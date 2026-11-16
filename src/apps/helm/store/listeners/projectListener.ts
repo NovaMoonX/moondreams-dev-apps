@@ -74,6 +74,9 @@ const toMilestoneState = (value: unknown): Project['milestoneState'] =>
       )
     : {};
 
+const toStatus = (value: unknown): Project['status'] =>
+  value === 'finished' || value === 'paused' ? value : 'active';
+
 /** A project that won't open is kept, with no name, so the surface can say so instead of dropping it. */
 async function openProject(
   entry: QueryDocumentSnapshot,
@@ -83,7 +86,10 @@ async function openProject(
   const base = {
     id: entry.id,
     targetDate: data.targetDate ?? null,
-    status: data.status === 'finished' ? 'finished' : 'active',
+    kind: data.kind === 'goal' ? 'goal' : 'project',
+    status: toStatus(data.status),
+    pausedAt: data.pausedAt ?? null,
+    pausedUntil: data.pausedUntil ?? null,
     milestoneState: toMilestoneState(data.milestoneState),
     whoRoles: toRoles(data.whoRoles),
     mediaIds: data.mediaIds ?? [],
@@ -104,6 +110,7 @@ async function openProject(
       objective: toText(payload.objective),
       milestones: toMilestones(payload.milestones),
       roleNotes: toNotes(payload.roleNotes),
+      why: payload.why ?? null,
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
@@ -116,6 +123,7 @@ async function openProject(
       objective: null,
       milestones: {},
       roleNotes: {},
+      why: null,
       isUnreadable: true,
       privateMark: null,
       isPrivacyCleared: false,

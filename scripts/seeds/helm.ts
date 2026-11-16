@@ -42,6 +42,7 @@ import {
   type Gender,
 } from '../../src/apps/helm/engine/connections.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
+import { whyFingerprint } from '../../src/apps/helm/utils/goalWhy.ts';
 import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
 import {
   getMediaObjectPath,
@@ -1664,7 +1665,7 @@ export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's two projects: the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
+/** Alex's three projects: the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1683,20 +1684,27 @@ async function buildProjects(input: {
       | 'createdBy'
       | 'executionId'
       | 'lastEditedAt'
-    >,
-    words: ProjectSealed,
+      | 'kind'
+      | 'pausedAt'
+      | 'pausedUntil'
+    > &
+      Partial<Pick<Project, 'kind' | 'pausedAt' | 'pausedUntil'>>,
+    words: Omit<ProjectSealed, 'why'> & Partial<Pick<ProjectSealed, 'why'>>,
     milestoneState: Project['milestoneState'] = {},
   ): Promise<{ id: string; project: Project }> => ({
     id,
     project: {
       privacy: 'ordinary',
+      kind: 'project',
+      pausedAt: null,
+      pausedUntil: null,
       ...fields,
       milestoneState,
       mediaIds: [],
       createdBy: 'person',
       executionId: null,
       lastEditedAt: null,
-      sealed: await seal<ProjectSealed>(words),
+      sealed: await seal<ProjectSealed>({ why: null, ...words }),
     },
   });
   const taskOf = async (
@@ -1806,6 +1814,56 @@ async function buildProjects(input: {
           date: today - 35 * DAY_MS,
           order: 0,
           doneAt: now - 36 * DAY_MS,
+        },
+      },
+    ),
+    projectOf(
+      'seed-project-guitar-goal',
+      {
+        kind: 'goal',
+        targetDate: null,
+        status: 'active',
+        whoRoles: {},
+        createdAt: now - 60 * DAY_MS,
+        finishedAt: null,
+      },
+      {
+        name: 'Get back into guitar',
+        emoji: '🎸',
+        objective: null,
+        milestones: {
+          'seed-milestone-guitar-1': { title: 'Restring and tune it' },
+          'seed-milestone-guitar-2': { title: 'Play a whole song for Sam' },
+        },
+        roleNotes: {},
+        why: {
+          verbatim:
+            'I used to play every night in college, and I miss it. It was the one hour where my head went quiet.',
+          cleaned:
+            'I used to play every night in college and I miss it: it was the one hour my head went quiet.',
+          cleanedState: 'offered',
+          summary: 'Miss playing; it quieted my head',
+          tags: ['music', 'calm', 'college'],
+          basedOn: whyFingerprint(
+            'I used to play every night in college, and I miss it. It was the one hour where my head went quiet.',
+          ),
+          saidAt: now - 60 * DAY_MS,
+          editedAt: null,
+          captureId: null,
+        },
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
+      {
+        'seed-milestone-guitar-1': {
+          date: today - 45 * DAY_MS,
+          order: 0,
+          doneAt: now - 50 * DAY_MS,
+        },
+        'seed-milestone-guitar-2': {
+          date: today + 30 * DAY_MS,
+          order: 1,
+          doneAt: null,
         },
       },
     ),
@@ -1994,6 +2052,7 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
           e: { start: '19:00', end: '22:00', order: 0, part: 'evening', editedAt: null },
         },
         reminder: seedReminder(createdAt),
+        projectId: 'seed-project-guitar-goal',
         startsOn,
         createdAt,
       },

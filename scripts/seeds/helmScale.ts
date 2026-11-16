@@ -905,8 +905,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
       const project: Project = {
         privacy: isPrivateProject(index) ? 'private' : 'ordinary',
+        kind: 'project',
         targetDate: isDone ? null : dayStart(now + between(5, 365) * DAY_MS),
         status: isDone ? 'finished' : 'active',
+        pausedAt: null,
+        pausedUntil: null,
         milestoneState: {
           'm-1': { date: null, order: 0, doneAt: isDone ? finishedAt : null },
           'm-2': {
@@ -935,6 +938,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             'm-2': { title: 'Final stage' },
           },
           roleNotes: {},
+          why: null,
           privateMark: isPrivateProject(index) ? 'person' : null,
           isPrivacyCleared: false,
         }),

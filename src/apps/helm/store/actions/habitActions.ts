@@ -67,7 +67,7 @@ const event = (
   stage: null,
 });
 
-const addEvent = (
+export const addEvent = (
   history: readonly HabitHistoryEvent[],
   kind: HabitEventKind,
   at: number,

@@ -2917,6 +2917,14 @@ export const HELM_COPY = {
     `${name}${note ? ` (${note})` : ''} has ${count} open`,
   projectQuiet: (days: number, open: number) =>
     `Nothing done in ${days} days · ${open} open`,
+  goalNoStep: 'No regular step yet',
+  goalWeeksLine: (met: number, of: number) =>
+    `Showed up ${met} of the last ${of} weeks`,
+  goalLastReached: (title: string, dayLabel: string) => {
+    const short =
+      title.length > 40 ? `${title.slice(0, 39).trimEnd()}…` : title;
+    return `Reached ${short} on ${dayLabel}`;
+  },
   projectTargetLine: (
     dateLabel: string,
     daysAway: number,

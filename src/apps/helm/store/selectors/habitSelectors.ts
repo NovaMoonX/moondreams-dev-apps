@@ -41,6 +41,20 @@ export const selectHabitById = createSelector(
     new Map(habits.map((habit) => [habit.id, habit])),
 );
 
+/** A goal's habits that were not stopped (active, paused or formed), A to Z. */
+export const selectGoalHabits = createSelector(
+  [selectHabits, (_state: RootState, projectId: string) => projectId],
+  (habits, projectId) =>
+    habits
+      .filter(
+        (habit) =>
+          !habit.isUnreadable &&
+          habit.projectId === projectId &&
+          habit.status !== 'ended',
+      )
+      .sort(byName),
+);
+
 export const selectHasHabits = (state: RootState) =>
   state.helm.habits.items.some((habit) => !habit.isUnreadable);
 

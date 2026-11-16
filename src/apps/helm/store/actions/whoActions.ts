@@ -11,6 +11,7 @@ import {
   runTransaction,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -42,6 +43,8 @@ import {
   type ContactRefusal,
 } from '@apps/helm/engine/contactPoints';
 import { normalizeKin } from '@apps/helm/engine/kin';
+import { addEvent } from '@apps/helm/store/actions/habitActions';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type { City } from '@/lib/cities/types';
 import { keepCurrentAway, MAX_AWAY_SPANS } from '@apps/helm/engine/whereabouts';
@@ -790,9 +793,87 @@ export async function forgetWithPhotos(
   };
 }
 
+const CARE_FIELDS = [
+  'status',
+  'endedAt',
+  'history',
+  'reminder',
+  'lockScreenName',
+] as const;
+
+/** Ends the person's care habits (reminder off, off the lock screen, an `ended` event) and stamps reminders, in one batch. Undo puts back what it wrote on each habit still as this left it. */
+async function endCareHabits(uid: string, whoId: string) {
+  const habits = collection(userOf(uid), 'habits');
+  const found = await getDocs(query(habits, where('forWhoId', '==', whoId)));
+  const caring = found.docs.filter(
+    (entry) => entry.data().isCare === true && entry.data().status !== 'ended',
+  );
+  const now = Date.now();
+  const batch = writeBatch(db);
+  const before = caring.map((entry) => ({
+    ref: entry.ref,
+    data: Object.fromEntries(
+      CARE_FIELDS.map((field) => [field, entry.data()[field] ?? null]),
+    ),
+  }));
+  caring.forEach((entry) => {
+    const data = entry.data();
+    batch.update(entry.ref, {
+      status: 'ended',
+      endedAt: now,
+      history: addEvent(data.history ?? [], 'ended', now),
+      reminder: data.reminder ? { ...data.reminder, isOn: false } : null,
+      lockScreenName: null,
+      lastEditedAt: now,
+    });
+  });
+  if (caring.length > 0) {
+    markRemindersChanged(batch, uid, now);
+    await batch.commit();
+  }
+  return {
+    restore: async () => {
+      if (before.length === 0) return;
+      await runTransaction(db, async (transaction) => {
+        const live = await Promise.all(
+          before.map((entry) => transaction.get(entry.ref)),
+        );
+        const undoNow = Date.now();
+        live.forEach((snapshot, at) => {
+          if (snapshot.data()?.endedAt !== now) return;
+          transaction.update(before[at].ref, {
+            ...before[at].data,
+            lastEditedAt: undoNow,
+          });
+        });
+        markRemindersChanged(transaction, uid, undoNow);
+      });
+    },
+  };
+}
+
+/** Forgets a person; their care habits end with them, and Undo brings the person and those habits back. */
 export const forgetWho = async (uid: string, whoId: string) => {
   await keepInheritedPrivate(uid, 'who', whoId);
-  return forgetWithPhotos(uid, 'who', whoId);
+  const forgotten = await forgetWithPhotos(uid, 'who', whoId);
+  const ended = await endCareHabits(uid, whoId).catch(
+    async (error: unknown) => {
+      await forgotten.restore().catch((restoreError: unknown) => {
+        console.error('Helm forgotten person was not put back', restoreError);
+      });
+      throw error;
+    },
+  );
+  return {
+    ...forgotten,
+    restore: async () => {
+      const outcome = await forgotten.restore();
+      await ended.restore().catch((error: unknown) => {
+        console.error('Helm care habits were not put back', error);
+      });
+      return outcome;
+    },
+  };
 };
 
 /** Makes the person's own who once; the transaction keeps two tabs from making two. */

@@ -1020,6 +1020,7 @@ const projectSealed = (
   objective: null,
   milestones,
   roleNotes,
+  why: null,
   privateMark: null,
   isPrivacyCleared: false,
 });

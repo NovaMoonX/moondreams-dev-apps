@@ -305,12 +305,13 @@ const skippedUnits = (
     : ids.filter(isSkipped).length;
 };
 
-/** This week's figure in the habit's own unit, Monday to today, counting only the days it asked for so far; today counts once it is done. A skipped unit is neither done nor missed: it leaves `due` and is counted in `skipped`. A times-a-week habit counts days and is met once its count is. `due: 0` means nothing has been asked yet ("Starts today"). Days in a pause, read in `timeZone`, are left out. */
+/** This week's figure in the habit's own unit, Monday to today, counting only the days it asked for so far; today counts once it is done. A skipped unit is neither done nor missed: it leaves `due` and is counted in `skipped`. A times-a-week habit counts days and is met once its count is. `due: 0` means nothing has been asked yet ("Starts today"). Days in a pause, read in `timeZone`, are left out. A finished week (`isWeekOver`) asks for its last day too, done or not. */
 export function selectHabitWeek(
   habit: HabitScheduleLike & { id: string },
   days: Record<string, HabitDayLike>,
   todayKey: string,
   timeZone: string,
+  isWeekOver = false,
 ): { done: number; due: number; skipped: number } {
   const monday = shiftKey(
     todayKey,
@@ -361,7 +362,9 @@ export function selectHabitWeek(
         );
         return {
           done: total.done + done,
-          due: total.due + (key === todayKey ? done : full - skipped),
+          due:
+            total.due +
+            (key === todayKey && !isWeekOver ? done : full - skipped),
           skipped: total.skipped + skipped,
         };
       },

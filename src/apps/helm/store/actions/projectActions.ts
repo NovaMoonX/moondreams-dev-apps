@@ -30,12 +30,14 @@ import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
   Project,
+  ProjectKind,
   ProjectRole,
   ProjectSealed,
   Sealed,
   Who,
   WhoSealed,
 } from '@apps/helm/types';
+import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 
 const CHUNK = 200;
 
@@ -69,14 +71,17 @@ const toWords = (words: ProjectWords): ProjectWords => ({
 export async function createProject(
   uid: string,
   encryption: HelmEncryption,
-  input: ProjectWords,
+  input: ProjectWords & { kind?: ProjectKind; why?: GoalWhy | null },
 ) {
   const words = toWords(input);
   if (!words.name) throw new Error('A project needs a name.');
   const id = generateUuid();
   const project: Project = {
+    kind: input.kind ?? 'project',
     targetDate: words.targetDate,
     status: 'active',
+    pausedAt: null,
+    pausedUntil: null,
     milestoneState: {},
     whoRoles: {},
     mediaIds: [],
@@ -93,6 +98,7 @@ export async function createProject(
         objective: words.objective,
         milestones: {},
         roleNotes: {},
+        why: input.why ?? null,
         privateMark: null,
         isPrivacyCleared: false,
       },
@@ -151,16 +157,24 @@ export async function updateProject(
   }
 }
 
-/** Finishes or reopens a project; the earlier state is handed back so Undo can write it. */
+/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone and has no end date. */
 export function setProjectStatus(
   uid: string,
-  project: { id: string; status: Project['status']; finishedAt: number | null },
+  project: {
+    id: string;
+    status: Project['status'];
+    finishedAt: number | null;
+    pausedAt: number | null;
+    pausedUntil: number | null;
+  },
   status: Project['status'],
 ) {
   const now = Date.now();
   const written = updateDoc(doc(projectsOf(uid), project.id), {
     status,
     finishedAt: status === 'finished' ? now : null,
+    pausedAt: status === 'paused' ? now : null,
+    pausedUntil: null,
     lastEditedAt: now,
   });
   return {
@@ -169,6 +183,8 @@ export function setProjectStatus(
       updateDoc(doc(projectsOf(uid), project.id), {
         status: project.status,
         finishedAt: project.finishedAt,
+        pausedAt: project.pausedAt,
+        pausedUntil: project.pausedUntil,
         lastEditedAt: Date.now(),
       }),
   };
