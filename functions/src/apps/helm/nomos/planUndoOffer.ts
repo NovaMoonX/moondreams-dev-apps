@@ -1,9 +1,10 @@
-import type { UndoOffer, UndoReason } from './commands.js';
+import { OPTION_CAP, type UndoOffer, type UndoReason } from './commands.js';
+
 import type { PlannedQuestion } from './executeCommands.js';
 import {
   buildUndoOfferPrompt,
+  listUndoLines,
   buildSpokenQuestion,
-  describeUndoLine,
 } from './summaries.js';
 import {
   buildUndoUnits,
@@ -15,7 +16,7 @@ import {
 
 export const UNDO_OFFER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const MAX_UNDOABLE_UNITS = 12;
-const DETAIL_CAP = 80;
+const DETAIL_CAP = OPTION_CAP;
 
 export type UndoOfferDropCode =
   | 'missing'
@@ -189,7 +190,7 @@ export function planUndoOffer(input: {
       options: [
         ...candidates.map((candidate, index) => ({
           id: `c${index + 1}`,
-          label: capital(candidate.going.map(describeUndoLine).join(' and ')),
+          label: capital(listUndoLines(candidate.going)).slice(0, OPTION_CAP),
           detail: candidate.said ? candidate.said.slice(0, DETAIL_CAP) : null,
           ref: null,
         })),

@@ -1808,6 +1808,47 @@ test('prices count cache reads and writes', () => {
   );
 });
 
+test('an undo wish with no undoable earlier turn tells the model nothing can be taken back', () => {
+  const build = (text: string, undoable: boolean) =>
+    buildContext({
+      text,
+      reading: READING,
+      createdAt: 20_000,
+      timeZone: 'UTC',
+      tasks: [],
+      earlierTurns: [
+        {
+          said: 'Add milk',
+          did: 'Made 1 task',
+          taskIds: [],
+          ...(undoable
+            ? {
+                undoable: [
+                  {
+                    executionId: 'e1',
+                    createdAt: 10_000,
+                    units: [
+                      {
+                        n: 1,
+                        kind: 'task',
+                        change: 'added',
+                        title: 'Milk',
+                        isUndone: false,
+                        quote: null,
+                      },
+                    ],
+                  },
+                ],
+              }
+            : {}),
+        },
+      ],
+    }).message;
+  assert.match(build('undo that', false), /<nothing_to_undo>/);
+  assert.ok(!build('undo that', true).includes('<nothing_to_undo>'));
+  assert.ok(!build('add eggs', false).includes('<nothing_to_undo>'));
+});
+
 test('"never mind" after a filed turn reaches an undo offer through the context, the reply checks and the plan', async () => {
   const text = 'Never mind, I do not need it';
   const executionId = 'exec-earlier';

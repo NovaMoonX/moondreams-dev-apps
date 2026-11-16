@@ -1574,9 +1574,10 @@ const readRunCommands = (
     );
 };
 
-export type UndoOfferDrop = 'undo-unknown-turn' | 'undo-no-lines';
+export type UndoOfferDrop =
+  'undo-unknown-turn' | 'undo-no-lines' | 'undo-over-limit';
 
-/** The offers to take back an earlier turn's lines: a turn handle must be one offered, each line one that turn has, a reason outside the list is `unclear`, and a quote stays only when its words are in this turn's text. At most `MAX_UNDO_OFFERS`, one per turn. */
+/** The offers to take back an earlier turn's lines: a turn handle must be one offered, each line one that turn has, a reason outside the list is `unclear`, and a quote stays only when its words are in this turn's text. At most `MAX_UNDO_OFFERS`, one per turn: a second offer for the same turn merges into the first (its lines joined, "all" winning), and an offer past the limit is a drop. Only an explicit `[]` means all; a missing or non-list `undoLines` is a drop. */
 export function readUndoOffers(
   items: Record<string, unknown>[],
   turns: AliasBook | undefined,
@@ -1598,23 +1599,40 @@ export function readUndoOffers(
             : null;
         const count = executionId ? (unitCounts.get(executionId) ?? 0) : 0;
         if (!executionId || count === 0) return drop('undo-unknown-turn');
-        const asked = Array.isArray(item.undoLines)
-          ? [
-              ...new Set(
-                item.undoLines.filter(
-                  (line): line is number =>
-                    Number.isInteger(line) && line >= 1 && line <= count,
-                ),
-              ),
-            ]
-          : [];
-        const isAll =
-          !Array.isArray(item.undoLines) || item.undoLines.length === 0;
+        if (!Array.isArray(item.undoLines)) return drop('undo-no-lines');
+        const asked = [
+          ...new Set(
+            item.undoLines.filter(
+              (line): line is number =>
+                Number.isInteger(line) && line >= 1 && line <= count,
+            ),
+          ),
+        ];
+        const isAll = item.undoLines.length === 0;
         if (!isAll && asked.length === 0) return drop('undo-no-lines');
-        if (acc.offers.some((offer) => offer.executionId === executionId)) {
-          return acc;
+        const earlier = acc.offers.find(
+          (offer) => offer.executionId === executionId,
+        );
+        if (earlier) {
+          return {
+            ...acc,
+            offers: acc.offers.map((offer) =>
+              offer === earlier
+                ? {
+                    ...offer,
+                    lineNumbers:
+                      offer.lineNumbers === 'all' || isAll
+                        ? 'all'
+                        : [...new Set([...offer.lineNumbers, ...asked])].sort(
+                            (a, b) => a - b,
+                          ),
+                  }
+                : offer,
+            ),
+          };
         }
-        if (acc.offers.length >= MAX_UNDO_OFFERS) return acc;
+        if (acc.offers.length >= MAX_UNDO_OFFERS)
+          return drop('undo-over-limit');
         const quote =
           typeof item.undoQuote === 'string'
             ? item.undoQuote.trim().slice(0, UNDO_QUOTE_CAP)

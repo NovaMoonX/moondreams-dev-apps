@@ -1,4 +1,4 @@
-import type { AskCommand } from './commands.js';
+import { QUESTION_CAP, type AskCommand } from './commands.js';
 
 const plural = (count: number, one: string, many: string) =>
   count === 1 ? one : many;
@@ -567,7 +567,18 @@ export const describeUndoLine = (line: {
           : `adding ${name}`;
 };
 
-/** "Undo adding Book flights? Call the vet stays.": what would go, then up to two of what stays and a count of the rest; no second sentence when nothing stays. */
+const UNDO_LISTED_LINES = 3;
+
+/** "adding A, adding B and 2 more": the first few lines named and a count of the rest, so a long turn never lists them all. */
+export const listUndoLines = (
+  going: { change: string; title: string | null; kind: string }[],
+) => {
+  const named = going.slice(0, UNDO_LISTED_LINES).map(describeUndoLine);
+  const more = going.length - named.length;
+  return more > 0 ? `${named.join(', ')} and ${more} more` : joinNames(named);
+};
+
+/** "Undo adding Book flights? Call the vet stays.": what would go (a few lines, then "and N more"), then up to two of what stays and a count of the rest; no second sentence when nothing stays, and the stays sentence goes first when the prompt would pass the question cap. */
 export const buildUndoOfferPrompt = (
   going: { change: string; title: string | null; kind: string }[],
   staying: { title: string | null; kind: string }[],
@@ -582,7 +593,10 @@ export const buildUndoOfferPrompt = (
       : more > 0
         ? ` ${names.slice(0, 2).join(', ')} and ${more} more stay.`
         : ` ${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'}.`;
-  return `Undo ${joinNames(going.map(describeUndoLine))}?${stays}`;
+  const ask = `Undo ${listUndoLines(going)}?`;
+  return (ask + stays).length <= QUESTION_CAP
+    ? ask + stays
+    : ask.slice(0, QUESTION_CAP);
 };
 
 export type PickKind = 'whichPerson' | 'whichPlace';

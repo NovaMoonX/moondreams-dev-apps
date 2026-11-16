@@ -16,7 +16,7 @@ import {
 } from './commands.js';
 import type { StepGroupBlock } from '../stepGroups.js';
 import { withoutAddress } from './joinedTurn.js';
-import { hasReviseCue, isQuestion } from './route.js';
+import { hasReviseCue, hasUndoCue, isQuestion } from './route.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
@@ -454,6 +454,12 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(earlierTurns.length
       ? [`<earlier_turns>${toDataJson(earlierTurns)}</earlier_turns>`]
+      : []),
+    ...(hasUndoCue(input.text) &&
+    !earlierTurns.some((turn) => 'undoable' in turn)
+      ? [
+          `<nothing_to_undo>Nothing from earlier turns can be taken back now. Say plainly that you can't take that back, and do not send offerUndo.</nothing_to_undo>`,
+        ]
       : []),
     ...(input.answeredQuestion
       ? [

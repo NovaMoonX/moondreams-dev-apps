@@ -18,7 +18,14 @@ import {
   buildSpokenPick,
   buildWhichIsTrueQuestion,
 } from '../../functions/src/apps/helm/nomos/summaries.ts';
-import { planUndoOffer } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
+import {
+  readUndoableUnits,
+  toUndoLead,
+} from '../../functions/src/apps/helm/sortHelmCapture.ts';
+import {
+  UNDO_OFFER_MAX_AGE_MS,
+  planUndoOffer,
+} from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
 import { readUndoOffers } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { buildUndoOfferPrompt } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
@@ -1284,6 +1291,142 @@ test('the reply keeps an undo offer only for a turn it was shown, with its quote
   assert.deepEqual(read({ undoTurn: handle, undoLines: [7] }).dropped, [
     'undo-no-lines',
   ]);
+});
+
+test('offers for the same turn merge, a missing list is a drop and an offer past the limit is named', () => {
+  const book = createAliasBook('u');
+  const handles = ['a', 'b', 'c', 'd', 'e'].map((id) => book.add(`ex-${id}`));
+  const counts = new Map(
+    ['a', 'b', 'c', 'd', 'e'].map((id) => [`ex-${id}`, 3]),
+  );
+  const read = (items: Record<string, unknown>[]) =>
+    readUndoOffers(
+      items.map((item) => ({ kind: 'offerUndo', ...item })),
+      book,
+      counts,
+      'no',
+    );
+  const merged = read([
+    { undoTurn: handles[0], undoLines: [3, 1] },
+    { undoTurn: handles[0], undoLines: [2, 1] },
+  ]);
+  assert.deepEqual(merged.offers[0].lineNumbers, [1, 2, 3]);
+  assert.deepEqual(merged.dropped, []);
+  assert.equal(
+    read([
+      { undoTurn: handles[0], undoLines: [1] },
+      { undoTurn: handles[0], undoLines: [] },
+    ]).offers[0].lineNumbers,
+    'all',
+  );
+  assert.equal(
+    read([
+      { undoTurn: handles[0], undoLines: [] },
+      { undoTurn: handles[0], undoLines: [2] },
+    ]).offers[0].lineNumbers,
+    'all',
+  );
+  assert.deepEqual(read([{ undoTurn: handles[0] }]).dropped, ['undo-no-lines']);
+  assert.deepEqual(read([{ undoTurn: handles[0], undoLines: 'all' }]).dropped, [
+    'undo-no-lines',
+  ]);
+  const many = read(handles.map((undoTurn) => ({ undoTurn, undoLines: [] })));
+  assert.equal(many.offers.length, 4);
+  assert.deepEqual(many.dropped, ['undo-over-limit']);
+});
+
+test('an all offer names a few lines and counts the rest, within the caps', () => {
+  const titles = ['One', 'Two', 'Three', 'Four', 'Five'];
+  const { question } = planOffer([offerOf('all')], {
+    ex1: offerExecution({
+      effectRefs: titles.map((_, i) => ({
+        op: 'create' as const,
+        collection: 'tasks',
+        docId: `t${i}`,
+      })),
+      effects: titles.map((title) => ({
+        written: { 'sealed.title': title },
+        previous: null,
+      })),
+      undoneDocIds: [],
+    }),
+  });
+  assert.equal(
+    question?.sealed.prompt,
+    'Undo adding One, adding Two, adding Three and 2 more?',
+  );
+  const long = 'x'.repeat(150);
+  const { question: capped } = planOffer(
+    [offerOf('all'), offerOf('all', 'ex2')],
+    {
+      ex1: offerExecution({
+        effects: [
+          { written: { 'sealed.title': long }, previous: null },
+          { written: { 'sealed.title': long }, previous: null },
+        ],
+        undoneDocIds: [],
+      }),
+      ex2: offerExecution({
+        effects: [
+          { written: { 'sealed.title': long }, previous: null },
+          { written: { 'sealed.title': long }, previous: null },
+        ],
+        undoneDocIds: [],
+      }),
+    },
+  );
+  const options = capped?.sealed.options as { label: string }[];
+  assert.ok(options.every((option) => option.label.length <= 80));
+  const { question: one } = planOffer([offerOf('all')], {
+    ex1: offerExecution({
+      effects: [
+        { written: { 'sealed.title': long }, previous: null },
+        { written: { 'sealed.title': long }, previous: null },
+      ],
+      undoneDocIds: [],
+    }),
+  });
+  assert.ok((one?.sealed.prompt as string).length <= 200);
+});
+
+test('a lead that claims something was undone is refused and one that explains stays', () => {
+  [
+    'Dropped it.',
+    'Reverted.',
+    'Removed it from your list.',
+    'Deleted.',
+    'Took it out.',
+    'Undid that.',
+    'Cancelled.',
+    "It's gone.",
+  ].forEach((line) => assert.equal(toUndoLead(line), null, line));
+  const kept = "I read 'next week' as Monday.";
+  assert.equal(toUndoLead(kept), kept);
+  assert.equal(toUndoLead(null), null);
+});
+
+test('an earlier turn older than an offer may reach is not shown to the model', () => {
+  const execution = (createdAt: number) => ({
+    state: 'succeeded',
+    category: 'organize',
+    createdAt,
+    effectRefs: [{ op: 'create', collection: 'tasks', docId: 'tk1' }],
+  });
+  const opened = {
+    effects: [{ written: { 'sealed.title': 'Book flights' }, previous: null }],
+  };
+  assert.equal(
+    readUndoableUnits('ex1', execution(Date.now() - 3_600_000), opened).length,
+    1,
+  );
+  assert.deepEqual(
+    readUndoableUnits(
+      'ex1',
+      execution(Date.now() - UNDO_OFFER_MAX_AGE_MS - 60_000),
+      opened,
+    ),
+    [],
+  );
 });
 
 const undoOfferQuestion = () => {

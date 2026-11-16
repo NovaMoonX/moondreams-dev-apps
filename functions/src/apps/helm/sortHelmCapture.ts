@@ -179,6 +179,7 @@ import {
 import { getDayIn } from './nomos/spoken.js';
 import {
   MAX_UNDOABLE_UNITS,
+  UNDO_OFFER_MAX_AGE_MS,
   planUndoOffer,
   type OfferedExecution,
 } from './nomos/planUndoOffer.js';
@@ -1299,8 +1300,8 @@ const quoteForUnit = (
   return typeof quote === 'string' && quote ? quote : null;
 };
 
-/** What an earlier execution did that can still be taken back: its units, each marked taken back or not. Empty for a failed execution, an undo, an import, one with no effects or one fully undone. */
-function readUndoableUnits(
+/** What an earlier execution did that can still be taken back: its units, each marked taken back or not. Empty for a failed execution, an undo, an import, one with no effects, one fully undone or one older than an offer may reach. */
+export function readUndoableUnits(
   executionId: string,
   execution: {
     effectRefs?: unknown;
@@ -1321,6 +1322,7 @@ function readUndoableUnits(
     execution.category === 'import' ||
     typeof execution.category !== 'string' ||
     typeof execution.createdAt !== 'number' ||
+    Date.now() - execution.createdAt > UNDO_OFFER_MAX_AGE_MS ||
     typeof execution.undoneByExecutionId === 'string' ||
     refs.length === 0
   ) {
@@ -1357,12 +1359,12 @@ function readUndoableUnits(
       ];
 }
 
-/** The model's line leading an undo offer; one that claims something was already taken back is refused, since only the person's answer undoes. */
-const toUndoLead = (line: string | null) =>
-  line &&
-  !/\b(undid|undone|took back|taken back|deleted|removed it)\b/i.test(line)
-    ? line
-    : null;
+const UNDO_CLAIMS =
+  /\b(undid|undone|took (it |that |them )?(back|out|off)|taken (back|out|off)|put (it )?back|dropped|reverted|removed|deleted|cancell?ed|scrapped|cleared|erased|gone|rolled back)\b/i;
+
+/** The model's line leading an undo offer; one that says or implies something was already taken back is refused, since only the person's answer undoes. */
+export const toUndoLead = (line: string | null) =>
+  line && !UNDO_CLAIMS.test(line) ? line : null;
 
 /** The last turns of this turn's conversation, oldest first: what was said, the summary of what was done and the tasks it touched. A turn from before conversations were kept has none. */
 async function readEarlierTurns(
