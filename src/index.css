@@ -240,7 +240,7 @@ html[data-site-banner='true'] .subview-backdrop {
   z-index: 126 !important;
 }
 
-/* Dreamer UI's closed Popover keeps its panel mounted as an `inert`, `aria-hidden` dialog, so only an open one counts (`dialogUtils`). */
+/* Dreamer UI's closed Popover keeps its panel mounted as an `inert`, `aria-hidden` dialog, so only an open one counts. */
 html:has([role='dialog']:not([inert], [aria-hidden='true'], [data-app-surface])) [data-fallback-tab] {
   opacity: 0;
   visibility: hidden;

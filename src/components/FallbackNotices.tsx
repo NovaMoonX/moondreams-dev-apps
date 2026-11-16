@@ -16,10 +16,10 @@ import { formatTime } from '@/utils/formatUtils';
 
 const PILL_MS = 5000;
 
-const toLine = ({ used, wanted, reason, recoveredAt }: Fallback) =>
+const toLine = ({ used, wanted, reason, cause, recoveredAt }: Fallback) =>
   recoveredAt === null
-    ? `Using ${used} instead of ${wanted}: ${reason}`
-    : `Working again. Earlier it used ${used} instead of ${wanted}: ${reason}`;
+    ? `Using ${used} instead of ${wanted}: ${reason} (${cause.stage})`
+    : `Working again. Earlier it used ${used} instead of ${wanted}: ${reason} (${cause.stage})`;
 
 const toShort = ({ used, wanted }: Fallback) => {
   const text = `${used} instead of ${wanted}`;
@@ -27,11 +27,11 @@ const toShort = ({ used, wanted }: Fallback) => {
 };
 
 const toFacts = (fallback: Fallback) => [
+  `Step: ${fallback.cause.stage}`,
+  `Error: ${fallback.cause.detail}`,
   `Feature: ${fallback.feature}`,
   `Wanted: ${fallback.wanted}`,
   `Used: ${fallback.used}`,
-  `Step: ${fallback.cause.stage}`,
-  `Error: ${fallback.cause.detail}`,
   ...fallback.facts,
   ...(fallback.recoveredAt === null
     ? []
