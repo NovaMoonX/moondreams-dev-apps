@@ -47,7 +47,7 @@ const toOffer = (
   at: Date.now(),
   dayKind: slot?.dayKind ?? null,
   gapMinutes: slot?.gapMinutes ?? null,
-  afterBusyDay: slot?.afterBusyDay ?? null,
+  afterBusyDay: null,
   outcome,
 });
 
@@ -155,7 +155,7 @@ export const notNowLearn = (
   slot: LearnSlot | null,
 ) =>
   updateDoc(researchRef(uid, item.id), {
-    status: 'ready',
+    ...(item.status === 'ready' ? {} : { status: 'ready' }),
     offeredOn: null,
     declineReason: 'timing',
     notNowStreak: item.notNowStreak + 1,
@@ -232,7 +232,8 @@ const toNoteBody = (item: OpenResearch) => {
 };
 
 export type KeepLearnResult =
-  ({ kind: 'saved' } & LearnTap) | { kind: 'empty' | 'full' };
+  | ({ kind: 'saved'; topicName: string | null } & LearnTap)
+  | { kind: 'empty' | 'full' };
 
 /** "Save to my knowledge": the overview as a note (under the topic it plainly fits, else loose) and the item marked done, in one batch with one execution so Undo takes back both. Videos are not copied. */
 export async function keepLearn(
@@ -314,6 +315,11 @@ export async function keepLearn(
     },
   );
   return saved.kind === 'saved'
-    ? { kind: 'saved', executionId: executionRef.id, written: saved.written }
+    ? {
+        kind: 'saved',
+        topicName: topic?.name ?? null,
+        executionId: executionRef.id,
+        written: saved.written,
+      }
     : saved;
 }

@@ -2,7 +2,7 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import {
-  readLearnOffer,
+  readLearnOffers,
   type LearnOfferReading,
 } from '@apps/helm/engine/learnLater';
 import type { OpenResearch } from '@apps/helm/types';
@@ -32,27 +32,27 @@ export const selectLearnById = createSelector([selectLearnItems], (items) => {
   return (id: string | null) => (id === null ? null : (byId.get(id) ?? null));
 });
 
-const dayOf = (at: number, timeZone: string) =>
-  new Intl.DateTimeFormat('en-CA', {
+/** The saved questions Today may offer, best first. An item offered on an earlier day and left unanswered is offered again, and one question is offered a day: any answer given today ends it. */
+export function pickLearnOffers(
+  items: OpenResearch[],
+  todayKey: string,
+  timeZone: string,
+): LearnOfferReading[] {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date(at));
-
-/** The one saved question Today may offer. An item offered on an earlier day and left unanswered is offered again, and one question is offered a day: any answer given today ends it. */
-export function pickLearnOffer(
-  items: OpenResearch[],
-  todayKey: string,
-  timeZone: string,
-): LearnOfferReading | null {
+  });
   const isAnsweredToday = items.some((one) => {
     const last = one.offers[one.offers.length - 1];
-    return last !== undefined && dayOf(last.at, timeZone) === todayKey;
+    return (
+      last !== undefined && formatter.format(new Date(last.at)) === todayKey
+    );
   });
   return isAnsweredToday
-    ? null
-    : readLearnOffer({
+    ? []
+    : readLearnOffers({
         items: items.map((one) =>
           one.offeredOn === todayKey ? one : { ...one, offeredOn: null },
         ),

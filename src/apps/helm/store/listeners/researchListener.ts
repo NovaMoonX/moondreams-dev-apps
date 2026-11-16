@@ -171,6 +171,7 @@ async function openResearch(
     prepareAt: numberOrNull(data.prepareAt),
     needsLiveFacts: data.needsLiveFacts === true,
     notNowStreak: numberOrNull(data.notNowStreak) ?? 0,
+    prepareFailures: numberOrNull(data.prepareFailures) ?? 0,
     declineReason: REASONS.find((one) => one === data.declineReason) ?? null,
     offeredOn: stringOrNull(data.offeredOn),
     offers: toOffers(data.offers),

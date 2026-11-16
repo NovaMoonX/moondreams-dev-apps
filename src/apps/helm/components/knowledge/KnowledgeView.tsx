@@ -95,6 +95,14 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
         .filter(({ text }) => words.every((word) => text.includes(word)))
         .map(({ note }) => note)
     : [];
+  const learnMatches = isSearching
+    ? learnLater.filter((item) => {
+        const text = fold(
+          [item.subject, item.question, ...item.moreAsked].join(' '),
+        );
+        return words.every((word) => text.includes(word));
+      }).length
+    : 0;
 
   return (
     <>
@@ -128,26 +136,48 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
           </p>
         )}
         {isSearching ? (
-          found.length === 0 ? (
-            <p className='text-muted-foreground text-[15px]'>
-              {HELM_COPY.knowledgeNoMatch}
-            </p>
-          ) : (
-            <ul className='helm-card divide-border divide-y overflow-hidden'>
-              {found.map((note) => (
-                <li key={note.id}>
-                  <NoteRow
-                    note={note}
-                    onOpen={setOpenNoteId}
-                    topicLine={note.topicIds
-                      .map((id) => pathOf(id, allTopics).join(' › '))
-                      .filter(Boolean)
-                      .join(', ')}
+          <>
+            {found.length === 0 ? (
+              <p className='text-muted-foreground text-[15px]'>
+                {HELM_COPY.knowledgeNoMatch}
+              </p>
+            ) : (
+              <ul className='helm-card divide-border divide-y overflow-hidden'>
+                {found.map((note) => (
+                  <li key={note.id}>
+                    <NoteRow
+                      note={note}
+                      onOpen={setOpenNoteId}
+                      topicLine={note.topicIds
+                        .map((id) => pathOf(id, allTopics).join(' › '))
+                        .filter(Boolean)
+                        .join(', ')}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {learnMatches > 0 && (
+              <Button
+                type='button'
+                variant='secondary'
+                className='flex h-auto w-full items-center justify-between gap-3 px-4 py-3 text-left'
+                onClick={() => setIsLearnOpen(true)}
+              >
+                <span className='flex min-w-0 flex-1 items-center gap-2.5'>
+                  <GraduationCap
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
                   />
-                </li>
-              ))}
-            </ul>
-          )
+                  <span>{HELM_COPY.learnMatchRow(learnMatches)}</span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            )}
+          </>
         ) : (
           <>
             <Button

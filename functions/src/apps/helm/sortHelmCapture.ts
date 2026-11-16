@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
   readContextHabits,
@@ -4778,7 +4779,7 @@ async function writeResult(
       timeZone: researchTimeZone,
       now,
       captureId: captureRef.id,
-      newId: () => crypto.randomUUID(),
+      newId: () => randomUUID(),
       seal,
       room: Math.max(
         0,

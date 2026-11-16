@@ -14,9 +14,6 @@ const VideoEmbed = lazy(() => import('@/components/VideoEmbed'));
 
 const VIDEO_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 
-const HIT_CLASS =
-  "relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']";
-
 interface LearnItemSheetProps {
   itemId: string | null;
   onClose: () => void;
@@ -58,7 +55,7 @@ function Videos({ item }: { item: OpenResearch }) {
   );
 }
 
-/** A saved question opened: its overview with the table or steps, its videos (nothing plays until tapped; a month-old lookup is hidden, as YouTube's terms require), and the actions in the footer: Save to my knowledge is the one primary, Done with it and Remove sit quiet and apart. */
+/** A saved question opened: its overview with the table or steps, its videos (nothing plays until tapped; a month-old lookup is hidden, as YouTube's terms require), and the actions in the footer: Save to my knowledge is the one primary, Done with it is outline beneath it, and Remove sits alone below a hairline. */
 function LearnItemSheet({ itemId, onClose }: LearnItemSheetProps) {
   const item = useAppSelector((state) => selectLearnById(state)(itemId));
   const now = useNow(60_000);
@@ -84,36 +81,40 @@ function LearnItemSheet({ itemId, onClose }: LearnItemSheetProps) {
       extra={hasVideos && item ? <Videos item={item} /> : null}
       footer={
         item && (isOpenable || isWaiting) ? (
-          <div className='space-y-2'>
+          <div className='space-y-3'>
             {isOpenable && (
-              <Button
-                type='button'
-                className='w-full'
-                loading={taps.isBusy}
-                onClick={() => void taps.keep(item)}
-              >
-                {HELM_COPY.learnKeep}
-              </Button>
-            )}
-            <div className='flex items-center justify-between gap-3'>
-              {isOpenable ? (
+              <div className='space-y-2'>
                 <Button
                   type='button'
-                  variant='tertiary'
-                  size='sm'
-                  className={HIT_CLASS}
+                  className='w-full'
+                  loading={taps.isBusy}
+                  onClick={() => void taps.keep(item)}
+                >
+                  {HELM_COPY.learnKeep}
+                </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  className='w-full'
+                  disabled={taps.isBusy}
                   onClick={() => void taps.done(item)}
                 >
                   {HELM_COPY.learnDone}
                 </Button>
-              ) : (
-                <span />
-              )}
+              </div>
+            )}
+            <div
+              className={
+                isOpenable
+                  ? 'border-border flex justify-center border-t pt-3'
+                  : 'flex justify-center'
+              }
+            >
               <Button
                 type='button'
-                variant='tertiary'
+                variant='outline'
                 size='sm'
-                className={HIT_CLASS}
+                disabled={taps.isBusy}
                 onClick={() => void taps.remove(item)}
               >
                 {HELM_COPY.learnRemove}

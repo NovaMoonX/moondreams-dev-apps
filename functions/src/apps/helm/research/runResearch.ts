@@ -12,7 +12,10 @@ import type { Keyring } from '../../../appKeys/keyring.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { isForcedFixture, isRunningInEmulator } from '../../../emulator.js';
 import { searchVideos } from '../../../videoSearch/searchVideos.js';
-import type { FoundVideo } from '../../../videoSearch/types.js';
+import type {
+  FoundVideo,
+  VideoSearchSkip,
+} from '../../../videoSearch/types.js';
 import { recordAiSpendIn } from '../aiLimits.js';
 import {
   openForHelm,
@@ -127,6 +130,11 @@ export const SUBMIT_LEARN_TOOL: TerminalTool = {
 const VIDEO_MIN_SECONDS = 180;
 const VIDEO_MAX_SECONDS = 1200;
 const VIDEOS_KEPT = 2;
+/** A search that could not run is stamped this far back, so the hourly refresh tries again a day later rather than a month later. */
+const VIDEOS_RETRY_AFTER_MS = 24 * 60 * 60_000;
+const VIDEOS_STALE_MS = 30 * 24 * 60 * 60_000;
+/** A preparation that fails this many times in a row stays planned with no night booked, instead of being retried for ever. */
+export const PREPARE_FAILURES_MAX = 3;
 
 const toDataJson = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
@@ -316,13 +324,23 @@ export interface ResearchSettlement {
   spentCents: number;
   searches: number;
   hundredths: number;
-  /** A saved wish only: the videos found, the search that found them, and the extra questions the run was given, so a line added meanwhile sends the item round again. */
-  learn?: {
+  /** A saved wish only: the videos found, the search that found them (and why it could not run, if so), and the extra questions the run was given, so a line added meanwhile sends the item round again. */
+  learn: {
     videos: FoundVideo[];
     searchQuery: string | null;
+    skipped: VideoSearchSkip | null;
     moreAskedAtClaim: string[];
-  };
+  } | null;
 }
+
+const toFetchedAt = (
+  searchQuery: string | null,
+  skipped: VideoSearchSkip | null,
+  now: number,
+) => {
+  if (searchQuery === null) return null;
+  return skipped === null ? now : now - VIDEOS_STALE_MS + VIDEOS_RETRY_AFTER_MS;
+};
 
 const toSettledFields = (input: {
   key: HelmKey;
@@ -331,6 +349,7 @@ const toSettledFields = (input: {
   settlement: ResearchSettlement;
   now: number;
   timeZone: string;
+  failures: number;
 }): Record<string, unknown> => {
   const { opened, settlement, now } = input;
   const spent = {
@@ -362,18 +381,31 @@ const toSettledFields = (input: {
     startedAt: null,
     preparedAt: null,
   };
-  if (result === null) return { ...sendBack, prepareFailedAt: now };
   const isMoreAsked =
     JSON.stringify(opened.moreAsked ?? []) !==
     JSON.stringify(settlement.learn?.moreAskedAtClaim ?? []);
-  if (isMoreAsked) return sendBack;
+  if (result === null) {
+    const failures = isMoreAsked ? 1 : input.failures + 1;
+    return {
+      ...sendBack,
+      prepareAt: failures >= PREPARE_FAILURES_MAX ? null : sendBack.prepareAt,
+      prepareFailures: failures,
+      prepareFailedAt: now,
+    };
+  }
+  if (isMoreAsked) return { ...sendBack, prepareFailures: 0 };
   const searchQuery = settlement.learn?.searchQuery ?? null;
   return {
     ...spent,
     status: 'ready',
     preparedAt: now,
     prepareFailedAt: null,
-    videosFetchedAt: searchQuery === null ? null : now,
+    prepareFailures: 0,
+    videosFetchedAt: toFetchedAt(
+      searchQuery,
+      settlement.learn?.skipped ?? null,
+      now,
+    ),
     sealed: sealForHelm(input.key, {
       ...opened,
       overview: result.overview,
@@ -438,6 +470,8 @@ export async function settleResearch(
           settlement,
           now,
           timeZone,
+          failures:
+            typeof data.prepareFailures === 'number' ? data.prepareFailures : 0,
         }),
       );
     }
@@ -505,6 +539,7 @@ const toSettlement = (
     spentCents: Math.ceil(hundredths / HUNDREDTHS_PER_CENT),
     searches,
     hundredths,
+    learn: null,
   };
 };
 
@@ -600,6 +635,7 @@ export async function runResearchItem(
           learn: {
             videos: found?.videos ?? [],
             searchQuery,
+            skipped: found?.skipped ?? null,
             moreAskedAtClaim: claimed.words.moreAsked,
           },
         }

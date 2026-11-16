@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/utils/formatUtils';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { formatYearlyDate } from '@/utils/yearlyDateUtils';
 import type {
@@ -453,7 +454,10 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
         id: item.id,
         describe: () => ({
           title: item.subject,
-          line: HELM_COPY.learnLaterTitle,
+          line: HELM_COPY.learnSavedLine(
+            formatDateShort(item.createdAt),
+            item.contextLine,
+          ),
         }),
         ...texts,
         target: { kind: 'learnLater', id: item.id },

@@ -106,7 +106,7 @@ async function sweepOne(
     key,
     uid,
     researchId,
-    { result: null, spentCents: 0, searches: 0, hundredths: 0 },
+    { result: null, spentCents: 0, searches: 0, hundredths: 0, learn: null },
     now,
   );
 }

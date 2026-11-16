@@ -712,6 +712,36 @@ test('the same wish as a goal and a save is withheld and asked about, and a doub
   assert.equal(read.projects.length, 0);
 });
 
+test('two saves of a goal wish: the first becomes the ask and the other stays a save', () => {
+  const read = normalizeLearn(
+    [
+      {
+        kind: 'createProject',
+        title: 'Learn piano',
+        projectKind: 'goal',
+        projectEmoji: '🎹',
+        objective: null,
+        dueSpanId: null,
+      },
+      learnItem('saveForLater', {
+        learnQuestion: 'How do I learn piano',
+        learnSubject: 'Piano',
+        learnPractise: 'read',
+      }),
+      learnItem('saveForLater', {
+        learnQuestion: 'Which piano scales come first',
+        learnSubject: 'Piano scales',
+        learnPractise: 'read',
+      }),
+    ],
+    'I want to learn piano',
+  );
+  assert.equal(read.learnAsks.length, 1);
+  assert.equal(read.learnAsks[0].subject, 'Piano');
+  assert.equal(read.learnCommands.length, 1);
+  assert.equal(read.projects.length, 0);
+});
+
 test('the learn-later context lists aliases, not ids, and says nothing of a let-go item', () => {
   const context = buildContext({
     text: TEXT,

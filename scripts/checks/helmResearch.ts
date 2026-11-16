@@ -65,6 +65,7 @@ import { parseIsoDuration } from '../../functions/src/videoSearch/youtube.ts';
 import {
   findLearnSlot,
   readLearnOffer,
+  readLearnOffers,
 } from '../../src/apps/helm/engine/learnLater.ts';
 import type { OpenExecution } from '../../src/apps/helm/types.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
@@ -1125,6 +1126,7 @@ const settlement = (
       },
     ],
     searchQuery: 'sourdough for beginners',
+    skipped: null,
     moreAskedAtClaim: [],
   },
   ...over,
@@ -1161,7 +1163,7 @@ test('settling a learn-later item: ready with videos sealed, failure goes back t
     dataKey,
     UID,
     'r1',
-    { result: null, spentCents: 0, searches: 0, hundredths: 0 },
+    { result: null, spentCents: 0, searches: 0, hundredths: 0, learn: null },
     NOW,
   );
   const failed = docs.get(path);
@@ -1194,6 +1196,67 @@ test('settling a learn-later item: ready with videos sealed, failure goes back t
   assert.equal(again?.prepareAt, nextNight(NOW, NY));
 });
 
+test('a search that could not run is retried the next day, and three failed preparations stop the nights', async () => {
+  const path = `${BASE}/research/r1`;
+  const docs = baseDocs({
+    [path]: researchDoc({ status: 'preparing', startedAt: NOW - 5_000 }),
+  });
+  const store = makeStore(docs);
+  const skipped = settlement();
+  await settleResearch(
+    store,
+    dataKey,
+    UID,
+    'r1',
+    { ...skipped, learn: { ...skipped.learn!, videos: [], skipped: 'capped' } },
+    NOW,
+  );
+  assert.equal(docs.get(path)?.status, 'ready');
+  assert.equal(docs.get(path)?.videosFetchedAt, NOW - 29 * DAY_MS);
+
+  const failure = {
+    result: null,
+    spentCents: 0,
+    searches: 0,
+    hundredths: 0,
+    learn: null,
+  };
+  const failOnce = async (failures: number | undefined) => {
+    docs.set(
+      path,
+      researchDoc({
+        status: 'preparing',
+        startedAt: NOW - 5_000,
+        ...(failures === undefined ? {} : { prepareFailures: failures }),
+      }),
+    );
+    await settleResearch(store, dataKey, UID, 'r1', failure, NOW);
+    return docs.get(path);
+  };
+  const first = await failOnce(undefined);
+  assert.equal(first?.prepareFailures, 1);
+  assert.equal(first?.prepareAt, nextNight(NOW, NY));
+  const second = await failOnce(1);
+  assert.equal(second?.prepareFailures, 2);
+  assert.equal(second?.prepareAt, nextNight(NOW, NY));
+  const third = await failOnce(2);
+  assert.equal(third?.status, 'planned');
+  assert.equal(third?.prepareFailures, 3);
+  assert.equal(third?.prepareAt, null);
+  assert.equal(third?.prepareFailedAt, NOW);
+
+  docs.set(
+    path,
+    researchDoc({
+      status: 'preparing',
+      startedAt: NOW - 5_000,
+      prepareFailures: 2,
+    }),
+  );
+  await settleResearch(store, dataKey, UID, 'r1', settlement(), NOW);
+  assert.equal(docs.get(path)?.prepareFailures, 0);
+});
+
 test('a failed learn-later look never asks for a rerun and an asked look still dismisses', async () => {
   const docs = baseDocs({
     [`${BASE}/research/ask`]: {
@@ -1221,7 +1284,7 @@ test('a failed learn-later look never asks for a rerun and an asked look still d
     dataKey,
     UID,
     'ask',
-    { result: null, spentCents: 0, searches: 0, hundredths: 0 },
+    { result: null, spentCents: 0, searches: 0, hundredths: 0, learn: null },
     NOW,
   );
   assert.equal(docs.get(`${BASE}/research/ask`)?.status, 'dismissed');
@@ -1581,7 +1644,58 @@ test('old videos are searched again after 30 days, dropped with no search to rep
   assert.deepEqual(videosOf('noQuery'), []);
   assert.equal(docs.get(`${BASE}/research/noQuery`)?.videosFetchedAt, null);
   assert.equal(videosOf('fresh')[0]?.videoId, 'oldoldold01');
-  assert.equal(videosOf('planned')[0]?.videoId, 'oldoldold01');
+  assert.deepEqual(videosOf('planned'), []);
+  assert.equal(docs.get(`${BASE}/research/planned`)?.videosFetchedAt, null);
+});
+
+test('a refresh clears an item that is no longer wanted so it never jams the oldest-first batch', async () => {
+  const old = NOW - 31 * DAY_MS;
+  const doc = (status: string) => ({
+    ...researchDoc({
+      status,
+      prepareAt: null,
+      videosFetchedAt: old,
+      sealed: sealed({
+        question: 'q',
+        subject: 'Sourdough',
+        moreAsked: [],
+        overview: null,
+        sources: [],
+        videos: [
+          {
+            videoId: 'oldoldold01',
+            title: 'Old',
+            channel: 'C',
+            durationSec: 300,
+          },
+        ],
+        searchQuery: 'sourdough',
+        contextLine: null,
+      }),
+    }),
+  });
+  const docs = baseDocs({
+    [`${BASE}/research/done`]: doc('done'),
+    [`${BASE}/research/gone`]: doc('dismissed'),
+  });
+  await withEnv(
+    {
+      FUNCTIONS_EMULATOR: 'true',
+      FIREBASE_EMULATOR_HUB: 'localhost:4400',
+      LOCAL_FIXTURES: 'youtube',
+    },
+    async () => {
+      assert.equal(
+        await refreshOldVideos(makeStore(docs), DEV_KEYRING, NOW),
+        0,
+      );
+    },
+  );
+  ['done', 'gone'].forEach((id) => {
+    const after = docs.get(`${BASE}/research/${id}`);
+    assert.equal(after?.videosFetchedAt, null);
+    assert.deepEqual(openForHelm(dataKey, after?.sealed as never).videos, []);
+  });
 });
 
 test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy day; readLearnOffer picks one ready item', () => {
@@ -1604,7 +1718,6 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
     busyShare: 0.2,
     offers: [],
     isToday: true,
-    isAfterBusyDay: false,
   });
   assert.ok(slot);
   assert.equal(slot.endAt - slot.startAt, 30 * 60_000);
@@ -1615,7 +1728,6 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
       busyShare: 0.8,
       offers: [],
       isToday: true,
-      isAfterBusyDay: null,
     }),
     null,
   );
@@ -1625,7 +1737,6 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
       busyShare: 0.2,
       offers: [],
       isToday: false,
-      isAfterBusyDay: null,
     }),
     null,
   );
@@ -1642,7 +1753,6 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
       busyShare: 0.2,
       offers: declined,
       isToday: true,
-      isAfterBusyDay: null,
     }),
     null,
   );
@@ -1655,6 +1765,7 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
       offeredOn: null,
       prepareFailedAt: null,
       notNowStreak: 0,
+      offers: [],
       createdAt: NOW,
       ...over,
     }) as never;
@@ -1682,6 +1793,122 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
       timeZone: NY,
     })?.ask,
     'still',
+  );
+});
+
+test('learn offers: shown today first, never offered before offered, longest ago first; old Not nows are forgotten and a blocked item falls back to one that fits', async () => {
+  const todayKey = '2026-11-16';
+  const item = (id: string, over: Record<string, unknown>) =>
+    ({
+      id,
+      mode: 'learnLater',
+      status: 'ready',
+      isUnreadable: false,
+      offeredOn: null,
+      prepareFailedAt: null,
+      notNowStreak: 0,
+      offers: [],
+      createdAt: NOW,
+      ...over,
+    }) as never;
+  const offered = (at: number) => [
+    {
+      at,
+      dayKind: 'weekday',
+      gapMinutes: 60,
+      afterBusyDay: null,
+      outcome: 'notNow',
+    },
+  ];
+  const ids = (items: never[]) =>
+    readLearnOffers({ items, todayKey, timeZone: NY }).map(
+      (reading) => (reading.item as unknown as { id: string }).id,
+    );
+  assert.deepEqual(
+    ids([
+      item('recent', { offers: offered(NOW - DAY_MS), status: 'offered' }),
+      item('older', { offers: offered(NOW - 5 * DAY_MS), status: 'offered' }),
+      item('never', { createdAt: NOW - DAY_MS }),
+      item('neverNewer', { createdAt: NOW }),
+      item('today', {
+        offeredOn: todayKey,
+        offers: offered(NOW),
+        status: 'offered',
+      }),
+      item('tieA', {
+        offers: offered(NOW - 9 * DAY_MS),
+        createdAt: NOW - 3 * DAY_MS,
+      }),
+      item('tieB', {
+        offers: offered(NOW - 9 * DAY_MS),
+        createdAt: NOW - 4 * DAY_MS,
+      }),
+    ]),
+    ['today', 'never', 'neverNewer', 'tieB', 'tieA', 'older', 'recent'],
+  );
+
+  const plan = {
+    dayKey: todayKey,
+    timeZone: NY,
+    now: Date.UTC(2026, 10, 16, 13, 0),
+    dayStartTime: '08:00',
+    dayEndTime: '22:00',
+    fillPercent: 100,
+    hasCalendar: false,
+    restDay: null,
+    currentPlaceId: null,
+    busy: [],
+    slots: {},
+    tasks: [],
+  };
+  const dayStart = Date.UTC(2026, 10, 16, 13, 0);
+  const notNows = (agesInDays: number[]) =>
+    agesInDays.map((age) => ({
+      at: dayStart - age * DAY_MS,
+      dayKind: 'weekday' as const,
+      gapMinutes: 60,
+      afterBusyDay: null,
+      outcome: 'notNow' as const,
+    }));
+  const slotWith = (offers: ReturnType<typeof notNows>) =>
+    findLearnSlot({ plan, busyShare: 0.2, offers, isToday: true });
+  assert.ok(slotWith(notNows([40, 45])));
+  assert.equal(slotWith(notNows([2, 3])), null);
+
+  const blocked = item('A', { offers: notNows([2, 3]), status: 'offered' });
+  const fits = item('B', { createdAt: NOW });
+  const first = readLearnOffers({
+    items: [blocked, fits],
+    todayKey,
+    timeZone: NY,
+  })
+    .map(
+      (reading) =>
+        reading.item as unknown as {
+          id: string;
+          offers: ReturnType<typeof notNows>;
+        },
+    )
+    .find(
+      (one) =>
+        findLearnSlot({
+          plan,
+          busyShare: 0.2,
+          offers: one.offers,
+          isToday: true,
+        }) !== null,
+    );
+  assert.equal(first?.id, 'B');
+
+  const { pickLearnOffers } =
+    await import('../../src/apps/helm/store/selectors/researchSelectors.ts');
+  assert.deepEqual(
+    pickLearnOffers(
+      [item('x', { offers: offered(NOW), status: 'offered' }), item('y', {})],
+      todayKey,
+      NY,
+    ),
+    [],
   );
 });
 

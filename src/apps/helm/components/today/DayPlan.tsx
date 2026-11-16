@@ -84,7 +84,7 @@ interface DayPlanProps {
   onSelectDay: (dayKey: string) => void;
   onOpenHabit: (habitId: string) => void;
   /** The saved question Today may offer, when no pattern offer is showing; the card appears at the day's first free half hour. */
-  learn: LearnOfferReading | null;
+  learns: LearnOfferReading[];
   onOpenLearn: (itemId: string) => void;
 }
 
@@ -124,7 +124,7 @@ function DayPlan({
   onUndoTick,
   onSelectDay,
   onOpenHabit,
-  learn,
+  learns,
   onOpenLearn,
 }: DayPlanProps) {
   const assistantName = useAssistantName();
@@ -214,16 +214,26 @@ function DayPlan({
   const gaps = input.hasCalendar
     ? findFreeGaps(gapInput, FREE_GAP_MINUTES)
     : [];
-  const learnSlot =
-    learn && isToday && !isHeld
-      ? findLearnSlot({
-          plan: gapInput,
-          busyShare: readBusyShare(input),
-          offers: learn.item.offers,
-          isToday,
-          isAfterBusyDay: null,
-        })
-      : null;
+  const learnBusyShare = readBusyShare(input);
+  const { learn, learnSlot } =
+    isToday && !isHeld
+      ? learns.reduce<{
+          learn: LearnOfferReading | null;
+          learnSlot: LearnSlot | null;
+        }>(
+          (found, candidate) => {
+            if (found.learn) return found;
+            const slot = findLearnSlot({
+              plan: gapInput,
+              busyShare: learnBusyShare,
+              offers: candidate.item.offers,
+              isToday,
+            });
+            return slot ? { learn: candidate, learnSlot: slot } : found;
+          },
+          { learn: null, learnSlot: null },
+        )
+      : { learn: null, learnSlot: null };
   const hasRoom =
     !input.hasCalendar || findFreeGaps(gapInput, FULL_GAP_MINUTES).length > 0;
   const isLate =

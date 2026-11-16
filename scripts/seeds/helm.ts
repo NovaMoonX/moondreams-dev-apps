@@ -2496,6 +2496,100 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
   ]);
 }
 
+/** Jamie's saved-to-learn questions: no pattern offer waits on Today, so a weekday evening shows the learn card. One is ready and never offered, one is still preparing, one was offered a week ago. */
+async function buildPartnerLearn(input: { now: number; encryption: HelmEncryption }) {
+  const { now, encryption } = input;
+  const item = async (
+    id: string,
+    question: string,
+    subject: string,
+    fields: Record<string, unknown>,
+    overview: ResearchSealed['overview'],
+  ) => ({
+    id,
+    doc: {
+      mode: 'learnLater' as const,
+      captureId: null,
+      projectId: null,
+      depth: 'light' as const,
+      isWithoutWeb: true,
+      reservedCents: 0,
+      searchesUsed: 0,
+      costCents: 0,
+      rerunOn: null,
+      cancelledAt: null,
+      lastEditedAt: null,
+      prepareAt: null,
+      needsLiveFacts: false,
+      notNowStreak: 0,
+      prepareFailures: 0,
+      declineReason: null,
+      offeredOn: null,
+      offers: [],
+      relatedOfferedAt: {},
+      mergedInto: null,
+      videosFetchedAt: null,
+      prepareFailedAt: null,
+      resultNoteId: null,
+      removedAt: null,
+      ...fields,
+      sealed: await sealJson<ResearchSealed>(
+        { question, subject, overview, sources: [], moreAsked: [], videos: [], searchQuery: null, contextLine: null },
+        encryption,
+      ),
+    },
+  });
+  return Promise.all([
+    item(
+      'seed-learn-jamie-sourdough',
+      'How do I keep a sourdough starter alive?',
+      'sourdough starters',
+      { status: 'ready', preparedAt: now - DAY_MS, startedAt: now - DAY_MS, createdAt: now - 3 * DAY_MS },
+      {
+        summary:
+          'A starter is flour and water that wild yeast and bacteria keep fed; feed it regularly and it stays lively for years.',
+        sections: [
+          {
+            heading: 'Keeping it going',
+            points: [
+              'Feed it equal weights of flour and water, daily at room temperature or weekly in the fridge.',
+              'It is ready to bake with when it doubles within a few hours of feeding.',
+            ],
+          },
+        ],
+        comparison: null,
+        form: 'points',
+      },
+    ),
+    item(
+      'seed-learn-jamie-tides',
+      'Why are there two tides a day?',
+      'how tides work',
+      { status: 'planned', prepareAt: now + 6 * 3_600_000, createdAt: now - DAY_MS },
+      null,
+    ),
+    item(
+      'seed-learn-jamie-compost',
+      'How does composting work?',
+      'composting at home',
+      {
+        status: 'ready',
+        preparedAt: now - 8 * DAY_MS,
+        startedAt: now - 8 * DAY_MS,
+        createdAt: now - 9 * DAY_MS,
+        offers: [{ at: now - 7 * DAY_MS, dayKind: 'weekday', gapMinutes: 80, afterBusyDay: null, outcome: 'yes' }],
+      },
+      {
+        summary:
+          'Composting lets microbes break kitchen scraps down into soil; a balance of greens and browns, air and moisture keeps it working.',
+        sections: [],
+        comparison: null,
+        form: 'points',
+      },
+    ),
+  ]);
+}
+
 /** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private) and 🧘 Stretch (a morning window left unticked today, so "Window ended" shows once it has passed). */
 async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
   const { now, encryption } = input;
@@ -7177,6 +7271,14 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           : null;
         if (researchWorld) {
           researchWorld.forEach((entry) =>
+            batch.set(person.collection('research').doc(entry.id), entry.doc),
+          );
+        }
+        const partnerLearn = people
+          ? null
+          : await buildPartnerLearn({ now: context.now, encryption });
+        if (partnerLearn) {
+          partnerLearn.forEach((entry) =>
             batch.set(person.collection('research').doc(entry.id), entry.doc),
           );
         }

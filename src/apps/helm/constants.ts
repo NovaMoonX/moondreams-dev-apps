@@ -1650,6 +1650,7 @@ export const HELM_COPY = {
   learnLaterRow: (count: number) =>
     count === 0 ? 'Learn later' : `Learn later · ${count}`,
   learnLaterTitle: 'Learn later',
+  learnMatchRow: (count: number) => `${count} in Learn later`,
   learnSaved: (subject: string) =>
     `Saved to learn later: ${subject}. I'll bring it up when you have a free half hour.`,
   learnSavedPlain:
@@ -1660,7 +1661,8 @@ export const HELM_COPY = {
     `${subject} is back on your learn later list.`,
   learnRemoved: (subject: string) => `Okay, I took ${subject} off your list.`,
   learnNotNowLine: 'Okay, it stays on your list.',
-  learnCardTitle: (subject: string) => `${subject}, the longer version`,
+  learnCardTitle: (subject: string) =>
+    `${subject.charAt(0).toUpperCase()}${subject.slice(1)}, the longer version`,
   learnCardLine: 'Remember that thing you wanted to learn?',
   learnCardMeta: (minutes: number, savedOn: string) =>
     `${minutes} min · you saved it ${savedOn} · Suggested`,
@@ -1686,6 +1688,7 @@ export const HELM_COPY = {
     'From general knowledge, not checked against your records. It may be out of date.',
   learnKeep: 'Save to my knowledge',
   learnKept: 'Saved to your knowledge.',
+  learnKeptIn: (topicName: string) => `Saved to ${topicName}.`,
   learnDone: 'Done with it',
   learnDoneLine: (subject: string) => `Marked ${subject} as learned.`,
   learnRemove: 'Remove',
@@ -1693,7 +1696,9 @@ export const HELM_COPY = {
   learnVideoMeta: (channel: string, minutes: number) =>
     `${channel} · ${minutes} min`,
   learnFailed: "Couldn't put the overview together. It'll try again tomorrow.",
-  learnPreparing: 'Preparing…',
+  learnPreparing: 'Preparing this for you. Ready by tomorrow morning.',
+  learnPreparingLine: (savedOn: string) =>
+    `Saved ${savedOn} · ready by tomorrow morning`,
   learnSavedLine: (savedOn: string, context: string | null) =>
     context ? `Saved ${savedOn} · ${context}` : `Saved ${savedOn}`,
   learnEmpty:

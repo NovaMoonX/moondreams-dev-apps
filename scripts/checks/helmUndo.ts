@@ -2901,6 +2901,22 @@ test('a merge into a saved question puts its words and status back', () => {
   assert.deepEqual((one.reseal as ResearchSealed).moreAsked, []);
 });
 
+test('putting a saved question back to planned with no night booked is kept, never restored', () => {
+  const sentBack = execution([
+    researchUpdate({ status: 'ready' }, { status: 'planned' }),
+  ]);
+  const result = asRefused(
+    plan(sentBack, [
+      researchTarget('r1', {
+        ...LEARN_UNTOUCHED,
+        status: 'ready',
+        prepareAt: null,
+      }),
+    ]),
+  );
+  assert.deepEqual(result.kept, ['Engines']);
+});
+
 test('removing a saved question comes back with its status and reason, kept if it changed since', () => {
   const removed = execution([
     researchUpdate(

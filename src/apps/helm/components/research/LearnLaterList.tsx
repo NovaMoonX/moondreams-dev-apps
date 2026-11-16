@@ -26,7 +26,7 @@ const toStatusLine = (item: OpenResearch) =>
   item.status === 'planned' && item.prepareFailedAt !== null
     ? HELM_COPY.learnFailed
     : item.status === 'planned' || item.status === 'preparing'
-      ? HELM_COPY.learnPreparing
+      ? HELM_COPY.learnPreparingLine(formatDateShort(item.createdAt))
       : HELM_COPY.learnSavedLine(
           formatDateShort(item.createdAt),
           item.contextLine,

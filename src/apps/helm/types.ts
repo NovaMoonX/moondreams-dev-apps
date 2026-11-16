@@ -2085,6 +2085,8 @@ export interface Research {
   needsLiveFacts: boolean;
   /** Learn later: Not nows in a row; Show me and Keep it reset it to 0. */
   notNowStreak: number;
+  /** Learn later: how many nights the overview failed to prepare; written by the server only. */
+  prepareFailures: number;
   declineReason: LearnDeclineReason | null;
   /** Learn later: the day key Today last showed it, so it is offered once a day across devices. */
   offeredOn: string | null;

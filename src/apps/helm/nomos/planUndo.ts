@@ -597,6 +597,12 @@ const planRecord = (
   if (Object.keys(updated.restored).length === 0) {
     return updated.hasKeptEntry ? { kind: 'kept', title } : left;
   }
+  if (
+    entries[0]?.ref.collection === 'research' &&
+    updated.restored.status === 'planned' &&
+    (target.data.prepareAt ?? null) === null
+  )
+    return { kind: 'kept', title };
   const reseal =
     Object.keys(updated.sealedFields).length > 0
       ? (updated.opened as Exclude<

@@ -206,7 +206,7 @@ export function readLearnCommands(
   };
 }
 
-/** Withholds a save and a goal the model made of the same wish: both are dropped and code asks which the person meant. A goal offered for a wish that is already a goal is dropped too. */
+/** Withholds a save and a goal the model made of the same wish: both are dropped and code asks which the person meant (the first such save is the ask; any further one stays a save, since one ask is shown at a time). A goal offered for a wish that is already a goal is dropped too. */
 export function refuseDoubledGoals(
   learn: LearnCommands,
   projects: ProjectCommand[],
@@ -255,28 +255,25 @@ export function refuseDoubledGoals(
     });
   const dropped = new Set(
     [...doubledSaves, ...doubledAsks, ...doubledOffers].flatMap((entry) =>
-      overlapped(
-        'name' in entry
-          ? [entry.name]
-          : 'subject' in entry
-            ? [entry.subject, entry.question]
-            : [],
-      ),
+      overlapped([
+        ...('name' in entry ? [entry.name] : []),
+        ...('subject' in entry ? [entry.subject, entry.question] : []),
+        ...('quote' in entry ? [entry.quote] : []),
+      ]),
     ),
   );
+  const asks = learn.asks.map((ask) =>
+    doubledAsks.includes(ask) ? withGoal(ask) : ask,
+  );
+  const asked = asks.length === 0 ? doubledSaves.slice(0, 1) : [];
   return {
     learn: {
       commands: learn.commands.filter(
         (command) =>
-          !(doubledSaves as LearnCommand[]).includes(command) &&
+          !(asked as LearnCommand[]).includes(command) &&
           !(doubledOffers as LearnCommand[]).includes(command),
       ),
-      asks: [
-        ...learn.asks.map((ask) =>
-          doubledAsks.includes(ask) ? withGoal(ask) : ask,
-        ),
-        ...doubledSaves.map(toAsk),
-      ].slice(0, 1),
+      asks: [...asks, ...asked.map(toAsk)].slice(0, 1),
     },
     projects: projects.filter(
       (command) =>

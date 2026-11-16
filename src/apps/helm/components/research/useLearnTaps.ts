@@ -50,7 +50,7 @@ export function useLearnTaps(onFinished?: () => void) {
   };
 
   const run = async (
-    start: (uid: string) => Promise<LearnTap | null>,
+    start: (uid: string) => Promise<(LearnTap & { title?: string }) | null>,
     title: string,
   ) => {
     if (!user || isBusy) return;
@@ -58,7 +58,7 @@ export function useLearnTaps(onFinished?: () => void) {
     try {
       const tap = await start(user.uid);
       if (tap) {
-        say(title, tap);
+        say(tap.title ?? title, tap);
         tap.written.catch((error: unknown) => {
           console.error('Helm learn later change was not saved', error);
           addToast({ title: HELM_COPY.learnActionFailed, type: 'error' });
@@ -84,7 +84,13 @@ export function useLearnTaps(onFinished?: () => void) {
     keep: (item: OpenResearch) =>
       run(async (uid) => {
         const result = await keepLearn(uid, item);
-        if (result.kind === 'saved') return result;
+        if (result.kind === 'saved')
+          return {
+            ...result,
+            title: result.topicName
+              ? HELM_COPY.learnKeptIn(result.topicName)
+              : HELM_COPY.learnKept,
+          };
         addToast({
           title:
             result.kind === 'full' ? HELM_COPY.notesFull : HELM_COPY.saveFailed,

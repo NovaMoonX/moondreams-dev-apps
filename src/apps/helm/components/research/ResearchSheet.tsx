@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import DetailSheet from '@/components/DetailSheet';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import SectionDivider from '@/components/SectionDivider';
@@ -23,13 +25,22 @@ function Comparison({
   comparison: NonNullable<OpenResearch['overview']>['comparison'];
 }) {
   if (!comparison || comparison.rows.length === 0) return null;
+  const columnCount = Math.max(
+    comparison.columns.length,
+    ...comparison.rows.map((row) => row.length),
+  );
   return (
     <section className='space-y-2'>
       <h3 className='text-muted-foreground text-[13px] font-semibold'>
         {HELM_COPY.researchComparisonLabel}
       </h3>
       <div className='border-border max-w-full overflow-x-auto rounded-[10px] border'>
-        <table className='w-full min-w-max border-collapse text-left text-[13px] leading-[18px]'>
+        <table
+          className={join(
+            'w-full border-collapse text-left text-[13px] leading-[18px]',
+            columnCount >= 4 ? 'min-w-max' : 'table-fixed',
+          )}
+        >
           {comparison.columns.length > 0 && (
             <thead>
               <tr className='bg-muted'>
@@ -37,7 +48,7 @@ function Comparison({
                   <th
                     key={`${column}-${index}`}
                     scope='col'
-                    className='max-w-[180px] px-3 py-2 align-top font-semibold break-words'
+                    className='px-3 py-2 align-top font-semibold break-words'
                   >
                     {column}
                   </th>
@@ -53,14 +64,14 @@ function Comparison({
                     <th
                       key={cellIndex}
                       scope='row'
-                      className='max-w-[180px] px-3 py-2 align-top font-semibold break-words'
+                      className='px-3 py-2 align-top font-semibold break-words'
                     >
                       {cell}
                     </th>
                   ) : (
                     <td
                       key={cellIndex}
-                      className='max-w-[180px] px-3 py-2 align-top break-words'
+                      className='px-3 py-2 align-top break-words'
                     >
                       {cell}
                     </td>
@@ -136,7 +147,10 @@ function ResearchSheet({
                     </h3>
                   )}
                   <List
-                    className={`${isSteps ? 'list-decimal' : 'list-disc'} space-y-1 pl-5 text-[15px] leading-[21px]`}
+                    className={join(
+                      isSteps ? 'list-decimal' : 'list-disc',
+                      'space-y-1 pl-5 text-[15px] leading-[21px]',
+                    )}
                   >
                     {section.points.map((point, pointIndex) => (
                       <li key={pointIndex} className='break-words'>

@@ -321,6 +321,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     writer: 'actions/learnLaterActions',
     taps: [
       'cancelResearch',
+      'markLearnOffered',
       'notNowLearn',
       'showLearn',
       'keepLearn',

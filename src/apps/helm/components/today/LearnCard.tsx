@@ -43,25 +43,24 @@ function LearnCard({ item, ask, slot, dayKey, onOpen }: LearnCardProps) {
     );
   }, [user, item, dayKey]);
 
-  const write = (change: Promise<unknown>, onDone?: () => void) =>
-    change.then(onDone).catch((error: unknown) => {
-      console.error('Helm learn later change was not saved', error);
-      addToast({ title: HELM_COPY.learnActionFailed, type: 'error' });
-    });
+  const failToast = (error: unknown) => {
+    console.error('Helm learn later change was not saved', error);
+    addToast({ title: HELM_COPY.learnActionFailed, type: 'error' });
+  };
 
   const show = () => {
     if (!user) return;
-    void write(showLearn(user.uid, item, slot), () => onOpen(item.id));
+    onOpen(item.id);
+    void showLearn(user.uid, item, slot).catch(failToast);
   };
   const notNow = () => {
     if (!user) return;
-    void write(notNowLearn(user.uid, item, slot), () =>
-      addToast({ title: HELM_COPY.learnNotNowLine, type: 'info' }),
-    );
+    addToast({ title: HELM_COPY.learnNotNowLine, type: 'info' });
+    void notNowLearn(user.uid, item, slot).catch(failToast);
   };
   const keep = () => {
     if (!user) return;
-    void write(keepStillLearn(user.uid, item));
+    void keepStillLearn(user.uid, item).catch(failToast);
   };
 
   return (

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { toAwayIds, toTurnZone } from './nomos/planWhereabouts.js';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -527,7 +528,7 @@ export const resolveHelmQuestion = onCall(
           now,
           timeZone,
           items,
-          newId: () => crypto.randomUUID(),
+          newId: () => randomUUID(),
           capture: {
             status: capture.status,
             executionIds: capture.executionIds ?? [],
@@ -547,7 +548,7 @@ export const resolveHelmQuestion = onCall(
                 base,
                 key,
               ),
-              newId: () => crypto.randomUUID(),
+              newId: () => randomUUID(),
               executionId: executionRef.id,
               captureId,
               now,

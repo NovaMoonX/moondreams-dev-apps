@@ -30,7 +30,7 @@ import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
 import { patternFamily } from '@apps/helm/engine/patterns';
 import LearnItemSheet from '@apps/helm/components/research/LearnItemSheet';
 import {
-  pickLearnOffer,
+  pickLearnOffers,
   selectLearnLater,
 } from '@apps/helm/store/selectors/researchSelectors';
 import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
@@ -158,10 +158,13 @@ function TodayView({
     : null;
   const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
 
-  const learn =
-    isToday && offer === null
-      ? pickLearnOffer(learnItems, todayKey, timeZone)
-      : null;
+  const learns = useMemo(
+    () =>
+      isToday && offer === null
+        ? pickLearnOffers(learnItems, todayKey, timeZone)
+        : [],
+    [isToday, offer, learnItems, todayKey, timeZone],
+  );
 
   const handleDeleted = (
     taskId: string,
@@ -271,7 +274,7 @@ function TodayView({
               onUndoTick={(taskId) => void undoTick(taskId)}
               onSelectDay={setPickedKey}
               onOpenHabit={onOpenHabit}
-              learn={learn}
+              learns={learns}
               onOpenLearn={setOpenLearnId}
             />
           ))}

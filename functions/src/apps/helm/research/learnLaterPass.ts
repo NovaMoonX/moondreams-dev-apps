@@ -1,4 +1,4 @@
-import type { Firestore } from 'firebase-admin/firestore';
+import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 import { searchVideos } from '../../../videoSearch/searchVideos.js';
@@ -115,6 +115,35 @@ export async function startDueLearnLater(firestore: Firestore, now: number) {
 
 type Refresh = 'refreshed' | 'skipped' | 'unavailable';
 
+const isLive = (status: unknown) => status === 'ready' || status === 'offered';
+
+/** An item that is no longer wanted (done, dismissed, planned again, merged) keeps no videos past their month and leaves the oldest-first query, so it never holds a place that a live item needs. */
+async function dropVideos(
+  firestore: Firestore,
+  key: HelmKey,
+  ref: DocumentReference,
+  fetchedAt: number,
+): Promise<Refresh> {
+  return firestore.runTransaction<Refresh>(async (transaction) => {
+    const current = await transaction.get(ref);
+    const data = current.data();
+    if (!data || data.videosFetchedAt !== fetchedAt) return 'skipped';
+    if (data.mode === 'learnLater' && isLive(data.status)) return 'skipped';
+    transaction.update(ref, {
+      videosFetchedAt: null,
+      ...(data.mode === 'learnLater'
+        ? {
+            sealed: sealForHelm(key, {
+              ...openForHelm(key, data.sealed as SealedPayload),
+              videos: [],
+            }),
+          }
+        : {}),
+    });
+    return 'skipped';
+  });
+}
+
 /** Looks again for the videos of one ready or offered item, or drops them when it has no search to repeat. A search that could not run leaves the item as it was. */
 async function refreshOne(
   firestore: Firestore,
@@ -126,13 +155,9 @@ async function refreshOne(
   const ref = firestore.doc(path);
   const snap = await ref.get();
   const data = snap.data();
-  if (
-    !data ||
-    data.mode !== 'learnLater' ||
-    (data.status !== 'ready' && data.status !== 'offered') ||
-    data.videosFetchedAt !== fetchedAt
-  ) {
-    return 'skipped';
+  if (!data || data.videosFetchedAt !== fetchedAt) return 'skipped';
+  if (data.mode !== 'learnLater' || !isLive(data.status)) {
+    return dropVideos(firestore, key, ref, fetchedAt);
   }
   const opened = openForHelm(key, data.sealed as SealedPayload);
   const query =
@@ -161,7 +186,7 @@ async function refreshOne(
   });
 }
 
-/** Refreshes videos older than 30 days, at most 20 a run, so a link that stopped playing is replaced and the search quota is spread out. Stops when the search is unavailable (no key, past the day's cap, failing) and tries again next run. */
+/** Refreshes videos older than 30 days, at most 20 a run (an item no longer wanted is cleared instead, so it never fills the batch), so a link that stopped playing is replaced and the search quota is spread out. Stops when the search is unavailable (no key, past the day's cap, failing) and tries again next run. */
 export async function refreshOldVideos(
   firestore: Firestore,
   keyring: Keyring,
