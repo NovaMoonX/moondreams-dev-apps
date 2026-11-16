@@ -71,3 +71,10 @@ export const isOnDeviceLang = (lang: string) =>
 /** The engine and the model, with their licences, as named where the download is offered. */
 export const ON_DEVICE_CREDITS =
   'sherpa-onnx (Apache-2.0) with ONNX Runtime (MIT) and a Zipformer model trained on LibriSpeech (Apache-2.0)';
+
+export const ON_DEVICE_FALLBACK_KEYS = {
+  model: 'speech:on-device-model',
+  download: 'speech:on-device-download',
+  storage: 'speech:on-device-storage',
+  listen: 'speech:on-device-listen',
+};

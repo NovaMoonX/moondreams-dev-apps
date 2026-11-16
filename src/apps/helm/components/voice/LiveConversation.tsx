@@ -5,6 +5,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Mic, MicOff, X } from 'lucide-react';
 
 import WorkingRing from '@/components/WorkingRing';
+import { useFollowScroll } from '@/hooks/useFollowScroll';
+import { splitIntoParagraphs } from '@/utils/proseUtils';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -69,12 +71,15 @@ function LiveConversation() {
   const name = useAssistantName();
   const dialog = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const personParagraph = useRef<HTMLParagraphElement>(null);
-  const helmParagraph = useRef<HTMLParagraphElement>(null);
+  const personBlock = useRef<HTMLDivElement>(null);
+  const helmBlock = useRef<HTMLDivElement>(null);
   const isHearing = voice.state === 'listening' && voice.heard !== '';
   const personLine = isHearing ? voice.heard : voice.liveSaid;
-  const helmLine = isHearing ? '' : voice.lastLine;
+  const helmLine =
+    isHearing || voice.state === 'thinking' ? '' : voice.lastLine;
   const isThinking = voice.state === 'thinking';
+  const isDeviceVoice =
+    voice.state === 'speaking' && voice.speakingVoice === 'device';
   const isWaiting =
     !voice.isLiveMuted && (voice.isStarting || voice.isPreparing);
   const isOpening = personLine === '' && helmLine === '' && !isThinking;
@@ -98,11 +103,10 @@ function LiveConversation() {
     };
   }, []);
 
-  // The person's words shrink to fit as they grow, and once at the floor their newest stay in view; a reply arrives whole and is read from its start.
   useLayoutEffect(() => {
     const box = scroller.current;
     if (!box) return;
-    const line = personParagraph.current;
+    const line = personBlock.current;
     if (line && isHearing) fitHeard(box, line);
     else if (line) line.style.fontSize = '';
     box.scrollTop = box.scrollHeight;
@@ -110,11 +114,18 @@ function LiveConversation() {
 
   useEffect(() => {
     const box = scroller.current;
-    const reply = helmParagraph.current;
+    const reply = helmBlock.current;
     if (!box || !reply) return;
     box.scrollTop =
       reply.offsetTop - parseFloat(getComputedStyle(box).paddingTop);
   }, [helmLine]);
+
+  useFollowScroll({
+    scrollerRef: scroller,
+    targetRef: helmBlock,
+    progress: voice.lineProgress,
+    restartKey: helmLine,
+  });
 
   return (
     <div
@@ -138,15 +149,20 @@ function LiveConversation() {
         <span className='helm-live-glow' />
         {isHearing && <span key={wordCount} className='helm-live-ripple' />}
       </div>
-      <div className='relative mx-auto flex h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
-        <p
-          aria-live='polite'
-          className='text-foreground/80 text-[15px] font-medium'
-        >
-          {isOpening || isThinking
-            ? ''
-            : toStatus(voice.state, voice.isLiveMuted, isWaiting)}
-        </p>
+      <div className='relative mx-auto flex min-h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
+        <div className='min-w-0 flex-1'>
+          <p
+            aria-live='polite'
+            className='text-foreground/80 text-[15px] font-medium'
+          >
+            {isOpening || isThinking
+              ? ''
+              : toStatus(voice.state, voice.isLiveMuted, isWaiting)}
+          </p>
+          <p className='text-foreground/75 min-h-4 min-w-0 truncate text-xs'>
+            {isDeviceVoice && !isOpening ? HELM_COPY.voiceUsingDevice : ''}
+          </p>
+        </div>
         <MuteControl shows='whileSpeaking' />
         <MuteControl shows='whileMuted' />
       </div>
@@ -171,15 +187,17 @@ function LiveConversation() {
         ) : (
           <div className='my-auto flex flex-col gap-5'>
             {personLine !== '' && (
-              <p
-                ref={personParagraph}
+              <div
+                ref={personBlock}
                 className={join(
-                  'leading-snug font-medium text-pretty',
+                  'space-y-3 leading-snug font-medium text-pretty',
                   isHearing ? 'text-[30px]' : 'text-muted-foreground text-xl',
                 )}
               >
-                {personLine}
-              </p>
+                {splitIntoParagraphs(personLine).map((part, index) => (
+                  <p key={index}>{part}</p>
+                ))}
+              </div>
             )}
             {isThinking && (
               <div role='status' className='flex items-center gap-3'>
@@ -192,12 +210,14 @@ function LiveConversation() {
               </div>
             )}
             {helmLine !== '' && (
-              <p
-                ref={helmParagraph}
-                className='text-[26px] leading-snug text-pretty'
+              <div
+                ref={helmBlock}
+                className='space-y-4 text-[26px] leading-snug text-pretty'
               >
-                {helmLine}
-              </p>
+                {splitIntoParagraphs(helmLine).map((part, index) => (
+                  <p key={index}>{part}</p>
+                ))}
+              </div>
             )}
             {voice.note !== null && voice.note !== helmLine && (
               <p className='text-foreground/80 text-[15px]'>{voice.note}</p>

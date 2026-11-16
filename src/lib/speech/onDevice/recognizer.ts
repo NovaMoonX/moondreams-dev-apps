@@ -1,6 +1,12 @@
 import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
+import {
   ON_DEVICE_BINARY,
   ON_DEVICE_CACHE_NAME,
+  ON_DEVICE_FALLBACK_KEYS,
   ON_DEVICE_MODELS,
   ON_DEVICE_RUNTIME,
 } from '@/lib/speech/onDevice/config';
@@ -10,6 +16,8 @@ import type {
 } from '@/lib/speech/onDevice/workerMessages';
 
 export type RecognizerStatus = 'idle' | 'loading' | 'ready' | 'failed';
+
+const FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.model;
 
 interface RecognitionHandlers {
   onPartial: (text: string) => void;
@@ -83,6 +91,8 @@ export const unloadRecognizer = () => {
   store.worker = null;
   store.loading = null;
   failAll();
+  removeFallback(FALLBACK_KEY);
+  removeFallback(ON_DEVICE_FALLBACK_KEYS.listen);
   setStatus('idle');
 };
 
@@ -107,6 +117,17 @@ export const loadRecognizer = () => {
         store.worker = null;
         store.loading = null;
         setStatus('failed');
+        reportFallback({
+          key: FALLBACK_KEY,
+          feature: 'Listening',
+          wanted: 'the on-device speech model',
+          used: "the browser's listening",
+          reason: "it couldn't start",
+          facts: [
+            `Error: ${error.message}`,
+            `Was ready before: ${wasReady ? 'yes' : 'no'}`,
+          ],
+        });
         if (wasReady) failAll();
       }
       reject(error);
@@ -123,6 +144,7 @@ export const loadRecognizer = () => {
         window.clearTimeout(timeoutId);
         store.loading = null;
         setStatus('ready');
+        clearFallback(FALLBACK_KEY);
         resolve();
         return;
       }

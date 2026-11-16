@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, CircleHelp, Mic, Square, X } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import { splitIntoParagraphs } from '@/utils/proseUtils';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
@@ -46,10 +47,7 @@ export function VoiceNotice() {
 }
 
 /** What the voice is doing, in words: what is heard as it is said (the newest words kept in view), the line being spoken, or the short line after an undo, with Mute while a line plays and Muted once it is on. Draws nothing while idle unless it carries the controls or the voice is muted. */
-function VoiceStatus({
-  hasControls = false,
-  screen = null,
-}: VoiceStatusProps) {
+function VoiceStatus({ hasControls = false, screen = null }: VoiceStatusProps) {
   const voice = useHelmVoiceContext();
   const isLoud = voice.state === 'listening' || voice.state === 'speaking';
   const text =
@@ -91,15 +89,25 @@ function VoiceStatus({
         </div>
       )}
       {text !== '' && voice.state !== 'listening' && (
-        <p
+        <div
           className={join(
-            'max-h-36 overflow-y-auto text-balance break-words',
+            'max-h-36 space-y-2 overflow-y-auto text-balance break-words',
             isLoud
               ? 'text-[22px] leading-7 font-medium'
               : 'text-muted-foreground text-[15px]',
           )}
         >
-          {text}
+          {(voice.state === 'speaking'
+            ? splitIntoParagraphs(text)
+            : [text]
+          ).map((part, index) => (
+            <p key={index}>{part}</p>
+          ))}
+        </div>
+      )}
+      {voice.state === 'speaking' && voice.speakingVoice === 'device' && (
+        <p className='text-muted-foreground -mt-1 text-xs'>
+          {HELM_COPY.voiceUsingDevice}
         </p>
       )}
       {voice.state === 'listening' && voice.listeningRoute === 'cloud' && (

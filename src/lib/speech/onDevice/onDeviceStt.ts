@@ -1,9 +1,13 @@
+import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import { ON_DEVICE_FALLBACK_KEYS } from '@/lib/speech/onDevice/config';
 import {
+  getRecognizerStatus,
   loadRecognizer,
   openRecognition,
 } from '@/lib/speech/onDevice/recognizer';
 import {
   describeThrown,
+  readSpeechEvents,
   recordSpeechEvent,
 } from '@/lib/speech/speechDiagnostics';
 import { startPcmCapture } from '@/lib/speech/voice/pcmWorklet';
@@ -25,6 +29,23 @@ export const toHeardText = (parts: string[]) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+const FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.listen;
+
+// A model that failed to load is already reported under its own key, so the listen it ended isn't reported twice.
+const reportListenFailed = (raw: string) => {
+  if (getRecognizerStatus() === 'failed') return;
+  const events = readSpeechEvents();
+  reportFallback({
+    key: FALLBACK_KEY,
+    feature: 'Listening',
+    wanted: 'the on-device speech model',
+    used: 'nothing for this listen, which ended',
+    reason: "it couldn't listen",
+    facts: [`Error: ${raw}`],
+    trace: events.length > 0 ? events.join('\n') : null,
+  });
+};
+
 const toErrorCode = (error: unknown): SttErrorCode => {
   recordSpeechEvent(`On-device listening failed: ${describeThrown(error)}`);
   if (error instanceof DOMException) {
@@ -33,6 +54,7 @@ const toErrorCode = (error: unknown): SttErrorCode => {
     }
     if (error.name === 'NotFoundError') return 'no-microphone';
   }
+  reportListenFailed(describeThrown(error));
   return 'unavailable';
 };
 
@@ -189,12 +211,14 @@ export const createOnDeviceStt = ({
             if (state.isDone) return;
             release();
             state.isDone = true;
+            reportListenFailed('The recognizer reported a failure');
             options.onError('unavailable');
           },
         });
         if (recognition.current === null) throw new Error('Not loaded');
         microphone.preRoll.forEach((frame) => recognition.current?.push(frame));
         microphone.subscribe((frame) => recognition.current?.push(frame));
+        clearFallback(FALLBACK_KEY);
         options.onListening?.();
       } catch (error) {
         if (state.isDone) return;
@@ -261,9 +285,11 @@ export const listenOnDevice = ({
         onFailed: () => {
           if (state.isClosed) return;
           close();
+          reportListenFailed('The recognizer reported a failure');
           onUnavailable('unavailable');
         },
       });
+      clearFallback(FALLBACK_KEY);
       microphone.subscribe((frame) => state.recognition?.push(frame));
     })
     .catch((error: unknown) => {

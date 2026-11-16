@@ -1,5 +1,11 @@
 import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
+import {
   NATURAL_MAX_SLOW_READINGS,
+  NATURAL_START_TIMEOUT_MS,
   NATURAL_VOICE_CACHE_NAME,
   NATURAL_VOICE_CONFIG_URL,
   NATURAL_VOICE_MODEL_BYTES,
@@ -24,6 +30,8 @@ export interface NaturalVoiceState {
   isStored: boolean | null;
   problem: NaturalVoiceProblem | null;
 }
+
+export const NATURAL_VOICE_FALLBACK_KEY = 'speech:natural-voice';
 
 const MIN_MODEL_BYTES = 1_000_000;
 const LOAD_TIMEOUT_MS = 90_000;
@@ -250,6 +258,7 @@ const load = async () => {
   await loadWorker();
   store.slowReadings = 0;
   setState({ status: 'ready' });
+  clearFallback(NATURAL_VOICE_FALLBACK_KEY);
 };
 
 const getProblem = (error: unknown): NaturalVoiceProblem => {
@@ -270,7 +279,19 @@ const run = async (shouldDownload: boolean) => {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('The natural voice could not start', error);
       stopWorker();
-      setState({ status: 'failed', problem: getProblem(error) });
+      const problem = getProblem(error);
+      setState({ status: 'failed', problem });
+      reportFallback({
+        key: NATURAL_VOICE_FALLBACK_KEY,
+        feature: 'Speaking',
+        wanted: 'the natural voice',
+        used: "the browser's voice",
+        reason: "it couldn't start",
+        facts: [
+          `Problem: ${problem}`,
+          `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+        ],
+      });
     } finally {
       store.abort = null;
       store.running = null;
@@ -295,6 +316,7 @@ export const warmNaturalVoice = async () => {
 export const unloadNaturalVoice = () => {
   store.abort?.abort();
   stopWorker();
+  removeFallback(NATURAL_VOICE_FALLBACK_KEY);
   setState({ status: 'idle', progress: 0, problem: null });
 };
 
@@ -344,8 +366,20 @@ export const recordSlowNaturalReading = () => {
   if (store.slowReadings < NATURAL_MAX_SLOW_READINGS) return;
   stopWorker();
   setState({ status: 'failed', problem: 'slow' });
+  reportFallback({
+    key: NATURAL_VOICE_FALLBACK_KEY,
+    feature: 'Speaking',
+    wanted: 'the natural voice',
+    used: "the browser's voice",
+    reason: 'it was too slow on this device',
+    facts: [
+      `Slow readings in a row: ${store.slowReadings}`,
+      `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
+    ],
+  });
 };
 
 export const recordFastNaturalReading = () => {
   store.slowReadings = 0;
+  clearFallback(NATURAL_VOICE_FALLBACK_KEY);
 };

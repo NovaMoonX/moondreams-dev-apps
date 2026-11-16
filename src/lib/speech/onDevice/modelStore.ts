@@ -1,6 +1,12 @@
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
 import { hasRoomForOnDevice } from '@/lib/speech/onDevice/capability';
 import {
   ON_DEVICE_CACHE_NAME,
+  ON_DEVICE_FALLBACK_KEYS,
   ON_DEVICE_FILES,
   ON_DEVICE_TOTAL_BYTES,
   type OnDeviceFile,
@@ -19,6 +25,19 @@ export interface OnDeviceModelState {
 }
 
 class FileCheckError extends Error {}
+
+const STORAGE_FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.storage;
+const DOWNLOAD_FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.download;
+
+const reportModelFallback = (key: string, reason: string, facts: string[]) =>
+  reportFallback({
+    key,
+    feature: 'Listening',
+    wanted: 'the on-device speech model',
+    used: "the browser's listening",
+    reason,
+    facts,
+  });
 
 const store = {
   state: {
@@ -88,6 +107,7 @@ export const refreshOnDeviceStored = async () => {
   if (store.abort !== null) return;
   try {
     if (!(await caches.has(ON_DEVICE_CACHE_NAME))) {
+      removeFallback(STORAGE_FALLBACK_KEY);
       setState({ isStored: false });
       return;
     }
@@ -96,9 +116,25 @@ export const refreshOnDeviceStored = async () => {
       ON_DEVICE_FILES.map((file) => cache.match(file.url)),
     );
     const isStored = found.every((response) => response !== undefined);
-    if (!isStored) await caches.delete(ON_DEVICE_CACHE_NAME);
+    if (!isStored) {
+      reportModelFallback(
+        STORAGE_FALLBACK_KEY,
+        'the downloaded model is missing files, so it was cleared',
+        [
+          `Files found: ${found.filter((response) => response !== undefined).length} of ${ON_DEVICE_FILES.length}`,
+        ],
+      );
+      await caches.delete(ON_DEVICE_CACHE_NAME);
+    } else clearFallback(STORAGE_FALLBACK_KEY);
     setState({ isStored });
-  } catch {
+  } catch (error) {
+    reportModelFallback(
+      STORAGE_FALLBACK_KEY,
+      "the downloaded model couldn't be read from this browser",
+      [
+        `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+      ],
+    );
     setState({ isStored: false });
   }
 };
@@ -144,11 +180,25 @@ export const downloadOnDeviceModel = async () => {
       isStored: true,
       loadedBytes: ON_DEVICE_TOTAL_BYTES,
     });
+    clearFallback(DOWNLOAD_FALLBACK_KEY);
+    clearFallback(STORAGE_FALLBACK_KEY);
   } catch (error) {
     await caches.delete(ON_DEVICE_CACHE_NAME).catch(() => false);
     const isCancel =
       error instanceof DOMException && error.name === 'AbortError';
-    if (!isCancel) console.error('The on-device model was not kept', error);
+    if (!isCancel) {
+      console.error('The on-device model was not kept', error);
+      reportModelFallback(
+        DOWNLOAD_FALLBACK_KEY,
+        getProblem(error) === 'check'
+          ? 'a downloaded file was not the expected one, so nothing was kept'
+          : "the download couldn't be kept",
+        [
+          `Problem: ${getProblem(error)}`,
+          `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+        ],
+      );
+    }
     setState({
       isDownloading: false,
       isStored: false,
@@ -167,5 +217,6 @@ export const cancelOnDeviceDownload = () => store.abort?.abort();
 export const removeOnDeviceModel = async () => {
   store.abort?.abort();
   await caches.delete(ON_DEVICE_CACHE_NAME);
+  Object.values(ON_DEVICE_FALLBACK_KEYS).forEach(removeFallback);
   setState({ isStored: false, problem: null, loadedBytes: 0 });
 };

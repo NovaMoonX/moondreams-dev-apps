@@ -11,7 +11,7 @@ export type SpeechFetch =
       contentType: string;
     }
   | { status: 'held'; reason: SpeechHeldReason }
-  | { status: 'unavailable' };
+  | { status: 'unavailable'; detail?: string };
 
 export interface SpeechVoice {
   voiceId: string | null;
@@ -45,7 +45,9 @@ export const createSpeechSource = ({
   fetchSpeech: async (text, priority, signal, voice) => {
     try {
       const headers = await getHeaders();
-      if (headers === null) return { status: 'unavailable' };
+      if (headers === null) {
+        return { status: 'unavailable', detail: 'No sign-in headers yet' };
+      }
       const { voiceId, speed } = voice ??
         readVoice?.() ?? { voiceId: null, speed: null };
       const response = await fetch(url, {
@@ -65,10 +67,13 @@ export const createSpeechSource = ({
         const answer = (await response.json()) as { reason?: unknown };
         return isHeldReason(answer.reason)
           ? { status: 'held', reason: answer.reason }
-          : { status: 'unavailable' };
+          : { status: 'unavailable', detail: 'HTTP 429' };
       }
       if (!response.ok || response.body === null) {
-        return { status: 'unavailable' };
+        return {
+          status: 'unavailable',
+          detail: response.ok ? 'No body' : `HTTP ${response.status}`,
+        };
       }
       return {
         status: 'ready',
@@ -76,8 +81,14 @@ export const createSpeechSource = ({
         provider: response.headers.get('X-Voice-Provider') ?? 'unknown',
         contentType: response.headers.get('Content-Type') ?? '',
       };
-    } catch {
-      return { status: 'unavailable' };
+    } catch (error) {
+      return {
+        status: 'unavailable',
+        detail:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error),
+      };
     }
   },
 });
