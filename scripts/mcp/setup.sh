@@ -6,14 +6,16 @@
 #   npm run mcp:setup -- --restart    starts over from step 1
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+source scripts/lib/setupState.sh
 
 PROJECT=moondreams-dev-apps
 DASHBOARD="https://dashboard.workos.com"
 LOGIN_URI="https://apps.moondreams.dev/connect-assistant"
 RESOURCES=("https://apps.moondreams.dev/mcp/helm")
 LAST_STEP=5
-# Holds only the number of the last dashboard step the person confirmed, never a value.
+# Hold only the last dashboard step the person confirmed and the resource addresses already added, never a value.
 PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/mcp-setup-step"
+SETUP_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/mcp-setup"
 CURRENT="starting"
 CURRENT_STEP=1
 
@@ -84,9 +86,19 @@ need firebase "Install it with: npm install -g firebase-tools"
 source scripts/lib/firebaseLogin.sh; require_firebase_login
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste into it." >&2; exit 1; }
 
-[[ "${1:-}" == "--restart" ]] && rm -f "$PROGRESS_FILE"
+[[ "${1:-}" == "--restart" ]] && rm -rf "$PROGRESS_FILE" "$SETUP_STATE_DIR"
 START=${from:-$(( $(confirmed_step) + 1 ))}
 echo "Assistant sign-in runs on WorkOS AuthKit (free up to 1 million monthly users)."
+# A saved domain means the dashboard was set up on an earlier run, perhaps on another machine, so it is asked about once instead of walked.
+if [[ -z "$from" ]] && (( START == 1 )) && secret_saved WORKOS_AUTHKIT_DOMAIN; then
+  echo "WORKOS_AUTHKIT_DOMAIN is already saved, so WorkOS was set up before."
+  if ask_yes "Are its Connect settings and resource indicators (${RESOURCES[*]}) already in place?"; then
+    record resources "${RESOURCES[@]}"
+    remember_step 3
+    START=4
+    echo "✓ Noted; only resource addresses added later will be asked for."
+  fi
+fi
 if (( START > LAST_STEP )); then
   echo "Every step was done on an earlier run; checking the saved secrets. To redo a step: npm run mcp:setup -- --from <step>"
 elif (( START > 1 )); then
@@ -104,18 +116,32 @@ if start_step 2 "the Connect configuration"; then
   echo "     - Client ID Metadata Document: on   (Claude uses this)"
   echo "     - Dynamic Client Registration: on   (Gemini uses this)"
   echo "     - Login URI: $LOGIN_URI"
-  pause "   Press Enter when those three are saved. "
+  if ask_yes "   Are those three already saved?"; then
+    echo "   ✓ Noted; this step won't be asked again."
+  else
+    pause "   Press Enter when those three are saved. "
+  fi
   remember_step 2
 fi
 
-if start_step 3 "the resource indicators"; then
-  echo "3. On the same Connect page, find Resource Indicators and add each address below."
-  for resource in "${RESOURCES[@]}"; do echo "     - $resource"; done
-  echo "   Then open the ⋯ menu beside ${RESOURCES[0]} and choose Set as default"
-  echo "   (for assistants that don't say which server they want)."
-  pause "   Press Enter when they're added. "
-  remember_step 3
+# 3 also runs past its step when an MCP server was added to the list since it was confirmed.
+CURRENT_STEP=3
+CURRENT="the resource indicators"
+echo
+(( START > 3 )) && ! has_record resources && record resources "${RESOURCES[@]}"
+new_resources=(); while IFS= read -r line; do new_resources+=("$line"); done < <(missing_from resources "${RESOURCES[@]}")
+if (( ${#new_resources[@]} == 0 )); then
+  echo "3. ✓ Every resource indicator is already added."
+else
+  echo "3. On the same Connect page, find Resource Indicators. It needs these addresses:"
+  for resource in "${new_resources[@]}"; do echo "     - $resource"; done
+  if has_record resources || ! ask_yes "   Are they all already added?"; then
+    has_record resources || { echo "   Then open the ⋯ menu beside ${RESOURCES[0]} and choose Set as default"; echo "   (for assistants that don't say which server they want)."; }
+    pause "   Press Enter when they're added. "
+  fi
+  record resources "${new_resources[@]}"
 fi
+remember_step 3
 
 CURRENT_STEP=4
 CURRENT="the AuthKit domain"
