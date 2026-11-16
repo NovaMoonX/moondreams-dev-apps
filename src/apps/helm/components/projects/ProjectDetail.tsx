@@ -45,6 +45,7 @@ import {
   setGoalStatus,
   turnIntoProject,
 } from '@apps/helm/store/actions/goalActions';
+import { KeepPrivateError } from '@apps/helm/store/actions/privacyActions';
 import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 import { sortProjectTasks } from '@apps/helm/utils/projectTasks';
@@ -259,7 +260,10 @@ function ProjectDetail({
       }
       setHabitsAsk(null);
     } catch (error) {
-      reportGoalFailure(error);
+      if (error instanceof KeepPrivateError) {
+        console.error('Helm goal was not changed', error);
+        addToast({ title: HELM_COPY.privateNeedsConnection, type: 'error' });
+      } else reportGoalFailure(error);
     }
     setIsGoalBusy(false);
   };
