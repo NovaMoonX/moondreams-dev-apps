@@ -65,7 +65,7 @@ function GoalIdentity({ project, onOpenWhy, onAddWhy }: GoalIdentityProps) {
       <p className='text-muted-foreground text-[13px]'>
         {HELM_COPY.goalKindLine(formatDateShort(project.createdAt))}
       </p>
-      {evidence && (
+      {evidence && evidence !== HELM_COPY.goalNoStep && (
         <p className='text-muted-foreground text-[13px] break-words'>
           {evidence}
         </p>
