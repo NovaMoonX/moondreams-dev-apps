@@ -743,7 +743,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             fromRecordsText: nullable(
               'string',
-              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only: bold, italics, lists, links); null when they say nothing about it.`,
+              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only: bold, italics, lists, links, one short blockquote of a cited passage); null when they say nothing about it.`,
             ),
             fromRecordsSpoken: nullable(
               'string',

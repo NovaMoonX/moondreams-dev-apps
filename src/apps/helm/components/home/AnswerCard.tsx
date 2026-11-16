@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 import MarkdownText from '@/components/MarkdownText';
 import AnswerSources from '@apps/helm/components/home/AnswerSources';
 import QuoteLine from '@apps/helm/components/home/QuoteLine';
@@ -7,7 +9,11 @@ import GeneralKnowledgeCard from '@apps/helm/components/home/GeneralKnowledgeCar
 import SaveToKnowledge from '@apps/helm/components/home/SaveToKnowledge';
 import { HELM_COPY } from '@apps/helm/constants';
 import { readConnectorAppId } from '@/lib/connections/contract';
-import { readWrittenAnswer } from '@apps/helm/utils/writtenAnswer';
+import { useAppSelector } from '@/store';
+import {
+  readAnswerLinks,
+  readWrittenAnswer,
+} from '@apps/helm/utils/writtenAnswer';
 import type { AnswerQuote, CaptureAnswer } from '@apps/helm/types';
 
 interface AnswerCardProps {
@@ -26,7 +32,19 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
     (scope === 'both' && answer.searched.length === 0
       ? null
       : HELM_COPY.answerNothingInRecords);
-  const quotes = fromRecords === null ? [] : answer.quotes;
+  const quotes = useMemo(
+    () => (fromRecords === null ? [] : answer.quotes),
+    [fromRecords, answer.quotes],
+  );
+  const synced = useAppSelector((state) => state.helm.synced.items);
+  const links = useMemo(
+    () => readAnswerLinks({ quotes, sources: answer.sources }, synced),
+    [quotes, answer.sources, synced],
+  );
+  const written = useMemo(
+    () => (fromRecords === null ? '' : readWrittenAnswer(fromRecords, links)),
+    [fromRecords, links],
+  );
   const appGroups = quotes
     .filter((quote) => readConnectorAppId(quote.connectorId) !== null)
     .reduce(
@@ -53,7 +71,8 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
             </p>
           ) : (
             <MarkdownText
-              text={readWrittenAnswer(fromRecords)}
+              text={written}
+              allowedLinks={links}
               className='pb-2 text-[15px] break-words'
             />
           )}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 import { BookOpen, Globe, Stethoscope } from 'lucide-react';
 
@@ -38,6 +38,8 @@ function DiffersLine({
   );
 }
 
+const NO_LINKS: ReadonlySet<string> = new Set();
+
 /** General knowledge, always under its "Not from your records" label, with no sources and no doors. */
 function GeneralKnowledgeCard({
   text,
@@ -46,6 +48,7 @@ function GeneralKnowledgeCard({
   children,
 }: GeneralKnowledgeCardProps) {
   const name = useAssistantName();
+  const written = useMemo(() => readWrittenAnswer(text, NO_LINKS), [text]);
   return (
     <div className='flex w-full flex-col gap-3'>
       <SectionDivider label={HELM_COPY.answerNotFromRecords} />
@@ -62,7 +65,8 @@ function GeneralKnowledgeCard({
         )}
         {differs && <DiffersLine differs={differs} />}
         <MarkdownText
-          text={readWrittenAnswer(text)}
+          text={written}
+          allowedLinks={NO_LINKS}
           className='text-[15px] break-words'
         />
         <p className='text-muted-foreground text-[13px] text-pretty'>

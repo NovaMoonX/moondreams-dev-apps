@@ -50,12 +50,22 @@ import {
   isLiveDeepLink,
   toDocumentLink,
 } from '../../functions/src/connections/deepLinks.ts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import MarkdownText from '../../src/components/MarkdownText.tsx';
 import {
+  createLinkGate,
   extractLinks,
+  labelForLink,
   normalizeProse,
   stripProseMarks,
 } from '../../src/utils/proseUtils.ts';
-import { readWrittenAnswer } from '../../src/apps/helm/utils/writtenAnswer.ts';
+import {
+  readAnswerLinks,
+  readWrittenAnswer,
+} from '../../src/apps/helm/utils/writtenAnswer.ts';
+import { SYSTEM_PROMPT } from '../../functions/src/apps/helm/nomos/prompt.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   sealForHelm,
@@ -2601,13 +2611,16 @@ const tests: [string, () => void | Promise<void>][] = [
       const stored =
         '# Hi\n\n[a](//evil.example) [b](https://ok.example/p_(1)) [https://paypal.com](https://ok.example/p_(1)) [c](http://nope.example)';
       assert.equal(
-        readWrittenAnswer(stored),
+        readWrittenAnswer(stored, new Set(['https://ok.example/p_(1)'])),
         'Hi\n\na [b](https://ok.example/p_(1)) [ok.example](https://ok.example/p_(1)) c',
       );
-      assert.equal(readWrittenAnswer(stored), readWrittenAnswer(stored));
+      assert.equal(
+        readWrittenAnswer(stored, new Set()),
+        'Hi\n\na b https://paypal.com c',
+      );
       const clean = normalizeProse('One **two** *three*\n\n3. a\n4. b', 1_200)!;
       assert.equal(
-        readWrittenAnswer(clean),
+        readWrittenAnswer(clean, new Set()),
         clean,
         'normalizing twice changes nothing',
       );
@@ -2648,7 +2661,10 @@ const tests: [string, () => void | Promise<void>][] = [
         '5 * 3 = 15',
       );
       assert.equal(
-        readWrittenAnswer(normalizeProse('It is 2*3 and *very* big', 1_200)!),
+        readWrittenAnswer(
+          normalizeProse('It is 2*3 and *very* big', 1_200)!,
+          new Set(),
+        ),
         'It is 2\\*3 and *very* big',
       );
     },
@@ -2681,6 +2697,264 @@ const tests: [string, () => void | Promise<void>][] = [
       );
       const italic = normalizeProse('A *rare* and *odd', 1_200);
       assert.equal(italic, 'A *rare* and odd');
+    },
+  ],
+  [
+    'a link with nested brackets is reduced to its label unless its address is allowed, and a list-item definition is dropped',
+    () => {
+      assert.equal(
+        normalizeProse('See [[x]](https://evil.example/a).', 1_200),
+        'See x.',
+      );
+      assert.equal(
+        normalizeProse(
+          'See [a [b]](https://evil.example/a) and [[[c]]](https://evil.example/b).',
+          1_200,
+        ),
+        'See a b and c.',
+      );
+      assert.equal(
+        normalizeProse('See [a [b] c](https://ok.example/a).', 1_200, [
+          'https://ok.example/a',
+        ]),
+        'See [a b c](https://ok.example/a).',
+      );
+      assert.equal(
+        normalizeProse(
+          'Hi\n\n- [x]: https://evil.example\n1. [y]: https://evil.example\n> [z]: https://evil.example\n\nBye',
+          1_200,
+          ['https://evil.example'],
+        ),
+        'Hi\n\nBye',
+      );
+    },
+  ],
+  [
+    'a label spoofing another address shows the host at render, zero-width and look-alike letters included, and ordinary labels stay',
+    () => {
+      const href = 'https://ok.example/p';
+      assert.equal(labelForLink('paypal.com', href), 'ok.example');
+      assert.equal(labelForLink('pay\u200bpal.com', href), 'ok.example');
+      assert.equal(labelForLink('\u0440aypal.com', href), 'ok.example');
+      assert.equal(labelForLink('paypal\uFF0Ecom', href), 'ok.example');
+      assert.equal(
+        labelForLink('HTTPS://www.paypal.com/login', href),
+        'ok.example',
+      );
+      assert.equal(labelForLink('Node.js', href), 'Node.js');
+      assert.equal(labelForLink('report.pdf', href), 'report.pdf');
+      assert.equal(labelForLink('Dr.Smith', href), 'Dr.Smith');
+      assert.equal(
+        labelForLink('the ok.example guide', href),
+        'the ok.example guide',
+      );
+      assert.equal(
+        labelForLink('see end.then', href),
+        'see end.then (ok.example)',
+      );
+      assert.equal(labelForLink('a\u200b b', href), 'a b');
+      assert.equal(labelForLink('', href), 'ok.example');
+      assert.equal(
+        normalizeProse('[pay\u200bpal.com](https://ok.example/p)', 1_200, [
+          href,
+        ]),
+        '[ok.example](https://ok.example/p)',
+      );
+      assert.equal(
+        normalizeProse('[\u0440aypal.com](https://ok.example/p)', 1_200, [
+          href,
+        ]),
+        '[ok.example](https://ok.example/p)',
+      );
+      assert.equal(
+        normalizeProse('[Node.js](https://ok.example/p)', 1_200, [href]),
+        '[Node.js](https://ok.example/p)',
+      );
+    },
+  ],
+  [
+    'an answer is not cut by its own normalising',
+    () => {
+      assert.equal(
+        readWrittenAnswer('Items:\n- a\n- bb cc', new Set()),
+        'Items:\n\n- a\n- bb cc',
+      );
+      assert.equal(
+        readWrittenAnswer('Use 2*3 and \\* stars\n\n\nlast word', new Set()),
+        'Use 2\\*3 and \\* stars\n\nlast word',
+      );
+    },
+  ],
+  [
+    'a list opens after a line ending in a colon, with or without closing emphasis, or when two items follow a line',
+    () => {
+      assert.equal(
+        normalizeProse('**Today:**\n- a\n- b', 1_200),
+        '**Today:**\n\n- a\n- b',
+      );
+      assert.equal(normalizeProse('_Today:_\n- a', 1_200), '_Today:_\n\n- a');
+      assert.equal(
+        normalizeProse('Here are the steps\n1. a\n2. b', 1_200),
+        'Here are the steps\n\n1. a\n2. b',
+      );
+      assert.equal(
+        normalizeProse('It was cold,\n3. then warm.', 1_200),
+        'It was cold, 3. then warm.',
+      );
+    },
+  ],
+  [
+    'italics after a digit and a space stay italics; a star between touching digits is a times sign',
+    () => {
+      assert.equal(
+        normalizeProse('In 2024 *3 things changed*', 1_200),
+        'In 2024 *3 things changed*',
+      );
+      assert.equal(normalizeProse('It is 2*3', 1_200), 'It is 2\\*3');
+      assert.equal(normalizeProse('5 * 3 = 15', 1_200), '5 \\* 3 = 15');
+    },
+  ],
+  [
+    'a blockquote is kept once, one level, links normalised, definitions dropped; later ones are plain; speech has no marker',
+    () => {
+      assert.equal(
+        normalizeProse(
+          'She wrote:\n\n> Pick me up at **six**.\n> Bring the [map](https://ok.example/m).',
+          1_200,
+          ['https://ok.example/m'],
+        ),
+        'She wrote:\n\n> Pick me up at **six**. Bring the [map](https://ok.example/m).',
+      );
+      assert.equal(normalizeProse('> > deep\n> - item', 1_200), '> deep item');
+      assert.equal(
+        normalizeProse('> one\n\n> two\n\n> three', 1_200),
+        '> one\n\ntwo\n\nthree',
+      );
+      assert.equal(
+        normalizeProse('> [1]: https://evil.example\n> kept', 1_200),
+        '> kept',
+      );
+      const again = normalizeProse('> one\n\ntwo', 1_200)!;
+      assert.equal(normalizeProse(again, 1_200), again);
+      assert.equal(
+        stripProseMarks('Hi.\n\n> “Six” sharp.\n\nBye.'),
+        'Hi. “Six” sharp. Bye.',
+      );
+      assert.equal(
+        stripProseMarks('Hi.\n\n> Six sharp.', { keepBreaks: true }),
+        'Hi.\n\n“Six sharp.”',
+      );
+      assert.ok(!stripProseMarks('> a\n> b').includes('>'));
+      assert.equal(
+        normalizeProse("He said “yes” and 'no'.", 1_200),
+        "He said “yes” and 'no'.",
+      );
+    },
+  ],
+  [
+    'a rendered link is a link only for an http(s) address, and only an allowed one when a set is given',
+    () => {
+      const html = (text: string, allowed?: ReadonlySet<string> | null) =>
+        renderToStaticMarkup(
+          createElement(MarkdownText, { text, allowedLinks: allowed }),
+        );
+      const ok = new Set(['https://ok.example/a']);
+      assert.ok(
+        html('[x](https://ok.example/a)', ok).includes(
+          'href="https://ok.example/a"',
+        ),
+      );
+      assert.ok(!html('[x](https://evil.example/a)', ok).includes('<a '));
+      assert.ok(!html('[x](https://ok.example/a)', new Set()).includes('<a '));
+      assert.ok(
+        html('[x](https://anywhere.example/a)').includes('<a '),
+        'a note has no set',
+      );
+      assert.ok(!html('[x](javascript:alert(1))').includes('<a '));
+      assert.ok(!html('[x](mailto:a@b.example)').includes('<a '));
+      assert.ok(!html('[x](/relative)').includes('<a '));
+      assert.ok(!html('[x](data:text/html;base64,AAAA)').includes('<a '));
+      assert.ok(!html('[x](http://ok.example/a)', ok).includes('<a '));
+      assert.ok(
+        html('[paypal.com](https://ok.example/a)', ok).includes('>ok.example'),
+      );
+      assert.ok(
+        !html('[\u0440aypal.com](https://ok.example/a)', ok).includes('aypal'),
+      );
+      assert.ok(html('x\n\n> quoted words').includes('<blockquote'));
+      const gate = createLinkGate(new Set(['https://a.example/50%']));
+      assert.equal(gate('https://a.example/50%25'), 'https://a.example/50%');
+      assert.equal(
+        createLinkGate(null)('HTTPS://A.example'),
+        'https://a.example/',
+      );
+    },
+  ],
+  [
+    "the links an answer may carry are its quotes' deep links and addresses written in the records it cites, never a quote's words",
+    () => {
+      const quote = (deepLink: string | null, text: string) => ({
+        id: 'q',
+        connectorId: 'google:gmail',
+        accountId: 'a',
+        sourceLabel: 's',
+        at: null,
+        text,
+        record: null,
+        deepLink,
+        deletedAt: null,
+      });
+      const record = (id: string, title: string, detail: string | null) =>
+        ({
+          id,
+          sealed: {
+            title,
+            subtitle: null,
+            detail,
+            placeLabel: null,
+            extra: { site: 'https://x.example/e' },
+          },
+        }) as never;
+      const links = readAnswerLinks(
+        {
+          quotes: [
+            quote('https://mail.example/m1', 'see https://evil.example/q'),
+          ],
+          sources: [
+            {
+              kind: 'synced',
+              id: 's1',
+              connectorId: 'c',
+              title: null,
+              startAt: null,
+            },
+          ],
+        },
+        [
+          record('s1', 'Menu https://a.example/menu.', 'https://b.example/d'),
+          record('s2', 'Other https://c.example/uncited', null),
+        ],
+      );
+      assert.deepEqual([...links].sort(), [
+        'https://a.example/menu',
+        'https://b.example/d',
+        'https://mail.example/m1',
+        'https://x.example/e',
+      ]);
+    },
+  ],
+  [
+    'the prompt says how italics, quotation marks and a blockquote are used',
+    () => {
+      const prompt = SYSTEM_PROMPT;
+      assert.ok(
+        prompt.includes('title of a book, film, show, song or publication'),
+      );
+      assert.ok(prompt.includes('never a whole sentence or decoration'));
+      assert.ok(prompt.includes('never a paraphrase or scare quotes'));
+      assert.ok(prompt.includes('at most one per answer'));
+      assert.ok(prompt.includes('No headings, tables, images, code or HTML'));
+      assert.ok(prompt.includes('never a `>`'));
     },
   ],
   [
