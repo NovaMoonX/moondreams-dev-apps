@@ -1,3 +1,11 @@
+/** What failed and the raw error from the place it was caught: never a token, a key or the person's text. */
+export interface FallbackCause {
+  /** The stage that failed, short and stable ("token request", "socket closed before open"). */
+  stage: string;
+  /** The error as the catch saw it: code, message, HTTP status, close code, or the limit that ran out. */
+  detail: string;
+}
+
 export interface FallbackReport {
   /** A fixed constant per fallback, never built from data: dismissal and repeat-merging both go by it. */
   key: string;
@@ -5,6 +13,7 @@ export interface FallbackReport {
   wanted: string;
   used: string;
   reason: string;
+  cause: FallbackCause;
   facts?: string[];
   trace?: string | null;
 }
@@ -15,6 +24,7 @@ export interface Fallback {
   wanted: string;
   used: string;
   reason: string;
+  cause: FallbackCause;
   facts: string[];
   trace: string | null;
   count: number;
@@ -59,8 +69,16 @@ const publish = () => {
   store.listeners.forEach((listener) => listener());
 };
 
-/** Notes that something preferred wasn't used and a stand-in was (a chosen voice, a downloaded model, a service, a cached copy), so debug viewers get a dismissible notice with Copy. Cheap and silent for everyone else. A fixed `key` per fallback keeps repeats on one entry. */
+/** Notes that something preferred wasn't used and a stand-in was (a chosen voice, a downloaded model, a service, a cached copy), so debug viewers get a dismissible notice with Copy. Cheap and silent for everyone else. A fixed `key` per fallback keeps repeats on one entry, and the `cause` (the stage and the raw error) is required: say where it was caught, never a guess. */
 export const reportFallback = (report: FallbackReport) => {
+  if (
+    import.meta.env?.DEV &&
+    (report.cause.stage.trim() === '' || report.cause.detail.trim() === '')
+  ) {
+    console.warn(
+      `Fallback ${report.key} was reported without its stage or its error`,
+    );
+  }
   const now = Date.now();
   const before = store.entries.get(report.key);
   const kept = before?.reason === report.reason ? before : undefined;
@@ -70,6 +88,7 @@ export const reportFallback = (report: FallbackReport) => {
     wanted: report.wanted,
     used: report.used,
     reason: report.reason,
+    cause: report.cause,
     facts: report.facts?.length ? report.facts : (kept?.facts ?? []),
     trace: report.trace ?? kept?.trace ?? null,
     count: (before?.count ?? 0) + 1,

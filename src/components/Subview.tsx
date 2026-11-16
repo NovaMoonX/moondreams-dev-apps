@@ -194,6 +194,7 @@ function Subview({
           ref={overlayRef}
           role='dialog'
           data-subview-overlay=''
+          data-app-surface=''
           aria-label={title}
           className={join('subview-card flex max-w-2xl flex-col', className)}
         >

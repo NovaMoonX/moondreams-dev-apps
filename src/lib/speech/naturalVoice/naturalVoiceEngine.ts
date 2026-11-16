@@ -11,6 +11,10 @@ import {
   NATURAL_VOICE_MODEL_BYTES,
   NATURAL_VOICE_MODEL_URL,
 } from '@/lib/speech/naturalVoice/config';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import type {
   FromVoiceWorker,
   ToVoiceWorker,
@@ -124,7 +128,10 @@ export const refreshNaturalVoiceStored = async () => {
       cache.match(NATURAL_VOICE_CONFIG_URL),
     ]);
     setState({ isStored: model !== undefined && config !== undefined });
-  } catch {
+  } catch (error) {
+    recordSpeechEvent(
+      `The natural voice files could not be read: ${describeThrown(error)}`,
+    );
     setState({ isStored: false });
   }
 };
@@ -287,10 +294,8 @@ const run = async (shouldDownload: boolean) => {
         wanted: 'the natural voice',
         used: "the browser's voice",
         reason: "it couldn't start",
-        facts: [
-          `Problem: ${problem}`,
-          `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-        ],
+        cause: { stage: 'natural voice start', detail: describeThrown(error) },
+        facts: [`Problem: ${problem}`],
       });
     } finally {
       store.abort = null;
@@ -372,10 +377,10 @@ export const recordSlowNaturalReading = () => {
     wanted: 'the natural voice',
     used: "the browser's voice",
     reason: 'it was too slow on this device',
-    facts: [
-      `Slow readings in a row: ${store.slowReadings}`,
-      `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
-    ],
+    cause: {
+      stage: 'natural voice start timed out',
+      detail: `${store.slowReadings} readings in a row gave no sound within ${NATURAL_START_TIMEOUT_MS} ms`,
+    },
   });
 };
 

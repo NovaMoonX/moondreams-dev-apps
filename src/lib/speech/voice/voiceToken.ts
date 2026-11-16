@@ -1,3 +1,6 @@
+import type { FallbackCause } from '@/lib/fallbacks/fallbacks';
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
+import { CLOUD_LISTEN_STAGES } from '@/lib/speech/voice/cloudListenStages';
 import type { CloudHeldReason } from '@/lib/speech/voice/types';
 
 const MAX_CLOSED_REPORTS = 10;
@@ -22,7 +25,13 @@ export type MintVoiceTokenResult =
       model: string;
       mintId: string;
     }
-  | { status: 'held'; reason: CloudHeldReason | 'unavailable' };
+  | { status: 'held'; reason: CloudHeldReason }
+  | {
+      status: 'held';
+      reason: 'unavailable';
+      /** A short non-secret code for why the server was unavailable (no key, the provider's status). */
+      detail?: string;
+    };
 
 export type VoiceTokenAnswer =
   | {
@@ -32,7 +41,8 @@ export type VoiceTokenAnswer =
       model: string;
       mintId: string;
     }
-  | { status: 'held'; reason: CloudHeldReason | 'unavailable' };
+  | { status: 'held'; reason: CloudHeldReason }
+  | { status: 'held'; reason: 'unavailable'; cause: FallbackCause };
 
 export interface VoiceTokenSource {
   getToken: () => Promise<VoiceTokenAnswer>;
@@ -40,7 +50,25 @@ export interface VoiceTokenSource {
   reportClosed: (mintId: string, ms: number) => void;
 }
 
-/** Asks the server for a short-lived listening token (`mint` is the callable, injected). A failed request reads as held `unavailable`; the stream reports stay for the next request when the server couldn't count them. */
+const AUTH_CODES = [
+  'unauthenticated',
+  'permission-denied',
+  'failed-precondition',
+];
+
+const toRequestFailure = (error: unknown): FallbackCause => {
+  const { code } = (error ?? {}) as { code?: unknown };
+  const name = typeof code === 'string' ? code.replace('functions/', '') : '';
+  const hint = AUTH_CODES.includes(name)
+    ? 'sign-in or App Check looks involved'
+    : 'no sign of sign-in or App Check being involved';
+  return {
+    stage: CLOUD_LISTEN_STAGES.tokenRequest,
+    detail: `${typeof code === 'string' ? `${code} ` : ''}${describeThrown(error)} (${hint})`,
+  };
+};
+
+/** Asks the server for a short-lived listening token (`mint` is the callable, injected). A failed request reads as held `unavailable` with the error it threw, and a server that says unavailable keeps its stated why; the stream reports stay for the next request when the server couldn't count them. */
 export const createVoiceTokenSource = ({
   appId,
   mint,
@@ -58,17 +86,31 @@ export const createVoiceTokenSource = ({
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           closed: sent,
         });
-        if (result.status === 'held' && result.reason === 'unavailable')
-          return result;
+        if (result.status === 'held' && result.reason === 'unavailable') {
+          return {
+            status: 'held',
+            reason: 'unavailable',
+            cause: {
+              stage: CLOUD_LISTEN_STAGES.tokenRefused,
+              detail: `The server answered unavailable: ${result.detail ?? 'no reason given'}`,
+            },
+          };
+        }
         pending.closed = pending.closed.filter(
           (report) => !sent.includes(report),
         );
-        if (result.status === 'held') return result;
+        if (result.status === 'held') {
+          return { status: 'held', reason: result.reason };
+        }
         const { token, expiresAt, model, mintId } = result;
         return { status: 'ready', token, expiresAt, model, mintId };
       } catch (error) {
         console.error('Voice token was not minted', error);
-        return { status: 'held', reason: 'unavailable' };
+        return {
+          status: 'held',
+          reason: 'unavailable',
+          cause: toRequestFailure(error),
+        };
       }
     },
     reportClosed: (mintId, ms) => {

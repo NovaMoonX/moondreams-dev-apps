@@ -132,6 +132,7 @@ function LiveConversation() {
       ref={dialog}
       role='dialog'
       aria-modal='true'
+      data-app-surface=''
       aria-label={HELM_COPY.liveLabel(name)}
       tabIndex={-1}
       className='helm-live-screen bg-background fixed inset-0 flex flex-col overflow-hidden outline-none'

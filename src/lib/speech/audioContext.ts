@@ -1,3 +1,8 @@
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
+
 const holder: { context: AudioContext | null; isArmed: boolean } = {
   context: null,
   isArmed: false,
@@ -11,6 +16,7 @@ export const getAudioContext = () => {
     return holder.context;
   } catch (error) {
     console.error('Audio is not available', error);
+    recordSpeechEvent(`Audio could not start: ${describeThrown(error)}`);
     return null;
   }
 };

@@ -11,6 +11,10 @@ import {
   describeThrown,
   recordSpeechEvent,
 } from '@/lib/speech/speechDiagnostics';
+import {
+  CLOUD_LISTEN_STAGES,
+  type CloudListenCause,
+} from '@/lib/speech/voice/cloudListenStages';
 import type { VoiceTokenAnswer } from '@/lib/speech/voice/voiceToken';
 
 const LISTEN_URL = 'wss://api.deepgram.com/v1/listen';
@@ -21,14 +25,64 @@ const KEEP_ALIVE_MS = 5000;
 const UTTERANCE_MS = 59_000;
 const BUFFER_FRAMES = 500;
 
+type TokenOutcome =
+  | VoiceTokenAnswer
+  | { status: 'threw'; detail: string }
+  | { status: 'timeout' };
+
+const toTokenCause = (
+  outcome: Exclude<TokenOutcome, { status: 'ready' }>,
+  waitedMs: number,
+): CloudListenCause => {
+  if (outcome.status === 'threw') {
+    return {
+      stage: CLOUD_LISTEN_STAGES.tokenRequest,
+      detail: outcome.detail,
+      facts: [],
+    };
+  }
+  if (outcome.status === 'timeout') {
+    return {
+      stage: CLOUD_LISTEN_STAGES.tokenTimeout,
+      detail: `No token within ${waitedMs} ms`,
+      facts: [`Waited: ${waitedMs} ms`],
+    };
+  }
+  return outcome.reason === 'unavailable'
+    ? { ...outcome.cause, facts: [] }
+    : {
+        stage: CLOUD_LISTEN_STAGES.tokenHeld,
+        detail: `The server held this listen: ${outcome.reason}`,
+        facts: [],
+      };
+};
+
+const toCloseCause = (
+  event: CloseEvent,
+  hasErrored: boolean,
+): CloudListenCause => ({
+  stage: hasErrored
+    ? CLOUD_LISTEN_STAGES.socketError
+    : CLOUD_LISTEN_STAGES.socketClosed,
+  detail: `Close code ${event.code}, reason ${event.reason === '' ? 'none' : `"${event.reason}"`}, ${event.wasClean ? 'clean' : 'not clean'}${hasErrored ? ', after an error event' : ''}`,
+  facts: [
+    `Close code: ${event.code}`,
+    `Close reason: ${event.reason === '' ? 'none' : event.reason}`,
+    `Closed cleanly: ${event.wasClean ? 'yes' : 'no'}`,
+  ],
+});
+
 interface DeepgramSttOptions {
   lang: string;
   getToken: () => Promise<VoiceTokenAnswer>;
   tokenWaitMs?: number;
   /** A microphone already open (a speech gate that heard the person start): its pre-roll is sent first, then its live frames, and the stream releases it when it ends. Without one the stream opens the microphone itself. */
   source?: FrameSource | null;
-  /** The cloud could not take this listen; `reason` is the limit that held it, null for any other cause. Nothing was delivered. */
-  onUnavailable: (reason: CloudHeldReason | null) => void;
+  /** The cloud could not take this listen; `reason` is the limit that held it, null for any other cause, and `cause` is the exact stage and error either way. Nothing was delivered. */
+  onUnavailable: (
+    reason: CloudHeldReason | null,
+    cause: CloudListenCause,
+  ) => void;
   /** A minted stream has ended, after `ms` open (0 when it never opened). */
   onClosed: (mintId: string, ms: number) => void;
 }
@@ -95,10 +149,13 @@ export const createDeepgramStt = ({
     canStream: true,
     start: async (options) => {
       run.asked = null;
-      const tokenRequest = getToken().catch(() => null);
+      const tokenRequest = getToken().catch((error: unknown): TokenOutcome => ({
+        status: 'threw',
+        detail: describeThrown(error),
+      }));
       const releaseToken = () =>
         void tokenRequest.then((answer) => {
-          if (answer?.status === 'ready') onClosed(answer.mintId, 0);
+          if (answer.status === 'ready') onClosed(answer.mintId, 0);
         });
       const stream = source
         ? null
@@ -119,7 +176,13 @@ export const createDeepgramStt = ({
                 options.onError('denied');
               } else if (name === 'NotFoundError') {
                 options.onError('no-microphone');
-              } else onUnavailable(null);
+              } else {
+                onUnavailable(null, {
+                  stage: CLOUD_LISTEN_STAGES.microphoneOpen,
+                  detail: describeThrown(error),
+                  facts: [],
+                });
+              }
               return null;
             });
       if (!source && !stream) {
@@ -137,6 +200,7 @@ export const createDeepgramStt = ({
       const state = {
         isDone: false,
         isOpen: false,
+        hasErrored: false,
         isClosing: false,
         openedAt: 0,
         mintId: '',
@@ -181,7 +245,10 @@ export const createDeepgramStt = ({
           socket.close();
         }
       };
-      const fail = (reason: CloudHeldReason | null) => {
+      const fail = (
+        reason: CloudHeldReason | null,
+        cause: CloudListenCause,
+      ) => {
         if (state.isClosing) {
           deliver();
           return;
@@ -190,7 +257,10 @@ export const createDeepgramStt = ({
         state.isDone = true;
         teardown();
         if (state.mintId) onClosed(state.mintId, 0);
-        onUnavailable(reason);
+        recordSpeechEvent(
+          `Cloud listening failed, ${cause.stage}: ${cause.detail}`,
+        );
+        onUnavailable(reason, cause);
       };
       const deliver = () => {
         if (state.isDone) return;
@@ -246,22 +316,27 @@ export const createDeepgramStt = ({
           },
           (error: unknown) => {
             console.error('Microphone capture did not start', error);
-            fail(null);
+            fail(null, {
+              stage: CLOUD_LISTEN_STAGES.microphoneCapture,
+              detail: describeThrown(error),
+              facts: [],
+            });
           },
         );
       }
 
-      const timeout = new Promise<null>((resolve) =>
-        window.setTimeout(() => resolve(null), tokenWaitMs),
+      const timeout = new Promise<TokenOutcome>((resolve) =>
+        window.setTimeout(() => resolve({ status: 'timeout' }), tokenWaitMs),
       );
       const answer = await Promise.race([tokenRequest, timeout]);
-      if (state.isDone || answer === null) releaseToken();
+      if (state.isDone || answer.status !== 'ready') releaseToken();
       if (state.isDone) return;
-      if (answer === null || answer.status === 'held') {
+      if (answer.status !== 'ready') {
         fail(
-          answer?.status === 'held' && answer.reason !== 'unavailable'
+          answer.status === 'held' && answer.reason !== 'unavailable'
             ? answer.reason
             : null,
+          toTokenCause(answer, tokenWaitMs),
         );
         return;
       }
@@ -272,7 +347,15 @@ export const createDeepgramStt = ({
         answer.token,
       ]);
       state.socket = socket;
-      state.openId = window.setTimeout(() => fail(null), OPEN_WAIT_MS);
+      state.openId = window.setTimeout(
+        () =>
+          fail(null, {
+            stage: CLOUD_LISTEN_STAGES.socketOpenTimeout,
+            detail: `Not open after ${OPEN_WAIT_MS} ms${state.hasErrored ? ', after an error event' : ''}`,
+            facts: [`Waited: ${OPEN_WAIT_MS} ms`],
+          }),
+        OPEN_WAIT_MS,
+      );
       socket.onopen = () => {
         window.clearTimeout(state.openId);
         state.isOpen = true;
@@ -291,9 +374,12 @@ export const createDeepgramStt = ({
         state.limitId = window.setTimeout(stop, UTTERANCE_MS);
       };
       socket.onerror = () => {
-        if (!state.isOpen) fail(null);
+        state.hasErrored = true;
       };
-      socket.onclose = () => (state.isOpen ? deliver() : fail(null));
+      socket.onclose = (event: CloseEvent) =>
+        state.isOpen
+          ? deliver()
+          : fail(null, toCloseCause(event, state.hasErrored));
       socket.onmessage = (event: MessageEvent) => {
         const heard = readHeard(event.data);
         if (!heard || state.isDone) return;

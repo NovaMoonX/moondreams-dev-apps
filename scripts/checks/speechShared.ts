@@ -97,12 +97,22 @@ import {
   createPlaybackQueue,
   toJoinKey,
 } from '../../src/lib/speech/voice/playbackQueue.ts';
+import { createDeepgramStt } from '../../src/lib/speech/voice/deepgramStream.ts';
+import {
+  CLOUD_LISTEN_STAGES,
+  type CloudListenCause,
+} from '../../src/lib/speech/voice/cloudListenStages.ts';
 import {
   createVoiceTokenSource,
   type MintVoiceTokenRequest,
   type MintVoiceTokenResult,
 } from '../../src/lib/speech/voice/voiceToken.ts';
-import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
+import type {
+  CloudHeldReason,
+  FrameSource,
+  TtsAdapter,
+} from '../../src/lib/speech/voice/types.ts';
+import type { VoiceTokenAnswer } from '../../src/lib/speech/voice/voiceToken.ts';
 import {
   pickListener,
   pickSpeaker,
@@ -947,7 +957,7 @@ console.log('speechShared: on-device recognition checks passed');
 }
 {
   const requests: MintVoiceTokenRequest[] = [];
-  const state = { isFailing: false, isKeyless: false };
+  const state = { isFailing: false, isKeyless: false, thrown: null as unknown };
   const READY: MintVoiceTokenResult = {
     status: 'ready',
     token: 't',
@@ -960,8 +970,10 @@ console.log('speechShared: on-device recognition checks passed');
     appId: 'x',
     mint: async (request) => {
       requests.push(request);
-      if (state.isFailing) throw new Error('offline');
-      if (state.isKeyless) return { status: 'held', reason: 'unavailable' };
+      if (state.isFailing) throw state.thrown ?? new Error('offline');
+      if (state.isKeyless) {
+        return { status: 'held', reason: 'unavailable', detail: 'key-missing' };
+      }
       return READY;
     },
   });
@@ -973,28 +985,412 @@ console.log('speechShared: on-device recognition checks passed');
   assert.deepEqual(requests[1].closed, [], 'a sent report is not sent twice');
   source.reportClosed('b', 2000);
   state.isFailing = true;
+  const failed = await source.getToken();
   assert.deepEqual(
-    await source.getToken(),
-    { status: 'held', reason: 'unavailable' },
-    'a failed request reads as held unavailable',
+    [
+      failed.status,
+      'reason' in failed && failed.reason,
+      'cause' in failed && failed.cause.stage,
+    ],
+    ['held', 'unavailable', 'token request'],
+    'a failed request reads as held unavailable, at the token request stage',
   );
+  assert.match(
+    'cause' in failed ? failed.cause.detail : '',
+    /offline/,
+    'a failed request keeps the error it threw',
+  );
+  state.thrown = Object.assign(new Error('App Check token is invalid'), {
+    name: 'FirebaseError',
+    code: 'functions/unauthenticated',
+  });
+  const refused = await source.getToken();
+  assert.match(
+    'cause' in refused ? refused.cause.detail : '',
+    /functions\/unauthenticated FirebaseError: App Check token is invalid \(sign-in or App Check looks involved\)/,
+    'a callable error keeps its code and name and says App Check or sign-in looks involved',
+  );
+  state.thrown = null;
   state.isFailing = false;
   await source.getToken();
   assert.deepEqual(
-    requests[3].closed,
+    requests[4].closed,
     [{ mintId: 'b', ms: 2000 }],
     'a report kept after a failed request is sent with the next one',
   );
   source.reportClosed('c', 3000);
   state.isKeyless = true;
-  await source.getToken();
+  const keyless = await source.getToken();
+  assert.deepEqual(
+    'cause' in keyless && [keyless.cause.stage, keyless.cause.detail],
+    [
+      'token refused by the server',
+      'The server answered unavailable: key-missing',
+    ],
+    "a server's unavailable keeps the why it stated",
+  );
   state.isKeyless = false;
   await source.getToken();
   assert.deepEqual(
-    requests[5].closed,
+    requests[6].closed,
     [{ mintId: 'c', ms: 3000 }],
     'a report the server could not count (held unavailable) is sent again',
   );
+}
+{
+  interface FakeClose {
+    code: number;
+    reason: string;
+    wasClean: boolean;
+  }
+  class FakeSocket {
+    static all: FakeSocket[] = [];
+    onopen: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onclose: ((event: FakeClose) => void) | null = null;
+    onmessage: (() => void) | null = null;
+    constructor(
+      public url: string,
+      public protocols: string[],
+    ) {
+      FakeSocket.all.push(this);
+    }
+    send() {}
+    close() {}
+  }
+  const clock = {
+    next: 1,
+    timers: new Map<number, { fn: () => void; ms: number }>(),
+  };
+  const fire = (ms: number) =>
+    Array.from(clock.timers.entries())
+      .filter(([, timer]) => timer.ms === ms)
+      .forEach(([id, timer]) => {
+        clock.timers.delete(id);
+        timer.fn();
+      });
+  const fakeWindow = {
+    setTimeout: (fn: () => void, ms: number) => {
+      clock.next += 1;
+      clock.timers.set(clock.next, { fn, ms });
+      return clock.next;
+    },
+    clearTimeout: (id: number) => clock.timers.delete(id),
+    setInterval: () => 0,
+    clearInterval: () => undefined,
+  };
+  const fakeDocument = {
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    visibilityState: 'visible',
+  };
+  const prior = {
+    window: Reflect.get(globalThis, 'window'),
+    document: Reflect.get(globalThis, 'document'),
+    socket: Reflect.get(globalThis, 'WebSocket'),
+    navigator: Reflect.get(globalThis, 'navigator'),
+  };
+  Object.assign(globalThis, {
+    window: fakeWindow,
+    document: fakeDocument,
+    WebSocket: FakeSocket,
+  });
+  const setNavigator = (value: unknown) =>
+    Reflect.defineProperty(globalThis, 'navigator', {
+      value,
+      configurable: true,
+      writable: true,
+    });
+  const READY_ANSWER: VoiceTokenAnswer = {
+    status: 'ready',
+    token: 'secret-token-value',
+    expiresAt: 1,
+    model: 'm',
+    mintId: 'mint-9',
+  };
+  const microphone = (): FrameSource => ({
+    preRoll: [],
+    subscribe: () => undefined,
+    stop: () => undefined,
+  });
+  const listen = (
+    getToken: () => Promise<VoiceTokenAnswer>,
+    { tokenWaitMs = 1500, isOwnMicrophone = false } = {},
+  ) => {
+    const unavailable: [CloudHeldReason | null, CloudListenCause][] = [];
+    const errors: string[] = [];
+    const stt = createDeepgramStt({
+      lang: 'en',
+      getToken,
+      tokenWaitMs,
+      source: isOwnMicrophone ? null : microphone(),
+      onUnavailable: (reason, cause) => unavailable.push([reason, cause]),
+      onClosed: () => undefined,
+    });
+    const started = stt.start({
+      onPartial: () => undefined,
+      onFinal: () => undefined,
+      onSpeechStart: () => undefined,
+      onError: (code) => errors.push(code),
+      preRoll: null,
+    });
+    return { unavailable, errors, started };
+  };
+  const only = (unavailable: [CloudHeldReason | null, CloudListenCause][]) => {
+    assert.equal(unavailable.length, 1, 'one failure is reported once');
+    return unavailable[0]!;
+  };
+  const realConsole = { error: console.error, warn: console.warn };
+  console.error = () => undefined;
+  console.warn = () => undefined;
+  try {
+    const thrown = listen(() =>
+      Promise.reject(
+        Object.assign(new Error('Failed to fetch'), {
+          name: 'FirebaseError',
+          code: 'functions/unavailable',
+        }),
+      ),
+    );
+    await thrown.started;
+    const [thrownReason, thrownCause] = only(thrown.unavailable);
+    assert.deepEqual(
+      [thrownReason, thrownCause.stage, thrownCause.detail],
+      [
+        null,
+        CLOUD_LISTEN_STAGES.tokenRequest,
+        'FirebaseError: Failed to fetch',
+      ],
+      'a token request that throws reports its stage and the raw error',
+    );
+
+    const refused = listen(
+      createVoiceTokenSource({
+        appId: 'x',
+        mint: async () => {
+          throw Object.assign(new Error('App Check failed'), {
+            name: 'FirebaseError',
+            code: 'functions/unauthenticated',
+          });
+        },
+      }).getToken,
+    );
+    await refused.started;
+    const [, refusedCause] = only(refused.unavailable);
+    assert.deepEqual(
+      [
+        refusedCause.stage,
+        /functions\/unauthenticated FirebaseError: App Check failed/.test(
+          refusedCause.detail,
+        ),
+      ],
+      [CLOUD_LISTEN_STAGES.tokenRequest, true],
+      "a mint failure's code and message reach the listen's cause",
+    );
+
+    const keyless = listen(async () => ({
+      status: 'held',
+      reason: 'unavailable',
+      cause: {
+        stage: CLOUD_LISTEN_STAGES.tokenRefused,
+        detail: 'The server answered unavailable: provider-status-401',
+      },
+    }));
+    await keyless.started;
+    const [keylessReason, keylessCause] = only(keyless.unavailable);
+    assert.deepEqual(
+      [keylessReason, keylessCause.stage, keylessCause.detail],
+      [
+        null,
+        CLOUD_LISTEN_STAGES.tokenRefused,
+        'The server answered unavailable: provider-status-401',
+      ],
+      'a token held unavailable keeps the server stated why',
+    );
+
+    const limited = listen(async () => ({
+      status: 'held',
+      reason: 'listenLimit',
+    }));
+    await limited.started;
+    const [limitedReason, limitedCause] = only(limited.unavailable);
+    assert.deepEqual(
+      [limitedReason, limitedCause.stage, limitedCause.detail],
+      [
+        'listenLimit',
+        CLOUD_LISTEN_STAGES.tokenHeld,
+        'The server held this listen: listenLimit',
+      ],
+      'a token held by a limit names the limit',
+    );
+
+    const slow = listen(() => new Promise<VoiceTokenAnswer>(() => undefined), {
+      tokenWaitMs: 1234,
+    });
+    fire(1234);
+    await slow.started;
+    const [, slowCause] = only(slow.unavailable);
+    assert.deepEqual(
+      [slowCause.stage, slowCause.detail, slowCause.facts],
+      [
+        CLOUD_LISTEN_STAGES.tokenTimeout,
+        'No token within 1234 ms',
+        ['Waited: 1234 ms'],
+      ],
+      'a token that never arrives reports the wait it hit',
+    );
+
+    const closed = listen(async () => READY_ANSWER);
+    await closed.started;
+    FakeSocket.all.at(-1)!.onclose?.({
+      code: 1006,
+      reason: '',
+      wasClean: false,
+    });
+    const [, closedCause] = only(closed.unavailable);
+    assert.deepEqual(
+      [closedCause.stage, closedCause.detail, closedCause.facts],
+      [
+        CLOUD_LISTEN_STAGES.socketClosed,
+        'Close code 1006, reason none, not clean',
+        ['Close code: 1006', 'Close reason: none', 'Closed cleanly: no'],
+      ],
+      'a socket closed before it opened reports its close code',
+    );
+
+    const errored = listen(async () => READY_ANSWER);
+    await errored.started;
+    const erroredSocket = FakeSocket.all.at(-1)!;
+    erroredSocket.onerror?.();
+    assert.equal(
+      errored.unavailable.length,
+      0,
+      'an error event waits for the close that carries the code',
+    );
+    erroredSocket.onclose?.({ code: 1006, reason: 'bad', wasClean: false });
+    const [, erroredCause] = only(errored.unavailable);
+    assert.deepEqual(
+      [erroredCause.stage, erroredCause.detail],
+      [
+        CLOUD_LISTEN_STAGES.socketError,
+        'Close code 1006, reason "bad", not clean, after an error event',
+      ],
+      'a socket error before open reports the close code that followed',
+    );
+
+    const unopened = listen(async () => READY_ANSWER);
+    await unopened.started;
+    fire(3000);
+    const [, unopenedCause] = only(unopened.unavailable);
+    assert.deepEqual(
+      [unopenedCause.stage, unopenedCause.detail, unopenedCause.facts],
+      [
+        CLOUD_LISTEN_STAGES.socketOpenTimeout,
+        'Not open after 3000 ms',
+        ['Waited: 3000 ms'],
+      ],
+      'a socket that never opens reports the wait it hit',
+    );
+
+    setNavigator({
+      mediaDevices: {
+        getUserMedia: async () => {
+          throw new DOMException('Device in use', 'NotReadableError');
+        },
+      },
+    });
+    const busy = listen(async () => READY_ANSWER, { isOwnMicrophone: true });
+    await busy.started;
+    const [, busyCause] = only(busy.unavailable);
+    assert.deepEqual(
+      [busyCause.stage, busyCause.detail],
+      [CLOUD_LISTEN_STAGES.microphoneOpen, 'NotReadableError: Device in use'],
+      'a microphone refused for another reason reports the browser error',
+    );
+
+    setNavigator({
+      mediaDevices: {
+        getUserMedia: async () => ({ getTracks: () => [] }),
+      },
+    });
+    const noCapture = listen(
+      () => new Promise<VoiceTokenAnswer>(() => undefined),
+      { isOwnMicrophone: true },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    fire(1500);
+    await noCapture.started;
+    assert.ok(
+      noCapture.unavailable.length > 0 &&
+        noCapture.unavailable.every(
+          ([, cause]) =>
+            cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture ||
+            cause.stage === CLOUD_LISTEN_STAGES.tokenTimeout,
+        ),
+      'a microphone capture that does not start reports its own stage',
+    );
+    assert.ok(
+      noCapture.unavailable.some(
+        ([, cause]) => cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture,
+      ),
+      'the capture failure is the first cause',
+    );
+    assert.equal(
+      JSON.stringify(
+        [thrown, refused, keyless, limited, slow, closed, errored].map(
+          ({ unavailable }) => unavailable,
+        ),
+      ).includes('secret-token-value'),
+      false,
+      'no cause holds the token',
+    );
+  } finally {
+    console.error = realConsole.error;
+    console.warn = realConsole.warn;
+    Object.entries({
+      window: prior.window,
+      document: prior.document,
+      WebSocket: prior.socket,
+    }).forEach(([key, value]) => {
+      if (value === undefined) Reflect.deleteProperty(globalThis, key);
+      else Reflect.set(globalThis, key, value);
+    });
+    if (prior.navigator === undefined) {
+      Reflect.deleteProperty(globalThis, 'navigator');
+    } else setNavigator(prior.navigator);
+  }
+  console.log('speechShared: cloud listening failure cause checks passed');
+}
+{
+  resetFallbacks();
+  // @ts-expect-error a report without its cause does not compile
+  reportFallback({
+    key: 'no-cause',
+    feature: 'f',
+    wanted: 'w',
+    used: 'u',
+    reason: 'r',
+  });
+  resetFallbacks();
+  const warned: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (message: string) => warned.push(message);
+  reportFallback({
+    key: 'empty',
+    feature: 'f',
+    wanted: 'w',
+    used: 'u',
+    reason: 'r',
+    cause: { stage: 'a stage', detail: '' },
+  });
+  console.warn = realWarn;
+  const [shown] = readFallbacks();
+  assert.deepEqual(
+    [shown?.cause, warned.length],
+    [{ stage: 'a stage', detail: '' }, 0],
+    'the cause is kept as reported (the empty-detail warning is for local builds only)',
+  );
+  resetFallbacks();
 }
 const SPEAKER_ON = {
   isOnline: true,
@@ -1154,6 +1550,7 @@ console.log('speechShared: voice router and playback queue checks passed');
       wanted: 'your chosen voice',
       used: "this device's voice",
       reason,
+      cause: { stage: 'a stage', detail: 'a raw error' },
     });
   report('a');
   report('a', 'it broke again');
@@ -1242,6 +1639,7 @@ console.log('speechShared: voice router and playback queue checks passed');
     wanted: 'a',
     used: 'b',
     reason: 'first',
+    cause: { stage: 's', detail: 'd' },
     facts: ['Error: raw'],
     trace: 'the trace',
   });
@@ -1251,6 +1649,7 @@ console.log('speechShared: voice router and playback queue checks passed');
     wanted: 'a',
     used: 'b',
     reason: 'first',
+    cause: { stage: 's', detail: 'd' },
   });
   assert.deepEqual(
     [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
@@ -1263,6 +1662,7 @@ console.log('speechShared: voice router and playback queue checks passed');
     wanted: 'a',
     used: 'b',
     reason: 'second',
+    cause: { stage: 's', detail: 'd' },
   });
   assert.deepEqual(
     [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
@@ -1275,6 +1675,7 @@ console.log('speechShared: voice router and playback queue checks passed');
     wanted: 'a',
     used: 'b',
     reason: 'third',
+    cause: { stage: 's', detail: 'd' },
     facts: ['Error: newer'],
   });
   assert.deepEqual(
@@ -1408,10 +1809,10 @@ console.log('speechShared: voice router and playback queue checks passed');
     "the voice service couldn't be reached",
     'the report says why in plain words',
   );
-  assert.ok(
-    cloudReport?.facts.includes('Error: HTTP 500') &&
-      cloudReport.facts.includes('Stood in: system'),
-    'the report keeps the raw cause and what stood in',
+  assert.deepEqual(
+    [cloudReport?.cause, cloudReport?.facts.includes('Stood in: system')],
+    [{ stage: 'speech request', detail: 'HTTP 500' }, true],
+    'the report keeps the stage, the raw cause and what stood in',
   );
   await createCloudTts({
     source: { fetchSpeech: () => new Promise<never>(() => undefined) },
@@ -1469,6 +1870,7 @@ console.log('speechShared: voice router and playback queue checks passed');
     wanted: 'w',
     used: 'u',
     reason: 'r',
+    cause: { stage: 's', detail: 'd' },
   });
   await createCloudTts({
     source: { fetchSpeech: async () => mpeg() },
@@ -1556,10 +1958,10 @@ console.log('speechShared: voice router and playback queue checks passed');
   assert.equal(heldResult, 'system', 'a held answer is spoken by the fallback');
   assert.deepEqual(held, ['speechLimit'], 'a held answer reports its reason');
   assert.equal(
-    await cloudWith(async () => ({ status: 'unavailable' })).speak(
-      'Two',
-      options,
-    ),
+    await cloudWith(async () => ({
+      status: 'unavailable',
+      detail: 'HTTP 500',
+    })).speak('Two', options),
     'system',
     'an unavailable answer is spoken by the fallback',
   );
@@ -1573,10 +1975,10 @@ console.log('speechShared: voice router and playback queue checks passed');
   );
   const fetchedBefore = fetched.length;
   assert.equal(
-    await cloudWith(async () => ({ status: 'unavailable' })).speak(
-      'word '.repeat(130),
-      options,
-    ),
+    await cloudWith(async () => ({
+      status: 'unavailable',
+      detail: 'HTTP 500',
+    })).speak('word '.repeat(130), options),
     'system',
     'a long text whose cloud voice fails is spoken by the fallback',
   );
@@ -1737,7 +2139,7 @@ console.log('speechShared: voice router and playback queue checks passed');
                 },
               }),
             }
-          : { status: 'unavailable' };
+          : { status: 'unavailable', detail: 'HTTP 500' };
       },
     },
     fallback,
@@ -1762,7 +2164,7 @@ console.log('speechShared: voice router and playback queue checks passed');
   const routeEvents: boolean[] = [];
   const probe = createCloudTts({
     source: {
-      fetchSpeech: async () => ({ status: 'unavailable' }),
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
     },
     fallback: { ...fallback, isPlayingThroughWebAudio: false },
   });
@@ -2202,7 +2604,9 @@ console.log('speechShared: voice router and playback queue checks passed');
 
   const fellBack: string[] = [];
   await createCloudTts({
-    source: { fetchSpeech: async () => ({ status: 'unavailable' }) },
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
     fallback,
     onFallback: () => fellBack.push('fallback'),
   }).speak('Ten', options());

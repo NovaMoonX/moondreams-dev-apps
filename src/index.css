@@ -240,6 +240,12 @@ html[data-site-banner='true'] .subview-backdrop {
   z-index: 126 !important;
 }
 
+/* The fallback tab belongs to the app's space: a drawer, modal or the site's menu panel (any dialog) covers it, while an app's full-screen surface (`data-app-surface`) keeps it. It fades out rather than leaving the layout so a drawer that closes can hand focus back to it. */
+html:has([role='dialog']:not([data-app-surface])) [data-fallback-tab] {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
 @media (max-width: 639.98px) {
   [role='region'][aria-label='Notifications'] {

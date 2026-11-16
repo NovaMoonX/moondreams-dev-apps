@@ -30,6 +30,8 @@ const toFacts = (fallback: Fallback) => [
   `Feature: ${fallback.feature}`,
   `Wanted: ${fallback.wanted}`,
   `Used: ${fallback.used}`,
+  `Step: ${fallback.cause.stage}`,
+  `Error: ${fallback.cause.detail}`,
   ...fallback.facts,
   ...(fallback.recoveredAt === null
     ? []
@@ -95,6 +97,7 @@ function FallbackTab({
         type='button'
         variant='base'
         size='sm'
+        data-fallback-tab
         aria-label={pill === null ? label : `${label}: ${toShort(pill)}`}
         className={join(
           "fixed top-1/2 left-0 z-[125] flex h-10 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-l-0 p-0 shadow-md before:absolute before:inset-y-0 before:-right-2 before:left-0 before:content-['']",

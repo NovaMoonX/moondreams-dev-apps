@@ -32,7 +32,7 @@ export const toHeardText = (parts: string[]) => {
 const FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.listen;
 
 // A model that failed to load is already reported under its own key, so the listen it ended isn't reported twice.
-const reportListenFailed = (raw: string) => {
+const reportListenFailed = (stage: string, raw: string) => {
   if (getRecognizerStatus() === 'failed') return;
   const events = readSpeechEvents();
   reportFallback({
@@ -41,7 +41,7 @@ const reportListenFailed = (raw: string) => {
     wanted: 'the on-device speech model',
     used: 'nothing for this listen, which ended',
     reason: "it couldn't listen",
-    facts: [`Error: ${raw}`],
+    cause: { stage, detail: raw },
     trace: events.length > 0 ? events.join('\n') : null,
   });
 };
@@ -54,7 +54,7 @@ const toErrorCode = (error: unknown): SttErrorCode => {
     }
     if (error.name === 'NotFoundError') return 'no-microphone';
   }
-  reportListenFailed(describeThrown(error));
+  reportListenFailed('listen', describeThrown(error));
   return 'unavailable';
 };
 
@@ -207,11 +207,11 @@ export const createOnDeviceStt = ({
             state.partial = '';
             deliver(read());
           },
-          onFailed: () => {
+          onFailed: (detail) => {
             if (state.isDone) return;
             release();
             state.isDone = true;
-            reportListenFailed('The recognizer reported a failure');
+            reportListenFailed('recognizer', detail);
             options.onError('unavailable');
           },
         });
@@ -282,10 +282,10 @@ export const listenOnDevice = ({
         onPartial: () => undefined,
         onSegment: (text) => onPhrase(toHeardText([text])),
         onFinished: () => undefined,
-        onFailed: () => {
+        onFailed: (detail) => {
           if (state.isClosed) return;
           close();
-          reportListenFailed('The recognizer reported a failure');
+          reportListenFailed('recognizer', detail);
           onUnavailable('unavailable');
         },
       });

@@ -1,4 +1,8 @@
-import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import {
+  clearFallback,
+  reportFallback,
+  type FallbackCause,
+} from '@/lib/fallbacks/fallbacks';
 import { getAudioContext } from '@/lib/speech/audioContext';
 import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
 import { describeThrown } from '@/lib/speech/speechDiagnostics';
@@ -174,8 +178,8 @@ export const createCloudTts = ({
   bodyMs?: number;
   gapMs?: number;
   onHeld?: (reason: SpeechHeldReason) => void;
-  onFallback?: () => void;
-  onCut?: () => void;
+  onFallback?: (cause: FallbackCause) => void;
+  onCut?: (cause: FallbackCause) => void;
   onPlayed?: () => void;
   player?: CloudPlayer;
   /** False for a sample or preview, so a failed one reports nothing. */
@@ -202,10 +206,13 @@ export const createCloudTts = ({
         playedBy: 'cloud',
         isStarted: false,
         isCut: false,
-        failure: { reason: '', raw: null as string | null },
+        failure: {
+          reason: '',
+          cause: { stage: '', detail: '' } as FallbackCause,
+        },
       };
-      const fail = (reason: string, raw: string | null = null) => {
-        run.failure = { reason, raw };
+      const fail = (reason: string, stage: string, detail: string) => {
+        run.failure = { reason, cause: { stage, detail } };
       };
       const reportFailure = (index: number, isCut: boolean) =>
         reportsFallback &&
@@ -217,8 +224,8 @@ export const createCloudTts = ({
             : 'your chosen voice',
           used: isCut ? 'the part that played' : "this device's voice",
           reason: run.failure.reason,
+          cause: run.failure.cause,
           facts: [
-            ...(run.failure.raw === null ? [] : [`Error: ${run.failure.raw}`]),
             `Failed part: ${index + 1} of ${pieces.length}`,
             `Line: ${totalChars} characters, ${priority}`,
             `Stood in: ${fallback.id}`,
@@ -350,7 +357,11 @@ export const createCloudTts = ({
             const next = await within(reader.read(), gapMs);
             if (next === 'late' && !signal.aborted) {
               state.isCut = true;
-              fail('the voice stopped partway', `No audio for ${gapMs} ms`);
+              fail(
+                'the voice stopped partway',
+                'audio gap',
+                `No audio for ${gapMs} ms`,
+              );
             }
             if (next === 'late' || next.done || signal.aborted) return;
             sink.push(next.value);
@@ -364,7 +375,11 @@ export const createCloudTts = ({
             if (!wasPlaying) throw error;
             if (!signal.aborted) {
               state.isCut = true;
-              fail('the voice stopped partway', describeThrown(error));
+              fail(
+                'the voice stopped partway',
+                'audio stream read',
+                describeThrown(error),
+              );
               console.error('The cloud voice stopped partway', error);
             }
           }
@@ -401,6 +416,7 @@ export const createCloudTts = ({
           if (answer === 'late') {
             fail(
               "the voice service didn't answer in time",
+              'speech request timed out',
               `No response within ${firstByteMs} ms`,
             );
             controller.abort();
@@ -409,7 +425,8 @@ export const createCloudTts = ({
           if (answer.status === 'unavailable') {
             fail(
               "the voice service couldn't be reached",
-              answer.detail ?? null,
+              'speech request',
+              answer.detail,
             );
             controller.abort();
             return 'failed';
@@ -417,6 +434,7 @@ export const createCloudTts = ({
           if (answer.status === 'held') {
             fail(
               "today's cloud voice allowance is used up",
+              'allowance held',
               `Held: ${answer.reason}`,
             );
             onHeld?.(answer.reason);
@@ -434,6 +452,7 @@ export const createCloudTts = ({
             if (first === 'late') {
               fail(
                 'the voice service sent no sound in time',
+                'first audio timed out',
                 `No audio within ${firstByteMs} ms of the request`,
               );
             }
@@ -458,6 +477,7 @@ export const createCloudTts = ({
           if (rest === 'late') {
             fail(
               'the voice audio took too long to arrive',
+              'audio body timed out',
               `Audio incomplete after ${bodyLimitMs} ms`,
             );
             controller.abort();
@@ -470,10 +490,18 @@ export const createCloudTts = ({
         } catch (error) {
           if (signal.aborted) return 'aborted';
           if (state.isPlaying) {
-            fail('the voice stopped partway', describeThrown(error));
+            fail(
+              'the voice stopped partway',
+              'audio playback',
+              describeThrown(error),
+            );
             return 'cut';
           }
-          fail("the voice audio couldn't be played", describeThrown(error));
+          fail(
+            "the voice audio couldn't be played",
+            'audio decode or playback',
+            describeThrown(error),
+          );
           console.error('The cloud voice failed to read', error);
           controller.abort();
           return 'failed';
@@ -500,13 +528,13 @@ export const createCloudTts = ({
           return index === 0 ? undefined : run.playedBy;
         if (outcome === 'failed') {
           reportFailure(index, false);
-          onFallback?.();
+          onFallback?.(run.failure.cause);
           return speakRest(index);
         }
         if (outcome === 'cut') {
           run.isCut = true;
           reportFailure(index, true);
-          onCut?.();
+          onCut?.(run.failure.cause);
         }
         return speakFrom(index + 1);
       };

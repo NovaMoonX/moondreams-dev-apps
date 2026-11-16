@@ -1,3 +1,4 @@
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import type {
   SpeechHeldReason,
   SpeechPriority,
@@ -11,7 +12,7 @@ export type SpeechFetch =
       contentType: string;
     }
   | { status: 'held'; reason: SpeechHeldReason }
-  | { status: 'unavailable'; detail?: string };
+  | { status: 'unavailable'; detail: string };
 
 export interface SpeechVoice {
   voiceId: string | null;
@@ -44,7 +45,12 @@ export const createSpeechSource = ({
 }): SpeechSource => ({
   fetchSpeech: async (text, priority, signal, voice) => {
     try {
-      const headers = await getHeaders();
+      const headers = await getHeaders().catch(
+        (error: unknown) => `Sign-in headers failed: ${describeThrown(error)}`,
+      );
+      if (typeof headers === 'string') {
+        return { status: 'unavailable', detail: headers };
+      }
       if (headers === null) {
         return { status: 'unavailable', detail: 'No sign-in headers yet' };
       }
@@ -70,9 +76,17 @@ export const createSpeechSource = ({
           : { status: 'unavailable', detail: 'HTTP 429' };
       }
       if (!response.ok || response.body === null) {
+        const snippet = response.ok
+          ? ''
+          : await response
+              .text()
+              .then((body) => body.replace(/\s+/g, ' ').trim().slice(0, 160))
+              .catch(() => '');
         return {
           status: 'unavailable',
-          detail: response.ok ? 'No body' : `HTTP ${response.status}`,
+          detail: response.ok
+            ? 'No body'
+            : `HTTP ${response.status}${snippet === '' ? '' : `: ${snippet}`}`,
         };
       }
       return {
@@ -82,13 +96,7 @@ export const createSpeechSource = ({
         contentType: response.headers.get('Content-Type') ?? '',
       };
     } catch (error) {
-      return {
-        status: 'unavailable',
-        detail:
-          error instanceof Error
-            ? `${error.name}: ${error.message}`
-            : String(error),
-      };
+      return { status: 'unavailable', detail: describeThrown(error) };
     }
   },
 });

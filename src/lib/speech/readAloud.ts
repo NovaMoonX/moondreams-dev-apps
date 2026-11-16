@@ -1,4 +1,4 @@
-import { reportFallback } from '@/lib/fallbacks/fallbacks';
+import { reportFallback, type FallbackCause } from '@/lib/fallbacks/fallbacks';
 import { getAudioContext } from '@/lib/speech/audioContext';
 import {
   isNaturalVoiceLang,
@@ -14,6 +14,7 @@ import {
   synthesizeNaturalVoice,
 } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
 import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import { toSpokenText } from '@/lib/speech/spokenText';
 import { speakText } from '@/utils/speechUtils';
 
@@ -33,13 +34,18 @@ export interface ReadAloudOptions {
 
 const PROGRESS_MS = 150;
 
-const reportBrowserVoice = (reason: string, facts: string[]) =>
+const reportBrowserVoice = (
+  reason: string,
+  cause: FallbackCause,
+  facts: string[] = [],
+) =>
   reportFallback({
     key: NATURAL_VOICE_FALLBACK_KEY,
     feature: 'Speaking',
     wanted: 'the natural voice',
     used: "the browser's voice",
     reason,
+    cause,
     facts,
   });
 
@@ -197,10 +203,11 @@ const readNatural = (
     } catch (error) {
       if (run.isStopped || isNaturalVoiceCancel(error)) return;
       console.error('The natural voice failed to read', error);
-      reportBrowserVoice('it failed while reading', [
-        `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-        `Sentence: ${index + 1} of ${sentences.length}`,
-      ]);
+      reportBrowserVoice(
+        'it failed while reading',
+        { stage: 'natural voice synthesis', detail: describeThrown(error) },
+        [`Sentence: ${index + 1} of ${sentences.length}`],
+      );
       giveUpOn(index);
       return;
     }
@@ -212,16 +219,22 @@ const readNatural = (
     cancelNaturalSynthesis();
     recordSlowNaturalReading();
     if (getNaturalVoiceState().status !== 'failed') {
-      reportBrowserVoice('it was too slow to start', [
-        `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
-      ]);
+      reportBrowserVoice('it was too slow to start', {
+        stage: 'natural voice start timed out',
+        detail: `No sound within ${NATURAL_START_TIMEOUT_MS} ms`,
+      });
     }
     giveUpOn(0);
   }, NATURAL_START_TIMEOUT_MS);
 
   synthesizeFrom(0).catch((error: unknown) => {
     console.error('The natural voice failed to read', error);
-    if (!run.isStopped) giveUpOn(0);
+    if (run.isStopped) return;
+    reportBrowserVoice('it failed while reading', {
+      stage: 'natural voice reading',
+      detail: describeThrown(error),
+    });
+    giveUpOn(0);
   });
 
   return () => {
@@ -266,7 +279,10 @@ export function readAloud(text: string, options: ReadAloudOptions): () => void {
         ? toNaturalBlock(options, context)
         : null;
     if (block !== null && getNaturalVoiceState().status !== 'failed') {
-      reportBrowserVoice(block, []);
+      reportBrowserVoice(block, {
+        stage: 'natural voice not usable',
+        detail: block,
+      });
     }
     options.onVoice?.('system');
     return speakText(spokenText, options);
