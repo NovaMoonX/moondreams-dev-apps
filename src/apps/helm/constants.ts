@@ -4286,8 +4286,8 @@ export const HELM_COPY = {
   guardrailUndoSubtitle: (name: string) => `Puts ${name} back on your plans.`,
   guardrailUndone: (name: string) => `Okay, ${name} is back on your plans.`,
   guardrailStop: 'Stop suggesting this',
-  guardrailStopSubtitle: (name: string) =>
-    `Won't suggest pausing ${name} again unless you ask.`,
+  guardrailStopSubtitle: (name: string, isHold = false) =>
+    `Won't suggest ${isHold ? 'holding' : 'pausing'} ${name} again unless you ask.`,
   guardrailStopTaskSubtitle: (title: string) =>
     `Won't flag a full day for ${title} again unless you ask.`,
   guardrailHeld: (name: string, date: string | null) =>
