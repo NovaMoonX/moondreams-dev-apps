@@ -41,6 +41,26 @@ const isDismissReply = (text: string, question: HelmQuestion) => {
   );
 };
 
+const UNDO_OFFER_YES = new Set([
+  'undo it',
+  'undo',
+  'undo that',
+  'take it back',
+  'yes',
+  'yeah',
+  'yep',
+  'do it',
+]);
+const UNDO_OFFER_NO = new Set([
+  'keep it',
+  'keep',
+  'leave it',
+  'no',
+  'nope',
+  "don't",
+  'do not',
+]);
+
 const NEW_NAMES = ['someone new', 'new', 'a new one', 'new one', 'new person'];
 const NONE_NAMES = ["don't link anyone", "don't link"];
 
@@ -98,6 +118,21 @@ export function matchSpokenAnswer(
 ): SpokenAnswer | null {
   if (isDismissable(question.kind) && isDismissReply(text, question)) {
     return { kind: 'dismiss' };
+  }
+  if (question.kind === 'undoOffer' && question.shape === 'yesNo') {
+    const words = toPlainWords(text);
+    if (UNDO_OFFER_YES.has(words)) {
+      return {
+        kind: 'answer',
+        value: { shape: 'yesNo', optionId: 'yes', otherText: null },
+      };
+    }
+    if (UNDO_OFFER_NO.has(words)) {
+      return {
+        kind: 'answer',
+        value: { shape: 'yesNo', optionId: 'no', otherText: null },
+      };
+    }
   }
   const read = readSpokenAnswer(toSpokenQuestion(question), text, {
     readDate: toDateReader(context),
