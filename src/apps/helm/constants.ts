@@ -1,3 +1,4 @@
+import { CLOSING_PHRASES } from '@/lib/speech/closingPhrase';
 import { formatList, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { ThemeOption } from '@/components/ThemePicker';
@@ -176,38 +177,35 @@ export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 export const CAPTURE_MAX_CHARS = 4_000;
 
-/** Said at the end of an utterance to send it without a tap; in a live conversation they also end it. */
-export const END_PHRASES = [
-  "that's all",
-  'thats all',
+const withoutApostrophes = (phrases: readonly string[]) =>
+  phrases.map((phrase) => phrase.replace(/['’]/g, ''));
+
+/** Helm's own words that end an utterance, beside the shared phrases that may follow anything. */
+const HELM_END_PHRASES = [
   "that's all for now",
-  'thats all for now',
-  "that's it",
-  'thats it',
   "that's it for now",
-  'thats it for now',
-  "that's everything",
-  'thats everything',
   'end the conversation',
   'end conversation',
   'bye for now',
 ];
-/** A whole utterance in a live conversation that is only one of these (with any nod around it: "okay, I'm done") ends it; never as an end phrase, since "tell Sam I'm done" means something. */
+const SHARED_ANYWHERE_ENDS = CLOSING_PHRASES.finish.filter((phrase) =>
+  phrase.startsWith("that's "),
+);
+const END_WORDS = [...SHARED_ANYWHERE_ENDS, ...HELM_END_PHRASES];
+/** Said at the end of an utterance to send it without a tap; in a live conversation they also end it. The shared phrases are the only copy of "that's all" and its kin. */
+export const END_PHRASES = Array.from(
+  new Set([...END_WORDS, ...withoutApostrophes(END_WORDS)]),
+);
+/** Helm's own whole-utterance closers in a live conversation, added to the shared finish phrases and "stop" (with any nod around: "okay, we're done"); never as an end phrase, since "tell Sam we're done" means something. */
 export const LIVE_CLOSING_PHRASES = [
-  "i'm done",
-  'im done',
   "we're done",
-  'were done',
   "i'm all set",
-  'im all set',
   "i'm good",
-  'im good',
   'goodbye',
   'bye',
   'nothing else',
   'that will be all',
   "that'll be all",
-  'stop',
   'end',
 ];
 /** A whole utterance in a live conversation that only acknowledges the last reply ("Gotcha. Okay.") files nothing; listening carries on. */
