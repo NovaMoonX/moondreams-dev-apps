@@ -80,6 +80,7 @@ export interface NewHabit {
   notes: string | null;
   isCare: boolean;
   forWhoId: string | null;
+  projectId: string | null;
   /** The habit day it starts on, as UTC midnight. */
   startsOn: number;
   when: ReturnType<typeof fromWhenDraft>;
@@ -100,7 +101,7 @@ export async function createHabit(
     cadence: input.when.cadence,
     windowState: input.when.windowState,
     timesPerDay: input.when.timesPerDay,
-    projectId: null,
+    projectId: input.projectId,
     forWhoId: input.isCare ? input.forWhoId : null,
     isCare: input.isCare,
     startsOn: input.startsOn,
