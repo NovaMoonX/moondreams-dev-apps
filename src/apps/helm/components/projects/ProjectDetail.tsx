@@ -525,7 +525,9 @@ function ProjectDetail({
                 />
               )
             )}
-            {guardrail && <GuardrailLine pattern={guardrail} />}
+            {guardrail && !(isGoal && !isFinished && tidyOffer) && (
+              <GuardrailLine pattern={guardrail} />
+            )}
             <ImportancePlaceRow
               id={project.id}
               variant='quiet'

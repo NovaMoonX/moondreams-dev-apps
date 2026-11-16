@@ -27,7 +27,7 @@ export const useGuardrailSubjectName = (pattern: OpenPattern) => {
   );
 };
 
-/** The other things a guardrail could pause, lowest-placed first (at most three): what the same rules allow, leaving out what it names and the deadline it is about. Nothing is counted from the calendar here, so it costs no read. */
+/** The other things a guardrail could pause, lowest-placed first (at most three), with no calendar read. */
 export function useGuardrailOthers(pattern: OpenPattern | null) {
   const clock = useHabitClock();
   const helm = useAppSelector((state) => state.helm);

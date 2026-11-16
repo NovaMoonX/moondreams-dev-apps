@@ -1,4 +1,3 @@
-// Pause or hold off: the bar (two kinds of reason, or one deadline), who may be named, the quiet first week, the switch, the signature and the back-off.
 import assert from 'node:assert/strict';
 
 import { shiftDayKeyBy } from '@/utils/cadenceUtils';
@@ -7,12 +6,17 @@ import {
   checkDaily,
   checkOnStart,
   meetsGuardrailBar,
+  pickStarted,
   readNameable,
   readStarved,
   type FreeDay,
   type GuardrailInput,
   type GuardrailThing,
 } from '../../src/apps/helm/engine/guardrails.ts';
+import {
+  isSameEvidence,
+  toPatternFields,
+} from '../../src/apps/helm/engine/patternCheck.ts';
 import { isEvidenceAsStrong } from '../../src/apps/helm/engine/patterns.ts';
 
 let failures = 0;
@@ -247,6 +251,108 @@ const run = async () => {
         input(goals, { tasks: [task(null)] }),
       ),
       null,
+    );
+  });
+
+  await test('a task date with under half its lengths known gives nothing', () => {
+    const task = (id: string, minutes: number | null) => ({
+      id,
+      title: id,
+      projectId: null,
+      dueDay: ms(TODAY) + DAY,
+      minutes,
+      isLatent: false,
+    });
+    assert.equal(
+      checkOnStart(
+        { id: 't', kind: 'task' },
+        input(goals, {
+          tasks: [
+            task('t', 900),
+            task('u', null),
+            task('v', null),
+            task('w', null),
+          ],
+        }),
+      ),
+      null,
+    );
+  });
+
+  await test('a project started with a deadline it breaks gives a hold', () => {
+    const { deadline, longTasks } = wontFit();
+    const found = checkOnStart(
+      { id: 'p', kind: 'project' },
+      input([...goals, deadline], { tasks: longTasks }),
+    );
+    assert.ok(found);
+    assert.equal(found.moment, 'onStart');
+    assert.equal(found.reasons[0].kind, 'deadlineWontFit');
+  });
+
+  await test('a habit started in a busy stretch with something starved is held', () => {
+    const habit = thing('h', 'habit', null, { createdAt: NOW, activity: [] });
+    const starved = thing('s', 'project', 5, { activity: [] });
+    const took = thing('b', 'project', 3);
+    const found = checkOnStart(
+      { id: 'h', kind: 'habit' },
+      input([thing('g1', 'goal', 4), starved, took, habit], busy),
+    );
+    assert.ok(found);
+    assert.equal(found.moment, 'onStart');
+    assert.equal(found.subject.otherId, 'h');
+    assert.equal(found.reasons.length, 2);
+  });
+
+  await test('goal load with no date to wait for lasts until picked back up', () => {
+    const starved = thing('s', 'project', 5, { activity: [] });
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([starved, ...goals, fourth]),
+    );
+    assert.ok(found);
+    assert.equal(found.effect.kind, 'pause');
+    assert.equal(found.effect.kind === 'pause' ? found.effect.until : 0, null);
+  });
+
+  await test('a pattern written before reasons reads as none', () => {
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([...goals, fourth], busy),
+    );
+    assert.ok(found);
+    assert.deepEqual(
+      toPatternFields(found, { now: NOW, privacy: 'ordinary' }).reasons,
+      [],
+    );
+  });
+
+  await test('the start pick is goal, then project, then habit, then task', () => {
+    const records = [
+      { id: 't', kind: 'task' as const },
+      { id: 'h', kind: 'habit' as const },
+      { id: 'p', kind: 'project' as const },
+      { id: 'g', kind: 'goal' as const },
+    ];
+    assert.equal(pickStarted(records)?.id, 'g');
+    assert.equal(pickStarted(records.slice(0, 3))?.id, 'p');
+    assert.equal(pickStarted(records.slice(0, 2))?.id, 'h');
+    assert.equal(pickStarted([]), null);
+  });
+
+  await test('load evidence is the same when only the day it was read changes', () => {
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([...goals, fourth], busy),
+    );
+    assert.ok(found?.evidence.kind === 'load');
+    assert.equal(
+      isSameEvidence(found.evidence, { ...found.evidence, asOf: NOW + DAY }),
+      true,
+    );
+    assert.equal(
+      isSameEvidence(found.evidence, { ...found.evidence, measured: 99 }),
+      false,
     );
   });
 

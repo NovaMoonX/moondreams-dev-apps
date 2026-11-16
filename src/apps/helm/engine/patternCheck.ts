@@ -18,8 +18,12 @@ type Stored = Pick<
   'state' | 'offReason' | 'nextEligibleOn' | 'evidenceSince' | 'evidence'
 >;
 
-const isSameEvidence = (a: PatternEvidence, b: PatternEvidence) =>
-  JSON.stringify(a) === JSON.stringify(b);
+export const isSameEvidence = (a: PatternEvidence, b: PatternEvidence) =>
+  a.kind === 'load' && b.kind === 'load'
+    ? a.measured === b.measured &&
+      a.limit === b.limit &&
+      JSON.stringify(a.refs) === JSON.stringify(b.refs)
+    : JSON.stringify(a) === JSON.stringify(b);
 
 /** What the daily check does with one finding given what is stored for it: make it, refresh its evidence, bring an answered one back on fresh evidence at least as strong, or leave it. `today` is date-only. */
 export function readPatternMove(input: {

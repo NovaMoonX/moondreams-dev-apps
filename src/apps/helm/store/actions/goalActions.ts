@@ -233,7 +233,7 @@ const resumedHabits = (
       },
     }));
 
-/** Sets a goal aside: the project pauses and so does each active habit in it (one whose words can't be read too), in one batch, so a pause the person made themselves is never mistaken for this one; `pausedUntil` (date-only) ends both. A goal already aside is left as it is. Undo puts every field back. */
+/** Sets a goal aside: the project pauses and so does each active habit in it (one whose words can't be read too), in one batch, so a pause the person made themselves is never mistaken for this one. A goal already aside is left as it is. Undo puts every field back. */
 export function setGoalAside(
   uid: string,
   projectId: string,

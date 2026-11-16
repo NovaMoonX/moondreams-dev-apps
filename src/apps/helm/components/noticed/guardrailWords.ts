@@ -8,7 +8,7 @@ import {
 
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
-import type { OpenPattern, PatternKind } from '@apps/helm/types';
+import type { OpenPattern, PatternKind, Weekday } from '@apps/helm/types';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
 const REASON_ICONS: Partial<Record<PatternKind, LucideIcon>> = {
@@ -24,7 +24,7 @@ export interface ReasonLine {
   Icon: LucideIcon;
 }
 
-/** One line per reason, each with its kind's icon. The lines are sealed with the pattern, joined by a line break in the order of its reasons; a pattern from before them has its one evidence line. */
+/** One line per reason, with its kind's icon; a pattern from before reasons has its one evidence line. */
 export function readReasonLines(pattern: OpenPattern): ReasonLine[] {
   const lines = (pattern.reasonLine ?? pattern.evidenceLine).split('\n');
   const kinds =
@@ -71,6 +71,16 @@ export const toShortDay = (day: number | null) =>
 export const toToastDay = (day: number | null) =>
   day === null ? null : formatWeekdayDayUTC(day);
 
-/** The weekday a task guardrail is about, from the sealed statement's own day: kept as the statement's first word. */
-export const readTaskDay = (pattern: OpenPattern) =>
-  pattern.statement.split(' ')[0];
+export function readKeepDayLabel(pattern: OpenPattern): string {
+  const refs = pattern.reasons.flatMap((reason) =>
+    reason.kind === 'deadlineWontFit' && reason.evidence.kind === 'load'
+      ? [reason.evidence.refs]
+      : [],
+  )[0];
+  const day = Number(refs?.[1]);
+  return Number.isFinite(day)
+    ? HELM_COPY.guardrailKeepDay(
+        HELM_COPY.habitWeekdaysLong[new Date(day).getUTCDay() as Weekday],
+      )
+    : HELM_COPY.guardrailKeepDate;
+}

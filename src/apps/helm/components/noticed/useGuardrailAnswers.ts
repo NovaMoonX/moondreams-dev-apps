@@ -14,6 +14,7 @@ import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { acceptGuardrail } from '@apps/helm/store/actions/guardrailActions';
 import {
   notNowPattern,
+  reopenPattern,
   stopPattern,
 } from '@apps/helm/store/actions/patternActions';
 import type { OpenPattern } from '@apps/helm/types';
@@ -25,7 +26,6 @@ interface Target {
   id: string;
 }
 
-/** The answers a person can give a guardrail. A pause is one write with its own Undo in the toast; a no or a stop is told in a line. One write at a time, and nothing else on the screen locks. */
 export function useGuardrailAnswers() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -65,7 +65,6 @@ export function useGuardrailAnswers() {
 
   return {
     busyId,
-    /** Holds or pauses: `target` another thing instead, `until` another day (null until picked back up). */
     pause: (
       pattern: OpenPattern,
       options: {
@@ -88,18 +87,15 @@ export function useGuardrailAnswers() {
           action: {
             label: HELM_COPY.undo,
             onClick: () =>
-              void answer.undo().catch((error: unknown) => {
-                console.error('Helm guardrail was not put back', error);
-                addToast({
-                  title: HELM_COPY.guardrailUndoFailed,
-                  type: 'error',
-                });
+              void guard(pattern.id, async () => {
+                const result = await answer.undo();
+                if (result !== 'saved') told(result, '');
+                return result === 'saved';
               }),
           },
         });
         return true;
       }),
-    /** Start it now, Keep going, Keep Friday: a no, waiting 4 weeks, then 8, and the third is final. */
     keepGoing: (pattern: OpenPattern) => {
       const weeks = readNotNowWeeks(pattern);
       return guard(pattern.id, async (uid) =>
@@ -114,11 +110,23 @@ export function useGuardrailAnswers() {
       );
     },
     stop: (pattern: OpenPattern, name: string) =>
-      guard(pattern.id, async (uid) =>
-        told(
-          await stopPattern(uid, pattern.id),
-          HELM_COPY.guardrailStopped(assistant, name),
-        ),
-      ),
+      guard(pattern.id, async (uid) => {
+        const result = await stopPattern(uid, pattern.id);
+        if (result !== 'saved') return told(result, '');
+        addToast({
+          title: HELM_COPY.guardrailStopped(assistant, name),
+          type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void guard(pattern.id, async () => {
+                const undone = await reopenPattern(uid, pattern.id);
+                if (undone !== 'saved') told(undone, '');
+                return undone === 'saved';
+              }),
+          },
+        });
+        return true;
+      }),
   };
 }

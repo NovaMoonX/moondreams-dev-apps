@@ -37,6 +37,7 @@ import type {
   Who,
   WhoSealed,
 } from '@apps/helm/types';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 
 const CHUNK = 200;
@@ -107,6 +108,7 @@ export async function createProject(
     ),
   };
   const ref = doc(projectsOf(uid), id);
+  markCreatedHere(id);
   return {
     id,
     written: setDoc(ref, project),
@@ -161,7 +163,7 @@ export async function updateProject(
   }
 }
 
-/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone and ends on `pausedUntil` (date-only), or when the person picks it back up. */
+/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone. */
 export function setProjectStatus(
   uid: string,
   project: {

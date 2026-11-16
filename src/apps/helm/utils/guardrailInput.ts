@@ -1,6 +1,6 @@
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import type { RootState } from '@/store';
-import { isDueOn } from '@/utils/cadenceUtils';
+import { isDueOn, shiftDayKeyBy } from '@/utils/cadenceUtils';
 import { readBusyShare, readFreeMinutes } from '@apps/helm/engine/planner';
 import type {
   FreeDay,
@@ -8,6 +8,7 @@ import type {
   GuardrailTask,
   GuardrailThing,
 } from '@apps/helm/engine/guardrails';
+import { TODAY_WINDOW_DAYS } from '@apps/helm/constants';
 import { selectImportanceItems } from '@apps/helm/store/selectors/importanceSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { OpenHabit, OpenProject } from '@apps/helm/types';
@@ -29,9 +30,7 @@ export interface GuardrailWorld {
   now: number;
   todayKey: string;
   timeZone: string;
-  /** The calendar grants; none counts as no calendar connected. */
   grants: ConnectionGrantWithId[];
-  /** The habit days read, the last weeks of check-ins. */
   days: DoneChecks;
 }
 
@@ -56,7 +55,7 @@ const toStepDue = (habits: OpenHabit[]) => (dayKey: string) =>
     (habit) => habit.status === 'active' && isDueOn(habit.cadence, dayKey),
   );
 
-/** What the guardrails read, from the store as it stands: every project, goal and habit with what has been done on it, the open tasks with their lengths and dates, and a free-time reader built on the planner's own input so it never disagrees with the plan. */
+/** What the guardrails read, built on the planner's own input so it never disagrees with the plan. */
 export function buildGuardrailInput(world: GuardrailWorld): GuardrailInput {
   const { state, now, todayKey, timeZone } = world;
   const { helm } = state;
@@ -111,6 +110,7 @@ export function buildGuardrailInput(world: GuardrailWorld): GuardrailInput {
           },
         ],
   );
+  const loadedThrough = shiftDayKeyBy(todayKey, TODAY_WINDOW_DAYS);
   const days = new Map<string, FreeDay>();
   const freeDay = (dayKey: string): FreeDay => {
     const known = days.get(dayKey);
@@ -137,7 +137,7 @@ export function buildGuardrailInput(world: GuardrailWorld): GuardrailInput {
       ? {
           minutes: readFreeMinutes(input),
           busyShare: readBusyShare(input),
-          hasCalendar: input.hasCalendar,
+          hasCalendar: input.hasCalendar && dayKey <= loadedThrough,
         }
       : { minutes: 0, busyShare: 0, hasCalendar: false };
     days.set(dayKey, free);

@@ -13,7 +13,10 @@ import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import AnsweredQuestion from '@apps/helm/components/home/AnsweredQuestion';
-import MediaLine, { TurnPhotos } from '@apps/helm/components/home/MediaLine';
+import MediaLine, {
+  OpenTask,
+  TurnPhotos,
+} from '@apps/helm/components/home/MediaLine';
 import NotedRow from '@apps/helm/components/home/NotedRow';
 import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import QuestionCard from '@apps/helm/components/home/QuestionCard';
@@ -100,6 +103,7 @@ function TurnCard({
   );
   const { addToast } = useToast();
   const [isRetrying, setIsRetrying] = useState(false);
+  const [laterTaskId, setLaterTaskId] = useState<string | null>(null);
   const isOffline = useNetworkStatus() === 'offline';
   const isReading =
     isCallOut ||
@@ -278,8 +282,18 @@ function TurnCard({
       )}
       {hasCard && startGuardrail && (
         <div className='flex w-full flex-col items-start gap-2'>
-          <GuardrailLine pattern={startGuardrail} />
+          <GuardrailLine
+            pattern={startGuardrail}
+            onFindLater={() => setLaterTaskId(startGuardrail.subject.id)}
+          />
         </div>
+      )}
+      {laterTaskId && (
+        <OpenTask
+          taskId={laterTaskId}
+          isOpen
+          onClose={() => setLaterTaskId(null)}
+        />
       )}
       {!capture.isUnreadable && capture.attachmentIds.length > 0 && (
         <div className='flex w-full flex-col items-start gap-2'>

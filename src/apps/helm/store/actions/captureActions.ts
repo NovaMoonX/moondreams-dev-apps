@@ -49,6 +49,7 @@ import { rankNotes } from '@apps/helm/utils/noteSearch';
 import { readLocationPermission } from '@apps/helm/utils/phoneLocation';
 import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import { clearRemindersIdle } from '@apps/helm/store/actions/markRemindersChanged';
 import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import type {
@@ -213,6 +214,7 @@ export async function sendCapture(
     sealed,
   };
   const reference = doc(capturesOf(uid));
+  markCreatedHere(reference.id);
   // A message joining a turn is written with its lead's list in one batch, so neither lands without the other.
   const write = leadId
     ? writeJoined(uid, leadId, reference, capture)

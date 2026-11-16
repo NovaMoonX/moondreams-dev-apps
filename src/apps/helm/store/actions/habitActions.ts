@@ -35,6 +35,7 @@ import type {
   ReminderPace,
   Sealed,
 } from '@apps/helm/types';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import type { fromWhenDraft } from '@apps/helm/utils/habitDraft';
 import {
   readEffectivePrivacy,
@@ -145,6 +146,7 @@ export async function createHabit(
     ),
   };
   const ref = doc(habitsOf(uid), id);
+  markCreatedHere(id);
   return { id, written: setDoc(ref, habit), undo: () => deleteDoc(ref) };
 }
 

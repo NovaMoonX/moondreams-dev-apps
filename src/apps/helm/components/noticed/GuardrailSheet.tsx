@@ -13,7 +13,7 @@ import {
   readHoursSource,
   readPauseUntil,
   readReasonLines,
-  readTaskDay,
+  readKeepDayLabel,
   toShortDay,
 } from '@apps/helm/components/noticed/guardrailWords';
 import { readStateWords } from '@apps/helm/components/noticed/patternWords';
@@ -29,10 +29,8 @@ import { selectShownPatterns } from '@apps/helm/store/selectors/patternSelectors
 import type { OpenPattern } from '@apps/helm/types';
 
 interface GuardrailSheetProps {
-  /** Null keeps the sheet closed. */
   patternId: string | null;
   onClose: () => void;
-  /** Opens the task's due date, for a task's guardrail. */
   onFindLater?: () => void;
 }
 
@@ -72,7 +70,7 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
       ? HELM_COPY.guardrailPauseNamed(name, date)
       : HELM_COPY.guardrailPause(date);
   const noLabel = isTask
-    ? HELM_COPY.guardrailKeepDay(readTaskDay(pattern))
+    ? readKeepDayLabel(pattern)
     : isStart
       ? HELM_COPY.guardrailStartNow
       : HELM_COPY.guardrailKeepGoing;
@@ -119,7 +117,6 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
               label={HELM_COPY.guardrailFindLater}
               subtitle={HELM_COPY.guardrailFindLaterSubtitle}
               hasChevron
-              isDisabled={isBusy}
               onClick={() => {
                 onClose();
                 onFindLater();
@@ -195,16 +192,19 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
         name={name}
         todayKey={dayKey}
         onClose={() => setIsPicking(false)}
-        onPause={(picked) => {
-          setIsPicking(false);
-          done(answers.pause(pattern, { until: picked }));
-        }}
+        onPause={(picked) =>
+          void answers.pause(pattern, { until: picked }).then((isSaved) => {
+            if (!isSaved) return;
+            setIsPicking(false);
+            onClose();
+          })
+        }
       />
     </div>
   );
 }
 
-/** One guardrail opened: each reason with its record, where the hours come from, the choices named by what they do, other things it could pause, and stopping it, apart below. */
+/** One guardrail opened: its reasons, the choices named by what they do, and stopping it, apart below. */
 function GuardrailSheet({
   patternId,
   onClose,

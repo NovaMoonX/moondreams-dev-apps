@@ -4,6 +4,7 @@ import SectionDivider from '@/components/SectionDivider';
 import HelpTip from '@/components/HelpTip';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
+import { OpenTask } from '@apps/helm/components/home/MediaLine';
 import ForgetNoticedRow from '@apps/helm/components/noticed/ForgetNoticedRow';
 import GuardrailSheet from '@apps/helm/components/noticed/GuardrailSheet';
 import LearningSwitchRow from '@apps/helm/components/noticed/LearningSwitchRow';
@@ -32,6 +33,7 @@ function WhatIveNoticed() {
   const isLoaded = useAppSelector((state) => state.helm.patterns.isLoaded);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openGuardrailId, setOpenGuardrailId] = useState<string | null>(null);
+  const [laterTaskId, setLaterTaskId] = useState<string | null>(null);
   const [isAll, setIsAll] = useState(false);
   const [isUnusedOpen, setIsUnusedOpen] = useState(false);
   const used = rows.filter((row) => row.isUsed);
@@ -130,7 +132,20 @@ function WhatIveNoticed() {
       <GuardrailSheet
         patternId={openGuardrailId}
         onClose={() => setOpenGuardrailId(null)}
+        onFindLater={() =>
+          setLaterTaskId(
+            guardrails.find((row) => row.pattern.id === openGuardrailId)
+              ?.pattern.subject.id ?? null,
+          )
+        }
       />
+      {laterTaskId && (
+        <OpenTask
+          taskId={laterTaskId}
+          isOpen
+          onClose={() => setLaterTaskId(null)}
+        />
+      )}
     </section>
   );
 }

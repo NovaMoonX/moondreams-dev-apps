@@ -25,11 +25,8 @@ import type {
 
 export interface GuardrailThing extends ImportanceItem {
   createdAt: number;
-  /** Instants something was done on it: a task finished, a milestone reached, a check ticked (a goal also holds its habits'). */
   activity: number[];
-  /** Its target date and its open dated milestones, date-only. */
   dates: number[];
-  /** Whether its regular step falls on a day; null for anything but a goal. */
   isStepDue: ((dayKey: string) => boolean) | null;
 }
 
@@ -37,18 +34,13 @@ export interface GuardrailTask {
   id: string;
   title: string;
   projectId: string | null;
-  /** Date-only day it is due; null when it has no date. */
   dueDay: number | null;
-  /** The length the person gave; null when none. */
   minutes: number | null;
-  /** Asleep until later: not work yet. */
   isLatent: boolean;
 }
 
 export interface FreeDay {
-  /** What the planner could fill: Your day less busy time and buffers, at the fill share; 0 on a rest day. */
   minutes: number;
-  /** How much of Your day the calendar keeps busy, 0 to 1; a rest day is 1. */
   busyShare: number;
   hasCalendar: boolean;
 }
@@ -57,9 +49,7 @@ export interface GuardrailInput {
   now: number;
   todayKey: string;
   isLearningOn: boolean;
-  /** Every project, goal and habit that is not unreadable, finished and ended ones too. */
   things: GuardrailThing[];
-  /** Open tasks. */
   tasks: GuardrailTask[];
   freeDay: (dayKey: string) => FreeDay;
 }
@@ -80,6 +70,18 @@ export interface GuardrailRecord {
   id: string;
   kind: 'project' | 'goal' | 'habit' | 'task';
 }
+
+const START_ORDER: GuardrailRecord['kind'][] = [
+  'goal',
+  'project',
+  'habit',
+  'task',
+];
+
+export const pickStarted = (records: GuardrailRecord[]) =>
+  [...records].sort(
+    (a, b) => START_ORDER.indexOf(a.kind) - START_ORDER.indexOf(b.kind),
+  )[0] ?? null;
 
 const REASON_ORDER: PatternKind[] = [
   'deadlineWontFit',
@@ -144,7 +146,7 @@ export interface GoalLoad {
   reason: GuardrailReason;
 }
 
-/** On start, a new goal while 3 or more others are going; daily, 4 or more going and one with nothing done for 21 days. `newId` is the goal being started, or null for the daily read. */
+/** Too many goals: on start, a new one while 3 or more are going; daily, 4 or more with one quiet for 21 days. */
 export function readGoalLoad(
   input: GuardrailInput,
   newId: string | null,
@@ -218,14 +220,13 @@ export interface DeadlineFit {
   freeMinutes: number;
   hasCalendar: boolean;
   isCare: boolean;
-  /** Enough tasks with a length, and short by enough, to say so. */
   isWontFit: boolean;
 }
 
 const minutesOf = (task: GuardrailTask) =>
   task.minutes ?? LIMITS.defaultTaskMinutes;
 
-/** For each project or goal with a date in the next 60 days, the work due by it against the free time to it; dates are served earliest first so an earlier deadline takes its share before a later one. */
+/** The work due by each deadline in the next 60 days against the free time to it, earliest date first. */
 export function readDeadlineFit(input: GuardrailInput): DeadlineFit[] {
   const today = todayOf(input);
   const horizon = today + LIMITS.deadlineWindowDays * DAY_MS;
@@ -297,7 +298,6 @@ const toDeadlineReason = (
   ),
 });
 
-/** The deadline that won't fit and is not a care item's, the one most over first. */
 const readWontFit = (input: GuardrailInput, fits: DeadlineFit[]) =>
   fits
     .filter((fit) => fit.isWontFit && !fit.isCare)
@@ -313,7 +313,7 @@ const rowOf = (order: ImportanceOrder, id: string) =>
     (row) => row.id === id,
   ) ?? null;
 
-/** Whether `a` sits above `b` in what matters most: placed above unplaced above Can wait, and among the unplaced the nearer date. Equal places are side by side, so neither is above. */
+/** Whether `a` sits above `b` in what matters most; equal places are side by side, so neither is above. */
 export function isAbove(a: OrderRow, b: OrderRow): boolean {
   if (a.group === 'inOrder')
     return b.group !== 'inOrder' || (a.rank ?? 0) > (b.rank ?? 0);
@@ -334,7 +334,7 @@ export interface Starved {
   days: number;
 }
 
-/** Something placed above had nothing done for 14 days while something below it had 3 or more; nothing is starved when nothing is placed and no dates separate them. */
+/** Something placed above with nothing done for 14 days while something below it had 3 or more. */
 export function readStarved(input: GuardrailInput): Starved | null {
   const order = toOrder(input);
   const since = input.now - LIMITS.starvedDays * DAY_MS;
@@ -395,7 +395,7 @@ export interface BusyStretch {
   fullKeys: string[];
 }
 
-/** Over the next 14 days, 3 full days in a row or 5 in all, a full day being one the calendar keeps at least three-quarters busy (a rest day is full). */
+/** 3 full days in a row or 5 in all over the next 14 days, a full day being at least three-quarters busy. */
 export function readBusyStretch(input: GuardrailInput): BusyStretch | null {
   const keys = dayKeys(input, LIMITS.busyWindowDays);
   const full = keys.map(
@@ -459,7 +459,7 @@ const toBusyReason = (
       ),
 });
 
-/** Two reasons of different kinds at once, or one deadline that won't fit. */
+/** Two reasons of different kinds, or one deadline that won't fit. */
 export const meetsGuardrailBar = (reasons: { kind: PatternKind }[]) =>
   new Set(reasons.map((reason) => reason.kind)).size >= 2 ||
   reasons.some((reason) => reason.kind === 'deadlineWontFit');
@@ -469,7 +469,7 @@ const sortReasons = (reasons: GuardrailReason[]) =>
     .sort((a, b) => REASON_ORDER.indexOf(a.kind) - REASON_ORDER.indexOf(b.kind))
     .slice(0, REASONS_SHOWN);
 
-/** What a guardrail may offer to pause, lowest-placed first: running, never health or care, never the first place in what matters most, never anything above what is starved, never anything with a date or dated milestone within 14 days. */
+/** What a guardrail may offer to pause, lowest-placed first; never care, the first place, or anything with a date within 14 days. */
 export function readNameable(
   input: GuardrailInput,
   options: { starvedId: string | null; leaveOut: string[] },
@@ -497,7 +497,7 @@ export function readNameable(
   });
 }
 
-/** The lowest-placed thing a guardrail may name, or null when none is eligible. */
+/** The lowest-placed thing a guardrail may name, or null. */
 export const pickNamed = (
   input: GuardrailInput,
   options: { starvedId: string | null; leaveOut: string[] },
@@ -520,7 +520,6 @@ const isGateOpen = (input: GuardrailInput) => {
 
 const dayAfter = (day: number) => day + DAY_MS;
 
-/** The day a hold or pause ends: the day after the busy stretch or the deadline the reasons name, the later one; null (until picked back up) when none names a date. */
 const readUntil = (reasons: GuardrailReason[]) => {
   const dates = reasons.flatMap((reason) =>
     reason.kind === 'busyStretch'
@@ -604,7 +603,6 @@ const withoutThing = (input: GuardrailInput, id: string): GuardrailInput => ({
   tasks: input.tasks.filter((task) => task.projectId !== id),
 });
 
-/** A task with a length whose own date can't be met: the work due by then, with its own, is more than the free time to it by 60 minutes. */
 function checkTask(
   taskId: string,
   input: GuardrailInput,
@@ -621,11 +619,12 @@ function checkTask(
   )
     return null;
   const dueDay = task.dueDay;
-  const work = input.tasks
-    .filter(
-      (one) => !one.isLatent && one.dueDay !== null && one.dueDay <= dueDay,
-    )
-    .reduce((sum, one) => sum + minutesOf(one), 0);
+  const due = input.tasks.filter(
+    (one) => !one.isLatent && one.dueDay !== null && one.dueDay <= dueDay,
+  );
+  const known = due.filter((one) => one.minutes !== null).length;
+  if (known < due.length * LIMITS.lengthsKnownShare) return null;
+  const work = due.reduce((sum, one) => sum + minutesOf(one), 0);
   const free = freeThrough(input, dueDay);
   if (work - free.minutes < LIMITS.deadlineSlackMinutes) return null;
   const line = HELM_COPY.guardrailTaskReason(
@@ -673,7 +672,7 @@ function checkTask(
   };
 }
 
-/** What starting something says, at the moment it is made: at most one guardrail, never for health or care, and nothing before the gate (7 days of use, learning on). */
+/** At most one guardrail for something just started; never for health or care, nothing in the first 7 days. */
 export function checkOnStart(
   record: GuardrailRecord,
   input: GuardrailInput,
@@ -725,7 +724,7 @@ export function checkOnStart(
     : null;
 }
 
-/** The daily read: at most one guardrail, the strongest reasons for the lowest-placed thing that may be named. */
+/** At most one guardrail: the strongest reasons for the lowest-placed thing that may be named. */
 export function checkDaily(input: GuardrailInput): GuardrailFinding | null {
   if (!isGateOpen(input)) return null;
   const goals = readGoalLoad(input, null);

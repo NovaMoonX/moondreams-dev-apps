@@ -9,7 +9,7 @@ import {
   isTaskGuardrail,
   readPauseUntil,
   readReasonLines,
-  readTaskDay,
+  readKeepDayLabel,
   toShortDay,
 } from '@apps/helm/components/noticed/guardrailWords';
 import { useGuardrailAnswers } from '@apps/helm/components/noticed/useGuardrailAnswers';
@@ -19,11 +19,10 @@ import type { OpenPattern } from '@apps/helm/types';
 
 interface GuardrailLineProps {
   pattern: OpenPattern;
-  /** Opens the task's due date; a task's card has no first answer without it. */
   onFindLater?: () => void;
 }
 
-/** Advice to hold something off, in the offer card's dashed look: the suggestion, one line per reason, the one answer that does it and a quiet no below a hairline. The other choices are in the sheet. It only advises: the thing was made as said and nothing waits on this. */
+/** Advice to hold something off, in the offer card's dashed look; it only advises. */
 function GuardrailLine({ pattern, onFindLater }: GuardrailLineProps) {
   const answers = useGuardrailAnswers();
   const [isOpen, setIsOpen] = useState(false);
@@ -39,7 +38,7 @@ function GuardrailLine({ pattern, onFindLater }: GuardrailLineProps) {
       : HELM_COPY.guardrailPauseNamed(name, date)
     : HELM_COPY.guardrailPause(date);
   const no = isTask
-    ? HELM_COPY.guardrailKeepDay(readTaskDay(pattern))
+    ? readKeepDayLabel(pattern)
     : isStart
       ? HELM_COPY.guardrailStartNow
       : HELM_COPY.guardrailKeepGoing;
@@ -73,12 +72,7 @@ function GuardrailLine({ pattern, onFindLater }: GuardrailLineProps) {
       </Button>
       {isTask ? (
         onFindLater && (
-          <Button
-            type='button'
-            className='w-full'
-            disabled={isBusy}
-            onClick={onFindLater}
-          >
+          <Button type='button' className='w-full' onClick={onFindLater}>
             {HELM_COPY.guardrailFindLater}
           </Button>
         )

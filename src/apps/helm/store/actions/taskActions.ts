@@ -25,6 +25,7 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import { readPrivacyFacts, readPrivateMark } from '@apps/helm/utils/privacy';
 import {
   readNewRecordPrivacy,
@@ -100,6 +101,7 @@ export async function createTask(
     ),
   };
   const ref = doc(tasksOf(uid));
+  markCreatedHere(ref.id);
   return { id: ref.id, write: setDoc(ref, task) };
 }
 

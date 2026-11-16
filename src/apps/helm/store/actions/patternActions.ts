@@ -420,7 +420,7 @@ interface FindingCheck {
   recheck: (since: number) => PatternFinding | null;
 }
 
-/** One finding in one transaction on its own id, so two devices make one pattern. A Helm-planned thing is accepted and told at once, with its execution in the same transaction. A guardrail brings its own lines, moment and reasons. */
+/** One finding in one transaction on its own id, so two devices make one pattern. A Helm-planned thing is accepted and told at once, with its execution in the same transaction. */
 export async function writeFinding(
   uid: string,
   encryption: HelmEncryption,
@@ -1049,7 +1049,6 @@ export async function undoPattern(
 export interface DailyCheckContext {
   todayKey: string;
   timeZone: string;
-  /** The calendar grants, for the guardrails' free time; none reads as no calendar connected. */
   grants?: ConnectionGrantWithId[];
 }
 
@@ -1134,13 +1133,18 @@ export async function runDailyPatternCheck(
     ...helm.patterns.items
       .filter(
         (pattern) =>
-          pattern.state === 'candidate' &&
           patternFamily(pattern.kind) === 'guardrail' &&
-          pattern.id !== (guardrail ? patternDocId(guardrail) : ''),
+          pattern.id !== (guardrail ? patternDocId(guardrail) : '') &&
+          (pattern.state === 'candidate' ||
+            (pattern.state === 'suggested' &&
+              (pattern.moment !== 'onStart' ||
+                toDayKey(pattern.createdAt, timeZone) !== todayKey))),
       )
       .map((pattern) =>
         changePattern(uid, pattern.id, (current, now) =>
-          current.state === 'candidate' ? applyRetire(current, { now }) : null,
+          current.state === 'candidate' || current.state === 'suggested'
+            ? applyRetire(current, { now, keepsCount: true })
+            : null,
         ),
       ),
     ...helm.patterns.items

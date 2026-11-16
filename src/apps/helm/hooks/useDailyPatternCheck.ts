@@ -10,7 +10,7 @@ import {
   pruneWeekly,
 } from '@apps/helm/store/actions/retentionActions';
 
-/** Once a day on open, after the habits, observations and reflections have loaded: notices patterns, weighs whether to hold something off, and offers at most one, and once a week cleans up what is old. Online only; each day is tried once per open, and a failure is tried again on the next open. */
+/** Once a day on open, after the habits, observations and reflections have loaded: notices patterns and offers at most one, and once a week cleans up what is old. Online only; each day is tried once per open, and a failure is tried again on the next open. */
 export function useDailyPatternCheck(uid: string | null) {
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const profile = useAppSelector((state) => state.helm.profile);

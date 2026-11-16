@@ -4144,6 +4144,7 @@ export const HELM_COPY = {
   guardrailStartNow: 'Start it now',
   guardrailKeepGoing: 'Keep going',
   guardrailKeepDay: (weekday: string) => `Keep ${weekday}`,
+  guardrailKeepDate: 'Keep the date',
   guardrailFindLater: 'Find a later day',
   guardrailFindLaterSubtitle: "Opens the task's due date.",
   guardrailKeepGoingSubtitle: (date: string | null, assistant: string) =>
@@ -4180,7 +4181,6 @@ export const HELM_COPY = {
       : `Okay. I won't bring this up before ${date}.`,
   guardrailStopped: (assistant: string, name: string) =>
     `${assistant} won't suggest pausing ${name} again. You can still ask.`,
-  guardrailUndoFailed: "Couldn't put it back. Check your connection.",
   guardrailOneThought: 'One thought on timing is on screen.',
   guardrailStateSentence: (assistant: string) =>
     `${assistant} is only suggesting this. Nothing changes unless you say so.`,

@@ -737,11 +737,11 @@ export function applyConfirm(
 /** The effect ends, the count and wait reset, and the same pattern needs fresh evidence at normal thresholds. */
 export function applyRetire(
   pattern: BackoffPattern,
-  input: { now: number },
+  input: { now: number; keepsCount?: boolean },
 ): BackoffPatch {
   return {
     state: 'retired',
-    declineCount: 0,
+    declineCount: input.keepsCount ? pattern.declineCount : 0,
     nextEligibleOn: null,
     offReason: null,
     offAt: null,

@@ -495,7 +495,7 @@ export function findFreeGaps(
   );
 }
 
-/** The minutes the planner could fill on a day: free time after busy blocks and buffers, at the fill share; a rest day, a past day and a day with no room left are 0. Kept slots don't count, so it reads what the calendar leaves, not what is already planned. */
+/** The minutes the planner could fill on a day; 0 on a rest day, a past day or a day with no room. */
 export function readFreeMinutes(input: PlannerInput): number {
   if (input.restDay !== null) return 0;
   const window = getWindow(input);
@@ -507,7 +507,7 @@ export function readFreeMinutes(input: PlannerInput): number {
   return (getMinutes(gaps) * input.fillPercent) / 100;
 }
 
-/** How much of Your day the calendar's busy blocks take, 0 to 1 (a rest day is 1), counting the whole day even when it has begun. */
+/** How much of Your day the calendar's busy blocks take, 0 to 1 (a rest day is 1). */
 export function readBusyShare(
   input: Pick<
     PlannerInput,
