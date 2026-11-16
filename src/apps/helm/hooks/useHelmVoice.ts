@@ -240,6 +240,13 @@ export function useHelmVoice() {
     },
   });
 
+  function endLiveNow() {
+    waiting.current.clear();
+    stopCount.current += 1;
+    voice.endLive();
+    voice.settle();
+  }
+
   function endDictation() {
     dictation.current = null;
     setDictationOwner(null);
@@ -314,8 +321,7 @@ export function useHelmVoice() {
     if (await answerQuestion(text, sttProvider, now)) return;
     // A nod or a goodbye in a live conversation is not a turn: filing it read back "nothing to file in it".
     if (voice.isLive && isLiveCloser(text)) {
-      voice.endLive();
-      voice.settle();
+      endLiveNow();
       return;
     }
     if (voice.isLive && isAcknowledgement(text)) {
@@ -878,12 +884,7 @@ export function useHelmVoice() {
     },
     talk,
     /** Ends the live conversation: what is being heard is dropped and a reply on its way is written, not said. */
-    endLive: () => {
-      waiting.current.clear();
-      stopCount.current += 1;
-      voice.endLive();
-      voice.settle();
-    },
+    endLive: endLiveNow,
     setSurfaceShown,
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),

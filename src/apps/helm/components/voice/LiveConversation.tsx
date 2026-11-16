@@ -138,12 +138,14 @@ function LiveConversation() {
         <span className='helm-live-glow' />
         {isHearing && <span key={wordCount} className='helm-live-ripple' />}
       </div>
-      <div className='relative mx-auto flex min-h-8 w-full max-w-xl items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
+      <div className='relative mx-auto flex h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
         <p
           aria-live='polite'
           className='text-foreground/80 text-[15px] font-medium'
         >
-          {toStatus(voice.state, voice.isLiveMuted, isWaiting)}
+          {isOpening || isThinking
+            ? ''
+            : toStatus(voice.state, voice.isLiveMuted, isWaiting)}
         </p>
         <MuteControl shows='whileSpeaking' />
         <MuteControl shows='whileMuted' />
@@ -151,7 +153,7 @@ function LiveConversation() {
       {/* A centred column that can overflow centres an inner block with my-auto, so a long line starts at the top and every word stays reachable. */}
       <div
         ref={scroller}
-        className='relative mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-y-auto px-6 py-5'
+        className='helm-live-scroll relative mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-y-auto px-6 py-5'
       >
         {isOpening ? (
           <div className='my-auto flex flex-col items-center gap-5 pb-10 text-center'>

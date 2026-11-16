@@ -183,8 +183,6 @@ export const END_PHRASES = [
   'thats it',
   "that's it for now",
   'thats it for now',
-  'that is all',
-  'that is it',
   "that's everything",
   'thats everything',
   'end the conversation',
@@ -229,13 +227,9 @@ export const ACKNOWLEDGEMENT_WORDS = [
   'mhm',
   'mm hmm',
   'uh huh',
-  'right',
-  'sure',
   'awesome',
-  'good',
   'now',
   'so',
-  'yeah',
 ];
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
 export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];

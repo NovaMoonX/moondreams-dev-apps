@@ -280,7 +280,8 @@ html.helm-theme .helm-dock-in {
   }
 }
 
-/* A live conversation's ambience: the person's glow rises from the foot (by the microphone) and swells with each word; the assistant's halo spreads from the top while it speaks; both drift low while it works. */
+/* A live conversation's ambience: the person's glow rises from the foot and swells with each word, the assistant's halo spreads from the top while it speaks, and both drift low while it works.
+   State opacity lives on the state rules; the keyframes only move, so they never override it. */
 html.helm-theme .helm-live-glow,
 html.helm-theme .helm-live-ripple {
   position: absolute;
@@ -297,6 +298,10 @@ html.helm-theme .helm-live-ripple {
   );
   filter: blur(28px);
   transform-origin: 50% 100%;
+}
+
+html.helm-theme .helm-live-scroll {
+  mask-image: linear-gradient(to bottom, transparent, #000 20px);
 }
 
 html.helm-theme .helm-live-halo {
@@ -328,7 +333,7 @@ html.helm-theme [data-glow='listening'] .helm-live-glow {
 }
 
 html.helm-theme [data-glow='waiting'] .helm-live-glow {
-  opacity: 0.35;
+  opacity: 0.5;
   animation: helm-live-breathe 2.4s ease-in-out infinite;
 }
 
@@ -338,7 +343,7 @@ html.helm-theme [data-glow='thinking'] .helm-live-glow {
 }
 
 html.helm-theme [data-glow='thinking'] .helm-live-halo {
-  opacity: 0.35;
+  opacity: 0.45;
   animation: helm-live-drift 5s ease-in-out infinite reverse;
 }
 
@@ -362,11 +367,9 @@ html.helm-theme .helm-live-ripple {
 @keyframes helm-live-breathe {
   0%,
   100% {
-    opacity: 0.5;
     transform: scale(0.94);
   }
   50% {
-    opacity: 0.8;
     transform: scale(1);
   }
 }
@@ -374,11 +377,9 @@ html.helm-theme .helm-live-ripple {
 @keyframes helm-live-drift {
   0%,
   100% {
-    opacity: 0.45;
     transform: translateX(-5%) scale(0.92);
   }
   50% {
-    opacity: 0.6;
     transform: translateX(5%) scale(0.96);
   }
 }
