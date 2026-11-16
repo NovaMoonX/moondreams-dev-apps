@@ -439,7 +439,7 @@ function ImportanceView({
           <Button
             type='button'
             variant='tertiary'
-            className='helm-card flex h-auto min-h-10 w-full min-w-0 items-center gap-3 px-4 py-2 text-left font-normal'
+            className='helm-card flex h-auto min-h-10 w-full min-w-0 items-center gap-3 py-2 pr-0 pl-4 text-left font-normal'
             onClick={() => setIsKeptOpen(true)}
           >
             <HeartPulse
@@ -449,10 +449,12 @@ function ImportanceView({
             <span className='text-muted-foreground min-w-0 flex-1 text-[15px] leading-[21px] break-words'>
               {HELM_COPY.importanceAlwaysKept(groups.alwaysKept.length)}
             </span>
-            <ChevronRight
-              className='text-muted-foreground size-4 shrink-0'
-              aria-hidden='true'
-            />
+            <span className='flex w-8 shrink-0 justify-center'>
+              <ChevronRight
+                className='text-muted-foreground size-4'
+                aria-hidden='true'
+              />
+            </span>
           </Button>
         )}
       </main>
@@ -481,7 +483,7 @@ function ImportanceView({
       <DetailSheet
         isOpen={isKeptOpen}
         onClose={() => setIsKeptOpen(false)}
-        title={HELM_COPY.importanceAlwaysKept(groups.alwaysKept.length)}
+        title={HELM_COPY.importanceAlwaysKeptTitle}
       >
         <div className='space-y-3 pb-2'>
           <p className='text-muted-foreground text-[13px] text-pretty'>

@@ -25,7 +25,7 @@ function HabitMeta({ habit }: { habit: OpenHabit }) {
   const whoName = useHabitWhoName(habit);
   const line = readLine(habit);
   return (
-    <span className='text-muted-foreground block text-[13px] break-words'>
+    <span className='text-muted-foreground block text-[13px] text-pretty break-words'>
       {whoName === null
         ? line
         : `${HELM_COPY.habitForWho(whoName)}\u00a0· ${line}`}
@@ -76,7 +76,7 @@ function ImportanceRowBody({
           {thing.name}
         </PrivateTitle>
         {isPaused ? (
-          <span className='text-muted-foreground block text-[13px]'>
+          <span className='text-muted-foreground block text-[13px] text-pretty'>
             {pausedLine(thing.pausedUntil)}
           </span>
         ) : record.kind === 'habit' ? (

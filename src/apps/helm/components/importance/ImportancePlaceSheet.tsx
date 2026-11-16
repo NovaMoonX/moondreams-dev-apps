@@ -122,7 +122,8 @@ function ImportancePlaceSheet({
     row.position === 1 &&
     others.every((other) => other.position !== 1);
   const canPutAbove = others.some((other) => other.position !== 1);
-  const isStillSaid = isInOrder && row.position === 1;
+  const isStillSaid =
+    (isInOrder && row.position === 1) || row.group === 'canWait';
   const quote = row.place?.words ?? null;
   return (
     <Drawer

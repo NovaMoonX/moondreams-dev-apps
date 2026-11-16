@@ -34,7 +34,7 @@ export interface ReorderGroup<T extends { id: string }> {
 export interface ReorderMove {
   itemId: string;
   toGroupId: string;
-  /** Where the item ends up in that group's items once it has left its old spot. */
+  /** Where the item ends up among that group's drawn rows once it has left its old spot; a row `renderRow` hides is not counted, so filter hidden items out of `groups` instead. */
   toIndex: number;
 }
 

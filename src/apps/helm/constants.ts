@@ -3847,8 +3847,8 @@ export const HELM_COPY = {
   importanceNotSaid: 'Not said yet',
   importanceNotSaidTrailing: 'by date',
   importanceCanWait: 'Can wait',
-  importanceAlwaysKept: (count: number) =>
-    `Always kept: health and care · ${count}`,
+  importanceAlwaysKept: (count: number) => `Always kept · ${count}`,
+  importanceAlwaysKeptTitle: 'Health and care, always kept',
   importanceAlwaysKeptNote: (assistantName: string) =>
     `${assistantName} never suggests pausing these, whatever the order.`,
   importanceNothingSaid: (assistantName: string) =>
