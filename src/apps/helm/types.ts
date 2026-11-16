@@ -85,6 +85,8 @@ export interface HelmProfile {
   conversationFreshAt: number | null;
   /** Home folds sessions from before today under Show earlier, unless one is still open; never ends a conversation. */
   isDailyFreshOn: boolean;
+  /** When the person last looked at what outside assistants added; null until then, and on a profile from before. */
+  outsideSeenAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -650,7 +652,12 @@ export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
 }
 
 export type NoteSource =
-  'typed' | 'capture' | 'savedAnswer' | 'importedFile' | 'assistantDraft';
+  | 'typed'
+  | 'capture'
+  | 'savedAnswer'
+  | 'importedFile'
+  | 'assistantDraft'
+  | 'outside';
 
 /** `apps/helm/users/{uid}/notes/{id}`: one piece of knowledge, in any number of topics or none. */
 export interface Note {
@@ -672,6 +679,10 @@ export interface Note {
 export interface NoteSealed {
   title: string;
   body: string;
+  /** The outside assistant that saved it; null on every other note and on one made before the field. */
+  via: string | null;
+  /** Links the outside assistant brought; empty on every other note and on one made before the field. */
+  links: { title: string; url: string }[];
 }
 
 export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {

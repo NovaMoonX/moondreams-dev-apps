@@ -1186,6 +1186,8 @@ async function buildAnswerTurns(input: {
                 {
                   title: 'How long does cake keep',
                   body: saved.general,
+                  via: null,
+                  links: [],
                 },
                 encryption,
               ),
@@ -1767,6 +1769,9 @@ const TYRE_NOTE_ID = 'seed-note-22';
 const CAPTURE_NOTE_ID = 'seed-note-from-capture';
 const CAPTURE_NOTE_TURN_ID = 'seed-turn-note';
 const CAPTURE_NOTE_EXECUTION_ID = 'seed-execution-note';
+const OUTSIDE_NOTE_ID = 'seed-note-outside-timing-belt';
+const OUTSIDE_TURN_ID = 'seed-turn-outside-handover';
+const OUTSIDE_EXECUTION_ID = 'seed-execution-outside-handover';
 
 /** The turn "Remember that cakes keep 3 days in the fridge": the note it kept in Baking, the topic it marked behind, and the execution with the result line as the assistant writes it. */
 async function buildNoteTurn(input: {
@@ -1890,7 +1895,10 @@ async function buildNoteTurn(input: {
     executionId: CAPTURE_NOTE_EXECUTION_ID,
     createdAt: sortedAt,
     lastEditedAt: null,
-    sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+    sealed: await sealJson<NoteSealed>(
+      { title, body, via: null, links: [] },
+      encryption,
+    ),
   };
   return { capture, execution, note };
 }
@@ -2028,6 +2036,15 @@ async function buildKnowledge(input: {
     writtenBy: 'nomos',
     sources: [tyreMark],
   };
+  const timingBelt: TopicSection = {
+    id: 'seed-section-car-timing-belt',
+    heading: 'Timing belt',
+    level: 2,
+    markdown:
+      'Most belts last 60,000 to 100,000 miles. Replace it early: a belt that snaps can wreck the engine.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: OUTSIDE_NOTE_ID }],
+  };
   const carVersions: {
     reason: TopicVersion['reason'];
     at: number;
@@ -2087,6 +2104,23 @@ async function buildKnowledge(input: {
         freshener,
         booklet,
         tyreSize,
+        winter,
+      ],
+    },
+    {
+      reason: 'addedFromSource',
+      at: now - 5 * MINUTE_MS,
+      by: 'nomos',
+      noteIds: [OUTSIDE_NOTE_ID],
+      summary: 'Added Timing belt',
+      sections: [
+        introShort,
+        service,
+        tyresHeard,
+        freshener,
+        booklet,
+        tyreSize,
+        timingBelt,
         winter,
       ],
     },
@@ -2241,7 +2275,10 @@ async function buildKnowledge(input: {
       createdAt: now - (21 - index) * DAY_MS,
       lastEditedAt: null,
       ...extra,
-      sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+      sealed: await sealJson<NoteSealed>(
+        { title, body, via: null, links: [] },
+        encryption,
+      ),
     },
   });
   const car = 'seed-topic-car';
@@ -2532,6 +2569,104 @@ async function buildKnowledge(input: {
       encryption,
     ),
   };
+  const outsideText =
+    'Saved a note about the timing belt, with two links, under Car care';
+  const outsideAt = now - 8 * MINUTE_MS;
+  const outsideBase = baseCapture(outsideAt, 0, outsideText);
+  const outsideCapture: Capture = {
+    ...outsideBase,
+    medium: 'mcp',
+    via: 'Gemini',
+    outsideReadScopes: [],
+    sessionId: `seed-${uid}-outside-handover`,
+    status: 'sorted',
+    questionState: {},
+    executionIds: [OUTSIDE_EXECUTION_ID],
+    seenAt: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: outsideText,
+        reading: outsideBase.reading,
+        answer: null,
+        questionAnswer: null,
+      },
+      encryption,
+    ),
+  };
+  const outsideExecution: Execution = {
+    captureId: OUTSIDE_TURN_ID,
+    actor: 'nomos',
+    via: 'Gemini',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'notes', docId: OUTSIDE_NOTE_ID },
+      { op: 'update', collection: 'topics', docId: 'seed-topic-car' },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: outsideBase.sortedAt,
+    decidedAt: outsideBase.sortedAt,
+    finishedAt: outsideBase.sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: 'Saved a note: Timing belt · Car care',
+        said: null,
+        commands: [],
+        effects: [
+          {
+            written: { 'sealed.title': 'Saved a note: Timing belt' },
+            previous: null,
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: [],
+      },
+      encryption,
+    ),
+  };
+  const outsideNote: { id: string; note: Note } = {
+    id: OUTSIDE_NOTE_ID,
+    note: {
+      topicIds: ['seed-topic-car'],
+      source: 'outside',
+      isFromGeneralAnswer: false,
+      checkedAt: null,
+      hasHealthCaution: false,
+      sourceCaptureId: OUTSIDE_TURN_ID,
+      sourceMediaId: null,
+      projectIds: [],
+      createdBy: 'nomos',
+      executionId: OUTSIDE_EXECUTION_ID,
+      createdAt: outsideBase.sortedAt,
+      lastEditedAt: null,
+      sealed: await sealJson<NoteSealed>(
+        {
+          title: 'Timing belt',
+          body: 'Most belts last 60,000 to 100,000 miles. Replace it early: a belt that snaps can wreck the engine.',
+          via: 'Gemini',
+          links: [
+            {
+              title: 'How a timing belt works',
+              url: 'https://example.com/timing-belt-basics',
+            },
+            {
+              title: 'When to replace it',
+              url: 'https://example.com/timing-belt-replacement',
+            },
+          ],
+        },
+        encryption,
+      ),
+    },
+  };
   const groupText = 'Did my long run and then stretched';
   const groupAt = now - 15 * MINUTE_MS;
   const groupQuestionId = 'seed-question-group-fitness';
@@ -2570,13 +2705,17 @@ async function buildKnowledge(input: {
   };
   return {
     topics,
-    notes,
+    notes: [...notes, outsideNote],
     versions,
     captures: [
       { id: TYRE_TURN_ID, capture: tyreCapture },
+      { id: OUTSIDE_TURN_ID, capture: outsideCapture },
       { id: 'seed-turn-group-fitness', capture: groupCapture },
     ],
-    executions: [{ id: TYRE_EXECUTION_ID, execution: tyreExecution }],
+    executions: [
+      { id: TYRE_EXECUTION_ID, execution: tyreExecution },
+      { id: OUTSIDE_EXECUTION_ID, execution: outsideExecution },
+    ],
   };
 }
 
@@ -3680,7 +3819,12 @@ async function buildFileTurns(input: {
     executionId: mdExecution,
     createdAt: mdAt,
     lastEditedAt: null,
-    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText }),
+    sealed: await seal<NoteSealed>({
+      title: noteTitle,
+      body: mdText,
+      via: null,
+      links: [],
+    }),
   };
   const topic: Topic = {
     parentId: null,
@@ -4955,6 +5099,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
           conversationFreshAt: null,
           isDailyFreshOn: false,
+          outsideSeenAt: null,
           createdAt,
           lastEditedAt: null,
         });

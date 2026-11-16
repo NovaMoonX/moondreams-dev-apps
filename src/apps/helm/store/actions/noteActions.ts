@@ -102,7 +102,7 @@ export async function createNote(
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
-      { title: words.title, body: words.body },
+      { title: words.title, body: words.body, via: null, links: [] },
       encryption,
     ),
   };
@@ -393,7 +393,7 @@ export async function saveAnswerAsNote(
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
-      { title: words.title, body: words.body },
+      { title: words.title, body: words.body, via: null, links: [] },
       encryption,
     ),
   };
