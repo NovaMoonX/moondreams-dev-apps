@@ -40,6 +40,11 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   abilityOffers: data.abilityOffers ?? [],
   conversationFreshAt: data.conversationFreshAt ?? null,
   isDailyFreshOn: data.isDailyFreshOn ?? false,
+  isLearningOn: data.isLearningOn !== false,
+  patternsCheckedOn: data.patternsCheckedOn ?? null,
+  reflectDueAt: data.reflectDueAt ?? null,
+  forgottenAt: data.forgottenAt ?? null,
+  prunedOn: data.prunedOn ?? null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });

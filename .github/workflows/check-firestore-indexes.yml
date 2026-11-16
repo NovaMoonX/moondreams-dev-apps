@@ -113,3 +113,6 @@ jobs:
       - run: npm run check:helm-checkin-match
       - run: npm run check:helm-habit-commands
       - run: npm run check:helm-importance
+      - run: npm run check:helm-said
+      - run: npm run check:helm-patterns
+      - run: npm run check:helm-retention

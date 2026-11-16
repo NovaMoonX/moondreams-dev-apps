@@ -3924,7 +3924,87 @@ export const HELM_COPY = {
   importanceWhichFirstSince: (date: string) => `First since ${date}`,
   importanceWhichPlaceSince: (place: string, date: string) =>
     `${place} since ${date}`,
+  patternPartPlural: {
+    morning: 'mornings',
+    midday: 'middays',
+    afternoon: 'afternoons',
+    evening: 'evenings',
+    bedtime: 'nights',
+  },
+  patternWindowMissedStatement: (name: string, weekday: string, part: string) =>
+    `${name} doesn't tend to happen on ${weekday} ${part}`,
+  patternWindowMissedEvidence: (
+    matched: number,
+    total: number,
+    weekday: string,
+  ) => `Not done on ${matched} of the last ${total} ${weekday}s`,
+  patternDoneOutsideStatement: (name: string, side: 'before' | 'after') =>
+    `${name} usually happens ${side === 'before' ? 'earlier' : 'later'} than planned`,
+  patternDoneOutsideEvidence: (matched: number, total: number, time: string) =>
+    `${matched} of the last ${total} times, around ${time}`,
+  patternPlannedSlotStatement: (weekday: string, part: string) =>
+    `What's planned for ${weekday} ${part} tends not to get done`,
+  patternPlannedSlotEvidence: (matched: number, total: number, weeks: number) =>
+    `${matched} of ${total} planned slots over ${weeks} weeks`,
+  patternPlannedSlotActed: (part: string) => `Today's ${part} left empty`,
+  patternSaidStrugglingStatement: (name: string) =>
+    `${name} has felt hard lately`,
+  patternSaidWorkingStatement: (name: string) => `${name} is going well`,
+  patternSaidEvidence: (dates: string) => `You said so on ${dates}`,
+  patternSaidLinkStatement: (name: string, link: string) =>
+    `${name} tends to slip on ${link}`,
+  patternLinkPhrases: {
+    shift: 'days around your shifts',
+    busyDay: 'busy days',
+    lateDay: 'days that ran late',
+    weekday: 'certain days of the week',
+    other: 'some days',
+  },
+  patternCareStatement: (name: string) =>
+    `You've mentioned how ${name} has been going`,
 } as const;
+
+/** What was said, in the closed set the model and the code both read. */
+export const WATCHING_PHRASES = [
+  'keep an eye',
+  'watch for',
+  "i'll notice",
+  'noted',
+] as const;
+
+/** The fixed line after a turn that was only noted, by the assistant's tone; never stored. */
+export const TONE_LINES: Record<AssistantTone, { noted: string }> = {
+  composed: { noted: 'Noted.' },
+  warm: { noted: 'Noted, thank you for telling me.' },
+  brief: { noted: 'Noted.' },
+  formal: { noted: 'Noted.' },
+};
+
+/** Weeks Helm waits after the first and the second no; the third is final. */
+export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;
+
+export const PATTERN_THRESHOLDS = {
+  windowMissedMatched: 4,
+  windowMissedOf: 5,
+  windowMissedWeeks: 10,
+  outsideMatched: 5,
+  outsideOf: 6,
+  slotCount: 5,
+  slotWeeksNeeded: 4,
+  slotWeeks: 8,
+  slotMissedShare: 0.8,
+  suggestedAtOnce: 3,
+  newPerDay: 1,
+} as const;
+
+export const OBSERVATION_KEEP_WEEKS = 26;
+export const REFLECTION_KEEP_DAYS = 14;
+export const EXECUTION_KEEP_DAYS = 396;
+export const PATTERN_LIVE_CAP = 500;
+export const PATTERN_OFF_CAP = 5000;
+export const PRUNE_RUN_CAP = 400;
+export const SEEN_AS_SHOWN_CAP = 40;
+export const SEEN_AS_REMOVED_CAP = 200;
 
 export const PLANNER_COPY = {
   estimate: 'about 30 min · estimate',
@@ -3942,3 +4022,9 @@ export const PLANNER_COPY = {
   worthDoing: 'Worth doing today',
   home: "You're home",
 } as const;
+
+export {
+  OBSERVATION_TAGS,
+  STRUGGLING_TAGS,
+  WORKING_TAGS,
+} from '@apps/helm/engine/said';
