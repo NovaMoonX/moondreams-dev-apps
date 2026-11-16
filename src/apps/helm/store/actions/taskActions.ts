@@ -140,11 +140,11 @@ export const updateTaskFields = (
     lastEditedAt: Date.now(),
   });
 
-/** Answers "Do they feel ready?" for a meeting; the edit stamp is left alone so Undo of the turn that made the task still works. */
+/** Answers "Do you feel ready?" for a meeting, or null takes the answer back; the edit stamp is left alone so Undo of the turn that made the task still works. */
 export const setReadyAnswer = (
   uid: string,
   taskId: string,
-  readyAnswer: TaskReadyAnswer,
+  readyAnswer: TaskReadyAnswer | null,
 ) => updateDoc(doc(tasksOf(uid), taskId), { readyAnswer });
 
 /** Changes a task's words in one transaction that re-reads them first, so a change made on another device meanwhile is kept. Needs a connection. */

@@ -13,6 +13,7 @@ import { baseQuestion, toPlannedQuestion } from './planHabitCommands.js';
 import { QUESTIONS_MAX, QUESTION_CAP } from './questionsTask.js';
 
 const DAY_MS = 86_400_000;
+const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** The kind of the code-built question that offers a document's questions as a task. */
 export const QUESTIONS_TASK_KIND = 'questionsTask';
@@ -21,16 +22,11 @@ export const QUESTIONS_TASK_KIND = 'questionsTask';
 export const QUESTIONS_WORDS = {
   yes: 'Make the task',
   no: 'No thanks',
-  offer: (count: number, who: string | null, day: string | null) =>
-    `Make ${count === 1 ? 'this question' : `these ${count} questions`}${who ? ` for ${who}` : ''} a task${day ? ` for ${day}` : ''}?`,
+  offer: (title: string, count: number, day: string | null) =>
+    `Make "${title}" a task${day ? ` for your call ${/\d/.test(day) ? `on ${day}` : day}` : ''}? It has ${count === 1 ? '1 question' : `${count} questions`}.`,
   made: (title: string, count: number) =>
     `Made ${title} with ${count === 1 ? '1 question' : `${count} questions`}.`,
 };
-
-export const joinNames = (names: string[]) =>
-  names.length < 2
-    ? (names[0] ?? null)
-    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
 const toDayNumber = (at: number, timeZone: string) =>
   Date.parse(
@@ -69,8 +65,8 @@ export const buildQuestionsTaskQuestion = (
     kind: QUESTIONS_TASK_KIND,
     shape: 'yesNo',
     prompt: QUESTIONS_WORDS.offer(
+      offer.title,
       offer.questions.length,
-      joinNames(offer.who),
       offer.meeting
         ? toMeetingDay(offer.meeting.startAt, input.now, input.timeZone)
         : null,
@@ -112,7 +108,7 @@ const readHeld = (held: Record<string, unknown>) => {
     .map((entry) => entry.slice(0, QUESTION_CAP))
     .slice(0, QUESTIONS_MAX);
   const whoIds = (Array.isArray(held.whoIds) ? held.whoIds : [])
-    .filter((id): id is string => typeof id === 'string')
+    .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
     .slice(0, 4);
   return title === '' || questions.length === 0
     ? null
@@ -144,6 +140,8 @@ export type QuestionsTaskResolveResult =
       refused: null;
       /** The task the answer makes, or null when the answer was No. */
       create: { id: string; data: Record<string, unknown> } | null;
+      isPrivate: boolean;
+      linkedWhoIds: string[];
       effectRefs: EffectRef[];
       effects: Effect[];
       lines: string[];
@@ -170,6 +168,9 @@ export function planResolveQuestionsTask(
   if (optionId !== 'yes' && optionId !== 'no') return { refused: 'unknown' };
   const draft = readHeld(held);
   if (!draft) return { refused: 'unknown' };
+  const whoFacts = (input.whoFacts ?? []).filter((who) =>
+    draft.whoIds.includes(who.id),
+  );
   const made =
     optionId === 'yes'
       ? planWrites({
@@ -188,7 +189,7 @@ export function planResolveQuestionsTask(
                 draft.meeting && draft.meeting.startAt > now
                   ? draft.meeting
                   : null,
-              whoIds: draft.whoIds,
+              whoIds: whoFacts.map((who) => who.id),
             },
           ],
           existing: new Map(),
@@ -200,7 +201,7 @@ export function planResolveQuestionsTask(
           people: {
             mentions: [],
             places: [],
-            known: (input.whoFacts ?? []).map((who) => ({
+            known: whoFacts.map((who) => ({
               id: who.id,
               kind: 'person',
               name: '',
@@ -227,6 +228,8 @@ export function planResolveQuestionsTask(
   return {
     refused: null,
     create: made?.creates[0] ?? null,
+    isPrivate: made?.creates[0]?.data.privacy === 'private',
+    linkedWhoIds: whoFacts.map((who) => who.id),
     effectRefs: made?.effectRefs ?? [],
     effects: made?.effects ?? [],
     lines: made?.creates[0]

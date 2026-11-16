@@ -83,6 +83,7 @@ import {
 import {
   formatMeetingWhen,
   getMeetingDay,
+  useResolvedMeeting,
 } from '@apps/helm/utils/meetingWords';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
@@ -209,6 +210,7 @@ function TaskSheet({
   const { confirm } = useActionModal();
   const isOffline = useNetworkStatus() === 'offline';
   const nowMinute = Math.floor(useNow(MINUTE_MS) / MINUTE_MS) * MINUTE_MS;
+  const meeting = useResolvedMeeting(task);
   const split = useAppSelector((state) => selectTaskActivity(state, nowMinute));
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
@@ -561,12 +563,11 @@ function TaskSheet({
 
   const getStepsSummary = () => {
     const answered = steps.filter((entry) => entry.doneAt !== null).length;
-    return task.meeting
-      ? HELM_COPY.stepsCountMeeting(
-          answered,
-          steps.length - answered,
-          getMeetingDay(task.meeting.startAt, nowMinute, timeZone),
-        )
+    const day = meeting
+      ? getMeetingDay(meeting.startAt, nowMinute, timeZone)
+      : null;
+    return day
+      ? HELM_COPY.stepsCountMeeting(answered, steps.length - answered, day)
       : HELM_COPY.stepsCount(answered, steps.length);
   };
 
@@ -660,12 +661,14 @@ function TaskSheet({
     }
     return (
       <div className='space-y-4'>
-        {task.meeting && task.meetingLabel && (
+        {meeting?.label && (
           <p className='text-muted-foreground text-sm text-pretty break-words'>
-            {HELM_COPY.taskMeetingLine(
-              task.meetingLabel,
-              formatMeetingWhen(task.meeting.startAt, timeZone),
-            )}
+            {HELM_COPY.taskMeetingLabel(meeting.label)}
+            <span className='whitespace-nowrap'>
+              {HELM_COPY.taskMeetingWhen(
+                formatMeetingWhen(meeting.startAt, timeZone),
+              )}
+            </span>
           </p>
         )}
         {task.isUnreadable && (

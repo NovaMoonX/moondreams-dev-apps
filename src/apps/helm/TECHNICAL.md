@@ -117,6 +117,7 @@ interface HelmProfile {
   shiftCalendarIds: string[];          // "{accountId}/{calendarId}" marked as shifts (rest-day rule)
   busyAllDayEventRefs: string[];       // synced ids of all-day events the person said block the day
   calendarOfferFoldedAt: number | null;
+  questionDocsOffered: string[] | null;  // server-written: hashed keys of documents whose questions were already offered as a task, capped at 50 (oldest dropped); never written by the client
   hasSeenAiNotice: boolean;            // the first-capture AI line was shown
   hasSeenVoiceNotice: boolean | null; // deprecated: where speech goes is a help icon while listening; written null
   voiceMode: VoiceMode;                // round 6: default 'cloudWhenOnline'
@@ -282,9 +283,11 @@ interface Task {
   sourceCaptureId: string | null; executionId: string | null;
   createdAt: number; lastEditedAt: number | null; completedAt: number | null;
   clearedAt: number | null;            // issue 46: set by "Clear done tasks"; hides a done task from its project's Done fold, never from Search
+  meeting: { syncedId: string; startAt: number } | null;  // the calendar event a task's questions are for; screens read the synced record's live start and title by syncedId and fall back to this start (the synced listener is limited, so a missing record is not a deletion)
+  readyAnswer: { answer: 'ready' | 'notYet'; at: number; forStartAt: number } | null; // "Do you feel ready?"; counts only while forStartAt equals the meeting's start; written field-scoped (no lastEditedAt), null on Undo
   sealed: Sealed;                      // TaskSealed
 }
-interface TaskSealed { title: string; notes: string | null; steps: Record<string, { text: string }>; } // steps: same keys as stepState
+interface TaskSealed { title: string; notes: string | null; steps: Record<string, { text: string }>; meetingLabel: string | null; } // meetingLabel: the event's name, sealed with the task; absent in a payload sealed before the field // steps: same keys as stepState
 ```
 
 **Owner review 2**: a task with a moment due can be an appointment, and carries how it meets: `meets: { how: 'inPerson' | 'video' | 'phone'; setBy: 'person' | 'calendar' } | null` (readable; null for an ordinary task), with the place as one of its `placeIds` (a place gains `city: City | null` in `PlaceSealed`). Set from what the person says (`createTask`/`updateTask` with `meetsHow` and a place) or the sheet; when a calendar event is the same thing (section 19, "The same thing twice") and has a format, the calendar's fills a null and never overwrites `setBy: 'person'`.

@@ -264,6 +264,22 @@ export function addKeptSlot(
   );
 }
 
+/** Undoes a slot just kept for a task: puts back the slot it replaced, or takes it off the day when there was none. */
+export function undoKeptSlot(
+  uid: string,
+  dayKey: string,
+  taskId: string,
+  previous: PlanSlot | null,
+) {
+  const slotId = Object.entries(
+    store.getState().helm.planDays.byId[dayKey]?.slots ?? {},
+  ).find(([, held]) => held.taskId === taskId)?.[0];
+  if (!slotId) return Promise.resolve();
+  return updateDoc(doc(planDaysOf(uid), dayKey), {
+    [`slots.${slotId}`]: previous ?? deleteField(),
+  });
+}
+
 /** "Bring to today": a task left undone on a past day is kept on today with no time; the past day stays as it was. */
 export const bringToToday = (uid: string, todayKey: string, taskId: string) =>
   addKeptSlot(uid, todayKey, {

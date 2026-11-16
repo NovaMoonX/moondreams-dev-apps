@@ -668,13 +668,19 @@ export const resolveHelmQuestion = onCall(
         const execution = answered.create
           ? buildHabitAnswerExecution(
               {
-                isPrivate: false,
+                isPrivate: answered.isPrivate,
                 effectRefs: answered.effectRefs,
                 effects: answered.effects,
                 lines: answered.lines,
                 notKept: [],
               },
-              { captureId, questionId, now, seal },
+              {
+                captureId,
+                questionId,
+                now,
+                seal,
+                linkedWhoIds: answered.linkedWhoIds,
+              },
             )
           : null;
         if (execution) transaction.create(executionRef, execution);

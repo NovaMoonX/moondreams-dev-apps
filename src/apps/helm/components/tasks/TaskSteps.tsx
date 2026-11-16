@@ -24,7 +24,10 @@ import {
   tickTaskStep,
 } from '@apps/helm/store/actions/taskActions';
 import { selectProcedureFromTask } from '@apps/helm/store/selectors/procedureSelectors';
-import { getMeetingDay } from '@apps/helm/utils/meetingWords';
+import {
+  getMeetingDay,
+  useResolvedMeeting,
+} from '@apps/helm/utils/meetingWords';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
@@ -82,6 +85,10 @@ function TaskSteps({
   const { task, uid, timeZone, isOffline, run, saveWords } = editing;
   const { addToast } = useToast();
   const now = useNow(60_000);
+  const meeting = useResolvedMeeting(task);
+  const meetingDay = meeting
+    ? getMeetingDay(meeting.startAt, now, timeZone)
+    : null;
   const steps = getOrderedSteps(task);
   const doneCount = steps.filter((step) => step.doneAt !== null).length;
   const [draft, setDraft] = useState('');
@@ -188,11 +195,11 @@ function TaskSteps({
           {steps.length > 0 && (
             <span className='text-muted-foreground font-normal tabular-nums'>
               {' · '}
-              {task.meeting
+              {meetingDay
                 ? HELM_COPY.stepsCountMeeting(
                     doneCount,
                     steps.length - doneCount,
-                    getMeetingDay(task.meeting.startAt, now, timeZone),
+                    meetingDay,
                   )
                 : HELM_COPY.stepsCount(doneCount, steps.length)}
             </span>

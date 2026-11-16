@@ -1,9 +1,49 @@
+import { useAppSelector } from '@/store';
 import { getDateTimeFormat } from '@/utils/timezoneUtils';
-import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
+import type { OpenTask, SyncedRecord } from '@apps/helm/types';
+import {
+  formatDayName,
+  shiftDayKey,
+  toDayKey,
+} from '@apps/helm/utils/planDays';
 
-/** "today", "tomorrow" or the weekday a meeting falls on, in the person's zone. */
-export const getMeetingDay = (startAt: number, now: number, timeZone: string) =>
-  formatDayName(toDayKey(startAt, timeZone), toDayKey(now, timeZone));
+const SHORT_DATE_FROM_DAYS = 7;
+
+/** "today", "tomorrow", a weekday within the week or a short date, in the person's zone; null once the meeting has started. */
+export function getMeetingDay(startAt: number, now: number, timeZone: string) {
+  if (startAt <= now) return null;
+  const todayKey = toDayKey(now, timeZone);
+  const key = toDayKey(startAt, timeZone);
+  if (key >= shiftDayKey(todayKey, SHORT_DATE_FROM_DAYS)) {
+    return getDateTimeFormat({
+      timeZone,
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(startAt));
+  }
+  return formatDayName(key, todayKey);
+}
+
+/** A task's meeting as it stands now: the synced event's live start and title, or what the task stored when the event isn't among those read. */
+export const resolveMeeting = (
+  task: Pick<OpenTask, 'meeting' | 'meetingLabel'> | null,
+  synced: SyncedRecord[],
+) => {
+  if (!task?.meeting) return null;
+  const record = synced.find((entry) => entry.id === task.meeting?.syncedId);
+  return {
+    startAt: record?.startAt ?? task.meeting.startAt,
+    label: record?.sealed.title || task.meetingLabel,
+  };
+};
+
+export const useResolvedMeeting = (
+  task: Pick<OpenTask, 'meeting' | 'meetingLabel'> | null,
+) =>
+  resolveMeeting(
+    task,
+    useAppSelector((state) => state.helm.synced.items),
+  );
 
 /** "Mon 10:00 AM" */
 export const formatMeetingWhen = (startAt: number, timeZone: string) =>

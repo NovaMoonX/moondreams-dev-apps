@@ -44,6 +44,7 @@ import {
   selectLearnLater,
 } from '@apps/helm/store/selectors/researchSelectors';
 import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
+import { resolveMeeting } from '@apps/helm/utils/meetingWords';
 import QuestionsReadyCard from '@apps/helm/components/today/QuestionsReadyCard';
 import {
   countQuestions,
@@ -134,7 +135,8 @@ function TodayView({
   }, [hasTasks]);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
-  const offer = useAppSelector(selectTodayOffer);
+  const patternOffer = useAppSelector(selectTodayOffer);
+  const synced = useAppSelector((state) => state.helm.synced.items);
   const learnItems = useAppSelector(selectLearnLater);
   const [openLearnId, setOpenLearnId] = useState<string | null>(null);
   const sources = usePlanSources(nowMinute);
@@ -174,6 +176,38 @@ function TodayView({
   const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
 
   const projects = useAppSelector(selectActiveProjects);
+  const readyTask = useMemo(
+    () =>
+      !isToday
+        ? null
+        : (tasks
+            .filter((task) => {
+              const meeting = resolveMeeting(task, synced);
+              return (
+                !task.isUnreadable &&
+                task.meeting !== null &&
+                meeting !== null &&
+                isReadyCheckDue(
+                  {
+                    status: task.status,
+                    meeting: { ...task.meeting, startAt: meeting.startAt },
+                    readyAnswer: task.readyAnswer,
+                    count: countQuestions(task.stepState),
+                  },
+                  now,
+                )
+              );
+            })
+            .sort(
+              (a, b) =>
+                (resolveMeeting(a, synced)?.startAt ?? 0) -
+                (resolveMeeting(b, synced)?.startAt ?? 0),
+            )
+            .at(0) ?? null),
+    [isToday, tasks, synced, now],
+  );
+  const offer = readyTask ? null : patternOffer;
+
   const aheadToday = useMemo(() => {
     if (!isToday || offer !== null) return null;
     const today = dayKeyToMs(todayKey);
@@ -199,31 +233,6 @@ function TodayView({
     setAheadTarget(target);
     setIsAheadOpen(true);
   };
-
-  const readyTask = useMemo(
-    () =>
-      !isToday || offer !== null || aheadToday !== null
-        ? null
-        : (tasks
-            .filter(
-              (task) =>
-                !task.isUnreadable &&
-                isReadyCheckDue(
-                  {
-                    status: task.status,
-                    meeting: task.meeting,
-                    readyAnswer: task.readyAnswer,
-                    count: countQuestions(task.stepState),
-                  },
-                  now,
-                ),
-            )
-            .sort(
-              (a, b) => (a.meeting?.startAt ?? 0) - (b.meeting?.startAt ?? 0),
-            )
-            .at(0) ?? null),
-    [isToday, offer, aheadToday, tasks, now],
-  );
 
   const learns = useMemo(
     () =>

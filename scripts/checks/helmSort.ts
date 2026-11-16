@@ -3196,7 +3196,7 @@ test('an offered document asks once, yes writes the task with its steps and meet
   assert.equal(question.state.kind, 'questionsTask');
   assert.equal(
     question.sealed.prompt,
-    'Make these 2 questions for Priya and Sam a task for Nov 23?',
+    'Make "Questions for Priya and Sam" a task for your call on Nov 23? It has 2 questions.',
   );
   assert.deepEqual(question.sealed.options, [
     { id: 'yes', label: 'Make the task' },
@@ -3206,6 +3206,7 @@ test('an offered document asks once, yes writes the task with its steps and meet
   assert.equal(asked.offeredDocuments?.length, 1);
   const answer = (optionId: string) =>
     planResolveQuestionsTask({
+      whoFacts: [],
       captureId: 'capture-1',
       executionId: 'exec-2',
       questionId: question.id,
@@ -3213,10 +3214,7 @@ test('an offered document asks once, yes writes the task with its steps and meet
       by: 'tap',
       now: QUESTION_NOW + 1000,
       seal: keepSeal,
-      newId: (() => {
-        let next = 0;
-        return () => `w-${(next += 1)}`;
-      })(),
+      newId: createIdCounter(),
       capture: {
         status: 'needsYou',
         executionIds: [],
@@ -3264,10 +3262,7 @@ test('an offer for an existing person makes a task for that person, a new name m
       by: 'tap',
       now,
       seal: keepSeal,
-      newId: (() => {
-        let next = 0;
-        return () => `v-${(next += 1)}`;
-      })(),
+      newId: createIdCounter(),
       capture: {
         status: 'needsYou',
         executionIds: [],
@@ -3278,14 +3273,25 @@ test('an offer for an existing person makes a task for that person, a new name m
     if (result.refused !== null || result.create === null) {
       throw new Error('expected a task');
     }
-    return result.create.data;
+    return Object.assign(result.create.data, { execution: result });
   };
   const priya = { id: 'who-priya', names: ['Priya', 'Pri'] };
+  const open = (id: string, privateMark: 'person' | null = null) => ({
+    id,
+    privacyFacts: readPrivacyFacts({ privateMark, isPrivacyCleared: false }),
+  });
   const known = answerYes(
     [priya, { id: 'who-x', names: ['Xavier'] }],
     QUESTION_NOW,
+    [open('who-priya')],
   );
   assert.deepEqual(known.whoIds, ['who-priya']);
+  const unopened = answerYes(
+    [priya, { id: 'who-sam', names: ['Sam'] }],
+    QUESTION_NOW,
+    [open('who-priya')],
+  );
+  assert.deepEqual(unopened.whoIds, ['who-priya']);
   assert.deepEqual(answerYes([], QUESTION_NOW).whoIds, []);
   const marked = (privateMark: 'person' | null) =>
     answerYes([priya], QUESTION_NOW, [
@@ -3303,6 +3309,9 @@ test('an offer for an existing person makes a task for that person, a new name m
     undefined,
   );
   assert.equal(marked(null).privacy, 'ordinary');
+  assert.equal(marked('person').execution.isPrivate, true);
+  assert.equal(marked(null).execution.isPrivate, false);
+  assert.deepEqual(marked('person').execution.linkedWhoIds, ['who-priya']);
   const past = answerYes([priya], MEETING_AT + 1);
   assert.equal(past.meeting, null);
   assert.equal(

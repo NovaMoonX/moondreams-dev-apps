@@ -1862,9 +1862,12 @@ export const HELM_COPY = {
       : answered === 0
         ? `${toAsk} to ask ${day}`
         : `${answered} answered · ${toAsk} to ask ${day}`,
-  taskMeetingLine: (label: string, when: string) => `For ${label} · ${when}`,
-  questionsMeetingLine: (label: string, time: string) => `${label} · ${time}`,
-  questionsReadyAsk: 'Do they feel ready?',
+  taskMeetingLabel: (label: string) => `For ${label} `,
+  taskMeetingWhen: (when: string) => `· ${when}`,
+  questionsMeetingLabel: (label: string) => `${label} `,
+  questionsMeetingWhen: (time: string) => `· ${time}`,
+  questionsReadyAsk: 'Do you feel ready?',
+  questionsReadyToast: (day: string) => `Marked ready for ${day}'s call`,
   questionsReady: "I'm ready",
   questionsNotYet: 'Not yet',
   questionsOpenLabel: (label: string) => `Open your questions for ${label}`,
