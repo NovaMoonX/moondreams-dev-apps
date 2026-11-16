@@ -239,7 +239,7 @@ function GuardrailBody({
             subtitle={
               isTask
                 ? HELM_COPY.guardrailStopTaskSubtitle(name)
-                : HELM_COPY.guardrailStopSubtitle(name)
+                : HELM_COPY.guardrailStopSubtitle(name, isHold)
             }
             isDestructive
             isDisabled={isBusy}
