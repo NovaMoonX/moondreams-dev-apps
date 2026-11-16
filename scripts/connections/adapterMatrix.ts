@@ -2451,6 +2451,23 @@ assert.equal(
   7_001,
 );
 
+const zonedDay = await queryCare(OWNER, 'catExpenses', {
+  from: '2026-11-19',
+  to: '2026-11-19',
+  timeZone: 'America/Los_Angeles',
+});
+assert.equal(
+  zonedDay.totalCents,
+  0,
+  'a picked date on the next day stays out when the range is read in a zone',
+);
+const zonedVisits = await queryCare(OWNER, 'visitNotes', {
+  from: dayText(TODAY - 420 * DAY),
+  to: dayText(TODAY - 401 * DAY),
+  timeZone: 'America/Los_Angeles',
+});
+assert.equal(zonedVisits.matchedCount, 0, 'a visit past the range is left out');
+
 const careLiveOutput = JSON.stringify(
   await Promise.all(careLiveCategories.map((id) => queryCare(OWNER, id, {}))),
 );

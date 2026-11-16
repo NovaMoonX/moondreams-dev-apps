@@ -710,6 +710,7 @@ const liveVisitNotes = (household: Household, args: LiveArgs) =>
         const names = namesOfCats(catRead.names, readIds(doc.get('catIds')));
         if (
           scheduledAt === null ||
+          !isInRange(scheduledAt, args) ||
           names.length === 0 ||
           doc.get('status') !== 'completed'
         )
@@ -929,6 +930,7 @@ const liveCatExpenses = (household: Household, args: LiveArgs) =>
         typeof amount !== 'number' ||
         !Number.isFinite(amount) ||
         incurredAt === null ||
+        !isInRange(incurredAt, args) ||
         ids.length === 0
       )
         return [];
