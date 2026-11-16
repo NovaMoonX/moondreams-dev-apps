@@ -29,6 +29,7 @@ export const hasOpenChoice = (capture: OpenCapture) =>
     'whichIsTrue',
     'whichTopic',
     'groupTopics',
+    'undoOffer',
     'asked',
   ]);
 

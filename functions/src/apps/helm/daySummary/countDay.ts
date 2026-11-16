@@ -49,9 +49,11 @@ export interface DayExecution {
   state: string;
   category: string;
   undoneByExecutionId: string | null;
+  /** Records a partial undo already took back; what they wrote counts for nothing. */
+  undoneDocIds: string[];
   /** Made for an outside assistant's turn. */
   isOutside: boolean;
-  effectRefs: { op: string; collection: string }[];
+  effectRefs: { op: string; collection: string; docId: string }[];
 }
 
 interface DayBounds {
@@ -136,7 +138,10 @@ export const countHelmDay = (input: {
     .reduce<HelmDayCounts>(
       (counts, execution) => ({
         ...execution.effectRefs.reduce((acc, ref) => {
-          const key = ref.op === 'create' ? ADDED_KEY[ref.collection] : null;
+          const key =
+            ref.op === 'create' && !execution.undoneDocIds.includes(ref.docId)
+              ? ADDED_KEY[ref.collection]
+              : null;
           return key ? { ...acc, [key]: acc[key] + 1 } : acc;
         }, counts),
         planned: counts.planned + (execution.category === 'plan' ? 1 : 0),
@@ -338,10 +343,12 @@ const readName = (written: Record<string, unknown>) =>
 /** Titles of what one execution made or finished, from its opened effects and their refs. */
 export const toEffectTitles = (
   effects: { written?: Record<string, unknown> }[],
-  refs: { op: string; collection: string }[],
+  refs: { op: string; collection: string; docId?: string }[],
+  undoneDocIds: string[] = [],
 ): string[] =>
   effects.flatMap((effect, index) => {
     const ref = refs[index];
+    if (ref?.docId && undoneDocIds.includes(ref.docId)) return [];
     const written = effect.written ?? {};
     const isMade = ref?.op === 'create';
     const isDone =
