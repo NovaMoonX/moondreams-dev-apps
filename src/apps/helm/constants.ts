@@ -175,8 +175,64 @@ export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 export const CAPTURE_MAX_CHARS = 4_000;
 
-/** Said at the end of an utterance to send it without a tap. */
-export const END_PHRASES = ["that's all", 'thats all'];
+/** Said at the end of an utterance to send it without a tap; in a live conversation they also end it. */
+export const END_PHRASES = [
+  "that's all",
+  'thats all',
+  "that's all for now",
+  'thats all for now',
+  "that's it",
+  'thats it',
+  "that's it for now",
+  'thats it for now',
+  "that's everything",
+  'thats everything',
+  'end the conversation',
+  'end conversation',
+  'bye for now',
+];
+/** A whole utterance in a live conversation that is only one of these (with any nod around it: "okay, I'm done") ends it; never as an end phrase, since "tell Sam I'm done" means something. */
+export const LIVE_CLOSING_PHRASES = [
+  "i'm done",
+  'im done',
+  "we're done",
+  'were done',
+  "i'm all set",
+  'im all set',
+  "i'm good",
+  'im good',
+  'goodbye',
+  'bye',
+  'nothing else',
+  'that will be all',
+  "that'll be all",
+  'stop',
+  'end',
+];
+/** A whole utterance in a live conversation that only acknowledges the last reply ("Gotcha. Okay.") files nothing; listening carries on. */
+export const ACKNOWLEDGEMENT_WORDS = [
+  'ok',
+  'okay',
+  'k',
+  'gotcha',
+  'got it',
+  'cool',
+  'great',
+  'nice',
+  'perfect',
+  'sounds good',
+  'alright',
+  'all right',
+  'thanks',
+  'thank you',
+  'thanks a lot',
+  'mhm',
+  'mm hmm',
+  'uh huh',
+  'awesome',
+  'now',
+  'so',
+];
 /** Commands that delete a record. A closing phrase never reaches one: the reading keeps one only when its subject is still named once every closing phrase is taken out of the words. */
 export const DELETING_COMMANDS = ['removeKeyDate'] as const;
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
@@ -602,6 +658,20 @@ export const HELM_COPY = {
   talkMute: 'Mute',
   talkUnmute: 'Unmute',
   talkMuted: 'Muted',
+  liveLabel: (name: string) => `Talking with ${name}`,
+  liveListening: 'Listening…',
+  liveThinking: 'Thinking…',
+  liveSpeaking: 'Speaking…',
+  liveMicMuted: 'Microphone off',
+  liveEndHint: 'Say "that\'s it" or tap End when you\'re done.',
+  liveReady: (name: string) => `Go ahead. ${name} is listening.`,
+  liveMicOff: 'Mic off',
+  liveMicOn: 'Mic on',
+  liveEnd: 'End',
+  liveEndLabel: 'End the conversation',
+  liveEndedQuiet: 'The conversation ended after a quiet spell.',
+  liveEndedFailed:
+    'Listening stopped working, so the conversation ended. Tap Talk to try again.',
   talkByVoice: 'Ask by voice',
   talkByTyping: 'Ask by typing',
   talkNeedsMicrophone:
@@ -679,6 +749,9 @@ export const HELM_COPY = {
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
   earlierFold: 'Show earlier',
+  earlierHide: 'Hide earlier',
+  threadToday: 'Today',
+  threadYesterday: 'Yesterday',
   homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
   homeNextEventTomorrow: (clock: string, title: string) =>
     `Tomorrow ${clock} · ${title}`,
@@ -833,7 +906,12 @@ export const HELM_COPY = {
   savedHeldRecent: 'Saved as written. Read in a few minutes.',
   savedHeldBudget: 'Saved as written. Read once reading is back.',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",
-  undoAll: 'Undo all of this',
+  undoPickTitle: 'What should go?',
+  undoPickAll: 'Undo all',
+  undoPickSome: (count: number) => `Undo ${count}`,
+  undoPickNone: 'Tick what to take back.',
+  undoPickKeepHint: 'Untick anything that should stay.',
+  undoPickCancel: 'Cancel',
   tookBackHome: 'Took back being home',
   tookBackNotHome: 'Took back No longer home',
   undoReportHome: "You're no longer marked home.",
@@ -1073,6 +1151,27 @@ export const HELM_COPY = {
   assistantDisconnectFailed: "That didn't disconnect. Try again.",
   assistantDisconnected: (name: string) => `Disconnected ${name}`,
   assistantFrom: (name: string) => `From ${name}`,
+  homeOutsideAdded: (
+    vias: string[],
+    count: number,
+    isAllNew: boolean,
+    title: string | null,
+  ) => {
+    const who =
+      vias.length > 3
+        ? 'Your assistants'
+        : vias.length > 1
+          ? `${vias.slice(0, -1).join(', ')} and ${vias.at(-1)}`
+          : vias[0];
+    const verb = isAllNew ? 'added' : 'changed';
+    if (title !== null) return `${who} added ${title}`;
+    return `${who} ${verb} ${count === 1 ? '1 thing' : `${count} things`}`;
+  },
+  sourceOutside: (via: string, date: string) => `From ${via} · ${date}`,
+  noteSavedFromOutside: (via: string) => `Saved from ${via}`,
+  noteLinks: 'Links',
+  versionOutsideAdded: (via: string) => `${via} added this`,
+  versionOutsideNotes: (via: string) => `With notes from ${via}`,
   assistantsConnectHeading: 'Connect an assistant',
   assistantsAddressLabel: (app: string) => `Your ${app}'s address`,
   assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
@@ -1310,18 +1409,17 @@ export const HELM_COPY = {
     "Your speech isn't sent to our voice services, and answers are read by this device's voice. The browser still does its own listening: in Chrome that goes to Google, in Safari to Apple.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
-  voiceHandsFreeTitle: 'Answer without tapping',
-  voiceHandsFreeOn:
-    'After a reply, it listens for a few seconds so you can answer. Nothing is sent until you speak.',
-  voiceHandsFreeOff: 'Tap Talk to answer.',
+  voiceHandsFreeTitle: 'Keep the conversation going',
+  voiceHandsFree:
+    'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s it", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
     'Takes music and chatter out of what you say, on this device, before anything listens.',
   voiceNoiseCleaningCredits:
     'Noise cleaning uses RNNoise (BSD-3-Clause) and web-noise-suppressor (MIT), both open source.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
-  voiceWake: (name: string) =>
-    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
+  voiceWake: (name: string, canHearOffline: boolean) =>
+    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple. ${canHearOffline ? 'On some phones, music may pause while it waits for the phrase; Hear me offline avoids that.' : 'On some phones, music may pause while it waits for the phrase.'}`,
   voiceWakeLocked: "This browser can't listen for a phrase.",
   voiceDeviceOnlyOnOffline:
     "Your speech isn't sent anywhere: this phone turns it into words itself, and answers are read by this device's voice.",
@@ -2000,6 +2098,9 @@ export const HELM_COPY = {
   questionDismissed: 'Dismissed.',
   questionDismissedLine: (prompt: string) => `${prompt} · Dismissed`,
   questionAnswered: 'Done.',
+  undoOfferKept: 'Kept it.',
+  undoOfferKeptAll: 'Kept everything.',
+  undoOfferFinishOnCard: 'Pick the one to undo on the card.',
   factKept: (statement: string) => `Kept “${statement}”`,
   factKeptNeither: 'Saved what’s true now',
   questionSheetTitle: 'Which one?',
@@ -2176,9 +2277,11 @@ export const HELM_COPY = {
         ? 'That note or one of those topics was removed.'
         : kind === 'groupTopics'
           ? 'Those topics changed since.'
-          : kind === 'whichPlace'
-            ? 'That place was removed.'
-            : 'That person was removed.',
+          : kind === 'undoOffer'
+            ? 'That was already taken back.'
+            : kind === 'whichPlace'
+              ? 'That place was removed.'
+              : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>

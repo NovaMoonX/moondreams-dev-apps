@@ -45,6 +45,8 @@ const question = (
   dateMode: null,
   number: null,
   aboutRef: null,
+  lead: null,
+  undoChoices: [],
   answer: null,
 });
 
