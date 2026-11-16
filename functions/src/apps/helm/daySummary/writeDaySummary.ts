@@ -11,6 +11,10 @@ import {
   type TerminalTool,
   type ToolLoopRequest,
 } from '../../../ai/modelProvider.js';
+import {
+  createAnthropicBatchProvider,
+  type BatchProvider,
+} from '../../../ai/batch.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import { createAnthropicProvider } from '../../../ai/providers/anthropic.js';
 import type { Keyring } from '../../../appKeys/keyring.js';
@@ -32,6 +36,8 @@ import {
   countHelmDay,
   getDayBounds,
   isEmptyDay,
+  isWaitingOnBatch,
+  PENDING_BATCH,
   readDaySummary,
   toDayLine,
   SUMMARY_MAX_ATTEMPTS,
@@ -85,6 +91,10 @@ export const buildDaySummaryMessage = (input: {
       : []),
   ].join('\n');
 
+/** Added to the writer's prompt in a batch, where there is no tool to call. */
+export const BATCH_ANSWER_LINE = `Reply with JSON holding the sentence in "summary" instead of calling ${SUBMIT_DAY_SUMMARY_TOOL.name}.`;
+export const BATCH_MAX_TOKENS = 600;
+
 const STYLE_LINE = `<your_style> describes how the person writes. Shape your sentence to it (length, capitalisation, punctuation, warmth) and never use what is in avoid; it never changes what you say happened.`;
 
 const readBlock = <T>(message: string, tag: string): T | null => {
@@ -124,6 +134,12 @@ const readApiKey = () => {
   }
 };
 
+/** The batch writer for the night run; none without a live key, so the emulator keeps the live path. */
+export const pickDaySummaryBatchProvider = (): BatchProvider | null => {
+  const apiKey = readApiKey();
+  return apiKey ? createAnthropicBatchProvider(apiKey) : null;
+};
+
 export const pickDaySummaryProvider = (): ModelProvider | null => {
   const apiKey = readApiKey();
   if (apiKey) return createAnthropicProvider(apiKey);
@@ -140,7 +156,12 @@ const readTitles = (key: HelmKey, docs: { data: DocumentData }[]): string[] =>
           Array.isArray(sealed.effects)
             ? (sealed.effects as { written?: Record<string, unknown> }[])
             : [],
-          (data.effectRefs ?? []) as { op: string; collection: string }[],
+          (data.effectRefs ?? []) as {
+            op: string;
+            collection: string;
+            docId?: string;
+          }[],
+          Array.isArray(data.undoneDocIds) ? data.undoneDocIds : [],
         );
       } catch {
         return [];
@@ -197,20 +218,36 @@ const toHabitChecks = (
 const isClosed = (data: DocumentData | undefined) =>
   data?.status === 'empty' || (data?.status === 'written' && !data.staleAt);
 
-/** Counts the day, writes it at once as `counted` (or `empty`), then asks for the sentence; a spent allowance leaves `counted` and says `busy`. */
-export async function writeHelmDaySummary(
+export interface PreparedDaySummary {
+  system: string;
+  message: string;
+}
+
+export type DaySummaryPreparation =
+  | { status: DaySummaryResult }
+  | {
+      request: PreparedDaySummary;
+      counts: HelmDayCounts;
+      line: string;
+      reservedAt: number;
+      key: HelmKey;
+    };
+
+/** Counts the day and writes it at once as `counted` (or `empty`); when a sentence is still wanted and `isAsking`, reserves one quick call (counting the attempt) and returns the request. `isForBatch` marks the claim as waiting on a batch. A spent allowance leaves `counted` and says `busy`; a summary waiting on its batch says `busy`. */
+export async function prepareDaySummary(
   firestore: Firestore,
-  provider: ModelProvider | null,
   keyring: Keyring,
   uid: string,
   dayKey: string,
   now: number,
-): Promise<DaySummaryResult> {
+  isAsking: boolean,
+  isForBatch = false,
+): Promise<DaySummaryPreparation> {
   const base = `apps/helm/users/${uid}`;
   const summaryRef = firestore.doc(`${base}/daySummaries/${dayKey}`);
   const current = await summaryRef.get();
   if (isClosed(current.data()))
-    return current.get('status') as DaySummaryStatus;
+    return { status: current.get('status') as DaySummaryStatus };
 
   const profile = await firestore.doc(base).get();
   const timeZone = toKnownZone(
@@ -277,6 +314,7 @@ export async function writeHelmDaySummary(
       typeof data.undoneByExecutionId === 'string'
         ? data.undoneByExecutionId
         : null,
+    undoneDocIds: Array.isArray(data.undoneDocIds) ? data.undoneDocIds : [],
     isOutside:
       (typeof data.via === 'string' && data.via !== '') ||
       outsideIds.has(String(data.captureId)),
@@ -315,6 +353,8 @@ export async function writeHelmDaySummary(
   const isEmpty = isEmptyDay(counts);
   const readStale = (value: unknown) =>
     typeof value === 'number' ? value : null;
+  const readText = (value: unknown) =>
+    typeof value === 'string' ? value : null;
   const settled = await firestore.runTransaction<DaySummaryResult | 'generate'>(
     async (transaction) => {
       const latest = await transaction.get(summaryRef);
@@ -326,6 +366,17 @@ export async function writeHelmDaySummary(
         return 'busy';
       const isRetry =
         latest.get('status') === 'counted' && !latest.get('staleAt');
+      if (
+        isRetry &&
+        isWaitingOnBatch(
+          {
+            batchId: readText(latest.get('batchId')),
+            batchedAt: readStale(latest.get('batchedAt')),
+          },
+          now,
+        )
+      )
+        return 'busy';
       if (isRetry && now - Number(latest.get('writtenAt') ?? 0) < LEASE_MS)
         return 'busy';
       const attempts = isRetry ? Number(latest.get('attempts') ?? 0) : 0;
@@ -336,20 +387,29 @@ export async function writeHelmDaySummary(
         attempts,
         writtenAt: now,
         staleAt: null,
+        batchId: isForBatch && !isEmpty ? PENDING_BATCH : null,
+        batchedAt: isForBatch && !isEmpty ? now : null,
         sealed: isEmpty ? null : sealForHelm(key, { text: line, line, counts }),
       });
       return isEmpty ? 'empty' : 'generate';
     },
   );
-  if (settled !== 'generate') return settled;
-  if (!provider) return 'counted';
+  if (settled !== 'generate') return { status: settled };
+  if (!isAsking) return { status: 'counted' };
 
   const held = await reserveAiCall(firestore, uid, now, 'quick');
-  if (held) return 'busy';
+  if (held) {
+    if (isForBatch) await summaryRef.update({ batchId: null, batchedAt: null });
+    return { status: 'busy' };
+  }
   await summaryRef.update({ attempts: FieldValue.increment(1) });
-  try {
-    const style = await readStyle(firestore, base, key);
-    const reply = (await askTopicModel(firestore, provider, 'daySummary', {
+  const style = await readStyle(firestore, base, key);
+  return {
+    counts,
+    line,
+    reservedAt: now,
+    key,
+    request: {
       system: [
         DAY_SUMMARY_PROMPT,
         style ? STYLE_LINE : null,
@@ -380,16 +440,49 @@ export async function writeHelmDaySummary(
         ),
         style,
       }),
+    },
+  };
+}
+
+/** Counts the day, writes it at once as `counted` (or `empty`), then asks for the sentence; a spent allowance leaves `counted` and says `busy`. */
+export async function writeHelmDaySummary(
+  firestore: Firestore,
+  provider: ModelProvider | null,
+  keyring: Keyring,
+  uid: string,
+  dayKey: string,
+  now: number,
+): Promise<DaySummaryResult> {
+  const prepared = await prepareDaySummary(
+    firestore,
+    keyring,
+    uid,
+    dayKey,
+    now,
+    provider !== null,
+  );
+  if (!('request' in prepared)) return prepared.status;
+  if (!provider) return 'counted';
+  try {
+    const reply = (await askTopicModel(firestore, provider, 'daySummary', {
+      ...prepared.request,
       terminalTool: SUBMIT_DAY_SUMMARY_TOOL,
       limits: SUMMARY_LIMITS,
     })) as { summary?: unknown } | null;
-    const text = readDaySummary(reply?.summary, counts);
+    const text = readDaySummary(reply?.summary, prepared.counts);
     if (!text) return 'counted';
-    await summaryRef.update({
-      status: 'written',
-      writtenAt: Date.now(),
-      sealed: sealForHelm(key, { text, line, counts }),
-    });
+    const { key } = prepared;
+    await firestore
+      .doc(`apps/helm/users/${uid}/daySummaries/${dayKey}`)
+      .update({
+        status: 'written',
+        writtenAt: Date.now(),
+        sealed: sealForHelm(key, {
+          text,
+          line: prepared.line,
+          counts: prepared.counts,
+        }),
+      });
     return 'written';
   } catch {
     logger.warn('helm.daySummary.failed');

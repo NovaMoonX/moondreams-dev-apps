@@ -71,6 +71,7 @@ export async function ensureHelmProfile(uid: string) {
       abilityOffers: [],
       conversationFreshAt: null,
       isDailyFreshOn: false,
+      outsideSeenAt: null,
       createdAt: Date.now(),
       lastEditedAt: null,
     };
@@ -121,6 +122,13 @@ export const setConversationFreshAt = (
 ) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     conversationFreshAt,
+    lastEditedAt: Date.now(),
+  });
+
+/** Marks what outside assistants added as looked at, from now. */
+export const setOutsideSeenAt = (uid: string, outsideSeenAt: number) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    outsideSeenAt,
     lastEditedAt: Date.now(),
   });
 

@@ -216,7 +216,7 @@ def main():
     check('planDays create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/planDays/d', plan)]), False)
 
     # A day's summary is written by the server: the owner reads it and may only set staleAt.
-    summary = dict(dayKey='2030-01-01', status='written', attempts=1, writtenAt=NOW, staleAt=None, sealed=SEAL)
+    summary = dict(dayKey='2030-01-01', status='written', attempts=1, writtenAt=NOW, staleAt=None, batchId=None, batchedAt=None, sealed=SEAL)
     sk = f'{path}/daySummaries/2030-01-01'
     for a, tok in actors.items():
         admin([put(sk, summary)])

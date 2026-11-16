@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Trash2 } from 'lucide-react';
+import { CalendarDays, Trash2 } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import SectionDivider from '@/components/SectionDivider';
@@ -9,12 +9,14 @@ import StatTile from '@/components/StatTile';
 import SummaryRow from '@/components/SummaryRow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppSelector } from '@/store';
+import { formatDayRuns } from '@/utils/dayRunUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import PeopleSection from '@apps/going-once/components/people/PeopleSection';
 import FinishSection from '@apps/going-once/components/sales/FinishSection';
 import LinkCard from '@apps/going-once/components/sales/LinkCard';
 import PushSwitch from '@apps/going-once/components/sales/PushSwitch';
 import PaymentMethodsSheet from '@apps/going-once/components/sales/PaymentMethodsSheet';
+import PickupDaysSheet from '@apps/going-once/components/sales/PickupDaysSheet';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
 import {
   FINISHED_SALE_STATUS,
@@ -28,6 +30,7 @@ import {
 } from '@apps/going-once/store/selectors';
 import type { Sale, SaleDetailField } from '@apps/going-once/types';
 import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
+import { getUpcomingDays } from '@apps/going-once/utils/pickupDays';
 import { toFirstName } from '@apps/going-once/utils/personName';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
 import { formatOfAsked, type StatusView } from '@apps/going-once/utils/status';
@@ -86,6 +89,9 @@ function SaleTab({
   const people = useUserInfo(coSellerIds);
   const [editing, setEditing] = useState<SaleDetailField | null>(null);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
+  const [isEditingDays, setIsEditingDays] = useState(false);
+  const [now] = useState(() => Date.now());
+  const upcomingDays = getUpcomingDays(sale.pickupDays, now, sale.timeZone);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const isSeller = isSaleSeller(sale, uid);
@@ -167,6 +173,16 @@ function SaleTab({
 
       <LinkCard sale={sale} isSeller={isSeller} />
 
+      {isSeller && !isFinished && upcomingDays.length === 0 && (
+        <ActionRow
+          icon={<CalendarDays className='size-4' aria-hidden='true' />}
+          label='Add your pickup days'
+          subtitle='Buyers then say which days work when they ask'
+          hasChevron
+          onClick={() => setIsEditingDays(true)}
+        />
+      )}
+
       {!isFinished && <PushSwitch saleId={sale.id} uid={uid} />}
 
       <PeopleSection sale={sale} uid={uid} myEmail={myEmail} onLeft={onLeft} />
@@ -193,6 +209,19 @@ function SaleTab({
             </SummaryRow>
           );
         })}
+        <SummaryRow
+          label='Pickup days'
+          detail='Buyers see this and pick the days that work'
+          onClick={isSeller ? () => setIsEditingDays(true) : undefined}
+        >
+          {upcomingDays.length === 0 ? (
+            <span className='text-muted-foreground'>
+              {isSeller ? 'Add the days you can hand things over' : 'Not set'}
+            </span>
+          ) : (
+            <span className='line-clamp-3'>{formatDayRuns(upcomingDays)}</span>
+          )}
+        </SummaryRow>
         <SummaryRow
           label='Payment methods'
           detail='Buyers see this'
@@ -238,6 +267,15 @@ function SaleTab({
           saleId={sale.id}
           value={sale.paymentMethods}
           onClose={() => setIsEditingPayment(false)}
+        />
+      )}
+
+      {isEditingDays && (
+        <PickupDaysSheet
+          saleId={sale.id}
+          value={sale.pickupDays}
+          timeZone={sale.timeZone}
+          onClose={() => setIsEditingDays(false)}
         />
       )}
 

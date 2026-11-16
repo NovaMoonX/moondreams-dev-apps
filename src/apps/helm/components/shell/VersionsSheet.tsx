@@ -34,6 +34,10 @@ export interface VersionRow {
   reasonText: string;
   /** What the version holds, in a line ("12 steps in this version"). */
   contentLine: string;
+  /** The outside assistant that made the change, named where the assistant's own name would be; null for anyone else. */
+  via?: string | null;
+  /** A line saying an outside assistant's turn or notes are behind the change; null or left out when none is. */
+  attribution?: string | null;
 }
 
 interface VersionsSheetProps {
@@ -103,7 +107,7 @@ function VersionsBody({
       entry.version,
       whenOf(entry.createdAt),
       entry.createdBy === 'person',
-      assistant,
+      entry.via || assistant,
     );
 
   const change = async (target: number, undoneSummary: string | null) => {
@@ -232,6 +236,11 @@ function VersionsBody({
             <p className='text-muted-foreground text-[13px]'>
               {lineOf(opened)}
             </p>
+            {opened.attribution && (
+              <p className='text-muted-foreground text-[13px]'>
+                {opened.attribution}
+              </p>
+            )}
             <p className='text-muted-foreground text-[13px]'>
               {opened.contentLine}
             </p>
@@ -272,6 +281,11 @@ function VersionsBody({
                           {entry.changeSummary}
                         </span>
                       )}
+                    {entry.attribution && (
+                      <span className='text-muted-foreground block text-[13px]'>
+                        {entry.attribution}
+                      </span>
+                    )}
                     <span className='text-muted-foreground block text-[13px]'>
                       {lineOf(entry)}
                       {entry.version === newest &&
