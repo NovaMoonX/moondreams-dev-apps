@@ -64,7 +64,8 @@ export function hasResultRow(
     isEntityRef(ref) ||
     ref.collection === 'media' ||
     ref.collection === 'connections' ||
-    ref.collection === 'scheduledActions'
+    ref.collection === 'scheduledActions' ||
+    ref.collection === 'research'
   )
     return false;
   if (ref.collection === 'topics') {

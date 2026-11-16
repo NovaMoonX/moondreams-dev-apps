@@ -117,6 +117,7 @@
     "check:helm-importance": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmImportance.ts",
     "check:helm-said": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSaid.ts",
     "check:helm-act-now": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmActNow.ts",
+    "check:helm-research": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmResearch.ts",
     "check:helm-scheduled": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmScheduled.ts",
     "check:helm-patterns": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPatterns.ts",
     "check:helm-guardrails": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmGuardrails.ts",

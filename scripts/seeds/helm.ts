@@ -78,6 +78,7 @@ import type {
   NoteSealed,
   Project,
   ProjectSealed,
+  ResearchSealed,
   ScheduledActionSealed,
   Connection,
   Who,
@@ -2223,6 +2224,108 @@ async function buildScheduled(input: { now: number; encryption: HelmEncryption }
         lastOutcome: null,
         createdAt: now - 90 * DAY_MS,
         lastEditedAt: now - 5 * DAY_MS,
+      },
+    ),
+  ]);
+}
+
+/** Two research items: a quick look still being made, and a thorough one that is done, with its overview, a comparison and three sources. */
+async function buildResearch(input: { now: number; encryption: HelmEncryption }) {
+  const { now, encryption } = input;
+  const base = {
+    mode: 'asked' as const,
+    captureId: null,
+    projectId: null,
+    isWithoutWeb: false,
+    searchesUsed: 0,
+    costCents: 0,
+    rerunOn: null,
+    cancelledAt: null,
+    lastEditedAt: null,
+  };
+  const item = async (id: string, words: ResearchSealed, fields: Record<string, unknown>) => ({
+    id,
+    doc: { ...base, ...fields, sealed: await sealJson<ResearchSealed>(words, encryption) },
+  });
+  return Promise.all([
+    item(
+      'seed-research-preparing',
+      {
+        question: 'What should I know before getting a standing desk?',
+        subject: 'standing desks',
+        overview: null,
+        sources: [],
+      },
+      {
+        status: 'preparing',
+        depth: 'light',
+        reservedCents: 11,
+        startedAt: now - 30_000,
+        preparedAt: null,
+        createdAt: now - 30_000,
+      },
+    ),
+    item(
+      'seed-research-done',
+      {
+        question: 'Which robot vacuum is worth it for a small apartment with a cat?',
+        subject: 'robot vacuums for a small apartment',
+        overview: {
+          summary:
+            'For a small apartment with a cat, a mid-priced model with good hair handling and a washable filter does the job; the premium ones mostly add a self-emptying dock.',
+          sections: [
+            {
+              heading: 'What matters most',
+              points: [
+                'Strong suction with a rubber roller copes with cat hair better than bristles.',
+                'A small footprint fits under furniture and turns in tight rooms.',
+                'Mapping lets it skip the litter box area.',
+              ],
+            },
+            {
+              heading: 'What to skip',
+              points: [
+                'Self-emptying docks add cost and take floor space in a small place.',
+                'Camera models raise privacy questions, so look for ones that map with a laser instead.',
+              ],
+            },
+          ],
+          comparison: {
+            columns: ['Model', 'Price', 'Cat hair', 'Noise'],
+            rows: [
+              ['Roborock Q Revo', '$450', 'Very good', 'Medium'],
+              ['Eufy X10', '$400', 'Good', 'Quiet'],
+              ['iRobot Roomba j7', '$500', 'Very good', 'Loud'],
+            ],
+          },
+        },
+        sources: [
+          {
+            title: 'The best robot vacuums for pet hair',
+            url: 'https://www.example.com/reviews/robot-vacuums-pet-hair',
+            site: 'example.com',
+          },
+          {
+            title: 'Robot vacuum buying guide',
+            url: 'https://www.example.org/guides/robot-vacuum',
+            site: 'example.org',
+          },
+          {
+            title: 'How mapping works in robot vacuums',
+            url: 'https://www.example.net/explainers/vacuum-mapping',
+            site: 'example.net',
+          },
+        ],
+      },
+      {
+        status: 'done',
+        depth: 'thorough',
+        reservedCents: 0,
+        searchesUsed: 8,
+        costCents: 31,
+        startedAt: now - 2 * DAY_MS,
+        preparedAt: now - 2 * DAY_MS + 6 * 60_000,
+        createdAt: now - 2 * DAY_MS,
       },
     ),
   ]);
@@ -6212,6 +6315,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           forgottenAt: null,
           prunedOn: habitDayKey(context.now, HABIT_ZONE),
           outsideSeenAt: null,
+          researchDepth: null,
+          researchAllowance: null,
           createdAt,
           lastEditedAt: null,
         });
@@ -6902,6 +7007,14 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             ),
           );
         }
+        const researchWorld = people
+          ? await buildResearch({ now: context.now, encryption })
+          : null;
+        if (researchWorld) {
+          researchWorld.forEach((entry) =>
+            batch.set(person.collection('research').doc(entry.id), entry.doc),
+          );
+        }
         const learning = people
           ? await buildLearning({
               now: context.now,
@@ -7043,6 +7156,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             (projects ? projects.projects.length + projects.tasks.length : 0) +
             (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
             (scheduledWorld ? scheduledWorld.length : 0) +
+            (researchWorld ? researchWorld.length : 0) +
             (learning
               ? learning.patterns.length +
                 learning.observations.length +

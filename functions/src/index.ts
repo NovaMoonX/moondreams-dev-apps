@@ -44,6 +44,8 @@ export { signOutEverywhere } from './auth/signOutEverywhere.js';
 export { streamSpeech } from './voice/streamSpeech.js';
 export { deleteHelmData } from './apps/helm/deleteHelmData.js';
 export { runHelmScheduledActions } from './apps/helm/scheduledActions/runHelmScheduledActions.js';
+export { runHelmResearch } from './apps/helm/research/runHelmResearch.js';
+export { rerunHelmResearch } from './apps/helm/research/rerunHelmResearch.js';
 export { planHelmReminders } from './apps/helm/reminders/planHelmReminders.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.js';

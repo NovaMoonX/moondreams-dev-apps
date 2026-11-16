@@ -64,6 +64,8 @@ import {
   setConnectionsFailed,
   setScheduledActions,
   setScheduledActionsFailed,
+  setResearch,
+  setResearchFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,
@@ -114,6 +116,7 @@ import { startProceduresListener } from '@apps/helm/store/listeners/procedureLis
 import { startOpenRunsListener } from '@apps/helm/store/listeners/runListener';
 import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
 import { stampWaitingScheduledActions } from '@apps/helm/store/actions/scheduledActionWrites';
+import { startResearchListener } from '@apps/helm/store/listeners/researchListener';
 import { startScheduledActionsListener } from '@apps/helm/store/listeners/scheduledActionListener';
 import { startConnectionsListener } from '@apps/helm/store/listeners/connectionListener';
 import { startHabitsListener } from '@apps/helm/store/listeners/habitListener';
@@ -529,6 +532,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm scheduled actions listener failed', error);
               dispatch(setScheduledActionsFailed());
+            },
+          ),
+          startResearchListener(
+            uid,
+            read,
+            (items) => dispatch(setResearch(items)),
+            (error) => {
+              console.error('Helm research listener failed', error);
+              dispatch(setResearchFailed());
             },
           ),
           startHabitsListener(

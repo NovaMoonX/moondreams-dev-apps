@@ -87,6 +87,7 @@ import {
   UNDO_QUOTE_CAP,
   UNDO_REASONS,
   type UndoOffer,
+  type ResearchCommand,
   type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
@@ -146,6 +147,7 @@ import {
   isWorthTidying,
 } from '../goalWhy.js';
 import { readConnectionCommands } from './readConnectionCommands.js';
+import { readResearchCommands } from './readResearchCommands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
 
@@ -2229,6 +2231,7 @@ export function normalizeNomosReply(
   habitDropped: HabitDrop[];
   scheduleCommands: ScheduleCommand[];
   scheduleDropped: ScheduleDrop[];
+  researchCommands: ResearchCommand[];
   importanceCommands: SetImportanceCommand[];
   importanceDropped: ImportanceDrop[];
   soundsLike: NoteSoundsLikeCommand[];
@@ -2372,6 +2375,7 @@ export function normalizeNomosReply(
       captureText: context.captureText,
       timeZone: context.timeZone,
     });
+  const researchCommands = readResearchCommands(items);
   const { commands: importanceCommands, dropped: importanceDropped } =
     readImportanceCommands(items, {
       projects: context.projects,
@@ -2494,6 +2498,7 @@ export function normalizeNomosReply(
     habitDropped,
     scheduleCommands,
     scheduleDropped,
+    researchCommands,
     importanceCommands,
     importanceDropped,
     soundsLike,

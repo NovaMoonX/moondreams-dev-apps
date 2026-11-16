@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships; its voice name is absent, null or at most 32 characters, and its speed absent, null or 0.8 to 1.2): only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations, reflections and scheduled actions are the owner's like a task, the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's and the scheduled actions' queues included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations, reflections and scheduled actions are the owner's like a task, a research item is read by its owner who may only stop it (dismissed, with when) and never creates, deletes or changes any other field, the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's and the scheduled actions' queues included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -245,6 +245,22 @@ def main():
         admin([rm(sk + '-new-' + a)])
     check('daySummaries read at another uid [o]', get(f'apps/helm/users/{x_uid}/daySummaries/d', o_tok), False)
 
+    # A research item is made and settled by the server: the owner reads it and may only stop it (status dismissed, cancelledAt, lastEditedAt).
+    research = dict(mode='asked', status='preparing', captureId='capture-1', projectId=None, depth='light', isWithoutWeb=False, reservedCents=11, searchesUsed=0, costCents=0, rerunOn=None, startedAt=None, preparedAt=None, cancelledAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    rk = f'{path}/research/research-1'
+    for a, tok in actors.items():
+        admin([put(rk, research)])
+        check(f'research read [{a}]', get(rk, tok), a == 'o')
+        check(f'research list [{a}]', get(f'{path}/research', tok), a == 'o')
+        check(f'research create [{a}]', commit(tok, [put_new(rk + '-new-' + a, research)]), False)
+        check(f'research cancel [{a}]', commit(tok, [put(rk, dict(research, status='dismissed', cancelledAt=NOW, lastEditedAt=NOW))]), a == 'o')
+        check(f'research update status other than dismissed [{a}]', commit(tok, [put(rk, dict(research, status='ready'))]), False)
+        check(f'research update reservedCents [{a}]', commit(tok, [put(rk, dict(research, status='dismissed', reservedCents=0))]), False)
+        check(f'research update sealed [{a}]', commit(tok, [put(rk, dict(research, status='dismissed', sealed=dict(SEAL, value='y')))]), False)
+        check(f'research update rerunOn [{a}]', commit(tok, [put(rk, dict(research, status='dismissed', rerunOn=NOW))]), False)
+        check(f'research delete [{a}]', commit(tok, [rm(rk)]), False)
+    check('research read at another uid [o]', get(f'apps/helm/users/{x_uid}/research/r', o_tok), False)
+
     # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection and a connection are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
@@ -462,9 +478,9 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'apps/helm/server/{uid}/research/usage', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}'):
         admin([put(p, {'x': 1})])
-        label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
+        label = p.split("/")[0] if p.startswith('voice') else '/'.join(p.split("/")[-2:]) if p.endswith('/usage') else p.split("/")[-2]
         for a, tok in actors.items():
             check(f'{label} read [{a}]', get(p, tok), False)
             check(f'{label} create [{a}]', commit(tok, [put_new(p + '-new', {'x': 2})]), False)

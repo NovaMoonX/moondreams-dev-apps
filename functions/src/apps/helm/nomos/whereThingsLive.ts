@@ -16,6 +16,7 @@ export const HELM_HOMES = [
   'habits',
   'habitDays',
   'scheduledActions',
+  'research',
   'patterns',
   'observations',
   'reflections',
@@ -298,8 +299,25 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     ],
     jobFields: [
       {
-        field: 'lastRunAt, lastRunDueAt, lastRunCaptureId, lastOutcome, lastFailReason, nextRunAt, nextRunKey, runNowAt, status and endedBy once the rule has finished',
+        field:
+          'lastRunAt, lastRunDueAt, lastRunCaptureId, lastOutcome, lastFailReason, nextRunAt, nextRunKey, runNowAt, status and endedBy once the rule has finished',
         job: 'runHelmScheduledActions',
+      },
+    ],
+  }),
+  row({
+    thing: 'Research the person asked for, looked up on the web',
+    home: 'research',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server'],
+    commands: ['research'],
+    writer: 'actions/researchActions',
+    taps: ['cancelResearch'],
+    jobFields: [
+      {
+        field:
+          'status, startedAt, preparedAt, reservedCents, searchesUsed, costCents, rerunOn once the person said yes, and the sealed overview and sources',
+        job: 'runHelmResearch',
       },
     ],
   }),

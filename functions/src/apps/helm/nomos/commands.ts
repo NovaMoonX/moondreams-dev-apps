@@ -179,6 +179,23 @@ export const SCHEDULE_COMMAND_KINDS = [
   'changeScheduledAction',
 ] as const;
 
+/** Read from its own list; the one kind that starts a live web look-up and is no `NomosCommand`. */
+export const RESEARCH_COMMAND_KINDS = ['research'] as const;
+
+export const RESEARCH_QUESTION_CAP = 400;
+export const RESEARCH_SUBJECT_CAP = 60;
+export const MAX_RESEARCH_PER_TURN = 1;
+
+/** A look-up on the web the person asked for. `depth` is what they said ("look into it properly" is thorough), null when they didn't. */
+export interface ResearchCommand {
+  kind: 'research';
+  question: string;
+  subject: string;
+  depth: 'light' | 'thorough' | null;
+  /** True when the answer will feed a choice the person is making, which is when asking how deep is worth a question. */
+  isDecision: boolean;
+}
+
 export const SCHEDULE_CHANGES = [
   'skip',
   'move',
@@ -1172,6 +1189,10 @@ export const buildFileResultsTool = ({
             'undoLines',
             'undoReason',
             'undoQuote',
+            'researchQuestion',
+            'researchSubject',
+            'researchDepth',
+            'researchIsDecision',
           ],
           properties: {
             kind: {
@@ -1182,6 +1203,7 @@ export const buildFileResultsTool = ({
                 ...PROCEDURE_COMMAND_KINDS,
                 ...RUN_COMMAND_KINDS,
                 ...SCHEDULE_COMMAND_KINDS,
+                ...RESEARCH_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
                 ...IMPORTANCE_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
@@ -1893,6 +1915,24 @@ export const buildFileResultsTool = ({
             undoQuote: nullable(
               'string',
               `offerUndo: the words from THIS capture that show the reason, copied exactly, at most ${UNDO_QUOTE_CAP} characters; null when no words do.`,
+            ),
+            researchQuestion: nullable(
+              'string',
+              `research: what to look up on the web, in the person's words made self-contained, at most ${RESEARCH_QUESTION_CAP} characters; never a name or detail from their records unless they said it in this capture; null for every other kind.`,
+            ),
+            researchSubject: nullable(
+              'string',
+              `research: two to five words naming what is looked into ("AWD vs 4WD", "Lisbon in December"), at most ${RESEARCH_SUBJECT_CAP} characters; null for every other kind.`,
+            ),
+            researchDepth: {
+              type: ['string', 'null'],
+              enum: ['light', 'thorough', null],
+              description:
+                'research: thorough only when the person asks for it ("look into it properly", "dig deep", "compare them all"), light only when they ask for a quick one; null when they did not say, which is the usual case.',
+            },
+            researchIsDecision: nullable(
+              'boolean',
+              'research: true when the answer will feed a choice the person is making ("which one should I buy", "where should we stay"); false for plain curiosity; null for every other kind.',
             ),
           },
         },

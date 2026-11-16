@@ -1359,7 +1359,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Voice follows the turn on every page: spoken on home, through "Ask about this" or after the wake phrase is answered aloud there; typed is answered in writing (O) (Issue 117)
 - [ ] Private things: health and care things private on their own on any kind of record, anything marked private by saying so or a switch; never named in a reminder, copy or export unless turned on for that one thing; every reminder nameless by default (O) (Issue 103)
 - [ ] Where you and your people are: a home and a temporary location with dates for you and each who, from what you say, your calendar and trips, used for "nearby"; the phone's location as your choice of Off, City only or Precise (O, C) (Issue 107)
-- [ ] Research with live web search: quick or thorough, a default you set, asked when it matters, within a monthly allowance per person (O) (Issue 118)
+- [x] Research with live web search: quick or thorough, a default you set, asked when it matters, within a monthly allowance per person (O) (Issue 118)
 - [ ] How and where a meeting happens (in person, video or phone, and its place), on Helm's events and read from Google Calendar (O) (Issue 123)
 - [ ] One chosen Google Calendar kept in step both ways (O) (Issue 127)
 - [ ] Your day: say what you want done today and get it planned with breaks, wind down in the evening with what got done, what moves to tomorrow and why, kept on the server so it happens whether or not the app is open (O) (Issue 128)

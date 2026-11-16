@@ -87,6 +87,8 @@ export const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
         question?.kind === 'groupTopics' ||
         question?.kind === 'whichComesFirst' ||
         question?.kind === 'undoOffer' ||
+        question?.kind === 'researchDepth' ||
+        question?.kind === 'researchRerun' ||
         question?.kind === 'asked';
       return typeof question === 'object' &&
         question !== null &&

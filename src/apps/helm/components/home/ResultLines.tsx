@@ -8,6 +8,7 @@ import UndoButton from '@apps/helm/components/activity/UndoButton';
 import AbilityOfferRow from '@apps/helm/components/home/AbilityOfferRow';
 import AwayPauseOfferRow from '@apps/helm/components/home/AwayPauseOfferRow';
 import AwayZoneOfferRow from '@apps/helm/components/home/AwayZoneOfferRow';
+import ResearchRows from '@apps/helm/components/research/ResearchRows';
 import ScheduledRuleRows from '@apps/helm/components/scheduled/ScheduledRuleRows';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -182,6 +183,7 @@ function ResultLines({
             execution={execution}
             hasUndoHere={lines.length === 0 && !isUndone}
           />
+          <ResearchRows captureId={captureId} execution={execution} />
           {execution.awayZoneOffer && (
             <AwayZoneOfferRow offer={execution.awayZoneOffer} />
           )}

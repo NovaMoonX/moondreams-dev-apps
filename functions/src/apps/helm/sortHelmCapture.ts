@@ -191,6 +191,7 @@ import {
   type ProcedureCommand,
   type NoteSoundsLikeCommand,
   type AddContactPointCommand,
+  type ResearchCommand,
   type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -299,6 +300,12 @@ import {
   SCHEDULE_DROP_LINES,
   planScheduledActions,
 } from './nomos/planScheduledActions.js';
+import {
+  planResearch,
+  readUsageDoc,
+  toAllowanceMirror,
+} from './nomos/planResearch.js';
+import { readUsageIn, usageRef } from './research/researchStore.js';
 import type {
   ScheduleCommand,
   ScheduleDrop,
@@ -2190,6 +2197,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       importanceCommands: [],
       scheduleCommands: [],
       scheduleDropped: [],
+      researchCommands: [],
       soundsLike: [],
       contactPoints: [],
       connectionCommands: [],
@@ -3256,6 +3264,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.connectionCommands.length +
     reply.whereabouts.length +
     reply.scheduleCommands.length +
+    reply.researchCommands.length +
     (reply.planDay ? 1 : 0) +
     (reply.setCurrentPlace ? 1 : 0);
   const outcome =
@@ -3324,6 +3333,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     importanceCommands: keeps ? reply.importanceCommands : [],
     scheduleCommands: keeps ? reply.scheduleCommands : [],
     scheduleDropped: keeps ? reply.scheduleDropped : [],
+    researchCommands: keeps ? reply.researchCommands : [],
     soundsLike: keeps ? reply.soundsLike : [],
     contactPoints: keeps ? reply.contactPoints : [],
     connectionCommands: keeps ? reply.connectionCommands : [],
@@ -3539,6 +3549,7 @@ async function writeResult(
     habitCommands: HabitCommand[];
     scheduleCommands: ScheduleCommand[];
     scheduleDropped: ScheduleDrop[];
+    researchCommands: ResearchCommand[];
     importanceCommands: SetImportanceCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
@@ -3596,6 +3607,7 @@ async function writeResult(
     importanceCommands,
     scheduleCommands,
     scheduleDropped,
+    researchCommands,
     soundsLike,
     contactPoints,
     connectionCommands,
@@ -3806,6 +3818,7 @@ async function writeResult(
       connectionCommands.length > 0 ||
       whereabouts.length > 0 ||
       scheduleCommands.length > 0 ||
+      researchCommands.length > 0 ||
       observations.length > 0 ||
       offerAbility !== null
         ? transaction.get(firestore.doc(base))
@@ -4636,6 +4649,17 @@ async function writeResult(
       hasNewSchedule && selfWhoId
         ? await transaction.get(firestore.doc(`${base}/who/${selfWhoId}`))
         : null;
+    const researchTimeZone = String(profileSnap?.get('timeZone') ?? timeZone);
+    const researchUsage =
+      researchCommands.length > 0 && !isStale
+        ? await readUsageIn(
+            transaction,
+            firestore,
+            input.uid,
+            now,
+            researchTimeZone,
+          )
+        : readUsageDoc(undefined, now, researchTimeZone);
     const schedulePlan = planScheduledActions({
       commands: keptSchedule,
       stored: scheduledStored,
@@ -4659,6 +4683,33 @@ async function writeResult(
           connectionPlan.effects.length -
           habitPlan.effects.length -
           importancePlan.effects.length,
+      ),
+    });
+    const keptResearch = isStale ? [] : researchCommands;
+    const researchPlan = planResearch({
+      commands: keptResearch,
+      profileDepth:
+        profileSnap?.get('researchDepth') === 'thorough' ||
+        profileSnap?.get('researchDepth') === 'light'
+          ? profileSnap.get('researchDepth')
+          : null,
+      usage: researchUsage,
+      timeZone: researchTimeZone,
+      now,
+      captureId: captureRef.id,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length,
       ),
     });
     const scheduleNotKept = [
@@ -4687,6 +4738,7 @@ async function writeResult(
         ...habitPlan.effectRefs,
         ...importancePlan.effectRefs,
         ...schedulePlan.effectRefs,
+        ...researchPlan.effectRefs,
       ],
       effects: [
         ...written.effects,
@@ -4698,6 +4750,7 @@ async function writeResult(
         ...habitPlan.effects,
         ...importancePlan.effects,
         ...schedulePlan.effects,
+        ...researchPlan.effects,
       ],
       notKept: [
         ...written.notKept,
@@ -4707,6 +4760,7 @@ async function writeResult(
         ...habitPlan.notKept,
         ...importancePlan.notKept,
         ...scheduleNotKept,
+        ...researchPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -4830,6 +4884,7 @@ async function writeResult(
       ...habitPlan.questions,
       ...importancePlan.questions,
       ...schedulePlan.questions,
+      ...researchPlan.questions,
       ...impliedQuestions,
     ];
     const followUp =
@@ -5043,6 +5098,20 @@ async function writeResult(
           data,
         ),
       );
+      researchPlan.creates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/research/${id}`), doc),
+      );
+      if (researchPlan.usage) {
+        transaction.set(usageRef(firestore, input.uid), researchPlan.usage);
+        if (profileSnap?.exists)
+          transaction.update(firestore.doc(base), {
+            researchAllowance: toAllowanceMirror(
+              researchPlan.usage,
+              now,
+              researchTimeZone,
+            ),
+          });
+      }
       if (
         profileSnap?.exists &&
         schedulePlan.creates.length + schedulePlan.updates.length > 0
@@ -5119,6 +5188,7 @@ async function writeResult(
               ...habitPlan.lines,
               ...importancePlan.lines,
               ...schedulePlan.lines,
+              ...researchPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -5130,6 +5200,9 @@ async function writeResult(
               importancePlan.lines,
               schedulePlan.lines,
               scheduleNotKept,
+              researchPlan.lines,
+              researchPlan.notKept,
+              researchPlan.questions,
               noted.refused,
               liveRefused,
               askPlan.isDeferred,
@@ -5235,6 +5308,9 @@ async function writeResult(
           schedulePlan.lines.length +
           scheduleNotKept.length +
           schedulePlan.questions.length +
+          researchPlan.lines.length +
+          researchPlan.notKept.length +
+          researchPlan.questions.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
           contactPlan.lines.length +

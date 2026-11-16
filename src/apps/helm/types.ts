@@ -2089,3 +2089,8 @@ export interface ResearchSealed {
   overview: ResearchOverview | null;
   sources: { title: string; url: string; site: string }[];
 }
+
+export interface OpenResearch extends Research {
+  /** The sealed words did not open: kept so a count sees it, never drawn. */
+  isUnreadable: boolean;
+}

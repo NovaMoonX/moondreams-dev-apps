@@ -269,6 +269,29 @@ const packingOption = (label: string) => ({
   recordAlias: null,
 });
 
+/** The emulator's web look-up for "Look into …" / "Research …": "properly" or "thorough" asks for a thorough look, "quick" a light one, "should I" makes it feed a decision. */
+const readResearchAsk = (text: string) => {
+  const match = text.match(
+    /^\s*(?:please\s+)?(?:look into|research)\s+(.+?)[.?!]*\s*$/i,
+  );
+  if (!match) return null;
+  const subject = match[1]
+    .replace(/\b(properly|thoroughly|for me|quickly|a quick look)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    kind: 'research',
+    researchQuestion: `What should I know about ${subject}?`,
+    researchSubject: subject,
+    researchDepth: /\b(properly|thorough)/i.test(text)
+      ? 'thorough'
+      : /\bquick/i.test(text)
+        ? 'light'
+        : null,
+    researchIsDecision: /\b(should i|which|vs|or)\b/i.test(text),
+  };
+};
+
 /** The emulator's two questions for "Help me pack for the Tahoe trip": what goes on the list, and how many nights. */
 const readPackingAsks = (text: string) =>
   PACKING_RE.test(text)
@@ -1907,6 +1930,17 @@ function createTextFixtureProvider(
       if (packed !== null || packingAsks) {
         return {
           terminalInput: { commands: packed ?? packingAsks ?? [] },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const research = readResearchAsk(text);
+      if (research) {
+        return {
+          terminalInput: { commands: [research] },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

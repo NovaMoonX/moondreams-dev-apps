@@ -12,6 +12,7 @@ import {
   MapPin,
   MessagesSquare,
   Mic,
+  Search,
   Sparkles,
   Sun,
   Sunrise,
@@ -39,6 +40,7 @@ import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import PhoneLocationSheet from '@apps/helm/components/settings/PhoneLocationSheet';
 import HabitRemindersList from '@apps/helm/components/settings/HabitRemindersList';
+import ResearchDepthSheet from '@apps/helm/components/settings/ResearchDepthSheet';
 import LearningSheet from '@apps/helm/components/settings/LearningSheet';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -54,6 +56,7 @@ import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { readThoroughLeft } from '@apps/helm/utils/researchWords';
 import { formatClockTime } from '@/utils/formatUtils';
 import { setDailyFreshOn } from '@apps/helm/store/actions/settingsActions';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
@@ -122,6 +125,7 @@ function SettingsScreen({
   const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
   const [isLearningOpen, setIsLearningOpen] = useState(false);
+  const [isResearchOpen, setIsResearchOpen] = useState(false);
   const [isRemindersOpen, setIsRemindersOpen] = useState(false);
   const remindingCount = useAppSelector((state) =>
     countHabitsReminding(state.helm.habits.items),
@@ -218,6 +222,32 @@ function SettingsScreen({
                 : HELM_COPY.learningRowOn
             }
             onClick={() => setIsLearningOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<Search className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.researchSettingsTitle}
+            description={
+              <>
+                <span className='block'>
+                  {profile?.researchDepth === 'light'
+                    ? HELM_COPY.researchDepthQuick
+                    : profile?.researchDepth === 'thorough'
+                      ? HELM_COPY.researchDepthThorough
+                      : HELM_COPY.researchSettingsAsk}
+                </span>
+                <span className='block'>
+                  {HELM_COPY.researchThoroughLeft(
+                    readThoroughLeft(
+                      profile?.researchAllowance ?? null,
+                      now,
+                      profile?.timeZone ?? 'UTC',
+                    ),
+                  )}
+                </span>
+              </>
+            }
+            onClick={() => setIsResearchOpen(true)}
             hasChevron
           />
         </SettingsSection>
@@ -348,6 +378,10 @@ function SettingsScreen({
       <LearningSheet
         isOpen={isLearningOpen}
         onClose={() => setIsLearningOpen(false)}
+      />
+      <ResearchDepthSheet
+        isOpen={isResearchOpen}
+        onClose={() => setIsResearchOpen(false)}
       />
       <VoiceSettings
         isOpen={isVoiceOpen}

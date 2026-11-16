@@ -409,3 +409,13 @@ export async function deleteAllHelmData(uid: string) {
   }
   await forgetHelmOnDevice(uid);
 }
+
+/** The depth research runs at when a request doesn't say; null asks when it feeds a decision. */
+export const setResearchDepth = (
+  uid: string,
+  researchDepth: 'light' | 'thorough' | null,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    researchDepth,
+    lastEditedAt: Date.now(),
+  });

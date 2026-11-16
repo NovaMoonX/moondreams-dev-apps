@@ -1608,7 +1608,7 @@ export const HELM_COPY = {
   answerNothingInRecords: 'Nothing in your records answers this.',
   answerNotFromRecords: 'Not from your records',
   researchNotFromWeb: 'Not from the web',
-  researchLooking: 'Looking into it…',
+  researchLookingInto: (subject: string) => `Looking into ${subject}…`,
   researchArrival: {
     fewMinutes: 'Give me about 2 minutes.',
     fiveToTen: "About 5 to 10 minutes; I'll tell you when it's in.",
@@ -1634,6 +1634,11 @@ export const HELM_COPY = {
   researchSettingsTitle: 'Research',
   researchSettingsDefault: 'How deep to look',
   researchSettingsAsk: 'Ask me when it matters',
+  researchSettingsIntro: (name: string) =>
+    `How deep ${name} looks when you ask it to find something out on the web. A thorough look reads more widely and uses more of this month's allowance.`,
+  researchSettingsFailed: "Couldn't save that. Check your connection.",
+  researchNothingToShow: "I couldn't put anything together for this one.",
+  researchComparisonLabel: 'Side by side',
   researchThoroughLeft: (count: number) =>
     count === 0
       ? 'No thorough looks left this month'

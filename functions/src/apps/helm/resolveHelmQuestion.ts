@@ -22,6 +22,8 @@ import { planResolveHabit } from './nomos/planHabitCommands.js';
 import { importanceToday, readImportanceRecordsIn } from './importanceStore.js';
 import { planResolveImportance } from './nomos/planImportance.js';
 import { planResolveScheduled } from './nomos/planScheduledActions.js';
+import { planResolveResearch } from './nomos/planResearch.js';
+import { readUsageIn, usageRef } from './research/researchStore.js';
 import { buildHabitAnswerExecution } from './nomos/planHabitCommands.js';
 import { readScheduledState } from './scheduledActions/actionStore.js';
 import {
@@ -430,6 +432,62 @@ export const resolveHelmQuestion = onCall(
           executionId: plan && plan.effects.length > 0 ? executionRef.id : null,
           isStale: false,
         };
+      }
+      if (held?.kind === 'researchDepth' || held?.kind === 'researchRerun') {
+        const now = Date.now();
+        const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
+        const researchId = String(
+          (held as { researchId?: unknown }).researchId ?? '',
+        );
+        const researchSnap = ID_RE.test(researchId)
+          ? await transaction.get(
+              firestore.doc(`${base}/research/${researchId}`),
+            )
+          : null;
+        const usage = await readUsageIn(
+          transaction,
+          firestore,
+          uid,
+          now,
+          timeZone,
+        );
+        const answered = planResolveResearch({
+          questionId,
+          optionId,
+          by,
+          now,
+          research: researchSnap?.exists
+            ? {
+                id: researchId,
+                status: String(researchSnap.get('status') ?? ''),
+              }
+            : null,
+          usage,
+          timeZone,
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        if (answered.research)
+          transaction.update(
+            firestore.doc(`${base}/research/${answered.research.id}`),
+            answered.research.data,
+          );
+        if (answered.usage)
+          transaction.set(usageRef(firestore, uid), answered.usage);
+        if (answered.profile && profileSnap.exists)
+          transaction.update(firestore.doc(base), answered.profile);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return { executionId: null, isStale: false };
       }
       if (held?.kind === 'whichComesFirst') {
         const now = Date.now();

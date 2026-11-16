@@ -11,6 +11,7 @@ import type {
   OpenExecution,
   OpenFact,
   OpenConnection,
+  OpenResearch,
   OpenScheduledAction,
   OpenHabit,
   OpenHabitDay,
@@ -110,6 +111,8 @@ export interface HelmState {
   connections: LoadedSet<OpenConnection>;
   /** What the assistant does at set times, ended ones included; a screen reads `selectScheduledActions`. */
   scheduledActions: LoadedSet<OpenScheduledAction>;
+  /** Looking-into-it items and what they found; a screen reads `selectResearch`. */
+  research: LoadedSet<OpenResearch>;
   /** The things the person keeps up, active or not. */
   habits: LoadedSet<OpenHabit>;
   /** Each habit's ticks and tallies for the days from two weeks back. */
@@ -201,6 +204,7 @@ const initialState: HelmState = {
   who: emptyLoadedSet,
   connections: emptyLoadedSet,
   scheduledActions: emptyLoadedSet,
+  research: emptyLoadedSet,
   habits: emptyLoadedSet,
   habitDays: emptyHabitDays,
   keyDateIndex: emptyKeyDateIndex,
@@ -426,6 +430,16 @@ const helmSlice = createSlice({
     },
     setScheduledActionsFailed: (state) => {
       state.scheduledActions.isFailed = true;
+    },
+    setResearch: (state, action: PayloadAction<OpenResearch[]>) => {
+      state.research = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setResearchFailed: (state) => {
+      state.research.isFailed = true;
     },
     setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
       state.habits = { items: action.payload, isLoaded: true, isFailed: false };
@@ -653,6 +667,8 @@ export const {
   setConnectionsFailed,
   setScheduledActions,
   setScheduledActionsFailed,
+  setResearch,
+  setResearchFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,

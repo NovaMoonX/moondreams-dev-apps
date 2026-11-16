@@ -215,7 +215,8 @@ export interface EffectRef {
     | 'habits'
     | 'habitDays'
     | 'connections'
-    | 'scheduledActions';
+    | 'scheduledActions'
+    | 'research';
   docId: string;
 }
 
@@ -3250,6 +3251,8 @@ const isPickKind = (kind: string) =>
   kind === 'whichMedicine' ||
   kind === 'howWasIt' ||
   kind === 'undoOffer' ||
+  kind === 'researchDepth' ||
+  kind === 'researchRerun' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>
