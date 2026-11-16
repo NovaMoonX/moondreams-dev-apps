@@ -645,6 +645,36 @@ const run = async () => {
     assert.equal(fit.isWontFit, true);
   });
 
+  await test("tasks with no length do not make a trip a won't-fit", () => {
+    const fit = readTripFit({
+      ...base,
+      tasks: [
+        fitTask('a', { dueDay: dayMs(1), minutes: null }),
+        fitTask('b', { dueDay: dayMs(1), minutes: null }),
+      ],
+      range: trip(1, 2),
+      events: [],
+    });
+    assert.equal(fit.isWontFit, false);
+    assert.equal(fit.mustDoCount, 2);
+    assert.deepEqual(
+      fit.mustDoFirst.map((task) => task.isOverdue),
+      [false, false],
+    );
+  });
+
+  await test('leaving today with no calendar says so, and overdue tasks are marked', () => {
+    const fit = readTripFit({
+      ...base,
+      freeDay: () => ({ minutes: 0, busyShare: 0, hasCalendar: false }),
+      tasks: [fitTask('a', { dueDay: dayMs(-1) })],
+      range: trip(0, 2),
+      events: [],
+    });
+    assert.equal(fit.hasCalendar, false);
+    assert.equal(fit.mustDoFirst[0].isOverdue, true);
+  });
+
   await test('a deadline after the trip fits at home and does not once the days away count as full', () => {
     const project = thing('p', 'project', null, { dates: [dayMs(8)] });
     const tasks = ['a', 'b', 'c'].map((id) =>

@@ -44,7 +44,15 @@ import {
   settleCapture,
   type ExistingFact,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
-import { readFitRange } from '../../functions/src/apps/helm/nomos/fitContext.ts';
+import {
+  readContextFit,
+  readFitRange,
+} from '../../functions/src/apps/helm/nomos/fitContext.ts';
+import { maskPrivateNames } from '../../functions/src/apps/helm/privacy.ts';
+import {
+  toContextTask,
+  type MaskedName,
+} from '../../functions/src/apps/helm/nomos/unattended.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
 import {
   normalizeNomosReply,
@@ -3341,11 +3349,11 @@ test('an open task reads out how many of its questions are answered and when its
 });
 
 const FIT_TODAY = '2026-11-16';
-const fitDay = (key: string) => ({
+const fitDay = (key: string, text = key, start = 0) => ({
   id: `date:${key}`,
-  text: key,
-  start: 0,
-  end: key.length,
+  text,
+  start,
+  end: start + text.length,
   precision: null,
   due: { kind: 'day' as const, date: Date.parse(`${key}T00:00:00Z`) },
 });
@@ -3384,9 +3392,30 @@ test('a can-I-go question names the days it is about, widened to the stretch awa
   );
   assert.deepEqual(
     fitRange('Could I go from Friday to the 20th?', {
-      dates: [fitDay('2026-11-20'), fitDay('2026-11-18')],
+      dates: [
+        fitDay('2026-11-20', 'the 20th', 26),
+        fitDay('2026-11-18', 'Friday', 16),
+      ],
     }),
     { firstDay: '2026-11-18', lastDay: '2026-11-20' },
+  );
+  assert.deepEqual(
+    fitRange('Could I leave Sunday and be back Wednesday?', {
+      dates: [
+        fitDay('2026-11-18', 'Wednesday', 33),
+        fitDay('2026-11-22', 'Sunday', 14),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-25' },
+  );
+  assert.deepEqual(
+    fitRange('What do I need to get done today before leaving Sunday?', {
+      dates: [
+        fitDay('2026-11-16', 'today', 27),
+        fitDay('2026-11-22', 'Sunday', 48),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-22' },
   );
   assert.deepEqual(
     fitRange('When do you leave?', {
@@ -3395,6 +3424,17 @@ test('a can-I-go question names the days it is about, widened to the stretch awa
       dates: [fitDay('2026-11-22')],
     }),
     { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+});
+
+test('a question about a trip taken or a person leaving is not a fit turn', () => {
+  assert.equal(
+    fitRange('How was the trip?', { dates: [fitDay('2026-11-22')] }),
+    null,
+  );
+  assert.equal(
+    fitRange('When is Priya leaving?', { dates: [fitDay('2026-11-22')] }),
+    null,
   );
 });
 
@@ -3438,9 +3478,20 @@ test('the fit block carries aliases, only for tasks and projects the model is sh
     lastDay: '2026-11-24',
     events: [copy],
     fit: {
+      mustDoCount: 12,
       mustDoFirst: [
-        { id: TASK_IDS[0], dueDay: Date.UTC(2026, 10, 20), minutes: 120 },
-        { id: 'task-not-listed', dueDay: Date.UTC(2026, 10, 21), minutes: 20 },
+        {
+          id: TASK_IDS[0],
+          dueDay: Date.UTC(2026, 10, 20),
+          minutes: 120,
+          isOverdue: true,
+        },
+        {
+          id: 'task-not-listed',
+          dueDay: Date.UTC(2026, 10, 21),
+          minutes: 20,
+          isOverdue: false,
+        },
       ],
       workMinutes: 140,
       freeMinutesBefore: 61.4,
@@ -3498,8 +3549,9 @@ test('the fit block carries aliases, only for tasks and projects the model is sh
   assert.ok(block, 'a <fit> block');
   const read = JSON.parse(block[1]);
   assert.deepEqual(read.mustDoFirst, [
-    { task: 't1', due: '2026-11-20', minutes: 120 },
+    { task: 't1', due: '2026-11-20', minutes: 120, isOverdue: true },
   ]);
+  assert.equal(read.mustDoCount, 12);
   assert.deepEqual(read.wouldMove, ['e1']);
   assert.equal(read.noCalendar, true);
   assert.equal(read.wontFit, true);
@@ -3512,6 +3564,99 @@ test('the fit block carries aliases, only for tasks and projects the model is sh
     !block[0].includes('task-not-listed') && !block[0].includes('ev-fit'),
   );
   assert.ok(!buildContext(input).message.includes('<fit>'));
+});
+
+const fitProject = (id: string, privateMark: string | null) => ({
+  id,
+  get: (field: string) =>
+    ({
+      sealed: seal({ name: `Project ${id}`, privateMark }),
+      status: 'active',
+      kind: 'project',
+      targetDate: Date.UTC(2026, 10, 27),
+      milestoneState: {},
+      createdAt: 1,
+    })[field],
+});
+const fitFirestore = (projects: ReturnType<typeof fitProject>[]) =>
+  ({
+    collection: () => {
+      const query = {
+        where: () => query,
+        limit: () => query,
+        get: async () => ({ docs: projects }),
+      };
+      return query;
+    },
+  }) as never;
+const fitTask = (id: string, projectId: string) => ({
+  id,
+  get: (field: string) =>
+    ({
+      projectId,
+      due: null,
+      durationMinutes: 2000,
+    })[field],
+});
+const readFit = (
+  text: string,
+  projects: ReturnType<typeof fitProject>[],
+  dates: CaptureReading['dates'],
+) =>
+  readContextFit({
+    firestore: fitFirestore(projects),
+    uid: UID,
+    base: `apps/helm/users/${UID}`,
+    key: KEY,
+    profile: undefined,
+    taskDocs: ['plain', 'care'].flatMap((project) =>
+      [1, 2, 3].map((at) => fitTask(`${project}-${at}`, project)),
+    ) as never,
+    selfWhoId: null,
+    trips: [],
+    text,
+    answeredQuestion: null,
+    dates,
+    isQuestion: true,
+    isAppsHeld: true,
+    now: Date.UTC(2026, 10, 16, 15, 0),
+    timeZone: 'UTC',
+  });
+
+test('a fit turn naming no day asks for the days, and a care project is left out of the deadlines', async () => {
+  assert.deepEqual(await readFit("What's left before I go?", [], []), {
+    needsDays: true,
+  });
+  const found = await readFit(
+    'Could I leave Tuesday?',
+    [fitProject('plain', null), fitProject('care', 'health')],
+    [fitDay('2026-11-17', 'Tuesday', 16)],
+  );
+  assert.ok(found && 'fit' in found);
+  assert.deepEqual(
+    found.fit.deadlines.map((deadline) => deadline.name),
+    ['Project plain'],
+  );
+});
+
+test('an attended answer naming a private task is quoting something private', () => {
+  const mask = {
+    isOn: false,
+    timeZone: 'UTC',
+    names: [],
+    quoted: [] as MaskedName[],
+  };
+  toContextTask(
+    't9',
+    { privacy: 'private', due: null },
+    { title: 'Call the clinic' },
+    mask,
+  );
+  toContextTask('t8', { due: null }, { title: 'Buy milk' }, mask);
+  const quotes = (text: string) => maskPrivateNames(text, mask.quoted) !== text;
+  assert.ok(quotes('You still need to call the clinic.'));
+  assert.ok(!quotes('You still need to buy milk.'));
+  assert.equal(mask.names.length, 0);
 });
 
 const failures: string[] = [];

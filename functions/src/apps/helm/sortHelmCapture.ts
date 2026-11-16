@@ -2801,9 +2801,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             return undefined;
           })
       : undefined;
-    const fitEvents = (contextFit?.events ?? []).filter(
-      (copy) => !allSynced.some((known) => known.id === copy.id),
-    );
+    const fitEvents =
+      contextFit && 'events' in contextFit
+        ? contextFit.events.filter(
+            (copy) =>
+              contextFit.fit.wouldMove.includes(copy.id) &&
+              !allSynced.some((known) => known.id === copy.id),
+          )
+        : [];
     const contextSynced = read.isOutside
       ? filterSourcesForOutside(read.outsideReadScopes, [
           ...allSynced,

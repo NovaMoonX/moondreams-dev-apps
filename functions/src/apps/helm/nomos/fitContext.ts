@@ -36,6 +36,10 @@ export interface ContextFit extends FitRange {
   events: SyncedCopy[];
 }
 
+export interface NeedsDays {
+  needsDays: true;
+}
+
 const DAY_MS = 86_400_000;
 const MAX_RANGE_DAYS = 14;
 const LOOK_AHEAD_DAYS = 14;
@@ -45,8 +49,20 @@ const LONGEST_BUSY_MS = 12 * 3_600_000;
 const UNTIMED_BUSY_MS = 3_600_000;
 const FILL_PERCENT = 50;
 
-const FIT_CUE_RE =
-  /\b(before (i|we) (go|leave|head out)|leav(e|ing)|hit(ting)? the road|go(ing)? away|away|trip|get done|what'?s left|(can|could) (i|we) go)\b/i;
+const WEEKDAY = '(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*';
+const FIT_CUE_RE = new RegExp(
+  `\\b(before (i|we) (go|leave|head out)|leav(e|ing) (on|this|next|for|tomorrow|the \\d|${WEEKDAY})|when (do|are|will) (you|we|i) (leave|leaving)|hit(ting)? the road|go(ing)? away|(can|could) (i|we) (go|leave)|what'?s left before)\\b`,
+  'i',
+);
+const FIRST_CUE_RE =
+  /\b(?:leav\w*|go|going|head(?:ing)? out|depart\w*|from)\s+(?:on\s+|this\s+)?(?:the\s+)?$/i;
+const LAST_CUE_RE =
+  /\b(?:back|return\w*|until|till|through|thru|to)\s+(?:on\s+|by\s+)?(?:the\s+)?$/i;
+const BARE_WEEKDAY_RE = new RegExp(
+  `^\\s*(?:(?:on|this|next|coming)\\s+)?${WEEKDAY}\\s*$`,
+  'i',
+);
+const WEEK_DAYS = 7;
 
 const isFitTurn = (input: {
   text: string;
@@ -59,7 +75,7 @@ const isFitTurn = (input: {
 
 const toDayKey = (at: number) => new Date(at).toISOString().slice(0, 10);
 
-/** The days a can-I-go question is about: the days it names, widened to the away span or trip they start; with no day named, the nearest one starting within two weeks. */
+/** The days a can-I-go question is about: the days it names in the order it names them, widened to the away span or trip they start; with no day named, the nearest one starting within two weeks. */
 export function readFitRange(input: {
   text: string;
   answeredQuestion: string | null;
@@ -70,14 +86,24 @@ export function readFitRange(input: {
   isQuestion: boolean;
 }): FitRange | null {
   if (!isFitTurn(input)) return null;
-  const keys = input.dates
+  const named = input.dates
     .filter((span) => span.precision === null)
-    .map((span) =>
-      span.due.kind === 'day'
-        ? toDayKey(span.due.date)
-        : toDayKey(getLocalDay(span.due.at, toKnownZone(input.timeZone))),
-    )
-    .sort();
+    .sort((a, b) => a.start - b.start)
+    .map((span) => {
+      const before = input.text.slice(Math.max(0, span.start - 24), span.start);
+      return {
+        key:
+          span.due.kind === 'day'
+            ? toDayKey(span.due.date)
+            : toDayKey(getLocalDay(span.due.at, toKnownZone(input.timeZone))),
+        role: FIRST_CUE_RE.test(before)
+          ? 'first'
+          : LAST_CUE_RE.test(before)
+            ? 'last'
+            : null,
+        isBareWeekday: BARE_WEEKDAY_RE.test(span.text),
+      };
+    });
   const spans = [...input.away].sort((a, b) => a.from - b.from);
   const withEnd = (firstDay: string) => {
     const near = spans.find(
@@ -87,11 +113,28 @@ export function readFitRange(input: {
       ? { firstDay, lastDay: toDayKey(near.to) }
       : { firstDay, lastDay: firstDay };
   };
-  const found = ((): FitRange | null => {
-    if (keys.length >= 2) {
-      return { firstDay: keys[0], lastDay: keys[keys.length - 1] };
-    }
-    if (keys.length === 1) return withEnd(keys[0]);
+  const fromNamed = (): FitRange => {
+    const first =
+      named.find((day) => day.role === 'first') ??
+      named.find((day) => day.role !== 'last') ??
+      named[0];
+    const rest = named.filter((day) => day !== first);
+    const last =
+      rest.find((day) => day.role === 'last') ??
+      [...rest].reverse().find((day) => day.role !== 'first');
+    if (!last) return withEnd(first.key);
+    const gap = Math.round(
+      (dayKeyToMs(first.key) - dayKeyToMs(last.key)) / DAY_MS,
+    );
+    return {
+      firstDay: first.key,
+      lastDay:
+        gap > 0 && last.isBareWeekday
+          ? shiftDayKeyBy(last.key, WEEK_DAYS * Math.ceil(gap / WEEK_DAYS))
+          : last.key,
+    };
+  };
+  const fromAway = (): FitRange | null => {
     const next = spans.find(
       (span) =>
         toDayKey(span.from) >= input.todayKey &&
@@ -100,7 +143,8 @@ export function readFitRange(input: {
     return next
       ? { firstDay: toDayKey(next.from), lastDay: toDayKey(next.to) }
       : null;
-  })();
+  };
+  const found = named.length > 0 ? fromNamed() : fromAway();
   if (!found) return null;
   const firstDay =
     found.firstDay < input.todayKey ? input.todayKey : found.firstDay;
@@ -165,7 +209,7 @@ const readAway = async (
   }
 };
 
-/** What a stretch away asks of the days before it, worked out from the person's records for a can-I-go question; null when the turn is not that or names no days. Timed events block time; apps' events are read only when `isAppsHeld` is false. */
+/** What a stretch away asks of the days before it, worked out from the person's records for a can-I-go question; null when the turn is not that or names no days. Timed events block time; apps' events are read only when the turn may read apps. A fit turn that names no days returns a marker asking for them. */
 export async function readContextFit(input: {
   firestore: Firestore;
   uid: string;
@@ -182,7 +226,7 @@ export async function readContextFit(input: {
   isAppsHeld: boolean;
   now: number;
   timeZone: string;
-}): Promise<ContextFit | null> {
+}): Promise<ContextFit | NeedsDays | null> {
   const zone = toKnownZone(input.timeZone);
   const today = getLocalDay(input.now, zone);
   const todayKey = toDayKey(today);
@@ -205,7 +249,7 @@ export async function readContextFit(input: {
     timeZone: zone,
     isQuestion: input.isQuestion,
   });
-  if (!range) return null;
+  if (!range) return { needsDays: true };
   const lastRead = Math.round((dayKeyToMs(range.lastDay) - today) / DAY_MS);
   const days = Math.min(MAX_EVENT_DAYS, lastRead + 1 + LOOK_AHEAD_DAYS);
   const [events, hasCalendar, projectDocs] = await Promise.all([
@@ -234,7 +278,8 @@ export async function readContextFit(input: {
     startAt: copy.startAt as number,
     endAt: copy.endAt ?? (copy.startAt as number) + UNTIMED_BUSY_MS,
   }));
-  const freeDay = (dayKey: string): FreeDay => {
+  const freeDays = new Map<string, FreeDay>();
+  const readFreeDay = (dayKey: string): FreeDay => {
     const dayStart = zonedDateTimeToEpoch(dayKey, '00:00', zone);
     const dayEnd = zonedDateTimeToEpoch(
       shiftDayKeyBy(dayKey, 1),
@@ -261,13 +306,22 @@ export async function readContextFit(input: {
       hasCalendar: isRead,
     };
   };
+  const freeDay = (dayKey: string): FreeDay => {
+    const known = freeDays.get(dayKey);
+    if (known) return known;
+    const made = readFreeDay(dayKey);
+    freeDays.set(dayKey, made);
+    return made;
+  };
   const things = openProjects(input.key, projectDocs.docs).map(
     (project): FitThing => ({
       id: project.id,
       name: project.name,
       kind: project.kind,
       status: project.isPaused ? 'paused' : 'running',
-      isCare: false,
+      isCare:
+        project.sealed.privateMark === 'health' ||
+        project.sealed.privateMark === 'care',
       dates: [
         ...(project.targetDate === null ? [] : [project.targetDate]),
         ...Object.values(project.milestoneState).flatMap((state) =>
@@ -297,6 +351,8 @@ export async function readContextFit(input: {
     );
   const inRange = events.filter(
     (copy) =>
+      isBusy(copy) &&
+      copy.category !== 'itinerary' &&
       copy.startAt !== null &&
       dayKeyOf(copy) >= range.firstDay &&
       dayKeyOf(copy) <= range.lastDay,

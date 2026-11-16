@@ -769,20 +769,37 @@ function readQuestion(text: string, message: string) {
     ...(readBlock<ListedRecord[]>(message, 'synced_records') ?? []),
   ];
   const fit = readBlock<{
+    needsDays?: boolean;
     mustDoFirst: { task: string }[];
+    mustDoCount: number;
     wouldMove: string[];
     wontFit: boolean;
+    noCalendar: boolean;
   }>(message, 'fit');
+  if (fit?.needsDays) {
+    return toAsk({
+      shape: 'dateTime',
+      prompt: 'When are you leaving?',
+      dateMode: 'dateTime',
+    });
+  }
   if (fit) {
     const titleOf = (alias: string) =>
       records.find((record) => record.alias === alias)?.title ?? alias;
     const first = fit.mustDoFirst.map((entry) => titleOf(entry.task));
     const moved = fit.wouldMove.map(titleOf);
+    const rest = fit.mustDoCount - 2;
+    const firstTwo = first.slice(0, 2).join(' and ');
     const said = [
+      fit.wontFit
+        ? 'It will not all fit, so maybe leave later.'
+        : 'Yes, you can go.',
+      ...(fit.noCalendar
+        ? ['Your free time is a guess because no calendar is connected.']
+        : []),
       first.length > 0
-        ? `${first.length === 1 ? 'One thing' : `${first.length} things`} first: ${first.join(' and ')}.`
+        ? `${first.length === 1 ? 'One thing' : `${fit.mustDoCount} things`} first: ${firstTwo}${rest > 0 ? ` and ${rest} more` : ''}.`
         : 'Nothing has to be done first.',
-      ...(fit.wontFit ? ['It will not all fit, so maybe leave later.'] : []),
       ...(moved.length > 0 ? [`${moved.join(' and ')} would move.`] : []),
     ].join(' ');
     return toAnswer({

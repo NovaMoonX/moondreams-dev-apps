@@ -5,7 +5,7 @@ import {
   type SyncedBook,
 } from './aliases.js';
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
-import type { ContextFit } from './fitContext.js';
+import type { ContextFit, NeedsDays } from './fitContext.js';
 import type { HeardName } from './heardNames.js';
 import {
   MAX_CONTEXT_HABITS,
@@ -279,7 +279,7 @@ export interface ContextInput {
   /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
   whereabouts?: Record<string, unknown> | null;
   /** How a stretch away fits the work and the calendar, worked out by code for a can-I-go question. */
-  fit?: ContextFit | null;
+  fit?: ContextFit | NeedsDays | null;
   /** What this phone lets the assistant read of where it is. */
   abilities?: {
     location: {
@@ -477,47 +477,52 @@ export function buildContext(input: ContextInput): {
       .slice(0, MAX_CONTEXT_PROJECTS)
       .map((project) => project.name),
   );
-  const fit = input.fit
-    ? {
-        leaving: input.fit.firstDay,
-        back: input.fit.lastDay,
-        mustDoFirst: input.fit.fit.mustDoFirst.flatMap((task) =>
-          listedTaskIds.has(task.id)
-            ? [
-                {
-                  task: aliases.add(task.id),
-                  due: new Date(task.dueDay).toISOString().slice(0, 10),
-                  minutes: task.minutes,
-                },
-              ]
-            : [],
-        ),
-        workMinutes: input.fit.fit.workMinutes,
-        freeMinutesBefore: Math.round(input.fit.fit.freeMinutesBefore),
-        noCalendar: !input.fit.fit.hasCalendar,
-        wontFit: input.fit.fit.isWontFit,
-        wouldMove: input.fit.events
-          .filter(
-            (copy) =>
-              input.fit?.fit.wouldMove.includes(copy.id) &&
-              (input.synced ?? []).some((shown) => shown.id === copy.id),
-          )
-          .map((copy) => synced.add(copy)),
-        deadlines: input.fit.fit.deadlines.flatMap((deadline) =>
-          listedProjects.has(deadline.name)
-            ? [
-                {
-                  name: deadline.name,
-                  date: new Date(deadline.date).toISOString().slice(0, 10),
-                  workMinutes: deadline.workMinutes,
-                  freeMinutes: Math.round(deadline.freeMinutes),
-                  becauseAway: deadline.isBecauseAway,
-                },
-              ]
-            : [],
-        ),
-      }
-    : null;
+  const toFitBlock = (found: ContextFit) => ({
+    leaving: found.firstDay,
+    back: found.lastDay,
+    mustDoCount: found.fit.mustDoCount,
+    mustDoFirst: found.fit.mustDoFirst.flatMap((task) =>
+      listedTaskIds.has(task.id)
+        ? [
+            {
+              task: aliases.add(task.id),
+              due: new Date(task.dueDay).toISOString().slice(0, 10),
+              minutes: task.minutes,
+              isOverdue: task.isOverdue,
+            },
+          ]
+        : [],
+    ),
+    workMinutes: found.fit.workMinutes,
+    freeMinutesBefore: Math.round(found.fit.freeMinutesBefore),
+    noCalendar: !found.fit.hasCalendar,
+    wontFit: found.fit.isWontFit,
+    wouldMove: found.events
+      .filter(
+        (copy) =>
+          found.fit.wouldMove.includes(copy.id) &&
+          (input.synced ?? []).some((shown) => shown.id === copy.id),
+      )
+      .map((copy) => synced.add(copy)),
+    deadlines: found.fit.deadlines.flatMap((deadline) =>
+      listedProjects.has(deadline.name)
+        ? [
+            {
+              name: deadline.name,
+              date: new Date(deadline.date).toISOString().slice(0, 10),
+              workMinutes: deadline.workMinutes,
+              freeMinutes: Math.round(deadline.freeMinutes),
+              becauseAway: deadline.isBecauseAway,
+            },
+          ]
+        : [],
+    ),
+  });
+  const fit = !input.fit
+    ? null
+    : 'needsDays' in input.fit
+      ? { needsDays: true }
+      : toFitBlock(input.fit);
   const toRef = (task: ContextTask) => ({
     alias: aliases.add(task.id),
     title: task.title,

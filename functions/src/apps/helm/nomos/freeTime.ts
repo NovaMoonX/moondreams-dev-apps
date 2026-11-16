@@ -219,7 +219,13 @@ export function readDeadlineFit(input: FitInput): DeadlineFit[] {
 }
 
 export interface TripFit {
-  mustDoFirst: { id: string; dueDay: number; minutes: number }[];
+  mustDoFirst: {
+    id: string;
+    dueDay: number;
+    minutes: number;
+    isOverdue: boolean;
+  }[];
+  mustDoCount: number;
   workMinutes: number;
   freeMinutesBefore: number;
   hasCalendar: boolean;
@@ -237,13 +243,25 @@ export function readTripFit(
 ): TripFit {
   const { firstDay, lastDay } = input.range;
   const last = dayKeyToMs(lastDay);
-  const must = input.tasks
+  const today = todayOf(input);
+  const dueTasks = input.tasks.filter(
+    (task) => !task.isLatent && task.dueDay !== null && task.dueDay <= last,
+  );
+  const must = dueTasks
     .flatMap((task) =>
-      !task.isLatent && task.dueDay !== null && task.dueDay <= last
-        ? [{ id: task.id, dueDay: task.dueDay, minutes: minutesOf(task) }]
-        : [],
+      task.dueDay === null
+        ? []
+        : [
+            {
+              id: task.id,
+              dueDay: task.dueDay,
+              minutes: minutesOf(task),
+              isOverdue: task.dueDay < today,
+            },
+          ],
     )
     .sort((a, b) => a.dueDay - b.dueDay || a.id.localeCompare(b.id));
+  const knownCount = dueTasks.filter((task) => task.minutes !== null).length;
   const workMinutes = must.reduce((sum, task) => sum + task.minutes, 0);
   const before = readFreeThrough(
     input,
@@ -260,11 +278,16 @@ export function readTripFit(
   const home = readDeadlineFit(input);
   return {
     mustDoFirst: must.slice(0, MUST_DO_SHOWN),
+    mustDoCount: must.length,
     workMinutes,
     freeMinutesBefore: before.minutes,
-    hasCalendar: dayKeyToMs(firstDay) <= todayOf(input) || before.hasCalendar,
+    hasCalendar:
+      before.hasCalendar ||
+      (firstDay <= input.todayKey && input.freeDay(input.todayKey).hasCalendar),
     isWontFit:
-      workMinutes - before.minutes >= DEADLINE_FIT_LIMITS.deadlineSlackMinutes,
+      workMinutes - before.minutes >=
+        DEADLINE_FIT_LIMITS.deadlineSlackMinutes &&
+      knownCount >= must.length * DEADLINE_FIT_LIMITS.lengthsKnownShare,
     wouldMove: input.events
       .filter((event) => isAway(event.dayKey))
       .map((event) => event.id),
