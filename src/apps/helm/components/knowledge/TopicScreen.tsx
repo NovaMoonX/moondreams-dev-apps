@@ -191,13 +191,10 @@ function TopicScreen({
     : null;
   const historyLine =
     topic && newest && newest.version === topic.version
-      ? [
-          HELM_COPY.topicHistoryLine(
-            formatDateShort(newest.createdAt),
-            newest.changeSummary || HELM_COPY.historyReason(newest.reason),
-          ),
-          ...(newestVia ? [HELM_COPY.assistantFrom(newestVia)] : []),
-        ].join(' · ')
+      ? HELM_COPY.topicHistoryLine(
+          formatDateShort(newest.createdAt),
+          newest.changeSummary || HELM_COPY.historyReason(newest.reason),
+        )
       : null;
 
   const now = useNow(15_000);
@@ -456,10 +453,15 @@ function TopicScreen({
                   type='button'
                   variant='tertiary'
                   size='sm'
-                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  className="text-muted-foreground relative flex h-auto max-w-full min-w-0 justify-start px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
                   onClick={() => setIsHistoryOpen(true)}
                 >
-                  <span className='block truncate'>{historyLine}</span>
+                  <span className='min-w-0 truncate'>{historyLine}</span>
+                  {newestVia && (
+                    <span className='shrink-0 whitespace-pre'>
+                      {` · ${HELM_COPY.assistantFrom(newestVia)}`}
+                    </span>
+                  )}
                 </Button>
               )}
             </div>
