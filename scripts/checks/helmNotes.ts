@@ -441,6 +441,8 @@ const asOpen = (
   linkedPlaceIds: [],
   undoesExecutionId: null,
   undoneByExecutionId: null,
+  undoneDocIds: [],
+  partUndoIds: [],
   questionRef: null,
   errorCode: null,
   createdAt: 5000,

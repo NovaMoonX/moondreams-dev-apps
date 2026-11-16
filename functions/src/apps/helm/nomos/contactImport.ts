@@ -754,6 +754,8 @@ export const buildImportExecution = (input: {
   linkedPlaceIds: [],
   undoesExecutionId: null,
   undoneByExecutionId: null,
+  undoneDocIds: null,
+  partUndoIds: null,
   questionRef: null,
   errorCode: null,
   createdAt: input.now,

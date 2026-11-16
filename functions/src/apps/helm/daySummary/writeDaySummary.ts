@@ -154,7 +154,12 @@ const readTitles = (key: HelmKey, docs: { data: DocumentData }[]): string[] =>
           Array.isArray(sealed.effects)
             ? (sealed.effects as { written?: Record<string, unknown> }[])
             : [],
-          (data.effectRefs ?? []) as { op: string; collection: string }[],
+          (data.effectRefs ?? []) as {
+            op: string;
+            collection: string;
+            docId?: string;
+          }[],
+          Array.isArray(data.undoneDocIds) ? data.undoneDocIds : [],
         );
       } catch {
         return [];
@@ -276,6 +281,7 @@ export async function prepareDaySummary(
       typeof data.undoneByExecutionId === 'string'
         ? data.undoneByExecutionId
         : null,
+    undoneDocIds: Array.isArray(data.undoneDocIds) ? data.undoneDocIds : [],
     isOutside:
       (typeof data.via === 'string' && data.via !== '') ||
       outsideIds.has(String(data.captureId)),

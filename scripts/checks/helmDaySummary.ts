@@ -61,14 +61,21 @@ const capture = (patch: Partial<DayCapture>): DayCapture => ({
   questionState: {},
   ...patch,
 });
-const execution = (patch: Partial<DayExecution>): DayExecution => ({
+const execution = (
+  patch: Partial<Omit<DayExecution, 'effectRefs'>> & {
+    effectRefs?: { op: string; collection: string; docId?: string }[];
+  },
+): DayExecution => ({
   createdAt: 0,
   state: 'succeeded',
   category: 'organize',
   undoneByExecutionId: null,
+  undoneDocIds: [],
   isOutside: false,
-  effectRefs: [{ op: 'create', collection: 'tasks' }],
   ...patch,
+  effectRefs: (patch.effectRefs ?? [{ op: 'create', collection: 'tasks' }]).map(
+    (ref, index) => ({ docId: `d${index}`, ...ref }),
+  ),
 });
 
 // Counting, on a plain day in UTC.
@@ -100,6 +107,23 @@ assert.equal(
   }).messages,
   1,
   'a message counts for a lead of the day on the web; joined, outside and neighbouring days do not',
+);
+assert.deepEqual(
+  count({
+    executions: [
+      execution({
+        createdAt: at,
+        undoneDocIds: ['d0', 'd2'],
+        effectRefs: [
+          { op: 'create', collection: 'tasks' },
+          { op: 'create', collection: 'tasks' },
+          { op: 'create', collection: 'notes' },
+        ],
+      }),
+    ],
+  }),
+  counts({ tasksAdded: 1 }),
+  'a partly undone execution counts only what is left of it',
 );
 assert.equal(
   count({ captures: [capture({ createdAt: at, medium: undefined as never })] })

@@ -10,7 +10,7 @@ import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useResultLines } from '@apps/helm/hooks/useResultLines';
-import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
+import { useUndosOf } from '@apps/helm/hooks/useUndosOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { loadCaptureWords } from '@apps/helm/store/actions/activityActions';
 import {
@@ -99,7 +99,7 @@ function useAskedQuestion(execution: OpenExecution) {
 function SheetBody({ execution }: { execution: OpenExecution }) {
   const lines = useResultLines(execution);
   const asked = useAskedQuestion(execution);
-  const { undo } = useUndoOf(execution);
+  const { undos } = useUndosOf(execution);
   const { texts, answer } = useCaptureTexts(execution.captureId);
 
   return (
@@ -133,7 +133,12 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
       {lines.length > 0 && (
         <section className='space-y-1'>
           <h3 className='text-[13px] font-medium'>{HELM_COPY.sheetChanged}</h3>
-          <ResultRows execution={execution} lines={lines} undo={undo} isFlat />
+          <ResultRows
+            execution={execution}
+            lines={lines}
+            undos={undos}
+            isFlat
+          />
         </section>
       )}
     </div>
@@ -142,7 +147,7 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
 
 function SheetFoot({ execution }: { execution: OpenExecution }) {
   const lines = useResultLines(execution);
-  const { undo } = useUndoOf(execution);
+  const { latest: undo } = useUndosOf(execution);
 
   if (execution.category === 'undo') {
     return (

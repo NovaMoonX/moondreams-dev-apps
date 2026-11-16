@@ -995,6 +995,10 @@ export interface Execution {
   linkedPlaceIds: string[];
   undoesExecutionId: string | null;
   undoneByExecutionId: string | null;
+  /** Records a partial undo took back, by id; null on a document written before partial undo and on every execution not yet partly undone. */
+  undoneDocIds: string[] | null;
+  /** Every undo that took part of this execution back, oldest first; null as above. */
+  partUndoIds: string[] | null;
   questionRef: { captureId: string; questionId: string } | null;
   errorCode: string | null;
   createdAt: number;
@@ -1024,8 +1028,13 @@ export interface ExecutionSealed {
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
-export interface OpenExecution extends Omit<Execution, 'sealed'> {
+export interface OpenExecution extends Omit<
+  Execution,
+  'sealed' | 'undoneDocIds' | 'partUndoIds'
+> {
   id: string;
+  undoneDocIds: string[];
+  partUndoIds: string[];
   summary: string;
   said: string | null;
   effects: ExecutionEffect[];

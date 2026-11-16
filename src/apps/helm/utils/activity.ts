@@ -74,7 +74,16 @@ export function getTakenBackMark(
   execution: OpenExecution,
   undo: OpenExecution | null,
 ) {
-  if (execution.undoneByExecutionId === null) return null;
+  if (execution.undoneByExecutionId === null) {
+    return execution.partUndoIds.length > 0
+      ? HELM_COPY.partlyTakenBackLabel
+      : null;
+  }
+  if (execution.partUndoIds.length > 1) {
+    return undo?.goneIds?.length
+      ? HELM_COPY.partlyTakenBackLabel
+      : HELM_COPY.takenBackLabel;
+  }
   const isImport = execution.category === 'import';
   const isPartial =
     !!undo &&

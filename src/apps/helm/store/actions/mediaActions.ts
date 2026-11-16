@@ -599,6 +599,8 @@ export async function keepLetGoMedia(
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: now,

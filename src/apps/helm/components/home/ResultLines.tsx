@@ -14,7 +14,7 @@ import {
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
 import { useResultLines } from '@apps/helm/hooks/useResultLines';
-import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
+import { useUndosOf } from '@apps/helm/hooks/useUndosOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
@@ -96,7 +96,7 @@ function ResultLines({
   const { user } = useAuth();
   const card = useRef<HTMLDivElement>(null);
   const lines = useResultLines(execution);
-  const { undo } = useUndoOf(execution);
+  const { undos, latest: undo } = useUndosOf(execution);
   const isUndone = execution.undoneByExecutionId !== null;
   const hasFoot = canUndo(execution) || isUndone;
 
@@ -132,7 +132,7 @@ function ResultLines({
           )}
           {lines.length > 0 && (
             <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>
-              <ResultRows execution={execution} lines={lines} undo={undo} />
+              <ResultRows execution={execution} lines={lines} undos={undos} />
               {!isUndone && <PeopleRow execution={execution} />}
               {hasFoot && (
                 <div className='border-border flex items-baseline justify-between gap-3 border-t px-3.5 py-2'>

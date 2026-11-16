@@ -6,7 +6,7 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson } from '@apps/helm/security';
 import {
   addEarlierExecutions,
-  markExecutionUndone,
+  markExecutionPartUndone,
 } from '@apps/helm/store/helmSlice';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 
@@ -14,9 +14,10 @@ import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListene
 export async function takeBack(
   uid: string,
   executionId: string,
+  options?: Parameters<typeof undoExecution>[3],
 ): Promise<UndoResult> {
   const encryption = await getHelmEncryption(uid);
-  const result = await undoExecution(uid, encryption, executionId);
+  const result = await undoExecution(uid, encryption, executionId, options);
   if (result.kind !== 'done' || store.getState().helm.uid !== uid) {
     return result;
   }
@@ -31,9 +32,11 @@ export async function takeBack(
   // The undo's own write can push the original out of the activity window while its sheet is open.
   if (!isKept && original) store.dispatch(addEarlierExecutions([original]));
   store.dispatch(
-    markExecutionUndone({
+    markExecutionPartUndone({
       executionId,
       undoExecutionId: result.undoExecutionId,
+      undoneDocIds: result.undoneDocIds,
+      isFinal: result.isFinal,
     }),
   );
   const read = createSealedReader(encryption, openJson);

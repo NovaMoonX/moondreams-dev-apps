@@ -232,11 +232,7 @@ function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
                 <li key={execution.id}>
                   <ActivityRow
                     execution={execution}
-                    undo={
-                      execution.undoneByExecutionId
-                        ? (byId.get(execution.undoneByExecutionId) ?? null)
-                        : null
-                    }
+                    undo={byId.get(execution.partUndoIds.at(-1) ?? '') ?? null}
                     via={
                       execution.via ??
                       (execution.captureId

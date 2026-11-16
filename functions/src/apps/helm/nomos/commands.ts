@@ -100,6 +100,9 @@ export const NAME_CAP = 80;
 export const PLAN_DAY_AHEAD = 6;
 export const MAX_EFFECTS = 40;
 export const MAX_MEDIA_TARGETS = 3;
+/** Most effects a whole turn records: its commands, then the people and places they name, the home effect and a photo's keeps. The device's undo reads every one in one transaction. */
+export const MAX_EXECUTION_EFFECTS =
+  MAX_EFFECTS + MAX_MENTIONS + MAX_PLACES + 1 + MAX_MEDIA_TARGETS;
 export const MAX_MEDIA_TOPICS = 10;
 export const TITLE_CAP = 200;
 export const QUESTION_CAP = 200;
