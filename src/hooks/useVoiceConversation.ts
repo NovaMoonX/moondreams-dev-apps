@@ -6,6 +6,7 @@ import {
   clearFallback,
   removeFallback,
   reportFallback,
+  type FallbackCause,
 } from '@/lib/fallbacks/fallbacks';
 import { unlockAudio } from '@/lib/speech/audioContext';
 import {
@@ -22,7 +23,10 @@ import {
   wasMicrophoneGranted,
   watchMicrophonePermission,
 } from '@/lib/speech/microphonePermission';
-import { readSpeechEvents } from '@/lib/speech/speechDiagnostics';
+import {
+  readSpeechEvents,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import { readWakePhrase } from '@/lib/speech/speechText';
 import {
   hasSameWords,
@@ -45,6 +49,7 @@ import {
   createBrowserStt,
   type BrowserSttAdoption,
 } from '@/lib/speech/voice/browserStt';
+import { CLOUD_LISTEN_STAGES } from '@/lib/speech/voice/cloudListenStages';
 import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
 import {
   CLOUD_VOICE_FALLBACK_KEY,
@@ -196,6 +201,30 @@ const END_PHRASE_HOLD_MS = 900;
 const BARGE_CONFIRM_MS = 1500;
 const TAP_CONFIG = { lockMs: 0 };
 const BLOCKED: SttErrorCode[] = ['denied', 'service', 'no-microphone'];
+
+const toCloudListenReason = (
+  heldReason: CloudHeldReason | null,
+  stage: string,
+) => {
+  if (heldReason !== null)
+    return "today's cloud listening allowance is used up";
+  if (stage === CLOUD_LISTEN_STAGES.tokenRequest) {
+    return "the cloud listener couldn't get its token: the request failed";
+  }
+  if (stage === CLOUD_LISTEN_STAGES.tokenRefused) {
+    return "the cloud listener couldn't get its token: the server said it was unavailable";
+  }
+  if (stage === CLOUD_LISTEN_STAGES.tokenTimeout) {
+    return "the cloud listener couldn't get its token in time";
+  }
+  if (
+    stage === CLOUD_LISTEN_STAGES.microphoneOpen ||
+    stage === CLOUD_LISTEN_STAGES.microphoneCapture
+  ) {
+    return "the cloud listener couldn't use the microphone";
+  }
+  return `the cloud listener couldn't connect (${stage})`;
+};
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -476,7 +505,7 @@ export function useVoiceConversation({
     );
   };
 
-  const countCloudFailure = () => {
+  const countCloudFailure = (cause: FallbackCause) => {
     run.current.cloudFailures += 1;
     if (run.current.cloudFailures >= CLOUD_FAILURES_MAX) {
       run.current.isDeviceSticky = true;
@@ -486,6 +515,10 @@ export function useVoiceConversation({
         wanted: 'your chosen voice',
         used: "this device's voice for the rest of the conversation",
         reason: 'two lines in a row fell back or were cut short',
+        cause: {
+          stage: 'cloud voice failed twice in a row',
+          detail: `The last one, ${cause.stage}: ${cause.detail}`,
+        },
         facts: [`Failures in a row: ${run.current.cloudFailures}`],
       });
     }
@@ -844,6 +877,18 @@ export function useVoiceConversation({
       setListeningRoute(adapter.route === 'cloud' ? 'cloud' : 'device');
       adapter.start(callbacks).catch((error: unknown) => {
         console.error('Voice listening did not start', error);
+        const name = error instanceof Error ? error.name : 'Error';
+        recordSpeechEvent(`Listening did not start, ${adapter.id}: ${name}`);
+        if (adapter.route === 'cloud') {
+          reportFallback({
+            key: CLOUD_LISTEN_FALLBACK_KEY,
+            feature: 'Listening',
+            wanted: 'the cloud listener',
+            used: 'nothing, listening stopped',
+            reason: "the cloud listener couldn't start",
+            cause: { stage: CLOUD_LISTEN_STAGES.listenStart, detail: name },
+          });
+        }
         if (isCurrent()) handleError('unavailable');
       });
     };
@@ -904,7 +949,7 @@ export function useVoiceConversation({
           lang: latest.current.lang,
           source: options.source ?? null,
           getToken: cloud.tokenSource.getToken,
-          onUnavailable: (heldReason) => {
+          onUnavailable: (heldReason, cause) => {
             if (
               !isCurrent() ||
               run.current.isCancelled ||
@@ -925,13 +970,12 @@ export function useVoiceConversation({
               used: latest.current.canHearOnDevice
                 ? 'the on-device speech model'
                 : "the browser's listening",
-              reason:
-                heldReason === null
-                  ? "the cloud listener couldn't start"
-                  : "today's cloud listening allowance is used up",
+              reason: toCloudListenReason(heldReason, cause.stage),
+              cause: { stage: cause.stage, detail: cause.detail },
               facts: [
                 `Held: ${heldReason ?? 'no'}`,
                 `Online: ${navigator.onLine ? 'yes' : 'no'}`,
+                ...cause.facts,
               ],
               trace: events.length > 0 ? events.join('\n') : null,
             });

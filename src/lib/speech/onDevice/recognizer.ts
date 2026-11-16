@@ -3,6 +3,7 @@ import {
   removeFallback,
   reportFallback,
 } from '@/lib/fallbacks/fallbacks';
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import {
   ON_DEVICE_BINARY,
   ON_DEVICE_CACHE_NAME,
@@ -23,7 +24,8 @@ interface RecognitionHandlers {
   onPartial: (text: string) => void;
   onSegment: (text: string) => void;
   onFinished: (text: string) => void;
-  onFailed: () => void;
+  /** `detail` is the raw reason the recognizer gave. */
+  onFailed: (detail: string) => void;
 }
 
 /** One stretch of listening on the loaded model: 16 kHz 16-bit frames in, words out. */
@@ -60,10 +62,10 @@ export const subscribeRecognizer = (listener: () => void) => {
 
 export const getRecognizerStatus = () => store.status;
 
-const failAll = () => {
+const failAll = (detail: string) => {
   const waiting = Array.from(store.handlers.values());
   store.handlers.clear();
-  waiting.forEach((handlers) => handlers.onFailed());
+  waiting.forEach((handlers) => handlers.onFailed(detail));
 };
 
 const handleMessage = (message: FromRecognizerWorker) => {
@@ -72,7 +74,7 @@ const handleMessage = (message: FromRecognizerWorker) => {
     if (message.id === null) return;
     const handlers = store.handlers.get(message.id);
     store.handlers.delete(message.id);
-    handlers?.onFailed();
+    handlers?.onFailed(message.message);
     return;
   }
   const handlers = store.handlers.get(message.id);
@@ -90,7 +92,7 @@ export const unloadRecognizer = () => {
   store.worker?.terminate();
   store.worker = null;
   store.loading = null;
-  failAll();
+  failAll('The model was unloaded while it was listening');
   removeFallback(FALLBACK_KEY);
   removeFallback(ON_DEVICE_FALLBACK_KEYS.listen);
   setStatus('idle');
@@ -123,12 +125,10 @@ export const loadRecognizer = () => {
           wanted: 'the on-device speech model',
           used: "the browser's listening",
           reason: "it couldn't start",
-          facts: [
-            `Error: ${error.message}`,
-            `Was ready before: ${wasReady ? 'yes' : 'no'}`,
-          ],
+          cause: { stage: 'model start', detail: describeThrown(error) },
+          facts: [`Was ready before: ${wasReady ? 'yes' : 'no'}`],
         });
-        if (wasReady) failAll();
+        if (wasReady) failAll(`The model stopped: ${error.message}`);
       }
       reject(error);
     };

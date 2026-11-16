@@ -16,10 +16,10 @@ import { formatTime } from '@/utils/formatUtils';
 
 const PILL_MS = 5000;
 
-const toLine = ({ used, wanted, reason, recoveredAt }: Fallback) =>
+const toLine = ({ used, wanted, reason, cause, recoveredAt }: Fallback) =>
   recoveredAt === null
-    ? `Using ${used} instead of ${wanted}: ${reason}`
-    : `Working again. Earlier it used ${used} instead of ${wanted}: ${reason}`;
+    ? `Using ${used} instead of ${wanted}: ${reason} (${cause.stage})`
+    : `Working again. Earlier it used ${used} instead of ${wanted}: ${reason} (${cause.stage})`;
 
 const toShort = ({ used, wanted }: Fallback) => {
   const text = `${used} instead of ${wanted}`;
@@ -27,6 +27,8 @@ const toShort = ({ used, wanted }: Fallback) => {
 };
 
 const toFacts = (fallback: Fallback) => [
+  `Step: ${fallback.cause.stage}`,
+  `Error: ${fallback.cause.detail}`,
   `Feature: ${fallback.feature}`,
   `Wanted: ${fallback.wanted}`,
   `Used: ${fallback.used}`,
@@ -95,6 +97,7 @@ function FallbackTab({
         type='button'
         variant='base'
         size='sm'
+        data-fallback-tab
         aria-label={pill === null ? label : `${label}: ${toShort(pill)}`}
         className={join(
           "fixed top-1/2 left-0 z-[125] flex h-10 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-l-0 p-0 shadow-md before:absolute before:inset-y-0 before:-right-2 before:left-0 before:content-['']",
