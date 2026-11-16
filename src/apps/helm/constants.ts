@@ -1647,6 +1647,50 @@ export const HELM_COPY = {
     count === 0
       ? `No thorough looks left this month; they come back ${resetOn}.`
       : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
+  aheadStatement: (subject: string, project: string) =>
+    `Want me to look into ${subject} before ${project}?`,
+  aheadDateReason: (date: string, weeks: number, project: string) =>
+    weeks <= 1
+      ? `${project}'s date is ${date}, this week or next.`
+      : `${project}'s date is ${date}, ${weeks} weeks from now.`,
+  aheadAsk: 'Ask me a few things first',
+  aheadNotNow: 'Not now',
+  aheadNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave it."
+      : `I won't bring it up for ${weeks} weeks.`,
+  aheadActionFailed: "Couldn't save that. Check your connection.",
+  aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
+  aheadBriefLabel: "What I'll look into",
+  aheadOptional: 'Everything here is optional. Skip what you like.',
+  aheadInferred: (assistant: string, from: string) =>
+    `${assistant} inferred · ${from}`,
+  aheadMinField: 'From',
+  aheadMaxField: 'Up to',
+  aheadDepthLabel: 'How deep',
+  aheadDepthQuick: 'Quick look',
+  aheadDepthQuickLine: 'Reads a few good sources',
+  aheadDepthThorough: 'Thorough',
+  aheadDepthThoroughLine: (left: number) =>
+    `Reads more widely · about ${left} thorough ${left === 1 ? 'look' : 'looks'} left this month`,
+  aheadStartNow: 'Start now',
+  aheadStartNowLine: 'Instead of having it ready by morning',
+  aheadSend: 'Look into it',
+  aheadCancel: 'Cancel',
+  aheadSendFailed: "Couldn't send that. Check your connection and try again.",
+  aheadGone: 'This offer is no longer here.',
+  aheadArrival: {
+    fewMinutes: 'Ready in a few minutes.',
+    fiveToTen: 'Ready in about 5 to 10 minutes.',
+    byMorning: 'Ready by morning.',
+  },
+  aheadSent: (subject: string, arrival: string) =>
+    `Looking into ${subject}. ${arrival}`,
+  aheadLooking: (subject: string, arrival: string) =>
+    `Looking into ${subject} · ${arrival.replace(/\.$/, '')}`,
+  aheadTold: (subject: string) => `Looked into ${subject} for you.`,
+  aheadOpenIt: 'Open it',
+  aheadToldDismiss: 'Dismiss',
   learnLaterRow: (count: number) =>
     count === 0 ? 'Learn later' : `Learn later · ${count}`,
   learnLaterTitle: 'Learn later',

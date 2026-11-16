@@ -99,7 +99,11 @@ import {
   MAX_MOMENTS_PER_WHO,
 } from './nomos/commands.js';
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
-import { readActiveProjectsIn, readContextProjects } from './projectStore.js';
+import {
+  readActiveProjectsIn,
+  readContextProjects,
+  readProjectOffers,
+} from './projectStore.js';
 import {
   openTopicRecord,
   readContextTopics,
@@ -308,7 +312,13 @@ import {
   readUsageDoc,
   toAllowanceMirror,
 } from './nomos/planResearch.js';
-import { planLearnLater } from './nomos/planLearnLater.js';
+import { nextNight, planLearnLater } from './nomos/planLearnLater.js';
+import {
+  planAheadStart,
+  readAheadAsk,
+  readAheadStart,
+  type AheadStart,
+} from './nomos/planResearchAhead.js';
 import {
   readContextLearnLater,
   readLearnItemsIn,
@@ -329,6 +339,7 @@ import {
 import {
   isScheduledCapture,
   narrowReply,
+  readAheadLoop,
   readHeldLoop,
 } from './scheduledActions/scheduledTurn.js';
 import {
@@ -506,6 +517,8 @@ export interface CaptureDoc {
   medium?: 'web' | 'mcp';
   via?: string | null;
   arrivedVia: string | null;
+  /** A yes on a research offer: where the offer is and how it starts; read by code, never from the words. */
+  aheadOffer?: unknown;
   scheduledActionId: string | null;
   heldCommands: unknown;
   allowedKinds: unknown;
@@ -2210,6 +2223,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       scheduleCommands: [],
       scheduleDropped: [],
       researchCommands: [],
+      aheadStart: null,
       learnCommands: [],
       learnAsks: [],
       isMidTask: false,
@@ -3042,7 +3056,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       });
       return { handedOver, value: loop };
     };
-    const heldLoop = readHeldLoop(capture);
+    const heldLoop = readHeldLoop(capture) ?? readAheadLoop(capture);
     const routed = heldLoop
       ? { value: heldLoop, route: 'quick' as const, aborted: false }
       : await runRouted({
@@ -3371,6 +3385,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     scheduleCommands: keeps ? reply.scheduleCommands : [],
     scheduleDropped: keeps ? reply.scheduleDropped : [],
     researchCommands: keeps ? reply.researchCommands : [],
+    aheadStart: readAheadStart(claimed.capture),
     learnCommands: keeps ? reply.learnCommands : [],
     learnAsks: keeps ? reply.learnAsks : [],
     isMidTask: isRunOpen || answerTurn !== null,
@@ -3590,6 +3605,7 @@ async function writeResult(
     scheduleCommands: ScheduleCommand[];
     scheduleDropped: ScheduleDrop[];
     researchCommands: ResearchCommand[];
+    aheadStart: AheadStart | null;
     learnCommands: LearnCommand[];
     learnAsks: LearnAsk[];
     /** A run is open or the turn answers a question, so a question about two saved items would interrupt. */
@@ -3652,6 +3668,7 @@ async function writeResult(
     scheduleCommands,
     scheduleDropped,
     researchCommands,
+    aheadStart,
     learnCommands,
     learnAsks,
     isMidTask,
@@ -3866,6 +3883,7 @@ async function writeResult(
       whereabouts.length > 0 ||
       scheduleCommands.length > 0 ||
       researchCommands.length > 0 ||
+      aheadStart !== null ||
       learnCommands.length > 0 ||
       observations.length > 0 ||
       offerAbility !== null
@@ -4698,8 +4716,9 @@ async function writeResult(
         ? await transaction.get(firestore.doc(`${base}/who/${selfWhoId}`))
         : null;
     const researchTimeZone = String(profileSnap?.get('timeZone') ?? timeZone);
+    const keptAhead = isStale ? null : aheadStart;
     const researchUsage =
-      researchCommands.length > 0 && !isStale
+      (researchCommands.length > 0 || keptAhead !== null) && !isStale
         ? await readUsageIn(
             transaction,
             firestore,
@@ -4738,7 +4757,7 @@ async function writeResult(
       ),
     });
     const keptResearch = isStale ? [] : researchCommands;
-    const researchPlan = planResearch({
+    const askedResearch = planResearch({
       commands: keptResearch,
       profileDepth:
         profileSnap?.get('researchDepth') === 'thorough' ||
@@ -4765,6 +4784,47 @@ async function writeResult(
           schedulePlan.effects.length,
       ),
     });
+    const aheadProjectSnap = keptAhead
+      ? await transaction.get(
+          firestore.doc(`${base}/projects/${keptAhead.projectId}`),
+        )
+      : null;
+    const aheadWords = aheadProjectSnap?.exists
+      ? openSealed(key, aheadProjectSnap.get('sealed'))
+      : null;
+    const aheadPlan = keptAhead
+      ? planAheadStart({
+          start: keptAhead,
+          project: aheadWords
+            ? {
+                offers: readProjectOffers(
+                  aheadProjectSnap?.get('researchOffers'),
+                ),
+                ask: readAheadAsk(
+                  aheadWords,
+                  keptAhead.offerId,
+                  keptAhead.depth,
+                ),
+              }
+            : null,
+          usage: askedResearch.usage ?? researchUsage,
+          timeZone: researchTimeZone,
+          now,
+          nextNight: nextNight(now, researchTimeZone),
+          captureId: captureRef.id,
+          newId: () => crypto.randomUUID(),
+          seal,
+        })
+      : null;
+    const researchPlan = {
+      ...askedResearch,
+      creates: [
+        ...askedResearch.creates,
+        ...(aheadPlan?.create ? [aheadPlan.create] : []),
+      ],
+      lines: [...askedResearch.lines, ...(aheadPlan ? [aheadPlan.line] : [])],
+      usage: aheadPlan?.usage ?? askedResearch.usage,
+    };
     const keptLearn = isStale ? [] : learnCommands;
     const learnItems =
       keptLearn.length > 0
@@ -4882,7 +4942,8 @@ async function writeResult(
           ],
         }
       : withHome;
-    const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
+    const isFiling =
+      plan.effects.length > 0 || plan.lines.length > 0 || aheadPlan !== null;
     if (
       !isFiling &&
       commands.length > 0 &&
@@ -5188,6 +5249,11 @@ async function writeResult(
       researchPlan.creates.forEach(({ id, doc }) =>
         transaction.create(firestore.doc(`${base}/research/${id}`), doc),
       );
+      if (keptAhead && aheadPlan?.offers)
+        transaction.update(
+          firestore.doc(`${base}/projects/${keptAhead.projectId}`),
+          { researchOffers: aheadPlan.offers },
+        );
       learnPlan.creates.forEach(({ id, doc }) =>
         transaction.create(firestore.doc(`${base}/research/${id}`), doc),
       );
@@ -5274,6 +5340,7 @@ async function writeResult(
           { ...plan, questions },
           {
             extraLines: [
+              ...plan.offerLines,
               ...soundsPlan.lines,
               ...wherePlan.lines,
               ...contactPlan.lines,
@@ -5290,6 +5357,7 @@ async function writeResult(
               plan.questions,
               questions,
               plan.lines,
+              plan.offerLines,
               habitPlan.lines,
               importancePlan.lines,
               schedulePlan.lines,

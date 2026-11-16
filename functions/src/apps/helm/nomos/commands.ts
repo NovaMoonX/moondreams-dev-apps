@@ -6,6 +6,7 @@ import {
   TURN_INTENTS,
 } from './actNow.js';
 import { OBSERVATION_TAGS } from './said.js';
+import { LEAD_QUESTIONS_MAX, type LeadQuestion } from './researchAhead.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 import { toPlainText } from '../../../vendor/speechText.js';
@@ -71,6 +72,7 @@ export const COMMAND_KINDS = [
   'createProject',
   'setProjectRole',
   'addMilestone',
+  'offerResearch',
   'createNote',
   'setPrivate',
 ] as const;
@@ -791,8 +793,36 @@ export interface AddMilestoneCommand {
   date: number | null;
 }
 
+export const OFFER_SUBJECT_CAP = 60;
+export const OFFER_QUESTION_CAP = 300;
+export const OFFER_WHY_CAP = 120;
+export const OFFER_LABEL_CAP = 40;
+export const OFFER_OPTION_CAP = 40;
+export const OFFER_OPTIONS_MAX = 8;
+export const OFFER_FROM_CAP = 60;
+export const OFFER_PREFILL_CAP = 200;
+export const MAX_OFFERS_PER_TURN = 2;
+
+/** A question the offer will ask before looking, as the model wrote it; code gives it its id. */
+export type OfferQuestionInput = Omit<LeadQuestion, 'id'>;
+
+/** Research to offer ahead of a project's date, from the project's date and what needs finding out first; the offer's words are sealed on the project. */
+export interface OfferResearchCommand {
+  kind: 'offerResearch';
+  projectRef: string;
+  subject: string;
+  question: string;
+  whyNow: string | null;
+  leadDays: number;
+  isDecision: boolean;
+  questions: OfferQuestionInput[];
+}
+
 export type ProjectCommand =
-  CreateProjectCommand | SetProjectRoleCommand | AddMilestoneCommand;
+  | CreateProjectCommand
+  | SetProjectRoleCommand
+  | AddMilestoneCommand
+  | OfferResearchCommand;
 
 /** Something general to remember that is about no person, pet, place or project, its topics settled to ids of ones the person already has. */
 export interface CreateNoteCommand {
@@ -1260,6 +1290,12 @@ export const buildFileResultsTool = ({
             'undoLines',
             'undoReason',
             'undoQuote',
+            'offerSubject',
+            'offerQuestion',
+            'offerWhyNow',
+            'offerLeadDays',
+            'offerIsDecision',
+            'offerQuestions',
             'researchQuestion',
             'researchSubject',
             'researchDepth',
@@ -1544,7 +1580,7 @@ export const buildFileResultsTool = ({
             ),
             projectRef: nullable(
               'string',
-              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. startRun: the name of the project from <open_projects> the run is for, only when the person names it and no trip or event. null otherwise.',
+              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole, addMilestone and offerResearch: the name of the project. startRun: the name of the project from <open_projects> the run is for, only when the person names it and no trip or event. null otherwise.',
             ),
             projectEmoji: nullable(
               'string',
@@ -1999,6 +2035,73 @@ export const buildFileResultsTool = ({
               'string',
               `offerUndo: the words from THIS capture that show the reason, copied exactly, at most ${UNDO_QUOTE_CAP} characters; null when no words do.`,
             ),
+            offerSubject: nullable(
+              'string',
+              `offerResearch: two to five words naming what to look into ("apartments", "Lisbon bookings"), at most ${OFFER_SUBJECT_CAP} characters; null for every other kind.`,
+            ),
+            offerQuestion: nullable(
+              'string',
+              `offerResearch: what to find out, self-contained, at most ${OFFER_QUESTION_CAP} characters; null for every other kind.`,
+            ),
+            offerWhyNow: nullable(
+              'string',
+              `offerResearch: one line on why it helps now ("Nothing in Move yet says what you're looking for."), at most ${OFFER_WHY_CAP} characters; null when there is none.`,
+            ),
+            offerLeadDays: {
+              type: ['integer', 'null'],
+              description:
+                "offerResearch: how many days before the project's date to offer it, by the kind of work (a home search 56 to 105, a trip's bookings about 42, a gift about 21); null for every other kind.",
+            },
+            offerIsDecision: nullable(
+              'boolean',
+              'offerResearch: true when the answer feeds a choice with money or a date; false otherwise; null for every other kind.',
+            ),
+            offerQuestions: {
+              type: ['array', 'null'],
+              description: `offerResearch: what you would need to know first, at most ${LEAD_QUESTIONS_MAX}; null for every other kind.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: [
+                  'label',
+                  'shape',
+                  'options',
+                  'prefill',
+                  'from',
+                  'isInferred',
+                ],
+                properties: {
+                  label: {
+                    type: 'string',
+                    description: `The question as a short label, at most ${OFFER_LABEL_CAP} characters ("Where", "Rent a month").`,
+                  },
+                  shape: {
+                    type: 'string',
+                    enum: ['text', 'pickOne', 'pickMany', 'amountRange'],
+                  },
+                  options: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: `pickOne and pickMany only, at most ${OFFER_OPTIONS_MAX} of at most ${OFFER_OPTION_CAP} characters; [] otherwise.`,
+                  },
+                  prefill: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                      'What the person already said: the chosen options, the text, or "min-max" in cents for an amountRange (a bound may be empty); [] when they said nothing.',
+                  },
+                  from: nullable(
+                    'string',
+                    `Where the prefill came from ("What you said today"), at most ${OFFER_FROM_CAP} characters; null when nothing was filled.`,
+                  ),
+                  isInferred: {
+                    type: 'boolean',
+                    description:
+                      'true when the prefill is your inference, not something the person said.',
+                  },
+                },
+              },
+            },
             researchQuestion: nullable(
               'string',
               `research: what to look up on the web, in the person's words made self-contained, at most ${RESEARCH_QUESTION_CAP} characters; never a name or detail from their records unless they said it in this capture; null for every other kind.`,

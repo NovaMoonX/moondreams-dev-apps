@@ -636,6 +636,7 @@ async function buildBackToBack(input: {
         ttsProvider: null,
         arrivedVia: 'direct',
         scheduledActionId: null,
+        aheadOffer: null,
         disposition: null,
         noticedCount: null,
         medium: 'web',
@@ -1006,6 +1007,7 @@ async function buildGmailTurn(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     medium: 'web',
@@ -1166,6 +1168,7 @@ async function buildAnswerTurns(input: {
         ttsProvider: null,
         arrivedVia: 'direct',
         scheduledActionId: null,
+        aheadOffer: null,
         disposition: null,
         noticedCount: null,
         medium: 'web',
@@ -1744,10 +1747,13 @@ async function buildProjects(input: {
       | 'kind'
       | 'pausedAt'
       | 'pausedUntil'
+      | 'researchOffers'
     > &
-      Partial<Pick<Project, 'kind' | 'pausedAt' | 'pausedUntil'>>,
-    words: Omit<ProjectSealed, 'why' | 'importance'> &
-      Partial<Pick<ProjectSealed, 'why' | 'importance'>>,
+      Partial<
+        Pick<Project, 'kind' | 'pausedAt' | 'pausedUntil' | 'researchOffers'>
+      >,
+    words: Omit<ProjectSealed, 'why' | 'importance' | 'aheadAsks'> &
+      Partial<Pick<ProjectSealed, 'why' | 'importance' | 'aheadAsks'>>,
     milestoneState: Project['milestoneState'] = {},
   ): Promise<{ id: string; project: Project }> => ({
     id,
@@ -1756,6 +1762,7 @@ async function buildProjects(input: {
       kind: 'project',
       pausedAt: null,
       pausedUntil: null,
+      researchOffers: [],
       ...fields,
       milestoneState,
       mediaIds: [],
@@ -1765,6 +1772,7 @@ async function buildProjects(input: {
       sealed: await seal<ProjectSealed>({
         why: null,
         importance: null,
+        aheadAsks: null,
         ...words,
       }),
     },
@@ -1953,6 +1961,88 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+      },
+    ),
+    projectOf(
+      'seed-project-new-place',
+      {
+        targetDate: today + 15 * 7 * DAY_MS,
+        status: 'active',
+        whoRoles: {},
+        createdAt: now - 12 * DAY_MS,
+        finishedAt: null,
+        researchOffers: [
+          {
+            id: 'seed-ahead-apartments',
+            leadDays: 105,
+            offerOn: today,
+            state: 'waiting',
+            declineCount: 0,
+            nextEligibleOn: null,
+            shownOn: null,
+            researchId: null,
+            toldAt: null,
+            createdAt: now - 2 * DAY_MS,
+          },
+        ],
+      },
+      {
+        name: 'New place',
+        emoji: '🏡',
+        objective: null,
+        milestones: {},
+        roleNotes: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+        aheadAsks: {
+          'seed-ahead-apartments': {
+            subject: 'apartments',
+            question:
+              'What neighborhoods, sizes and rents fit what you want in a new place?',
+            whyNow: "Nothing in New place yet says what you're looking for.",
+            isDecision: true,
+            questions: [
+              {
+                id: 'where',
+                label: 'Where',
+                shape: 'pickMany',
+                options: ['Ballard', 'Fremont', 'Greenwood'],
+                prefill: ['Ballard', 'Fremont'],
+                from: 'From what you said · Nov 10',
+                isInferred: false,
+              },
+              {
+                id: 'bedrooms',
+                label: 'Bedrooms',
+                shape: 'pickOne',
+                options: ['1', '2', '3+'],
+                prefill: ['2'],
+                from: null,
+                isInferred: false,
+              },
+              {
+                id: 'mustHave',
+                label: 'Must have',
+                shape: 'pickMany',
+                options: ['Pets', 'In-unit laundry', 'Parking'],
+                prefill: ['Pets'],
+                from: 'Inferred · Miso and Pepper',
+                isInferred: true,
+              },
+              {
+                id: 'rent',
+                label: 'Rent a month',
+                shape: 'amountRange',
+                options: [],
+                prefill: ['220000-280000'],
+                from: null,
+                isInferred: false,
+              },
+            ],
+            answers: null,
+            brief: null,
+          },
+        },
       },
     ),
     projectOf(
@@ -2253,6 +2343,8 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     videosFetchedAt: null,
     prepareFailedAt: null,
     resultNoteId: null,
+    aheadOfferId: null,
+    resultTopicId: null,
     removedAt: null,
   };
   const noLearn = { moreAsked: [], videos: [], searchQuery: null, contextLine: null };
@@ -2531,6 +2623,8 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
       videosFetchedAt: null,
       prepareFailedAt: null,
       resultNoteId: null,
+      aheadOfferId: null,
+      resultTopicId: null,
       removedAt: null,
       ...fields,
       sealed: await sealJson<ResearchSealed>(
@@ -2588,6 +2682,146 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
       },
     ),
   ]);
+}
+
+/** Jamie's 🌱 Garden project with one offer already taken: its look into raised beds is ready with a topic filed, and Jamie has not been told yet, so the project page shows "Looked into raised beds for you." with Open it. */
+async function buildPartnerAhead(input: { now: number; encryption: HelmEncryption }) {
+  const { now, encryption } = input;
+  const today = getSeedToday(now);
+  const project = {
+    kind: 'project' as const,
+    targetDate: today + 40 * DAY_MS,
+    status: 'active' as const,
+    pausedAt: null,
+    pausedUntil: null,
+    milestoneState: {},
+    whoRoles: {},
+    mediaIds: [],
+    createdBy: 'person' as const,
+    executionId: null,
+    privacy: 'ordinary' as const,
+    createdAt: now - 20 * DAY_MS,
+    lastEditedAt: null,
+    finishedAt: null,
+    researchOffers: [
+      {
+        id: 'seed-ahead-raised-beds',
+        leadDays: 35,
+        offerOn: today + 5 * DAY_MS,
+        state: 'taken' as const,
+        declineCount: 0,
+        nextEligibleOn: null,
+        shownOn: null,
+        researchId: 'seed-research-jamie-raised-beds',
+        toldAt: null,
+        createdAt: now - 6 * DAY_MS,
+      },
+    ],
+    sealed: await sealJson<ProjectSealed>(
+      {
+        name: 'Garden',
+        emoji: '🌱',
+        objective: null,
+        milestones: {},
+        roleNotes: {},
+        why: null,
+        importance: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+        aheadAsks: {
+          'seed-ahead-raised-beds': {
+            subject: 'raised beds',
+            question: 'What size and soil suit a first raised bed?',
+            whyNow: null,
+            isDecision: false,
+            questions: [],
+            answers: {},
+            brief: 'Raised beds; quick look.',
+          },
+        },
+      },
+      encryption,
+    ),
+  };
+  const research = {
+    mode: 'leadTime' as const,
+    captureId: null,
+    projectId: 'seed-project-jamie-garden',
+    depth: 'light' as const,
+    isWithoutWeb: false,
+    reservedCents: 0,
+    searchesUsed: 3,
+    costCents: 11,
+    rerunOn: null,
+    cancelledAt: null,
+    lastEditedAt: null,
+    prepareAt: null,
+    needsLiveFacts: false,
+    notNowStreak: 0,
+    prepareFailures: 0,
+    declineReason: null,
+    offeredOn: null,
+    offers: [],
+    relatedOfferedAt: {},
+    mergedInto: null,
+    videosFetchedAt: null,
+    prepareFailedAt: null,
+    resultNoteId: null,
+    aheadOfferId: 'seed-ahead-raised-beds',
+    resultTopicId: 'seed-topic-jamie-raised-beds',
+    removedAt: null,
+    status: 'ready' as const,
+    preparedAt: now - 3_600_000,
+    startedAt: now - 2 * 3_600_000,
+    createdAt: now - 5 * DAY_MS,
+    sealed: await sealJson<ResearchSealed>(
+      {
+        question: 'What size and soil suit a first raised bed?',
+        subject: 'raised beds',
+        overview: {
+          summary:
+            'A first raised bed works well at about 4 by 8 feet and 10 to 12 inches deep, filled with a mix of topsoil and compost.',
+          sections: [],
+          comparison: null,
+          form: 'points',
+        },
+        sources: [],
+        moreAsked: [],
+        videos: [],
+        searchQuery: null,
+        contextLine: null,
+      },
+      encryption,
+    ),
+  };
+  const topic = {
+    privacy: 'ordinary' as const,
+    parentId: null,
+    depth: 1 as const,
+    projectIds: ['seed-project-jamie-garden'],
+    version: 0,
+    docState: 'empty' as const,
+    pendingNoteIds: [],
+    writeClaim: null,
+    overviewOf: {},
+    createdBy: 'nomos' as const,
+    executionId: null,
+    createdAt: now - 3_600_000,
+    lastEditedAt: null,
+    lastWrittenAt: null,
+    sealed: await sealJson<TopicSealed>(
+      {
+        name: 'Raised beds',
+        emoji: '🌱',
+        overview: null,
+        sections: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
+      encryption,
+    ),
+  };
+  return { project, research, topic };
 }
 
 /** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private) and 🧘 Stretch (a morning window left unticked today, so "Window ended" shows once it has passed). */
@@ -2792,6 +3026,7 @@ async function buildNoteTurn(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     medium: 'web',
@@ -3503,6 +3738,7 @@ async function buildKnowledge(input: {
     ttsProvider: null,
     arrivedVia: 'direct' as const,
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     medium: 'web' as const,
@@ -4312,6 +4548,7 @@ async function buildPhotoTurns(input: {
       ttsProvider: null,
       arrivedVia: 'direct',
       scheduledActionId: null,
+      aheadOffer: null,
       disposition: null,
       noticedCount: null,
       medium: 'web',
@@ -4634,6 +4871,7 @@ async function buildFileTurns(input: {
       ttsProvider: null,
       arrivedVia: 'direct',
       scheduledActionId: null,
+      aheadOffer: null,
       disposition: null,
       noticedCount: null,
       medium: 'web',
@@ -5657,6 +5895,7 @@ async function buildPeople(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     medium: 'web',
@@ -5751,6 +5990,7 @@ async function buildPeople(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     medium: 'web',
@@ -5827,6 +6067,7 @@ async function buildPeople(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     medium: 'web',
@@ -5874,6 +6115,7 @@ async function buildPeople(input: {
     ...capture,
     arrivedVia: 'dropBox',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     noticedCount: null,
     sessionId: 'seed-alex-facts',
@@ -6640,6 +6882,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               ttsProvider: spoken === undefined ? null : 'natural',
               arrivedVia: 'direct',
               scheduledActionId: null,
+              aheadOffer: null,
               disposition: null,
               noticedCount: null,
               medium: 'web',
@@ -7280,6 +7523,25 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         if (partnerLearn) {
           partnerLearn.forEach((entry) =>
             batch.set(person.collection('research').doc(entry.id), entry.doc),
+          );
+        }
+        const partnerAhead = people
+          ? null
+          : await buildPartnerAhead({ now: context.now, encryption });
+        if (partnerAhead) {
+          batch.set(
+            person.collection('projects').doc('seed-project-jamie-garden'),
+            partnerAhead.project,
+          );
+          batch.set(
+            person
+              .collection('research')
+              .doc('seed-research-jamie-raised-beds'),
+            partnerAhead.research,
+          );
+          batch.set(
+            person.collection('topics').doc('seed-topic-jamie-raised-beds'),
+            partnerAhead.topic,
           );
         }
         const learning = people

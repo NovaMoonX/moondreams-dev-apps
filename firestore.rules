@@ -290,11 +290,11 @@ service cloud.firestore {
         && (request.resource.data.staleAt == null || request.resource.data.staleAt is int);
     }
 
-    // A research item is made, run and settled by the server; the owner reads it and may only stop it while it is asking or preparing (status to dismissed, with when) so the server gives back what it held. A learn-later item also takes the owner's answers (see below).
+    // A research item is made, run and settled by the server; the owner reads it and may only stop it while it is asking, preparing or planned for its night (status to dismissed, with when) so the server gives back what it held. A learn-later item also takes the owner's answers (see below).
     match /apps/helm/users/{uid}/research/{researchId} {
       allow read: if isHelmOwner(uid);
       allow update: if isHelmOwner(uid)
-        && resource.data.status in ['asking', 'preparing']
+        && resource.data.status in ['asking', 'preparing', 'planned']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'lastEditedAt'])
         && request.resource.data.status == 'dismissed'
         && (request.resource.data.cancelledAt == null || request.resource.data.cancelledAt is int)

@@ -1044,6 +1044,7 @@ const projectSealed = (
   importance: null,
   privateMark: null,
   isPrivacyCleared: false,
+  aheadAsks: null,
 });
 
 test('a project the turn made is deleted by its undo, and says projects', () => {

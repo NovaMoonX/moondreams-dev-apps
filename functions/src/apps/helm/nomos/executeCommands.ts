@@ -616,6 +616,8 @@ export interface WritePlan {
   keyDateDeletes: string[];
   projectCreates: { id: string; data: Record<string, unknown> }[];
   projectUpdates: { id: string; data: Record<string, unknown> }[];
+  /** What each research offer this turn adds says, for the summary. */
+  offerLines: string[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
   /** Photos kept by this turn, and photos let go for a day. */
   mediaKept: { id: string; data: Record<string, unknown> }[];
@@ -1450,6 +1452,9 @@ export function planWrites(input: PlanInput): WritePlan {
     ),
     milestones: projectCommands.flatMap((command) =>
       command.kind === 'addMilestone' ? [command] : [],
+    ),
+    offers: projectCommands.flatMap((command) =>
+      command.kind === 'offerResearch' ? [command] : [],
     ),
     newId: input.newId,
     taskWho: [...drafts.values()].map((draft) => ({
@@ -2586,6 +2591,7 @@ export function planWrites(input: PlanInput): WritePlan {
     keyDateDeletes: keyDatePlan.deletes,
     projectCreates: projectPlan.creates,
     projectUpdates: projectPlan.updates,
+    offerLines: projectPlan.offerLines,
     noteCreates: [
       ...noteSteps.creates,
       ...knowledge.imports.map((made) => ({

@@ -652,6 +652,8 @@ test('a task made under a private project is stored private from the start, one 
     roleNotes: {},
     milestoneState: {},
     milestoneTitles: {},
+    targetDate: null,
+    researchOffers: [],
     sealed: { name, privateMark: mark, isPrivacyCleared: false },
   });
   const made = (projectRef: string) =>

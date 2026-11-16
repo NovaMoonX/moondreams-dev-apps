@@ -150,6 +150,7 @@ import {
 } from '../goalWhy.js';
 import { readConnectionCommands } from './readConnectionCommands.js';
 import { readResearchCommands } from './readResearchCommands.js';
+import { readOfferResearch } from './readOfferResearch.js';
 import { readLearnCommands, refuseDoubledGoals } from './readLearnCommands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
@@ -746,6 +747,7 @@ const readProjects = (
     ...read
       .filter((command) => command.kind === 'addMilestone')
       .slice(0, MAX_MILESTONES_PER_TURN),
+    ...readOfferResearch(items),
   ];
 };
 
@@ -1180,6 +1182,7 @@ const readCommand = (
     kind === 'createProject' ||
     kind === 'setProjectRole' ||
     kind === 'addMilestone' ||
+    kind === 'offerResearch' ||
     kind === 'createNote'
   ) {
     return null;

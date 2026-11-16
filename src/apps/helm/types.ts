@@ -4,6 +4,11 @@ import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { ImportancePlace } from '@apps/helm/engine/importance';
 import type { ObservationTag } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
+import type {
+  AheadOfferMeta,
+  LeadAnswer,
+  LeadQuestion,
+} from '@apps/helm/engine/researchAhead';
 import type { ContactPoint } from '@apps/helm/engine/contactPoints';
 import type {
   ConnectionKind,
@@ -404,9 +409,16 @@ export interface Capture {
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
-  arrivedVia: 'direct' | 'dropBox' | 'scheduled';
+  arrivedVia: 'direct' | 'dropBox' | 'scheduled' | 'researchAhead';
   /** The scheduled action a run's turn was made for; null on any other turn. */
   scheduledActionId: string | null;
+  /** The offer ahead of a project this turn answers (its sealed text is the brief); the server turns it into the research. Null on any other turn and on one made before the field. */
+  aheadOffer: {
+    projectId: string;
+    offerId: string;
+    depth: 'light' | 'thorough';
+    when: 'now' | 'later';
+  } | null;
   /** Whether the turn acted, was only noted, or answered a question; null on a turn from before. */
   disposition: CaptureDisposition | null;
   /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
@@ -953,7 +965,26 @@ export interface Project {
   finishedAt: number | null;
   /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
   privacy: PrivacyClass | null;
+  /** Research offered ahead of the date (at most 3); absent on a project from before the field, read as none. Their words are in `sealed.aheadAsks`. */
+  researchOffers: AheadOfferMeta[];
   sealed: Sealed;
+}
+
+/** The words of one research offer ahead of a project's date. */
+export interface AheadAsk {
+  /** "apartments", at most 60 characters. */
+  subject: string;
+  /** What to find out, at most 300 characters. */
+  question: string;
+  /** The model's reason it helps now ("Nothing in Move yet says what you're looking for."), at most 120 characters. */
+  whyNow: string | null;
+  /** Whether the answer feeds a decision with money or a date, so the sheet asks how deep. */
+  isDecision: boolean;
+  /** At most 5. */
+  questions: LeadQuestion[];
+  /** Set when the person sends it. */
+  answers: Record<string, LeadAnswer> | null;
+  brief: string | null;
 }
 
 export interface ProjectSealed {
@@ -971,6 +1002,8 @@ export interface ProjectSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** offer id to its words; absent in a payload sealed before the field. */
+  aheadAsks: Record<string, AheadAsk> | null;
 }
 
 export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
@@ -2108,6 +2141,10 @@ export interface Research {
   searchQuery: string | null;
   /** Where the wish came up, such as "while planning the Leavenworth drive"; at most 60 characters. */
   contextLine: string | null;
+  /** Ahead of a project: the offer on the project that started it. */
+  aheadOfferId: string | null;
+  /** Ahead of a project: the topic the finished look was filed as. */
+  resultTopicId: string | null;
 }
 
 export type LearnDeclineReason = 'timing' | 'lostInterest' | 'changedMind';

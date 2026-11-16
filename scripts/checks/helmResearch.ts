@@ -69,6 +69,29 @@ import {
 } from '../../src/apps/helm/engine/learnLater.ts';
 import type { OpenExecution } from '../../src/apps/helm/types.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
+import {
+  AHEAD_BACKOFF_WEEKS,
+  RESEARCH_OFFERS_PER_PROJECT,
+  applyAheadNotNow,
+  buildAheadBrief,
+  computeOfferOn,
+  isAheadOfferDue,
+  pickAheadOffer,
+  rewriteOfferDays,
+  type AheadOfferMeta,
+  type LeadQuestion,
+} from '../../src/apps/helm/engine/researchAhead.ts';
+import {
+  planAheadStart,
+  planOfferResearch,
+  readAheadAsk,
+  readAheadStart,
+  type OfferTarget,
+} from '../../functions/src/apps/helm/nomos/planResearchAhead.ts';
+import { readOfferResearch } from '../../functions/src/apps/helm/nomos/readOfferResearch.ts';
+import { planProjectRoles } from '../../functions/src/apps/helm/nomos/planProjects.ts';
+import { buildResultTopic } from '../../functions/src/apps/helm/research/buildResultTopic.ts';
+import { planNightStart } from '../../functions/src/apps/helm/research/learnLaterPass.ts';
 
 const NOW = Date.UTC(2026, 10, 16, 12, 0);
 const NY = 'America/New_York';
@@ -1910,6 +1933,622 @@ test('learn offers: shown today first, never offered before offered, longest ago
     ),
     [],
   );
+});
+
+const DAY = 86_400_000;
+const MOVE = Date.UTC(2027, 2, 1);
+const TODAY = Date.UTC(2026, 10, 16);
+const meta = (over: Partial<AheadOfferMeta> = {}): AheadOfferMeta => ({
+  id: 'o1',
+  leadDays: 56,
+  offerOn: MOVE - 56 * DAY,
+  state: 'waiting',
+  declineCount: 0,
+  nextEligibleOn: null,
+  shownOn: null,
+  researchId: null,
+  toldAt: null,
+  createdAt: NOW,
+  ...over,
+});
+
+test('computeOfferOn is the date minus the lead, null with no date, and the lead is clamped', () => {
+  assert.equal(computeOfferOn(MOVE, 56), MOVE - 56 * DAY);
+  assert.equal(computeOfferOn(null, 56), null);
+  assert.equal(computeOfferOn(MOVE, 2), MOVE - 7 * DAY);
+  assert.equal(computeOfferOn(MOVE, 900), MOVE - 180 * DAY);
+});
+
+test('a date move rewrites a waiting offer only; a cleared date clears it', () => {
+  const moved = Date.UTC(2027, 3, 1);
+  const offers = [
+    meta(),
+    meta({ id: 'o2', state: 'taken', offerOn: 5 }),
+    meta({ id: 'o3', state: 'off', offerOn: 6 }),
+  ];
+  const after = rewriteOfferDays(offers, moved);
+  assert.equal(after[0].offerOn, moved - 56 * DAY);
+  assert.equal(after[1].offerOn, 5);
+  assert.equal(after[2].offerOn, 6);
+  assert.equal(rewriteOfferDays(offers, null)[0].offerOn, null);
+});
+
+test('an offer is due from its day until the date, past a back-off; the earliest due is picked', () => {
+  const offer = meta();
+  assert.ok(!isAheadOfferDue(offer, MOVE, offer.offerOn! - DAY));
+  assert.ok(isAheadOfferDue(offer, MOVE, offer.offerOn!));
+  assert.ok(!isAheadOfferDue(offer, MOVE, MOVE));
+  assert.ok(!isAheadOfferDue(meta({ offerOn: null }), MOVE, TODAY));
+  assert.ok(!isAheadOfferDue(meta({ state: 'taken' }), MOVE, TODAY));
+  assert.ok(
+    !isAheadOfferDue(meta({ nextEligibleOn: TODAY + DAY }), MOVE, TODAY),
+  );
+  const later = meta({ id: 'b', offerOn: TODAY - DAY });
+  const earlier = meta({ id: 'a', offerOn: TODAY - 5 * DAY });
+  assert.equal(pickAheadOffer([later, earlier], MOVE, TODAY)?.id, 'a');
+  assert.equal(pickAheadOffer([meta({ state: 'off' })], MOVE, TODAY), null);
+});
+
+test('Not now waits 2 weeks, then 4, and the third or a wait reaching the date turns it off', () => {
+  assert.deepEqual([...AHEAD_BACKOFF_WEEKS], [2, 4]);
+  const first = applyAheadNotNow(meta(), MOVE, TODAY);
+  assert.equal(first.state, 'waiting');
+  assert.equal(first.nextEligibleOn, TODAY + 14 * DAY);
+  const second = applyAheadNotNow(first, MOVE, TODAY);
+  assert.equal(second.nextEligibleOn, TODAY + 28 * DAY);
+  const third = applyAheadNotNow(second, MOVE, TODAY);
+  assert.equal(third.state, 'off');
+  assert.equal(third.nextEligibleOn, null);
+  const near = applyAheadNotNow(meta(), TODAY + 10 * DAY, TODAY);
+  assert.equal(near.state, 'off');
+  assert.equal(near.declineCount, 1);
+});
+
+const questions: LeadQuestion[] = [
+  {
+    id: 'q1',
+    label: 'Where',
+    shape: 'pickMany',
+    options: ['Ballard', 'Fremont', 'Capitol Hill'],
+    prefill: ['Ballard', 'Fremont'],
+    from: null,
+    isInferred: false,
+  },
+  {
+    id: 'q2',
+    label: 'Rent a month',
+    shape: 'amountRange',
+    options: [],
+    prefill: [],
+    from: null,
+    isInferred: false,
+  },
+  {
+    id: 'q3',
+    label: 'Pets',
+    shape: 'text',
+    options: [],
+    prefill: [],
+    from: null,
+    isInferred: false,
+  },
+];
+
+test('buildAheadBrief writes the answered questions, skips the rest and says how deep', () => {
+  assert.equal(
+    buildAheadBrief({
+      subject: 'apartments',
+      questions,
+      answers: {
+        q1: { kind: 'picks', picks: ['Ballard', 'Fremont'] },
+        q2: { kind: 'range', minCents: 220000, maxCents: 280000 },
+        q3: { kind: 'skipped' },
+      },
+      depth: 'thorough',
+    }),
+    'Apartments: Where: Ballard or Fremont; Rent a month: $2,200 to $2,800; thorough.',
+  );
+  assert.equal(
+    buildAheadBrief({
+      subject: 'gifts',
+      questions,
+      answers: {},
+      depth: 'light',
+    }),
+    'Gifts; quick look.',
+  );
+});
+
+const offerCommand = (over: Record<string, unknown> = {}) => ({
+  kind: 'offerResearch' as const,
+  projectRef: 'Move',
+  subject: 'apartments',
+  question: 'Which neighborhoods fit a 2 bedroom under $2,800?',
+  whyNow: 'Nothing in Move yet says what you are looking for.',
+  leadDays: 70,
+  isDecision: true,
+  questions: [
+    {
+      label: 'Where',
+      shape: 'pickMany' as const,
+      options: ['Ballard', 'Fremont'],
+      prefill: ['Ballard'],
+      from: 'What you said today',
+      isInferred: false,
+    },
+  ],
+  ...over,
+});
+const target = (over: Partial<OfferTarget> = {}): OfferTarget => ({
+  id: 'p1',
+  name: 'Move',
+  targetDate: MOVE,
+  offers: [],
+  subjects: [],
+  ...over,
+});
+const planOffers = (
+  commands: ReturnType<typeof offerCommand>[],
+  targets: OfferTarget[],
+) => {
+  let count = 0;
+  return planOfferResearch({
+    commands,
+    targets,
+    resolve: (ref) => (ref === 'Move' ? 'p1' : null),
+    newId: () => `id-${(count += 1)}`,
+    now: NOW,
+  });
+};
+
+test('offerResearch is accepted with a date and room: a waiting offer and its sealed words', () => {
+  const plan = planOffers([offerCommand()], [target()]);
+  assert.equal(plan.notKept.length, 0);
+  assert.equal(plan.accepted.length, 1);
+  const [one] = plan.accepted;
+  assert.deepEqual(one.meta, {
+    id: 'id-1',
+    leadDays: 70,
+    offerOn: MOVE - 70 * DAY,
+    state: 'waiting',
+    declineCount: 0,
+    nextEligibleOn: null,
+    shownOn: null,
+    researchId: null,
+    toldAt: null,
+    createdAt: NOW,
+  });
+  assert.equal(one.ask.answers, null);
+  assert.equal(one.ask.brief, null);
+  assert.equal(one.ask.questions[0].id, 'id-2');
+  assert.equal(
+    one.line,
+    "I'll offer to look into apartments 10 weeks before Move",
+  );
+});
+
+test('offerResearch is refused, in code words, with no date, at the cap or for the same subject', () => {
+  const noDate = planOffers([offerCommand()], [target({ targetDate: null })]);
+  assert.equal(noDate.accepted.length, 0);
+  assert.equal(
+    noDate.notKept[0],
+    'I can offer research ahead once Move has a date',
+  );
+  const full = planOffers(
+    [offerCommand()],
+    [
+      target({
+        offers: [
+          meta({ id: 'a', state: 'off' }),
+          meta({ id: 'b', state: 'taken' }),
+          meta({ id: 'c' }),
+        ],
+      }),
+    ],
+  );
+  assert.equal(RESEARCH_OFFERS_PER_PROJECT, 3);
+  assert.equal(full.accepted.length, 0);
+  assert.equal(full.notKept[0], 'Move already has 3 research offers');
+  const duplicate = planOffers(
+    [offerCommand({ subject: 'Apartments' })],
+    [target({ subjects: ['apartments'] })],
+  );
+  assert.equal(duplicate.accepted.length, 0);
+  assert.match(duplicate.notKept[0], /already have an offer to look into/);
+  const twice = planOffers(
+    [offerCommand(), offerCommand({ question: 'Again' })],
+    [target()],
+  );
+  assert.equal(twice.accepted.length, 1);
+  assert.equal(twice.notKept.length, 1);
+  assert.equal(
+    planOffers([offerCommand({ projectRef: 'Nowhere' })], [target()]).accepted
+      .length,
+    0,
+  );
+});
+
+test('the offer reader caps its words, settles the lead and drops a pick with one option', () => {
+  const [read] = readOfferResearch([
+    {
+      kind: 'offerResearch',
+      projectRef: 'Move',
+      offerSubject: 'x'.repeat(100),
+      offerQuestion: 'What fits?',
+      offerWhyNow: null,
+      offerLeadDays: 3,
+      offerIsDecision: true,
+      offerQuestions: [
+        {
+          label: 'Where',
+          shape: 'pickOne',
+          options: ['Ballard'],
+          prefill: [],
+          from: null,
+          isInferred: false,
+        },
+        {
+          label: 'Budget',
+          shape: 'amountRange',
+          options: ['ignored'],
+          prefill: ['100000-200000'],
+          from: 'What you said',
+          isInferred: true,
+        },
+      ],
+    },
+  ]);
+  assert.equal(read.subject.length, 60);
+  assert.equal(read.leadDays, 7);
+  assert.equal(read.questions.length, 1);
+  assert.deepEqual(read.questions[0].options, []);
+  assert.equal(read.questions[0].isInferred, true);
+  assert.equal(readOfferResearch([{ kind: 'offerResearch' }]).length, 0);
+});
+
+test('an offer on an existing project reseals its words and appends the offer; one on a new project carries it from the start', () => {
+  const base = {
+    pool: [{ id: 'p1', name: 'Move' }],
+    commands: [],
+    milestones: [],
+    newId: (() => {
+      let count = 0;
+      return () => `n-${(count += 1)}`;
+    })(),
+    taskWho: [],
+    namedWhoIds: [],
+    whoIdOf: new Map<string, string>(),
+    nameOf: new Map<string, string>(),
+    executionId: 'e1',
+    captureId: 'c1',
+    now: NOW,
+    seal: (fields: Record<string, unknown>) => fields as never,
+  };
+  const existing = [
+    {
+      id: 'p1',
+      name: 'Move',
+      emoji: null,
+      whoRoles: {},
+      roleNotes: {},
+      milestoneState: {},
+      milestoneTitles: {},
+      kind: 'project' as const,
+      targetDate: MOVE,
+      researchOffers: [meta({ id: 'old' })],
+      sealed: {
+        name: 'Move',
+        aheadAsks: { old: { subject: 'movers' } },
+      },
+    },
+  ];
+  const plan = planProjectRoles({
+    ...base,
+    created: null,
+    existing,
+    offers: [offerCommand()],
+  });
+  assert.equal(plan.updates.length, 1);
+  const data = plan.updates[0].data as {
+    researchOffers: AheadOfferMeta[];
+    sealed: { aheadAsks: Record<string, unknown>; name: string };
+  };
+  assert.deepEqual(
+    data.researchOffers.map((offer) => offer.id),
+    ['old', 'n-1'],
+  );
+  assert.deepEqual(Object.keys(data.sealed.aheadAsks), ['old', 'n-1']);
+  assert.equal(plan.offerLines.length, 1);
+  const refused = planProjectRoles({
+    ...base,
+    created: null,
+    existing,
+    offers: [offerCommand({ subject: 'Movers' })],
+  });
+  assert.equal(refused.updates.length, 0);
+  assert.equal(refused.offerLines.length, 0);
+  const made = planProjectRoles({
+    ...base,
+    created: {
+      id: 'new',
+      command: {
+        kind: 'createProject',
+        name: 'Move',
+        emoji: null,
+        objective: null,
+        targetDate: MOVE,
+        projectKind: 'project',
+        why: null,
+      },
+    },
+    existing: [],
+    pool: [{ id: 'new', name: 'Move' }],
+    offers: [offerCommand()],
+  });
+  const created = made.creates[0].data as {
+    researchOffers: AheadOfferMeta[];
+    sealed: { aheadAsks: Record<string, unknown> | null };
+  };
+  assert.equal(created.researchOffers.length, 1);
+  assert.equal(Object.keys(created.sealed.aheadAsks ?? {}).length, 1);
+});
+
+const aheadProject = (over: Partial<AheadOfferMeta> = {}) => ({
+  offers: [meta({ id: 'o1', state: 'taken', ...over })],
+  ask: readAheadAsk(
+    {
+      aheadAsks: {
+        o1: {
+          subject: 'apartments',
+          questions,
+          answers: { q1: { kind: 'picks', picks: ['Ballard'] } },
+          brief: null,
+        },
+      },
+    },
+    'o1',
+    'light',
+  ),
+});
+const aheadStart = (
+  when: 'now' | 'later',
+  project: ReturnType<typeof aheadProject> | null,
+  depth: 'light' | 'thorough' = 'light',
+  used = 0,
+) => {
+  let count = 0;
+  return planAheadStart({
+    start: { projectId: 'p1', offerId: 'o1', depth, when },
+    project,
+    usage: usage(used),
+    timeZone: NY,
+    now: NOW,
+    nextNight: nextNight(NOW, NY),
+    captureId: 'cap-1',
+    newId: () => `r-${(count += 1)}`,
+    seal: (fields) => fields as never,
+  });
+};
+
+test('a capture from the device is read as a start only with every readable field', () => {
+  assert.deepEqual(
+    readAheadStart({
+      arrivedVia: 'researchAhead',
+      aheadOffer: {
+        projectId: 'p1',
+        offerId: 'o1',
+        depth: 'light',
+        when: 'now',
+      },
+    }),
+    { projectId: 'p1', offerId: 'o1', depth: 'light', when: 'now' },
+  );
+  assert.equal(
+    readAheadStart({
+      arrivedVia: 'direct',
+      aheadOffer: {
+        projectId: 'p1',
+        offerId: 'o1',
+        depth: 'light',
+        when: 'now',
+      },
+    }),
+    null,
+  );
+  assert.equal(
+    readAheadStart({
+      arrivedVia: 'researchAhead',
+      aheadOffer: {
+        projectId: 'p1',
+        offerId: 'o1',
+        depth: 'deep',
+        when: 'now',
+      },
+    }),
+    null,
+  );
+});
+
+test('a taken offer starts a leadTime item at once from the project’s own brief', () => {
+  const plan = aheadStart('now', aheadProject(), 'thorough');
+  assert.ok(plan.create);
+  const doc = plan.create.doc as Record<string, unknown> & {
+    sealed: Record<string, unknown>;
+  };
+  assert.equal(doc.mode, 'leadTime');
+  assert.equal(doc.projectId, 'p1');
+  assert.equal(doc.aheadOfferId, 'o1');
+  assert.equal(doc.captureId, 'cap-1');
+  assert.equal(doc.resultTopicId, null);
+  assert.equal(doc.status, 'preparing');
+  assert.equal(doc.depth, 'thorough');
+  assert.equal(doc.reservedCents, RESEARCH_DEPTHS.thorough.estimateCents);
+  assert.equal(doc.sealed.subject, 'apartments');
+  assert.equal(doc.sealed.question, 'Apartments: Where: Ballard; quick look.');
+  assert.equal(plan.offers?.[0].researchId, 'r-1');
+  assert.equal(plan.offers?.[0].state, 'taken');
+  assert.ok(plan.usage);
+  assert.equal(
+    plan.line,
+    "Looking into apartments. About 5 to 10 minutes; I'll tell you when it's in.",
+  );
+});
+
+test('a thorough start that the month cannot fit falls back to a quick look', () => {
+  const plan = aheadStart('now', aheadProject(), 'thorough', 170);
+  const doc = plan.create?.doc as Record<string, unknown>;
+  assert.equal(doc.depth, 'light');
+  assert.equal(doc.status, 'preparing');
+  assert.match(plan.line, /thorough look won't fit/i);
+});
+
+test('a later start is planned for the coming night with nothing held', () => {
+  const plan = aheadStart('later', aheadProject(), 'thorough');
+  const doc = plan.create?.doc as Record<string, unknown>;
+  assert.equal(doc.status, 'planned');
+  assert.equal(doc.depth, 'thorough');
+  assert.equal(doc.reservedCents, 0);
+  assert.equal(doc.prepareAt, nextNight(NOW, NY));
+  assert.equal(plan.usage, null);
+  assert.equal(
+    plan.line,
+    'Looking into apartments. It will be ready by morning.',
+  );
+});
+
+test('an offer already started, not taken or gone starts nothing', () => {
+  [
+    aheadProject({ researchId: 'r-9' }),
+    aheadProject({ state: 'waiting' }),
+    aheadProject({ state: 'off' }),
+    { offers: [], ask: null },
+  ].forEach((project) => {
+    const plan = aheadStart('now', project);
+    assert.equal(plan.create, null);
+    assert.equal(plan.offers, null);
+    assert.equal(plan.usage, null);
+    assert.equal(plan.line, 'That look is already under way.');
+  });
+  assert.equal(aheadStart('now', null).create, null);
+});
+
+test('the night starts a leadTime item at its depth, always live, and a learn-later wish as before', () => {
+  const planned = {
+    mode: 'leadTime',
+    status: 'planned',
+    depth: 'thorough',
+    prepareAt: NOW - 1,
+  };
+  const ahead = planNightStart({
+    id: 'r1',
+    data: planned,
+    usage: usage(0),
+    now: NOW,
+    timeZone: NY,
+  });
+  assert.equal(ahead.fields.status, 'preparing');
+  assert.equal(ahead.fields.depth, 'thorough');
+  assert.equal(ahead.fields.isWithoutWeb, false);
+  assert.equal(ahead.fields.prepareAt, null);
+  assert.equal(
+    ahead.fields.reservedCents,
+    RESEARCH_DEPTHS.thorough.estimateCents,
+  );
+  assert.ok(ahead.usage);
+  const spent = planNightStart({
+    id: 'r1',
+    data: planned,
+    usage: usage(195),
+    now: NOW,
+    timeZone: NY,
+  });
+  assert.equal(spent.fields.isWithoutWeb, true);
+  assert.equal(spent.fields.depth, 'light');
+  const wish = planNightStart({
+    id: 'r2',
+    data: { mode: 'learnLater', needsLiveFacts: false, depth: null },
+    usage: null,
+    now: NOW,
+    timeZone: NY,
+  });
+  assert.equal(wish.fields.isWithoutWeb, true);
+  assert.equal(wish.usage, null);
+});
+
+test('a finished look is filed as a top-level topic under the project, sections, table and sources sealed', () => {
+  let count = 0;
+  const filed = buildResultTopic({
+    subject: 'apartments',
+    overview: {
+      summary: 'Ballard and Fremont fit best.',
+      sections: [
+        {
+          heading: 'Areas',
+          points: ['Ballard is walkable', 'Fremont is close'],
+        },
+      ],
+      comparison: {
+        columns: ['Area', 'Rent'],
+        rows: [['Ballard', '$2,500 | avg']],
+      },
+      form: null,
+    },
+    sources: [
+      {
+        title: 'Rents [2026]',
+        url: 'https://example.com/rents',
+        site: 'example.com',
+      },
+    ],
+    projectId: 'p1',
+    captureId: 'cap-1',
+    newId: () => `s-${(count += 1)}`,
+    now: NOW,
+    seal: (fields) => fields as never,
+  });
+  const topic = filed.topic as Record<string, unknown>;
+  assert.equal(topic.parentId, null);
+  assert.equal(topic.depth, 1);
+  assert.deepEqual(topic.projectIds, ['p1']);
+  assert.equal(topic.version, 1);
+  assert.equal(topic.docState, 'current');
+  assert.equal(topic.createdBy, 'nomos');
+  assert.equal(topic.privacy, null);
+  const sealed = topic.sealed as unknown as {
+    name: string;
+    overview: string;
+    sections: {
+      heading: string;
+      level: number;
+      markdown: string;
+      writtenBy: string;
+    }[];
+    privateMark: null;
+  };
+  assert.equal(sealed.name, 'Apartments');
+  assert.equal(sealed.overview, 'Ballard and Fremont fit best.');
+  assert.deepEqual(
+    sealed.sections.map((section) => section.heading),
+    ['Areas', 'Comparison', 'Sources'],
+  );
+  assert.ok(
+    sealed.sections.every(
+      (section) => section.level === 2 && section.writtenBy === 'nomos',
+    ),
+  );
+  assert.equal(
+    sealed.sections[0].markdown,
+    '- Ballard is walkable\n- Fremont is close',
+  );
+  assert.match(
+    sealed.sections[1].markdown,
+    /\| Ballard \| \$2,500 \\\| avg \|/,
+  );
+  assert.equal(
+    sealed.sections[2].markdown,
+    '- [Rents 2026](https://example.com/rents) · example.com',
+  );
+  assert.equal((filed.version as { reason: string }).reason, 'firstWritten');
 });
 
 const failures: string[] = [];

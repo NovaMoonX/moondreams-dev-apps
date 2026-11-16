@@ -10,7 +10,11 @@ import {
   unwrapHelmKey,
   type HelmKey,
 } from '../helmKey.js';
-import { planStart, toStartFields } from '../nomos/planResearch.js';
+import {
+  planStart,
+  toStartFields,
+  type ResearchUsageDoc,
+} from '../nomos/planResearch.js';
 import { readUsageIn, writeUsageIn } from './researchStore.js';
 import { getVideoSearchDeps } from './videoDeps.js';
 
@@ -22,7 +26,56 @@ const VIDEO_MAX_SECONDS = 1200;
 const VIDEOS_KEPT = 2;
 const USER_PATH = /^apps\/helm\/users\/([^/]+)\/research\/([^/]+)$/;
 
-/** Starts a planned item once its night has come. A wish that needs live facts is reserved from the month's allowance like any look (and runs from what the model knows when the month is spent); any other wish is prepared from what the model knows, with nothing held. Reads the item again in the transaction. */
+const NIGHT_MODES = ['learnLater', 'leadTime'];
+
+const isLiveStart = (data: Record<string, unknown>) =>
+  data.mode === 'leadTime' || data.needsLiveFacts === true;
+
+/** What a planned item's night writes. A look ahead of a project starts at the depth it was saved with, reserved like any look; a learn-later wish that needs live facts starts a quick one, and any other wish is prepared from what the model knows, with nothing held. */
+export function planNightStart(input: {
+  id: string;
+  data: Record<string, unknown>;
+  usage: ResearchUsageDoc | null;
+  now: number;
+  timeZone: string;
+}): { fields: Record<string, unknown>; usage: ResearchUsageDoc | null } {
+  const { data, now } = input;
+  const cleared = {
+    prepareAt: null,
+    startedAt: null,
+    preparedAt: null,
+    cancelledAt: null,
+  };
+  if (!isLiveStart(data) || input.usage === null) {
+    return {
+      fields: {
+        status: 'preparing',
+        depth: 'light',
+        isWithoutWeb: true,
+        reservedCents: 0,
+        lastEditedAt: now,
+        ...cleared,
+      },
+      usage: null,
+    };
+  }
+  const start = planStart({
+    id: input.id,
+    wanted:
+      data.mode === 'leadTime' && data.depth === 'thorough'
+        ? 'thorough'
+        : 'light',
+    usage: input.usage,
+    now,
+    timeZone: input.timeZone,
+  });
+  return {
+    fields: { ...toStartFields(start, now), ...cleared },
+    usage: start.usage,
+  };
+}
+
+/** Starts a planned item once its night has come, reading it again in the transaction. */
 async function startOne(
   firestore: Firestore,
   uid: string,
@@ -39,7 +92,7 @@ async function startOne(
     const data = snap.data();
     if (
       !data ||
-      data.mode !== 'learnLater' ||
+      !NIGHT_MODES.includes(String(data.mode)) ||
       typeof data.prepareAt !== 'number' ||
       data.prepareAt > now
     ) {
@@ -49,42 +102,28 @@ async function startOne(
       transaction.update(ref, { prepareAt: null });
       return false;
     }
-    const cleared = {
-      prepareAt: null,
-      startedAt: null,
-      preparedAt: null,
-      cancelledAt: null,
-    };
-    if (data.needsLiveFacts !== true) {
-      transaction.update(ref, {
-        status: 'preparing',
-        depth: 'light',
-        isWithoutWeb: true,
-        reservedCents: 0,
-        lastEditedAt: now,
-        ...cleared,
-      });
-      return true;
-    }
     const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
-    const usage = await readUsageIn(transaction, firestore, uid, now, timeZone);
-    const start = planStart({
+    const usage = isLiveStart(data)
+      ? await readUsageIn(transaction, firestore, uid, now, timeZone)
+      : null;
+    const planned = planNightStart({
       id: researchId,
-      wanted: 'light',
+      data,
       usage,
       now,
       timeZone,
     });
-    transaction.update(ref, { ...toStartFields(start, now), ...cleared });
-    writeUsageIn(
-      transaction,
-      firestore,
-      uid,
-      start.usage,
-      now,
-      timeZone,
-      profileSnap.exists,
-    );
+    transaction.update(ref, planned.fields);
+    if (planned.usage)
+      writeUsageIn(
+        transaction,
+        firestore,
+        uid,
+        planned.usage,
+        now,
+        timeZone,
+        profileSnap.exists,
+      );
     return true;
   });
 }

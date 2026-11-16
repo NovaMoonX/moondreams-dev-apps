@@ -19,6 +19,8 @@ import { selectSubjectGuardrail } from '@apps/helm/store/selectors/patternSelect
 import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
+import AheadLines from '@apps/helm/components/projects/AheadLines';
+import AheadOfferCard from '@apps/helm/components/projects/AheadOfferCard';
 import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
@@ -34,7 +36,9 @@ import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import { DAY_MS, HELM_COPY, PROJECT_TASKS_SHOWN } from '@apps/helm/constants';
+import { pickAheadOffer } from '@apps/helm/engine/researchAhead';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { useImportanceToday } from '@apps/helm/hooks/useImportancePlace';
 import {
   deleteProject,
   countProjectTasks,
@@ -67,6 +71,7 @@ interface ProjectDetailProps {
   onOpenRun: (runId: string) => void;
   onOpenHabit: (habitId: string) => void;
   onOpenImportance: (focusId: string) => void;
+  onOpenTopic: (topicId: string) => void;
 }
 
 /** One project: what it is, what its tasks show, and tabs for its tasks and its people. A finished project reads only, with a way to reopen it. */
@@ -79,6 +84,7 @@ function ProjectDetail({
   onOpenRun,
   onOpenHabit,
   onOpenImportance,
+  onOpenTopic,
 }: ProjectDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -93,6 +99,11 @@ function ProjectDetail({
   const projectTasks = useAppSelector((state) => state.helm.projectTasks.items);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const todayUtc = useImportanceToday();
+  const aheadOffer =
+    project && project.status === 'active'
+      ? pickAheadOffer(project.researchOffers, project.targetDate, todayUtc)
+      : null;
   const [tab, setTab] = useState<ProjectTab>('tasks');
   const [isAllTasks, setIsAllTasks] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -472,6 +483,14 @@ function ProjectDetail({
                 </p>
               )}
             </div>
+            <AheadLines project={project} onOpenTopic={onOpenTopic} />
+            {aheadOffer && (
+              <AheadOfferCard
+                project={project}
+                offer={aheadOffer}
+                today={todayUtc}
+              />
+            )}
             {isGoal && !isFinished && tidyOffer && (
               <Button
                 type='button'

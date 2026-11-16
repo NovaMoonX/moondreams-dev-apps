@@ -938,7 +938,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         createdAt: now - between(30, 700) * DAY_MS,
         lastEditedAt: null,
         finishedAt,
+        researchOffers: [],
         sealed: await seal<ProjectSealed>({
+          aheadAsks: null,
           name: `${PROJECT_NAMES[index % 10]}${index >= 10 ? ` ${Math.floor(index / 10) + 1}` : ''}`,
           emoji: index % 3 === 0 ? '🛠️' : null,
           objective:
@@ -1520,6 +1522,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       ttsProvider: null,
       arrivedVia: 'direct',
       scheduledActionId: null,
+      aheadOffer: null,
       disposition: null,
       noticedCount: null,
       medium: 'web',

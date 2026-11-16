@@ -7,6 +7,7 @@ import {
   setDoc,
   updateDoc,
   writeBatch,
+  type WriteBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -85,6 +86,17 @@ function writeJoined(
   return batch.commit();
 }
 
+function writeWithProject(
+  reference: DocumentReference,
+  capture: Capture,
+  alsoWrite: (batch: WriteBatch) => void,
+) {
+  const batch = writeBatch(db);
+  batch.set(reference, capture);
+  alsoWrite(batch);
+  return batch.commit();
+}
+
 /** The turn and its photos' ids in one batch, so a photo never loses its turn or the turn its photos. */
 function writeWithPhotos(
   uid: string,
@@ -137,6 +149,11 @@ export async function sendCapture(
     /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
     presence?: Capture['presence'];
     heardNames?: HeardName[];
+    /** A turn that starts research ahead of a project: its offer, and the project's own write, which joins the turn's batch so neither lands without the other. */
+    ahead?: {
+      offer: NonNullable<Capture['aheadOffer']>;
+      alsoWrite: (batch: WriteBatch) => void;
+    };
     /** Called with the turn's id when the server found the words only asked to hear the last reply again; the turn is then gone and leaves nothing in the history. */
     onRepeat?: (captureId: string) => void;
   },
@@ -174,8 +191,9 @@ export async function sendCapture(
     interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
     answersQuestion: turn.answersQuestion,
     ttsProvider: null,
-    arrivedVia: 'direct',
+    arrivedVia: turn.ahead ? 'researchAhead' : 'direct',
     scheduledActionId: null,
+    aheadOffer: turn.ahead?.offer ?? null,
     disposition: null,
     medium: 'web',
     via: null,
@@ -219,11 +237,13 @@ export async function sendCapture(
   const reference = doc(capturesOf(uid));
   markCreatedHere(reference.id);
   // A message joining a turn is written with its lead's list in one batch, so neither lands without the other.
-  const write = leadId
-    ? writeJoined(uid, leadId, reference, capture)
-    : attachmentIds.length > 0
-      ? writeWithPhotos(uid, reference, capture)
-      : setDoc(reference, capture);
+  const write = turn.ahead
+    ? writeWithProject(reference, capture, turn.ahead.alsoWrite)
+    : leadId
+      ? writeJoined(uid, leadId, reference, capture)
+      : attachmentIds.length > 0
+        ? writeWithPhotos(uid, reference, capture)
+        : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
     async () => {
