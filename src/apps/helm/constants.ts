@@ -535,6 +535,19 @@ export const HELM_COPY = {
   talkMute: 'Mute',
   talkUnmute: 'Unmute',
   talkMuted: 'Muted',
+  liveLabel: (name: string) => `Talking with ${name}`,
+  liveListening: 'Listening…',
+  liveThinking: 'Thinking…',
+  liveSpeaking: 'Speaking…',
+  liveMicMuted: 'Microphone off',
+  liveEndHint: 'Say "that\'s all" or tap End when you\'re done.',
+  liveMicOff: 'Mic off',
+  liveMicOn: 'Mic on',
+  liveEnd: 'End',
+  liveEndLabel: 'End the conversation',
+  liveEndedQuiet: 'The conversation ended after a quiet spell.',
+  liveEndedFailed:
+    'Listening stopped working, so the conversation ended. Tap Talk to try again.',
   talkByVoice: 'Ask by voice',
   talkByTyping: 'Ask by typing',
   talkNeedsMicrophone:
@@ -1240,10 +1253,9 @@ export const HELM_COPY = {
     "Your speech isn't sent to our voice services, and answers are read by this device's voice. The browser still does its own listening: in Chrome that goes to Google, in Safari to Apple.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
-  voiceHandsFreeTitle: 'Answer without tapping',
-  voiceHandsFreeOn:
-    'After a reply, it listens for a few seconds so you can answer. Nothing is sent until you speak.',
-  voiceHandsFreeOff: 'Tap Talk to answer.',
+  voiceHandsFreeTitle: 'Keep the conversation going',
+  voiceHandsFree:
+    'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s all", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
     'Takes music and chatter out of what you say, on this device, before anything listens.',

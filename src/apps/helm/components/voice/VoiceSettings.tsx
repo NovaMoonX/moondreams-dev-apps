@@ -392,11 +392,7 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
           />
           <SwitchRow
             title={HELM_COPY.voiceHandsFreeTitle}
-            description={
-              isHandsFreeOn
-                ? HELM_COPY.voiceHandsFreeOn
-                : HELM_COPY.voiceHandsFreeOff
-            }
+            description={HELM_COPY.voiceHandsFree}
             checked={isHandsFreeOn}
             onChange={(isOn) => changeSwitch(setHandsFreeOn, isOn)}
           />

@@ -214,6 +214,11 @@ html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
   z-index: 110;
 }
 
+/* A live conversation covers the whole screen: above the site header, sheets and the conversation over a page, under a sheet it opens and toasts. */
+html.helm-theme .helm-live-screen {
+  z-index: 115;
+}
+
 /* A sheet opened from inside that conversation mounts after it, so it rises above it too. */
 html.helm-theme .subview-backdrop:has(.helm-ask-overlay) ~ .z-\[100\] {
   z-index: 120;
@@ -272,5 +277,108 @@ html.helm-theme .helm-dock-in {
 @media (prefers-reduced-motion: reduce) {
   html.helm-theme .helm-dock-in {
     animation: none;
+  }
+}
+
+/* A live conversation's glow: it breathes while listening, swells with each new word, drifts while working and shimmers while speaking. */
+html.helm-theme .helm-live-glow,
+html.helm-theme .helm-live-ripple {
+  position: absolute;
+  left: -25%;
+  right: -25%;
+  bottom: -32%;
+  height: 72%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-primary) 45%, transparent),
+    color-mix(in oklab, var(--color-primary) 18%, transparent) 60%,
+    transparent
+  );
+  filter: blur(28px);
+  transform-origin: 50% 100%;
+}
+
+html.helm-theme .helm-live-glow {
+  opacity: 0.7;
+  transition: opacity 400ms ease-out;
+}
+
+html.helm-theme [data-glow='listening'] .helm-live-glow {
+  animation: helm-live-breathe 4.2s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='thinking'] .helm-live-glow {
+  animation: helm-live-drift 5s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='speaking'] .helm-live-glow {
+  animation: helm-live-shimmer 1.4s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='muted'] .helm-live-glow {
+  opacity: 0.2;
+}
+
+html.helm-theme .helm-live-ripple {
+  animation: helm-live-ripple 700ms ease-out forwards;
+}
+
+@keyframes helm-live-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+@keyframes helm-live-drift {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateX(-5%) scale(0.92);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateX(5%) scale(0.96);
+  }
+}
+
+@keyframes helm-live-shimmer {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+    filter: blur(28px) brightness(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+    filter: blur(24px) brightness(1.15);
+  }
+}
+
+@keyframes helm-live-ripple {
+  from {
+    opacity: 0.55;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.helm-theme .helm-live-glow,
+  html.helm-theme .helm-live-ripple {
+    animation: none !important;
+  }
+  html.helm-theme .helm-live-ripple {
+    display: none;
   }
 }

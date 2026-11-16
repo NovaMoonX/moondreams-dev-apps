@@ -1,0 +1,187 @@
+import { type KeyboardEvent, useEffect, useRef } from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Mic, MicOff, X } from 'lucide-react';
+
+import MuteControl from '@apps/helm/components/voice/MuteControl';
+import { HELM_COPY } from '@apps/helm/constants';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+
+const ROUND =
+  "relative size-16 min-w-16 rounded-full! p-0 before:absolute before:-inset-1 before:content-['']";
+
+const toStatus = (
+  state: string,
+  isMicMuted: boolean,
+  isPreparing: boolean,
+): string => {
+  if (isMicMuted) return HELM_COPY.liveMicMuted;
+  if (state === 'listening') {
+    return isPreparing ? HELM_COPY.talkGettingReady : HELM_COPY.liveListening;
+  }
+  if (state === 'speaking') return HELM_COPY.liveSpeaking;
+  if (state === 'thinking') return HELM_COPY.liveThinking;
+  return HELM_COPY.liveListening;
+};
+
+const keepTabInside = (event: KeyboardEvent<HTMLDivElement>) => {
+  const stops = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>('button, [href]'),
+  );
+  const first = stops[0];
+  const last = stops[stops.length - 1];
+  if (!first || !last) return;
+  const isLeaving = event.shiftKey
+    ? document.activeElement === first ||
+      document.activeElement === event.currentTarget
+    : document.activeElement === last;
+  if (!isLeaving) return;
+  event.preventDefault();
+  (event.shiftKey ? last : first).focus();
+};
+
+function LiveConversation() {
+  const voice = useHelmVoiceContext();
+  const name = useAssistantName();
+  const dialog = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const helmParagraph = useRef<HTMLParagraphElement>(null);
+  const isHearing = voice.state === 'listening' && voice.heard !== '';
+  const personLine = isHearing ? voice.heard : voice.liveSaid;
+  const helmLine = isHearing ? '' : voice.lastLine;
+  const glow = voice.isLiveMuted
+    ? 'muted'
+    : voice.state === 'idle'
+      ? 'listening'
+      : voice.state;
+  const wordCount = voice.heard.split(/\s+/).filter(Boolean).length;
+
+  useEffect(() => {
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialog.current?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+
+  // The person's words grow, so their newest stay in view; a reply arrives whole and is read from its start.
+  useEffect(() => {
+    const box = scroller.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [personLine]);
+
+  useEffect(() => {
+    const box = scroller.current;
+    const reply = helmParagraph.current;
+    if (!box || !reply) return;
+    box.scrollTop =
+      reply.offsetTop - parseFloat(getComputedStyle(box).paddingTop);
+  }, [helmLine]);
+
+  return (
+    <div
+      ref={dialog}
+      role='dialog'
+      aria-modal='true'
+      aria-label={HELM_COPY.liveLabel(name)}
+      tabIndex={-1}
+      className='helm-live-screen bg-background fixed inset-0 flex flex-col overflow-hidden outline-none'
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') voice.endLive();
+        if (event.key === 'Tab') keepTabInside(event);
+      }}
+    >
+      <div
+        aria-hidden='true'
+        className='pointer-events-none absolute inset-0'
+        data-glow={glow}
+      >
+        <span className='helm-live-glow' />
+        {isHearing && <span key={wordCount} className='helm-live-ripple' />}
+      </div>
+      <div className='relative mx-auto flex min-h-8 w-full max-w-xl items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
+        <p
+          aria-live='polite'
+          className='text-foreground/80 text-[15px] font-medium'
+        >
+          {toStatus(voice.state, voice.isLiveMuted, voice.isPreparing)}
+        </p>
+        <MuteControl shows='whileSpeaking' />
+        <MuteControl shows='whileMuted' />
+      </div>
+      {/* A centred column that can overflow centres an inner block with my-auto, so a long line starts at the top and every word stays reachable. */}
+      <div
+        ref={scroller}
+        className='relative mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-y-auto px-6 py-5'
+      >
+        <div className='my-auto flex flex-col gap-5'>
+          {personLine !== '' && (
+            <p
+              className={join(
+                'leading-snug font-medium text-pretty',
+                isHearing ? 'text-[26px]' : 'text-muted-foreground text-xl',
+              )}
+            >
+              {personLine}
+            </p>
+          )}
+          {helmLine !== '' && (
+            <p
+              ref={helmParagraph}
+              className='text-[26px] leading-snug text-pretty'
+            >
+              {helmLine}
+            </p>
+          )}
+          {voice.note !== null && voice.note !== helmLine && (
+            <p className='text-foreground/80 text-[15px]'>{voice.note}</p>
+          )}
+        </div>
+      </div>
+      <p className='text-foreground/80 relative px-6 pt-2 text-center text-[13px]'>
+        {HELM_COPY.liveEndHint}
+      </p>
+      <div className='relative flex items-start justify-center gap-12 px-6 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]'>
+        <div className='flex flex-col items-center gap-1.5'>
+          <Button
+            type='button'
+            variant='secondary'
+            aria-label={
+              voice.isLiveMuted ? HELM_COPY.liveMicOn : HELM_COPY.liveMicOff
+            }
+            className={ROUND}
+            onClick={() => voice.setLiveMuted(!voice.isLiveMuted)}
+          >
+            {voice.isLiveMuted ? (
+              <MicOff className='size-6' aria-hidden='true' />
+            ) : (
+              <Mic className='size-6' aria-hidden='true' />
+            )}
+          </Button>
+          <span className='text-[13px] font-medium'>
+            {voice.isLiveMuted ? HELM_COPY.liveMicOn : HELM_COPY.liveMicOff}
+          </span>
+        </div>
+        <div className='flex flex-col items-center gap-1.5'>
+          <Button
+            type='button'
+            variant='destructive'
+            aria-label={HELM_COPY.liveEndLabel}
+            className={ROUND}
+            onClick={voice.endLive}
+          >
+            <X className='size-6' aria-hidden='true' />
+          </Button>
+          <span className='text-[13px] font-medium'>{HELM_COPY.liveEnd}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default LiveConversation;
