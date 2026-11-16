@@ -3,12 +3,14 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
 import {
+  MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
@@ -31,6 +33,7 @@ const DOC_LIMIT = 500;
 const DETAIL_CLIP = 120;
 const SYMPTOM_CLIP = 160;
 const SYMPTOM_TAG_LIMIT = 8;
+const EXPENSE_CURRENCY = 'USD';
 
 const EMPTY_RECORD: SharedRecord = {
   sourceRef: '',
@@ -579,6 +582,417 @@ const syncSymptoms = (firestore: Firestore, uid: string, windowStart: number) =>
     };
   });
 
+interface LiveArgs {
+  text: string | null;
+  from: number | null;
+  to: number | null;
+}
+
+interface LiveRow {
+  at: number;
+  record: SharedRecord;
+}
+
+interface LiveRead {
+  rows: LiveRow[];
+  isFull: boolean;
+}
+
+const readDayArg = (value: unknown) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return null;
+  const at = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(at) && new Date(at).toISOString().startsWith(value)
+    ? at
+    : null;
+};
+
+const readLiveArgs = (args: unknown): LiveArgs => {
+  const asked =
+    typeof args === 'object' && args !== null && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : {};
+  return {
+    text: readText(asked.text)?.toLowerCase() ?? null,
+    from: readDayArg(asked.from),
+    to: readDayArg(asked.to),
+  };
+};
+
+const toDayText = (at: number | null) =>
+  at === null ? null : new Date(at).toISOString().slice(0, 10);
+
+const isInRange = (at: number, { from, to }: LiveArgs) =>
+  (from === null || at >= from) && (to === null || at < to + DAY_MS);
+
+const withRange = (
+  query: FirebaseFirestore.Query,
+  field: string,
+  { from, to }: LiveArgs,
+) => {
+  const lower = from === null ? query : query.where(field, '>=', from);
+  return (to === null ? lower : lower.where(field, '<', to + DAY_MS)).orderBy(
+    field,
+    'desc',
+  );
+};
+
+const isTextMatch = (text: string | null, parts: string[]) =>
+  text === null || parts.some((part) => part.toLowerCase().includes(text));
+
+const readCatNameMap = async (household: Household) => {
+  const { cats, isFull } = await readCatNames(household);
+  return {
+    names: new Map(cats.map((cat) => [cat.id, cat.name])),
+    isFull,
+  };
+};
+
+const namesOfCats = (names: Map<string, string>, ids: string[]) =>
+  ids.flatMap((id) => {
+    const name = names.get(id);
+    return name === undefined ? [] : [name];
+  });
+
+const liveVisitNotes = (household: Household, args: LiveArgs) =>
+  Promise.all([
+    readCatNameMap(household),
+    readDocs(household.ref.collection('vetClinics').select('name')),
+    readDocs(
+      withRange(
+        household.ref
+          .collection('visits')
+          .select(
+            'catIds',
+            'clinicId',
+            'status',
+            'reason',
+            'customReasonLabel',
+            'scheduledAt',
+            'summary',
+          ),
+        'scheduledAt',
+        args,
+      ),
+    ),
+  ]).then(([catRead, clinicRead, visitRead]): LiveRead => {
+    const clinicNames = new Map(
+      clinicRead.docs.map((doc) => [doc.id, readText(doc.get('name'))]),
+    );
+    return {
+      rows: visitRead.docs.flatMap((doc) => {
+        const scheduledAt = readTime(doc.get('scheduledAt'));
+        const names = namesOfCats(catRead.names, readIds(doc.get('catIds')));
+        if (
+          scheduledAt === null ||
+          names.length === 0 ||
+          doc.get('status') !== 'completed'
+        )
+          return [];
+        const reason = readText(doc.get('reason')) ?? '';
+        const label =
+          (Object.hasOwn(REASON_LABELS, reason)
+            ? REASON_LABELS[reason]
+            : null) ??
+          readText(doc.get('customReasonLabel')) ??
+          'Visit';
+        const title = `${joinNames(names)}: ${label}`;
+        const notes = readText(doc.get('summary'));
+        const clinicId = readText(doc.get('clinicId'));
+        return isTextMatch(args.text, [title, ...names])
+          ? [
+              {
+                at: scheduledAt,
+                record: toRecord({
+                  sourceRef: `households/${household.id}/visits/${doc.id}`,
+                  kind: 'event',
+                  title,
+                  subtitle: 'Past visit',
+                  detail:
+                    notes === null
+                      ? null
+                      : clipTo(notes.replace(/\s+/g, ' '), DETAIL_CLIP),
+                  startAt: scheduledAt,
+                  placeLabel:
+                    clinicId === null
+                      ? null
+                      : (clinicNames.get(clinicId) ?? null),
+                }),
+              },
+            ]
+          : [];
+      }),
+      isFull: catRead.isFull && clinicRead.isFull && visitRead.isFull,
+    };
+  });
+
+const asObject = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+const liveDoseHistory = (household: Household, args: LiveArgs) =>
+  Promise.all([
+    readCatNameMap(household),
+    readDocs(
+      household.ref
+        .collection('vaccinations')
+        .select('catId', 'name', 'history', 'lastAdministeredAt'),
+    ),
+    readDocs(
+      household.ref
+        .collection('preventives')
+        .select('catIds', 'name', 'history', 'lastAdministeredAt'),
+    ),
+  ]).then(([catRead, vaccinationRead, preventiveRead]): LiveRead => {
+    const doseRows = (
+      collection: string,
+      subtitle: string,
+      doc: FirebaseFirestore.QueryDocumentSnapshot,
+      ids: string[],
+    ) => {
+      const names = namesOfCats(catRead.names, ids);
+      const name = readText(doc.get('name'));
+      const history = doc.get('history');
+      const logged = (Array.isArray(history) ? history : []).flatMap(
+        (entry) => {
+          const dose = asObject(entry);
+          const at = readTime(dose?.administeredAt);
+          return at === null ? [] : [{ at, dosage: readText(dose?.dosage) }];
+        },
+      );
+      const lastGiven = readTime(doc.get('lastAdministeredAt'));
+      const doses =
+        logged.length > 0
+          ? logged
+          : lastGiven === null
+            ? []
+            : [{ at: lastGiven, dosage: null }];
+      if (names.length === 0 || name === null) return [];
+      const title = `${joinNames(names)}: ${name}`;
+      return doses.flatMap((dose, index) =>
+        isInRange(dose.at, args) && isTextMatch(args.text, [title, ...names])
+          ? [
+              {
+                at: dose.at,
+                record: toRecord({
+                  sourceRef: `households/${household.id}/${collection}/${doc.id}/doses/${index}`,
+                  kind: 'event',
+                  title,
+                  subtitle,
+                  detail: clipTo(
+                    joinLines([
+                      `Given ${formatGivenDay(dose.at)}`,
+                      dose.dosage === null ? null : `Dosage: ${dose.dosage}`,
+                    ]) ?? '',
+                    DETAIL_CLIP,
+                  ),
+                  startAt: dose.at,
+                  isAllDay: dose.at % DAY_MS === 0,
+                }),
+              },
+            ]
+          : [],
+      );
+    };
+    return {
+      rows: [
+        ...vaccinationRead.docs.flatMap((doc) => {
+          const catId = readText(doc.get('catId'));
+          return doseRows(
+            'vaccinations',
+            'Vaccine given',
+            doc,
+            catId === null ? [] : [catId],
+          );
+        }),
+        ...preventiveRead.docs.flatMap((doc) =>
+          doseRows(
+            'preventives',
+            'Preventive given',
+            doc,
+            readIds(doc.get('catIds')),
+          ),
+        ),
+      ],
+      isFull: catRead.isFull && vaccinationRead.isFull && preventiveRead.isFull,
+    };
+  });
+
+const liveWeights = (household: Household, args: LiveArgs) =>
+  Promise.all([
+    readCatNameMap(household),
+    readDocs(
+      withRange(
+        household.ref
+          .collection('weightEntries')
+          .select('catId', 'weight', 'unit', 'measuredAt'),
+        'measuredAt',
+        args,
+      ),
+    ),
+  ]).then(([catRead, weightRead]): LiveRead => ({
+    rows: weightRead.docs.flatMap((doc) => {
+      const catId = readText(doc.get('catId'));
+      const catName = catId === null ? undefined : catRead.names.get(catId);
+      const weight = doc.get('weight');
+      const unit = doc.get('unit');
+      const measuredAt = readTime(doc.get('measuredAt'));
+      if (
+        catName === undefined ||
+        typeof weight !== 'number' ||
+        !Number.isFinite(weight) ||
+        (unit !== 'lb' && unit !== 'kg') ||
+        measuredAt === null ||
+        !isTextMatch(args.text, [catName])
+      )
+        return [];
+      return [
+        {
+          at: measuredAt,
+          record: toRecord({
+            sourceRef: `households/${household.id}/weightEntries/${doc.id}`,
+            kind: 'knowledge',
+            title: `${catName}: ${Number(weight.toFixed(2))} ${unit}`,
+            subtitle: catName,
+            detail: `Weighed ${formatGivenDay(measuredAt)}`,
+            startAt: measuredAt,
+            isAllDay: measuredAt % DAY_MS === 0,
+          }),
+        },
+      ];
+    }),
+    isFull: catRead.isFull && weightRead.isFull,
+  }));
+
+const monthFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** An expense shared by several cats is split evenly in cents, the first cats taking the odd ones. */
+const splitCents = (cents: number, count: number) =>
+  Array.from(
+    { length: count },
+    (_, index) => Math.floor(cents / count) + (index < cents % count ? 1 : 0),
+  );
+
+const liveCatExpenses = (household: Household, args: LiveArgs) =>
+  Promise.all([
+    readCatNameMap(household),
+    readDocs(
+      withRange(
+        household.ref
+          .collection('expenses')
+          .select('catIds', 'amount', 'incurredAt'),
+        'incurredAt',
+        args,
+      ),
+    ),
+  ]).then(([catRead, expenseRead]): LiveRead => {
+    const shares = expenseRead.docs.flatMap((doc) => {
+      const amount = doc.get('amount');
+      const incurredAt = readTime(doc.get('incurredAt'));
+      const ids = readIds(doc.get('catIds')).filter((id) =>
+        catRead.names.has(id),
+      );
+      if (
+        typeof amount !== 'number' ||
+        !Number.isFinite(amount) ||
+        incurredAt === null ||
+        ids.length === 0
+      )
+        return [];
+      const month = new Date(incurredAt);
+      const monthStart = Date.UTC(month.getUTCFullYear(), month.getUTCMonth());
+      return splitCents(Math.round(amount * 100), ids.length).map(
+        (cents, index) => ({ catId: ids[index], monthStart, cents }),
+      );
+    });
+    const totals = shares.reduce((found, share) => {
+      const key = `${share.catId}/${share.monthStart}`;
+      const before = found.get(key);
+      return found.set(key, {
+        ...share,
+        cents: (before?.cents ?? 0) + share.cents,
+        count: (before?.count ?? 0) + 1,
+      });
+    }, new Map<string, (typeof shares)[number] & { count: number }>());
+    return {
+      rows: [...totals.values()].flatMap((total) => {
+        const catName = catRead.names.get(total.catId) ?? '';
+        const label = monthFormatter.format(total.monthStart);
+        return isTextMatch(args.text, [`${catName}: ${label}`, catName])
+          ? [
+              {
+                at: total.monthStart,
+                record: toRecord({
+                  sourceRef: `households/${household.id}/catExpenses/${total.catId}/${new Date(total.monthStart).toISOString().slice(0, 7)}`,
+                  kind: 'artifact',
+                  title: `${catName}: ${label}`,
+                  subtitle: catName,
+                  detail: `${total.count} ${total.count === 1 ? 'expense' : 'expenses'}`,
+                  startAt: total.monthStart,
+                  isAllDay: true,
+                  amountCents: total.cents,
+                  currency: EXPENSE_CURRENCY,
+                }),
+              },
+            ]
+          : [];
+      }),
+      isFull: catRead.isFull && expenseRead.isFull,
+    };
+  });
+
+const LIVE_READERS: Record<
+  string,
+  (household: Household, args: LiveArgs) => Promise<LiveRead>
+> = {
+  visitNotes: liveVisitNotes,
+  doseHistory: liveDoseHistory,
+  weights: liveWeights,
+  catExpenses: liveCatExpenses,
+};
+
+async function queryCare(
+  firestore: Firestore,
+  uid: string,
+  category: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const read = Object.hasOwn(LIVE_READERS, category)
+    ? LIVE_READERS[category]
+    : null;
+  if (read === null) throw new Error('Unknown category.');
+  const { households, isFull } = await readHouseholds(firestore, uid);
+  const reads = await Promise.all(
+    households.map((household) => read(household, args)),
+  );
+  const rows = reads
+    .flatMap((one) => one.rows)
+    .sort(
+      (a, b) =>
+        b.at - a.at || a.record.sourceRef.localeCompare(b.record.sourceRef),
+    );
+  const isMoney = category === 'catExpenses';
+  return {
+    records: rows.slice(0, MAX_RECORDS_PER_CATEGORY).map((row) => row.record),
+    matchedCount: rows.length,
+    totalCents: isMoney
+      ? rows.reduce((sum, row) => sum + (row.record.amountCents ?? 0), 0)
+      : null,
+    currency: isMoney ? EXPENSE_CURRENCY : null,
+    isPartial:
+      !isFull ||
+      reads.some((one) => !one.isFull) ||
+      rows.length > MAX_RECORDS_PER_CATEGORY,
+    from: toDayText(args.from),
+    to: toDayText(args.to),
+  };
+}
+
 export interface NineLivesAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -633,6 +1047,13 @@ export function createNineLivesAdapter(
       isDone: true,
       resumeState: null,
     }),
+    query: (ctx, req) =>
+      queryCare(
+        deps.firestore(),
+        ctx.uid,
+        req.category,
+        readLiveArgs(req.args),
+      ),
     deepLink: () => '/nine-lives',
   };
 }

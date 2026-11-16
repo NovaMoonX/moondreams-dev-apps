@@ -51,6 +51,7 @@ const firestore = getFirestore();
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 10, 10, 15);
 const TODAY = Date.UTC(2026, 10, 10);
+const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 const WINDOW_START = TODAY - 30 * DAY;
 
 const OWNER = 'owner-uid';
@@ -1696,6 +1697,7 @@ const HOUSEMATE = 'housemate-uid';
 const CARE_SECRET = 'SECRET CARE';
 const EXPENSE_AMOUNT = 6363;
 const WEIGHT_VALUE = 11.77;
+const VISIT_NOTES = 'Ate well and stayed calm.';
 
 const careHousehold = firestore.doc('apps/nine-lives/households/home');
 const careDocs = (collection: string, id: string) =>
@@ -1710,7 +1712,8 @@ const vetVisit = (catIds: string[], extra: Record<string, unknown> = {}) => ({
   customReasonLabel: null,
   title: CARE_SECRET,
   scheduledAt: TODAY + 3 * DAY + 9 * 3_600_000,
-  summary: CARE_SECRET,
+  summary: VISIT_NOTES,
+  followUpNote: CARE_SECRET,
   lastEditedAt: NOW - 11,
   ...extra,
 });
@@ -1780,6 +1783,115 @@ await Promise.all([
       costCents: EXPENSE_AMOUNT,
     }),
   ),
+  careDocs('visits', 'notes-old').set(
+    vetVisit(['mochi', 'juniper'], {
+      status: 'completed',
+      scheduledAt: TODAY - 500 * DAY,
+      summary: 'Bloodwork normal.\n  Weight steady.',
+    }),
+  ),
+  careDocs('visits', 'long-notes').set(
+    vetVisit(['mochi'], {
+      status: 'completed',
+      scheduledAt: TODAY - 600 * DAY,
+      reason: 'illness',
+      summary: 'n'.repeat(300),
+    }),
+  ),
+  careDocs('vaccinations', 'felv').set({
+    catId: 'juniper',
+    name: 'FeLV',
+    history: [
+      {
+        id: 'd2',
+        administeredAt: Date.UTC(2025, 2, 1),
+        lotNumber: CARE_SECRET,
+      },
+      {
+        id: 'd1',
+        administeredAt: Date.UTC(2024, 2, 1, 14, 30),
+        lotNumber: CARE_SECRET,
+      },
+    ],
+    lastAdministeredAt: Date.UTC(2025, 2, 1),
+    expiresAt: TODAY - 300 * DAY,
+  }),
+  careDocs('preventives', 'worm').set({
+    catIds: ['mochi', 'gone-cat'],
+    name: 'Dewormer',
+    history: [
+      {
+        administeredAt: TODAY - 400 * DAY,
+        dosage: '1 tablet',
+        lotNumber: CARE_SECRET,
+      },
+    ],
+    lastAdministeredAt: TODAY - 400 * DAY,
+    expiresAt: TODAY - 380 * DAY,
+  }),
+  careDocs('weightEntries', 'w2').set({
+    catId: 'mochi',
+    weight: 12.456,
+    unit: 'lb',
+    measuredAt: TODAY - 10 * DAY,
+    linkedVisitId: CARE_SECRET,
+  }),
+  careDocs('weightEntries', 'w3').set({
+    catId: 'juniper',
+    weight: 4.1,
+    unit: 'kg',
+    measuredAt: TODAY - 100 * DAY + 3_600_000,
+  }),
+  careDocs('weightEntries', 'w-orphan').set({
+    catId: 'gone-cat',
+    weight: 9,
+    unit: 'lb',
+    measuredAt: TODAY - DAY,
+  }),
+  careDocs('expenses', 'vet-split').set({
+    catIds: ['mochi', 'juniper'],
+    items: [{ id: 'i', category: 'vet', label: CARE_SECRET, amount: 100.01 }],
+    amount: 100.01,
+    label: CARE_SECRET,
+    notes: CARE_SECRET,
+    incurredAt: Date.UTC(2026, 10, 3),
+  }),
+  careDocs('expenses', 'food-nov').set({
+    catIds: ['mochi'],
+    items: [],
+    amount: 20,
+    incurredAt: Date.UTC(2026, 10, 20),
+  }),
+  careDocs('expenses', 'food-oct').set({
+    catIds: ['mochi'],
+    items: [],
+    amount: 5.5,
+    incurredAt: Date.UTC(2026, 9, 15),
+  }),
+  careDocs('expenses', 'orphan').set({
+    catIds: ['gone-cat'],
+    items: [],
+    amount: 77,
+    incurredAt: Date.UTC(2026, 10, 4),
+  }),
+  leftHousehold
+    .collection('weightEntries')
+    .doc('gw')
+    .set({
+      catId: 'ghost',
+      weight: 8,
+      unit: 'lb',
+      measuredAt: TODAY - DAY,
+    }),
+  leftHousehold
+    .collection('expenses')
+    .doc('ge')
+    .set({
+      catIds: ['ghost'],
+      items: [],
+      amount: 55,
+      incurredAt: Date.UTC(2026, 10, 4),
+    }),
   careDocs('visits', 'ancient').set(
     vetVisit(['mochi'], {
       status: 'completed',
@@ -2141,6 +2253,190 @@ assert.equal(
   nineLivesAdapter.deepLink('households/home/cats/mochi', nineLivesCtx(OWNER)),
   '/nine-lives',
 );
+
+const queryCare = (uid: string, category: string, args: unknown) =>
+  nineLivesAdapter.query!(nineLivesCtx(uid), { category, args });
+const careLiveCategories = [
+  'visitNotes',
+  'doseHistory',
+  'weights',
+  'catExpenses',
+];
+assert.deepEqual(
+  nineLivesAdapter.manifest.categories
+    .filter((category) => careLiveCategories.includes(category.id))
+    .map((category) => [category.mode, category.isOnAtConnect]),
+  careLiveCategories.map(() => ['live', false]),
+);
+
+const noteRead = await queryCare(OWNER, 'visitNotes', {});
+assertShape(noteRead.records);
+assert.deepEqual(
+  noteRead.records.map((record) => [record.title, record.subtitle]),
+  [
+    ['Mochi: Checkup', 'Past visit'],
+    ['Mochi: Checkup', 'Past visit'],
+    ['Mochi and Juniper: Checkup', 'Past visit'],
+    ['Mochi: Illness', 'Past visit'],
+  ],
+  'only completed visits, newest first; upcoming and called-off ones are left out',
+);
+assert.deepEqual(
+  noteRead.records.slice(0, 3).map((record) => record.detail),
+  [VISIT_NOTES, VISIT_NOTES, 'Bloodwork normal. Weight steady.'],
+);
+assert.equal(noteRead.records[3]?.detail?.length, 120);
+assert.ok(noteRead.records[3]?.detail?.endsWith('…'));
+assert.equal(noteRead.records[2]?.placeLabel, 'Blue Bark Vet');
+assert.equal(noteRead.matchedCount, 4);
+assert.equal(noteRead.totalCents, null);
+assert.equal(noteRead.currency, null);
+assert.equal(noteRead.isPartial, false);
+assert.deepEqual([noteRead.from, noteRead.to], [null, null]);
+assert.deepEqual(
+  (await queryCare(OWNER, 'visitNotes', { text: ' JUNIPER ' })).records.map(
+    (record) => record.title,
+  ),
+  ['Mochi and Juniper: Checkup'],
+  'text matches the cats and the reason in the title',
+);
+const noteWindow = await queryCare(OWNER, 'visitNotes', {
+  from: dayText(TODAY - 420 * DAY),
+  to: dayText(TODAY - 380 * DAY),
+});
+assert.equal(noteWindow.matchedCount, 1);
+assert.equal(noteWindow.from, dayText(TODAY - 420 * DAY));
+assert.equal(noteWindow.to, dayText(TODAY - 380 * DAY));
+assert.equal(
+  (await queryCare(OWNER, 'visitNotes', { text: 'bloodwork' })).matchedCount,
+  0,
+  'the notes themselves are not searched',
+);
+assert.equal(
+  (await queryCare(OWNER, 'visitNotes', 'garbage')).matchedCount,
+  4,
+  'malformed arguments are as if none were given',
+);
+
+const doseRead = await queryCare(OWNER, 'doseHistory', {});
+assertShape(doseRead.records);
+assert.deepEqual(
+  doseRead.records.map((record) => [record.title, record.subtitle]),
+  [
+    ['Mochi: Rabies', 'Vaccine given'],
+    ['Mochi: Dewormer', 'Preventive given'],
+    ['Juniper: FeLV', 'Vaccine given'],
+    ['Juniper: FeLV', 'Vaccine given'],
+  ],
+  'every logged dose, newest first; a record with no dose log reads as its last dose, and one with no day gives none',
+);
+assert.deepEqual(
+  doseRead.records.map((record) => record.detail),
+  [
+    'Given Nov 3, 2025',
+    'Given Oct 6, 2025 · Dosage: 1 tablet',
+    'Given Mar 1, 2025',
+    'Given around Mar 1, 2024',
+  ],
+);
+assert.equal(
+  doseRead.records.filter((record) => record.title.includes('gone-cat')).length,
+  0,
+);
+assert.equal(
+  new Set(refs(doseRead.records)).size,
+  doseRead.records.length,
+  'each dose has its own ref',
+);
+assert.equal(
+  (await queryCare(OWNER, 'doseHistory', { text: 'felv' })).matchedCount,
+  2,
+);
+assert.equal(
+  (
+    await queryCare(OWNER, 'doseHistory', {
+      from: '2025-01-01',
+      to: '2025-03-01',
+    })
+  ).matchedCount,
+  1,
+  'the last day asked covers its whole day',
+);
+
+const weightRead = await queryCare(OWNER, 'weights', {});
+assertShape(weightRead.records);
+assert.deepEqual(
+  weightRead.records.map((record) => record.title),
+  ['Mochi: 12.46 lb', 'Juniper: 4.1 kg'],
+  'a weigh-in without a day or for a cat that is gone is left out',
+);
+assert.equal(
+  (await queryCare(OWNER, 'weights', { text: 'moch' })).matchedCount,
+  1,
+);
+assert.equal(weightRead.currency, null);
+assert.equal(weightRead.totalCents, null);
+
+const expenseRead = await queryCare(OWNER, 'catExpenses', {});
+assertShape(expenseRead.records);
+assert.deepEqual(
+  expenseRead.records.map((record) => [
+    record.title,
+    record.amountCents,
+    record.detail,
+  ]),
+  [
+    ['Juniper: November 2026', 5_000, '1 expense'],
+    ['Mochi: November 2026', 7_001, '2 expenses'],
+    ['Mochi: October 2026', 550, '1 expense'],
+  ],
+  'a total per cat per month; a shared expense splits to the cent and a cat that is gone is left out',
+);
+expenseRead.records.forEach((record) => {
+  assert.equal(record.currency, 'USD');
+  assert.equal(record.kind, 'artifact');
+});
+assert.equal(expenseRead.totalCents, 12_551);
+assert.equal(expenseRead.currency, 'USD');
+assert.equal(
+  (
+    await queryCare(OWNER, 'catExpenses', {
+      from: '2026-11-01',
+      to: '2026-11-30',
+      text: 'mochi',
+    })
+  ).totalCents,
+  7_001,
+);
+
+const careLiveOutput = JSON.stringify(
+  await Promise.all(careLiveCategories.map((id) => queryCare(OWNER, id, {}))),
+);
+assert.ok(
+  !/SECRET|secret|example\.test|555-0100|Cat Lane/.test(careLiveOutput),
+  'no notes, lot number, clinic phone or address',
+);
+assert.ok(!careLiveOutput.includes('left'), 'nothing from a household left');
+assert.ok(!careLiveOutput.includes('Ghost'));
+await Promise.all(
+  careLiveCategories.map(async (category) =>
+    assert.deepEqual(
+      (await queryCare(OTHER, category, {})).records,
+      [],
+      `${category} gives a stranger nothing`,
+    ),
+  ),
+);
+const housemateWeights = await queryCare(HOUSEMATE, 'weights', {});
+assert.ok(
+  housemateWeights.records.some((record) => record.title === 'Ghost: 8 lb'),
+  'a member reads their own households',
+);
+assert.ok(
+  !careAll.some((record) => JSON.stringify(record).includes(VISIT_NOTES)),
+  'a synced visit carries no notes',
+);
+await assert.rejects(() => queryCare(OWNER, 'cats', {}), /Unknown category/);
 
 const TRIP_SECRET = 'SECRET TRIP';
 const TRIP_EXPENSE_AMOUNT = 9000;
@@ -3637,6 +3933,9 @@ assert.deepEqual(
     ['horizon', false],
     ['envelopes', false],
     ['transactions', false],
+    ['envelopeBalances', false],
+    ['accountBalances', false],
+    ['cardsDue', false],
   ],
 );
 assert.equal(
@@ -3788,7 +4087,6 @@ assert.equal(
   '/runway',
 );
 
-const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 const TX_SECRETS = [
   'TX NOTE SECRET',
   'TX RECEIPT SECRET',
@@ -4331,6 +4629,326 @@ assert.equal(
   'a purchase that cannot be opened is said',
 );
 await assert.rejects(() => queryTx(OTHER, {}));
+
+const BAL = 'runway-bal';
+const BAL_SECRETS = [
+  'BAL INSTITUTION SECRET',
+  '4242',
+  '9876',
+  '1111',
+  '790000',
+  '987654',
+];
+const balDoc = (
+  collection: string,
+  id: string,
+  fields: Record<string, unknown>,
+  top: Record<string, unknown> = {},
+) =>
+  runwayPlans
+    .doc(BAL)
+    .collection(collection)
+    .doc(id)
+    .set({ archivedAt: null, linkId: null, ...top, sealed: sealTx(fields) });
+await runwayPlanWith(BAL, sealRunway(runwaySummary));
+await Promise.all([
+  envItem(BAL, 'e-groc'),
+  envItem(BAL, 'e-fun'),
+  envItem(BAL, 'e-old', { archivedAt: NOW }),
+  envVersion(BAL, 'v-groc', 'e-groc', 1, 'Groceries'),
+  envVersion(BAL, 'v-fun', 'e-fun', 1, 'Fun'),
+  envVersion(BAL, 'v-old', 'e-old', 1, 'Old Fund'),
+  txDoc(BAL, 'p1', 2, {
+    amountCents: 4_000,
+    lines: [txLine('e-groc', 4_000)],
+  }),
+  txDoc(BAL, 'p2', 3, {
+    amountCents: 4_000,
+    lines: [txLine('e-groc', 3_000), txLine('e-fun', 1_000)],
+  }),
+  txDoc(BAL, 'p3', 1, {
+    amountCents: -500,
+    lines: [txLine('e-groc', -500)],
+  }),
+  txDoc(
+    BAL,
+    'p4',
+    1,
+    { amountCents: -1_100, lines: [txLine('e-fun', -1_100)] },
+    { needsHome: true },
+  ),
+  txDoc(BAL, 'p5', 15, {
+    amountCents: 9_900,
+    lines: [txLine('e-groc', 9_900)],
+  }),
+  txDoc(BAL, 'p6', 2, {
+    amountCents: -80_000,
+    incomeDayId: 'day-1',
+    lines: [txLine('e-fun', -80_000)],
+  }),
+  balDoc('accounts', 'acc-check', {
+    name: 'Checking A',
+    institution: BAL_SECRETS[0],
+    kind: 'checking',
+    countedTowardTotal: true,
+    lastFour: BAL_SECRETS[1],
+    balanceCents: 250_000,
+    balanceOn: TODAY - 2 * DAY,
+  }),
+  balDoc(
+    'accounts',
+    'acc-linked',
+    {
+      name: 'Savings B',
+      institution: BAL_SECRETS[0],
+      kind: 'savings',
+      countedTowardTotal: true,
+      lastFour: BAL_SECRETS[2],
+      balanceCents: 100,
+      balanceOn: TODAY - 30 * DAY,
+    },
+    { linkId: 'link-1' },
+  ),
+  balDoc('accounts', 'acc-invest', {
+    name: 'Brokerage',
+    kind: 'brokerage',
+    countedTowardTotal: false,
+    balanceCents: 5_000_000,
+    balanceOn: TODAY - DAY,
+  }),
+  balDoc('accounts', 'acc-cash', {
+    name: 'Cash',
+    kind: 'cash',
+    countedTowardTotal: true,
+    balanceCents: null,
+    balanceOn: null,
+  }),
+  balDoc(
+    'accounts',
+    'acc-closed',
+    { name: 'Closed', kind: 'checking', balanceCents: 1 },
+    { archivedAt: NOW },
+  ),
+  runwayPlans
+    .doc(BAL)
+    .collection('accountBalances')
+    .doc('acc-linked')
+    .set({
+      id: 'acc-linked',
+      asOf: NOW - 3_600_000,
+      sealed: sealTx({ cents: 800_000, availableCents: 790_000 }),
+    }),
+  runwayPlans
+    .doc(BAL)
+    .collection('links')
+    .doc('link-1')
+    .set({ status: 'active' }),
+  runwayPlans
+    .doc(BAL)
+    .collection('links')
+    .doc('link-dead')
+    .set({ status: 'broken' }),
+  balDoc('cards', 'card-venture', {
+    issuer: 'Capital One',
+    name: 'Venture X',
+    dueDay: 25,
+    lastFour: BAL_SECRETS[3],
+  }),
+  balDoc(
+    'cards',
+    'card-chase',
+    { issuer: 'Chase', name: null, dueDay: 5, lastFour: BAL_SECRETS[3] },
+    { linkId: 'link-1' },
+  ),
+  balDoc(
+    'cards',
+    'card-amex',
+    { issuer: 'Amex', name: 'Gold', dueDay: 31 },
+    { linkId: 'link-dead' },
+  ),
+  balDoc('cards', 'card-none', {
+    issuer: 'Discover',
+    name: null,
+    dueDay: null,
+  }),
+  balDoc(
+    'cards',
+    'card-citi',
+    { issuer: 'Citi', name: null, dueDay: null },
+    { linkId: 'link-1' },
+  ),
+  balDoc(
+    'cards',
+    'card-old',
+    { issuer: 'Retired', name: null, dueDay: 3 },
+    { archivedAt: NOW },
+  ),
+  balDoc('cardStatements', 'card-chase', {
+    dueOn: TODAY + 4 * DAY,
+    statementCents: 123_456,
+    minimumCents: 3_500,
+  }),
+  balDoc('cardStatements', 'card-amex', {
+    dueOn: TODAY + 6 * DAY,
+    statementCents: 987_654,
+    minimumCents: 987_654,
+  }),
+  balDoc('cardStatements', 'card-citi', {
+    dueOn: TODAY - 2 * DAY,
+    statementCents: null,
+    minimumCents: 2_500,
+  }),
+]);
+const queryBal = (category: string, args: unknown, uid = BAL) =>
+  runwayAdapter.query!(runwayCtx(uid), { category, args });
+
+const spending = await queryBal('envelopeBalances', {});
+assertShape(spending.records);
+assert.deepEqual(
+  spending.records.map((record) => [
+    record.title,
+    record.amountCents,
+    record.currency,
+  ]),
+  [
+    ['Groceries', 6_500, 'USD'],
+    ['Fun', 1_000, 'USD'],
+  ],
+  'this month so far: a split counts its share, a refund subtracts, a waiting credit, an income deposit and an archived envelope are left out',
+);
+assert.equal(spending.records[0]?.detail, 'Spent Nov 1, 2026 to Nov 10, 2026');
+assert.deepEqual([spending.from, spending.to], ['2026-11-01', '2026-11-10']);
+assert.equal(spending.totalCents, 7_500);
+assert.equal(spending.currency, 'USD');
+assert.equal(spending.matchedCount, 2);
+assert.equal(spending.isPartial, false);
+const spendingBack = await queryBal('envelopeBalances', {
+  from: '2026-10-01',
+  text: 'GROC',
+});
+assert.deepEqual(
+  spendingBack.records.map((record) => [record.title, record.amountCents]),
+  [['Groceries', 16_400]],
+);
+assert.equal(spendingBack.from, '2026-10-01');
+assert.equal(spendingBack.to, '2026-11-10');
+assert.deepEqual(
+  (await queryBal('envelopeBalances', { from: '2026-11-09', to: '2026-11-01' }))
+    .records,
+  [],
+  'a backwards range is empty',
+);
+const noPlanSpending = await queryBal('envelopeBalances', {}, 'runway-many');
+assert.deepEqual(noPlanSpending.records, []);
+assert.equal(noPlanSpending.totalCents, null, 'no currency, no total');
+
+const accountRead = await queryBal('accountBalances', {});
+assertShape(accountRead.records);
+assert.deepEqual(
+  accountRead.records.map((record) => [
+    record.title,
+    record.subtitle,
+    record.amountCents,
+    record.detail,
+  ]),
+  [
+    ['Brokerage', 'Brokerage', 5_000_000, 'Balance as of Nov 9, 2026'],
+    ['Cash', 'Cash', null, null],
+    ['Checking A', 'Checking', 250_000, 'Balance as of Nov 8, 2026'],
+    ['Savings B', 'Savings', 800_000, 'Balance as of Nov 10, 2026'],
+  ],
+  "a linked account takes the bank's figure; an archived one is left out",
+);
+accountRead.records.forEach((record) =>
+  assert.equal(record.currency, record.amountCents === null ? null : 'USD'),
+);
+assert.equal(
+  accountRead.totalCents,
+  1_050_000,
+  'the total counts only accounts the person counts toward theirs',
+);
+assert.equal(accountRead.currency, 'USD');
+assert.deepEqual([accountRead.from, accountRead.to], [null, null]);
+assert.equal(
+  (await queryBal('accountBalances', { text: 'check' })).matchedCount,
+  1,
+);
+
+const cardRead = await queryBal('cardsDue', {});
+assertShape(cardRead.records);
+assert.deepEqual(
+  cardRead.records.map((record) => [
+    record.title,
+    record.dueAt,
+    record.amountCents,
+    record.subtitle,
+  ]),
+  [
+    ['Chase', TODAY + 4 * DAY, 123_456, 'Statement balance'],
+    ['Capital One Venture X', Date.UTC(2026, 10, 25), null, null],
+    ['Amex Gold', Date.UTC(2026, 10, 30), null, null],
+    ['Citi', Date.UTC(2026, 11, 8), null, null],
+    ['Discover', null, null, null],
+  ],
+  "the bank's due day and statement count only while the card's sign-in works and the statement is ahead; an archived card is left out",
+);
+assert.equal(cardRead.records[4]?.detail, 'No due day is set');
+assert.equal(cardRead.records[0]?.detail, 'Due Nov 14, 2026');
+assert.equal(cardRead.totalCents, 123_456);
+assert.equal(cardRead.currency, 'USD');
+assert.deepEqual(
+  (
+    await queryBal('cardsDue', { from: '2026-11-20', to: '2026-11-30' })
+  ).records.map((record) => record.title),
+  ['Capital One Venture X', 'Amex Gold'],
+);
+assert.deepEqual(
+  (await queryBal('cardsDue', { text: 'CHASE' })).records.map(
+    (record) => record.title,
+  ),
+  ['Chase'],
+);
+
+const balOutput = JSON.stringify([
+  spending,
+  spendingBack,
+  accountRead,
+  cardRead,
+]);
+[...BAL_SECRETS, ...ENVELOPE_SECRETS, 'Old Fund', 'Closed', 'Retired'].forEach(
+  (secret) => assert.ok(!balOutput.includes(secret), `Balances have ${secret}`),
+);
+await Promise.all(
+  ['envelopeBalances', 'accountBalances', 'cardsDue'].map((category) =>
+    assert.rejects(() => queryBal(category, {}, OTHER), category),
+  ),
+);
+await runwayPlanWith('runway-bal-bad', sealRunway(runwaySummary));
+await Promise.all([
+  runwayPlans
+    .doc('runway-bal-bad')
+    .collection('accounts')
+    .doc('x')
+    .set({
+      archivedAt: null,
+      linkId: null,
+      sealed: { value: 'x', nonce: 'y' },
+    }),
+  runwayPlans
+    .doc('runway-bal-bad')
+    .collection('cards')
+    .doc('y')
+    .set({
+      archivedAt: null,
+      linkId: null,
+      sealed: { value: 'x', nonce: 'y' },
+    }),
+]);
+assert.equal(
+  (await queryBal('accountBalances', {}, 'runway-bal-bad')).isPartial,
+  true,
+  'an account that would not open is said',
+);
 
 const txGrant = (isOn: boolean, status: string) =>
   firestore.doc('connections/tx-owner/grants/helm__app:runway__site').set({

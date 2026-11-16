@@ -127,6 +127,8 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'sameEventKey',
     'hasTicket',
     'format',
+    'buyerFirstName',
+    'status',
   ],
   task: [],
   project: [
@@ -138,7 +140,7 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'leftCents',
   ],
   knowledge: ['rating'],
-  artifact: ['status'],
+  artifact: ['status', 'state', 'condition', 'floorPriceCents'],
   scenario: [],
   trip: [],
   pet: [],
