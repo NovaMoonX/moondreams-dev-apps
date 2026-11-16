@@ -33,6 +33,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   styleLearnedThroughAt: data.styleLearnedThroughAt ?? null,
   conversationFreshAt: data.conversationFreshAt ?? null,
   isDailyFreshOn: data.isDailyFreshOn ?? false,
+  outsideSeenAt: data.outsideSeenAt ?? null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });

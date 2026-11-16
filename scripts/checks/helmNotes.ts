@@ -441,6 +441,8 @@ const asOpen = (
   linkedPlaceIds: [],
   undoesExecutionId: null,
   undoneByExecutionId: null,
+  undoneDocIds: [],
+  partUndoIds: [],
   questionRef: null,
   errorCode: null,
   createdAt: 5000,
@@ -451,6 +453,7 @@ const asOpen = (
   undoReport: null,
   spoken: null,
   goneIds: null,
+  undoReason: null,
   lines: [],
   isUnreadable: false,
 });
@@ -464,7 +467,12 @@ const undoTargets = (
     {
       docId: 'id-1',
       data: { lastEditedAt: noteEdited ? 7000 : null },
-      opened: { title: 'Cakes keep 3 days in the fridge', body: 'x' },
+      opened: {
+        title: 'Cakes keep 3 days in the fridge',
+        body: 'x',
+        via: null,
+        links: [],
+      },
     },
   ],
   [
@@ -547,7 +555,12 @@ test('Undo of a filing restores the note topics and the topic marks without touc
         {
           docId: 'n1',
           data: { topicIds: ['cars', 'baking'], lastEditedAt: null },
-          opened: { title: 'Cakes keep 3 days', body: 'x' },
+          opened: {
+            title: 'Cakes keep 3 days',
+            body: 'x',
+            via: null,
+            links: [],
+          },
         },
       ],
       [
@@ -609,7 +622,7 @@ const noteTarget = (id: string, isEdited: boolean): [string, UndoTarget] => [
   {
     docId: id,
     data: { lastEditedAt: isEdited ? 7000 : null },
-    opened: { title: 'T', body: 'x' },
+    opened: { title: 'T', body: 'x', via: null, links: [] },
   },
 ];
 

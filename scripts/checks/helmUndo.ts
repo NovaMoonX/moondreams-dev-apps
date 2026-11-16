@@ -1,16 +1,28 @@
 import assert from 'node:assert/strict';
 
+import { MAX_EXECUTION_EFFECTS } from '../../functions/src/apps/helm/nomos/commands.ts';
+import { buildWriteExecution } from '../../functions/src/apps/helm/topicWriteExecution.ts';
+import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
+  MAX_UNDO_EFFECTS,
   canUndo,
   getTakenBackIds,
+  getUndoneDocIds,
+  narrowForUndo,
   planReopen,
   planUndo,
   procedureEffectKind,
+  toOfferDocIds,
+  readUndoFields,
   topicEffectKind,
   type UndoPlan,
   type UndoTarget,
 } from '../../src/apps/helm/nomos/planUndo.ts';
+import {
+  buildUndoUnits,
+  getRemainingUnits,
+} from '../../src/apps/helm/utils/undoUnits.ts';
 import { planPhotoRelease } from '../../src/apps/helm/utils/mediaRelease.ts';
 import { buildResultLines } from '../../src/apps/helm/utils/resultLines.ts';
 import type {
@@ -82,6 +94,8 @@ const execution = (
   linkedPlaceIds: [],
   undoesExecutionId: null,
   undoneByExecutionId: null,
+  undoneDocIds: [],
+  partUndoIds: [],
   questionRef: null,
   errorCode: null,
   createdAt: EARLIER,
@@ -92,6 +106,7 @@ const execution = (
   undoReport: null,
   spoken: null,
   goneIds: null,
+  undoReason: null,
   lines: [],
   isUnreadable: false,
   ...overrides,
@@ -122,8 +137,9 @@ const asRefused = (result: UndoPlan) => {
   return result;
 };
 
-const tests: [string, () => void][] = [];
-const test = (name: string, run: () => void) => tests.push([name, run]);
+const tests: [string, () => void | Promise<void>][] = [];
+const test = (name: string, run: () => void | Promise<void>) =>
+  tests.push([name, run]);
 
 const TWO_CREATES = [
   create('t1', 'Book the hair trial'),
@@ -416,7 +432,7 @@ test('unreadable, mismatched or foreign effects are refused', () => {
     asRefused(plan({ ...base, effects: base.effects.slice(1) }, [])).reason,
     'unreadable',
   );
-  const many = Array.from({ length: 41 }, (_, index) =>
+  const many = Array.from({ length: MAX_UNDO_EFFECTS + 1 }, (_, index) =>
     create(`t${index}`, `Task ${index}`),
   );
   assert.equal(asRefused(plan(execution(many), [])).reason, 'unreadable');
@@ -473,7 +489,10 @@ test('taken back ids come from the undo execution', () => {
 
 test('copy never names the app or the default assistant', () => {
   const lines = [
-    HELM_COPY.undoAll,
+    HELM_COPY.undoPickTitle,
+    HELM_COPY.undoPickAll,
+    HELM_COPY.undoPickSome(2),
+    HELM_COPY.undoPickNone,
     HELM_COPY.tookBack(1),
     HELM_COPY.tookBackKept(1, 1),
     HELM_COPY.nothingToTakeBack(['Call Dana'], 1),
@@ -2063,17 +2082,408 @@ test('a turn that made a note and a run takes back both and says so', () => {
   );
 });
 
-const failures = tests.flatMap(([name, run]) => {
+const entry = (
+  collection: EffectRef['collection'],
+  docId: string,
+  written: Record<string, unknown>,
+  previous: Record<string, unknown> | null = null,
+  op: EffectRef['op'] = previous === null ? 'create' : 'update',
+) => ({
+  ref: { op, collection, docId } as EffectRef,
+  effect: { written, previous },
+});
+
+const THREE_TASKS = [
+  create('t1', 'Book the venue'),
+  create('t2', 'Send invites'),
+  create('t3', 'Order flowers'),
+];
+const taskTargets = (ids: string[]) =>
+  ids.map((id) => target(id, { lastEditedAt: null }, sealedOf(id)));
+
+test('a project and its milestone on one record are one unit', () => {
+  const { units } = buildUndoUnits(
+    execution([
+      entry('projects', 'p1', { 'sealed.name': 'Wedding' }),
+      entry(
+        'projects',
+        'p1',
+        { 'sealed.milestones.m1': { text: 'Book' }, 'sealed.title': 'Wedding' },
+        { 'sealed.title': 'Wedding' },
+      ),
+      create('t1', 'Book the venue'),
+    ]),
+  );
+  assert.equal(units.length, 2);
+  assert.deepEqual(units[0].effectIndexes, [0, 1]);
+  assert.equal(units[0].kind, 'project');
+  assert.equal(units[0].change, 'added');
+  assert.equal(units[1].kind, 'task');
+});
+
+test('topics of one title (a grouping) are one unit, with a note hidden by a topic', () => {
+  const built = buildUndoUnits(
+    execution([
+      entry('notes', 'n1', { 'sealed.title': 'Baking' }),
+      entry('topics', 'a', { 'sealed.title': 'Baking', version: 1 }, null),
+      entry('topics', 'b', { 'sealed.title': 'Baking', version: 1 }, null),
+      entry('topics', 'c', { 'sealed.title': 'Garden', version: 1 }, null),
+    ]),
+  );
+  assert.equal(built.units.length, 2);
+  assert.deepEqual(built.units[0].effectIndexes, [0, 1, 2]);
+  assert.deepEqual(built.units[0].docIds, ['n1', 'a', 'b']);
+  assert.equal(built.units[0].key, 'a:1');
+  assert.equal(built.units[1].key, 'c:3');
+});
+
+test('a filing rides along; a row-less topic effect joins its record or title', () => {
+  const built = buildUndoUnits(
+    execution([
+      entry(
+        'topics',
+        'a',
+        { 'sealed.title': 'Baking', version: 2 },
+        { version: 1 },
+      ),
+      entry(
+        'topics',
+        'a',
+        { 'sealed.title': 'Baking', depth: 1 },
+        { depth: 0 },
+      ),
+      entry(
+        'topics',
+        'z',
+        { 'sealed.title': 'Baking', version: 3, change: 'moved' },
+        { version: 2 },
+      ),
+      entry(
+        'topics',
+        'k',
+        { pendingNoteIds: ['n'], docState: 'fresh' },
+        { pendingNoteIds: [] },
+      ),
+      entry('topics', 'q', { 'sealed.title': 'Lost', depth: 2 }, { depth: 1 }),
+    ]),
+  );
+  assert.equal(built.units.length, 1);
+  assert.deepEqual(built.units[0].effectIndexes, [0, 1, 2]);
+  assert.deepEqual(built.riders, [3]);
+  assert.deepEqual(built.rest, [4]);
+});
+
+test('people, places and photos are held apart; an import is one unit', () => {
+  const effects = [
+    create('t1', 'Book'),
+    entry('who', 'w1', { 'sealed.name': 'Dana' }),
+    entry('places', 'pl1', { 'sealed.name': 'Home' }),
+    entry('media', 'm1', { attachedTo: [{ kind: 'task', id: 't1' }] }),
+    entry(
+      'profile',
+      'me',
+      { currentPlace: null, 'sealed.title': 'Home' },
+      { currentPlace: {} },
+    ),
+  ];
+  const built = buildUndoUnits(execution(effects));
+  assert.deepEqual(built.entities, [1, 2]);
+  assert.deepEqual(built.media, [3]);
+  assert.equal(built.units.length, 2);
+  assert.equal(built.units[1].kind, 'home');
+  const imported = buildUndoUnits(execution(effects, { category: 'import' }));
+  assert.equal(imported.units.length, 1);
+  assert.equal(imported.units[0].effectIndexes.length, 5);
+});
+
+test('every drawn row names its unit, and a unit key is its first row key', () => {
+  const original = execution([
+    entry('notes', 'n1', { 'sealed.title': 'Baking' }),
+    entry('topics', 'a', { 'sealed.title': 'Baking', version: 1 }, null),
+    create('t1', 'Book'),
+    update(
+      't1',
+      { 'sealed.title': 'Book', status: 'done' },
+      { 'sealed.title': 'Book', status: 'open' },
+    ),
+    entry('who', 'w1', { 'sealed.name': 'Dana' }),
+  ]);
+  const { units } = buildUndoUnits(original);
+  const lines = buildResultLines(original, new Map(), 'UTC', NOW);
+  assert.ok(lines.every((line) => line.unitKey !== null));
+  assert.ok(
+    lines.every((line) => units.some((unit) => unit.key === line.unitKey)),
+  );
+  units.forEach((unit) =>
+    assert.equal(
+      lines.find((line) => line.unitKey === unit.key)?.key,
+      unit.key,
+    ),
+  );
+  assert.equal(units[1].change, 'added');
+  assert.equal(units[1].docIds[0], 't1');
+});
+
+test('a partial undo takes back only the chosen tasks', () => {
+  const original = execution(THREE_TASKS);
+  const narrowed = narrowForUndo(original, ['t1']);
+  assert.equal(narrowed.kind, 'ok');
+  if (narrowed.kind !== 'ok') return;
+  assert.equal(narrowed.isFinal, false);
+  assert.deepEqual(narrowed.recordedDocIds, ['t1']);
+  assert.deepEqual(
+    narrowed.view.effectRefs.map((ref) => ref.docId),
+    ['t1'],
+  );
+  assert.equal(narrowed.view.effects.length, 1);
+  const result = asWrite(
+    planUndo({
+      original: narrowed.view,
+      targets: new Map(taskTargets(['t1', 't2', 't3'])),
+      undoExecutionId: 'undo-1',
+      now: NOW,
+      usedIds: new Set(),
+      questionRef: { captureId: 'c1', questionId: 'q1' },
+    }),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['t1'],
+  );
+  assert.deepEqual(result.undoExecution.questionRef, {
+    captureId: 'c1',
+    questionId: 'q1',
+  });
+  assert.equal(result.undoExecution.undoneDocIds, null);
+});
+
+test('the last units finish the undo and take the people and places with them', () => {
+  const original = execution([
+    ...THREE_TASKS,
+    entry('who', 'w1', { 'sealed.name': 'Dana' }),
+  ]);
+  const partial = narrowForUndo(original, ['t1', 't2']);
+  assert.equal(partial.kind === 'ok' && partial.isFinal, false);
+  if (partial.kind === 'ok') {
+    assert.ok(!partial.view.effectRefs.some((ref) => ref.docId === 'w1'));
+  }
+  const after = {
+    ...original,
+    undoneDocIds: ['t1', 't2'],
+    partUndoIds: ['u1'],
+  };
+  const last = narrowForUndo(after, null);
+  assert.equal(last.kind, 'ok');
+  if (last.kind !== 'ok') return;
+  assert.equal(last.isFinal, true);
+  assert.deepEqual(
+    last.view.effectRefs.map((ref) => ref.docId),
+    ['t3', 'w1'],
+  );
+  assert.deepEqual(last.recordedDocIds.sort(), ['t1', 't2', 't3', 'w1']);
+  assert.equal(
+    narrowForUndo(after, ['t1']).kind,
+    'refused',
+    'a unit already undone is not taken twice',
+  );
+  const everything = narrowForUndo(original, null);
+  assert.equal(everything.kind === 'ok' && everything.isFinal, true);
+});
+
+test('a photo on a task that is not chosen survives; photos with outside owners go last', () => {
+  const original = execution([
+    create('t1', 'Book'),
+    create('t2', 'Send'),
+    entry('media', 'm1', { attachedTo: [{ kind: 'task', id: 't2' }] }),
+    entry('media', 'm2', { attachedTo: [{ kind: 'fact', id: 'elsewhere' }] }),
+  ]);
+  const ids = (docIds: string[], base = original) => {
+    const narrowed = narrowForUndo(base, docIds);
+    return narrowed.kind === 'ok'
+      ? narrowed.view.effectRefs.map((ref) => ref.docId)
+      : [];
+  };
+  assert.deepEqual(ids(['t1']), ['t1']);
+  assert.deepEqual(ids(['t2']), ['t2', 'm1']);
+  const afterT2 = {
+    ...original,
+    undoneDocIds: ['t2', 'm1'],
+    partUndoIds: ['u'],
+  };
+  assert.deepEqual(ids(['t1'], afterT2), ['t1', 'm2']);
+  const afterT1 = { ...original, undoneDocIds: ['t1'], partUndoIds: ['u'] };
+  assert.deepEqual(ids(['t2'], afterT1), ['t2', 'm1', 'm2']);
+});
+
+test('what an earlier undo took back is not planned again', () => {
+  const original = {
+    ...execution(THREE_TASKS),
+    undoneDocIds: ['t1'],
+    partUndoIds: ['u1'],
+  };
+  const narrowed = narrowForUndo(original, null);
+  assert.equal(narrowed.kind === 'ok' && narrowed.isFinal, true);
+  assert.deepEqual(
+    narrowed.kind === 'ok'
+      ? narrowed.view.effectRefs.map((ref) => ref.docId)
+      : [],
+    ['t2', 't3'],
+  );
+  assert.deepEqual(
+    getRemainingUnits(
+      buildUndoUnits(original).units,
+      getUndoneDocIds(original),
+    ).map((unit) => unit.docIds[0]),
+    ['t2', 't3'],
+  );
+});
+
+test('Undo is offered only while a unit is left', () => {
+  const base = execution(THREE_TASKS);
+  assert.equal(canUndo(base), true);
+  assert.equal(canUndo({ ...base, undoneDocIds: ['t1', 't2'] }), true);
+  assert.equal(canUndo({ ...base, undoneDocIds: ['t1', 't2', 't3'] }), false);
+  assert.equal(canUndo({ ...base, undoneByExecutionId: 'u' }), false);
+  assert.equal(
+    canUndo(execution([entry('who', 'w1', { 'sealed.name': 'Dana' })])),
+    true,
+    'an execution with no unit keeps the old rule',
+  );
+});
+
+test('a full turn of the most effects the server writes can still be taken back', () => {
+  assert.ok(MAX_UNDO_EFFECTS >= MAX_EXECUTION_EFFECTS);
+  const many = Array.from({ length: MAX_EXECUTION_EFFECTS }, (_, index) =>
+    create(`t${index}`, `Task ${index}`),
+  );
+  const result = plan(
+    execution(many),
+    taskTargets(many.map((entry) => entry.ref.docId)),
+  );
+  assert.equal(result.kind, 'write');
+});
+
+test('an execution from before partial undo opens with its undone ids filled in', () => {
+  const open = (data: Parameters<typeof readUndoFields>[0]) =>
+    readUndoFields(data);
+  const fresh = open({ undoneByExecutionId: null });
+  assert.deepEqual(fresh.undoneDocIds, []);
+  assert.deepEqual(fresh.partUndoIds, []);
+  const old = open({ undoneByExecutionId: 'u9' });
+  assert.deepEqual(old.partUndoIds, ['u9']);
+  const part = open({
+    undoneByExecutionId: null,
+    undoneDocIds: ['t1'],
+    partUndoIds: ['u1', 'u2'],
+  });
+  assert.deepEqual(part.undoneDocIds, ['t1']);
+  assert.deepEqual(part.partUndoIds, ['u1', 'u2']);
+});
+
+test('a later batch write to a topic is taken back as a version; the first write has nothing to go back to', () => {
+  const written = (from: number, reason = 'notesBrought') =>
+    buildWriteExecution(
+      NOW,
+      (fields) => fields as unknown as SealedPayload,
+      'Brought 2 notes into Car care',
+      { topicId: 'car', name: 'Car care', reason, from, to: from + 1 },
+    ) as unknown as {
+      effectRefs: EffectRef[];
+      sealed: { effects: ExecutionEffect[] };
+    };
+  const first = written(0, 'firstWritten');
+  assert.deepEqual(first.effectRefs, []);
+  assert.deepEqual(first.sealed.effects, []);
+  const later = written(4);
+  assert.deepEqual(later.effectRefs, [
+    { op: 'update', collection: 'topics', docId: 'car' },
+  ]);
+  assert.deepEqual(Object.keys(later.sealed.effects[0].written).sort(), [
+    'change',
+    'sealed.title',
+    'version',
+  ]);
+  const result = asWrite(
+    plan(
+      execution(
+        later.effectRefs.map((ref, index) => ({
+          ref,
+          effect: later.sealed.effects[index],
+        })),
+      ),
+      [topicTarget('car', { version: 5, writeClaim: null })],
+    ),
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
+  const moved = asRefused(
+    plan(
+      execution(
+        later.effectRefs.map((ref, index) => ({
+          ref,
+          effect: later.sealed.effects[index],
+        })),
+      ),
+      [topicTarget('car', { version: 6, writeClaim: null })],
+    ),
+  );
+  assert.ok(moved);
+});
+
+test('an undo offer names what is still left: the whole turn, a part, or nothing', () => {
+  const exec = execution(TWO_CREATES);
+  assert.deepEqual(toOfferDocIds({ docIds: [], isAll: true }, exec), [
+    't1',
+    't2',
+  ]);
+  assert.deepEqual(
+    toOfferDocIds({ docIds: ['t2', 'zzz'], isAll: false }, exec),
+    ['t2'],
+  );
+  const part = execution(TWO_CREATES, { undoneDocIds: ['t1'] });
+  assert.deepEqual(toOfferDocIds({ docIds: [], isAll: true }, part), ['t2']);
+  assert.deepEqual(toOfferDocIds({ docIds: ['t1'], isAll: false }, part), []);
+  const whole = execution(TWO_CREATES, { undoneByExecutionId: 'undo-0' });
+  assert.deepEqual(toOfferDocIds({ docIds: [], isAll: true }, whole), []);
+});
+
+test('an undo carries the reason it was asked for, null when none was given', () => {
+  const targets: [string, UndoTarget][] = [
+    target('t1', { lastEditedAt: null }, sealedOf('Book the hair trial')),
+    target('t2', { lastEditedAt: null }, sealedOf('Send the save-the-dates')),
+  ];
+  const reason = {
+    reason: 'wrongDetails' as const,
+    quote: 'not that one',
+    via: 'offer' as const,
+  };
+  const withReason = asWrite(
+    planUndo({
+      original: execution(TWO_CREATES),
+      targets: new Map(targets),
+      undoExecutionId: 'undo-1',
+      now: NOW,
+      usedIds: new Set(),
+      reason,
+    }),
+  );
+  assert.deepEqual(withReason.undoSealed.undoReason, reason);
+  const without = asWrite(plan(execution(TWO_CREATES), targets));
+  assert.equal(without.undoSealed.undoReason, null);
+});
+
+const failures: string[] = [];
+for (const [name, run] of tests) {
   try {
-    run();
+    await run();
     console.log(`ok   ${name}`);
-    return [];
   } catch (error) {
     console.error(
       `FAIL ${name}\n${error instanceof Error ? error.stack : error}`,
     );
-    return [name];
+    failures.push(name);
   }
-});
+}
 console.log(`${tests.length - failures.length}/${tests.length} passed`);
 process.exit(failures.length ? 1 : 0);
