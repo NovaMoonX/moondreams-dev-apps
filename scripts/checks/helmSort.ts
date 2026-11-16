@@ -46,6 +46,7 @@ import {
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import {
   readContextFit,
+  isAskingDays,
   readFitRange,
 } from '../../functions/src/apps/helm/nomos/fitContext.ts';
 import { maskPrivateNames } from '../../functions/src/apps/helm/privacy.ts';
@@ -3424,6 +3425,78 @@ test('a can-I-go question names the days it is about, widened to the stretch awa
       dates: [fitDay('2026-11-22')],
     }),
     { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+});
+
+test('days keep their spoken roles: a day after leave or from starts, one after back, to or through ends, and a bare weekday end moves forward by weeks', () => {
+  assert.deepEqual(
+    fitRange('Could I leave Friday, back the 27th?', {
+      dates: [
+        fitDay('2026-11-27', 'the 27th', 27),
+        fitDay('2026-11-20', 'Friday', 14),
+      ],
+    }),
+    { firstDay: '2026-11-20', lastDay: '2026-11-27' },
+  );
+  assert.deepEqual(
+    fitRange('Could I leave the 18th?', {
+      dates: [fitDay('2026-11-18', 'the 18th', 14)],
+    }),
+    { firstDay: '2026-11-18', lastDay: '2026-11-18' },
+  );
+  assert.deepEqual(
+    fitRange('Sunday through Tuesday', {
+      answeredQuestion: 'When do you leave?',
+      dates: [
+        fitDay('2026-11-17', 'Tuesday', 15),
+        fitDay('2026-11-22', 'Sunday', 0),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-24' },
+  );
+  assert.deepEqual(
+    fitRange('Could I leave Sunday and be back Friday?', {
+      todayKey: '2026-11-20',
+      dates: [
+        fitDay('2026-11-20', 'Friday', 33),
+        fitDay('2026-11-22', 'Sunday', 14),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-27' },
+  );
+  assert.deepEqual(
+    fitRange('Could I go from Friday to the 20th?', {
+      dates: [
+        fitDay('2026-11-20', 'the 20th', 26),
+        fitDay('2026-11-18', 'Friday', 16),
+      ],
+    }),
+    { firstDay: '2026-11-18', lastDay: '2026-11-20' },
+  );
+});
+
+test('only a clear leaving cue asks when the person leaves, and never again right after the answer', () => {
+  assert.equal(
+    isAskingDays({ text: "What's left before I go?", answeredQuestion: null }),
+    true,
+  );
+  assert.equal(
+    isAskingDays({ text: 'Can I go to bed early?', answeredQuestion: null }),
+    false,
+  );
+  assert.equal(
+    isAskingDays({
+      text: 'Should I leave for the airport at 5?',
+      answeredQuestion: null,
+    }),
+    false,
+  );
+  assert.equal(
+    isAskingDays({
+      text: 'Next week, before I go away',
+      answeredQuestion: 'When are you leaving?',
+    }),
+    false,
   );
 });
 

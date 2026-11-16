@@ -54,6 +54,10 @@ const FIT_CUE_RE = new RegExp(
   `\\b(before (i|we) (go|leave|head out)|leav(e|ing) (on|this|next|for|tomorrow|the \\d|${WEEKDAY})|when (do|are|will) (you|we|i) (leave|leaving)|hit(ting)? the road|go(ing)? away|(can|could) (i|we) (go|leave)|what'?s left before)\\b`,
   'i',
 );
+const ASK_DAYS_RE = new RegExp(
+  `\\b(before (i|we) (go|leave|head out)|leav(e|ing) (on|this|next|tomorrow|the \\d|${WEEKDAY})|hit(ting)? the road|go(ing)? away|what'?s left before)\\b`,
+  'i',
+);
 const FIRST_CUE_RE =
   /\b(?:leav\w*|go|going|head(?:ing)? out|depart\w*|from)\s+(?:on\s+|this\s+)?(?:the\s+)?$/i;
 const LAST_CUE_RE =
@@ -72,6 +76,14 @@ const isFitTurn = (input: {
   input.isQuestion &&
   (FIT_CUE_RE.test(input.text) ||
     FIT_CUE_RE.test(input.answeredQuestion ?? ''));
+
+/** Whether a fit turn with no days to go on asks when the person leaves: only on a clear leaving cue, and never right after that question was answered. */
+export const isAskingDays = (input: {
+  text: string;
+  answeredQuestion: string | null;
+}) =>
+  ASK_DAYS_RE.test(input.text) &&
+  !FIT_CUE_RE.test(input.answeredQuestion ?? '');
 
 const toDayKey = (at: number) => new Date(at).toISOString().slice(0, 10);
 
@@ -249,7 +261,7 @@ export async function readContextFit(input: {
     timeZone: zone,
     isQuestion: input.isQuestion,
   });
-  if (!range) return { needsDays: true };
+  if (!range) return isAskingDays(input) ? { needsDays: true } : null;
   const lastRead = Math.round((dayKeyToMs(range.lastDay) - today) / DAY_MS);
   const days = Math.min(MAX_EVENT_DAYS, lastRead + 1 + LOOK_AHEAD_DAYS);
   const [events, hasCalendar, projectDocs] = await Promise.all([
