@@ -110,6 +110,7 @@ async function openCapture(
   const base = {
     id: entry.id,
     inputMode: data.inputMode ?? 'typed',
+    isSpokenTurn: data.isSpokenTurn ?? data.inputMode === 'voice',
     sttProvider: data.sttProvider ?? null,
     interruptedCaptureId: data.interruptedCaptureId ?? null,
     answersQuestion: data.answersQuestion ?? null,

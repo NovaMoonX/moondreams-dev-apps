@@ -76,6 +76,7 @@ Later:
 - [x] Scheduled actions the assistant does for you at a set time, repeating the way a calendar event does, listed under Browse › Scheduled, each run told on Today and in Activity
 - [ ] "Could I drive to Leavenworth Sunday after I land?" (for the friend's wedding you officiate) answered with what must be done first, reading each connected app as you see it there (Going Once's drafts and buyers' questions too), where you and your people are, and how each meeting happens; questions saved to learn later and brought back on a quiet evening with a picture and two videos; research offered ahead of a dated plan like a move, quick or thorough, within a monthly allowance ($2 a person)
 - [x] Hands-free first: every question answered aloud, listening after it asks, talk over it any time
+- [x] Voice follows the turn on every page: speak on a person's page or after the wake phrase and the answer is said there; type and it's written
 - [ ] "How Nomos sees you" grows to how you talk and what works for you, each line citing where it came from; give the assistant a personality (blunt, kind, brief…) and say how honest it may be
 - [ ] Your phone's location only if you choose (Off, City only or Precise), and one Google Calendar kept in step both ways
 - [ ] Drafting in your style, video, app cards (a Pinch recipe card), a life timeline and milestones from the moments Helm keeps, writes to other apps

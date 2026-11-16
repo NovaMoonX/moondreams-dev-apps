@@ -133,6 +133,7 @@ export async function sendCapture(
     attachmentIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
+    isSpokenTurn?: boolean;
     /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
     presence?: Capture['presence'];
     heardNames?: HeardName[];
@@ -168,6 +169,7 @@ export async function sendCapture(
   // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {
     inputMode: turn.voice ? 'voice' : text ? 'typed' : 'attachment',
+    isSpokenTurn: turn.isSpokenTurn ?? turn.voice !== undefined,
     sttProvider: turn.voice?.sttProvider ?? null,
     interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
     answersQuestion: turn.answersQuestion,

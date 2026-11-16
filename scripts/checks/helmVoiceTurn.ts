@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   OPEN_QUESTION_MS,
+  isSpokenTurn,
   pickQuestionTurn,
 } from '../../src/apps/helm/utils/openQuestion.ts';
 
@@ -72,4 +73,31 @@ assert.equal(
   'a typed turn opens nothing to answer by voice',
 );
 
-console.log('helm voice turn: 7 routes picked as expected');
+const open = { isOpen: true, isMuted: false };
+const closed = { isOpen: false, isMuted: false };
+const muted = { isOpen: true, isMuted: true };
+const spokenCases: [
+  Parameters<typeof isSpokenTurn>[0],
+  typeof open,
+  boolean,
+  string,
+][] = [
+  ['spoken', closed, true, 'a spoken turn is spoken on any page'],
+  ['typed', open, false, 'a typed turn is written even mid-conversation'],
+  [
+    'tap',
+    open,
+    true,
+    'a tap while a spoken conversation is open is answered aloud',
+  ],
+  ['tap', closed, false, 'a tap with no conversation open is written'],
+  ['spoken', muted, false, 'Mute ends the spoken turn'],
+  ['tap', muted, false, 'a tap while muted is written'],
+];
+spokenCases.forEach(([route, conversation, expected, message]) =>
+  assert.equal(isSpokenTurn(route, conversation), expected, message),
+);
+
+console.log(
+  `helm voice turn: 7 routes picked, ${spokenCases.length} turns marked spoken or written as expected`,
+);

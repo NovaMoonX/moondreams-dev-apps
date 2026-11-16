@@ -99,6 +99,7 @@ const toCapture = async (
   const { turn } = input;
   return {
     inputMode: turn.inputMode,
+    isSpokenTurn: turn.inputMode === 'voice',
     sttProvider: turn.sttProvider,
     interruptedCaptureId: turn.interruptedCaptureId,
     answersQuestion: null,

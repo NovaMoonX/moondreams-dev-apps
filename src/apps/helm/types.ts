@@ -383,6 +383,8 @@ export interface ScreenContext {
 /** One turn: what the person said, with the words sealed. */
 export interface Capture {
   inputMode: 'typed' | 'voice' | 'attachment';
+  /** Whether the reply is said aloud: a spoken turn, or a choice tapped while a spoken conversation was open; null on a turn from before, read as `inputMode === 'voice'`. */
+  isSpokenTurn: boolean | null;
   /** Which listener wrote a spoken turn ('browser'); null on every other turn. */
   sttProvider: string | null;
   /** The capture whose spoken reply the person talked over to say this; null on every other turn. */

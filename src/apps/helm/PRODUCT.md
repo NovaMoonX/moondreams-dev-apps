@@ -1356,7 +1356,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] How [name] sees you, widened: how you talk and what works for you, each line citing what it came from, corrected or removed by tap or voice (O) (Issue 125)
 - [ ] The assistant's personality: traits you pick or say, how honest it may be, a warning when two clash and a sample of how replies will read (O) (Issue 126)
 - [x] Hands-free first across habits, goals, learning and thinking ahead: every question answered aloud, listening after asking, talking over it, the wake phrase to answer late (O, N) (Issue 116)
-- [ ] Voice follows the turn on every page: spoken on home, through "Ask about this" or after the wake phrase is answered aloud there; typed is answered in writing (O) (Issue 117)
+- [x] Voice follows the turn on every page: spoken on home, through "Ask about this" or after the wake phrase is answered aloud there; typed is answered in writing (O) (Issue 117)
 - [ ] Private things: health and care things private on their own on any kind of record, anything marked private by saying so or a switch; never named in a reminder, copy or export unless turned on for that one thing; every reminder nameless by default (O) (Issue 103)
 - [ ] Where you and your people are: a home and a temporary location with dates for you and each who, from what you say, your calendar and trips, used for "nearby"; the phone's location as your choice of Off, City only or Precise (O, C) (Issue 107)
 - [ ] Research with live web search: quick or thorough, a default you set, asked when it matters, within a monthly allowance per person (O) (Issue 118)

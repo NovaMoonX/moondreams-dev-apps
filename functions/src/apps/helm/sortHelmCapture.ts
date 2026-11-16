@@ -483,6 +483,7 @@ export interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  isSpokenTurn?: boolean | null;
   medium?: 'web' | 'mcp';
   via?: string | null;
   arrivedVia: string | null;
@@ -505,6 +506,10 @@ export interface CaptureDoc {
   createdAt: number;
   sealed: SealedPayload;
 }
+
+/** A spoken turn, or a choice tapped while a spoken conversation was open; a turn from before the flag reads its input mode. */
+const isSpokenDoc = (capture: Pick<CaptureDoc, 'inputMode' | 'isSpokenTurn'>) =>
+  capture.isSpokenTurn ?? capture.inputMode === 'voice';
 
 interface TaskDoc {
   status: 'open' | 'done';
@@ -2216,7 +2221,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       messageCount: 1,
       route: 'quick',
       timeZone: 'UTC',
-      isSpoken: capture.inputMode === 'voice',
+      isSpoken: isSpokenDoc(capture),
       media: null,
     });
   }
@@ -2438,10 +2443,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       via: typeof lead?.via === 'string' ? lead.via : '',
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
-        lead?.inputMode === 'voice' ||
-        joined.some(
-          (snapshot) => (snapshot.data() as CaptureDoc).inputMode === 'voice',
-        ),
+        (lead !== undefined && isSpokenDoc(lead)) ||
+        joined.some((snapshot) => isSpokenDoc(snapshot.data() as CaptureDoc)),
     };
   };
 
