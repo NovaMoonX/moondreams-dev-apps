@@ -263,6 +263,8 @@ const dayQuestion: HelmQuestion = {
   builtBy: 'model',
   shape: 'dateTime',
   prompt: 'When is it due?',
+  lead: null,
+  undoChoices: [],
   options: [],
   allowsSomethingElse: false,
   noneOption: false,
@@ -324,6 +326,32 @@ assert.deepEqual(
   'a stored speed reads as its nearest notch, normal when null',
 );
 assert.ok(HELM_VOICE_SPEEDS.includes(1), 'normal pace is a notch');
+
+const undoOffer: HelmQuestion = {
+  kind: 'undoOffer',
+  builtBy: 'code',
+  shape: 'yesNo',
+  prompt: 'Undo adding Call Sam? Buy milk stays.',
+  lead: null,
+  undoChoices: [],
+  options: [
+    { id: 'yes', label: 'Undo it', detail: null, ref: null },
+    { id: 'no', label: 'Keep it', detail: null, ref: null },
+  ],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  aboutRef: null,
+  answer: null,
+};
+assert.ok(
+  isUndoPhrase('undo that') &&
+    matchSpokenAnswer('undo that', undoOffer, { now: NOW, timeZone: ZONE })
+      ?.kind === 'answer',
+  'an undo phrase is an undo phrase and, with an offer open, also reads as yes',
+);
 
 console.log(
   'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',

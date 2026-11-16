@@ -2530,6 +2530,7 @@ export function buildExecution(
       lines: plan.lines,
       undoReport: null,
       goneIds: null,
+      undoReason: null,
       spoken: withQuestion(
         (own && isVoice
           ? own
@@ -2582,6 +2583,7 @@ export function buildAnswerExecution(input: {
       notDone: input.notDone ?? [],
       undoReport: null,
       goneIds: null,
+      undoReason: null,
       said: null,
       lines: null,
       spoken: input.spoken,

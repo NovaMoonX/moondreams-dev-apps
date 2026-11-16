@@ -200,6 +200,16 @@ export interface QuestionNumber {
 }
 
 /** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
+/** One thing an undo offer can take back: the records one execution wrote, whole or in part. */
+export interface UndoChoice {
+  optionId: string;
+  executionId: string;
+  docIds: string[];
+  isAll: boolean;
+  reason: UndoReason;
+  quote: string | null;
+}
+
 export interface HelmQuestion {
   kind:
     | 'whichPerson'
@@ -207,10 +217,15 @@ export interface HelmQuestion {
     | 'whichIsTrue'
     | 'whichTopic'
     | 'groupTopics'
+    | 'undoOffer'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
   prompt: string;
+  /** A quiet line drawn above the prompt (the assistant's reason for an undo offer); null on every other kind. */
+  lead: string | null;
+  /** What each choice of an undo offer takes back; [] on every other kind. */
+  undoChoices: UndoChoice[];
   options: QuestionOption[];
   allowsSomethingElse: boolean;
   noneOption: boolean;
@@ -1023,8 +1038,19 @@ export interface ExecutionSealed {
   spoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
+  /** Why an undo was asked for and how; null on every execution that is not an undo and on ones made before this. */
+  undoReason: UndoReasonRecord | null;
   /** Result rows that touch no record (a note already kept); null on executions that said none. */
   lines: ResultNoteLine[] | null;
+}
+
+export type UndoReason =
+  'wrongThing' | 'wrongDetails' | 'tooHasty' | 'changedMind' | 'unclear';
+
+export interface UndoReasonRecord {
+  reason: UndoReason;
+  quote: string | null;
+  via: 'offer' | 'card' | 'voice';
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -1041,6 +1067,7 @@ export interface OpenExecution extends Omit<
   undoReport: string | null;
   spoken: string | null;
   goneIds: string[] | null;
+  undoReason: UndoReasonRecord | null;
   lines: ResultNoteLine[];
   isUnreadable: boolean;
 }

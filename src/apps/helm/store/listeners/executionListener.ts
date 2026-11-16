@@ -65,6 +65,7 @@ export async function openExecution(
       undoReport: payload.undoReport ?? null,
       spoken: payload.spoken ?? null,
       goneIds: payload.goneIds ?? null,
+      undoReason: payload.undoReason ?? null,
       lines: payload.lines ?? [],
       isUnreadable: false,
     };
@@ -77,6 +78,7 @@ export async function openExecution(
       undoReport: null,
       spoken: null,
       goneIds: null,
+      undoReason: null,
       lines: [],
       isUnreadable: true,
     };

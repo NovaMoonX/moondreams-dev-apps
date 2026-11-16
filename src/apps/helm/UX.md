@@ -117,6 +117,7 @@ Helm reads from the person's other apps on this site and from Google, and change
 - **At most 3 on screen in a turn;** more wait in Needs you ("2 more questions in Needs you").
 - **Answered and kept.** The card becomes the reply ("Got it: Sam Lee and Jordan Hayes.") and the lines it changed, with one Undo; Activity keeps "Asked: … · You picked …". Undo takes the effect back and the question waits again.
 - **Who writes it.** {Name}'s questions and options are checked and capped (80 characters an option); Helm's own ("Which Sam?", "Which is true now?") keep their wording in every tone.
+- **Undo offer (the assistant asks before taking anything back).** On "never mind" or "why did you do that?" {Name} answers in words and the turn ends with a question card: a quiet {Name} line first (the reason, such as "That may have been the wrong task."), then "Undo adding Call Sam? Buy milk stays." with **Undo it** and **Keep it**; several candidates ask "Which of these should be undone?" with one row each and **Keep everything**. The card, Needs you's sheet and a spoken turn all answer it: tap, or say "undo it", "keep it", a row's words or "keep everything" (an exact "undo that" answers yes; with several rows it points to the card). The card says what happened where the buttons were: the undo's own line ("Took back 1 task."), "Kept it.", "Kept everything." or "That was already taken back."; offline says "Answering needs a connection." and nothing changes. {Name} never undoes without this answer.
 
 ### 1f. Your knowledge: topics are documents (round 6d)
 

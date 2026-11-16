@@ -61,7 +61,10 @@ import {
   isAnswerInFlight,
   sendQuestionAnswer,
 } from '@apps/helm/store/actions/questionActions';
-import { takeBack } from '@apps/helm/store/actions/undoActions';
+import {
+  answerUndoOffer,
+  takeBack,
+} from '@apps/helm/store/actions/undoActions';
 import {
   selectAllCaptures,
   selectExecutionsById,
@@ -292,12 +295,18 @@ export function useHelmVoice() {
       sayRepeatRefusal(voice.repeat());
       return;
     }
+    // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase; the compiler flags every clock read once the answer path calls the sender
+    const now = Date.now();
     if (isUndoPhrase(text)) {
+      const offer = findAskedQuestion(now);
+      if (offer?.asked.question.kind === 'undoOffer') {
+        await answerOpenUndoOffer(offer.asked, 'yes');
+        return;
+      }
       await undoLatest();
       return;
     }
-    // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase; the compiler flags every clock read once the answer path calls the sender
-    if (await answerQuestion(text, sttProvider, Date.now())) return;
+    if (await answerQuestion(text, sttProvider, now)) return;
     await sendTurn(text, sttProvider, interrupted);
   }
 
@@ -314,12 +323,8 @@ export function useHelmVoice() {
     return next ? buildSpokenQuestion(next.question) : null;
   }
 
-  /** An answer to the open question of the latest spoken turn settles it instead of becoming a turn of its own kind: a code-built question is answered on the server, one the assistant wrote goes as an answer turn (what could not be placed goes as its words). A code-built question's reply that is none of its choices is asked again once, then goes on as a turn. */
-  async function answerQuestion(
-    text: string,
-    sttProvider: string,
-    now: number,
-  ) {
+  /** The first open, unskipped question of the latest spoken turn of the open session, with that turn. */
+  function findAskedQuestion(now: number) {
     const state = store.getState();
     const all = selectAllCaptures(state);
     const sessionId = getOpenSessionId(
@@ -341,7 +346,57 @@ export function useHelmVoice() {
             )
             .map((entry) => ({ captureId: latest.id, ...entry }))[0]
         : undefined;
-    if (!uid || !asked) return false;
+    return latest && asked ? { state, latest, asked } : null;
+  }
+
+  /** Answers an open undo offer by voice and says what happened; a pick between several is finished on the card, never guessed. */
+  async function answerOpenUndoOffer(
+    asked: { captureId: string; id: string; question: HelmQuestion },
+    optionId: string,
+  ) {
+    if (!uid) return;
+    if (asked.question.shape !== 'yesNo' && optionId === 'yes') {
+      say(HELM_COPY.undoOfferFinishOnCard);
+      return;
+    }
+    try {
+      const outcome = await answerUndoOffer(uid, {
+        captureId: asked.captureId,
+        questionId: asked.id,
+        question: asked.question,
+        optionId,
+        by: 'voice',
+      });
+      say(
+        outcome.kind === 'undone'
+          ? outcome.report
+          : outcome.kind === 'kept'
+            ? optionId === 'keep'
+              ? HELM_COPY.undoOfferKeptAll
+              : HELM_COPY.undoOfferKept
+            : outcome.kind === 'already'
+              ? HELM_COPY.questionGone('undoOffer')
+              : outcome.kind === 'nothing'
+                ? (outcome.report ?? HELM_COPY.cannotTakeBack)
+                : outcome.kind === 'offline'
+                  ? HELM_COPY.questionNeedsConnection
+                  : HELM_COPY.heldActionFailed,
+      );
+    } catch (error) {
+      console.error('Helm undo offer was not answered by voice', error);
+      say(HELM_COPY.heldActionFailed);
+    }
+  }
+
+  /** An answer to the open question of the latest spoken turn settles it instead of becoming a turn of its own kind: a code-built question is answered on the server, one the assistant wrote goes as an answer turn (what could not be placed goes as its words). A code-built question's reply that is none of its choices is asked again once, then goes on as a turn. */
+  async function answerQuestion(
+    text: string,
+    sttProvider: string,
+    now: number,
+  ) {
+    const found = findAskedQuestion(now);
+    if (!uid || !found) return false;
+    const { state, latest, asked } = found;
     const { question } = asked;
     const askedKey = `${asked.captureId}:${asked.id}`;
     const answer = matchSpokenAnswer(text, question, {
@@ -408,6 +463,10 @@ export function useHelmVoice() {
       return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
     }
     if (choice === null) return false;
+    if (question.kind === 'undoOffer' && optionId !== null) {
+      await answerOpenUndoOffer(asked, optionId);
+      return true;
+    }
     if (question.kind === 'whichIsTrue' && optionId === 'none') {
       say(HELM_COPY.whichIsTrueNoneVoice);
       return true;
@@ -578,7 +637,9 @@ export function useHelmVoice() {
       return;
     }
     try {
-      const result = await takeBack(uid, latest.id);
+      const result = await takeBack(uid, latest.id, {
+        reason: { reason: 'unclear', quote: null, via: 'voice' },
+      });
       if (result.kind === 'done') say(result.report);
       else if (result.kind === 'refused') {
         say(result.report ?? HELM_COPY.cannotTakeBack);

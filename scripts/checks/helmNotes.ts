@@ -453,6 +453,7 @@ const asOpen = (
   undoReport: null,
   spoken: null,
   goneIds: null,
+  undoReason: null,
   lines: [],
   isUnreadable: false,
 });

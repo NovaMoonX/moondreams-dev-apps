@@ -21,6 +21,8 @@ import type {
   ProcedureSealed,
   RunSealed,
   TopicSealed,
+  UndoChoice,
+  UndoReasonRecord,
   WhoSealed,
 } from '@apps/helm/types';
 
@@ -644,6 +646,8 @@ export function planUndo(input: {
   usedIds: Set<string>;
   /** The question an offered undo answered; written on the undo's own execution. */
   questionRef?: Execution['questionRef'];
+  /** Why the undo was asked for; written on the undo's own execution. */
+  reason?: UndoReasonRecord;
 }): UndoPlan {
   const { original, targets, now, usedIds } = input;
   if (original.undoneByExecutionId !== null) return refuse('alreadyUndone');
@@ -1353,6 +1357,7 @@ export function planUndo(input: {
       undoReport: report,
       spoken: null,
       goneIds,
+      undoReason: input.reason ?? null,
       lines: null,
     },
     takenBack: [
@@ -1462,6 +1467,28 @@ export function narrowForUndo(
             .map((index) => refs[index].docId),
         ],
   };
+}
+
+/** The records an undo offer's choice would still take back from an execution: every unit left when it is the whole turn, else the ones it names that are not yet undone; empty once nothing is left. */
+export function toOfferDocIds(
+  choice: Pick<UndoChoice, 'docIds' | 'isAll'>,
+  execution: OpenExecution,
+): string[] {
+  if (execution.undoneByExecutionId !== null) return [];
+  const built = buildUndoUnits(execution);
+  if (built.units.length === 0) {
+    return [...new Set(execution.effectRefs.map((ref) => ref.docId))];
+  }
+  const remaining = getRemainingUnits(
+    built.units,
+    getUndoneDocIds(execution),
+  ).flatMap((unit) => unit.docIds);
+  const wanted = new Set(choice.docIds);
+  return [
+    ...new Set(
+      choice.isAll ? remaining : remaining.filter((id) => wanted.has(id)),
+    ),
+  ];
 }
 
 /** The records an Undo took back (restored or deleted), by id. */

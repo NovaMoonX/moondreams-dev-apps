@@ -582,6 +582,7 @@ export async function keepLetGoMedia(
       undoReport: null,
       spoken: null,
       goneIds: null,
+      undoReason: null,
       said: null,
       lines: null,
     },

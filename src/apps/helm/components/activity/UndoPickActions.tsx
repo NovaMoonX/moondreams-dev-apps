@@ -49,6 +49,7 @@ function UndoPickActions({
     try {
       const result = await takeBack(user.uid, execution.id, {
         docIds: [...new Set(chosen.flatMap((unit) => unit.docIds))],
+        reason: { reason: 'unclear', quote: null, via: 'card' },
       });
       if (result.kind === 'done') onDone();
       if (result.kind === 'refused') {

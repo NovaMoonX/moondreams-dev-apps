@@ -58,6 +58,7 @@ import type {
   TaskSealed,
   TopicSealed,
   TopicVersion,
+  UndoReasonRecord,
   TopicVersionSealed,
   WhoSealed,
 } from '@apps/helm/types';
@@ -380,6 +381,8 @@ export async function undoExecution(
     /** Takes back only the units that write these records; every unit still left when absent. */
     docIds?: string[];
     questionRef?: { captureId: string; questionId: string };
+    /** Why the undo was asked for; written on the undo and read later for learning. */
+    reason?: UndoReasonRecord;
   } = {},
 ): Promise<UndoResult> {
   if (!navigator.onLine) return { kind: 'offline' };
@@ -529,6 +532,7 @@ export async function undoExecution(
           now: Date.now(),
           usedIds,
           questionRef: options.questionRef,
+          reason: options.reason,
         });
         if (plan.kind === 'refused') {
           return { kind: 'refused', reason: plan.reason, report: plan.report };

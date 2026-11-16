@@ -40,6 +40,8 @@ import {
   getHomeFrom,
   getOpenSessionId,
 } from '../../src/apps/helm/utils/sessions.ts';
+import { toQuestions } from '../../src/apps/helm/utils/readQuestions.ts';
+import { buildSpokenQuestion } from '../../src/apps/helm/utils/spokenQuestion.ts';
 import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
 import { toQuestionChoice } from '../../src/apps/helm/utils/questionChoice.ts';
 import type {
@@ -893,6 +895,8 @@ const GROUP_QUESTION: HelmQuestion = {
   builtBy: 'code',
   shape: 'yesNo',
   prompt: 'Group Washing and Fragrance under Car care?',
+  lead: null,
+  undoChoices: [],
   options: [
     { id: 'yes', label: 'Group them', detail: null, ref: null },
     { id: 'no', label: "Don't group", detail: null, ref: null },
@@ -1354,6 +1358,104 @@ test('an open undo offer keeps the turn waiting in Needs you', () => {
     hadAsks: true,
   });
   assert.equal(settled.status, 'needsYou');
+});
+
+const OFFER_CHOICE = {
+  optionId: 'yes',
+  executionId: 'e1',
+  docIds: ['t1'],
+  isAll: false,
+  reason: 'wrongThing',
+  quote: 'not that',
+};
+const OFFER_SEALED = {
+  kind: 'undoOffer',
+  builtBy: 'code',
+  shape: 'yesNo',
+  prompt: 'Undo adding Call Sam? Buy milk stays.',
+  lead: 'That may have been the wrong task.',
+  options: [
+    { id: 'yes', label: 'Undo it', detail: null, ref: null },
+    { id: 'no', label: 'Keep it', detail: null, ref: null },
+  ],
+  heldCommands: [{ kind: 'undoOffer', choices: [OFFER_CHOICE] }],
+};
+const offerQuestion = (): HelmQuestion => toQuestions({ q1: OFFER_SEALED }).q1;
+
+test('an undo offer is read with its lead and what each choice takes back', () => {
+  const question = offerQuestion();
+  assert.equal(question.kind, 'undoOffer');
+  assert.equal(question.lead, 'That may have been the wrong task.');
+  assert.deepEqual(question.undoChoices, [OFFER_CHOICE]);
+  const bad = toQuestions({
+    q1: {
+      ...OFFER_SEALED,
+      heldCommands: [
+        { kind: 'undoOffer', choices: [{ ...OFFER_CHOICE, reason: 'x' }] },
+      ],
+    },
+  }).q1;
+  assert.deepEqual(bad.undoChoices, []);
+  const other = toQuestions({ q1: { ...GROUP_QUESTION } }).q1;
+  assert.equal(other.lead, null);
+  assert.deepEqual(other.undoChoices, []);
+});
+
+test('an open undo offer holds its turn in Needs you and can be dismissed', () => {
+  const capture = {
+    questionState: {
+      q1: { kind: 'undoOffer', answeredAt: null },
+    },
+  } as unknown as OpenCapture;
+  assert.equal(hasOpenChoice(capture), true);
+  assert.equal(isDismissable('undoOffer'), true);
+});
+
+test('an undo offer is spoken with its lead and answered by its own words', () => {
+  const question = offerQuestion();
+  assert.equal(
+    buildSpokenQuestion(question),
+    'That may have been the wrong task. Undo adding Call Sam? Buy milk stays.',
+  );
+  const optionOf = (text: string) => {
+    const answer = matchSpokenAnswer(text, question, {
+      now: 0,
+      timeZone: 'UTC',
+    });
+    return answer?.kind === 'answer' && 'optionId' in answer.value
+      ? answer.value.optionId
+      : null;
+  };
+  ['undo it', 'Undo that.', 'take it back', 'yeah', 'do it'].forEach((text) =>
+    assert.equal(optionOf(text), 'yes', text),
+  );
+  ['keep it', 'Leave it', 'no', "don't"].forEach((text) =>
+    assert.equal(optionOf(text), 'no', text),
+  );
+  assert.equal(optionOf('what about the milk'), null);
+});
+
+test('a pick between several offers keeps everything by its label', () => {
+  const question: HelmQuestion = {
+    ...offerQuestion(),
+    shape: 'pickOne',
+    prompt: 'Which of these should be undone?',
+    options: [
+      { id: 'c1', label: 'Added Call Sam', detail: null, ref: null },
+      { id: 'c2', label: 'Added Buy milk', detail: null, ref: null },
+      { id: 'keep', label: 'Keep everything', detail: null, ref: null },
+    ],
+  };
+  const answer = matchSpokenAnswer('keep everything', question, {
+    now: 0,
+    timeZone: 'UTC',
+  });
+  assert.equal(
+    answer?.kind === 'answer' && 'optionId' in answer.value
+      ? answer.value.optionId
+      : null,
+    'keep',
+  );
 });
 
 const failures: string[] = [];

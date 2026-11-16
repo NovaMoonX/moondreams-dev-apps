@@ -13,6 +13,7 @@ import {
   planReopen,
   planUndo,
   procedureEffectKind,
+  toOfferDocIds,
   readUndoFields,
   topicEffectKind,
   type UndoPlan,
@@ -105,6 +106,7 @@ const execution = (
   undoReport: null,
   spoken: null,
   goneIds: null,
+  undoReason: null,
   lines: [],
   isUnreadable: false,
   ...overrides,
@@ -2427,6 +2429,48 @@ test('a later batch write to a topic is taken back as a version; the first write
     ),
   );
   assert.ok(moved);
+});
+
+test('an undo offer names what is still left: the whole turn, a part, or nothing', () => {
+  const exec = execution(TWO_CREATES);
+  assert.deepEqual(toOfferDocIds({ docIds: [], isAll: true }, exec), [
+    't1',
+    't2',
+  ]);
+  assert.deepEqual(
+    toOfferDocIds({ docIds: ['t2', 'zzz'], isAll: false }, exec),
+    ['t2'],
+  );
+  const part = execution(TWO_CREATES, { undoneDocIds: ['t1'] });
+  assert.deepEqual(toOfferDocIds({ docIds: [], isAll: true }, part), ['t2']);
+  assert.deepEqual(toOfferDocIds({ docIds: ['t1'], isAll: false }, part), []);
+  const whole = execution(TWO_CREATES, { undoneByExecutionId: 'undo-0' });
+  assert.deepEqual(toOfferDocIds({ docIds: [], isAll: true }, whole), []);
+});
+
+test('an undo carries the reason it was asked for, null when none was given', () => {
+  const targets: [string, UndoTarget][] = [
+    target('t1', { lastEditedAt: null }, sealedOf('Book the hair trial')),
+    target('t2', { lastEditedAt: null }, sealedOf('Send the save-the-dates')),
+  ];
+  const reason = {
+    reason: 'wrongDetails' as const,
+    quote: 'not that one',
+    via: 'offer' as const,
+  };
+  const withReason = asWrite(
+    planUndo({
+      original: execution(TWO_CREATES),
+      targets: new Map(targets),
+      undoExecutionId: 'undo-1',
+      now: NOW,
+      usedIds: new Set(),
+      reason,
+    }),
+  );
+  assert.deepEqual(withReason.undoSealed.undoReason, reason);
+  const without = asWrite(plan(execution(TWO_CREATES), targets));
+  assert.equal(without.undoSealed.undoReason, null);
 });
 
 const failures: string[] = [];

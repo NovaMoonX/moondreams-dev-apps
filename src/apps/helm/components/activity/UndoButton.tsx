@@ -68,7 +68,9 @@ function UndoButton({ execution, unitCount, onPick, isFull }: UndoButtonProps) {
     if (!user || isWorking) return;
     setIsWorking(true);
     try {
-      const result = await takeBack(user.uid, execution.id);
+      const result = await takeBack(user.uid, execution.id, {
+        reason: { reason: 'unclear', quote: null, via: 'card' },
+      });
       if (result.kind === 'refused') {
         setRefusal(result.report ?? HELM_COPY.cannotTakeBack);
       }
