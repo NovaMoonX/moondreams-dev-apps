@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  getFirestore,
+  type Firestore,
+} from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 
@@ -21,6 +25,7 @@ import {
 import { readAssistantName } from '../assistantName.js';
 import { readDates, readIsUrgent } from '../dateReading.js';
 import { DEFAULT_ASSISTANT_NAME } from '../nomos/commands.js';
+import { AUTOMATIC_LEVEL } from '../nomos/policy.js';
 import { connectorLabel, toKnownZone } from '../syncedCopies.js';
 import type { ConnectionGrant } from '../../../vendor/connectionsContract.js';
 import { createAliasBook, createSealedAliasBook } from '../nomos/aliases.js';
@@ -36,7 +41,16 @@ import {
 } from '../sortHelmCapture.js';
 import type { McpReadScope } from '../../../mcp/shapes.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
+import { openTopicRecord } from '../noteStore.js';
 import { buildHelmTools } from './buildTools.js';
+import {
+  SAVE_ABOUT_CAP,
+  SAVE_LEARNED_CAP,
+  SAVE_NEW_TOPIC_CAP,
+  SAVE_TITLE_CAP,
+  describeSave,
+  planSaveToHelm,
+} from './saveToHelm.js';
 import {
   READ_SCOPE_TOOLS,
   accessForConnector,
@@ -234,6 +248,51 @@ const retryKeyFor = (ctx: McpRequestContext, words: string, now: number) =>
     .digest('hex')
     .slice(0, 28)}`;
 
+/** The fields every outside capture carries; the caller adds its status, executions and sealed words. */
+const outsideCaptureFields = (ctx: McpRequestContext, createdAt: number) => ({
+  inputMode: 'typed',
+  sttProvider: null,
+  interruptedCaptureId: null,
+  answersQuestion: null,
+  ttsProvider: null,
+  arrivedVia: 'direct',
+  medium: 'mcp',
+  via: ctx.clientName,
+  outsideReadScopes: ctx.readScopes,
+  sessionId: randomUUID(),
+  turnIndex: 0,
+  route: null,
+  heldReason: null,
+  claimId: null,
+  claimedAt: null,
+  attempts: 0,
+  lastErrorCode: null,
+  questionState: {},
+  turnLeadId: null,
+  joinedCaptureIds: [],
+  attachmentIds: [],
+  // Home never shows an outside turn, so it is filed seen and stays out of home's unseen window.
+  seenAt: createdAt,
+  quotedSourceKeys: [],
+  dismissedAt: null,
+  answerSavedNoteId: null,
+  whoIds: [],
+  placeIds: [],
+  planDayKey: null,
+  createdAt,
+  screen: null,
+});
+
+const readingOf = (words: string, now: number, timeZone: string) => ({
+  people: [],
+  places: [],
+  documents: [],
+  commands: [],
+  isUrgent: readIsUrgent(words),
+  dates: readDates(words, { now, timeZone }),
+  addressedAs: null,
+});
+
 /** Writes a turn the way the device does (same fields, the words sealed under the person's key) and has Helm sort it, under the same limits as a typed one. */
 async function fileTurn({
   ctx,
@@ -255,51 +314,13 @@ async function fileTurn({
     .doc(retryKeyFor(ctx, words, createdAt));
   const isNew = await reference
     .create({
-      inputMode: 'typed',
-      sttProvider: null,
-      interruptedCaptureId: null,
-      answersQuestion: null,
-      ttsProvider: null,
-      arrivedVia: 'direct',
-      medium: 'mcp',
-      via: ctx.clientName,
-      outsideReadScopes: ctx.readScopes,
-      sessionId: randomUUID(),
-      turnIndex: 0,
-      route: null,
+      ...outsideCaptureFields(ctx, createdAt),
       status: 'received',
-      heldReason: null,
-      claimId: null,
-      claimedAt: null,
-      attempts: 0,
-      lastErrorCode: null,
-      questionState: {},
       executionIds: [],
-      turnLeadId: null,
-      joinedCaptureIds: [],
-      attachmentIds: [],
-      // Home never shows an outside turn, so it is filed seen and stays out of home's unseen window.
-      seenAt: createdAt,
-      quotedSourceKeys: [],
-      dismissedAt: null,
-      answerSavedNoteId: null,
-      whoIds: [],
-      placeIds: [],
-      planDayKey: null,
-      createdAt,
       sortedAt: null,
-      screen: null,
       sealed: sealForHelm(key, {
         text: words,
-        reading: {
-          people: [],
-          places: [],
-          documents: [],
-          commands: [],
-          isUrgent: readIsUrgent(words),
-          dates: readDates(words, { now: createdAt, timeZone }),
-          addressedAs: null,
-        },
+        reading: readingOf(words, createdAt, timeZone),
         answer: null,
         questionAnswer: null,
       }),
@@ -348,6 +369,199 @@ const tellShape = {
       'What the person wants Helm to remember or do, in their own words, such as "Remind me to call Dana on Friday" or "Mum is allergic to penicillin".',
     ),
 };
+
+const saveShape = {
+  title: z
+    .string()
+    .min(1)
+    .max(SAVE_TITLE_CAP)
+    .describe(
+      'A short name for what was learned, such as "Timing belt schedule".',
+    ),
+  learned: z
+    .string()
+    .min(1)
+    .max(SAVE_LEARNED_CAP)
+    .describe(
+      'What was learned, written out in full as Markdown: the facts, numbers and conclusions themselves. Never "remember this" or a pointer to the chat.',
+    ),
+  about: z
+    .string()
+    .max(SAVE_ABOUT_CAP)
+    .nullish()
+    .describe(
+      'What it is about in the person\'s life, such as "my 2019 Subaru Outback".',
+    ),
+  topic: z
+    .string()
+    .nullish()
+    .describe(
+      'The topic that fits, exactly as list_topics or get_topic returned it.',
+    ),
+  newTopic: z
+    .string()
+    .max(SAVE_NEW_TOPIC_CAP)
+    .nullish()
+    .describe('A name for a new topic, used only when no listed topic fits.'),
+  sources: z
+    .array(
+      z.object({
+        title: z.string().max(120),
+        url: z.string().max(2_000),
+      }),
+    )
+    .max(20)
+    .nullish()
+    .describe(
+      'At most 5 links that back it up, never every page read. Only https links are kept.',
+    ),
+};
+
+const NOT_FOUND_TOPIC_TEXT =
+  'That topic was not found in list_topics, so it was treated as no topic.';
+
+/** Saves what an outside assistant learned as a note (and a topic when asked) with no model call, in one transaction, recorded as one execution so Undo in Helm takes it back like a file import. */
+async function saveTurn({
+  ctx,
+  key,
+  name,
+  topicIdOf,
+  input,
+}: {
+  ctx: McpRequestContext;
+  key: HelmKey;
+  name: string;
+  topicIdOf: (alias: string) => string | null;
+  input: z.infer<z.ZodObject<typeof saveShape>>;
+}) {
+  const firestore = getFirestore();
+  const base = `apps/helm/users/${ctx.uid}`;
+  const now = Date.now();
+  const words = `${input.title}\n\n${input.learned}`;
+  const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
+  const profile = await firestore.doc(base).get();
+  const timeZone = toKnownZone(
+    (profile.data()?.timeZone as string | undefined) ?? 'UTC',
+  );
+  const captureRef = firestore
+    .collection(`${base}/captures`)
+    .doc(retryKeyFor(ctx, words, now));
+  const executionRef = firestore.collection(`${base}/executions`).doc();
+  const topicId = input.topic ? topicIdOf(input.topic) : null;
+  const outcome = await firestore
+    .runTransaction(async (transaction) => {
+      const [topicSnapshot, notes, topics] = await Promise.all([
+        topicId
+          ? transaction.get(firestore.doc(`${base}/topics/${topicId}`))
+          : null,
+        transaction.get(firestore.collection(`${base}/notes`).count()),
+        transaction.get(firestore.collection(`${base}/topics`).count()),
+      ]);
+      const opened =
+        topicId && topicSnapshot?.exists
+          ? openTopicRecord(key, topicId, topicSnapshot.data() ?? {})
+          : null;
+      const plan = planSaveToHelm({
+        title: input.title,
+        learned: input.learned,
+        about: input.about ?? null,
+        sources: input.sources ?? [],
+        topic:
+          topicId && opened
+            ? {
+                id: topicId,
+                state: {
+                  name: opened.name,
+                  path: opened.name,
+                  docState: opened.docState,
+                  pendingNoteIds: opened.pendingNoteIds,
+                },
+              }
+            : null,
+        newTopic: input.newTopic ?? null,
+        noteCount: notes.data().count,
+        topicCount: topics.data().count,
+        via: ctx.clientName,
+        captureId: captureRef.id,
+        executionId: executionRef.id,
+        now,
+        newId: () => randomUUID(),
+        seal,
+      });
+      if (plan.kind === 'full') return plan;
+      transaction.create(captureRef, {
+        ...outsideCaptureFields(ctx, now),
+        status: 'sorted',
+        executionIds: [executionRef.id],
+        sortedAt: now,
+        sealed: seal({
+          text: words,
+          reading: readingOf(words, now, timeZone),
+          answer: null,
+          questionAnswer: null,
+        }),
+      });
+      transaction.create(
+        firestore.doc(`${base}/notes/${plan.noteId}`),
+        plan.noteData,
+      );
+      if (plan.topic) {
+        const topicRef = firestore.doc(`${base}/topics/${plan.topic.id}`);
+        transaction.create(topicRef, plan.topic.data);
+        transaction.create(
+          topicRef.collection('versions').doc('1'),
+          plan.topic.version,
+        );
+      }
+      if (plan.filing) {
+        transaction.update(firestore.doc(`${base}/topics/${plan.filing.id}`), {
+          docState: plan.filing.docState,
+          pendingNoteIds: FieldValue.arrayUnion(plan.filing.addPendingId),
+        });
+      }
+      transaction.create(executionRef, {
+        via: ctx.clientName,
+        captureId: captureRef.id,
+        actor: 'nomos',
+        category: 'organize',
+        autonomyLevel: AUTOMATIC_LEVEL,
+        state: 'succeeded',
+        effectRefs: plan.effectRefs,
+        linkedWhoIds: [],
+        linkedPlaceIds: [],
+        undoesExecutionId: null,
+        undoneByExecutionId: null,
+        questionRef: null,
+        errorCode: null,
+        createdAt: now,
+        decidedAt: now,
+        finishedAt: now,
+        sealed: seal({
+          summary: plan.summary,
+          said: null,
+          commands: [],
+          effects: plan.effects,
+          lines: plan.lines,
+          undoReport: null,
+          goneIds: null,
+          spoken: null,
+        }),
+      });
+      return plan;
+    })
+    .catch((error: unknown) => {
+      if ((error as { code?: unknown }).code === ALREADY_EXISTS) return null;
+      throw error;
+    });
+  if (!outcome) return ALREADY_FILED_TEXT;
+  if (outcome.kind === 'full') {
+    return `${outcome.line} Nothing was saved; the person can make room in Helm first.`;
+  }
+  return [
+    describeSave(outcome, name),
+    ...(input.topic && outcome.where !== 'topic' ? [NOT_FOUND_TOPIC_TEXT] : []),
+  ].join(' ');
+}
 
 const askShape = {
   question: z
@@ -418,8 +632,12 @@ const instructionsFor = (
   [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
     canWrite
-      ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
+      ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question, save_to_helm saves what they learned or researched in this chat, and the search tools look things up directly.`
       : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
+    `Whenever the conversation touches the person's own life (their things, people, plans or routines), check Helm on your own, without waiting to be told: list_topics and get_topic for what they have written down, search_tasks, get_calendar and search_procedures. Use only what the tools return; if they find nothing, say so rather than guessing.`,
+    canWrite
+      ? `When they want to keep what they learned or researched here (they say save this, remember this or tell ${name} about it), call save_to_helm with the learning written out in full, after list_topics so it goes in the topic that fits. For a task, a date or anything to do, use tell_helm.`
+      : '',
     `This connection takes text only: it can't receive photos, files, voice notes or any other media, and nothing is attached to what reaches ${name}. When the person shares one and wants it in Helm, say that this connection can't take it, and that they can add it in Helm itself; if it holds words they want kept, you may pass those on as text, saying so.`,
     sourcesBriefFor(name, sources, access),
   ]
@@ -445,6 +663,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
     ctx.readScopes.length > 0 ? readSiteGrants(firestore, ctx.uid) : [],
     readConnectedSources(firestore, ctx.uid).catch((): ConnectedSource[] => []),
   ]);
+  const topicAliases = createSealedAliasBook('tp', ctx.uid, key);
   const tools = buildHelmTools({
     uid: ctx.uid,
     liveGrants: liveGrants.filter(
@@ -461,7 +680,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
     timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
     aliases: createSealedAliasBook('t', ctx.uid, key),
     topicRead: {
-      topics: createSealedAliasBook('tp', ctx.uid, key),
+      topics: topicAliases,
       sections: createAliasBook('s'),
       versions: new Map(),
     },
@@ -492,7 +711,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   server.registerTool(
     'tell_helm',
     {
-      description: `Tells ${name}, the person's assistant in Helm, something in their own words, as if they had typed it to ${name}: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person says "tell ${name}" or wants ${name} or Helm to remember or do something (add a task, note a date, save what they learned). Do not use it for a question: use ask_helm. Text only: it can't carry a photo, file or other media, so when the person wants one in Helm, tell them to add it in Helm itself. The person can undo everything it does in Helm.`,
+      description: `Tells ${name}, the person's assistant in Helm, something in their own words, as if they had typed it to ${name}: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person says "tell ${name}" or wants ${name} or Helm to remember or do something (add a task, note a date). To save what they learned or researched, use save_to_helm instead. Do not use it for a question: use ask_helm. Text only: it can't carry a photo, file or other media, so when the person wants one in Helm, tell them to add it in Helm itself. The person can undo everything it does in Helm.`,
       inputSchema: tellShape,
       annotations: {
         readOnlyHint: false,
@@ -501,6 +720,28 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
       },
     },
     async ({ text: words }) => text(await fileTurn({ ctx, key, words })),
+  );
+  server.registerTool(
+    'save_to_helm',
+    {
+      description: `Saves what the person learned or researched in this chat into ${name}'s Helm, at once and with no waiting, filed under the topic that fits. Call it when the person says save this, remember this or tell ${name} about what they learned. Write the learning out in full in "learned" (the facts, numbers and conclusions themselves, never "remember this" or a pointer to this chat). Call list_topics first and pass the topic that fits, or newTopic when none does. Pass at most 5 sources worth keeping, never every page read. Text only: it can't carry a photo, file or other media. The person can see it, and undo it, in Helm.`,
+      inputSchema: saveShape,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input) =>
+      text(
+        await saveTurn({
+          ctx,
+          key,
+          name,
+          topicIdOf: (alias) => topicAliases.idOf(alias),
+          input,
+        }),
+      ),
   );
   server.registerTool(
     'ask_helm',

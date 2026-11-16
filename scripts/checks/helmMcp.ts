@@ -10,6 +10,13 @@ import {
   sourcesBriefFor,
   toHeldBackPrompt,
 } from '../../functions/src/apps/helm/mcp/sourcesBrief.ts';
+import {
+  TOO_LONG_NOTICE,
+  TOPICS_FULL_NOTICE,
+  cleanSavedLinks,
+  describeSave,
+  planSaveToHelm,
+} from '../../functions/src/apps/helm/mcp/saveToHelm.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import {
@@ -127,6 +134,7 @@ const registered = [...external.matchAll(/registerTool\(\s*'([a-z_]+)'/g)].map(
 );
 assert.ok(registered.includes('tell_helm'));
 assert.ok(registered.includes('ask_helm'));
+assert.ok(registered.includes('save_to_helm'));
 const server = readFileSync(
   new URL('../../functions/src/apps/helm/mcp/server.ts', import.meta.url),
   'utf8',
@@ -137,10 +145,14 @@ assert.match(
   external,
   /'tell_helm',[\s\S]*?readOnlyHint: false,\s*destructiveHint: false,\s*openWorldHint: false/,
 );
+assert.match(
+  external,
+  /'save_to_helm',[\s\S]*?readOnlyHint: false,\s*destructiveHint: false,\s*openWorldHint: false/,
+);
 // Both turn-filing tools can change records, so neither is registered before the write check.
 const writeCheck = external.indexOf('if (!ctx.canWrite) return server;');
 assert.ok(writeCheck > 0, 'the write check guards the filing tools');
-for (const name of ['tell_helm', 'ask_helm']) {
+for (const name of ['tell_helm', 'ask_helm', 'save_to_helm']) {
   assert.ok(
     external.indexOf(`'${name}'`) > writeCheck,
     `${name} is registered only for an assistant that may write`,
@@ -336,6 +348,165 @@ assert.match(
   /Text only: it can't carry a photo, file or other media/,
 );
 assert.match(external, /`Asks \$\{name\}/);
+// Saving what was learned points to save_to_helm, and the instructions tell an outside assistant to check Helm on its own.
+assert.match(external, /use save_to_helm instead/);
+assert.match(external, /check Helm on your own, without waiting to be told/);
+assert.match(external, /Use only what the tools return/);
+
+// save_to_helm writes one note, filed under a topic, a new topic or none, with no model call.
+const seal = (fields: Record<string, unknown>) => fields as never;
+let counter = 0;
+const plan = (over: Partial<Parameters<typeof planSaveToHelm>[0]> = {}) =>
+  planSaveToHelm({
+    title: 'Timing belt schedule',
+    learned: '## Interval\n\nEvery 105,000 miles.\n\n## Cost\n\nAbout $900.',
+    about: 'my 2019 Subaru Outback',
+    sources: [],
+    topic: null,
+    newTopic: null,
+    noteCount: 3,
+    topicCount: 2,
+    via: 'Gemini',
+    captureId: 'cap1',
+    executionId: 'ex1',
+    now: 1000,
+    newId: () => `id${++counter}`,
+    seal,
+    ...over,
+  });
+const saved = (over?: Parameters<typeof plan>[0]) => {
+  const made = plan(over);
+  assert.equal(made.kind, 'saved');
+  return made as Extract<typeof made, { kind: 'saved' }>;
+};
+const cars = {
+  id: 'topicCars',
+  state: {
+    name: 'Cars',
+    path: 'Cars',
+    docState: 'current',
+    pendingNoteIds: ['n0'],
+  },
+};
+const onTopic = saved({ topic: cars, newTopic: 'Ignored' });
+assert.equal(onTopic.where, 'topic');
+assert.equal(onTopic.topic, null);
+assert.deepEqual(onTopic.filing, {
+  id: 'topicCars',
+  docState: 'behind',
+  addPendingId: onTopic.noteId,
+});
+assert.equal(onTopic.noteData.source, 'outside');
+assert.equal(onTopic.noteData.createdBy, 'nomos');
+assert.equal(onTopic.noteData.sourceCaptureId, 'cap1');
+assert.deepEqual(onTopic.noteData.topicIds, ['topicCars']);
+assert.deepEqual(onTopic.noteData.sealed, {
+  title: 'Timing belt schedule',
+  body: 'About: my 2019 Subaru Outback\n\n## Interval\n\nEvery 105,000 miles.\n\n## Cost\n\nAbout $900.',
+  via: 'Gemini',
+  links: [],
+});
+assert.equal(onTopic.summary, 'Saved Timing belt schedule to Cars');
+assert.deepEqual(
+  onTopic.effectRefs.map(({ op, collection }) => `${op}:${collection}`),
+  ['create:notes', 'update:topics'],
+);
+assert.deepEqual(onTopic.effects[1].previous, {
+  docState: 'current',
+  pendingNoteIds: ['n0'],
+});
+const fresh = saved({ newTopic: '  Car batteries ' });
+assert.equal(fresh.where, 'newTopic');
+assert.equal(fresh.filing, null);
+assert.equal(fresh.topic?.data.version, 1);
+assert.equal(fresh.topic?.data.docState, 'current');
+assert.equal(fresh.topic?.version.reason, 'imported');
+assert.deepEqual(fresh.noteData.topicIds, [fresh.topic?.id]);
+assert.equal(fresh.summary, 'Started a topic, Car batteries, from Gemini');
+const freshSections = (
+  fresh.topic?.data.sealed as {
+    sections: { sources: unknown[]; writtenBy: string }[];
+  }
+).sections;
+assert.equal(freshSections.length, 2);
+assert.ok(freshSections.every((section) => section.writtenBy === 'nomos'));
+assert.deepEqual(freshSections[0].sources, [
+  { kind: 'message', captureId: 'cap1', at: 1000, noteId: fresh.noteId },
+]);
+assert.deepEqual(
+  fresh.effectRefs.map(({ op, collection }) => `${op}:${collection}`),
+  ['create:notes', 'create:topics'],
+);
+assert.equal(fresh.effects[1].written.importedVersion, 1);
+const plain = saved({
+  learned: 'Replace it every 105,000 miles.',
+  newTopic: 'Cars',
+});
+assert.deepEqual(
+  (
+    plain.topic?.data.sealed as { sections: { heading: string | null }[] }
+  ).sections.map((section) => section.heading),
+  ['Timing belt schedule'],
+);
+const loose = saved();
+assert.equal(loose.where, 'loose');
+assert.deepEqual(
+  [loose.topic, loose.filing, loose.noteData.topicIds],
+  [null, null, []],
+);
+assert.equal(loose.summary, 'Saved Timing belt schedule as a note');
+assert.equal(loose.effectRefs.length, 1);
+
+// Only https links are kept, at most five.
+assert.deepEqual(
+  cleanSavedLinks([
+    { title: 'Manual', url: 'https://example.com/a' },
+    { title: 'Plain', url: 'http://example.com/b' },
+    { title: 'Script', url: 'javascript:alert(1)' },
+    { title: 'Broken', url: 'not a link' },
+    { title: '', url: 'https://example.org/c' },
+  ]),
+  [
+    { title: 'Manual', url: 'https://example.com/a' },
+    { title: 'example.org', url: 'https://example.org/c' },
+  ],
+);
+assert.equal(
+  cleanSavedLinks(
+    Array.from({ length: 9 }, (_, index) => ({
+      title: `Page ${index}`,
+      url: `https://example.com/${index}`,
+    })),
+  ).length,
+  5,
+);
+assert.deepEqual(
+  (
+    saved({ sources: [{ title: 'Web', url: 'http://x.example' }] }).noteData
+      .sealed as { links: unknown[] }
+  ).links,
+  [],
+);
+
+// Limits: a full notes list writes nothing; full topics or too many parts leave a loose note that says so.
+assert.equal(plan({ noteCount: 1_000 }).kind, 'full');
+const topicsFull = saved({ newTopic: 'Cars', topicCount: 100 });
+assert.equal(topicsFull.where, 'loose');
+assert.equal(topicsFull.notice, TOPICS_FULL_NOTICE);
+const tooMany = saved({
+  newTopic: 'Cars',
+  learned: Array.from(
+    { length: 61 },
+    (_, index) => `## Part ${index}\n\nText`,
+  ).join('\n\n'),
+});
+assert.equal(tooMany.where, 'loose');
+assert.equal(tooMany.notice, TOO_LONG_NOTICE);
+const spoken = describeSave(onTopic, 'Sol');
+assert.match(spoken, /under the topic Cars/);
+assert.match(spoken, /next time the topic is opened/);
+assert.match(spoken, /undo it, in Helm under From your assistants/);
+assert.ok(!/\bI\b|Nomos/.test(spoken));
 
 // An outside turn reads stored records only through its own switches.
 const stored = [
