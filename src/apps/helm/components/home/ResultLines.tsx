@@ -14,6 +14,7 @@ import {
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
 import { useResultLines } from '@apps/helm/hooks/useResultLines';
+import { useUndoChoices } from '@apps/helm/hooks/useUndoChoices';
 import { useUndosOf } from '@apps/helm/hooks/useUndosOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
@@ -96,9 +97,11 @@ function ResultLines({
   const { user } = useAuth();
   const card = useRef<HTMLDivElement>(null);
   const lines = useResultLines(execution);
-  const { undos, latest: undo } = useUndosOf(execution);
+  const { undos, latest } = useUndosOf(execution);
+  const { units } = useUndoChoices(execution);
   const isUndone = execution.undoneByExecutionId !== null;
-  const hasFoot = canUndo(execution) || isUndone;
+  const isPartlyUndone = !isUndone && execution.partUndoIds.length > 0;
+  const hasFoot = canUndo(execution) || isUndone || isPartlyUndone;
 
   useOnceVisible(card, isOnHome && !isSeen && user !== null, async () => {
     if (!user) return;
@@ -138,13 +141,20 @@ function ResultLines({
                 <div className='border-border flex items-baseline justify-between gap-3 border-t px-3.5 py-2'>
                   {isUndone ? (
                     <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
-                      {undo?.undoReport ?? HELM_COPY.takenBackLabel}
+                      {latest?.undoReport ?? HELM_COPY.takenBackLabel}
                     </p>
                   ) : (
-                    <UndoButton
-                      execution={execution}
-                      lineCount={lines.length}
-                    />
+                    <div className='flex min-w-0 flex-col items-start gap-2'>
+                      {isPartlyUndone && (
+                        <p className='text-muted-foreground text-[13px] text-pretty'>
+                          {latest?.undoReport ?? HELM_COPY.partlyTakenBackLabel}
+                        </p>
+                      )}
+                      <UndoButton
+                        execution={execution}
+                        unitCount={units.length}
+                      />
+                    </div>
                   )}
                   {!isUndone && (
                     <time

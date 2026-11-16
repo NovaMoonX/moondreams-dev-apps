@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import UndoPickSheet from '@apps/helm/components/activity/UndoPickSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
@@ -14,20 +15,23 @@ import type { OpenExecution } from '@apps/helm/types';
 
 interface UndoButtonProps {
   execution: OpenExecution;
-  /** How many changes the card lists: "Undo all of this" from two. */
-  lineCount: number;
+  /** The units still left to take back: with more than one, Undo opens the list to pick from. */
+  unitCount: number;
+  /** Opens the list in place; without it the button opens its own sheet. */
+  onPick?: () => void;
   /** The sheet's one action: a full-width primary button; cards keep the small secondary. */
   isFull?: boolean;
 }
 
 /** Takes an execution back. It works alone: nothing else on the surface is locked while it runs. */
-function UndoButton({ execution, lineCount, isFull }: UndoButtonProps) {
+function UndoButton({ execution, unitCount, onPick, isFull }: UndoButtonProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const label = lineCount > 1 ? HELM_COPY.undoAll : HELM_COPY.undo;
+  const [isPicking, setIsPicking] = useState(false);
+  const label = HELM_COPY.undo;
 
   if (refusal !== null) {
     return (
@@ -56,6 +60,11 @@ function UndoButton({ execution, lineCount, isFull }: UndoButtonProps) {
   }
 
   const run = async () => {
+    if (unitCount > 1) {
+      if (onPick) onPick();
+      else setIsPicking(true);
+      return;
+    }
     if (!user || isWorking) return;
     setIsWorking(true);
     try {
@@ -79,16 +88,25 @@ function UndoButton({ execution, lineCount, isFull }: UndoButtonProps) {
   };
 
   return (
-    <Button
-      type='button'
-      variant={isFull ? 'primary' : 'secondary'}
-      size={isFull ? undefined : 'sm'}
-      className={join('whitespace-nowrap', isFull && 'w-full')}
-      disabled={isWorking}
-      onClick={run}
-    >
-      {label}
-    </Button>
+    <>
+      <Button
+        type='button'
+        variant={isFull ? 'primary' : 'secondary'}
+        size={isFull ? undefined : 'sm'}
+        className={join('whitespace-nowrap', isFull && 'w-full')}
+        disabled={isWorking}
+        onClick={run}
+      >
+        {label}
+      </Button>
+      {!onPick && (
+        <UndoPickSheet
+          execution={execution}
+          isOpen={isPicking}
+          onClose={() => setIsPicking(false)}
+        />
+      )}
+    </>
   );
 }
 

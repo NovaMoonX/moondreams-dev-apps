@@ -485,7 +485,10 @@ test('taken back ids come from the undo execution', () => {
 
 test('copy never names the app or the default assistant', () => {
   const lines = [
-    HELM_COPY.undoAll,
+    HELM_COPY.undoPickTitle,
+    HELM_COPY.undoPickAll,
+    HELM_COPY.undoPickSome(2),
+    HELM_COPY.undoPickNone,
     HELM_COPY.tookBack(1),
     HELM_COPY.tookBackKept(1, 1),
     HELM_COPY.nothingToTakeBack(['Call Dana'], 1),
