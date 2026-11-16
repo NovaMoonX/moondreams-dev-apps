@@ -130,6 +130,9 @@ export interface Viewing {
   lastEditedAt: number;
 }
 
+/** AMC's listed tax for the showing, or the member's usual rate applied to the price. */
+export type TaxChoice = 'AMC' | 'USUAL';
+
 /** What a non-member would have paid. Always `totalCents = priceCents + feeAvoidedCents + taxCents`. */
 export interface Ticket {
   /** How the member entered it; reopening the form restores this mode. */
@@ -144,6 +147,8 @@ export interface Ticket {
   /** The rate chosen on this ticket; null when none was chosen. */
   taxRate: number | null;
   taxCents: number;
+  /** Which figure the tax matched when AMC's tax and the usual rate disagreed; null otherwise. Tickets saved before it lack the key. */
+  taxChoice: TaxChoice | null;
   /** Exact as entered when all-in. */
   totalCents: number;
 }

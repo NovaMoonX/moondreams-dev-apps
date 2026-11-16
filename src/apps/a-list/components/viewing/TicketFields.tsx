@@ -6,6 +6,7 @@ import MoneyInput from '@/components/MoneyInput';
 import PremiumSavingsHelp from '@apps/a-list/components/shared/PremiumSavingsHelp';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import SuggestionNote from '@apps/a-list/components/viewing/SuggestionNote';
+import TaxChoiceChips from '@apps/a-list/components/viewing/TaxChoiceChips';
 import { AMC_FORMAT_LABELS, AMC_FORMATS } from '@apps/a-list/constants';
 import { useAppSelector } from '@/store';
 import { useTicketSuggestion } from '@apps/a-list/hooks/useTicketSuggestion';
@@ -23,6 +24,7 @@ import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import {
   applyTicketFormChange,
   evaluateTicketDraft,
+  getTaxOptions,
   resolveTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
@@ -47,6 +49,7 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
   const edited = useRef({ fee: false, tax: false });
   const shown = resolveTicketDraft(draft, suggestion);
   const { ticket, errors } = evaluateTicketDraft(draft, suggestion);
+  const taxOptions = getTaxOptions(draft, suggestion);
   const isPremium = draft.format !== 'STANDARD';
   const priceCents = parseMoneyToCents(draft.price);
   const standardCents = parseMoneyToCents(draft.standardPrice);
@@ -151,16 +154,26 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
       name: 'tax',
       label: 'Tax',
       renderComponent: (props) => (
-        <MoneyInput
-          ariaLabel='Tax'
-          placeholder={estimatedTax}
-          value={shown.tax}
-          errorMessage={errors.tax}
-          onChange={(value) => {
-            edited.current.tax = true;
-            props.onValueChange(value);
-          }}
-        />
+        <div className='space-y-2'>
+          <MoneyInput
+            ariaLabel='Tax'
+            placeholder={estimatedTax}
+            value={shown.tax}
+            errorMessage={errors.tax}
+            onChange={(value) => {
+              edited.current.tax = true;
+              props.onValueChange(value);
+            }}
+          />
+          <TaxChoiceChips
+            value={shown.tax}
+            options={taxOptions}
+            onPick={(cents) => {
+              edited.current.tax = true;
+              props.onValueChange(centsToInputValue(cents));
+            }}
+          />
+        </div>
       ),
     }),
   ];
@@ -188,7 +201,7 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
         suggestion={suggestion}
         draft={draft}
         theatreName={theatre?.name ?? null}
-        hasTax={shown.tax.trim() !== ''}
+        shownTax={shown.tax}
       />
       {ticket && (
         <p className='text-muted-foreground text-sm'>

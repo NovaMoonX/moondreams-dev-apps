@@ -71,6 +71,7 @@ const TICKET_FIELDS = {
   feeAvoidedCents: 'never',
   taxRate: 'never',
   taxCents: 'never',
+  taxChoice: 'never',
   totalCents: 'never',
 } satisfies Record<keyof Ticket, ShareDecision>;
 

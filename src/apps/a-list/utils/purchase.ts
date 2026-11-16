@@ -18,28 +18,15 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
   };
 }
 
-function getTaxFromPlan(draft: TicketDraft, taxCents: number | null) {
-  if (taxCents !== null)
-    return {
-      tax: centsToInputValue(taxCents),
-      isTaxEdited: true,
-      isTaxFromAmc: true,
-    };
-  return draft.isTaxFromAmc
-    ? { tax: '', isTaxEdited: false, isTaxFromAmc: false }
-    : {};
-}
-
-/** The ticket form's start for a picked showing: its format and AMC's prices; the fee and tax are still the member's to enter. */
+/** The ticket form's start for a picked showing: its format, AMC's prices and AMC's tax to offer beside the usual rate. */
 export function applyPurchaseToDraft(
   draft: TicketDraft,
   plan: Pick<PurchasePlan, 'format' | 'priceCents' | 'standardPriceCents'> &
     Partial<Pick<PurchasePlan, 'taxCents'>>,
 ): TicketDraft {
-  const taxCents = plan.taxCents ?? null;
   return {
     ...draft,
-    ...getTaxFromPlan(draft, taxCents),
+    amcTaxCents: plan.taxCents ?? null,
     format: plan.format,
     price: centsToInputValue(plan.priceCents),
     standardPrice:
