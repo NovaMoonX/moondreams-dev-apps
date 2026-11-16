@@ -82,7 +82,7 @@ if (isUsingFirebaseEmulators) {
   // Not a hardcoded 127.0.0.1: a phone loading the dev server over the LAN would otherwise reach for itself.
   const emulatorHost = window.location.hostname;
   connectAuthEmulator(auth, `http://${emulatorHost}:9099`, { disableWarnings: true });
-  connectFirestoreEmulator(db, emulatorHost, 8191);
+  connectFirestoreEmulator(db, emulatorHost, 8080);
   connectDatabaseEmulator(realtimeDb, emulatorHost, 9000);
   connectFunctionsEmulator(functions, emulatorHost, 5001);
   connectStorageEmulator(storage, emulatorHost, 9199);
