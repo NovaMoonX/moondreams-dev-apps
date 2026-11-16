@@ -409,6 +409,20 @@ export async function buildLearning(input: {
       },
       encryption,
     ),
+    toSeedObservation(
+      {
+        id: 'seed-obs-day-2',
+        subject: { collection: 'day', id: null },
+        dayKey: shiftKey(todayKey, 3),
+        time: '21:40',
+        source: 'turn',
+        sourceKey: 'captures/seed-obs-day-2',
+        kind: 'feeling',
+        tags: ['proud'],
+        quote: 'only three things today and I got all of them done',
+      },
+      encryption,
+    ),
   ]);
 
   const missed = (keys: string[], count: number) => keys.slice(0, count);
@@ -858,8 +872,11 @@ export async function buildLearning(input: {
     toSeedSeenAs(
       {
         kind: 'howYouTalk',
-        claim: 'Short and warm; signs off “Thanks!”',
-        sourceKeys: ['style/general#warm-but-brief', obsKey('seed-obs-day-1')],
+        claim: 'Short and warm; signs off “Cheers,”',
+        sourceKeys: [
+          'style/general#warm-but-brief',
+          'style/general#signs-off-cheers',
+        ],
         derivedAt: now - 11 * DAY_MS,
       },
       encryption,
@@ -893,7 +910,7 @@ export async function buildLearning(input: {
         claim: 'A short list beats a long one',
         state: 'corrected',
         corrected: 'A short list of three beats a long one',
-        sourceKeys: [obsKey('seed-obs-day-1'), patternKey(4)],
+        sourceKeys: [obsKey('seed-obs-day-2'), obsKey('seed-obs-day-1')],
         derivedAt: now - 8 * DAY_MS,
         changedAt: now - 24 * 60 * 60_000,
       },
