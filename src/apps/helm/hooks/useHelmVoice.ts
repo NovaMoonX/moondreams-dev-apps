@@ -86,7 +86,12 @@ import {
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
-import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
+import {
+  isAcknowledgement,
+  isLiveCloser,
+  isUndoPhrase,
+  toWakeSpellings,
+} from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
@@ -235,6 +240,13 @@ export function useHelmVoice() {
     },
   });
 
+  function endLiveNow() {
+    waiting.current.clear();
+    stopCount.current += 1;
+    voice.endLive();
+    voice.settle();
+  }
+
   function endDictation() {
     dictation.current = null;
     setDictationOwner(null);
@@ -307,6 +319,15 @@ export function useHelmVoice() {
       return;
     }
     if (await answerQuestion(text, sttProvider, now)) return;
+    // A nod or a goodbye in a live conversation is not a turn: filing it read back "nothing to file in it".
+    if (voice.isLive && isLiveCloser(text)) {
+      endLiveNow();
+      return;
+    }
+    if (voice.isLive && isAcknowledgement(text)) {
+      voice.settle();
+      return;
+    }
     await sendTurn(text, sttProvider, interrupted);
   }
 
@@ -863,12 +884,7 @@ export function useHelmVoice() {
     },
     talk,
     /** Ends the live conversation: what is being heard is dropped and a reply on its way is written, not said. */
-    endLive: () => {
-      waiting.current.clear();
-      stopCount.current += 1;
-      voice.endLive();
-      voice.settle();
-    },
+    endLive: endLiveNow,
     setSurfaceShown,
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),

@@ -173,8 +173,64 @@ export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 export const CAPTURE_MAX_CHARS = 4_000;
 
-/** Said at the end of an utterance to send it without a tap. */
-export const END_PHRASES = ["that's all", 'thats all'];
+/** Said at the end of an utterance to send it without a tap; in a live conversation they also end it. */
+export const END_PHRASES = [
+  "that's all",
+  'thats all',
+  "that's all for now",
+  'thats all for now',
+  "that's it",
+  'thats it',
+  "that's it for now",
+  'thats it for now',
+  "that's everything",
+  'thats everything',
+  'end the conversation',
+  'end conversation',
+  'bye for now',
+];
+/** A whole utterance in a live conversation that is only one of these (with any nod around it: "okay, I'm done") ends it; never as an end phrase, since "tell Sam I'm done" means something. */
+export const LIVE_CLOSING_PHRASES = [
+  "i'm done",
+  'im done',
+  "we're done",
+  'were done',
+  "i'm all set",
+  'im all set',
+  "i'm good",
+  'im good',
+  'goodbye',
+  'bye',
+  'nothing else',
+  'that will be all',
+  "that'll be all",
+  'stop',
+  'end',
+];
+/** A whole utterance in a live conversation that only acknowledges the last reply ("Gotcha. Okay.") files nothing; listening carries on. */
+export const ACKNOWLEDGEMENT_WORDS = [
+  'ok',
+  'okay',
+  'k',
+  'gotcha',
+  'got it',
+  'cool',
+  'great',
+  'nice',
+  'perfect',
+  'sounds good',
+  'alright',
+  'all right',
+  'thanks',
+  'thank you',
+  'thanks a lot',
+  'mhm',
+  'mm hmm',
+  'uh huh',
+  'awesome',
+  'now',
+  'so',
+];
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
 export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];
 
@@ -540,7 +596,8 @@ export const HELM_COPY = {
   liveThinking: 'Thinking…',
   liveSpeaking: 'Speaking…',
   liveMicMuted: 'Microphone off',
-  liveEndHint: 'Say "that\'s all" or tap End when you\'re done.',
+  liveEndHint: 'Say "that\'s it" or tap End when you\'re done.',
+  liveReady: (name: string) => `Go ahead. ${name} is listening.`,
   liveMicOff: 'Mic off',
   liveMicOn: 'Mic on',
   liveEnd: 'End',
@@ -1281,7 +1338,7 @@ export const HELM_COPY = {
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
   voiceHandsFreeTitle: 'Keep the conversation going',
   voiceHandsFree:
-    'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s all", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
+    'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s it", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
     'Takes music and chatter out of what you say, on this device, before anything listens.',
