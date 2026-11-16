@@ -11,6 +11,8 @@ import type {
 } from '@apps/helm/engine/connections';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
+export type { GoalWhy } from '@apps/helm/utils/goalWhy';
+import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 import type { PrivacyClass, PrivateMark } from '@apps/helm/utils/privacy';
@@ -809,10 +811,20 @@ export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
 export type ProjectRole = 'key' | 'involved' | 'mentioned';
 
 /** `apps/helm/users/{uid}/projects/{projectId}`: something with several steps. Its words are sealed; the roles are ids and an enum only. */
+export type ProjectKind = 'project' | 'goal';
+export type ProjectStatus = 'active' | 'paused' | 'finished';
+
 export interface Project {
+  /** A project from before the field reads `'project'`. */
+  kind: ProjectKind;
   /** Date-only, UTC midnight. */
   targetDate: number | null;
-  status: 'active' | 'finished';
+  /** An unknown status reads `'active'`. */
+  status: ProjectStatus;
+  /** When it was set aside; resuming wakes the habits whose own pause carries this instant. */
+  pausedAt: number | null;
+  /** Date-only, UTC midnight; null means until the person picks it back up. */
+  pausedUntil: number | null;
   milestoneState: Record<
     string,
     { date: number | null; order: number; doneAt: number | null }
@@ -834,6 +846,8 @@ export interface ProjectSealed {
   emoji: string | null;
   objective: string | null;
   milestones: Record<string, { title: string }>;
+  /** A goal's why; null for a project, or a goal whose why was skipped. */
+  why: GoalWhy | null;
   /** whoId to a short note ("florist"). */
   roleNotes: Record<string, string>;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
