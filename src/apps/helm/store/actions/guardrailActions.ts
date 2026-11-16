@@ -18,6 +18,10 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { sealJson } from '@apps/helm/security';
 import { setHabitStatus } from '@apps/helm/store/actions/habitActions';
 import {
+  endAnsweringPattern,
+  startAnsweringPattern,
+} from '@apps/helm/store/helmSlice';
+import {
   pickGoalBackUp,
   setGoalAside,
 } from '@apps/helm/store/actions/goalActions';
@@ -221,6 +225,22 @@ async function recordTakenBack(
 
 /** The person's yes to a guardrail: pauses, marks it accepted and hands back an Undo. Needs a connection. */
 export async function acceptGuardrail(
+  uid: string,
+  pattern: OpenPattern,
+  options: Parameters<typeof writeGuardrailYes>[2] = {},
+): Promise<GuardrailAnswer> {
+  store.dispatch(startAnsweringPattern(pattern.id));
+  const answer = await writeGuardrailYes(uid, pattern, options).catch(
+    (error: unknown) => {
+      store.dispatch(endAnsweringPattern(pattern.id));
+      throw error;
+    },
+  );
+  if (answer.kind !== 'saved') store.dispatch(endAnsweringPattern(pattern.id));
+  return answer;
+}
+
+async function writeGuardrailYes(
   uid: string,
   pattern: OpenPattern,
   options: {
