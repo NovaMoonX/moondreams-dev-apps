@@ -156,21 +156,28 @@ export async function generatePlan(
           ),
         }
       : null;
-  if (needsPlan(existing) && !isOffline) {
-    const isWritten = await runTransaction(db, async (transaction) => {
+  const writeBatched = async () => {
+    const batch = writeBatch(db);
+    batch.set(planRef, planData, { merge: true });
+    if (execution) batch.set(executionRef, execution);
+    await batch.commit();
+    return true;
+  };
+  const writeFirst = () =>
+    runTransaction(db, async (transaction) => {
       const fresh = await transaction.get(planRef);
       if (fresh.exists() && fresh.get('generatedAt') != null) return false;
       transaction.set(planRef, planData, { merge: true });
       if (execution) transaction.set(executionRef, execution);
       return true;
-    });
-    if (!isWritten) return 'skipped';
-  } else {
-    const batch = writeBatch(db);
-    batch.set(planRef, planData, { merge: true });
-    if (execution) batch.set(executionRef, execution);
-    await batch.commit();
-  }
+    }).catch((error: unknown) =>
+      isOfflineError(error) ? writeBatched() : Promise.reject(error),
+    );
+  // A rest day's "plan anyway" is the person's own ask, so it is written even over a plan that just arrived.
+  const isFirstWrite =
+    needsPlan(existing) && !isOffline && overrideRestAt === null;
+  const isWritten = isFirstWrite ? await writeFirst() : await writeBatched();
+  if (!isWritten) return 'skipped';
   if (suggested === 0 && removed.length > 0) {
     void settleExecution(
       uid,
@@ -179,6 +186,13 @@ export async function generatePlan(
     );
   }
   return result;
+}
+
+/** Whether a write failed only because the device has no connection yet. */
+function isOfflineError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === 'unavailable' || /offline/i.test(error.message);
 }
 
 const decide = (
