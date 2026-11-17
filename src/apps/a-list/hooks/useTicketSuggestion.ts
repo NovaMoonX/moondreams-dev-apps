@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useAppSelector } from '@/store';
 import {
   selectFeeChips,
+  selectTaxRateChips,
   selectViewingItems,
 } from '@apps/a-list/store/selectors';
 import type { AmcFormat } from '@apps/a-list/types';
@@ -18,10 +19,18 @@ export function useTicketSuggestion(
 ): TicketSuggestion {
   const viewings = useAppSelector(selectViewingItems);
   const fallbackFeeCents = useAppSelector(selectFeeChips)[1] ?? 0;
+  const { defaultRate } = useAppSelector(selectTaxRateChips);
 
   const suggestion = useMemo(
-    () => getTicketSuggestion(viewings, theatreId, format, fallbackFeeCents),
-    [viewings, theatreId, format, fallbackFeeCents],
+    () =>
+      getTicketSuggestion(
+        viewings,
+        theatreId,
+        format,
+        fallbackFeeCents,
+        defaultRate,
+      ),
+    [viewings, theatreId, format, fallbackFeeCents, defaultRate],
   );
   return suggestion;
 }

@@ -246,8 +246,8 @@ const readUndoSurvey = async (
           entry.id,
           {
             updatedAt: data.updatedAt,
-            ingredientIds: (data.ingredients ?? []).map(
-              (line) => line.ingredientId,
+            ingredientIds: (data.ingredients ?? []).flatMap((line) =>
+              line.ingredientId === null ? [] : [line.ingredientId],
             ),
           },
         ];
@@ -271,7 +271,10 @@ const readUndoSurvey = async (
     notes: new Map(
       notes.docs.map((entry) => {
         const data = entry.data() as RecipeNote;
-        return [entry.id, { updatedAt: data.updatedAt, recipeId: data.recipeId }];
+        return [
+          entry.id,
+          { updatedAt: data.updatedAt, recipeId: data.recipeId },
+        ];
       }),
     ),
     usedIds: new Set([

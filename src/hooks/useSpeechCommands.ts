@@ -13,7 +13,10 @@ import {
   rememberRecognitionRefused,
   wasMicrophoneGranted,
 } from '@/lib/speech/microphonePermission';
-import { recordSpeechEvent } from '@/lib/speech/speechDiagnostics';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import { readAloud } from '@/lib/speech/readAloud';
 import { primeSpeech } from '@/utils/speechUtils';
 
@@ -163,7 +166,9 @@ export const createSpeechListener = (
       { length: event.results.length },
       (_, index) => index,
     )
-      .filter((index) => index >= event.resultIndex && !event.results[index].isFinal)
+      .filter(
+        (index) => index >= event.resultIndex && !event.results[index].isFinal,
+      )
       .map((index) => event.results[index][0].transcript.trim())
       .join(' ');
     if (interim !== '') state.options?.onInterimTranscript?.(interim);
@@ -309,6 +314,9 @@ export const createSpeechListener = (
       recognition.start();
     } catch (error) {
       console.error('Speech recognition could not start', error);
+      recordSpeechEvent(
+        `Speech recognition could not start: ${describeThrown(error)}`,
+      );
       state.isRunning = false;
       state.session = null;
       countFailure();
@@ -328,7 +336,9 @@ export const createSpeechListener = (
       if (state.isWanted || getRecognitionConstructor() === null) return;
       // Starting would only flash on and off: the screen shows the way to allow the microphone instead.
       if (needsMicrophoneAsk(peekMicrophonePermission())) {
-        recordSpeechEvent('Not started: the microphone has to be allowed first');
+        recordSpeechEvent(
+          'Not started: the microphone has to be allowed first',
+        );
         halt('denied');
         return;
       }

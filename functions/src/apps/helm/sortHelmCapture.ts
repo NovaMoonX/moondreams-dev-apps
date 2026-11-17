@@ -230,6 +230,7 @@ import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
+  toSpokenTurnPrompt,
   APP_RECORDS_PROMPT,
   toOffCategoriesPrompt,
   MAIL_PROMPT,
@@ -2041,6 +2042,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      toSpokenTurnPrompt(read.isSpoken),
       read.isOutside
         ? toHeldBackPrompt(read.via, read.outsideReadScopes, heldBackNames)
         : null,
