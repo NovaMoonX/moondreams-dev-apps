@@ -3,6 +3,8 @@ import HelpTip from '@/components/HelpTip';
 interface DiscountDayNoticeProps {
   /** What the member does with the price on this screen, said last in the explanation. */
   step: 'pick' | 'enter' | 'change';
+  /** Only some of the listed showings are on a discount day, so the chip doesn't speak for all of them. */
+  isSomeShowings?: boolean;
 }
 
 const STEP_LINES: Record<DiscountDayNoticeProps['step'], string> = {
@@ -14,15 +16,23 @@ const STEP_LINES: Record<DiscountDayNoticeProps['step'], string> = {
 };
 
 /** AMC marks the showing as a discount day: its listed price is the regular one, and checkout may charge less. */
-function DiscountDayNotice({ step }: DiscountDayNoticeProps) {
+function DiscountDayNotice({
+  step,
+  isSomeShowings = false,
+}: DiscountDayNoticeProps) {
   return (
-    <div>
+    <div className={step === 'pick' ? 'pb-1' : undefined}>
       <HelpTip
-        badgeLabel='Discount day: you may pay less'
+        badgeLabel={
+          isSomeShowings
+            ? 'Some showings may cost less'
+            : 'Discount day: you may pay less'
+        }
         title='You may pay less at checkout'
       >
-        AMC marks this as a discount day, so AMC Stubs members usually pay less
-        than the listed price, and other deals can lower it too.{' '}
+        {isSomeShowings ? 'AMC marks some of these showings' : 'AMC marks this'}{' '}
+        as a discount day, so checkout may come to less than the listed price
+        (often for AMC Stubs members), and other deals can lower it too.{' '}
         {STEP_LINES[step]}
       </HelpTip>
     </div>

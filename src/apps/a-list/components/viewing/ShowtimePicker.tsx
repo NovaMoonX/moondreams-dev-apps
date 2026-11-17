@@ -206,7 +206,10 @@ function ShowtimePicker({
         </p>
       )}
       {open.some((option) => option.isDiscountDay) && (
-        <DiscountDayNotice step='pick' />
+        <DiscountDayNotice
+          step='pick'
+          isSomeShowings={!open.every((option) => option.isDiscountDay)}
+        />
       )}
       {groups.map((group) => (
         <div key={group.format} className='space-y-1.5'>
