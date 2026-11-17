@@ -25,6 +25,7 @@ import {
 } from './dayAimsStore.js';
 import { makeFirstPlan } from './firstPlanStore.js';
 import {
+  FIRST_PLAN_LEAD,
   findStaleSuggestions,
   isFirstPlanDue,
   isRollable,
@@ -63,12 +64,14 @@ const EVENT_LOOKBEHIND = 12 * 60 * MINUTE;
 const UNTIMED_EVENT = 30 * MINUTE;
 const SPAN_MAX = 12 * 60 * MINUTE;
 const DEFAULT_FILL = 50;
+const FIRST_PLAN_ACTIVE_WITHIN = 14 * 24 * 60 * MINUTE;
 
 export interface DayReport {
   people: number;
   rolled: number;
   ready: number;
   firstPlans: number;
+  held: number;
   flagged: number;
   replanned: number;
   failed: number;
@@ -220,6 +223,19 @@ const readAwayIds = async (
   }
 };
 
+const isRecentlyActive = async (
+  firestore: Firestore,
+  uid: string,
+  now: number,
+) => {
+  const lastActiveAt = toNumber(
+    (await firestore.doc(`apps/helm/usage/${uid}`).get()).get('lastActiveAt'),
+  );
+  return (
+    lastActiveAt !== null && now - lastActiveAt <= FIRST_PLAN_ACTIVE_WITHIN
+  );
+};
+
 async function runPerson(
   firestore: Firestore,
   keyring: Keyring,
@@ -264,7 +280,7 @@ async function runPerson(
     : [];
   const clock = readDayClock(now, profile);
 
-  if (now >= clock.startAt)
+  if (now >= clock.startAt - FIRST_PLAN_LEAD)
     report.rolled += await rollOver(firestore, key, uid, clock.dayKey, now);
 
   const todayRef = firestore.doc(dayAimsPath(uid, clock.dayKey));
@@ -292,20 +308,32 @@ async function runPerson(
     clock,
     hasPlan: toNumber(firstSnap.get('generatedAt')) !== null,
   });
-  const isFirstMade =
+  const isEligible =
     isFirstDue &&
-    (await makeFirstPlan({
-      firestore,
-      key,
-      uid,
-      now,
-      clock,
-      profile,
-      profileData: profileSnap.data() as DocumentData,
-      fillPercent,
-      aimTaskIds,
-    }));
+    typeof profileSnap.get('timeZone') === 'string' &&
+    (await isRecentlyActive(firestore, uid, now));
+  const firstPlan = isEligible
+    ? await makeFirstPlan({
+        firestore,
+        key,
+        uid,
+        now,
+        clock,
+        profile,
+        profileData: profileSnap.data() as DocumentData,
+        fillPercent,
+        aimTaskIds,
+      }).catch((error: unknown) => {
+        logger.error('helm.dayPlan.firstPlanFailed', {
+          who: uid.slice(0, 4),
+          name: error instanceof Error ? error.name : 'error',
+        });
+        return 'failed' as const;
+      })
+    : null;
+  const isFirstMade = firstPlan === 'made';
   if (isFirstMade) report.firstPlans += 1;
+  if (firstPlan === 'held') report.held += 1;
   const planSnap = isFirstMade ? await planRef.get() : firstSnap;
   const slots = readSlots(planSnap.data());
   const isPlanned = aimTaskIds.length > 0 && Object.keys(slots).length > 0;
@@ -373,7 +401,7 @@ async function runPerson(
   }
 
   const isRolloverOwed =
-    now < clock.startAt &&
+    now < clock.startAt - FIRST_PLAN_LEAD &&
     (await readRollablePast(firestore, uid, clock.dayKey)) !== null;
   const lookAt = readPassLookAt({
     now,
@@ -382,7 +410,10 @@ async function runPerson(
     aimCount: view.aims.length,
     isPlanned,
     isRolloverOwed,
-    isFirstPlanOwed: isFirstDue && !isFirstMade,
+    hasFirstPlan:
+      isFirstMade ||
+      (isFirstDue && !isEligible) ||
+      toNumber(firstSnap.get('generatedAt')) !== null,
   });
   await firestore.runTransaction(async (transaction) => {
     const queue = await transaction.get(queueRef);
@@ -507,6 +538,7 @@ export async function runDayPlans(
     rolled: 0,
     ready: 0,
     firstPlans: 0,
+    held: 0,
     flagged: 0,
     replanned: 0,
     failed: 0,

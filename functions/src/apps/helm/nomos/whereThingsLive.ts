@@ -130,6 +130,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: 'Tasks',
     home: 'tasks',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<open_tasks>',
     tools: ['search_tasks'],
     commands: ['createTask', 'updateTask', 'completeTask', 'offerQuestionTask'],
@@ -139,6 +140,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: 'Goals and projects, with their milestones',
     home: 'projects',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<open_projects>',
     batchJobs: ['reflect'],
     commands: ['createProject', 'setProjectRole', 'addMilestone'],
@@ -493,6 +495,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: "Helm's plan for a day",
     home: 'planDays',
+    readers: ['device', 'server', 'turn', 'quick'],
     tools: ['get_calendar'],
     writer: 'actions/planActions',
     taps: ['generatePlan', 'keepSlot', 'skipSlot', 'moveSlot'],
@@ -636,6 +639,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: 'Calendar events',
     home: 'synced',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<synced_records>',
     tools: ['get_calendar', 'search_synced'],
     writer: 'platform/sink',
@@ -656,6 +660,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   }),
   connected('google:calendar', 'events', 'Google Calendar events', {
     home: 'synced',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<synced_records>',
     tools: ['get_calendar', 'search_synced'],
     isSynced: true,

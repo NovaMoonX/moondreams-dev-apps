@@ -8,7 +8,7 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-/** Enrols anyone who plans a day, aims or not, in the day queue so the first plan is made for them before the app opens; a person already in the queue is left alone. */
+/** Enrols anyone who plans a day, aims or not, in the day queue so the first plan is made for them before the app opens; a person already waiting on a look is left alone. */
 export const onHelmPlanDayWritten = onDocumentWritten(
   {
     document: 'apps/helm/users/{uid}/planDays/{dayKey}',
@@ -19,7 +19,7 @@ export const onHelmPlanDayWritten = onDocumentWritten(
     if (!event.data?.after.exists) return;
     const firestore = getFirestore();
     const queue = await firestore.doc(dayQueuePath(event.params.uid)).get();
-    if (!queue.exists)
+    if (!queue.exists || queue.get('lookAt') == null)
       await stampDayQueue(firestore, event.params.uid, Date.now());
   },
 );

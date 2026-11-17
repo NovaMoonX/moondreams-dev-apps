@@ -36,7 +36,7 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   const { addToast } = useToast();
   const { uid, model, filing } = card;
   const { held, tick, undoTick } = useTaskTicks(uid);
-  const { plan, isReady, isFailing } = usePlanDay();
+  const { plan, isReady, isWaitingForServer, isFailing } = usePlanDay();
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [lengthRow, setLengthRow] = useState<AimRow | null>(null);
   const [failedPlanKey, setFailedPlanKey] = useState<string | null>(null);
@@ -59,12 +59,13 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   const isPlanFailed = failedPlanKey === planKey;
 
   useEffect(() => {
-    if (!isPlanDue || attempted.has(planKey)) return;
+    if (!isPlanDue || isWaitingForServer(todayKey) || attempted.has(planKey))
+      return;
     attempted.add(planKey);
     void plan(todayKey, false, true).then((result) => {
       if (result === 'failed') setFailedPlanKey(planKey);
     });
-  }, [isPlanDue, planKey, plan, todayKey]);
+  }, [isPlanDue, isWaitingForServer, planKey, plan, todayKey]);
 
   if (!model || !uid || mode === 'hidden') return null;
 

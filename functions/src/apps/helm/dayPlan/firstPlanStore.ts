@@ -29,6 +29,7 @@ import { readFinished, readSlots, toNumber, userPath } from './planRead.js';
 
 const DAY_MS = 86_400_000;
 const EVENTS_READ = 400;
+const EVENT_LOOKBEHIND_DAYS = 14;
 const PLAN_DAYS_READ = 30;
 const PATTERNS_READ = 500;
 const SUMMARY_DAY = 'today';
@@ -54,9 +55,9 @@ const readEvents = async (
   const snap = await firestore
     .collection(`${userPath(uid)}/synced`)
     .where('kind', '==', 'event')
-    .where('startAt', '>=', noon - 2 * DAY_MS)
+    .where('startAt', '>=', noon - EVENT_LOOKBEHIND_DAYS * DAY_MS)
     .where('startAt', '<=', noon + 2 * DAY_MS)
-    .orderBy('startAt')
+    .orderBy('startAt', 'desc')
     .limit(EVENTS_READ)
     .get();
   return snap.docs.flatMap((doc): PlanEvent[] => {
@@ -64,6 +65,7 @@ const readEvents = async (
     if (data.connectionEndedAt != null || typeof data.helmRef === 'string')
       return [];
     const words = openWords(key, data.sealed);
+    if (typeof words?.title !== 'string') return [];
     const extra = words?.extra as { sameEventKey?: unknown } | undefined;
     return [
       {
@@ -78,7 +80,7 @@ const readEvents = async (
         isBusy: typeof data.isBusy === 'boolean' ? data.isBusy : null,
         calendarKey:
           typeof data.calendarKey === 'string' ? data.calendarKey : null,
-        title: typeof words?.title === 'string' ? words.title : '',
+        title: words.title,
         sameEventKey:
           typeof extra?.sameEventKey === 'string' ? extra.sameEventKey : null,
       },
@@ -152,7 +154,7 @@ const readLaterKeptTaskIds = async (
     ),
   );
 
-/** The day's first plan, made on the server before the person opens the app, written as the device writes it: slots keyed by task id, the reasons and calendar snapshot sealed, and one proposed execution when anything is suggested. Returns false when nothing was written: the calendar is held back, or a plan arrived while this one was worked out. */
+/** The day's first plan, made on the server before the person opens the app, written as the device writes it: slots keyed by task id, the reasons and calendar snapshot sealed, and one proposed execution when anything is suggested. Says whether a plan was made, the calendar is held back, or a plan arrived while this one was worked out. */
 export async function makeFirstPlan(input: {
   firestore: Firestore;
   key: HelmKey;
@@ -167,10 +169,10 @@ export async function makeFirstPlan(input: {
   profileData: DocumentData;
   fillPercent: number;
   aimTaskIds: string[];
-}): Promise<boolean> {
+}): Promise<'made' | 'held' | 'raced'> {
   const { firestore, key, uid, now, clock, profile } = input;
   const grants = await readGrants(firestore, uid);
-  if (isCalendarHeld(grants.map((entry) => entry.grant))) return false;
+  if (isCalendarHeld(grants.map((entry) => entry.grant))) return 'held';
   const day = dayKeyToMs(clock.dayKey);
   const isLearningOn = input.profileData.isLearningOn !== false;
   const base = userPath(uid);
@@ -225,7 +227,7 @@ export async function makeFirstPlan(input: {
   const executionRef = firestore.doc(`${base}/executions/plan-${clock.dayKey}`);
   return firestore.runTransaction(async (transaction) => {
     const snap = await transaction.get(planRef);
-    if (toNumber(snap.get('generatedAt')) !== null) return false;
+    if (toNumber(snap.get('generatedAt')) !== null) return 'raced';
     const overriddenAt = toNumber(snap.get('restDayOverriddenAt'));
     const built = buildFirstPlan(
       { ...sources, restDayOverriddenAt: overriddenAt },
@@ -303,6 +305,6 @@ export async function makeFirstPlan(input: {
         }),
       });
     }
-    return true;
+    return 'made';
   });
 }

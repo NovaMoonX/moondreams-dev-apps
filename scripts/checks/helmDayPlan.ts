@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 
+import { resetAllState } from '../../src/store/actions/globalActions.ts';
+import {
+  helmReducer,
+  setPlanDays,
+} from '../../src/apps/helm/store/helmSlice.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
   foldedAimsLine,
@@ -363,7 +368,7 @@ test('rollover brings an aim sent to Tomorrow once and never twice, and leaves a
   );
 });
 
-test('a pass at 00:15 with today empty and yesterday unrolled asks again at the day start', () => {
+test('a pass at 00:15 with today empty and yesterday unrolled asks again when the rollover and first plan open', () => {
   const clock = readDayClock(at('00:15'), profile);
   const input = {
     now: at('00:15'),
@@ -371,15 +376,13 @@ test('a pass at 00:15 with today empty and yesterday unrolled asks again at the 
     windDownState: 'waiting',
     aimCount: 0,
     isPlanned: false,
-    isFirstPlanOwed: false,
+    hasFirstPlan: false,
   };
-  assert.equal(
-    readPassLookAt({ ...input, isRolloverOwed: true }),
-    clock.startAt,
-  );
+  const opensAt = clock.startAt - 2 * 60 * MIN;
+  assert.equal(readPassLookAt({ ...input, isRolloverOwed: true }), opensAt);
   assert.equal(
     readPassLookAt({ ...input, aimCount: 2, isRolloverOwed: true }),
-    clock.startAt,
+    opensAt,
   );
 });
 
@@ -405,29 +408,56 @@ test('a person without aims stays in the queue: the next look is the next first 
     isRolloverOwed: false,
   };
   assert.equal(
-    readPassLookAt({
-      ...input,
-      now: at('06:05'),
-      isFirstPlanOwed: false,
-    }),
+    readPassLookAt({ ...input, now: at('06:05'), hasFirstPlan: true }),
     clockNow.nextStartAt - 2 * 60 * MIN,
   );
   assert.equal(
-    readPassLookAt({ ...input, now: at('03:00'), isFirstPlanOwed: true }),
+    readPassLookAt({ ...input, now: at('03:00'), hasFirstPlan: false }),
     clockNow.startAt - 2 * 60 * MIN,
   );
   assert.equal(
-    readPassLookAt({ ...input, now: at('07:10'), isFirstPlanOwed: true }),
+    readPassLookAt({ ...input, now: at('03:00'), hasFirstPlan: true }),
+    clockNow.nextStartAt - 2 * 60 * MIN,
+  );
+  assert.equal(
+    readPassLookAt({ ...input, now: at('07:10'), hasFirstPlan: false }),
     at('07:15'),
   );
   assert.equal(
-    readPassLookAt({
-      ...input,
-      now: at('20:55'),
-      isFirstPlanOwed: true,
-    }),
+    readPassLookAt({ ...input, now: at('20:55'), hasFirstPlan: false }),
     at('21:00'),
   );
+});
+
+test('plan days heard from the server stay known until the state resets', () => {
+  const heard = (isFromServer: boolean) =>
+    setPlanDays({ days: [], isFromServer });
+  const cache = helmReducer(undefined, heard(false));
+  assert.equal(cache.planDays.isFromServer, false);
+  const server = helmReducer(cache, heard(true));
+  assert.equal(server.planDays.isFromServer, true);
+  assert.equal(helmReducer(server, heard(false)).planDays.isFromServer, true);
+  assert.equal(
+    helmReducer(server, resetAllState()).planDays.isFromServer,
+    false,
+  );
+});
+
+test('a day starting at 01:00 never asks for a look that is already past', () => {
+  const early = { ...profile, dayStartTime: '01:00' };
+  const now = at('23:00');
+  const clock = readDayClock(now, early);
+  const lookAt = readPassLookAt({
+    now,
+    clock,
+    windDownState: 'waiting',
+    aimCount: 0,
+    isPlanned: false,
+    isRolloverOwed: false,
+    hasFirstPlan: true,
+  });
+  assert.ok(lookAt > now);
+  assert.equal(lookAt, clock.nextStartAt);
 });
 
 test('a day aim sent to tomorrow or dropped is no longer an aim to plan', () => {

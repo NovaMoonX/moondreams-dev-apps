@@ -357,7 +357,7 @@ export const readAimTaskIds = (view: AimsView): string[] =>
     .filter((aim) => (view.windDown[aim.taskId]?.choice ?? null) === null)
     .map((aim) => aim.taskId);
 
-/** The next look after a pass: whatever the day still needs, the day's start while a rollover waits for it, and the first plan: the window's opening while it has not come, a quarter hour on while it is owed and cannot be made yet (a held calendar), else the next day's. Everyone with a profile stays in the queue. */
+/** The next look after a pass: whatever the day still needs, the rollover's and the first plan's opening while it has not come, a quarter hour on while the first plan is owed and cannot be made yet (a held calendar), else the next day's opening; a next opening already past (a day starting within two hours of midnight) waits for the day's start itself, so the result is always after now. */
 export function readPassLookAt(input: {
   now: number;
   clock: DayClock;
@@ -365,11 +365,12 @@ export function readPassLookAt(input: {
   aimCount: number;
   isPlanned: boolean;
   isRolloverOwed: boolean;
-  isFirstPlanOwed: boolean;
+  hasFirstPlan: boolean;
 }): number {
   const { now, clock } = input;
-  const owed =
-    input.isRolloverOwed && now < clock.startAt ? [clock.startAt] : [];
+  const opensAt = clock.startAt - FIRST_PLAN_LEAD;
+  const nextOpensAt = clock.nextStartAt - FIRST_PLAN_LEAD;
+  const owed = input.isRolloverOwed && now < opensAt ? [opensAt] : [];
   const day =
     input.aimCount > 0
       ? [
@@ -382,11 +383,13 @@ export function readPassLookAt(input: {
           }),
         ]
       : [];
-  const opensAt = clock.startAt - FIRST_PLAN_LEAD;
-  const first = !input.isFirstPlanOwed
-    ? clock.nextStartAt - FIRST_PLAN_LEAD
-    : now < opensAt
-      ? opensAt
-      : Math.min(nextBoundary(now), clock.endAt);
+  const first =
+    input.hasFirstPlan || now >= clock.endAt
+      ? nextOpensAt > now
+        ? nextOpensAt
+        : clock.nextStartAt
+      : now < opensAt
+        ? opensAt
+        : Math.min(nextBoundary(now), clock.endAt);
   return Math.min(...owed, ...day, first);
 }
