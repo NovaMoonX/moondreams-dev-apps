@@ -38,18 +38,26 @@ export function CookAmountButton({ row, className }: CookAmountProps) {
   );
 }
 
-/** The other units of an opened amount, read from arm's length at the stove: a tinted card in full-contrast type, one measure per item. */
+const otherKind = (labels: string[]) => {
+  if (labels.includes('by weight')) return 'by volume';
+  if (labels.includes('by volume')) return 'by weight';
+  return '';
+};
+
+/** The other units of an opened amount, read from arm's length at the stove: a tinted card in full-contrast type, each kind on its own row under one label column. */
 export function CookConversionLine({
   row,
+  isCompact = false,
   className,
 }: {
   row: Pick<CookRow, 'conversion'>;
+  isCompact?: boolean;
   className?: string;
 }) {
   const { openKey } = useContext(CookConversionContext);
   if (row.conversion === null || openKey !== row.conversion.key) return null;
   const parts = row.conversion.text.replace(/^=\s*/, '').split(' · ');
-  const lines = (['', ' by weight', ' by volume'] as const)
+  const groups = (['', ' by weight', ' by volume'] as const)
     .map((suffix) => ({
       label: suffix.trim(),
       values: parts
@@ -60,36 +68,40 @@ export function CookConversionLine({
         )
         .map((part) => part.slice(0, part.length - suffix.length)),
     }))
-    .filter((line) => line.values.length > 0);
+    .filter((group) => group.values.length > 0);
+  const labels = groups.map((group) => group.label);
+  const lines = groups.map((group) => ({
+    ...group,
+    label: group.label || otherKind(labels),
+  }));
+  const hasLabels = lines.some((line) => line.label !== '');
   return (
     <div
       className={join(
-        'bg-accent text-accent-foreground space-y-1 rounded-xl px-3 py-2 text-lg',
+        'bg-accent text-accent-foreground grid items-baseline gap-x-3 rounded-xl px-3',
+        hasLabels ? 'grid-cols-[auto_1fr]' : 'grid-cols-1',
+        isCompact ? 'gap-y-0.5 py-1.5 text-base' : 'gap-y-1 py-2 text-lg',
         className,
       )}
     >
       {lines.map((line) => (
-        <p
-          key={line.label}
-          className='flex flex-wrap items-baseline gap-x-4 gap-y-1'
-        >
-          <span className='sr-only'>{line.label || 'Also'}: </span>
-          {line.label && (
-            <span
-              aria-hidden='true'
-              className='w-full text-xs font-medium tracking-wide uppercase opacity-70'
-            >
+        <p key={line.label} className='contents'>
+          {hasLabels && (
+            <span className='text-xs font-medium tracking-wide whitespace-nowrap uppercase opacity-70'>
               {line.label}
+              <span className='sr-only'>: </span>
             </span>
           )}
-          {line.values.map((value) => (
-            <span
-              key={value}
-              className='font-semibold whitespace-nowrap tabular-nums'
-            >
-              {value}
-            </span>
-          ))}
+          <span className='flex flex-wrap gap-x-4'>
+            {line.values.map((value) => (
+              <span
+                key={value}
+                className='font-semibold whitespace-nowrap tabular-nums'
+              >
+                {value}
+              </span>
+            ))}
+          </span>
         </p>
       ))}
     </div>

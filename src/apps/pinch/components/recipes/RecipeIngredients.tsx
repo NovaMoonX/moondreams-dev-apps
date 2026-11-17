@@ -373,8 +373,12 @@ function IngredientEditor({
     isRoundRowDrawn && typedAmount !== null && isMeasureUnit(row.unit)
       ? stepMeasure(typedAmount, row.unit, direction)
       : null;
-  const down = step(-1);
-  const up = step(1);
+  const roundTargets = [
+    { target: step(-1), Icon: ArrowDown, word: 'down' },
+    { target: step(1), Icon: ArrowUp, word: 'up' },
+  ].flatMap(({ target, ...rest }) =>
+    target === null || target === typedAmount ? [] : [{ target, ...rest }],
+  );
   const changeUnit = (unit: Unit) => {
     const base =
       pending ??
@@ -531,28 +535,21 @@ function IngredientEditor({
           <div className='grid grid-cols-2 gap-3'>
             <Field label='Amount'>
               {(id) => (
-                <>
-                  <Input
-                    id={id}
-                    inputMode='decimal'
-                    variant='outline'
-                    ref={amountRef}
-                    autoFocus={isAmountJustAdded}
-                    value={row.amount}
-                    onChange={(event) => {
-                      setPending(null);
-                      onUpdate({
-                        amount: event.target.value,
-                        adaptedFrom: null,
-                      });
-                    }}
-                  />
-                  {row.adaptedFrom !== null && (
-                    <span className='text-muted-foreground block text-xs font-normal'>
-                      Adapted from {getOriginalText(row.adaptedFrom)}
-                    </span>
-                  )}
-                </>
+                <Input
+                  id={id}
+                  inputMode='decimal'
+                  variant='outline'
+                  ref={amountRef}
+                  autoFocus={isAmountJustAdded}
+                  value={row.amount}
+                  onChange={(event) => {
+                    setPending(null);
+                    onUpdate({
+                      amount: event.target.value,
+                      adaptedFrom: null,
+                    });
+                  }}
+                />
               )}
             </Field>
             <div className='space-y-1.5'>
@@ -583,15 +580,35 @@ function IngredientEditor({
           {row.adaptedFrom !== null && (
             <div
               role='group'
-              aria-label='Round or put back'
-              className='border-border flex flex-wrap items-center gap-2 rounded-xl border p-2'
+              aria-label={`Adapted from ${getOriginalText(row.adaptedFrom)}`}
+              className='border-border space-y-2 rounded-xl border p-2'
             >
-              {isRoundRowDrawn &&
-                [
-                  { target: down, Icon: ArrowDown, word: 'down' },
-                  { target: up, Icon: ArrowUp, word: 'up' },
-                ].map(({ target, Icon, word }) =>
-                  target === null || target === typedAmount ? null : (
+              <div className='flex items-center justify-between gap-2'>
+                <span className='text-muted-foreground pl-1 text-sm'>
+                  Adapted from {getOriginalText(row.adaptedFrom)}
+                </span>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  rounded='full'
+                  className={UNIT_CHIP_CLASS}
+                  aria-label={`Use the original, ${getOriginalText(row.adaptedFrom)}`}
+                  onClick={() => {
+                    const { amount, unit, adaptedFrom } = restoreRow(row);
+                    onUpdate({ amount, unit, adaptedFrom });
+                  }}
+                >
+                  <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
+                  Use original
+                </Button>
+              </div>
+              {roundTargets.length > 0 && (
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='text-muted-foreground pl-1 text-sm'>
+                    Round to
+                  </span>
+                  {roundTargets.map(({ target, Icon, word }) => (
                     <Button
                       key={word}
                       type='button'
@@ -607,23 +624,9 @@ function IngredientEditor({
                       <Icon className='h-3.5 w-3.5' aria-hidden='true' />
                       {formatAmountText(target)} {UNIT_LABELS[row.unit]}
                     </Button>
-                  ),
-                )}
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                rounded='full'
-                className={join(UNIT_CHIP_CLASS, 'ml-auto')}
-                aria-label={`Use the original, ${getOriginalText(row.adaptedFrom)}`}
-                onClick={() => {
-                  const { amount, unit, adaptedFrom } = restoreRow(row);
-                  onUpdate({ amount, unit, adaptedFrom });
-                }}
-              >
-                <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
-                Use original
-              </Button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <RevealChip
@@ -1339,7 +1342,7 @@ function AdaptReviewSheet({
         <ul className='divide-border divide-y'>
           {changes.map(({ id, before, after }) => (
             <li key={id}>
-              <label className='flex cursor-pointer items-start gap-3 py-2'>
+              <label className='flex min-h-14 cursor-pointer items-center gap-3 py-2'>
                 <span className='inline-flex shrink-0'>
                   <AppCheckbox
                     aria-label={`Adapt ${getName(before)}`}
@@ -1349,11 +1352,11 @@ function AdaptReviewSheet({
                     }
                   />
                 </span>
-                <span className='flex min-h-10 min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3'>
-                  <span className='min-w-0 font-medium break-words'>
+                <span className='flex min-w-0 flex-1 items-center justify-between gap-x-3'>
+                  <span className='min-w-0 font-medium text-pretty break-words'>
                     {getName(before)}
                   </span>
-                  <span className='text-sm whitespace-nowrap'>
+                  <span className='shrink-0 text-sm whitespace-nowrap'>
                     <span className='text-muted-foreground'>
                       {getAmountLabel(before)}
                     </span>

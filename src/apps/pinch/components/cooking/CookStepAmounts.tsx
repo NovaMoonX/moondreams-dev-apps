@@ -37,7 +37,7 @@ export function CookAmountRows({
               }
             />
           </div>
-          <CookConversionLine row={row} className='mb-1.5 text-base' />
+          <CookConversionLine row={row} isCompact className='mb-1.5' />
         </li>
       ))}
     </ul>
