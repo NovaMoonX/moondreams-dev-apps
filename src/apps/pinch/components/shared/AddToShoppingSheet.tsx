@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react';
-
 import {
-  Button,
-  Calendar,
-} from '@moondreamsdev/dreamer-ui/components';
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+
+import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
 import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -12,10 +17,10 @@ import { ChevronDown, ListChecks, ListX } from 'lucide-react';
 import ActionChips from '@/components/ActionChips';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SectionDivider from '@/components/SectionDivider';
 import Stepper from '@/components/Stepper';
 import SummaryRow from '@/components/SummaryRow';
 import { useBackStep } from '@/hooks/useBackHistory';
-import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
   toDateInputValue,
@@ -25,6 +30,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_SHOPPING_LINES_PER_ADD,
   MEAL_TYPE_LABELS,
+  SHOPPING_MOVE_DELAY_MS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -94,6 +100,78 @@ const RANGE_STYLES = {
   todayCellClassName: 'border-0',
 };
 
+const MOVE_ANIMATION_MS = 260;
+
+/** Rows whose tick just changed stay in the part they were drawn in for a moment, so a second tap never lands on a row that moved. Holding renders nothing: only letting go does. */
+function useHeldMoves() {
+  const held = useRef(new Map<string, boolean>());
+  const timers = useRef(new Map<string, number>());
+  const isAnimating = useRef(false);
+  const [, release] = useReducer((count: number) => count + 1, 0);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach((timer) => window.clearTimeout(timer));
+      pending.clear();
+    };
+  }, []);
+
+  const toggle = useCallback((id: string, wasTicked: boolean) => {
+    if (held.current.has(id)) {
+      window.clearTimeout(timers.current.get(id));
+      timers.current.delete(id);
+      held.current.delete(id);
+      return;
+    }
+    held.current.set(id, wasTicked);
+    timers.current.set(
+      id,
+      window.setTimeout(() => {
+        timers.current.delete(id);
+        held.current.delete(id);
+        isAnimating.current = true;
+        release();
+      }, SHOPPING_MOVE_DELAY_MS),
+    );
+  }, []);
+
+  const releaseAll = useCallback(() => {
+    timers.current.forEach((timer) => window.clearTimeout(timer));
+    timers.current.clear();
+    held.current.clear();
+    isAnimating.current = true;
+  }, []);
+
+  const rowEls = useRef(new Map<string, HTMLElement>());
+  const tops = useRef(new Map<string, number>());
+
+  // Slides each row from where it was drawn to its new spot; instant under reduced motion.
+  useLayoutEffect(() => {
+    const next = new Map<string, number>();
+    const shouldMove =
+      isAnimating.current &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    rowEls.current.forEach((el, id) => {
+      const top = el.getBoundingClientRect().top;
+      next.set(id, top);
+      const before = tops.current.get(id);
+      if (!shouldMove || before === undefined || before === top) return;
+      el.animate(
+        [
+          { transform: `translateY(${before - top}px)`, opacity: 0.5 },
+          { transform: 'translateY(0)', opacity: 1 },
+        ],
+        { duration: MOVE_ANIMATION_MS, easing: 'ease-out' },
+      );
+    });
+    isAnimating.current = false;
+    tops.current = next;
+  });
+
+  return { held, toggle, releaseAll, rowEls };
+}
+
 const toCellDate = (dayKey: string) => {
   const [year, month, day] = dayKey.split('-').map(Number);
   return new Date(year, month - 1, day);
@@ -135,7 +213,7 @@ export function ShoppingPick({
   uid,
   request,
   onClose,
-  columnClassName = 'max-h-[max(22rem,calc(92dvh-22rem))]',
+  columnClassName = 'max-h-[max(22rem,calc(92dvh-14rem))]',
   hasViewAction = true,
 }: ShoppingPickProps) {
   const dispatch = useAppDispatch();
@@ -170,7 +248,7 @@ export function ShoppingPick({
   const [draft, setDraft] = useState<DraftRange | null>(null);
   useBackStep(draft !== null, () => setDraft(null));
   const [choices, setChoices] = useState<Record<string, boolean>>({});
-  const isCompact = useIsShortScreen();
+  const { held, toggle, releaseAll, rowEls } = useHeldMoves();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -351,6 +429,11 @@ export function ShoppingPick({
     ...rows.filter((row) => !isUsuallyAtHome(row)),
     ...atHomeRows,
   ];
+  const isShownTicked = (row: ShopLineRow) =>
+    held.current.get(row.id) ?? isTicked(row);
+  const addingRows = shownRows.filter(isShownTicked);
+  const notAddingRows = shownRows.filter((row) => !isShownTicked(row));
+  const hasAtHomeBelow = notAddingRows.some(isUsuallyAtHome);
   const selectedLines = selected.flatMap((row) => getState(row).addLines);
   const selectedIds = [
     ...new Set(
@@ -460,21 +543,83 @@ export function ShoppingPick({
           ),
           label: isAllTicked ? 'Untick all' : 'Tick all',
           isDisabled: !isReady,
-          onClick: () =>
+          onClick: () => {
+            releaseAll();
             setChoices(
               Object.fromEntries(rows.map((row) => [row.id, !isAllTicked])),
-            ),
+            );
+          },
         },
       ]}
     />
   );
   const stepper = recipe && (
-    <div className='flex flex-wrap items-center gap-3'>
-      <span className='text-sm'>For</span>
-      <Stepper label='Servings' value={servings} onChange={setServings} />
-      <span className='text-sm'>{servings === 1 ? 'serving' : 'servings'}</span>
+    <div className='flex shrink-0 items-center gap-2'>
+      <Stepper
+        label='Servings'
+        value={servings}
+        onChange={setServings}
+        isCompact
+      />
+      <span className='text-muted-foreground text-sm'>
+        {servings === 1 ? 'serving' : 'servings'}
+      </span>
     </div>
   );
+
+  const renderRow = (row: ShopLineRow) => {
+    const state = getState(row);
+    const hint =
+      getOnListHint(
+        state,
+        formatSourceNames(state.matched.map(nameSource)),
+        state.openText,
+      ) ?? getPantryHint(row);
+    const amountText = formatShopAmount(
+      getShopAmount(state.addLines, row.section),
+    );
+    return (
+      <li
+        key={row.id}
+        ref={(el) => {
+          if (el) rowEls.current.set(row.id, el);
+          else rowEls.current.delete(row.id);
+        }}
+      >
+        <label className='flex min-h-10 cursor-pointer items-start gap-2.5 py-1.5'>
+          <span className='mt-0.5 inline-flex shrink-0'>
+            <AppCheckbox
+              aria-label={`Add ${row.name}`}
+              checked={isTicked(row)}
+              disabled={!isReady}
+              onCheckedChange={(checked) => {
+                toggle(row.id, isShownTicked(row));
+                setChoices((current) => ({
+                  ...current,
+                  [row.id]: checked === true,
+                }));
+              }}
+            />
+          </span>
+          <span className='min-w-0 flex-1'>
+            <span className='flex items-baseline justify-between gap-3'>
+              <span className='min-w-0 wrap-break-word'>{row.name}</span>
+              {amountText && (
+                <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                  {amountText}
+                </span>
+              )}
+            </span>
+            {hint && (
+              <span className='text-muted-foreground block text-xs'>
+                {hint}
+              </span>
+            )}
+          </span>
+        </label>
+      </li>
+    );
+  };
 
   if (draft) {
     const isDraftDone = draft.startKey !== '' && draft.endKey !== '';
@@ -554,6 +699,7 @@ export function ShoppingPick({
               disabled={!isDraftDone}
               onClick={() => {
                 setDays(draft);
+                releaseAll();
                 setChoices({});
                 setDraft(null);
               }}
@@ -574,83 +720,53 @@ export function ShoppingPick({
           columnClassName,
         )}
       >
-        <div
-          className={join('shrink-0', isCompact ? 'space-y-2' : 'space-y-3')}
-        >
-          {isCompact && !isRange ? (
-            <>
-              <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
-                <div className='order-1 min-w-0 flex-1'>
-                  <p className='text-lg font-medium wrap-break-word'>{label}</p>
-                  {rows.length > 0 && (
-                    <p className='text-muted-foreground truncate text-xs'>
-                      Adding {selected.length} of {rows.length}
-                    </p>
+        <div className='shrink-0 space-y-2'>
+          {isRange ? (
+            <SummaryRow
+              label='Days'
+              ariaLabel='Change the days'
+              onClick={
+                isPlanLoaded
+                  ? () =>
+                      setDraft({
+                        startKey: span.startKey,
+                        endKey: span.startKey > span.endKey ? '' : span.endKey,
+                      })
+                  : undefined
+              }
+            >
+              <span className='flex flex-wrap items-baseline gap-x-2'>
+                <span>
+                  {span.startKey > span.endKey ? (
+                    'These days have passed'
+                  ) : (
+                    <SpanText {...span} />
                   )}
-                </div>
-                {stepper && (
-                  <div className='order-3 basis-full sm:order-2 sm:basis-auto'>
-                    {stepper}
-                  </div>
-                )}
-                <div className='order-2 sm:order-3'>{tickAll}</div>
-              </div>
-              {stockLine && <StockNote text={stockLine} />}
-            </>
-          ) : (
-            <>
-              {isRange ? (
-                <SummaryRow
-                  label='Days'
-                  ariaLabel='Change the days'
-                  onClick={
-                    isPlanLoaded
-                      ? () =>
-                          setDraft({
-                            startKey: span.startKey,
-                            endKey:
-                              span.startKey > span.endKey ? '' : span.endKey,
-                          })
-                      : undefined
-                  }
-                >
-                  <span className='flex flex-wrap items-baseline gap-x-2'>
-                    <span>
-                      {span.startKey > span.endKey ? (
-                        'These days have passed'
-                      ) : (
-                        <SpanText {...span} />
-                      )}
-                    </span>
-                    {isPlanLoaded && span.startKey <= span.endKey && (
-                      <span className='text-muted-foreground text-sm whitespace-nowrap'>
-                        {formatMealCount(span.meals.length)}
-                        {span.isClamped && ' from today on'}
-                      </span>
-                    )}
+                </span>
+                {isPlanLoaded && span.startKey <= span.endKey && (
+                  <span className='text-muted-foreground text-sm whitespace-nowrap'>
+                    {formatMealCount(span.meals.length)}
+                    {span.isClamped && ' from today on'}
                   </span>
-                </SummaryRow>
-              ) : (
-                <p className='text-lg font-medium wrap-break-word'>{label}</p>
-              )}
+                )}
+              </span>
+            </SummaryRow>
+          ) : (
+            <div className='flex items-center justify-between gap-3'>
+              <p className='min-w-0 text-lg leading-snug font-medium wrap-break-word'>
+                {label}
+              </p>
               {stepper}
-              {stockLine && (
-                <p className='text-muted-foreground text-sm [@media(max-height:500px)]:hidden'>
-                  {stockLine}
-                </p>
-              )}
-              {rows.length > 0 && (
-                <div className='flex items-center justify-between gap-3'>
-                  <div className='text-muted-foreground min-w-0 text-sm'>
-                    <p>
-                      Adding {selected.length} of {rows.length}
-                    </p>
-                    <p className='text-xs'>{hintText}</p>
-                  </div>
-                  {tickAll}
-                </div>
-              )}
-            </>
+            </div>
+          )}
+          {stockLine && <StockNote text={stockLine} />}
+          {rows.length > 0 && (
+            <div className='flex items-center justify-between gap-3'>
+              <p className='text-muted-foreground min-w-0 text-xs'>
+                Adding {selected.length} of {rows.length} · {hintText}
+              </p>
+              {tickAll}
+            </div>
           )}
         </div>
         {rows.length === 0 ? (
@@ -658,61 +774,26 @@ export function ShoppingPick({
             {getEmptyText()}
           </p>
         ) : (
-          <ul className='divide-border flex-1 divide-y overflow-y-auto [@media(max-height:500px)]:overflow-visible [@media(max-height:800px)]:min-h-36'>
-            {shownRows.map((row) => {
-              const state = getState(row);
-              const hint =
-                getOnListHint(
-                  state,
-                  formatSourceNames(state.matched.map(nameSource)),
-                  state.openText,
-                ) ?? getPantryHint(row);
-              const amountText = formatShopAmount(
-                getShopAmount(state.addLines, row.section),
-              );
-              return (
-                <li key={row.id}>
-                  {row.id === atHomeRows[0]?.id && (
-                    <p className='text-muted-foreground pt-3 pb-0.5 text-xs'>
-                      Usually at home: tick what you're out of
-                    </p>
-                  )}
-                  <label className='flex min-h-12 cursor-pointer items-start gap-3 py-2.5'>
-                    <span className='mt-0.5 inline-flex shrink-0'>
-                      <AppCheckbox
-                        aria-label={`Add ${row.name}`}
-                        checked={isTicked(row)}
-                        disabled={!isReady}
-                        onCheckedChange={(checked) =>
-                          setChoices((current) => ({
-                            ...current,
-                            [row.id]: checked === true,
-                          }))
-                        }
-                      />
-                    </span>
-                    <span className='min-w-0 flex-1'>
-                      <span className='flex items-baseline justify-between gap-3'>
-                        <span className='min-w-0 wrap-break-word'>
-                          {row.name}
-                        </span>
-                        {amountText && (
-                          <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                            {amountText}
-                          </span>
-                        )}
-                      </span>
-                      {hint && (
-                        <span className='text-muted-foreground block text-xs'>
-                          {hint}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
+          <div className='flex-1 overflow-y-auto [@media(max-height:500px)]:overflow-visible [@media(max-height:800px)]:min-h-36'>
+            <ul className='divide-border divide-y'>
+              {addingRows.map(renderRow)}
+            </ul>
+            {notAddingRows.length > 0 && (
+              <>
+                {addingRows.length > 0 && (
+                  <SectionDivider label='Not adding' className='pt-3 pb-1' />
+                )}
+                {hasAtHomeBelow && (
+                  <p className='text-muted-foreground pb-0.5 text-center text-xs'>
+                    Usually at home: tick what you're out of
+                  </p>
+                )}
+                <ul className='divide-border divide-y'>
+                  {notAddingRows.map(renderRow)}
+                </ul>
+              </>
+            )}
+          </div>
         )}
       </div>
       {error && <p className='text-destructive text-sm'>{error}</p>}
@@ -735,7 +816,9 @@ export function ShoppingPick({
             disabled={isSubmitting || block !== null}
             onClick={() => void handleAdd()}
           >
-            {selected.length > 0 ? `Add ${selected.length}` : 'Add'}
+            {selected.length > 0
+              ? `Add ${selected.length} to shopping list`
+              : 'Add to shopping list'}
           </Button>
         }
       />
