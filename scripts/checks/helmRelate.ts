@@ -427,6 +427,7 @@ test('a task forces a project, so a topic parent becomes a new project to make',
     parentId: null,
     projectIds: [],
     privacy: 'ordinary',
+    createdAt: NOW - DAY_MS,
     sealed: sealForHelm(keyFor(U), { name: 'House' }),
   });
   await runNight([
@@ -452,6 +453,7 @@ test('a care item is never sent and a private one goes without its words', async
     due: null,
     privacy: 'private',
     completedAt: null,
+    createdAt: NOW - DAY_MS,
     sealed: sealForHelm(key, { title: 'Take insulin', privateMark: 'care' }),
   });
   await firestore.doc(`${base(U)}/notes/priv1`).set({
@@ -642,6 +644,132 @@ test('related things come from stored groupings and carry no private title', asy
   assert.ok(message.includes('<related_things>'));
   assert.ok(!message.includes(id), 'no grouping id is shown');
   assert.ok(readGrouping(id, (await groupings())[0]));
+});
+
+const storeMoving = (extra: Record<string, unknown> = {}) =>
+  storeGrouping(['tasks/t4', 'synced/s1', 'notes/n1'], 'proposed', {
+    sources: [
+      { key: 'tasks/t4', app: null, kind: 'task' },
+      { key: 'synced/s1', app: 'app:runway', kind: 'project' },
+      { key: 'notes/n1', app: null, kind: 'note' },
+    ],
+    sealed: sealForHelm(keyFor(U), {
+      proposedTitle: 'Moving',
+      emoji: null,
+      titles: { 'tasks/t4': 'Book a plumber', 'synced/s1': 'Moving fund' },
+    }),
+    ...extra,
+  });
+
+test('a masked turn sends the grouping name and the kinds, never a source title', async () => {
+  await setup();
+  await storeMoving();
+  const things = await readContextRelatedThings(
+    firestore,
+    base(U),
+    keyFor(U),
+    'how is the moving going',
+    true,
+  );
+  assert.equal(things.length, 1);
+  assert.equal(things[0].name, 'Moving');
+  assert.deepEqual(
+    things[0].sources.map((source: { kind: string }) => source.kind),
+    ['task', 'project', 'note'],
+  );
+  things[0].sources.forEach((source: { title: string | null }) =>
+    assert.equal(source.title, null),
+  );
+});
+
+test('a source made private after the grouping was written is left out', async () => {
+  await setup();
+  await storeMoving();
+  await firestore.doc(`${base(U)}/tasks/t4`).update({ privacy: 'private' });
+  const [thing] = await readContextRelatedThings(
+    firestore,
+    base(U),
+    keyFor(U),
+    'how is the moving going',
+    false,
+  );
+  assert.deepEqual(
+    thing.sources.map((source: { kind: string }) => source.kind),
+    ['project', 'note'],
+  );
+  assert.ok(!JSON.stringify(thing).includes('Book a plumber'));
+});
+
+test('a task under a paused care project is never in the request', async () => {
+  await setup();
+  const key = keyFor(U);
+  await firestore.doc(`${base(U)}/projects/pCare`).set({
+    status: 'paused',
+    kind: 'project',
+    privacy: 'private',
+    createdAt: NOW - 20 * DAY_MS,
+    targetDate: null,
+    whoRoles: {},
+    sealed: sealForHelm(key, { name: 'Care plan', privateMark: 'care' }),
+  });
+  await firestore.doc(`${base(U)}/tasks/tCare`).set({
+    status: 'open',
+    projectId: 'pCare',
+    whoIds: [],
+    due: null,
+    privacy: 'ordinary',
+    completedAt: null,
+    createdAt: NOW - DAY_MS,
+    sealed: sealForHelm(key, { title: 'Refill prescriptions' }),
+  });
+  await runNight([]);
+  const sent = prompts.join('');
+  assert.ok(sent.includes(taskAlias('t4')), 'the request was sent');
+  ['Refill prescriptions', taskAlias('tCare'), 'Care plan'].forEach((text) =>
+    assert.ok(!sent.includes(text), `the request never carries ${text}`),
+  );
+});
+
+test('an apply that throws does not stop the next result', async () => {
+  await setup();
+  await setup({ uid: OTHER });
+  const client = createFakeBatchProvider([]);
+  client.collect = async (batchId: string) => {
+    const batch = client.created.find((entry) => entry.id === batchId);
+    const [run] = (await firestore.collection(RUNS_PATH).get()).docs;
+    const requests = run.data().requests as Record<string, { uid: string }>;
+    return (batch?.customIds ?? [])
+      .map((customId: string) =>
+        requests[customId].uid === OTHER
+          ? { customId, outcome: 'succeeded' as const, output: {}, usage }
+          : {
+              customId,
+              outcome: 'succeeded' as const,
+              output: answerOf([
+                {
+                  sources: [taskAlias('t4'), syncedAlias('s1')],
+                  proposedTitle: 'Moving',
+                },
+              ]).json,
+              usage,
+            },
+      )
+      .sort((left: { customId: string }) =>
+        requests[left.customId].uid === OTHER ? -1 : 1,
+      );
+  };
+  await runHelmReflectionPass(firestore, client, DEV_KEYRING, NOW);
+  await runHelmReflectionPass(firestore, client, DEV_KEYRING, NOW + HOUR);
+  assert.equal((await groupings()).length, 1);
+  assert.equal((await groupings(OTHER)).length, 0);
+  const runs = (await firestore.collection(RUNS_PATH).get()).docs;
+  assert.ok(
+    runs.some(
+      (run: { data: () => { status: string } }) =>
+        run.data().status === 'collected',
+    ),
+    'the run that held the failure is closed',
+  );
 });
 
 const failures: string[] = [];

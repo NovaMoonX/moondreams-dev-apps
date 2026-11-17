@@ -56,7 +56,8 @@ const readGroupings = (uid: string) =>
     ? store.getState().helm.groupings.items
     : [];
 
-const offerName = (grouping: OpenGrouping) =>
+/** The name a grouping's parent is shown and made under. */
+export const offerName = (grouping: OpenGrouping) =>
   grouping.proposedTitle?.trim() ||
   Object.values(grouping.titles).find((title) => title.trim().length > 0) ||
   '';
@@ -502,7 +503,16 @@ export async function undoGroupingExecution(
             ),
           })),
         );
+        const parentTopic =
+          grouping.parentKind === 'topic' &&
+          grouping.parentId !== null &&
+          links.some((link) => link.collection === 'notes')
+            ? await transaction.get(
+                doc(collection(userOf(uid), 'topics'), grouping.parentId),
+              )
+            : null;
         const now = Date.now();
+        const leftNoteIds = new Set<string>();
         linked.forEach(({ link, snapshot: entry }) => {
           if (!entry.exists() || grouping.parentId === null) return;
           const parent = grouping.parentId;
@@ -525,12 +535,24 @@ export async function undoGroupingExecution(
               });
             return;
           }
-          if ((entry.data() as Note).topicIds?.includes(parent))
+          if ((entry.data() as Note).topicIds?.includes(parent)) {
+            leftNoteIds.add(link.id);
             transaction.update(entry.ref, {
               topicIds: arrayRemove(parent),
               lastEditedAt: now,
             });
+          }
         });
+        if (parentTopic?.exists() && leftNoteIds.size > 0) {
+          const topic = parentTopic.data() as Topic;
+          transaction.update(parentTopic.ref, {
+            pendingNoteIds: arrayRemove(...leftNoteIds),
+            ...(topic.docState === 'behind' &&
+            topic.pendingNoteIds.every((id) => leftNoteIds.has(id))
+              ? { docState: topic.lastWrittenAt !== null ? 'current' : 'empty' }
+              : {}),
+          });
+        }
         const patch = toGroupingUndoPatch(original.actor, previous, now);
         transaction.update(target, patch);
         if (unusedParent && grouping.parentId !== null) {

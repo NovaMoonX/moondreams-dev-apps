@@ -1,4 +1,4 @@
-import type { Firestore } from 'firebase-admin/firestore';
+import type { DocumentData, Firestore } from 'firebase-admin/firestore';
 
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
@@ -6,6 +6,7 @@ import {
   createOptionMatcher,
   toComparable,
 } from '../../../vendor/optionMatchUtils.js';
+import { toPrivateMark } from './contextPeople.js';
 import { openForHelm, type HelmKey } from '../helmKey.js';
 import { connectorLabel } from '../syncedCopies.js';
 import { readGrouping, type GroupingRecord } from './grouping.js';
@@ -36,28 +37,29 @@ const wordsOf = (text: string) => [
 
 interface OpenedGrouping {
   grouping: GroupingRecord;
-  name: string | null;
+  proposedTitle: string | null;
   titles: Record<string, string>;
 }
 
-/** Up to six stored groupings the turn's words touch. */
-export function pickRelatedThings(
+/** The stored groupings the turn's words touch, newest first and settled ones before proposals. */
+export function matchRelatedThings(
   opened: readonly OpenedGrouping[],
   text: string,
   isMasked: boolean,
-): ContextRelatedThing[] {
+): OpenedGrouping[] {
   const turnWords = wordsOf(text);
   return opened
     .filter(
-      ({ grouping, name }) =>
-        name !== null &&
+      ({ grouping }) =>
         !(isMasked && grouping.privacy === 'private') &&
         (grouping.state === 'filed' ||
           grouping.state === 'groupedByYou' ||
           grouping.state === 'proposed'),
     )
-    .filter(({ name, titles }) => {
-      const words = wordsOf([name ?? '', ...Object.values(titles)].join(' '));
+    .filter(({ proposedTitle, titles }) => {
+      const words = wordsOf(
+        [proposedTitle ?? '', ...Object.values(titles)].join(' '),
+      );
       return turnWords.some((word) => matcher.match(word, words) !== null);
     })
     .sort(
@@ -66,31 +68,62 @@ export function pickRelatedThings(
           Number(right.grouping.state === 'proposed') ||
         right.grouping.updatedAt - left.grouping.updatedAt ||
         left.grouping.id.localeCompare(right.grouping.id),
-    )
+    );
+}
+
+/** Up to six things with a name; a masked turn sends no source title, and a source private now is left out. */
+export function pickRelatedThings(
+  resolved: readonly (OpenedGrouping & {
+    name: string | null;
+    hiddenKeys: ReadonlySet<string>;
+  })[],
+  isMasked: boolean,
+): ContextRelatedThing[] {
+  return resolved
+    .filter(({ name }) => name !== null)
     .slice(0, MAX_RELATED_THINGS)
-    .map(({ grouping, name, titles }) => ({
+    .map(({ grouping, name, titles, hiddenKeys }) => ({
       name: name ?? '',
       state: grouping.state === 'proposed' ? 'suggested' : 'grouped',
-      sources: grouping.sources.slice(0, MAX_SOURCES_SHOWN).map((source) => ({
-        app: source.app === null ? null : connectorLabel(source.app),
-        kind: source.kind,
-        title: titles[source.key] ?? null,
-      })),
+      sources: grouping.sources
+        .filter((source) => !hiddenKeys.has(source.key))
+        .slice(0, MAX_SOURCES_SHOWN)
+        .map((source) => ({
+          app: source.app === null ? null : connectorLabel(source.app),
+          kind: source.kind,
+          title: isMasked ? null : (titles[source.key] ?? null),
+        })),
     }));
 }
 
 const toText = (value: unknown) =>
   typeof value === 'string' && value !== '' ? value : null;
 
-const openParentName = (
-  key: HelmKey,
-  parent: { exists: boolean; get: (field: string) => unknown },
-) => {
-  if (!parent.exists || parent.get('privacy') === 'private') return null;
+type Snap = {
+  exists: boolean;
+  id: string;
+  data: () => DocumentData | undefined;
+};
+
+const openParentName = (key: HelmKey, parent: Snap) => {
+  const data = parent.data();
+  if (!parent.exists || !data || data.privacy === 'private') return null;
   try {
-    return toText(openForHelm(key, parent.get('sealed') as SealedPayload).name);
+    return toText(openForHelm(key, data.sealed as SealedPayload).name);
   } catch {
     return null;
+  }
+};
+
+const isPrivateNow = (key: HelmKey, source: Snap) => {
+  const data = source.data();
+  if (!source.exists || !data) return true;
+  if (data.privacy === 'private' || data.isCare === true) return true;
+  try {
+    const words = openForHelm(key, data.sealed as SealedPayload);
+    return words.isCare === true || toPrivateMark(words.privateMark) !== null;
+  } catch {
+    return true;
   }
 };
 
@@ -106,7 +139,7 @@ export async function readContextRelatedThings(
     .where('state', 'in', ['filed', 'groupedByYou', 'proposed'])
     .limit(200)
     .get();
-  const groupings = snap.docs.flatMap((doc) => {
+  const opened = snap.docs.flatMap((doc): OpenedGrouping[] => {
     const grouping = readGrouping(doc.id, doc.data());
     try {
       const words = openForHelm(key, doc.get('sealed') as SealedPayload);
@@ -129,28 +162,61 @@ export async function readContextRelatedThings(
       return [];
     }
   });
-  const parents = await Promise.all(
-    groupings.map(({ grouping }) =>
-      grouping.parentId === null
-        ? null
-        : firestore
-            .doc(
-              `${base}/${grouping.parentKind === 'project' ? 'projects' : 'topics'}/${grouping.parentId}`,
-            )
-            .get(),
+  const matched = matchRelatedThings(opened, text, isMasked).slice(
+    0,
+    MAX_RELATED_THINGS * 2,
+  );
+  if (matched.length === 0) return [];
+  const parentRefs = matched.flatMap(({ grouping }) =>
+    grouping.parentId === null
+      ? []
+      : [
+          firestore.doc(
+            `${base}/${grouping.parentKind === 'project' ? 'projects' : 'topics'}/${grouping.parentId}`,
+          ),
+        ],
+  );
+  const sourceKeys = [
+    ...new Set(
+      matched.flatMap(({ grouping }) =>
+        grouping.sources
+          .slice(0, MAX_SOURCES_SHOWN)
+          .map((source) => source.key),
+      ),
     ),
+  ];
+  const refs = [
+    ...parentRefs,
+    ...sourceKeys.map((sourceKey) => firestore.doc(`${base}/${sourceKey}`)),
+  ];
+  const snaps = await firestore.getAll(...refs);
+  const parents = new Map(
+    snaps
+      .slice(0, parentRefs.length)
+      .map((parent) => [parent.ref.path, parent]),
+  );
+  const hidden = new Set(
+    snaps
+      .slice(parentRefs.length)
+      .flatMap((source, at) =>
+        isPrivateNow(key, source) ? [sourceKeys[at]] : [],
+      ),
   );
   return pickRelatedThings(
-    groupings.map(({ grouping, proposedTitle, titles }, at) => {
-      const parent = parents[at];
-      const parentName = parent ? openParentName(key, parent) : null;
+    matched.map((item) => {
+      const { grouping, proposedTitle } = item;
+      const parent =
+        grouping.parentId === null
+          ? undefined
+          : parents.get(
+              `${base}/${grouping.parentKind === 'project' ? 'projects' : 'topics'}/${grouping.parentId}`,
+            );
       return {
-        grouping,
-        name: parentName ?? proposedTitle,
-        titles,
+        ...item,
+        name: (parent ? openParentName(key, parent) : null) ?? proposedTitle,
+        hiddenKeys: hidden,
       };
     }),
-    text,
     isMasked,
   );
 }

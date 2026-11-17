@@ -6,7 +6,11 @@ import { getUsageCost } from '../../../../ai/models.js';
 import type { Keyring } from '../../../../appKeys/keyring.js';
 import { recordAiSpendIn } from '../../aiLimits.js';
 import { sealForHelm, unwrapHelmKey, type HelmKey } from '../../helmKey.js';
-import { dropSource, type GroupingRecord } from '../../nomos/grouping.js';
+import {
+  dropSource,
+  readGrouping,
+  type GroupingRecord,
+} from '../../nomos/grouping.js';
 import {
   readRun,
   readState,
@@ -27,6 +31,8 @@ import { RELATE_BATCH } from './relateRuns.js';
 
 export type RelateResult =
   'written' | 'dropped' | 'skipped' | 'failed' | 'gaveUp';
+
+const toIds = (value: unknown) => (Array.isArray(value) ? value : []);
 
 const isPlainObject = (value: unknown) =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -215,6 +221,36 @@ export async function applyRelateOutcome(
   const profileRef = firestore.doc(base);
   const stateRef = firestore.doc(statePath(uid, 'relate'));
 
+  const world =
+    answer && key
+      ? await readRelateWorld((query) => query.get(), firestore, uid, key, now)
+      : null;
+  const backstop = world
+    ? await dropGoneSources(firestore, base, world, (refs) =>
+        firestore.getAll(...refs),
+      )
+    : null;
+  const cleaned =
+    world && backstop ? { ...world, groupings: backstop.groupings } : null;
+  const index = cleaned ? buildRelateIndex(uid, cleaned) : null;
+  const planWith = (dayKey: string, executedIds: ReadonlySet<string>) =>
+    cleaned && index && answer
+      ? planRelate({
+          uid,
+          now,
+          dayKey,
+          world: cleaned,
+          index,
+          answer,
+          executedIds,
+        })
+      : null;
+  const storedIds = new Set(
+    (cleaned?.groupings ?? []).flatMap((grouping) =>
+      grouping.executionId === null ? [] : [grouping.id],
+    ),
+  );
+
   return firestore.runTransaction<RelateResult>(async (transaction) => {
     const [runSnap, profileSnap, stateSnap] = await Promise.all([
       transaction.get(runRef),
@@ -233,43 +269,8 @@ export async function applyRelateOutcome(
       profile,
       hasAnswer: answer !== null && key !== null,
     });
-    const world =
-      decision === 'write' && key
-        ? await readRelateWorld(
-            (query) => transaction.get(query),
-            firestore,
-            uid,
-            key,
-            now,
-          )
-        : null;
-    const backstop = world
-      ? await dropGoneSources(firestore, base, world, (refs) =>
-          transaction.getAll(...refs),
-        )
-      : null;
-    const cleaned =
-      world && backstop ? { ...world, groupings: backstop.groupings } : null;
-    const index = cleaned ? buildRelateIndex(uid, cleaned) : null;
-    const planWith = (executedIds: ReadonlySet<string>) =>
-      cleaned && index && answer
-        ? planRelate({
-            uid,
-            now,
-            dayKey: current.dayKey,
-            world: cleaned,
-            index,
-            answer,
-            executedIds,
-          })
-        : null;
-    const firstPlan = planWith(
-      new Set(
-        (cleaned?.groupings ?? []).flatMap((grouping) =>
-          grouping.executionId === null ? [] : [grouping.id],
-        ),
-      ),
-    );
+    const firstPlan =
+      decision === 'write' ? planWith(current.dayKey, storedIds) : null;
     const filedIds = (firstPlan?.groupings ?? [])
       .filter((planned) => planned.meta.state === 'filed')
       .map((planned) => planned.id);
@@ -286,14 +287,48 @@ export async function applyRelateOutcome(
     const plan =
       alreadyExecuted.length === 0
         ? firstPlan
-        : planWith(
-            new Set([
-              ...(cleaned?.groupings ?? []).flatMap((grouping) =>
-                grouping.executionId === null ? [] : [grouping.id],
-              ),
-              ...alreadyExecuted,
-            ]),
-          );
+        : planWith(current.dayKey, new Set([...storedIds, ...alreadyExecuted]));
+    const touchedIds = [
+      ...new Set([
+        ...(plan?.groupings ?? []).map((planned) => planned.id),
+        ...(backstop?.edits ?? []).map((edit) => edit.id),
+      ]),
+    ];
+    const linkRefs = (plan?.groupings ?? []).flatMap((planned) =>
+      planned.links.map((link) => ({
+        link,
+        ref: firestore.doc(`${base}/${link.collection}/${link.id}`),
+      })),
+    );
+    const [groupingSnaps, linkSnaps] = await Promise.all([
+      touchedIds.length
+        ? transaction.getAll(
+            ...touchedIds.map((id) => firestore.doc(`${base}/groupings/${id}`)),
+          )
+        : [],
+      linkRefs.length
+        ? transaction.getAll(...linkRefs.map((entry) => entry.ref))
+        : [],
+    ]);
+    const isStale =
+      touchedIds.some((id, at) => {
+        const before = world?.groupings.find((grouping) => grouping.id === id);
+        const live = readGrouping(id, groupingSnaps[at]?.data());
+        return (
+          (before === undefined) !== (live === null) ||
+          (before !== undefined &&
+            live !== null &&
+            (before.updatedAt !== live.updatedAt ||
+              before.state !== live.state))
+        );
+      }) ||
+      linkRefs.some(({ link }, at) => {
+        const snap = linkSnaps[at];
+        if (!snap?.exists) return true;
+        return link.collection === 'tasks'
+          ? (snap.get('projectId') ?? null) !== null
+          : toIds(snap.get('projectIds')).length > 0;
+      });
 
     transaction.update(runRef, {
       [`requests.${customId}`]: FieldValue.delete(),
@@ -346,6 +381,10 @@ export async function applyRelateOutcome(
     releaseLeaseIn(transaction, firestore, uid, 0, current.dayKey, 'relate');
     clearDue();
     if (!plan || !cleaned || !backstop || !key) return 'skipped';
+    if (isStale) {
+      logger.info('helm.relate.stale');
+      return 'skipped';
+    }
     const writtenIds = new Set(plan.groupings.map((planned) => planned.id));
     backstop.edits
       .filter((edit) => !writtenIds.has(edit.id))
@@ -384,6 +423,7 @@ export async function applyRelateOutcome(
             ...(link.collection === 'tasks'
               ? { projectId: link.projectId }
               : { projectIds: [link.projectId] }),
+            lastEditedAt: now,
           },
         ),
       );

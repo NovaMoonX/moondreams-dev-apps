@@ -1730,7 +1730,10 @@ export const HELM_COPY = {
   groupingTitleUnnamed: 'These look like one thing',
   groupingGroup: 'Group them',
   groupingNotRelated: 'Not related',
-  groupingNotNow: 'Not now',
+  groupingNotNow: 'Ask me later',
+  groupingSubtitleExisting: (name: string) =>
+    `Link them to ${name} so they stay together.`,
+  groupingSubtitleNew: (name: string) => `Make ${name} to hold them.`,
   groupingMore: (count: number) => `+${count} more`,
   groupingFromApp: (app: string) => `From ${app}`,
   groupingPrivateItem: 'A private item',
@@ -1740,7 +1743,7 @@ export const HELM_COPY = {
   groupingYourProject: 'Your project',
   groupingGroupedToast: (count: number, name: string) =>
     `Grouped ${count} things under ${name}.`,
-  groupingNotRelatedToast: "Won't group those again.",
+  groupingNotRelatedToast: "Okay, I won't suggest these together.",
   groupingNotNowToast: (weeks: number | null) =>
     weeks === null
       ? "I'll leave those alone."

@@ -161,22 +161,19 @@ export async function readRelateWorld(
     groupingSnap,
     whoSnap,
   ] = await Promise.all([
-    read(
-      firestore
-        .collection(`${base}/projects`)
-        .where('status', '==', 'active')
-        .limit(200),
-    ),
+    read(firestore.collection(`${base}/projects`)),
     read(
       firestore
         .collection(`${base}/tasks`)
         .where('status', '==', 'open')
+        .orderBy('createdAt', 'desc')
         .limit(ROOM.open),
     ),
     read(
       firestore
         .collection(`${base}/tasks`)
         .where('completedAt', '>=', now - DONE_DAYS * DAY_MS)
+        .orderBy('completedAt', 'desc')
         .limit(ROOM.done),
     ),
     read(
@@ -185,7 +182,12 @@ export async function readRelateWorld(
         .orderBy('createdAt', 'desc')
         .limit(ROOM.notes),
     ),
-    read(firestore.collection(`${base}/topics`).limit(ROOM.topics)),
+    read(
+      firestore
+        .collection(`${base}/topics`)
+        .orderBy('createdAt', 'desc')
+        .limit(ROOM.topics),
+    ),
     read(
       firestore
         .collection(`${base}/synced`)
@@ -193,7 +195,10 @@ export async function readRelateWorld(
         .limit(ROOM.synced * 2),
     ),
     read(
-      firestore.collection(`${base}/groupings`).limit(GROUPING_LIMITS.records),
+      firestore
+        .collection(`${base}/groupings`)
+        .orderBy('updatedAt', 'desc')
+        .limit(GROUPING_LIMITS.records),
     ),
     read(firestore.collection(`${base}/who`)),
   ]);
@@ -203,18 +208,19 @@ export async function readRelateWorld(
   const projects = new Map(
     projectSnap.docs.flatMap((doc): [string, RelateProject][] => {
       const words = open(key, doc.data());
-      if (
-        !words ||
-        typeof words.name !== 'string' ||
-        doc.get('kind') === 'goal'
-      )
-        return [];
+      if (!words) return [];
       const facts = toFacts(doc.data(), words);
       if (facts.isCare) {
         careProjects.add(doc.id);
         return [];
       }
       if (facts.isPrivate) privateProjects.add(doc.id);
+      if (
+        typeof words.name !== 'string' ||
+        doc.get('status') !== 'active' ||
+        doc.get('kind') === 'goal'
+      )
+        return [];
       return [
         [
           doc.id,

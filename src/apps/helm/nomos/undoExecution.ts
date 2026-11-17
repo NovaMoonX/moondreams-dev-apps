@@ -843,7 +843,7 @@ export async function undoExecution(
     );
     if (result.kind === 'done') {
       void markDaySummaryStale(uid, executionId);
-      if (groupingIds.length > 0 && !options.docIds)
+      if (groupingIds.length > 0 && result.isFinal)
         closeGroupings(uid, groupingIds, Date.now()).catch((error: unknown) =>
           console.error('A taken-back grouping was not closed', error),
         );

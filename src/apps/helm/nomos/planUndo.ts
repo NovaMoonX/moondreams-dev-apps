@@ -1080,6 +1080,38 @@ export function planUndo(input: {
       const last = filing[filing.length - 1]?.effect;
       const pending = toIds(target.data?.pendingNoteIds);
       const left = pending.filter((id) => !takenBackNoteIds.has(id));
+      const linkWas = last && toIds(last.written.projectIds);
+      if (
+        target.data &&
+        first?.previous &&
+        linkWas &&
+        'projectIds' in last.written &&
+        left.length === pending.length &&
+        toIds(target.data.projectIds).length === linkWas.length &&
+        toIds(target.data.projectIds).every((id) => linkWas.includes(id))
+      ) {
+        const title = toTitle(
+          target,
+          filing.map((entry) => entry.effect),
+        );
+        const fields: Values = { projectIds: toIds(first.previous.projectIds) };
+        return {
+          docId,
+          outcome: {
+            kind: 'restored',
+            title,
+            fields,
+            reseal: null,
+            effect: {
+              written: { ...fields, 'sealed.title': title },
+              previous: {
+                projectIds: toIds(target.data.projectIds),
+                'sealed.title': title,
+              },
+            },
+          },
+        };
+      }
       if (
         !target.data ||
         !first?.previous ||

@@ -44,6 +44,7 @@ function GroupingFiledLine({ grouping }: GroupingFiledLineProps) {
     takeBack(user.uid, executionId)
       .then((result) => {
         if (result.kind !== 'done') throw new Error('Not taken back');
+        addToast({ title: HELM_COPY.groupingTookBackReport, type: 'info' });
       })
       .catch((error: unknown) => {
         console.error('Helm grouping was not taken back', error);
@@ -60,7 +61,13 @@ function GroupingFiledLine({ grouping }: GroupingFiledLineProps) {
         )}
       </span>
       <span aria-hidden='true'>·</span>
-      <Button type='button' variant='tertiary' size='sm' onClick={undo}>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className="relative before:absolute before:-inset-1.5 before:content-['']"
+        onClick={undo}
+      >
         {HELM_COPY.undo}
       </Button>
     </p>

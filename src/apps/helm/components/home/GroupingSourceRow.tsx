@@ -29,11 +29,13 @@ function GroupingSourceRow({ source, title }: GroupingSourceRowProps) {
 
   return (
     <li className='flex min-w-0 items-center gap-3'>
-      {source.app === null ? (
-        <AssistantMark name={name} isOnTint />
-      ) : (
-        <AppLogo appId={appId ?? ''} className='size-5 rounded-md' />
-      )}
+      <span className='flex size-6 shrink-0 items-center justify-center'>
+        {source.app === null ? (
+          <AssistantMark name={name} isOnTint />
+        ) : (
+          <AppLogo appId={appId ?? ''} className='size-5 rounded-md' />
+        )}
+      </span>
       <div className='min-w-0'>
         <p className='truncate text-[15px] leading-[21px]'>
           {title?.trim() || HELM_COPY.groupingPrivateItem}

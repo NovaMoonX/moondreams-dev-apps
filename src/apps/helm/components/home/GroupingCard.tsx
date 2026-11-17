@@ -10,6 +10,7 @@ import GroupingSourcesSheet from '@apps/helm/components/home/GroupingSourcesShee
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   groupThem,
+  offerName,
   markNotRelated,
   notNowGrouping,
 } from '@apps/helm/store/actions/groupingActions';
@@ -35,7 +36,7 @@ function GroupingCard({ grouping }: GroupingCardProps) {
       : state.helm.topics.items.find((one) => one.id === grouping.parentId)
           ?.name,
   );
-  const name = parentName || grouping.proposedTitle?.trim() || '';
+  const name = parentName || offerName(grouping);
   const shown = grouping.sources.slice(0, SHOWN_SOURCES);
   const hidden = grouping.sources.length - shown.length;
 
@@ -65,6 +66,7 @@ function GroupingCard({ grouping }: GroupingCardProps) {
         async () => {
           const undone = await takeBack(user.uid, result.executionId);
           if (undone.kind !== 'done') throw new Error('Not taken back');
+          addToast({ title: HELM_COPY.groupingTookBackReport, type: 'info' });
         },
       );
     } catch (error) {
@@ -93,6 +95,13 @@ function GroupingCard({ grouping }: GroupingCardProps) {
       <p className='text-foreground text-[15px] leading-[21px] font-medium text-pretty break-words'>
         {name ? HELM_COPY.groupingTitle(name) : HELM_COPY.groupingTitleUnnamed}
       </p>
+      {name && (
+        <p className='text-muted-foreground -mt-1.5 text-[13px]'>
+          {parentName
+            ? HELM_COPY.groupingSubtitleExisting(name)
+            : HELM_COPY.groupingSubtitleNew(name)}
+        </p>
+      )}
       <ul className='space-y-3'>
         {shown.map((source) => (
           <GroupingSourceRow
@@ -107,6 +116,7 @@ function GroupingCard({ grouping }: GroupingCardProps) {
           type='button'
           variant='tertiary'
           size='sm'
+          className="relative before:absolute before:-inset-1.5 before:content-['']"
           onClick={() => setIsListOpen(true)}
         >
           {HELM_COPY.groupingMore(hidden)}
@@ -115,13 +125,27 @@ function GroupingCard({ grouping }: GroupingCardProps) {
       <Button type='button' className='w-full' onClick={() => void group()}>
         {HELM_COPY.groupingGroup}
       </Button>
-      <div className='border-border flex items-center justify-between border-t pt-3'>
-        <Button type='button' variant='tertiary' size='sm' onClick={notRelated}>
-          {HELM_COPY.groupingNotRelated}
-        </Button>
-        <Button type='button' variant='tertiary' size='sm' onClick={notNow}>
-          {HELM_COPY.groupingNotNow}
-        </Button>
+      <div className='border-border border-t pt-3'>
+        <div className='-mx-2 flex items-center justify-between'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative before:absolute before:-inset-1.5 before:content-['']"
+            onClick={notRelated}
+          >
+            {HELM_COPY.groupingNotRelated}
+          </Button>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative before:absolute before:-inset-1.5 before:content-['']"
+            onClick={notNow}
+          >
+            {HELM_COPY.groupingNotNow}
+          </Button>
+        </div>
       </div>
       <GroupingSourcesSheet
         grouping={grouping}

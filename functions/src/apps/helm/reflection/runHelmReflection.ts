@@ -308,6 +308,14 @@ async function collectRun(
       customId: result.customId,
       result,
       now,
+    }).catch((error: unknown) => {
+      logger.error('helm.reflect.applyFailed', {
+        runId,
+        uid: run.requests[result.customId]?.uid,
+        jobId: run.requests[result.customId]?.jobId,
+        customId: result.customId,
+        code: toCode(error),
+      });
     });
   }, Promise.resolve());
   if (REFLECT_BATCH.deleteAfterCollect) await client.remove(run.batchId);
