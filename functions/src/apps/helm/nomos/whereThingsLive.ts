@@ -143,7 +143,8 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['createProject', 'changeProjectRole', 'addMilestone'],
   }),
   row({
-    thing: 'Research offered ahead of a dated project, and what the person answered',
+    thing:
+      'Research offered ahead of a dated project, and what the person answered',
     home: 'projects',
     classes: ['readable', 'sealed'],
     readers: ['device', 'server', 'turn'],
@@ -449,6 +450,20 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     classes: ['readable'],
     writer: 'server/sortHelmCapture',
     jobFields: [{ field: 'touchesPrivate', job: 'sortHelmCapture' }],
+  }),
+  row({
+    thing: 'Whether a thing is kept quiet',
+    home: 'tasks',
+    classes: ['readable', 'sealed'],
+    commands: ['setQuiet'],
+    writer: 'server/sortHelmCapture',
+  }),
+  row({
+    thing: "Whether a turn's spoken line was held",
+    home: 'executions',
+    classes: ['sealed'],
+    writer: 'server/sortHelmCapture',
+    jobFields: [{ field: 'heldSpoken', job: 'sortHelmCapture' }],
   }),
   row({
     thing: 'Photos and files kept with a record',

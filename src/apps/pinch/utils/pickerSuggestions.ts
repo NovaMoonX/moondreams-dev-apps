@@ -1,4 +1,5 @@
 import type { Package, Recipe, ShoppingItem } from '@apps/pinch/types';
+import { getLineIngredientIds } from '@apps/pinch/utils/freeLines';
 import { isPutAway } from '@apps/pinch/utils/shopping';
 
 /** The most rows an ingredient picker offers while its field is empty. */
@@ -24,15 +25,13 @@ const newestFirst = <T>(items: readonly T[], getAt: (item: T) => number) =>
 /** Every ingredient the recipes use, the one in the most recipes first and the one in the most recently changed recipe first among equals. A recipe that lists an ingredient under two headings counts once. */
 export function rankOftenUsedIngredients(recipes: readonly RecipeLines[]) {
   const usage = recipes.reduce((byId, recipe) => {
-    new Set(recipe.ingredients.map((line) => line.ingredientId)).forEach(
-      (id) => {
-        const known = byId.get(id);
-        byId.set(id, {
-          count: (known?.count ?? 0) + 1,
-          latest: Math.max(known?.latest ?? -Infinity, recipe.updatedAt),
-        });
-      },
-    );
+    new Set(getLineIngredientIds(recipe.ingredients)).forEach((id) => {
+      const known = byId.get(id);
+      byId.set(id, {
+        count: (known?.count ?? 0) + 1,
+        latest: Math.max(known?.latest ?? -Infinity, recipe.updatedAt),
+      });
+    });
     return byId;
   }, new Map<string, { count: number; latest: number }>());
   const result = [...usage.entries()]
@@ -81,7 +80,7 @@ export function getShoppingPickIds(
       const at = cookSummaries.get(recipe.id)?.lastCookedAt;
       return at === undefined
         ? []
-        : recipe.ingredients.map((line) => ({ id: line.ingredientId, at }));
+        : getLineIngredientIds(recipe.ingredients).map((id) => ({ id, at }));
     }),
   ];
   const result = takeSuggestionIds(

@@ -206,6 +206,11 @@ async function openCapture(
       questions: toQuestions(payload.questions),
       line:
         typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
+      heldLine:
+        typeof payload.spoken?.heldText === 'string'
+          ? payload.spoken.heldText
+          : null,
+      asksHeldLine: payload.asksHeldLine === true,
       isUnreadable: false,
       endedConversation: data.endedConversation === true,
     };
@@ -218,6 +223,8 @@ async function openCapture(
       heardNames: null,
       questions: {},
       line: null,
+      heldLine: null,
+      asksHeldLine: false,
       isUnreadable: true,
       endedConversation: data.endedConversation === true,
     };

@@ -140,15 +140,20 @@ export function getMarkCardId(
     : null;
 }
 
-/** What warns about one card today (the same answer as Home's), or null; `startDate` is when tracking began. */
+/** What warns about one card today (the same answer as Home's), or null; `startDate` is when tracking began, and a card in `bankDue` (read from its bank at Link) takes that answer. */
 export const getCardDueNow = (
   card: OpenCard,
   reserveByCard: Readonly<Record<string, Cents>>,
   moves: readonly OpenMove[],
   today: DateOnly,
   startDate: DateOnly,
-): DueCard | null =>
-  getCardDueState(
+  bankDue: Readonly<Record<string, DueCard | null>> = {},
+): DueCard | null => {
+  if (Object.hasOwn(bankDue, card.id)) {
+    const due = bankDue[card.id];
+    return due ? { ...due, card } : null;
+  }
+  return getCardDueState(
     card,
     reserveByCard[card.id] ?? 0,
     collectCardHistory(card.id, [], moves).flatMap((entry) =>
@@ -160,6 +165,7 @@ export const getCardDueNow = (
     CARD_DUE_WARN_DAYS,
     Math.max(startDate, todayAsUtcDate(card.createdAt)),
   );
+};
 
 /** The one due fact a card shows: "Due Nov 14", "Due in 3 days" / "Due today" inside the warning window when money waits, "Past due since Oct 14", or "Due Nov 3 · not paid by Oct 14"; null with no due day. `due` is what `getCardDueNow` found. */
 export const dayOf = (date: DateOnly) =>
