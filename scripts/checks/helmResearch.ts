@@ -2288,6 +2288,7 @@ test('an offer on an existing project reseals its words and appends the offer; o
       id: 'new',
       command: {
         kind: 'createProject',
+        ref: null,
         name: 'Move',
         emoji: null,
         objective: null,

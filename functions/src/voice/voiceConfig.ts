@@ -8,7 +8,7 @@ export const TTS_MAX_CHARS = 600;
 interface TtsPrice {
   per: 'character' | 'audioSecond';
   micros: number;
-  readOn: '2026-11-09';
+  readOn: '2026-11-09' | '2026-11-17';
 }
 
 /** Millionths of a dollar per character or per second of audio, read from the providers' docs (search results) and unverified until the first real run. Google's first million characters a month are free; Gemini's audio price is said to double to $12 per million tokens on 2027-01-01. */
@@ -16,6 +16,13 @@ export const TTS_PRICES: Record<TtsProviderId, TtsPrice> = {
   deepgramAura: { per: 'character', micros: 30, readOn: '2026-11-09' },
   googleTts: { per: 'character', micros: 30, readOn: '2026-11-09' },
   geminiTts: { per: 'audioSecond', micros: 150, readOn: '2026-11-09' },
+};
+
+/** Gemini 2.5 Flash TTS on Cloud TTS, used for a whispered line: $10 per million audio tokens at 25 tokens a second. Unverified until the first real run. */
+export const TTS_WHISPER_PRICE: TtsPrice = {
+  per: 'audioSecond',
+  micros: 250,
+  readOn: '2026-11-17',
 };
 
 /** The candidates the benchmark plays for each provider. */
@@ -44,8 +51,9 @@ export const TTS_VOICES: Record<
 export const costMicros = (
   provider: TtsProviderId,
   { characters, audioSeconds }: { characters: number; audioSeconds: number },
+  isWhisper = false,
 ) => {
-  const price = TTS_PRICES[provider];
+  const price = isWhisper ? TTS_WHISPER_PRICE : TTS_PRICES[provider];
   return price.micros * (price.per === 'character' ? characters : audioSeconds);
 };
 
