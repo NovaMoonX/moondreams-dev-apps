@@ -15,6 +15,27 @@ export interface CookMeasure {
   gramsPerMl: number | null;
 }
 
+const NBSP = '\u00A0';
+const SIZE_PAIRS: [Unit, Unit][] = [
+  ['OZ', 'LB'],
+  ['G', 'KG'],
+  ['ML', 'L'],
+];
+
+/** Of a unit and its larger sibling (oz and lb, g and kg, ml and l) only the one that reads best: the larger from one up. */
+const onePerSizePair = (conversions: { amount: number; unit: Unit }[]) =>
+  conversions.filter((conversion) =>
+    SIZE_PAIRS.every(([small, large]) => {
+      if (conversion.unit !== small && conversion.unit !== large) return true;
+      const bigger = conversions.find((other) => other.unit === large);
+      const hasBoth =
+        bigger !== undefined &&
+        conversions.some((other) => other.unit === small);
+      if (!hasBoth) return true;
+      return conversion.unit === (bigger.amount >= 1 ? large : small);
+    }),
+  );
+
 /** The one muted line under an opened amount ("= 8 tbsp · 4 fl oz · about 2¼ oz by weight"), or null when there is nothing else to say. */
 export function getConversionLine({
   amount,
@@ -22,10 +43,15 @@ export function getConversionLine({
   gramsPerMl,
 }: CookMeasure): string | null {
   if (!isMeasureUnit(unit)) return null;
-  const others = getConversions(amount, unit, { gramsPerMl }).slice(1);
+  const others = onePerSizePair(
+    getConversions(amount, unit, { gramsPerMl }).slice(1),
+  );
   if (others.length === 0) return null;
   const parts = others.map((other) => {
-    const text = formatKitchenAmount(other.amount, other.unit);
+    const text = formatKitchenAmount(other.amount, other.unit).replaceAll(
+      ' ',
+      NBSP,
+    );
     if (
       !isMeasureUnit(other.unit) ||
       MEASURE_KIND[other.unit] === MEASURE_KIND[unit]
@@ -48,7 +74,7 @@ const lower = (name: string) => name.toLowerCase();
 /** What one ingredient line comes to in the unit the person named, at the servings being made. `toSpoken` writes an amount as it is said. */
 export function describeIngredientConversion(
   row: { name: string; amountText: string; measure: CookMeasure | null },
-  target: MeasureUnit,
+  unit: MeasureUnit,
   toSpoken: (amountText: string) => string,
 ): SpokenAnswer {
   const name = lower(row.name);
@@ -62,9 +88,14 @@ export function describeIngredientConversion(
     return { ok: true, show: sentence, speak: sentence };
   }
   if (!isMeasureUnit(measure.unit)) {
-    const sentence = `The ${name} is ${row.amountText}, which I can't change into ${formatTarget(target)}.`;
+    const sentence = `The ${name} is ${row.amountText}, which I can't change into ${formatTarget(unit)}.`;
     return { ok: false, show: sentence, speak: sentence };
   }
+  const isLooseVolume =
+    unit === 'OZ' &&
+    MEASURE_KIND[measure.unit] === 'VOLUME' &&
+    (measure.gramsPerMl === null || measure.gramsPerMl <= 0);
+  const target = isLooseVolume ? 'FL_OZ' : unit;
   const converted = convertForIngredient(measure.amount, measure.unit, target, {
     gramsPerMl: measure.gramsPerMl,
   });

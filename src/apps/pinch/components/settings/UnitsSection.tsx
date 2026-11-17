@@ -28,12 +28,15 @@ function UnitsSection({ uid }: UnitsSectionProps) {
   const { units } = settings;
 
   return (
-    <SettingsGroup title='Units'>
-      <SettingsRow
-        icon='⚖️'
-        title='Weights'
-        description='Recipes you read arrive in these units, and cooking shows amounts in them. A saved recipe changes only when you adapt it.'
-      >
+    <SettingsGroup
+      title='Units'
+      footer={
+        units.weight !== 'AS_WRITTEN' || units.volume !== 'AS_WRITTEN'
+          ? 'Recipes you read in, and cooking mode, use these. For a saved recipe, open it and tap Adapt to my units.'
+          : undefined
+      }
+    >
+      <SettingsRow icon='⚖️' title='Weights'>
         <PillGroup
           label='Weights'
           options={WEIGHT_CHOICES}

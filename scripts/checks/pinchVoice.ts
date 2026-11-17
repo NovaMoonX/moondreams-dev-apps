@@ -10,7 +10,12 @@ import {
   describeMeasureConversion,
   getConversionLine,
 } from '../../src/apps/pinch/utils/cookConversions.ts';
-import { readMeasureUnitWord } from '../../src/utils/measureUtils.ts';
+import {
+  convertMeasure,
+  readMeasureUnitWord,
+  roundMeasure,
+} from '../../src/utils/measureUtils.ts';
+import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
 
 import {
   describeAmounts,
@@ -599,6 +604,8 @@ const butterIn = (unit: MeasureUnit): CookCommand => ({
   'how much does the butter cost',
   'convert it',
   'put the butter in the bowl',
+  'butter in l',
+  'butter in g',
 ].forEach((phrase) =>
   assert.notEqual(
     parse(phrase, bakeContext)?.kind,
@@ -606,6 +613,80 @@ const butterIn = (unit: MeasureUnit): CookCommand => ({
     `not a conversion: "${phrase}"`,
   ),
 );
+assert.equal(
+  parse(['butter in the bowl', 'butter in l'], bakeContext)?.kind,
+  undefined,
+  'a short unit word alone is never a conversion, even from an alternate',
+);
+assert.equal(
+  parse(['butter in the bowl', 'butter in grams'], bakeContext),
+  null,
+  'a bare conversion from a lower-ranked guess is not trusted',
+);
+assert.deepEqual(
+  parse(['how much butter in g', 'how much butter in l'], bakeContext),
+  butterIn('G'),
+  'with "how much" a short unit word converts',
+);
+assert.deepEqual(
+  [
+    parse('convert half a cup to ml', bakeContext),
+    parse('what is a quarter cup in tablespoons', bakeContext),
+    parse('convert one and a half cups to ml', bakeContext),
+    parse('what is three quarters of a cup in ml', bakeContext),
+  ],
+  [
+    { kind: 'CONVERT_AMOUNT', amount: 0.5, from: 'CUP', to: 'ML' },
+    { kind: 'CONVERT_AMOUNT', amount: 0.25, from: 'CUP', to: 'TBSP' },
+    { kind: 'CONVERT_AMOUNT', amount: 1.5, from: 'CUP', to: 'ML' },
+    { kind: 'CONVERT_AMOUNT', amount: 0.75, from: 'CUP', to: 'ML' },
+  ],
+  'fractions said in words convert',
+);
+assert.deepEqual(
+  ['0.5 kg', '1 kg', '1½ cups', '½ cup', '2 g'].map(toSpokenAmount),
+  ['0.5 kilograms', '1 kilogram', '1 and a half cups', 'a half cup', '2 grams'],
+  'a unit is singular only for exactly one, or a lone fraction',
+);
+assert.equal(
+  describeIngredientConversion(
+    {
+      name: 'Milk',
+      amountText: '1 cup',
+      measure: { amount: 1, unit: 'CUP', gramsPerMl: null },
+    },
+    'OZ',
+    toSpokenAmount,
+  ).ok,
+  true,
+  'ounces of a volume with no density are fluid ounces',
+);
+{
+  const shown = roundMeasure(convertMeasure(0.5, 'CUP', 'ML') ?? 0, 'ML');
+  const text = formatKitchenAmount(shown, 'ML');
+  const answer = describeIngredientConversion(
+    {
+      name: 'Butter',
+      amountText: text,
+      measure: { amount: shown, unit: 'ML', gramsPerMl: 0.91 },
+    },
+    'ML',
+    toSpokenAmount,
+  );
+  assert.equal(
+    answer.show,
+    `The butter is ${text}.`,
+    'the amount a row shows is the amount the voice answers',
+  );
+  assert.ok(
+    !getConversionLine({
+      amount: shown,
+      unit: 'ML',
+      gramsPerMl: 0.91,
+    })?.includes('118'),
+    'the conversion line starts from the shown amount',
+  );
+}
 assert.deepEqual(
   parse('how much time is left on the pasta', {
     ...bakeContext,
@@ -685,10 +766,25 @@ assert.equal(
   false,
   'a plain conversion never crosses weight and volume',
 );
+const cupLine = getConversionLine({
+  amount: 0.5,
+  unit: 'CUP',
+  gramsPerMl: 0.91,
+});
 assert.equal(
-  getConversionLine({ amount: 0.5, unit: 'CUP', gramsPerMl: 0.91 }),
+  cupLine?.replaceAll('\u00A0', ' '),
   '= 8 tbsp · 4 fl oz · 118 ml · 108 g by weight · about 4 oz by weight',
   'the other units of an amount, the other kind marked',
+);
+assert.ok(
+  cupLine?.includes('4\u00A0fl\u00A0oz'),
+  'a unit never splits from its number',
+);
+assert.ok(
+  !/\boz\b.*\blb\b|\blb\b.*\boz\b/.test(
+    getConversionLine({ amount: 2, unit: 'CUP', gramsPerMl: 0.91 }) ?? '',
+  ),
+  'a weight is given in oz or lb, not both',
 );
 assert.equal(
   getConversionLine({ amount: 2, unit: 'EACH', gramsPerMl: null }),

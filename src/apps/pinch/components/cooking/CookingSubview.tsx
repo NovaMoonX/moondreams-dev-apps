@@ -558,7 +558,7 @@ function CookingSession({
     (target: Recipe, targetServings: number) => {
       const repeatedGroups = getRepeatedLineGroups(target.ingredients);
       const result = target.ingredients.map((line) => {
-        const shown =
+        const preferred =
           line.amount === null
             ? null
             : toPreferredUnits(
@@ -566,6 +566,15 @@ function CookingSession({
                 line.unit,
                 units,
               );
+        const shown =
+          preferred !== null &&
+          preferred.unit !== line.unit &&
+          isMeasureUnit(preferred.unit)
+            ? {
+                amount: roundMeasure(preferred.amount, preferred.unit),
+                unit: preferred.unit,
+              }
+            : preferred;
         const measure =
           shown === null
             ? null
@@ -584,12 +593,7 @@ function CookingSession({
           amountText:
             shown === null
               ? (line.note ?? '')
-              : formatKitchenAmount(
-                  shown.unit !== line.unit && isMeasureUnit(shown.unit)
-                    ? roundMeasure(shown.amount, shown.unit)
-                    : shown.amount,
-                  shown.unit,
-                ),
+              : formatKitchenAmount(shown.amount, shown.unit),
           isMeasured: line.amount !== null,
           measure,
           conversion:
@@ -2137,7 +2141,9 @@ function CookingSession({
         to,
         toSpokenAmount,
       );
-      return answer.ok ? done(answer.show, answer.speak) : refuse(answer.show);
+      return answer.ok
+        ? done(answer.show, answer.speak)
+        : refuse(answer.show, answer.speak);
     },
     switchRecipe: (recipeId, candidates) => {
       if (recipeId === null) {

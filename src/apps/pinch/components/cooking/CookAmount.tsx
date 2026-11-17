@@ -28,7 +28,7 @@ export function CookAmountButton({ row, className }: CookAmountProps) {
       aria-label={`${row.amountText}, show other units`}
       onClick={() => onToggle(key)}
       className={join(
-        'text-foreground! relative h-auto! min-h-0! shrink-0 px-1.5! py-0.5! font-[inherit] text-[length:inherit] before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[""]',
+        'text-foreground! relative -mr-1.5 h-auto! min-h-0! shrink-0 px-1.5! py-0.5! font-[inherit] text-[length:inherit] before:absolute before:-inset-x-2 before:-inset-y-2.5 before:content-[""]',
         isOpen && 'bg-accent!',
         className,
       )}
@@ -49,7 +49,7 @@ export function CookConversionLine({
   const { openKey } = useContext(CookConversionContext);
   if (row.conversion === null || openKey !== row.conversion.key) return null;
   return (
-    <p className={join('text-muted-foreground text-xs', className)}>
+    <p className={join('text-muted-foreground text-sm', className)}>
       {row.conversion.text}
     </p>
   );

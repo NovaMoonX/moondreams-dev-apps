@@ -1,6 +1,10 @@
 import type { MeasureUnit } from '@/utils/measureUtils';
 export type PinchTab =
-  'calendar' | 'recipes' | 'kitchen' | 'shopping' | 'settings';
+  | 'calendar'
+  | 'recipes'
+  | 'kitchen'
+  | 'shopping'
+  | 'settings';
 
 /** The tabs a person can open Pinch on; Settings is the place that chooses, so it is never one. */
 export type PinchStartTab = Exclude<PinchTab, 'settings'>;
@@ -744,17 +748,8 @@ export interface SharedRecipe {
 }
 
 export type SharedMealItem =
-  | {
-      kind: 'RECIPE';
-      servings: number;
-      /** An index into `SharedMeal.recipes`. */ recipeIndex: number;
-    }
-  | {
-      kind: 'INGREDIENT';
-      servings: number;
-      name: string;
-      catalogId: string | null;
-    };
+  | { kind: 'RECIPE'; servings: number; /** An index into `SharedMeal.recipes`. */ recipeIndex: number }
+  | { kind: 'INGREDIENT'; servings: number; name: string; catalogId: string | null };
 
 /** A saved meal as a share carries it: its name and items, with each recipe inline once. */
 export interface SharedMeal {

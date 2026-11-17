@@ -92,7 +92,10 @@ const CookIngredientRow = memo(function CookIngredientRow({
           )}
         />
       </div>
-      <CookConversionLine row={{ conversion }} className='-mt-1.5 pb-2.5' />
+      <CookConversionLine
+        row={{ conversion }}
+        className='-mt-1.5 pb-2.5 pl-8'
+      />
     </li>
   );
 });
@@ -171,6 +174,8 @@ function CookIngredientsView({
               {outCount === 0
                 ? "Tick what you've got out"
                 : `${outCount} of ${rows.length} got out`}
+              {rows.some((row) => row.conversion !== null) &&
+                ' · tap an amount for other units'}
             </p>
             {outCount > 0 && (
               <ActionChips

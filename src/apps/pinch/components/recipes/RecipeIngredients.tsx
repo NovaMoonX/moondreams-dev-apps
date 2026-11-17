@@ -10,12 +10,14 @@ import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowDown,
+  ArrowRightLeft,
   ArrowUp,
   Pencil,
   Plus,
   Ruler,
   Search,
   Trash2,
+  Undo2,
   Ungroup,
   X,
 } from 'lucide-react';
@@ -104,6 +106,9 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
   rows
     .filter((row) => getGroupKey(row.group) === getGroupKey(group))
     .map((row) => row.ingredientId);
+
+const UNIT_CHIP_CLASS =
+  "relative gap-1.5 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']";
 
 const getOriginalText = (from: NonNullable<IngredientRow['adaptedFrom']>) =>
   `${formatAmountText(from.amount)} ${UNIT_LABELS[from.unit]}`;
@@ -361,8 +366,9 @@ function IngredientEditor({
   const isReadyForAmount = !isUnresolved && !row.isAmountless;
   const typedAmount = parseAmountText(row.amount);
   const conversion = getConversion(pending, row.unit);
+  const isRoundRowDrawn = row.adaptedFrom !== null && isMeasureUnit(row.unit);
   const step = (direction: 1 | -1) =>
-    typedAmount !== null && isMeasureUnit(row.unit)
+    isRoundRowDrawn && typedAmount !== null && isMeasureUnit(row.unit)
       ? stepMeasure(typedAmount, row.unit, direction)
       : null;
   const down = step(-1);
@@ -551,11 +557,13 @@ function IngredientEditor({
               </span>
               <Button
                 type='button'
-                variant='tertiary'
+                variant='secondary'
                 size='sm'
-                className='h-10'
+                rounded='full'
+                className={UNIT_CHIP_CLASS}
                 onClick={convert}
               >
+                <ArrowRightLeft className='h-3.5 w-3.5' aria-hidden='true' />
                 Convert
               </Button>
             </div>
@@ -567,14 +575,16 @@ function IngredientEditor({
               </span>
               <Button
                 type='button'
-                variant='tertiary'
+                variant='secondary'
                 size='sm'
-                className='h-10'
+                rounded='full'
+                className={UNIT_CHIP_CLASS}
                 onClick={() => {
                   const { amount, unit, adaptedFrom } = restoreRow(row);
                   onUpdate({ amount, unit, adaptedFrom });
                 }}
               >
+                <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
                 Use original
               </Button>
             </div>
@@ -590,9 +600,10 @@ function IngredientEditor({
                   <Button
                     key={word}
                     type='button'
-                    variant='tertiary'
+                    variant='secondary'
                     size='sm'
-                    className='h-10 gap-1'
+                    rounded='full'
+                    className={UNIT_CHIP_CLASS}
                     aria-label={`Round ${word} to ${formatAmountText(target)} ${UNIT_LABELS[row.unit]}`}
                     onClick={() =>
                       onUpdate({ amount: formatAmountText(target) })
@@ -1027,11 +1038,13 @@ function RecipeIngredients({
           </p>
           <Button
             type='button'
-            variant='tertiary'
+            variant='secondary'
             size='sm'
-            className='h-10'
+            rounded='full'
+            className={UNIT_CHIP_CLASS}
             onClick={putBack}
           >
+            <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
             Put them back
           </Button>
         </div>

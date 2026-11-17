@@ -1224,14 +1224,28 @@ const CONVERT_INGREDIENT = [
   /^convert (?:the |my )?(?<ing>.+?) (?:to|into) (?<unit>.+)$/,
 ];
 const BARE_CONVERT = /^(?<ing>.+?) in (?<unit>.+)$/;
+const MIN_BARE_UNIT_LETTERS = 3;
+
+const hasConvertLeadIn = (text: string) =>
+  CONVERT_INGREDIENT.some((pattern) => pattern.test(wordsToDigits(text)));
 
 /** Ounces said of a volume are fluid ounces. */
 const toKindOfUnit = (unit: MeasureUnit, from: MeasureUnit): MeasureUnit =>
   unit === 'OZ' && MEASURE_KIND[from] === 'VOLUME' ? 'FL_OZ' : unit;
 
+/** A fraction said in words becomes the number a conversion reads ("half a cup" is "0.5 cup"). */
+const fractionWordsToDigits = (text: string) =>
+  text
+    .replace(/\b(\d+) and a half\b/g, '$1.5')
+    .replace(/\b(\d+) and a quarter\b/g, '$1.25')
+    .replace(/\b(?:a )?half(?: of)?(?: an?)? (?=[a-z])/g, '0.5 ')
+    .replace(/\b(?:three|3) quarters(?: of)?(?: an?)? (?=[a-z])/g, '0.75 ')
+    .replace(/\b(?:a )?quarter(?: of)?(?: an?)? (?=[a-z])/g, '0.25 ');
+
 const parseConvertAmount = (text: string): CookCommand | null => {
+  const spoken = fractionWordsToDigits(text);
   const groups = CONVERT_PURE.map(
-    (pattern) => text.match(pattern)?.groups,
+    (pattern) => spoken.match(pattern)?.groups,
   ).find(Boolean);
   if (!groups) return null;
   const from = readMeasureUnitWord(groups.from);
@@ -1270,7 +1284,11 @@ const parseConvert = (
   const asked = CONVERT_INGREDIENT.map(
     (pattern) => spoken.match(pattern)?.groups,
   ).find((groups) => groups && readMeasureUnitWord(groups.unit) !== null);
-  const bare = asked ? null : spoken.match(BARE_CONVERT)?.groups;
+  const bareMatch = asked ? null : spoken.match(BARE_CONVERT)?.groups;
+  const bare =
+    bareMatch && bareMatch.unit.length >= MIN_BARE_UNIT_LETTERS
+      ? bareMatch
+      : null;
   const groups = asked ?? bare;
   const unit = groups ? readMeasureUnitWord(groups.unit) : null;
   if (!groups || unit === null) return null;
@@ -1396,6 +1414,13 @@ export const readCookCommand = (
     const command = parseOne(guess, context);
     if (command === null) return null;
     if (rank > 0 && !isTrustedAlternate(guess, command)) return null;
+    if (
+      rank > 0 &&
+      command.kind === 'CONVERT' &&
+      !hasConvertLeadIn(normalizeTranscript(guess))
+    ) {
+      return null;
+    }
     return { command, transcript: normalizeTranscript(guess) };
   }, null);
   return result;
@@ -1448,7 +1473,8 @@ export const toSpokenAmount = (amountText: string) => {
     return `${groups.whole} and ${fraction}`;
   };
   const unitWords = groups.unit ? SPOKEN_UNITS[groups.unit] : undefined;
-  const isOne = whole <= 1 && (whole === 0 || fraction === null);
+  const isOne =
+    (whole === 1 && fraction === null) || (whole === 0 && fraction !== null);
   const getUnit = () => {
     if (!groups.unit) return '';
     if (!unitWords) return ` ${groups.unit}`;

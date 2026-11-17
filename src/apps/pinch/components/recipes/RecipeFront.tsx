@@ -1,3 +1,4 @@
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
@@ -417,6 +418,13 @@ function RecipeFront({
                           {line.note}
                         </span>
                       )}
+                      {line.adaptedFrom && line.amount !== null && (
+                        <span className='text-muted-foreground block text-xs'>
+                          Adapted from{' '}
+                          {formatAmountText(line.adaptedFrom.amount)}{' '}
+                          {UNIT_LABELS[line.adaptedFrom.unit]}
+                        </span>
+                      )}
                       {gap && (
                         <span className='text-muted-foreground block text-xs'>
                           {gap}
@@ -433,14 +441,6 @@ function RecipeFront({
                       ) : (
                         <span className='text-muted-foreground text-sm whitespace-nowrap'>
                           {formatKitchenAmount(line.amount, line.unit)}
-                          {line.adaptedFrom && (
-                            <span className='text-xs'>
-                              {' '}
-                              · adapted from{' '}
-                              {formatAmountText(line.adaptedFrom.amount)}{' '}
-                              {UNIT_LABELS[line.adaptedFrom.unit]}
-                            </span>
-                          )}
                         </span>
                       )}
                       {pantry !== null && pantryText !== null && (

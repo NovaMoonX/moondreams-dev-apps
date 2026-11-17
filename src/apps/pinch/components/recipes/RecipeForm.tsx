@@ -115,6 +115,7 @@ import type {
   DishCategory,
   Idea,
   NutritionMetric,
+  PinchUnitSettings,
   Recipe,
   RecipeNote,
   RecipeSource,
@@ -137,6 +138,7 @@ import {
   getWhyChoices,
   isWhyAsked,
 } from '@apps/pinch/utils/recipeChanges';
+import { readaptLine } from '@apps/pinch/utils/units';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { getShownCover } from '@apps/pinch/utils/recipeCover';
 import {
@@ -198,22 +200,22 @@ interface RecipeFormProps {
   onSaved?: () => void;
 }
 
-/** The draft with lines adapted in this edit read as the recipe had them, so changing units alone (adapting a line or putting it back) never asks why. */
+/** The draft with lines changed only by adapting to the person's units (or put back to the saved original) read as the recipe had them, so those never ask why; a line the person then rounded or edited does. */
 const withLinesAsWritten = (
   draft: RecipeDraft,
   recipe: Recipe,
+  units: PinchUnitSettings,
 ): RecipeDraft => ({
   ...draft,
   ingredients: draft.ingredients.map((line) => {
     const before = recipe.ingredients.find((saved) => saved.id === line.id);
+    if (before === undefined) return line;
+    const adapted = readaptLine(before, units);
     const isAdaptedNow =
-      before !== undefined &&
-      before.adaptedFrom === null &&
-      line.adaptedFrom !== null &&
-      before.amount === line.adaptedFrom.amount &&
-      before.unit === line.adaptedFrom.unit;
+      adapted !== null &&
+      line.amount === adapted.amount &&
+      line.unit === adapted.unit;
     const isPutBackNow =
-      before !== undefined &&
       before.adaptedFrom !== null &&
       line.adaptedFrom === null &&
       line.amount === before.adaptedFrom.amount &&
@@ -1031,7 +1033,7 @@ function RecipeForm({
     if (recipe && (tracking === 'on' || applied.length > 0) && !hasReason) {
       const { changes, topics } = getDraftChanges(
         recipe,
-        withLinesAsWritten(getDraft(data, ''), recipe),
+        withLinesAsWritten(getDraft(data, ''), recipe, units),
         ingredientsById,
         sourcesById,
         collectionsById,
