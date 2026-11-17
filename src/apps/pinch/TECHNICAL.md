@@ -306,6 +306,7 @@ interface RecipeIngredient {
   unit: Unit;
   note: string | null;                         // "diced"
   group: string | null;                        // the heading it sits under ("For the sauce"), 1 … 40 characters; a missing key (lines written before groups) reads as null
+  adaptedFrom: { amount: number; unit: Unit } | null; // what the line was before it was adapted to the person's units; a missing key reads as null; never shared
 }
 
 interface RecipeCare {
@@ -580,6 +581,7 @@ interface PinchSettings {
   fridgeDays: number | null;                     // whole days 1 … 14 a new fridge box starts with; null is CONTAINER_FRIDGE_DAYS (3)
   freezerDays: number | null;                    // whole days 7 … 365 a new freezer box starts with; null is CONTAINER_FREEZER_DAYS (90)
   suggestPhotos: boolean;                        // a new recipe's Photo drawer searches the web with its title; a missing key (a document written before this) reads as true
+  units: PinchUnitSettings;                      // { weight: AS_WRITTEN | METRIC | US, volume: AS_WRITTEN | METRIC | CUPS | FL_OZ, keepSpoons }; a missing key reads as everything as written
   reminders: PinchReminderSettings;              // exactly these six keys
   updatedAt: number;
   lastDigestDay: string | null;                  // 'YYYY-MM-DD' in reminders.timeZone: the day the note last went out; only the Function writes it
@@ -948,6 +950,14 @@ idle → reading(source) → draft(recipe, unread[]) → (person edits) → save
 - **Archive and delete.** Archiving a recipe leaves its notes alone. A hard delete reads the recipe's notes from Firestore (`getDocs` with `where('recipeId', '==', id)`, one equality, so no index) instead of the store, which is empty while the notes load or after they fail to and would leave them orphaned, and removes them with `deleteNotes`, `writeBatch`es of 400, after the recipe's own delete and as best effort (a failure is logged and the delete still finishes), like cooks; anything that survives names a recipe that no longer exists and is ignored by every reader. Deleting a cook leaves its notes, which then read as plain notes while the dangling `cookId` stays in the document.
 - **Reading and performance.** The grouping and the summary are `createSelector`s over the slice's items (the summary in one pass). `RecipeRow` is a `memo` component, so opening a drawer or a sheet, or adding a note, re-renders no row of the list (it re-rendered every mounted row before); a recipe save still re-renders them, as every recipe snapshot does, because each snapshot gives every recipe a new object.
 
+
+### 5e.2. Units: adapting to the person's units
+
+A person picks how weights and volumes read (`PinchSettings.units`); "as written" for both changes nothing anywhere. The math is the shared `@/utils/measureUtils` (`convertMeasure`, `roundMeasure`, `stepMeasure`, `parseAmountText`, `formatAmountText`, `readMeasureUnitWord`), so another app can measure with it; Pinch's `utils/units.ts` holds only the preference: which unit an amount reads in (`getPreferredUnit`: weights by size, grams under a kilogram, ounces under a pound; volumes by size, cups from a quarter cup, spoons below; teaspoons and tablespoons kept unless volumes are metric and the person converts them), `adaptAmount`/`adaptLines` (convert, then round to an amount a cook measures), the converter's list (`getConversions`) and the voice's answer (`convertForIngredient`). Weights convert to weights and volumes to volumes; a weight from a volume (or back) happens only in the converter and the voice, and only through the ingredient's own `gramsPerMl`. Pinches, counts and lines with no amount never change.
+
+- **A reading arrives adapted, and a saved recipe changes only when the person adapts it.** The reader's rows are adapted in the form before review, each changed line keeping its first original in `adaptedFrom` (shown as "from 200 g", with Use original and round up / down in its editor, and one "Adapted N lines to your units · Put them back" line over the ingredients); an existing recipe's form offers "Adapt to my units". Typing a new amount or picking no amount clears `adaptedFrom`; rounding keeps it. Saving writes every line with the key. Adapting is an amount and unit change, so a cooked recipe records it like any other (`getRecipeChanges`).
+- **Cooking shows amounts in the person's units without changing the recipe** (`toPreferredUnits`, then `formatKitchenAmount`), and tapping an amount lists it in the other units inline. Spoken questions ("how much butter in grams?") are read by `parseCookCommand` and answered at the servings being made; a weight asked of a volume without a density is refused in words.
+- `adaptedFrom` is never shared (`share/fields.ts`), and the rules don't read it (they don't walk lines).
 
 ### 5f. Recipe care
 
