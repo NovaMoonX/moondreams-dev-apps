@@ -8,7 +8,16 @@ import {
 
 import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil, Plus, Search, Trash2, Ungroup, X } from 'lucide-react';
+import {
+  Link2,
+  NotebookText,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Ungroup,
+  X,
+} from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
@@ -27,6 +36,7 @@ import ItemSearch, {
 } from '@apps/pinch/components/plan/ItemSearch';
 import {
   isRowAmountValid,
+  isRowUnresolved,
   type IngredientRow,
 } from '@apps/pinch/components/recipes/recipeFormModel';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
@@ -82,6 +92,21 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
   rows
     .filter((row) => getGroupKey(row.group) === getGroupKey(group))
     .map((row) => row.ingredientId);
+
+const FREE_LINE_LABEL = 'Not a kitchen ingredient';
+
+/** The last choice of a line's sheet: keep the words in the recipe, outside the kitchen and the shopping list. */
+function FreeLineOffer({ onClick }: { onClick: () => void }) {
+  return (
+    <ActionRow
+      icon={<NotebookText className='h-4 w-4' />}
+      label={FREE_LINE_LABEL}
+      subtitle='Keep it in the recipe, not in your kitchen or shopping list.'
+      hasChevron
+      onClick={onClick}
+    />
+  );
+}
 
 const getAmountLabel = (row: IngredientRow) => {
   if (row.isAmountless) return row.note ?? '';
@@ -288,7 +313,13 @@ function IngredientEditor({
   const servingUnit = useAppSelector(selectIngredientsById).get(
     row.ingredientId,
   )?.serving.unit;
-  const isUnresolved = row.ingredientId === '';
+  const isUnresolved = isRowUnresolved(row);
+  const isFree = row.freeText !== null;
+  const ownWords =
+    ingredients.find((ingredient) => ingredient.id === row.ingredientId)
+      ?.name ??
+    row.newName ??
+    '';
   const proposedName = row.proposedName ?? '';
   const [openedName] = useState(proposedName);
   const usedInGroup = getUsedInGroup(
@@ -378,6 +409,16 @@ function IngredientEditor({
             }}
           />
         )}
+        <FreeLineOffer
+          onClick={() =>
+            onUpdate({
+              freeText: proposedName.trim(),
+              ingredientId: '',
+              proposedName: null,
+              newName: null,
+            })
+          }
+        />
         {showRemove && (
           <ActionRow
             isDestructive
@@ -403,6 +444,19 @@ function IngredientEditor({
           }
           onUseExisting={(toId) => onUseExisting(row.ingredientId, toId)}
         />
+      )}
+      {isFree && (
+        <Field label='Name'>
+          {(id) => (
+            <Input
+              id={id}
+              variant='outline'
+              value={row.freeText ?? ''}
+              maxLength={MAX_NAME_LENGTH}
+              onChange={(event) => onUpdate({ freeText: event.target.value })}
+            />
+          )}
+        </Field>
       )}
       {row.isAmountless ? (
         <div className='space-y-1.5'>
@@ -487,6 +541,33 @@ function IngredientEditor({
         names={groupNames}
         onChange={(group) => onUpdate({ group })}
       />
+      {isFree ? (
+        <ActionRow
+          icon={<Link2 className='h-4 w-4' />}
+          label='Link to an ingredient'
+          subtitle='Pick one from your kitchen or add it as new.'
+          hasChevron
+          onClick={() =>
+            onUpdate({
+              freeText: null,
+              ingredientId: '',
+              proposedName: row.freeText?.trim() ?? '',
+              newName: null,
+            })
+          }
+        />
+      ) : (
+        <FreeLineOffer
+          onClick={() =>
+            onUpdate({
+              freeText: ownWords,
+              ingredientId: '',
+              proposedName: null,
+              newName: null,
+            })
+          }
+        />
+      )}
       {showRemove && (
         <ActionRow
           isDestructive
@@ -729,18 +810,39 @@ function RecipeIngredients({
   const lastGroup = rows[rows.length - 1]?.group ?? null;
 
   const getName = (row: IngredientRow) =>
-    ingredientsById.get(row.ingredientId)?.name ??
-    row.newName ??
-    row.proposedName ??
-    'Removed ingredient';
+    row.freeText !== null
+      ? row.freeText || 'New line'
+      : (ingredientsById.get(row.ingredientId)?.name ??
+        row.newName ??
+        row.proposedName ??
+        'Removed ingredient');
   const update = (id: string, patch: Partial<IngredientRow>) => {
     const row = rows.find((candidate) => candidate.id === id);
     if (!row) return;
     if (!('group' in patch)) {
+      const resolvedId = patch.ingredientId;
+      const readName = normalizeName(row.proposedName ?? '');
+      const isResolving =
+        isRowUnresolved(row) &&
+        resolvedId !== undefined &&
+        resolvedId !== '' &&
+        readName !== '';
       onChange(
-        rows.map((candidate) =>
-          candidate.id === id ? { ...candidate, ...patch } : candidate,
-        ),
+        rows.map((candidate) => {
+          if (candidate.id === id) return { ...candidate, ...patch };
+          const isSameRead =
+            isResolving &&
+            isRowUnresolved(candidate) &&
+            normalizeName(candidate.proposedName ?? '') === readName;
+          return isSameRead
+            ? {
+                ...candidate,
+                ingredientId: resolvedId,
+                newName: patch.newName ?? null,
+                proposedName: null,
+              }
+            : candidate;
+        }),
       );
       return;
     }
@@ -787,6 +889,7 @@ function RecipeIngredients({
       placeLineInGroup(rows, {
         id,
         ingredientId,
+        freeText: null,
         amount: String(serving.amount),
         unit: serving.unit,
         isAmountless: false,
@@ -808,6 +911,24 @@ function RecipeIngredients({
     );
 
     return sameLine ? sameLine.id : addRow(ingredientId, group, name);
+  };
+  const addFree = (words: string, group: string | null) => {
+    const id = generateUuid();
+    onChange(
+      placeLineInGroup(rows, {
+        id,
+        ingredientId: '',
+        freeText: words,
+        amount: '',
+        unit: DEFAULT_SERVING.unit,
+        isAmountless: true,
+        note: null,
+        proposedName: null,
+        newName: null,
+        group: resolveGroupName(group, rows),
+      }),
+    );
+    return id;
   };
   const renameNew = (ingredientId: string, name: string, isFinal: boolean) => {
     const other = isFinal
@@ -871,7 +992,8 @@ function RecipeIngredients({
                 {group.lines.map((row) => {
                   const name = getName(row);
                   const label = getAmountLabel(row);
-                  const isUnresolved = row.ingredientId === '';
+                  const isUnresolved = isRowUnresolved(row);
+                  const isFree = row.freeText !== null;
                   return (
                     <li
                       key={row.id}
@@ -887,7 +1009,7 @@ function RecipeIngredients({
                           type='button'
                           variant='tertiary'
                           aria-haspopup='dialog'
-                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}`}
+                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : isFree ? `not a kitchen ingredient, ${label || 'no amount'}` : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}`}
                           onClick={() => setSheet({ kind: 'edit', id: row.id })}
                           className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                         >
@@ -902,6 +1024,11 @@ function RecipeIngredients({
                                 </LabelChip>
                               )}
                             </span>
+                            {isFree && (
+                              <span className='text-muted-foreground block text-xs font-normal'>
+                                {FREE_LINE_LABEL}
+                              </span>
+                            )}
                             {row.note && !row.isAmountless && (
                               <span className='text-muted-foreground block truncate text-xs font-normal'>
                                 {row.note}
@@ -970,6 +1097,7 @@ function RecipeIngredients({
           suggestions={suggestions}
           onAdd={addRow}
           onStageNew={stageNew}
+          onAddFree={addFree}
           onUpdate={update}
           onRemove={remove}
           onRename={renameNew}
@@ -989,6 +1117,7 @@ interface IngredientSheetProps {
   suggestions: ItemSuggestions;
   onAdd: (ingredientId: string, group: string | null) => string;
   onStageNew: (name: string, group: string | null) => string;
+  onAddFree: (words: string, group: string | null) => string;
   onUpdate: (id: string, patch: Partial<IngredientRow>) => void;
   onRemove: (id: string) => void;
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
@@ -1004,6 +1133,7 @@ function IngredientSheet({
   suggestions,
   onAdd,
   onStageNew,
+  onAddFree,
   onUpdate,
   onRemove,
   onRename,
@@ -1025,7 +1155,7 @@ function IngredientSheet({
   };
   const getFooter = () => {
     if (!row) return undefined;
-    const isUnresolved = row.ingredientId === '';
+    const isUnresolved = isRowUnresolved(row);
     const addAsNew = isUnresolved && (
       <Button
         type='button'
@@ -1118,6 +1248,7 @@ function IngredientSheet({
               setActiveId(onAdd(ingredientId, addGroup))
             }
             onStageNew={(name) => setActiveId(onStageNew(name, addGroup))}
+            onPickFree={(words) => setActiveId(onAddFree(words, addGroup))}
           />
         </div>
       )}

@@ -6,6 +6,11 @@ import {
   scaleNutrition,
   toPer100g,
 } from '../../src/apps/pinch/utils/nutritionBasis.ts';
+import { getFreedIngredientIds } from '../../src/apps/pinch/utils/freeLines.ts';
+import {
+  settleNewIngredients,
+  type IngredientRow,
+} from '../../src/apps/pinch/components/recipes/recipeFormModel.ts';
 import { scaleAmount } from '../../src/apps/pinch/utils/quantity.ts';
 import {
   buildRepricedSnapshot,
@@ -1318,8 +1323,26 @@ assert.deepEqual(
     x.localeCompare(y),
   ),
   [
-    ['adobo', { count: 4, lastCookedAt: 500, ratedCount: 0, ratingTotal: 0, photoCount: 0 }],
-    ['rice', { count: 1, lastCookedAt: 300, ratedCount: 0, ratingTotal: 0, photoCount: 0 }],
+    [
+      'adobo',
+      {
+        count: 4,
+        lastCookedAt: 500,
+        ratedCount: 0,
+        ratingTotal: 0,
+        photoCount: 0,
+      },
+    ],
+    [
+      'rice',
+      {
+        count: 1,
+        lastCookedAt: 300,
+        ratedCount: 0,
+        ratingTotal: 0,
+        photoCount: 0,
+      },
+    ],
   ],
   'the summary counts each recipe and keeps its latest cook, in one pass',
 );
@@ -1464,8 +1487,23 @@ assert.deepEqual(
 
 {
   assert.deepEqual(
-    [0, 0.25, 0.5, 1, 1.5, 4.5, 5, 5.5, 6, -1, NaN, Infinity].map(isValidCookRating),
-    [false, false, true, true, true, true, true, false, false, false, false, false],
+    [0, 0.25, 0.5, 1, 1.5, 4.5, 5, 5.5, 6, -1, NaN, Infinity].map(
+      isValidCookRating,
+    ),
+    [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ],
     'a rating is half a star to five stars, in half steps',
   );
   assert.deepEqual(
@@ -1491,13 +1529,19 @@ assert.deepEqual(
   ] as Cook[];
   assert.deepEqual(
     getCookSummaries(rated).get('adobo'),
-    { count: 4, lastCookedAt: 400, ratedCount: 2, ratingTotal: 7.5, photoCount: 1 },
+    {
+      count: 4,
+      lastCookedAt: 400,
+      ratedCount: 2,
+      ratingTotal: 7.5,
+      photoCount: 1,
+    },
     'cooks with no rating (null, or a key an older cook lacks) are not counted as 0 stars',
   );
   assert.equal(
     getCookPhotoPath('alex', 'p__r', 1760000000000),
     'apps/pinch/kitchens/alex/cooks/p__r/photo-1760000000000.webp',
-    'a cook\'s photo has its own folder and a new name for each upload',
+    "a cook's photo has its own folder and a new name for each upload",
   );
 }
 
@@ -1879,7 +1923,15 @@ const recipeLine = (
   amount: number,
   unit: Unit,
   note: string | null = null,
-): RecipeIngredient => ({ id, ingredientId, amount, unit, note, group: null });
+): RecipeIngredient => ({
+  id,
+  ingredientId,
+  freeText: null,
+  amount,
+  unit,
+  note,
+  group: null,
+});
 const baseRecipe: RecipeContent = {
   title: 'Adobo chicken',
   description: 'Sticky and tangy.',
@@ -3009,7 +3061,9 @@ const reading: ExtractedRecipe = {
   ],
   steps: ['Braise.'],
   care: null,
+  photoSearch: null,
   unread: [],
+  guided: [],
 };
 const linkIdea = idea({
   kind: 'LINK',
@@ -4200,8 +4254,14 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    getNewContainersProblem([fromCookInput, fromCookInput, fromCookInput, fromCookInput], 496),
-    getNewContainersProblem([fromCookInput, fromCookInput, fromCookInput, fromCookInput], 497),
+    getNewContainersProblem(
+      [fromCookInput, fromCookInput, fromCookInput, fromCookInput],
+      496,
+    ),
+    getNewContainersProblem(
+      [fromCookInput, fromCookInput, fromCookInput, fromCookInput],
+      497,
+    ),
     getNewContainersProblem([fromCookInput], 499),
     getNewContainersProblem([fromCookInput], 500),
   ].map((problem) => problem !== null),
@@ -6582,11 +6642,11 @@ assert.deepEqual(
 
 const shopLineRows = shopGroupLines(
   [
-    { ingredientId: 'cat-doritos', amount: 4.5, unit: 'OZ' , source: null },
-    { ingredientId: 'cat-garlic', amount: 6, unit: 'EACH' , source: null },
-    { ingredientId: 'cat-doritos', amount: 28, unit: 'G' , source: null },
-    { ingredientId: 'cat-garlic', amount: 2, unit: 'TSP' , source: null },
-    { ingredientId: 'cat-salt', amount: 0.25, unit: 'TSP' , source: null },
+    { ingredientId: 'cat-doritos', amount: 4.5, unit: 'OZ', source: null },
+    { ingredientId: 'cat-garlic', amount: 6, unit: 'EACH', source: null },
+    { ingredientId: 'cat-doritos', amount: 28, unit: 'G', source: null },
+    { ingredientId: 'cat-garlic', amount: 2, unit: 'TSP', source: null },
+    { ingredientId: 'cat-salt', amount: 0.25, unit: 'TSP', source: null },
   ],
   new Map([
     [
@@ -8322,7 +8382,15 @@ assert.equal(
     amount: number | null,
     unit: Unit,
     note: string | null = null,
-  ): RecipeIngredient => ({ id, ingredientId, amount, unit, note, group: null });
+  ): RecipeIngredient => ({
+    id,
+    ingredientId,
+    freeText: null,
+    amount,
+    unit,
+    note,
+    group: null,
+  });
   const amtRecipe = (
     id: string,
     servings: number,
@@ -8400,6 +8468,29 @@ assert.equal(
     Math.round(amtNutrition.values.calories ?? 0),
     Math.round((2 * 453.59237 * 2) / 4),
     'the per-serving calories come from the measured lines alone',
+  );
+  const amtFreeNutrition = getRecipeNutrition(
+    {
+      ...amtAdobo,
+      ingredients: [
+        ...amtAdobo.ingredients,
+        {
+          id: 'free',
+          ingredientId: null,
+          freeText: 'Reserved pasta water',
+          amount: 1,
+          unit: 'CUP',
+          note: null,
+          group: null,
+        },
+      ],
+    } as unknown as Recipe,
+    amtById,
+  );
+  assert.deepEqual(
+    [amtFreeNutrition.missing, amtFreeNutrition.values],
+    [amtNutrition.missing, amtNutrition.values],
+    'a free line is no gap in the nutrition and adds none',
   );
 
   // coverage and the period's gaps: lines with no amount don't count
@@ -8769,7 +8860,9 @@ assert.equal(
       ],
       steps: [],
       care: null,
+      photoSearch: null,
       unread: [],
+      guided: [],
     },
     resolveIngredients([]),
   );
@@ -8793,6 +8886,7 @@ assert.equal(
     {
       id: amtRead.ingredients[1].id,
       ingredientId: amtRead.ingredients[1].ingredientId,
+      freeText: null,
       amount: null,
       unit: 'EACH',
       note: 'to taste',
@@ -8822,6 +8916,7 @@ assert.equal(
       {
         id: 'a',
         ingredientId: 'cat-chicken-thigh',
+        freeText: null,
         amount: 2,
         unit: 'LB' as const,
         note: null,
@@ -8830,6 +8925,7 @@ assert.equal(
       {
         id: 'b',
         ingredientId: 'cat-salt',
+        freeText: null,
         amount: null,
         unit: 'EACH' as const,
         note: 'to taste',
@@ -9015,31 +9111,62 @@ assert.equal(
   const taken = { meal: adobo, status: 'taken' as const };
   const rowsFor = (
     live: ReturnType<typeof meal>[],
-    held: [string, { meal: ReturnType<typeof meal>; status: 'removing' | 'taken' | 'restored' }][],
-  ) => stopMealRows(live, new Map(held)).map((row) => [row.meal.source, row.held?.status ?? null]);
+    held: [
+      string,
+      {
+        meal: ReturnType<typeof meal>;
+        status: 'removing' | 'taken' | 'restored';
+      },
+    ][],
+  ) =>
+    stopMealRows(live, new Map(held)).map((row) => [
+      row.meal.source,
+      row.held?.status ?? null,
+    ]);
   assert.deepEqual(
     rowsFor([adobo, rice], []),
-    [['recipe:adobo', null], ['recipe:rice', null]],
+    [
+      ['recipe:adobo', null],
+      ['recipe:rice', null],
+    ],
     'with nothing held every live meal is an ordinary row',
   );
   assert.deepEqual(
     rowsFor([rice], [['recipe:adobo', taken]]),
-    [['recipe:adobo', 'taken'], ['recipe:rice', null]],
+    [
+      ['recipe:adobo', 'taken'],
+      ['recipe:rice', null],
+    ],
     'a meal the listener already dropped stays in its place as a taken row',
   );
   assert.deepEqual(
-    rowsFor([adobo, rice], [['recipe:adobo', { meal: adobo, status: 'removing' }]]),
-    [['recipe:adobo', 'removing'], ['recipe:rice', null]],
+    rowsFor(
+      [adobo, rice],
+      [['recipe:adobo', { meal: adobo, status: 'removing' }]],
+    ),
+    [
+      ['recipe:adobo', 'removing'],
+      ['recipe:rice', null],
+    ],
     'a meal still being taken off is one row, not a live and a held copy',
   );
   assert.deepEqual(
-    rowsFor([adobo, rice], [['recipe:adobo', { meal: adobo, status: 'restored' }]]),
-    [['recipe:adobo', null], ['recipe:rice', null]],
+    rowsFor(
+      [adobo, rice],
+      [['recipe:adobo', { meal: adobo, status: 'restored' }]],
+    ),
+    [
+      ['recipe:adobo', null],
+      ['recipe:rice', null],
+    ],
     'a restored meal is an ordinary row again once the listener has it',
   );
   assert.deepEqual(
     rowsFor([rice], [['recipe:adobo', { meal: adobo, status: 'restored' }]]),
-    [['recipe:adobo', null], ['recipe:rice', null]],
+    [
+      ['recipe:adobo', null],
+      ['recipe:rice', null],
+    ],
     'a restored meal the listener has not caught up with stays on screen',
   );
 }
@@ -9066,11 +9193,14 @@ assert.equal(
     adjLines(
       chicken,
       record(patch),
-      (id) => ({ 'cat-fam-chicken': 'Chicken', 'cat-fam-pork': 'Pork' })[id] ?? null,
-    ).map(
-      (line) => `${line.label}: ${line.builtIn} -> ${line.yours}`,
-    );
-  assert.deepEqual(lines({}), [], 'a record that only points at a product changes nothing');
+      (id) =>
+        ({ 'cat-fam-chicken': 'Chicken', 'cat-fam-pork': 'Pork' })[id] ?? null,
+    ).map((line) => `${line.label}: ${line.builtIn} -> ${line.yours}`);
+  assert.deepEqual(
+    lines({}),
+    [],
+    'a record that only points at a product changes nothing',
+  );
   assert.deepEqual(
     lines({
       name: 'Chicken thigh',
@@ -9087,7 +9217,12 @@ assert.equal(
     lines({
       name: 'Boneless thigh',
       familyId: 'cat-fam-pork',
-      nutritionPer100g: { calories: 230.4, protein: null, carbs: null, fat: 11 },
+      nutritionPer100g: {
+        calories: 230.4,
+        protein: null,
+        carbs: null,
+        fat: 11,
+      },
       servingAmount: 0.5,
       servingUnit: 'LB',
       gramsPerMl: 0.9,
@@ -9937,7 +10072,7 @@ assert.equal(
     group: string | null,
     amount: number | null = 1,
     unit: Unit = 'TBSP',
-  ) => ({ id, ingredientId, amount, unit, note: null, group });
+  ) => ({ id, ingredientId, freeText: null, amount, unit, note: null, group });
   const ids = (lines: { id: string }[]) => lines.map((line) => line.id);
   const heads = (lines: { group?: string | null }[]) =>
     groupIngredientLines(lines).map((group) => [
@@ -10185,7 +10320,9 @@ assert.equal(
       ],
       steps: [],
       care: null,
+      photoSearch: null,
       unread: [],
+      guided: [],
     },
     resolveIngredients([]),
   );
@@ -10212,6 +10349,7 @@ assert.equal(
       {
         id: 'a',
         ingredientId: 'x',
+        freeText: null,
         amount: 1,
         unit: 'TBSP',
         note: null,
@@ -10237,7 +10375,6 @@ assert.equal(
     "one ingredient's lines in two groups are one line on the shopping list",
   );
 }
-
 
 // Settings: how long a new box keeps, and the document a first change writes
 {
@@ -10284,7 +10421,11 @@ assert.equal(
     [
       getEatByDefault('FRIDGE', careOf(3, null), lateOnThe14th, null, usual),
       getEatByDefault('FREEZER', careOf(3, 60), lateOnThe14th, null, usual),
-    ].map((preset) => [preset.days, preset.isFromRecipe, preset.isFromSettings]),
+    ].map((preset) => [
+      preset.days,
+      preset.isFromRecipe,
+      preset.isFromSettings,
+    ]),
     [
       [3, true, false],
       [60, true, false],
@@ -10338,10 +10479,14 @@ assert.equal(
     [true, true, true, false, false],
     'a note can look one to three days ahead',
   );
-  assert.deepEqual(
-    [0, 9, 23, -1, 24, 9.5].map(stgValidHour),
-    [true, true, true, false, false, false],
-  );
+  assert.deepEqual([0, 9, 23, -1, 24, 9.5].map(stgValidHour), [
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+  ]);
 
   assert.deepEqual(
     stgCreate({ fridgeDays: 5 }, 1000, null),
@@ -10351,7 +10496,12 @@ assert.equal(
       suggestPhotos: true,
       calendarStats: false,
       defaultTab: 'recipes',
-      voice: { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: null },
+      voice: {
+        hasAgreed: null,
+        isReadingAloud: null,
+        isReadingNotes: null,
+        isWaiting: null,
+      },
       reminders: {
         eatSoon: true,
         expiring: true,
@@ -10379,14 +10529,18 @@ assert.equal(
       hour: 9,
       timeZone: 'America/Denver',
     },
-    "a first reminder change keeps the other reminder defaults",
+    'a first reminder change keeps the other reminder defaults',
   );
   assert.equal(
     stgCreate({ fridgeDays: 5 }, 7, 'Asia/Tokyo').reminders.timeZone,
     'Asia/Tokyo',
     'a first change made before the zone was written still sends the note in the device’s zone, never at UTC',
   );
-  assert.equal(stgDefaults.updatedAt, 0, 'the defaults are never written as they are');
+  assert.equal(
+    stgDefaults.updatedAt,
+    0,
+    'the defaults are never written as they are',
+  );
   assert.equal(stgDefaults.suggestPhotos, true, 'photo suggestions start on');
   assert.deepEqual(
     [
@@ -10406,7 +10560,10 @@ assert.equal(
     ],
     [
       true,
-      [{ path: ['calendarStats'], value: true }, { path: ['updatedAt'], value: 9 }],
+      [
+        { path: ['calendarStats'], value: true },
+        { path: ['updatedAt'], value: 9 },
+      ],
       false,
     ],
     'the Calendar stats choice is written on its own path and starts off',
@@ -10418,13 +10575,18 @@ assert.equal(
       stgWithDefaults(null).defaultTab,
       stgWithDefaults(
         Object.fromEntries(
-          Object.entries(stgWithDefaults(null)).filter(([key]) => key !== 'defaultTab'),
+          Object.entries(stgWithDefaults(null)).filter(
+            ([key]) => key !== 'defaultTab',
+          ),
         ) as never,
       ).defaultTab,
     ],
     [
       'kitchen',
-      [{ path: ['defaultTab'], value: 'kitchen' }, { path: ['updatedAt'], value: 9 }],
+      [
+        { path: ['defaultTab'], value: 'kitchen' },
+        { path: ['updatedAt'], value: 9 },
+      ],
       'recipes',
       'recipes',
     ],
@@ -10437,12 +10599,18 @@ assert.equal(
   );
   assert.deepEqual(
     stgUpdates({ suggestPhotos: false }, 9),
-    [{ path: ['suggestPhotos'], value: false }, { path: ['updatedAt'], value: 9 }],
+    [
+      { path: ['suggestPhotos'], value: false },
+      { path: ['updatedAt'], value: 9 },
+    ],
     'a later change to suggestions names only its own field',
   );
   assert.deepEqual(
     stgUpdates({ fridgeDays: 6 }, 9),
-    [{ path: ['fridgeDays'], value: 6 }, { path: ['updatedAt'], value: 9 }],
+    [
+      { path: ['fridgeDays'], value: 6 },
+      { path: ['updatedAt'], value: 9 },
+    ],
     'a later change names only its own field, so another device is never overwritten',
   );
   assert.deepEqual(
@@ -10457,10 +10625,13 @@ assert.equal(
     ],
     'a reminder change is one dotted path per field and skips what it leaves out',
   );
-  assert.deepEqual(
-    [0, 9, 12, 13, 23].map(stgHour),
-    ['12:00 am', '9:00 am', '12:00 pm', '1:00 pm', '11:00 pm'],
-  );
+  assert.deepEqual([0, 9, 12, 13, 23].map(stgHour), [
+    '12:00 am',
+    '9:00 am',
+    '12:00 pm',
+    '1:00 pm',
+    '11:00 pm',
+  ]);
   assert.equal(stgZone('America/Los_Angeles', Date.UTC(2026, 9, 18)), 'PDT');
   assert.equal(stgZone('America/Los_Angeles', Date.UTC(2026, 0, 18)), 'PST');
   assert.deepEqual(
@@ -10503,8 +10674,13 @@ assert.equal(
   );
   assert.deepEqual(
     stgWithDefaults(olderDocument)?.voice,
-    { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: null },
-    'and one written before the voice choices reads each as not chosen yet, so this device\'s own earlier choice still stands',
+    {
+      hasAgreed: null,
+      isReadingAloud: null,
+      isReadingNotes: null,
+      isWaiting: null,
+    },
+    "and one written before the voice choices reads each as not chosen yet, so this device's own earlier choice still stands",
   );
   assert.deepEqual(
     [
@@ -10512,8 +10688,16 @@ assert.equal(
       stgUpdates({ voice: { hasAgreed: true } }, 9),
     ],
     [
-      { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: true },
-      [{ path: ['voice', 'hasAgreed'], value: true }, { path: ['updatedAt'], value: 9 }],
+      {
+        hasAgreed: null,
+        isReadingAloud: null,
+        isReadingNotes: null,
+        isWaiting: true,
+      },
+      [
+        { path: ['voice', 'hasAgreed'], value: true },
+        { path: ['updatedAt'], value: 9 },
+      ],
     ],
     'a voice choice is written on its own path and leaves the others unchosen',
   );
@@ -10531,7 +10715,13 @@ assert.equal(
     (['on', 'blocked', 'unsupported', 'dismissed', 'failed'] as const).map(
       stgFailureText,
     ),
-    [null, null, null, null, 'We couldn’t turn reminders on. Check your connection and try again.'],
+    [
+      null,
+      null,
+      null,
+      null,
+      'We couldn’t turn reminders on. Check your connection and try again.',
+    ],
     'a closed question and a refused one say nothing here; a failed setup is worded with a retry hint',
   );
   assert.deepEqual(
@@ -10574,7 +10764,7 @@ assert.equal(
   assert.deepEqual(
     getStepAnchor(steps, 1),
     { stepIndex: 1, stepText: steps[1] },
-    'an entry keeps its step number and the step\'s words',
+    "an entry keeps its step number and the step's words",
   );
   assert.deepEqual(
     getStepAnchor(steps, null),
@@ -10609,29 +10799,45 @@ assert.equal(
       'a step that reads like another and moved is found at the nearest of the two, not the first',
     );
     assert.equal(
-      resolveNoteStep({ stepIndex: 1, stepText: getStepAnchorText('Stir.') }, ['Mix.', ...repeated]),
+      resolveNoteStep({ stepIndex: 1, stepText: getStepAnchorText('Stir.') }, [
+        'Mix.',
+        ...repeated,
+      ]),
       2,
       'and the other one when the entry was written near it',
     );
   }
   assert.equal(
-    (getJoinedChangeReason([
-      { ...entry('long', 'CHANGE', 1, null), reason: 'x'.repeat(2500) } as RecipeNote,
-    ]) ?? '').length <= 2000,
+    (
+      getJoinedChangeReason([
+        {
+          ...entry('long', 'CHANGE', 1, null),
+          reason: 'x'.repeat(2500),
+        } as RecipeNote,
+      ]) ?? ''
+    ).length <= 2000,
     true,
-    'a reason with no spaces is still cut to the rules\' 2,000 characters, the ellipsis included',
+    "a reason with no spaces is still cut to the rules' 2,000 characters, the ellipsis included",
   );
 
   const tip = entry('tip', 'TIP', 100, 1);
-  assert.equal(resolveNoteStep(tip, steps), 1, 'a step that did not move stays');
+  assert.equal(
+    resolveNoteStep(tip, steps),
+    1,
+    'a step that did not move stays',
+  );
   const longStep = `Simmer the sauce gently, stirring now and then, until it coats the back of a spoon and the oil starts to separate at the edges.`;
   assert.equal(
-    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, [longStep]),
+    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, [
+      longStep,
+    ]),
     0,
     'a kept beginning of any length finds its long step, so changing the clip never strands entries',
   );
   assert.equal(
-    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, ['Boil the water.']),
+    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, [
+      'Boil the water.',
+    ]),
     null,
     'and a different step does not match it',
   );
@@ -10645,7 +10851,11 @@ assert.equal(
     null,
     'a rewritten step no longer holds the entry',
   );
-  assert.equal(isStepLost(tip, [steps[0]]), true, 'a lost step is told apart from none');
+  assert.equal(
+    isStepLost(tip, [steps[0]]),
+    true,
+    'a lost step is told apart from none',
+  );
   assert.equal(
     isStepLost(entry('whole', 'NOTE', 1, null), steps),
     false,
@@ -10654,7 +10864,7 @@ assert.equal(
   assert.equal(
     resolveNoteStep({ stepIndex: 1, stepText: null }, steps),
     1,
-    'an entry written without the step\'s words trusts its number',
+    "an entry written without the step's words trusts its number",
   );
   assert.equal(
     resolveNoteStep({ stepIndex: 5, stepText: null }, steps),
@@ -10662,7 +10872,10 @@ assert.equal(
     'and drops it when that number is past the last step',
   );
   assert.equal(
-    resolveNoteStep({ stepIndex: undefined, stepText: undefined } as never, steps),
+    resolveNoteStep(
+      { stepIndex: undefined, stepText: undefined } as never,
+      steps,
+    ),
     null,
     'an entry written before steps lacks both keys and reads as the whole recipe',
   );
@@ -10706,7 +10919,7 @@ assert.equal(
       steps,
     )?.id,
     'n3',
-    'the note the cook leads with is the latest about the whole recipe: a step\'s own note shows with that step and a tip is no note',
+    "the note the cook leads with is the latest about the whole recipe: a step's own note shows with that step and a tip is no note",
   );
   assert.equal(getLastTimeNote([], steps), null, 'no note leads with nothing');
 
@@ -10723,13 +10936,16 @@ assert.equal(
   assert.equal(
     getJoinedChangeReason([entry('c', 'CHANGE', 1, null, 'x', null)]),
     null,
-    'changes with no reasons leave the tweak\'s reason empty',
+    "changes with no reasons leave the tweak's reason empty",
   );
 
   const day = (at: number) => `day${at}`;
   assert.equal(
     getSpokenEntries(
-      [entry('t1', 'TIP', 1, 1, "Don't crowd the pan"), entry('t2', 'TIP', 2, 1, 'Pat it dry.')],
+      [
+        entry('t1', 'TIP', 1, 1, "Don't crowd the pan"),
+        entry('t2', 'TIP', 2, 1, 'Pat it dry.'),
+      ],
       'TIPS',
       day,
     ),
@@ -10757,16 +10973,117 @@ assert.equal(
     'a step with no notes says so by saying nothing',
   );
   assert.equal(
-    (getSpokenEntries([entry('n', 'NOTE', 1, 1, 'word '.repeat(300))], 'NOTES', day) ?? '')
-      .length < 500,
+    (
+      getSpokenEntries(
+        [entry('n', 'NOTE', 1, 1, 'word '.repeat(300))],
+        'NOTES',
+        day,
+      ) ?? ''
+    ).length < 500,
     true,
     'a long note is read in part, so it never holds the kitchen up',
   );
   assert.equal(
-    getNoteSummary(entry('c', 'CHANGE', 1, 1, 'More garlic', 'Bland'), day).body,
+    getNoteSummary(entry('c', 'CHANGE', 1, 1, 'More garlic', 'Bland'), day)
+      .body,
     'More garlic. Bland',
     'a planned change reads as what and why',
   );
+}
+
+// A line that isn't a kitchen ingredient ("reserved pasta water") stays a line of the recipe and nothing else
+{
+  const pastaWater = {
+    id: 'free-1',
+    ingredientId: null,
+    freeText: 'Reserved pasta water',
+    amount: 1,
+    unit: 'CUP',
+    note: null,
+    group: null,
+  } as unknown as RecipeIngredient;
+  const withFree = (base: Recipe) =>
+    ({ ...base, ingredients: [...base.ingredients, pastaWater] }) as Recipe;
+  assert.deepEqual(
+    getRecipeLines(withFree(adobo), shopIngredients),
+    getRecipeLines(adobo, shopIngredients),
+    'a free line never reaches the shopping list',
+  );
+  const plain = recipe(4, [['chicken', 2, 'LB']]) as Recipe;
+  const plainCost = cost(plain, [chicken], [chickenProduct]);
+  const freeCost = cost(withFree(plain), [chicken], [chickenProduct]);
+  assert.equal(
+    freeCost.totalCents,
+    plainCost.totalCents,
+    'a free line adds no cost',
+  );
+  assert.deepEqual(
+    freeCost.leftOut,
+    plainCost.leftOut,
+    'a free line is no gap in the cost',
+  );
+  assert.deepEqual(
+    getRecipeChanges(
+      baseRecipe,
+      {
+        ...baseRecipe,
+        ingredients: baseRecipe.ingredients.map((line, index) =>
+          index === 2
+            ? ({
+                ...line,
+                ingredientId: null,
+                freeText: 'Cold butter',
+              } as RecipeIngredient)
+            : line,
+        ),
+      },
+      names,
+    ).filter((entry) => entry.includes('plain line')),
+    ['Made Cold butter a plain line, not a kitchen ingredient'],
+    'turning an ingredient into a free line is recorded by its name',
+  );
+  assert.deepEqual(
+    getFreedIngredientIds(
+      [
+        { id: 'a', ingredientId: 'pasta-water' },
+        { id: 'b', ingredientId: 'salt' },
+        { id: 'c', ingredientId: 'oil' },
+        { id: 'd', ingredientId: 'oil' },
+      ],
+      [
+        { id: 'a', ingredientId: null },
+        { id: 'b', ingredientId: 'salt' },
+        { id: 'c', ingredientId: null },
+        { id: 'd', ingredientId: 'oil' },
+      ],
+    ),
+    ['pasta-water'],
+    'an ingredient another line still names is not offered for removal',
+  );
+  const row = (id: string, ingredientId: string, newName: string | null) =>
+    ({
+      id,
+      ingredientId,
+      freeText: null,
+      amount: '1',
+      unit: 'EACH',
+      isAmountless: false,
+      note: null,
+      proposedName: null,
+      newName,
+      group: null,
+    }) as IngredientRow;
+  const settled = settleNewIngredients([
+    row('r1', 'n-1', 'Scallion'),
+    row('r2', 'n-2', ' scallion '),
+    row('r3', 'existing', null),
+  ]);
+  assert.deepEqual(
+    settled.rows.map((entry) => entry.ingredientId),
+    ['n-1', 'n-1', 'existing'],
+    'a name repeated across rows is one new ingredient',
+  );
+  assert.equal(settled.newIngredients.length, 1);
 }
 
 console.log('pinchMath: all checks passed');

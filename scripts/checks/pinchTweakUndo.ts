@@ -44,6 +44,7 @@ const check = (name: string, run: () => void) => {
 const line = (id: string, amount: number | null): RecipeIngredient => ({
   id,
   ingredientId: `cat-${id}`,
+  freeText: null,
   amount,
   unit: 'TBSP',
   note: null,

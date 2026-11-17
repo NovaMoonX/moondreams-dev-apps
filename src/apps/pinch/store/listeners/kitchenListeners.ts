@@ -94,7 +94,18 @@ export function startRecipesListener(
   return onSnapshot(
     kitchenCollection(uid, 'recipes'),
     (snapshot) =>
-      onChange(snapshot.docs.map((document) => document.data() as Recipe)),
+      onChange(
+        snapshot.docs.map((document) => {
+          const recipe = document.data() as Recipe;
+          return {
+            ...recipe,
+            ingredients: recipe.ingredients.map((line) => ({
+              ...line,
+              freeText: line.freeText ?? null,
+            })),
+          };
+        }),
+      ),
     onError,
   );
 }

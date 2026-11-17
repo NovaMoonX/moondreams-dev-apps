@@ -36,7 +36,10 @@ export const getRecipeSnapshot = (recipe: RecipeContent): RecipeSnapshot => ({
   servings: recipe.servings,
   prepMinutes: recipe.prepMinutes ?? null,
   cookMinutes: recipe.cookMinutes ?? null,
-  ingredients: recipe.ingredients,
+  ingredients: recipe.ingredients.map((line) => ({
+    ...line,
+    freeText: line.freeText ?? null,
+  })),
   steps: recipe.steps,
   nutritionOverride: recipe.nutritionOverride ?? null,
   sourceId: recipe.sourceId ?? null,
@@ -71,10 +74,12 @@ const formatQuantity = ({
     : `${formatAmount(amount)} ${UNIT_LABELS[unit]}`;
 
 type ComparedLine = Omit<RecipeIngredient, 'group'>;
+type NamedLine = Pick<RecipeIngredient, 'ingredientId' | 'freeText'>;
 
 const normalizeLine = (line: RecipeIngredient): ComparedLine => ({
   id: line.id,
   ingredientId: line.ingredientId,
+  freeText: line.ingredientId === null ? (line.freeText ?? '').trim() : null,
   amount: line.amount,
   unit: line.amount === null ? 'EACH' : line.unit,
   note: (line.note ?? '').trim() || null,
@@ -149,7 +154,26 @@ const getLineChanges = (
     return [`Note on ${name} changed`];
   };
 
-  if (before.ingredientId !== after.ingredientId) {
+  if (before.ingredientId !== null && after.ingredientId === null) {
+    return [
+      `Made ${name} a plain line, not a kitchen ingredient`,
+      ...(isAmountChanged ? [amountLine] : []),
+      ...noteLine(),
+    ];
+  }
+  if (before.ingredientId === null && after.ingredientId !== null) {
+    return [
+      beforeName === name
+        ? `Linked ${name} to your kitchen`
+        : `Linked ${beforeName} to ${name}`,
+      ...(isAmountChanged ? [amountLine] : []),
+      ...noteLine(),
+    ];
+  }
+  if (
+    before.ingredientId !== after.ingredientId ||
+    before.freeText !== after.freeText
+  ) {
     return [swapLine, ...noteLine()];
   }
   return [...(isAmountChanged ? [amountLine] : []), ...noteLine()];
@@ -159,13 +183,11 @@ const getLineChanges = (
 const getIngredientChanges = (
   beforeLines: RecipeIngredient[],
   afterLines: RecipeIngredient[],
-  getName: (ingredientId: string) => string,
+  getName: (line: NamedLine) => string,
 ) => {
   const labelWith = (labels: Map<string, string>) => (line: ComparedLine) => {
     const group = labels.get(line.id);
-    return group
-      ? `${getName(line.ingredientId)} (${group})`
-      : getName(line.ingredientId);
+    return group ? `${getName(line)} (${group})` : getName(line);
   };
   const beforeLabel = labelWith(getRepeatedLineGroups(beforeLines));
   const afterLabel = labelWith(getRepeatedLineGroups(afterLines));
@@ -234,7 +256,7 @@ const quoteGroup = (name: string) => `“${clip(name, GROUP_QUOTE_LENGTH)}”`;
 const getGroupChanges = (
   beforeLines: RecipeIngredient[],
   afterLines: RecipeIngredient[],
-  getName: (ingredientId: string) => string,
+  getName: (line: NamedLine) => string,
 ) => {
   const beforeById = new Map(beforeLines.map((line) => [line.id, line]));
   const kept = afterLines.filter((line) => beforeById.has(line.id));
@@ -289,17 +311,13 @@ const getGroupChanges = (
     }
     if (to === '') {
       return lines.length === 1
-        ? [
-            `Took ${getName(lines[0].ingredientId)} out of ${quoteGroup(fromName ?? '')}`,
-          ]
+        ? [`Took ${getName(lines[0])} out of ${quoteGroup(fromName ?? '')}`]
         : [
             `Took ${lines.length} ingredients out of ${quoteGroup(fromName ?? '')}`,
           ];
     }
     return lines.length === 1
-      ? [
-          `Moved ${getName(lines[0].ingredientId)} to ${quoteGroup(toName ?? '')}`,
-        ]
+      ? [`Moved ${getName(lines[0])} to ${quoteGroup(toName ?? '')}`]
       : [`Moved ${lines.length} ingredients to ${quoteGroup(toName ?? '')}`];
   });
 
@@ -587,8 +605,10 @@ export const getRecipeChanges = (
 ) => {
   const was = normalize(before);
   const now = normalize(after);
-  const getName = (ingredientId: string) =>
-    ingredientsById.get(ingredientId)?.name ?? 'Removed ingredient';
+  const getName = (line: NamedLine) =>
+    line.ingredientId === null
+      ? (line.freeText ?? '')
+      : (ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient');
   const getSourceLine = () => {
     if (was.sourceId === now.sourceId) return [];
     if (now.sourceId === null) {
