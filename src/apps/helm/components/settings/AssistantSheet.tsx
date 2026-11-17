@@ -1,10 +1,13 @@
 import { useState } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useConnections } from '@/lib/connections/useConnections';
 import {
@@ -21,6 +24,8 @@ import type { OpenConnectedAssistant } from '@apps/helm/types';
 interface AssistantSheetProps {
   assistant: OpenConnectedAssistant | null;
   onClose: () => void;
+  /** Where Gmail, Drive and the apps are connected. */
+  onOpenConnectedApps: () => void;
 }
 
 const readScopeOf = (connectorId: string): McpReadScope | null =>
@@ -35,7 +40,11 @@ const readScopeOf = (connectorId: string): McpReadScope | null =>
 const READ_SCOPE_ORDER: McpReadScope[] = ['mail', 'drive', 'apps'];
 
 /** One connected assistant: what it can do, when it connected, and the way to disconnect it. */
-function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
+function AssistantSheet({
+  assistant,
+  onClose,
+  onOpenConnectedApps,
+}: AssistantSheetProps) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -43,14 +52,14 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
   const [busyScopes, setBusyScopes] = useState<McpReadScope[]>([]);
   const { grants } = useConnections({ readerAppId: 'helm' });
   const isGoogleReadOpen = useIsGateOpen('helm', 'google-mail-and-drive');
-  const connectedScopes = READ_SCOPE_ORDER.filter(
-    (scope) =>
-      (scope === 'apps' || isGoogleReadOpen) &&
-      grants.some(
-        (grant) =>
-          grant.status !== 'ended' && readScopeOf(grant.connectorId) === scope,
-      ),
+  const shownScopes = READ_SCOPE_ORDER.filter(
+    (scope) => scope === 'apps' || isGoogleReadOpen,
   );
+  const isConnected = (scope: McpReadScope) =>
+    grants.some(
+      (grant) =>
+        grant.status !== 'ended' && readScopeOf(grant.connectorId) === scope,
+    );
 
   const setReadScope = async (scope: McpReadScope, isOn: boolean) => {
     if (!assistant || busyScopes.includes(scope)) return;
@@ -136,7 +145,7 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
               onCheckedChange={(checked) => void setCanWrite(checked)}
             />
           </div>
-          {connectedScopes.map((scope) => {
+          {shownScopes.map((scope) => {
             const isOn = assistant.readScopes.includes(scope);
             return (
               <div
@@ -147,26 +156,46 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
                   <p className='text-[15px] font-medium'>
                     {HELM_COPY.assistantReadScopeLabels[scope]}
                   </p>
-                  <p className='text-muted-foreground text-[13px] text-pretty'>
-                    {HELM_COPY.assistantReadScopeHint(
-                      scope,
-                      assistant.name,
-                      helmAppName,
-                      { isOn, canWrite: assistant.canWrite },
-                    )}
-                  </p>
+                  {isConnected(scope) ? (
+                    <p className='text-muted-foreground text-[13px] text-pretty'>
+                      {HELM_COPY.assistantReadScopeHint(
+                        scope,
+                        assistant.name,
+                        helmAppName,
+                        { isOn, canWrite: assistant.canWrite },
+                      )}
+                    </p>
+                  ) : (
+                    <p className='text-muted-foreground flex items-center gap-1.5 text-[13px] text-pretty'>
+                      <Lock className='size-3.5 shrink-0' aria-hidden='true' />
+                      {HELM_COPY.assistantNeedsSource(scope)}
+                    </p>
+                  )}
                 </div>
-                <AppToggle
-                  aria-label={HELM_COPY.assistantReadScopeLabels[scope]}
-                  checked={isOn}
-                  disabled={busyScopes.includes(scope)}
-                  onCheckedChange={(checked) =>
-                    void setReadScope(scope, checked)
-                  }
-                />
+                {(isConnected(scope) || isOn) && (
+                  <AppToggle
+                    aria-label={HELM_COPY.assistantReadScopeLabels[scope]}
+                    checked={isOn}
+                    disabled={busyScopes.includes(scope)}
+                    onCheckedChange={(checked) =>
+                      void setReadScope(scope, checked)
+                    }
+                  />
+                )}
               </div>
             );
           })}
+          {shownScopes.some((scope) => !isConnected(scope)) && (
+            <Button
+              variant='secondary'
+              size='sm'
+              className='self-start'
+              onClick={() => afterBackLayersClose(onOpenConnectedApps)}
+            >
+              {HELM_COPY.assistantOpenConnectedApps}
+              <ChevronRight className='size-4' aria-hidden='true' />
+            </Button>
+          )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantPrivacy(assistant.name)}
           </p>

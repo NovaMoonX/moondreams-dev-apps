@@ -1,6 +1,15 @@
+import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
+
 const MIN_SPEAK_GUARD_MS = 4000;
 const MAX_SPEAK_GUARD_MS = 60_000;
 const SPEAK_MS_PER_CHAR = 90;
+// A reading still reporting progress outlasts the guard; one silent longer than its rest at a slow pace is stuck.
+const SLOW_SPEAK_MS_PER_CHAR = 130;
+const STUCK_MARGIN_MS = 5000;
+const GUARD_POLL_MS = 1000;
+// Chrome stops a single utterance after about 15 seconds, so a reading is queued a sentence or two at a time.
+const CHUNK_MIN_CHARS = 40;
+const CHUNK_MAX_CHARS = 200;
 // Chrome drops a reading started in the same moment as a cancel, so one that follows another waits a beat and a silent one is tried once more.
 const CANCEL_SETTLE_MS = 80;
 const MAX_SPEAK_ATTEMPTS = 2;
@@ -13,6 +22,7 @@ interface SpeakOptions {
   /** Gives up when the reading hasn't started by then (`onNoStart`, then `onEnd`). */
   startTimeoutMs?: number;
   onNoStart?: () => void;
+  onProgress?: (fraction: number) => void;
 }
 
 const normalizeLang = (lang: string) => lang.toLowerCase().replace('_', '-');
@@ -64,12 +74,14 @@ export function pickVoice(
 }
 
 // Kept so the browser can't collect a reading before its `end` arrives (Chrome drops the event otherwise).
-const reading: { current: SpeechSynthesisUtterance | null } = { current: null };
+const reading: { current: SpeechSynthesisUtterance[] | null } = {
+  current: null,
+};
 
 /** Reads `text` aloud, cancelling whatever was being read. Returns a function that stops it. Where text-to-speech is missing it calls `onEnd` at once. */
 export function speakText(
   text: string,
-  { lang, onStart, onEnd, startTimeoutMs, onNoStart }: SpeakOptions,
+  { lang, onStart, onEnd, startTimeoutMs, onNoStart, onProgress }: SpeakOptions,
 ): () => void {
   const synth = getSpeechSynthesis();
   if (synth === null || typeof SpeechSynthesisUtterance === 'undefined') {
@@ -80,14 +92,31 @@ export function speakText(
   const wasBusy = synth.speaking || synth.pending;
   synth.cancel();
   const voice = pickVoice(synth.getVoices(), lang);
+  const split = splitSentences(text, {
+    minChars: CHUNK_MIN_CHARS,
+    maxChars: CHUNK_MAX_CHARS,
+  });
+  const chunks = split.length > 0 ? split : [text];
+  const wholeChars = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const starts = chunks.map((_, index) =>
+    chunks.slice(0, index).reduce((sum, chunk) => sum + chunk.length, 0),
+  );
+  const reportAt = (index: number, charIndex: number) => {
+    const at = starts[index]! + charIndex;
+    state.spokenChars = Math.max(state.spokenChars, at);
+    state.reportedAt = Date.now();
+    onProgress?.(Math.min(1, at / Math.max(1, wholeChars)));
+  };
 
   const state = {
+    spokenChars: 0,
+    reportedAt: Date.now(),
     isEnded: false,
     guardId: 0,
     startId: 0,
     speakId: 0,
     attempts: 0,
-    utterance: null as SpeechSynthesisUtterance | null,
+    utterances: null as SpeechSynthesisUtterance[] | null,
   };
   const finish = () => {
     if (state.isEnded) return;
@@ -95,28 +124,44 @@ export function speakText(
     window.clearTimeout(state.guardId);
     window.clearTimeout(state.startId);
     window.clearTimeout(state.speakId);
-    if (reading.current === state.utterance) reading.current = null;
+    if (reading.current === state.utterances) reading.current = null;
     onEnd?.();
   };
   const speakOnce = () => {
     if (state.isEnded) return;
     state.attempts += 1;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    if (voice !== null) utterance.voice = voice;
-    utterance.onstart = () => {
-      window.clearTimeout(state.startId);
-      onStart?.();
-    };
-    utterance.onend = finish;
-    utterance.onerror = finish;
-    state.utterance = utterance;
-    reading.current = utterance;
+    const utterances = chunks.map((chunk, index) => {
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      utterance.lang = lang;
+      if (voice !== null) utterance.voice = voice;
+      utterance.onstart = () => {
+        window.clearTimeout(state.startId);
+        if (index === 0) onStart?.();
+        reportAt(index, 0);
+      };
+      utterance.onboundary = (event) => reportAt(index, event.charIndex);
+      utterance.onend = index === chunks.length - 1 ? finish : null;
+      utterance.onerror = (event) => {
+        const isLast = index === chunks.length - 1;
+        if (
+          isLast ||
+          event.error === 'canceled' ||
+          event.error === 'interrupted'
+        ) {
+          finish();
+        }
+      };
+      return utterance;
+    });
+    state.utterances = utterances;
+    reading.current = utterances;
     if (startTimeoutMs !== undefined) {
       state.startId = window.setTimeout(() => {
         if (state.isEnded) return;
-        utterance.onend = null;
-        utterance.onerror = null;
+        utterances.forEach((utterance) => {
+          utterance.onend = null;
+          utterance.onerror = null;
+        });
         synth.cancel();
         if (state.attempts < MAX_SPEAK_ATTEMPTS) {
           state.speakId = window.setTimeout(speakOnce, CANCEL_SETTLE_MS);
@@ -128,20 +173,32 @@ export function speakText(
     }
     try {
       synth.resume();
-      synth.speak(utterance);
+      utterances.forEach((utterance) => synth.speak(utterance));
     } catch (error) {
       console.error('Text could not be read aloud', error);
+      synth.cancel();
       finish();
     }
   };
 
-  state.guardId = window.setTimeout(
-    finish,
-    Math.min(
-      MAX_SPEAK_GUARD_MS,
-      MIN_SPEAK_GUARD_MS + text.length * SPEAK_MS_PER_CHAR,
-    ),
+  const guardMs = Math.min(
+    MAX_SPEAK_GUARD_MS,
+    MIN_SPEAK_GUARD_MS + wholeChars * SPEAK_MS_PER_CHAR,
   );
+  const checkGuard = () => {
+    if (state.isEnded) return;
+    const restMs =
+      Math.min(wholeChars - state.spokenChars, CHUNK_MAX_CHARS) *
+        SLOW_SPEAK_MS_PER_CHAR +
+      STUCK_MARGIN_MS;
+    if (synth.speaking && Date.now() < state.reportedAt + restMs) {
+      state.guardId = window.setTimeout(checkGuard, GUARD_POLL_MS);
+      return;
+    }
+    if (synth.speaking) synth.cancel();
+    finish();
+  };
+  state.guardId = window.setTimeout(checkGuard, guardMs);
   if (wasBusy) state.speakId = window.setTimeout(speakOnce, CANCEL_SETTLE_MS);
   else speakOnce();
 

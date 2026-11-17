@@ -293,7 +293,9 @@ interface AmcShowtime {
   id?: number | string;
   movieName?: string;
   showDateTimeUtc?: string;
+  showDateTimeLocal?: string;
   isSoldOut?: boolean;
+  isDiscountDaysEligible?: boolean;
   isCanceled?: boolean;
   purchaseUrl?: string;
   mobilePurchaseUrl?: string;
@@ -326,14 +328,20 @@ function toAmcDate(isoDate: string) {
   return `${month}-${day}-${year}`;
 }
 
+// "Laser at AMC" tags most ordinary showings at some theaters and is priced as Standard, so it never makes a showing premium.
 const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
   ['imax', 'IMAX'],
   ['dolby', 'DOLBY_CINEMA'],
   ['prime', 'PRIME'],
   ['reald', 'REALD_3D'],
   ['3d', 'REALD_3D'],
-  ['laser', 'LASER'],
 ];
+
+// AMC lists a discount-day showing at its regular price and takes the discount off at checkout; its flag already
+// follows AMC's current days and blackout dates, so no weekday is assumed here.
+function isDiscountDay(showtime: AmcShowtime) {
+  return Boolean(showtime.isDiscountDaysEligible);
+}
 
 function toFormat(showtime: AmcShowtime): AmcFormat {
   const text = (showtime.attributes ?? []).map((attribute) => `${attribute.code ?? ''} ${attribute.name ?? ''}`.toLowerCase()).join(' ');
@@ -413,6 +421,7 @@ function fixtureDay(date: string): DayShowtime[] {
     taxes: { ADULT: Math.round((priceCents as number) * 0.08), SENIOR: Math.round((priceCents as number) * 0.08), CHILD: Math.round((priceCents as number) * 0.08) },
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
     isSoldOut: index === 9,
+    isDiscountDay: [2, 3].includes(new Date(`${date}T00:00:00Z`).getUTCDay()),
     // Matches every title, so any movie the emulator is asked about has showings.
     movieTitle: '*',
   }));
@@ -455,6 +464,7 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
               taxes,
               purchaseUrl,
               isSoldOut: Boolean(showtime.isSoldOut),
+              isDiscountDay: isDiscountDay(showtime),
               movieTitle: showtime.movieName,
             } satisfies DayShowtime,
           ]
@@ -490,6 +500,7 @@ export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeO
       taxes: showtime.taxes,
       purchaseUrl: showtime.purchaseUrl,
       isSoldOut: showtime.isSoldOut,
+      isDiscountDay: showtime.isDiscountDay,
     };
   });
   return result;

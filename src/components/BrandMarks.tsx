@@ -497,6 +497,154 @@ export function GeminiMark({ className = 'size-4' }: BrandMarkProps) {
   );
 }
 
+export function GmailMark({ className = 'size-5' }: BrandMarkProps) {
+  const id = useId().replace(/[^\w-]/g, '');
+  return (
+    <svg viewBox='0 -26 256 256' aria-hidden='true' className={className}>
+      <defs>
+        <linearGradient
+          id={`${id}a`}
+          x1='165'
+          x2='165'
+          y1='44'
+          y2='166'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop stopColor='#60d673' />
+          <stop offset='.17' stopColor='#42c868' />
+          <stop offset='.39' stopColor='#0ebc5f' />
+          <stop offset='.62' stopColor='#00a9bb' />
+          <stop offset='.86' stopColor='#3c90ff' />
+          <stop offset='1' stopColor='#3186ff' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}b`}
+          x1='8'
+          x2='184'
+          y1='46.13'
+          y2='46.13'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.08' stopColor='#ff63a0' />
+          <stop offset='.3' stopColor='#fc413d' />
+          <stop offset='.5' stopColor='#fc413d' />
+          <stop offset='.65' stopColor='#fc413d' />
+          <stop offset='.72' stopColor='#fc5c30' />
+          <stop offset='.86' stopColor='#feb10c' />
+          <stop offset='.91' stopColor='#fec700' />
+          <stop offset='.96' stopColor='#ffdb0f' />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${id}a)`}
+        d='M146 44h38v110c0 6.627-5.373 12-12 12h-20a6 6 0 0 1-6-6z'
+        transform='translate(-11.636 -37.818)scale(1.45454)'
+      />
+      <path
+        fill='#fc413d'
+        d='M55.273 26.182H0v160c0 9.638 7.816 17.454 17.455 17.454h29.09a8.727 8.727 0 0 0 8.728-8.728z'
+      />
+      <path
+        fill={`url(#${id}b)`}
+        d='M39.226 30.456c-8.033-6.752-20.018-5.714-26.77 2.319c-6.752 8.032-5.714 20.017 2.319 26.77l76.078 63.949a8 8 0 0 0 10.295 0l76.078-63.95c8.032-6.752 9.07-18.737 2.318-26.77c-6.752-8.032-18.737-9.07-26.769-2.318L96 78.18z'
+        transform='translate(-11.636 -37.818)scale(1.45454)'
+      />
+    </svg>
+  );
+}
+
+export function GoogleDriveMark({ className = 'size-5' }: BrandMarkProps) {
+  const id = useId().replace(/[^\w-]/g, '');
+  return (
+    <svg viewBox='0 -9.25 256 256' aria-hidden='true' className={className}>
+      <defs>
+        <linearGradient
+          id={`${id}a`}
+          x1='86.924%'
+          x2='7.63%'
+          y1='94.294%'
+          y2='45.952%'
+        >
+          <stop offset='9%' stopColor='#ffe921' />
+          <stop offset='100%' stopColor='#fec700' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}b`}
+          x1='99.538%'
+          x2='23.437%'
+          y1='93.901%'
+          y2='54.033%'
+        >
+          <stop offset='15%' stopColor='#a9a8ff' />
+          <stop offset='33%' stopColor='#6d97ff' />
+          <stop offset='48%' stopColor='#3186ff' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}c`}
+          x1='87.128%'
+          x2='-.639%'
+          y1='51.518%'
+          y2='93.078%'
+        >
+          <stop offset='55%' stopColor='#0ebc5f' />
+          <stop offset='85%' stopColor='#78c9ff' />
+        </linearGradient>
+        <path
+          id={`${id}d`}
+          d='M77.303 29.27c22.531-39.026 78.863-39.027 101.394 0l69.373 120.158c22.531 39.027-5.633 87.81-50.698 87.81H58.628c-45.065 0-73.23-48.783-50.698-87.81z'
+        />
+      </defs>
+      <mask id={`${id}e`} fill='#fff'>
+        <use href={`#${id}d`} />
+      </mask>
+      <g mask={`url(#${id}e)`}>
+        <path
+          fill={`url(#${id}a)`}
+          d='M341.719 295.937H200.166l-29.293-50.735l70.777-122.589z'
+          transform='translate(-42.87 -58.67)'
+        />
+        <path
+          fill={`url(#${id}b)`}
+          d='m0 295.916l100.069-173.325v.003l-29.282 50.723h58.57l70.783 122.596l-200.138.001z'
+          transform='translate(-42.87 -58.67)'
+        />
+        <path
+          fill={`url(#${id}c)`}
+          d='m170.881 0l70.781 122.6l-29.286 50.726H70.812z'
+          transform='translate(-42.87 -58.67)'
+        />
+      </g>
+    </svg>
+  );
+}
+
+export function GoogleMark({ className = 'size-5' }: BrandMarkProps) {
+  return (
+    <svg
+      viewBox='-2.765 0.018 261.529 261.529'
+      aria-hidden='true'
+      className={className}
+    >
+      <path
+        fill='#4285f4'
+        d='M255.878 133.451c0-10.734-.871-18.567-2.756-26.69H130.55v48.448h71.947c-1.45 12.04-9.283 30.172-26.69 42.356l-.244 1.622l38.755 30.023l2.685.268c24.659-22.774 38.875-56.282 38.875-96.027'
+      />
+      <path
+        fill='#34a853'
+        d='M130.55 261.1c35.248 0 64.839-11.605 86.453-31.622l-41.196-31.913c-11.024 7.688-25.82 13.055-45.257 13.055c-34.523 0-63.824-22.773-74.269-54.25l-1.531.13l-40.298 31.187l-.527 1.465C35.393 231.798 79.49 261.1 130.55 261.1'
+      />
+      <path
+        fill='#fbbc05'
+        d='M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82c0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602z'
+      />
+      <path
+        fill='#eb4335'
+        d='M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251'
+      />
+    </svg>
+  );
+}
+
 export function ChatGptMark({ className = 'size-4' }: BrandMarkProps) {
   return (
     <svg

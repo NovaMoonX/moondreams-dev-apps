@@ -15,6 +15,7 @@ import {
 } from '@apps/runway/engine/balances';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { getCashPosition } from '@apps/runway/engine/cash';
+import { selectBankHeldByCard } from '@apps/runway/store/selectors/cardBankSelectors';
 
 const toBalanceInputs =
   (level: Level) =>
@@ -61,7 +62,7 @@ const toBalanceInputs =
     ]),
   });
 
-/** What the ledger alone sums from, at the level the plan is at, before any match to the account balances. */
+/** What the ledger sums from, at the level the plan is at, before any match to the account balances; at Link a linked card takes its bank's figure. */
 export const selectLedgerBalanceInputs = createSelector(
   [
     (state: RootState) => state.runway.plan?.startDate ?? null,
@@ -74,6 +75,7 @@ export const selectLedgerBalanceInputs = createSelector(
     selectClosingBase,
     () => todayAsUtcDate(),
     selectLevel,
+    selectBankHeldByCard,
   ],
   (
     startDate,
@@ -86,8 +88,9 @@ export const selectLedgerBalanceInputs = createSelector(
     closing,
     today,
     level,
-  ) =>
-    toBalanceInputs(level)(
+    bankOwedByCard,
+  ): BalancesInput => ({
+    ...toBalanceInputs(level)(
       startDate,
       moves,
       records,
@@ -98,6 +101,8 @@ export const selectLedgerBalanceInputs = createSelector(
       closing,
       today,
     ),
+    bankOwedByCard,
+  }),
 );
 
 /** The balances from the ledger alone: what a check against the bank compares with. */
