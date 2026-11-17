@@ -1363,7 +1363,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Research with live web search: quick or thorough, a default you set, asked when it matters, within a monthly allowance per person (O) (Issue 118)
 - [x] How and where a meeting happens (in person, video or phone, and its place), on Helm's events and read from Google Calendar (O) (Issue 123)
 - [x] One chosen Google Calendar kept in step both ways (O) (Issue 127)
-- [ ] Your day: say what you want done today and get it planned with breaks, wind down in the evening with what got done, what moves to tomorrow and why, kept on the server so it happens whether or not the app is open (O) (Issue 128)
+- [x] Your day: say what you want done today and get it planned with breaks, wind down in the evening with what got done, what moves to tomorrow and why, kept on the server so it happens whether or not the app is open (O) (Issue 128)
 - [ ] Related things grouped overnight: things across your records and connected apps that belong together (a sale, a planned expense, tasks and notes about a move) found by the nightly pass, filed quietly where they clearly belong and proposed as one thing when unsure, so "moving" already has its project ready (O) (Issue 130)
 - [ ] Knowledge found by meaning; a topic linked to a project; notes from a link or many imported at once; topics ordered by your own use
 - [ ] Commitments: promises made to someone or by someone, with who and by when
