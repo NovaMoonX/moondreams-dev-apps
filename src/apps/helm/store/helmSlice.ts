@@ -8,6 +8,7 @@ import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexLi
 import type {
   HelmProfile,
   OpenCapture,
+  OpenDayAims,
   OpenConnectedAssistant,
   OpenExecution,
   OpenFact,
@@ -58,6 +59,13 @@ export interface PlanDaySet {
   isFailed: boolean;
 }
 
+export interface DayAimsSet {
+  /** Keyed by day ("YYYY-MM-DD" in the profile's zone). */
+  byId: Record<string, OpenDayAims>;
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
 export interface HabitDaySet {
   /** Keyed by habit day ("YYYY-MM-DD" in the profile's zone, rolling over at 03:00). */
   byId: Record<string, OpenHabitDay>;
@@ -104,6 +112,8 @@ export interface HelmState {
   projectTasks: LoadedSet<OpenTask>;
   /** The plan days from yesterday to six days ahead. */
   planDays: PlanDaySet;
+  /** The days' aims and wind-down results, over the same window as the plan days. */
+  dayAims: DayAimsSet;
   /** The person's confirmed and inferred facts, and the superseded ones they replaced. */
   facts: LoadedSet<OpenFact>;
   /** The people, pets and organizations the person knows. */
@@ -171,6 +181,12 @@ const emptyPlanDays: PlanDaySet = {
   isFailed: false,
 };
 
+const emptyDayAims: DayAimsSet = {
+  byId: {},
+  isLoaded: false,
+  isFailed: false,
+};
+
 const emptyHabitDays: HabitDaySet = {
   byId: {},
   isLoaded: false,
@@ -205,6 +221,7 @@ const initialState: HelmState = {
   openTasks: emptyLoadedSet,
   projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
+  dayAims: emptyDayAims,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
   connections: emptyLoadedSet,
@@ -386,6 +403,18 @@ const helmSlice = createSlice({
     },
     setPlanDaysFailed: (state) => {
       state.planDays.isFailed = true;
+    },
+    setDayAims: (state, action: PayloadAction<OpenDayAims[]>) => {
+      state.dayAims = {
+        byId: Object.fromEntries(
+          action.payload.map((entry) => [entry.id, entry]),
+        ),
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setDayAimsFailed: (state) => {
+      state.dayAims.isFailed = true;
     },
     setFacts: (state, action: PayloadAction<OpenFact[]>) => {
       state.facts = { items: action.payload, isLoaded: true, isFailed: false };
@@ -682,6 +711,8 @@ export const {
   setProjectTasksFailed,
   setPlanDays,
   setPlanDaysFailed,
+  setDayAims,
+  setDayAimsFailed,
   setFacts,
   setFactsFailed,
   setWho,

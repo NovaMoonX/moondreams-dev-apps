@@ -487,7 +487,7 @@ export interface Capture {
   sortedAt: number | null;
   /** Set when the assistant was asked to plan a day: "YYYY-MM-DD", which the device plans on sight. */
   planDayKey: string | null;
-  /** Set when the turn answers the morning card: "YYYY-MM-DD" of the day whose aims it files, read by the server, never from the words. */
+  /** Set on the answer to the morning card: the day ("YYYY-MM-DD") whose aims it files; null on every other turn and on one made before the field. */
   aimsDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
@@ -1703,6 +1703,15 @@ export interface DayAims {
   lookAt: number | null;
   rolledAt: number | null;
   sealed: Sealed;
+}
+
+/** A day's aims after their sealed payload is opened; an unreadable one keeps its readable fields and no aims. */
+export interface OpenDayAims extends Omit<DayAims, 'sealed'> {
+  /** "YYYY-MM-DD" in the profile's zone. */
+  id: string;
+  aims: DayAimsSealed['aims'];
+  windDown: DayAimsSealed['windDown'];
+  isUnreadable: boolean;
 }
 
 export interface PlanCalendarEntry {

@@ -88,6 +88,8 @@ import type {
   HelmDaySummarySealed,
   HelmEncryption,
   PlanDaySealed,
+  DayAims,
+  DayAimsSealed,
   PlanSlot,
   Task,
   TaskDue,
@@ -1597,8 +1599,50 @@ async function buildPlanDays(input: {
       sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
     },
   };
+  const aim = (taskId: string, order: number, broughtFrom: string | null) => ({
+    aimId: `seed-aim-${taskId}`,
+    taskId,
+    order,
+    lengthIsGuess: false,
+    broughtFrom,
+  });
+  const dayAims = async (
+    key: string,
+    payload: DayAimsSealed,
+    state: DayAims['state'],
+  ): Promise<{ id: string; doc: DayAims }> => ({
+    id: key,
+    doc: {
+      date: Date.parse(key),
+      state,
+      windDownState: 'waiting',
+      lookAt: null,
+      rolledAt: null,
+      sealed: await sealJson<DayAimsSealed>(payload, encryption),
+    },
+  });
+  // Today is still open with one aim, so the morning card asks, lists "From yesterday" and, in the last 2 hours of the day, winds down.
+  const aimDays = await Promise.all([
+    dayAims(
+      yesterdayKey,
+      {
+        aims: [
+          aim('seed-task-plan-done', 1, null),
+          aim('seed-task-3-1', 2, null),
+        ],
+        windDown: {},
+      },
+      'answered',
+    ),
+    dayAims(
+      todayKey,
+      { aims: [aim('seed-task-hand-2', 1, null)], windDown: {} },
+      'open',
+    ),
+  ]);
   return {
     days,
+    aimDays,
     summary,
     task: { id: 'seed-task-plan-done', task: doneTask },
   };
@@ -7537,6 +7581,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           planDays.days.forEach((entry) =>
             batch.set(person.collection('planDays').doc(entry.id), entry.day),
           );
+          planDays.aimDays.forEach((entry) =>
+            batch.set(person.collection('dayAims').doc(entry.id), entry.doc),
+          );
           batch.set(
             person.collection('daySummaries').doc(planDays.summary.id),
             planDays.summary.doc,
@@ -7962,7 +8009,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           answerTurns.notes.length +
           (gmailTurn ? 3 : 0) +
           (noteTurn ? 3 : 0) +
-          (planDays ? planDays.days.length + 2 : 0);
+          (planDays ? planDays.days.length + planDays.aimDays.length + 2 : 0);
         return (
           backToBackCount +
           turns.reduce(
