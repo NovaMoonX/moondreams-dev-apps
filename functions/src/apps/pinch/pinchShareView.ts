@@ -61,6 +61,7 @@ export interface SharedIngredient {
   unit: ShareUnit;
   note: string | null;
   group: string | null;
+  isFree: boolean;
 }
 
 export interface SharedRecipeLink {
@@ -257,6 +258,7 @@ function toIngredient(raw: unknown): SharedIngredient | null {
     unit: unit ?? 'EACH',
     note: toText(raw.note, SHARE_LIMITS.MAX_NOTE_LENGTH),
     group: toText(raw.group, SHARE_LIMITS.MAX_INGREDIENT_GROUP_LENGTH),
+    isFree: raw.isFree === true,
   };
   return result;
 }

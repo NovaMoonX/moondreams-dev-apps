@@ -41,7 +41,8 @@ export interface TheatreResult {
   distanceMiles: number | null;
 }
 
-export type AmcFormat = 'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
+export type AmcFormat =
+  'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 
 export type TicketPriceKind = 'ADULT' | 'SENIOR' | 'CHILD';
 
@@ -67,4 +68,6 @@ export interface ShowtimeOption {
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
+  /** AMC marks the showing as a discount day, so checkout may charge less than these list prices. */
+  isDiscountDay: boolean;
 }

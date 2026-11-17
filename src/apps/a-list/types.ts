@@ -130,6 +130,8 @@ export interface Viewing {
   lastEditedAt: number;
 }
 
+export type TaxChoice = 'AMC' | 'USUAL';
+
 /** What a non-member would have paid. Always `totalCents = priceCents + feeAvoidedCents + taxCents`. */
 export interface Ticket {
   /** How the member entered it; reopening the form restores this mode. */
@@ -144,6 +146,8 @@ export interface Ticket {
   /** The rate chosen on this ticket; null when none was chosen. */
   taxRate: number | null;
   taxCents: number;
+  /** Which figure the tax matched when AMC's tax and the usual rate disagreed; null otherwise. Tickets saved before it lack the key. */
+  taxChoice: TaxChoice | null;
   /** Exact as entered when all-in. */
   totalCents: number;
 }
@@ -252,6 +256,8 @@ export interface ShowtimeOption {
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
+  /** AMC marks the showing as a discount day, so checkout may charge less than these list prices. */
+  isDiscountDay: boolean;
 }
 
 /** What the member picked on AMC's showtime list; the ticket itself is only recorded once they come back with the fee and tax. */
@@ -263,6 +269,8 @@ export interface PurchasePlan {
   /** AMC's sales tax on one ticket at that price; null when AMC listed none. Plans saved before it existed lack the key. */
   taxCents: number | null;
   purchaseUrl: string;
+  /** AMC marks the showing as a discount day; null on plans saved before it existed, which lack the key. */
+  isDiscountDay: boolean | null;
   /** Instant: when the member last left for AMC to buy; null until they do. */
   startedAt: number | null;
 }
