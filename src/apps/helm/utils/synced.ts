@@ -97,7 +97,7 @@ export const isDueForRefresh = (grant: ConnectionGrant, now: number) => {
   );
 };
 
-export const isOwnEvent = (record: SyncedRecord) => record.helmRef == null;
+export const isOutsideEvent = (record: SyncedRecord) => record.helmRef == null;
 
 export const isCalendarEvent = (record: SyncedRecord) =>
   record.connectorId === 'google:calendar';
@@ -109,7 +109,7 @@ export const getLiveRecords = (
   includeEnded: boolean,
 ) =>
   stored.filter((record) => {
-    if (!isOwnEvent(record)) return false;
+    if (!isOutsideEvent(record)) return false;
     const grant = grants.find((entry) => entry.id === record.grantId);
     if (!grant) return false;
     return grant.status === 'ended'

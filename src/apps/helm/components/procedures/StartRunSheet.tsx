@@ -46,7 +46,7 @@ import type {
 } from '@apps/helm/types';
 import { getRunProgress } from '@apps/helm/utils/runSteps';
 import { mergeSameThings } from '@apps/helm/utils/sameThing';
-import { isOwnEvent, toFirstDay } from '@apps/helm/utils/synced';
+import { isOutsideEvent, toFirstDay } from '@apps/helm/utils/synced';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 
 interface Row {
@@ -93,7 +93,7 @@ const getOffered = (records: SyncedRecord[], now: number) =>
       (record) =>
         (record.kind === 'trip' || record.kind === 'event') &&
         record.category !== 'itinerary' &&
-        isOwnEvent(record) &&
+        isOutsideEvent(record) &&
         record.connectionEndedAt === null &&
         record.startAt !== null &&
         record.startAt <= now + RUN_START_DAYS * DAY_MS &&

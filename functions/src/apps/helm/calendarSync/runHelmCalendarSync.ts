@@ -9,6 +9,7 @@ import {
   googleGet,
   googleSend,
   isRateLimited,
+  SyncTokenGone,
   toReconnectOnRefusal,
 } from '../../../connections/google/client.js';
 import {
@@ -98,6 +99,28 @@ const isStillOn = async (
 const isStatus = (error: unknown, status: number) =>
   error instanceof GoogleHttpError && error.status === status;
 
+const keepCalendarLinks = async (
+  firestore: Firestore,
+  uid: string,
+  token: string,
+  calendarId: string,
+) => {
+  const all = await readLinks(firestore, uid);
+  const left = [...all.values()].filter(
+    (link) => link.calendarId !== calendarId,
+  );
+  await inGroups(left, async (link) => {
+    if (link.startAt >= Date.now())
+      await googleSend(
+        token,
+        'DELETE',
+        `${eventsUrl(link.calendarId)}/${encodeURIComponent(link.eventId)}`,
+      ).catch(() => undefined);
+    await deleteLink(firestore, uid, link.helmRef);
+  });
+  return new Map([...all].filter(([, link]) => link.calendarId === calendarId));
+};
+
 const setSyncState = (
   firestore: Firestore,
   uid: string,
@@ -120,7 +143,6 @@ export async function syncPerson(
   firestore: Firestore,
   keyring: Keyring,
   uid: string,
-  now: number,
 ): Promise<PersonReport> {
   const profile = (await firestore.doc(userPath(uid)).get()).data();
   const sync = profile?.calendarSync;
@@ -136,7 +158,7 @@ export async function syncPerson(
     accountId: string;
     calendarId: string;
   };
-  if (!(await takeLease(firestore, uid, now, LEASE)))
+  if (!(await takeLease(firestore, uid, Date.now(), LEASE)))
     return { ...EMPTY_REPORT, state: 'busy' };
   try {
     return await run(firestore, keyring, uid, {
@@ -175,7 +197,7 @@ const run = async (
     const token = await getGoogleAccessToken(firestore, uid, accountId);
     const grant = await readGrantState(firestore, uid, accountId);
     const grantId = toCalendarGrantId(accountId);
-    const links = await readLinks(firestore, uid);
+    const links = await keepCalendarLinks(firestore, uid, token, calendarId);
     const remote = await readRemote(firestore, uid, grantId, links);
     const first = await readSyncInputs(firestore, uid, key, now, timeZone);
     const back = readBack({
@@ -259,7 +281,11 @@ const run = async (
           const existing = await googleGet<{ status?: string }>(
             token,
             `${eventsUrl(calendarId)}/${encodeURIComponent(id)}`,
-          ).catch(() => null);
+          ).catch((failure: unknown) =>
+            failure instanceof SyncTokenGone || isStatus(failure, 404)
+              ? { status: 'cancelled' }
+              : toReconnectOnRefusal(failure),
+          );
           if (existing?.status !== 'cancelled') return id;
           const fresh = toEventId(
             calendarId,
@@ -375,7 +401,6 @@ const readPeople = async (firestore: Firestore) => {
 export async function runCalendarSync(
   firestore: Firestore,
   keyring: Keyring,
-  now: number,
 ): Promise<RunReport> {
   const people = await readPeople(firestore);
   const startedAt = Date.now();
@@ -396,7 +421,7 @@ export async function runCalendarSync(
     }
     await Promise.all(
       group.map((uid) =>
-        syncPerson(firestore, keyring, uid, now).then(
+        syncPerson(firestore, keyring, uid).then(
           (result) => {
             if (result.state === 'ran') report.ran += 1;
           },
@@ -421,11 +446,7 @@ export const runHelmCalendarSync = onSchedule(
     secrets: [HELM_MASTER_KEYS, ...GOOGLE_SECRETS],
   },
   async () => {
-    const report = await runCalendarSync(
-      getFirestore(),
-      loadHelmKeyring(),
-      Date.now(),
-    );
+    const report = await runCalendarSync(getFirestore(), loadHelmKeyring());
     logger.info('helm.calendarSync.ran', report);
   },
 );

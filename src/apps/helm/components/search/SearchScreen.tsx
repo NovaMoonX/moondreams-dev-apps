@@ -18,7 +18,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { doneTasksQueryOptions } from '@apps/helm/queries/doneTaskQueries';
 import { momentsQueryOptions } from '@apps/helm/queries/momentQueries';
-import { isOwnEvent } from '@apps/helm/utils/synced';
+import { isOutsideEvent } from '@apps/helm/utils/synced';
 import { selectLearnLater } from '@apps/helm/store/selectors/researchSelectors';
 import type { HelmView } from '@apps/helm/types';
 import {
@@ -153,7 +153,7 @@ function SearchScreen({
       projects,
       procedures,
       media,
-      synced: synced.filter(isOwnEvent),
+      synced: synced.filter(isOutsideEvent),
     }),
     [
       who,

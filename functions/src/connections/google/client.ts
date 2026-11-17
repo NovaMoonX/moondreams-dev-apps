@@ -22,6 +22,7 @@ const RATE_LIMIT_REASONS = [
   'rateLimitExceeded',
   'userRateLimitExceeded',
   'quotaExceeded',
+  'dailyLimitExceeded',
 ];
 
 export const readGoogleReason = (body: unknown): string | null => {
