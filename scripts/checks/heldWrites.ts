@@ -179,6 +179,30 @@ assert.deepEqual(
   'a create taken back before the list shows it stays gone',
 );
 
+const trimmed = addHeldWrites(
+  [
+    hold({ id: 'a', cents: 9, meta: { a: 2, b: 2 } }, 'a', 't1', null, [
+      'cents',
+      'meta',
+    ]),
+  ],
+  [
+    hold({ id: 'a', cents: 1, meta: { a: 2, b: 2 } }, 'a', 't2', null, [
+      'cents',
+    ]),
+  ],
+);
+assert.deepEqual(
+  trimmed[0].fields,
+  ['meta'],
+  'an older hold keeps only the fields it alone wrote',
+);
+assert.equal(
+  trimmed[0].item?.cents,
+  1,
+  'and its item carries the newer value of a field taken over, so a list filtering on it reads it right',
+);
+
 const overlapping = [
   hold({ id: 'a', cents: 9, meta: { a: 1, b: 1 } }, 'a', 't1', null, ['cents']),
   hold({ id: 'a', cents: 1, meta: { a: 5, b: 5 } }, 'a', 't2', null, ['meta']),

@@ -112,13 +112,13 @@ export function applyHeldWrites<T>(
 
 /**
  * A write's holds join the others in order. A newer hold takes over the fields it writes from a record's older holds,
- * so an Undo that puts a field back never leaves the older value showing; an older hold keeps only the fields it alone wrote.
+ * so an Undo that puts a field back never leaves the older value showing; an older hold keeps only the fields it alone wrote, its item carrying the newer values.
  */
 export const addHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   added: readonly HeldWrite<T>[],
 ): HeldWrite<T>[] => {
-  const kept = held.flatMap((hold) => {
+  const kept = held.flatMap((hold): HeldWrite<T>[] => {
     const newer = added.filter((entry) => entry.id === hold.id);
     if (newer.length === 0) return [hold];
     if (newer.some((entry) => entry.token === hold.token)) return [];
@@ -128,9 +128,16 @@ export const addHeldWrites = <T>(
     const taken = new Set(newer.flatMap((entry) => entry.fields));
     const fields = hold.fields.filter((field) => !taken.has(field));
     if (fields.length === 0) return [];
+    const item = newer.reduce<T>(
+      (sum, entry) => ({
+        ...sum,
+        ...(pickFields(entry.item, entry.fields) as T),
+      }),
+      hold.item,
+    );
     return [
       {
-        ...toHeldWrite(hold.id, hold.item, fields, hold.token),
+        ...toHeldWrite(hold.id, item, fields, hold.token),
         settledAt: hold.settledAt,
       },
     ];
