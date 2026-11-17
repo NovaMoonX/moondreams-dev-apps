@@ -7,6 +7,7 @@ import AimLengthSheet from '@apps/helm/components/dayCard/AimLengthSheet';
 import AimRows from '@apps/helm/components/dayCard/AimRows';
 import FoldedLine from '@apps/helm/components/dayCard/FoldedLine';
 import MorningCard from '@apps/helm/components/dayCard/MorningCard';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import WindDownCard from '@apps/helm/components/dayCard/WindDownCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -35,10 +36,12 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   const { addToast } = useToast();
   const { uid, model, filing } = card;
   const { held, tick, undoTick } = useTaskTicks(uid);
-  const { plan, isReady } = usePlanDay();
+  const { plan, isReady, isFailing } = usePlanDay();
   const [unfolded, setUnfolded] = useState<string | null>(null);
   const [lengthRow, setLengthRow] = useState<AimRow | null>(null);
   const [failedPlanKey, setFailedPlanKey] = useState<string | null>(null);
+  const { showView } = useHelmUrlState();
+  const openToday = () => void showView('today');
   const heldIds = new Set(held.keys());
 
   const todayKey = model?.todayKey ?? '';
@@ -47,6 +50,7 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   const planKey = `${uid}|${todayKey}|${wanted.map((row) => row.taskId).join(',')}`;
   const isPlanDue =
     isReady &&
+    !isFailing &&
     uid !== null &&
     wanted.length > 0 &&
     (mode === 'answered' || mode === 'ask');
@@ -55,8 +59,8 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   useEffect(() => {
     if (!isPlanDue || attempted.has(planKey)) return;
     attempted.add(planKey);
-    void plan(todayKey).then((isPlanned) => {
-      if (!isPlanned) setFailedPlanKey(planKey);
+    void plan(todayKey, false, true).then((result) => {
+      if (result === 'failed') setFailedPlanKey(planKey);
     });
   }, [isPlanDue, planKey, plan, todayKey]);
 
@@ -108,6 +112,7 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
       onTick={tick}
       onUndoTick={(taskId) => void undoTick(taskId)}
       onFixLength={setLengthRow}
+      onOpenToday={openToday}
     />
   );
   const sheet = lengthRow && (
@@ -171,6 +176,7 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
           onTick={tick}
           onUndoTick={(taskId) => void undoTick(taskId)}
           onFixLength={setLengthRow}
+          onOpenToday={openToday}
           onRetryPlan={() => {
             attempted.delete(planKey);
             setFailedPlanKey(null);
@@ -264,7 +270,9 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
               result: row.result,
               reason,
             }),
-          HELM_COPY.windDownReasonSaved,
+          HELM_COPY.windDownReasonSaved(
+            reason ? HELM_COPY.dayAimsStruggle[reason] : null,
+          ),
         )
       }
       onFinish={() =>

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type RefObject } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -18,6 +18,27 @@ import {
 } from '@apps/helm/utils/sessions';
 
 const TURN_ESTIMATED_HEIGHT = 88;
+const HOLD_WINDOW_MS = 5000;
+
+const readRestTop = (
+  element: HTMLElement | null,
+  scroller: HTMLElement | null,
+) => {
+  if (!element) return 0;
+  const box = element.getBoundingClientRect();
+  const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
+  const viewHeight = scroller ? scroller.clientHeight : window.innerHeight;
+  const dock =
+    parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        '--helm-composer-h',
+      ),
+    ) || 0;
+  const current = scroller ? scroller.scrollTop : window.scrollY;
+  const top = current + box.top - viewTop;
+  const endClear = current + box.bottom - viewTop - (viewHeight - dock - 16);
+  return Math.max(0, Math.min(top, endClear));
+};
 
 interface ConversationThreadProps {
   sessions: Session[];
@@ -31,7 +52,8 @@ interface ConversationThreadProps {
   /** Sessions that started before this moment fold too, the newest included (a fresh start, or today's midnight with Start each day fresh on). */
   freshFrom?: number;
   /** Something above the thread is asking the person first (home's day card): the page rests at its top until a new turn arrives or the person moves. */
-  holdsTop?: boolean;
+  /** While the page opens, rest on this element with its end clear of the dock instead of following the newest turn. */
+  holdsOn?: RefObject<HTMLElement | null> | null;
 }
 
 type Place = { id: string; top: number } | null;
@@ -146,7 +168,7 @@ function ConversationThread({
   loadsEarlier,
   foldsBefore = null,
   freshFrom = 0,
-  holdsTop = false,
+  holdsOn = null,
 }: ConversationThreadProps) {
   const { user } = useAuth();
   const [isUnfolded, setIsUnfolded] = useState(false);
@@ -164,15 +186,19 @@ function ConversationThread({
   // The newest turn stays in view while earlier sessions mount above it, until the person scrolls or types.
   const hasMoved = useRef(false);
   const heldFor = useRef<string | null>(null);
+  const firstSeenAt = useRef<number | null>(null);
   useEffect(() => {
     if (!latestId) return;
     const scroller = getScroller(root.current, scroll);
-    // Held only over the turn it was first shown with and only until the person moves, so a card that appears later never jumps the page.
+    firstSeenAt.current ??= performance.now();
+    // Held only while the page is still opening (the card may load just after the turns), over the turn it was first shown with and until the person moves, so a card that appears later never jumps the page.
+    const isOpening = performance.now() - firstSeenAt.current < HOLD_WINDOW_MS;
     const hold = {
       isOn:
-        holdsTop &&
+        holdsOn !== null &&
         !hasMoved.current &&
-        (heldFor.current === null || heldFor.current === latestId),
+        (heldFor.current === latestId ||
+          (heldFor.current === null && isOpening)),
     };
     if (hold.isOn) heldFor.current = latestId;
     isFollowing.current = !hold.isOn;
@@ -184,8 +210,9 @@ function ConversationThread({
     };
     const toBottom = () => {
       if (hold.isOn) {
-        if (scroller) scroller.scrollTo({ top: 0 });
-        else window.scrollTo({ top: 0 });
+        const top = readRestTop(holdsOn?.current ?? null, scroller);
+        if (scroller) scroller.scrollTo({ top });
+        else window.scrollTo({ top });
         return;
       }
       if (!isFollowing.current) {
@@ -217,7 +244,7 @@ function ConversationThread({
       target.removeEventListener('scroll', keepPlace);
       intents.forEach((name) => window.removeEventListener(name, stop));
     };
-  }, [latestId, scroll, holdsTop]);
+  }, [latestId, scroll, holdsOn]);
 
   if (sessions.length === 0) return null;
 

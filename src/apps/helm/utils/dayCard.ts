@@ -68,6 +68,7 @@ export function readAimResult(input: {
 
 export interface WindDownCounts {
   done: number;
+  left: number;
   tomorrow: number;
   later: number;
   dropped: number;
@@ -88,9 +89,9 @@ export const readWindDownCounts = (
       if (choice === 'later') return { ...counts, later: counts.later + 1 };
       return choice === 'dropped'
         ? { ...counts, dropped: counts.dropped + 1 }
-        : counts;
+        : { ...counts, left: counts.left + 1 };
     },
-    { done: 0, tomorrow: 0, later: 0, dropped: 0 },
+    { done: 0, tomorrow: 0, later: 0, dropped: 0, left: 0 },
   );
 
 /** "30 min", "1h", "1h 30m": an aim's length as it is said. */

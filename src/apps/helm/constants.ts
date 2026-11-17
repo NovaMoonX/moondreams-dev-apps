@@ -2016,7 +2016,7 @@ export const HELM_COPY = {
   planSuggestedSummary: (count: number, day: string) =>
     `Suggested ${count} ${count === 1 ? 'task' : 'tasks'} for ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
   planFailed: "Couldn't plan the day. Try again.",
-  todayAimMark: 'Aim for today',
+  todayAimMark: 'Your aim',
   dayAimsQuestion: 'What do you want to get done today?',
   dayAimsField: 'What you want to get done today',
   dayAimsPlaceholder: 'Say it or type it',
@@ -2030,6 +2030,7 @@ export const HELM_COPY = {
   dayAimsLeftOff: (title: string) => `${title} stays off today.`,
   dayAimsAnyTime: 'Any time',
   dayAimsNoFit: "Doesn't fit today",
+  dayAimsMoveOnToday: 'Make room on Today',
   dayAimsGuess: (length: string) => `about ${length}?`,
   dayAimsFixLength: (title: string) => `Set how long ${title} takes`,
   dayAimsLengthTitle: 'How long will it take?',
@@ -2058,31 +2059,37 @@ export const HELM_COPY = {
   windDownLater: 'Later',
   windDownDrop: 'Drop it',
   windDownWhy: 'Why?',
+  windDownReasonChosen: (reason: string) => `Why: ${reason}`,
   windDownFinish: 'Done',
   windDownChose: (title: string, choice: 'tomorrow' | 'later' | 'dropped') =>
     choice === 'tomorrow'
       ? `${title} moves to tomorrow.`
       : choice === 'later'
-        ? `${title} goes back to later.`
+        ? `${title} moved to later.`
         : `Dropped ${title}. The task stays.`,
-  windDownReasonSaved: 'Noted.',
+  windDownReasonSaved: (reason: string | null) =>
+    reason ? `Noted: ${reason.toLowerCase()}.` : 'Reason cleared.',
   windDownSummary: (counts: {
     done: number;
     tomorrow: number;
     later: number;
     dropped: number;
+    left: number;
   }) => {
     const parts = [
       counts.done > 0 ? `${counts.done} done` : null,
       counts.tomorrow > 0 ? `${counts.tomorrow} to tomorrow` : null,
       counts.later > 0 ? `${counts.later} for later` : null,
       counts.dropped > 0 ? `${counts.dropped} dropped` : null,
+      counts.left > 0 ? `${counts.left} left as they were` : null,
     ].filter((part): part is string => part !== null);
     return parts.length > 0
       ? `Wound down: ${parts.join(', ')}.`
       : 'Wound down.';
   },
   windDownReview: 'Show how the day wound down',
+  windDownLeft: 'Left as it was',
+  windDownChange: (title: string) => `Change ${title}`,
   windDownEmpty: 'Nothing left for today.',
   planNowOverlaps: (title: string) => `Now overlaps ${title}`,
   planKeepOverlap: 'Keep it as it is',

@@ -305,7 +305,7 @@ def main():
         check(f'learn later rules leave an asked item alone [{a}]', commit(tok, [put(rk, dict(research, status='ready', reservedCents=0, preparedAt=NOW, notNowStreak=1))]), False)
     check('research read at another uid [o]', get(f'apps/helm/users/{x_uid}/research/r', o_tok), False)
 
-    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection and a connection are the owner's alone, like a task.
+    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection, a day's aims and a connection are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     projectDoc = dict(status='active', targetDate=None, whoRoles={}, createdBy='person', createdAt=NOW, sealed=SEAL)
@@ -317,8 +317,9 @@ def main():
     observationDoc = dict(subject=dict(collection='habits', id='habit-1'), dayKey='2030-01-01', at=NOW, source='turn', sourceKeys=['captures/capture-1'], isCare=False, writtenBy='turn', createdAt=NOW, privacy='ordinary', sealed=SEAL)
     reflectionDoc = dict(dayKey='2030-01-01', reflectionId='r1', candidateCount=1, seenAt=None, sourceKeys=['observations/observation-1'], createdAt=NOW, privacy='ordinary', sealed=SEAL)
     scheduledActionDoc = dict(status='active', endedBy=None, repeat='FREQ=WEEKLY;BYDAY=SU', startsOn='2030-01-06', time='18:00', timeZone=None, skipped=[], moved={}, nextRunAt=NOW, nextRunKey='2030-01-06', splitFromId=None, kind='commands', allowed=['createTask'], needsApproval=False, lastRunAt=None, lastRunCaptureId=None, lastRunDueAt=None, lastOutcome=None, lastFailReason=None, pausedFrom=None, pausedUntil=None, createdBy='person', sourceCaptureId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    dayAimsDoc = dict(date=1893456000000, state='open', windDownState='waiting', lookAt=None, rolledAt=None, sealed=SEAL)
     connectionDoc = dict(whoIds=['who-1', 'who-2'], kind='family', source='page', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
-    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed'), ('scheduledActions', scheduledActionDoc, 'status', 'paused')):
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed'), ('scheduledActions', scheduledActionDoc, 'status', 'paused'), ('dayAims', dayAimsDoc, 'state', 'dismissed')):
         dk = f'{path}/{name}/{name}-1'
         for a, tok in actors.items():
             admin([put(dk, doc)])

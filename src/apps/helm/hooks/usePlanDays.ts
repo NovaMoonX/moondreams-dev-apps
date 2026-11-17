@@ -160,6 +160,8 @@ export function usePlanSources(nowMinute: number) {
 const attempted = new Set<string>();
 
 /** Plans one day now, answering whether it was written: the planner's slots, reasons and snapshot are written in one batch. Never a past day, and nothing while the calendar can't be read, since a plan made then would ignore it. `isRestOverridden` plans a rest day anyway. */
+type PlanResult = 'planned' | 'skipped' | 'failed';
+
 export function usePlanDay() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -176,10 +178,14 @@ export function usePlanDay() {
   const isFailing = isCalendarHeld(grants);
 
   const plan = useCallback(
-    async (dayKey: string, isRestOverridden = false) => {
+    async (
+      dayKey: string,
+      isRestOverridden = false,
+      isQuiet = false,
+    ): Promise<PlanResult> => {
       const sources = readPlanSources(grants);
-      if (!uid || !sources || dayKey < sources.todayKey) return false;
-      if (isCalendarHeld(grants)) return false;
+      if (!uid || !sources || dayKey < sources.todayKey) return 'skipped';
+      if (isCalendarHeld(grants)) return 'skipped';
       try {
         const encryption = await getHelmEncryption(uid);
         await generatePlan(
@@ -190,11 +196,11 @@ export function usePlanDay() {
           formatDayWord(dayKey, sources.todayKey),
           isRestOverridden ? Date.now() : null,
         );
-        return true;
+        return 'planned';
       } catch (error) {
-        console.error('Helm day was not planned', error);
-        addToast({ title: HELM_COPY.planFailed, type: 'error' });
-        return false;
+        console.error('Day was not planned', error);
+        if (!isQuiet) addToast({ title: HELM_COPY.planFailed, type: 'error' });
+        return 'failed';
       }
     },
     [uid, grants, addToast],

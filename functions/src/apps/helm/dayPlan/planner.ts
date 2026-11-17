@@ -147,29 +147,29 @@ export function guessDuration(
   );
 }
 
-/** The line over a day's aims, from the planner's result: which don't fit, and what would have to move. */
+/** The line over a day's aims, from the planner's result: which don't fit, and what would have to move; null when they all fit. */
 export function describeFit(
   aimTitles: Record<string, string>,
   unplacedIds: string[],
   blockers: Record<string, FitBlocker | null> = {},
-): string {
+): string | null {
   const [firstId] = unplacedIds;
-  if (firstId === undefined) return 'These fit.';
+  if (firstId === undefined) return null;
   const name = aimTitles[firstId] ?? 'One';
   const subject =
     unplacedIds.length > 1
       ? `“${name}” and ${unplacedIds.length - 1} more`
       : `“${name}”`;
-  const blocker = blockers[firstId] ?? null;
+  const blocker = unplacedIds.length === 1 ? (blockers[firstId] ?? null) : null;
   const unless = !blocker
     ? ''
     : blocker.kind === 'event'
       ? ` unless you move “${blocker.title}”`
       : ' unless you move something you kept';
-  const lead =
-    unplacedIds.length < Object.keys(aimTitles).length ? 'These fit. ' : '';
   const verb = unless ? "doesn't today" : "doesn't fit today";
-  return `${lead}${subject} ${unplacedIds.length > 1 ? verb.replace("doesn't", "don't") : verb}${unless}.`;
+  const rest =
+    unplacedIds.length < Object.keys(aimTitles).length ? ' The rest fit.' : '';
+  return `${subject} ${unplacedIds.length > 1 ? verb.replace("doesn't", "don't") : verb}${unless}.${rest}`;
 }
 
 const getObstacles = (

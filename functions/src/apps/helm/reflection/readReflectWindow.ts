@@ -1,5 +1,6 @@
 import type {
   DocumentData,
+  DocumentSnapshot,
   Firestore,
   Query,
   QuerySnapshot,
@@ -16,13 +17,18 @@ import {
   type LiveHabit,
 } from '../habitStore.js';
 import { openForHelm, type HelmKey } from '../helmKey.js';
-import { toPersonRecord } from '../nomos/contextPeople.js';
+import { toPersonRecord, toPrivateMark } from '../nomos/contextPeople.js';
 import {
   OBSERVATION_TAGS,
   STRUGGLING_TAGS,
   type ObservationTag,
 } from '../nomos/said.js';
-import { readPrivacy, type PrivacyClass } from '../privacy.js';
+import {
+  isPrivateInEffect,
+  readPrivacy,
+  readPrivacyFacts,
+  type PrivacyClass,
+} from '../privacy.js';
 
 export const WINDOW_DAYS = 14;
 export const MAX_OBSERVATIONS = 300;
@@ -155,23 +161,55 @@ async function readWindDowns(
     0,
     MAX_TASKS_READ,
   );
+  // getAll reads by id; a transaction `read` only takes queries.
   const tasks =
     taskIds.length === 0
       ? []
       : await firestore.getAll(
           ...taskIds.map((id) => firestore.doc(`${base}/tasks/${id}`)),
         );
+  const projectIds = [
+    ...new Set(
+      tasks.flatMap((task) => {
+        const id: unknown = task.get('projectId');
+        return typeof id === 'string' ? [id] : [];
+      }),
+    ),
+  ];
+  const projects =
+    projectIds.length === 0
+      ? []
+      : await firestore.getAll(
+          ...projectIds.map((id) => firestore.doc(`${base}/projects/${id}`)),
+        );
+  const toFacts = (snap: DocumentSnapshot) => {
+    try {
+      const words = openForHelm(key, snap.get('sealed') as SealedPayload);
+      return readPrivacyFacts({
+        privateMark: toPrivateMark(words.privateMark),
+        isCare: snap.get('isCare') === true || words.isCare === true,
+      });
+    } catch {
+      return null;
+    }
+  };
+  const privateProjects = new Set(
+    projects.flatMap((project) =>
+      project.exists &&
+      (project.get('privacy') === 'private' ||
+        isPrivateInEffect(
+          toFacts(project) ?? readPrivacyFacts({ isCare: true }),
+        ))
+        ? [project.id]
+        : [],
+    ),
+  );
   const isShareable = new Set(
     tasks.flatMap((task) => {
       if (!task.exists || task.get('privacy') === 'private') return [];
-      try {
-        const words = openForHelm(key, task.get('sealed') as SealedPayload);
-        return words.privateMark === 'care' || words.privateMark === 'person'
-          ? []
-          : [task.id];
-      } catch {
-        return [];
-      }
+      if (privateProjects.has(String(task.get('projectId') ?? ''))) return [];
+      const facts = toFacts(task);
+      return facts && !isPrivateInEffect(facts) ? [task.id] : [];
     }),
   );
   return reasons

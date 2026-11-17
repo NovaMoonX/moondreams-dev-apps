@@ -1,6 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { TriangleAlert } from 'lucide-react';
+import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import TickMark from '@/components/TickMark';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
@@ -78,6 +78,7 @@ interface AimRowsProps {
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
   onFixLength: (row: AimRow) => void;
+  onOpenToday: () => void;
 }
 
 /** The day's aims with their times and lengths, under the line that says whether they fit. Breaks between them are never drawn. */
@@ -89,6 +90,7 @@ function AimRows({
   onTick,
   onUndoTick,
   onFixLength,
+  onOpenToday,
 }: AimRowsProps) {
   if (rows.length === 0) return null;
   return (
@@ -129,16 +131,27 @@ function AimRows({
                   </span>
                   <AimLength row={row} onFix={onFixLength} />
                 </span>
-                {row.overlap && !isDone && (
-                  <span className='mt-1 flex items-start gap-1.5 text-[13px] text-[var(--helm-overdue)]'>
+                {(row.overlap || row.doesntFit) && !isDone && (
+                  <Button
+                    type='button'
+                    variant='base'
+                    className='relative mt-1 flex h-auto items-start gap-1.5 p-0 text-left text-[13px] text-[var(--helm-overdue)] after:absolute after:inset-x-0 after:-inset-y-2.5'
+                    onClick={onOpenToday}
+                  >
                     <TriangleAlert
                       className='mt-0.5 size-3.5 shrink-0'
                       aria-hidden='true'
                     />
                     <span className='min-w-0 break-words'>
-                      {HELM_COPY.planNowOverlaps(row.overlap.title)}
+                      {row.overlap
+                        ? HELM_COPY.planNowOverlaps(row.overlap.title)
+                        : HELM_COPY.dayAimsMoveOnToday}
                     </span>
-                  </span>
+                    <ChevronRight
+                      className='mt-0.5 size-3.5 shrink-0'
+                      aria-hidden='true'
+                    />
+                  </Button>
                 )}
               </span>
             </li>

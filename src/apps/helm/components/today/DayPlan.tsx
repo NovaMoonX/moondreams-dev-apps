@@ -300,10 +300,10 @@ function DayPlan({
         task={task}
         timeLine={
           [
+            aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
             slot.startAt !== null && slot.endAt !== null
               ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
               : null,
-            aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
           ]
             .filter((part): part is string => part !== null)
             .join(' · ') || null
@@ -330,10 +330,10 @@ function DayPlan({
         key={id}
         title={task.isUnreadable ? HELM_COPY.unreadable : task.title}
         detail={[
+          aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
           slot.startAt !== null && slot.endAt !== null
             ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
             : null,
-          aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
           reasonOf(id),
         ]
           .filter((part): part is string => part !== null)

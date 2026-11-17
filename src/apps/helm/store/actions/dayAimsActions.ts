@@ -39,7 +39,7 @@ import {
 type WindDownEntry = DayAimsSealed['windDown'][string];
 type Readable = Pick<DayAims, 'state' | 'windDownState'>;
 
-/** What the device keeps of one write so its Undo can put back exactly that: it runs only while the document still holds what the write left. */
+/** What the device keeps of one write so its Undo can put back exactly that: an Undo that would overwrite a later change (a task's length changed since) does nothing. */
 export interface DayAimsChange {
   write: Promise<void>;
   undo: () => Promise<void>;
@@ -160,7 +160,7 @@ export async function bringAimToToday(
   },
 ): Promise<DayAimsChange> {
   const { todayKey, fromKey, taskId, hasLength } = input;
-  const { write } = await editDay({
+  const { write, before } = await editDay({
     uid,
     dayKey: todayKey,
     change: (payload) =>
@@ -184,6 +184,9 @@ export async function bringAimToToday(
             ],
           },
   });
+  if (before.payload.aims.some((aim) => aim.taskId === taskId)) {
+    return { write, undo: async () => {} };
+  }
   return {
     write,
     undo: async () => {
@@ -290,6 +293,14 @@ export async function fixAimLength(
   return {
     write,
     undo: async () => {
+      const taskRef = doc(
+        collection(db, 'apps', 'helm', 'users', uid, 'tasks'),
+        taskId,
+      );
+      const current = await getDocFromCache(taskRef)
+        .catch(() => getDoc(taskRef))
+        .catch(() => null);
+      if (current?.data()?.durationMinutes !== minutes) return;
       await setLength(previousMinutes, wasGuess);
     },
   };
@@ -336,7 +347,7 @@ export async function setWindDownEntry(
   };
 }
 
-/** "Done" on the wind-down: the day is wound down, and each aim's result as the person saw it is kept with it. Undo reopens the card. */
+/** "Done" on the wind-down: the day is wound down, and each aim's result as the person saw it is kept with it. Undo reopens the card and takes back the entries this wrote. */
 export async function finishWindDown(
   uid: string,
   input: { dayKey: string; results: Record<string, WindDownEntry['result']> },
@@ -360,13 +371,23 @@ export async function finishWindDown(
     readable: { windDownState: 'done' },
   });
   const previous = before.readable?.windDownState ?? 'ready';
+  const added = Object.keys(results).filter(
+    (taskId) => !(taskId in before.payload.windDown),
+  );
   return {
     write,
     undo: async () => {
       await editDay({
         uid,
         dayKey,
-        change: (payload) => payload,
+        change: (payload) => ({
+          ...payload,
+          windDown: Object.fromEntries(
+            Object.entries(payload.windDown).filter(
+              ([taskId]) => !added.includes(taskId),
+            ),
+          ),
+        }),
         readable: { windDownState: previous === 'done' ? 'ready' : previous },
       });
     },

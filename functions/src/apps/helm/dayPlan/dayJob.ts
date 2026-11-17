@@ -338,3 +338,31 @@ export function readNextLookAt(input: {
   ];
   return times.length > 0 ? Math.min(...times) : clock.nextStartAt;
 }
+
+/** The next look after a pass: whatever the day still needs, and the day's start while a rollover waits for it. A day with no aims asks for nothing else. */
+export function readPassLookAt(input: {
+  now: number;
+  clock: DayClock;
+  windDownState: string;
+  aimCount: number;
+  isPlanned: boolean;
+  isRolloverOwed: boolean;
+}): number | null {
+  const { now, clock } = input;
+  const owed =
+    input.isRolloverOwed && now < clock.startAt ? [clock.startAt] : [];
+  const day =
+    input.aimCount > 0
+      ? [
+          readNextLookAt({
+            now,
+            clock,
+            windDownState: input.windDownState,
+            hasAims: true,
+            isPlanned: input.isPlanned,
+          }),
+        ]
+      : [];
+  const times = [...owed, ...day];
+  return times.length > 0 ? Math.min(...times) : null;
+}

@@ -336,6 +336,7 @@ function HomeSurface({
     };
   }, []);
   const composerBox = useRef<HTMLDivElement>(null);
+  const dayCardBox = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = composerBox.current;
     if (!element) return;
@@ -387,7 +388,11 @@ function HomeSurface({
         {keyStatus === 'ready' && <QuietLines now={now} />}
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
-        {keyStatus === 'ready' && <DayCard card={dayCard} />}
+        {keyStatus === 'ready' && (
+          <div ref={dayCardBox}>
+            <DayCard card={dayCard} />
+          </div>
+        )}
         {isOpening && (
           <div
             className='flex flex-1 flex-col items-center justify-center gap-4 pb-16'
@@ -420,7 +425,9 @@ function HomeSurface({
             loadsEarlier
             foldsBefore={todayStart}
             freshFrom={homeFrom}
-            holdsTop={keyStatus === 'ready' && isDayCardAsking}
+            holdsOn={
+              keyStatus === 'ready' && isDayCardAsking ? dayCardBox : null
+            }
           />
         )}
         {!hasFreshTurns && !isOpening && !isWaitingOnKey && (

@@ -29,8 +29,13 @@ import {
   planRollover,
   readAimsView,
   readDayClock,
+  readPassLookAt,
   type AimsView,
 } from '../../functions/src/apps/helm/dayPlan/dayJob.ts';
+import {
+  buildExecution,
+  planWrites,
+} from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import { planDayAims } from '../../functions/src/apps/helm/nomos/planDayAims.ts';
 import { buildDesired } from '../../functions/src/apps/helm/calendarSync/plan.ts';
 
@@ -207,9 +212,9 @@ test('an aim that does not fit is returned and worded', () => {
   const titles = { 'call-mom': 'Call Mom', gym: 'Gym' };
   assert.equal(
     describeFit(titles, result.unplaced, result.blockers),
-    "These fit. “Gym” doesn't today unless you move “Team call”.",
+    "“Gym” doesn't today unless you move “Team call”. The rest fit.",
   );
-  assert.equal(describeFit(titles, [], {}), 'These fit.');
+  assert.equal(describeFit(titles, [], {}), null);
 });
 
 test('an aim nothing could make room for is not blamed on a move', () => {
@@ -338,6 +343,26 @@ test('rollover brings an open aim once and never twice', () => {
   assert.equal(
     isRollable({ dayKey: '2026-10-01', rolledAt: null }, DAY),
     false,
+  );
+});
+
+test('a pass at 00:15 with today empty and yesterday unrolled asks again at the day start', () => {
+  const clock = readDayClock(at('00:15'), profile);
+  const input = {
+    now: at('00:15'),
+    clock,
+    windDownState: 'waiting',
+    aimCount: 0,
+    isPlanned: false,
+  };
+  assert.equal(
+    readPassLookAt({ ...input, isRolloverOwed: true }),
+    clock.startAt,
+  );
+  assert.equal(readPassLookAt({ ...input, isRolloverOwed: false }), null);
+  assert.equal(
+    readPassLookAt({ ...input, aimCount: 2, isRolloverOwed: true }),
+    clock.startAt,
   );
 });
 
@@ -513,11 +538,23 @@ test('the folded line and the wound-down line read as written', () => {
   assert.equal(foldedAimsLine(3, 2), 'Today: 3 aims · 2 planned');
   assert.equal(foldedAimsLine(1, 1), 'Today: 1 aim · 1 planned');
   assert.equal(
-    HELM_COPY.windDownSummary({ done: 2, tomorrow: 1, later: 0, dropped: 1 }),
-    'Wound down: 2 done, 1 to tomorrow, 1 dropped.',
+    HELM_COPY.windDownSummary({
+      done: 2,
+      tomorrow: 1,
+      later: 0,
+      dropped: 1,
+      left: 2,
+    }),
+    'Wound down: 2 done, 1 to tomorrow, 1 dropped, 2 left as they were.',
   );
   assert.equal(
-    HELM_COPY.windDownSummary({ done: 0, tomorrow: 0, later: 0, dropped: 0 }),
+    HELM_COPY.windDownSummary({
+      done: 0,
+      tomorrow: 0,
+      later: 0,
+      dropped: 0,
+      left: 0,
+    }),
     'Wound down.',
   );
 });
@@ -547,6 +584,7 @@ test('the wind-down counts what each aim became', () => {
       tomorrow: 1,
       later: 0,
       dropped: 1,
+      left: 1,
     },
   );
   assert.deepEqual(readAimTaskIds(day), ['a', 'd']);
@@ -595,6 +633,126 @@ test("yesterday's undone aims are listed until something answers them", () => {
     ),
     ['b'],
   );
+});
+
+const makeAims = (
+  titles: string[],
+  linked: string[] = [],
+  extra: { isPrivate?: boolean } = {},
+) => {
+  const state = { n: 0 };
+  const seal = (fields: Record<string, unknown>) => fields as never;
+  const created = titles.map((title, at) => ({
+    kind: 'createTask',
+    ref: `$new${at + 1}`,
+    title,
+    due: null,
+    isUrgent: false,
+    whoRefs: [],
+    placeRefs: [],
+    projectRef: null,
+    questions: [],
+    meeting: null,
+    isAim: true,
+  }));
+  const links = linked.map((title) => ({
+    kind: 'updateTask',
+    taskId: `old-${title}`,
+    title: null,
+    due: null,
+    hasDue: false,
+    isUrgent: null,
+    whoRefs: [],
+    placeRefs: [],
+    isAim: true,
+  }));
+  const privates = extra.isPrivate
+    ? [{ kind: 'setPrivate', taskId: '$new1', isPrivate: true }]
+    : [];
+  const commands = [...created, ...links, ...privates] as never[];
+  const existing = new Map(
+    linked.map((title) => [
+      `old-${title}`,
+      {
+        status: 'open' as const,
+        due: null,
+        isUrgent: false,
+        title,
+        whoIds: [],
+        placeIds: [],
+        sealed: {},
+      },
+    ]),
+  );
+  const written = planWrites({
+    commands,
+    existing,
+    captureId: 'c1',
+    executionId: 'e1',
+    now: 5000,
+    seal,
+    newId: () => `id${++state.n}`,
+  });
+  const aims = planDayAims({
+    dayKey: DAY,
+    commands,
+    taskIdByRef: written.taskIdByRef,
+    existing,
+    current: null,
+    newAimId: () => `aim${++state.n}`,
+    seal,
+  });
+  return { written, aims, commands, seal };
+};
+
+test('the reply to filed aims names them, new and linked', () => {
+  assert.equal(
+    makeAims(['Finish the deck', 'Call Mom', 'Gym']).aims.line,
+    'Added 3 for today: Finish the deck, Call Mom, Gym.',
+  );
+  assert.equal(makeAims(['Gym']).aims.line, 'Added 1 for today: Gym.');
+  assert.equal(makeAims([], ['Call Mom']).aims.line, 'Linked to Call Mom.');
+  assert.equal(
+    makeAims([], ['Call Mom', 'Gym']).aims.line,
+    'Linked to Call Mom and Gym.',
+  );
+  assert.equal(
+    makeAims(['A', 'B'], ['C']).aims.line,
+    'Added 2 for today: A, B. Linked to C.',
+  );
+  assert.equal(
+    makeAims(['A', 'B', 'C', 'D', 'E']).aims.line,
+    'Added 5 for today: A, B, C and 2 more.',
+  );
+  assert.equal(
+    makeAims(['A', 'B'], [], { isPrivate: true }).aims.line,
+    'Added 2 for today.',
+  );
+});
+
+test('the summary and spoken reply of an aims turn say the aims, not task counts', () => {
+  const { written, aims, commands, seal } = makeAims([
+    'Finish the deck',
+    'Call Mom',
+    'Gym',
+  ]);
+  const execution = buildExecution(written, {
+    commands,
+    captureId: 'c1',
+    now: 5000,
+    seal,
+    inputMode: 'voice',
+    aims,
+  }) as { sealed: { summary: string; spoken: string } };
+  assert.equal(
+    execution.sealed.summary,
+    'Added 3 for today: Finish the deck, Call Mom, Gym.',
+  );
+  assert.equal(
+    execution.sealed.spoken,
+    'Added 3 for today: Finish the deck, Call Mom, Gym.',
+  );
+  assert.ok(!/made 3 tasks/i.test(execution.sealed.summary));
 });
 
 const failures = tests.flatMap(([name, body]) => {

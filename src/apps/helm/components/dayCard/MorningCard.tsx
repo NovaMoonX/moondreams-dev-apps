@@ -27,6 +27,7 @@ interface MorningCardProps {
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
   onFixLength: (row: AimRow) => void;
+  onOpenToday: () => void;
   onRetryPlan: () => void;
 }
 
@@ -46,6 +47,7 @@ function MorningCard({
   onTick,
   onUndoTick,
   onFixLength,
+  onOpenToday,
   onRetryPlan,
 }: MorningCardProps) {
   const [text, setText] = useState('');
@@ -84,6 +86,7 @@ function MorningCard({
         onTick={onTick}
         onUndoTick={onUndoTick}
         onFixLength={onFixLength}
+        onOpenToday={onOpenToday}
       />
       {isPlanFailed && (
         <InlineNotice tone='warning'>
@@ -114,13 +117,19 @@ function MorningCard({
                   )}
                 </p>
                 <div className='flex items-center justify-between gap-3'>
-                  <Button type='button' size='sm' onClick={() => onBring(row)}>
+                  <Button
+                    type='button'
+                    size='sm'
+                    className='relative after:absolute after:-inset-x-1 after:-inset-y-1.5'
+                    onClick={() => onBring(row)}
+                  >
                     {HELM_COPY.dayAimsBring}
                   </Button>
                   <Button
                     type='button'
                     variant='tertiary'
                     size='sm'
+                    className='relative after:absolute after:-inset-x-1 after:-inset-y-1.5'
                     onClick={() => onLeaveOff(row)}
                   >
                     {HELM_COPY.dayAimsNotToday}

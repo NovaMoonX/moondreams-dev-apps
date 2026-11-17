@@ -141,7 +141,7 @@ const setSyncState = (
     });
   });
 
-/** A synced calendar may have changed under a kept aim, so a person with aims has the day job look soon. */
+/** A synced calendar may have changed under a kept aim, so a person with aims has the day job look soon. Only a pass that changed something asks. */
 const askDayPlan = async (
   firestore: Firestore,
   uid: string,
@@ -180,7 +180,10 @@ export async function syncPerson(
       accountId,
       calendarId,
     });
-    if (report.state === 'ran') await askDayPlan(firestore, uid, profile);
+    const isChanged =
+      report.inserted + report.patched + report.deleted + report.readBack > 0;
+    if (report.state === 'ran' && isChanged)
+      await askDayPlan(firestore, uid, profile);
     return report;
   } finally {
     await releaseLease(firestore, uid);

@@ -5627,6 +5627,7 @@ async function writeResult(
             inputMode: isSpoken ? 'voice' : capture.inputMode,
             timeZone,
             offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
+            aims: dayAimsPlan,
           },
         ),
       });

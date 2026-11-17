@@ -3087,8 +3087,22 @@ export function buildExecution(
     inputMode?: string;
     timeZone?: string;
     offers?: Record<string, unknown>;
+    /** The day's aims filed this turn: their line replaces the made and updated counts they would be worded as. */
+    aims?: {
+      line: string | null;
+      madeCount: number;
+      linkedCount: number;
+    } | null;
   },
 ): Record<string, unknown> {
+  const aims = input.aims?.line ? input.aims : null;
+  const counts = aims
+    ? {
+        ...plan.counts,
+        made: Math.max(0, plan.counts.made - aims.madeCount),
+        updated: Math.max(0, plan.counts.updated - aims.linkedCount),
+      }
+    : plan.counts;
   const created = plan.effectRefs.flatMap((ref, index) => {
     const { written } = plan.effects[index];
     return ref.op === 'create' && ref.collection === 'tasks'
@@ -3103,8 +3117,9 @@ export function buildExecution(
   const { homeLine = null, said = null, extraLines = [] } = input;
   const ack = buildSpokenAck({
     inputMode: input.inputMode,
-    counts: plan.counts,
+    counts,
     messageCount: input.messageCount ?? 1,
+    aimsLine: aims?.line ?? null,
     created,
     timeZone: input.timeZone ?? 'UTC',
     now: input.now,
@@ -3163,40 +3178,46 @@ export function buildExecution(
       abilityOffer: null,
       awayZoneOffer: null,
       ...input.offers,
-      summary: [
-        summarize(plan.counts, input.messageCount),
-        ...plan.kinLines,
-        describeFacts(plan.factCreates.length + plan.factConfirms.length),
-        describeKeyDates(
-          plan.effectRefs.flatMap((ref, position) =>
-            ref.collection === 'keyDates'
-              ? [String(plan.effects[position].written['sealed.title'] ?? '')]
-              : [],
+      summary: withAims(
+        [
+          summarize(counts, input.messageCount),
+          ...plan.kinLines,
+          describeFacts(plan.factCreates.length + plan.factConfirms.length),
+          describeKeyDates(
+            plan.effectRefs.flatMap((ref, position) =>
+              ref.collection === 'keyDates'
+                ? [String(plan.effects[position].written['sealed.title'] ?? '')]
+                : [],
+            ),
           ),
-        ),
-        describeProjects(
-          plan.projectsMade,
-          plan.rolesSet,
-          plan.milestonesAdded,
-        ),
-        describeNotes(plan.notesMade),
-        describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
-        ...plan.fileSummaries,
-        describeTopicChanges(plan.topicLines.length),
-        describeProcedureChanges(
-          plan.procedureCreates.length,
-          plan.procedureVersions.length,
-        ),
-        describeRunChanges(
-          plan.runCreates.length,
-          plan.runTicks.reduce((total, tick) => total + tick.stepIds.length, 0),
-        ),
-        ...plan.notKept,
-        ...extraLines,
-        homeLine,
-      ]
-        .filter(Boolean)
-        .join('. '),
+          describeProjects(
+            plan.projectsMade,
+            plan.rolesSet,
+            plan.milestonesAdded,
+          ),
+          describeNotes(plan.notesMade),
+          describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
+          ...plan.fileSummaries,
+          describeTopicChanges(plan.topicLines.length),
+          describeProcedureChanges(
+            plan.procedureCreates.length,
+            plan.procedureVersions.length,
+          ),
+          describeRunChanges(
+            plan.runCreates.length,
+            plan.runTicks.reduce(
+              (total, tick) => total + tick.stepIds.length,
+              0,
+            ),
+          ),
+          ...plan.notKept,
+          ...extraLines,
+          homeLine,
+        ]
+          .filter(Boolean)
+          .join('. '),
+        aims?.line ?? null,
+      ),
       said: own,
       commands: input.commands,
       effects: plan.effects,
@@ -3222,6 +3243,10 @@ export function buildExecution(
     }),
   };
 }
+
+/** The aims line keeps its own full stop, so it ends the summary rather than joining the others. */
+const withAims = (summary: string, line: string | null) =>
+  [summary, line].filter(Boolean).join(summary ? '. ' : '');
 
 const withQuestion = (ack: string | null, question: string | null) =>
   ack && question ? `${ack} ${question}` : ack;

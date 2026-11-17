@@ -4,6 +4,7 @@ import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
 import { readPartOf } from '../../src/apps/helm/engine/patterns.ts';
 import {
   PART_CLOCKS,
+  describeFit,
   findFreeGaps,
   findOpenings,
   planDay,
@@ -564,6 +565,19 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
       `${part} does not start before ${from}`,
     );
   });
+}
+
+{
+  const titles = { a: 'A', b: 'B', c: 'C' };
+  const blocker = { kind: 'event', title: 'Dentist' } as const;
+  assert.equal(
+    describeFit(titles, ['a'], { a: blocker }),
+    "“A” doesn't today unless you move “Dentist”. The rest fit.",
+  );
+  assert.equal(
+    describeFit(titles, ['a', 'b'], { a: blocker, b: null }),
+    "“A” and 1 more don't fit today. The rest fit.",
+  );
 }
 
 console.log('check:helm-planner: planner rules hold.');

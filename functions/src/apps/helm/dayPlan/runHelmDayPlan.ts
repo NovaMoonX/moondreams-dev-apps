@@ -28,7 +28,7 @@ import {
   planReplan,
   planRollover,
   readDayClock,
-  readNextLookAt,
+  readPassLookAt,
   type BusyEvent,
   type SlotRecord,
 } from './dayJob.js';
@@ -40,6 +40,7 @@ if (getApps().length === 0) {
 
 const MINUTE = 60_000;
 const LEASE = 4 * MINUTE;
+const RETRY_AFTER = 60 * MINUTE;
 const PEOPLE_MAX = 100;
 const AT_ONCE = 5;
 const STOP_STARTING_AFTER = 180_000;
@@ -209,14 +210,11 @@ const readFinished = async (
   });
 };
 
-/** Carries yesterday's unfinished aims into today, once: the source day's `rolledAt` is written in the same transaction as today's aims. */
-async function rollOver(
+const readRollablePast = async (
   firestore: Firestore,
-  key: HelmKey,
   uid: string,
   todayKey: string,
-  now: number,
-): Promise<number> {
+) => {
   const past = (
     await firestore
       .collection(`${userPath(uid)}/dayAims`)
@@ -225,14 +223,25 @@ async function rollOver(
       .limit(1)
       .get()
   ).docs[0];
-  if (
-    !past ||
-    !isRollable(
+  return past &&
+    isRollable(
       { dayKey: past.id, rolledAt: toNumber(past.get('rolledAt')) },
       todayKey,
     )
-  )
-    return 0;
+    ? past
+    : null;
+};
+
+/** Carries yesterday's unfinished aims into today, once: the source day's `rolledAt` is written in the same transaction as today's aims. */
+async function rollOver(
+  firestore: Firestore,
+  key: HelmKey,
+  uid: string,
+  todayKey: string,
+  now: number,
+): Promise<number> {
+  const past = await readRollablePast(firestore, uid, todayKey);
+  if (!past) return 0;
   const fromView = openAimsView(key, past.data());
   const statuses = await readTaskStatuses(
     firestore,
@@ -395,16 +404,17 @@ async function runPerson(
     });
   }
 
-  const lookAt =
-    view.aims.length === 0
-      ? null
-      : readNextLookAt({
-          now,
-          clock,
-          windDownState,
-          hasAims: true,
-          isPlanned,
-        });
+  const isRolloverOwed =
+    now < clock.startAt &&
+    (await readRollablePast(firestore, uid, clock.dayKey)) !== null;
+  const lookAt = readPassLookAt({
+    now,
+    clock,
+    windDownState,
+    aimCount: view.aims.length,
+    isPlanned,
+    isRolloverOwed,
+  });
   await firestore.runTransaction(async (transaction) => {
     const queue = await transaction.get(queueRef);
     const isChanged = toNumber(queue.get('changedAt')) !== seen;
@@ -501,7 +511,10 @@ const runGroups = async (
           });
           await firestore
             .doc(dayQueuePath(uid))
-            .set({ leaseUntil: null }, { merge: true })
+            .set(
+              { leaseUntil: null, lookAt: now + RETRY_AFTER },
+              { merge: true },
+            )
             .catch(() => undefined);
         },
       ),
