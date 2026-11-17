@@ -9,6 +9,7 @@ import {
   addHeldWrites,
   applyHeldWrites,
   dropHeldWrites,
+  patchHeldWrite,
   settleHeldWrites,
   type HeldWrite,
 } from '@/utils/heldWrites';
@@ -113,9 +114,7 @@ export interface RunwayState {
   /** The confirmed day ids the history records were read for, as the selector joins them. */
   historyRecordsFor: string | null;
   historyFailedFor: string | null;
-  /** What the listeners last delivered, before this device's own writes are laid over it. */
   incoming: HeldLists;
-  /** This device's writes shown over the lists until the listeners show them. */
   held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
   deliveredAt: { [K in HeldKind]: number | null };
 }
@@ -204,12 +203,15 @@ const initialState: RunwayState = {
   held: { days: [], records: [], moves: [] },
 };
 
-/** Shows a write's records at once, before the server answers. */
 export const holdWrites = createAction<HeldWritesInput>('runway/holdWrites');
-/** The server accepted the write: a record the listeners show now lets go of its hold. */
 export const settleWrites = createAction<string>('runway/settleWrites');
-/** The write failed: its records go back to what the listeners show. */
 export const dropWrites = createAction<string>('runway/dropWrites');
+// A plain write to a held record shows through the hold, which would otherwise hide Firestore's own local copy.
+export const patchHeld = createAction<{
+  kind: HeldKind;
+  id: string;
+  fields: Record<string, unknown>;
+}>('runway/patchHeld');
 
 export const runwaySlice = createSlice({
   name: 'runway',
@@ -395,6 +397,7 @@ export const runwaySlice = createSlice({
     });
     builder.addCase(settleWrites, (state, action) => {
       HELD_KINDS.forEach((kind) => {
+        if (state.held[kind].length === 0) return;
         (state.held[kind] as HeldWrite<unknown>[]) = settleHeldWrites<unknown>(
           state.held[kind],
           action.payload,
@@ -404,12 +407,23 @@ export const runwaySlice = createSlice({
     });
     builder.addCase(dropWrites, (state, action) => {
       HELD_KINDS.forEach((kind) => {
+        if (state.held[kind].length === 0) return;
         (state.held[kind] as HeldWrite<unknown>[]) = dropHeldWrites<unknown>(
           state.held[kind],
           action.payload,
         );
         layHeld(state, kind);
       });
+    });
+    builder.addCase(patchHeld, (state, action) => {
+      const { kind, id, fields } = action.payload;
+      if (!state.held[kind].some((hold) => hold.id === id)) return;
+      (state.held[kind] as HeldWrite<unknown>[]) = patchHeldWrite<unknown>(
+        state.held[kind],
+        id,
+        fields,
+      );
+      layHeld(state, kind);
     });
     builder.addCase(resetAllState, () => initialState);
   },

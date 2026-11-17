@@ -1,4 +1,6 @@
+import { store } from '@/store';
 import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { patchHeld } from '@apps/runway/store/runwaySlice';
 import {
   arrayRemove,
   arrayUnion,
@@ -268,6 +270,22 @@ export type WrittenPaidMark = {
   dueOn: DateOnly;
 } & BillPaidSealed;
 
+const dayRef = (uid: string, dayId: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId);
+
+// The day is read and its list written whole, rather than with `arrayUnion`, so the change can be shown before the server answers.
+const readDoneLineIds = async (
+  transaction: Transaction,
+  uid: string,
+  lines: { dayId: string; lineIds: readonly string[] } | null,
+): Promise<string[] | null> => {
+  if (lines === null || lines.lineIds.length === 0) return null;
+  const day = await transaction.get(dayRef(uid, lines.dayId));
+  return day.exists()
+    ? ((day.data().doneLineIds as string[] | undefined) ?? [])
+    : null;
+};
+
 /**
  * Marks several payments paid at once, a transaction per few bills that re-reads each payment's marks
  * and skips one already paid, and ticks the checklist lines in the first. Returns the marks it wrote,
@@ -322,6 +340,11 @@ export async function markBillsPaid(
       const wrote = await runChunk(before, () =>
         runHeldTransaction(uid, async (transaction) => {
           const plan = await transaction.get(planDoc);
+          const doneBefore = await readDoneLineIds(
+            transaction,
+            uid,
+            chunkIndex === 0 ? lines : null,
+          );
           const findOpenMark = async (
             input: MarkBillPaidInput,
             marks: number,
@@ -365,11 +388,12 @@ export async function markBillsPaid(
               sealed: entry.sealed,
             } satisfies MoveDoc),
           );
-          if (chunkIndex === 0 && lines !== null && lines.lineIds.length > 0) {
-            transaction.update(
-              doc(db, 'apps', 'runway', 'plans', uid, 'days', lines.dayId),
-              { doneLineIds: arrayUnion(...lines.lineIds) },
-            );
+          if (doneBefore !== null && lines !== null) {
+            transaction.update(dayRef(uid, lines.dayId), {
+              doneLineIds: Array.from(
+                new Set([...doneBefore, ...lines.lineIds]),
+              ),
+            });
           }
           return open.map((entry): WrittenPaidMark => ({
             moveId: entry.id,
@@ -414,6 +438,11 @@ export async function undoBillsPaid(
       const before = await previous;
       const undone = await runHeldTransaction(uid, async (transaction) => {
         const plan = await transaction.get(planDoc);
+        const doneBefore = await readDoneLineIds(
+          transaction,
+          uid,
+          chunkIndex === 0 ? lines : null,
+        );
         const existing = await Promise.all(
           chunk.map((entry) =>
             transaction.get(moveRef(uid, getUndoMoveId(entry.paid.moveId))),
@@ -440,11 +469,11 @@ export async function undoBillsPaid(
             sealed: entry.sealed,
           } satisfies MoveDoc);
         });
-        if (chunkIndex === 0 && lines !== null && lines.lineIds.length > 0) {
-          transaction.update(
-            doc(db, 'apps', 'runway', 'plans', uid, 'days', lines.dayId),
-            { doneLineIds: arrayRemove(...lines.lineIds) },
-          );
+        if (doneBefore !== null && lines !== null) {
+          const unticked = new Set(lines.lineIds);
+          transaction.update(dayRef(uid, lines.dayId), {
+            doneLineIds: doneBefore.filter((id) => !unticked.has(id)),
+          });
         }
         return open.length;
       });
@@ -466,9 +495,27 @@ export async function setLinesDone(
   if (isDone && new Set([...current, ...lineIds]).size > MAX_DONE_LINE_IDS) {
     throw new Error('This checklist is full. Untick an item first.');
   }
-  await updateDoc(doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId), {
-    doneLineIds: isDone ? arrayUnion(...lineIds) : arrayRemove(...lineIds),
-  });
+  const ticked = new Set(lineIds);
+  const next = isDone
+    ? Array.from(new Set([...current, ...lineIds]))
+    : current.filter((id) => !ticked.has(id));
+  store.dispatch(
+    patchHeld({ kind: 'days', id: dayId, fields: { doneLineIds: next } }),
+  );
+  try {
+    await updateDoc(doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId), {
+      doneLineIds: isDone ? arrayUnion(...lineIds) : arrayRemove(...lineIds),
+    });
+  } catch (error) {
+    store.dispatch(
+      patchHeld({
+        kind: 'days',
+        id: dayId,
+        fields: { doneLineIds: [...current] },
+      }),
+    );
+    throw error;
+  }
 }
 
 export interface StartHoldingInput {

@@ -37,18 +37,13 @@ const waitUntil = (hasLanded: () => boolean, ms: number): Promise<boolean> =>
   });
 
 export interface WriteLandedWatch {
-  /** The app or feature, for debug viewers. */
   feature: string;
-  /** What was written, in a few words with no names or amounts ("a move of money"). */
+  /** No names or amounts: debug viewers can copy it. */
   what: string;
-  /** Whether the screen's listeners now show the write. */
   hasLanded: () => boolean;
 }
 
-/**
- * After a write the server accepted, waits for the listeners to show it; when they don't within a few
- * seconds the live connection has stalled, so it is restarted and debug viewers are told.
- */
+/** Restarts a stalled live connection when the listeners miss a write the server accepted, and tells debug viewers. */
 export async function watchWriteLanded({
   feature,
   what,
@@ -63,7 +58,10 @@ export async function watchWriteLanded({
     wanted: 'Live updates from the server',
     used: 'A restart of the connection',
     reason: `The server saved ${what}, but the screen had not heard about it after ${waited}.`,
-    cause: { stage: 'listener catch-up', detail: `no snapshot within ${waited}` },
+    cause: {
+      stage: 'listener catch-up',
+      detail: `no snapshot within ${waited}`,
+    },
     facts: [
       `visibility: ${typeof document === 'undefined' ? 'unknown' : document.visibilityState}`,
     ],
@@ -81,6 +79,9 @@ export async function watchWriteLanded({
     wanted: 'Live updates from the server',
     used: 'The last data the screen had',
     reason: `The server saved ${what}, and the screen still had not heard about it after a restart.`,
-    cause: { stage: 'listener catch-up', detail: 'no snapshot after a restart' },
+    cause: {
+      stage: 'listener catch-up',
+      detail: 'no snapshot after a restart',
+    },
   });
 }

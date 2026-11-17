@@ -5,6 +5,7 @@ import {
   addHeldWrites,
   applyHeldWrites,
   dropHeldWrites,
+  patchHeldWrite,
   settleHeldWrites,
   toFingerprint,
   type HeldWrite,
@@ -163,5 +164,41 @@ assert.deepEqual(
   'only the failed write drops',
 );
 assert.deepEqual(dropHeldWrites(twice, 't2'), []);
+
+const followed = apply(
+  [{ id: 'a', cents: 4 }],
+  [hold({ id: 'a', cents: 9 }, 'a', 't1', null, base[0])],
+);
+assert.equal(
+  followed.held[0].baseline,
+  toFingerprint({ id: 'a', cents: 4 }),
+  'while in flight, the baseline follows the list',
+);
+const afterOther = apply(
+  [{ id: 'a', cents: 4 }],
+  settleHeldWrites(followed.held, 't1', 900),
+);
+assert.equal(
+  afterOther.list[0].cents,
+  9,
+  "another device's change seen before the write settled never releases it once it does",
+);
+
+const patched = patchHeldWrite(
+  [hold({ id: 'a', cents: 9 }, 'a'), hold(null, 'b')],
+  'a',
+  { cents: 12 },
+);
+assert.equal(
+  patched[0].item?.cents,
+  12,
+  'a plain write shows through the hold',
+);
+assert.equal(
+  patched[0].fingerprint,
+  toFingerprint({ id: 'a', cents: 12 }),
+  'and the hold waits for the patched copy',
+);
+assert.equal(patched[1].item, null, 'a removal is never patched');
 
 console.log('held writes: all checks passed');

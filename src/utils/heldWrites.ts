@@ -1,13 +1,12 @@
-/** A local copy of a write shown over a listener's list until the list shows it; `item` null is a removal. */
+/** A device's own write shown over a listener's list until the list shows it; `item` null is a removal. */
 export interface HeldWrite<T> {
   id: string;
   item: T | null;
   fingerprint: string;
-  /** Which write held it, so only that write settles or drops it. */
   token: string;
-  /** When the write was accepted by the server; null while it is in flight. */
+  /** Null while the write is in flight. */
   settledAt: number | null;
-  /** The fingerprint of the list's copy when the write was made, null when the list had none. */
+  /** The list's copy the write replaces (null when it had none); followed while in flight, frozen once settled. */
   baseline: string | null;
 }
 
@@ -29,14 +28,9 @@ const sortKeys = (value: unknown): unknown => {
 export const toFingerprint = (value: unknown): string =>
   JSON.stringify(sortKeys(value));
 
-const hasLanded = <T>(
-  hold: HeldWrite<T>,
-  incoming: T | undefined,
-  fingerprintOf: (item: T) => string,
-): boolean => {
-  if (hold.item === null) return incoming === undefined;
-  if (incoming === undefined) return false;
-  const seen = fingerprintOf(incoming);
+const hasLanded = <T>(hold: HeldWrite<T>, seen: string | null): boolean => {
+  if (hold.item === null) return seen === null;
+  if (seen === null) return false;
   if (seen === hold.fingerprint) return true;
   return hold.settledAt !== null && seen !== hold.baseline;
 };
@@ -54,15 +48,11 @@ const hasExpired = <T>(
 export interface ApplyHeldOptions<T> {
   fingerprintOf?: (item: T) => string;
   now?: number;
-  /** When the listener last delivered the list; a stalled listener never lets a hold expire. */
+  /** A listener that has delivered nothing since a write settled never lets its hold expire. */
   deliveredAt?: number | null;
 }
 
-/**
- * Lays held writes over a listener's list: a hold lets go once the list shows its write, or, once the
- * server accepted it, a copy that differs from the one the write replaced; never merely because the
- * write settled, so a listener that has stalled never flashes the old value back.
- */
+/** Lays held writes over a listener's list; a hold lets go when the list shows it, never merely because it settled. */
 export function applyHeldWrites<T>(
   incoming: readonly T[],
   held: readonly HeldWrite<T>[],
@@ -74,11 +64,19 @@ export function applyHeldWrites<T>(
   }: ApplyHeldOptions<T> = {},
 ): { list: T[]; held: HeldWrite<T>[] } {
   const byId = new Map(incoming.map((item) => [idOf(item), item]));
-  const kept = held.filter(
-    (hold) =>
-      !hasLanded(hold, byId.get(hold.id), fingerprintOf) &&
-      !hasExpired(hold, now, deliveredAt),
-  );
+  const seenOf = (id: string) => {
+    const item = byId.get(id);
+    return item === undefined ? null : fingerprintOf(item);
+  };
+  const kept = held
+    .filter(
+      (hold) =>
+        !hasLanded(hold, seenOf(hold.id)) &&
+        !hasExpired(hold, now, deliveredAt),
+    )
+    .map((hold) =>
+      hold.settledAt === null ? { ...hold, baseline: seenOf(hold.id) } : hold,
+    );
   if (kept.length === 0) return { list: [...incoming], held: [] };
   const holdById = new Map(kept.map((hold) => [hold.id, hold]));
   const list = [
@@ -94,7 +92,7 @@ export function applyHeldWrites<T>(
   return { list, held: kept };
 }
 
-/** Adds holds, the newest write of a record replacing an older hold of it. */
+/** The newest write of a record replaces an older hold of it. */
 export const addHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   added: readonly HeldWrite<T>[],
@@ -118,3 +116,15 @@ export const dropHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   token: string,
 ): HeldWrite<T>[] => held.filter((hold) => hold.token !== token);
+
+/** Lays a plain write's fields over a record's hold, so the hold shows it too. */
+export const patchHeldWrite = <T>(
+  held: readonly HeldWrite<T>[],
+  id: string,
+  fields: Record<string, unknown>,
+): HeldWrite<T>[] =>
+  held.map((hold) => {
+    if (hold.id !== id || hold.item === null) return hold;
+    const item = { ...hold.item, ...fields } as T;
+    return { ...hold, item, fingerprint: toFingerprint(item) };
+  });

@@ -8,12 +8,10 @@ import {
 
 import { db } from '@/lib/firebase/config';
 
-/** One write a transaction body made, with the document's path split into segments. */
 export interface RecordedWrite {
   segments: string[];
   op: 'set' | 'update' | 'delete';
   data: DocumentData | null;
-  /** A set with `merge` writes only the fields it names, like an update. */
   isMerge: boolean;
 }
 
@@ -79,10 +77,7 @@ const recordingTransaction = (
   return recording;
 };
 
-/**
- * Runs a transaction and hands each attempt's writes to `onWrites` before that attempt commits, so a
- * caller can show them at once (a transaction is not shown by Firestore until the server answers).
- */
+/** Hands each attempt's writes to `onWrites` before it commits, since Firestore shows a transaction only once the server answers. */
 export function runRecordedTransaction<T>(
   body: (transaction: Transaction) => Promise<T>,
   onWrites: (writes: RecordedWrite[]) => Promise<void> | void,

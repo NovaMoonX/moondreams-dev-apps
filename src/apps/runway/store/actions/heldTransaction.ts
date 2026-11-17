@@ -63,9 +63,6 @@ const openFull = (
   return openRecord({ ...(data as DayRecordDoc), id }, encryption);
 };
 
-const currentOf = (kind: HeldKind, id: string): Opened | undefined =>
-  (store.getState().runway[kind] as Opened[]).find((item) => item.id === id);
-
 const baselineOf = (kind: HeldKind, id: string): string | null => {
   const delivered = (store.getState().runway.incoming[kind] as Opened[]).find(
     (item) => item.id === id,
@@ -73,73 +70,103 @@ const baselineOf = (kind: HeldKind, id: string): string | null => {
   return delivered === undefined ? null : toFingerprint(delivered);
 };
 
-/** A partial write is laid over the shown record only when every field it names is a plain, readable one the record carries. */
-const mergeReadable = (
-  kind: HeldKind,
-  id: string,
-  data: DocumentData | null,
-): Opened | null => {
-  const current = currentOf(kind, id);
-  if (current === undefined || !isPlainWrite(data) || data === null)
-    return null;
-  const fields = Object.keys(data);
-  if (fields.includes('sealed')) return null;
-  if (!fields.every((field) => Object.hasOwn(current, field))) return null;
-  return { ...current, ...data } as Opened;
+/** What a write lands on: another write's hold, else the list; never this transaction's own earlier attempt. */
+const baseOf = (kind: HeldKind, id: string, token: string): Opened | null => {
+  const { held, incoming } = store.getState().runway;
+  const other = (held[kind] as HeldWrite<Opened>[]).find(
+    (hold) => hold.id === id && hold.token !== token,
+  );
+  if (other !== undefined) return other.item;
+  return (incoming[kind] as Opened[]).find((item) => item.id === id) ?? null;
 };
 
-const toHold = async (
+const IGNORED = Symbol('ignored');
+const UNSHOWABLE = Symbol('unshowable');
+
+const mergeReadable = (
+  base: Opened,
+  data: DocumentData | null,
+): Opened | typeof UNSHOWABLE => {
+  if (data === null || !isPlainWrite(data)) return UNSHOWABLE;
+  const fields = Object.keys(data);
+  if (fields.includes('sealed')) return UNSHOWABLE;
+  if (!fields.every((field) => Object.hasOwn(base, field))) return UNSHOWABLE;
+  return { ...base, ...data } as Opened;
+};
+
+const toItem = async (
   write: RecordedWrite,
+  kind: HeldKind,
+  id: string,
+  base: Opened | null,
+  encryption: RunwayEncryption,
+): Promise<Opened | null | typeof IGNORED | typeof UNSHOWABLE> => {
+  if (write.op === 'delete') return null;
+  if (write.op === 'set' && !write.isMerge && write.data !== null) {
+    return openFull(kind, id, write.data, encryption).catch(() => UNSHOWABLE);
+  }
+  if (base === null) return IGNORED;
+  return mergeReadable(base, write.data);
+};
+
+interface Built {
+  kind: HeldKind;
+  id: string;
+  item: Opened | null;
+}
+
+/** Each record's state after the attempt's writes, in order; null when any write can't be shown, so none is. */
+const buildItems = (
+  writes: RecordedWrite[],
   uid: string,
   token: string,
   encryption: RunwayEncryption,
-): Promise<{ kind: HeldKind; hold: HeldWrite<Opened> } | null> => {
-  const target = readTarget(write.segments, uid);
-  if (target === null) return null;
-  const { kind, id } = target;
-  const item =
-    write.op === 'delete'
-      ? null
-      : write.op === 'set' && !write.isMerge && write.data !== null
-        ? await openFull(kind, id, write.data, encryption).catch(
-            () => undefined,
-          )
-        : mergeReadable(kind, id, write.data);
-  if (item === undefined || (item === null && write.op !== 'delete'))
-    return null;
-  return {
-    kind,
-    hold: {
-      id,
-      item,
-      fingerprint: item === null ? '' : toFingerprint(item),
-      token,
-      settledAt: null,
-      baseline: baselineOf(kind, id),
-    },
-  };
-};
+): Promise<Built[] | null> =>
+  writes
+    .reduce<Promise<Map<string, Built> | null>>(async (pending, write) => {
+      const built = await pending;
+      const target = readTarget(write.segments, uid);
+      if (built === null || target === null) return built;
+      const key = `${target.kind}/${target.id}`;
+      const earlier = built.get(key);
+      const base =
+        earlier !== undefined
+          ? earlier.item
+          : baseOf(target.kind, target.id, token);
+      const item = await toItem(
+        write,
+        target.kind,
+        target.id,
+        base,
+        encryption,
+      );
+      if (item === UNSHOWABLE) return null;
+      if (item === IGNORED) return built;
+      return new Map(built).set(key, { ...target, item });
+    }, Promise.resolve(new Map()))
+    .then((built) => (built === null ? null : [...built.values()]));
 
-/** Whether the listeners read this record; one outside their window (a day not read) is never held, since it would never let go. */
-const isWatched = (kind: HeldKind, hold: HeldWrite<Opened>): boolean => {
+/** Whether the listeners read this record; one outside their window is never held, since it would never let go. */
+const isWatched = (entry: Built, heldDayIds: Set<string>): boolean => {
   const state = store.getState().runway;
-  if (hold.item === null) return true;
-  if (kind === 'moves') {
-    const move = hold.item as OpenMove;
+  if (entry.item === null) return true;
+  if (entry.kind === 'moves') {
+    const move = entry.item as OpenMove;
     return (
       move.kind === 'start' ||
       (state.movesFrom !== null && move.date >= state.movesFrom)
     );
   }
-  if (kind === 'days') {
+  if (entry.kind === 'days') {
     return (
       state.daysFrom !== null &&
-      (hold.item as OpenDay).expectedOn >= state.daysFrom
+      (entry.item as OpenDay).expectedOn >= state.daysFrom
     );
   }
-  return (state.recordsFor ?? '')
-    .split(',')
-    .includes((hold.item as OpenRecord).dayId);
+  const { dayId } = entry.item as OpenRecord;
+  return (
+    heldDayIds.has(dayId) || (state.recordsFor ?? '').split(',').includes(dayId)
+  );
 };
 
 const isLanded = (token: string) => () => {
@@ -149,10 +176,7 @@ const isLanded = (token: string) => () => {
   );
 };
 
-/**
- * Runs a Runway transaction whose moves, days and records show on screen before the server answers,
- * go back if it fails, and are watched until the listeners show them.
- */
+/** A Runway transaction whose moves, days and records show at once, go back if it fails, and are watched until the listeners show them. */
 export async function runHeldTransaction<T>(
   uid: string,
   body: (transaction: Transaction) => Promise<T>,
@@ -161,20 +185,35 @@ export async function runHeldTransaction<T>(
   const encryption = await getRunwayEncryption(uid).catch(() => null);
   const hold = async (writes: RecordedWrite[]) => {
     if (encryption === null) return;
-    const holds = (
-      await Promise.all(
-        writes.map((write) => toHold(write, uid, token, encryption)),
-      )
-    )
-      .filter((entry) => entry !== null)
-      .filter((entry) => isWatched(entry.kind, entry.hold));
-    const input = holds.reduce<HeldWritesInput>(
-      (sum, entry) => ({
-        ...sum,
-        [entry.kind]: [...(sum[entry.kind] ?? []), entry.hold],
-      }),
-      { token },
+    const built = await buildItems(writes, uid, token, encryption);
+    if (built === null) {
+      store.dispatch(dropWrites(token));
+      return;
+    }
+    const heldDayIds = new Set(
+      built
+        .filter((entry) => entry.kind === 'days' && isWatched(entry, new Set()))
+        .map((entry) => entry.id),
     );
+    const input = built
+      .filter((entry) => isWatched(entry, heldDayIds))
+      .reduce<HeldWritesInput>(
+        (sum, { kind, id, item }) => ({
+          ...sum,
+          [kind]: [
+            ...(sum[kind] ?? []),
+            {
+              id,
+              item,
+              fingerprint: item === null ? '' : toFingerprint(item),
+              token,
+              settledAt: null,
+              baseline: baselineOf(kind, id),
+            },
+          ],
+        }),
+        { token },
+      );
     store.dispatch(holdWrites(input));
   };
   try {
