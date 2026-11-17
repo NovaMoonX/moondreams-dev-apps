@@ -138,33 +138,45 @@ const twice = addHeldWrites(
   [hold({ id: 'a', cents: 2 }, 'a', 't1')],
   [hold({ id: 'a', cents: 3 }, 'a', 't2')],
 );
-assert.equal(
-  twice.length,
-  2,
-  'a newer write of a record keeps the older hold, each waiting for its own fields',
+assert.deepEqual(
+  twice.map((entry) => entry.token),
+  ['t2'],
+  'a newer write of the same fields takes them over from the older hold',
 );
 assert.equal(
-  apply([], twice).list[0].cents,
-  3,
-  'the newer one is laid over it',
-);
-assert.equal(
-  settleHeldWrites(twice, 't1', 50)[1].settledAt,
+  settleHeldWrites(twice, 't1', 50)[0].settledAt,
   null,
   'an older write settling never settles the newer one',
 );
-assert.equal(settleHeldWrites(twice, 't2', 50)[1].settledAt, 50);
-assert.deepEqual(
-  dropHeldWrites(twice, 't1').map((entry) => entry.token),
-  ['t2'],
-  'only the failed write drops',
-);
+assert.equal(settleHeldWrites(twice, 't2', 50)[0].settledAt, 50);
+assert.deepEqual(dropHeldWrites(twice, 't2'), [], 'a failed write drops');
 assert.deepEqual(
   addHeldWrites(twice, [hold({ id: 'a', cents: 4 }, 'a', 't2')]).map(
     (entry) => entry.token,
   ),
-  ['t1', 't2'],
-  "a write's retry replaces only its own hold",
+  ['t2'],
+  "a write's retry replaces its own hold",
+);
+
+const undone = addHeldWrites(
+  [hold({ id: 'a', cents: 9 }, 'a', 't1', null, ['cents'])],
+  [hold({ id: 'a', cents: 1 }, 'a', 't2', null, ['cents'])],
+);
+assert.deepEqual(
+  apply([{ id: 'a', cents: 1 }], undone).list[0].cents,
+  1,
+  'an Undo that puts a field back never leaves the older value showing',
+);
+assert.deepEqual(
+  apply(
+    [],
+    addHeldWrites(
+      [hold({ id: 'a', cents: 9 }, 'a', 't1')],
+      [hold(null, 'a', 't2')],
+    ),
+  ).list,
+  [],
+  'a create taken back before the list shows it stays gone',
 );
 
 const overlapping = [

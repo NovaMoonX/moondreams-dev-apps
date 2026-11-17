@@ -110,16 +110,32 @@ export function applyHeldWrites<T>(
   return { list, held: kept };
 }
 
-/** A write's holds join the others in order; a record's older holds stay, each waiting for its own fields, and a newer one is laid over them. */
+/**
+ * A write's holds join the others in order. A newer hold takes over the fields it writes from a record's older holds,
+ * so an Undo that puts a field back never leaves the older value showing; an older hold keeps only the fields it alone wrote.
+ */
 export const addHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   added: readonly HeldWrite<T>[],
 ): HeldWrite<T>[] => {
-  const keys = new Set(added.map((hold) => `${hold.id}/${hold.token}`));
-  return [
-    ...held.filter((hold) => !keys.has(`${hold.id}/${hold.token}`)),
-    ...added,
-  ];
+  const kept = held.flatMap((hold) => {
+    const newer = added.filter((entry) => entry.id === hold.id);
+    if (newer.length === 0) return [hold];
+    if (newer.some((entry) => entry.token === hold.token)) return [];
+    if (hold.item === null || newer.some((entry) => entry.item === null)) {
+      return [];
+    }
+    const taken = new Set(newer.flatMap((entry) => entry.fields));
+    const fields = hold.fields.filter((field) => !taken.has(field));
+    if (fields.length === 0) return [];
+    return [
+      {
+        ...toHeldWrite(hold.id, hold.item, fields, hold.token),
+        settledAt: hold.settledAt,
+      },
+    ];
+  });
+  return [...kept, ...added];
 };
 
 export const settleHeldWrites = <T>(

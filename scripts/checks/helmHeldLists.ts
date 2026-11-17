@@ -156,6 +156,21 @@ assert.deepEqual(
   'and never counts the hold as shown there',
 );
 
+const failedList = layHelmKind(
+  'tasks',
+  withState((state) => {
+    state.deliveredAt.openTasks = 1;
+    state.failed.projectTasks = true;
+    state.held.tasks = [toHeldWrite('a', done, ['status'], 't')];
+  }),
+);
+assert.deepEqual(
+  failedList.held,
+  [],
+  'a list whose listener failed never keeps a hold the other lists have shown',
+);
+assert.equal(failedList.lists.projectTasks, undefined);
+
 const unrelated = layHelmKind(
   'who',
   withState((state) => {

@@ -103,6 +103,8 @@ export interface HelmHeldState {
   incoming: { [L in HelmListName]: HelmHeldLists[L][] };
   /** Null until a list's listener has delivered once. */
   deliveredAt: Record<HelmListName, number | null>;
+  /** A list whose listener failed never keeps a hold, until it delivers again. */
+  failed: Record<HelmListName, boolean>;
   held: { [K in HelmHeldKind]: HeldWrite<HelmHeldItems[K]>[] };
   landed: Record<HelmHeldKind, Record<string, HelmListName[]>>;
 }
@@ -118,6 +120,9 @@ export const emptyHelmHeld = (): HelmHeldState => ({
   deliveredAt: Object.fromEntries(
     LIST_NAMES.map((name) => [name, null]),
   ) as HelmHeldState['deliveredAt'],
+  failed: Object.fromEntries(
+    LIST_NAMES.map((name) => [name, false]),
+  ) as HelmHeldState['failed'],
   held: Object.fromEntries(
     HELM_HELD_KINDS.map((kind) => [kind, []]),
   ) as unknown as HelmHeldState['held'],
@@ -126,7 +131,7 @@ export const emptyHelmHeld = (): HelmHeldState => ({
   ) as HelmHeldState['landed'],
 });
 
-/** One kind's delivered lists with its holds laid over each, in each list's own order; a list still loading is left as it is. */
+/** One kind's delivered lists with its holds laid over each, in each list's own order; a list still loading or failed is left as it is. */
 export function layHelmKind<K extends HelmHeldKind>(
   kind: K,
   state: HelmHeldState,
@@ -141,9 +146,10 @@ export function layHelmKind<K extends HelmHeldKind>(
     HelmListName,
     ListRule<T>,
   ][];
+  const live = rules.filter(([name]) => !state.failed[name]);
   const laid = layHeldLists<T, HelmListName>({
     lists: Object.fromEntries(
-      rules.map(([name, rule]) => [
+      live.map(([name, rule]) => [
         name,
         {
           incoming: state.incoming[name] as unknown as T[],
@@ -166,7 +172,7 @@ export function layHelmKind<K extends HelmHeldKind>(
   });
   return {
     lists: Object.fromEntries(
-      rules
+      live
         .filter(([name]) => state.deliveredAt[name] !== null)
         .map(([name, rule]) => {
           const list = laid.lists[name];
