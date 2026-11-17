@@ -129,4 +129,20 @@ const failed = layPurchaseLists({
 assert.deepEqual(failed.held, [], 'a period list that is gone lets go of it');
 assert.deepEqual(failed.landed, {});
 
+const unloaded = layPurchaseLists({
+  window: [shown],
+  needsHome: [],
+  period: [],
+  deliveredAt: { window: 1, needsHome: null, period: null },
+  purchasesFrom: FROM,
+  periodFor: range,
+  held: [edit],
+  landed: {},
+});
+assert.deepEqual(
+  unloaded.landed,
+  { 's/t': ['window'] },
+  'a list that has not delivered never counts a hold as shown',
+);
+
 console.log('runway purchase holds: ok');

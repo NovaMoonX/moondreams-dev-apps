@@ -70,7 +70,10 @@ export const layPurchaseLists = ({
     return {
       list: result.list,
       kept,
-      landedNow: waiting.map(keyOf).filter((key) => !kept.has(key)),
+      landedNow:
+        deliveredAt[list] === null
+          ? []
+          : waiting.map(keyOf).filter((key) => !kept.has(key)),
     };
   };
   const results = {
