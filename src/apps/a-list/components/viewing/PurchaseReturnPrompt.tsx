@@ -10,6 +10,8 @@ import { formatDate } from '@/utils/formatUtils';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import SuggestionNote from '@apps/a-list/components/viewing/SuggestionNote';
+import DiscountDayNotice from '@apps/a-list/components/viewing/DiscountDayNotice';
+import TaxChoiceChips from '@apps/a-list/components/viewing/TaxChoiceChips';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import { useAppSelector } from '@/store';
 import { useTicketSuggestion } from '@apps/a-list/hooks/useTicketSuggestion';
@@ -31,6 +33,7 @@ import {
 import { formatShowtimeForTheatre } from '@apps/a-list/utils/theatreTime';
 import {
   evaluateTicketDraft,
+  getTaxOptions,
   resolveTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
@@ -131,11 +134,13 @@ function PurchaseReturnPrompt({
               Change
             </Button>
           </p>
+          {draft.isDiscountDay && <DiscountDayNotice step='change' />}
           <SuggestionNote
             suggestion={suggestion}
             draft={draft}
             theatreName={viewing.theatre?.name ?? null}
-            hasTax={shown.tax.trim() !== ''}
+            shownTax={shown.tax}
+            hasTaxChoice={getTaxOptions(draft, suggestion) !== null}
           />
           <p className='text-muted-foreground text-sm'>
             {suggestion.isFeeLearned || suggestion.isTaxLearned
@@ -175,6 +180,17 @@ function PurchaseReturnPrompt({
               errorMessage={result.errors.tax}
               onChange={(value) =>
                 setDraft({ ...draft, tax: value, isTaxEdited: true })
+              }
+            />
+            <TaxChoiceChips
+              value={shown.tax}
+              options={getTaxOptions(draft, suggestion)}
+              onPick={(cents) =>
+                setDraft({
+                  ...draft,
+                  tax: centsToInputValue(cents),
+                  isTaxEdited: true,
+                })
               }
             />
           </div>

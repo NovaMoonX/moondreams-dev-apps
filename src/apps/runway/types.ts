@@ -834,6 +834,26 @@ export interface OpenRule extends RuleSealed {
   updatedAt: number;
 }
 
+/** A card payment the person says they started at their bank, under `startedPayments`; at Link it waits for the bank to show it. */
+export interface StartedPaymentDoc {
+  id: string;
+  cardId: string;
+  startedOn: DateOnly;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface StartedPaymentSealed {
+  amountCents: Cents;
+}
+
+export interface OpenStartedPayment extends StartedPaymentSealed {
+  id: string;
+  cardId: string;
+  startedOn: DateOnly;
+  createdAt: number;
+}
+
 /** Something the person confirmed by hand that Runway uses to settle a later match, under `memories`. */
 export interface MemoryDoc {
   id: string;
