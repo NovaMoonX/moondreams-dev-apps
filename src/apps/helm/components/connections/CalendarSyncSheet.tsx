@@ -235,7 +235,11 @@ function SyncForm({
               title: option.isPrimary
                 ? HELM_COPY.calendarPickerMain
                 : option.name,
-              description: option.detail ?? option.name,
+              description:
+                option.isPrimary ||
+                (option.detail ?? option.name) !== option.name
+                  ? (option.detail ?? option.name)
+                  : HELM_COPY.calendarSyncPickDetail,
               onPick: () =>
                 void run({
                   action: 'choose',

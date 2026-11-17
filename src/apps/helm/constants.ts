@@ -1115,7 +1115,7 @@ export const HELM_COPY = {
   connectedAppsCount: (count: number) => `${count} connected`,
   connectedAppsNone: 'Not connected',
   connectedAppsLead: (name: string) =>
-    `${name} can read these. It can't add, change or delete anything in them.`,
+    `${name} can read these. It doesn't change anything in them, apart from keeping your plan in a Google Calendar when you ask it to.`,
   connectReadOnlyPromise: (name: string, app: string) =>
     `${name} can read these. It can't add, change or delete anything in ${app}.`,
   connectedSection: 'Connected',
@@ -1372,8 +1372,9 @@ export const HELM_COPY = {
     `${name} puts your kept plan, your habit windows and your appointments in one calendar. Move or remove a plan slot or an appointment there and it follows here; a habit window you move stays where it is here, and ${name} tells you.`,
   calendarSyncMakeTitle: 'Make a calendar for your plan',
   calendarSyncMakeDetail: (name: string) =>
-    `Recommended. A fresh calendar called "${name}'s plan". Google only lets ${name} touch calendars it makes itself.`,
+    `Recommended. A fresh calendar called "${name}'s plan". ${name} can only touch this one calendar, never your others.`,
   calendarSyncChooseTitle: 'Use one of your calendars',
+  calendarSyncPickDetail: 'Your plan goes in beside what is already there',
   calendarSyncChooseDetail:
     'Pick one you already look at. Google will ask to let events be added and changed.',
   calendarSyncPickLead: 'Which calendar should carry your plan?',
@@ -1389,7 +1390,7 @@ export const HELM_COPY = {
     `Google needs you to reconnect before ${name} can keep your plan in step again.`,
   calendarSyncStopTitle: 'Stop keeping it in step',
   calendarSyncStopDetail: (name: string, calendarName: string) =>
-    `${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, and your plan here is untouched.`,
+    `If you stop, ${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, and your plan here is untouched.`,
   calendarSyncStopMade:
     'The calendar itself stays; delete it in Google Calendar if you no longer want it.',
   calendarSyncKeepGoing: 'Keep it going',
