@@ -1,5 +1,6 @@
 // Related things grouped overnight: the engine's id, offer, back-off and delete rules.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   PATTERN_BACKOFF_WEEKS,
@@ -15,6 +16,12 @@ import {
   toGroupingId,
   type GroupingRecord,
 } from '../../src/apps/helm/engine/grouping.ts';
+import {
+  createGroupingSession,
+  pickFiledLine,
+  pickGroupingOffer,
+  pickHomeCards,
+} from '../../src/apps/helm/utils/groupingOffer.ts';
 import { WHERE_THINGS_LIVE } from '../../src/apps/helm/whereThingsLive.ts';
 
 const NOW = Date.UTC(2030, 0, 10, 12);
@@ -177,6 +184,111 @@ test('a deleted source leaves the grouping, and below two it goes', () => {
   assert.equal(dropped?.isGone, false);
   assert.equal(dropSource(three, 'tasks/zzz'), null);
   assert.equal(dropSource(make('g'), 'tasks/a')?.isGone, true);
+});
+
+test('one offer is shown per app open, and Not now backs off 4 weeks, 8 weeks, then ends', () => {
+  const all = live('tasks/a', 'tasks/b', 'tasks/c');
+  const first = make('g_1', { proposedAt: NOW - 2 * DAY });
+  const second = make('g_2', { proposedAt: NOW - DAY });
+  const session = createGroupingSession();
+  assert.equal(
+    pickGroupingOffer(session, [first, second], NOW, all)?.id,
+    'g_2',
+  );
+  const answered = [first, { ...second, state: 'groupedByYou' as const }];
+  assert.equal(pickGroupingOffer(session, answered, NOW, all), null);
+  assert.equal(
+    pickGroupingOffer(createGroupingSession(), answered, NOW, all)?.id,
+    'g_1',
+  );
+  const waits = [1, 2, 3].reduce<{ record: GroupingRecord; weeks: number[] }>(
+    (run) => {
+      const patch = applyGroupingNotNow(run.record, NOW);
+      return {
+        record: { ...run.record, ...patch },
+        weeks: [
+          ...run.weeks,
+          patch.nextOfferAfter === null
+            ? -1
+            : (patch.nextOfferAfter - NOW) / (7 * DAY),
+        ],
+      };
+    },
+    { record: make('g_3'), weeks: [] },
+  );
+  assert.deepEqual(waits.weeks, [4, 8, -1]);
+  assert.deepEqual(GROUPING_BACKOFF_WEEKS, PATTERN_BACKOFF_WEEKS);
+  assert.equal(
+    pickGroupingOffer(
+      createGroupingSession(),
+      [waits.record],
+      NOW + 100 * DAY,
+      all,
+    ),
+    null,
+  );
+});
+
+test('a deleted source takes the grouping out of an offer, and every delete action drops it', () => {
+  const grouping = make('g', { sourceKeys: ['tasks/a', 'tasks/b'] });
+  assert.equal(
+    pickGroupingOffer(
+      createGroupingSession(),
+      [grouping],
+      NOW,
+      live('tasks/a'),
+    ),
+    null,
+  );
+  const actions = (name: string) =>
+    readFileSync(`src/apps/helm/store/actions/${name}.ts`, 'utf8');
+  [
+    ['taskActions', 'tasks/${taskId}'],
+    ['noteActions', 'notes/${noteId}'],
+    ['topicActions', 'topics/${topicId}'],
+    ['projectActions', 'projects/${projectId}'],
+  ].forEach(([file, key]) =>
+    assert.ok(
+      actions(file).includes(`dropFromGroupings(uid, \`${key}\``),
+      `${file} drops groupings on delete`,
+    ),
+  );
+});
+
+test('the filed line is held once chosen, and home draws at most three cards, the line only without an offer', () => {
+  const filed = make('g_f', {
+    state: 'filed',
+    parentId: 'p1',
+    executionId: 'relate-g_f',
+    linkedKeys: ['tasks/a', 'tasks/b'],
+  });
+  const session = createGroupingSession();
+  assert.equal(pickFiledLine(session, [filed])?.id, 'g_f');
+  assert.equal(pickFiledLine(session, [{ ...filed, toldAt: NOW }])?.id, 'g_f');
+  assert.equal(
+    pickFiledLine(createGroupingSession(), [{ ...filed, toldAt: NOW }]),
+    null,
+  );
+  assert.equal(
+    pickFiledLine(createGroupingSession(), [{ ...filed, state: 'notRelated' }]),
+    null,
+  );
+  const every = [true, false].flatMap((hasDay) =>
+    [true, false].flatMap((hasOffer) =>
+      [true, false].map((hasFiled) =>
+        pickHomeCards({ hasDay, hasOffer, hasFiled }),
+      ),
+    ),
+  );
+  assert.ok(every.every((cards) => cards.length <= 3));
+  assert.deepEqual(
+    pickHomeCards({ hasDay: true, hasOffer: true, hasFiled: true }),
+    ['day', 'grouping'],
+  );
+  assert.deepEqual(
+    pickHomeCards({ hasDay: true, hasOffer: false, hasFiled: true }),
+    ['day', 'filedLine'],
+  );
 });
 
 test('the synced categories the grouping reads match the rows that allow it', () => {

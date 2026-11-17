@@ -26,6 +26,7 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import { readPrivacyFacts, readPrivateMark } from '@apps/helm/utils/privacy';
 import {
@@ -306,6 +307,7 @@ export async function deleteTask(
   const mediaRef = (id: string) =>
     doc(db, 'apps', 'helm', 'users', uid, 'media', id);
   const write = deleteDoc(ref);
+  dropFromGroupings(uid, `tasks/${taskId}`);
   released.forEach((entry) =>
     updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
   );

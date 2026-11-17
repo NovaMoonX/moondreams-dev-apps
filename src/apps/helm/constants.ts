@@ -1752,6 +1752,11 @@ export const HELM_COPY = {
   groupingActivityLinked: (count: number, name: string) =>
     `Linked ${count} things to ${name}`,
   groupingActionFailed: "Couldn't save that. Check your connection.",
+  groupingTookBackSummary: 'Took back the grouping',
+  groupingTookBackReport: 'Took those links back.',
+  groupingLinkedHeading: 'Linked',
+  groupingSourcesTitle: 'What goes together',
+  groupingFiledUndoFailed: "Couldn't take that back. Try again.",
   aheadActionFailed: "Couldn't save that. Check your connection.",
   aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
   aheadBriefLabel: "What I'll send:",

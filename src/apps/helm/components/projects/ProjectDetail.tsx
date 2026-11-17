@@ -37,6 +37,7 @@ import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
 import ProjectPeople from '@apps/helm/components/projects/ProjectPeople';
 import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import LinkedSection from '@apps/helm/components/home/LinkedSection';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import { DAY_MS, HELM_COPY, PROJECT_TASKS_SHOWN } from '@apps/helm/constants';
 import { pickAheadOffer } from '@apps/helm/engine/researchAhead';
@@ -644,6 +645,9 @@ function ProjectDetail({
               />
             )}
           </>
+        )}
+        {project && !project.isUnreadable && (
+          <LinkedSection kind='project' parentId={project.id} />
         )}
         {project && !project.isUnreadable && (
           <PrivateRow kind='project' record={project} title={project.name} />

@@ -20,6 +20,8 @@ import {
   planReopen,
   planUndo,
   procedureEffectKind,
+  toGroupingUndoPatch,
+  withoutGroupings,
   toOfferDocIds,
   readUndoFields,
   topicEffectKind,
@@ -1262,6 +1264,52 @@ test('a project the turn made is deleted by its undo, and says projects', () => 
     ['projects:p1'],
   );
   assert.equal(result.report, 'Took back 1 project.');
+});
+
+test('a quiet link is taken back record by record, then the grouping is a no and the generic plan never writes it', () => {
+  const link = update('t1', { projectId: 'p1' }, { projectId: null });
+  const grouping = {
+    ref: { op: 'update', collection: 'groupings', docId: 'g_1' } as EffectRef,
+    effect: {
+      written: { state: 'filed', linkedKeys: ['tasks/t1'] },
+      previous: { state: 'proposed', linkedKeys: [] },
+    },
+  };
+  const original = execution([link, grouping]);
+  const view = withoutGroupings(original);
+  assert.deepEqual(
+    view.effectRefs.map((ref) => ref.collection),
+    ['tasks'],
+  );
+  const result = asWrite(
+    plan(view, [target('t1', { projectId: 'p1' }, sealedOf('Pack the boxes'))]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => entry.docId),
+    ['t1'],
+  );
+  assert.equal(result.updates[0].fields.projectId, null);
+  const quiet = toGroupingUndoPatch('nomos', grouping.effect.previous, NOW);
+  assert.equal(quiet.state, 'notRelated');
+  assert.deepEqual(quiet.linkedKeys, []);
+  assert.deepEqual(
+    Object.keys(quiet).filter(
+      (key) =>
+        !['state', 'linkedKeys', 'answeredAt', 'updatedAt'].includes(key),
+    ),
+    [],
+  );
+  const own = toGroupingUndoPatch(
+    'person',
+    { state: 'proposed', parentId: null, answeredAt: null },
+    NOW,
+  );
+  assert.equal(own.state, 'proposed');
+  assert.equal(own.executionId, null);
+  assert.equal(
+    toGroupingUndoPatch('person', { state: 'notNow' }, NOW).state,
+    'notNow',
+  );
 });
 
 test('a role the turn gave is stepped back with the earlier roles and notes, and a role changed since is kept', () => {

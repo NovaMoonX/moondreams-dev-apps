@@ -1904,6 +1904,45 @@ export function narrowForUndo(
   };
 }
 
+/** The execution as the generic undo reads it: a grouping's own fields are not stepped back field by field (its rule lets only its answer fields change), so its effect is left out and `toGroupingUndoPatch` writes it. */
+export const withoutGroupings = (view: OpenExecution): OpenExecution => {
+  const keep = view.effectRefs.flatMap((ref, index) =>
+    ref.collection === 'groupings' ? [] : [index],
+  );
+  return {
+    ...view,
+    effectRefs: keep.map((index) => view.effectRefs[index]),
+    effects: keep.map((index) => view.effects[index]),
+  };
+};
+
+/** A grouping after its execution is taken back: the person's own Group them goes back to where it was, and a link the server made quietly is a no, so those two are never offered again. */
+export function toGroupingUndoPatch(
+  actor: Execution['actor'],
+  previous: Record<string, unknown> | null,
+  now: number,
+) {
+  if (actor === 'nomos')
+    return {
+      state: 'notRelated' as const,
+      linkedKeys: [] as string[],
+      answeredAt: now,
+      updatedAt: now,
+    };
+  return {
+    state:
+      previous?.state === 'notNow'
+        ? ('notNow' as const)
+        : ('proposed' as const),
+    parentId: typeof previous?.parentId === 'string' ? previous.parentId : null,
+    linkedKeys: [] as string[],
+    answeredAt:
+      typeof previous?.answeredAt === 'number' ? previous.answeredAt : null,
+    executionId: null,
+    updatedAt: now,
+  };
+}
+
 /** The records an undo offer's choice would still take back from an execution: every unit left when it is the whole turn, else the ones it names that are not yet undone; empty once nothing is left. */
 export function toOfferDocIds(
   choice: Pick<UndoChoice, 'docIds' | 'isAll'>,

@@ -22,6 +22,7 @@ import {
   NOTE_TOPICS_MAX,
   NOTES_LIMIT,
 } from '@apps/helm/constants';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { openJson, sealJson } from '@apps/helm/security';
 import {
   planPhotoRelease,
@@ -310,6 +311,7 @@ export async function deleteNote(
     ...topicsCitingNote(topics, noteId),
   ]);
   const write = deleteDoc(ref);
+  dropFromGroupings(uid, `notes/${noteId}`);
   const released = planPhotoRelease(
     media,
     [{ kind: 'note', id: noteId }],
