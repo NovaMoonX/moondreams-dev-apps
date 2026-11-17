@@ -22,12 +22,14 @@ import {
   type PlannerTask,
 } from '../../src/apps/helm/engine/planner.ts';
 import {
+  isFirstPlanDue,
   isRollable,
   isWindDownDue,
   planOverlapFlags,
   planReplan,
   planRollover,
   readAimsView,
+  readAimTaskIds as readServerAimTaskIds,
   readDayClock,
   readPassLookAt,
   type AimsView,
@@ -36,6 +38,14 @@ import {
   buildExecution,
   planWrites,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  buildFirstPlan,
+  filterAwake,
+  isCalendarHeld,
+  readAvoidBuckets,
+  type FirstPlanSources,
+} from '../../functions/src/apps/helm/dayPlan/firstPlan.ts';
+import type { ConnectionGrant } from '../../functions/src/vendor/connectionsContract.ts';
 import { planDayAims } from '../../functions/src/apps/helm/nomos/planDayAims.ts';
 import { buildDesired } from '../../functions/src/apps/helm/calendarSync/plan.ts';
 
@@ -361,16 +371,239 @@ test('a pass at 00:15 with today empty and yesterday unrolled asks again at the 
     windDownState: 'waiting',
     aimCount: 0,
     isPlanned: false,
+    isFirstPlanOwed: false,
   };
   assert.equal(
     readPassLookAt({ ...input, isRolloverOwed: true }),
     clock.startAt,
   );
-  assert.equal(readPassLookAt({ ...input, isRolloverOwed: false }), null);
   assert.equal(
     readPassLookAt({ ...input, aimCount: 2, isRolloverOwed: true }),
     clock.startAt,
   );
+});
+
+const clockNow = readDayClock(at('12:00'), profile);
+const first = (time: string, hasPlan = false) =>
+  isFirstPlanDue({ now: at(time), clock: clockNow, hasPlan });
+
+test('the first plan is due from two hours before the day starts until it ends, once', () => {
+  assert.equal(first('05:59'), false);
+  assert.equal(first('06:00'), true);
+  assert.equal(first('15:00'), true);
+  assert.equal(first('21:59'), true);
+  assert.equal(first('22:00'), false);
+  assert.equal(first('15:00', true), false);
+});
+
+test('a person without aims stays in the queue: the next look is the next first plan', () => {
+  const input = {
+    clock: clockNow,
+    windDownState: 'waiting',
+    aimCount: 0,
+    isPlanned: false,
+    isRolloverOwed: false,
+  };
+  assert.equal(
+    readPassLookAt({
+      ...input,
+      now: at('06:05'),
+      isFirstPlanOwed: false,
+    }),
+    clockNow.nextStartAt - 2 * 60 * MIN,
+  );
+  assert.equal(
+    readPassLookAt({ ...input, now: at('03:00'), isFirstPlanOwed: true }),
+    clockNow.startAt - 2 * 60 * MIN,
+  );
+  assert.equal(
+    readPassLookAt({ ...input, now: at('07:10'), isFirstPlanOwed: true }),
+    at('07:15'),
+  );
+  assert.equal(
+    readPassLookAt({
+      ...input,
+      now: at('20:55'),
+      isFirstPlanOwed: true,
+    }),
+    at('21:00'),
+  );
+});
+
+test('a day aim sent to tomorrow or dropped is no longer an aim to plan', () => {
+  const aim = (taskId: string, order: number) => ({
+    aimId: taskId,
+    taskId,
+    order,
+    lengthIsGuess: false,
+    broughtFrom: null,
+  });
+  assert.deepEqual(
+    readServerAimTaskIds({
+      aims: [aim('t2', 2), aim('t1', 1), aim('t3', 3)],
+      windDown: {
+        t3: {
+          result: 'wontHappen',
+          choice: 'dropped',
+          reason: null,
+          saidSpanId: null,
+        },
+        t2: { result: 'tonight', choice: null, reason: null, saidSpanId: null },
+      },
+    }),
+    ['t1', 't2'],
+  );
+});
+
+const grant = (extra: Record<string, unknown> = {}) =>
+  ({
+    readerAppId: 'helm',
+    connectorId: 'google:calendar',
+    status: 'live',
+    categories: { events: { isOn: true } },
+    categoryState: { events: { lastOkAt: 5, lastError: null, count: 1 } },
+    ...extra,
+  }) as unknown as ConnectionGrant;
+
+test('a calendar that cannot be read holds the first plan back', () => {
+  assert.equal(isCalendarHeld([grant()]), false);
+  assert.equal(isCalendarHeld([grant({ status: 'needsReconnect' })]), true);
+  assert.equal(
+    isCalendarHeld([
+      grant({
+        categoryState: {
+          events: { lastOkAt: 5, lastError: { code: 'x', at: 9 }, count: 1 },
+        },
+      }),
+    ]),
+    true,
+  );
+  assert.equal(isCalendarHeld([]), false);
+});
+
+test('only accepted avoid patterns of a learning person after the last Forget leave a part empty', () => {
+  const bucket = { kind: 'weekdayPart', weekday: 2, part: 'morning' };
+  const pattern = (state: string, createdAt = 10, kind = 'plannerAvoid') => ({
+    state,
+    createdAt,
+    effect: { kind, bucket },
+  });
+  const read = (
+    rows: ReturnType<typeof pattern>[],
+    isLearningOn = true,
+    forgottenAt: number | null = null,
+  ) => readAvoidBuckets(rows, { isLearningOn, forgottenAt });
+  assert.deepEqual(read([pattern('accepted')]), [bucket]);
+  assert.deepEqual(read([pattern('suggested')]), []);
+  assert.deepEqual(read([pattern('accepted', 10, 'other')]), []);
+  assert.deepEqual(read([pattern('accepted')], false), []);
+  assert.deepEqual(read([pattern('accepted', 10)], true, 10), []);
+  assert.deepEqual(read([pattern('accepted', 11)], true, 10), [bucket]);
+});
+
+test('a task that waits or is not until later is asleep and never planned', () => {
+  const row = (id: string, data: Record<string, unknown>) => ({
+    id,
+    data,
+    isCare: false,
+    isUnreadable: false,
+  });
+  const today = Date.parse(`${DAY}T00:00:00Z`);
+  assert.deepEqual(
+    filterAwake(
+      [
+        row('a', {}),
+        row('b', { notUntil: today + 86_400_000 }),
+        row('c', { waitsOnTaskIds: ['a'] }),
+        row('d', { waitsOnWhoId: 'w1' }),
+        row('e', { waitsOnTaskIds: ['gone'] }),
+        row('f', { notUntil: today }),
+      ],
+      today,
+    ).map((entry) => entry.id),
+    ['a', 'e', 'f'],
+  );
+});
+
+const firstSources = (
+  extra: Partial<FirstPlanSources> = {},
+): FirstPlanSources => ({
+  dayKey: DAY,
+  timeZone: ZONE,
+  now: at('06:00'),
+  dayStartAt: at('08:00'),
+  dayEndAt: at('21:00'),
+  dayStartTime: '08:00',
+  dayEndTime: '21:00',
+  fillPercent: 100,
+  shiftCalendarIds: [],
+  busyAllDayEventRefs: [],
+  grants: [{ id: 'g1', grant: grant() }],
+  events: [
+    {
+      id: 'night',
+      grantId: 'g1',
+      connectorId: 'google:calendar',
+      category: 'events',
+      startAt: zonedDateTimeToEpoch('2026-11-09', '22:00', ZONE),
+      endAt: at('04:00'),
+      isAllDay: false,
+      isBusy: true,
+      calendarKey: null,
+      title: 'Late shift',
+      sameEventKey: null,
+    },
+  ],
+  tasks: [
+    {
+      id: 't1',
+      data: { status: 'open', durationMinutes: 30 },
+      isCare: false,
+      isUnreadable: false,
+    },
+  ],
+  projectPlaces: {},
+  avoidBuckets: [],
+  aimTaskIds: [],
+  finishedTasks: [],
+  laterKeptTaskIds: [],
+  restDayOverriddenAt: null,
+  ...extra,
+});
+
+test('the first plan leaves the day after a late night empty unless the person asked for one', () => {
+  const rest = buildFirstPlan(firstSources(), {});
+  assert.equal(rest.input.restDay, 'late');
+  assert.equal(run(rest.input).outcome, 'rest');
+  const overridden = buildFirstPlan(
+    firstSources({ restDayOverriddenAt: at('05:00') }),
+    {},
+  );
+  assert.equal(overridden.input.restDay, null);
+  assert.deepEqual(idsOf(run(overridden.input)), ['t1']);
+  assert.equal(overridden.calendarReadAt, 5);
+});
+
+test('the first plan skips what a later day keeps and an unreadable task, and keeps the slots the person made', () => {
+  const kept = { s1: slot('t2', '10:00', '10:30', 'kept') };
+  const built = buildFirstPlan(
+    firstSources({
+      events: [],
+      laterKeptTaskIds: ['t3'],
+      tasks: ['t1', 't2', 't3', 't4'].map((id) => ({
+        id,
+        data: { status: 'open', durationMinutes: 30 },
+        isCare: false,
+        isUnreadable: id === 't4',
+      })),
+    }),
+    kept,
+  );
+  assert.deepEqual(
+    built.input.tasks.map((entry) => entry.id),
+    ['t1'],
+  );
+  assert.deepEqual(built.input.slots, kept);
 });
 
 test('the wind-down is ready two hours before the day ends', () => {

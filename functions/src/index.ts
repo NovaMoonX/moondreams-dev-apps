@@ -51,6 +51,7 @@ export { planHelmReminders } from './apps/helm/reminders/planHelmReminders.js';
 export { runHelmCalendarSync } from './apps/helm/calendarSync/runHelmCalendarSync.js';
 export { runHelmDayPlan } from './apps/helm/dayPlan/runHelmDayPlan.js';
 export { onHelmDayAimsWritten } from './apps/helm/dayPlan/onHelmDayAimsWritten.js';
+export { onHelmPlanDayWritten } from './apps/helm/dayPlan/onHelmPlanDayWritten.js';
 export { setHelmCalendarSync } from './apps/helm/calendarSync/setHelmCalendarSync.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.js';

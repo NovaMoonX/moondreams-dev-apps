@@ -476,7 +476,8 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             uid,
             read,
             getPlanDaysWindow(Date.now()),
-            (days) => dispatch(setPlanDays(days)),
+            (days, isFromServer) =>
+              dispatch(setPlanDays({ days, isFromServer })),
             (error) => {
               console.error('Helm plan days listener failed', error);
               dispatch(setPlanDaysFailed());

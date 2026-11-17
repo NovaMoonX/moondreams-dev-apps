@@ -56,6 +56,8 @@ export interface PlanDaySet {
   /** Keyed by day ("YYYY-MM-DD" in the profile's zone). */
   byId: Record<string, PlanDay>;
   isLoaded: boolean;
+  /** The server has answered at least once, so a missing day is truly unplanned rather than not yet read. */
+  isFromServer: boolean;
   isFailed: boolean;
 }
 
@@ -178,6 +180,7 @@ const emptyLoadedSet = { items: [], isLoaded: false, isFailed: false };
 const emptyPlanDays: PlanDaySet = {
   byId: {},
   isLoaded: false,
+  isFromServer: false,
   isFailed: false,
 };
 
@@ -392,12 +395,17 @@ const helmSlice = createSlice({
     setProjectTasksFailed: (state) => {
       state.projectTasks.isFailed = true;
     },
-    setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
+    setPlanDays: (
+      state,
+      action: PayloadAction<{ days: PlanDay[]; isFromServer: boolean }>,
+    ) => {
       state.planDays = {
         byId: Object.fromEntries(
-          action.payload.map((entry) => [entry.id, entry]),
+          action.payload.days.map((entry) => [entry.id, entry]),
         ),
         isLoaded: true,
+        isFromServer:
+          state.planDays.isFromServer || action.payload.isFromServer,
         isFailed: false,
       };
     },

@@ -1364,6 +1364,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] How and where a meeting happens (in person, video or phone, and its place), on Helm's events and read from Google Calendar (O) (Issue 123)
 - [x] One chosen Google Calendar kept in step both ways (O) (Issue 127)
 - [x] Your day: say what you want done today and get it planned with breaks, wind down in the evening with what got done, what moves to tomorrow and why, kept on the server so it happens whether or not the app is open (O) (Issue 128)
+- [x] The day's first plan is made before the app opens, on the server, so Today opens on a plan already made (O) (Issue 129)
 - [ ] Related things grouped overnight: things across your records and connected apps that belong together (a sale, a planned expense, tasks and notes about a move) found by the nightly pass, filed quietly where they clearly belong and proposed as one thing when unsure, so "moving" already has its project ready (O) (Issue 130)
 - [ ] Knowledge found by meaning; a topic linked to a project; notes from a link or many imported at once; topics ordered by your own use
 - [ ] Commitments: promises made to someone or by someone, with who and by when

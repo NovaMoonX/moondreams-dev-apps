@@ -176,6 +176,11 @@ export function usePlanDay() {
   );
 
   const isFailing = isCalendarHeld(grants);
+  // The server makes each day's first plan; the device makes one only once the server has answered without it, or while offline.
+  const isServerKnown = useAppSelector(
+    (state) => state.helm.planDays.isFromServer,
+  );
+  const canPlanFirst = isServerKnown || !navigator.onLine;
 
   const plan = useCallback(
     async (
@@ -206,7 +211,13 @@ export function usePlanDay() {
     [uid, grants, addToast],
   );
 
-  return { plan, isReady: isReady && isKnown, uid, isFailing };
+  return {
+    plan,
+    isReady: isReady && isKnown,
+    canPlanFirst,
+    uid,
+    isFailing,
+  };
 }
 
 /** Plans today the first time Today shows it with no plan, once per day for the session. */
@@ -214,7 +225,7 @@ export function useAutoPlanToday(
   isShowingToday: boolean,
   sources: PlanSources | null,
 ) {
-  const { plan, isReady, uid, isFailing } = usePlanDay();
+  const { plan, isReady, canPlanFirst, uid, isFailing } = usePlanDay();
   const todayKey = sources?.todayKey ?? null;
   const isUnplanned =
     todayKey !== null && needsPlan(sources?.planDays[todayKey]);
@@ -230,12 +241,14 @@ export function useAutoPlanToday(
     const key = `${uid}|${todayKey}|${clashKey}`;
     const isDue = isUnplanned || clashKey !== '';
     if (!isShowingToday || !isReady || !uid || !todayKey || !isDue) return;
+    if (isUnplanned && !canPlanFirst) return;
     if (isFailing || attempted.has(key)) return;
     attempted.add(key);
     void plan(todayKey);
   }, [
     isShowingToday,
     isReady,
+    canPlanFirst,
     isFailing,
     uid,
     isUnplanned,

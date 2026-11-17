@@ -337,7 +337,27 @@ export function readNextLookAt(input: {
   return times.length > 0 ? Math.min(...times) : clock.nextStartAt;
 }
 
-/** The next look after a pass: whatever the day still needs, and the day's start while a rollover waits for it. A day with no aims asks for nothing else. */
+/** How long before the day starts its first plan is made, so Today is ready when the person wakes. */
+export const FIRST_PLAN_LEAD = 120 * MINUTE;
+
+/** Whether the day's first plan is owed now: none made yet, from two hours before the day starts until it ends. */
+export const isFirstPlanDue = (input: {
+  now: number;
+  clock: DayClock;
+  hasPlan: boolean;
+}) =>
+  !input.hasPlan &&
+  input.now >= input.clock.startAt - FIRST_PLAN_LEAD &&
+  input.now < input.clock.endAt;
+
+/** The task ids a day still wants done, in the person's order; a task sent to tomorrow, left for later or dropped is no longer one. */
+export const readAimTaskIds = (view: AimsView): string[] =>
+  [...view.aims]
+    .sort((first, second) => first.order - second.order)
+    .filter((aim) => (view.windDown[aim.taskId]?.choice ?? null) === null)
+    .map((aim) => aim.taskId);
+
+/** The next look after a pass: whatever the day still needs, the day's start while a rollover waits for it, and the first plan: the window's opening while it has not come, a quarter hour on while it is owed and cannot be made yet (a held calendar), else the next day's. Everyone with a profile stays in the queue. */
 export function readPassLookAt(input: {
   now: number;
   clock: DayClock;
@@ -345,7 +365,8 @@ export function readPassLookAt(input: {
   aimCount: number;
   isPlanned: boolean;
   isRolloverOwed: boolean;
-}): number | null {
+  isFirstPlanOwed: boolean;
+}): number {
   const { now, clock } = input;
   const owed =
     input.isRolloverOwed && now < clock.startAt ? [clock.startAt] : [];
@@ -361,6 +382,11 @@ export function readPassLookAt(input: {
           }),
         ]
       : [];
-  const times = [...owed, ...day];
-  return times.length > 0 ? Math.min(...times) : null;
+  const opensAt = clock.startAt - FIRST_PLAN_LEAD;
+  const first = !input.isFirstPlanOwed
+    ? clock.nextStartAt - FIRST_PLAN_LEAD
+    : now < opensAt
+      ? opensAt
+      : Math.min(nextBoundary(now), clock.endAt);
+  return Math.min(...owed, ...day, first);
 }

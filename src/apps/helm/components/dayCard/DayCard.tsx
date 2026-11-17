@@ -52,7 +52,9 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
     isReady &&
     !isFailing &&
     uid !== null &&
-    wanted.length > 0 &&
+    wanted.some(
+      (row) => row.slotId === null && !row.doesntFit && !row.isDone,
+    ) &&
     (mode === 'answered' || mode === 'ask');
   const isPlanFailed = failedPlanKey === planKey;
 
