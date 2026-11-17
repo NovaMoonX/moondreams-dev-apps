@@ -1304,7 +1304,7 @@ export const HELM_COPY = {
   googleReconnectTitle: 'Reconnect Google Calendar',
   googleReconnectAccount: (account: string) => `Reconnecting ${account}.`,
   googleConnectReadOnly: (name: string) =>
-    `${name} reads each event's title, time and calendar so it can plan around your day. It can't add, change or delete anything in Google Calendar.`,
+    `${name} reads each event's title, time and calendar so it can plan around your day. It changes nothing in Google Calendar unless you ask it to keep your plan there.`,
   googleConnectTesting: (name: string) =>
     `While ${name} is private, Google shows an "unverified app" screen before you agree, and may ask you to reconnect about once a week.`,
   googleContinue: 'Continue to Google',
@@ -1349,7 +1349,7 @@ export const HELM_COPY = {
     'People you brought in stay in People, just as they are.',
   googleContactsFailed: "Google Contacts didn't connect. Try again.",
   googleReadOnly: (name: string) =>
-    `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
+    `${name} can read your events. It only adds to Google Calendar when you ask it to keep your plan there.`,
   googleDisconnectNote: 'Google also forgets this access to the account.',
   googleDisconnectNoteTitle: 'Access at Google',
   googleLabelRow: 'Label',
@@ -1362,6 +1362,47 @@ export const HELM_COPY = {
   googleWhichCalendars: 'Which calendars',
   googleCalendarsCount: (count: number) =>
     `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
+  calendarSyncTitle: 'Keep your plan in a calendar',
+  calendarSyncOff: (name: string) =>
+    `See ${name}'s plan beside everything else in Google Calendar.`,
+  calendarSyncOn: (calendarName: string) => `Kept in step with ${calendarName}`,
+  calendarSyncReconnect: 'Reconnect Google to keep going',
+  calendarSyncGone: 'That calendar is gone. Choose one again.',
+  calendarSyncLead: (name: string) =>
+    `${name} puts your kept plan, your habit windows and your appointments in one calendar. Move or remove a plan slot or an appointment there and it follows here; a habit window you move stays where it is here, and ${name} tells you.`,
+  calendarSyncMakeTitle: 'Make a calendar for your plan',
+  calendarSyncMakeDetail: (name: string) =>
+    `Recommended. A fresh calendar called "${name}'s plan". Google only lets ${name} touch calendars it makes itself.`,
+  calendarSyncChooseTitle: 'Use one of your calendars',
+  calendarSyncChooseDetail:
+    'Pick one you already look at. Google will ask to let events be added and changed.',
+  calendarSyncPickLead: 'Which calendar should carry your plan?',
+  calendarSyncNoneWritable:
+    "None of your calendars can have events added. Make a new one instead and it's ready straight away.",
+  calendarSyncLoadingCalendars: 'Opening your calendars',
+  calendarSyncBack: 'Back',
+  calendarSyncGoneLead: (name: string) =>
+    `The calendar ${name} was keeping your plan in was deleted in Google, so nothing is being kept there now. Choose a calendar again to pick it back up.`,
+  calendarSyncOnLead: (name: string, calendarName: string) =>
+    `${name} is keeping your plan in step with ${calendarName}.`,
+  calendarSyncReconnectLead: (name: string) =>
+    `Google needs you to reconnect before ${name} can keep your plan in step again.`,
+  calendarSyncStopTitle: 'Stop keeping it in step',
+  calendarSyncStopDetail: (name: string, calendarName: string) =>
+    `${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, and your plan here is untouched.`,
+  calendarSyncStopMade:
+    'The calendar itself stays; delete it in Google Calendar if you no longer want it.',
+  calendarSyncKeepGoing: 'Keep it going',
+  calendarSyncReconnectAction: 'Reconnect Google',
+  calendarSyncWorking: 'Setting it up',
+  calendarSyncCancelled:
+    "Google didn't get your OK, so nothing changed. Try again whenever you're ready.",
+  calendarSyncNotWritable:
+    "That calendar can't have events added. Pick another, or make a new one.",
+  calendarSyncFailed:
+    "That didn't work and nothing changed. Give it another try.",
+  calendarSyncStopFailed:
+    "That didn't stop and nothing was removed. Give it another try.",
   calendarPickerLead: (name: string) =>
     `Pick the calendars ${name} plans around. Holidays and subscriptions start off.`,
   calendarPickerLoading: 'Opening your calendars',

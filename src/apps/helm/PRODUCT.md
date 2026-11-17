@@ -602,7 +602,7 @@ Issue 130. Things about one subject often sit in different places: a Going Once 
 Google Calendar is one connection among the others (Connected Apps, In Detail), and the one Today offers on its own.
 
 - **Optional, on a tap.** "Connect Google Calendar to plan around your events" is offered on Today, with the reason beside it, never on load. Helm works fully without it.
-- **Read only.** Helm asks Google to read events only, and reads each event's title, time and calendar, and (Next Steps) its place and whether it meets on video: never its description, guests or meeting link. It never creates, changes or deletes an event in the MVP; keeping one chosen calendar in step both ways is Issue 127.
+- **Read only.** Helm asks Google to read events only, and reads each event's title, time and calendar, and (Next Steps) its place and whether it meets on video: never its description, guests or meeting link. It creates, changes or deletes events only in the one calendar the person chose to keep their plan in (Issue 127, below); in every other calendar it changes nothing.
 - **While Helm is in testing.** Until Google reviews Helm, Google shows a warning that the app isn't verified, and may ask to reconnect about once a week. The Connect screen says so in one line before the person leaves for Google, so the warning isn't a surprise.
 - **Coming back from Google.** Declined: back on Today, nothing changed. Signed in but the calendar permission unticked: "Helm needs permission to see your events to plan around them. Nothing was connected." with Try again.
 - **The real calendar is many calendars.** After connecting, the person picks which ones count as busy; holidays and subscriptions start off. One tap marks a calendar as shifts. An event on two calendars counts once; declined events are ignored; tentative ones count as busy and say so; all-day events show at the top and block nothing unless the person says they do (a day off, a trip). A calendar added in Google later appears in Settings, off; one deleted in Google drops out quietly.
@@ -1111,7 +1111,7 @@ Each in the words the person sees:
 - Questions for someone, with their state, as a task with steps (Issue 121, on Issue 68).
 - Learn later: saving, bringing back on a good evening, the overview and up to 2 videos (Issue 119, with Issues 65 and 74 widened).
 - Research offered ahead of a dated project, with questions up front (Issue 120, on Issue 74), and live web search with a depth and a monthly allowance (Issue 118, on Issue 74).
-- Keeping one chosen Google Calendar in step both ways (Issue 127; Issue 67 writes one approval at a time).
+- Per-event approval for writes to Google Calendar (Issue 67 writes one approval at a time); keeping one chosen calendar in step both ways is built (Issue 127).
 - Scheduled actions (Issue 115, its outbound kinds on Issues 67 and 93; Words We Use).
 
 ### Search and Activity, In Detail
@@ -1362,7 +1362,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] Where you and your people are: a home and a temporary location with dates for you and each who, from what you say, your calendar and trips, used for "nearby"; the phone's location as your choice of Off, City only or Precise (O, C) (Issue 107)
 - [x] Research with live web search: quick or thorough, a default you set, asked when it matters, within a monthly allowance per person (O) (Issue 118)
 - [x] How and where a meeting happens (in person, video or phone, and its place), on Helm's events and read from Google Calendar (O) (Issue 123)
-- [ ] One chosen Google Calendar kept in step both ways (O) (Issue 127)
+- [x] One chosen Google Calendar kept in step both ways (O) (Issue 127)
 - [ ] Your day: say what you want done today and get it planned with breaks, wind down in the evening with what got done, what moves to tomorrow and why, kept on the server so it happens whether or not the app is open (O) (Issue 128)
 - [ ] Related things grouped overnight: things across your records and connected apps that belong together (a sale, a planned expense, tasks and notes about a move) found by the nightly pass, filed quietly where they clearly belong and proposed as one thing when unsure, so "moving" already has its project ready (O) (Issue 130)
 - [ ] Knowledge found by meaning; a topic linked to a project; notes from a link or many imported at once; topics ordered by your own use

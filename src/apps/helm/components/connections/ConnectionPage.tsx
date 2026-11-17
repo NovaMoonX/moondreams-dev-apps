@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarCheck, CalendarDays, ChevronDown, Tag } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarDays,
+  CalendarSync,
+  ChevronDown,
+  Tag,
+} from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
@@ -37,6 +43,8 @@ import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
+import { useAppSelector } from '@/store';
+import CalendarSyncSheet from '@apps/helm/components/connections/CalendarSyncSheet';
 import AccountLabelSheet from '@apps/helm/components/connections/AccountLabelSheet';
 import DisconnectSheet from '@apps/helm/components/connections/DisconnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -109,6 +117,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
+  const [isSyncOpen, setIsSyncOpen] = useState(false);
+  const calendarSync = useAppSelector(
+    (state) => state.helm.profile?.calendarSync ?? null,
+  );
   const [isGmailDisconnectOpen, setIsGmailDisconnectOpen] = useState(false);
   const [isDriveDisconnectOpen, setIsDriveDisconnectOpen] = useState(false);
   const [isContactsDisconnectOpen, setIsContactsDisconnectOpen] =
@@ -446,6 +458,28 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                   grant.options?.calendarIds.length ?? 0,
                 )}
                 onClick={() => openCalendarPicker(grant.accountId)}
+                hasChevron
+              />
+            )}
+          {!hasStopped &&
+            !isGmailGrant &&
+            !isDriveGrant &&
+            !isContactsGrant &&
+            (calendarSync === null ||
+              calendarSync.accountId === grant.accountId) && (
+              <SettingsRow
+                icon={<CalendarSync className='size-5' aria-hidden='true' />}
+                title={HELM_COPY.calendarSyncTitle}
+                description={
+                  calendarSync === null
+                    ? HELM_COPY.calendarSyncOff(name)
+                    : calendarSync.lastError === 'reconnect'
+                      ? HELM_COPY.calendarSyncReconnect
+                      : calendarSync.lastError === 'calendarGone'
+                        ? HELM_COPY.calendarSyncGone
+                        : HELM_COPY.calendarSyncOn(calendarSync.calendarName)
+                }
+                onClick={() => setIsSyncOpen(true)}
                 hasChevron
               />
             )}
@@ -839,6 +873,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           onClose={() => setIsLabelOpen(false)}
           grantId={grant.id}
           label={account?.label ?? null}
+        />
+      )}
+      {isGoogle && !isGmailGrant && !isDriveGrant && !isContactsGrant && (
+        <CalendarSyncSheet
+          isOpen={isSyncOpen}
+          onClose={() => setIsSyncOpen(false)}
+          accountId={grant.accountId}
         />
       )}
     </main>

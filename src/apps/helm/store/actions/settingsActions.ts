@@ -93,6 +93,7 @@ export async function ensureHelmProfile(uid: string) {
       outsideSeenAt: null,
       researchDepth: null,
       researchAllowance: null,
+      calendarSync: null,
       createdAt: Date.now(),
       lastEditedAt: null,
     };

@@ -252,8 +252,8 @@ export interface StartGoogleConnectionRequest {
   accountId: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount: boolean;
-  /** Further permissions asked in the same sign-in; only the two calendar ones, and only for the calendar connector. */
-  extraScopes?: string[];
+  /** Further permissions to ask for with the connector's own, from the server's short allowlist; null asks for none. */
+  extraScopes: string[] | null;
 }
 
 export interface StartGoogleConnectionResult {

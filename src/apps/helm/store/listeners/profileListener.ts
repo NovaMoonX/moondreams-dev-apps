@@ -71,6 +71,25 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
           leftCents: Number(data.researchAllowance.leftCents) || 0,
         }
       : null,
+  calendarSync:
+    data.calendarSync && typeof data.calendarSync.calendarId === 'string'
+      ? {
+          accountId: String(data.calendarSync.accountId ?? ''),
+          calendarId: data.calendarSync.calendarId,
+          calendarName: String(data.calendarSync.calendarName ?? ''),
+          isMadeByHelm: data.calendarSync.isMadeByHelm === true,
+          wasAlreadyRead: data.calendarSync.wasAlreadyRead === true,
+          startedAt: Number(data.calendarSync.startedAt) || 0,
+          lastWrittenAt:
+            typeof data.calendarSync.lastWrittenAt === 'number'
+              ? data.calendarSync.lastWrittenAt
+              : null,
+          lastError:
+            typeof data.calendarSync.lastError === 'string'
+              ? data.calendarSync.lastError
+              : null,
+        }
+      : null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });
