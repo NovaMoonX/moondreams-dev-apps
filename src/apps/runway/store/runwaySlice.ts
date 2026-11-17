@@ -13,6 +13,10 @@ import {
   settleHeldWrites,
   type HeldWrite,
 } from '@/utils/heldWrites';
+import {
+  layPurchaseLists,
+  type PurchaseList,
+} from '@apps/runway/utils/purchaseHolds';
 import { withBankBalances } from '@apps/runway/engine/accounts';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -117,6 +121,11 @@ export interface RunwayState {
   historyRecordsFor: string | null;
   historyFailedFor: string | null;
   incoming: HeldLists;
+  incomingNeedsHome: OpenPurchase[];
+  incomingPeriod: OpenPurchase[];
+  deliveredAtNeedsHome: number | null;
+  deliveredAtPeriod: number | null;
+  purchaseLanded: Record<string, PurchaseList[]>;
   held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
   deliveredAt: { [K in HeldKind]: number | null };
 }
@@ -125,6 +134,7 @@ interface HeldLists {
   days: OpenDay[];
   records: OpenRecord[];
   moves: OpenMove[];
+  purchases: OpenPurchase[];
 }
 
 export type HeldKind = keyof HeldLists;
@@ -134,11 +144,39 @@ export interface HeldWritesInput {
   days?: HeldWrite<OpenDay>[];
   records?: HeldWrite<OpenRecord>[];
   moves?: HeldWrite<OpenMove>[];
+  purchases?: HeldWrite<OpenPurchase>[];
 }
 
-const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves'];
+const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves', 'purchases'];
+
+const layPurchases = (state: RunwayState) => {
+  const laid = layPurchaseLists({
+    window: state.incoming.purchases,
+    needsHome: state.incomingNeedsHome,
+    period: state.incomingPeriod,
+    deliveredAt: {
+      window: state.deliveredAt.purchases,
+      needsHome: state.deliveredAtNeedsHome,
+      period: state.deliveredAtPeriod,
+    },
+    purchasesFrom: state.purchasesFrom,
+    periodFor:
+      state.periodFailedFor === state.periodFor ? null : state.periodFor,
+    held: state.held.purchases,
+    landed: state.purchaseLanded,
+  });
+  state.purchases = laid.purchases;
+  state.needsHome = laid.needsHome;
+  state.periodPurchases = laid.periodPurchases;
+  state.held.purchases = laid.held;
+  state.purchaseLanded = laid.landed;
+};
 
 const layHeld = (state: RunwayState, kind: HeldKind) => {
+  if (kind === 'purchases') {
+    layPurchases(state);
+    return;
+  }
   const { list, held } = applyHeldWrites<HeldLists[typeof kind][number]>(
     state.incoming[kind],
     state.held[kind],
@@ -201,9 +239,14 @@ const initialState: RunwayState = {
   historyFor: null,
   historyRecordsFor: null,
   historyFailedFor: null,
-  incoming: { days: [], records: [], moves: [] },
-  deliveredAt: { days: null, records: null, moves: null },
-  held: { days: [], records: [], moves: [] },
+  incoming: { days: [], records: [], moves: [], purchases: [] },
+  incomingNeedsHome: [],
+  incomingPeriod: [],
+  deliveredAtNeedsHome: null,
+  deliveredAtPeriod: null,
+  purchaseLanded: {},
+  deliveredAt: { days: null, records: null, moves: null, purchases: null },
+  held: { days: [], records: [], moves: [], purchases: [] },
 };
 
 export const holdWrites = createAction<HeldWritesInput>('runway/holdWrites');
@@ -323,8 +366,10 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ from: DateOnly; purchases: OpenPurchase[] }>,
     ) => {
-      state.purchases = action.payload.purchases;
+      state.incoming.purchases = action.payload.purchases;
+      state.deliveredAt.purchases = Date.now();
       state.purchasesFrom = action.payload.from;
+      layPurchases(state);
     },
     setLinkHistoryPurchases: (
       state,
@@ -333,24 +378,31 @@ export const runwaySlice = createSlice({
       state.linkHistoryPurchases = action.payload;
     },
     setNeedsHome: (state, action: PayloadAction<OpenPurchase[]>) => {
-      state.needsHome = action.payload;
+      state.incomingNeedsHome = action.payload;
+      state.deliveredAtNeedsHome = Date.now();
       state.isNeedsHomeLoaded = true;
+      layPurchases(state);
     },
     setPeriodPurchases: (
       state,
       action: PayloadAction<{ key: string; purchases: OpenPurchase[] }>,
     ) => {
-      state.periodPurchases = action.payload.purchases;
+      state.incomingPeriod = action.payload.purchases;
+      state.deliveredAtPeriod = Date.now();
       state.periodFor = action.payload.key;
       state.periodFailedFor = null;
+      layPurchases(state);
     },
     clearPeriodPurchases: (state) => {
-      state.periodPurchases = [];
+      state.incomingPeriod = [];
+      state.deliveredAtPeriod = null;
       state.periodFor = null;
       state.periodFailedFor = null;
+      layPurchases(state);
     },
     setPeriodFailed: (state, action: PayloadAction<string>) => {
       state.periodFailedFor = action.payload;
+      layPurchases(state);
     },
     setHistoryDays: (
       state,
