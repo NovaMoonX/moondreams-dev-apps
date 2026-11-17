@@ -149,7 +149,7 @@ def main():
     admin([put(path, profile)])
     for theme, allowed in [('plum', True), (None, True), ('neon', False), (3, False)]:
         check(f'profile theme {theme!r} update [o]', commit(o_tok, [put(path, dict(profile, theme=theme))]), allowed)
-    for field, value, allowed in [('voiceId', 'Sulafat', True), ('voiceId', None, True), ('voiceId', 'x' * 33, False), ('voiceId', 3, False), ('voiceSpeed', 0.8, True), ('voiceSpeed', 1.2, True), ('voiceSpeed', None, True), ('voiceSpeed', 1.3, False), ('voiceSpeed', 0.7, False), ('voiceSpeed', '1', False)]:
+    for field, value, allowed in [('voiceId', 'Sulafat', True), ('voiceId', None, True), ('voiceId', 'x' * 33, False), ('voiceId', 3, False), ('voiceSpeed', 0.8, True), ('voiceSpeed', 1.2, True), ('voiceSpeed', None, True), ('voiceSpeed', 1.3, False), ('voiceSpeed', 0.7, False), ('voiceSpeed', '1', False), ('whisperHeld', True, True), ('whisperHeld', None, True), ('whisperHeld', 'yes', False)]:
         check(f'profile {field} {value!r} update [o]', commit(o_tok, [put(path, dict(profile, **{field: value}))]), allowed)
     for value, allowed in [(True, True), (False, True), ('no', False), (None, False), (1, False)]:
         check(f'profile isLearningOn {value!r} update [o]', commit(o_tok, [put(path, dict(profile, isLearningOn=value))]), allowed)

@@ -5,6 +5,8 @@ import type { SealedPayload } from '../../appKeys/seal.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
 import { MAX_HINT_NOTES } from './nomos/commands.js';
 import type { ContextNote, ContextTopic } from './nomos/buildContext.js';
+import type { PrivacyFacts } from './privacy.js';
+import { readQuietFacts } from './nomos/quietTurn.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_TOPICS_READ = 100;
@@ -109,6 +111,8 @@ export interface HintedNote extends ContextNote {
   body: string;
   isUnchecked: boolean;
   topicIds: string[];
+  projectIds: string[];
+  quietFacts: PrivacyFacts;
 }
 
 /** The notes the device ranked for what was typed, opened under the caller's own uid: ids that are not ids, repeats, missing and unreadable notes are dropped and at most 8 are kept. A failed read is logged and leaves the turn without hints. */
@@ -141,6 +145,12 @@ export async function readHintedNotes(
                 isPrivate: data.privacy === 'private',
                 isUnchecked:
                   data.isFromGeneralAnswer === true && data.checkedAt == null,
+                quietFacts: readQuietFacts(words),
+                projectIds: Array.isArray(data.projectIds)
+                  ? data.projectIds.filter(
+                      (id): id is string => typeof id === 'string',
+                    )
+                  : [],
                 topicIds: Array.isArray(data.topicIds)
                   ? data.topicIds.filter(
                       (id): id is string => typeof id === 'string',

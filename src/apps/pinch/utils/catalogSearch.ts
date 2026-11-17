@@ -265,6 +265,8 @@ export function buildRecipeSearchIndex(
     rest: normalize(
       [
         ...recipe.ingredients.flatMap((line) => {
+          if (line.ingredientId === null)
+            return line.freeText ? [line.freeText] : [];
           const ingredient = ingredientsById.get(line.ingredientId);
           return ingredient ? [ingredient.name, ...ingredient.aliases] : [];
         }),

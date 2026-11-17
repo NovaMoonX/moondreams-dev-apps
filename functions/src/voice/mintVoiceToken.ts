@@ -25,10 +25,8 @@ export type MintVoiceTokenResult =
       model: string;
       mintId: string;
     }
-  | {
-      status: 'held';
-      reason: 'listenLimit' | 'mintLimit' | 'budgetReached' | 'unavailable';
-    };
+  | { status: 'held'; reason: 'listenLimit' | 'mintLimit' | 'budgetReached' }
+  | { status: 'held'; reason: 'unavailable'; detail: string };
 
 const KEY_NAME = 'DEEPGRAM_API_KEY';
 const MAX_CLOSED = 10;
@@ -37,9 +35,11 @@ const MINT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const secretReader = createOptionalSecretReader({ fetch: globalThis.fetch });
 const keyState = { isMissingLogged: false };
 
-const unavailable = (): MintVoiceTokenResult => ({
+/** `detail` is a short non-secret code for the debug notice: never the key, a token or the provider's body. */
+const unavailable = (detail: string): MintVoiceTokenResult => ({
   status: 'held',
   reason: 'unavailable',
+  detail,
 });
 
 const toClosed = (value: unknown): ClosedListen[] =>
@@ -104,7 +104,7 @@ export const mintVoiceToken = onCall(
         keyState.isMissingLogged = true;
         logger.error('voice.keyMissing', { event: 'voice.keyMissing' });
       }
-      return unavailable();
+      return unavailable('key-missing');
     }
     keyState.isMissingLogged = false;
 
@@ -154,7 +154,11 @@ export const mintVoiceToken = onCall(
         status,
       });
       if (status === 401 || status === 403) secretReader.forget(KEY_NAME);
-      return unavailable();
+      return unavailable(
+        status === null
+          ? `provider-failed-${error instanceof Error ? error.name : 'unknown'}`
+          : `provider-status-${status}`,
+      );
     }
   },
 );
