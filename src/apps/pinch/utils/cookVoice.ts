@@ -1,5 +1,10 @@
 import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
+import {
+  MEASURE_KIND,
+  type MeasureUnit,
+  readMeasureUnitWord,
+} from '@/utils/measureUtils';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import {
   MAX_COOK_DICTATION_CHARS,
@@ -147,6 +152,15 @@ export type CookCommand =
   | { kind: 'TIME_LEFT'; target: CookTimerTarget }
   | { kind: 'TIMER_ANSWER'; answer: CookTimerAnswer }
   | { kind: 'AMOUNT'; query: string; lineIds: string[] }
+  /** "How much butter in grams": the lines the words found (none when the recipe has no such ingredient) in the unit asked for. */
+  | { kind: 'CONVERT'; query: string; lineIds: string[]; unit: MeasureUnit }
+  /** "What's 200 ml in cups": a plain conversion with no ingredient. */
+  | {
+      kind: 'CONVERT_AMOUNT';
+      amount: number;
+      from: MeasureUnit;
+      to: MeasureUnit;
+    }
   | { kind: 'SWITCH_RECIPE'; recipeId: string | null; candidates: string[] }
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
   | { kind: 'READ_TIPS' }
@@ -1185,6 +1199,105 @@ const parseAmount = (
   return { kind: 'AMOUNT', query, lineIds };
 };
 
+const lineNameMatcher = createOptionMatcher<CookVoiceContext['lines'][number]>({
+  names: (line) => line.names,
+  foldPlurals: true,
+});
+
+const AMOUNT_WORD = String.raw`(?:\d+(?:\.\d+)?|an?)`;
+const CONVERT_PURE = [
+  new RegExp(
+    String.raw`^(?:what is|whats|convert) (?<n>${AMOUNT_WORD}) (?<from>.+?) (?:in|to|into|in to) (?<to>.+)$`,
+  ),
+  new RegExp(
+    String.raw`^how (?:much|many) (?<to>.+?) (?:is|are|in|are in|is in) (?<n>${AMOUNT_WORD}) (?<from>.+)$`,
+  ),
+];
+const NEED_TAIL = String.raw`(?: do (?:i|we) (?:need|use|add))?`;
+const CONVERT_INGREDIENT = [
+  new RegExp(
+    String.raw`^how (?:much|many) (?<unit>.+?) (?:of|is|are) (?<ing>.+?)${NEED_TAIL}$`,
+  ),
+  new RegExp(
+    String.raw`^how (?:much|many) (?:of )?(?<ing>.+?)${NEED_TAIL} (?:in|as) (?<unit>.+?)${NEED_TAIL}$`,
+  ),
+  /^convert (?:the |my )?(?<ing>.+?) (?:to|into) (?<unit>.+)$/,
+];
+const BARE_CONVERT = /^(?<ing>.+?) in (?<unit>.+)$/;
+const MIN_BARE_UNIT_LETTERS = 3;
+
+const hasConvertLeadIn = (text: string) =>
+  CONVERT_INGREDIENT.some((pattern) => pattern.test(wordsToDigits(text)));
+
+/** Ounces said of a volume are fluid ounces. */
+const toKindOfUnit = (unit: MeasureUnit, from: MeasureUnit): MeasureUnit =>
+  unit === 'OZ' && MEASURE_KIND[from] === 'VOLUME' ? 'FL_OZ' : unit;
+
+/** A fraction said in words becomes the number a conversion reads ("half a cup" is "0.5 cup"). */
+const fractionWordsToDigits = (text: string) =>
+  text
+    .replace(/\b(\d+) and a half\b/g, '$1.5')
+    .replace(/\b(\d+) and a quarter\b/g, '$1.25')
+    .replace(/\b(?:a )?half(?: of)?(?: an?)? (?=[a-z])/g, '0.5 ')
+    .replace(/\b(?:three|3) quarters(?: of)?(?: an?)? (?=[a-z])/g, '0.75 ')
+    .replace(/\b(?:a )?quarter(?: of)?(?: an?)? (?=[a-z])/g, '0.25 ');
+
+const parseConvertAmount = (text: string): CookCommand | null => {
+  const spoken = fractionWordsToDigits(text);
+  const groups = CONVERT_PURE.map(
+    (pattern) => spoken.match(pattern)?.groups,
+  ).find(Boolean);
+  if (!groups) return null;
+  const from = readMeasureUnitWord(groups.from);
+  const to = readMeasureUnitWord(groups.to);
+  const amount = /^an?$/.test(groups.n) ? 1 : Number(groups.n);
+  if (from === null || to === null || !(amount > 0)) return null;
+  return { kind: 'CONVERT_AMOUNT', amount, from, to: toKindOfUnit(to, from) };
+};
+
+const findConvertLines = (query: string, context: CookVoiceContext) => {
+  const words = query.split(' ').filter(Boolean);
+  if (
+    words.length === 0 ||
+    words.length > MAX_QUERY_WORDS ||
+    words.some((word) => QUERY_STOP_WORDS.has(word) || /^\d/.test(word))
+  ) {
+    return null;
+  }
+  const byName = matchByName(query, context.lines);
+  const close = lineNameMatcher.match(query, context.lines);
+  const matches = byName.length > 0 ? byName : close ? [close] : [];
+  const inStep = matches.filter((line) => line.isInStep);
+  return (inStep.length > 0 ? inStep : matches)
+    .slice(0, MAX_AMOUNT_MATCHES)
+    .map((line) => line.id);
+};
+
+/** A conversion that clearly asks for one: a unit word and, unless it is a plain measure, an ingredient. "Butter in grams" alone counts only when the recipe has that ingredient, so ordinary talk never converts. */
+const parseConvert = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const spoken = wordsToDigits(text);
+  const pure = parseConvertAmount(spoken);
+  if (pure) return pure;
+  const asked = CONVERT_INGREDIENT.map(
+    (pattern) => spoken.match(pattern)?.groups,
+  ).find((groups) => groups && readMeasureUnitWord(groups.unit) !== null);
+  const bareMatch = asked ? null : spoken.match(BARE_CONVERT)?.groups;
+  const bare =
+    bareMatch && bareMatch.unit.length >= MIN_BARE_UNIT_LETTERS
+      ? bareMatch
+      : null;
+  const groups = asked ?? bare;
+  const unit = groups ? readMeasureUnitWord(groups.unit) : null;
+  if (!groups || unit === null) return null;
+  const query = cleanQuery(groups.ing);
+  const lineIds = findConvertLines(query, context);
+  if (lineIds === null || (bare && lineIds.length === 0)) return null;
+  return { kind: 'CONVERT', query, lineIds, unit };
+};
+
 const parseSwitch = (
   text: string,
   context: CookVoiceContext,
@@ -1220,12 +1333,16 @@ const parseDictation = (transcript: string): CookCommand | null => {
   if (plain === '') return null;
   if (CANCEL_ANSWERS.has(plain)) return answer({ kind: 'NEVER_MIND' });
   if (EXACT.get(plain) === 'STOP_LISTENING') return { kind: 'STOP_LISTENING' };
-  if (text.length <= MAX_COOK_DICTATION_CHARS) return { kind: 'DICTATION', text };
+  if (text.length <= MAX_COOK_DICTATION_CHARS)
+    return { kind: 'DICTATION', text };
   const cut = text.slice(0, MAX_COOK_DICTATION_CHARS);
   const space = cut.lastIndexOf(' ');
   return {
     kind: 'DICTATION',
-    text: (space > MAX_COOK_DICTATION_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd(),
+    text: (space > MAX_COOK_DICTATION_CHARS / 2
+      ? cut.slice(0, space)
+      : cut
+    ).trimEnd(),
   };
 };
 
@@ -1261,6 +1378,7 @@ const parseOne = (
   }
   const result =
     parseTimer(text, context) ??
+    parseConvert(text, context) ??
     parseAmount(text, context) ??
     parseSwitch(text, context) ??
     parseChoiceAnswer(text, context);
@@ -1296,6 +1414,13 @@ export const readCookCommand = (
     const command = parseOne(guess, context);
     if (command === null) return null;
     if (rank > 0 && !isTrustedAlternate(guess, command)) return null;
+    if (
+      rank > 0 &&
+      command.kind === 'CONVERT' &&
+      !hasConvertLeadIn(normalizeTranscript(guess))
+    ) {
+      return null;
+    }
     return { command, transcript: normalizeTranscript(guess) };
   }, null);
   return result;
@@ -1348,7 +1473,8 @@ export const toSpokenAmount = (amountText: string) => {
     return `${groups.whole} and ${fraction}`;
   };
   const unitWords = groups.unit ? SPOKEN_UNITS[groups.unit] : undefined;
-  const isOne = whole <= 1 && (whole === 0 || fraction === null);
+  const isOne =
+    (whole === 1 && fraction === null) || (whole === 0 && fraction !== null);
   const getUnit = () => {
     if (!groups.unit) return '';
     if (!unitWords) return ` ${groups.unit}`;

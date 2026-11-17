@@ -193,11 +193,6 @@ anthropic_run() {
 google_done() { secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.googleapis.com && api_enabled gmail.googleapis.com && api_enabled drive.googleapis.com && api_enabled people.googleapis.com; }
 google_run() {
   bash scripts/connections/googleSetup.sh
-  if ! secret_has GOOGLE_OAUTH_CLIENT; then
-    add BROWSER_LIST "Google consent screen: scopes and In production status; and the Web OAuth client"
-    pause "Finish the clicks above, then press Enter to paste the client ID and secret: "
-    bash scripts/connections/googleSecrets.sh
-  fi
 }
 
 deepgram_read_granted() {
@@ -219,7 +214,12 @@ deepgram_run() {
   pause "Set a spend alert if you see one (or skip it), then press Enter: "
 }
 
-tts_done() { api_enabled texttospeech.googleapis.com; }
+tts_whisper_granted() {
+  gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' \
+    --filter='bindings.role=roles/aiplatform.user AND bindings.members~-compute@developer.gserviceaccount.com' \
+    --format='value(bindings.role)' 2>/dev/null | grep -q aiplatform
+}
+tts_done() { api_enabled texttospeech.googleapis.com && api_enabled aiplatform.googleapis.com && tts_whisper_granted; }
 # stdin is closed so the script doesn't offer a second sign-in; the check above already did it.
 tts_run() { bash scripts/voice/googleSetup.sh </dev/null; }
 

@@ -1,7 +1,14 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { getBankDueDay } from '@apps/runway/engine/cards';
+import { CARD_DUE_WARN_DAYS } from '@apps/runway/constants';
+import {
+  getBankDueDay,
+  getBankDueState,
+  type DueCard,
+} from '@apps/runway/engine/cards';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectBankOwedByCard } from '@apps/runway/store/selectors/cardBankSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard, OpenCardStatement } from '@apps/runway/types';
 
@@ -31,4 +38,46 @@ export const selectCardsWithBankDue = createSelector(
       );
       return day === null ? card : { ...card, dueDay: day };
     }),
+);
+
+/** At Link, each card read from its bank and what warns about it today, from the bank's minimum alone (`getBankDueState`); a card here never warns from Runway's own record of payments. */
+export const selectBankDueByCard = createSelector(
+  [
+    selectBankOwedByCard,
+    (state: RootState) => state.runway.cards,
+    (state: RootState) => state.runway.cardStatements,
+    (state: RootState) => state.runway.links,
+    (state: RootState) => state.runway.startedPayments,
+    (state: RootState) => state.runway.plan?.startDate ?? 0,
+    () => todayAsUtcDate(),
+  ],
+  (
+    owed,
+    cards,
+    cardStatements,
+    links,
+    started,
+    startDate,
+    today,
+  ): Record<string, DueCard | null> =>
+    Object.fromEntries(
+      cards.flatMap((card) => {
+        const entry = owed[card.id];
+        if (entry === undefined) return [];
+        return [
+          [
+            card.id,
+            getBankDueState({
+              card,
+              statement: getLinkedStatement({ cardStatements, links }, card),
+              started,
+              owedCents: entry.heldCents,
+              today,
+              days: CARD_DUE_WARN_DAYS,
+              since: Math.max(startDate, todayAsUtcDate(card.createdAt)),
+            }),
+          ],
+        ];
+      }),
+    ),
 );

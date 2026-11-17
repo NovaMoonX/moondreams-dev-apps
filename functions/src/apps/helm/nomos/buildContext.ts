@@ -31,6 +31,8 @@ export interface ContextTask {
   due: TaskDue | null;
   /** How many of a task's questions are answered, and when its meeting starts; null for any other task. */
   questions?: { answered: number; total: number; meetingAt: number } | null;
+  /** Kept quiet today, by its own mark or a quiet project. */
+  isQuiet?: boolean;
 }
 
 /** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
@@ -182,6 +184,7 @@ export interface ContextNote {
   body?: string;
   isUnchecked?: boolean;
   isPrivate?: boolean;
+  isQuiet?: boolean;
 }
 
 /** Each body trimmed so that all together stay within the cap: the shortest keep every word and what they leave over is shared by the longer ones. */
@@ -316,6 +319,8 @@ export interface EarlierTurn {
   said: string;
   did: string | null;
   taskIds: string[];
+  /** The line it kept off the speaker; never handed to the model. */
+  heldLine?: string | null;
   /** What this turn did that can still be taken back, one entry per execution. */
   undoable?: {
     executionId: string;
@@ -413,6 +418,7 @@ export function buildContext(input: ContextInput): {
   keyDates: AliasBook;
   topics: AliasBook;
   notes: AliasBook;
+  projects: AliasBook;
   parts: AliasBook;
   sections: AliasBook;
   procedures: AliasBook;
@@ -421,7 +427,6 @@ export function buildContext(input: ContextInput): {
   habits: AliasBook;
   scheduledActions: AliasBook;
   learnLater: AliasBook;
-  projects: AliasBook;
   habitNames: Map<string, string>;
   undoTurns: AliasBook;
   /** How many lines the model was shown for each turn it may offer to take back. */
@@ -432,13 +437,13 @@ export function buildContext(input: ContextInput): {
   const sectionBook = createAliasBook('s');
   const topics = createAliasBook('tp');
   const notes = createAliasBook('n');
+  const projects = createAliasBook('p');
   const procedures = createAliasBook('pr');
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
   const habits = createAliasBook('h');
   const scheduledBook = createAliasBook('sa');
   const learnBook = createAliasBook('r');
-  const projectBook = createAliasBook('p');
   const undoTurns = createAliasBook('u');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
@@ -465,10 +470,12 @@ export function buildContext(input: ContextInput): {
       questions: `${task.questions.answered} of ${task.questions.total} answered`,
       meeting: describeMeetingDay(task.questions.meetingAt, input.timeZone),
     }),
+    ...(task.isQuiet ? { isQuiet: true } : {}),
   }));
   const toRef = (task: ContextTask) => ({
     alias: aliases.add(task.id),
     title: task.title,
+    ...(task.isQuiet ? { isQuiet: true } : {}),
   });
   const screen = input.screen
     ? {
@@ -484,6 +491,7 @@ export function buildContext(input: ContextInput): {
     said: turn.said.slice(0, MAX_EARLIER_SAID_CHARS),
     did: turn.did,
     records: turn.taskIds.map((id) => aliases.add(id)),
+    ...((turn.heldLine ?? null) !== null ? { keptOffSpeaker: true } : {}),
     ...(turn.undoable?.some((entry) => entry.units.length > 0)
       ? {
           undoable: turn.undoable
@@ -515,6 +523,7 @@ export function buildContext(input: ContextInput): {
     alias: notes.add(note.id),
     title: note.title,
     ...(noteBodies[index] === null ? {} : { body: noteBodies[index] }),
+    ...(note.isQuiet ? { isQuiet: true } : {}),
     ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
   const focusedProcedure = input.focusedProcedure ?? null;
@@ -705,21 +714,25 @@ export function buildContext(input: ContextInput): {
               .slice(0, MAX_CONTEXT_PROJECTS)
               .map(
                 ({
+                  id,
                   name,
                   milestones,
+                  isQuiet,
                   kind,
                   status,
                   why,
                   date,
                   researchOffered,
                 }) => ({
+                  alias: projects.add(id),
                   name,
                   ...(date && { date }),
                   ...(researchOffered.length > 0 && { researchOffered }),
                   ...(kind === 'goal' && { kind }),
                   ...(status && { status }),
                   ...(why && { why }),
-                  ...(milestones.length > 0 && { milestones }),
+                  ...(milestones.length > 0 ? { milestones } : {}),
+                  ...(isQuiet ? { isQuiet: true } : {}),
                 }),
               ),
           )}</open_projects>`,
@@ -798,7 +811,7 @@ export function buildContext(input: ContextInput): {
             toImportanceView(input.importance, (entry) =>
               entry.kind === 'habit'
                 ? habits.add(entry.id)
-                : projectBook.add(entry.id),
+                : projects.add(entry.id),
             ),
           )}</importance>`,
         ]
@@ -851,6 +864,7 @@ export function buildContext(input: ContextInput): {
     keyDates,
     topics,
     notes,
+    projects,
     parts,
     sections: sectionBook,
     procedures,
@@ -859,7 +873,6 @@ export function buildContext(input: ContextInput): {
     habits,
     scheduledActions: scheduledBook,
     learnLater: learnBook,
-    projects: projectBook,
     habitNames: new Map(
       (input.habits ?? [])
         .slice(0, MAX_CONTEXT_HABITS)
