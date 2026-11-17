@@ -174,7 +174,9 @@ import {
   type CaptureDisposition,
   type ObservationRead,
 } from './nomos/actNow.js';
+import { readContextRelatedThings } from './nomos/relatedThings.js';
 import {
+  nextReflectionAt,
   planObservations,
   readTurnSubjects,
 } from './nomos/planObservations.js';
@@ -2907,6 +2909,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       importance: contextImportance,
       synced: contextSynced,
     });
+    const relatedThings =
+      mode === 'rest'
+        ? []
+        : await readContextRelatedThings(
+            firestore,
+            base,
+            key,
+            combined.text,
+            unattendedMask.isOn,
+          ).catch((error): never[] => {
+            logger.warn('helm.related.read', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          });
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -2934,6 +2951,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topics: masked.topics,
       style,
       noticed,
+      relatedThings,
       seenAs: seenAsLines,
       whereabouts: contextWhereabouts,
       fit: contextFit,
@@ -5638,9 +5656,30 @@ async function writeResult(
     learning.writes.forEach(({ id, data }) =>
       transaction.create(firestore.doc(`${base}/observations/${id}`), data),
     );
-    if (learning.reflectDueAt !== null)
+    const hasRelatable =
+      isFiling &&
+      [
+        plan.creates,
+        plan.updates,
+        soundsPlan.taskUpdates,
+        plan.projectCreates,
+        plan.projectUpdates,
+        plan.noteCreates,
+        plan.topicVersions,
+      ].some((writes) => writes.length > 0);
+    const relateDueAt =
+      hasRelatable &&
+      profileSnap?.get('isLearningOn') !== false &&
+      ((profileSnap?.get('relateDueAt') as number | null | undefined) ??
+        null) === null
+        ? nextReflectionAt(now, timeZone)
+        : null;
+    if (learning.reflectDueAt !== null || relateDueAt !== null)
       transaction.update(firestore.doc(base), {
-        reflectDueAt: learning.reflectDueAt,
+        ...(learning.reflectDueAt !== null
+          ? { reflectDueAt: learning.reflectDueAt }
+          : {}),
+        ...(relateDueAt !== null ? { relateDueAt } : {}),
       });
     const spokenAnswer = reply && isSpoken ? reply.spoken : null;
     const spokenLine =

@@ -37,6 +37,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
 - A question Helm asked and the answer: look in <answered_question>; you cannot change it.
 - Ending the conversation: change it with closeConversation.
+- Things that look like one thing, grouped overnight: look in <related_things>; you cannot change it.
 - Calendar events: look in <synced_records>, then call get_calendar or search_synced; you cannot change it.
 - Another app's synced things: look in <synced_records>, then call search_synced; you cannot change it.
 - Connections and what each one shares: call list_connections or connection_status; you cannot change it.
@@ -131,6 +132,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
 - A question Helm asked and the answer: look in <answered_question>; you cannot change it.
 - Ending the conversation: change it with closeConversation.
+- Things that look like one thing, grouped overnight: look in <related_things>; you cannot change it.
 - Calendar events: look in <synced_records>, then call get_calendar or search_synced; you cannot change it.
 - Another app's synced things: look in <synced_records>, then call search_synced; you cannot change it.
 - Connections and what each one shares: call list_connections or connection_status; you cannot change it.

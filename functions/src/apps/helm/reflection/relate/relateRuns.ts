@@ -17,3 +17,14 @@ export const RELATE_BATCH = {
   },
   whenWantedNow: 'answerAtOnce',
 } as const satisfies BatchJobSettings;
+
+/** The connected categories the nightly grouping may read, each `<connector id>/<category id>`. */
+export const RELATE_SYNCED_CATEGORIES = [
+  'app:going-once/sales',
+  'app:going-once/things',
+  'app:going-once/pickups',
+  'app:runway/horizon',
+  'app:runway/upcomingBills',
+  'app:waypoint/trips',
+  'app:waypoint/myTasks',
+] as const;

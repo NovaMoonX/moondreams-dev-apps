@@ -27,12 +27,15 @@ export const REFLECT_BATCH = {
 
 export const RUNS_PATH = 'apps/helm/reflectionRuns';
 export const OPEN_RUN_STATUSES = ['creating', 'submitted'];
-export const statePath = (uid: string) =>
-  `apps/helm/server/${uid}/reflection/state`;
+export type JobId = 'reflect' | 'relate';
+
+export const statePath = (uid: string, jobId: JobId = 'reflect') =>
+  `apps/helm/server/${uid}/reflection/${jobId === 'reflect' ? 'state' : jobId}`;
 
 export type RunStatus = 'creating' | 'submitted' | 'collected' | 'lost';
 
 export interface RunRequest {
+  jobId: JobId;
   uid: string;
   dayKey: string;
   answersDueAt: number;
@@ -81,7 +84,7 @@ const toRequests = (value: unknown): Record<string, RunRequest> =>
   typeof value === 'object' && value !== null
     ? Object.fromEntries(
         Object.entries(value).flatMap(([id, request]) => {
-          const { uid, dayKey, answersDueAt, reserved } = (request ??
+          const { jobId, uid, dayKey, answersDueAt, reserved } = (request ??
             {}) as Record<string, unknown>;
           return typeof uid === 'string' &&
             typeof dayKey === 'string' &&
@@ -90,6 +93,7 @@ const toRequests = (value: unknown): Record<string, RunRequest> =>
                 [
                   id,
                   {
+                    jobId: jobId === 'relate' ? 'relate' : 'reflect',
                     uid,
                     dayKey,
                     answersDueAt,
@@ -145,9 +149,10 @@ export const releaseLeaseIn = (
   uid: string,
   attempts: number,
   lastDayKey: string | null,
+  jobId: JobId = 'reflect',
 ) =>
   transaction.set(
-    firestore.doc(statePath(uid)),
+    firestore.doc(statePath(uid, jobId)),
     toReleasedState(attempts, lastDayKey),
   );
 
