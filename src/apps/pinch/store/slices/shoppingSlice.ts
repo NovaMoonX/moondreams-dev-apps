@@ -1,30 +1,41 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import {
+  addHeldCases,
+  deliverHeld,
+  emptyHeldList,
+  type HeldList,
+} from '@apps/pinch/store/heldLists';
 import type { ShoppingItem } from '@apps/pinch/types';
 
 export interface ShoppingState {
   items: ShoppingItem[];
+  hold: HeldList<ShoppingItem>;
   isLoaded: boolean;
   loadError: string | null;
 }
 
 const initialState: ShoppingState = {
   items: [],
+  hold: emptyHeldList<ShoppingItem>(),
   isLoaded: false,
   loadError: null,
 };
+
+const belongs = () => true;
 
 export const shoppingSlice = createSlice({
   name: 'pinch/shopping',
   initialState,
   reducers: {
     setShopping(state, action: PayloadAction<ShoppingItem[]>) {
-      state.items = action.payload;
+      state.items = deliverHeld(state.hold, action.payload, belongs);
       state.isLoaded = true;
       state.loadError = null;
     },
     setShoppingLoadError(state, action: PayloadAction<string>) {
+      state.hold = emptyHeldList();
       state.isLoaded = true;
       state.items = [];
       state.loadError = action.payload;
@@ -33,6 +44,14 @@ export const shoppingSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
+    addHeldCases<ShoppingItem, ShoppingState>(
+      builder,
+      'shoppingItems',
+      belongs,
+      (state, list) => {
+        state.items = list;
+      },
+    );
   },
 });
 
