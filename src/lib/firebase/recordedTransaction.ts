@@ -88,7 +88,7 @@ const recordingTransaction = (
   return recording;
 };
 
-/** Hands each attempt's writes to `onWrites` before it commits, since Firestore shows a transaction only once the server answers. */
+/** Hands each attempt's writes to `onWrites` before it commits, since Firestore shows a transaction only once the server answers; a throw there never stops the commit. */
 export function runRecordedTransaction<T>(
   body: (transaction: Transaction) => Promise<T>,
   onWrites: (
@@ -100,7 +100,9 @@ export function runRecordedTransaction<T>(
     const writes: RecordedWrite[] = [];
     const reads: RecordedReads = new Map();
     const result = await body(recordingTransaction(transaction, writes, reads));
-    await onWrites(writes, reads);
+    await Promise.resolve()
+      .then(() => onWrites(writes, reads))
+      .catch((error: unknown) => console.error(error));
     return result;
   });
 }

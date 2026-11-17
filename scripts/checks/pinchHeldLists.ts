@@ -114,6 +114,22 @@ assert.deepEqual(
   'a write that changes nothing holds nothing',
 );
 
+assert.deepEqual(
+  buildPinchHolds(
+    [
+      {
+        segments: kitchen('products', 'p'),
+        before: { id: 'p', sizeAmount: 2, note: 'x' },
+        after: { id: 'p', sizeAmount: 2 },
+      },
+    ],
+    'u1',
+    't',
+  )?.products?.[0].fields,
+  ['note'],
+  'a field the write removed is held as removed',
+);
+
 const box = { id: 'box', status: 'IN_STOCK', servings: 2 } as Container;
 const finished = { ...box, status: 'DONE', servings: 0 } as Container;
 const holdBox = holdPinchWrites({

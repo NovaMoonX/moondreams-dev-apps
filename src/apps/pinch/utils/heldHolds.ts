@@ -30,7 +30,9 @@ const readTarget = (
 type Fields = { [key: string]: unknown };
 
 const changedFields = (before: Fields | null, after: Fields): string[] =>
-  Object.keys(after).filter(
+  Array.from(
+    new Set([...Object.keys(before ?? {}), ...Object.keys(after)]),
+  ).filter(
     (key) =>
       before === null ||
       toFingerprint(before[key]) !== toFingerprint(after[key]),
