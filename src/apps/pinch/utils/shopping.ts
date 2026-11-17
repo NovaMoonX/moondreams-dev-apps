@@ -727,7 +727,11 @@ const getRecipeRawLines = (
 ): ShoppingLine[] =>
   recipe.servings > 0
     ? recipe.ingredients
-        .filter((line) => ingredientsById.has(line.ingredientId))
+        .flatMap((line) =>
+          line.ingredientId !== null && ingredientsById.has(line.ingredientId)
+            ? [{ ...line, ingredientId: line.ingredientId }]
+            : [],
+        )
         .map((line): ShoppingLine =>
           line.amount === null
             ? { ingredientId: line.ingredientId, amount: null, unit: 'EACH' }
@@ -739,7 +743,7 @@ const getRecipeRawLines = (
         )
     : [];
 
-/** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone is left out, and one with no amount stays just the name. */
+/** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone or that is not a kitchen ingredient is left out, and one with no amount stays just the name. */
 export function getRecipeLines(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
@@ -1554,11 +1558,9 @@ export function getShoppingCost(
       rowId: getShopRowId(line.ingredientId, line.unit),
       ...getLineCost(
         {
-          id: getShoppingItemId(line.ingredientId, line.unit),
           ingredientId: line.ingredientId,
           amount: line.amount,
           unit: line.unit,
-          note: null,
         },
         ingredientsById.get(line.ingredientId),
         defaultProducts.get(line.ingredientId),

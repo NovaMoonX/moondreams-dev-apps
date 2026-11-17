@@ -24,7 +24,11 @@ import {
   getInitialCollectionsChoice,
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
-import { addPrepToNote, splitPrep } from '@apps/pinch/utils/ingredientNames';
+import {
+  addPrepToNote,
+  splitPrep,
+  toTypedIngredientName,
+} from '@apps/pinch/utils/ingredientNames';
 import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
 import {
   normalizeName,
@@ -73,8 +77,10 @@ const NO_SOURCE_CHOICE: SourceChoice = { choice: '', newText: '' };
 
 export interface IngredientRow {
   id: string;
-  /** Empty while the reader's name hasn't been resolved to an ingredient yet. */
+  /** Empty while the reader's name hasn't been resolved to an ingredient yet, and for a free line. */
   ingredientId: string;
+  /** The words of a line that isn't a kitchen ingredient ("reserved pasta water"); null for every ingredient line. */
+  freeText: string | null;
   amount: string;
   unit: Unit;
   /** No amount by choice ("to taste", "a handful"): the note says how much, if anything, and the line saves without one. */
@@ -118,7 +124,8 @@ export const getInitialData = (
   description: recipe?.description ?? '',
   ingredients: (recipe?.ingredients ?? []).map((line) => ({
     id: line.id,
-    ingredientId: line.ingredientId,
+    ingredientId: line.ingredientId ?? '',
+    freeText: line.ingredientId === null ? (line.freeText ?? '') : null,
     amount: line.amount === null ? '' : String(line.amount),
     unit: line.unit,
     isAmountless: line.amount === null,
@@ -204,6 +211,7 @@ export const getDataFromExtracted = (
       {
         id: generateUuid(),
         ingredientId: match?.id ?? stagedId ?? '',
+        freeText: null,
         amount: amount === null ? '' : String(amount),
         unit,
         isAmountless: amount === null,
@@ -267,6 +275,49 @@ export const getDataFromIdea = (
       : NO_SOURCE_CHOICE,
 });
 
+/** One name makes one new ingredient: rows that stage the same name (ignoring case and spacing) share the first one's id, and each new ingredient is listed once. */
+export const settleNewIngredients = (rows: IngredientRow[]) => {
+  const firstIds = rows.reduce(
+    (acc, row) =>
+      row.newName === null || acc.has(normalizeName(row.newName))
+        ? acc
+        : acc.set(normalizeName(row.newName), row.ingredientId),
+    new Map<string, string>(),
+  );
+  const settled = rows.map((row) =>
+    row.newName === null
+      ? row
+      : {
+          ...row,
+          ingredientId:
+            firstIds.get(normalizeName(row.newName)) ?? row.ingredientId,
+        },
+  );
+  const newIngredients = [
+    ...new Map(
+      settled.flatMap((row) =>
+        row.newName === null
+          ? []
+          : [
+              [
+                row.ingredientId,
+                {
+                  id: row.ingredientId,
+                  name: toTypedIngredientName(row.newName),
+                },
+              ] as const,
+            ],
+      ),
+    ).values(),
+  ];
+
+  return { rows: settled, newIngredients };
+};
+
+/** A reader's name no ingredient is chosen for yet: a free line is resolved by being free. */
+export const isRowUnresolved = (row: IngredientRow) =>
+  row.ingredientId === '' && row.freeText === null;
+
 /** Whether a row's amount can be saved: a number above zero and within the cap, or no amount by choice. */
 export const isRowAmountValid = (row: IngredientRow) => {
   if (row.isAmountless) return true;
@@ -282,7 +333,8 @@ export const isRowAmountValid = (row: IngredientRow) => {
 /** The line a row saves as; one with no amount by choice saves none, in `EACH`. */
 export const toRecipeLine = (row: IngredientRow): RecipeIngredient => ({
   id: row.id,
-  ingredientId: row.ingredientId,
+  ingredientId: row.freeText === null ? row.ingredientId : null,
+  freeText: row.freeText === null ? null : row.freeText.trim(),
   amount: row.isAmountless ? null : Number(row.amount),
   unit: row.isAmountless ? 'EACH' : row.unit,
   note: row.note,
@@ -336,6 +388,7 @@ const isIngredientRow = (value: unknown) =>
   isTextOrNull(value.note) &&
   isTextOrNull(value.proposedName) &&
   isTextOrNull(value.newName) &&
+  (value.freeText === undefined || isTextOrNull(value.freeText)) &&
   isTextOrNull(value.group);
 
 const isLinkDraft = (value: unknown) =>
@@ -400,6 +453,10 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
   if (!isShaped) return null;
   return {
     ...(stored as unknown as RecipeFormData),
+    ingredients: (ingredients as IngredientRow[]).map((row) => ({
+      ...row,
+      freeText: row.freeText ?? null,
+    })),
     categories: getCategories({ categories: categories as DishCategory[] }),
   };
 };

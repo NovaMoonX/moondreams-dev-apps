@@ -13,13 +13,7 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import {
-  ChevronLeft,
-  ListChecks,
-  Pause,
-  Play,
-  Timer,
-} from 'lucide-react';
+import { ChevronLeft, ListChecks, Pause, Play, Timer } from 'lucide-react';
 
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import Subview from '@/components/Subview';
@@ -159,6 +153,7 @@ import {
   type CookVoiceTimer,
 } from '@apps/pinch/utils/cookVoice';
 import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
+import { getLineKey, getLineName } from '@apps/pinch/utils/freeLines';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
@@ -484,7 +479,10 @@ function CookingSession({
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
   const [gotItNotes, setGotItNotes] = useState<string[]>([]);
-  const [dockOpen, setDockOpen] = useState<{ key: string; view: DockView | null } | null>(null);
+  const [dockOpen, setDockOpen] = useState<{
+    key: string;
+    view: DockView | null;
+  } | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -521,13 +519,18 @@ function CookingSession({
           matchStepIngredients(
             candidate.recipe.steps,
             candidate.recipe.ingredients.map((line) => {
-              const ingredient = ingredientsById.get(line.ingredientId);
+              const ingredient =
+                line.ingredientId === null
+                  ? undefined
+                  : ingredientsById.get(line.ingredientId);
               return {
                 id: line.id,
-                ingredientId: line.ingredientId,
+                ingredientId: getLineKey(line),
                 names: ingredient
                   ? [ingredient.name, ...ingredient.aliases]
-                  : [],
+                  : line.freeText
+                    ? [line.freeText]
+                    : [],
                 group: line.group ?? null,
               };
             }),
@@ -542,8 +545,7 @@ function CookingSession({
       const repeatedGroups = getRepeatedLineGroups(target.ingredients);
       const result = target.ingredients.map((line) => ({
         id: line.id,
-        name:
-          ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
+        name: getLineName(line, ingredientsById),
         note: line.amount === null ? null : line.note,
         amountText:
           line.amount === null
@@ -807,17 +809,37 @@ function CookingSession({
     const lastEntry =
       index !== 0
         ? null
-        : getLastTimeNote(notesByRecipe.get(recipe.id) ?? NO_RECIPE_NOTES, recipe.steps);
+        : getLastTimeNote(
+            notesByRecipe.get(recipe.id) ?? NO_RECIPE_NOTES,
+            recipe.steps,
+          );
     return [
-      { view: 'LAST' as const, text: getSpokenEntries(lastEntry === null ? [] : [lastEntry], 'NOTES', formatDateShort) },
-      { view: 'TIP' as const, text: getSpokenEntries(stepEntries, 'TIPS', formatDateShort) },
-      { view: 'NOTE' as const, text: getSpokenEntries(stepEntries, 'NOTES', formatDateShort) },
-      { view: 'CHANGE' as const, text: getSpokenEntries(stepEntries, 'CHANGES', formatDateShort) },
+      {
+        view: 'LAST' as const,
+        text: getSpokenEntries(
+          lastEntry === null ? [] : [lastEntry],
+          'NOTES',
+          formatDateShort,
+        ),
+      },
+      {
+        view: 'TIP' as const,
+        text: getSpokenEntries(stepEntries, 'TIPS', formatDateShort),
+      },
+      {
+        view: 'NOTE' as const,
+        text: getSpokenEntries(stepEntries, 'NOTES', formatDateShort),
+      },
+      {
+        view: 'CHANGE' as const,
+        text: getSpokenEntries(stepEntries, 'CHANGES', formatDateShort),
+      },
     ].flatMap((segment) =>
       segment.text === null ? [] : [{ view: segment.view, text: segment.text }],
     );
   };
-  const isOnStep = focused === null && isStepsView && hasSteps && !isFinishShown;
+  const isOnStep =
+    focused === null && isStepsView && hasSteps && !isFinishShown;
   const dockKey = `${recipe.id}:${index}`;
   const leadingNote = useLastTimeNote(index === 0 ? recipe.id : null);
   const isLeadingNoteOpen =
@@ -927,9 +949,7 @@ function CookingSession({
           cookId: record.recordedCookId,
           noteIds: pending,
         }),
-      ).finally(() =>
-        pending.forEach((id) => tyingToCook.current.delete(id)),
-      );
+      ).finally(() => pending.forEach((id) => tyingToCook.current.delete(id)));
     });
   }, [records, capture.captured, notesByRecipe, cooksById, dispatch, uid]);
 
@@ -1791,7 +1811,10 @@ function CookingSession({
         const crossesTo =
           timerNext?.kind === 'RECIPE' ? getTitle(timerNext.recipeId) : null;
         goNextFromTimer();
-        return done(crossesTo === null ? undefined : `Showing ${crossesTo}`, '');
+        return done(
+          crossesTo === null ? undefined : `Showing ${crossesTo}`,
+          '',
+        );
       }
       if (timerSecondary === 'BACK') {
         backToStep();
@@ -2132,7 +2155,8 @@ function CookingSession({
         leadingNote === null
           ? null
           : getSpokenEntries([leadingNote], 'NOTES', formatDateShort);
-      if (text === null) return refuse("You haven't left a note from last time.");
+      if (text === null)
+        return refuse("You haven't left a note from last time.");
       showDockView('LAST');
       return done('Last time', text);
     },
@@ -2166,7 +2190,8 @@ function CookingSession({
       if (question === null || question.kind !== 'DICTATE') {
         return refuse('Nothing was asked.');
       }
-      if (!isDictationHere(question)) return refuse('That step is no longer open.');
+      if (!isDictationHere(question))
+        return refuse('That step is no longer open.');
       const word = ENTRY_WORDS[question.entryKind];
       const id = generateUuid();
       setSaved({
@@ -2199,7 +2224,9 @@ function CookingSession({
           setSaved(null);
           voice.speak(`Sorry, I couldn't save that ${word}.`);
         });
-      const coaching = hasCoachedUndo.current ? '' : ' Say undo that to take it back.';
+      const coaching = hasCoachedUndo.current
+        ? ''
+        : ' Say undo that to take it back.';
       hasCoachedUndo.current = true;
       return done(
         `Saved your ${word} for step ${question.stepIndex + 1}`,
@@ -2215,7 +2242,6 @@ function CookingSession({
         written === undefined ||
         written.kind === 'TWEAK' ||
         written.updatedAt !== written.createdAt ||
-         
         Date.now() - last.at > UNDO_DICTATION_MS ||
         isFinishShown ||
         last.recipeId !== recipe.id ||
@@ -2314,10 +2340,17 @@ function CookingSession({
     timers: timers.timers.map(toVoiceTimerRef),
     choice: getVoiceChoice(),
     lines: voiceStep.recipe.ingredients.map((line) => {
-      const ingredient = ingredientsById.get(line.ingredientId);
+      const ingredient =
+        line.ingredientId === null
+          ? undefined
+          : ingredientsById.get(line.ingredientId);
       return {
         id: line.id,
-        names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
+        names: ingredient
+          ? [ingredient.name, ...ingredient.aliases]
+          : line.freeText
+            ? [line.freeText]
+            : [],
         isInStep: voiceStepMatch?.lineIds.includes(line.id) ?? false,
       };
     }),
@@ -2488,7 +2521,9 @@ function CookingSession({
       size='icon'
       rounded='full'
       className='size-10 shrink-0'
-      aria-label={timers.liveCount > 0 ? `Timers, ${timers.liveCount} going` : 'Timers'}
+      aria-label={
+        timers.liveCount > 0 ? `Timers, ${timers.liveCount} going` : 'Timers'
+      }
       onClick={handleShowTimers}
     >
       <Timer className='h-4 w-4' aria-hidden='true' />
