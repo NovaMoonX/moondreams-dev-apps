@@ -16,13 +16,28 @@ interface LinkedSectionProps {
 
 function LinkedSection({ kind, parentId }: LinkedSectionProps) {
   const groupings = useAppSelector(selectOpenGroupings);
+  const openTasks = useAppSelector((state) => state.helm.openTasks.items);
+  const projectTasks = useAppSelector((state) => state.helm.projectTasks.items);
+  const listedTaskKeys = useMemo(
+    () =>
+      new Set(
+        [...openTasks, ...projectTasks]
+          .filter((task) => task.projectId === parentId)
+          .map((task) => `tasks/${task.id}`),
+      ),
+    [openTasks, projectTasks, parentId],
+  );
   const rows = useMemo(
     () =>
       Array.from(
         new Map(
           selectGroupingsUnder(groupings, kind, parentId).flatMap((grouping) =>
             grouping.sources
-              .filter((source) => source.key !== `${kind}s/${parentId}`)
+              .filter(
+                (source) =>
+                  source.key !== `${kind}s/${parentId}` &&
+                  !(kind === 'project' && listedTaskKeys.has(source.key)),
+              )
               .map((source) => [
                 source.key,
                 { source, title: grouping.titles[source.key] },
@@ -30,7 +45,7 @@ function LinkedSection({ kind, parentId }: LinkedSectionProps) {
           ),
         ).values(),
       ),
-    [groupings, kind, parentId],
+    [groupings, kind, parentId, listedTaskKeys],
   );
   if (rows.length === 0) return null;
 
