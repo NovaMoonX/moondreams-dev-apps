@@ -70,7 +70,7 @@ export interface ApplyHeldOptions {
   deliveredAt?: number | null;
 }
 
-/** Lays held writes over a listener's list; a hold lets go when the list shows it, never merely because it settled. */
+/** Lays held writes over a listener's list; a hold shows only the fields it wrote, so a later write to another field shows through, and lets go when the list shows it, never merely because it settled. */
 export function applyHeldWrites<T>(
   incoming: readonly T[],
   held: readonly HeldWrite<T>[],
@@ -89,7 +89,8 @@ export function applyHeldWrites<T>(
     ...incoming.flatMap((item) => {
       const hold = holdById.get(idOf(item));
       if (hold === undefined) return [item];
-      return hold.item === null ? [] : [hold.item];
+      if (hold.item === null) return [];
+      return [{ ...item, ...(pickFields(hold.item, hold.fields) as T) }];
     }),
     ...kept.flatMap((hold) =>
       hold.item !== null && !byId.has(hold.id) ? [hold.item] : [],

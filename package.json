@@ -79,6 +79,7 @@
     "check:serving": "tsx scripts/checks/serving.ts",
     "check:stale-chunk": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/staleChunk.ts",
     "check:sunset-times": "TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/sunsetTimes.ts",
+    "check:helm-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHeldLists.ts",
     "check:held-writes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/heldWrites.ts",
     "check:project-writes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/projectWrites.ts",
     "check:runway-purchase-holds": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayPurchaseHolds.ts",

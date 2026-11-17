@@ -215,4 +215,14 @@ assert.equal(
   "so another device's change to that field never keeps it held",
 );
 
+const showsThrough = apply(
+  [{ id: 'a', cents: 1, meta: { a: 8, b: 8 } }],
+  [partial()],
+);
+assert.deepEqual(
+  showsThrough.list[0],
+  { id: 'a', cents: 9, meta: { a: 8, b: 8 } },
+  'a hold shows only the fields it wrote, so a later write to another field shows through',
+);
+
 console.log('held writes: all checks passed');

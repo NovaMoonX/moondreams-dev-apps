@@ -44,7 +44,7 @@ const toAttachments = (value: unknown): MediaAttachment[] =>
     : [];
 
 /** A medium that won't open is kept, with no nonces, so a page can say so instead of dropping it. */
-async function openMedia(
+export async function openMedia(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenMedia> {
