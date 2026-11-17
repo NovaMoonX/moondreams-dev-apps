@@ -10,6 +10,7 @@ import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowDown,
+  ArrowRight,
   ArrowRightLeft,
   ArrowUp,
   Pencil,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import AppCheckbox from '@/components/AppCheckbox';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import LabelChip from '@/components/LabelChip';
@@ -529,18 +531,28 @@ function IngredientEditor({
           <div className='grid grid-cols-2 gap-3'>
             <Field label='Amount'>
               {(id) => (
-                <Input
-                  id={id}
-                  inputMode='decimal'
-                  variant='outline'
-                  ref={amountRef}
-                  autoFocus={isAmountJustAdded}
-                  value={row.amount}
-                  onChange={(event) => {
-                    setPending(null);
-                    onUpdate({ amount: event.target.value, adaptedFrom: null });
-                  }}
-                />
+                <>
+                  <Input
+                    id={id}
+                    inputMode='decimal'
+                    variant='outline'
+                    ref={amountRef}
+                    autoFocus={isAmountJustAdded}
+                    value={row.amount}
+                    onChange={(event) => {
+                      setPending(null);
+                      onUpdate({
+                        amount: event.target.value,
+                        adaptedFrom: null,
+                      });
+                    }}
+                  />
+                  {row.adaptedFrom !== null && (
+                    <span className='text-muted-foreground block text-xs font-normal'>
+                      Adapted from {getOriginalText(row.adaptedFrom)}
+                    </span>
+                  )}
+                </>
               )}
             </Field>
             <div className='space-y-1.5'>
@@ -569,16 +581,41 @@ function IngredientEditor({
             </div>
           )}
           {row.adaptedFrom !== null && (
-            <div className='flex min-h-10 items-center gap-1'>
-              <span className='text-muted-foreground min-w-0 flex-1 text-sm'>
-                From {getOriginalText(row.adaptedFrom)}
-              </span>
+            <div
+              role='group'
+              aria-label='Round or put back'
+              className='border-border flex flex-wrap items-center gap-2 rounded-xl border p-2'
+            >
+              {isRoundRowDrawn &&
+                [
+                  { target: down, Icon: ArrowDown, word: 'down' },
+                  { target: up, Icon: ArrowUp, word: 'up' },
+                ].map(({ target, Icon, word }) =>
+                  target === null || target === typedAmount ? null : (
+                    <Button
+                      key={word}
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      rounded='full'
+                      className={UNIT_CHIP_CLASS}
+                      aria-label={`Round ${word} to ${formatAmountText(target)} ${UNIT_LABELS[row.unit]}`}
+                      onClick={() =>
+                        onUpdate({ amount: formatAmountText(target) })
+                      }
+                    >
+                      <Icon className='h-3.5 w-3.5' aria-hidden='true' />
+                      {formatAmountText(target)} {UNIT_LABELS[row.unit]}
+                    </Button>
+                  ),
+                )}
               <Button
                 type='button'
                 variant='secondary'
                 size='sm'
                 rounded='full'
-                className={UNIT_CHIP_CLASS}
+                className={join(UNIT_CHIP_CLASS, 'ml-auto')}
+                aria-label={`Use the original, ${getOriginalText(row.adaptedFrom)}`}
                 onClick={() => {
                   const { amount, unit, adaptedFrom } = restoreRow(row);
                   onUpdate({ amount, unit, adaptedFrom });
@@ -587,33 +624,6 @@ function IngredientEditor({
                 <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
                 Use original
               </Button>
-            </div>
-          )}
-          {row.adaptedFrom !== null && isMeasureUnit(row.unit) && (
-            <div className='flex min-h-10 flex-wrap items-center gap-x-2'>
-              <span className='text-muted-foreground text-sm'>Round to</span>
-              {[
-                { target: down, Icon: ArrowDown, word: 'down' },
-                { target: up, Icon: ArrowUp, word: 'up' },
-              ].map(({ target, Icon, word }) =>
-                target === null || target === typedAmount ? null : (
-                  <Button
-                    key={word}
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    rounded='full'
-                    className={UNIT_CHIP_CLASS}
-                    aria-label={`Round ${word} to ${formatAmountText(target)} ${UNIT_LABELS[row.unit]}`}
-                    onClick={() =>
-                      onUpdate({ amount: formatAmountText(target) })
-                    }
-                  >
-                    <Icon className='h-3.5 w-3.5' aria-hidden='true' />
-                    {formatAmountText(target)} {UNIT_LABELS[row.unit]}
-                  </Button>
-                ),
-              )}
             </div>
           )}
           <RevealChip
@@ -889,6 +899,7 @@ function RecipeIngredients({
   });
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [sheet, setSheet] = useState<SheetMode | null>(null);
+  const [isAdaptReviewOpen, setIsAdaptReviewOpen] = useState(false);
   const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
   const usedKey = rows.map((row) => row.ingredientId).join(',');
   const suggestions = useMemo<ItemSuggestions>(
@@ -1054,9 +1065,25 @@ function RecipeIngredients({
           icon={<Ruler className='h-4 w-4' />}
           label='Adapt to my units'
           subtitle={`${offer.ids.length} ${offer.ids.length === 1 ? 'line changes' : 'lines change'} to ${getUnitsPhrase(offer.units)}`}
-          onClick={() => {
-            onChange(offer.rows);
-            onAdaptedIdsChange(offer.ids);
+          onClick={() => setIsAdaptReviewOpen(true)}
+        />
+      )}
+      {isAdaptReviewOpen && offer !== null && (
+        <AdaptReviewSheet
+          rows={rows}
+          offer={offer}
+          getName={getName}
+          onClose={() => setIsAdaptReviewOpen(false)}
+          onApply={(ids) => {
+            onChange(
+              rows.map((row) =>
+                ids.includes(row.id)
+                  ? (offer.rows.find((next) => next.id === row.id) ?? row)
+                  : row,
+              ),
+            );
+            onAdaptedIdsChange(ids);
+            setIsAdaptReviewOpen(false);
           }}
         />
       )}
@@ -1219,6 +1246,132 @@ interface IngredientSheetProps {
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
   onClose: () => void;
+}
+
+interface AdaptReviewSheetProps {
+  rows: IngredientRow[];
+  /** The same rows in the person's units; `ids` are the ones that change. */
+  offer: { rows: IngredientRow[]; ids: string[]; units: PinchUnitSettings };
+  getName: (row: IngredientRow) => string;
+  onApply: (ids: string[]) => void;
+  onClose: () => void;
+}
+
+/** Each line the adapt would change, before and after, all ticked to start, so a person can keep some as written. */
+function AdaptReviewSheet({
+  rows,
+  offer,
+  getName,
+  onApply,
+  onClose,
+}: AdaptReviewSheetProps) {
+  const isPhone = useMediaQuery().isBelow('sm');
+  const [picked, setPicked] = useState<string[]>(offer.ids);
+  const changes = offer.ids.flatMap((id) => {
+    const before = rows.find((row) => row.id === id);
+    const after = offer.rows.find((row) => row.id === id);
+    return before && after ? [{ id, before, after }] : [];
+  });
+  const isAll = picked.length === changes.length;
+  const togglePick = (id: string, isOn: boolean) =>
+    setPicked((current) =>
+      isOn
+        ? offer.ids.filter(
+            (candidate) => candidate === id || current.includes(candidate),
+          )
+        : current.filter((candidate) => candidate !== id),
+    );
+  const getPrimaryLabel = () => {
+    if (isAll)
+      return changes.length === 1 ? 'Adapt it' : `Adapt all ${changes.length}`;
+    return `Adapt ${picked.length} of ${changes.length}`;
+  };
+
+  return (
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title='Adapt to my units'
+      footer={
+        <div className='px-4 pb-4'>
+          <ModalFooterActions
+            note={picked.length === 0 ? 'Tick a line to adapt it.' : undefined}
+            cancelAction={
+              <Button
+                type='button'
+                variant='secondary'
+                className={join(isPhone && 'w-full')}
+                onClick={onClose}
+              >
+                Cancel
+              </Button>
+            }
+            rightActions={
+              <Button
+                type='button'
+                className={join(isPhone && 'w-full')}
+                disabled={picked.length === 0}
+                onClick={() => onApply(picked)}
+              >
+                {getPrimaryLabel()}
+              </Button>
+            }
+          />
+        </div>
+      }
+    >
+      <div className='space-y-2'>
+        <div className='flex min-h-10 items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-sm text-pretty'>
+            Into {getUnitsPhrase(offer.units)}, rounded to amounts you can
+            measure.
+          </p>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='relative shrink-0 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[""]'
+            onClick={() => setPicked(isAll ? [] : offer.ids)}
+          >
+            {isAll ? 'Untick all' : 'Tick all'}
+          </Button>
+        </div>
+        <ul className='divide-border divide-y'>
+          {changes.map(({ id, before, after }) => (
+            <li key={id}>
+              <label className='flex cursor-pointer items-start gap-3 py-2'>
+                <span className='inline-flex shrink-0'>
+                  <AppCheckbox
+                    aria-label={`Adapt ${getName(before)}`}
+                    checked={picked.includes(id)}
+                    onCheckedChange={(checked) =>
+                      togglePick(id, checked === true)
+                    }
+                  />
+                </span>
+                <span className='flex min-h-10 min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3'>
+                  <span className='min-w-0 font-medium break-words'>
+                    {getName(before)}
+                  </span>
+                  <span className='text-sm whitespace-nowrap'>
+                    <span className='text-muted-foreground'>
+                      {getAmountLabel(before)}
+                    </span>
+                    <ArrowRight
+                      className='text-muted-foreground mx-1.5 inline h-3.5 w-3.5 align-[-2px]'
+                      aria-hidden='true'
+                    />
+                    <span className='sr-only'>becomes</span>
+                    <span className='font-medium'>{getAmountLabel(after)}</span>
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </DetailSheet>
+  );
 }
 
 function IngredientSheet({

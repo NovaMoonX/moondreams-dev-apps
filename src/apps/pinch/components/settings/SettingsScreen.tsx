@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react';
 
 import IntroCard from '@/components/IntroCard';
 import SectionHeader from '@/components/SectionHeader';
+import SettingsGroup from '@/components/SettingsGroup';
 import { useAppSelector } from '@/store';
 import KeepingSection from '@apps/pinch/components/settings/KeepingSection';
-import NutritionSection from '@apps/pinch/components/settings/NutritionSection';
+import NumbersRow from '@apps/pinch/components/settings/NumbersRow';
 import PhotosSection from '@apps/pinch/components/settings/PhotosSection';
 import RemindersSection from '@apps/pinch/components/settings/RemindersSection';
-import StartTabSection from '@apps/pinch/components/settings/StartTabSection';
-import UnitsSection from '@apps/pinch/components/settings/UnitsSection';
+import StartTabRow from '@apps/pinch/components/settings/StartTabRow';
+import UnitsRow from '@apps/pinch/components/settings/UnitsRow';
 import SharedLinksSection from '@apps/pinch/components/settings/SharedLinksSection';
 import { selectPinchSettingsLoadError } from '@apps/pinch/store/selectors';
 
@@ -35,9 +36,14 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
       <SectionHeader title='Settings' />
       <div className='space-y-5 md:grid md:grid-cols-2 md:items-start md:space-y-0 md:gap-x-6'>
         <div className='space-y-5'>
-          {loadError === null && <StartTabSection uid={uid} />}
-          {loadError === null && <UnitsSection uid={uid} />}
-          <NutritionSection uid={uid} />
+          <SettingsGroup title='What you see'>
+            {loadError === null && <StartTabRow uid={uid} position='first' />}
+            <NumbersRow
+              uid={uid}
+              position={loadError === null ? 'middle' : 'only'}
+            />
+            {loadError === null && <UnitsRow uid={uid} position='last' />}
+          </SettingsGroup>
           {loadError !== null ? (
             <IntroCard
               icon='🧂'

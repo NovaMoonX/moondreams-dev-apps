@@ -1,4 +1,3 @@
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
@@ -13,7 +12,6 @@ import StatTile from '@/components/StatTile';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
-import { formatAmountText } from '@/utils/measureUtils';
 import LineStockMarker from '@apps/pinch/components/pantry/LineStockMarker';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import RecipeEntryRows from '@apps/pinch/components/recipes/RecipeEntryRows';
@@ -22,7 +20,7 @@ import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSectio
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
-import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
+import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import {
   selectCollectionCounts,
@@ -416,13 +414,6 @@ function RecipeFront({
                       {line.note && line.amount !== null && (
                         <span className='text-muted-foreground block text-xs'>
                           {line.note}
-                        </span>
-                      )}
-                      {line.adaptedFrom && line.amount !== null && (
-                        <span className='text-muted-foreground block text-xs'>
-                          Adapted from{' '}
-                          {formatAmountText(line.adaptedFrom.amount)}{' '}
-                          {UNIT_LABELS[line.adaptedFrom.unit]}
                         </span>
                       )}
                       {gap && (

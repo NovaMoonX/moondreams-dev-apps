@@ -92,10 +92,7 @@ const CookIngredientRow = memo(function CookIngredientRow({
           )}
         />
       </div>
-      <CookConversionLine
-        row={{ conversion }}
-        className='-mt-1.5 pb-2.5 pl-8'
-      />
+      <CookConversionLine row={{ conversion }} className='mb-2.5 ml-8' />
     </li>
   );
 });
