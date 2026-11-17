@@ -35,6 +35,7 @@ import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 import { sortProjectTasks } from '@apps/helm/utils/projectTasks';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
+import QuietRow from '@apps/helm/components/privacy/QuietRow';
 
 const { option } = DropdownMenuFactories;
 
@@ -373,7 +374,10 @@ function ProjectDetail({
           </>
         )}
         {project && !project.isUnreadable && (
-          <PrivateRow kind='project' record={project} title={project.name} />
+          <>
+            <PrivateRow kind='project' record={project} title={project.name} />
+            <QuietRow kind='project' record={project} title={project.name} />
+          </>
         )}
       </main>
       {project && !project.isUnreadable && (

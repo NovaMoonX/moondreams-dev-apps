@@ -1,4 +1,5 @@
 import type {
+  SpeechDelivery,
   SpeechHeldReason,
   SpeechPriority,
 } from '@/lib/speech/voice/types';
@@ -24,6 +25,7 @@ export interface SpeechSource {
     priority: SpeechPriority,
     signal: AbortSignal,
     voice?: SpeechVoice,
+    delivery?: SpeechDelivery,
   ) => Promise<SpeechFetch>;
 }
 
@@ -42,7 +44,7 @@ export const createSpeechSource = ({
   getHeaders: () => Promise<Record<string, string> | null>;
   readVoice?: () => SpeechVoice;
 }): SpeechSource => ({
-  fetchSpeech: async (text, priority, signal, voice) => {
+  fetchSpeech: async (text, priority, signal, voice, delivery) => {
     try {
       const headers = await getHeaders();
       if (headers === null) return { status: 'unavailable' };
@@ -57,6 +59,7 @@ export const createSpeechSource = ({
           priority,
           voiceId,
           speed,
+          ...(delivery ? { delivery } : {}),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         signal,
@@ -96,8 +99,8 @@ export const withSpeechVoice = (
   source: SpeechSource,
   voice: SpeechVoice,
 ): SpeechSource => ({
-  fetchSpeech: (text, priority, signal) =>
-    source.fetchSpeech(text, priority, signal, voice),
+  fetchSpeech: (text, priority, signal, _voice, delivery) =>
+    source.fetchSpeech(text, priority, signal, voice, delivery),
 });
 
 interface CachedSpeech {
@@ -135,8 +138,8 @@ export const withSpeechCache = (
   cache: ReturnType<typeof createSpeechCache>,
   voiceKey: string,
 ): SpeechSource => ({
-  fetchSpeech: async (text, priority, signal, voice) => {
-    const key = `${voiceKey}|${text}`;
+  fetchSpeech: async (text, priority, signal, voice, delivery) => {
+    const key = `${voiceKey}|${delivery ?? ''}|${text}`;
     const hit = cache.get(key);
     if (hit) {
       return {
@@ -146,7 +149,13 @@ export const withSpeechCache = (
         contentType: hit.contentType,
       };
     }
-    const answer = await source.fetchSpeech(text, priority, signal, voice);
+    const answer = await source.fetchSpeech(
+      text,
+      priority,
+      signal,
+      voice,
+      delivery,
+    );
     if (answer.status !== 'ready') return answer;
     const chunks: Uint8Array[] = [];
     return {

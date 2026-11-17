@@ -66,6 +66,8 @@ export async function openExecution(
       effects: payload.effects ?? [],
       undoReport: payload.undoReport ?? null,
       spoken: payload.spoken ?? null,
+      heldSpoken:
+        typeof payload.heldSpoken === 'string' ? payload.heldSpoken : null,
       goneIds: payload.goneIds ?? null,
       undoReason: payload.undoReason ?? null,
       lines: payload.lines ?? [],
@@ -79,6 +81,7 @@ export async function openExecution(
       effects: [],
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: [],

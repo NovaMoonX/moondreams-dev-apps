@@ -542,6 +542,7 @@ const asExecution = (made: ReturnType<typeof saved>): OpenExecution => ({
   undoneDocIds: [],
   partUndoIds: [],
   undoReason: null,
+  heldSpoken: null,
   questionRef: null,
   errorCode: null,
   createdAt: 1000,
@@ -574,6 +575,9 @@ const savedNote = (made: ReturnType<typeof saved>): UndoTarget => ({
     links: [],
     privateMark: null,
     isPrivacyCleared: false,
+    quietMark: null,
+    quietUntil: null,
+    isQuietCleared: false,
   },
 });
 const undoFiled = undoOf(onTopic, [

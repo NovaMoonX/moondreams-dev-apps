@@ -34,6 +34,7 @@ export type SpeechRequest =
       timeZone: string;
       voiceName: string;
       speed: number;
+      delivery: 'whisper' | null;
     }
   | { ok: false; status: number; error: string };
 
@@ -76,7 +77,7 @@ export function readSpeechRequest({
     );
   if (!isAllowed) return refuse(403, 'origin');
 
-  const { appId, text, priority, timeZone, voiceId, speed } = (body ??
+  const { appId, text, priority, timeZone, voiceId, speed, delivery } = (body ??
     {}) as Record<string, unknown>;
   if (typeof appId !== 'string' || !Object.hasOwn(VOICE_APPS, appId)) {
     return refuse(400, 'app');
@@ -86,6 +87,9 @@ export function readSpeechRequest({
   if (text.length > TTS_MAX_CHARS) return refuse(413, 'too-long');
   if (typeof priority !== 'string' || !PRIORITIES.includes(priority)) {
     return refuse(400, 'priority');
+  }
+  if (delivery !== undefined && delivery !== null && delivery !== 'whisper') {
+    return refuse(400, 'delivery');
   }
   const { voiceNames, defaultVoice, speedRange } = VOICE_APPS[appId];
   return {
@@ -106,6 +110,7 @@ export function readSpeechRequest({
       speed <= speedRange.max
         ? Math.round(speed * 100) / 100
         : 1,
+    delivery: delivery === 'whisper' ? 'whisper' : null,
   };
 }
 
@@ -217,7 +222,8 @@ export const streamSpeech = onRequest(
           .catch(() => false)));
     if (!isAppCheckOk) return fail(401, 'app-check');
 
-    const { appId, text, timeZone, voiceName, speed } = request;
+    const { appId, text, timeZone, voiceName, speed, delivery } = request;
+    const isWhisper = delivery === 'whisper';
     const limits = VOICE_APPS[appId];
     const providerId = VOICE_PROVIDER_DEFAULT;
     const provider = await getProvider(providerId);
@@ -235,10 +241,11 @@ export const streamSpeech = onRequest(
     const firestore = getFirestore();
     const now = Date.now();
     const characters = text.length;
-    const cost = costMicros(providerId, {
-      characters,
-      audioSeconds: Math.ceil(characters / 12),
-    });
+    const cost = costMicros(
+      providerId,
+      { characters, audioSeconds: Math.ceil(characters / 12) },
+      isWhisper,
+    );
     const held = await reserveSpeech(firestore, {
       uid,
       limits,
@@ -292,10 +299,13 @@ export const streamSpeech = onRequest(
         text,
         voiceId:
           providerId === 'googleTts'
-            ? `en-US-Chirp3-HD-${voiceName}`
+            ? isWhisper
+              ? voiceName
+              : `en-US-Chirp3-HD-${voiceName}`
             : limits.voices[providerId],
         format: 'mp3',
         speed,
+        ...(isWhisper && { delivery }),
         signal,
       })
       .catch(async (error: unknown) => {
@@ -307,6 +317,7 @@ export const streamSpeech = onRequest(
         logger.error('voice.speechFailed', {
           event: 'voice.speechFailed',
           status,
+          delivery,
         });
         if ((status === 401 || status === 403) && providerId !== 'googleTts') {
           secretReader.forget(SECRET_NAMES[providerId]);
@@ -328,6 +339,7 @@ export const streamSpeech = onRequest(
       logger.error('voice.speechFailed', {
         event: 'voice.speechFailed',
         status: null,
+        delivery,
       });
       return fail(502, 'unavailable');
     }
@@ -337,6 +349,7 @@ export const streamSpeech = onRequest(
       providerId,
       voiceName,
       speed,
+      delivery,
     });
     res.status(200);
     res.setHeader('Content-Type', speech.contentType);

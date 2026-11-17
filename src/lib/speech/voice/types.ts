@@ -7,6 +7,9 @@ export type SpeechHeldReason = 'speechLimit' | 'budgetReached';
 /** ack: a code-built confirmation of what was done · reply: an answer · summary: a long read. */
 export type SpeechPriority = 'ack' | 'reply' | 'summary';
 
+/** whisper: said softly and close; only the cloud voice can. */
+export type SpeechDelivery = 'whisper';
+
 export type SttErrorCode =
   'denied' | 'service' | 'no-microphone' | 'unavailable' | 'language';
 
@@ -44,6 +47,7 @@ export interface SttAdapter {
 
 export interface TtsSpeakOptions {
   priority: SpeechPriority;
+  delivery?: SpeechDelivery;
   signal: AbortSignal;
   onStart: () => void;
   onEnd: () => void;
