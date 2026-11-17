@@ -2,7 +2,11 @@ import { useRef, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { CalendarOff } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
@@ -12,6 +16,7 @@ import { readConnectorOptions } from '@/lib/connections/connectionCalls';
 import type { ConnectorOption } from '@/lib/connections/contract';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
+import { formatDate, formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
@@ -31,6 +36,11 @@ interface CalendarSyncSheetProps {
 
 const isWritable = (option: ConnectorOption) => option.isWritable === true;
 
+const formatLastWritten = (at: number) =>
+  new Date(at).toDateString() === new Date().toDateString()
+    ? formatTime(at)
+    : `${formatDate(at)}, ${formatTime(at)}`;
+
 function SyncForm({
   onClose,
   accountId,
@@ -38,6 +48,8 @@ function SyncForm({
   const name = useAssistantName();
   const isOffline = useNetworkStatus() === 'offline';
   const { begin, requestCalendarScopes } = useGoogleConnect();
+  const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const sync = useAppSelector((state) => state.helm.profile?.calendarSync);
   const isOnHere = !!sync && sync.accountId === accountId;
   const isGone = isOnHere && sync.lastError === 'calendarGone';
@@ -68,25 +80,39 @@ function SyncForm({
     setIsWorking(true);
     setFailure(null);
     try {
-      try {
-        await setHelmCalendarSync(request);
-      } catch (error) {
-        const scope = readNeededScope(error, request);
-        if (scope === null) throw error;
-        const outcome = await requestCalendarScopes(accountId, [scope]).catch(
-          (consentError: unknown) => {
-            console.error('Helm calendar consent did not finish', consentError);
-            return 'cancelled' as const;
-          },
-        );
-        if (outcome === 'redirected') return;
-        if (outcome === 'cancelled') {
-          setFailure(HELM_COPY.calendarSyncCancelled);
-          setIsWorking(false);
-          inFlight.current = false;
-          return;
-        }
-        await setHelmCalendarSync(request);
+      const result = await setHelmCalendarSync(request).catch(
+        async (error: unknown) => {
+          const scope = readNeededScope(error, request);
+          if (scope === null) throw error;
+          const outcome = await requestCalendarScopes(accountId, [scope]).catch(
+            (consentError: unknown) => {
+              console.error('Calendar consent did not finish', consentError);
+              return 'cancelled' as const;
+            },
+          );
+          if (outcome === 'redirected') return null;
+          if (outcome === 'cancelled') {
+            setFailure(HELM_COPY.calendarSyncCancelled);
+            setIsWorking(false);
+            inFlight.current = false;
+            return null;
+          }
+          return setHelmCalendarSync(request);
+        },
+      );
+      if (result === null) return;
+      if (request.action === 'stop' && sync) {
+        addToast({
+          title: HELM_COPY.calendarSyncStopped(
+            result.removedCount,
+            sync.calendarName,
+          ),
+          description:
+            result.leftCount > 0
+              ? HELM_COPY.calendarSyncStoppedLeft(result.leftCount)
+              : undefined,
+          type: 'success',
+        });
       }
       onClose();
     } catch (error) {
@@ -116,67 +142,83 @@ function SyncForm({
   );
 
   if (view === 'stop' && sync) {
+    const askToStop = async () => {
+      const isConfirmed = await confirm({
+        title: HELM_COPY.calendarSyncStopTitle,
+        message:
+          HELM_COPY.calendarSyncStopDetail(name, sync.calendarName) +
+          (sync.isMadeByHelm ? HELM_COPY.calendarSyncStopMade : ''),
+        confirmText: HELM_COPY.calendarSyncStopAction,
+        destructive: true,
+      });
+      if (isConfirmed) void run({ action: 'stop' });
+    };
     return (
       <div className='flex flex-col gap-4'>
-        <p className='text-foreground text-[15px] text-pretty'>
-          {needsReconnect
-            ? HELM_COPY.calendarSyncReconnectLead(name)
-            : HELM_COPY.calendarSyncOnLead(name, sync.calendarName)}
-        </p>
         {needsReconnect ? (
           <InlineNotice tone='warning'>
-            {HELM_COPY.calendarSyncReconnect}
+            {HELM_COPY.calendarSyncReconnectLead(name)}
           </InlineNotice>
         ) : (
-          <>
-            <p className='text-muted-foreground text-[15px] text-pretty'>
-              {HELM_COPY.calendarSyncStopDetail(name, sync.calendarName)}
-            </p>
-            {sync.isMadeByHelm && (
-              <p className='text-muted-foreground text-[13px] text-pretty'>
-                {HELM_COPY.calendarSyncStopMade}
-              </p>
+          <p className='text-foreground text-[15px] text-pretty'>
+            {HELM_COPY.calendarSyncOnLead(
+              sync.calendarName,
+              sync.lastWrittenAt === null
+                ? null
+                : formatLastWritten(sync.lastWrittenAt),
             )}
-          </>
+          </p>
+        )}
+        <div className='pt-4'>
+          {isOffline ? (
+            <LockedButton
+              label={HELM_COPY.calendarSyncStopRow}
+              title={HELM_COPY.connectionsNeedConnection}
+            >
+              <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
+            </LockedButton>
+          ) : (
+            <ActionRow
+              icon={<CalendarOff className='size-4' aria-hidden='true' />}
+              label={HELM_COPY.calendarSyncStopRow}
+              subtitle={HELM_COPY.calendarSyncStopRowDetail}
+              onClick={() => void askToStop()}
+              isDisabled={isWorking}
+              isDestructive
+            />
+          )}
+        </div>
+        {isWorking && (
+          <p className='text-muted-foreground text-[13px]' role='status'>
+            {HELM_COPY.calendarSyncStopping}
+          </p>
         )}
         {failureNote}
         <ModalFooterActions
-          cancelAction={
-            <Button
-              type='button'
-              variant='tertiary'
-              onClick={onClose}
-              disabled={isWorking}
-            >
-              {HELM_COPY.calendarSyncKeepGoing}
-            </Button>
-          }
           rightActions={
-            isOffline ? (
-              <LockedButton
-                label={HELM_COPY.calendarSyncStopTitle}
-                title={HELM_COPY.connectionsNeedConnection}
-              >
-                <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
-              </LockedButton>
-            ) : needsReconnect ? (
-              <Button
-                type='button'
-                onClick={() => {
-                  onClose();
-                  begin({ accountId });
-                }}
-              >
-                {HELM_COPY.calendarSyncReconnectAction}
-              </Button>
+            needsReconnect && !isOffline ? (
+              <>
+                <Button type='button' variant='tertiary' onClick={onClose}>
+                  {HELM_COPY.calendarSyncDone}
+                </Button>
+                <Button
+                  type='button'
+                  onClick={() => {
+                    onClose();
+                    begin({ accountId });
+                  }}
+                >
+                  {HELM_COPY.calendarSyncReconnectAction}
+                </Button>
+              </>
             ) : (
               <Button
                 type='button'
-                variant='destructive'
-                loading={isWorking}
-                onClick={() => void run({ action: 'stop' })}
+                variant='secondary'
+                onClick={onClose}
+                disabled={isWorking}
               >
-                {HELM_COPY.calendarSyncStopTitle}
+                {HELM_COPY.calendarSyncDone}
               </Button>
             )
           }
@@ -188,6 +230,14 @@ function SyncForm({
   if (view === 'pick') {
     return (
       <div className='flex flex-col gap-4'>
+        <BackLink
+          label={HELM_COPY.calendarSyncBack}
+          onBack={() => {
+            if (isWorking) return;
+            setFailure(null);
+            setView('start');
+          }}
+        />
         <p className='text-muted-foreground text-[15px] text-pretty'>
           {HELM_COPY.calendarSyncPickLead}
         </p>
@@ -239,7 +289,7 @@ function SyncForm({
                 option.isPrimary ||
                 (option.detail ?? option.name) !== option.name
                   ? (option.detail ?? option.name)
-                  : HELM_COPY.calendarSyncPickDetail,
+                  : '',
               onPick: () =>
                 void run({
                   action: 'choose',
@@ -249,30 +299,26 @@ function SyncForm({
             }))}
           />
         )}
+        {isWorking && (
+          <p className='text-muted-foreground text-[13px]' role='status'>
+            {HELM_COPY.calendarSyncWorking}
+          </p>
+        )}
         {offlineNote}
         {failureNote}
-        <Button
-          type='button'
-          variant='tertiary'
-          className='self-start'
-          onClick={() => {
-            setFailure(null);
-            setView('start');
-          }}
-          disabled={isWorking}
-        >
-          {HELM_COPY.calendarSyncBack}
-        </Button>
       </div>
     );
   }
 
   return (
     <div className='flex flex-col gap-4'>
-      <p className='text-muted-foreground text-[15px] text-pretty'>
+      <p className='text-foreground text-[15px] text-pretty'>
         {isGone
           ? HELM_COPY.calendarSyncGoneLead(name)
           : HELM_COPY.calendarSyncLead(name)}
+      </p>
+      <p className='text-muted-foreground -mt-2 text-[13px] text-pretty'>
+        {HELM_COPY.calendarSyncLeadNote(name)}
       </p>
       <MethodPicker
         disabled={isWorking || isOffline}
@@ -288,7 +334,7 @@ function SyncForm({
             id: 'choose',
             emoji: '📅',
             title: HELM_COPY.calendarSyncChooseTitle,
-            description: HELM_COPY.calendarSyncChooseDetail,
+            description: HELM_COPY.calendarSyncChooseDetail(name),
             onPick: () => {
               setFailure(null);
               setView('pick');

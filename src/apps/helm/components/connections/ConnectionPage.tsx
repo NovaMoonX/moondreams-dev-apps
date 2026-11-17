@@ -472,12 +472,16 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 title={HELM_COPY.calendarSyncTitle}
                 description={
                   calendarSync === null
-                    ? HELM_COPY.calendarSyncOff(name)
+                    ? HELM_COPY.calendarSyncOff
                     : calendarSync.lastError === 'reconnect'
                       ? HELM_COPY.calendarSyncReconnect
                       : calendarSync.lastError === 'calendarGone'
                         ? HELM_COPY.calendarSyncGone
-                        : HELM_COPY.calendarSyncOn(calendarSync.calendarName)
+                        : calendarSync.lastWrittenAt === null
+                          ? HELM_COPY.calendarSyncPending(
+                              calendarSync.calendarName,
+                            )
+                          : HELM_COPY.calendarSyncOn(calendarSync.calendarName)
                 }
                 onClick={() => setIsSyncOpen(true)}
                 hasChevron

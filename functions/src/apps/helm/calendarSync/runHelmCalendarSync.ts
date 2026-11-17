@@ -358,7 +358,9 @@ const run = async (
     );
     await setSyncState(firestore, uid, calendarId, {
       lastError: null,
-      ...(report.inserted + report.patched + report.deleted > 0
+      ...(report.inserted + report.patched + report.deleted > 0 ||
+      typeof (profile.calendarSync as { lastWrittenAt?: unknown })
+        .lastWrittenAt !== 'number'
         ? { lastWrittenAt: Date.now() }
         : {}),
     });

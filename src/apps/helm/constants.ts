@@ -1363,20 +1363,22 @@ export const HELM_COPY = {
   googleCalendarsCount: (count: number) =>
     `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
   calendarSyncTitle: 'Keep your plan in a calendar',
-  calendarSyncOff: (name: string) =>
-    `See ${name}'s plan beside everything else in Google Calendar.`,
-  calendarSyncOn: (calendarName: string) => `Kept in step with ${calendarName}`,
+  calendarSyncOff: 'Show your plan in Google Calendar',
+  calendarSyncOn: (calendarName: string) => `Your plan is in ${calendarName}`,
+  calendarSyncPending: (calendarName: string) =>
+    `Getting ${calendarName} ready`,
   calendarSyncReconnect: 'Reconnect Google to keep going',
   calendarSyncGone: 'That calendar is gone. Choose one again.',
   calendarSyncLead: (name: string) =>
-    `${name} puts your kept plan, your habit windows and your appointments in one calendar. Move or remove a plan slot or an appointment there and it follows here; a habit window you move stays where it is here, and ${name} tells you.`,
+    `${name} puts your kept plan, habit windows and appointments in one calendar, and moves you make there come back here.`,
+  calendarSyncLeadNote: (name: string) =>
+    `It updates about every 10 minutes. A habit window you move there stays put here, and ${name} tells you.`,
   calendarSyncMakeTitle: 'Make a calendar for your plan',
   calendarSyncMakeDetail: (name: string) =>
-    `Recommended. A fresh calendar called "${name}'s plan". ${name} can only touch this one calendar, never your others.`,
+    `Recommended. ${name} can only touch this one, never your others.`,
   calendarSyncChooseTitle: 'Use one of your calendars',
-  calendarSyncPickDetail: 'Your plan goes in beside what is already there',
-  calendarSyncChooseDetail:
-    'Pick one you already look at. Google will ask to let events be added and changed.',
+  calendarSyncChooseDetail: (name: string) =>
+    `Pick one you already look at. Google asks for wider access; ${name} only uses that one.`,
   calendarSyncPickLead: 'Which calendar should carry your plan?',
   calendarSyncNoneWritable:
     "None of your calendars can have events added. Make a new one instead and it's ready straight away.",
@@ -1384,18 +1386,30 @@ export const HELM_COPY = {
   calendarSyncBack: 'Back',
   calendarSyncGoneLead: (name: string) =>
     `The calendar ${name} was keeping your plan in was deleted in Google, so nothing is being kept there now. Choose a calendar again to pick it back up.`,
-  calendarSyncOnLead: (name: string, calendarName: string) =>
-    `${name} is keeping your plan in step with ${calendarName}.`,
+  calendarSyncOnLead: (calendarName: string, lastWrittenAt: string | null) =>
+    lastWrittenAt === null
+      ? `Your plan lands in ${calendarName} within about 10 minutes, then updates about every 10 minutes.`
+      : `Your plan is in ${calendarName} and updates about every 10 minutes. Last updated ${lastWrittenAt}.`,
   calendarSyncReconnectLead: (name: string) =>
-    `Google needs you to reconnect before ${name} can keep your plan in step again.`,
-  calendarSyncStopTitle: 'Stop keeping it in step',
+    `Google needs you to reconnect before ${name} can keep your plan in your calendar again.`,
+  calendarSyncStopRow: 'Stop keeping your plan there',
+  calendarSyncStopRowDetail: 'Removes its upcoming events',
+  calendarSyncStopTitle: 'Stop keeping your plan there?',
   calendarSyncStopDetail: (name: string, calendarName: string) =>
-    `If you stop, ${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, and your plan here is untouched.`,
+    `${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, your plan here is untouched, and you can turn it back on any time.`,
   calendarSyncStopMade:
-    'The calendar itself stays; delete it in Google Calendar if you no longer want it.',
-  calendarSyncKeepGoing: 'Keep it going',
+    ' The calendar itself stays; delete it in Google Calendar if you no longer want it.',
+  calendarSyncStopAction: 'Stop and remove',
+  calendarSyncStopped: (count: number, calendarName: string) =>
+    count === 0
+      ? `Stopped. Nothing upcoming was left in ${calendarName}.`
+      : `Stopped. Removed ${count} upcoming ${count === 1 ? 'event' : 'events'} from ${calendarName}.`,
+  calendarSyncStoppedLeft: (count: number) =>
+    `${count} ${count === 1 ? 'event' : 'events'} couldn't be removed yet; they'll be tried again.`,
+  calendarSyncDone: 'Done',
   calendarSyncReconnectAction: 'Reconnect Google',
   calendarSyncWorking: 'Setting it up',
+  calendarSyncStopping: 'Removing upcoming events',
   calendarSyncCancelled:
     "Google didn't get your OK, so nothing changed. Try again whenever you're ready.",
   calendarSyncNotWritable:
