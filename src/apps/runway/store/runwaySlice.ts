@@ -24,6 +24,7 @@ import type {
   OpenCard,
   OpenExpense,
   OpenMemory,
+  OpenStartedPayment,
   OpenRule,
   OpenChange,
   OpenDay,
@@ -77,6 +78,7 @@ export interface RunwayState {
   isRulesLoaded: boolean;
   /** The moves and payers the person confirmed by hand, and whether they have been read once, so no pass runs before they arrive. */
   memories: OpenMemory[];
+  startedPayments: OpenStartedPayment[];
   isMemoriesLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
@@ -174,6 +176,7 @@ const initialState: RunwayState = {
   rules: [],
   isRulesLoaded: false,
   memories: [],
+  startedPayments: [],
   isMemoriesLoaded: false,
   purchases: [],
   needsHome: [],
@@ -300,6 +303,12 @@ export const runwaySlice = createSlice({
     },
     setCardStatements: (state, action: PayloadAction<OpenCardStatement[]>) => {
       state.cardStatements = action.payload;
+    },
+    setStartedPayments: (
+      state,
+      action: PayloadAction<OpenStartedPayment[]>,
+    ) => {
+      state.startedPayments = action.payload;
     },
     setMoves: (
       state,
@@ -444,6 +453,7 @@ export const {
   setLinks,
   setAccountBalances,
   setCardStatements,
+  setStartedPayments,
   setExpenses,
   setRules,
   setMemories,
