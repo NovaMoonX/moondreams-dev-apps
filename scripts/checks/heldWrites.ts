@@ -200,4 +200,19 @@ assert.equal(
 );
 assert.equal(patched[1].item, null, 'a removal is never patched');
 
+const patchedOutside = patchHeldWrite([partial()], 'a', {
+  meta: { a: 5, b: 5 },
+});
+assert.deepEqual(
+  patchedOutside[0].fields,
+  ['cents'],
+  'a plain write never adds to the fields a hold waits for',
+);
+assert.equal(
+  apply([{ id: 'a', cents: 9, meta: { a: 7, b: 7 } }], patchedOutside).held
+    .length,
+  0,
+  "so another device's change to that field never keeps it held",
+);
+
 console.log('held writes: all checks passed');

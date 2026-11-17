@@ -132,11 +132,8 @@ export const patchHeldWrite = <T>(
   held.map((hold) => {
     if (hold.id !== id || hold.item === null) return hold;
     const item = { ...hold.item, ...fields } as T;
-    const written = Array.from(
-      new Set([...hold.fields, ...Object.keys(fields)]),
-    );
     return {
-      ...toHeldWrite(hold.id, item, written, hold.token),
+      ...toHeldWrite(hold.id, item, hold.fields, hold.token),
       settledAt: hold.settledAt,
     };
   });
