@@ -78,8 +78,7 @@ function PlanScreen() {
       if (!isLeaving) return;
       lock.exit();
     }
-    if (swipeRef.current) swipeRef.current.show(section);
-    else showPlanSection(section);
+    swipeRef.current?.show(section);
   };
 
   return (
