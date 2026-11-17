@@ -20,6 +20,7 @@ import { helmAppName } from '@apps/helm/queries/helmKeyQueries';
 
 interface ConnectedAssistantsScreenProps {
   onBack: () => void;
+  onOpenConnectedApps: () => void;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,7 +43,10 @@ const formatLastUsed = (at: number, now: number) => {
 };
 
 /** A utility screen: the outside assistants the person connected, and how to connect another. */
-function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
+function ConnectedAssistantsScreen({
+  onBack,
+  onOpenConnectedApps,
+}: ConnectedAssistantsScreenProps) {
   const { items, isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.assistants,
   );
@@ -217,7 +221,11 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
           </section>
         )}
       </main>
-      <AssistantSheet assistant={open} onClose={() => setOpenKey(null)} />
+      <AssistantSheet
+        assistant={open}
+        onClose={() => setOpenKey(null)}
+        onOpenConnectedApps={onOpenConnectedApps}
+      />
     </>
   );
 }

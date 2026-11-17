@@ -193,11 +193,6 @@ anthropic_run() {
 google_done() { secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.googleapis.com && api_enabled gmail.googleapis.com && api_enabled drive.googleapis.com && api_enabled people.googleapis.com; }
 google_run() {
   bash scripts/connections/googleSetup.sh
-  if ! secret_has GOOGLE_OAUTH_CLIENT; then
-    add BROWSER_LIST "Google consent screen: scopes and In production status; and the Web OAuth client"
-    pause "Finish the clicks above, then press Enter to paste the client ID and secret: "
-    bash scripts/connections/googleSecrets.sh
-  fi
 }
 
 deepgram_read_granted() {

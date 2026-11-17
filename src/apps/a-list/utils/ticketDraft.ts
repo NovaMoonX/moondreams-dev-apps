@@ -1,5 +1,5 @@
 import { MAX_AMOUNT_CENTS, MAX_TAX_RATE } from '@apps/a-list/constants';
-import type { AmcFormat, Ticket } from '@apps/a-list/types';
+import type { AmcFormat, TaxChoice, Ticket } from '@apps/a-list/types';
 import type { TicketSuggestion } from '@apps/a-list/utils/chips';
 import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
@@ -15,8 +15,67 @@ export interface TicketDraft {
   /** Until the member types or picks one, the fee and tax follow the suggestion for the theater, format and price. */
   isFeeEdited: boolean;
   isTaxEdited: boolean;
-  /** True while the tax is AMC's figure for the picked showing, so a pick with none gives the learned rate back. */
-  isTaxFromAmc?: boolean;
+  /** AMC's tax for the picked showing; null with no pick or when AMC lists none. */
+  amcTaxCents: number | null;
+  /** The picked showing is on an AMC discount day, so checkout may charge less than its list price and tax. */
+  isDiscountDay: boolean;
+  /** The saved ticket's choice (a figure the member picked or typed, never the default left as is) and the tax it was made on, kept while that tax is unchanged. */
+  savedTaxChoice: { taxCents: number; choice: TaxChoice | null } | null;
+}
+
+/** The two figures the tax can start from, offered side by side when both exist and disagree. */
+export interface TaxOptions {
+  amcCents: number;
+  usualCents: number;
+  usualRate: number;
+}
+
+export function getTaxOptions(
+  draft: TicketDraft,
+  suggestion: TicketSuggestion | null,
+): TaxOptions | null {
+  const priceCents = parseMoneyToCents(draft.price);
+  const usualRate = suggestion?.usualTaxRate ?? null;
+  if (draft.amcTaxCents === null || priceCents === null || usualRate === null)
+    return null;
+  const usualCents = getItemizedTaxCents(priceCents, usualRate);
+  // A stored rate is rounded, so a cent apart is the same tax.
+  if (Math.abs(usualCents - draft.amcTaxCents) <= 1) return null;
+  return { amcCents: draft.amcTaxCents, usualCents, usualRate };
+}
+
+/** The tax an untouched field starts with: with AMC's figure, whichever this theater keeps; otherwise the rate learned here. */
+function getSuggestedTax(
+  draft: TicketDraft,
+  suggestion: TicketSuggestion | null,
+): string {
+  const options = getTaxOptions(draft, suggestion);
+  if (options)
+    return centsToInputValue(
+      suggestion?.preferredTaxChoice === 'AMC'
+        ? options.amcCents
+        : options.usualCents,
+    );
+  if (draft.amcTaxCents !== null) return centsToInputValue(draft.amcTaxCents);
+  const priceCents = parseMoneyToCents(draft.price);
+  return priceCents !== null && suggestion && suggestion.taxRate !== null
+    ? centsToInputValue(getItemizedTaxCents(priceCents, suggestion.taxRate))
+    : '';
+}
+
+function getTaxChoice(
+  draft: TicketDraft,
+  options: TaxOptions | null,
+  taxCents: number,
+): TaxChoice | null {
+  if (options) {
+    if (!draft.isTaxEdited) return null;
+    if (taxCents === options.amcCents) return 'AMC';
+    return taxCents === options.usualCents ? 'USUAL' : null;
+  }
+  return draft.savedTaxChoice?.taxCents === taxCents
+    ? draft.savedTaxChoice.choice
+    : null;
 }
 
 export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
@@ -29,6 +88,12 @@ export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
       tax: centsToInputValue(ticket.taxCents),
       isFeeEdited: true,
       isTaxEdited: true,
+      amcTaxCents: null,
+      isDiscountDay: false,
+      savedTaxChoice: {
+        taxCents: ticket.taxCents,
+        choice: ticket.taxChoice ?? null,
+      },
     };
   }
 
@@ -40,6 +105,9 @@ export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
     tax: '',
     isFeeEdited: false,
     isTaxEdited: false,
+    amcTaxCents: null,
+    isDiscountDay: false,
+    savedTaxChoice: null,
   };
 }
 
@@ -48,18 +116,26 @@ export function resolveTicketDraft(
   draft: TicketDraft,
   suggestion: TicketSuggestion | null,
 ): TicketDraft {
-  if (!suggestion) return draft;
-
-  const priceCents = parseMoneyToCents(draft.price);
-  const suggestedTax =
-    priceCents !== null && suggestion.taxRate !== null
-      ? centsToInputValue(getItemizedTaxCents(priceCents, suggestion.taxRate))
-      : '';
   const result = {
     ...draft,
-    fee: draft.isFeeEdited ? draft.fee : centsToInputValue(suggestion.feeCents),
-    tax: draft.isTaxEdited ? draft.tax : suggestedTax,
+    fee:
+      draft.isFeeEdited || !suggestion
+        ? draft.fee
+        : centsToInputValue(suggestion.feeCents),
+    tax: draft.isTaxEdited ? draft.tax : getSuggestedTax(draft, suggestion),
   };
+  return result;
+}
+
+/** AMC's tax is for the price and format it listed; typing another drops it. */
+function isSameShowingPrice(
+  draft: TicketDraft,
+  data: Partial<Pick<TicketDraft, 'format' | 'price'>>,
+): boolean {
+  const result =
+    (data.price === undefined ||
+      parseMoneyToCents(data.price) === parseMoneyToCents(draft.price)) &&
+    (data.format === undefined || data.format === draft.format);
   return result;
 }
 
@@ -76,7 +152,7 @@ export function applyTicketFormChange(
     ...data,
     isFeeEdited: draft.isFeeEdited || edited.fee,
     isTaxEdited: draft.isTaxEdited || edited.tax,
-    isTaxFromAmc: edited.tax ? false : draft.isTaxFromAmc,
+    amcTaxCents: isSameShowingPrice(draft, data) ? draft.amcTaxCents : null,
   };
   return result;
 }
@@ -150,6 +226,7 @@ export function evaluateTicketDraft(
         ? Math.round((tax.cents / price.cents) * 10_000) / 10_000
         : null,
     taxCents: tax.cents,
+    taxChoice: getTaxChoice(draft, getTaxOptions(draft, suggestion), tax.cents),
     totalCents: price.cents + fee.cents + tax.cents,
   };
   const isValid = ticket.totalCents <= MAX_AMOUNT_CENTS;

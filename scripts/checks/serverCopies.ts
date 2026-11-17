@@ -103,6 +103,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/utils/proseUtils.ts',
+    dest: 'functions/src/vendor/proseUtils.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/lib/speech/soundAlike.ts',
     dest: 'functions/src/vendor/soundAlike.ts',
     importRewrites: {},

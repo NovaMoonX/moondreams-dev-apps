@@ -3,6 +3,7 @@ import {
   toComparable,
 } from '../../../vendor/optionMatchUtils.js';
 import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
+import { extractLinks, normalizeProse } from '../../../vendor/proseUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { ASK_WORDS } from './summaries.js';
 import {
@@ -129,6 +130,7 @@ const KNOWN_KEYS = new Set([
   'question',
   'isHealth',
   'fromRecordsText',
+  'fromRecordsSpoken',
   'sourceAliases',
   'quoteAliases',
   'generalText',
@@ -238,26 +240,43 @@ const toText = (value: unknown, cap: number) =>
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
 
+const toWholeLine = (value: unknown, cap: number) => {
+  if (typeof value !== 'string') return null;
+  const line = value.replace(/\s+/g, ' ').trim();
+  return line === '' || line.length > cap ? null : line;
+};
+
 const readNumbers = (text: string) =>
   (text.match(/\d(?:[\d,.:]*\d)?/g) ?? []).map((number) =>
     number.replace(/,/g, ''),
   );
 
-/** The model's own line about the turn, refused (so code's line stands) when it speaks as "I", falls back on a template, runs long, carries a link or markup, or names a number the person never said. */
-export const readReplyLine = (value: unknown, saidText = '') => {
+const readModelLine = (
+  value: unknown,
+  saidText: string,
+  cap: number,
+  isCountFree: boolean,
+) => {
   if (typeof value !== 'string') return null;
   const line = value.replace(/\s+/g, ' ').trim();
-  if (line === '' || line.length > REPLY_LINE_CAP) return null;
+  if (line === '' || line.length > cap) return null;
   if (/\b(i|i'm|i've|i'll|i'd|me|my)\b|^got it\b/i.test(line)) return null;
   if (/:\/\/|www\.|[*_#`[\]<>]/.test(line)) return null;
-  // A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's.
   const said = new Set(readNumbers(saidText));
   return readNumbers(line)
-    .filter((number) => !/^\d$/.test(number))
+    .filter((number) => !isCountFree || !/^\d$/.test(number))
     .every((number) => said.has(number))
     ? line
     : null;
 };
+
+/** The model's reply line, or null so code's line stands. A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's. */
+export const readReplyLine = (value: unknown, saidText = '') =>
+  readModelLine(value, saidText, REPLY_LINE_CAP, true);
+
+/** The model's spoken line for an answer; every number, a count too, must come from the records text. */
+export const readSpokenRecordsLine = (value: unknown, recordsText: string) =>
+  readModelLine(value, recordsText, ANSWER_SPOKEN_CAP, false);
 
 const toCutText = (value: unknown, cap: number) => {
   const whole = toText(value, Number.MAX_SAFE_INTEGER);
@@ -312,24 +331,46 @@ const readAnswer = (
   const listedQuotes = Array.isArray(item.quoteAliases)
     ? item.quoteAliases.slice(0, MAX_QUOTES)
     : [];
+  const citedQuotes = listedQuotes.flatMap((alias: unknown) => {
+    const quote = toQuote(alias, quotes);
+    return quote ? [quote] : [];
+  });
+  const citedCopies = listed.flatMap((alias: unknown) => {
+    const copy = typeof alias === 'string' ? synced?.get(alias) : null;
+    return copy ? [copy] : [];
+  });
+  const recordLinks = [
+    ...citedQuotes.flatMap((quote) => (quote.deepLink ? [quote.deepLink] : [])),
+    ...extractLinks([
+      ...citedCopies.flatMap((copy) => [
+        copy.title,
+        copy.subtitle ?? '',
+        copy.detail ?? '',
+        copy.placeLabel ?? '',
+        ...Object.values(copy.extra).map(String),
+      ]),
+    ]),
+  ];
   return {
     scope,
     question,
     isHealth: item.isHealth === true,
-    fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
+    fromRecordsText: normalizeProse(
+      item.fromRecordsText,
+      ANSWER_TEXT_CAP,
+      recordLinks,
+    ),
+    fromRecordsSpoken: toWholeLine(item.fromRecordsSpoken, ANSWER_SPOKEN_CAP),
     sources: listed.flatMap((alias: unknown) => {
       const source = toSource(alias, aliases, synced, facts, parts);
       return source ? [source] : [];
     }),
-    quotes: listedQuotes.flatMap((alias: unknown) => {
-      const quote = toQuote(alias, quotes);
-      return quote ? [quote] : [];
-    }),
+    quotes: citedQuotes,
     syncedKeys: listed.flatMap((alias: unknown) => {
       const copy = typeof alias === 'string' ? synced?.get(alias) : null;
       return copy ? [`${copy.connectorId}|${copy.accountId}`] : [];
     }),
-    generalText: toText(item.generalText, ANSWER_TEXT_CAP),
+    generalText: normalizeProse(item.generalText, ANSWER_TEXT_CAP),
     generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
     noteIds: [
       ...new Set(

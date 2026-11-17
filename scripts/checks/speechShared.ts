@@ -32,7 +32,9 @@ import {
 } from '../../src/lib/speech/closingPhrase.ts';
 import {
   BARGE_IN_GATE,
+  BARGE_SUPPRESS_MS,
   createSpeechGate,
+  isBargeSuppressed,
 } from '../../src/lib/speech/voice/bargeIn.ts';
 import {
   createSpeechCache,
@@ -74,6 +76,14 @@ import {
 } from '../../functions/src/voice/voiceConfig.ts';
 import { readSpeechRequest } from '../../functions/src/voice/streamSpeech.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
+import {
+  clearFallback,
+  dismissFallback,
+  readFallbacks,
+  removeFallback,
+  reportFallback,
+  resetFallbacks,
+} from '../../src/lib/fallbacks/fallbacks.ts';
 import { createCloudTts } from '../../src/lib/speech/voice/cloudTts.ts';
 import {
   createSpeechSource,
@@ -87,13 +97,26 @@ import {
   type PcmContext,
   type PcmFormat,
 } from '../../src/lib/speech/voice/pcmStream.ts';
-import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
+import {
+  createPlaybackQueue,
+  toJoinKey,
+} from '../../src/lib/speech/voice/playbackQueue.ts';
+import { createDeepgramStt } from '../../src/lib/speech/voice/deepgramStream.ts';
+import {
+  CLOUD_LISTEN_STAGES,
+  type CloudListenCause,
+} from '../../src/lib/speech/voice/cloudListenStages.ts';
 import {
   createVoiceTokenSource,
   type MintVoiceTokenRequest,
   type MintVoiceTokenResult,
 } from '../../src/lib/speech/voice/voiceToken.ts';
-import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
+import type {
+  CloudHeldReason,
+  FrameSource,
+  TtsAdapter,
+} from '../../src/lib/speech/voice/types.ts';
+import type { VoiceTokenAnswer } from '../../src/lib/speech/voice/voiceToken.ts';
 import {
   pickListener,
   pickSpeaker,
@@ -101,11 +124,25 @@ import {
 } from '../../src/lib/speech/voice/voiceRouter.ts';
 import {
   isOnDeviceLang,
+  ON_DEVICE_FALLBACK_KEYS,
   ON_DEVICE_FILES,
   ON_DEVICE_SIZE_MB,
 } from '../../src/lib/speech/onDevice/config.ts';
 import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
-import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
+import { unloadRecognizer } from '../../src/lib/speech/onDevice/recognizer.ts';
+import { removeOnDeviceModel } from '../../src/lib/speech/onDevice/modelStore.ts';
+import {
+  getNaturalVoiceState,
+  NATURAL_VOICE_FALLBACK_KEY,
+  recordSlowNaturalReading,
+  removeNaturalVoice,
+  unloadNaturalVoice,
+} from '../../src/lib/speech/naturalVoice/naturalVoiceEngine.ts';
+import {
+  getVoiceQuality,
+  pickVoice,
+  speakText,
+} from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
   ...readdirSync(new URL('../../src/lib/speech/', import.meta.url), {
@@ -993,13 +1030,33 @@ console.log('speechShared: on-device recognition checks passed');
   );
   const ends = hook.match(/endConversation\(\)/g) ?? [];
   assert.ok(
-    ends.length === 4,
-    'a conversation ends on an end phrase, a stop, the idle gap and a newly picked voice',
+    ends.length === 5,
+    'a conversation ends on an end phrase, a stop, the idle gap, a newly picked voice and the start of a live conversation',
   );
   assert.match(
     hook,
-    /const endConversation = \(\) => \{\s*run\.current\.isDeviceSticky = false;\s*run\.current\.voice = null;/,
+    /const endConversation = \(\) => \{\s*clearLatch\(\);\s*run\.current\.voice = null;/,
     'ending a conversation resets the device stickiness and the latched voice together',
+  );
+  assert.match(
+    hook,
+    /const clearLatch = \(\) => \{\s*run\.current\.isDeviceSticky = false;\s*run\.current\.cloudFailures = 0;/,
+    'the device latch and its failure count clear together',
+  );
+  assert.match(
+    hook,
+    /if \(!wasLive\) endConversation\(\);/,
+    'a live conversation starts with the cloud voice tried afresh',
+  );
+  assert.doesNotMatch(
+    hook,
+    /choice !== 'cloud'[^]{0,80}isDeviceSticky = true/,
+    'a line the router sent to the device (offline, not ready) never latches the device voice',
+  );
+  assert.match(
+    hook,
+    /cloudFailures >= CLOUD_FAILURES_MAX/,
+    'only repeated cloud failures latch the device voice',
   );
   assert.equal(
     (hook.match(/readVoice\(\)/g) ?? []).length,
@@ -1037,13 +1094,13 @@ console.log('speechShared: on-device recognition checks passed');
   );
   assert.match(
     hook,
-    /FIRST_LINE_FIRST_BYTE_MS = 4000/,
-    "a conversation's first line waits 4 s for its first byte",
+    /FIRST_LINE_FIRST_BYTE_MS = 6000/,
+    "a conversation's first line waits 6 s for its first byte",
   );
 }
 {
   const requests: MintVoiceTokenRequest[] = [];
-  const state = { isFailing: false, isKeyless: false };
+  const state = { isFailing: false, isKeyless: false, thrown: null as unknown };
   const READY: MintVoiceTokenResult = {
     status: 'ready',
     token: 't',
@@ -1056,8 +1113,10 @@ console.log('speechShared: on-device recognition checks passed');
     appId: 'x',
     mint: async (request) => {
       requests.push(request);
-      if (state.isFailing) throw new Error('offline');
-      if (state.isKeyless) return { status: 'held', reason: 'unavailable' };
+      if (state.isFailing) throw state.thrown ?? new Error('offline');
+      if (state.isKeyless) {
+        return { status: 'held', reason: 'unavailable', detail: 'key-missing' };
+      }
       return READY;
     },
   });
@@ -1069,28 +1128,432 @@ console.log('speechShared: on-device recognition checks passed');
   assert.deepEqual(requests[1].closed, [], 'a sent report is not sent twice');
   source.reportClosed('b', 2000);
   state.isFailing = true;
+  const failed = await source.getToken();
   assert.deepEqual(
-    await source.getToken(),
-    { status: 'held', reason: 'unavailable' },
-    'a failed request reads as held unavailable',
+    [
+      failed.status,
+      'reason' in failed && failed.reason,
+      'cause' in failed && failed.cause.stage,
+    ],
+    ['held', 'unavailable', 'token request'],
+    'a failed request reads as held unavailable, at the token request stage',
   );
+  assert.match(
+    'cause' in failed ? failed.cause.detail : '',
+    /offline/,
+    'a failed request keeps the error it threw',
+  );
+  state.thrown = Object.assign(new Error('App Check token is invalid'), {
+    name: 'FirebaseError',
+    code: 'functions/unauthenticated',
+  });
+  const refused = await source.getToken();
+  assert.match(
+    'cause' in refused ? refused.cause.detail : '',
+    /functions\/unauthenticated FirebaseError: App Check token is invalid \(sign-in or App Check looks involved\)/,
+    'a callable error keeps its code and name and says App Check or sign-in looks involved',
+  );
+  state.thrown = null;
   state.isFailing = false;
   await source.getToken();
   assert.deepEqual(
-    requests[3].closed,
+    requests[4].closed,
     [{ mintId: 'b', ms: 2000 }],
     'a report kept after a failed request is sent with the next one',
   );
   source.reportClosed('c', 3000);
   state.isKeyless = true;
-  await source.getToken();
+  const keyless = await source.getToken();
+  assert.deepEqual(
+    'cause' in keyless && [keyless.cause.stage, keyless.cause.detail],
+    [
+      'token refused by the server',
+      'The server answered unavailable: key-missing',
+    ],
+    "a server's unavailable keeps the why it stated",
+  );
   state.isKeyless = false;
   await source.getToken();
   assert.deepEqual(
-    requests[5].closed,
+    requests[6].closed,
     [{ mintId: 'c', ms: 3000 }],
     'a report the server could not count (held unavailable) is sent again',
   );
+}
+{
+  interface FakeClose {
+    code: number;
+    reason: string;
+    wasClean: boolean;
+  }
+  class FakeSocket {
+    static all: FakeSocket[] = [];
+    static failWith: Error | null = null;
+    onopen: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onclose: ((event: FakeClose) => void) | null = null;
+    onmessage: (() => void) | null = null;
+    constructor(
+      public url: string,
+      public protocols: string[],
+    ) {
+      if (FakeSocket.failWith) throw FakeSocket.failWith;
+      FakeSocket.all.push(this);
+    }
+    send() {}
+    close() {}
+  }
+  const clock = {
+    next: 1,
+    timers: new Map<number, { fn: () => void; ms: number }>(),
+  };
+  const fire = (ms: number) =>
+    Array.from(clock.timers.entries())
+      .filter(([, timer]) => timer.ms === ms)
+      .forEach(([id, timer]) => {
+        clock.timers.delete(id);
+        timer.fn();
+      });
+  const fakeWindow = {
+    setTimeout: (fn: () => void, ms: number) => {
+      clock.next += 1;
+      clock.timers.set(clock.next, { fn, ms });
+      return clock.next;
+    },
+    clearTimeout: (id: number) => clock.timers.delete(id),
+    setInterval: () => 0,
+    clearInterval: () => undefined,
+  };
+  const fakeDocument = {
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    visibilityState: 'visible',
+  };
+  const prior = {
+    window: Reflect.get(globalThis, 'window'),
+    document: Reflect.get(globalThis, 'document'),
+    socket: Reflect.get(globalThis, 'WebSocket'),
+    navigator: Reflect.get(globalThis, 'navigator'),
+  };
+  Object.assign(globalThis, {
+    window: fakeWindow,
+    document: fakeDocument,
+    WebSocket: FakeSocket,
+  });
+  const setNavigator = (value: unknown) =>
+    Reflect.defineProperty(globalThis, 'navigator', {
+      value,
+      configurable: true,
+      writable: true,
+    });
+  const READY_ANSWER: VoiceTokenAnswer = {
+    status: 'ready',
+    token: 'secret-token-value',
+    expiresAt: 1,
+    model: 'm',
+    mintId: 'mint-9',
+  };
+  const microphone = (): FrameSource => ({
+    preRoll: [],
+    subscribe: () => undefined,
+    stop: () => undefined,
+  });
+  const listen = (
+    getToken: () => Promise<VoiceTokenAnswer>,
+    { tokenWaitMs = 1500, isOwnMicrophone = false } = {},
+  ) => {
+    const unavailable: [CloudHeldReason | null, CloudListenCause][] = [];
+    const errors: string[] = [];
+    const closed: [string, number][] = [];
+    const stt = createDeepgramStt({
+      lang: 'en',
+      getToken,
+      tokenWaitMs,
+      source: isOwnMicrophone ? null : microphone(),
+      onUnavailable: (reason, cause) => unavailable.push([reason, cause]),
+      onClosed: (mintId, ms) => closed.push([mintId, ms]),
+    });
+    const started = stt.start({
+      onPartial: () => undefined,
+      onFinal: () => undefined,
+      onSpeechStart: () => undefined,
+      onError: (code) => errors.push(code),
+      preRoll: null,
+    });
+    return { unavailable, errors, closed, started };
+  };
+  const only = (unavailable: [CloudHeldReason | null, CloudListenCause][]) => {
+    assert.equal(unavailable.length, 1, 'one failure is reported once');
+    return unavailable[0]!;
+  };
+  const realConsole = { error: console.error, warn: console.warn };
+  console.error = () => undefined;
+  console.warn = () => undefined;
+  try {
+    const thrown = listen(() =>
+      Promise.reject(
+        Object.assign(new Error('Failed to fetch'), {
+          name: 'FirebaseError',
+          code: 'functions/unavailable',
+        }),
+      ),
+    );
+    await thrown.started;
+    const [thrownReason, thrownCause] = only(thrown.unavailable);
+    assert.deepEqual(
+      [thrownReason, thrownCause.stage, thrownCause.detail],
+      [
+        null,
+        CLOUD_LISTEN_STAGES.tokenRequest,
+        'FirebaseError: Failed to fetch',
+      ],
+      'a token request that throws reports its stage and the raw error',
+    );
+
+    const refused = listen(
+      createVoiceTokenSource({
+        appId: 'x',
+        mint: async () => {
+          throw Object.assign(new Error('App Check failed'), {
+            name: 'FirebaseError',
+            code: 'functions/unauthenticated',
+          });
+        },
+      }).getToken,
+    );
+    await refused.started;
+    const [, refusedCause] = only(refused.unavailable);
+    assert.deepEqual(
+      [
+        refusedCause.stage,
+        /functions\/unauthenticated FirebaseError: App Check failed/.test(
+          refusedCause.detail,
+        ),
+      ],
+      [CLOUD_LISTEN_STAGES.tokenRequest, true],
+      "a mint failure's code and message reach the listen's cause",
+    );
+
+    const keyless = listen(async () => ({
+      status: 'held',
+      reason: 'unavailable',
+      cause: {
+        stage: CLOUD_LISTEN_STAGES.tokenRefused,
+        detail: 'The server answered unavailable: provider-status-401',
+      },
+    }));
+    await keyless.started;
+    const [keylessReason, keylessCause] = only(keyless.unavailable);
+    assert.deepEqual(
+      [keylessReason, keylessCause.stage, keylessCause.detail],
+      [
+        null,
+        CLOUD_LISTEN_STAGES.tokenRefused,
+        'The server answered unavailable: provider-status-401',
+      ],
+      'a token held unavailable keeps the server stated why',
+    );
+
+    const limited = listen(async () => ({
+      status: 'held',
+      reason: 'listenLimit',
+    }));
+    await limited.started;
+    const [limitedReason, limitedCause] = only(limited.unavailable);
+    assert.deepEqual(
+      [limitedReason, limitedCause.stage, limitedCause.detail],
+      [
+        'listenLimit',
+        CLOUD_LISTEN_STAGES.tokenHeld,
+        'The server held this listen: listenLimit',
+      ],
+      'a token held by a limit names the limit',
+    );
+
+    const slow = listen(() => new Promise<VoiceTokenAnswer>(() => undefined), {
+      tokenWaitMs: 1234,
+    });
+    fire(1234);
+    await slow.started;
+    const [, slowCause] = only(slow.unavailable);
+    assert.deepEqual(
+      [slowCause.stage, slowCause.detail, slowCause.facts],
+      [
+        CLOUD_LISTEN_STAGES.tokenTimeout,
+        'No token within 1234 ms',
+        ['Waited: 1234 ms'],
+      ],
+      'a token that never arrives reports the wait it hit',
+    );
+
+    const closed = listen(async () => READY_ANSWER);
+    await closed.started;
+    FakeSocket.all.at(-1)!.onclose?.({
+      code: 1006,
+      reason: '',
+      wasClean: false,
+    });
+    const [, closedCause] = only(closed.unavailable);
+    assert.deepEqual(
+      [closedCause.stage, closedCause.detail, closedCause.facts],
+      [
+        CLOUD_LISTEN_STAGES.socketClosed,
+        'Close code 1006, reason none, not clean',
+        ['Close code: 1006', 'Close reason: none', 'Closed cleanly: no'],
+      ],
+      'a socket closed before it opened reports its close code',
+    );
+
+    const errored = listen(async () => READY_ANSWER);
+    await errored.started;
+    const erroredSocket = FakeSocket.all.at(-1)!;
+    erroredSocket.onerror?.();
+    assert.equal(
+      errored.unavailable.length,
+      0,
+      'an error event waits for the close that carries the code',
+    );
+    erroredSocket.onclose?.({ code: 1006, reason: 'bad', wasClean: false });
+    const [, erroredCause] = only(errored.unavailable);
+    assert.deepEqual(
+      [erroredCause.stage, erroredCause.detail],
+      [
+        CLOUD_LISTEN_STAGES.socketError,
+        'Close code 1006, reason "bad", not clean, after an error event',
+      ],
+      'a socket error before open reports the close code that followed',
+    );
+
+    const unopened = listen(async () => READY_ANSWER);
+    await unopened.started;
+    fire(3000);
+    const [, unopenedCause] = only(unopened.unavailable);
+    assert.deepEqual(
+      [unopenedCause.stage, unopenedCause.detail, unopenedCause.facts],
+      [
+        CLOUD_LISTEN_STAGES.socketOpenTimeout,
+        'Not open after 3000 ms',
+        ['Waited: 3000 ms'],
+      ],
+      'a socket that never opens reports the wait it hit',
+    );
+
+    setNavigator({
+      mediaDevices: {
+        getUserMedia: async () => {
+          throw new DOMException('Device in use', 'NotReadableError');
+        },
+      },
+    });
+    const busy = listen(async () => READY_ANSWER, { isOwnMicrophone: true });
+    await busy.started;
+    const [, busyCause] = only(busy.unavailable);
+    assert.deepEqual(
+      [busyCause.stage, busyCause.detail],
+      [CLOUD_LISTEN_STAGES.microphoneOpen, 'NotReadableError: Device in use'],
+      'a microphone refused for another reason reports the browser error',
+    );
+
+    setNavigator({
+      mediaDevices: {
+        getUserMedia: async () => ({ getTracks: () => [] }),
+      },
+    });
+    const noCapture = listen(
+      () => new Promise<VoiceTokenAnswer>(() => undefined),
+      { isOwnMicrophone: true },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    fire(1500);
+    await noCapture.started;
+    assert.ok(
+      noCapture.unavailable.length > 0 &&
+        noCapture.unavailable.every(
+          ([, cause]) =>
+            cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture ||
+            cause.stage === CLOUD_LISTEN_STAGES.tokenTimeout,
+        ),
+      'a microphone capture that does not start reports its own stage',
+    );
+    assert.ok(
+      noCapture.unavailable.some(
+        ([, cause]) => cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture,
+      ),
+      'the capture failure is the first cause',
+    );
+    FakeSocket.failWith = new SyntaxError(
+      "Failed to construct 'WebSocket': The subprotocol 'secret-token-value' is invalid.",
+    );
+    const unbuilt = listen(async () => READY_ANSWER);
+    await unbuilt.started;
+    FakeSocket.failWith = null;
+    const [, unbuiltCause] = only(unbuilt.unavailable);
+    assert.deepEqual(
+      [unbuiltCause.stage, unbuiltCause.detail, unbuilt.closed],
+      [CLOUD_LISTEN_STAGES.socketConstruct, 'SyntaxError', [['mint-9', 0]]],
+      "a socket that cannot be built reports its name only, and the token's mint is released",
+    );
+    assert.equal(
+      JSON.stringify(unbuilt.unavailable).includes('secret-token-value'),
+      false,
+      'a constructor message that quotes the token never reaches the cause',
+    );
+    assert.equal(
+      JSON.stringify(
+        [thrown, refused, keyless, limited, slow, closed, errored].map(
+          ({ unavailable }) => unavailable,
+        ),
+      ).includes('secret-token-value'),
+      false,
+      'no cause holds the token',
+    );
+  } finally {
+    console.error = realConsole.error;
+    console.warn = realConsole.warn;
+    Object.entries({
+      window: prior.window,
+      document: prior.document,
+      WebSocket: prior.socket,
+    }).forEach(([key, value]) => {
+      if (value === undefined) Reflect.deleteProperty(globalThis, key);
+      else Reflect.set(globalThis, key, value);
+    });
+    if (prior.navigator === undefined) {
+      Reflect.deleteProperty(globalThis, 'navigator');
+    } else setNavigator(prior.navigator);
+  }
+  console.log('speechShared: cloud listening failure cause checks passed');
+}
+{
+  resetFallbacks();
+  // @ts-expect-error a report without its cause does not compile
+  reportFallback({
+    key: 'no-cause',
+    feature: 'f',
+    wanted: 'w',
+    used: 'u',
+    reason: 'r',
+  });
+  resetFallbacks();
+  const warned: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (message: string) => warned.push(message);
+  reportFallback({
+    key: 'empty',
+    feature: 'f',
+    wanted: 'w',
+    used: 'u',
+    reason: 'r',
+    cause: { stage: 'a stage', detail: '' },
+  });
+  console.warn = realWarn;
+  const [shown] = readFallbacks();
+  assert.deepEqual(
+    [shown?.cause, warned.length],
+    [{ stage: 'a stage', detail: '' }, 0],
+    'the cause is kept as reported (the empty-detail warning is for local builds only)',
+  );
+  resetFallbacks();
 }
 const SPEAKER_ON = {
   isOnline: true,
@@ -1242,6 +1705,382 @@ assert.deepEqual(
 console.log('speechShared: voice router and playback queue checks passed');
 
 {
+  resetFallbacks();
+  const report = (key: string, reason = 'it broke') =>
+    reportFallback({
+      key,
+      feature: 'Speaking',
+      wanted: 'your chosen voice',
+      used: "this device's voice",
+      reason,
+      cause: { stage: 'a stage', detail: 'a raw error' },
+    });
+  report('a');
+  report('a', 'it broke again');
+  report('b');
+  assert.deepEqual(
+    readFallbacks()
+      .map(({ key, count, reason }) => [key, count, reason])
+      .sort(),
+    [
+      ['a', 2, 'it broke again'],
+      ['b', 1, 'it broke'],
+    ],
+    'the same key is one entry that counts and keeps the latest reason',
+  );
+  const before = readFallbacks();
+  assert.equal(
+    readFallbacks(),
+    before,
+    'the snapshot is stable until a change',
+  );
+  clearFallback('b');
+  assert.deepEqual(
+    ['a', 'b'].map(
+      (key) =>
+        readFallbacks().find((entry) => entry.key === key)?.recoveredAt ===
+        null,
+    ),
+    [true, false],
+    'a recovered key stays, marked recovered; the other stays active',
+  );
+  assert.equal(
+    readFallbacks().find(({ key }) => key === 'b')?.reason,
+    'it broke',
+    'a recovered entry keeps its reason',
+  );
+  const snapshot = readFallbacks();
+  clearFallback('b');
+  assert.equal(
+    readFallbacks(),
+    snapshot,
+    'clearing an already recovered key changes nothing',
+  );
+  report('b');
+  assert.equal(
+    readFallbacks().find(({ key }) => key === 'b')?.recoveredAt,
+    null,
+    'a recovered entry that fails again is active again',
+  );
+  assert.equal(
+    readFallbacks().find(({ key }) => key === 'b')?.count,
+    2,
+    'and keeps counting',
+  );
+  removeFallback('b');
+  assert.deepEqual(
+    readFallbacks().map(({ key }) => key),
+    ['a'],
+    'removing the preferred route deletes the entry',
+  );
+  clearFallback('zzz');
+  removeFallback('zzz');
+  dismissFallback('a', 'it broke again');
+  assert.equal(readFallbacks().length, 0, 'a dismissed cause is hidden');
+  report('a', 'it broke again');
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'the same cause again stays hidden for the session',
+  );
+  report('a', 'something else broke');
+  assert.deepEqual(
+    readFallbacks().map(({ key, reason }) => [key, reason]),
+    [['a', 'something else broke']],
+    'a different cause under a dismissed key shows again',
+  );
+  report('a', 'it broke again');
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'a dismissed cause stays dismissed after another cause came and went',
+  );
+  resetFallbacks();
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'first',
+    cause: { stage: 's', detail: 'd' },
+    facts: ['Error: raw'],
+    trace: 'the trace',
+  });
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'first',
+    cause: { stage: 's', detail: 'd' },
+  });
+  assert.deepEqual(
+    [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
+    [['Error: raw'], 'the trace'],
+    'a later report of the same reason with no facts keeps the earlier facts and trace',
+  );
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'second',
+    cause: { stage: 's', detail: 'd' },
+  });
+  assert.deepEqual(
+    [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
+    [[], null],
+    'a different reason does not keep the earlier reason facts or trace',
+  );
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'third',
+    cause: { stage: 's', detail: 'd' },
+    facts: ['Error: newer'],
+  });
+  assert.deepEqual(
+    readFallbacks()[0]?.facts,
+    ['Error: newer'],
+    'a later report with facts replaces them',
+  );
+  resetFallbacks();
+  report('c');
+  assert.deepEqual(
+    readFallbacks().map(({ key }) => key),
+    ['c'],
+    'other keys still show',
+  );
+  resetFallbacks();
+  report('a');
+  assert.equal(
+    readFallbacks().length,
+    1,
+    'a new session starts with nothing dismissed',
+  );
+  resetFallbacks();
+
+  const reportKeys = (keys: string[]) =>
+    keys.forEach((key) => report(key, 'it failed'));
+  const onDeviceKeys = Object.values(ON_DEVICE_FALLBACK_KEYS);
+  reportKeys([...onDeviceKeys, 'other']);
+  unloadRecognizer();
+  assert.deepEqual(
+    readFallbacks()
+      .map(({ key }) => key)
+      .sort(),
+    [
+      ON_DEVICE_FALLBACK_KEYS.download,
+      ON_DEVICE_FALLBACK_KEYS.storage,
+      'other',
+    ].sort(),
+    'freeing the model deletes its model and listen reports only',
+  );
+  Object.assign(globalThis, {
+    caches: {
+      delete: async () => true,
+      open: async () => ({ delete: async () => true }),
+    },
+  });
+  reportKeys(onDeviceKeys);
+  await removeOnDeviceModel();
+  assert.deepEqual(
+    readFallbacks().map(({ key }) => key),
+    ['other'],
+    'removing the downloaded model deletes every on-device report',
+  );
+  resetFallbacks();
+  recordSlowNaturalReading();
+  recordSlowNaturalReading();
+  const slow = readFallbacks().filter(
+    ({ key }) => key === NATURAL_VOICE_FALLBACK_KEY,
+  );
+  assert.deepEqual(
+    [slow.length, slow[0]?.count, getNaturalVoiceState().problem],
+    [1, 1, 'slow'],
+    'the natural voice reports being too slow once, when it is set aside',
+  );
+  unloadNaturalVoice();
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'turning the natural voice off deletes its report',
+  );
+  recordSlowNaturalReading();
+  recordSlowNaturalReading();
+  await removeNaturalVoice();
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'removing the natural voice deletes its report',
+  );
+  resetFallbacks();
+
+  const cloudKey = 'speech:cloud-voice';
+  const system: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async () => undefined,
+  };
+  const speakOptions = () => ({
+    priority: 'reply' as const,
+    signal: new AbortController().signal,
+    onStart: () => undefined,
+    onEnd: () => undefined,
+  });
+  const played = {
+    decode: async () => ({}) as AudioBuffer,
+    play: async (
+      _audio: AudioBuffer,
+      _signal: AbortSignal,
+      onStart: () => void,
+    ) => onStart(),
+    openStream: async () => {
+      throw new Error('not a stream');
+    },
+  };
+  const mpeg = (): SpeechFetch => ({
+    status: 'ready',
+    provider: 'googleTts',
+    contentType: 'audio/mpeg',
+    body: new ReadableStream<Uint8Array>({
+      start: (stream) => {
+        stream.enqueue(new Uint8Array([1]));
+        stream.close();
+      },
+    }),
+  });
+  const fallbacks: string[] = [];
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
+    fallback: system,
+    onFallback: () => fallbacks.push('fell'),
+  }).speak('Hello', speakOptions());
+  const [cloudReport] = readFallbacks();
+  assert.equal(
+    cloudReport?.key,
+    cloudKey,
+    'a cloud line that fell back is reported',
+  );
+  assert.equal(
+    cloudReport?.reason,
+    "the voice service couldn't be reached",
+    'the report says why in plain words',
+  );
+  assert.deepEqual(
+    [cloudReport?.cause, cloudReport?.facts.includes('Stood in: system')],
+    [{ stage: 'speech request', detail: 'HTTP 500' }, true],
+    'the report keeps the stage, the raw cause and what stood in',
+  );
+  await createCloudTts({
+    source: { fetchSpeech: () => new Promise<never>(() => undefined) },
+    fallback: system,
+    firstByteMs: 10,
+  }).speak('Hello again', speakOptions());
+  assert.deepEqual(
+    [readFallbacks()[0]?.count, readFallbacks()[0]?.reason],
+    [2, "the voice service didn't answer in time"],
+    'a second failure updates the same entry',
+  );
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'held', reason: 'speechLimit' }),
+    },
+    fallback: system,
+  }).speak('Held', speakOptions());
+  assert.equal(
+    readFallbacks()[0]?.reason,
+    "today's cloud voice allowance is used up",
+    'a spent allowance is reported as the reason',
+  );
+  await createCloudTts({
+    source: { fetchSpeech: async () => mpeg() },
+    fallback: system,
+    player: played,
+  }).speak('Fine', speakOptions());
+  assert.notEqual(
+    readFallbacks().find(({ key }) => key === cloudKey)?.recoveredAt ?? null,
+    null,
+    'a cloud line that plays marks the report recovered and keeps it',
+  );
+  resetFallbacks();
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
+    fallback: system,
+    reportsFallback: false,
+  }).speak('Sample', speakOptions());
+  await createCloudTts({
+    source: { fetchSpeech: async () => mpeg() },
+    fallback: system,
+    player: played,
+    reportsFallback: false,
+  }).speak('Sample', speakOptions());
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'a line that opts out reports and clears nothing',
+  );
+  reportFallback({
+    key: cloudKey,
+    feature: 'Speaking',
+    wanted: 'w',
+    used: 'u',
+    reason: 'r',
+    cause: { stage: 's', detail: 'd' },
+  });
+  await createCloudTts({
+    source: { fetchSpeech: async () => mpeg() },
+    fallback: system,
+    player: played,
+    reportsFallback: false,
+  }).speak('Sample', speakOptions());
+  assert.equal(
+    readFallbacks()[0]?.recoveredAt,
+    null,
+    'a preview that plays leaves the real report alone',
+  );
+  resetFallbacks();
+
+  const voices = { current: 'cloud' as 'cloud' | 'device' };
+  const gate: { release: () => void } = { release: () => undefined };
+  const routed = createPlaybackQueue({
+    pick: (priority) => ({
+      id: priority,
+      route: 'cloud',
+      isPlayingThroughWebAudio: true,
+      get isFallingBack() {
+        return voices.current === 'device';
+      },
+      speak: () => new Promise<void>((resolve) => (gate.release = resolve)),
+    }),
+  });
+  assert.equal(routed.getPlayingVoice(), null, 'nothing plays, no voice');
+  void routed.enqueue('Reply', { priority: 'reply', turnKey: 1 });
+  assert.deepEqual(
+    routed.getPlayingVoice(),
+    { priority: 'reply', route: 'cloud' },
+    'a cloud line that is sounding is the cloud route',
+  );
+  voices.current = 'device';
+  assert.deepEqual(
+    routed.getPlayingVoice(),
+    { priority: 'reply', route: 'device' },
+    'a cloud line a device voice took over is the device route',
+  );
+  gate.release();
+  await tick();
+  routed.clear();
+  console.log('speechShared: fallback reporting checks passed');
+}
+
+{
   const calls: string[] = [];
   const held: string[] = [];
   const fallback: TtsAdapter = {
@@ -1282,10 +2121,10 @@ console.log('speechShared: voice router and playback queue checks passed');
   assert.equal(heldResult, 'system', 'a held answer is spoken by the fallback');
   assert.deepEqual(held, ['speechLimit'], 'a held answer reports its reason');
   assert.equal(
-    await cloudWith(async () => ({ status: 'unavailable' })).speak(
-      'Two',
-      options,
-    ),
+    await cloudWith(async () => ({
+      status: 'unavailable',
+      detail: 'HTTP 500',
+    })).speak('Two', options),
     'system',
     'an unavailable answer is spoken by the fallback',
   );
@@ -1299,14 +2138,213 @@ console.log('speechShared: voice router and playback queue checks passed');
   );
   const fetchedBefore = fetched.length;
   assert.equal(
-    await cloudWith(async () => ({ status: 'unavailable' })).speak(
-      'word '.repeat(130),
-      options,
-    ),
+    await cloudWith(async () => ({
+      status: 'unavailable',
+      detail: 'HTTP 500',
+    })).speak('word '.repeat(130), options),
     'system',
-    'a long text goes straight to the fallback',
+    'a long text whose cloud voice fails is spoken by the fallback',
   );
-  assert.equal(fetched.length, fetchedBefore, 'a long text is never fetched');
+  assert.equal(
+    fetched.length - fetchedBefore,
+    1,
+    'a long text is tried in the cloud first, one piece at a time',
+  );
+  const sentence = 'This is one sentence of a long reply. ';
+  const longText = sentence.repeat(40);
+  const pieceFetches: string[] = [];
+  const pieceStarts: number[] = [];
+  const longBy = await createCloudTts({
+    source: {
+      fetchSpeech: async (piece) => {
+        pieceFetches.push(piece);
+        return {
+          status: 'ready',
+          provider: 'googleTts',
+          contentType: 'audio/mpeg',
+          body: new ReadableStream<Uint8Array>({
+            start: (stream) => {
+              stream.enqueue(new Uint8Array([1]));
+              stream.close();
+            },
+          }),
+        };
+      },
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: async (_audio, _signal, onStart, onProgress) => {
+        pieceStarts.push(pieceFetches.length);
+        onStart();
+        onProgress?.(0.5);
+      },
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, {
+    ...options,
+    onStart: () => pieceStarts.push(-1),
+  });
+  assert.equal(longBy, 'cloud:googleTts', 'a long line is spoken by the cloud');
+  assert.ok(
+    pieceFetches.length > 1 &&
+      pieceFetches.every((piece) => piece.length <= 600),
+    'a line over 600 characters is cut into pieces that each fit',
+  );
+  assert.equal(
+    pieceFetches.join(' ').replace(/\s+/g, ' '),
+    longText.trim().replace(/\s+/g, ' '),
+    'the pieces say every word in order',
+  );
+  assert.equal(
+    pieceStarts.filter((entry) => entry === -1).length,
+    1,
+    'a line reports its start once, not once per piece',
+  );
+  const overlapFetches: string[] = [];
+  const overlapSignals: AbortSignal[] = [];
+  const stopMidLine = new AbortController();
+  const overlapping = createCloudTts({
+    source: {
+      fetchSpeech: async (piece, _priority, fetchSignal) => {
+        overlapFetches.push(piece);
+        overlapSignals.push(fetchSignal);
+        return {
+          status: 'ready',
+          provider: 'googleTts',
+          contentType: 'audio/mpeg',
+          body: new ReadableStream<Uint8Array>({
+            start: (stream) => {
+              stream.enqueue(new Uint8Array([1]));
+              stream.close();
+            },
+          }),
+        };
+      },
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: (_audio, playSignal, onStart) =>
+        new Promise<void>((resolve) => {
+          onStart();
+          playSignal.addEventListener('abort', () => resolve());
+        }),
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, { ...options, signal: stopMidLine.signal });
+  await tick();
+  assert.equal(
+    overlapFetches.length,
+    2,
+    'the next piece is fetched while the first one plays, with none beyond it',
+  );
+  assert.equal(overlapSignals[1]!.aborted, false, 'its answer is held');
+  stopMidLine.abort();
+  await overlapping;
+  assert.equal(
+    overlapSignals[1]!.aborted,
+    true,
+    'a held piece is released when the line is stopped',
+  );
+  const lineProgress: number[] = [];
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({
+        status: 'ready',
+        provider: 'googleTts',
+        contentType: 'audio/mpeg',
+        body: new ReadableStream<Uint8Array>({
+          start: (stream) => {
+            stream.enqueue(new Uint8Array([1]));
+            stream.close();
+          },
+        }),
+      }),
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: async (_audio, _signal, onStart, onProgress) => {
+        onStart();
+        onProgress?.(0.5);
+        onProgress?.(1);
+      },
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, { ...options, onProgress: (f) => lineProgress.push(f) });
+  assert.ok(
+    lineProgress.every(
+      (value, index) => index === 0 || value >= lineProgress[index - 1]!,
+    ) && lineProgress.at(-1)! > 0.9,
+    'progress through the pieces of a long line runs forward to the end',
+  );
+  const attempts: string[] = [];
+  const secondBy = await createCloudTts({
+    source: {
+      fetchSpeech: async (piece) => {
+        attempts.push(piece);
+        return attempts.length === 1
+          ? {
+              status: 'ready',
+              provider: 'googleTts',
+              contentType: 'audio/mpeg',
+              body: new ReadableStream<Uint8Array>({
+                start: (stream) => {
+                  stream.enqueue(new Uint8Array([1]));
+                  stream.close();
+                },
+              }),
+            }
+          : { status: 'unavailable', detail: 'HTTP 500' };
+      },
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: async (_audio, _signal, onStart) => onStart(),
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, options);
+  assert.equal(
+    attempts.length,
+    2,
+    'a piece that fails sends the rest to the fallback in one go, not piece by piece',
+  );
+  assert.equal(
+    secondBy,
+    'system',
+    'the fallback finishes a line whose later piece failed',
+  );
+  const routeEvents: boolean[] = [];
+  const probe = createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
+    fallback: { ...fallback, isPlayingThroughWebAudio: false },
+  });
+  assert.equal(
+    probe.isPlayingThroughWebAudio,
+    false,
+    'a cloud line is not in the page audio before it makes a sound',
+  );
+  await probe.speak('Probe', {
+    ...options,
+    onRouteChange: () => routeEvents.push(probe.isPlayingThroughWebAudio),
+  });
+  assert.deepEqual(
+    [routeEvents, probe.isPlayingThroughWebAudio],
+    [[false], false],
+    'a line that fell back to the system voice reports it is not in the page audio',
+  );
   const callsBefore = calls.length;
   const aborting = new AbortController();
   const pending = cloudWith(
@@ -1558,6 +2596,7 @@ console.log('speechShared: voice router and playback queue checks passed');
       },
       end: () => events.push('end'),
       remainingMs: () => 0,
+      getTiming: () => ({ playedMs: 0, scheduledMs: 0, isEnded: true }),
       stop: () => events.push('stop'),
       done: Promise.resolve(),
     }),
@@ -1620,6 +2659,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         push: () => undefined,
         end: () => undefined,
         remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 0, isEnded: true }),
         stop: () => undefined,
         done: Promise.resolve(),
       }),
@@ -1648,6 +2688,29 @@ console.log('speechShared: voice router and playback queue checks passed');
     false,
     'a line that stalled after sound never repeats on the device',
   );
+  const outcomes: string[] = [];
+  pushed.length = 0;
+  await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])], true)),
+    fallback,
+    gapMs: 20,
+    player: player([]),
+    onCut: () => outcomes.push('cut'),
+    onPlayed: () => outcomes.push('played'),
+  }).speak('Stalled', options());
+  pushed.length = 0;
+  await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])])),
+    fallback,
+    player: player([]),
+    onCut: () => outcomes.push('cut'),
+    onPlayed: () => outcomes.push('played'),
+  }).speak('Whole', options());
+  assert.deepEqual(
+    outcomes,
+    ['cut', 'played'],
+    'a piece that stalls after sound counts as a cloud failure, and only a whole line counts as played',
+  );
 
   const hungEvents: string[] = [];
   const hungAt = Date.now();
@@ -1660,6 +2723,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         push: () => onStart(),
         end: () => hungEvents.push('end'),
         remainingMs: () => 100,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 100, isEnded: true }),
         stop: () => hungEvents.push('stop'),
         done: new Promise<void>(() => undefined),
       }),
@@ -1692,6 +2756,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         },
         end: () => undefined,
         remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 0, isEnded: true }),
         stop: () => undefined,
         done: Promise.resolve(),
       }),
@@ -1702,7 +2767,9 @@ console.log('speechShared: voice router and playback queue checks passed');
 
   const fellBack: string[] = [];
   await createCloudTts({
-    source: { fetchSpeech: async () => ({ status: 'unavailable' }) },
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
     fallback,
     onFallback: () => fellBack.push('fallback'),
   }).speak('Ten', options());
@@ -1749,6 +2816,34 @@ console.log('speechShared: voice router and playback queue checks passed');
       'audio/L16; rate=24000; channels=1',
       'the response type is passed on',
     );
+    const failedWith = async (response: Response) => {
+      globalThis.fetch = (async () => response) as typeof fetch;
+      const failed = await createSpeechSource({
+        appId: 'helm',
+        url: 'http://localhost/speech',
+        getHeaders: async () => ({}),
+      }).fetchSpeech('Hi', 'reply', new AbortController().signal);
+      return failed.status === 'unavailable' ? failed.detail : failed.status;
+    };
+    assert.deepEqual(
+      [
+        await failedWith(
+          new Response('<html>Bad gateway <b>secret</b></html>', {
+            status: 502,
+          }),
+        ),
+        await failedWith(
+          new Response(JSON.stringify({ error: 'app-check' }), { status: 401 }),
+        ),
+        await failedWith(
+          new Response(JSON.stringify({ error: 'Token abc: bad' }), {
+            status: 401,
+          }),
+        ),
+      ],
+      ['HTTP 502', 'HTTP 401: app-check', 'HTTP 401'],
+      'a failed response keeps only a short error code, never its body',
+    );
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -1791,7 +2886,7 @@ console.log('speechShared: voice router and playback queue checks passed');
     });
   const heldWhispers: string[] = [];
   const whisperOutcomes = await Promise.allSettled([
-    whisperSpeak(async () => ({ status: 'unavailable' })),
+    whisperSpeak(async () => ({ status: 'unavailable', detail: 'test' })),
     whisperSpeak(() => new Promise<never>(() => undefined)),
     whisperSpeak(async () => ({ status: 'held', reason: 'speechLimit' }), {
       onHeld: () => heldWhispers.push('held'),
@@ -2867,4 +3962,321 @@ console.log('speechShared: voice provider checks passed');
   await readAll(await cached.fetchSpeech('one', 'reply', signal));
   assert.equal(fetched.count, 4, 'the oldest line is dropped past the limit');
   console.log('speechShared: turn end, barge-in and replay checks passed');
+}
+
+{
+  const clock = { now: 10 };
+  const context: PcmContext = {
+    get currentTime() {
+      return clock.now;
+    },
+    destination: {} as AudioNode,
+    createBuffer: (_channels, length, rate) =>
+      ({
+        duration: length / rate,
+        length,
+        copyToChannel: () => undefined,
+      }) as unknown as AudioBuffer,
+    createBufferSource: () =>
+      ({
+        buffer: null,
+        connect: () => undefined,
+        start: () => undefined,
+        stop: () => undefined,
+      }) as unknown as AudioBufferSourceNode,
+  };
+  const sink = createPcmSink({
+    context,
+    sampleRate: 1000,
+    prebufferSeconds: 0,
+    leadSeconds: 0,
+    onStart: () => undefined,
+  });
+  assert.deepEqual(
+    sink.getTiming(),
+    { playedMs: 0, scheduledMs: 0, isEnded: false },
+    'a sink that has made no sound has played nothing',
+  );
+  sink.push(new Uint8Array(4000));
+  clock.now = 11;
+  assert.deepEqual(
+    sink.getTiming(),
+    { playedMs: 1000, scheduledMs: 2000, isEnded: false },
+    'a sink says how much it has played of what it was handed',
+  );
+  clock.now = 20;
+  sink.end();
+  assert.deepEqual(
+    sink.getTiming(),
+    { playedMs: 2000, scheduledMs: 2000, isEnded: true },
+    'played never runs past what was scheduled',
+  );
+  sink.stop();
+
+  const events: string[] = [];
+  const reports: number[] = [];
+  const adapter = (progress: number[]): TtsAdapter => ({
+    id: 'reporter',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async (_text, { onStart, onProgress, onRouteChange }) => {
+      onStart();
+      onRouteChange?.();
+      progress.forEach((value) => onProgress?.(value));
+    },
+  });
+  const progressQueue = createPlaybackQueue({
+    pick: () => adapter([0.2, 0.1, 0.6]),
+    onRouteChange: () => events.push('route'),
+  });
+  const spokenLine = await progressQueue.enqueue('Hello there', {
+    priority: 'reply',
+    turnKey: 1,
+    onProgress: (value) => reports.push(value),
+  });
+  assert.equal(spokenLine.status, 'spoken');
+  assert.deepEqual(
+    reports,
+    [0.2, 0.6, 1],
+    "a line's progress only moves forward and ends at 1 once it is spoken",
+  );
+  assert.deepEqual(
+    events,
+    ['route', 'route'],
+    'the queue passes on that the sound began and that the line changed voice',
+  );
+  const estimated: number[] = [];
+  const silent: TtsAdapter = {
+    id: 'silent',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: (_text, { onStart, signal }) =>
+      new Promise<void>((resolve) => {
+        onStart();
+        signal.addEventListener('abort', () => resolve());
+      }),
+  };
+  const estimateQueue = createPlaybackQueue({ pick: () => silent });
+  const estimating = estimateQueue.enqueue('Fourteen chars', {
+    priority: 'reply',
+    turnKey: 1,
+    onProgress: (value) => estimated.push(value),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  estimateQueue.clear();
+  await estimating;
+  assert.ok(
+    estimated.length > 0 &&
+      estimated.every((value) => value > 0 && value <= 0.96),
+    'with no report from the voice, a clock estimate runs short of the end',
+  );
+
+  assert.deepEqual(
+    [
+      toJoinKey({ turnKey: 5, currentKey: 9, isActive: true }),
+      toJoinKey({ turnKey: 9, currentKey: 9, isActive: true }),
+      toJoinKey({ turnKey: 12, currentKey: 9, isActive: true }),
+      toJoinKey({ turnKey: 5, currentKey: 9, isActive: false }),
+    ],
+    [null, 9, 9, 5],
+    'a stale say is dropped while a newer reply plays, one of the turn joins it, and none takes the newest key',
+  );
+  assert.ok(
+    isBargeSuppressed(1000 + BARGE_SUPPRESS_MS, 1000 + BARGE_SUPPRESS_MS - 1) &&
+      !isBargeSuppressed(1000 + BARGE_SUPPRESS_MS, 1000 + BARGE_SUPPRESS_MS) &&
+      BARGE_SUPPRESS_MS <= 8000,
+    'barge suppression after an unconfirmed listen expires after a few seconds',
+  );
+
+  const sparse: number[] = [];
+  const sparseQueue = createPlaybackQueue({
+    pick: () => ({
+      id: 'sparse',
+      route: 'device',
+      isPlayingThroughWebAudio: false,
+      speak: (_text, { onStart, onProgress, signal }) =>
+        new Promise<void>((resolve) => {
+          onStart();
+          onProgress?.(0.2);
+          signal.addEventListener('abort', () => resolve());
+        }),
+    }),
+  });
+  const sparseLine = sparseQueue.enqueue('x'.repeat(140), {
+    priority: 'reply',
+    turnKey: 1,
+    onProgress: (value) => sparse.push(value),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  sparseQueue.clear();
+  await sparseLine;
+  assert.ok(
+    sparse[0] === 0.2 &&
+      sparse.length > 2 &&
+      sparse.every(
+        (value, index) => index === 0 || value > sparse[index - 1]!,
+      ) &&
+      sparse.at(-1)! < 0.96,
+    "progress keeps advancing between a voice's sparse reports, never backwards",
+  );
+
+  {
+    const timers = {
+      now: 1_000_000,
+      nextId: 1,
+      tasks: [] as { id: number; at: number; run: () => void }[],
+    };
+    const realNow = Date.now;
+    Date.now = () => timers.now;
+    const advance = (ms: number) => {
+      const end = timers.now + ms;
+      const step = (): void => {
+        const due = timers.tasks
+          .filter((task) => task.at <= end)
+          .sort((a, b) => a.at - b.at)[0];
+        if (due === undefined) {
+          timers.now = end;
+          return;
+        }
+        timers.tasks = timers.tasks.filter((task) => task.id !== due.id);
+        timers.now = Math.max(timers.now, due.at);
+        due.run();
+        step();
+      };
+      step();
+    };
+    interface FakeUtterance {
+      text: string;
+      onstart: (() => void) | null;
+      onend: (() => void) | null;
+      onerror: ((event: { error: string }) => void) | null;
+    }
+    const fake = {
+      speaking: false,
+      pending: false,
+      queue: [] as FakeUtterance[],
+      cancels: 0,
+      getVoices: () => [],
+      resume: () => undefined,
+      speak(utterance: FakeUtterance) {
+        this.queue.push(utterance);
+        this.speaking = true;
+      },
+      cancel() {
+        this.cancels += 1;
+        const dropped = this.queue.splice(0);
+        this.speaking = false;
+        dropped.forEach((utterance) =>
+          utterance.onerror?.({ error: 'canceled' }),
+        );
+      },
+    };
+    const priorWindow = Reflect.get(globalThis, 'window');
+    const priorUtterance = Reflect.get(globalThis, 'SpeechSynthesisUtterance');
+    Object.assign(globalThis, {
+      window: {
+        speechSynthesis: fake,
+        setTimeout: (run: () => void, ms: number) => {
+          const id = timers.nextId++;
+          timers.tasks.push({ id, at: timers.now + ms, run });
+          return id;
+        },
+        clearTimeout: (id: number) => {
+          timers.tasks = timers.tasks.filter((task) => task.id !== id);
+        },
+      },
+      SpeechSynthesisUtterance: class {
+        onstart = null;
+        onend = null;
+        onerror = null;
+        onboundary = null;
+        lang = '';
+        voice = null;
+        constructor(public text: string) {}
+      },
+    });
+    try {
+      const reading =
+        'This sentence is long enough to be a chunk of its own. '.repeat(8);
+      const begin = () => {
+        fake.queue = [];
+        fake.speaking = false;
+        const seen = { ended: 0 };
+        speakText(reading, {
+          lang: 'en-US',
+          onEnd: () => {
+            seen.ended += 1;
+          },
+        });
+        return seen;
+      };
+      const failing = begin();
+      assert.ok(fake.queue.length >= 2, 'a long reading is queued in chunks');
+      const [first, ...later] = fake.queue;
+      fake.queue = later;
+      first!.onerror?.({ error: 'synthesis-failed' });
+      assert.equal(
+        failing.ended,
+        0,
+        'a chunk that errors never reports the line done while later chunks are queued',
+      );
+      later.at(-1)!.onend?.();
+      assert.equal(failing.ended, 1, 'the last chunk ending ends the line');
+
+      const cut = begin();
+      fake.queue[0]!.onerror?.({ error: 'canceled' });
+      assert.equal(cut.ended, 1, 'a cancelled chunk ends the line');
+
+      const stuck = begin();
+      advance(40_000);
+      fake.queue[1]!.onstart?.();
+      advance(15_000);
+      assert.equal(
+        stuck.ended,
+        0,
+        'a reading still speaking past the guard is waited on',
+      );
+      const cancelsBefore = fake.cancels;
+      advance(60_000);
+      assert.equal(
+        stuck.ended,
+        1,
+        'a reading stuck speaking is ended within its estimated length',
+      );
+      assert.ok(fake.cancels > cancelsBefore, 'a stuck reading is cancelled');
+    } finally {
+      Date.now = realNow;
+      Object.assign(globalThis, {
+        window: priorWindow,
+        SpeechSynthesisUtterance: priorUtterance,
+      });
+      if (priorWindow === undefined) {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+      if (priorUtterance === undefined) {
+        Reflect.deleteProperty(globalThis, 'SpeechSynthesisUtterance');
+      }
+    }
+  }
+
+  const hook = readFileSync(
+    new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    hook,
+    /!isBargeSuppressed\(run\.current\.bargeSuppressedUntil, Date\.now\(\)\) &&\s*\(queueRef\.current\?\.isPlayingThroughWebAudio\(\)/,
+    'the barge-in microphone stays shut after a listen over the line came to nothing',
+  );
+  assert.match(
+    hook,
+    /joinsLine\s*\?\s*toJoinKey\(\{[^}]*isActive: queueRef\.current\?\.isActive\(\) \?\? false/,
+    'a line that joins one already playing waits for it instead of cutting it',
+  );
+  assert.match(
+    hook,
+    /if \(turnKey === null\) \{\s*return Promise\.resolve\(\{ status: 'cancelled'/,
+    'a joining line from an older turn is dropped',
+  );
+  console.log('speechShared: line progress and playback route checks passed');
 }

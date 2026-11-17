@@ -294,8 +294,8 @@ export function useHelmVoice() {
     setNeedsMicrophone(isMicrophone);
   }
 
-  function sayRepeatRefusal(outcome: VoiceRepeat) {
-    if (outcome === 'none') say(HELM_COPY.nothingToRepeat);
+  function sayRepeatRefusal(outcome: VoiceRepeat, turnKey: number) {
+    if (outcome === 'none') say(HELM_COPY.nothingToRepeat, turnKey);
     if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
   }
 
@@ -307,7 +307,7 @@ export function useHelmVoice() {
   }
 
   /** Says the last line again the way it was said; a whisper that can't play says so rather than going quiet. */
-  function repeatLast() {
+  function repeatLast(turnKey: number) {
     sayRepeatRefusal(
       voice.repeat(undefined, {
         onResult: (result, delivery) => {
@@ -316,6 +316,7 @@ export function useHelmVoice() {
           }
         },
       }),
+      turnKey,
     );
   }
 
@@ -333,6 +334,7 @@ export function useHelmVoice() {
           }
         },
       }),
+      Date.now(),
     );
   }
 
@@ -353,12 +355,13 @@ export function useHelmVoice() {
   }
 
   /** Shows the line; `spoken` is what is said when it differs (a line that names a quiet thing is shown, never said). */
-  function say(line: string, spoken: string = line) {
+  function say(line: string, turnKey: number, spoken: string = line) {
     voice.settle();
     showNote(line);
     void voice.speak(spoken, {
       priority: 'reply',
-      turnKey: Date.now(),
+      turnKey,
+      joinsLine: true,
       canAnswer: isHandsFreeOn && isSurfaceShown.current,
     });
   }
@@ -376,6 +379,7 @@ export function useHelmVoice() {
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
+    const now = Date.now();
     const interrupted = interruptedCaptureId.current;
     interruptedCaptureId.current = null;
     const write = dictation.current;
@@ -388,7 +392,7 @@ export function useHelmVoice() {
     }
     if (isRepeatRequest(text)) {
       voice.settle();
-      repeatLast();
+      repeatLast(now);
       return;
     }
     await takeOnDevice(text, {
@@ -429,10 +433,10 @@ export function useHelmVoice() {
     if (turn.kind === 'undo') {
       const offer = isSpoken ? findAskedQuestion(now, 'undoOffer') : null;
       if (offer?.asked.question.kind === 'undoOffer') {
-        await answerOpenUndoOffer(offer.asked, 'yes');
+        await answerOpenUndoOffer(offer.asked, 'yes', now);
         return true;
       }
-      await undoLatest();
+      await undoLatest(now);
       return true;
     }
     if (turn.kind === 'stopVoice') {
@@ -441,11 +445,11 @@ export function useHelmVoice() {
       return true;
     }
     if (turn.kind === 'close') {
-      if (await closeConversation(turn.close, isSpoken)) return true;
+      if (await closeConversation(turn.close, isSpoken, now)) return true;
       // A typed close that was not written keeps its words in the field; a spoken one puts what was heard there.
       if (!isSpoken) return 'kept' as const;
       if (fieldWriter.current) fieldWriter.current(text);
-      else say(HELM_COPY.talkSendFailed);
+      else say(HELM_COPY.talkSendFailed, now);
       return true;
     }
     if (!isSpoken) {
@@ -474,7 +478,11 @@ export function useHelmVoice() {
   }
 
   /** The device-side close: drops what was pending, keeps what was done, releases the microphone when it was spoken, and offers Undo only when something was dropped. Nothing is sent to the server. */
-  async function closeConversation(close: ClosingRead, isSpoken: boolean) {
+  async function closeConversation(
+    close: ClosingRead,
+    isSpoken: boolean,
+    now: number,
+  ) {
     const state = store.getState();
     const all = selectAllCaptures(state);
     const sessionId = getOpenSessionId(
@@ -500,7 +508,7 @@ export function useHelmVoice() {
         await closeQuestions(uid, effects);
       } catch (error) {
         console.error('Helm close was not written', error);
-        say(HELM_COPY.heldActionFailed);
+        say(HELM_COPY.heldActionFailed, now);
         return false;
       }
     }
@@ -621,10 +629,11 @@ export function useHelmVoice() {
   async function answerOpenUndoOffer(
     asked: { captureId: string; id: string; question: HelmQuestion },
     optionId: string,
+    turnKey: number,
   ) {
     if (!uid) return;
     if (asked.question.shape !== 'yesNo' && optionId === 'yes') {
-      say(HELM_COPY.undoOfferFinishOnCard);
+      say(HELM_COPY.undoOfferFinishOnCard, turnKey);
       return;
     }
     try {
@@ -652,10 +661,10 @@ export function useHelmVoice() {
       const isHeld =
         (outcome.kind === 'undone' || outcome.kind === 'nothing') &&
         outcome.isHeld;
-      say(line, isHeld ? QUIET_SPOKEN_LINE : line);
+      say(line, turnKey, isHeld ? QUIET_SPOKEN_LINE : line);
     } catch (error) {
       console.error('Helm undo offer was not answered by voice', error);
-      say(HELM_COPY.heldActionFailed);
+      say(HELM_COPY.heldActionFailed, turnKey);
     }
   }
 
@@ -693,10 +702,11 @@ export function useHelmVoice() {
           ]
             .filter(Boolean)
             .join(' '),
+          now,
         );
       } catch (error) {
         console.error('Helm question was not dismissed by voice', error);
-        say(HELM_COPY.heldActionFailed);
+        say(HELM_COPY.heldActionFailed, now);
       }
       return true;
     }
@@ -710,10 +720,11 @@ export function useHelmVoice() {
           ]
             .filter(Boolean)
             .join(' '),
+          now,
         );
       } catch (error) {
         console.error('Helm question was not skipped by voice', error);
-        say(HELM_COPY.heldActionFailed);
+        say(HELM_COPY.heldActionFailed, now);
       }
       return true;
     }
@@ -729,7 +740,11 @@ export function useHelmVoice() {
       )
         ? buildAskAgainLine(question)
         : buildSpokenQuestion(question);
-      say(askAgain, isTurnHeld(asked.captureId) ? QUIET_SPOKEN_LINE : askAgain);
+      say(
+        askAgain,
+        now,
+        isTurnHeld(asked.captureId) ? QUIET_SPOKEN_LINE : askAgain,
+      );
       return true;
     }
     if (isModel) {
@@ -737,11 +752,11 @@ export function useHelmVoice() {
     }
     if (choice === null) return false;
     if (question.kind === 'undoOffer' && optionId !== null) {
-      await answerOpenUndoOffer(asked, optionId);
+      await answerOpenUndoOffer(asked, optionId, now);
       return true;
     }
     if (question.kind === 'whichIsTrue' && optionId === 'none') {
-      say(HELM_COPY.whichIsTrueNoneVoice);
+      say(HELM_COPY.whichIsTrueNoneVoice, now);
       return true;
     }
     const result = await resolveQuestion(asked.captureId, asked.id, {
@@ -753,12 +768,13 @@ export function useHelmVoice() {
         [HELM_COPY.questionAnswered, sayNextQuestion(asked.captureId, asked.id)]
           .filter(Boolean)
           .join(' '),
+        now,
       );
     } else if (result.kind === 'offline') {
-      say(HELM_COPY.questionNeedsConnection);
+      say(HELM_COPY.questionNeedsConnection, now);
     } else if (result.kind === 'gone' || result.kind === 'stale') {
-      say(HELM_COPY.questionGone(question.kind));
-    } else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed);
+      say(HELM_COPY.questionGone(question.kind), now);
+    } else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed, now);
     else voice.settle();
     return true;
   }
@@ -872,7 +888,7 @@ export function useHelmVoice() {
           waiting.current.delete(captureId);
           clearSentTurn(uid, captureId);
           voice.settle();
-          repeatLast();
+          repeatLast(turn.createdAt);
         },
       });
       recordSentTurn(uid, turn, id);
@@ -883,10 +899,9 @@ export function useHelmVoice() {
     }
   }
 
-  async function undoLatest() {
+  async function undoLatest(now: number) {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const now = Date.now();
     const sessionId = getOpenSessionId(
       all,
       now,
@@ -900,7 +915,7 @@ export function useHelmVoice() {
           (capture.status === 'received' || capture.status === 'interpreting'),
       );
     if (isTurnPending) {
-      say(HELM_COPY.undoWhilePending);
+      say(HELM_COPY.undoWhilePending, now);
       return;
     }
     const executions = selectExecutionsById(state);
@@ -911,7 +926,7 @@ export function useHelmVoice() {
       .filter(canUndo)
       .sort((a, b) => b.createdAt - a.createdAt)[0];
     if (!uid || !latest) {
-      say(HELM_COPY.nothingToUndo);
+      say(HELM_COPY.nothingToUndo, now);
       return;
     }
     try {
@@ -920,14 +935,14 @@ export function useHelmVoice() {
         reason: { reason: 'unclear', quote: null, via: 'voice' },
       });
       if (result.kind === 'done')
-        say(result.report, isHeld ? QUIET_SPOKEN_LINE : result.report);
+        say(result.report, now, isHeld ? QUIET_SPOKEN_LINE : result.report);
       else if (result.kind === 'refused') {
         const refusal = result.report ?? HELM_COPY.cannotTakeBack;
-        say(refusal, isHeld ? QUIET_SPOKEN_LINE : refusal);
-      } else say(HELM_COPY.undoNeedsConnectionTitle);
+        say(refusal, now, isHeld ? QUIET_SPOKEN_LINE : refusal);
+      } else say(HELM_COPY.undoNeedsConnectionTitle, now);
     } catch (error) {
       console.error('Helm undo by voice failed', error);
-      say(HELM_COPY.undoFailed);
+      say(HELM_COPY.undoFailed, now);
     }
   }
 
@@ -1060,6 +1075,7 @@ export function useHelmVoice() {
             void applyClose.current(
               { kind: 'dismiss', position: 'whole', rest: '' },
               capture.inputMode === 'voice',
+              now,
             ),
         ),
       );
@@ -1209,7 +1225,7 @@ export function useHelmVoice() {
     handleTyped,
     registerField,
     /** Plays a line the person tapped again, or says why it can't right now. */
-    replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
+    replay: (line: string) => sayRepeatRefusal(voice.repeat(line), Date.now()),
     /** Says the line a turn kept off the speaker, whispered by default; never in the usual voice when the whisper can't play. */
     sayHeldAloud,
   };

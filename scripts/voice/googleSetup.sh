@@ -32,7 +32,9 @@ gcloud projects add-iam-policy-binding "$PROJECT" \
   --role="roles/aiplatform.user" --condition=None >/dev/null
 echo "✓ The functions can use the Gemini voices (whispered lines)"
 
-if [[ -t 0 ]]; then
+if gcloud auth application-default print-access-token >/dev/null 2>&1; then
+  echo "✓ This machine is already signed in for the Google voices"
+elif [[ -t 0 ]]; then
   printf 'Sign in so the benchmark can use the Google voices from this machine? [Y/n] '
   read -r answer || true
   if [[ ! "$answer" =~ ^[Nn] ]]; then

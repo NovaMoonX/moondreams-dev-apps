@@ -1,3 +1,4 @@
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import type {
   SpeechDelivery,
   SpeechHeldReason,
@@ -12,7 +13,7 @@ export type SpeechFetch =
       contentType: string;
     }
   | { status: 'held'; reason: SpeechHeldReason }
-  | { status: 'unavailable' };
+  | { status: 'unavailable'; detail: string };
 
 export interface SpeechVoice {
   voiceId: string | null;
@@ -32,6 +33,17 @@ export interface SpeechSource {
 const isHeldReason = (value: unknown): value is SpeechHeldReason =>
   value === 'speechLimit' || value === 'budgetReached';
 
+const toErrorCode = (body: string) => {
+  try {
+    const { error } = JSON.parse(body) as { error?: unknown };
+    return typeof error === 'string' && /^[a-z][a-z-]{0,39}$/.test(error)
+      ? error
+      : '';
+  } catch {
+    return '';
+  }
+};
+
 /** Asks the app's speech endpoint for audio. */
 export const createSpeechSource = ({
   appId,
@@ -46,8 +58,15 @@ export const createSpeechSource = ({
 }): SpeechSource => ({
   fetchSpeech: async (text, priority, signal, voice, delivery) => {
     try {
-      const headers = await getHeaders();
-      if (headers === null) return { status: 'unavailable' };
+      const headers = await getHeaders().catch(
+        (error: unknown) => `Sign-in headers failed: ${describeThrown(error)}`,
+      );
+      if (typeof headers === 'string') {
+        return { status: 'unavailable', detail: headers };
+      }
+      if (headers === null) {
+        return { status: 'unavailable', detail: 'No sign-in headers yet' };
+      }
       const { voiceId, speed } = voice ??
         readVoice?.() ?? { voiceId: null, speed: null };
       const response = await fetch(url, {
@@ -68,10 +87,21 @@ export const createSpeechSource = ({
         const answer = (await response.json()) as { reason?: unknown };
         return isHeldReason(answer.reason)
           ? { status: 'held', reason: answer.reason }
-          : { status: 'unavailable' };
+          : { status: 'unavailable', detail: 'HTTP 429' };
       }
       if (!response.ok || response.body === null) {
-        return { status: 'unavailable' };
+        const code = response.ok
+          ? ''
+          : await response
+              .text()
+              .then(toErrorCode)
+              .catch(() => '');
+        return {
+          status: 'unavailable',
+          detail: response.ok
+            ? 'No body'
+            : `HTTP ${response.status}${code === '' ? '' : `: ${code}`}`,
+        };
       }
       return {
         status: 'ready',
@@ -79,8 +109,8 @@ export const createSpeechSource = ({
         provider: response.headers.get('X-Voice-Provider') ?? 'unknown',
         contentType: response.headers.get('Content-Type') ?? '',
       };
-    } catch {
-      return { status: 'unavailable' };
+    } catch (error) {
+      return { status: 'unavailable', detail: describeThrown(error) };
     }
   },
 });

@@ -1,13 +1,15 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 import { BookOpen, Globe, Stethoscope } from 'lucide-react';
 
+import MarkdownText from '@/components/MarkdownText';
 import SectionDivider from '@/components/SectionDivider';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { CaptureAnswer } from '@apps/helm/types';
+import { readWrittenAnswer } from '@apps/helm/utils/writtenAnswer';
 
 interface GeneralKnowledgeCardProps {
   text: string;
@@ -36,6 +38,8 @@ function DiffersLine({
   );
 }
 
+const NO_LINKS: ReadonlySet<string> = new Set();
+
 /** General knowledge, always under its "Not from your records" label, with no sources and no doors. */
 function GeneralKnowledgeCard({
   text,
@@ -44,6 +48,7 @@ function GeneralKnowledgeCard({
   children,
 }: GeneralKnowledgeCardProps) {
   const name = useAssistantName();
+  const written = useMemo(() => readWrittenAnswer(text, NO_LINKS), [text]);
   return (
     <div className='flex w-full flex-col gap-3'>
       <SectionDivider label={HELM_COPY.answerNotFromRecords} />
@@ -59,9 +64,11 @@ function GeneralKnowledgeCard({
           </p>
         )}
         {differs && <DiffersLine differs={differs} />}
-        <p className='text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
-          {text}
-        </p>
+        <MarkdownText
+          text={written}
+          allowedLinks={NO_LINKS}
+          className='text-[15px] break-words'
+        />
         <p className='text-muted-foreground text-[13px] text-pretty'>
           {HELM_COPY.answerGeneralCaution(name)}
         </p>
