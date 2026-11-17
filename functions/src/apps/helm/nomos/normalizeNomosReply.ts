@@ -3,6 +3,7 @@ import {
   toComparable,
 } from '../../../vendor/optionMatchUtils.js';
 import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
+import { extractLinks, normalizeProse } from '../../../vendor/proseUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { normalizeKin } from './kin.js';
 import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
@@ -109,6 +110,8 @@ import {
   type RememberCommand,
   type SourceRef,
   type NomosCommand,
+  type SetQuietCommand,
+  MAX_QUIET_COMMANDS,
   type TaskDue,
   type HabitCommand,
 } from './commands.js';
@@ -138,6 +141,7 @@ const KNOWN_KEYS = new Set([
   'question',
   'isHealth',
   'fromRecordsText',
+  'fromRecordsSpoken',
   'sourceAliases',
   'quoteAliases',
   'generalText',
@@ -185,6 +189,10 @@ const KNOWN_KEYS = new Set([
   'procedureSteps',
   'fromTaskAlias',
   'runStepAliases',
+  'targetAlias',
+  'isQuiet',
+  'untilSpanId',
+  'isGuess',
   'shape',
   'prompt',
   'options',
@@ -209,6 +217,9 @@ const KNOWN_KEYS = new Set([
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
+
+const toNewRef = (value: unknown) =>
+  typeof value === 'string' && NEW_REF_RE.test(value) ? value : null;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -250,26 +261,43 @@ const toText = (value: unknown, cap: number) =>
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
 
+const toWholeLine = (value: unknown, cap: number) => {
+  if (typeof value !== 'string') return null;
+  const line = value.replace(/\s+/g, ' ').trim();
+  return line === '' || line.length > cap ? null : line;
+};
+
 const readNumbers = (text: string) =>
   (text.match(/\d(?:[\d,.:]*\d)?/g) ?? []).map((number) =>
     number.replace(/,/g, ''),
   );
 
-/** The model's own line about the turn, refused (so code's line stands) when it speaks as "I", falls back on a template, runs long, carries a link or markup, or names a number the person never said. */
-export const readReplyLine = (value: unknown, saidText = '') => {
+const readModelLine = (
+  value: unknown,
+  saidText: string,
+  cap: number,
+  isCountFree: boolean,
+) => {
   if (typeof value !== 'string') return null;
   const line = value.replace(/\s+/g, ' ').trim();
-  if (line === '' || line.length > REPLY_LINE_CAP) return null;
+  if (line === '' || line.length > cap) return null;
   if (/\b(i|i'm|i've|i'll|i'd|me|my)\b|^got it\b/i.test(line)) return null;
   if (/:\/\/|www\.|[*_#`[\]<>]/.test(line)) return null;
-  // A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's.
   const said = new Set(readNumbers(saidText));
   return readNumbers(line)
-    .filter((number) => !/^\d$/.test(number))
+    .filter((number) => !isCountFree || !/^\d$/.test(number))
     .every((number) => said.has(number))
     ? line
     : null;
 };
+
+/** The model's reply line, or null so code's line stands. A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's. */
+export const readReplyLine = (value: unknown, saidText = '') =>
+  readModelLine(value, saidText, REPLY_LINE_CAP, true);
+
+/** The model's spoken line for an answer; every number, a count too, must come from the records text. */
+export const readSpokenRecordsLine = (value: unknown, recordsText: string) =>
+  readModelLine(value, recordsText, ANSWER_SPOKEN_CAP, false);
 
 const toCutText = (value: unknown, cap: number) => {
   const whole = toText(value, Number.MAX_SAFE_INTEGER);
@@ -324,24 +352,46 @@ const readAnswer = (
   const listedQuotes = Array.isArray(item.quoteAliases)
     ? item.quoteAliases.slice(0, MAX_QUOTES)
     : [];
+  const citedQuotes = listedQuotes.flatMap((alias: unknown) => {
+    const quote = toQuote(alias, quotes);
+    return quote ? [quote] : [];
+  });
+  const citedCopies = listed.flatMap((alias: unknown) => {
+    const copy = typeof alias === 'string' ? synced?.get(alias) : null;
+    return copy ? [copy] : [];
+  });
+  const recordLinks = [
+    ...citedQuotes.flatMap((quote) => (quote.deepLink ? [quote.deepLink] : [])),
+    ...extractLinks([
+      ...citedCopies.flatMap((copy) => [
+        copy.title,
+        copy.subtitle ?? '',
+        copy.detail ?? '',
+        copy.placeLabel ?? '',
+        ...Object.values(copy.extra).map(String),
+      ]),
+    ]),
+  ];
   return {
     scope,
     question,
     isHealth: item.isHealth === true,
-    fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
+    fromRecordsText: normalizeProse(
+      item.fromRecordsText,
+      ANSWER_TEXT_CAP,
+      recordLinks,
+    ),
+    fromRecordsSpoken: toWholeLine(item.fromRecordsSpoken, ANSWER_SPOKEN_CAP),
     sources: listed.flatMap((alias: unknown) => {
       const source = toSource(alias, aliases, synced, facts, parts);
       return source ? [source] : [];
     }),
-    quotes: listedQuotes.flatMap((alias: unknown) => {
-      const quote = toQuote(alias, quotes);
-      return quote ? [quote] : [];
-    }),
+    quotes: citedQuotes,
     syncedKeys: listed.flatMap((alias: unknown) => {
       const copy = typeof alias === 'string' ? synced?.get(alias) : null;
       return copy ? [`${copy.connectorId}|${copy.accountId}`] : [];
     }),
-    generalText: toText(item.generalText, ANSWER_TEXT_CAP),
+    generalText: normalizeProse(item.generalText, ANSWER_TEXT_CAP),
     generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
     noteIds: [
       ...new Set(
@@ -431,6 +481,7 @@ const readNote = (
   const firstLine = words.split('\n').find((line) => line.trim()) ?? words;
   return {
     kind: 'createNote',
+    ref: toNewRef(item.ref),
     title:
       toText(item.title, NOTE_TITLE_CAP) ??
       cutAtWord(firstLine.replace(/\s+/g, ' ').trim(), NOTE_TITLE_CAP),
@@ -612,6 +663,7 @@ const readProjects = (
         ? [
             {
               kind: 'createProject',
+              ref: toNewRef(item.ref),
               name,
               emoji: toEmoji(item.projectEmoji),
               objective: toText(item.objective, PROJECT_OBJECTIVE_CAP),
@@ -1071,6 +1123,104 @@ const isQuotedPrivateChange = (
   );
 };
 
+export type QuietDrop =
+  | 'quiet-guess-release'
+  | 'quiet-unquoted'
+  | 'quiet-unknown-target'
+  | 'quiet-extra';
+
+/** Whether the capture holds the quoted words verbatim; no word is required in them, since what counts as a secret is the model's reading. */
+const isQuotedInCapture = (quote: unknown, captureText: string) => {
+  const words = toComparable(typeof quote === 'string' ? quote : '');
+  return (
+    words !== '' && ` ${toComparable(captureText)} `.includes(` ${words} `)
+  );
+};
+
+interface QuietReadContext {
+  aliases: AliasBook;
+  notes?: AliasBook;
+  projects?: AliasBook;
+  /** The `$new` refs this reply made, by kind of record. */
+  made: { task: Set<string>; project: Set<string>; note: Set<string> };
+  reading: CaptureReading;
+  captureText: string;
+  timeZone: string;
+}
+
+const readQuietTarget = (alias: unknown, context: QuietReadContext) => {
+  if (typeof alias !== 'string') return null;
+  const made = (['task', 'project', 'note'] as const).find((kind) =>
+    context.made[kind].has(alias),
+  );
+  if (made) return { targetKind: made, targetId: alias, isNew: true };
+  const stored = [
+    ['task', context.aliases.idOf(alias)],
+    ['note', context.notes?.idOf(alias) ?? null],
+    ['project', context.projects?.idOf(alias) ?? null],
+  ] as const;
+  const found = stored.find(([, id]) => id !== null);
+  return found && found[1] !== null
+    ? { targetKind: found[0], targetId: found[1], isNew: false }
+    : null;
+};
+
+/** The `setQuiet` commands of a reply. Keeping something quiet is the model's reading, so a guess needs no words from the person; a request to keep it quiet or to release it must quote the capture verbatim, and a guess can never release. Anything else is dropped, never an error. */
+const readQuietCommands = (
+  items: Record<string, unknown>[],
+  context: QuietReadContext,
+): { commands: SetQuietCommand[]; dropped: QuietDrop[] } => {
+  const read = items
+    .filter((item) => item.kind === 'setQuiet')
+    .map((item): SetQuietCommand | QuietDrop => {
+      const target = readQuietTarget(item.targetAlias, context);
+      if (!target || typeof item.isQuiet !== 'boolean') {
+        return 'quiet-unknown-target';
+      }
+      const isGuess = item.isGuess === true;
+      if (isGuess && !item.isQuiet) return 'quiet-guess-release';
+      if (
+        !isGuess &&
+        !isQuotedInCapture(item.requestQuote, context.captureText)
+      ) {
+        return 'quiet-unquoted';
+      }
+      const until = item.isQuiet
+        ? readProjectDate(item.untilSpanId, context.reading, context.timeZone)
+        : null;
+      return {
+        kind: 'setQuiet',
+        ...target,
+        isQuiet: item.isQuiet,
+        until:
+          until === null ? null : new Date(until).toISOString().slice(0, 10),
+        isUntilUnread:
+          item.isQuiet &&
+          until === null &&
+          typeof item.untilSpanId === 'string',
+        isGuess,
+      };
+    });
+  const valid = read.filter(
+    (entry): entry is SetQuietCommand => typeof entry !== 'string',
+  );
+  const first = valid.filter(
+    (command, index) =>
+      valid.findIndex(
+        (other) =>
+          other.targetKind === command.targetKind &&
+          other.targetId === command.targetId,
+      ) === index,
+  );
+  return {
+    commands: first.slice(0, MAX_QUIET_COMMANDS),
+    dropped: [
+      ...read.flatMap((entry) => (typeof entry === 'string' ? [entry] : [])),
+      ...first.slice(MAX_QUIET_COMMANDS).map(() => 'quiet-extra' as const),
+    ],
+  };
+};
+
 const readCommand = (
   item: Record<string, unknown>,
   state: { refs: Set<string> },
@@ -1092,7 +1242,8 @@ const readCommand = (
     kind === 'createProject' ||
     kind === 'setProjectRole' ||
     kind === 'addMilestone' ||
-    kind === 'createNote'
+    kind === 'createNote' ||
+    kind === 'setQuiet'
   ) {
     return null;
   }
@@ -2036,6 +2187,8 @@ export function normalizeNomosReply(
     people?: AliasBook;
     topics?: AliasBook;
     notes?: AliasBook;
+    /** The open projects, by alias. */
+    projectAliases?: AliasBook;
     parts?: AliasBook;
     /** The open topic's parts, by alias. */
     sections?: AliasBook;
@@ -2088,6 +2241,10 @@ export function normalizeNomosReply(
   keyDates: KeyDateCommand[];
   projects: ProjectCommand[];
   notes: CreateNoteCommand[];
+  quietCommands: SetQuietCommand[];
+  quietDropped: QuietDrop[];
+  keepQuiet: boolean;
+  sayHeldLine: boolean;
   topicCommands: TopicCommand[];
   topicDropped: TopicDrop[];
   procedureCommands: ProcedureCommand[];
@@ -2276,6 +2433,32 @@ export function normalizeNomosReply(
     throw new NomosReplyError('droppedToken');
   }
   const kept = fresh.slice(0, MAX_COMMANDS);
+  const { commands: quietCommands, dropped: quietDropped } = readQuietCommands(
+    items,
+    {
+      aliases: context.aliases,
+      notes: context.notes,
+      projects: context.projectAliases,
+      made: {
+        task: new Set(
+          kept.flatMap((command) =>
+            command.kind === 'createTask' ? [command.ref] : [],
+          ),
+        ),
+        project: new Set(
+          projects.flatMap((command) =>
+            command.kind === 'createProject' && command.ref
+              ? [command.ref]
+              : [],
+          ),
+        ),
+        note: new Set(notes.flatMap((note) => (note.ref ? [note.ref] : []))),
+      },
+      reading: context.reading,
+      captureText: context.captureText ?? '',
+      timeZone: context.timeZone ?? 'UTC',
+    },
+  );
   const { decisions: media, dropped: mediaDropped } = readMedia(raw.media, {
     attachments: context.attachments ?? [],
     aliases: context.aliases,
@@ -2299,6 +2482,10 @@ export function normalizeNomosReply(
     keyDates,
     projects,
     notes,
+    quietCommands,
+    quietDropped,
+    keepQuiet: raw.keepQuiet === true,
+    sayHeldLine: raw.sayHeldLine === true,
     topicCommands,
     topicDropped,
     procedureCommands,

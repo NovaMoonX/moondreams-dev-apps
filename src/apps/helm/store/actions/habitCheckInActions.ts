@@ -64,6 +64,7 @@ const toExecution = async (
       effects: record.effects,
       undoReport: null,
       spoken,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       said: null,

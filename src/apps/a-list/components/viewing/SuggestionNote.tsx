@@ -1,13 +1,16 @@
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import type { TicketSuggestion } from '@apps/a-list/utils/chips';
+import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import type { TicketDraft } from '@apps/a-list/utils/ticketDraft';
 
 interface SuggestionNoteProps {
   suggestion: TicketSuggestion;
   draft: TicketDraft;
   theatreName: string | null;
-  /** The tax field has an amount; with no price yet there is nothing to say was filled in. */
-  hasTax: boolean;
+  /** The tax as shown; it was filled from this theater only when it is the learned rate on the price. */
+  shownTax: string;
+  /** The tax chips are showing, and they speak for the tax. */
+  hasTaxChoice: boolean;
 }
 
 /** Says which of the fee and tax came from the member's past tickets here, until they change it. */
@@ -15,13 +18,25 @@ function SuggestionNote({
   suggestion,
   draft,
   theatreName,
-  hasTax,
+  shownTax,
+  hasTaxChoice,
 }: SuggestionNoteProps) {
+  const priceCents = parseMoneyToCents(draft.price);
+  const isTaxFromHere =
+    suggestion.taxRate !== null &&
+    priceCents !== null &&
+    parseMoneyToCents(shownTax) ===
+      getItemizedTaxCents(priceCents, suggestion.taxRate);
   const learned = [
     suggestion.isFeeLearned && !draft.isFeeEdited
       ? `${formatCents(suggestion.feeCents)} fee`
       : null,
-    suggestion.isTaxLearned && !draft.isTaxEdited && hasTax ? 'tax' : null,
+    suggestion.isTaxLearned &&
+    !draft.isTaxEdited &&
+    !hasTaxChoice &&
+    isTaxFromHere
+      ? 'tax'
+      : null,
   ].filter((part): part is string => part !== null);
 
   if (!theatreName || learned.length === 0) {
