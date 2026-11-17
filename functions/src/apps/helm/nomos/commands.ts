@@ -545,6 +545,7 @@ export interface AnswerCommand {
   question: string;
   isHealth: boolean;
   fromRecordsText: string | null;
+  fromRecordsSpoken: string | null;
   sources: SourceRef[];
   quotes: QuoteEntry[];
   syncedKeys: string[];
@@ -662,6 +663,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'question',
             'isHealth',
             'fromRecordsText',
+            'fromRecordsSpoken',
             'sourceAliases',
             'quoteAliases',
             'generalText',
@@ -773,7 +775,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             fromRecordsText: nullable(
               'string',
-              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters; null when they say nothing about it.`,
+              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only: bold, italics, lists, links, one short blockquote of a cited passage); null when they say nothing about it.`,
+            ),
+            fromRecordsSpoken: nullable(
+              'string',
+              `answer: only on a spoken turn, fromRecordsText as one or two plain sentences for the ear, at most ${ANSWER_SPOKEN_CAP} characters, with no lists or Markdown; leave null on a typed turn and when fromRecordsText is null.`,
             ),
             sourceAliases: {
               type: ['array', 'null'],
@@ -788,7 +794,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             generalText: nullable(
               'string',
-              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and never about the person's own plans, people or things.`,
+              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only), only for what the records do not say and never about the person's own plans, people or things.`,
             ),
             generalSpoken: nullable(
               'string',

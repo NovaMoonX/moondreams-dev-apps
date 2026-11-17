@@ -42,10 +42,9 @@ export const getNoteSummaries = (notes: RecipeNote[]) => {
     const known = summaries.get(note.recipeId);
     summaries.set(note.recipeId, {
       count: (known?.count ?? 0) + 1,
-      lastTweakAt:
-        isContentTweak(note)
-          ? Math.max(known?.lastTweakAt ?? -Infinity, note.createdAt)
-          : (known?.lastTweakAt ?? null),
+      lastTweakAt: isContentTweak(note)
+        ? Math.max(known?.lastTweakAt ?? -Infinity, note.createdAt)
+        : (known?.lastTweakAt ?? null),
     });
     return summaries;
   }, new Map<string, NoteSummary>());
@@ -76,7 +75,10 @@ export const getNoteSummary = (
 
 const getSummaryBody = (note: RecipeNote, squash: (text: string) => string) => {
   if (note.kind === 'TWEAK') {
-    return [(note.changes ?? []).map(squash).join('; '), squash(note.text ?? '')]
+    return [
+      (note.changes ?? []).map(squash).join('; '),
+      squash(note.text ?? ''),
+    ]
       .filter(Boolean)
       .join('. ');
   }
@@ -198,7 +200,16 @@ export const planTweakUndo = (
   const result: TweakUndoPlan =
     previous === null
       ? refuse('There is nothing to put back.')
-      : { kind: 'REVERT', fields: previous };
+      : {
+          kind: 'REVERT',
+          fields: {
+            ...previous,
+            ingredients: previous.ingredients.map((line) => ({
+              ...line,
+              freeText: line.freeText ?? null,
+            })),
+          },
+        };
 
   return result;
 };
@@ -300,9 +311,7 @@ export const resolveNoteStep = (
   if (steps[index] !== undefined && readsAs(steps[index], text)) {
     return index;
   }
-  const moved = steps.flatMap((step, at) =>
-    readsAs(step, text) ? [at] : [],
-  );
+  const moved = steps.flatMap((step, at) => (readsAs(step, text) ? [at] : []));
   if (moved.length === 0) return null;
   // Two steps can read the same ("Stir."): the one nearest where the entry was written, the later one when both are, since a step is added more often than taken out.
   return moved.reduce((nearest, at) =>
@@ -379,9 +388,12 @@ export const getLastTimeNote = (notes: RecipeNote[], steps: string[]) =>
 export const getJoinedChangeReason = (changes: RecipeNote[]) => {
   const reasons = changes
     .map((change) => squashText(change.reason ?? '').replace(/[.!?]+$/, ''))
-    .filter((reason, index, all) => reason !== '' && all.indexOf(reason) === index);
+    .filter(
+      (reason, index, all) => reason !== '' && all.indexOf(reason) === index,
+    );
   const joined = reasons.join('. ');
-  const result = joined === '' ? null : clipAtWord(joined, MAX_RECIPE_NOTE_LENGTH);
+  const result =
+    joined === '' ? null : clipAtWord(joined, MAX_RECIPE_NOTE_LENGTH);
 
   return result;
 };
@@ -402,7 +414,10 @@ export const getSpokenEntries = (
   if (wanted.length === 0) return null;
 
   const sentences = wanted.map((entry) => {
-    const text = clipAtWord(squashText(entry.text ?? ''), MAX_SPOKEN_NOTE_CHARS);
+    const text = clipAtWord(
+      squashText(entry.text ?? ''),
+      MAX_SPOKEN_NOTE_CHARS,
+    );
     const end = (value: string) => (/[.!?]$/.test(value) ? value : `${value}.`);
     if (entry.kind === 'TIP') return `Tip: ${end(text)}`;
     if (entry.kind === 'CHANGE') {

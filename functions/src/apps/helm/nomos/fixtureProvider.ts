@@ -227,6 +227,7 @@ const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
   question: null,
   isHealth: false,
   fromRecordsText: null,
+  fromRecordsSpoken: null,
   sourceAliases: [],
   quoteAliases: [],
   generalText: null,

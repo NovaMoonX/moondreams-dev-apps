@@ -54,11 +54,9 @@ export function getItemCost(
   const serving = ingredient?.serving ?? DEFAULT_SERVING;
   const line = getLineCost(
     {
-      id: item.id,
       ingredientId: item.refId,
       amount: serving.amount,
       unit: serving.unit,
-      note: null,
     },
     ingredient,
     defaultProducts.get(item.refId),
