@@ -88,6 +88,8 @@ import type {
   HelmDaySummarySealed,
   HelmEncryption,
   PlanDaySealed,
+  DayAims,
+  DayAimsSealed,
   PlanSlot,
   Task,
   TaskDue,
@@ -679,6 +681,7 @@ async function buildBackToBack(input: {
         whoIds: [],
         placeIds: [],
         planDayKey: null,
+        aimsDayKey: null,
         createdAt,
         sortedAt,
         screen: null,
@@ -1064,6 +1067,7 @@ async function buildGmailTurn(input: {
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt,
     screen: null,
@@ -1228,6 +1232,7 @@ async function buildAnswerTurns(input: {
         whoIds: [],
         placeIds: [],
         planDayKey: null,
+        aimsDayKey: null,
         createdAt,
         sortedAt,
         screen: null,
@@ -1594,8 +1599,50 @@ async function buildPlanDays(input: {
       sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
     },
   };
+  const aim = (taskId: string, order: number, broughtFrom: string | null) => ({
+    aimId: `seed-aim-${taskId}`,
+    taskId,
+    order,
+    lengthIsGuess: false,
+    broughtFrom,
+  });
+  const dayAims = async (
+    key: string,
+    payload: DayAimsSealed,
+    state: DayAims['state'],
+  ): Promise<{ id: string; doc: DayAims }> => ({
+    id: key,
+    doc: {
+      date: Date.parse(key),
+      state,
+      windDownState: 'waiting',
+      lookAt: null,
+      rolledAt: null,
+      sealed: await sealJson<DayAimsSealed>(payload, encryption),
+    },
+  });
+  // Today is still open with one aim, so the morning card asks, lists "From yesterday" and, in the last 2 hours of the day, winds down.
+  const aimDays = await Promise.all([
+    dayAims(
+      yesterdayKey,
+      {
+        aims: [
+          aim('seed-task-plan-done', 1, null),
+          aim('seed-task-3-1', 2, null),
+        ],
+        windDown: {},
+      },
+      'answered',
+    ),
+    dayAims(
+      todayKey,
+      { aims: [aim('seed-task-hand-2', 1, null)], windDown: {} },
+      'open',
+    ),
+  ]);
   return {
     days,
+    aimDays,
     summary,
     task: { id: 'seed-task-plan-done', task: doneTask },
   };
@@ -3232,6 +3279,7 @@ async function buildNoteTurn(input: {
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt,
     screen: null,
@@ -3940,6 +3988,7 @@ async function buildKnowledge(input: {
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt: createdAt + SORT_DELAY_MS,
     screen: null,
@@ -4752,6 +4801,7 @@ async function buildPhotoTurns(input: {
       whoIds: [],
       placeIds: [],
       planDayKey: null,
+      aimsDayKey: null,
       createdAt,
       sortedAt: createdAt + SORT_DELAY_MS,
       screen: null,
@@ -5080,6 +5130,7 @@ async function buildFileTurns(input: {
       whoIds: [],
       placeIds: [],
       planDayKey: null,
+      aimsDayKey: null,
       createdAt,
       sortedAt: createdAt + SORT_DELAY_MS,
       screen: null,
@@ -6139,6 +6190,7 @@ async function buildPeople(input: {
     createdAt: questionAt,
     sortedAt: questionAt + SORT_DELAY_MS,
     planDayKey: null,
+    aimsDayKey: null,
     screen: null,
     sealed: await seal({
       text: questionText,
@@ -6242,6 +6294,7 @@ async function buildPeople(input: {
     createdAt: askedAt,
     sortedAt: askedAt + SORT_DELAY_MS,
     planDayKey: null,
+    aimsDayKey: null,
     screen: null,
     sealed: await seal({
       text: askedText,
@@ -6302,6 +6355,7 @@ async function buildPeople(input: {
     createdAt: turnAt,
     sortedAt: turnAt + SORT_DELAY_MS,
     planDayKey: null,
+    aimsDayKey: null,
     screen: null,
     sealed: await seal<CaptureSealed>({
       text,
@@ -7129,6 +7183,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               whoIds: [],
               placeIds: [],
               planDayKey: null,
+              aimsDayKey: null,
               createdAt: turnTime,
               sortedAt: isSorted ? sortedAt : null,
               screen: isMove ? MOVE_SCREEN : null,
@@ -7525,6 +7580,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         if (planDays) {
           planDays.days.forEach((entry) =>
             batch.set(person.collection('planDays').doc(entry.id), entry.day),
+          );
+          planDays.aimDays.forEach((entry) =>
+            batch.set(person.collection('dayAims').doc(entry.id), entry.doc),
           );
           batch.set(
             person.collection('daySummaries').doc(planDays.summary.id),
@@ -7951,7 +8009,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           answerTurns.notes.length +
           (gmailTurn ? 3 : 0) +
           (noteTurn ? 3 : 0) +
-          (planDays ? planDays.days.length + 2 : 0);
+          (planDays ? planDays.days.length + planDays.aimDays.length + 2 : 0);
         return (
           backToBackCount +
           turns.reduce(

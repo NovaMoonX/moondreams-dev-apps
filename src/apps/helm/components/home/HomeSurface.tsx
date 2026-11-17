@@ -26,6 +26,7 @@ import { useConnections } from '@/lib/connections/useConnections';
 import { getDeviceTimeZone, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
+import DayCard from '@apps/helm/components/dayCard/DayCard';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
@@ -382,6 +383,7 @@ function HomeSurface({
         {keyStatus === 'ready' && <QuietLines now={now} />}
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
+        {keyStatus === 'ready' && <DayCard now={now} />}
         {isOpening && (
           <div
             className='flex flex-1 flex-col items-center justify-center gap-4 pb-16'

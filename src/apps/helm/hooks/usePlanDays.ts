@@ -20,6 +20,10 @@ import {
   selectAvoidBuckets,
   type AvoidBucket,
 } from '@apps/helm/store/selectors/patternSelectors';
+import {
+  selectAimTaskIdsByDay,
+  selectFinishedTasks,
+} from '@apps/helm/store/selectors/dayAimsSelectors';
 import { selectActiveTasks } from '@apps/helm/store/selectors/taskSelectors';
 import {
   formatDayWord,
@@ -35,6 +39,7 @@ import {
   isCalendarHeld,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
+import type { FinishedTask } from '@apps/helm/engine/planner';
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import type {
   HelmProfile,
@@ -56,6 +61,8 @@ interface SourceParts {
   places: OpenPlace[];
   importanceItems: ImportanceItem[];
   avoidBuckets: AvoidBucket[];
+  aimTaskIds: Record<string, string[]>;
+  finishedTasks: FinishedTask[];
   now: number;
 }
 
@@ -97,6 +104,8 @@ const readPlanSources = (grants: ConnectionGrantWithId[]) => {
     places: state.helm.places.items,
     importanceItems: selectImportanceItems(state),
     avoidBuckets: selectAvoidBuckets(state),
+    aimTaskIds: selectAimTaskIdsByDay(state),
+    finishedTasks: selectFinishedTasks(state),
     now,
   });
 };
@@ -111,6 +120,8 @@ export function usePlanSources(nowMinute: number) {
   const places = useAppSelector((state) => state.helm.places.items);
   const importanceItems = useAppSelector(selectImportanceItems);
   const avoidBuckets = useAppSelector(selectAvoidBuckets);
+  const aimTaskIds = useAppSelector(selectAimTaskIdsByDay);
+  const finishedTasks = useAppSelector(selectFinishedTasks);
   const awayKey = useAppSelector((state) => toAwayKey(state.helm.who.items));
   return useMemo(
     () =>
@@ -124,6 +135,8 @@ export function usePlanSources(nowMinute: number) {
         places,
         importanceItems,
         avoidBuckets,
+        aimTaskIds,
+        finishedTasks,
         now: nowMinute,
       }),
     [
@@ -136,6 +149,8 @@ export function usePlanSources(nowMinute: number) {
       places,
       importanceItems,
       avoidBuckets,
+      aimTaskIds,
+      finishedTasks,
       nowMinute,
     ],
   );
@@ -144,7 +159,7 @@ export function usePlanSources(nowMinute: number) {
 /** Days already tried this session, so a plan that fails or finds nothing never loops. */
 const attempted = new Set<string>();
 
-/** Plans one day now: the planner's slots, reasons and snapshot are written in one batch. Never a past day, and nothing while the calendar can't be read, since a plan made then would ignore it. `isRestOverridden` plans a rest day anyway. */
+/** Plans one day now, answering whether it was written: the planner's slots, reasons and snapshot are written in one batch. Never a past day, and nothing while the calendar can't be read, since a plan made then would ignore it. `isRestOverridden` plans a rest day anyway. */
 export function usePlanDay() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -163,8 +178,8 @@ export function usePlanDay() {
   const plan = useCallback(
     async (dayKey: string, isRestOverridden = false) => {
       const sources = readPlanSources(grants);
-      if (!uid || !sources || dayKey < sources.todayKey) return;
-      if (isCalendarHeld(grants)) return;
+      if (!uid || !sources || dayKey < sources.todayKey) return false;
+      if (isCalendarHeld(grants)) return false;
       try {
         const encryption = await getHelmEncryption(uid);
         await generatePlan(
@@ -175,9 +190,11 @@ export function usePlanDay() {
           formatDayWord(dayKey, sources.todayKey),
           isRestOverridden ? Date.now() : null,
         );
+        return true;
       } catch (error) {
         console.error('Helm day was not planned', error);
         addToast({ title: HELM_COPY.planFailed, type: 'error' });
+        return false;
       }
     },
     [uid, grants, addToast],

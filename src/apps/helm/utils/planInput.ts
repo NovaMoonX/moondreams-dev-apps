@@ -44,6 +44,10 @@ export interface PlanSources {
   projectPlaces: Record<string, number>;
   /** The weekday day-parts the person accepted leaving empty. */
   avoidBuckets?: PlannerInput['avoidBuckets'];
+  /** Each day's aim task ids still wanted, in the person's order; planned first. */
+  aimTaskIds?: Record<string, string[]>;
+  /** Finished tasks a length is guessed from. */
+  finishedTasks?: FinishedTask[];
 }
 
 export const isLiveCalendar = (grant: ConnectionGrantWithId) =>
@@ -158,8 +162,8 @@ export function buildPlanInput(
   dayKey: string,
   slots: Record<string, PlanSlot> = sources.planDays[dayKey]?.slots ?? {},
   aims: { taskIds: string[]; finishedTasks: FinishedTask[] } = {
-    taskIds: [],
-    finishedTasks: [],
+    taskIds: sources.aimTaskIds?.[dayKey] ?? [],
+    finishedTasks: sources.finishedTasks ?? [],
   },
 ) {
   const { profile, timeZone, now, todayKey, grants, tasks, planDays, places } =

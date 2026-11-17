@@ -1,5 +1,16 @@
 import assert from 'node:assert/strict';
 
+import { HELM_COPY } from '../../src/apps/helm/constants.ts';
+import {
+  foldedAimsLine,
+  pickTopCards,
+  readAimTaskIds,
+  readCarryOver,
+  readDayCardMode,
+  readWindDownCounts,
+  TOP_CARD_CAP,
+} from '../../src/apps/helm/utils/dayCard.ts';
+import type { OpenDayAims } from '../../src/apps/helm/types.ts';
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
 import {
   describeFit,
@@ -246,6 +257,124 @@ test('an aim with no length is planned with the guess and reported', () => {
   const write = placed(result).find((slot) => slot.taskId === 'write');
   assert.equal(write!.endAt! - write!.startAt!, 60 * MIN);
   assert.deepEqual(result.guessedTaskIds, ['write']);
+});
+
+const dayAims = (extra: Partial<OpenDayAims> = {}): OpenDayAims => ({
+  id: DAY,
+  date: Date.parse(DAY),
+  state: 'open',
+  windDownState: 'waiting',
+  lookAt: null,
+  rolledAt: null,
+  aims: [],
+  windDown: {},
+  isUnreadable: false,
+  ...extra,
+});
+
+const aim = (taskId: string, order: number) => ({
+  aimId: `aim-${taskId}`,
+  taskId,
+  order,
+  lengthIsGuess: false,
+  broughtFrom: null,
+});
+
+test('home holds at most three top cards and the day card is one of them', () => {
+  assert.equal(TOP_CARD_CAP, 3);
+  assert.deepEqual(pickTopCards(['grouping', 'day', 'needsYou', 'day']), [
+    'needsYou',
+    'day',
+    'grouping',
+  ]);
+});
+
+test('the folded line and the wound-down line read as written', () => {
+  assert.equal(foldedAimsLine(3, 2), 'Today: 3 aims · 2 planned');
+  assert.equal(foldedAimsLine(1, 1), 'Today: 1 aim · 1 planned');
+  assert.equal(
+    HELM_COPY.windDownSummary({ done: 2, tomorrow: 1, later: 0, dropped: 1 }),
+    'Wound down: 2 done, 1 to tomorrow, 1 dropped.',
+  );
+  assert.equal(
+    HELM_COPY.windDownSummary({ done: 0, tomorrow: 0, later: 0, dropped: 0 }),
+    'Wound down.',
+  );
+});
+
+test('the wind-down counts what each aim became', () => {
+  const day = dayAims({
+    aims: [aim('a', 1), aim('b', 2), aim('c', 3), aim('d', 4)],
+    windDown: {
+      b: {
+        result: 'wontHappen',
+        choice: 'tomorrow',
+        reason: null,
+        saidSpanId: null,
+      },
+      c: {
+        result: 'wontHappen',
+        choice: 'dropped',
+        reason: 'tired',
+        saidSpanId: null,
+      },
+    },
+  });
+  assert.deepEqual(
+    readWindDownCounts(day, (id) => id === 'a'),
+    {
+      done: 1,
+      tomorrow: 1,
+      later: 0,
+      dropped: 1,
+    },
+  );
+  assert.deepEqual(readAimTaskIds(day), ['a', 'd']);
+});
+
+test('the card is the question, the folded line, then the wind-down, never both', () => {
+  const start = at('08:00');
+  const end = at('21:00');
+  const mode = (day: OpenDayAims | null, now: string) =>
+    readDayCardMode({ day, now: at(now), dayStart: start, dayEnd: end });
+  assert.equal(mode(null, '07:00'), 'hidden');
+  assert.equal(mode(null, '09:00'), 'ask');
+  assert.equal(mode(dayAims({ state: 'dismissed' }), '09:00'), 'skipped');
+  assert.equal(
+    mode(dayAims({ state: 'answered', aims: [aim('a', 1)] }), '09:00'),
+    'answered',
+  );
+  assert.equal(mode(dayAims({ state: 'answered' }), '09:00'), 'ask');
+  const withAims = dayAims({ state: 'answered', aims: [aim('a', 1)] });
+  assert.equal(mode(withAims, '18:59'), 'answered');
+  assert.equal(mode(withAims, '19:00'), 'windDown');
+  assert.equal(mode(null, '19:30'), 'hidden');
+  assert.equal(mode({ ...withAims, windDownState: 'done' }, '20:00'), 'wound');
+});
+
+test("yesterday's undone aims are listed until something answers them", () => {
+  const yesterday = dayAims({
+    aims: [aim('a', 1), aim('b', 2), aim('c', 3)],
+    windDown: {
+      c: {
+        result: 'wontHappen',
+        choice: 'later',
+        reason: null,
+        saidSpanId: null,
+      },
+    },
+  });
+  const today = dayAims({ aims: [aim('b', 1)] });
+  assert.deepEqual(
+    readCarryOver(yesterday, today, () => true).map((entry) => entry.taskId),
+    ['a'],
+  );
+  assert.deepEqual(
+    readCarryOver(yesterday, null, (id) => id !== 'a').map(
+      (entry) => entry.taskId,
+    ),
+    ['b'],
+  );
 });
 
 const failures = tests.flatMap(([name, body]) => {

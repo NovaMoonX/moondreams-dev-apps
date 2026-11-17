@@ -43,6 +43,7 @@ import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { setCurrentPlace } from '@apps/helm/store/actions/planActions';
+import { keepOverlappingSlot } from '@apps/helm/store/actions/dayAimsActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import type { LearnSlot } from '@apps/helm/engine/learnLater';
 import type { OpenTask, PlanSlot, SyncedRecord } from '@apps/helm/types';
@@ -291,18 +292,32 @@ function DayPlan({
   const openRecord =
     records.find((record) => record.id === openRecordId) ?? null;
 
+  const aimIds = new Set(sources.aimTaskIds?.[dayKey] ?? []);
   const renderSlot = (id: string, slot: PlanSlot, task: OpenTask) =>
     slot.status === 'kept' ? (
       <PlannedCard
         key={id}
         task={task}
         timeLine={
-          slot.startAt !== null && slot.endAt !== null
-            ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
-            : null
+          [
+            slot.startAt !== null && slot.endAt !== null
+              ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
+              : null,
+            aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
+          ]
+            .filter((part): part is string => part !== null)
+            .join(' · ') || null
         }
         isDone={heldIds.has(task.id)}
-        overlapTitle={overlaps[id] ?? null}
+        overlapTitle={overlaps[id] ?? flaggedTitle(slot)}
+        isNewOverlap={
+          overlaps[id] === undefined && slot.overlapsEventRef !== null
+        }
+        onKeepOverlap={
+          slot.overlapsEventRef !== null
+            ? () => keepFlagged(id, slot.overlapsEventRef ?? '')
+            : undefined
+        }
         onAnotherTime={() =>
           onOpenSuggestion({ dayKey, slotId: id, isMove: true })
         }
@@ -318,6 +333,7 @@ function DayPlan({
           slot.startAt !== null && slot.endAt !== null
             ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
             : null,
+          aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
           reasonOf(id),
         ]
           .filter((part): part is string => part !== null)
@@ -326,6 +342,31 @@ function DayPlan({
         onOpen={() => onOpenSuggestion({ dayKey, slotId: id, isMove: false })}
       />
     );
+
+  const flaggedTitle = (slot: PlanSlot) =>
+    slot.overlapsEventRef === null
+      ? null
+      : (day?.calendarSnapshot.find(
+          (event) => event.eventRef === slot.overlapsEventRef,
+        )?.title ?? null);
+  const keepFlagged = (slotId: string, eventRef: string) => {
+    if (!user) return;
+    keepOverlappingSlot(user.uid, dayKey, slotId, eventRef)
+      .then((change) =>
+        addToast({
+          title: HELM_COPY.planKeptOverlap,
+          type: 'info',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () => void change.undo(),
+          },
+        }),
+      )
+      .catch((error: unknown) => {
+        console.error('Helm overlap was not kept', error);
+        addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
+      });
+  };
 
   const isPlanned = !needsPlan(day);
   const outcome =

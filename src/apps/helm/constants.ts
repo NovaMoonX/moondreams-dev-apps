@@ -2016,6 +2016,85 @@ export const HELM_COPY = {
   planSuggestedSummary: (count: number, day: string) =>
     `Suggested ${count} ${count === 1 ? 'task' : 'tasks'} for ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
   planFailed: "Couldn't plan the day. Try again.",
+  todayAimMark: 'Aim for today',
+  dayAimsQuestion: 'What do you want to get done today?',
+  dayAimsField: 'What you want to get done today',
+  dayAimsPlaceholder: 'Say it or type it',
+  dayAimsFiling: 'Filing what you said…',
+  dayAimsFilingOffline: "Saved here. It will be filed when you're back online.",
+  dayAimsFailedFiling: "That didn't get filed. Say it again when you're ready.",
+  dayAimsFromYesterday: 'From yesterday',
+  dayAimsBring: 'Bring to today',
+  dayAimsNotToday: 'Not today',
+  dayAimsBrought: (title: string) => `${title} is on today.`,
+  dayAimsLeftOff: (title: string) => `${title} stays off today.`,
+  dayAimsAnyTime: 'Any time',
+  dayAimsNoFit: "Doesn't fit today",
+  dayAimsGuess: (length: string) => `about ${length}?`,
+  dayAimsFixLength: (title: string) => `Set how long ${title} takes`,
+  dayAimsLengthTitle: 'How long will it take?',
+  dayAimsLengthSaved: (title: string, length: string) =>
+    `${title} takes ${length}.`,
+  dayAimsLengthFailed: "Couldn't save the length. Try again.",
+  dayAimsDone: (title: string) => `Mark ${title} done`,
+  dayAimsFolded: (aims: number, planned: number) =>
+    `Today: ${aims} ${aims === 1 ? 'aim' : 'aims'} · ${planned} planned`,
+  dayAimsSkipped: "Skipped today's aims.",
+  dayAimsSayIt: 'Say what you want done',
+  dayAimsSkip: 'Skip for today',
+  dayAimsSkippedToast: "Skipped today's aims.",
+  dayAimsOpen: "Show today's aims",
+  dayAimsHide: "Fold today's aims",
+  dayAimsPlanFailed: "Couldn't plan today. Your aims are saved.",
+  dayAimsTryAgain: 'Try again',
+  dayAimsRestDay: 'Nothing planned after a late night.',
+  dayAimsSaveFailed: "Couldn't save that. Try again.",
+  windDownTitle: 'How did today go?',
+  windDownDone: (count: number) => `Done · ${count}`,
+  windDownTonight: (count: number) => `Still possible tonight · ${count}`,
+  windDownWont: (count: number) => `Won't happen today · ${count}`,
+  windDownChoice: (title: string) => `What to do with ${title}`,
+  windDownTomorrow: 'Tomorrow',
+  windDownLater: 'Later',
+  windDownDrop: 'Drop it',
+  windDownWhy: 'Why?',
+  windDownFinish: 'Done',
+  windDownChose: (title: string, choice: 'tomorrow' | 'later' | 'dropped') =>
+    choice === 'tomorrow'
+      ? `${title} moves to tomorrow.`
+      : choice === 'later'
+        ? `${title} goes back to later.`
+        : `Dropped ${title}. The task stays.`,
+  windDownReasonSaved: 'Noted.',
+  windDownSummary: (counts: {
+    done: number;
+    tomorrow: number;
+    later: number;
+    dropped: number;
+  }) => {
+    const parts = [
+      counts.done > 0 ? `${counts.done} done` : null,
+      counts.tomorrow > 0 ? `${counts.tomorrow} to tomorrow` : null,
+      counts.later > 0 ? `${counts.later} for later` : null,
+      counts.dropped > 0 ? `${counts.dropped} dropped` : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0
+      ? `Wound down: ${parts.join(', ')}.`
+      : 'Wound down.';
+  },
+  windDownReview: 'Show how the day wound down',
+  windDownEmpty: 'Nothing left for today.',
+  planNowOverlaps: (title: string) => `Now overlaps ${title}`,
+  planKeepOverlap: 'Keep it as it is',
+  planKeptOverlap: 'Kept where it is.',
+  dayAimsStruggle: {
+    tired: 'Tired',
+    reluctant: "Didn't feel like it",
+    tooBusy: 'Too busy',
+    unwell: 'Unwell',
+    bored: 'Bored',
+    stressed: 'Stressed',
+  },
   dayStripLabel: 'Day',
   dayStripToday: 'Today',
   planEvents: (count: number) => `${count} ${count === 1 ? 'event' : 'events'}`,
