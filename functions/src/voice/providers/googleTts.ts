@@ -22,7 +22,7 @@ interface SynthesisRequest {
     streamingAudioConfig: {
       audioEncoding: 'PCM';
       sampleRateHertz: number;
-      speakingRate: number;
+      speakingRate?: number;
     };
   };
   input?: { text: string; prompt?: string };
@@ -119,7 +119,8 @@ export function createGoogleTts({
               streamingAudioConfig: {
                 audioEncoding: 'PCM',
                 sampleRateHertz: SAMPLE_RATE,
-                speakingRate: speed,
+                // A Gemini voice takes its pace from the prompt, so a whisper sends no rate.
+                ...(!isWhisper && { speakingRate: speed }),
               },
             },
           });

@@ -321,6 +321,7 @@ const CALL_BUDGET_MS = 55_000;
 const RESTART_MARGIN_MS = 5_000;
 const MIN_RESTART_MS = 22_000;
 const SETTLE_QUIET_MS = 1_000;
+const NOTHING_HELD_LINE = "Nothing's being kept off the speaker right now.";
 const SETTLE_MAX_MS = 3_000;
 
 export type SortMode = 'full' | 'rest';
@@ -1498,6 +1499,12 @@ export async function readEarlierTurns(
     .limit(EARLIER_TURNS * 2)
     .get();
   const fetched = new Set(earlier.docs.map((doc) => doc.id));
+  const readHeldText = (data: CaptureDoc) => {
+    const spoken = openTitle(key, data.sealed)?.sealed.spoken as
+      { heldText?: unknown } | undefined;
+    const held = spoken?.heldText;
+    return typeof held === 'string' && held !== '' ? held : null;
+  };
   const readSaid = (data: CaptureDoc) => {
     const said = openTitle(key, data.sealed)?.sealed.text;
     return typeof said === 'string' && said ? said : null;
@@ -1560,6 +1567,11 @@ export async function readEarlierTurns(
             : [];
           return [
             {
+              heldSpoken:
+                typeof opened?.sealed.heldSpoken === 'string' &&
+                opened.sealed.heldSpoken !== ''
+                  ? opened.sealed.heldSpoken
+                  : null,
               summary: typeof summary === 'string' ? summary : null,
               isPrivate: execution?.privacy === 'private',
               ids: refs.flatMap((ref) =>
@@ -1594,6 +1606,10 @@ export async function readEarlierTurns(
               EARLIER_RECORDS,
             ),
             undoable: done.flatMap((entry) => entry.undoable),
+            heldLine:
+              readHeldText(data) ??
+              done.find((entry) => entry.heldSpoken !== null)?.heldSpoken ??
+              null,
           },
         ];
       }),
@@ -1712,6 +1728,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       quietCommands: [],
       keepQuiet: false,
       sayHeldLine: false,
+      heldBefore: null,
       quietIndex: buildQuietIndex([]),
       today: '',
       topicCommands: [],
@@ -2658,6 +2675,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quietCommands: mode === 'full' ? reply.quietCommands : [],
     keepQuiet: mode === 'full' && reply.keepQuiet,
     sayHeldLine: mode === 'full' && reply.sayHeldLine,
+    heldBefore:
+      [...earlierTurns]
+        .reverse()
+        .find((turn) => (turn.heldLine ?? null) !== null)?.heldLine ?? null,
     quietIndex,
     today,
     topicCommands: mode === 'full' ? reply.topicCommands : [],
@@ -2844,6 +2865,7 @@ async function writeResult(
     quietCommands: SetQuietCommand[];
     keepQuiet: boolean;
     sayHeldLine: boolean;
+    heldBefore: string | null;
     quietIndex: QuietIndex;
     today: string;
     topicCommands: TopicCommand[];
@@ -2889,6 +2911,7 @@ async function writeResult(
     quietCommands,
     keepQuiet,
     sayHeldLine,
+    heldBefore,
     quietIndex,
     today,
     topicCommands: requestedTopicCommands,
@@ -4020,6 +4043,7 @@ async function writeResult(
         }),
       });
     }
+    const asksHeld = sayHeldLine && !isStale;
     const quietLine = isStale
       ? ALREADY_ANSWERED_LINE
       : askPlan.isDeferred
@@ -4079,9 +4103,9 @@ async function writeResult(
       questions,
       hadAsks: asksNow.length > 0 || undoPlan.question !== null,
       isAnswerTurn: answerTurn !== null,
-      asksHeldLine: sayHeldLine && !isStale,
-      line: quietLine,
-      isQuiet,
+      asksHeldLine: asksHeld,
+      line: asksHeld ? (heldBefore ?? NOTHING_HELD_LINE) : quietLine,
+      isQuiet: isQuiet || (asksHeld && heldBefore !== null),
     });
     if (askedRef && turn?.kind === 'apply') {
       transaction.update(askedRef, {

@@ -283,7 +283,11 @@ export function useVoiceConversation({
     gate: null as { close: () => void } | null,
     heardWords: '',
     pending: null as { text: string; timerId: number } | null,
-    lastLine: null as { text: string; voice: SpeechVoice | null } | null,
+    lastLine: null as {
+      text: string;
+      voice: SpeechVoice | null;
+      delivery: SpeechDelivery | undefined;
+    } | null,
     turnKey: 0,
     isLive: false,
     isLiveMuted: false,
@@ -988,7 +992,11 @@ export function useVoiceConversation({
       run.current.liveAt = Date.now();
       if (result.status !== 'cancelled') defer(() => setIsThinking(false));
       if (result.status === 'spoken' && line.priority !== 'ack') {
-        run.current.lastLine = { text, voice: run.current.voice };
+        run.current.lastLine = {
+          text,
+          voice: run.current.voice,
+          delivery: line.delivery,
+        };
       }
     });
     if (canAnswer) {
@@ -1018,10 +1026,13 @@ export function useVoiceConversation({
     if (lastLine !== null) run.current.voice ??= lastLine.voice;
     run.current.repeatId += 1;
     const { repeatId, listenId, turnKey } = run.current;
+    // Saying the last line again keeps how it was said, so a whispered line is never repeated aloud.
+    const delivery =
+      options.delivery ?? (text === undefined ? lastLine?.delivery : undefined);
     void sayLine(line, {
       priority: 'reply',
       turnKey,
-      delivery: options.delivery,
+      delivery,
     }).then((result) => {
       options.onResult?.(result);
       const { current } = run;

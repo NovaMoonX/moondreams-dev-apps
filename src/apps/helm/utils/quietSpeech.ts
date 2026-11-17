@@ -20,25 +20,3 @@ export const readReplayLine = (text: string, heldLine: string | null) =>
 export const heldDelivery = (
   whisperHeld: boolean | null,
 ): SpeechDelivery | null => (whisperHeld === false ? null : 'whisper');
-
-/** The newest line kept off the speaker earlier in the turn's own session; null when none was held. */
-export const findEarlierHeldLine = (
-  captures: readonly OpenCapture[],
-  capture: Pick<OpenCapture, 'sessionId' | 'createdAt'>,
-  executions: ReadonlyMap<string, OpenExecution>,
-) =>
-  captures
-    .filter(
-      (entry) =>
-        entry.sessionId === capture.sessionId &&
-        entry.createdAt < capture.createdAt,
-    )
-    .reduceRight<string | null>(
-      (found, entry) =>
-        found ??
-        findHeldLine(
-          [entry],
-          entry.executionIds.flatMap((id) => executions.get(id) ?? []),
-        ),
-      null,
-    );

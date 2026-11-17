@@ -100,11 +100,7 @@ import {
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { readPresence } from '@apps/helm/utils/presence';
 import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
-import {
-  findEarlierHeldLine,
-  findHeldLine,
-  heldDelivery,
-} from '@apps/helm/utils/quietSpeech';
+import { findHeldLine, heldDelivery } from '@apps/helm/utils/quietSpeech';
 import {
   isAcknowledgement,
   isLiveCloser,
@@ -114,7 +110,6 @@ import {
 const NOTE_MS = 6000;
 const CLOSED_MS = 10_000;
 const CLOSE_FRESH_MS = 30_000;
-const HELD_LOOKBACK = 8;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
 const OFFLINE_WAIT_MS = 20_000;
 const ASK_AGAIN_MAX_WORDS = 3;
@@ -304,6 +299,13 @@ export function useHelmVoice() {
     if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
   }
 
+  /** Why a whisper didn't play: the device's own voice never whispers, so that case says how to hear it. */
+  function whisperFailedNote() {
+    return store.getState().helm.profile?.voiceMode === 'deviceOnly'
+      ? HELM_COPY.whisperNeedsCloud
+      : HELM_COPY.whisperFailed;
+  }
+
   /** Says a line kept off the speaker: whispered unless the setting is off, and never in the usual voice when the whisper can't play. */
   function sayHeldAloud(line: string) {
     const delivery = heldDelivery(
@@ -314,50 +316,27 @@ export function useHelmVoice() {
         ...(delivery !== null && { delivery }),
         onResult: (result) => {
           if (delivery !== null && result.status === 'failed') {
-            showNote(HELM_COPY.whisperFailed);
+            showNote(whisperFailedNote());
           }
         },
       }),
     );
   }
 
-  /** The newest line kept off the speaker earlier in this turn's session; null when nothing is held. */
-  async function findHeldBefore(capture: OpenCapture) {
-    const earlier = selectAllCaptures(store.getState())
-      .filter(
-        (entry) =>
-          entry.sessionId === capture.sessionId &&
-          entry.createdAt < capture.createdAt,
-      )
-      .slice(-HELD_LOOKBACK);
-    if (uid) {
-      await loadExecutionsById(
-        uid,
-        earlier.flatMap((entry) => entry.executionIds),
-      );
+  /** The person asked by voice to hear what was kept off the speaker: the server put that line on this turn, so it is said (whispered), or the turn's own line says nothing is held. */
+  function answerHeldAsk(capture: OpenCapture) {
+    const line = capture.heldLine;
+    if (line === null) {
+      void deliver(capture, capture.line ?? HELM_COPY.nothingHeld);
+      return;
     }
-    return findEarlierHeldLine(
-      earlier,
+    showNote(line);
+    void deliver(
       capture,
-      selectExecutionsById(store.getState()),
+      line,
+      heldDelivery(store.getState().helm.profile?.whisperHeld ?? null) ??
+        undefined,
     );
-  }
-
-  /** The person asked to hear what was kept off the speaker: the line is shown, and said (whispered) only on a spoken turn; with nothing held, the turn says so. */
-  async function answerHeldAsk(capture: OpenCapture, isSpoken: boolean) {
-    const stops = stopCount.current;
-    const line = await findHeldBefore(capture);
-    if (stopCount.current !== stops) return;
-    showNote(line ?? HELM_COPY.nothingHeld);
-    if (!isSpoken) return;
-    if (line === null) void deliver(capture, HELM_COPY.nothingHeld);
-    else
-      void deliver(
-        capture,
-        line,
-        heldDelivery(store.getState().helm.profile?.whisperHeld ?? null) ??
-          undefined,
-      );
   }
 
   /** Shows the line; `spoken` is what is said when it differs (a line that names a quiet thing is shown, never said). */
@@ -959,7 +938,7 @@ export function useHelmVoice() {
       ...(delivery && { delivery }),
     });
     if (delivery && result.status === 'failed') {
-      showNote(HELM_COPY.whisperFailed);
+      showNote(whisperFailedNote());
     }
     if (speakingCaptureId.current === capture.id) {
       speakingCaptureId.current = null;
@@ -1010,7 +989,7 @@ export function useHelmVoice() {
         const answered = afterAnswer.current.get(leadId);
         afterAnswer.current.delete(leadId);
         if (isSettledWithLines && capture.asksHeldLine) {
-          void answerHeldAsk(capture, true);
+          answerHeldAsk(capture);
           return;
         }
         const reply =
@@ -1071,31 +1050,6 @@ export function useHelmVoice() {
             ),
         ),
       );
-  }, [captures]);
-
-  // A typed ask to hear what was kept off the speaker shows the line and plays nothing, once, only on the tab that sent it and while it is fresh.
-  const appliedHeldAsks = useRef(new Set<string>());
-  const applyHeldAsk = useRef(answerHeldAsk);
-  useEffect(() => {
-    applyHeldAsk.current = answerHeldAsk;
-  });
-  useEffect(() => {
-    const now = Date.now();
-    captures
-      .filter(
-        (capture) =>
-          capture.asksHeldLine &&
-          capture.inputMode !== 'voice' &&
-          (capture.status === 'sorted' || capture.status === 'needsYou') &&
-          capture.sortedAt !== null &&
-          now - capture.sortedAt < CLOSE_FRESH_MS &&
-          wasSentHere(capture.id) &&
-          !appliedHeldAsks.current.has(capture.id),
-      )
-      .forEach((capture) => {
-        appliedHeldAsks.current.add(capture.id);
-        void applyHeldAsk.current(capture, false);
-      });
   }, [captures]);
 
   useEffect(

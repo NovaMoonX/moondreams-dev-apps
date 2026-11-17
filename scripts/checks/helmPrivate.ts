@@ -37,10 +37,7 @@ import {
   toContextProjects,
 } from '../../functions/src/apps/helm/projectStore.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
-import {
-  findEarlierHeldLine,
-  heldDelivery,
-} from '../../src/apps/helm/utils/quietSpeech.ts';
+import { heldDelivery } from '../../src/apps/helm/utils/quietSpeech.ts';
 import {
   buildInheritedLine,
   buildOnItsPageLine,
@@ -1813,28 +1810,6 @@ test('a held line is whispered unless the person turned the whisper off, and fou
   assert.equal(heldDelivery(null), 'whisper');
   assert.equal(heldDelivery(true), 'whisper');
   assert.equal(heldDelivery(false), null);
-  const turn = (
-    id: string,
-    sessionId: string,
-    createdAt: number,
-    heldLine: string | null,
-  ) => ({ id, sessionId, createdAt, heldLine, executionIds: [] }) as never;
-  const captures = [
-    turn('a', 's1', 1, 'Old one.'),
-    turn('b', 's2', 2, 'Other session.'),
-    turn('c', 's2', 3, 'Newest held.'),
-    turn('d', 's2', 4, null),
-  ];
-  const ask = { sessionId: 's2', createdAt: 5 };
-  assert.equal(findEarlierHeldLine(captures, ask, new Map()), 'Newest held.');
-  assert.equal(
-    findEarlierHeldLine(captures, { sessionId: 's3', createdAt: 5 }, new Map()),
-    null,
-  );
-  assert.equal(
-    findEarlierHeldLine(captures, { sessionId: 's2', createdAt: 3 }, new Map()),
-    'Other session.',
-  );
 });
 
 test('a turn is quiet when a command, a touched record, an answer source, a name or the model says so', () => {

@@ -2144,7 +2144,6 @@ assert.deepEqual(
         streamingAudioConfig: {
           audioEncoding: 'PCM',
           sampleRateHertz: 24_000,
-          speakingRate: 1.1,
         },
       },
     },

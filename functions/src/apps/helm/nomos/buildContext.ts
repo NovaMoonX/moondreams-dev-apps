@@ -215,6 +215,8 @@ export interface EarlierTurn {
   said: string;
   did: string | null;
   taskIds: string[];
+  /** The line it kept off the speaker; never handed to the model. */
+  heldLine?: string | null;
   /** What this turn did that can still be taken back, one entry per execution. */
   undoable?: {
     executionId: string;
@@ -332,6 +334,7 @@ export function buildContext(input: ContextInput): {
     said: turn.said.slice(0, MAX_EARLIER_SAID_CHARS),
     did: turn.did,
     records: turn.taskIds.map((id) => aliases.add(id)),
+    ...((turn.heldLine ?? null) !== null ? { keptOffSpeaker: true } : {}),
     ...(turn.undoable?.some((entry) => entry.units.length > 0)
       ? {
           undoable: turn.undoable
