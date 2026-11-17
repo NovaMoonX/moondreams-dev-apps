@@ -8,9 +8,25 @@ import {
 
 import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil, Plus, Search, Trash2, Ungroup, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowRight,
+  ArrowRightLeft,
+  ArrowUp,
+  Link2,
+  NotebookText,
+  Pencil,
+  Plus,
+  Ruler,
+  Search,
+  Trash2,
+  Undo2,
+  Ungroup,
+  X,
+} from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import AppCheckbox from '@/components/AppCheckbox';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import LabelChip from '@/components/LabelChip';
@@ -22,11 +38,22 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
+import {
+  convertMeasure,
+  formatAmountText,
+  isMeasureUnit,
+  parseAmountText,
+  roundMeasure,
+  stepMeasure,
+} from '@/utils/measureUtils';
 import ItemSearch, {
   type ItemSuggestions,
 } from '@apps/pinch/components/plan/ItemSearch';
 import {
+  adaptRows,
   isRowAmountValid,
+  restoreRow,
+  isRowUnresolved,
   type IngredientRow,
 } from '@apps/pinch/components/recipes/recipeFormModel';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
@@ -38,6 +65,7 @@ import {
   MAX_RECIPE_INGREDIENTS,
   UNIT_LABELS,
 } from '@apps/pinch/constants';
+import type { PinchUnitSettings, Unit } from '@apps/pinch/types';
 import {
   selectIngredients,
   selectIngredientsById,
@@ -62,6 +90,7 @@ import {
 } from '@apps/pinch/utils/ingredientMatch';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
+import { hasUnitPreference } from '@apps/pinch/utils/units';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -83,10 +112,48 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
     .filter((row) => getGroupKey(row.group) === getGroupKey(group))
     .map((row) => row.ingredientId);
 
+const UNIT_CHIP_CLASS =
+  "relative gap-1.5 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']";
+
+const getOriginalText = (from: NonNullable<IngredientRow['adaptedFrom']>) =>
+  `${formatAmountText(from.amount)} ${UNIT_LABELS[from.unit]}`;
+
+const UNIT_WORDS = {
+  weight: { AS_WRITTEN: '', METRIC: 'grams', US: 'ounces' },
+  volume: {
+    AS_WRITTEN: '',
+    METRIC: 'millilitres',
+    CUPS: 'cups',
+    FL_OZ: 'fluid ounces',
+  },
+} as const;
+
+/** The units a person's preference names, in words ("grams and cups"). */
+const getUnitsPhrase = (units: PinchUnitSettings) =>
+  [UNIT_WORDS.weight[units.weight], UNIT_WORDS.volume[units.volume]]
+    .filter((word) => word !== '')
+    .join(' and ');
+
+const FREE_LINE_LABEL = 'Not a kitchen ingredient';
+
+/** The last choice of a line's sheet: keep the words in the recipe, outside the kitchen and the shopping list. */
+function FreeLineOffer({ onClick }: { onClick: () => void }) {
+  return (
+    <ActionRow
+      icon={<NotebookText className='h-4 w-4' />}
+      label={FREE_LINE_LABEL}
+      subtitle='Keep it in the recipe, not in your kitchen or shopping list.'
+      hasChevron
+      onClick={onClick}
+    />
+  );
+}
+
 const getAmountLabel = (row: IngredientRow) => {
   if (row.isAmountless) return row.note ?? '';
-  if (isRowAmountValid(row)) {
-    return `${Math.round(Number(row.amount) * 100) / 100} ${UNIT_LABELS[row.unit]}`;
+  const amount = parseAmountText(row.amount);
+  if (amount !== null && isRowAmountValid(row)) {
+    return `${formatAmountText(amount)} ${UNIT_LABELS[row.unit]}`;
   }
   return row.amount.trim() === '' ? 'Add an amount' : 'Check the amount';
 };
@@ -268,6 +335,25 @@ interface IngredientEditorProps {
   onUseExisting: (fromId: string, toId: string) => void;
 }
 
+interface PendingConversion {
+  amount: number;
+  unit: Unit;
+  adaptedFrom: IngredientRow['adaptedFrom'];
+}
+
+/** What the amount the person had becomes in the unit they just chose, when both are measures of one kind. */
+const getConversion = (pending: PendingConversion | null, unit: Unit) => {
+  if (pending === null || pending.unit === unit) return null;
+  if (!isMeasureUnit(pending.unit) || !isMeasureUnit(unit)) return null;
+  const converted = convertMeasure(pending.amount, pending.unit, unit);
+  return converted === null
+    ? null
+    : {
+        from: { amount: pending.amount, unit: pending.unit },
+        amount: roundMeasure(converted, unit),
+      };
+};
+
 /** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. */
 function IngredientEditor({
   uid,
@@ -281,6 +367,7 @@ function IngredientEditor({
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
+  const [pending, setPending] = useState<PendingConversion | null>(null);
   const [groupNames] = useState(() => getGroupNames(rows));
   const noteRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -288,7 +375,13 @@ function IngredientEditor({
   const servingUnit = useAppSelector(selectIngredientsById).get(
     row.ingredientId,
   )?.serving.unit;
-  const isUnresolved = row.ingredientId === '';
+  const isUnresolved = isRowUnresolved(row);
+  const isFree = row.freeText !== null;
+  const ownWords =
+    ingredients.find((ingredient) => ingredient.id === row.ingredientId)
+      ?.name ??
+    row.newName ??
+    '';
   const proposedName = row.proposedName ?? '';
   const [openedName] = useState(proposedName);
   const usedInGroup = getUsedInGroup(
@@ -297,6 +390,43 @@ function IngredientEditor({
   );
   const usedIds = usedInGroup.join(',');
   const isReadyForAmount = !isUnresolved && !row.isAmountless;
+  const typedAmount = parseAmountText(row.amount);
+  const conversion = getConversion(pending, row.unit);
+  const isRoundRowDrawn = row.adaptedFrom !== null && isMeasureUnit(row.unit);
+  const step = (direction: 1 | -1) =>
+    isRoundRowDrawn && typedAmount !== null && isMeasureUnit(row.unit)
+      ? stepMeasure(typedAmount, row.unit, direction)
+      : null;
+  const roundTargets = [
+    { target: step(-1), Icon: ArrowDown, word: 'down' },
+    { target: step(1), Icon: ArrowUp, word: 'up' },
+  ].flatMap(({ target, ...rest }) =>
+    target === null || target === typedAmount ? [] : [{ target, ...rest }],
+  );
+  const changeUnit = (unit: Unit) => {
+    const base =
+      pending ??
+      (typedAmount === null
+        ? null
+        : {
+            amount: typedAmount,
+            unit: row.unit,
+            adaptedFrom: row.adaptedFrom,
+          });
+    setPending(base);
+    onUpdate({ unit, adaptedFrom: null });
+  };
+  const convert = () => {
+    if (pending === null || conversion === null) return;
+    onUpdate({
+      amount: formatAmountText(conversion.amount),
+      adaptedFrom: pending.adaptedFrom ?? {
+        amount: pending.amount,
+        unit: pending.unit,
+      },
+    });
+    setPending(null);
+  };
 
   useEffect(() => {
     if (!isReadyForAmount || !canFocusFieldOnOpen()) {
@@ -378,6 +508,16 @@ function IngredientEditor({
             }}
           />
         )}
+        <FreeLineOffer
+          onClick={() =>
+            onUpdate({
+              freeText: proposedName.trim(),
+              ingredientId: '',
+              proposedName: null,
+              newName: null,
+            })
+          }
+        />
         {showRemove && (
           <ActionRow
             isDestructive
@@ -403,6 +543,19 @@ function IngredientEditor({
           }
           onUseExisting={(toId) => onUseExisting(row.ingredientId, toId)}
         />
+      )}
+      {isFree && (
+        <Field label='Name'>
+          {(id) => (
+            <Input
+              id={id}
+              variant='outline'
+              value={row.freeText ?? ''}
+              maxLength={MAX_NAME_LENGTH}
+              onChange={(event) => onUpdate({ freeText: event.target.value })}
+            />
+          )}
+        </Field>
       )}
       {row.isAmountless ? (
         <div className='space-y-1.5'>
@@ -431,29 +584,102 @@ function IngredientEditor({
               {(id) => (
                 <Input
                   id={id}
-                  type='number'
                   inputMode='decimal'
-                  min={0}
-                  step='any'
                   variant='outline'
                   ref={amountRef}
                   autoFocus={isAmountJustAdded}
                   value={row.amount}
-                  onChange={(event) => onUpdate({ amount: event.target.value })}
+                  onChange={(event) => {
+                    setPending(null);
+                    onUpdate({
+                      amount: event.target.value,
+                      adaptedFrom: null,
+                    });
+                  }}
                 />
               )}
             </Field>
             <div className='space-y-1.5'>
               <p className='font-medium'>Unit</p>
-              <UnitSelect
-                value={row.unit}
-                onChange={(unit) => onUpdate({ unit })}
-              />
+              <UnitSelect value={row.unit} onChange={changeUnit} />
             </div>
           </div>
+          {conversion !== null && (
+            <div className='flex min-h-10 flex-wrap items-center gap-x-3'>
+              <span className='text-muted-foreground text-sm'>
+                Convert {getOriginalText(conversion.from)} to{' '}
+                {getOriginalText({ amount: conversion.amount, unit: row.unit })}
+                ?
+              </span>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                rounded='full'
+                className={UNIT_CHIP_CLASS}
+                onClick={convert}
+              >
+                <ArrowRightLeft className='h-3.5 w-3.5' aria-hidden='true' />
+                Convert
+              </Button>
+            </div>
+          )}
+          {row.adaptedFrom !== null && (
+            <div
+              role='group'
+              aria-label={`Adapted from ${getOriginalText(row.adaptedFrom)}`}
+              className='border-border space-y-2 rounded-xl border p-2'
+            >
+              <div className='flex items-center justify-between gap-2'>
+                <span className='text-muted-foreground pl-1 text-sm'>
+                  Adapted from {getOriginalText(row.adaptedFrom)}
+                </span>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  rounded='full'
+                  className={UNIT_CHIP_CLASS}
+                  aria-label={`Use the original, ${getOriginalText(row.adaptedFrom)}`}
+                  onClick={() => {
+                    const { amount, unit, adaptedFrom } = restoreRow(row);
+                    onUpdate({ amount, unit, adaptedFrom });
+                  }}
+                >
+                  <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
+                  Use original
+                </Button>
+              </div>
+              {roundTargets.length > 0 && (
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='text-muted-foreground pl-1 text-sm'>
+                    Round to
+                  </span>
+                  {roundTargets.map(({ target, Icon, word }) => (
+                    <Button
+                      key={word}
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      rounded='full'
+                      className={UNIT_CHIP_CLASS}
+                      aria-label={`Round ${word} to ${formatAmountText(target)} ${UNIT_LABELS[row.unit]}`}
+                      onClick={() =>
+                        onUpdate({ amount: formatAmountText(target) })
+                      }
+                    >
+                      <Icon className='h-3.5 w-3.5' aria-hidden='true' />
+                      {formatAmountText(target)} {UNIT_LABELS[row.unit]}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <RevealChip
             onClick={() => {
-              onUpdate({ isAmountless: true, amount: '' });
+              setPending(null);
+              onUpdate({ isAmountless: true, amount: '', adaptedFrom: null });
               if (!row.note) noteRef.current?.focus();
             }}
           >
@@ -487,6 +713,33 @@ function IngredientEditor({
         names={groupNames}
         onChange={(group) => onUpdate({ group })}
       />
+      {isFree ? (
+        <ActionRow
+          icon={<Link2 className='h-4 w-4' />}
+          label='Link to an ingredient'
+          subtitle='Pick one from your kitchen or add it as new.'
+          hasChevron
+          onClick={() =>
+            onUpdate({
+              freeText: null,
+              ingredientId: '',
+              proposedName: row.freeText?.trim() ?? '',
+              newName: null,
+            })
+          }
+        />
+      ) : (
+        <FreeLineOffer
+          onClick={() =>
+            onUpdate({
+              freeText: ownWords,
+              ingredientId: '',
+              proposedName: null,
+              newName: null,
+            })
+          }
+        />
+      )}
       {showRemove && (
         <ActionRow
           isDestructive
@@ -700,6 +953,11 @@ interface RecipeIngredientsProps {
   onChange: (rows: IngredientRow[]) => void;
   /** Called with what a removal says and how to take it back. */
   onRemoved: (message: string, restore: () => void) => void;
+  /** The rows adapted to the person's units in this form session, which the line at the top counts and puts back. */
+  adaptedIds: string[];
+  onAdaptedIdsChange: (ids: string[]) => void;
+  /** The person's units while a saved recipe is being edited, so its lines can be adapted; null otherwise. */
+  adaptUnits: PinchUnitSettings | null;
 }
 
 /** A new line joins the last group, the one just above the add button, and "Add another" keeps the group of the line before. */
@@ -708,6 +966,9 @@ function RecipeIngredients({
   rows,
   onChange,
   onRemoved,
+  adaptedIds,
+  onAdaptedIdsChange,
+  adaptUnits,
 }: RecipeIngredientsProps) {
   const latest = useRef({ rows, onChange });
   useEffect(() => {
@@ -715,6 +976,7 @@ function RecipeIngredients({
   });
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [sheet, setSheet] = useState<SheetMode | null>(null);
+  const [isAdaptReviewOpen, setIsAdaptReviewOpen] = useState(false);
   const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
   const usedKey = rows.map((row) => row.ingredientId).join(',');
   const suggestions = useMemo<ItemSuggestions>(
@@ -729,18 +991,39 @@ function RecipeIngredients({
   const lastGroup = rows[rows.length - 1]?.group ?? null;
 
   const getName = (row: IngredientRow) =>
-    ingredientsById.get(row.ingredientId)?.name ??
-    row.newName ??
-    row.proposedName ??
-    'Removed ingredient';
+    row.freeText !== null
+      ? row.freeText || 'New line'
+      : (ingredientsById.get(row.ingredientId)?.name ??
+        row.newName ??
+        row.proposedName ??
+        'Removed ingredient');
   const update = (id: string, patch: Partial<IngredientRow>) => {
     const row = rows.find((candidate) => candidate.id === id);
     if (!row) return;
     if (!('group' in patch)) {
+      const resolvedId = patch.ingredientId;
+      const readName = normalizeName(row.proposedName ?? '');
+      const isResolving =
+        isRowUnresolved(row) &&
+        resolvedId !== undefined &&
+        resolvedId !== '' &&
+        readName !== '';
       onChange(
-        rows.map((candidate) =>
-          candidate.id === id ? { ...candidate, ...patch } : candidate,
-        ),
+        rows.map((candidate) => {
+          if (candidate.id === id) return { ...candidate, ...patch };
+          const isSameRead =
+            isResolving &&
+            isRowUnresolved(candidate) &&
+            normalizeName(candidate.proposedName ?? '') === readName;
+          return isSameRead
+            ? {
+                ...candidate,
+                ingredientId: resolvedId,
+                newName: patch.newName ?? null,
+                proposedName: null,
+              }
+            : candidate;
+        }),
       );
       return;
     }
@@ -787,13 +1070,15 @@ function RecipeIngredients({
       placeLineInGroup(rows, {
         id,
         ingredientId,
-        amount: String(serving.amount),
+        freeText: null,
+        amount: formatAmountText(serving.amount),
         unit: serving.unit,
         isAmountless: false,
         note: null,
         proposedName: null,
         newName,
         group: resolveGroupName(group, rows),
+        adaptedFrom: null,
       }),
     );
     return id;
@@ -808,6 +1093,25 @@ function RecipeIngredients({
     );
 
     return sameLine ? sameLine.id : addRow(ingredientId, group, name);
+  };
+  const addFree = (words: string, group: string | null) => {
+    const id = generateUuid();
+    onChange(
+      placeLineInGroup(rows, {
+        id,
+        ingredientId: '',
+        freeText: words,
+        amount: '',
+        unit: DEFAULT_SERVING.unit,
+        isAmountless: true,
+        note: null,
+        proposedName: null,
+        newName: null,
+        group: resolveGroupName(group, rows),
+        adaptedFrom: null,
+      }),
+    );
+    return id;
   };
   const renameNew = (ingredientId: string, name: string, isFinal: boolean) => {
     const other = isFinal
@@ -839,8 +1143,68 @@ function RecipeIngredients({
       ),
     );
 
+  const adaptedCount = rows.filter(
+    (row) => row.adaptedFrom !== null && adaptedIds.includes(row.id),
+  ).length;
+  const offer =
+    adaptUnits !== null && hasUnitPreference(adaptUnits)
+      ? { ...adaptRows(rows, adaptUnits), units: adaptUnits }
+      : null;
+  const putBack = () => {
+    onChange(
+      rows.map((row) => (adaptedIds.includes(row.id) ? restoreRow(row) : row)),
+    );
+    onAdaptedIdsChange([]);
+  };
+
   return (
     <div className='space-y-3' data-recipe-ingredients>
+      {adaptedCount > 0 && (
+        <div className='flex min-h-10 items-center gap-2'>
+          <p className='text-muted-foreground min-w-0 flex-1 text-sm'>
+            Adapted {adaptedCount} {adaptedCount === 1 ? 'line' : 'lines'} to
+            your units
+          </p>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className={UNIT_CHIP_CLASS}
+            onClick={putBack}
+          >
+            <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
+            Put them back
+          </Button>
+        </div>
+      )}
+      {adaptedCount === 0 && offer !== null && offer.ids.length > 0 && (
+        <ActionRow
+          icon={<Ruler className='h-4 w-4' />}
+          label='Adapt to my units'
+          subtitle={`${offer.ids.length} ${offer.ids.length === 1 ? 'line changes' : 'lines change'} to ${getUnitsPhrase(offer.units)}`}
+          onClick={() => setIsAdaptReviewOpen(true)}
+        />
+      )}
+      {isAdaptReviewOpen && offer !== null && (
+        <AdaptReviewSheet
+          rows={rows}
+          offer={offer}
+          getName={getName}
+          onClose={() => setIsAdaptReviewOpen(false)}
+          onApply={(ids) => {
+            onChange(
+              rows.map((row) =>
+                ids.includes(row.id)
+                  ? (offer.rows.find((next) => next.id === row.id) ?? row)
+                  : row,
+              ),
+            );
+            onAdaptedIdsChange(ids);
+            setIsAdaptReviewOpen(false);
+          }}
+        />
+      )}
       {rows.length > 0 && (
         <div>
           {groups.map((group) => (
@@ -871,7 +1235,8 @@ function RecipeIngredients({
                 {group.lines.map((row) => {
                   const name = getName(row);
                   const label = getAmountLabel(row);
-                  const isUnresolved = row.ingredientId === '';
+                  const isUnresolved = isRowUnresolved(row);
+                  const isFree = row.freeText !== null;
                   return (
                     <li
                       key={row.id}
@@ -887,7 +1252,7 @@ function RecipeIngredients({
                           type='button'
                           variant='tertiary'
                           aria-haspopup='dialog'
-                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}`}
+                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : isFree ? `not a kitchen ingredient, ${label || 'no amount'}` : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}${row.adaptedFrom !== null && !row.isAmountless ? `, adapted from ${getOriginalText(row.adaptedFrom)}` : ''}`}
                           onClick={() => setSheet({ kind: 'edit', id: row.id })}
                           className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                         >
@@ -902,6 +1267,11 @@ function RecipeIngredients({
                                 </LabelChip>
                               )}
                             </span>
+                            {isFree && (
+                              <span className='text-muted-foreground block text-xs font-normal'>
+                                {FREE_LINE_LABEL}
+                              </span>
+                            )}
                             {row.note && !row.isAmountless && (
                               <span className='text-muted-foreground block truncate text-xs font-normal'>
                                 {row.note}
@@ -921,6 +1291,12 @@ function RecipeIngredients({
                               )}
                             >
                               {label}
+                              {row.adaptedFrom !== null &&
+                                !row.isAmountless && (
+                                  <span className='text-muted-foreground ml-1 text-xs'>
+                                    from {getOriginalText(row.adaptedFrom)}
+                                  </span>
+                                )}
                             </span>
                           )}
                         </Button>
@@ -970,6 +1346,7 @@ function RecipeIngredients({
           suggestions={suggestions}
           onAdd={addRow}
           onStageNew={stageNew}
+          onAddFree={addFree}
           onUpdate={update}
           onRemove={remove}
           onRename={renameNew}
@@ -989,11 +1366,138 @@ interface IngredientSheetProps {
   suggestions: ItemSuggestions;
   onAdd: (ingredientId: string, group: string | null) => string;
   onStageNew: (name: string, group: string | null) => string;
+  onAddFree: (words: string, group: string | null) => string;
   onUpdate: (id: string, patch: Partial<IngredientRow>) => void;
   onRemove: (id: string) => void;
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
   onClose: () => void;
+}
+
+interface AdaptReviewSheetProps {
+  rows: IngredientRow[];
+  /** The same rows in the person's units; `ids` are the ones that change. */
+  offer: { rows: IngredientRow[]; ids: string[]; units: PinchUnitSettings };
+  getName: (row: IngredientRow) => string;
+  onApply: (ids: string[]) => void;
+  onClose: () => void;
+}
+
+/** Each line the adapt would change, before and after, all ticked to start, so a person can keep some as written. */
+function AdaptReviewSheet({
+  rows,
+  offer,
+  getName,
+  onApply,
+  onClose,
+}: AdaptReviewSheetProps) {
+  const isPhone = useMediaQuery().isBelow('sm');
+  const [picked, setPicked] = useState<string[]>(offer.ids);
+  const changes = offer.ids.flatMap((id) => {
+    const before = rows.find((row) => row.id === id);
+    const after = offer.rows.find((row) => row.id === id);
+    return before && after ? [{ id, before, after }] : [];
+  });
+  const isAll = picked.length === changes.length;
+  const togglePick = (id: string, isOn: boolean) =>
+    setPicked((current) =>
+      isOn
+        ? offer.ids.filter(
+            (candidate) => candidate === id || current.includes(candidate),
+          )
+        : current.filter((candidate) => candidate !== id),
+    );
+  const getPrimaryLabel = () => {
+    if (isAll)
+      return changes.length === 1 ? 'Adapt it' : `Adapt all ${changes.length}`;
+    return `Adapt ${picked.length} of ${changes.length}`;
+  };
+
+  return (
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title='Adapt to my units'
+      footer={
+        <div className='px-4 pb-4'>
+          <ModalFooterActions
+            note={picked.length === 0 ? 'Tick a line to adapt it.' : undefined}
+            cancelAction={
+              <Button
+                type='button'
+                variant='secondary'
+                className={join(isPhone && 'w-full')}
+                onClick={onClose}
+              >
+                Cancel
+              </Button>
+            }
+            rightActions={
+              <Button
+                type='button'
+                className={join(isPhone && 'w-full')}
+                disabled={picked.length === 0}
+                onClick={() => onApply(picked)}
+              >
+                {getPrimaryLabel()}
+              </Button>
+            }
+          />
+        </div>
+      }
+    >
+      <div className='space-y-2'>
+        <div className='flex min-h-10 items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-sm text-pretty'>
+            Into {getUnitsPhrase(offer.units)}, rounded to amounts you can
+            measure.
+          </p>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='relative shrink-0 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[""]'
+            onClick={() => setPicked(isAll ? [] : offer.ids)}
+          >
+            {isAll ? 'Untick all' : 'Tick all'}
+          </Button>
+        </div>
+        <ul className='divide-border divide-y'>
+          {changes.map(({ id, before, after }) => (
+            <li key={id}>
+              <label className='flex min-h-14 cursor-pointer items-center gap-3 py-2'>
+                <span className='inline-flex shrink-0'>
+                  <AppCheckbox
+                    aria-label={`Adapt ${getName(before)}`}
+                    checked={picked.includes(id)}
+                    onCheckedChange={(checked) =>
+                      togglePick(id, checked === true)
+                    }
+                  />
+                </span>
+                <span className='flex min-w-0 flex-1 items-center justify-between gap-x-3'>
+                  <span className='min-w-0 font-medium text-pretty break-words'>
+                    {getName(before)}
+                  </span>
+                  <span className='shrink-0 text-sm whitespace-nowrap'>
+                    <span className='text-muted-foreground'>
+                      {getAmountLabel(before)}
+                    </span>
+                    <ArrowRight
+                      className='text-muted-foreground mx-1.5 inline h-3.5 w-3.5 align-[-2px]'
+                      aria-hidden='true'
+                    />
+                    <span className='sr-only'>becomes</span>
+                    <span className='font-medium'>{getAmountLabel(after)}</span>
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </DetailSheet>
+  );
 }
 
 function IngredientSheet({
@@ -1004,6 +1508,7 @@ function IngredientSheet({
   suggestions,
   onAdd,
   onStageNew,
+  onAddFree,
   onUpdate,
   onRemove,
   onRename,
@@ -1025,7 +1530,7 @@ function IngredientSheet({
   };
   const getFooter = () => {
     if (!row) return undefined;
-    const isUnresolved = row.ingredientId === '';
+    const isUnresolved = isRowUnresolved(row);
     const addAsNew = isUnresolved && (
       <Button
         type='button'
@@ -1118,6 +1623,7 @@ function IngredientSheet({
               setActiveId(onAdd(ingredientId, addGroup))
             }
             onStageNew={(name) => setActiveId(onStageNew(name, addGroup))}
+            onPickFree={(words) => setActiveId(onAddFree(words, addGroup))}
           />
         </div>
       )}

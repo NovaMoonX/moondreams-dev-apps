@@ -41,6 +41,7 @@ import {
   type CoupleStatus,
   type Gender,
 } from '../../src/apps/helm/engine/connections.ts';
+import { holdQuietSpoken } from '../../src/apps/helm/utils/privacy.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
 import { whyFingerprint } from '../../src/apps/helm/utils/goalWhy.ts';
 import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
@@ -280,10 +281,14 @@ const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
       { title: 'Book the hair trial', dueWords: null },
       { title: 'Send the save-the-dates', dueWords: 'Saturday' },
     ],
+    9: [{ title: "Book the anniversary dinner at Lucia's", dueWords: null }],
   };
 
 /** The turns that were spoken; their line is the one the server would seal for them. */
-const SEED_VOICE_TURNS = new Set([1, 2]);
+const SEED_VOICE_TURNS = new Set([1, 2, 3, 9]);
+
+/** The tasks the person kept quiet: they show on screen, and the spoken turns that made them were held behind "Say it aloud this time" (the newest is the latest answer, so it shows the button). */
+const QUIET_TASK_IDS = new Set(['seed-task-4-1', 'seed-task-10-1']);
 
 /** The turn whose two tasks were taken back: the first is deleted, the second kept because its day was moved to Sunday afterwards. */
 const UNDONE_TURN = 4;
@@ -376,9 +381,20 @@ const SEED_HELD_TURNS = [
   },
 ] as const;
 
+/** The newest turn: a spoken plan the person kept quiet, so the latest answer shows Say it aloud this time. */
+const SEED_LATE_TURNS = [
+  {
+    session: 'today',
+    minutesAgo: 0.5,
+    text: "Book the anniversary dinner at Lucia's, and don't let Sam hear about it",
+    isSeen: false,
+  },
+] as const;
+
 const ALL_TURNS = [
   ...SEED_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
   ...SEED_HELD_TURNS.map((turn) => ({ ...turn, held: turn.held as SeedHold })),
+  ...SEED_LATE_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
 ];
 
 const toHeldFields = (
@@ -489,6 +505,7 @@ async function buildUndone(input: {
       effects,
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: [],
@@ -588,6 +605,7 @@ async function buildMove(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -727,6 +745,9 @@ async function buildBackToBack(input: {
             meetingLabel: null,
             privateMark: null,
             isPrivacyCleared: false,
+            quietMark: null,
+            quietUntil: null,
+            isQuietCleared: false,
           },
           encryption,
         ),
@@ -778,6 +799,7 @@ async function buildBackToBack(input: {
         })),
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -1107,6 +1129,7 @@ async function buildGmailTurn(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -1262,6 +1285,7 @@ async function buildAnswerTurns(input: {
             effects: [],
             undoReport: null,
             spoken: null,
+            heldSpoken: null,
             goneIds: null,
             undoReason: null,
             lines: [],
@@ -1307,6 +1331,9 @@ async function buildAnswerTurns(input: {
                   links: [],
                   privateMark: null,
                   isPrivacyCleared: false,
+                  quietMark: null,
+                  quietUntil: null,
+                  isQuietCleared: false,
                 },
                 encryption,
               ),
@@ -1352,6 +1379,9 @@ async function buildAnswerTurns(input: {
             meetingLabel: null,
             privateMark: entry.isHealth ? 'health' : null,
             isPrivacyCleared: false,
+            quietMark: null,
+            quietUntil: null,
+            isQuietCleared: false,
           },
           encryption,
         ),
@@ -1460,6 +1490,9 @@ async function buildPlanDays(input: {
         meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
@@ -1841,6 +1874,9 @@ async function buildProjects(input: {
         meetingLabel: null,
         privateMark: fields.privacy === 'private' ? 'health' : null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
         ...words,
       }),
     },
@@ -1882,6 +1918,9 @@ async function buildProjects(input: {
         },
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       {
         'seed-milestone-wedding-1': {
@@ -1914,6 +1953,9 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       {
         'seed-milestone-move-1': {
@@ -1959,6 +2001,9 @@ async function buildProjects(input: {
         },
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       {
         'seed-milestone-guitar-1': {
@@ -1990,6 +2035,9 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
     ),
     projectOf(
@@ -2023,6 +2071,9 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
         aheadAsks: {
           'seed-ahead-apartments': {
             subject: 'apartments',
@@ -2098,6 +2149,9 @@ async function buildProjects(input: {
         },
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
     ),
   ]);
@@ -2159,7 +2213,10 @@ async function buildProjects(input: {
         stepState: Object.fromEntries(
           Array.from({ length: 6 }, (_, order) => [
             `seed-step-question-${order + 1}`,
-            { order, doneAt: order < 2 ? now - (2 - order) * 60 * MINUTE_MS : null },
+            {
+              order,
+              doneAt: order < 2 ? now - (2 - order) * 60 * MINUTE_MS : null,
+            },
           ]),
         ),
         meeting: { syncedId: PLANNING_COPY_ID, startAt: planningStartAt },
@@ -2287,7 +2344,10 @@ const seedReminder = (turnedOnAt: number): Habit['reminder'] => ({
 });
 
 /** Three scheduled actions: Friday's weekend plan running with last Friday's run done, a paused water reminder, and an ended weekly review. */
-async function buildScheduled(input: { now: number; encryption: HelmEncryption }) {
+async function buildScheduled(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
   const { now, encryption } = input;
   const today = getSeedToday(now);
   const dayKey = (at: number) => new Date(at).toISOString().slice(0, 10);
@@ -2333,16 +2393,30 @@ async function buildScheduled(input: { now: number; encryption: HelmEncryption }
       'seed-scheduled-weekend',
       {
         title: 'Plan the weekend',
-        instruction: 'Look at my week and plan the weekend, then add what is left to my tasks',
+        instruction:
+          'Look at my week and plan the weekend, then add what is left to my tasks',
       },
       {
         repeat: 'FREQ=WEEKLY;BYDAY=FR',
         startsOn: dayKey(lastFriday - 14 * DAY_MS),
         time: '17:00',
-        nextRunAt: zonedDateTimeToEpoch(dayKey(nextFriday), '17:00', 'America/Los_Angeles'),
+        nextRunAt: zonedDateTimeToEpoch(
+          dayKey(nextFriday),
+          '17:00',
+          'America/Los_Angeles',
+        ),
         nextRunKey: dayKey(nextFriday),
-        lastRunAt: zonedDateTimeToEpoch(dayKey(lastFriday), '17:00', 'America/Los_Angeles') + 60_000,
-        lastRunDueAt: zonedDateTimeToEpoch(dayKey(lastFriday), '17:00', 'America/Los_Angeles'),
+        lastRunAt:
+          zonedDateTimeToEpoch(
+            dayKey(lastFriday),
+            '17:00',
+            'America/Los_Angeles',
+          ) + 60_000,
+        lastRunDueAt: zonedDateTimeToEpoch(
+          dayKey(lastFriday),
+          '17:00',
+          'America/Los_Angeles',
+        ),
         lastOutcome: 'done',
         createdAt: now - 21 * DAY_MS,
       },
@@ -2392,7 +2466,10 @@ async function buildScheduled(input: { now: number; encryption: HelmEncryption }
 }
 
 /** Two research items: a quick look still being made, and a thorough one that is done, with its overview, a comparison and three sources; then five saved to learn later (waiting for tonight, a comparison with two videos, steps, one put off twice, one the person lost interest in). */
-async function buildResearch(input: { now: number; encryption: HelmEncryption }) {
+async function buildResearch(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
   const { now, encryption } = input;
   const base = {
     mode: 'asked' as const,
@@ -2419,7 +2496,12 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     resultTopicId: null,
     removedAt: null,
   };
-  const noLearn = { moreAsked: [], videos: [], searchQuery: null, contextLine: null };
+  const noLearn = {
+    moreAsked: [],
+    videos: [],
+    searchQuery: null,
+    contextLine: null,
+  };
   const item = async (
     id: string,
     words: Omit<ResearchSealed, keyof typeof noLearn> & Partial<ResearchSealed>,
@@ -2429,7 +2511,10 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     doc: {
       ...base,
       ...fields,
-      sealed: await sealJson<ResearchSealed>({ ...noLearn, ...words }, encryption),
+      sealed: await sealJson<ResearchSealed>(
+        { ...noLearn, ...words },
+        encryption,
+      ),
     },
   });
   const nov13 = now - 3 * DAY_MS;
@@ -2441,7 +2526,12 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     createdAt: nov13,
     ...fields,
   });
-  const video = (videoId: string, title: string, channel: string, durationSec: number) => ({
+  const video = (
+    videoId: string,
+    title: string,
+    channel: string,
+    durationSec: number,
+  ) => ({
     videoId,
     title,
     channel,
@@ -2480,7 +2570,8 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     item(
       'seed-research-done',
       {
-        question: 'Which robot vacuum is worth it for a small apartment with a cat?',
+        question:
+          'Which robot vacuum is worth it for a small apartment with a cat?',
         subject: 'robot vacuums for a small apartment',
         overview: {
           summary:
@@ -2546,7 +2637,11 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
       learnWords('How do engines work?', 'how engines work', {
         moreAsked: ['what an ICE engine is'],
       }),
-      learn({ status: 'planned', prepareAt: now + 6 * 3_600_000, createdAt: now - DAY_MS }),
+      learn({
+        status: 'planned',
+        prepareAt: now + 6 * 3_600_000,
+        createdAt: now - DAY_MS,
+      }),
     ),
     item(
       'seed-learn-awd',
@@ -2554,8 +2649,18 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
         contextLine: 'while planning the Leavenworth drive',
         searchQuery: 'AWD vs 4WD explained',
         videos: [
-          video('M7lc1UVf-VE', 'AWD vs 4WD: what is the difference?', 'Car Explained', 540),
-          video('aqz-KE-bpKQ', 'How four-wheel drive works', 'Everyday Engineering', 780),
+          video(
+            'M7lc1UVf-VE',
+            'AWD vs 4WD: what is the difference?',
+            'Car Explained',
+            540,
+          ),
+          video(
+            'aqz-KE-bpKQ',
+            'How four-wheel drive works',
+            'Everyday Engineering',
+            780,
+          ),
         ],
         overview: {
           summary:
@@ -2590,25 +2695,29 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     ),
     item(
       'seed-learn-sourdough',
-      learnWords('How do sourdough starters work?', 'How sourdough starters work', {
-        overview: {
-          summary:
-            'A starter is flour and water that wild yeast and bacteria keep alive; you feed it on a rhythm and it lifts your bread.',
-          sections: [
-            {
-              heading: 'Getting one going',
-              points: [
-                'Mix equal weights of flour and water in a jar and cover it loosely.',
-                'Each day, keep a spoonful and feed it fresh flour and water.',
-                'After about a week it doubles within a few hours of feeding; that is when it is ready to bake with.',
-                'Keep it in the fridge and feed it weekly when you bake less.',
-              ],
-            },
-          ],
-          comparison: null,
-          form: 'steps',
+      learnWords(
+        'How do sourdough starters work?',
+        'How sourdough starters work',
+        {
+          overview: {
+            summary:
+              'A starter is flour and water that wild yeast and bacteria keep alive; you feed it on a rhythm and it lifts your bread.',
+            sections: [
+              {
+                heading: 'Getting one going',
+                points: [
+                  'Mix equal weights of flour and water in a jar and cover it loosely.',
+                  'Each day, keep a spoonful and feed it fresh flour and water.',
+                  'After about a week it doubles within a few hours of feeding; that is when it is ready to bake with.',
+                  'Keep it in the fridge and feed it weekly when you bake less.',
+                ],
+              },
+            ],
+            comparison: null,
+            form: 'steps',
+          },
         },
-      }),
+      ),
       learn({
         status: 'ready',
         preparedAt: now - 2 * DAY_MS,
@@ -2639,8 +2748,20 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
         status: 'ready',
         notNowStreak: 2,
         offers: [
-          { at: now - 2 * DAY_MS, dayKind: 'weekday', gapMinutes: 90, afterBusyDay: false, outcome: 'notNow' },
-          { at: now - DAY_MS, dayKind: 'weekday', gapMinutes: 75, afterBusyDay: false, outcome: 'notNow' },
+          {
+            at: now - 2 * DAY_MS,
+            dayKind: 'weekday',
+            gapMinutes: 90,
+            afterBusyDay: false,
+            outcome: 'notNow',
+          },
+          {
+            at: now - DAY_MS,
+            dayKind: 'weekday',
+            gapMinutes: 75,
+            afterBusyDay: false,
+            outcome: 'notNow',
+          },
         ],
         preparedAt: now - 5 * DAY_MS,
         startedAt: now - 5 * DAY_MS,
@@ -2661,7 +2782,10 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
 }
 
 /** Jamie's saved-to-learn questions: no pattern offer waits on Today, so a weekday evening shows the learn card. One is ready and never offered, one is still preparing, one was offered a week ago. */
-async function buildPartnerLearn(input: { now: number; encryption: HelmEncryption }) {
+async function buildPartnerLearn(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
   const { now, encryption } = input;
   const item = async (
     id: string,
@@ -2700,7 +2824,16 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
       removedAt: null,
       ...fields,
       sealed: await sealJson<ResearchSealed>(
-        { question, subject, overview, sources: [], moreAsked: [], videos: [], searchQuery: null, contextLine: null },
+        {
+          question,
+          subject,
+          overview,
+          sources: [],
+          moreAsked: [],
+          videos: [],
+          searchQuery: null,
+          contextLine: null,
+        },
         encryption,
       ),
     },
@@ -2710,7 +2843,12 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
       'seed-learn-jamie-sourdough',
       'How do I keep a sourdough starter alive?',
       'sourdough starters',
-      { status: 'ready', preparedAt: now - DAY_MS, startedAt: now - DAY_MS, createdAt: now - 3 * DAY_MS },
+      {
+        status: 'ready',
+        preparedAt: now - DAY_MS,
+        startedAt: now - DAY_MS,
+        createdAt: now - 3 * DAY_MS,
+      },
       {
         summary:
           'A starter is flour and water that wild yeast and bacteria keep fed; feed it regularly and it stays lively for years.',
@@ -2731,7 +2869,11 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
       'seed-learn-jamie-tides',
       'Why are there two tides a day?',
       'how tides work',
-      { status: 'planned', prepareAt: now + 6 * 3_600_000, createdAt: now - DAY_MS },
+      {
+        status: 'planned',
+        prepareAt: now + 6 * 3_600_000,
+        createdAt: now - DAY_MS,
+      },
       null,
     ),
     item(
@@ -2743,7 +2885,15 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
         preparedAt: now - 8 * DAY_MS,
         startedAt: now - 8 * DAY_MS,
         createdAt: now - 9 * DAY_MS,
-        offers: [{ at: now - 7 * DAY_MS, dayKind: 'weekday', gapMinutes: 80, afterBusyDay: null, outcome: 'yes' }],
+        offers: [
+          {
+            at: now - 7 * DAY_MS,
+            dayKind: 'weekday',
+            gapMinutes: 80,
+            afterBusyDay: null,
+            outcome: 'yes',
+          },
+        ],
       },
       {
         summary:
@@ -2757,7 +2907,10 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
 }
 
 /** Jamie's 🌱 Garden project with one offer already taken: its look into raised beds is ready with a topic filed, and Jamie has not been told yet, so the project page shows "Looked into raised beds for you." with Open it; and a 🎉 Family reunion project dated 24 days out with a second offer waiting and due today (a reunion place, three questions, nothing prefilled), already shown on a past Today so it stays on the project's page and Jamie's Today keeps the learn card, for a second reviewer to answer untouched. */
-async function buildPartnerAhead(input: { now: number; encryption: HelmEncryption }) {
+async function buildPartnerAhead(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
   const { now, encryption } = input;
   const today = getSeedToday(now);
   const project = {
@@ -2800,6 +2953,9 @@ async function buildPartnerAhead(input: { now: number; encryption: HelmEncryptio
         importance: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
         aheadAsks: {
           'seed-ahead-raised-beds': {
             subject: 'raised beds',
@@ -2922,11 +3078,16 @@ async function buildPartnerAhead(input: { now: number; encryption: HelmEncryptio
         importance: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
         aheadAsks: {
           'seed-ahead-reunion': {
             subject: 'reunion places',
-            question: 'Where could a family reunion for about twenty people happen?',
-            whyNow: "Once I know who's coming and roughly where, I can find places that fit.",
+            question:
+              'Where could a family reunion for about twenty people happen?',
+            whyNow:
+              "Once I know who's coming and roughly where, I can find places that fit.",
             isDecision: true,
             questions: [
               {
@@ -3259,6 +3420,7 @@ async function buildNoteTurn(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -3290,6 +3452,9 @@ async function buildNoteTurn(input: {
         links: [],
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
@@ -3686,6 +3851,9 @@ async function buildKnowledge(input: {
           links: [],
           privateMark: null,
           isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         },
         encryption,
       ),
@@ -3986,6 +4154,7 @@ async function buildKnowledge(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -4060,6 +4229,7 @@ async function buildKnowledge(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -4102,6 +4272,9 @@ async function buildKnowledge(input: {
           ],
           privateMark: null,
           isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         },
         encryption,
       ),
@@ -4835,6 +5008,9 @@ async function buildPhotoTurns(input: {
         meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
@@ -4892,6 +5068,7 @@ async function buildPhotoTurns(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -5223,6 +5400,9 @@ async function buildFileTurns(input: {
         meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id, task };
@@ -5265,6 +5445,7 @@ async function buildFileTurns(input: {
       effects: fields.effects,
       undoReport: null,
       spoken: fields.spoken,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: fields.lines ?? [],
@@ -5328,6 +5509,9 @@ async function buildFileTurns(input: {
       links: [],
       privateMark: null,
       isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
     }),
   };
   const topic: Topic = {
@@ -5968,6 +6152,9 @@ async function buildPeople(input: {
         meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     },
   });
@@ -6956,6 +7143,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           voiceMode: 'cloudWhenOnline',
           isWakeWordOn: false,
           isHandsFreeOn: true,
+          whisperHeld: null,
           hasSeenVoiceNotice: null,
           selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
           currentPlace: null,
@@ -7081,7 +7269,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             const tasks = await Promise.all(
               sortedTasks.map(async ({ id, title, due }) => {
                 const task: Task = {
-                  privacy: 'ordinary',
+                  privacy: QUIET_TASK_IDS.has(id) ? 'private' : 'ordinary',
                   status: 'open',
                   importance: null,
                   isUrgent: false,
@@ -7113,8 +7301,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       notes: null,
                       steps: {},
                       meetingLabel: null,
-                      privateMark: null,
+                      privateMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
                       isPrivacyCleared: false,
+                      quietMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
+                      quietUntil: null,
+                      isQuietCleared: false,
                     },
                     encryption,
                   ),
@@ -7167,7 +7358,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       })),
                       effects,
                       undoReport: null,
-                      spoken: spoken ?? null,
+                      ...holdQuietSpoken(
+                        spoken ?? null,
+                        sortedTasks.some(({ id }) => QUIET_TASK_IDS.has(id)),
+                      ),
                       goneIds: null,
                       undoReason: null,
                       lines: [],
@@ -7326,6 +7520,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   meetingLabel: null,
                   privateMark: null,
                   isPrivacyCleared: false,
+                  quietMark: null,
+                  quietUntil: null,
+                  isQuietCleared: false,
                 },
                 encryption,
               ),
@@ -7846,7 +8043,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             1 +
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
-            (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
+            (habitWorld
+              ? habitWorld.habits.length + habitWorld.days.length
+              : 0) +
             (scheduledWorld ? scheduledWorld.length : 0) +
             (researchWorld ? researchWorld.length : 0) +
             (learning

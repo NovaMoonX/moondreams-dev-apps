@@ -13,6 +13,7 @@ import {
 import { planOfferResearch, type OfferTarget } from './planResearchAhead.js';
 import type { AheadOfferMeta } from './researchAhead.js';
 import { whyFingerprint } from '../goalWhy.js';
+import type { PrivacyFacts } from '../privacy.js';
 import {
   buildMilestoneLine,
   buildMilestonesFullLine,
@@ -147,6 +148,8 @@ export function planProjectRoles(input: {
   captureId: string;
   now: number;
   seal: (fields: Record<string, unknown>) => SealedPayload;
+  /** What the project this turn starts says about being private and quiet, when a quiet command marked it. */
+  createdFacts?: PrivacyFacts | null;
 }): {
   creates: { id: string; data: Record<string, unknown> }[];
   updates: { id: string; data: Record<string, unknown> }[];
@@ -404,6 +407,7 @@ export function planProjectRoles(input: {
     return {
       id,
       data: {
+        ...(input.createdFacts && { privacy: 'private' }),
         targetDate: command.targetDate,
         researchOffers: madeOffers.map((entry) => entry.meta),
         kind: command.projectKind,
@@ -432,6 +436,13 @@ export function planProjectRoles(input: {
           ),
           roleNotes,
           aheadAsks: madeOffers.length > 0 ? toAsks(id) : null,
+          ...(input.createdFacts && {
+            privateMark: input.createdFacts.privateMark,
+            isPrivacyCleared: input.createdFacts.isPrivacyCleared,
+            quietMark: input.createdFacts.quietMark ?? null,
+            quietUntil: input.createdFacts.quietUntil ?? null,
+            isQuietCleared: input.createdFacts.isQuietCleared ?? false,
+          }),
         }),
       },
       milestoneEffects: [
@@ -645,6 +656,7 @@ export function buildGoalCreate(input: {
   const { created } = settleProjectStart({
     command: {
       kind: 'createProject',
+      ref: null,
       name: input.name,
       emoji: null,
       objective: null,

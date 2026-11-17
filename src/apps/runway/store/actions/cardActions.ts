@@ -1,4 +1,10 @@
-import { doc, runTransaction, type Transaction } from 'firebase/firestore';
+import {
+  deleteDoc,
+  doc,
+  runTransaction,
+  setDoc,
+  type Transaction,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -25,6 +31,8 @@ import type {
   MoveDoc,
   PlanDoc,
   RunwayEncryption,
+  StartedPaymentDoc,
+  StartedPaymentSealed,
   StartSealed,
 } from '@apps/runway/types';
 
@@ -310,4 +318,32 @@ export async function undoCardPayment(
     } satisfies MoveDoc);
     transaction.set(changeRef(uid, change.id), change);
   });
+}
+
+const startedPaymentRef = (uid: string, id: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'startedPayments', id);
+
+/** Notes a card payment the person started at their bank, which waits until the bank shows it; returns its id for an Undo. Needs a connection. */
+export async function startCardPayment(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: { cardId: string; amountCents: Cents; startedOn: DateOnly },
+): Promise<string> {
+  const id = generateUuid();
+  await setDoc(startedPaymentRef(uid, id), {
+    id,
+    cardId: input.cardId,
+    startedOn: input.startedOn,
+    createdAt: Date.now(),
+    sealed: await sealJson(
+      { amountCents: input.amountCents } satisfies StartedPaymentSealed,
+      encryption,
+    ),
+  } satisfies StartedPaymentDoc);
+  return id;
+}
+
+/** Forgets a started payment: one the person didn't make after all, or an Undo. */
+export async function removeStartedPayment(uid: string, id: string) {
+  await deleteDoc(startedPaymentRef(uid, id));
 }

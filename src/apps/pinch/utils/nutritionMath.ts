@@ -79,14 +79,14 @@ const addUp = (
     { values: NO_VALUES, missing: [] },
   );
 
-/** A recipe's nutrition per serving: added up from its lines unless the person typed their own for a metric. A line with no amount adds nothing and is never missing. */
+/** A recipe's nutrition per serving: added up from its lines unless the person typed their own for a metric. A line with no amount, or that isn't a kitchen ingredient, adds nothing and is never missing. */
 export function getRecipeNutrition(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): NutritionResult {
   const summed = addUp(
     recipe.ingredients.flatMap((line) =>
-      line.amount === null
+      line.amount === null || line.ingredientId === null
         ? []
         : [
             {
