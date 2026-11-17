@@ -109,15 +109,25 @@ export function getMoneyHistory(input: MoneyHistoryInput): MoneyPoint[] {
               purchases: [],
               closing: null,
               asOf: startDate,
+              bankOwedByCard: undefined,
             }),
           ),
         ]
       : [];
+  // The starting day reads each card as the person entered it: the bank's figure is today's, and the ledger's own card sum is what it corrects.
   const step = getStepDays(Math.round((today - from) / DAY_MS));
   const recent = listSampleDays(windowFrom, today, step).map((day) =>
     day === today
       ? toPoint(today, deriveBalances(balances))
-      : toPoint(day, deriveBalancesBefore(balances, day + DAY_MS)),
+      : toPoint(
+          day,
+          deriveBalancesBefore(
+            day === startDate
+              ? { ...balances, bankOwedByCard: undefined }
+              : balances,
+            day + DAY_MS,
+          ),
+        ),
   );
   const result = [...startPoint, ...early, ...recent];
   return result;

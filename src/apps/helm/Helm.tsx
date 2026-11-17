@@ -199,7 +199,10 @@ function HelmApp() {
           <ConnectionPage grantId={grant} onBack={goBack} />
         )}
         {!isLocked && view === 'assistants' && (
-          <ConnectedAssistantsScreen onBack={goBack} />
+          <ConnectedAssistantsScreen
+            onBack={goBack}
+            onOpenConnectedApps={() => showView('connectedApps')}
+          />
         )}
         {!isLocked && view === 'people' && (
           <WhoView
