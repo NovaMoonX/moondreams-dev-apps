@@ -45,6 +45,8 @@ const question = (
   dateMode: null,
   number: null,
   aboutRef: null,
+  lead: null,
+  undoChoices: [],
   answer: null,
 });
 
@@ -231,6 +233,24 @@ test('a finish phrase after words sends the words and does not reopen listening'
     text: 'Add milk',
     isFinish: false,
   });
+});
+
+test("each shared finish phrase that was also Helm's closes whole and at the end", () => {
+  ["that's all", "that's it", "that's everything", "i'm done"].forEach(
+    (phrase) => {
+      assert.deepEqual(turn(phrase), {
+        kind: 'close',
+        close: { kind: 'finish', position: 'whole', rest: '' },
+      });
+      assert.deepEqual(turn(`Add milk, ${phrase}`), {
+        kind: 'send',
+        text: 'Add milk',
+        isFinish: true,
+      });
+    },
+  );
+  assert.equal(turn("tell Sam I'm done").kind, 'send');
+  assert.equal(turn('add milk thats all').kind, 'send');
 });
 
 test('a close drops unsent words, leaves unfiled questions and skips filed ones', () => {

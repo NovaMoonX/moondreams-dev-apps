@@ -7,6 +7,7 @@ import { Stethoscope } from 'lucide-react';
 import CopyTextButton from '@/components/CopyTextButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import LinkedText from '@/components/LinkedText';
 import MarkdownText from '@/components/MarkdownText';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -18,6 +19,7 @@ import { formatDateShort } from '@/utils/formatUtils';
 import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import { NoteTopicsFields } from '@apps/helm/components/knowledge/NoteTopicsSheet';
+import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
@@ -141,9 +143,11 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
           ? HELM_COPY.noteWrote(formatDateShort(note.createdAt))
           : note.source === 'capture'
             ? HELM_COPY.noteFromWhatYouSaid(formatDateShort(note.createdAt))
-            : note.isFromGeneralAnswer
-              ? `${HELM_COPY.noteSavedFromAnswer} · ${formatDateShort(note.createdAt)}`
-              : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
+            : note.source === 'outside'
+              ? HELM_COPY.noteAdded(formatDateShort(note.createdAt))
+              : note.isFromGeneralAnswer
+                ? `${HELM_COPY.noteSavedFromAnswer} · ${formatDateShort(note.createdAt)}`
+                : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
         ...(note.isFromGeneralAnswer
           ? [
               note.checkedAt === null
@@ -215,6 +219,19 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                 <span className='min-w-0'>{HELM_COPY.answerHealthCaution}</span>
               </p>
             )}
+            {note.source === 'outside' && (
+              <p className='text-muted-foreground flex min-w-0 items-center gap-1.5 text-[13px]'>
+                <OutsideMark
+                  via={note.via || HELM_COPY.outsideUnnamed}
+                  isSmall
+                />
+                <span className='truncate'>
+                  {HELM_COPY.noteSavedFromOutside(
+                    note.via || HELM_COPY.outsideUnnamed,
+                  )}
+                </span>
+              </p>
+            )}
             {note.body &&
               (note.source === 'importedFile' ? (
                 <MarkdownText
@@ -224,6 +241,24 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
               ) : (
                 <LinkedText text={note.body} className='text-[15px]' />
               ))}
+            {note.links.length > 0 && (
+              <div className='space-y-1'>
+                <p className='text-muted-foreground text-[13px]'>
+                  {HELM_COPY.noteLinks}
+                </p>
+                <ul className='space-y-1'>
+                  {note.links.map((link) => (
+                    <li key={link.url} className='flex min-w-0'>
+                      <ExternalLinkText
+                        href={link.url}
+                        label={link.title || undefined}
+                        className='text-[15px]'
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <KeptMediaSection record={{ kind: 'note', id: note.id }} />
             <div>
               <PrivateRow kind='note' record={note} title={note.title} />

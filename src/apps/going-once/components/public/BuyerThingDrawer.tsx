@@ -1,15 +1,17 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Camera, ExternalLink } from 'lucide-react';
+import { CalendarDays, Camera, ExternalLink } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import DetailSheet from '@/components/DetailSheet';
 import PhotoStrip from '@/components/PhotoStrip';
 import InlineNotice from '@/components/InlineNotice';
+import { formatDayRuns } from '@/utils/dayRunUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import InterestView from '@apps/going-once/components/public/InterestView';
+import type { DaysAnswer } from '@apps/going-once/utils/pickupDays';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
@@ -22,6 +24,10 @@ interface BuyerThingDrawerProps {
   linkId: string;
   /** How the sale says buyers can pay; shown on the interest form. */
   paymentMethods: string[];
+  /** The sale's pickup days that haven't passed. */
+  openDays: number[];
+  daysAnswer: DaysAnswer;
+  onDaysAnswered: (answer: DaysAnswer) => void;
   onClose: () => void;
 }
 
@@ -30,6 +36,9 @@ function BuyerThingDrawer({
   thing,
   linkId,
   paymentMethods,
+  openDays,
+  daysAnswer,
+  onDaysAnswered,
   onClose,
 }: BuyerThingDrawerProps) {
   const [isAsking, setIsAsking] = useState(false);
@@ -96,6 +105,9 @@ function BuyerThingDrawer({
           thing={thing}
           linkId={linkId}
           paymentMethods={paymentMethods}
+          openDays={openDays}
+          daysAnswer={daysAnswer}
+          onDaysAnswered={onDaysAnswered}
           footerNode={footerNode}
           onBack={() => setIsAsking(false)}
           onDone={onClose}
@@ -133,6 +145,17 @@ function BuyerThingDrawer({
         </div>
         {facts.length > 0 && (
           <p className='text-muted-foreground text-sm'>{facts.join(' · ')}</p>
+        )}
+        {openDays.length > 0 && (
+          <p className='text-muted-foreground flex items-start gap-1.5 text-sm'>
+            <CalendarDays
+              className='mt-0.5 h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='min-w-0 text-pretty'>
+              Pickups {formatDayRuns(openDays)}
+            </span>
+          </p>
         )}
         {thing.description !== null && (
           <p className='text-sm wrap-break-word whitespace-pre-wrap'>

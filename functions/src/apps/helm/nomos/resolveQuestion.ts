@@ -176,6 +176,7 @@ const isHeld = (value: unknown): value is Record<string, unknown> =>
     Array.isArray(value.taskIds) ||
     Array.isArray(value.childIds) ||
     Array.isArray(value.factIds) ||
+    Array.isArray(value.choices) ||
     typeof value.keyDateId === 'string');
 
 const isOption = (value: unknown): value is PickOption =>
@@ -199,6 +200,58 @@ const hasNewDetails = (held: Record<string, unknown>, isPlace: boolean) =>
 const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
 ];
+
+/** What answering an offer to take something back writes: only the answer. The undo itself is the person's own device acting on the held choice, so the server writes no record and no execution. */
+function planUndoOfferAnswer(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+): ResolvePlan {
+  const { questionId, optionId, now, capture } = input;
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...capture.questionState[questionId], answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null,
+  );
+  return {
+    taskUpdates: [],
+    whoCreate: null,
+    placeCreate: null,
+    factCreate: null,
+    factUpdates: [],
+    keyDateUpdate: null,
+    whoUpdate: null,
+    noteUpdate: null,
+    topicUpdates: [],
+    execution: null,
+    isStale: false,
+    capture: {
+      questionState,
+      sealed: {
+        ...input.opened,
+        questions: {
+          ...oldQuestions,
+          [questionId]: {
+            ...question,
+            answer: {
+              by: input.by,
+              at: now,
+              turnCaptureId: null,
+              shape: question.shape === 'yesNo' ? 'yesNo' : 'pickOne',
+              optionId,
+              otherText: null,
+            },
+          },
+        },
+      },
+      status:
+        !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+      executionIds: capture.executionIds,
+    },
+  };
+}
 
 /** Closes a "which is true now?" question whose facts are no longer in dispute with each other, marked stale; a survivor still pointing at a partner that is gone or no longer points back is freed, and nothing else is written. */
 function closeStale(
@@ -445,6 +498,8 @@ function planSettle(
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: { captureId: input.captureId, questionId },
     errorCode: null,
     createdAt: now,
@@ -459,6 +514,7 @@ function planSettle(
       undoReport: null,
       goneIds: null,
       heldSpoken: null,
+      undoReason: null,
       said: null,
       lines: null,
       spoken: null,
@@ -611,6 +667,8 @@ function planSettleKeyDate(
         linkedPlaceIds: [],
         undoesExecutionId: null,
         undoneByExecutionId: null,
+        undoneDocIds: null,
+        partUndoIds: null,
         questionRef: { captureId: input.captureId, questionId },
         errorCode: null,
         createdAt: now,
@@ -623,6 +681,7 @@ function planSettleKeyDate(
           undoReport: null,
           goneIds: null,
           heldSpoken: null,
+          undoReason: null,
           said: null,
           lines: null,
           spoken: null,
@@ -763,6 +822,8 @@ function planFileNote(
           linkedPlaceIds: [],
           undoesExecutionId: null,
           undoneByExecutionId: null,
+          undoneDocIds: null,
+          partUndoIds: null,
           questionRef: { captureId: input.captureId, questionId },
           errorCode: null,
           createdAt: now,
@@ -775,6 +836,7 @@ function planFileNote(
             undoReport: null,
             goneIds: null,
             heldSpoken: null,
+            undoReason: null,
             said: null,
             lines: null,
             spoken: null,
@@ -879,6 +941,8 @@ function planGroup(
         linkedPlaceIds: [],
         undoesExecutionId: null,
         undoneByExecutionId: null,
+        undoneDocIds: null,
+        partUndoIds: null,
         questionRef: { captureId: input.captureId, questionId },
         errorCode: null,
         createdAt: now,
@@ -891,6 +955,7 @@ function planGroup(
           undoReport: null,
           goneIds: null,
           heldSpoken: null,
+          undoReason: null,
           said: null,
           lines: null,
           spoken: null,
@@ -977,6 +1042,12 @@ export function planResolve(
   }
   if (!options.some((option) => option.id === optionId)) {
     return { refused: 'unknown' };
+  }
+  if (held.kind === 'undoOffer') {
+    return {
+      refused: null,
+      plan: planUndoOfferAnswer(input, question, oldQuestions),
+    };
   }
   if (held.kind === 'groupTopics') {
     return planGroup(input, question, held, oldQuestions);
@@ -1149,6 +1220,8 @@ export function planResolve(
           linkedPlaceIds: isPlace && targetId ? [targetId] : [],
           undoesExecutionId: null,
           undoneByExecutionId: null,
+          undoneDocIds: null,
+          partUndoIds: null,
           questionRef: {
             captureId: input.captureId,
             questionId,
@@ -1164,6 +1237,7 @@ export function planResolve(
             undoReport: null,
             goneIds: null,
             heldSpoken: null,
+            undoReason: null,
             said: null,
             lines: null,
             spoken: null,

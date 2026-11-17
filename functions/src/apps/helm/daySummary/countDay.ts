@@ -16,6 +16,8 @@ export const SUMMARY_RETRY_MS = 2 * 60 * MINUTE_MS;
 /** A turn still marked as being sorted after this long has stalled, and no longer holds the night run back. */
 export const SUMMARY_STALLED_MS = 60 * MINUTE_MS;
 export const SUMMARY_MAX_CHARS = 220;
+/** A summary waiting on its batch is left alone this long; after it, opening the day writes it live. Same value on the device. */
+export const SUMMARY_BATCH_WAIT_MS = 6 * 60 * MINUTE_MS;
 
 export interface HelmDayCounts {
   messages: number;
@@ -47,9 +49,11 @@ export interface DayExecution {
   state: string;
   category: string;
   undoneByExecutionId: string | null;
+  /** Records a partial undo already took back; what they wrote counts for nothing. */
+  undoneDocIds: string[];
   /** Made for an outside assistant's turn. */
   isOutside: boolean;
-  effectRefs: { op: string; collection: string }[];
+  effectRefs: { op: string; collection: string; docId: string }[];
 }
 
 interface DayBounds {
@@ -134,7 +138,10 @@ export const countHelmDay = (input: {
     .reduce<HelmDayCounts>(
       (counts, execution) => ({
         ...execution.effectRefs.reduce((acc, ref) => {
-          const key = ref.op === 'create' ? ADDED_KEY[ref.collection] : null;
+          const key =
+            ref.op === 'create' && !execution.undoneDocIds.includes(ref.docId)
+              ? ADDED_KEY[ref.collection]
+              : null;
           return key ? { ...acc, [key]: acc[key] + 1 } : acc;
         }, counts),
         planned: counts.planned + (execution.category === 'plan' ? 1 : 0),
@@ -246,6 +253,8 @@ export interface SummaryExisting {
   status: string;
   attempts: number;
   writtenAt: number;
+  batchId: string | null;
+  batchedAt: number | null;
 }
 
 export interface SummaryDueInput {
@@ -269,12 +278,29 @@ export const getSummaryDay = (now: number, timeZone: string) => {
   };
 };
 
+/** The night run's claim before its batch is sent; it outlives one run so a run that dies after claiming frees the day for the next. */
+export const PENDING_BATCH = 'pending';
+export const SUMMARY_PENDING_WAIT_MS = 15 * 60 * 1000;
+
+/** Counted and sent to a batch recently enough that its result is still expected. */
+export const isWaitingOnBatch = (
+  existing: Pick<SummaryExisting, 'batchId' | 'batchedAt'>,
+  now: number,
+) =>
+  existing.batchId !== null &&
+  existing.batchedAt !== null &&
+  now - existing.batchedAt <
+    (existing.batchId === PENDING_BATCH
+      ? SUMMARY_PENDING_WAIT_MS
+      : SUMMARY_BATCH_WAIT_MS);
+
 export const isSummaryMissing = (
   existing: SummaryExisting | null,
   now: number,
 ) =>
   existing === null ||
   (existing.status === 'counted' &&
+    !isWaitingOnBatch(existing, now) &&
     existing.attempts < SUMMARY_MAX_ATTEMPTS &&
     now - existing.writtenAt >= SUMMARY_RETRY_MS);
 
@@ -317,10 +343,12 @@ const readName = (written: Record<string, unknown>) =>
 /** Titles of what one execution made or finished, from its opened effects and their refs. */
 export const toEffectTitles = (
   effects: { written?: Record<string, unknown> }[],
-  refs: { op: string; collection: string }[],
+  refs: { op: string; collection: string; docId?: string }[],
+  undoneDocIds: string[] = [],
 ): string[] =>
   effects.flatMap((effect, index) => {
     const ref = refs[index];
+    if (ref?.docId && undoneDocIds.includes(ref.docId)) return [];
     const written = effect.written ?? {};
     const isMade = ref?.op === 'create';
     const isDone =

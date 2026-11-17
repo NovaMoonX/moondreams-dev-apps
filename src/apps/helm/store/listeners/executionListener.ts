@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { readUndoFields } from '@apps/helm/nomos/planUndo';
 import type { SealedReader } from '@lib/security';
 
 import type {
@@ -46,6 +47,7 @@ export async function openExecution(
     linkedPlaceIds: data.linkedPlaceIds ?? [],
     undoesExecutionId: data.undoesExecutionId ?? null,
     undoneByExecutionId: data.undoneByExecutionId ?? null,
+    ...readUndoFields(data),
     via: typeof data.via === 'string' ? data.via : null,
     questionRef: data.questionRef ?? null,
     errorCode: data.errorCode ?? null,
@@ -67,6 +69,7 @@ export async function openExecution(
       heldSpoken:
         typeof payload.heldSpoken === 'string' ? payload.heldSpoken : null,
       goneIds: payload.goneIds ?? null,
+      undoReason: payload.undoReason ?? null,
       lines: payload.lines ?? [],
       isUnreadable: false,
     };
@@ -80,6 +83,7 @@ export async function openExecution(
       spoken: null,
       heldSpoken: null,
       goneIds: null,
+      undoReason: null,
       lines: [],
       isUnreadable: true,
     };

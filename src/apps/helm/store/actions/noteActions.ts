@@ -106,6 +106,8 @@ export async function createNote(
       {
         title: words.title,
         body: words.body,
+        via: null,
+        links: [],
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,
@@ -406,6 +408,8 @@ export async function saveAnswerAsNote(
       {
         title: words.title,
         body: words.body,
+        via: null,
+        links: [],
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,
