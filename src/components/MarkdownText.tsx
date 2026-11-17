@@ -1,14 +1,22 @@
-import { Children, isValidElement, type ReactNode } from 'react';
+import { Children, isValidElement, useMemo, type ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ExternalLink } from 'lucide-react';
 import Markdown, { type Components } from 'react-markdown';
 
-import ExternalLinkText from '@/components/ExternalLinkText';
+import { createLinkGate, labelForLink } from '@/utils/proseUtils';
 
 interface MarkdownTextProps {
   text: string;
   className?: string;
+  allowedLinks?: ReadonlySet<string> | null;
 }
+
+const isWebUrl = createLinkGate(null);
+const keepWebUrl = (url: string) => (isWebUrl(url) ? url : '');
+
+const LONG_WORD = 20;
+const TAIL = 4;
 
 const toPlainText = (node: ReactNode): string =>
   Children.toArray(node)
@@ -20,6 +28,35 @@ const toPlainText = (node: ReactNode): string =>
           : '',
     )
     .join('');
+
+const splitTail = (label: string) => {
+  const trimmed = label.trim();
+  const at = trimmed.search(/\S+$/);
+  const word = trimmed.slice(at);
+  const cut = word.length > LONG_WORD ? word.length - TAIL : 0;
+  return { head: trimmed.slice(0, at + cut), tail: word.slice(cut) };
+};
+
+function ProseLink({ href, label }: { href: string; label: string }) {
+  const { head, tail } = splitTail(label);
+  return (
+    <a
+      href={href}
+      target='_blank'
+      rel='noopener noreferrer'
+      className='text-primary decoration-primary box-decoration-clone py-0.5 break-words underline underline-offset-2 hover:no-underline'
+    >
+      {head}
+      <span className='whitespace-nowrap'>
+        {tail}
+        <ExternalLink
+          className='ml-0.5 inline-block size-3 align-[-1px]'
+          aria-hidden='true'
+        />
+      </span>
+    </a>
+  );
+}
 
 const COMPONENTS: Components = {
   h1: ({ children }) => (
@@ -38,7 +75,7 @@ const COMPONENTS: Components = {
     </h5>
   ),
   p: ({ children }) => (
-    <p className='text-foreground text-[15px] leading-[22px] break-words'>
+    <p className='text-[15px] leading-[22px] text-pretty break-words'>
       {children}
     </p>
   ),
@@ -47,8 +84,11 @@ const COMPONENTS: Components = {
       {children}
     </ul>
   ),
-  ol: ({ children }) => (
-    <ol className='ml-5 list-decimal space-y-1 text-[15px] leading-[22px]'>
+  ol: ({ children, start }) => (
+    <ol
+      start={start}
+      className='ml-5 list-decimal space-y-1 text-[15px] leading-[22px]'
+    >
       {children}
     </ol>
   ),
@@ -56,8 +96,9 @@ const COMPONENTS: Components = {
   strong: ({ children }) => (
     <strong className='font-semibold'>{children}</strong>
   ),
+  em: ({ children }) => <em className='italic'>{children}</em>,
   blockquote: ({ children }) => (
-    <blockquote className='border-border text-muted-foreground border-l-2 pl-3'>
+    <blockquote className='border-muted-foreground/40 space-y-2 border-l-2 pl-3'>
       {children}
     </blockquote>
   ),
@@ -77,24 +118,37 @@ const COMPONENTS: Components = {
     </pre>
   ),
   hr: () => <hr className='border-border' />,
-  a: ({ href, children }) =>
-    href ? (
-      <ExternalLinkText
-        href={href}
-        label={toPlainText(children) || undefined}
-        className='text-[length:inherit]'
-      />
-    ) : (
-      <span>{children}</span>
-    ),
   img: ({ alt }) => (alt ? <span>{alt}</span> : null),
 };
 
-/** Markdown drawn in the theme's tokens: links open outside, a picture shows only as its description, and raw HTML shows as plain text. */
-function MarkdownText({ text, className }: MarkdownTextProps) {
+/** Markdown drawn in the theme's tokens (text takes the colour of what holds it): only http(s) links are links, and they open outside, a picture shows only as its description, and raw HTML shows as plain text. */
+function MarkdownText({
+  text,
+  className,
+  allowedLinks = null,
+}: MarkdownTextProps) {
+  const components = useMemo<Components>(() => {
+    const gate = createLinkGate(allowedLinks);
+    return {
+      ...COMPONENTS,
+      a: ({ href, children }) => {
+        const safe = gate(href);
+        return safe ? (
+          <ProseLink
+            href={safe}
+            label={labelForLink(toPlainText(children) || safe, safe)}
+          />
+        ) : (
+          <span>{children}</span>
+        );
+      },
+    };
+  }, [allowedLinks]);
   return (
     <div className={join('space-y-2', className)}>
-      <Markdown components={COMPONENTS}>{text}</Markdown>
+      <Markdown components={components} urlTransform={keepWebUrl}>
+        {text}
+      </Markdown>
     </div>
   );
 }

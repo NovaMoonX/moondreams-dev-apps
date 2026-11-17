@@ -1,5 +1,6 @@
 import { toDateInputValue, fromDateInputValue } from '@/utils/dateInputUtils';
 import { formatList } from '@/utils/formatUtils';
+import { getLineIngredientIds } from '@apps/pinch/utils/freeLines';
 import {
   MAX_NAME_LENGTH,
   MAX_PACKAGE_HISTORY,
@@ -1316,7 +1317,7 @@ export const getUseItUpRecipes = (
     )
     .map((recipe) => {
       const dueIds = Array.from(
-        new Set(recipe.ingredients.map((line) => line.ingredientId)),
+        new Set(getLineIngredientIds(recipe.ingredients)),
       )
         .filter((id) => id !== ingredientId && getDue(id) !== undefined)
         .sort(

@@ -690,6 +690,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       voiceMode: 'cloudWhenOnline',
       isWakeWordOn: false,
       isHandsFreeOn: true,
+      whisperHeld: null,
       hasSeenVoiceNotice: null,
       selfWhoId: 'self',
       currentPlace: null,
@@ -938,6 +939,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           roleNotes: {},
           privateMark: isPrivateProject(index) ? 'person' : null,
           isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         }),
       };
       return { id, project };
@@ -1175,6 +1179,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         steps: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id: `scale-task-${pad(index, 3)}`, task };
@@ -1341,6 +1348,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         links: [],
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id, note };

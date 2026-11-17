@@ -246,7 +246,9 @@ const SEED_PURCHASES: Record<string, object> = {
     format: 'IMAX',
     priceCents: 2149,
     standardPriceCents: 1489,
+    taxCents: 182,
     purchaseUrl: 'https://www.amctheatres.com/order/seed/starlight',
+    isDiscountDay: false,
     startedAt: null,
   },
 };
@@ -260,6 +262,7 @@ const SEED_TICKETS: Record<string, Ticket> = {
     feeAvoidedCents: 0,
     taxRate: 0.081,
     taxCents: 126,
+    taxChoice: null,
     totalCents: 1682,
   },
   'seed-viewing-dune-1': {
@@ -270,6 +273,7 @@ const SEED_TICKETS: Record<string, Ticket> = {
     feeAvoidedCents: 150,
     taxRate: 0.075,
     taxCents: 150,
+    taxChoice: null,
     totalCents: 2299,
   },
   'seed-viewing-day9-3': {
@@ -280,6 +284,7 @@ const SEED_TICKETS: Record<string, Ticket> = {
     feeAvoidedCents: 150,
     taxRate: 0.075,
     taxCents: 139,
+    taxChoice: null,
     totalCents: 2139,
   },
 };

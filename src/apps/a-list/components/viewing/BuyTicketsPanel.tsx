@@ -54,7 +54,7 @@ function BuyTicketsPanel({
         type='button'
         variant='link'
         size='sm'
-        className='h-10'
+        className='h-auto! min-h-10 text-center whitespace-normal!'
         onClick={onEnterManually}
       >
         Already bought it somewhere else? Add what you paid
