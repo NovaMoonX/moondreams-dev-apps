@@ -138,24 +138,105 @@ const twice = addHeldWrites(
   [hold({ id: 'a', cents: 2 }, 'a', 't1')],
   [hold({ id: 'a', cents: 3 }, 'a', 't2')],
 );
-assert.equal(
-  twice.length,
-  1,
-  'the newest write of a record replaces the older hold',
+assert.deepEqual(
+  twice.map((entry) => entry.token),
+  ['t2'],
+  'a newer write of the same fields takes them over from the older hold',
 );
-assert.equal(twice[0].token, 't2');
 assert.equal(
   settleHeldWrites(twice, 't1', 50)[0].settledAt,
   null,
   'an older write settling never settles the newer one',
 );
 assert.equal(settleHeldWrites(twice, 't2', 50)[0].settledAt, 50);
+assert.deepEqual(dropHeldWrites(twice, 't2'), [], 'a failed write drops');
 assert.deepEqual(
-  dropHeldWrites(twice, 't1').length,
-  1,
-  'only the failed write drops',
+  addHeldWrites(twice, [hold({ id: 'a', cents: 4 }, 'a', 't2')]).map(
+    (entry) => entry.token,
+  ),
+  ['t2'],
+  "a write's retry replaces its own hold",
 );
-assert.deepEqual(dropHeldWrites(twice, 't2'), []);
+
+const undone = addHeldWrites(
+  [hold({ id: 'a', cents: 9 }, 'a', 't1', null, ['cents'])],
+  [hold({ id: 'a', cents: 1 }, 'a', 't2', null, ['cents'])],
+);
+assert.deepEqual(
+  apply([{ id: 'a', cents: 1 }], undone).list[0].cents,
+  1,
+  'an Undo that puts a field back never leaves the older value showing',
+);
+assert.deepEqual(
+  apply(
+    [],
+    addHeldWrites(
+      [hold({ id: 'a', cents: 9 }, 'a', 't1')],
+      [hold(null, 'a', 't2')],
+    ),
+  ).list,
+  [],
+  'a create taken back before the list shows it stays gone',
+);
+
+const trimmed = addHeldWrites(
+  [
+    hold({ id: 'a', cents: 9, meta: { a: 2, b: 2 } }, 'a', 't1', null, [
+      'cents',
+      'meta',
+    ]),
+  ],
+  [
+    hold({ id: 'a', cents: 1, meta: { a: 2, b: 2 } }, 'a', 't2', null, [
+      'cents',
+    ]),
+  ],
+);
+assert.deepEqual(
+  trimmed[0].fields,
+  ['meta'],
+  'an older hold keeps only the fields it alone wrote',
+);
+assert.equal(
+  trimmed[0].item?.cents,
+  1,
+  'and its item carries the newer value of a field taken over, so a list filtering on it reads it right',
+);
+
+const overlapping = [
+  hold({ id: 'a', cents: 9, meta: { a: 1, b: 1 } }, 'a', 't1', null, ['cents']),
+  hold({ id: 'a', cents: 1, meta: { a: 5, b: 5 } }, 'a', 't2', null, ['meta']),
+];
+const bothShow = apply(
+  [{ id: 'a', cents: 1, meta: { a: 1, b: 1 } }],
+  addHeldWrites([overlapping[0]], [overlapping[1]]),
+);
+assert.deepEqual(
+  bothShow.list[0],
+  { id: 'a', cents: 9, meta: { a: 5, b: 5 } },
+  'two writes in flight on one record both show',
+);
+const firstLanded = apply(
+  [{ id: 'a', cents: 9, meta: { a: 1, b: 1 } }],
+  overlapping,
+);
+assert.deepEqual(
+  firstLanded.held.map((entry) => entry.token),
+  ['t2'],
+  'the first lets go once its field shows, the second still waits',
+);
+assert.deepEqual(firstLanded.list[0].meta, { a: 5, b: 5 });
+assert.deepEqual(
+  apply([{ id: 'a', cents: 1, meta: { a: 1, b: 1 } }], [overlapping[0]]).list[0]
+    .meta,
+  { a: 1, b: 1 },
+  'and when the second fails, the first still shows',
+);
+assert.deepEqual(
+  apply([{ id: 'a', cents: 1 }], [overlapping[0], hold(null, 'a', 't2')]).list,
+  [],
+  'a newer removal hides the record',
+);
 
 const partial = () =>
   hold({ id: 'a', cents: 9, meta: { a: 1, b: 2 } }, 'a', 't1', 900, ['cents']);
@@ -213,6 +294,16 @@ assert.equal(
     .length,
   0,
   "so another device's change to that field never keeps it held",
+);
+
+const showsThrough = apply(
+  [{ id: 'a', cents: 1, meta: { a: 8, b: 8 } }],
+  [partial()],
+);
+assert.deepEqual(
+  showsThrough.list[0],
+  { id: 'a', cents: 9, meta: { a: 8, b: 8 } },
+  'a hold shows only the fields it wrote, so a later write to another field shows through',
 );
 
 console.log('held writes: all checks passed');

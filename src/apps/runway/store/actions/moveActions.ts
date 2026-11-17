@@ -509,7 +509,8 @@ export async function setLinesDone(
   } catch (error) {
     const shown = store
       .getState()
-      .runway.held.days.find((hold) => hold.id === dayId)?.item;
+      .runway.held.days.filter((hold) => hold.id === dayId)
+      .at(-1)?.item;
     if (shown) {
       const was = new Set(current);
       const reverted = isDone

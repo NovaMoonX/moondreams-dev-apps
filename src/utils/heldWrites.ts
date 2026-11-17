@@ -70,7 +70,7 @@ export interface ApplyHeldOptions {
   deliveredAt?: number | null;
 }
 
-/** Lays held writes over a listener's list; a hold lets go when the list shows it, never merely because it settled. */
+/** Lays held writes over a listener's list, a record's holds in the order they were made; a hold shows only the fields it wrote, so a later write to another field shows through, and lets go when the list shows it, never merely because it settled. */
 export function applyHeldWrites<T>(
   incoming: readonly T[],
   held: readonly HeldWrite<T>[],
@@ -84,27 +84,65 @@ export function applyHeldWrites<T>(
       !hasExpired(hold, now, deliveredAt),
   );
   if (kept.length === 0) return { list: [...incoming], held: [] };
-  const holdById = new Map(kept.map((hold) => [hold.id, hold]));
+  const holdsById = kept.reduce(
+    (sum, hold) => sum.set(hold.id, [...(sum.get(hold.id) ?? []), hold]),
+    new Map<string, HeldWrite<T>[]>(),
+  );
+  const layOver = (item: T | undefined, holds: HeldWrite<T>[]) =>
+    holds.reduce<T | undefined>((shown, hold) => {
+      if (hold.item === null) return undefined;
+      if (shown === undefined) return hold.item;
+      return { ...shown, ...(pickFields(hold.item, hold.fields) as T) };
+    }, item);
   const list = [
     ...incoming.flatMap((item) => {
-      const hold = holdById.get(idOf(item));
-      if (hold === undefined) return [item];
-      return hold.item === null ? [] : [hold.item];
+      const holds = holdsById.get(idOf(item));
+      if (holds === undefined) return [item];
+      const shown = layOver(item, holds);
+      return shown === undefined ? [] : [shown];
     }),
-    ...kept.flatMap((hold) =>
-      hold.item !== null && !byId.has(hold.id) ? [hold.item] : [],
-    ),
+    ...[...holdsById].flatMap(([id, holds]) => {
+      if (byId.has(id)) return [];
+      const shown = layOver(undefined, holds);
+      return shown === undefined ? [] : [shown];
+    }),
   ];
   return { list, held: kept };
 }
 
-/** The newest write of a record replaces an older hold of it. */
+/**
+ * A write's holds join the others in order. A newer hold takes over the fields it writes from a record's older holds,
+ * so an Undo that puts a field back never leaves the older value showing; an older hold keeps only the fields it alone wrote, its item carrying the newer values.
+ */
 export const addHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   added: readonly HeldWrite<T>[],
 ): HeldWrite<T>[] => {
-  const ids = new Set(added.map((hold) => hold.id));
-  return [...held.filter((hold) => !ids.has(hold.id)), ...added];
+  const kept = held.flatMap((hold): HeldWrite<T>[] => {
+    const newer = added.filter((entry) => entry.id === hold.id);
+    if (newer.length === 0) return [hold];
+    if (newer.some((entry) => entry.token === hold.token)) return [];
+    if (hold.item === null || newer.some((entry) => entry.item === null)) {
+      return [];
+    }
+    const taken = new Set(newer.flatMap((entry) => entry.fields));
+    const fields = hold.fields.filter((field) => !taken.has(field));
+    if (fields.length === 0) return [];
+    const item = newer.reduce<T>(
+      (sum, entry) => ({
+        ...sum,
+        ...(pickFields(entry.item, entry.fields) as T),
+      }),
+      hold.item,
+    );
+    return [
+      {
+        ...toHeldWrite(hold.id, item, fields, hold.token),
+        settledAt: hold.settledAt,
+      },
+    ];
+  });
+  return [...kept, ...added];
 };
 
 export const settleHeldWrites = <T>(
@@ -137,3 +175,90 @@ export const patchHeldWrite = <T>(
       settledAt: hold.settledAt,
     };
   });
+
+const holdKey = <T>(hold: HeldWrite<T>) => `${hold.id}/${hold.token}`;
+
+/** A hold stays only in a list its item belongs to; in any other it is a removal, which lands at once. */
+export const forHeldList = <T>(
+  held: readonly HeldWrite<T>[],
+  belongs: (item: T) => boolean,
+): HeldWrite<T>[] =>
+  held.map((hold) =>
+    hold.item === null || belongs(hold.item)
+      ? hold
+      : { ...hold, item: null, fields: [], fingerprint: '' },
+  );
+
+export interface HeldListInput<T> {
+  incoming: readonly T[];
+  /** Null until the list's listener has delivered once. */
+  deliveredAt: number | null;
+  belongs: (item: T) => boolean;
+}
+
+export interface LayHeldListsInput<T, L extends string> {
+  lists: Record<L, HeldListInput<T>>;
+  held: readonly HeldWrite<T>[];
+  /** The lists each hold (`id/token`) has already landed in; a hold never comes back over one of them. */
+  landed: Readonly<Record<string, readonly L[]>>;
+  idOf: (item: T) => string;
+  now?: number;
+}
+
+/** Several lists that read one kind of record, each with the holds laid over it; a hold stays while any list still waits for it, and a list that hasn't delivered never counts it as shown. */
+export function layHeldLists<T, L extends string>({
+  lists,
+  held,
+  landed,
+  idOf,
+  now,
+}: LayHeldListsInput<T, L>): {
+  lists: Record<L, T[]>;
+  held: HeldWrite<T>[];
+  landed: Record<string, L[]>;
+} {
+  const results = (Object.entries(lists) as [L, HeldListInput<T>][]).map(
+    ([name, { incoming, deliveredAt, belongs }]) => {
+      const waiting = forHeldList(held, belongs).filter(
+        (hold) => !landed[holdKey(hold)]?.includes(name),
+      );
+      const result = applyHeldWrites(incoming, waiting, idOf, {
+        deliveredAt,
+        now,
+      });
+      const kept = new Set(result.held.map(holdKey));
+      return {
+        name,
+        list: result.list,
+        kept,
+        landedNow:
+          deliveredAt === null
+            ? []
+            : waiting.map(holdKey).filter((key) => !kept.has(key)),
+      };
+    },
+  );
+  const keptHeld = held.filter((hold) =>
+    results.some((result) => result.kept.has(holdKey(hold))),
+  );
+  return {
+    lists: Object.fromEntries(
+      results.map((result) => [result.name, result.list]),
+    ) as Record<L, T[]>,
+    held: keptHeld,
+    landed: Object.fromEntries(
+      keptHeld.map((hold) => {
+        const key = holdKey(hold);
+        return [
+          key,
+          [
+            ...(landed[key] ?? []),
+            ...results.flatMap((result) =>
+              result.landedNow.includes(key) ? [result.name] : [],
+            ),
+          ],
+        ];
+      }),
+    ),
+  };
+}

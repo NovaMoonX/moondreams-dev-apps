@@ -4,12 +4,12 @@ import {
   doc,
   getDoc,
   getDocFromCache,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import {
@@ -130,8 +130,8 @@ export async function addExtraStep(
   if (!navigator.onLine) return { kind: 'offline' };
   const ref = doc(runsOf(uid), runId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<ExtraResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return { kind: 'missing' };

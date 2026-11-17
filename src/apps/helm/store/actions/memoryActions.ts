@@ -2,12 +2,12 @@ import {
   collection,
   deleteDoc,
   doc,
-  runTransaction,
   setDoc,
   type DocumentData,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -51,7 +51,7 @@ export const confirmFact = (uid: string, factId: string) =>
   guard(async (): Promise<FactChange> => {
     const ref = doc(factsOf(uid), factId);
     const now = Date.now();
-    const before = await runTransaction(db, async (transaction) => {
+    const before = await runHeldTransaction(uid, async (transaction) => {
       const data = (await transaction.get(ref)).data() as
         Partial<Fact> | undefined;
       if (data?.status !== 'inferred') return null;
@@ -66,7 +66,7 @@ export const confirmFact = (uid: string, factId: string) =>
     return {
       kind: 'done',
       undo: () =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const data = (await transaction.get(ref)).data() as
             Partial<Fact> | undefined;
           if (data?.status !== 'confirmed' || data.confirmedAt !== now) {
@@ -98,7 +98,7 @@ export const correctFact = (
       await getHelmEncryption(uid),
     );
     const now = Date.now();
-    const before = await runTransaction(db, async (transaction) => {
+    const before = await runHeldTransaction(uid, async (transaction) => {
       const data = (await transaction.get(oldRef)).data() as
         Partial<Fact> | undefined;
       if (!data || data.status === 'superseded') return null;
@@ -152,7 +152,7 @@ export const correctFact = (
     return {
       kind: 'done',
       undo: () =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const partnerRef = before.disputedWithId
             ? doc(facts, before.disputedWithId)
             : null;
@@ -205,7 +205,7 @@ export const forgetFact = (
     const mediaRef = (id: string) =>
       doc(db, 'apps', 'helm', 'users', uid, 'media', id);
     const now = Date.now();
-    const taken = await runTransaction(db, async (transaction) => {
+    const taken = await runHeldTransaction(uid, async (transaction) => {
       const readChain = async (
         id: string | null,
         seen: string[],
@@ -248,7 +248,7 @@ export const forgetFact = (
     return {
       kind: 'done',
       undo: () =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const partnerRef = taken.partnerId
             ? doc(factsOf(uid), taken.partnerId)
             : null;
