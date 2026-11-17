@@ -146,6 +146,7 @@ async function toToldExecution(
         effects: [],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: null,

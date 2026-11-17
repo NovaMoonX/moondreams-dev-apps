@@ -11,6 +11,7 @@ import {
   markExecutionPartUndone,
 } from '@apps/helm/store/helmSlice';
 import { loadExecutionsById } from '@apps/helm/store/actions/captureActions';
+import { isExecutionHeld } from '@apps/helm/store/actions/privacyActions';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { HelmQuestion } from '@apps/helm/types';
@@ -55,10 +56,10 @@ export async function takeBack(
 }
 
 export type UndoOfferOutcome =
-  | { kind: 'undone'; report: string }
+  | { kind: 'undone'; report: string; isHeld: boolean }
   | { kind: 'kept' }
   | { kind: 'already' }
-  | { kind: 'nothing'; report: string | null }
+  | { kind: 'nothing'; report: string | null; isHeld: boolean }
   | { kind: 'offline' }
   | { kind: 'failed' };
 
@@ -94,6 +95,7 @@ export async function answerUndoOffer(
   );
   if (!execution) return { kind: 'failed' };
   const docIds = toOfferDocIds(choice, execution);
+  const isHeld = isExecutionHeld(execution);
   if (docIds.length === 0) {
     await record();
     return { kind: 'already' };
@@ -111,10 +113,10 @@ export async function answerUndoOffer(
     }
     if (result.reason === 'nothingToTakeBack') {
       await record();
-      return { kind: 'nothing', report: result.report };
+      return { kind: 'nothing', report: result.report, isHeld };
     }
     return { kind: 'failed' };
   }
   await record();
-  return { kind: 'undone', report: result.report };
+  return { kind: 'undone', report: result.report, isHeld };
 }

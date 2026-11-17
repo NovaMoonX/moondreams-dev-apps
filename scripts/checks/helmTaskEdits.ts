@@ -18,6 +18,9 @@ const reread: TaskSealed = {
   steps: { x: { text: 'First' } },
   privateMark: null,
   isPrivacyCleared: false,
+  quietMark: null,
+  quietUntil: null,
+  isQuietCleared: false,
 };
 
 test('a title change keeps the notes and steps another device changed', () => {
@@ -27,6 +30,9 @@ test('a title change keeps the notes and steps another device changed', () => {
     steps: { x: { text: 'First' } },
     privateMark: null,
     isPrivacyCleared: false,
+    quietMark: null,
+    quietUntil: null,
+    isQuietCleared: false,
   });
 });
 
