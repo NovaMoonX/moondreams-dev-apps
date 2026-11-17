@@ -423,6 +423,13 @@ function CookVoiceSheet({
         ['what timers are running', 'Says each one'],
       ],
     },
+    {
+      label: 'Amounts',
+      rows: [
+        ['how much butter in grams', 'Says the amount in that unit'],
+        ['what’s 200 ml in ounces', 'Changes a measure, no ingredient needed'],
+      ],
+    },
     ...(dishExample === null
       ? []
       : [

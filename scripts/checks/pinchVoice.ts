@@ -6,6 +6,13 @@ import {
 } from '../../src/lib/speech/readSpokenAnswer.ts';
 
 import {
+  describeIngredientConversion,
+  describeMeasureConversion,
+  getConversionLine,
+} from '../../src/apps/pinch/utils/cookConversions.ts';
+import { readMeasureUnitWord } from '../../src/utils/measureUtils.ts';
+
+import {
   describeAmounts,
   describeTimersLeft,
   formatSpokenTime,
@@ -28,6 +35,7 @@ import {
   type CookVoiceChoice,
   type CookVoiceContext,
 } from '../../src/apps/pinch/utils/cookVoice.ts';
+import type { MeasureUnit } from '../../src/utils/measureUtils.ts';
 
 const plate: CookVoiceContext = {
   recipes: [
@@ -491,18 +499,19 @@ assert.deepEqual(
     parse('how many cups of tomatoes'),
   ],
   [
-    { kind: 'AMOUNT', query: 'cups of rice', lineIds: ['rice-line'] },
-    { kind: 'AMOUNT', query: 'tablespoons of vinegar', lineIds: ['vinegar'] },
+    { kind: 'CONVERT', query: 'rice', lineIds: ['rice-line'], unit: 'CUP' },
+    { kind: 'CONVERT', query: 'vinegar', lineIds: ['vinegar'], unit: 'TBSP' },
     { kind: 'AMOUNT', query: 'cloves of garlic', lineIds: ['garlic'] },
     {
-      kind: 'AMOUNT',
-      query: 'fluid ounces of coconut milk',
+      kind: 'CONVERT',
+      query: 'coconut milk',
       lineIds: ['coconut'],
+      unit: 'FL_OZ',
     },
     { kind: 'AMOUNT', query: 'cream of tartar', lineIds: ['tartar'] },
-    { kind: 'AMOUNT', query: 'cups of tomatoes', lineIds: ['tomato'] },
+    { kind: 'CONVERT', query: 'tomatoes', lineIds: ['tomato'], unit: 'CUP' },
   ],
-  'a quantity before the ingredient ("cups of", "cloves of") is looked past, a plural still matches, and a name with "of" in it is kept whole',
+  'a unit before the ingredient asks for it in that unit, a count like "cloves of" is looked past, a plural still matches, and a name with "of" in it is kept whole',
 );
 assert.deepEqual(
   [
@@ -511,11 +520,180 @@ assert.deepEqual(
     parse('how many minutes'),
   ],
   [
-    { kind: 'AMOUNT', query: 'cups of cilantro', lineIds: [] },
+    { kind: 'CONVERT', query: 'cilantro', lineIds: [], unit: 'CUP' },
     { kind: 'AMOUNT', query: 'people', lineIds: [] },
     { kind: 'AMOUNT', query: 'minutes', lineIds: [] },
   ],
   'a question with nothing found keeps the words searched, so the answer can name them',
+);
+
+const bakeContext: CookVoiceContext = {
+  ...single,
+  lines: [
+    { id: 'butter', names: ['Butter'], isInStep: false },
+    { id: 'flour', names: ['All-purpose flour', 'flour'], isInStep: false },
+    { id: 'salt', names: ['Salt'], isInStep: false },
+    { id: 'egg', names: ['Egg'], isInStep: false },
+  ],
+};
+const butterIn = (unit: MeasureUnit): CookCommand => ({
+  kind: 'CONVERT',
+  query: 'butter',
+  lineIds: ['butter'],
+  unit,
+});
+[
+  ['how much butter in grams', butterIn('G')],
+  ['how much butter do I need in grams', butterIn('G')],
+  ['how much butter in grams do I need', butterIn('G')],
+  ['how many grams of butter', butterIn('G')],
+  ['how many ounces of butter do I need', butterIn('OZ')],
+  ['how many cups is the butter', butterIn('CUP')],
+  ['convert the butter to tablespoons', butterIn('TBSP')],
+  ['butter in grams', butterIn('G')],
+  ['how much butter in tbsp', butterIn('TBSP')],
+  [
+    'how many cups is the flour',
+    { kind: 'CONVERT', query: 'flour', lineIds: ['flour'], unit: 'CUP' },
+  ],
+  [
+    'flour in cups',
+    { kind: 'CONVERT', query: 'flour', lineIds: ['flour'], unit: 'CUP' },
+  ],
+  [
+    'how much chicken in grams',
+    { kind: 'CONVERT', query: 'chicken', lineIds: [], unit: 'G' },
+  ],
+  [
+    "what's 200 ml in ounces",
+    { kind: 'CONVERT_AMOUNT', amount: 200, from: 'ML', to: 'FL_OZ' },
+  ],
+  [
+    'how many cups is 200 ml',
+    { kind: 'CONVERT_AMOUNT', amount: 200, from: 'ML', to: 'CUP' },
+  ],
+  [
+    'convert 8 ounces to grams',
+    { kind: 'CONVERT_AMOUNT', amount: 8, from: 'OZ', to: 'G' },
+  ],
+  [
+    'what is two cups in milliliters',
+    { kind: 'CONVERT_AMOUNT', amount: 2, from: 'CUP', to: 'ML' },
+  ],
+].forEach(([phrase, expected]) =>
+  assert.deepEqual(
+    parse(phrase as string, bakeContext),
+    expected,
+    `a clear conversion question converts: "${phrase}"`,
+  ),
+);
+[
+  'add the butter',
+  'butter in the pan',
+  'stir in grams',
+  'chicken in grams',
+  'how much time is left on the pasta',
+  'how much longer',
+  'how much butter',
+  'how many grams',
+  'how much does the butter cost',
+  'convert it',
+  'put the butter in the bowl',
+].forEach((phrase) =>
+  assert.notEqual(
+    parse(phrase, bakeContext)?.kind,
+    'CONVERT',
+    `not a conversion: "${phrase}"`,
+  ),
+);
+assert.deepEqual(
+  parse('how much time is left on the pasta', {
+    ...bakeContext,
+    timers: [{ id: 't1', names: ['pasta'], label: '10 min' }],
+  }),
+  { kind: 'TIME_LEFT', target: { seconds: null, name: 'pasta', isAll: false } },
+  'a time question stays the timer command',
+);
+assert.deepEqual(
+  [
+    ['grams', 'g', 'Kilos', 'ounces', 'oz.', 'lbs', 'milliliters', 'mls'],
+    ['litres', 'tsp', 'tablespoons', 'cups', 'fl oz', 'fluid ounces', 'big'],
+  ].map((words) => words.map((word) => readMeasureUnitWord(word))),
+  [
+    ['G', 'G', 'KG', 'OZ', 'OZ', 'LB', 'ML', 'ML'],
+    ['L', 'TSP', 'TBSP', 'CUP', 'FL_OZ', 'FL_OZ', null],
+  ],
+  'unit words, plural, singular and as a recognizer writes them',
+);
+
+const butterRow = (
+  amount: number,
+  unit: 'CUP' | 'G' | 'EACH',
+  amountText: string,
+) => ({
+  name: 'Butter',
+  amountText,
+  measure: { amount, unit, gramsPerMl: 0.91 },
+});
+assert.equal(
+  describeIngredientConversion(
+    butterRow(0.5, 'CUP', '½ cup'),
+    'OZ',
+    toSpokenAmount,
+  ).speak,
+  'The butter is about 4 ounces, or a half cup.',
+  'with a unit, the amount in that unit and then as shown',
+);
+assert.equal(
+  describeIngredientConversion(
+    butterRow(0.5, 'CUP', '½ cup'),
+    'CUP',
+    toSpokenAmount,
+  ).show,
+  'The butter is ½ cup.',
+  'the shown text is not repeated when it is the same',
+);
+assert.equal(
+  describeIngredientConversion(
+    {
+      name: 'Flour',
+      amountText: '2 cups',
+      measure: { amount: 2, unit: 'CUP', gramsPerMl: null },
+    },
+    'G',
+    toSpokenAmount,
+  ).show,
+  "I can't weigh flour without knowing how heavy it is. The recipe says 2 cups.",
+  'a weight from a volume needs a density',
+);
+assert.equal(
+  describeIngredientConversion(
+    { name: 'Salt', amountText: 'to taste', measure: null },
+    'G',
+    toSpokenAmount,
+  ).show,
+  'The salt is to taste.',
+  'a line with no amount says so',
+);
+assert.equal(
+  describeMeasureConversion(200, 'ML', 'FL_OZ', toSpokenAmount).show,
+  '200 ml is 7 fl oz.',
+  'a plain conversion within a kind',
+);
+assert.equal(
+  describeMeasureConversion(200, 'ML', 'G', toSpokenAmount).ok,
+  false,
+  'a plain conversion never crosses weight and volume',
+);
+assert.equal(
+  getConversionLine({ amount: 0.5, unit: 'CUP', gramsPerMl: 0.91 }),
+  '= 8 tbsp · 4 fl oz · 118 ml · 108 g by weight · about 4 oz by weight',
+  'the other units of an amount, the other kind marked',
+);
+assert.equal(
+  getConversionLine({ amount: 2, unit: 'EACH', gramsPerMl: null }),
+  null,
+  'a count has nothing to convert',
 );
 
 assert.deepEqual(

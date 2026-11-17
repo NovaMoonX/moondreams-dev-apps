@@ -190,3 +190,58 @@ export function formatAmountText(amount: number): string {
   if (glyph) return whole === 0 ? glyph[0] : `${whole} ${glyph[0]}`;
   return String(Math.round(amount * 100) / 100);
 }
+
+const UNIT_WORDS: Record<string, MeasureUnit> = {
+  g: 'G',
+  gram: 'G',
+  grams: 'G',
+  gm: 'G',
+  gms: 'G',
+  kg: 'KG',
+  kgs: 'KG',
+  kilo: 'KG',
+  kilos: 'KG',
+  kilogram: 'KG',
+  kilograms: 'KG',
+  oz: 'OZ',
+  ounce: 'OZ',
+  ounces: 'OZ',
+  lb: 'LB',
+  lbs: 'LB',
+  pound: 'LB',
+  pounds: 'LB',
+  ml: 'ML',
+  mls: 'ML',
+  milliliter: 'ML',
+  milliliters: 'ML',
+  millilitre: 'ML',
+  millilitres: 'ML',
+  l: 'L',
+  liter: 'L',
+  liters: 'L',
+  litre: 'L',
+  litres: 'L',
+  tsp: 'TSP',
+  tsps: 'TSP',
+  teaspoon: 'TSP',
+  teaspoons: 'TSP',
+  tbsp: 'TBSP',
+  tbsps: 'TBSP',
+  tablespoon: 'TBSP',
+  tablespoons: 'TBSP',
+  cup: 'CUP',
+  cups: 'CUP',
+  'fl oz': 'FL_OZ',
+  'fluid ounce': 'FL_OZ',
+  'fluid ounces': 'FL_OZ',
+};
+
+/** A unit as someone writes or says it ("grams", "tbsp", "fl oz", "Cups."); null for any other word. */
+export function readMeasureUnitWord(text: string): MeasureUnit | null {
+  const word = text
+    .toLowerCase()
+    .replace(/[.,]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return Object.hasOwn(UNIT_WORDS, word) ? UNIT_WORDS[word] : null;
+}
