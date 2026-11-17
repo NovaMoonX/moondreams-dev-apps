@@ -7084,6 +7084,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           isLearningOn: true,
           patternsCheckedOn: habitDayKey(context.now, HABIT_ZONE),
           reflectDueAt: null,
+          relateDueAt: null,
           forgottenAt: null,
           prunedOn: habitDayKey(context.now, HABIT_ZONE),
           outsideSeenAt: null,

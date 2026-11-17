@@ -9,7 +9,7 @@ import { GOOGLE_CONTACTS_MANIFEST } from '../../src/lib/connections/google/conta
 import { GOOGLE_DRIVE_MANIFEST } from '../../src/lib/connections/google/driveManifest.ts';
 import { GOOGLE_GMAIL_MANIFEST } from '../../src/lib/connections/google/gmailManifest.ts';
 import { SOURCE_SHARES } from '../../src/lib/connections/sources.ts';
-import { REFLECT_BATCH } from '../../functions/src/apps/helm/reflection/reflectionRuns.ts';
+import { BATCH_JOBS } from '../../functions/src/apps/helm/batchJobs.ts';
 import {
   CLOSE_CONVERSATION_TOOL,
   COMMAND_KINDS,
@@ -127,7 +127,7 @@ const world: World = {
   categories: manifests.flatMap((manifest) =>
     manifest.categories.map((category) => `${manifest.id}/${category.id}`),
   ),
-  batchJobs: [REFLECT_BATCH.jobId],
+  batchJobs: Object.keys(BATCH_JOBS),
   writerExists: (writer) =>
     writer === 'none' ||
     writerPath(writer).some((path) => existsSync(join(ROOT, path))),
@@ -416,10 +416,12 @@ test('a missing row is caught for each kind of thing', () => {
 
 test('a row naming an unregistered batch job is caught', () => {
   const problems = findProblems(
-    [...WHERE_THINGS_LIVE, { ...first, batchJobs: ['relate'] }],
+    [...WHERE_THINGS_LIVE, { ...first, batchJobs: ['rederive'] }],
     world,
   );
-  assert.ok(problems.some((line) => line.includes('batch job relate is not')));
+  assert.ok(
+    problems.some((line) => line.includes('batch job rederive is not')),
+  );
 });
 
 test('a row naming a registered batch job passes', () => {

@@ -323,6 +323,19 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/utils/sha256.ts',
+    dest: 'functions/src/vendor/sha256.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/grouping.ts',
+    dest: 'functions/src/apps/helm/nomos/grouping.ts',
+    importRewrites: {
+      '@/utils/sha256': '../../../vendor/sha256.js',
+      '@apps/helm/utils/privacy': '../privacy.js',
+    },
+  },
+  {
     src: 'src/apps/helm/engine/said.ts',
     dest: 'functions/src/apps/helm/nomos/said.ts',
     importRewrites: { '@apps/helm/utils/privacy': '../privacy.js' },

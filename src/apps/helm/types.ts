@@ -22,6 +22,7 @@ import type {
   CoupleStatus,
 } from '@apps/helm/engine/connections';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
+import type { GroupingMeta } from '@apps/helm/engine/grouping';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 export type { GoalWhy } from '@apps/helm/utils/goalWhy';
 import type { GoalWhy } from '@apps/helm/utils/goalWhy';
@@ -145,6 +146,8 @@ export interface HelmProfile {
   patternsCheckedOn: string | null;
   /** The next night's reflection is due from this instant; null when nothing new waits. */
   reflectDueAt: number | null;
+  /** The next night's grouping of related things is due from this instant; null when nothing new waits. */
+  relateDueAt: number | null;
   /** Stamped with any change to a scheduled action, so the server looks at the person's actions within minutes; null on a profile from before. */
   scheduledActionsChangedAt: number | null;
   /** When the person last chose Forget what you've noticed; what was made at or before it is hidden. */
@@ -1105,6 +1108,23 @@ export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
   isUnreadable: boolean;
 }
 
+/** `apps/helm/users/{uid}/groupings/{groupingId}`: things that look like one thing, found overnight; the id is a hash of the sorted source keys. */
+export interface Grouping extends GroupingMeta {
+  sealed: Sealed;
+}
+
+export interface GroupingSealed {
+  proposedTitle: string | null;
+  emoji: string | null;
+  /** Source key to its title; a private source has none. */
+  titles: Record<string, string>;
+}
+
+export interface OpenGrouping extends Omit<Grouping, 'sealed'>, GroupingSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
 export type TopicDepth = 1 | 2 | 3;
 
 export type TopicSource =
@@ -1433,7 +1453,8 @@ export interface EffectRef {
     | 'patterns'
     | 'scheduledActions'
     | 'research'
-    | 'dayAims';
+    | 'dayAims'
+    | 'groupings';
   docId: string;
 }
 

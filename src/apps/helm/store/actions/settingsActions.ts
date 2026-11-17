@@ -88,6 +88,7 @@ export async function ensureHelmProfile(uid: string) {
       isLearningOn: true,
       patternsCheckedOn: null,
       reflectDueAt: null,
+      relateDueAt: null,
       scheduledActionsChangedAt: null,
       forgottenAt: null,
       prunedOn: null,

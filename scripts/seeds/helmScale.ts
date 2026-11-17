@@ -707,6 +707,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       isLearningOn: true,
       patternsCheckedOn: null,
       reflectDueAt: null,
+      relateDueAt: null,
       forgottenAt: null,
       prunedOn: null,
       outsideSeenAt: null,

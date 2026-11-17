@@ -57,6 +57,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   isLearningOn: data.isLearningOn !== false,
   patternsCheckedOn: data.patternsCheckedOn ?? null,
   reflectDueAt: data.reflectDueAt ?? null,
+  relateDueAt: data.relateDueAt ?? null,
   scheduledActionsChangedAt: data.scheduledActionsChangedAt ?? null,
   forgottenAt: data.forgottenAt ?? null,
   prunedOn: data.prunedOn ?? null,

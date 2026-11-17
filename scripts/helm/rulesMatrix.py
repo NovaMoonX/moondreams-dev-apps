@@ -164,6 +164,15 @@ def main():
     admin([rm(path)])
     check('profile reflectDueAt set create [o]', commit(o_tok, [put_new(path, dict(profile, reflectDueAt=NOW))]), False)
     admin([put(path, profile)])
+    admin([put(path, dict(profile, relateDueAt=NOW))])
+    check('profile relateDueAt unchanged update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=NOW, planFillPercent=60))]), True)
+    check('profile relateDueAt cleared update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=None))]), True)
+    check('profile relateDueAt changed update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=NOW + 1))]), False)
+    admin([put(path, profile)])
+    check('profile relateDueAt set update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=NOW))]), False)
+    admin([rm(path)])
+    check('profile relateDueAt set create [o]', commit(o_tok, [put_new(path, dict(profile, relateDueAt=NOW))]), False)
+    admin([put(path, profile)])
     check('profile isLearningOn false update [x]', commit(x_tok, [put(path, dict(profile, isLearningOn=False))]), False)
     check('profile isLearningOn false update [a]', commit(None, [put(path, dict(profile, isLearningOn=False))]), False)
     check("profile voiceId 'Sulafat' update [x]", commit(x_tok, [put(path, dict(profile, voiceId='Sulafat'))]), False)
@@ -244,6 +253,25 @@ def main():
         check(f'daySummaries delete [{a}]', commit(tok, [rm(sk)]), False)
         admin([rm(sk + '-new-' + a)])
     check('daySummaries read at another uid [o]', get(f'apps/helm/users/{x_uid}/daySummaries/d', o_tok), False)
+
+    # A grouping is made by the server: the owner reads it, answers it and deletes it; what the server decided stays out of reach.
+    grouping = dict(parentKind='project', parentId=None, sourceKeys=['tasks/t1', 'tasks/t2'], sources=[dict(key='tasks/t1', app=None, kind='task'), dict(key='tasks/t2', app=None, kind='task')], linkedKeys=[], state='proposed', confidence='likely', evidence=['titleMatch'], declineCount=0, nextOfferAfter=None, answeredAt=None, toldAt=None, executionId=None, dayKey='2030-01-01', proposedAt=NOW, updatedAt=NOW, privacy=None, createdBy='nomos', sealed=SEAL)
+    gk = f'{path}/groupings/g_1'
+    for a, tok in actors.items():
+        admin([put(gk, grouping)])
+        check(f'groupings read [{a}]', get(gk, tok), a == 'o')
+        check(f'groupings list [{a}]', get(f'{path}/groupings', tok), a == 'o')
+        check(f'groupings create [{a}]', commit(tok, [put_new(gk + '-new-' + a, grouping)]), False)
+        check(f'groupings answer [{a}]', commit(tok, [put(gk, dict(grouping, state='groupedByYou', parentId='project-1', linkedKeys=['tasks/t1'], answeredAt=NOW, updatedAt=NOW + 1))]), a == 'o')
+        check(f'groupings not now [{a}]', commit(tok, [put(gk, dict(grouping, state='notNow', declineCount=1, nextOfferAfter=NOW, updatedAt=NOW + 1))]), a == 'o')
+        check(f'groupings state outside the set [{a}]', commit(tok, [put(gk, dict(grouping, state='done', updatedAt=NOW + 1))]), False)
+        check(f'groupings declineCount over 3 [{a}]', commit(tok, [put(gk, dict(grouping, declineCount=4, updatedAt=NOW + 1))]), False)
+        check(f'groupings dayKey [{a}]', commit(tok, [put(gk, dict(grouping, dayKey='2030-01-02'))]), False)
+        check(f'groupings confidence [{a}]', commit(tok, [put(gk, dict(grouping, confidence='certain'))]), False)
+        check(f'groupings evidence [{a}]', commit(tok, [put(gk, dict(grouping, evidence=[]))]), False)
+        check(f'groupings proposedAt [{a}]', commit(tok, [put(gk, dict(grouping, proposedAt=NOW + 1))]), False)
+        check(f'groupings delete [{a}]', commit(tok, [rm(gk)]), a == 'o')
+    check('groupings read at another uid [o]', get(f'apps/helm/users/{x_uid}/groupings/g_1', o_tok), False)
 
     # A research item is made and settled by the server: the owner reads it and may only stop it (status dismissed, cancelledAt, lastEditedAt).
     research = dict(mode='asked', status='preparing', captureId='capture-1', projectId=None, depth='light', isWithoutWeb=False, reservedCents=11, searchesUsed=0, costCents=0, rerunOn=None, startedAt=None, preparedAt=None, cancelledAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
