@@ -306,6 +306,19 @@ export function useHelmVoice() {
       : HELM_COPY.whisperFailed;
   }
 
+  /** Says the last line again the way it was said; a whisper that can't play says so rather than going quiet. */
+  function repeatLast() {
+    sayRepeatRefusal(
+      voice.repeat(undefined, {
+        onResult: (result, delivery) => {
+          if (delivery !== undefined && result.status === 'failed') {
+            showNote(whisperFailedNote());
+          }
+        },
+      }),
+    );
+  }
+
   /** Says a line kept off the speaker: whispered unless the setting is off, and never in the usual voice when the whisper can't play. */
   function sayHeldAloud(line: string) {
     const delivery = heldDelivery(
@@ -375,7 +388,7 @@ export function useHelmVoice() {
     }
     if (isRepeatRequest(text)) {
       voice.settle();
-      sayRepeatRefusal(voice.repeat());
+      repeatLast();
       return;
     }
     await takeOnDevice(text, {
@@ -859,7 +872,7 @@ export function useHelmVoice() {
           waiting.current.delete(captureId);
           clearSentTurn(uid, captureId);
           voice.settle();
-          sayRepeatRefusal(voice.repeat());
+          repeatLast();
         },
       });
       recordSentTurn(uid, turn, id);

@@ -686,7 +686,7 @@ export const HELM_COPY = {
   replayMuted: 'Voice is muted. Unmute it to hear this again.',
   whisperFailed: "Couldn't whisper it, so it stays on your screen.",
   whisperNeedsCloud:
-    "This device's voice can't whisper, so it stays on your screen. Turn off whispering in Voice settings to hear it out loud.",
+    "With Keep voice on this device on, it can't be whispered, so it stays on your screen. Turn off whispering in Voice settings to hear it out loud.",
   nothingHeld: "Nothing's being kept off the speaker right now.",
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
@@ -1423,7 +1423,7 @@ export const HELM_COPY = {
     'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s it", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
   voiceWhisperHeldTitle: "Whisper what's kept quiet",
   voiceWhisperHeld:
-    "Something kept off the speaker is whispered when you ask to hear it. Whispering needs the natural voice; without it, the line stays on your screen. Off: it's said in your usual voice.",
+    'Whispered when you ask to hear something kept off the speaker. Needs a connection, with Keep voice on this device off; otherwise it stays on your screen. Off: said in your usual voice.',
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
     'Takes music and chatter out of what you say, on this device, before anything listens.',

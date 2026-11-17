@@ -16,8 +16,10 @@ import {
   type PeopleInput,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import {
+  NOTHING_HELD_LINE,
   readAlreadyMade,
   readEarlierTurns,
+  readHeldAskLine,
 } from '../../functions/src/apps/helm/sortHelmCapture.ts';
 import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
 import {
@@ -1806,10 +1808,64 @@ test('the model asking to hear the kept line is read as a flag, and a turn with 
   assert.equal('asksHeldLine' in settle(false).sealed, false);
 });
 
-test('a held line is whispered unless the person turned the whisper off, and found from earlier in the same session', () => {
+test('a held line is whispered unless the person turned the whisper off', () => {
   assert.equal(heldDelivery(null), 'whisper');
   assert.equal(heldDelivery(true), 'whisper');
   assert.equal(heldDelivery(false), null);
+});
+
+test('an ask to hear the held line writes it kept quiet, and "nothing held" is never kept quiet', () => {
+  assert.deepEqual(
+    readHeldAskLine({
+      heldBefore: 'Ring is in the drawer.',
+      quietLine: null,
+      isQuiet: false,
+    }),
+    { line: 'Ring is in the drawer.', isQuiet: true },
+  );
+  assert.deepEqual(
+    readHeldAskLine({
+      heldBefore: 'Ring is in the drawer.',
+      quietLine: 'Which day?',
+      isQuiet: false,
+    }),
+    { line: 'Ring is in the drawer. Which day?', isQuiet: true },
+  );
+  assert.deepEqual(
+    readHeldAskLine({ heldBefore: null, quietLine: null, isQuiet: false }),
+    { line: NOTHING_HELD_LINE, isQuiet: false },
+  );
+  assert.deepEqual(
+    readHeldAskLine({
+      heldBefore: null,
+      quietLine: 'Which day?',
+      isQuiet: true,
+    }),
+    { line: 'Which day?', isQuiet: true },
+  );
+});
+
+test('the model learns an earlier turn held a line, never the line itself', () => {
+  const { message } = buildContext({
+    text: 'go on, you can say it',
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 10, 12),
+    timeZone: 'UTC',
+    tasks: [],
+    earlierTurns: [
+      {
+        said: 'plan the party',
+        did: null,
+        taskIds: [],
+        heldLine: 'Surprise party for Sam on Friday.',
+      },
+      { said: 'thanks', did: null, taskIds: [] },
+    ],
+  });
+  assert.equal(message.match(/keptOffSpeaker/g)?.length, 1);
+  ['Surprise party', 'Sam on Friday'].forEach((words) =>
+    assert.ok(!message.includes(words), `${words} reached the message`),
+  );
 });
 
 test('a turn is quiet when a command, a touched record, an answer source, a name or the model says so', () => {

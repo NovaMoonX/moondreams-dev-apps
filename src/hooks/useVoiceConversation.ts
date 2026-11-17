@@ -1012,7 +1012,10 @@ export function useVoiceConversation({
     text?: string,
     options: {
       delivery?: SpeechDelivery;
-      onResult?: (result: VoiceSpoken) => void;
+      onResult?: (
+        result: VoiceSpoken,
+        delivery: SpeechDelivery | undefined,
+      ) => void;
     } = {},
   ): VoiceRepeat => {
     endFollowUp(true);
@@ -1034,7 +1037,7 @@ export function useVoiceConversation({
       turnKey,
       delivery,
     }).then((result) => {
-      options.onResult?.(result);
+      options.onResult?.(result, delivery);
       const { current } = run;
       if (
         !wasListening ||

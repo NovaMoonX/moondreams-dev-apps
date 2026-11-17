@@ -321,7 +321,27 @@ const CALL_BUDGET_MS = 55_000;
 const RESTART_MARGIN_MS = 5_000;
 const MIN_RESTART_MS = 22_000;
 const SETTLE_QUIET_MS = 1_000;
-const NOTHING_HELD_LINE = "Nothing's being kept off the speaker right now.";
+export const NOTHING_HELD_LINE =
+  "Nothing's being kept off the speaker right now.";
+
+/** The line a turn asking to hear the held line writes: the held line, kept quiet, then the turn's own line; with nothing held, a plain "nothing held" that is never itself kept quiet. */
+export const readHeldAskLine = ({
+  heldBefore,
+  quietLine,
+  isQuiet,
+}: {
+  heldBefore: string | null;
+  quietLine: string | null;
+  isQuiet: boolean;
+}) => {
+  const join = (...lines: (string | null)[]) =>
+    lines.filter(Boolean).join(' ') || null;
+  if (heldBefore !== null) {
+    return { line: join(heldBefore, quietLine), isQuiet: true };
+  }
+  if (isQuiet) return { line: quietLine, isQuiet };
+  return { line: join(NOTHING_HELD_LINE, quietLine), isQuiet };
+};
 const SETTLE_MAX_MS = 3_000;
 
 export type SortMode = 'full' | 'rest';
@@ -2637,7 +2657,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ? text
       : maskPrivateNames(text, maskedNames);
   const answer =
-    mode === 'full' && reply.answer
+    // An ask to hear the held line is the whole reply: an answer beside it would take its place on the turn.
+    mode === 'full' && reply.answer && !reply.sayHeldLine
       ? {
           ...reply.answer,
           fromRecordsText: hide(reply.answer.fromRecordsText),
@@ -4104,8 +4125,9 @@ async function writeResult(
       hadAsks: asksNow.length > 0 || undoPlan.question !== null,
       isAnswerTurn: answerTurn !== null,
       asksHeldLine: asksHeld,
-      line: asksHeld ? (heldBefore ?? NOTHING_HELD_LINE) : quietLine,
-      isQuiet: isQuiet || (asksHeld && heldBefore !== null),
+      ...(asksHeld
+        ? readHeldAskLine({ heldBefore, quietLine, isQuiet })
+        : { line: quietLine, isQuiet }),
     });
     if (askedRef && turn?.kind === 'apply') {
       transaction.update(askedRef, {
