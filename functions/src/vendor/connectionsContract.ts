@@ -253,6 +253,8 @@ export interface StartGoogleConnectionRequest {
   accountId: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount: boolean;
+  /** Further permissions asked in the same sign-in; only the two calendar ones, and only for the calendar connector. */
+  extraScopes?: string[];
 }
 
 export interface StartGoogleConnectionResult {
@@ -291,6 +293,8 @@ export interface ConnectorOption {
   isPrimary: boolean;
   /** Holidays, subscriptions and calendars only shared to read start off. */
   isOnByDefault: boolean;
+  /** Whether the person may add to this choice (a calendar they own or can edit); absent where that makes no sense. */
+  isWritable?: boolean;
 }
 
 export interface EndConnectionRequest {

@@ -155,8 +155,23 @@ export interface HelmProfile {
   researchDepth: 'light' | 'thorough' | null;
   /** This month's research allowance as the server last settled it, shown as "About 4 thorough looks left"; the server's own usage decides, never this. */
   researchAllowance: { month: string; leftCents: number } | null;
+  /** The one Google calendar the plan is kept in step with; readable, written only by the server callable. Null is off. */
+  calendarSync: HelmCalendarSync | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+/** `accountId` is a connections account, `calendarId` the Google calendar; `lastError` is 'reconnect' or 'calendarGone' while the job can't write. */
+export interface HelmCalendarSync {
+  accountId: string;
+  calendarId: string;
+  calendarName: string;
+  isMadeByHelm: boolean;
+  /** Whether the calendar was already in the grant's read list before this was turned on, so stopping leaves it there. */
+  wasAlreadyRead: boolean;
+  startedAt: number;
+  lastWrittenAt: number | null;
+  lastError: string | null;
 }
 
 export type PhoneLocation = 'off' | 'city' | 'precise';
@@ -1562,6 +1577,8 @@ export interface SyncedRecord {
   calendarKey: string | null;
   isBusy: boolean | null;
   sourceUpdatedAt: number | null;
+  /** Set on an event the plan sync wrote to the calendar; null on every other copy and on one from before. */
+  helmRef: string | null;
   syncedAt: number;
   transformVersion: number;
   /** What the copy said when it was last written; null on a copy made before it was kept. */

@@ -6,7 +6,7 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
   contractVersion: 1,
   about:
     "Google Calendar, the person's Google calendars, connected through their Google account.",
-  transformVersion: 2,
+  transformVersion: 3,
   categories: [
     {
       id: 'events',

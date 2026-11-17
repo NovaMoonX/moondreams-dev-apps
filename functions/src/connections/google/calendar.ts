@@ -21,7 +21,7 @@ import { toEventLink } from './deepLinks.js';
 const API = 'https://www.googleapis.com/calendar/v3';
 const TRANSFORM_VERSION = GOOGLE_CALENDAR_MANIFEST.transformVersion;
 const EVENT_FIELDS =
-  'items(id,status,summary,start,end,iCalUID,attendees(self,responseStatus),transparency,updated,location,hangoutLink,conferenceData(entryPoints(entryPointType))),nextPageToken,nextSyncToken';
+  'items(id,status,summary,start,end,iCalUID,attendees(self,responseStatus),transparency,updated,location,hangoutLink,conferenceData(entryPoints(entryPointType)),extendedProperties(private)),nextPageToken,nextSyncToken';
 const LIST_FIELDS =
   'items(id,summary,summaryOverride,backgroundColor,primary,accessRole)';
 const PAGE_SIZE = 250;
@@ -50,6 +50,7 @@ interface CalendarEvent {
   location?: string;
   hangoutLink?: string;
   conferenceData?: { entryPoints?: { entryPointType?: string }[] };
+  extendedProperties?: { private?: Record<string, string> };
 }
 
 interface EventsPage {
@@ -269,6 +270,11 @@ const toFormat = (event: CalendarEvent): 'video' | 'phone' | null => {
   return types.includes('phone') || DIAL_RE.test(location) ? 'phone' : null;
 };
 
+const toHelmRef = (event: CalendarEvent) => {
+  const ref = event.extendedProperties?.private?.helmRef;
+  return typeof ref === 'string' && ref !== '' ? ref.slice(0, 200) : null;
+};
+
 const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
   sourceRef: `${calendarId}|${event.id}`,
   kind: 'event',
@@ -290,6 +296,7 @@ const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
     isFree: event.transparency === 'transparent',
     sameEventKey: toSameEventKey(event),
     format: toFormat(event),
+    helmRef: toHelmRef(event),
   },
 });
 
@@ -501,6 +508,7 @@ const toOption = (entry: CalendarListEntry): ConnectorOption => ({
   photoUrl: null,
   isPrimary: entry.primary === true,
   isOnByDefault: isOnByDefault(entry),
+  isWritable: entry.accessRole === 'owner' || entry.accessRole === 'writer',
 });
 
 const accountPath = (uid: string, accountId: string) =>

@@ -28,6 +28,7 @@ interface FixtureEvent {
   location?: string;
   hangoutLink?: string;
   conferenceData?: { entryPoints: { entryPointType: string; uri: string }[] };
+  extendedProperties?: { private?: Record<string, string> };
 }
 
 const ZONE = 'America/Los_Angeles';
@@ -193,6 +194,9 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
       meeting('fx-m-pin-oak', { location: 'Pin Oak Cafe @ 4 Elm St' }),
       meeting('fx-m-teams-word', { location: 'Microsoft Teams Meeting' }),
       meeting('fx-m-range', { location: '2000-2010 Main St, Suite 200' }),
+      meeting('fx-m-helm', {
+        extendedProperties: { private: { helmRef: 'slot:2026-11-17:s1' } },
+      }),
     ],
     'work@example.com': [
       {
@@ -935,5 +939,44 @@ export const answerFixture = (
     return answerFiles(parsed.pathname, parsed.searchParams, context.email);
   if (parsed.pathname.startsWith(MAIL_PATH))
     return answerMail(parsed.pathname, parsed.searchParams, context.email);
+  return { status: 404, body: {} };
+};
+
+export interface FixtureSend {
+  method: string;
+  url: string;
+  body: unknown;
+}
+
+/** Every write the emulator's fixture token answered, in order, so a check can read what was sent. */
+export const FIXTURE_SENT: FixtureSend[] = [];
+
+export const answerFixtureSend = (
+  method: string,
+  url: string,
+  body: unknown,
+): FixtureAnswer => {
+  FIXTURE_SENT.push({ method, url, body });
+  const { pathname } = new URL(url);
+  if (method === 'DELETE') return { status: 204, body: null };
+  if (pathname === '/calendar/v3/calendars') {
+    const name = (body as { summary?: unknown } | null)?.summary;
+    return {
+      status: 200,
+      body: {
+        id: `fixture-plan-${FIXTURE_SENT.length}@group.calendar.google.com`,
+        summary: typeof name === 'string' ? name : 'Plan',
+      },
+    };
+  }
+  const id = /^\/calendar\/v3\/calendars\/[^/]+\/events\/([^/]+)$/.exec(
+    pathname,
+  );
+  if (id) return { status: 200, body: { id: decodeURIComponent(id[1]) } };
+  if (/^\/calendar\/v3\/calendars\/[^/]+\/events$/.test(pathname))
+    return {
+      status: 200,
+      body: { id: `fixture-event-${FIXTURE_SENT.length}` },
+    };
   return { status: 404, body: {} };
 };

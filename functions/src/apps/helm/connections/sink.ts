@@ -28,7 +28,7 @@ import {
 } from '../helmKey.js';
 
 export const KEPT_COPY_DAYS = 90;
-export const TRANSFORM_VERSION = 1;
+export const TRANSFORM_VERSION = 2;
 export const MAX_COPIES_PER_CATEGORY = MAX_RECORDS_PER_CATEGORY;
 const DAY_MS = 86_400_000;
 const BATCH_SIZE = 400;
@@ -228,6 +228,10 @@ class HelmSinkSession implements SinkSession {
               ? record.extra.isFree !== true
               : null,
           sourceUpdatedAt: record.sourceUpdatedAt,
+          helmRef:
+            typeof record.extra.helmRef === 'string'
+              ? record.extra.helmRef
+              : null,
           contentHash: hash,
           syncedAt: now,
           transformVersion: TRANSFORM_VERSION,

@@ -1,5 +1,9 @@
 import { ReconnectNeeded } from '../tokens.js';
-import { answerFixture, type FixtureContext } from './fixtures.js';
+import {
+  answerFixture,
+  answerFixtureSend,
+  type FixtureContext,
+} from './fixtures.js';
 
 /** Google answered with a failure; only the status is kept, never the body or the address. */
 export class GoogleHttpError extends Error {
@@ -50,6 +54,31 @@ export async function googleGet<T>(
     headers: { Authorization: `Bearer ${token}` },
   });
   return toBody<T>(response.status, () => response.json());
+}
+
+/** Writes to Google with POST, PATCH or DELETE; a refusal or any failure surfaces as `GoogleHttpError`, the same as a read, and a body-less answer reads as `null`. */
+export async function googleSend<T = unknown>(
+  token: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  url: string,
+  body: unknown = null,
+): Promise<T | null> {
+  if (isFixtureToken(token)) {
+    const answer = answerFixtureSend(method, url, body);
+    if (answer.status < 200 || answer.status > 299)
+      throw new GoogleHttpError(answer.status);
+    return answer.body as T | null;
+  }
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body === null ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === null ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) throw new GoogleHttpError(response.status);
+  return (await response.json().catch(() => null)) as T | null;
 }
 
 /** Fetches a file's bytes: an export or a download, not JSON. */

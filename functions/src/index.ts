@@ -48,6 +48,8 @@ export { runHelmScheduledActions } from './apps/helm/scheduledActions/runHelmSch
 export { runHelmResearch } from './apps/helm/research/runHelmResearch.js';
 export { rerunHelmResearch } from './apps/helm/research/rerunHelmResearch.js';
 export { planHelmReminders } from './apps/helm/reminders/planHelmReminders.js';
+export { runHelmCalendarSync } from './apps/helm/calendarSync/runHelmCalendarSync.js';
+export { setHelmCalendarSync } from './apps/helm/calendarSync/setHelmCalendarSync.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.js';
 export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';

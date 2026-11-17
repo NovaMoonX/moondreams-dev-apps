@@ -1,6 +1,10 @@
 // Private things: each source of the class, what code may and may not change, the copy filter and the unattended turn.
 import assert from 'node:assert/strict';
 
+import {
+  buildDesired,
+  toEventBody,
+} from '../../functions/src/apps/helm/calendarSync/plan.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -1902,6 +1906,43 @@ test('a private habit name is never in the line said while unattended, and showi
   assert.ok(!toNameLine(yes, pills!, true).includes('Pills'));
   const hide = planNameRequest({ ...pills!, lockScreenName: 'Pills' }, false);
   assert.ok(!toNameLine(hide, pills!, true).includes('Pills'));
+});
+
+test('a private thing is a bare Busy block in the calendar the plan is kept in', () => {
+  const START = Date.parse('2026-11-17T22:00:00Z');
+  const [event] = buildDesired({
+    now: Date.parse('2026-11-17T17:00:00Z'),
+    timeZone: 'America/Los_Angeles',
+    slots: [
+      {
+        dayKey: '2026-11-17',
+        slotId: 's1',
+        taskId: 't1',
+        startAt: START,
+        endAt: START + 1_800_000,
+        status: 'kept',
+        decidedAt: null,
+      },
+    ],
+    tasks: [
+      {
+        id: 't1',
+        title: 'Refill the inhaler',
+        isPrivate: true,
+        status: 'open',
+        dueAt: null,
+        durationMinutes: null,
+        hasMeets: false,
+        lastEditedAt: null,
+      },
+    ],
+    habits: [],
+  });
+  const body = toEventBody(event, 'Aria');
+  assert.equal(body.summary, 'Busy');
+  assert.equal(body.visibility, 'private');
+  assert.ok(!JSON.stringify(body).includes('inhaler'));
+  assert.ok(!('description' in body));
 });
 
 const failures = (

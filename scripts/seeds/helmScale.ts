@@ -712,6 +712,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       outsideSeenAt: null,
       researchDepth: null,
       researchAllowance: null,
+      calendarSync: null,
       createdAt,
       lastEditedAt: null,
     },

@@ -7027,6 +7027,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           outsideSeenAt: null,
           researchDepth: null,
           researchAllowance: null,
+          calendarSync: null,
           createdAt,
           lastEditedAt: null,
         });
