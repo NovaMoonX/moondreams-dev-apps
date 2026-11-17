@@ -1,8 +1,8 @@
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
 import {
   arrayRemove,
   arrayUnion,
   doc,
-  runTransaction,
   updateDoc,
   type Transaction,
 } from 'firebase/firestore';
@@ -159,7 +159,7 @@ export async function markBillPaid(
   };
   const sealed = await sealJson(payload, encryption);
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const plan = await transaction.get(ref);
     const id = await findOpenMarkId(
       transaction,
@@ -226,7 +226,7 @@ export async function undoBillPaid(
     encryption,
   );
   const ref = moveRef(uid, id);
-  const isWritten = await runTransaction(db, async (transaction) => {
+  const isWritten = await runHeldTransaction(uid, async (transaction) => {
     const [existing, plan] = await Promise.all([
       transaction.get(ref),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
@@ -320,7 +320,7 @@ export async function markBillsPaid(
     async (previous, chunk, chunkIndex) => {
       const before = await previous;
       const wrote = await runChunk(before, () =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const plan = await transaction.get(planDoc);
           const findOpenMark = async (
             input: MarkBillPaidInput,
@@ -412,7 +412,7 @@ export async function undoBillsPaid(
   const count = await chunks.reduce<Promise<number>>(
     async (previous, chunk, chunkIndex) => {
       const before = await previous;
-      const undone = await runTransaction(db, async (transaction) => {
+      const undone = await runHeldTransaction(uid, async (transaction) => {
         const plan = await transaction.get(planDoc);
         const existing = await Promise.all(
           chunk.map((entry) =>
@@ -513,7 +513,7 @@ export async function recordStart(
     ),
   ]);
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const plan = snapshot.data() as Partial<PlanDoc> | undefined;
     const before = plan?.startDate ?? null;
@@ -568,7 +568,7 @@ export async function recordHolding(
     encryption,
   );
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  const isWritten = await runTransaction(db, async (transaction) => {
+  const isWritten = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const plan = snapshot.data() as Partial<PlanDoc> | undefined;
     if ((plan?.startDate ?? null) !== startDate) return false;

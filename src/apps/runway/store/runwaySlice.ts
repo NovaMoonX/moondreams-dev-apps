@@ -1,6 +1,13 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { createAction, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import {
+  addHeldWrites,
+  applyHeldWrites,
+  dropHeldWrites,
+  settleHeldWrites,
+  type HeldWrite,
+} from '@/utils/heldWrites';
 import { withBankBalances } from '@apps/runway/engine/accounts';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -102,7 +109,38 @@ export interface RunwayState {
   /** The confirmed day ids the history records were read for, as the selector joins them. */
   historyRecordsFor: string | null;
   historyFailedFor: string | null;
+  /** What the listeners last delivered, before this device's own writes are laid over it. */
+  incoming: HeldLists;
+  /** This device's writes shown over the lists until the listeners show them. */
+  held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
 }
+
+interface HeldLists {
+  days: OpenDay[];
+  records: OpenRecord[];
+  moves: OpenMove[];
+}
+
+export type HeldKind = keyof HeldLists;
+
+export interface HeldWritesInput {
+  token: string;
+  days?: HeldWrite<OpenDay>[];
+  records?: HeldWrite<OpenRecord>[];
+  moves?: HeldWrite<OpenMove>[];
+}
+
+const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves'];
+
+const layHeld = (state: RunwayState, kind: HeldKind) => {
+  const { list, held } = applyHeldWrites<HeldLists[typeof kind][number]>(
+    state.incoming[kind],
+    state.held[kind],
+    (item) => item.id,
+  );
+  (state[kind] as HeldLists[typeof kind]) = list as HeldLists[typeof kind];
+  (state.held[kind] as HeldWrite<HeldLists[typeof kind][number]>[]) = held;
+};
 
 const initialState: RunwayState = {
   keyStatus: 'idle',
@@ -155,7 +193,16 @@ const initialState: RunwayState = {
   historyFor: null,
   historyRecordsFor: null,
   historyFailedFor: null,
+  incoming: { days: [], records: [], moves: [] },
+  held: { days: [], records: [], moves: [] },
 };
+
+/** Shows a write's records at once, before the server answers. */
+export const holdWrites = createAction<HeldWritesInput>('runway/holdWrites');
+/** The server accepted the write: a record the listeners show now lets go of its hold. */
+export const settleWrites = createAction<string>('runway/settleWrites');
+/** The write failed: its records go back to what the listeners show. */
+export const dropWrites = createAction<string>('runway/dropWrites');
 
 export const runwaySlice = createSlice({
   name: 'runway',
@@ -185,7 +232,8 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ from: DateOnly; days: OpenDay[] }>,
     ) => {
-      state.days = action.payload.days;
+      state.incoming.days = action.payload.days;
+      layHeld(state, 'days');
       state.daysFrom = action.payload.from;
     },
     setChanges: (
@@ -203,7 +251,8 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ dayIds: string; records: OpenRecord[] }>,
     ) => {
-      state.records = action.payload.records;
+      state.incoming.records = action.payload.records;
+      layHeld(state, 'records');
       state.recordsFor = action.payload.dayIds;
     },
     setExpenses: (state, action: PayloadAction<OpenExpense[]>) => {
@@ -245,7 +294,8 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
     ) => {
-      state.moves = action.payload.moves;
+      state.incoming.moves = action.payload.moves;
+      layHeld(state, 'moves');
       state.movesFrom = action.payload.from;
     },
     setPurchases: (
@@ -321,6 +371,36 @@ export const runwaySlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    builder.addCase(holdWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        const added = action.payload[kind] ?? [];
+        const before = state.held[kind] as HeldWrite<unknown>[];
+        if (added.length === 0 && before.length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = addHeldWrites<unknown>(
+          dropHeldWrites<unknown>(before, action.payload.token),
+          added,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(settleWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        (state.held[kind] as HeldWrite<unknown>[]) = settleHeldWrites<unknown>(
+          state.held[kind],
+          action.payload,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(dropWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        (state.held[kind] as HeldWrite<unknown>[]) = dropHeldWrites<unknown>(
+          state.held[kind],
+          action.payload,
+        );
+        layHeld(state, kind);
+      });
+    });
     builder.addCase(resetAllState, () => initialState);
   },
 });
