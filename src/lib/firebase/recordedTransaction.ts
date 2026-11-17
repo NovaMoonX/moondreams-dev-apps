@@ -1,4 +1,6 @@
 import {
+  doc,
+  getDocFromCache,
   runTransaction,
   type DocumentData,
   type DocumentReference,
@@ -7,6 +9,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { projectWrites, type ProjectedDoc } from '@/lib/firebase/projectWrites';
 
 export interface RecordedWrite {
   segments: string[];
@@ -30,9 +33,13 @@ export const isPlainWrite = (data: DocumentData | null): boolean =>
   Object.keys(data).every((key) => !key.includes('.')) &&
   isPlain(data);
 
+/** What each document the attempt read held, by path; null when it didn't exist. */
+export type RecordedReads = Map<string, DocumentData | null>;
+
 const recordingTransaction = (
   transaction: Transaction,
   writes: RecordedWrite[],
+  reads: RecordedReads,
 ): Transaction => {
   const record = (
     ref: DocumentReference,
@@ -41,7 +48,11 @@ const recordingTransaction = (
     isMerge: boolean,
   ) => writes.push({ segments: ref.path.split('/'), op, data, isMerge });
   const recording: Transaction = Object.assign(Object.create(transaction), {
-    get: (ref: DocumentReference) => transaction.get(ref),
+    get: async (ref: DocumentReference) => {
+      const snapshot = await transaction.get(ref);
+      reads.set(ref.path, snapshot.exists() ? snapshot.data() : null);
+      return snapshot;
+    },
     set: (ref: DocumentReference, data: DocumentData, options?: SetOptions) => {
       const isMerge =
         options !== undefined &&
@@ -80,12 +91,46 @@ const recordingTransaction = (
 /** Hands each attempt's writes to `onWrites` before it commits, since Firestore shows a transaction only once the server answers. */
 export function runRecordedTransaction<T>(
   body: (transaction: Transaction) => Promise<T>,
-  onWrites: (writes: RecordedWrite[]) => Promise<void> | void,
+  onWrites: (
+    writes: RecordedWrite[],
+    reads: RecordedReads,
+  ) => Promise<void> | void,
 ): Promise<T> {
   return runTransaction(db, async (transaction) => {
     const writes: RecordedWrite[] = [];
-    const result = await body(recordingTransaction(transaction, writes));
-    await onWrites(writes);
+    const reads: RecordedReads = new Map();
+    const result = await body(recordingTransaction(transaction, writes, reads));
+    await onWrites(writes, reads);
     return result;
   });
 }
+
+const readCached = (path: string): Promise<DocumentData | null | undefined> =>
+  getDocFromCache(doc(db, path)).then(
+    (snapshot) => (snapshot.exists() ? snapshot.data() : null),
+    () => undefined,
+  );
+
+/** Each written document's data after an attempt's writes, from what the attempt read or else the device's cached copy. */
+export async function projectRecordedWrites(
+  writes: RecordedWrite[],
+  reads: RecordedReads,
+): Promise<ReturnType<typeof projectWrites>> {
+  const unread = Array.from(
+    new Set(
+      writes
+        .map((write) => write.segments.join('/'))
+        .filter((path) => !reads.has(path)),
+    ),
+  );
+  const cached = new Map(
+    await Promise.all(
+      unread.map(async (path) => [path, await readCached(path)] as const),
+    ),
+  );
+  return projectWrites(writes, (path) =>
+    reads.has(path) ? reads.get(path) : cached.get(path),
+  );
+}
+
+export type { ProjectedDoc };

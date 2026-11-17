@@ -79,6 +79,7 @@ jobs:
       - run: npm run check:option-match
       - run: npm run check:held-writes
       - run: npm run check:runway-purchase-holds
+      - run: npm run check:project-writes
       - run: npm run check:runway-notify-text
       - run: npm run check:waypoint-pushes
       - run: npm run check:waypoint-balances
