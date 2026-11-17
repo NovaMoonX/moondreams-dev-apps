@@ -248,6 +248,7 @@ type User = {
 ### Styling and class names
 - Use TailwindCSS exclusively.
 - **Always** use `join` from `@moondreamsdev/dreamer-ui/utils` for conditional class names.
+- **`join` doesn't resolve conflicts:** it keeps both classes and whichever Tailwind defines later wins, so a caller's `text-base` passed over a component's own `text-lg` silently does nothing. A component whose size, padding or colour a caller varies takes a prop (`isCompact`) that picks its classes; its `className` is for placement (margins), never for overriding what it sets itself (Pinch's conversion card stayed 18px in a 16px panel).
 - **Never** use template literals with `${` in `className`; always use `join()` instead.
 - Reuse existing styles and colors from `src/dreamer-ui.css` and `src/index.css` whenever applicable; do not modify them unless required.
 

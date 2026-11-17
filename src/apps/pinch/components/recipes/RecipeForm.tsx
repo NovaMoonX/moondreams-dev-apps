@@ -54,6 +54,7 @@ import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
 import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
 import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField';
 import {
+  adaptRows,
   getDataFromExtracted,
   getDataFromIdea,
   getInitialData,
@@ -104,6 +105,7 @@ import {
   selectCollectionsById,
   selectIsCollectionsReady,
   selectNotesByRecipe,
+  selectPinchSettings,
   selectRecipesById,
   selectShareBySource,
   selectShowNutrition,
@@ -117,6 +119,7 @@ import type {
   DishCategory,
   Idea,
   NutritionMetric,
+  PinchUnitSettings,
   Recipe,
   RecipeNote,
   RecipeSource,
@@ -138,6 +141,7 @@ import {
   getWhyChoices,
   isWhyAsked,
 } from '@apps/pinch/utils/recipeChanges';
+import { readaptLine } from '@apps/pinch/utils/units';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { getShownCover } from '@apps/pinch/utils/recipeCover';
 import {
@@ -204,6 +208,32 @@ interface RecipeFormProps {
   onSaved?: () => void;
 }
 
+// Adapting units or putting them back is not an edit, so it never asks why.
+const withLinesAsWritten = (
+  draft: RecipeDraft,
+  recipe: Recipe,
+  units: PinchUnitSettings,
+): RecipeDraft => ({
+  ...draft,
+  ingredients: draft.ingredients.map((line) => {
+    const before = recipe.ingredients.find((saved) => saved.id === line.id);
+    if (before === undefined) return line;
+    const adapted = readaptLine(before, units);
+    const isAdaptedNow =
+      adapted !== null &&
+      line.amount === adapted.amount &&
+      line.unit === adapted.unit;
+    const isPutBackNow =
+      before.adaptedFrom !== null &&
+      line.adaptedFrom === null &&
+      line.amount === before.adaptedFrom.amount &&
+      line.unit === before.adaptedFrom.unit;
+    return isAdaptedNow || isPutBackNow
+      ? { ...line, amount: before.amount, unit: before.unit }
+      : line;
+  }),
+});
+
 function RecipeForm({
   uid,
   recipeId,
@@ -245,14 +275,22 @@ function RecipeForm({
   );
   const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
+  const units = useAppSelector(selectPinchSettings).units;
+  const [readStart] = useState(() => {
+    if (!initialRead) return null;
+    const read = getDataFromExtracted(
+      initialRead.recipe,
+      ingredients,
+      initialRead.extras,
+    );
+    const adapted = adaptRows(read.ingredients, units);
+    return { data: { ...read, ingredients: adapted.rows }, ids: adapted.ids };
+  });
+  const [adaptedIds, setAdaptedIds] = useState<string[]>(readStart?.ids ?? []);
   const [initialData] = useState(() =>
-    initialRead
+    initialRead && readStart
       ? {
-          ...getDataFromExtracted(
-            initialRead.recipe,
-            ingredients,
-            initialRead.extras,
-          ),
+          ...readStart.data,
           sourceChoice: getReadSourceChoice(
             initialRead.source,
             initialRead.label,
@@ -740,6 +778,9 @@ function RecipeForm({
               rows={props.value as IngredientRow[]}
               onChange={props.onValueChange}
               onRemoved={showUndo}
+              adaptedIds={adaptedIds}
+              onAdaptedIdsChange={setAdaptedIds}
+              adaptUnits={recipe === null ? null : units}
             />
           </FormSection>
         ),
@@ -813,6 +854,8 @@ function RecipeForm({
     initialRead,
     showUndo,
     tracking,
+    adaptedIds,
+    units,
   ]);
 
   const handleDelete = async () => {
@@ -1051,7 +1094,7 @@ function RecipeForm({
     if (recipe && (tracking === 'on' || applied.length > 0) && !hasReason) {
       const { changes, topics } = getDraftChanges(
         recipe,
-        getDraft(data, ''),
+        withLinesAsWritten(getDraft(data, ''), recipe, units),
         ingredientsById,
         sourcesById,
         collectionsById,

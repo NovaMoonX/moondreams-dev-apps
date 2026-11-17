@@ -1,22 +1,11 @@
+import type { MeasureUnit } from '@/utils/measureUtils';
 export type PinchTab =
   'calendar' | 'recipes' | 'kitchen' | 'shopping' | 'settings';
 
 /** The tabs a person can open Pinch on; Settings is the place that chooses, so it is never one. */
 export type PinchStartTab = Exclude<PinchTab, 'settings'>;
 
-export type Unit =
-  | 'G'
-  | 'KG'
-  | 'OZ'
-  | 'LB'
-  | 'ML'
-  | 'L'
-  | 'TSP'
-  | 'TBSP'
-  | 'CUP'
-  | 'FL_OZ'
-  | 'PINCH'
-  | 'EACH';
+export type Unit = MeasureUnit | 'PINCH' | 'EACH';
 
 export type Dimension = 'MASS' | 'VOLUME' | 'COUNT';
 
@@ -152,6 +141,19 @@ export interface PinchVoiceSettings {
   isWaiting: boolean | null;
 }
 
+/** How weights are written in the person's recipes: as each recipe wrote them, grams and kilograms, or ounces and pounds. */
+export type WeightUnits = 'AS_WRITTEN' | 'METRIC' | 'US';
+/** How volumes are written: as written, millilitres and litres, cups (with spoons for small amounts), or fluid ounces. */
+export type VolumeUnits = 'AS_WRITTEN' | 'METRIC' | 'CUPS' | 'FL_OZ';
+
+/** The units a person cooks in. New readings arrive in them and cooking mode shows amounts in them; a saved recipe changes only when the person adapts it. */
+export interface PinchUnitSettings {
+  weight: WeightUnits;
+  volume: VolumeUnits;
+  /** Leave teaspoons and tablespoons as they are when volumes are metric. */
+  keepSpoons: boolean;
+}
+
 /** The person's own choices, at `apps/pinch/settings/{uid}`: reminders, how long a new box keeps and whether the Calendar draws its stat tiles. Created the first time Pinch opens with the defaults, or by their first change. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
 export interface PinchSettings {
   /** Days a box starts with in the fridge; null is the built-in number. */
@@ -166,6 +168,8 @@ export interface PinchSettings {
   defaultTab: PinchStartTab;
   /** Hands-free cooking choices. A document written before this key lacks it, which reads as every choice not made yet. */
   voice: PinchVoiceSettings;
+  /** The units recipes are adapted to. A document written before this key lacks it, which reads as everything as written. */
+  units: PinchUnitSettings;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
@@ -570,6 +574,8 @@ export interface RecipeIngredient {
   note: string | null;
   /** The heading the line sits under ("For the sauce"), or null for none; one ingredient may have a line in several groups. Lines written before groups lack the key, which reads as null. */
   group: string | null;
+  /** The amount and unit the line had before it was adapted to the person's units, or null when it is as written. Lines written before adapting lack the key, which reads as null. */
+  adaptedFrom: { amount: number; unit: Unit } | null;
 }
 
 export interface RecipeCare {

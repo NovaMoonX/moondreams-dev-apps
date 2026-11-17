@@ -31,6 +31,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort } from '@/utils/formatUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookCaptureView from '@apps/pinch/components/cooking/CookCaptureView';
+import { CookConversionContext } from '@apps/pinch/components/cooking/cookConversionContext';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookTimerBuzz from '@apps/pinch/components/cooking/CookTimerBuzz';
 import CookPantryTake from '@apps/pinch/components/cooking/CookPantryTake';
@@ -86,6 +87,7 @@ import {
   selectIngredientsById,
   selectNotesById,
   selectNotesByRecipe,
+  selectPinchSettings,
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -138,6 +140,7 @@ import {
 } from '@apps/pinch/utils/cooks';
 import {
   describeAmounts,
+  toSpokenAmount,
   describeTimerGuess,
   describeTimerQuestion,
   describeTimersLeft,
@@ -153,8 +156,14 @@ import {
   type CookVoiceTimer,
 } from '@apps/pinch/utils/cookVoice';
 import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  describeIngredientConversion,
+  describeMeasureConversion,
+  getConversionLine,
+} from '@apps/pinch/utils/cookConversions';
 import { getLineKey, getLineName } from '@apps/pinch/utils/freeLines';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeLines } from '@apps/pinch/utils/shopping';
@@ -483,6 +492,15 @@ function CookingSession({
     key: string;
     view: DockView | null;
   } | null>(null);
+  const [openConversion, setOpenConversion] = useState<string | null>(null);
+  const conversionState = useMemo(
+    () => ({
+      openKey: openConversion,
+      onToggle: (key: string) =>
+        setOpenConversion((current) => (current === key ? null : key)),
+    }),
+    [openConversion],
+  );
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -540,27 +558,55 @@ function CookingSession({
     [entries, ingredientsById],
   );
   const stepMatches = matchesByRecipe.get(recipe.id) ?? [];
+  const { units } = useAppSelector(selectPinchSettings);
   const getRows = useCallback(
     (target: Recipe, targetServings: number) => {
       const repeatedGroups = getRepeatedLineGroups(target.ingredients);
-      const result = target.ingredients.map((line) => ({
-        id: line.id,
-        name: getLineName(line, ingredientsById),
-        note: line.amount === null ? null : line.note,
-        amountText:
+      const result = target.ingredients.map((line) => {
+        const scaled =
           line.amount === null
-            ? (line.note ?? '')
-            : formatKitchenAmount(
-                scaleAmount(line.amount, targetServings, target.servings),
-                line.unit,
-              ),
-        isMeasured: line.amount !== null,
-        group: line.group ?? null,
-        groupLabel: repeatedGroups.get(line.id) ?? null,
-      }));
+            ? null
+            : scaleAmount(line.amount, targetServings, target.servings);
+        const shown =
+          scaled === null
+            ? null
+            : (adaptAmount(scaled, line.unit, units) ?? {
+                amount: scaled,
+                unit: line.unit,
+              });
+        const measure =
+          shown === null
+            ? null
+            : {
+                ...shown,
+                gramsPerMl:
+                  line.ingredientId === null
+                    ? null
+                    : (ingredientsById.get(line.ingredientId)?.gramsPerMl ??
+                      null),
+              };
+        const conversion = measure === null ? null : getConversionLine(measure);
+        return {
+          id: line.id,
+          name: getLineName(line, ingredientsById),
+          note: line.amount === null ? null : line.note,
+          amountText:
+            shown === null
+              ? (line.note ?? '')
+              : formatKitchenAmount(shown.amount, shown.unit),
+          isMeasured: line.amount !== null,
+          measure,
+          conversion:
+            conversion === null
+              ? null
+              : { key: `${target.id}:${line.id}`, text: conversion },
+          group: line.group ?? null,
+          groupLabel: repeatedGroups.get(line.id) ?? null,
+        };
+      });
       return result;
     },
-    [ingredientsById],
+    [ingredientsById, units],
   );
   const rows = useMemo(
     () => getRows(recipe, servings),
@@ -2070,6 +2116,35 @@ function CookingSession({
       const { show, speak } = describeAmounts(found);
       return done(show, speak);
     },
+    convert: (lineIds, query, unit) => {
+      const voiceRows = getVoiceRows();
+      const found = lineIds.flatMap((id) =>
+        voiceRows.filter((row) => row.id === id),
+      );
+      if (found.length === 0) {
+        const sentence = `I couldn't find ${query} in this recipe.`;
+        return refuse(sentence, sentence);
+      }
+      const answers = found.map((row) =>
+        describeIngredientConversion(row, unit, toSpokenAmount),
+      );
+      const show = answers.map((answer) => answer.show).join(' ');
+      const speak = answers.map((answer) => answer.speak).join(' ');
+      return answers.every((answer) => answer.ok)
+        ? done(show, speak)
+        : refuse(show, speak);
+    },
+    convertAmount: (amount, from, to) => {
+      const answer = describeMeasureConversion(
+        amount,
+        from,
+        to,
+        toSpokenAmount,
+      );
+      return answer.ok
+        ? done(answer.show, answer.speak)
+        : refuse(answer.show, answer.speak);
+    },
     switchRecipe: (recipeId, candidates) => {
       if (recipeId === null) {
         const titles = entries
@@ -2767,346 +2842,421 @@ function CookingSession({
   );
 
   return (
-    <Subview
-      overlay
-      isTitleWrapped
-      className={
-        isEditing
-          ? undefined
-          : 'lg:max-w-5xl [@media(max-height:500px)]:max-w-4xl'
-      }
-      title={isEditing ? editTitle : title}
-      headerAction={
-        voice.isSupported && !isFinishShown && !isEditing ? (
-          <CookVoiceButton voice={voice} />
-        ) : null
-      }
-      onClose={closeSubview}
-      onBack={() => {
-        if (isEditing) {
-          void leaveEdit();
-        } else if (capture.isOpen) {
-          void cancelCapture();
-        } else if (focused !== null) {
-          backToStep();
-        } else if (isStepsView && shownView !== null) {
-          showDockView(null);
-        } else if (isStepsView) {
-          void leave();
-        } else {
-          showView('steps');
+    <CookConversionContext.Provider value={conversionState}>
+      <Subview
+        overlay
+        isTitleWrapped
+        className={
+          isEditing
+            ? undefined
+            : 'lg:max-w-5xl [@media(max-height:500px)]:max-w-4xl'
         }
-      }}
-    >
-      <div
-        ref={rootRef}
-        onClickCapture={() => {
-          if (!isDraftOpen) scrollAtTap.current = getOverlay()?.scrollTop ?? 0;
+        title={isEditing ? editTitle : title}
+        headerAction={
+          voice.isSupported && !isFinishShown && !isEditing ? (
+            <CookVoiceButton voice={voice} />
+          ) : null
+        }
+        onClose={closeSubview}
+        onBack={() => {
+          if (isEditing) {
+            void leaveEdit();
+          } else if (capture.isOpen) {
+            void cancelCapture();
+          } else if (focused !== null) {
+            backToStep();
+          } else if (isStepsView && shownView !== null) {
+            showDockView(null);
+          } else if (isStepsView) {
+            void leave();
+          } else {
+            showView('steps');
+          }
         }}
-        className={join(
-          'flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2',
-          isEditing && 'hidden!',
-        )}
       >
-        {!isDishStripInStep && dishStrip}
-        {focused !== null ? (
-          getTimerContent()
-        ) : capture.isOpen && !isFinishShown ? (
-          <CookCaptureView
-            capture={capture}
-            steps={recipe.steps}
-            caption={isPlate ? recipe.title : null}
-            backLabel='Back to the step'
-            onBack={() => void cancelCapture()}
-            onDelete={() => void deleteCaptured()}
-          />
-        ) : isTimersView ? (
-          <CookTimersView
-            timers={getTimerRows(timers.timers, null)}
-            draft={timerDraft}
-            isFull={timers.isFull}
-            onDraftChange={setTimerDraft}
-            onBack={() => showView('steps')}
-            onTick={timers.settle}
-            onFocus={timers.focus}
-            onPause={timers.pause}
-            onResume={timers.resume}
-            onExtend={(id, ms) => void timers.extend(id, ms)}
-            onEnd={endTimer}
-          />
-        ) : isFinishShown ? (
-          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6 [@media(max-height:600px)]:gap-3 [@media(max-height:600px)]:py-2'>
-            <p className='text-center text-2xl leading-snug font-medium'>
-              Nice work
-            </p>
-            {!capture.isOpen && !putAway.isOpen && (
-              <CookRecord
-                status={recordStatus}
-                rows={records.map((record) => ({
-                  id: record.recipeId,
-                  label: isPlate ? record.entry.recipe.title : 'Servings made',
-                  servings: record.servings,
-                  isRecorded: record.recordedCookId !== null,
-                }))}
-                caption={isPlate ? 'Servings made' : null}
-                onServingsChange={changeServings}
-                undoState={
-                  !hasFollowUps &&
-                  (records.some((record) => record.isCooked) ||
-                    undoState === 'PENDING')
-                    ? (undoState ?? 'READY')
-                    : null
-                }
-                onUndo={() => void undoMarked()}
-                onMark={
-                  markable.length === 0 || undoState === 'PENDING'
-                    ? null
-                    : () => void markCooked()
-                }
-                problem={getRecordProblem()}
-              />
-            )}
-            {!capture.isOpen &&
-              !putAway.isOpen &&
-              followUpRecords.map((record) => (
-                <CookResultCard
-                  key={record.recipeId}
-                  uid={uid}
-                  cookId={record.recordedCookId ?? ''}
-                  caption={isPlate ? record.entry.recipe.title : null}
-                />
-              ))}
-            {!capture.isOpen && !putAway.isOpen && isRecorded && (
-              <CookPantryTake take={pantryTake} />
-            )}
-            {!capture.isOpen &&
-              recordedEntries.map((record) => (
-                <CookPutAway
-                  key={record.recipeId}
-                  putAway={putAway}
-                  recipeId={record.recipeId}
-                  care={getRecipeCare(record.entry.recipe)}
-                  caption={isPlate ? record.entry.recipe.title : null}
-                />
-              ))}
-            {isRecorded && capture.isOpen && (
-              <CookCaptureView
-                capture={capture}
-                steps={
-                  entries.find(
-                    (candidate) =>
-                      candidate.recipe.id === capture.draft?.recipeId,
-                  )?.recipe.steps ?? []
-                }
-                caption={isPlate ? openCaptureTitle : null}
-                backLabel='Back'
-                onBack={() => void cancelCapture()}
-                onDelete={() => void deleteCaptured()}
-              />
-            )}
-            {!capture.isOpen &&
-              !putAway.isOpen &&
-              followUpRecords.map((record) => {
-                const reviewEntries = getReviewEntries(record.recipeId, true);
-                const plannedChanges = reviewEntries.filter(
-                  (entry) => entry.note.kind === 'CHANGE',
-                );
-                return (
-                  <CookReview
-                    key={record.recipeId}
-                    caption={isPlate ? record.entry.recipe.title : null}
-                    entries={reviewEntries}
-                    canAdd={capture.isAvailable(record.recipeId)}
-                    isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
-                    doneText={getFollowUpDone(record.recipeId)}
-                    plannedChangeCount={plannedChanges.length}
-                    onAdd={() =>
-                      capture.open({
-                        recipeId: record.recipeId,
-                        stepIndex: null,
-                        kind: 'NOTE',
-                      })
-                    }
-                    onEdit={capture.edit}
-                    onChangeRecipe={() => void startEdit(record.recipeId, [])}
-                    onNothing={() => chooseNothing(record.recipeId)}
-                  />
-                );
-              })}
-            {!capture.isOpen && !putAway.isOpen && (
-              <Button
-                type='button'
-                variant='secondary'
-                className='border-border h-10 gap-1 self-center border'
-                onClick={() => setIsFinished(false)}
-              >
-                <ChevronLeft className='h-4 w-4' />
-                Back to the last step
-              </Button>
-            )}
-          </div>
-        ) : isWide ? (
-          <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-stretch gap-10'>
-            <div className='flex flex-col gap-4'>{stepContent}</div>
-            <div className='border-border space-y-6 border-l pl-8'>
-              {ingredientsContent}
-            </div>
-          </div>
-        ) : isStepsView ? (
-          stepContent
-        ) : (
-          <div className='space-y-6'>
-            {ingredientsContent}
-            {notesDoor}
-          </div>
-        )}
-        <div role='status' className='space-y-1 empty:hidden'>
-          {isChanged && focused === null && (
-            <p className='text-muted-foreground text-xs'>
-              This recipe was changed or removed elsewhere.
-            </p>
-          )}
-          {isEditedHere && !isChanged && focused === null && !isFinishShown && (
-            <p className='text-muted-foreground text-xs'>
-              Cooking now follows your changes.
-            </p>
-          )}
-        </div>
         <div
+          ref={rootRef}
+          onClickCapture={() => {
+            if (!isDraftOpen)
+              scrollAtTap.current = getOverlay()?.scrollTop ?? 0;
+          }}
           className={join(
-            'form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!',
-            isWide &&
-              !isFinishShown &&
-              !isTimersView &&
-              focused === null &&
-              'grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] gap-x-10',
+            'flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2',
+            isEditing && 'hidden!',
           )}
         >
-          <div
-            className={join(
-              'flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3',
-              focused !== null &&
-                'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-xl',
-              isFinishShown &&
-                focused === null &&
-                'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-md',
-            )}
-          >
-            {!isFinishShown && (
-              <CookVoiceLine
-                voice={voice}
-                ingredientExample={ingredientExample}
-                dishExample={dishExample}
-                className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'
-              />
-            )}
-            {isTimersView && focused === null && getStartNote() !== null && (
-              <p role='status' className='text-muted-foreground text-xs'>
-                {getStartNote()}
+          {!isDishStripInStep && dishStrip}
+          {focused !== null ? (
+            getTimerContent()
+          ) : capture.isOpen && !isFinishShown ? (
+            <CookCaptureView
+              capture={capture}
+              steps={recipe.steps}
+              caption={isPlate ? recipe.title : null}
+              backLabel='Back to the step'
+              onBack={() => void cancelCapture()}
+              onDelete={() => void deleteCaptured()}
+            />
+          ) : isTimersView ? (
+            <CookTimersView
+              timers={getTimerRows(timers.timers, null)}
+              draft={timerDraft}
+              isFull={timers.isFull}
+              onDraftChange={setTimerDraft}
+              onBack={() => showView('steps')}
+              onTick={timers.settle}
+              onFocus={timers.focus}
+              onPause={timers.pause}
+              onResume={timers.resume}
+              onExtend={(id, ms) => void timers.extend(id, ms)}
+              onEnd={endTimer}
+            />
+          ) : isFinishShown ? (
+            <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6 [@media(max-height:600px)]:gap-3 [@media(max-height:600px)]:py-2'>
+              <p className='text-center text-2xl leading-snug font-medium'>
+                Nice work
+              </p>
+              {!capture.isOpen && !putAway.isOpen && (
+                <CookRecord
+                  status={recordStatus}
+                  rows={records.map((record) => ({
+                    id: record.recipeId,
+                    label: isPlate
+                      ? record.entry.recipe.title
+                      : 'Servings made',
+                    servings: record.servings,
+                    isRecorded: record.recordedCookId !== null,
+                  }))}
+                  caption={isPlate ? 'Servings made' : null}
+                  onServingsChange={changeServings}
+                  undoState={
+                    !hasFollowUps &&
+                    (records.some((record) => record.isCooked) ||
+                      undoState === 'PENDING')
+                      ? (undoState ?? 'READY')
+                      : null
+                  }
+                  onUndo={() => void undoMarked()}
+                  onMark={
+                    markable.length === 0 || undoState === 'PENDING'
+                      ? null
+                      : () => void markCooked()
+                  }
+                  problem={getRecordProblem()}
+                />
+              )}
+              {!capture.isOpen &&
+                !putAway.isOpen &&
+                followUpRecords.map((record) => (
+                  <CookResultCard
+                    key={record.recipeId}
+                    uid={uid}
+                    cookId={record.recordedCookId ?? ''}
+                    caption={isPlate ? record.entry.recipe.title : null}
+                  />
+                ))}
+              {!capture.isOpen && !putAway.isOpen && isRecorded && (
+                <CookPantryTake take={pantryTake} />
+              )}
+              {!capture.isOpen &&
+                recordedEntries.map((record) => (
+                  <CookPutAway
+                    key={record.recipeId}
+                    putAway={putAway}
+                    recipeId={record.recipeId}
+                    care={getRecipeCare(record.entry.recipe)}
+                    caption={isPlate ? record.entry.recipe.title : null}
+                  />
+                ))}
+              {isRecorded && capture.isOpen && (
+                <CookCaptureView
+                  capture={capture}
+                  steps={
+                    entries.find(
+                      (candidate) =>
+                        candidate.recipe.id === capture.draft?.recipeId,
+                    )?.recipe.steps ?? []
+                  }
+                  caption={isPlate ? openCaptureTitle : null}
+                  backLabel='Back'
+                  onBack={() => void cancelCapture()}
+                  onDelete={() => void deleteCaptured()}
+                />
+              )}
+              {!capture.isOpen &&
+                !putAway.isOpen &&
+                followUpRecords.map((record) => {
+                  const reviewEntries = getReviewEntries(record.recipeId, true);
+                  const plannedChanges = reviewEntries.filter(
+                    (entry) => entry.note.kind === 'CHANGE',
+                  );
+                  return (
+                    <CookReview
+                      key={record.recipeId}
+                      caption={isPlate ? record.entry.recipe.title : null}
+                      entries={reviewEntries}
+                      canAdd={capture.isAvailable(record.recipeId)}
+                      isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
+                      doneText={getFollowUpDone(record.recipeId)}
+                      plannedChangeCount={plannedChanges.length}
+                      onAdd={() =>
+                        capture.open({
+                          recipeId: record.recipeId,
+                          stepIndex: null,
+                          kind: 'NOTE',
+                        })
+                      }
+                      onEdit={capture.edit}
+                      onChangeRecipe={() => void startEdit(record.recipeId, [])}
+                      onNothing={() => chooseNothing(record.recipeId)}
+                    />
+                  );
+                })}
+              {!capture.isOpen && !putAway.isOpen && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className='border-border h-10 gap-1 self-center border'
+                  onClick={() => setIsFinished(false)}
+                >
+                  <ChevronLeft className='h-4 w-4' />
+                  Back to the last step
+                </Button>
+              )}
+            </div>
+          ) : isWide ? (
+            <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-stretch gap-10'>
+              <div className='flex flex-col gap-4'>{stepContent}</div>
+              <div className='border-border space-y-6 border-l pl-8'>
+                {ingredientsContent}
+              </div>
+            </div>
+          ) : isStepsView ? (
+            stepContent
+          ) : (
+            <div className='space-y-6'>
+              {ingredientsContent}
+              {notesDoor}
+            </div>
+          )}
+          <div role='status' className='space-y-1 empty:hidden'>
+            {isChanged && focused === null && (
+              <p className='text-muted-foreground text-xs'>
+                This recipe was changed or removed elsewhere.
               </p>
             )}
-            <CookTimerStrip
-              timers={
-                focused === null && !isTimersView
-                  ? getTimerRows(timers.timers, null)
-                  : []
-              }
-              className='[@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:self-center'
-              onTick={timers.settle}
-              onFocus={isDraftOpen ? null : timers.focus}
-            />
-            <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
-              {focused !== null ? (
-                <>
-                  {timerSecondary === 'NEXT' && (
+            {isEditedHere &&
+              !isChanged &&
+              focused === null &&
+              !isFinishShown && (
+                <p className='text-muted-foreground text-xs'>
+                  Cooking now follows your changes.
+                </p>
+              )}
+          </div>
+          <div
+            className={join(
+              'form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!',
+              isWide &&
+                !isFinishShown &&
+                !isTimersView &&
+                focused === null &&
+                'grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] gap-x-10',
+            )}
+          >
+            <div
+              className={join(
+                'flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3',
+                focused !== null &&
+                  'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-xl',
+                isFinishShown &&
+                  focused === null &&
+                  'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-md',
+              )}
+            >
+              {!isFinishShown && (
+                <CookVoiceLine
+                  voice={voice}
+                  ingredientExample={ingredientExample}
+                  dishExample={dishExample}
+                  className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'
+                />
+              )}
+              {isTimersView && focused === null && getStartNote() !== null && (
+                <p role='status' className='text-muted-foreground text-xs'>
+                  {getStartNote()}
+                </p>
+              )}
+              <CookTimerStrip
+                timers={
+                  focused === null && !isTimersView
+                    ? getTimerRows(timers.timers, null)
+                    : []
+                }
+                className='[@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:self-center'
+                onTick={timers.settle}
+                onFocus={isDraftOpen ? null : timers.focus}
+              />
+              <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
+                {focused !== null ? (
+                  <>
+                    {timerSecondary === 'NEXT' && (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        className={join(
+                          'h-14 shrink-0 px-5 text-base',
+                          '[@media(max-height:500px)]:h-11',
+                        )}
+                        aria-label={secondaryLabels.aria}
+                        onClick={handleSecondary}
+                      >
+                        {secondaryLabels.text}
+                      </Button>
+                    )}
+                    <Button
+                      ref={primaryRef}
+                      type='button'
+                      className={join(
+                        'h-14 min-w-0 flex-1 gap-2 text-lg',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      aria-label={`${focusedVerb} the ${focused.label} timer`}
+                      onClick={handleFocusedAction}
+                    >
+                      {focused.status === 'running' && (
+                        <Pause className='h-5 w-5' aria-hidden='true' />
+                      )}
+                      {focused.status === 'paused' && (
+                        <Play className='h-5 w-5' aria-hidden='true' />
+                      )}
+                      {focusedVerb}
+                    </Button>
+                  </>
+                ) : isFinishShown && isRecorded && putAway.isOpen ? (
+                  <>
                     <Button
                       type='button'
                       variant='secondary'
                       className={join(
-                        'h-14 shrink-0 px-5 text-base',
+                        'h-14 shrink-0 px-6 text-base',
                         '[@media(max-height:500px)]:h-11',
                       )}
-                      aria-label={secondaryLabels.aria}
-                      onClick={handleSecondary}
+                      disabled={putAway.isSaving}
+                      onClick={putAway.skip}
                     >
-                      {secondaryLabels.text}
+                      Skip
                     </Button>
-                  )}
-                  <Button
-                    ref={primaryRef}
-                    type='button'
-                    className={join(
-                      'h-14 min-w-0 flex-1 gap-2 text-lg',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    aria-label={`${focusedVerb} the ${focused.label} timer`}
-                    onClick={handleFocusedAction}
-                  >
-                    {focused.status === 'running' && (
-                      <Pause className='h-5 w-5' aria-hidden='true' />
-                    )}
-                    {focused.status === 'paused' && (
+                    <Button
+                      type='button'
+                      className={join(
+                        'h-14 min-w-0 flex-1 text-lg',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      loading={putAway.isSaving}
+                      disabled={putAway.isSaving || !putAway.canSave}
+                      onClick={() => void putAway.save()}
+                    >
+                      Save
+                    </Button>
+                  </>
+                ) : capture.isOpen && (isRecorded || !isFinishShown) ? (
+                  <>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className={join(
+                        'h-14 shrink-0 px-6 text-base',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      disabled={capture.isSaving}
+                      onClick={() => void cancelCapture()}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type='button'
+                      className={join(
+                        'h-14 min-w-0 flex-1 text-lg',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      loading={capture.isSaving}
+                      disabled={capture.isSaving || !capture.canSave}
+                      onClick={() => void capture.save()}
+                    >
+                      Save
+                    </Button>
+                  </>
+                ) : isFinishShown ? (
+                  <>
+                    <Button
+                      ref={primaryRef}
+                      type='button'
+                      className={join(
+                        'h-14 min-w-0 flex-1 text-lg',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      onClick={() => void handleDone()}
+                    >
+                      Done
+                    </Button>
+                  </>
+                ) : isTimersView ? (
+                  <>
+                    <Button
+                      ref={primaryRef}
+                      type='button'
+                      className={join(
+                        'h-14 min-w-0 flex-1 gap-2 text-lg',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      disabled={draftSeconds === null || timers.isFull}
+                      onClick={handleStartDraft}
+                    >
                       <Play className='h-5 w-5' aria-hidden='true' />
-                    )}
-                    {focusedVerb}
-                  </Button>
-                </>
-              ) : isFinishShown && isRecorded && putAway.isOpen ? (
-                <>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    className={join(
-                      'h-14 shrink-0 px-6 text-base',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    disabled={putAway.isSaving}
-                    onClick={putAway.skip}
-                  >
-                    Skip
-                  </Button>
-                  <Button
-                    type='button'
-                    className={join(
-                      'h-14 min-w-0 flex-1 text-lg',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    loading={putAway.isSaving}
-                    disabled={putAway.isSaving || !putAway.canSave}
-                    onClick={() => void putAway.save()}
-                  >
-                    Save
-                  </Button>
-                </>
-              ) : capture.isOpen && (isRecorded || !isFinishShown) ? (
-                <>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    className={join(
-                      'h-14 shrink-0 px-6 text-base',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    disabled={capture.isSaving}
-                    onClick={() => void cancelCapture()}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type='button'
-                    className={join(
-                      'h-14 min-w-0 flex-1 text-lg',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    loading={capture.isSaving}
-                    disabled={capture.isSaving || !capture.canSave}
-                    onClick={() => void capture.save()}
-                  >
-                    Save
-                  </Button>
-                </>
-              ) : isFinishShown ? (
-                <>
+                      Start timer
+                    </Button>
+                  </>
+                ) : isStepsView ? (
+                  <>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className={join(
+                        'h-14 shrink-0 px-6 text-base',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      aria-label='Back to the previous step'
+                      disabled={index <= 0}
+                      onClick={() => goBy(-1)}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      ref={primaryRef}
+                      type='button'
+                      className={join(
+                        'h-14 min-w-0 flex-1 text-lg',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      aria-label={
+                        nextRecipe ? `Next: ${nextRecipe.title}` : undefined
+                      }
+                      disabled={!hasSteps && nextRecipe === null}
+                      onClick={handleNext}
+                    >
+                      {nextRecipe ? (
+                        <span className='min-w-0 truncate'>
+                          Next: {nextRecipe.title}
+                        </span>
+                      ) : next.kind === 'FINISH' && hasSteps ? (
+                        'Finish'
+                      ) : (
+                        'Next'
+                      )}
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     ref={primaryRef}
                     type='button'
@@ -3114,98 +3264,34 @@ function CookingSession({
                       'h-14 min-w-0 flex-1 text-lg',
                       '[@media(max-height:500px)]:h-11',
                     )}
-                    onClick={() => void handleDone()}
+                    onClick={() => showView('steps')}
                   >
-                    Done
+                    Back to the steps
                   </Button>
-                </>
-              ) : isTimersView ? (
-                <>
-                  <Button
-                    ref={primaryRef}
-                    type='button'
-                    className={join(
-                      'h-14 min-w-0 flex-1 gap-2 text-lg',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    disabled={draftSeconds === null || timers.isFull}
-                    onClick={handleStartDraft}
-                  >
-                    <Play className='h-5 w-5' aria-hidden='true' />
-                    Start timer
-                  </Button>
-                </>
-              ) : isStepsView ? (
-                <>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    className={join(
-                      'h-14 shrink-0 px-6 text-base',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    aria-label='Back to the previous step'
-                    disabled={index <= 0}
-                    onClick={() => goBy(-1)}
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    ref={primaryRef}
-                    type='button'
-                    className={join(
-                      'h-14 min-w-0 flex-1 text-lg',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    aria-label={
-                      nextRecipe ? `Next: ${nextRecipe.title}` : undefined
-                    }
-                    disabled={!hasSteps && nextRecipe === null}
-                    onClick={handleNext}
-                  >
-                    {nextRecipe ? (
-                      <span className='min-w-0 truncate'>
-                        Next: {nextRecipe.title}
-                      </span>
-                    ) : next.kind === 'FINISH' && hasSteps ? (
-                      'Finish'
-                    ) : (
-                      'Next'
-                    )}
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  ref={primaryRef}
-                  type='button'
-                  className={join(
-                    'h-14 min-w-0 flex-1 text-lg',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  onClick={() => showView('steps')}
-                >
-                  Back to the steps
-                </Button>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      {edit !== null && (
-        <CookRecipeEdit
-          key={edit.token}
-          uid={uid}
-          recipeId={edit.recipeId}
-          changeIds={edit.changeIds}
-          isDirtyRef={editDirtyRef}
-          backStepRef={editBackStepRef}
-          onTitleChange={setEditTitle}
-          onLeave={() => void leaveEdit()}
-          onSaved={() => finishEdit(edit)}
+        {edit !== null && (
+          <CookRecipeEdit
+            key={edit.token}
+            uid={uid}
+            recipeId={edit.recipeId}
+            changeIds={edit.changeIds}
+            isDirtyRef={editDirtyRef}
+            backStepRef={editBackStepRef}
+            onTitleChange={setEditTitle}
+            onLeave={() => void leaveEdit()}
+            onSaved={() => finishEdit(edit)}
+          />
+        )}
+        <CookVoiceExplainer
+          voice={voice}
+          ingredientExample={ingredientExample}
         />
-      )}
-      <CookVoiceExplainer voice={voice} ingredientExample={ingredientExample} />
-    </Subview>
+      </Subview>
+    </CookConversionContext.Provider>
   );
 }
 

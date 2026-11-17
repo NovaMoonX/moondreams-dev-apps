@@ -1,3 +1,4 @@
+import { formatAmountText } from '@/utils/measureUtils';
 import {
   COLLECTION_NOUN,
   COLLECTION_NOUN_PLURAL,
@@ -63,7 +64,15 @@ const truncate = (text: string, max: number) => {
 const clip = (text: string, max: number) =>
   truncate(text.replace(/\s+/g, ' ').trim(), max);
 
-const formatAmount = (amount: number) => String(Math.round(amount * 100) / 100);
+const formatAmount = (amount: number) => {
+  const exact = formatAmountText(amount);
+  return /\.\d{3,}/.test(exact)
+    ? formatAmountText(Math.round(amount * 100) / 100)
+    : exact;
+};
+
+const formatServings = (servings: number) =>
+  String(Math.round(servings * 100) / 100);
 
 const formatQuantity = ({
   amount,
@@ -73,7 +82,7 @@ const formatQuantity = ({
     ? 'no amount'
     : `${formatAmount(amount)} ${UNIT_LABELS[unit]}`;
 
-type ComparedLine = Omit<RecipeIngredient, 'group'>;
+type ComparedLine = Omit<RecipeIngredient, 'group' | 'adaptedFrom'>;
 type NamedLine = Pick<RecipeIngredient, 'ingredientId' | 'freeText'>;
 
 const normalizeLine = (line: RecipeIngredient): ComparedLine => ({
@@ -396,10 +405,10 @@ const getTextChanges = (before: Normalized, after: Normalized) => {
       ? []
       : [`Renamed to “${clip(after.title, TITLE_QUOTE_LENGTH)}”`];
   const servingsChange =
-    formatAmount(before.servings) === formatAmount(after.servings)
+    formatServings(before.servings) === formatServings(after.servings)
       ? []
       : [
-          `Serves ${formatAmount(before.servings)} → ${formatAmount(after.servings)}`,
+          `Serves ${formatServings(before.servings)} → ${formatServings(after.servings)}`,
         ];
   const getDescriptionChange = () => {
     if (before.description === after.description) return [];
