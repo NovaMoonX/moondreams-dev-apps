@@ -126,7 +126,7 @@ export const emptyHelmHeld = (): HelmHeldState => ({
   ) as HelmHeldState['landed'],
 });
 
-/** One kind's lists with its holds laid over each, in each list's own order. */
+/** One kind's delivered lists with its holds laid over each, in each list's own order; a list still loading is left as it is. */
 export function layHelmKind<K extends HelmHeldKind>(
   kind: K,
   state: HelmHeldState,
@@ -166,15 +166,17 @@ export function layHelmKind<K extends HelmHeldKind>(
   });
   return {
     lists: Object.fromEntries(
-      rules.map(([name, rule]) => {
-        const list = laid.lists[name];
-        return [
-          name,
-          rule.order !== undefined && laid.held.length > 0
-            ? [...list].sort(rule.order)
-            : list,
-        ];
-      }),
+      rules
+        .filter(([name]) => state.deliveredAt[name] !== null)
+        .map(([name, rule]) => {
+          const list = laid.lists[name];
+          return [
+            name,
+            rule.order !== undefined && laid.held.length > 0
+              ? [...list].sort(rule.order)
+              : list,
+          ];
+        }),
     ),
     held: laid.held,
     landed: laid.landed,

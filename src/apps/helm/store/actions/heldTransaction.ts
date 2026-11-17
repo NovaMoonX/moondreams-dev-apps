@@ -4,6 +4,7 @@ import type {
   Transaction,
 } from 'firebase/firestore';
 
+import { auth } from '@/lib/firebase/config';
 import { store } from '@/store';
 import { generateUuid } from '@/utils';
 import { toFingerprint, toHeldWrite } from '@/utils/heldWrites';
@@ -54,7 +55,7 @@ const COLLECTION_KINDS: Record<string, HelmHeldKind> = {
   style: 'style',
 };
 
-/** `apps/helm/users/{uid}/{collection}/{id}` for a collection a listener list reads; anything else is never held. */
+/** The kind and id of the person's own record in a collection a listener list reads; anything else is never held. */
 const readTarget = (
   segments: string[],
   uid: string,
@@ -187,7 +188,7 @@ export async function runHeldTransaction<T>(
       token,
       createSealedReader(encryption, openJson),
     ).catch(() => null);
-    if (built === null) {
+    if (built === null || auth.currentUser?.uid !== uid) {
       store.dispatch(dropHelmWrites(token));
       return;
     }

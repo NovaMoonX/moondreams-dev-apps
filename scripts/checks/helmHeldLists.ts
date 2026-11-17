@@ -124,37 +124,36 @@ const facts = layHelmKind(
   withState((state) => {
     state.incoming.facts = [fact];
     state.deliveredAt.facts = 1;
-    state.held.facts = [
-      toHeldWrite(
-        'f',
-        { ...fact, status: 'rejected' } as OpenFact,
-        ['status'],
-        't',
-      ),
-    ];
+    state.held.facts = [toHeldWrite<OpenFact>('f', null, [], 't')];
   }),
 );
 assert.deepEqual(
   ids(facts.lists.facts),
   [],
-  'a fact set aside leaves the list at once',
+  'a forgotten fact leaves the list at once',
 );
 
 const waiting = layHelmKind(
   'tasks',
   withState((state) => {
+    state.deliveredAt.openTasks = 1;
     state.held.tasks = [toHeldWrite('n', task('n'), ['title'], 't')];
   }),
 );
 assert.deepEqual(
   ids(waiting.lists.openTasks),
   ['n'],
-  'a held task shows before its list has delivered',
+  'a held task shows in a list that has delivered without it',
+);
+assert.equal(
+  waiting.lists.projectTasks,
+  undefined,
+  'a list still loading is left as it is, never filled with only the held record',
 );
 assert.deepEqual(
   waiting.landed,
   { 'n/t': [] },
-  'and never counts as shown there',
+  'and never counts the hold as shown there',
 );
 
 const unrelated = layHelmKind(

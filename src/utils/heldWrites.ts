@@ -70,7 +70,7 @@ export interface ApplyHeldOptions {
   deliveredAt?: number | null;
 }
 
-/** Lays held writes over a listener's list; a hold shows only the fields it wrote, so a later write to another field shows through, and lets go when the list shows it, never merely because it settled. */
+/** Lays held writes over a listener's list, a record's holds in the order they were made; a hold shows only the fields it wrote, so a later write to another field shows through, and lets go when the list shows it, never merely because it settled. */
 export function applyHeldWrites<T>(
   incoming: readonly T[],
   held: readonly HeldWrite<T>[],
@@ -84,28 +84,42 @@ export function applyHeldWrites<T>(
       !hasExpired(hold, now, deliveredAt),
   );
   if (kept.length === 0) return { list: [...incoming], held: [] };
-  const holdById = new Map(kept.map((hold) => [hold.id, hold]));
+  const holdsById = kept.reduce(
+    (sum, hold) => sum.set(hold.id, [...(sum.get(hold.id) ?? []), hold]),
+    new Map<string, HeldWrite<T>[]>(),
+  );
+  const layOver = (item: T | undefined, holds: HeldWrite<T>[]) =>
+    holds.reduce<T | undefined>((shown, hold) => {
+      if (hold.item === null) return undefined;
+      if (shown === undefined) return hold.item;
+      return { ...shown, ...(pickFields(hold.item, hold.fields) as T) };
+    }, item);
   const list = [
     ...incoming.flatMap((item) => {
-      const hold = holdById.get(idOf(item));
-      if (hold === undefined) return [item];
-      if (hold.item === null) return [];
-      return [{ ...item, ...(pickFields(hold.item, hold.fields) as T) }];
+      const holds = holdsById.get(idOf(item));
+      if (holds === undefined) return [item];
+      const shown = layOver(item, holds);
+      return shown === undefined ? [] : [shown];
     }),
-    ...kept.flatMap((hold) =>
-      hold.item !== null && !byId.has(hold.id) ? [hold.item] : [],
-    ),
+    ...[...holdsById].flatMap(([id, holds]) => {
+      if (byId.has(id)) return [];
+      const shown = layOver(undefined, holds);
+      return shown === undefined ? [] : [shown];
+    }),
   ];
   return { list, held: kept };
 }
 
-/** The newest write of a record replaces an older hold of it. */
+/** A write's holds join the others in order; a record's older holds stay, each waiting for its own fields, and a newer one is laid over them. */
 export const addHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   added: readonly HeldWrite<T>[],
 ): HeldWrite<T>[] => {
-  const ids = new Set(added.map((hold) => hold.id));
-  return [...held.filter((hold) => !ids.has(hold.id)), ...added];
+  const keys = new Set(added.map((hold) => `${hold.id}/${hold.token}`));
+  return [
+    ...held.filter((hold) => !keys.has(`${hold.id}/${hold.token}`)),
+    ...added,
+  ];
 };
 
 export const settleHeldWrites = <T>(

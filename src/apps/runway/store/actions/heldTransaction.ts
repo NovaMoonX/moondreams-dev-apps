@@ -75,13 +75,13 @@ const openFull = (
   return openRecord({ ...(data as DayRecordDoc), id }, encryption);
 };
 
-/** What a write lands on: another write's hold, else the list; never this transaction's own earlier attempt. */
+/** What a write lands on: the newest other write's hold, else the list; never this transaction's own earlier attempt. */
 const baseOf = (kind: HeldKind, id: string, token: string): Opened | null => {
   const { held, incoming, incomingNeedsHome, incomingPeriod } =
     store.getState().runway;
-  const other = (held[kind] as HeldWrite<Opened>[]).find(
-    (hold) => hold.id === id && hold.token !== token,
-  );
+  const other = (held[kind] as HeldWrite<Opened>[])
+    .filter((hold) => hold.id === id && hold.token !== token)
+    .at(-1);
   if (other !== undefined) return other.item;
   if (kind !== 'purchases') {
     return (incoming[kind] as Opened[]).find((item) => item.id === id) ?? null;
