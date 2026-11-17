@@ -48,6 +48,7 @@ import {
   RecipeTimesField,
   RecipeTitleField,
 } from '@apps/pinch/components/recipes/RecipeBasics';
+import RecipeImportNoteField from '@apps/pinch/components/recipes/RecipeImportNoteField';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
 import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
 import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
@@ -58,12 +59,14 @@ import {
   getInitialData,
   getReadSourceChoice,
   isRowAmountValid,
+  isRowUnresolved,
   isValidMinutes,
   isValidNutrition,
   parseMinutes,
   parseNutrition,
   parseRecipeFormDraft,
   getRecipeDraftKey,
+  settleNewIngredients,
   toRecipeLine,
   type IngredientRow,
   type RecipeFormData,
@@ -89,6 +92,7 @@ import {
   saveRecipe,
   type RecipeDraft,
 } from '@apps/pinch/store/actions/recipeActions';
+import { removeIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   selectCollections,
@@ -127,7 +131,6 @@ import {
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
-import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import {
@@ -142,6 +145,7 @@ import {
   isOverLinkCap,
   toRecipeLinks,
 } from '@apps/pinch/utils/recipeLinks';
+import { getFreedIngredientIds } from '@apps/pinch/utils/freeLines';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -172,7 +176,9 @@ const findLoadablePhoto = (photos: WebPhoto[]) =>
   );
 
 const isRowValid = (row: IngredientRow) =>
-  row.ingredientId !== '' && isRowAmountValid(row);
+  (row.freeText === null
+    ? row.ingredientId !== ''
+    : row.freeText.trim() !== '') && isRowAmountValid(row);
 
 interface RecipeFormProps {
   uid: string;
@@ -299,6 +305,7 @@ function RecipeForm({
       ingredients: restored.ingredients.filter(
         (row) =>
           row.ingredientId === '' ||
+          row.freeText !== null ||
           row.newName !== null ||
           ingredientIds.has(row.ingredientId),
       ),
@@ -416,9 +423,7 @@ function RecipeForm({
       ingredientsById,
     );
 
-    const unresolved = formData.ingredients.filter(
-      (row) => row.ingredientId === '',
-    ).length;
+    const unresolved = formData.ingredients.filter(isRowUnresolved).length;
 
     return {
       values: result.values,
@@ -427,7 +432,9 @@ function RecipeForm({
         count:
           new Set(result.missing.map((entry) => entry.ingredientId)).size +
           unresolved,
-        total: lines.filter((row) => !row.isAmountless).length + unresolved,
+        total:
+          lines.filter((row) => !row.isAmountless && row.freeText === null)
+            .length + unresolved,
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
@@ -461,9 +468,7 @@ function RecipeForm({
     initialRead === null &&
     initialIdea === null &&
     draft.restored === null;
-  const unresolvedCount = formData.ingredients.filter(
-    (row) => row.ingredientId === '',
-  ).length;
+  const unresolvedCount = formData.ingredients.filter(isRowUnresolved).length;
   const getBlocker = (): { text: string; target: string | null } | null => {
     const plain = (text: string) => ({ text, target: null });
     if (
@@ -618,7 +623,19 @@ function RecipeForm({
       });
     });
 
+    const importNoteField = custom({
+      name: 'importNote',
+      label: '',
+      renderComponent: (props) => (
+        <RecipeImportNoteField
+          value={String(props.value)}
+          onChange={props.onValueChange}
+        />
+      ),
+    });
+
     return [
+      ...(recipe === null && initialRead !== null ? [importNoteField] : []),
       custom({
         name: 'title',
         label: '',
@@ -676,6 +693,7 @@ function RecipeForm({
           />
         ),
       }),
+      ...(recipe === null && initialRead === null ? [importNoteField] : []),
       custom({
         name: 'cover',
         label: '',
@@ -687,6 +705,12 @@ function RecipeForm({
             canSuggest={recipe === null}
             sourcePhoto={sourcePhoto}
             title={formData.title}
+            searchWords={
+              initialRead?.recipe.photoSearch &&
+              formData.title === initialData.title
+                ? initialRead.recipe.photoSearch
+                : null
+            }
             onSelect={(file) => {
               hasChosenCover.current = true;
               void pickCover(file);
@@ -779,6 +803,7 @@ function RecipeForm({
         : []),
     ];
   }, [
+    initialData.title,
     uid,
     cover,
     sourcePhoto,
@@ -796,6 +821,7 @@ function RecipeForm({
     collections,
     suggestions,
     isBlankByHand,
+    initialRead,
     showUndo,
     tracking,
   ]);
@@ -901,6 +927,7 @@ function RecipeForm({
     reason: string,
     coverFile: File | null = upload.file,
   ): RecipeDraft => {
+    const settled = settleNewIngredients(data.ingredients);
     const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
     const { collectionIds, newCollections } = ownsCollections
       ? getCollectionsToSave(data.collections, collections)
@@ -913,7 +940,8 @@ function RecipeForm({
       servings: data.basics.servings,
       prepMinutes: parseMinutes(data.basics.prep),
       cookMinutes: parseMinutes(data.basics.cook),
-      ingredients: data.ingredients.map(toRecipeLine),
+      ingredients: settled.rows.map(toRecipeLine),
+      importNote: recipe ? null : data.importNote.trim() || null,
       source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
       sourceId,
       newSource,
@@ -922,19 +950,7 @@ function RecipeForm({
           ? null
           : getCollectionChange(initialData.collections.ids, collectionIds),
       newCollections,
-      newIngredients: [
-        ...new Map(
-          data.ingredients
-            .filter((row) => row.newName !== null)
-            .map((row) => [
-              row.ingredientId,
-              {
-                id: row.ingredientId,
-                name: toTypedIngredientName(row.newName ?? ''),
-              },
-            ]),
-        ).values(),
-      ],
+      newIngredients: settled.newIngredients,
       nutritionOverride: parseNutrition(data.nutrition),
       care: parseCareText(data.care),
       links: toRecipeLinks(data.links),
@@ -948,15 +964,60 @@ function RecipeForm({
     };
   };
 
+  const offerKitchenRemoval = async (ingredientId: string, savedId: string) => {
+    const state = store.getState().pinch;
+    const record = state.ingredients.records.find(
+      (entry) => entry.id === ingredientId,
+    );
+    if (!record || record.catalogId !== null || !record.name) return;
+    const usage = await dispatch(
+      getUsage({ uid, kind: 'INGREDIENT', id: ingredientId }),
+    )
+      .unwrap()
+      .catch(() => null);
+    if (usage === null) return;
+    const isUsedElsewhere =
+      isInUse({
+        ...usage,
+        recipes: state.recipes.items.filter(
+          (other) =>
+            other.id !== savedId &&
+            other.ingredients.some(
+              (line) => line.ingredientId === ingredientId,
+            ),
+        ).length,
+      }) ||
+      state.packages.items.some((item) => item.ingredientId === ingredientId) ||
+      state.shopping.items.some((item) => item.ingredientId === ingredientId);
+    if (isUsedElsewhere) return;
+    const isConfirmed = await confirm({
+      title: `Also remove ${record.name} from your kitchen?`,
+      message: `No other recipe uses ${record.name}, and it has no prices or stock. This recipe keeps the line as plain text.`,
+      confirmText: 'Remove',
+      cancelText: 'Keep it',
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    await dispatch(removeIngredient({ uid, id: ingredientId }))
+      .unwrap()
+      .catch((removeError) =>
+        addToast({
+          title: getErrorMessage(
+            removeError,
+            'Unable to remove this ingredient.',
+          ),
+          type: 'error',
+        }),
+      );
+  };
+
   const save = async (data: RecipeFormData) => {
     setError(null);
     setIsSubmitting(true);
     try {
+      const draft = getDraft(data, why, await upload.readyFile());
       const { recipeId: savedId } = await dispatch(
-        saveRecipe({
-          uid,
-          draft: getDraft(data, why, await upload.readyFile()),
-        }),
+        saveRecipe({ uid, draft }),
       ).unwrap();
       if (!recipe) {
         addToast({
@@ -976,6 +1037,17 @@ function RecipeForm({
           },
         });
         announceRecipeAdded(savedId);
+      }
+      if (recipe) {
+        const freed = getFreedIngredientIds(
+          recipe.ingredients,
+          draft.ingredients,
+        );
+        await freed.reduce(
+          (done, ingredientId) =>
+            done.then(() => offerKitchenRemoval(ingredientId, savedId)),
+          Promise.resolve(),
+        );
       }
       if (onSaved) onSaved();
       else closeSubviewIf((current) => current === subview);

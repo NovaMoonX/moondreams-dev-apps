@@ -3,6 +3,7 @@ import { clipAtWord } from '@/utils/stringUtils';
 import {
   MAX_MINUTES,
   MAX_NAME_LENGTH,
+  PHOTO_QUERY_MAX_WORDS_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
@@ -39,6 +40,8 @@ export interface ExtractedRecipe {
   prepMinutes: number | null;
   cookMinutes: number | null;
   description: string | null;
+  /** Words to search the web for a photo of the finished dish; null when the source names none. */
+  photoSearch: string | null;
   ingredients: ExtractedIngredient[];
   steps: string[];
   /** Only what the source says, never a guess. */
@@ -246,6 +249,11 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
     description:
       asString(parsed.description)?.slice(0, MAX_RECIPE_DESCRIPTION_LENGTH) ??
       null,
+    photoSearch:
+      asString(parsed.photoSearch)
+        ?.replace(/\s+/g, ' ')
+        .slice(0, PHOTO_QUERY_MAX_WORDS_LENGTH)
+        .trim() || null,
     ingredients: list(parsed.ingredients)
       .flatMap((entry) => {
         const item = (

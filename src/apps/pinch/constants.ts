@@ -515,6 +515,7 @@ export const MAX_CARE_TIP_LENGTH = 300;
 export const MAX_COVER_URL_LENGTH = 2000;
 export const PHOTO_QUERY_MIN_TITLE_LENGTH = 3;
 export const PHOTO_QUERY_MAX_TITLE_LENGTH = 70;
+export const PHOTO_QUERY_MAX_WORDS_LENGTH = 80;
 export const PHOTO_RESULT_COUNT = 6;
 /** The callable gives up at 10 seconds; the app waits a little longer than that for its answer. */
 export const PHOTO_LOOKUP_TIMEOUT_MS = 14_000;
@@ -721,12 +722,15 @@ export const NOTE_KIND_EMOJIS: Record<NoteKind, string> = {
 };
 
 /** What each kind is for, said under its pill. */
-export const NOTE_KIND_HINTS: Record<(typeof WRITTEN_NOTE_KINDS)[number], string> =
-  {
-    TIP: 'Advice for making it, any time you cook it.',
-    CHANGE: 'A change to make to the recipe. It stays planned until you update the recipe.',
-    NOTE: 'Something you noticed, for next time.',
-  };
+export const NOTE_KIND_HINTS: Record<
+  (typeof WRITTEN_NOTE_KINDS)[number],
+  string
+> = {
+  TIP: 'Advice for making it, any time you cook it.',
+  CHANGE:
+    'A change to make to the recipe. It stays planned until you update the recipe.',
+  NOTE: 'Something you noticed, for next time.',
+};
 
 /** The label and example under the words box for each kind. */
 export const NOTE_TEXT_COPY: Record<

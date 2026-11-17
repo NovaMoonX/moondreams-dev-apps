@@ -32,6 +32,7 @@ const SKELETON_TILES = Array.from(
 interface RecipePhotoSuggestionsProps {
   uid: string;
   title: string;
+  searchWords: string | null;
   sourcePhoto: WebPhoto | null;
   selectedUrl: string | null;
   onPick: (photo: WebPhoto) => void;
@@ -40,13 +41,14 @@ interface RecipePhotoSuggestionsProps {
 function RecipePhotoSuggestions({
   uid,
   title,
+  searchWords,
   sourcePhoto,
   selectedUrl,
   onPick,
 }: RecipePhotoSuggestionsProps) {
   const { settings, save } = usePinchSettings(uid);
   const { addToast, removeToast } = useToast();
-  const query = getPhotoQuery(title);
+  const query = searchWords ?? getPhotoQuery(title);
   const [searched, setSearched] = useState<string | null>(null);
   const [checkingUrl, setCheckingUrl] = useState<string | null>(null);
   const [unreachable, setUnreachable] = useState<string[]>([]);
@@ -153,7 +155,7 @@ function RecipePhotoSuggestions({
         <p className='text-muted-foreground text-sm'>
           {isError
             ? 'We couldn’t look up photos just now. You can still choose your own above.'
-            : 'Nothing turned up for this title. You can still choose your own photo above.'}
+            : `Nothing turned up for this ${searchWords ? 'search' : 'title'}. You can still choose your own photo above.`}
         </p>
       );
     }
@@ -212,7 +214,9 @@ function RecipePhotoSuggestions({
       }
     >
       <p className='text-muted-foreground text-xs'>
-        Searches the web with this title. Nothing else is sent.
+        {searchWords
+          ? `Searched for “${searchWords}”. Nothing else is sent.`
+          : 'Searches the web with this title. Nothing else is sent.'}
       </p>
       <div className='space-y-2'>{getBody()}</div>
     </FormSection>
