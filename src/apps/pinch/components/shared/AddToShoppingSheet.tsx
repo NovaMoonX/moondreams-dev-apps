@@ -105,46 +105,41 @@ const MOVE_ANIMATION_MS = 260;
 const DIVIDER_HEIGHT = 36;
 const AT_HOME_NOTE_HEIGHT = 22;
 
-/** Rows whose tick just changed stay in the part they were drawn in for a moment, so a second tap never lands on a row that moved. Holding renders nothing: only letting go does. */
+/** Rows whose tick just changed stay in the part they were drawn in until the taps pause, then move together, so a second tap never lands on a row that moved. Holding renders nothing: only letting go does. */
 function useHeldMoves() {
   const held = useRef(new Map<string, boolean>());
-  const timers = useRef(new Map<string, number>());
+  const timer = useRef<number | null>(null);
   const isAnimating = useRef(false);
   const [, release] = useReducer((count: number) => count + 1, 0);
 
-  useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      pending.forEach((timer) => window.clearTimeout(timer));
-      pending.clear();
-    };
+  const stopTimer = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
   }, []);
 
-  const toggle = useCallback((id: string, wasTicked: boolean) => {
-    if (held.current.has(id)) {
-      window.clearTimeout(timers.current.get(id));
-      timers.current.delete(id);
-      held.current.delete(id);
-      return;
-    }
-    held.current.set(id, wasTicked);
-    timers.current.set(
-      id,
-      window.setTimeout(() => {
-        timers.current.delete(id);
-        held.current.delete(id);
+  useEffect(() => stopTimer, [stopTimer]);
+
+  const toggle = useCallback(
+    (id: string, wasTicked: boolean) => {
+      stopTimer();
+      if (held.current.has(id)) held.current.delete(id);
+      else held.current.set(id, wasTicked);
+      if (held.current.size === 0) return;
+      timer.current = window.setTimeout(() => {
+        timer.current = null;
+        held.current.clear();
         isAnimating.current = true;
         release();
-      }, SHOPPING_MOVE_DELAY_MS),
-    );
-  }, []);
+      }, SHOPPING_MOVE_DELAY_MS);
+    },
+    [stopTimer],
+  );
 
   const releaseAll = useCallback(() => {
-    timers.current.forEach((timer) => window.clearTimeout(timer));
-    timers.current.clear();
+    stopTimer();
     held.current.clear();
     isAnimating.current = true;
-  }, []);
+  }, [stopTimer]);
 
   const rowEls = useRef(new Map<string, HTMLElement>());
   const tops = useRef(new Map<string, number>());
@@ -541,8 +536,8 @@ export function ShoppingPick({
   };
 
   const hintText = startsTicked
-    ? 'Untick what you already have.'
-    : 'Tick what you need.';
+    ? 'Untick what you have, then tap Add.'
+    : 'Tick what you need, then tap Add.';
   const tickAll = rows.length > 0 && (
     <ActionChips
       className='shrink-0'
@@ -776,7 +771,7 @@ export function ShoppingPick({
           {rows.length > 0 && (
             <div className='flex items-center justify-between gap-3'>
               <p className='text-muted-foreground min-w-0 text-xs'>
-                Adding {selected.length} of {rows.length} · {hintText}
+                {selected.length} of {rows.length} ticked · {hintText}
               </p>
               {tickAll}
             </div>
