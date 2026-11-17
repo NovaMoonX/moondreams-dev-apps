@@ -6,7 +6,8 @@ import type {
 } from 'firebase-admin/firestore';
 
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import { shiftDayKeyBy } from '../../../vendor/cadenceUtils.js';
+import { dayKeyToMs, shiftDayKeyBy } from '../../../vendor/cadenceUtils.js';
+import { openAimsView } from '../dayPlan/dayAimsStore.js';
 import type { GoalWhy } from '../goalWhy.js';
 import {
   habitsQuery,
@@ -16,7 +17,11 @@ import {
 } from '../habitStore.js';
 import { openForHelm, type HelmKey } from '../helmKey.js';
 import { toPersonRecord } from '../nomos/contextPeople.js';
-import { OBSERVATION_TAGS, type ObservationTag } from '../nomos/said.js';
+import {
+  OBSERVATION_TAGS,
+  STRUGGLING_TAGS,
+  type ObservationTag,
+} from '../nomos/said.js';
 import { readPrivacy, type PrivacyClass } from '../privacy.js';
 
 export const WINDOW_DAYS = 14;
@@ -119,6 +124,76 @@ const openGoal = (key: HelmKey, doc: { id: string; data: DocumentData }) => {
   }
 };
 
+const MAX_TASKS_READ = 200;
+const NOON = 12 * 60 * 60_000;
+
+/** The reasons the person gave in the last 14 days' wind-downs, as observations about the day. A reason on a private or care task is never read: the task's own class decides, so only the aim's task id is opened from the day, never a word of it. */
+async function readWindDowns(
+  read: Read,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  range: { from: string; to: string; forgottenAt: number },
+): Promise<WindowObservation[]> {
+  const days = await read(
+    firestore
+      .collection(`${base}/dayAims`)
+      .where('date', '>=', dayKeyToMs(range.from))
+      .where('date', '<=', dayKeyToMs(range.to)),
+  );
+  const reasons = days.docs.flatMap((doc) => {
+    const view = openAimsView(key, doc.data());
+    return view.aims.flatMap((aim) => {
+      const reason = view.windDown[aim.aimId]?.reason ?? null;
+      const tag = STRUGGLING_TAGS.find((known) => known === reason);
+      return tag
+        ? [{ dayKey: doc.id, aimId: aim.aimId, taskId: aim.taskId, tag }]
+        : [];
+    });
+  });
+  const taskIds = [...new Set(reasons.map((entry) => entry.taskId))].slice(
+    0,
+    MAX_TASKS_READ,
+  );
+  const tasks =
+    taskIds.length === 0
+      ? []
+      : await firestore.getAll(
+          ...taskIds.map((id) => firestore.doc(`${base}/tasks/${id}`)),
+        );
+  const isShareable = new Set(
+    tasks.flatMap((task) => {
+      if (!task.exists || task.get('privacy') === 'private') return [];
+      try {
+        const words = openForHelm(key, task.get('sealed') as SealedPayload);
+        return words.privateMark === 'care' || words.privateMark === 'person'
+          ? []
+          : [task.id];
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return reasons
+    .filter(
+      (entry) =>
+        isShareable.has(entry.taskId) &&
+        dayKeyToMs(entry.dayKey) + NOON > range.forgottenAt,
+    )
+    .map((entry): WindowObservation => ({
+      id: `wd_${entry.dayKey}_${entry.aimId}`,
+      subject: { collection: 'day', id: null },
+      dayKey: entry.dayKey,
+      at: dayKeyToMs(entry.dayKey) + NOON,
+      sourceKeys: [],
+      isCare: false,
+      privacy: 'ordinary',
+      kind: 'windDown',
+      tags: [entry.tag],
+      quote: null,
+    }));
+}
+
 /** The last 14 habit days of what the person said, with what those days' notes, habits, goals and other people are, read through `read` so a transaction can hold it. What was made at or before the person's last Forget is never read. */
 export async function readReflectWindow(
   read: Read,
@@ -156,12 +231,20 @@ export async function readReflectWindow(
       read(firestore.collection(`${base}/who`)),
     ]);
   const forgottenAt = profile.forgottenAt ?? 0;
+  const windDowns = await readWindDowns(read, firestore, base, key, {
+    from,
+    to: dayKey,
+    forgottenAt,
+  });
   const people = whoSnap.docs.flatMap((doc) => toPersonRecord(key, doc) ?? []);
   return {
     from,
-    observations: observationSnap.docs
-      .filter((doc) => Number(doc.get('createdAt') ?? 0) > forgottenAt)
-      .flatMap((doc) => openObservation(key, doc.id, doc.data())),
+    observations: [
+      ...observationSnap.docs
+        .filter((doc) => Number(doc.get('createdAt') ?? 0) > forgottenAt)
+        .flatMap((doc) => openObservation(key, doc.id, doc.data())),
+      ...windDowns,
+    ].slice(0, MAX_OBSERVATIONS),
     habits: new Map(
       habitSnap.docs.flatMap((doc) => {
         const habit = openLiveHabit(key, doc.id, doc.data(), profile.timeZone);

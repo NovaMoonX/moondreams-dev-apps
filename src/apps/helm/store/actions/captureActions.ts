@@ -207,6 +207,7 @@ export async function sendCapture(
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt: null,
     screen: turn.screen,

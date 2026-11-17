@@ -30,6 +30,7 @@ import {
   type NomosCommand,
   type NoteFactCommand,
   type MeetsHow,
+  type TaskEffort,
   type NoteFactKind,
   type PlaceRead,
   type ProjectCommand,
@@ -143,6 +144,7 @@ export interface ExistingTask {
   whoIds: string[];
   placeIds: string[];
   meets?: { how: MeetsHow; setBy: 'person' | 'calendar' } | null;
+  durationMinutes?: number | null;
   sealed: Record<string, unknown>;
   /** What the task says about being private and the parents it is filed under, read with it. */
   privacyFacts?: PrivacyFacts;
@@ -220,7 +222,8 @@ export interface EffectRef {
     | 'connections'
     | 'scheduledActions'
     | 'research'
-    | 'seenAs';
+    | 'seenAs'
+    | 'dayAims';
   docId: string;
 }
 
@@ -678,6 +681,8 @@ export interface WritePlan {
   counts: EffectCounts;
   /** One "which one?" question for each unsure name a filed task points at, at most MAX_PICK_QUESTIONS. */
   questions: PlannedQuestion[];
+  /** The id each task this turn makes was given, by its `$new` ref. */
+  taskIdByRef: Record<string, string>;
 }
 
 export interface PlannedQuestion {
@@ -773,6 +778,8 @@ interface Draft {
   questions: string[];
   meeting: QuestionsMeeting | null;
   meetsHow: MeetsHow | null;
+  effort: TaskEffort | null;
+  durationMinutes: number | null;
 }
 
 /** How a task meets counts only when its due has a time. */
@@ -1222,6 +1229,8 @@ export function planWrites(input: PlanInput): WritePlan {
         questions: command.questions,
         meeting: command.meeting,
         meetsHow: toMeetsHow(command.due, command.meetsHow),
+        effort: command.effort ?? null,
+        durationMinutes: command.durationMinutes ?? null,
       });
       return;
     }
@@ -2212,7 +2221,8 @@ export function planWrites(input: PlanInput): WritePlan {
         importance: null,
         isUrgent: draft.isUrgent,
         due: draft.due,
-        durationMinutes: null,
+        durationMinutes: draft.durationMinutes,
+        effort: draft.effort,
         energy: null,
         context: null,
         projectId: draft.projectId,
@@ -2726,6 +2736,9 @@ export function planWrites(input: PlanInput): WritePlan {
     effects: [...effects, ...mediaPlan.effects],
     counts,
     questions,
+    taskIdByRef: Object.fromEntries(
+      [...drafts.entries()].map(([ref, draft]) => [ref, draft.id]),
+    ),
   };
 }
 

@@ -487,6 +487,8 @@ export interface Capture {
   sortedAt: number | null;
   /** Set when the assistant was asked to plan a day: "YYYY-MM-DD", which the device plans on sight. */
   planDayKey: string | null;
+  /** Set when the turn answers the morning card: "YYYY-MM-DD" of the day whose aims it files, read by the server, never from the words. */
+  aimsDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
   /** The class of what the turn quotes; private when the turn filed or touched a private thing. */
@@ -1430,7 +1432,8 @@ export interface EffectRef {
     | 'connections'
     | 'patterns'
     | 'scheduledActions'
-    | 'research';
+    | 'research'
+    | 'dayAims';
   docId: string;
 }
 

@@ -234,6 +234,8 @@ export interface ContextInput {
   earlierTurns?: EarlierTurn[];
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
+  /** Set when the turn answers the morning card: the day whose aims it files. */
+  aimsDayKey?: string | null;
   facts?: ContextFact[];
   /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
   people?: ContextPerson[];
@@ -719,6 +721,9 @@ export function buildContext(input: ContextInput): {
       ? [
           `<nothing_to_undo>Nothing from earlier turns can be taken back now. If they are asking to take something back, say plainly you can't and send no offerUndo; otherwise carry on as usual.</nothing_to_undo>`,
         ]
+      : []),
+    ...(input.aimsDayKey
+      ? [`<aims_turn>${toDataJson({ day: input.aimsDayKey })}</aims_turn>`]
       : []),
     ...(input.answeredQuestion
       ? [

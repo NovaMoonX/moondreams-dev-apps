@@ -76,6 +76,7 @@ export const TURN_BLOCKS = [
   '<screen>',
   '<files>',
   '<already_made>',
+  '<aims_turn>',
 ] as const;
 
 const row = (
@@ -500,7 +501,11 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'dayAims',
     classes: ['readable', 'sealed'],
     readers: ['device', 'server'],
-    writer: 'none',
+    writer: 'server/sortHelmCapture',
+    jobFields: [
+      { field: 'windDownState', job: 'runHelmDayPlan' },
+      { field: 'rolledAt', job: 'runHelmDayPlan' },
+    ],
   }),
   row({
     thing: 'Where the person is right now',

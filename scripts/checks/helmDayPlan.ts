@@ -10,6 +10,18 @@ import {
   type PlannerInput,
   type PlannerTask,
 } from '../../src/apps/helm/engine/planner.ts';
+import {
+  isRollable,
+  isWindDownDue,
+  planOverlapFlags,
+  planReplan,
+  planRollover,
+  readAimsView,
+  readDayClock,
+  type AimsView,
+} from '../../functions/src/apps/helm/dayPlan/dayJob.ts';
+import { planDayAims } from '../../functions/src/apps/helm/nomos/planDayAims.ts';
+import { buildDesired } from '../../functions/src/apps/helm/calendarSync/plan.ts';
 
 const ZONE = 'America/Los_Angeles';
 const DAY = '2026-11-10';
@@ -246,6 +258,214 @@ test('an aim with no length is planned with the guess and reported', () => {
   const write = placed(result).find((slot) => slot.taskId === 'write');
   assert.equal(write!.endAt! - write!.startAt!, 60 * MIN);
   assert.deepEqual(result.guessedTaskIds, ['write']);
+});
+
+const view = (
+  taskIds: string[],
+  windDown: AimsView['windDown'] = {},
+): AimsView => ({
+  aims: taskIds.map((taskId, order) => ({
+    aimId: `a-${taskId}`,
+    taskId,
+    order,
+    lengthIsGuess: false,
+    broughtFrom: null,
+  })),
+  windDown,
+});
+const profile = { timeZone: ZONE, dayStartTime: '08:00', dayEndTime: '22:00' };
+const slot = (
+  taskId: string,
+  from: string,
+  to: string,
+  status: 'kept' | 'suggested',
+) => ({
+  taskId,
+  startAt: at(from),
+  endAt: at(to),
+  status,
+  source: 'nomos' as const,
+  decidedAt: null,
+  overlapsEventRef: null,
+});
+
+test('rollover brings an open aim once and never twice', () => {
+  const ids = ['n1', 'n2', 'n3'];
+  const next = () => ids.shift()!;
+  const args = {
+    fromDayKey: '2026-11-09',
+    from: view(['t1', 't2', 't3', 't4'], {
+      'a-t2': {
+        result: 'wontHappen',
+        choice: 'later',
+        reason: null,
+        saidSpanId: null,
+      },
+      'a-t3': { result: 'done', choice: null, reason: null, saidSpanId: null },
+    }),
+    taskStatus: new Map<string, 'open' | 'done'>([
+      ['t1', 'open'],
+      ['t2', 'open'],
+      ['t3', 'open'],
+      ['t4', 'done'],
+    ]),
+    newAimId: next,
+  };
+  const first = planRollover({ ...args, today: view([]) });
+  assert.deepEqual(
+    first.aims.map((aim) => aim.taskId),
+    ['t1'],
+  );
+  assert.equal(first.aims[0].broughtFrom, '2026-11-09');
+  const again = planRollover({
+    ...args,
+    today: { aims: first.aims, windDown: {} },
+  });
+  assert.equal(again.added, 0);
+  assert.equal(isRollable({ dayKey: '2026-11-09', rolledAt: 5 }, DAY), false);
+  assert.equal(isRollable({ dayKey: '2026-11-09', rolledAt: null }, DAY), true);
+  assert.equal(
+    isRollable({ dayKey: '2026-10-01', rolledAt: null }, DAY),
+    false,
+  );
+});
+
+test('the wind-down is ready two hours before the day ends', () => {
+  const clock = readDayClock(at('12:00'), profile);
+  assert.equal(clock.windDownAt, at('20:00'));
+  const due = (time: string, aimCount = 1) =>
+    isWindDownDue({ now: at(time), clock, windDownState: 'waiting', aimCount });
+  assert.equal(due('19:59'), false);
+  assert.equal(due('20:00'), true);
+  assert.equal(due('20:00', 0), false);
+});
+
+test('an overlap is flagged on a kept slot and never moved, then cleared', () => {
+  const slots = { s1: slot('t1', '10:00', '11:00', 'kept') };
+  const flags = planOverlapFlags({
+    slots,
+    busy: [{ ref: 'ev1', startAt: at('10:30'), endAt: at('11:30') }],
+    aimTaskIds: new Set(['t1']),
+  });
+  assert.deepEqual(flags, { s1: 'ev1' });
+  const flagged = { s1: { ...slots.s1, overlapsEventRef: 'ev1' } };
+  assert.deepEqual(
+    planOverlapFlags({ slots: flagged, busy: [], aimTaskIds: new Set(['t1']) }),
+    { s1: null },
+  );
+});
+
+test('only a suggested slot that no longer fits is re-planned', () => {
+  const slots = {
+    s1: slot('t1', '10:00', '10:30', 'suggested'),
+    s2: slot('t2', '14:00', '14:30', 'suggested'),
+    s3: slot('t3', '10:00', '10:30', 'kept'),
+  };
+  const patch = planReplan({
+    dayKey: DAY,
+    timeZone: ZONE,
+    now: at('09:00'),
+    dayStartTime: '08:00',
+    dayEndTime: '22:00',
+    fillPercent: 70,
+    busy: [
+      { startAt: at('10:00'), endAt: at('11:00'), isAllDay: false } as never,
+    ],
+    slots,
+    tasks: [task('t1'), task('t2')],
+    aimTaskIds: [],
+    finishedTasks: [],
+  });
+  assert.deepEqual(Object.keys({ ...patch.moved, ...patch.removed }), ['s1']);
+});
+
+test('the job opens only each aim task id, order and result', () => {
+  const read = readAimsView({
+    aims: [
+      { aimId: 'a', taskId: 't', order: 2, title: 'secret', note: 'secret' },
+    ],
+    windDown: { a: { result: 'done', reason: 'r', extra: 'secret' } },
+  });
+  assert.deepEqual(Object.keys(read.aims[0]).sort(), [
+    'aimId',
+    'broughtFrom',
+    'lengthIsGuess',
+    'order',
+    'taskId',
+  ]);
+  assert.deepEqual(Object.keys(read.windDown.a).sort(), [
+    'choice',
+    'reason',
+    'result',
+    'saidSpanId',
+  ]);
+});
+
+test('a turn on the morning card files its tasks as aims in one write', () => {
+  const plan = planDayAims({
+    dayKey: DAY,
+    commands: [
+      { kind: 'createTask', ref: '$new1', durationMinutes: 45 },
+      { kind: 'createTask', ref: '$new2', durationMinutes: null },
+    ] as never,
+    taskIdByRef: { $new1: 'x1', $new2: 'x2' },
+    existing: new Map(),
+    current: null,
+    newAimId: (() => {
+      const state = { n: 0 };
+      return () => `aim${++state.n}`;
+    })(),
+    seal: (fields) => fields as never,
+  });
+  assert.equal(plan.write?.op, 'create');
+  assert.equal(plan.effects.length, 1);
+  assert.equal(plan.effectRefs[0].collection, 'dayAims');
+  const sealed = plan.write!.data.sealed as unknown as AimsView;
+  assert.deepEqual(
+    sealed.aims.map((aim) => [aim.taskId, aim.lengthIsGuess]),
+    [
+      ['x1', false],
+      ['x2', true],
+    ],
+  );
+});
+
+const calendarSlot = (extra: Record<string, unknown> = {}) => ({
+  dayKey: DAY,
+  slotId: 's1',
+  taskId: 't1',
+  startAt: at('10:00'),
+  endAt: at('10:30'),
+  status: 'kept' as const,
+  decidedAt: null,
+  isAim: true,
+  isLetGo: false,
+  ...extra,
+});
+const desire = (extra: Record<string, unknown>, status: 'open' | 'done') =>
+  buildDesired({
+    now: at('09:00'),
+    timeZone: ZONE,
+    slots: [calendarSlot(extra)],
+    tasks: [
+      {
+        id: 't1',
+        title: 'Write',
+        isPrivate: Boolean(extra.isPrivate),
+        status,
+        dueAt: null,
+        durationMinutes: null,
+        hasMeets: false,
+        lastEditedAt: null,
+      },
+    ],
+    habits: [],
+  });
+
+test('a done aim is ticked in the calendar and a let-go one is removed', () => {
+  assert.equal(desire({}, 'done')[0].title, '\u2713 Write');
+  assert.equal(desire({}, 'open')[0].title, 'Write');
+  assert.equal(desire({ isLetGo: true }, 'open').length, 0);
 });
 
 const failures = tests.flatMap(([name, body]) => {

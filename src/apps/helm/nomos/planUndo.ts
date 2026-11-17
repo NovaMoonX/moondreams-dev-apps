@@ -676,8 +676,10 @@ const planRecord = (
     const isUntouched =
       create.ref.collection === 'procedureRuns'
         ? isRunUntouched(target.data)
-        : target.data.lastEditedAt === null ||
-          target.data.lastEditedAt === madeAt;
+        : create.ref.collection === 'dayAims'
+          ? isSame(target.data.sealed, create.effect.written.sealed)
+          : target.data.lastEditedAt === null ||
+            target.data.lastEditedAt === madeAt;
     return isUntouched
       ? {
           kind: 'deleted',
@@ -1329,6 +1331,7 @@ export function planUndo(input: {
     collectionOf.get(docId) === 'projects';
   const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
   const isSeenAsDoc = (docId: string) => collectionOf.get(docId) === 'seenAs';
+  const isDayAimsDoc = (docId: string) => collectionOf.get(docId) === 'dayAims';
   const personalityDocIds = new Set(
     original.effectRefs.flatMap((ref, index) =>
       isPersonalityEffect(ref, original.effects[index]) ? [ref.docId] : [],
@@ -1363,6 +1366,7 @@ export function planUndo(input: {
         !isHabitDoc(docId) &&
         !isHabitDayDoc(docId) &&
         !isSeenAsDoc(docId) &&
+        !isDayAimsDoc(docId) &&
         !isPersonalityDoc(docId),
   );
   const seenAsCount = done.filter(({ docId }) => isSeenAsDoc(docId)).length;
