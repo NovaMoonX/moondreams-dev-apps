@@ -26,6 +26,7 @@ import {
   getZoneName,
   sharesClockWithDevice,
 } from '@apps/a-list/utils/theatreTime';
+import DiscountDayNotice from '@apps/a-list/components/viewing/DiscountDayNotice';
 
 interface ShowtimePickerProps {
   theatre: TheatreSnapshot;
@@ -205,15 +206,7 @@ function ShowtimePicker({
         </p>
       )}
       {open.some((option) => option.isDiscountDay) && (
-        <p className='text-muted-foreground flex gap-1.5 text-xs'>
-          <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-            🏷️
-          </span>
-          <span className='min-w-0'>
-            Discount Tuesday: these are AMC&apos;s regular prices, and Stubs
-            members pay less at checkout.
-          </span>
-        </p>
+        <DiscountDayNotice step='pick' />
       )}
       {groups.map((group) => (
         <div key={group.format} className='space-y-1.5'>
@@ -270,7 +263,8 @@ function ShowtimePicker({
       )}
       {open.length > 0 && (
         <p className='text-muted-foreground text-xs'>
-          Showing AMC&apos;s {TICKET_PRICE_KIND_LABELS[priceKind]} price, before tax and fees.
+          Showing AMC&apos;s {TICKET_PRICE_KIND_LABELS[priceKind]} price, before
+          tax and fees.
         </p>
       )}
     </div>

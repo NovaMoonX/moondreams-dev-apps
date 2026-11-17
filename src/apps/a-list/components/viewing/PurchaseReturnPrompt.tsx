@@ -134,7 +134,7 @@ function PurchaseReturnPrompt({
               Change
             </Button>
           </p>
-          {draft.isDiscountDay && <DiscountDayNotice isPriceFolded />}
+          {draft.isDiscountDay && <DiscountDayNotice step='change' />}
           <SuggestionNote
             suggestion={suggestion}
             draft={draft}

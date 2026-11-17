@@ -337,12 +337,10 @@ const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
   ['3d', 'REALD_3D'],
 ];
 
-const DISCOUNT_WEEKDAY = 2;
-
-// AMC lists a Discount Tuesday showing at its regular price and takes the discount off at checkout.
+// AMC lists a discount-day showing at its regular price and takes the discount off at checkout; its flag already
+// follows AMC's current days and blackout dates, so no weekday is assumed here.
 function isDiscountDay(showtime: AmcShowtime) {
-  const localDay = (showtime.showDateTimeLocal ?? '').slice(0, 10);
-  return Boolean(showtime.isDiscountDaysEligible) && new Date(`${localDay}T00:00:00Z`).getUTCDay() === DISCOUNT_WEEKDAY;
+  return Boolean(showtime.isDiscountDaysEligible);
 }
 
 function toFormat(showtime: AmcShowtime): AmcFormat {
@@ -423,7 +421,7 @@ function fixtureDay(date: string): DayShowtime[] {
     taxes: { ADULT: Math.round((priceCents as number) * 0.08), SENIOR: Math.round((priceCents as number) * 0.08), CHILD: Math.round((priceCents as number) * 0.08) },
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
     isSoldOut: index === 9,
-    isDiscountDay: new Date(`${date}T00:00:00Z`).getUTCDay() === DISCOUNT_WEEKDAY,
+    isDiscountDay: [2, 3].includes(new Date(`${date}T00:00:00Z`).getUTCDay()),
     // Matches every title, so any movie the emulator is asked about has showings.
     movieTitle: '*',
   }));

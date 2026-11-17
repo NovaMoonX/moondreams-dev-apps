@@ -181,7 +181,7 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
 
   return (
     <div className='space-y-3'>
-      {draft.isDiscountDay && <DiscountDayNotice isPriceFolded={false} />}
+      {draft.isDiscountDay && <DiscountDayNotice step='enter' />}
       <Form
         key={isPremium ? 'premium' : 'standard'}
         id='a-list-ticket'

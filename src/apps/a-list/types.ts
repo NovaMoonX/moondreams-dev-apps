@@ -256,7 +256,7 @@ export interface ShowtimeOption {
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
-  /** AMC's Discount Tuesday applies, so checkout charges less than these list prices. */
+  /** AMC marks the showing as a discount day, so checkout may charge less than these list prices. */
   isDiscountDay: boolean;
 }
 
@@ -269,7 +269,7 @@ export interface PurchasePlan {
   /** AMC's sales tax on one ticket at that price; null when AMC listed none. Plans saved before it existed lack the key. */
   taxCents: number | null;
   purchaseUrl: string;
-  /** AMC's Discount Tuesday applies to the showing; null on plans saved before it existed, which lack the key. */
+  /** AMC marks the showing as a discount day; null on plans saved before it existed, which lack the key. */
   isDiscountDay: boolean | null;
   /** Instant: when the member last left for AMC to buy; null until they do. */
   startedAt: number | null;

@@ -1,19 +1,31 @@
-import InlineNotice from '@/components/InlineNotice';
+import HelpTip from '@/components/HelpTip';
 
 interface DiscountDayNoticeProps {
-  /** The price sits behind a Change button, so the notice points to it. */
-  isPriceFolded: boolean;
+  /** What the member does with the price on this screen, said last in the explanation. */
+  step: 'pick' | 'enter' | 'change';
 }
 
-/** A Discount Tuesday showing: AMC's listed price and tax are the regular ones, and checkout charges less. */
-function DiscountDayNotice({ isPriceFolded }: DiscountDayNoticeProps) {
+const STEP_LINES: Record<DiscountDayNoticeProps['step'], string> = {
+  pick: 'The prices here are the listed ones. After you buy, enter what your checkout charged.',
+  enter:
+    'Enter the price and tax from your checkout so your totals match what you paid.',
+  change:
+    'Tap Change to enter the price and tax from your checkout so your totals match what you paid.',
+};
+
+/** AMC marks the showing as a discount day: its listed price is the regular one, and checkout may charge less. */
+function DiscountDayNotice({ step }: DiscountDayNoticeProps) {
   return (
-    <InlineNotice tone='warning' title='Discount Tuesday showing'>
-      AMC lists the regular price, but Stubs members pay less at checkout.{' '}
-      {isPriceFolded
-        ? 'Tap Change to enter the price and tax from your checkout.'
-        : 'Enter the price and tax from your checkout.'}
-    </InlineNotice>
+    <div>
+      <HelpTip
+        badgeLabel='Discount day: you may pay less'
+        title='You may pay less at checkout'
+      >
+        AMC marks this as a discount day, so AMC Stubs members usually pay less
+        than the listed price, and other deals can lower it too.{' '}
+        {STEP_LINES[step]}
+      </HelpTip>
+    </div>
   );
 }
 
