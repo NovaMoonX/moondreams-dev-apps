@@ -9,8 +9,8 @@ import {
 import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
-  ChevronDown,
-  ChevronUp,
+  ArrowDown,
+  ArrowUp,
   Pencil,
   Plus,
   Ruler,
@@ -577,31 +577,31 @@ function IngredientEditor({
               >
                 Use original
               </Button>
-              {down !== null && up !== null && isMeasureUnit(row.unit) && (
-                <>
+            </div>
+          )}
+          {row.adaptedFrom !== null && isMeasureUnit(row.unit) && (
+            <div className='flex min-h-10 flex-wrap items-center gap-x-2'>
+              <span className='text-muted-foreground text-sm'>Round to</span>
+              {[
+                { target: down, Icon: ArrowDown, word: 'down' },
+                { target: up, Icon: ArrowUp, word: 'up' },
+              ].map(({ target, Icon, word }) =>
+                target === null || target === typedAmount ? null : (
                   <Button
+                    key={word}
                     type='button'
                     variant='tertiary'
-                    size='icon'
-                    className='size-10'
-                    disabled={down === typedAmount}
-                    aria-label={`Round down to ${formatAmountText(down)} ${UNIT_LABELS[row.unit]}`}
-                    onClick={() => onUpdate({ amount: formatAmountText(down) })}
+                    size='sm'
+                    className='h-10 gap-1'
+                    aria-label={`Round ${word} to ${formatAmountText(target)} ${UNIT_LABELS[row.unit]}`}
+                    onClick={() =>
+                      onUpdate({ amount: formatAmountText(target) })
+                    }
                   >
-                    <ChevronDown className='h-4 w-4' aria-hidden='true' />
+                    <Icon className='h-3.5 w-3.5' aria-hidden='true' />
+                    {formatAmountText(target)} {UNIT_LABELS[row.unit]}
                   </Button>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='icon'
-                    className='size-10'
-                    disabled={up === typedAmount}
-                    aria-label={`Round up to ${formatAmountText(up)} ${UNIT_LABELS[row.unit]}`}
-                    onClick={() => onUpdate({ amount: formatAmountText(up) })}
-                  >
-                    <ChevronUp className='h-4 w-4' aria-hidden='true' />
-                  </Button>
-                </>
+                ),
               )}
             </div>
           )}

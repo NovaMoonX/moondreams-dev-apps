@@ -198,6 +198,32 @@ interface RecipeFormProps {
   onSaved?: () => void;
 }
 
+/** The draft with lines adapted in this edit read as the recipe had them, so changing units alone (adapting a line or putting it back) never asks why. */
+const withLinesAsWritten = (
+  draft: RecipeDraft,
+  recipe: Recipe,
+): RecipeDraft => ({
+  ...draft,
+  ingredients: draft.ingredients.map((line) => {
+    const before = recipe.ingredients.find((saved) => saved.id === line.id);
+    const isAdaptedNow =
+      before !== undefined &&
+      before.adaptedFrom === null &&
+      line.adaptedFrom !== null &&
+      before.amount === line.adaptedFrom.amount &&
+      before.unit === line.adaptedFrom.unit;
+    const isPutBackNow =
+      before !== undefined &&
+      before.adaptedFrom !== null &&
+      line.adaptedFrom === null &&
+      line.amount === before.adaptedFrom.amount &&
+      line.unit === before.adaptedFrom.unit;
+    return isAdaptedNow || isPutBackNow
+      ? { ...line, amount: before.amount, unit: before.unit }
+      : line;
+  }),
+});
+
 function RecipeForm({
   uid,
   recipeId,
@@ -1005,7 +1031,7 @@ function RecipeForm({
     if (recipe && (tracking === 'on' || applied.length > 0) && !hasReason) {
       const { changes, topics } = getDraftChanges(
         recipe,
-        getDraft(data, ''),
+        withLinesAsWritten(getDraft(data, ''), recipe),
         ingredientsById,
         sourcesById,
         collectionsById,
