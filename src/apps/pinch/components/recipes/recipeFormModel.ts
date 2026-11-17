@@ -107,8 +107,6 @@ export interface RecipeFormData {
   collections: CollectionsChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
-  /** What the person wants to remember about a new recipe, written as its first journal note on save; always empty for a recipe being edited. */
-  importNote: string;
 }
 
 export const getInitialData = (
@@ -154,7 +152,6 @@ export const getInitialData = (
         : '',
     ]),
   ) as Record<NutritionMetric, string>,
-  importNote: '',
 });
 
 const clipNote = (note: string | null) =>
@@ -419,7 +416,6 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
     sourceChoice,
     collections,
     nutrition,
-    importNote,
   } = stored;
   const isShaped =
     isText(title) &&
@@ -453,12 +449,10 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
       (added) => isRecord(added) && isText(added.id) && isText(added.label),
     ) &&
     isRecord(nutrition) &&
-    NUTRITION_METRICS.every((metric) => isText(nutrition[metric])) &&
-    (importNote === undefined || isText(importNote));
+    NUTRITION_METRICS.every((metric) => isText(nutrition[metric]));
   if (!isShaped) return null;
   return {
     ...(stored as unknown as RecipeFormData),
-    importNote: isText(importNote) ? importNote : '',
     ingredients: (ingredients as IngredientRow[]).map((row) => ({
       ...row,
       freeText: row.freeText ?? null,

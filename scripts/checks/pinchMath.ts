@@ -3063,6 +3063,7 @@ const reading: ExtractedRecipe = {
   care: null,
   photoSearch: null,
   unread: [],
+  guided: [],
 };
 const linkIdea = idea({
   kind: 'LINK',
@@ -8861,6 +8862,7 @@ assert.equal(
       care: null,
       photoSearch: null,
       unread: [],
+      guided: [],
     },
     resolveIngredients([]),
   );
@@ -10320,6 +10322,7 @@ assert.equal(
       care: null,
       photoSearch: null,
       unread: [],
+      guided: [],
     },
     resolveIngredients([]),
   );

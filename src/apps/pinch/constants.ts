@@ -159,6 +159,11 @@ export const MAX_DISMISSED_NUDGES = 500;
 /** The most ingredient names one copy carries. */
 /** The longest recipe text the reader takes, and the biggest photo, screenshot or PDF. */
 export const MAX_PASTE_CHARS = 20_000;
+
+/** The longest guidance the person can give a reading, and how much of what it changed the form tells back. */
+export const MAX_GUIDANCE_CHARS = 300;
+export const MAX_GUIDED_ITEMS = 5;
+export const MAX_GUIDED_LENGTH = 80;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
 

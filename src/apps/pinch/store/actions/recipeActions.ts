@@ -32,11 +32,7 @@ import {
   getRecipeSnapshot,
   isUnrestoredLine,
 } from '@apps/pinch/utils/recipeChanges';
-import {
-  getStepAnchor,
-  getTweakReason,
-  planTweakUndo,
-} from '@apps/pinch/utils/notes';
+import { getTweakReason, planTweakUndo } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import {
   getCoverFields,
@@ -140,8 +136,6 @@ export interface RecipeDraft {
   newCollections: { id: string; label: string }[];
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
   newIngredients: { id: string; name: string }[];
-  /** What the person wanted to remember about a new recipe: written as its first journal note in the recipe's own batch; null for an edit and when nothing was typed. */
-  importNote: string | null;
   /** A source typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
   newSource: { id: string; label: string } | null;
   /** A new cover to upload, if one was picked. */
@@ -376,22 +370,6 @@ export const saveRecipe = createAsyncThunk<
           createdAt: now,
         };
         batch.set(recipeDoc(uid, recipeId), recipe);
-        if (draft.importNote !== null) {
-          const note: RecipeNote = {
-            id: generateUuid(),
-            recipeId,
-            kind: 'NOTE',
-            text: draft.importNote,
-            changes: [],
-            cookId: null,
-            ...getStepAnchor(draft.steps, null),
-            reason: null,
-            previous: null,
-            createdAt: now,
-            updatedAt: now,
-          };
-          batch.set(noteDoc(uid, note.id), note);
-        }
       }
       await batch.commit();
     } catch (error) {

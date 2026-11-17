@@ -1,6 +1,8 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import {
+  MAX_GUIDED_ITEMS,
+  MAX_GUIDED_LENGTH,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
   PHOTO_QUERY_MAX_WORDS_LENGTH,
@@ -48,6 +50,8 @@ export interface ExtractedRecipe {
   care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
+  /** Changes the person's guidance made to the reading, in a few words each; empty without guidance. */
+  guided: string[];
 }
 
 const asString = (value: unknown) =>
@@ -291,5 +295,10 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],
       )
       .slice(0, 10),
+    guided: list(parsed.guided)
+      .flatMap((entry) =>
+        asString(entry) ? [asString(entry)!.slice(0, MAX_GUIDED_LENGTH)] : [],
+      )
+      .slice(0, MAX_GUIDED_ITEMS),
   };
 }

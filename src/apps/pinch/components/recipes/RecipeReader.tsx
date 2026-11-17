@@ -14,6 +14,7 @@ import LinkPreviewCard from '@/components/LinkPreviewCard';
 import MethodPicker, { type Method } from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { useAppSelector } from '@/store';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
@@ -22,6 +23,7 @@ import { fitsReadLimit } from '@/utils/imageCompression';
 import { toWebLink } from '@/utils/urlUtils';
 import IdeaRow from '@apps/pinch/components/ideas/IdeaRow';
 import {
+  MAX_GUIDANCE_CHARS,
   MAX_PASTE_CHARS,
   MAX_UPLOAD_BYTES,
   RECIPE_START_METHODS,
@@ -68,6 +70,8 @@ const toReading = (recipe: ExtractedRecipe): Reading => ({
 });
 
 const SAVED_LINE = 'You look it over before anything is saved.';
+
+const GUIDANCE_MAX_LINES = 4;
 
 const IDEAS_SHOWN = 3;
 const IDEAS_SHOWN_MOST = 10;
@@ -167,11 +171,15 @@ function RecipeReader({
   const fileRef = useRef<HTMLInputElement>(null);
   const linkRef = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const guidanceRef = useRef<HTMLTextAreaElement>(null);
+  const [guidanceText, setGuidanceText] = useState('');
   const isMounted = useIsMounted();
   const isReading = state.status === 'reading';
   const canPasteText = initialUrl === undefined;
   const typed = method === 'text' ? text : link;
   const copy = READER_COPY[method];
+  const guidance = guidanceText.trim() || null;
+  useGrowingTextarea(guidanceRef, guidanceText, GUIDANCE_MAX_LINES);
   const [isIdeasOpen, setIsIdeasOpen] = useState(false);
   const toTry = useAppSelector(selectIdeaGroups).toTry;
   const linkIdeas =
@@ -257,7 +265,7 @@ function RecipeReader({
 
     setFile(next);
     void run(next.name, 'AI_FILE', async () =>
-      toReading(await extractRecipeFromFile(next)),
+      toReading(await extractRecipeFromFile(next, guidance)),
     );
   };
 
@@ -276,7 +284,7 @@ function RecipeReader({
         'youtube.com',
         'AI_LINK',
         async () => ({
-          recipe: await extractRecipeFromVideo(videoId),
+          recipe: await extractRecipeFromVideo(videoId, guidance),
           extras: getVideoExtras(url),
         }),
         true,
@@ -287,7 +295,7 @@ function RecipeReader({
     void run(new URL(url).hostname, 'AI_LINK', async () => {
       const page = await queryClient.fetchQuery(recipePageQueryOptions(url));
       return {
-        recipe: await extractRecipeFromPage(page),
+        recipe: await extractRecipeFromPage(page, guidance),
         extras: getPageExtras(page, url),
       };
     });
@@ -310,11 +318,17 @@ function RecipeReader({
 
   const handleText = () =>
     void run('your text', 'AI_TEXT', async () =>
-      toReading(await extractRecipeFromText(text)),
+      toReading(await extractRecipeFromText(text, guidance)),
+    );
+
+  const reportTyped = (main: string, guide: string) =>
+    onTypedChange?.(
+      (main.trim() !== '' && main !== (initialUrl ?? '')) ||
+        guide.trim() !== '',
     );
 
   const handleTyped = (next: string) => {
-    onTypedChange?.(next.trim() !== '' && next !== (initialUrl ?? ''));
+    reportTyped(next, guidanceText);
     setState((current) =>
       current.status === 'failed' ? { status: 'idle' } : current,
     );
@@ -393,6 +407,30 @@ function RecipeReader({
     );
   };
 
+  const getGuidanceField = () => (
+    <div className='border-border focus-within:border-foreground/40 rounded-xl border'>
+      <p aria-hidden className='text-muted-foreground px-4 pt-2 text-xs'>
+        Guidance for the AI (optional)
+      </p>
+      <Textarea
+        aria-label='Guidance for the AI (optional)'
+        ref={guidanceRef}
+        rows={2}
+        variant='base'
+        rounded='none'
+        placeholder="It's the second recipe on the page. I'm making it for 2, with chicken."
+        maxLength={MAX_GUIDANCE_CHARS}
+        disabled={isReading}
+        className={join(FIELD_CLASS, 'min-h-0 resize-none py-1.5 text-sm')}
+        value={guidanceText}
+        onChange={(event) => {
+          setGuidanceText(event.target.value);
+          reportTyped(typed, event.target.value);
+        }}
+      />
+    </div>
+  );
+
   const getIntro = () => {
     if (ideaTitle === undefined || initialUrl === undefined) {
       return { lead: copy.lead, rest: SAVED_LINE };
@@ -444,10 +482,14 @@ function RecipeReader({
               label: 'Clear',
               description:
                 method === 'text' ? 'Clear the text' : 'Clear the link',
-              isDisabled: isReading || typed === '',
+              isDisabled: isReading || (typed === '' && guidanceText === ''),
               onClick: () => {
                 (method === 'text' ? setText : setLink)('');
-                handleTyped('');
+                setGuidanceText('');
+                reportTyped('', '');
+                setState((current) =>
+                  current.status === 'failed' ? { status: 'idle' } : current,
+                );
                 (method === 'text' ? textRef : linkRef).current?.focus();
               },
             },
@@ -568,6 +610,7 @@ function RecipeReader({
             </div>
           </div>
         )}
+        {getGuidanceField()}
         {preview !== null && <LinkPreviewCard preview={preview} />}
       </FormSection>
       <ActionChips actions={getChips()} label='What else you can do with it' />

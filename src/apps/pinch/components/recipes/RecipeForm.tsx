@@ -36,6 +36,7 @@ import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatList } from '@/utils/formatUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
@@ -48,7 +49,6 @@ import {
   RecipeTimesField,
   RecipeTitleField,
 } from '@apps/pinch/components/recipes/RecipeBasics';
-import RecipeImportNoteField from '@apps/pinch/components/recipes/RecipeImportNoteField';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
 import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
 import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
@@ -625,17 +625,6 @@ function RecipeForm({
       });
     });
 
-    const importNoteField = custom({
-      name: 'importNote',
-      label: '',
-      renderComponent: (props) => (
-        <RecipeImportNoteField
-          value={String(props.value)}
-          onChange={props.onValueChange}
-        />
-      ),
-    });
-
     return [
       custom({
         name: 'title',
@@ -694,7 +683,6 @@ function RecipeForm({
           />
         ),
       }),
-      ...(recipe === null ? [importNoteField] : []),
       custom({
         name: 'cover',
         label: '',
@@ -942,7 +930,6 @@ function RecipeForm({
       prepMinutes: parseMinutes(data.basics.prep),
       cookMinutes: parseMinutes(data.basics.cook),
       ingredients: settled.rows.map(toRecipeLine),
-      importNote: recipe ? null : data.importNote.trim() || null,
       source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
       sourceId,
       newSource,
@@ -1188,6 +1175,11 @@ function RecipeForm({
             {initialRead.recipe.unread.length > 0 && (
               <p className='text-muted-foreground text-xs'>
                 We couldn&apos;t read: {initialRead.recipe.unread.join(', ')}.
+              </p>
+            )}
+            {initialRead.recipe.guided.length > 0 && (
+              <p className='text-muted-foreground text-xs'>
+                Followed your guidance: {formatList(initialRead.recipe.guided)}.
               </p>
             )}
           </div>
