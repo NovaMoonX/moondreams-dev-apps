@@ -50,6 +50,9 @@ const sealedOf = (title: string): TaskSealed => ({
   steps: { a: { text: 'Find the number' } },
   privateMark: null,
   isPrivacyCleared: false,
+  quietMark: null,
+  quietUntil: null,
+  isQuietCleared: false,
 });
 
 const target = (
@@ -112,6 +115,7 @@ const execution = (
   effects: entries.map((entry) => entry.effect),
   undoReport: null,
   spoken: null,
+  heldSpoken: null,
   goneIds: null,
   undoReason: null,
   lines: [],
@@ -1044,6 +1048,9 @@ const projectSealed = (
   importance: null,
   privateMark: null,
   isPrivacyCleared: false,
+  quietMark: null,
+  quietUntil: null,
+  isQuietCleared: false,
 });
 
 test('a project the turn made is deleted by its undo, and says projects', () => {
@@ -2119,6 +2126,91 @@ const habitEntry = (
 ) => ({
   ref: { op, collection, docId } as EffectRef,
   effect: { written, previous },
+});
+
+const quietUpdate = (
+  docId: string,
+  collection: EffectRef['collection'],
+  title: string,
+) => ({
+  ref: { op: 'update', collection, docId } as EffectRef,
+  effect: {
+    written: {
+      privacy: 'private',
+      'sealed.privateMark': 'person',
+      'sealed.isPrivacyCleared': false,
+      'sealed.quietMark': 'person',
+      'sealed.quietUntil': null,
+      'sealed.isQuietCleared': false,
+      'sealed.title': title,
+    },
+    previous: {
+      privacy: 'ordinary',
+      'sealed.privateMark': null,
+      'sealed.isPrivacyCleared': false,
+      'sealed.quietMark': null,
+      'sealed.quietUntil': null,
+      'sealed.isQuietCleared': false,
+      'sealed.title': title,
+    },
+  } as ExecutionEffect,
+});
+
+const quietTarget = (docId: string, title: string): [string, UndoTarget] => [
+  docId,
+  {
+    docId,
+    data: { privacy: 'private', lastEditedAt: EARLIER },
+    opened: {
+      ...sealedOf(title),
+      privateMark: 'person',
+      quietMark: 'person',
+    },
+  },
+];
+
+test('undoing a task kept quiet says how it was kept, not a task taken back', () => {
+  const result = asWrite(
+    plan(execution([quietUpdate('t1', 'tasks', 'Plan the party')]), [
+      quietTarget('t1', 'Plan the party'),
+    ]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.report, 'Put back how Plan the party was kept.');
+  assert.equal(
+    result.undoSealed.summary,
+    'Put back how Plan the party was kept',
+  );
+});
+
+test('undoing a project kept quiet with its tasks counts how they were kept', () => {
+  const result = asWrite(
+    plan(
+      execution([
+        quietUpdate('p1', 'projects', 'Surprise party'),
+        quietUpdate('t1', 'tasks', 'Book the room'),
+        quietUpdate('t2', 'tasks', 'Order the cake'),
+      ]),
+      [
+        quietTarget('p1', 'Surprise party'),
+        quietTarget('t1', 'Book the room'),
+        quietTarget('t2', 'Order the cake'),
+      ],
+    ),
+  );
+  assert.equal(result.updates.length, 3);
+  assert.equal(result.report, 'Put back how 3 things were kept.');
+  assert.ok(!/task/.test(result.undoSealed.summary));
+});
+
+test('undoing a note kept quiet never says it left its topics', () => {
+  const result = asWrite(
+    plan(execution([quietUpdate('n1', 'notes', 'Gift ideas')]), [
+      quietTarget('n1', 'Gift ideas'),
+    ]),
+  );
+  assert.equal(result.report, 'Put back how Gift ideas was kept.');
+  assert.ok(!result.report.includes('topics'));
 });
 
 const entry = (
