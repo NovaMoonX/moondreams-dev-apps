@@ -145,4 +145,32 @@ assert.deepEqual(
   'a list that has not delivered never counts a hold as shown',
 );
 
+const stale = purchase('s', FROM + DAY, true);
+const waitingWindow = layPurchaseLists({
+  window: [stale],
+  needsHome: [],
+  period: [],
+  deliveredAt: { window: 1, needsHome: null, period: null },
+  purchasesFrom: FROM,
+  periodFor: null,
+  held: [edit],
+  landed: {},
+});
+const arrived = layPurchaseLists({
+  window: [stale],
+  needsHome: [stale],
+  period: [],
+  deliveredAt: { window: 1, needsHome: 2, period: null },
+  purchasesFrom: FROM,
+  periodFor: null,
+  held: waitingWindow.held,
+  landed: waitingWindow.landed,
+});
+assert.deepEqual(
+  ids(arrived.needsHome),
+  [],
+  'a list that arrives late still has the hold laid over it',
+);
+assert.equal(arrived.held.length, 1);
+
 console.log('runway purchase holds: ok');
