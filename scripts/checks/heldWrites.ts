@@ -22,15 +22,21 @@ const hold = (
   id: string,
   token = 't1',
   settledAt: number | null = null,
+  baseline: Row | null = null,
 ): HeldWrite<Row> => ({
   id,
   item,
   fingerprint: item === null ? '' : toFingerprint(item),
   token,
   settledAt,
+  baseline: baseline === null ? null : toFingerprint(baseline),
 });
-const apply = (incoming: Row[], held: HeldWrite<Row>[], now = 1_000) =>
-  applyHeldWrites(incoming, held, idOf, toFingerprint, now);
+const apply = (
+  incoming: Row[],
+  held: HeldWrite<Row>[],
+  now = 1_000,
+  deliveredAt: number | null = null,
+) => applyHeldWrites(incoming, held, idOf, { now, deliveredAt });
 
 assert.equal(
   toFingerprint({ b: 1, a: { d: 2, c: 3 } }),
@@ -46,7 +52,11 @@ assert.equal(
 const base: Row[] = [{ id: 'a', cents: 1 }];
 
 const added = apply(base, [hold({ id: 'b', cents: 5 }, 'b')]);
-assert.deepEqual(added.list.map(idOf), ['a', 'b'], 'a new record shows at once');
+assert.deepEqual(
+  added.list.map(idOf),
+  ['a', 'b'],
+  'a new record shows at once',
+);
 assert.equal(added.held.length, 1, 'and stays held until the list shows it');
 
 const replaced = apply(base, [hold({ id: 'a', cents: 9 }, 'a')]);
@@ -60,11 +70,33 @@ assert.deepEqual(
   'and lets go once the list no longer has it',
 );
 
-const stale = apply(base, [hold({ id: 'a', cents: 9 }, 'a', 't1', 900)]);
+const stalled = apply(base, [
+  hold({ id: 'a', cents: 9 }, 'a', 't1', 900, base[0]),
+]);
 assert.equal(
-  stale.held.length,
+  stalled.list[0].cents,
+  9,
+  'a settled write over a listener that has sent nothing new never flashes the old value back',
+);
+
+const rewritten = apply(
+  [{ id: 'a', cents: 9, meta: { a: 1, b: 2 } }],
+  [hold({ id: 'a', cents: 9 }, 'a', 't1', 900, base[0])],
+);
+assert.equal(
+  rewritten.held.length,
   0,
-  'once the server accepted it, any copy of the record in the list lets go',
+  'once the server accepted it, a new copy of the record lets go even when the server added to it',
+);
+
+const created = apply(
+  [...base, { id: 'b', cents: 5, meta: { a: 1, b: 2 } }],
+  [hold({ id: 'b', cents: 5 }, 'b', 't1', 900)],
+);
+assert.equal(
+  created.held.length,
+  0,
+  'a settled new record lets go once the list has any copy',
 );
 
 const inFlight = apply(base, [hold({ id: 'a', cents: 9 }, 'a')]);
@@ -74,14 +106,38 @@ assert.equal(
   'while in flight, an older copy in the list never flashes back',
 );
 
-const landed = apply([{ id: 'a', cents: 9 }], [hold({ id: 'a', cents: 9 }, 'a')]);
-assert.equal(landed.held.length, 0, 'a list that shows the write lets go at once');
+const landed = apply(
+  [{ id: 'a', cents: 9 }],
+  [hold({ id: 'a', cents: 9 }, 'a')],
+);
+assert.equal(
+  landed.held.length,
+  0,
+  'a list that shows the write lets go at once',
+);
 
-const missing = apply(base, [hold({ id: 'b', cents: 5 }, 'b', 't1', 0)], HELD_WRITE_SETTLED_MS + 1);
+const quiet = apply(
+  base,
+  [hold({ id: 'b', cents: 5 }, 'b', 't1', 0)],
+  HELD_WRITE_SETTLED_MS + 1,
+  null,
+);
+assert.equal(
+  quiet.held.length,
+  1,
+  'a stalled listener never lets a hold expire',
+);
+
+const missing = apply(
+  base,
+  [hold({ id: 'b', cents: 5 }, 'b', 't1', 0)],
+  HELD_WRITE_SETTLED_MS + 1,
+  10,
+);
 assert.equal(
   missing.held.length,
   0,
-  'a settled hold the list never shows lets go after its time',
+  'a settled hold the list never shows, though it was delivered since, lets go after its time',
 );
 assert.deepEqual(missing.list.map(idOf), ['a']);
 
@@ -89,7 +145,11 @@ const twice = addHeldWrites(
   [hold({ id: 'a', cents: 2 }, 'a', 't1')],
   [hold({ id: 'a', cents: 3 }, 'a', 't2')],
 );
-assert.equal(twice.length, 1, 'the newest write of a record replaces the older hold');
+assert.equal(
+  twice.length,
+  1,
+  'the newest write of a record replaces the older hold',
+);
 assert.equal(twice[0].token, 't2');
 assert.equal(
   settleHeldWrites(twice, 't1', 50)[0].settledAt,
@@ -97,7 +157,11 @@ assert.equal(
   'an older write settling never settles the newer one',
 );
 assert.equal(settleHeldWrites(twice, 't2', 50)[0].settledAt, 50);
-assert.deepEqual(dropHeldWrites(twice, 't1').length, 1, 'only the failed write drops');
+assert.deepEqual(
+  dropHeldWrites(twice, 't1').length,
+  1,
+  'only the failed write drops',
+);
 assert.deepEqual(dropHeldWrites(twice, 't2'), []);
 
 console.log('held writes: all checks passed');

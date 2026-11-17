@@ -41,8 +41,10 @@ const readTarget = (
   const [apps, runway, plans, owner, ...rest] = segments;
   if (apps !== 'apps' || runway !== 'runway' || plans !== 'plans') return null;
   if (owner !== uid) return null;
-  if (rest.length === 2 && rest[0] === 'moves') return { kind: 'moves', id: rest[1] };
-  if (rest.length === 2 && rest[0] === 'days') return { kind: 'days', id: rest[1] };
+  if (rest.length === 2 && rest[0] === 'moves')
+    return { kind: 'moves', id: rest[1] };
+  if (rest.length === 2 && rest[0] === 'days')
+    return { kind: 'days', id: rest[1] };
   if (rest.length === 4 && rest[0] === 'days' && rest[2] === 'records') {
     return { kind: 'records', id: rest[3] };
   }
@@ -64,6 +66,13 @@ const openFull = (
 const currentOf = (kind: HeldKind, id: string): Opened | undefined =>
   (store.getState().runway[kind] as Opened[]).find((item) => item.id === id);
 
+const baselineOf = (kind: HeldKind, id: string): string | null => {
+  const delivered = (store.getState().runway.incoming[kind] as Opened[]).find(
+    (item) => item.id === id,
+  );
+  return delivered === undefined ? null : toFingerprint(delivered);
+};
+
 /** A partial write is laid over the shown record only when every field it names is a plain, readable one the record carries. */
 const mergeReadable = (
   kind: HeldKind,
@@ -71,7 +80,8 @@ const mergeReadable = (
   data: DocumentData | null,
 ): Opened | null => {
   const current = currentOf(kind, id);
-  if (current === undefined || !isPlainWrite(data) || data === null) return null;
+  if (current === undefined || !isPlainWrite(data) || data === null)
+    return null;
   const fields = Object.keys(data);
   if (fields.includes('sealed')) return null;
   if (!fields.every((field) => Object.hasOwn(current, field))) return null;
@@ -91,9 +101,12 @@ const toHold = async (
     write.op === 'delete'
       ? null
       : write.op === 'set' && !write.isMerge && write.data !== null
-        ? await openFull(kind, id, write.data, encryption).catch(() => undefined)
+        ? await openFull(kind, id, write.data, encryption).catch(
+            () => undefined,
+          )
         : mergeReadable(kind, id, write.data);
-  if (item === undefined || (item === null && write.op !== 'delete')) return null;
+  if (item === undefined || (item === null && write.op !== 'delete'))
+    return null;
   return {
     kind,
     hold: {
@@ -102,30 +115,37 @@ const toHold = async (
       fingerprint: item === null ? '' : toFingerprint(item),
       token,
       settledAt: null,
+      baseline: baselineOf(kind, id),
     },
   };
 };
 
-/** A hold the listeners can show: one outside their window (a day not read) is not waited on. */
+/** Whether the listeners read this record; one outside their window (a day not read) is never held, since it would never let go. */
 const isWatched = (kind: HeldKind, hold: HeldWrite<Opened>): boolean => {
   const state = store.getState().runway;
   if (hold.item === null) return true;
   if (kind === 'moves') {
     const move = hold.item as OpenMove;
-    return move.kind === 'start' || (state.movesFrom !== null && move.date >= state.movesFrom);
+    return (
+      move.kind === 'start' ||
+      (state.movesFrom !== null && move.date >= state.movesFrom)
+    );
   }
   if (kind === 'days') {
-    return state.daysFrom !== null && (hold.item as OpenDay).expectedOn >= state.daysFrom;
+    return (
+      state.daysFrom !== null &&
+      (hold.item as OpenDay).expectedOn >= state.daysFrom
+    );
   }
-  return (state.recordsFor ?? '').split(',').includes((hold.item as OpenRecord).dayId);
+  return (state.recordsFor ?? '')
+    .split(',')
+    .includes((hold.item as OpenRecord).dayId);
 };
 
 const isLanded = (token: string) => () => {
   const { held } = store.getState().runway;
   return (['days', 'records', 'moves'] as HeldKind[]).every((kind) =>
-    (held[kind] as HeldWrite<Opened>[]).every(
-      (hold) => hold.token !== token || !isWatched(kind, hold),
-    ),
+    (held[kind] as HeldWrite<Opened>[]).every((hold) => hold.token !== token),
   );
 };
 
@@ -142,8 +162,12 @@ export async function runHeldTransaction<T>(
   const hold = async (writes: RecordedWrite[]) => {
     if (encryption === null) return;
     const holds = (
-      await Promise.all(writes.map((write) => toHold(write, uid, token, encryption)))
-    ).filter((entry) => entry !== null);
+      await Promise.all(
+        writes.map((write) => toHold(write, uid, token, encryption)),
+      )
+    )
+      .filter((entry) => entry !== null)
+      .filter((entry) => isWatched(entry.kind, entry.hold));
     const input = holds.reduce<HeldWritesInput>(
       (sum, entry) => ({
         ...sum,

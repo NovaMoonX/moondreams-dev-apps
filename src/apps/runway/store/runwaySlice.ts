@@ -1,4 +1,8 @@
-import { createAction, createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import {
+  createAction,
+  createSlice,
+  type PayloadAction,
+} from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
 import {
@@ -113,6 +117,7 @@ export interface RunwayState {
   incoming: HeldLists;
   /** This device's writes shown over the lists until the listeners show them. */
   held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
+  deliveredAt: { [K in HeldKind]: number | null };
 }
 
 interface HeldLists {
@@ -137,6 +142,7 @@ const layHeld = (state: RunwayState, kind: HeldKind) => {
     state.incoming[kind],
     state.held[kind],
     (item) => item.id,
+    { deliveredAt: state.deliveredAt[kind] },
   );
   (state[kind] as HeldLists[typeof kind]) = list as HeldLists[typeof kind];
   (state.held[kind] as HeldWrite<HeldLists[typeof kind][number]>[]) = held;
@@ -194,6 +200,7 @@ const initialState: RunwayState = {
   historyRecordsFor: null,
   historyFailedFor: null,
   incoming: { days: [], records: [], moves: [] },
+  deliveredAt: { days: null, records: null, moves: null },
   held: { days: [], records: [], moves: [] },
 };
 
@@ -233,6 +240,7 @@ export const runwaySlice = createSlice({
       action: PayloadAction<{ from: DateOnly; days: OpenDay[] }>,
     ) => {
       state.incoming.days = action.payload.days;
+      state.deliveredAt.days = Date.now();
       layHeld(state, 'days');
       state.daysFrom = action.payload.from;
     },
@@ -252,6 +260,7 @@ export const runwaySlice = createSlice({
       action: PayloadAction<{ dayIds: string; records: OpenRecord[] }>,
     ) => {
       state.incoming.records = action.payload.records;
+      state.deliveredAt.records = Date.now();
       layHeld(state, 'records');
       state.recordsFor = action.payload.dayIds;
     },
@@ -295,6 +304,7 @@ export const runwaySlice = createSlice({
       action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
     ) => {
       state.incoming.moves = action.payload.moves;
+      state.deliveredAt.moves = Date.now();
       layHeld(state, 'moves');
       state.movesFrom = action.payload.from;
     },
