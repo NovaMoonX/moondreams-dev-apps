@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Banknote, CalendarDays } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
@@ -8,6 +8,7 @@ import HelpTip from '@/components/HelpTip';
 import { PillGroup } from '@/components/PillGroup';
 import ScopeChip from '@/components/ScopeChip';
 import SectionDivider from '@/components/SectionDivider';
+import SwipeViews, { type SwipeViewsHandle } from '@/components/SwipeViews';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -31,7 +32,10 @@ import { listHistoryMonths } from '@apps/runway/utils/historyWindow';
 import DaysCalendarView from '@apps/runway/screens/days/DaysCalendarView';
 import EarlierDaysView from '@apps/runway/screens/days/EarlierDaysView';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
-import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import {
+  RunwayPreviewContext,
+  useRunwayUrlState,
+} from '@apps/runway/useRunwayUrlState';
 import ExpectedScreen from '@apps/runway/screens/days/ExpectedScreen';
 import {
   selectRangeSides,
@@ -66,6 +70,8 @@ const groupByYear = (days: ListedDay[], thisYear: number) =>
     }
     return [...groups, { year, days: [day] }];
   }, []);
+
+type DaysView = (typeof DAYS_VIEWS)[number];
 
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -146,8 +152,10 @@ function DaysScreen() {
       ? confirmed.slice(0, SETTLED_DAYS_PREVIEW)
       : confirmed;
 
-  const monthChip =
-    isLoaded && !isCalendar && monthOptions.length > 0 ? (
+  const swipeRef = useRef<SwipeViewsHandle<DaysView>>(null);
+
+  const getMonthChip = (view: DaysView) =>
+    isLoaded && view === 'list' && monthOptions.length > 0 ? (
       <ScopeChip
         label={
           earlierMonth === null
@@ -170,7 +178,7 @@ function DaysScreen() {
       </ScopeChip>
     ) : null;
 
-  const getBody = () => {
+  const getBody = (view: DaysView) => {
     if (earlierMonth !== null) {
       return <EarlierDaysView key={earlierMonth} month={earlierMonth} />;
     }
@@ -189,7 +197,7 @@ function DaysScreen() {
         </EmptyCard>
       );
     }
-    if (isCalendar) {
+    if (view === 'calendar') {
       return <DaysCalendarView today={today} getShorts={getShorts} />;
     }
     return (
@@ -276,21 +284,10 @@ function DaysScreen() {
   };
 
   const hasDays = isLoaded && (days.length > 0 || confirmed.length > 0);
+  const canSwipe = hasDays && earlierMonth === null;
 
-  return (
-    <div className='space-y-4'>
-      {hasDays && earlierMonth === null && (
-        <PillGroup
-          label={DAYS_CALENDAR_WORDS.viewLabel}
-          options={DAYS_VIEWS.map((value) => ({
-            value,
-            label: DAYS_CALENDAR_WORDS[value],
-          }))}
-          value={daysView}
-          isThin
-          onChange={showDaysView}
-        />
-      )}
+  const renderView = (view: DaysView) => (
+    <>
       <div className='flex min-h-10 items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
           {earlierMonth !== null && (
@@ -324,9 +321,44 @@ function DaysScreen() {
             />
           )}
         </div>
-        {monthChip}
+        {getMonthChip(view)}
       </div>
-      {getBody()}
+      {getBody(view)}
+    </>
+  );
+
+  return (
+    <div className='space-y-4'>
+      <SwipeViews
+        ref={swipeRef}
+        views={DAYS_VIEWS}
+        current={daysView}
+        onShow={showDaysView}
+        isPaused={() => !canSwipe}
+        className='space-y-4'
+        bodyClassName='space-y-4'
+        header={
+          canSwipe && (
+            <PillGroup
+              label={DAYS_CALENDAR_WORDS.viewLabel}
+              options={DAYS_VIEWS.map((value) => ({
+                value,
+                label: DAYS_CALENDAR_WORDS[value],
+              }))}
+              value={daysView}
+              isThin
+              onChange={(view) => swipeRef.current?.show(view)}
+            />
+          )
+        }
+        renderPeek={(view) => (
+          <RunwayPreviewContext.Provider value>
+            {renderView(view)}
+          </RunwayPreviewContext.Provider>
+        )}
+      >
+        {renderView(daysView)}
+      </SwipeViews>
       {hasIncome && earlierMonth === null && (
         <FloatingAction
           label={DAYS_WORDS.addExpected}
