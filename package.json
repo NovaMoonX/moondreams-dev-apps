@@ -169,7 +169,8 @@
     "connections:keyring": "bash scripts/connections/keyring.sh",
     "connections:alerts": "bash scripts/connections/alerts.sh",
     "connections:google-secrets": "bash scripts/connections/googleSecrets.sh",
-    "connections:google-setup": "bash scripts/connections/googleSetup.sh"
+    "connections:google-setup": "bash scripts/connections/googleSetup.sh",
+    "check:pinch-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchHeldLists.ts"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",

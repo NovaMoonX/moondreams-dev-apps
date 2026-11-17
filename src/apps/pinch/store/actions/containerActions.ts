@@ -1,10 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, runTransaction, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { queryClient } from '@/lib/query/queryClient';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { CONTAINER_CLEAR_CHUNK_SIZE } from '@apps/pinch/constants';
 import { containerKeys } from '@apps/pinch/queries/containerQueries';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
@@ -48,7 +49,7 @@ const applyPlan = (
   id: string,
   getPlan: (container: Container, now: number) => ContainerPlan,
 ) =>
-  runTransaction(db, async (transaction) => {
+  runHeldTransaction(uid, async (transaction) => {
     const ref = containerDoc(uid, id);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(GONE);
@@ -66,7 +67,7 @@ const applyPlanToAll = (
   ids: string[],
   getPlan: (container: Container, now: number) => ContainerPlan,
 ) =>
-  runTransaction(db, async (transaction) => {
+  runHeldTransaction(uid, async (transaction) => {
     const snapshots = await Promise.all(
       ids.map((id) => transaction.get(containerDoc(uid, id))),
     );
@@ -124,7 +125,7 @@ export const undoContainerBatch = createAsyncThunk<
   { rejectValue: string }
 >('pinch/containers/undoBatch', async ({ uid, ids }, { rejectWithValue }) => {
   try {
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(uid, async (transaction) => {
       const snapshots = await Promise.all(
         ids.map((id) => transaction.get(containerDoc(uid, id))),
       );
@@ -337,7 +338,7 @@ export const changeContainersInPlace = createAsyncThunk<
       (
         chunk,
       ): Promise<{ changed: ClearedContainer[]; skipped: SkipCounts }[]> =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(containerDoc(uid, id))),
           );
@@ -397,7 +398,7 @@ export const undoClearOut = createAsyncThunk<
   'pinch/containers/undoClearOut',
   async ({ uid, cleared }, { rejectWithValue }) => {
     const { done, error } = await runInChunks(cleared, (chunk) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map(({ id }) => transaction.get(containerDoc(uid, id))),
         );

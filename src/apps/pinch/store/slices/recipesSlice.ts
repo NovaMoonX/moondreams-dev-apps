@@ -1,30 +1,41 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import {
+  addHeldCases,
+  deliverHeld,
+  emptyHeldList,
+  type HeldList,
+} from '@apps/pinch/store/heldLists';
 import type { Recipe } from '@apps/pinch/types';
 
 export interface RecipesState {
   items: Recipe[];
+  hold: HeldList<Recipe>;
   isLoaded: boolean;
   loadError: string | null;
 }
 
 const initialState: RecipesState = {
   items: [],
+  hold: emptyHeldList<Recipe>(),
   isLoaded: false,
   loadError: null,
 };
+
+const belongs = () => true;
 
 export const recipesSlice = createSlice({
   name: 'pinch/recipes',
   initialState,
   reducers: {
     setRecipes(state, action: PayloadAction<Recipe[]>) {
-      state.items = action.payload;
+      state.items = deliverHeld(state.hold, action.payload, belongs);
       state.isLoaded = true;
       state.loadError = null;
     },
     setRecipesLoadError(state, action: PayloadAction<string>) {
+      state.hold = emptyHeldList();
       state.isLoaded = true;
       state.loadError = action.payload;
     },
@@ -32,6 +43,14 @@ export const recipesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
+    addHeldCases<Recipe, RecipesState>(
+      builder,
+      'recipes',
+      belongs,
+      (state, list) => {
+        state.items = list;
+      },
+    );
   },
 });
 
