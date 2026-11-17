@@ -497,6 +497,7 @@ check('an ingredient line has exactly the public keys', () => {
       'amount',
       'catalogId',
       'group',
+      'isFree',
       'name',
       'note',
       'unit',
@@ -534,8 +535,32 @@ check('amounts, units, notes and groups are kept', () => {
     unit: 'G',
     note: 'lean',
     group: 'For the chili',
+    isFree: false,
   });
   assert.equal(shared.ingredients[2].amount, 1.5);
+});
+
+check('a kitchen-free line is shared as plain words marked free', () => {
+  const free = {
+    ...line('f', 'cat-beef', null, null, null),
+    ingredientId: null,
+    freeText: 'Fresh basil for serving',
+  } as RecipeIngredient;
+  const copy = buildSharedRecipe(
+    makeRecipe('r-free', { ingredients: [free] }),
+    ingredientsById,
+  );
+  assert.deepEqual(copy.ingredients, [
+    {
+      name: 'Fresh basil for serving',
+      catalogId: null,
+      amount: null,
+      unit: 'EACH',
+      note: null,
+      group: null,
+      isFree: true,
+    },
+  ]);
 });
 
 check(

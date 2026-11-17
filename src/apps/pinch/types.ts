@@ -706,6 +706,8 @@ export interface SharedIngredient {
   unit: Unit;
   note: string | null;
   group: string | null;
+  /** A line the owner kept outside their kitchen: it arrives as plain words, never as an ingredient. */
+  isFree: boolean;
 }
 
 export interface SharedRecipeLink {

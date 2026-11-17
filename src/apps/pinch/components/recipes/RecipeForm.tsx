@@ -160,6 +160,8 @@ export interface RecipeRead {
   extras: ReadExtras;
 }
 
+const USAGE_READ_TIMEOUT_MS = 4000;
+
 /** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
 const findLoadablePhoto = (photos: WebPhoto[]) =>
   photos.reduce<Promise<WebPhoto | null>>(
@@ -635,7 +637,6 @@ function RecipeForm({
     });
 
     return [
-      ...(recipe === null && initialRead !== null ? [importNoteField] : []),
       custom({
         name: 'title',
         label: '',
@@ -693,7 +694,7 @@ function RecipeForm({
           />
         ),
       }),
-      ...(recipe === null && initialRead === null ? [importNoteField] : []),
+      ...(recipe === null ? [importNoteField] : []),
       custom({
         name: 'cover',
         label: '',
@@ -970,11 +971,14 @@ function RecipeForm({
       (entry) => entry.id === ingredientId,
     );
     if (!record || record.catalogId !== null || !record.name) return;
-    const usage = await dispatch(
-      getUsage({ uid, kind: 'INGREDIENT', id: ingredientId }),
-    )
-      .unwrap()
-      .catch(() => null);
+    const usage = await Promise.race([
+      dispatch(getUsage({ uid, kind: 'INGREDIENT', id: ingredientId }))
+        .unwrap()
+        .catch(() => null),
+      new Promise<null>((resolve) =>
+        window.setTimeout(() => resolve(null), USAGE_READ_TIMEOUT_MS),
+      ),
+    ]);
     if (usage === null) return;
     const isUsedElsewhere =
       isInUse({
@@ -1038,19 +1042,17 @@ function RecipeForm({
         });
         announceRecipeAdded(savedId);
       }
-      if (recipe) {
-        const freed = getFreedIngredientIds(
-          recipe.ingredients,
-          draft.ingredients,
-        );
-        await freed.reduce(
-          (done, ingredientId) =>
-            done.then(() => offerKitchenRemoval(ingredientId, savedId)),
-          Promise.resolve(),
-        );
-      }
       if (onSaved) onSaved();
       else closeSubviewIf((current) => current === subview);
+      if (recipe) {
+        void getFreedIngredientIds(recipe.ingredients, draft.ingredients)
+          .reduce(
+            (done, ingredientId) =>
+              done.then(() => offerKitchenRemoval(ingredientId, savedId)),
+            Promise.resolve(),
+          )
+          .catch(() => undefined);
+      }
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
       setIsSubmitting(false);

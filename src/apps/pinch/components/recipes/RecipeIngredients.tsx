@@ -8,7 +8,16 @@ import {
 
 import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil, Plus, Search, Trash2, Ungroup, X } from 'lucide-react';
+import {
+  Link2,
+  NotebookText,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Ungroup,
+  X,
+} from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
@@ -86,23 +95,16 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
 
 const FREE_LINE_LABEL = 'Not a kitchen ingredient';
 
-/** The quiet last choice of a line's sheet: keep the words in the recipe, outside the kitchen and the shopping list. */
+/** The last choice of a line's sheet: keep the words in the recipe, outside the kitchen and the shopping list. */
 function FreeLineOffer({ onClick }: { onClick: () => void }) {
   return (
-    <div>
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        className='h-10 px-0! font-normal'
-        onClick={onClick}
-      >
-        {FREE_LINE_LABEL}
-      </Button>
-      <p className='text-muted-foreground text-xs'>
-        Keep it in the recipe, not in your kitchen or shopping list.
-      </p>
-    </div>
+    <ActionRow
+      icon={<NotebookText className='h-4 w-4' />}
+      label={FREE_LINE_LABEL}
+      subtitle='Keep it in the recipe, not in your kitchen or shopping list.'
+      hasChevron
+      onClick={onClick}
+    />
   );
 }
 
@@ -540,27 +542,20 @@ function IngredientEditor({
         onChange={(group) => onUpdate({ group })}
       />
       {isFree ? (
-        <div>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='h-10 px-0! font-normal'
-            onClick={() =>
-              onUpdate({
-                freeText: null,
-                ingredientId: '',
-                proposedName: row.freeText?.trim() ?? '',
-                newName: null,
-              })
-            }
-          >
-            Link to an ingredient
-          </Button>
-          <p className='text-muted-foreground text-xs'>
-            Pick one from your kitchen or add it as new.
-          </p>
-        </div>
+        <ActionRow
+          icon={<Link2 className='h-4 w-4' />}
+          label='Link to an ingredient'
+          subtitle='Pick one from your kitchen or add it as new.'
+          hasChevron
+          onClick={() =>
+            onUpdate({
+              freeText: null,
+              ingredientId: '',
+              proposedName: row.freeText?.trim() ?? '',
+              newName: null,
+            })
+          }
+        />
       ) : (
         <FreeLineOffer
           onClick={() =>
@@ -917,6 +912,24 @@ function RecipeIngredients({
 
     return sameLine ? sameLine.id : addRow(ingredientId, group, name);
   };
+  const addFree = (words: string, group: string | null) => {
+    const id = generateUuid();
+    onChange(
+      placeLineInGroup(rows, {
+        id,
+        ingredientId: '',
+        freeText: words,
+        amount: '',
+        unit: DEFAULT_SERVING.unit,
+        isAmountless: true,
+        note: null,
+        proposedName: null,
+        newName: null,
+        group: resolveGroupName(group, rows),
+      }),
+    );
+    return id;
+  };
   const renameNew = (ingredientId: string, name: string, isFinal: boolean) => {
     const other = isFinal
       ? rows.find(
@@ -1084,6 +1097,7 @@ function RecipeIngredients({
           suggestions={suggestions}
           onAdd={addRow}
           onStageNew={stageNew}
+          onAddFree={addFree}
           onUpdate={update}
           onRemove={remove}
           onRename={renameNew}
@@ -1103,6 +1117,7 @@ interface IngredientSheetProps {
   suggestions: ItemSuggestions;
   onAdd: (ingredientId: string, group: string | null) => string;
   onStageNew: (name: string, group: string | null) => string;
+  onAddFree: (words: string, group: string | null) => string;
   onUpdate: (id: string, patch: Partial<IngredientRow>) => void;
   onRemove: (id: string) => void;
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
@@ -1118,6 +1133,7 @@ function IngredientSheet({
   suggestions,
   onAdd,
   onStageNew,
+  onAddFree,
   onUpdate,
   onRemove,
   onRename,
@@ -1232,6 +1248,7 @@ function IngredientSheet({
               setActiveId(onAdd(ingredientId, addGroup))
             }
             onStageNew={(name) => setActiveId(onStageNew(name, addGroup))}
+            onPickFree={(words) => setActiveId(onAddFree(words, addGroup))}
           />
         </div>
       )}

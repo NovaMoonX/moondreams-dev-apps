@@ -36,7 +36,10 @@ export const getRecipeSnapshot = (recipe: RecipeContent): RecipeSnapshot => ({
   servings: recipe.servings,
   prepMinutes: recipe.prepMinutes ?? null,
   cookMinutes: recipe.cookMinutes ?? null,
-  ingredients: recipe.ingredients,
+  ingredients: recipe.ingredients.map((line) => ({
+    ...line,
+    freeText: line.freeText ?? null,
+  })),
   steps: recipe.steps,
   nutritionOverride: recipe.nutritionOverride ?? null,
   sourceId: recipe.sourceId ?? null,

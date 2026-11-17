@@ -213,10 +213,25 @@ function RecipePhotoSuggestions({
         </Button>
       }
     >
-      <p className='text-muted-foreground text-xs'>
-        {searchWords
-          ? `Searched for “${searchWords}”. Nothing else is sent.`
-          : 'Searches the web with this title. Nothing else is sent.'}
+      <p
+        className='text-muted-foreground flex min-w-0 text-xs'
+        title={
+          searchWords
+            ? `Searches the web for “${searchWords}”. Nothing else is sent.`
+            : undefined
+        }
+      >
+        {searchWords ? (
+          <>
+            <span className='shrink-0 whitespace-pre'>
+              Searches the web for “
+            </span>
+            <span className='truncate'>{searchWords}</span>
+            <span className='shrink-0'>”. Nothing else is sent.</span>
+          </>
+        ) : (
+          'Searches the web with this title. Nothing else is sent.'
+        )}
       </p>
       <div className='space-y-2'>{getBody()}</div>
     </FormSection>

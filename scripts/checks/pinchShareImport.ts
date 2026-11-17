@@ -65,6 +65,7 @@ const line = (
   unit: 'CUP',
   note: null,
   group: null,
+  isFree: false,
   ...overrides,
 });
 
@@ -395,6 +396,31 @@ const ids = (plan: ShareImportPlan) => ({
     getCoverTargets(plan),
     [{ index: 0, recipeId: recipe.id }],
     'a recipe with a shared cover is a cover to copy',
+  );
+}
+
+// ---- A kitchen-free line arrives as words, and makes no ingredient ----
+{
+  const plan = getPlan(
+    planRecipeImport(
+      recipeOf('Party platter', [
+        line('Brie'),
+        line('Fresh basil for serving', { isFree: true, amount: null }),
+      ]),
+      [],
+      NOW,
+      makeCounter(),
+    ),
+  );
+  const [brie, free] = plan.recipes[0].recipe.ingredients;
+  assert.notEqual(brie.ingredientId, null);
+  assert.equal(brie.freeText, null);
+  assert.equal(free.ingredientId, null, 'a free line has no ingredient');
+  assert.equal(free.freeText, 'Fresh basil for serving');
+  assert.deepEqual(
+    plan.ingredients.map((ingredient) => ingredient.name),
+    ['Brie'],
+    'nothing is created for the free line',
   );
 }
 

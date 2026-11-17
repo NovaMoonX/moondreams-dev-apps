@@ -2,7 +2,7 @@ import { useRef } from 'react';
 
 import { Textarea } from '@moondreamsdev/dreamer-ui/components';
 
-import Field from '@/components/forms/Field';
+import SummaryEditor from '@/components/SummaryEditor';
 import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
 
@@ -20,25 +20,29 @@ function RecipeImportNoteField({
   useGrowingTextarea(field, value, 6);
 
   return (
-    <div className='space-y-1'>
-      <Field label='Anything to remember?'>
-        {(id) => (
-          <Textarea
-            id={id}
-            ref={field}
-            rows={2}
-            variant='outline'
-            placeholder="Adapted for chicken, made for Sam's birthday"
-            maxLength={MAX_RECIPE_NOTE_LENGTH}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-          />
-        )}
-      </Field>
-      <p className='text-muted-foreground text-xs'>
-        Saved as the first note on this recipe.
-      </p>
-    </div>
+    <SummaryEditor
+      label='Your note'
+      title='Your note'
+      summary={value.trim()}
+      placeholder='Anything to remember?'
+      lines={2}
+    >
+      <div className='space-y-1'>
+        <Textarea
+          ref={field}
+          rows={2}
+          variant='outline'
+          aria-label='Your note'
+          placeholder="Adapted for chicken, made for Sam's birthday"
+          maxLength={MAX_RECIPE_NOTE_LENGTH}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <p className='text-muted-foreground text-xs'>
+          Saved to this recipe's notes.
+        </p>
+      </div>
+    </SummaryEditor>
   );
 }
 

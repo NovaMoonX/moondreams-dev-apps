@@ -26,6 +26,7 @@ import type {
   RecipeIngredient,
   RecipeNote,
   ShareKind,
+  SharedIngredient,
   SharedRecipe,
   SharedMeal,
 } from '@apps/pinch/types';
@@ -242,6 +243,8 @@ export function mapIngredients(
   return { created, getId };
 }
 
+const isFreeLine = (line: SharedIngredient) => line.isFree === true;
+
 const getUsableLines = (recipe: SharedRecipe) =>
   recipe.ingredients
     .filter((line) => typeof line.name === 'string')
@@ -266,8 +269,8 @@ const toRecipe = (
     const amount = asPositiveNumber(line.amount);
     return {
       id: makeId(),
-      ingredientId: getId(line),
-      freeText: null,
+      ingredientId: isFreeLine(line) ? null : getId(line),
+      freeText: isFreeLine(line) ? asName(line.name) : null,
       amount,
       unit: amount === null || !UNITS.includes(line.unit) ? 'EACH' : line.unit,
       note: asText(line.note, MAX_NOTE_LENGTH),
@@ -369,7 +372,12 @@ export function planRecipeImport(
   const lines = getUsableLines(shared);
   if (lines.length === 0) return withProblem(NO_INGREDIENTS_PROBLEM);
 
-  const { created, getId } = mapIngredients(lines, records, now, makeId);
+  const { created, getId } = mapIngredients(
+    lines.filter((line) => !isFreeLine(line)),
+    records,
+    now,
+    makeId,
+  );
   const plan: ShareImportPlan = {
     recipes: limitTips([
       withTips(
@@ -427,7 +435,9 @@ export function planMealImport(
   const { created, getId } = mapIngredients(
     [
       ...recipeIndexes.flatMap((index) =>
-        getUsableLines(shared.recipes[index]),
+        getUsableLines(shared.recipes[index]).filter(
+          (line) => !isFreeLine(line),
+        ),
       ),
       ...items.flatMap((item) => (item.kind === 'INGREDIENT' ? [item] : [])),
     ],

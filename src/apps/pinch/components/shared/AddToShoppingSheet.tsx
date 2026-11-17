@@ -102,6 +102,9 @@ const RANGE_STYLES = {
 
 const MOVE_ANIMATION_MS = 260;
 
+const DIVIDER_HEIGHT = 36;
+const AT_HOME_NOTE_HEIGHT = 22;
+
 /** Rows whose tick just changed stay in the part they were drawn in for a moment, so a second tap never lands on a row that moved. Holding renders nothing: only letting go does. */
 function useHeldMoves() {
   const held = useRef(new Map<string, boolean>());
@@ -433,7 +436,15 @@ export function ShoppingPick({
     held.current.get(row.id) ?? isTicked(row);
   const addingRows = shownRows.filter(isShownTicked);
   const notAddingRows = shownRows.filter((row) => !isShownTicked(row));
-  const hasAtHomeBelow = notAddingRows.some(isUsuallyAtHome);
+  const notAddingHome = notAddingRows.filter(isUsuallyAtHome);
+  const notAddingOther = notAddingRows.filter((row) => !isUsuallyAtHome(row));
+  const hasDivider = addingRows.length > 0 && notAddingRows.length > 0;
+  // Space the divider and the at-home line would take is kept while they are absent, so a row moving between parts never moves the sheet's top.
+  const spacerHeight =
+    (rows.length > 1 && !hasDivider ? DIVIDER_HEIGHT : 0) +
+    (atHomeRows.length > 0 && notAddingHome.length === 0
+      ? AT_HOME_NOTE_HEIGHT
+      : 0);
   const selectedLines = selected.flatMap((row) => getState(row).addLines);
   const selectedIds = [
     ...new Set(
@@ -475,6 +486,8 @@ export function ShoppingPick({
     return null;
   };
   const block = getBlock();
+  const isNoneTicked =
+    isReady && rows.length > 0 && selected.length === 0 && block !== null;
 
   const getEmptyText = () => {
     if (isRange && !isPlanLoaded) {
@@ -716,11 +729,11 @@ export function ShoppingPick({
     <div className='grid grid-cols-1 gap-4'>
       <div
         className={join(
-          'flex flex-col gap-3 [@media(max-height:500px)]:max-h-none',
+          'flex flex-col gap-3 [@media(max-height:500px)]:max-h-none [@media(max-height:500px)]:gap-1',
           columnClassName,
         )}
       >
-        <div className='shrink-0 space-y-2'>
+        <div className='shrink-0 space-y-2 [@media(max-height:500px)]:space-y-0.5'>
           {isRange ? (
             <SummaryRow
               label='Days'
@@ -752,7 +765,7 @@ export function ShoppingPick({
               </span>
             </SummaryRow>
           ) : (
-            <div className='flex items-center justify-between gap-3'>
+            <div className='flex flex-col items-start gap-2 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between min-[360px]:gap-3'>
               <p className='min-w-0 text-lg leading-snug font-medium wrap-break-word'>
                 {label}
               </p>
@@ -778,27 +791,33 @@ export function ShoppingPick({
             <ul className='divide-border divide-y'>
               {addingRows.map(renderRow)}
             </ul>
-            {notAddingRows.length > 0 && (
+            {hasDivider && (
+              <SectionDivider label='Not adding' className='pt-3 pb-1' />
+            )}
+            {notAddingOther.length > 0 && (
+              <ul className='divide-border divide-y'>
+                {notAddingOther.map(renderRow)}
+              </ul>
+            )}
+            {notAddingHome.length > 0 && (
               <>
-                {addingRows.length > 0 && (
-                  <SectionDivider label='Not adding' className='pt-3 pb-1' />
-                )}
-                {hasAtHomeBelow && (
-                  <p className='text-muted-foreground pb-0.5 text-center text-xs'>
-                    Usually at home: tick what you're out of
-                  </p>
-                )}
+                <p className='text-muted-foreground pt-1 pb-0.5 text-center text-xs'>
+                  Usually at home: tick what you're out of
+                </p>
                 <ul className='divide-border divide-y'>
-                  {notAddingRows.map(renderRow)}
+                  {notAddingHome.map(renderRow)}
                 </ul>
               </>
+            )}
+            {spacerHeight > 0 && (
+              <div aria-hidden='true' style={{ height: spacerHeight }} />
             )}
           </div>
         )}
       </div>
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <ModalFooterActions
-        note={block}
+        note={isNoneTicked ? null : block}
         cancelAction={
           <Button
             type='button'
@@ -814,11 +833,19 @@ export function ShoppingPick({
             type='button'
             loading={isSubmitting}
             disabled={isSubmitting || block !== null}
+            aria-label={
+              selected.length > 0
+                ? `Add ${selected.length} to shopping list`
+                : undefined
+            }
             onClick={() => void handleAdd()}
           >
             {selected.length > 0
-              ? `Add ${selected.length} to shopping list`
+              ? `Add ${selected.length}`
               : 'Add to shopping list'}
+            {selected.length > 0 && (
+              <span className='ml-1 max-[359px]:hidden'>to shopping list</span>
+            )}
           </Button>
         }
       />

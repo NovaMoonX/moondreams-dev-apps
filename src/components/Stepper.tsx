@@ -83,31 +83,34 @@ function Stepper({
           {value}
         </Button>
       ) : (
-        <Input
-          type='text'
-          inputMode='decimal'
-          aria-label={label}
-          autoFocus
-          value={draft}
-          onFocus={(event) => event.currentTarget.select()}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit();
-            }
-            if (event.key === 'Escape') {
-              event.stopPropagation();
-              isCancelled.current = true;
-              setDraft(null);
-            }
-          }}
-          className={join(
-            'w-14 px-1 text-center font-semibold tabular-nums',
-            isCompact ? 'h-8 text-base' : 'h-10 text-lg',
-          )}
-        />
+        <div className={join('shrink-0', isCompact ? 'w-10.5' : 'w-11')}>
+          <Input
+            type='text'
+            inputMode='decimal'
+            enterKeyHint='done'
+            aria-label={label}
+            autoFocus
+            value={draft}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commit();
+              }
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                isCancelled.current = true;
+                setDraft(null);
+              }
+            }}
+            className={join(
+              'w-full px-1! py-0! text-center font-semibold tabular-nums',
+              isCompact ? 'h-8 min-h-8 text-base' : 'h-10 min-h-10 text-lg',
+            )}
+          />
+        </div>
       )}
       <Button
         type='button'

@@ -88,6 +88,7 @@ const toSharedLine = (
       amount: line.amount ?? null,
       unit: line.unit,
       note: line.note ?? null,
+      isFree: line.ingredientId === null,
       group: line.group ?? null,
     },
   ];
