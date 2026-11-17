@@ -450,7 +450,7 @@ export interface CaptureSealed {
   /** On a turn that answers a question, the structured answer; null when a spoken one could not be placed. A turn made before answers had shapes reads as null. */
   questionAnswer: QuestionAnswerValue | null;
   /** The line the server wrote for the person to hear and read; absent until it wrote one. */
-  spoken?: { text: string; heldText?: string | null } | null;
+  spoken?: { text: string; heldText: string | null } | null;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -1141,8 +1141,8 @@ export interface ExecutionSealed {
   undoReport: string | null;
   /** The line said aloud after a spoken turn, code-built; null for a typed turn, an undo and anything made before voice. */
   spoken: string | null;
-  /** The line the server really wrote when it kept a quiet thing off the speaker and put the screen line in `spoken`; written only by the server, so absent on every other execution. */
-  heldSpoken?: string | null;
+  /** The line the server really wrote when it kept a quiet thing off the speaker and put the screen line in `spoken`; null on every other execution; absent on one written before the field. */
+  heldSpoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
   /** Why an undo was asked for and how; null on every execution that is not an undo and on ones made before this. */

@@ -441,6 +441,22 @@ export function isKeptQuietOnDevice(kind: PrivateKind, id: string) {
   );
 }
 
+/** Whether a turn's words must stay unspoken: it held its line, or it touched something kept quiet on this device. */
+export function isExecutionHeld(execution: {
+  heldSpoken?: string | null;
+  effectRefs: { collection: string; docId: string }[];
+}) {
+  return (
+    (execution.heldSpoken ?? null) !== null ||
+    execution.effectRefs.some((ref) => {
+      const kind = (Object.keys(PRIVATE_COLLECTIONS) as PrivateKind[]).find(
+        (each) => PRIVATE_COLLECTIONS[each] === ref.collection,
+      );
+      return kind ? isKeptQuietOnDevice(kind, ref.docId) : false;
+    })
+  );
+}
+
 /** Thrown when a child that is private only through a parent about to go could not be given its own mark: the parent stays. */
 export class KeepPrivateError extends Error {
   constructor() {

@@ -1386,6 +1386,7 @@ export function planUndo(input: {
       effects: allDone.map(({ outcome }) => outcome.effect),
       undoReport: report,
       spoken: null,
+      heldSpoken: null,
       goneIds,
       undoReason: input.reason ?? null,
       lines: null,
