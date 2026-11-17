@@ -155,8 +155,21 @@ export interface HelmProfile {
   researchDepth: 'light' | 'thorough' | null;
   /** This month's research allowance as the server last settled it, shown as "About 4 thorough looks left"; the server's own usage decides, never this. */
   researchAllowance: { month: string; leftCents: number } | null;
+  /** The one Google Calendar the plan is kept in step with; null is off. Written only by the server. */
+  calendarSync: HelmCalendarSync | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export interface HelmCalendarSync {
+  accountId: string;
+  calendarId: string;
+  calendarName: string;
+  isMadeByHelm: boolean;
+  startedAt: number;
+  lastWrittenAt: number | null;
+  /** 'reconnect' when Google needs the account connected again, 'calendarGone' when the calendar was deleted; null when well. */
+  lastError: string | null;
 }
 
 export type PhoneLocation = 'off' | 'city' | 'precise';
@@ -1566,6 +1579,8 @@ export interface SyncedRecord {
   transformVersion: number;
   /** What the copy said when it was last written; null on a copy made before it was kept. */
   contentHash: string | null;
+  /** Set on an event the assistant itself wrote to the calendar, so it is never shown or planned around twice; null on any other, and on a copy from before. */
+  helmRef: string | null;
   /** Set when the connection ended and the copy was kept. */
   connectionEndedAt: number | null;
   deleteAfter: number | null;

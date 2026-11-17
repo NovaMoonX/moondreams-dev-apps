@@ -252,6 +252,8 @@ export interface StartGoogleConnectionRequest {
   accountId: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount: boolean;
+  /** Further permissions to ask for with the connector's own, from the server's short allowlist; null asks for none. */
+  extraScopes: string[] | null;
 }
 
 export interface StartGoogleConnectionResult {

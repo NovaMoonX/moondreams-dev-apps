@@ -15,6 +15,11 @@ export interface GoogleConnectValue {
   begin: (options?: GoogleConnectOptions) => void;
   /** Opens the calendar picker on a connected account's grant, to change which calendars count. */
   openCalendarPicker: (accountId: string) => void;
+  /** Asks Google for more permissions on a connected account, in a popup or by leaving the page: 'redirected' means the page is going to Google and the person must repeat what they were doing on their return. */
+  requestCalendarScopes: (
+    accountId: string,
+    scopes: string[],
+  ) => Promise<'granted' | 'cancelled' | 'redirected'>;
   /** Opens the contacts picker on an account that already shares contacts, or connects one first. */
   openContacts: () => void;
 }
