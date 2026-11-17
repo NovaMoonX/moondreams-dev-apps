@@ -13,8 +13,14 @@ interface PurchaseListsInput {
   purchasesFrom: DateOnly | null;
   periodFor: string | null;
   held: HeldWrite<OpenPurchase>[];
+  /** The lists each hold (`id/token`) has already landed in; a hold never comes back over one of them. */
+  landed: Record<string, PurchaseList[]>;
   now?: number;
 }
+
+export type PurchaseList = 'window' | 'needsHome' | 'period';
+
+const keyOf = (hold: HeldWrite<OpenPurchase>) => `${hold.id}/${hold.token}`;
 
 const readPeriod = (
   periodFor: string | null,
@@ -44,42 +50,68 @@ export const layPurchaseLists = ({
   purchasesFrom,
   periodFor,
   held,
+  landed,
   now,
 }: PurchaseListsInput) => {
   const range = readPeriod(periodFor);
   const lay = (
+    list: PurchaseList,
     incoming: OpenPurchase[],
     belongs: (item: OpenPurchase) => boolean,
-    at: number | null,
-  ) =>
-    applyHeldWrites(incoming, forList(held, belongs), (item) => item.id, {
-      deliveredAt: at,
+  ) => {
+    const waiting = forList(held, belongs).filter(
+      (hold) => !landed[keyOf(hold)]?.includes(list),
+    );
+    const result = applyHeldWrites(incoming, waiting, (item) => item.id, {
+      deliveredAt: deliveredAt[list],
       now,
     });
-  const inWindow = lay(
-    window,
-    (item) => purchasesFrom !== null && item.date >= purchasesFrom,
-    deliveredAt.window,
-  );
-  const inNeedsHome = lay(
-    needsHome,
-    (item) => item.needsHome === true,
-    deliveredAt.needsHome,
-  );
-  const inPeriod = lay(
-    period,
-    (item) => range !== null && item.date >= range.from && item.date < range.to,
-    deliveredAt.period,
-  );
-  const kept = new Set(
-    [inWindow, inNeedsHome, inPeriod].flatMap((result) =>
-      result.held.map((hold) => `${hold.id}/${hold.token}`),
+    const kept = new Set(result.held.map(keyOf));
+    return {
+      list: result.list,
+      kept,
+      landedNow: waiting.map(keyOf).filter((key) => !kept.has(key)),
+    };
+  };
+  const results = {
+    window: lay(
+      'window',
+      window,
+      (item) => purchasesFrom !== null && item.date >= purchasesFrom,
     ),
+    needsHome: lay('needsHome', needsHome, (item) => item.needsHome === true),
+    period: lay(
+      'period',
+      period,
+      (item) =>
+        range !== null && item.date >= range.from && item.date < range.to,
+    ),
+  };
+  const entries = Object.entries(results) as [
+    PurchaseList,
+    (typeof results)[PurchaseList],
+  ][];
+  const keptHeld = held.filter((hold) =>
+    entries.some(([, result]) => result.kept.has(keyOf(hold))),
   );
   return {
-    purchases: inWindow.list,
-    needsHome: inNeedsHome.list,
-    periodPurchases: inPeriod.list,
-    held: held.filter((hold) => kept.has(`${hold.id}/${hold.token}`)),
+    purchases: results.window.list,
+    needsHome: results.needsHome.list,
+    periodPurchases: results.period.list,
+    held: keptHeld,
+    landed: Object.fromEntries(
+      keptHeld.map((hold) => {
+        const key = keyOf(hold);
+        return [
+          key,
+          [
+            ...(landed[key] ?? []),
+            ...entries.flatMap(([list, result]) =>
+              result.landedNow.includes(key) ? [list] : [],
+            ),
+          ],
+        ];
+      }),
+    ),
   };
 };

@@ -31,6 +31,7 @@ const lay = (
     purchasesFrom: FROM,
     periodFor,
     held,
+    landed: {},
   });
 
 const ids = (list: OpenPurchase[]) => list.map((item) => item.id);
@@ -82,5 +83,50 @@ assert.deepEqual(ids(removal.purchases), []);
 assert.deepEqual(ids(removal.needsHome), []);
 assert.deepEqual(ids(removal.periodPurchases), []);
 assert.equal(removal.held.length, 1);
+
+const shown = purchase('s', FROM + DAY, false, 900);
+const edit = toHeldWrite('s', shown, ['amountCents'], 't');
+const range = `${FROM}:${FROM + 30 * DAY}`;
+const first = layPurchaseLists({
+  window: [shown],
+  needsHome: [],
+  period: [purchase('s', FROM + DAY, false, 500)],
+  deliveredAt: { window: 1, needsHome: 1, period: null },
+  purchasesFrom: FROM,
+  periodFor: range,
+  held: [edit],
+  landed: {},
+});
+assert.equal(first.held.length, 1, 'a list still waiting keeps the hold');
+assert.deepEqual(first.landed, { 's/t': ['window', 'needsHome'] });
+const otherDevice = purchase('s', FROM + DAY, false, 1200);
+const second = layPurchaseLists({
+  window: [otherDevice],
+  needsHome: [],
+  period: [purchase('s', FROM + DAY, false, 500)],
+  deliveredAt: { window: 2, needsHome: 1, period: null },
+  purchasesFrom: FROM,
+  periodFor: range,
+  held: first.held,
+  landed: first.landed,
+});
+assert.equal(
+  second.purchases[0].amountCents,
+  1200,
+  "a hold never comes back over a list it landed in, so another device's later change shows",
+);
+assert.equal(second.periodPurchases[0].amountCents, 900);
+const failed = layPurchaseLists({
+  window: [otherDevice],
+  needsHome: [],
+  period: [],
+  deliveredAt: { window: 2, needsHome: 1, period: null },
+  purchasesFrom: FROM,
+  periodFor: null,
+  held: second.held,
+  landed: second.landed,
+});
+assert.deepEqual(failed.held, [], 'a period list that is gone lets go of it');
+assert.deepEqual(failed.landed, {});
 
 console.log('runway purchase holds: ok');

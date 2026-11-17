@@ -13,7 +13,10 @@ import {
   settleHeldWrites,
   type HeldWrite,
 } from '@/utils/heldWrites';
-import { layPurchaseLists } from '@apps/runway/utils/purchaseHolds';
+import {
+  layPurchaseLists,
+  type PurchaseList,
+} from '@apps/runway/utils/purchaseHolds';
 import { withBankBalances } from '@apps/runway/engine/accounts';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -118,11 +121,11 @@ export interface RunwayState {
   historyRecordsFor: string | null;
   historyFailedFor: string | null;
   incoming: HeldLists;
-  /** The listeners' own copies of Needs a home and the Spend period, kept apart from the lists the held purchases are laid over. */
   incomingNeedsHome: OpenPurchase[];
   incomingPeriod: OpenPurchase[];
   deliveredAtNeedsHome: number | null;
   deliveredAtPeriod: number | null;
+  purchaseLanded: Record<string, PurchaseList[]>;
   held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
   deliveredAt: { [K in HeldKind]: number | null };
 }
@@ -157,13 +160,16 @@ const layPurchases = (state: RunwayState) => {
       period: state.deliveredAtPeriod,
     },
     purchasesFrom: state.purchasesFrom,
-    periodFor: state.periodFor,
+    periodFor:
+      state.periodFailedFor === state.periodFor ? null : state.periodFor,
     held: state.held.purchases,
+    landed: state.purchaseLanded,
   });
   state.purchases = laid.purchases;
   state.needsHome = laid.needsHome;
   state.periodPurchases = laid.periodPurchases;
   state.held.purchases = laid.held;
+  state.purchaseLanded = laid.landed;
 };
 
 const layHeld = (state: RunwayState, kind: HeldKind) => {
@@ -238,6 +244,7 @@ const initialState: RunwayState = {
   incomingPeriod: [],
   deliveredAtNeedsHome: null,
   deliveredAtPeriod: null,
+  purchaseLanded: {},
   deliveredAt: { days: null, records: null, moves: null, purchases: null },
   held: { days: [], records: [], moves: [], purchases: [] },
 };
@@ -395,6 +402,7 @@ export const runwaySlice = createSlice({
     },
     setPeriodFailed: (state, action: PayloadAction<string>) => {
       state.periodFailedFor = action.payload;
+      layPurchases(state);
     },
     setHistoryDays: (
       state,

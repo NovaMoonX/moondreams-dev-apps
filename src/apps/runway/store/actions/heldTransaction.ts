@@ -83,11 +83,16 @@ const baseOf = (kind: HeldKind, id: string, token: string): Opened | null => {
     (hold) => hold.id === id && hold.token !== token,
   );
   if (other !== undefined) return other.item;
-  const lists: Opened[][] =
-    kind === 'purchases'
-      ? [incoming.purchases, incomingNeedsHome, incomingPeriod]
-      : [incoming[kind]];
-  return lists.flatMap((list) => list).find((item) => item.id === id) ?? null;
+  if (kind !== 'purchases') {
+    return (incoming[kind] as Opened[]).find((item) => item.id === id) ?? null;
+  }
+  return [...incoming.purchases, ...incomingNeedsHome, ...incomingPeriod]
+    .filter((item) => item.id === id)
+    .reduce<OpenPurchase | null>(
+      (newest, item) =>
+        newest === null || item.updatedAt > newest.updatedAt ? item : newest,
+      null,
+    );
 };
 
 const IGNORED = Symbol('ignored');
@@ -226,7 +231,12 @@ const buildItems = (
 /** Whether the listeners read this record; one outside their window is never held, since it would never let go. */
 const isWatched = (entry: Built, heldDayIds: Set<string>): boolean => {
   const state = store.getState().runway;
-  if (entry.item === null || entry.kind === 'purchases') return true;
+  if (entry.item === null) return true;
+  if (entry.kind === 'purchases') {
+    return (
+      state.purchasesFrom !== null || (entry.item as OpenPurchase).needsHome
+    );
+  }
   if (entry.kind === 'moves') {
     const move = entry.item as OpenMove;
     return (
