@@ -567,7 +567,7 @@ export function useHelmVoice() {
     const isQuiet =
       isSpoken && isUnattendedTurn(isWakeStarted.current, readPresence());
     const show = (line: string, type: 'info' | 'success') => {
-      if (isSpoken) say(line);
+      if (isSpoken) say(line, now);
       else addToast({ title: line, type });
     };
     const write = (
@@ -580,7 +580,7 @@ export function useHelmVoice() {
         console.error('Helm lock screen name was not changed', error);
         addToast({ title: HELM_COPY.lockScreenNameFailed, type: 'error' });
       });
-      if (isSpoken) say(line);
+      if (isSpoken) say(line, now);
       addToast({
         title: line,
         type: 'success',
@@ -640,7 +640,7 @@ export function useHelmVoice() {
       return true;
     }
     nameAsk.current = { habitId: entry.habit.id, at: now };
-    if (isSpoken) say(line);
+    if (isSpoken) say(line, now);
     addToast({
       title: line,
       type: 'info',
