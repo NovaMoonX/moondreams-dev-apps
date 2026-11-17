@@ -9956,7 +9956,15 @@ assert.equal(
     group: string | null,
     amount: number | null = 1,
     unit: Unit = 'TBSP',
-  ) => ({ id, ingredientId, amount, unit, note: null, group, adaptedFrom: null });
+  ) => ({
+    id,
+    ingredientId,
+    amount,
+    unit,
+    note: null,
+    group,
+    adaptedFrom: null,
+  });
   const ids = (lines: { id: string }[]) => lines.map((line) => line.id);
   const heads = (lines: { group?: string | null }[]) =>
     groupIngredientLines(lines).map((group) => [

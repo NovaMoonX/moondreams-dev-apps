@@ -200,7 +200,7 @@ interface RecipeFormProps {
   onSaved?: () => void;
 }
 
-/** The draft with lines changed only by adapting to the person's units (or put back to the saved original) read as the recipe had them, so those never ask why; a line the person then rounded or edited does. */
+// Adapting units or putting them back is not an edit, so it never asks why.
 const withLinesAsWritten = (
   draft: RecipeDraft,
   recipe: Recipe,
