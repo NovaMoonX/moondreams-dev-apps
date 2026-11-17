@@ -65,6 +65,7 @@ assert.equal(formatAmountText(1.5), '1 ½');
 
 // Typed amounts
 assert.equal(parseAmountText('1,000'), 1000);
+assert.equal(parseAmountText('0,125'), 0.125);
 assert.equal(parseAmountText('1 ½'), 1.5);
 assert.equal(parseAmountText('1 1/2'), 1.5);
 assert.equal(parseAmountText('¾'), 0.75);
@@ -95,6 +96,10 @@ const flOz: PinchUnitSettings = {
   volume: 'FL_OZ',
   keepSpoons: true,
 };
+
+// Spoon amounts that would round far from themselves in fluid ounces stay as written
+assert.equal(adaptAmount(2.5, 'TBSP', flOz), null);
+assert.equal(adaptAmount(7.5, 'TSP', flOz), null);
 
 // As written changes nothing
 assert.equal(adaptAmount(200, 'G', asWritten), null);

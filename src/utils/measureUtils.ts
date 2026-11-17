@@ -172,7 +172,7 @@ const GLYPH_VALUES: Record<string, number> = {
 /** A typed amount ("1 ½", "1 1/2", "1½", "3/4", "1.5", "1,5") as a number; null when it isn't one. */
 export function parseAmountText(text: string): number | null {
   const raw = text.trim();
-  const trimmed = /^\d{1,3}(,\d{3})+$/.test(raw)
+  const trimmed = /^[1-9]\d{0,2}(,\d{3})+$/.test(raw)
     ? raw.replace(/,/g, '')
     : raw.replace(',', '.');
   if (trimmed === '') return null;

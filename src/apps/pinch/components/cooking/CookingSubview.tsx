@@ -162,8 +162,7 @@ import {
   getConversionLine,
 } from '@apps/pinch/utils/cookConversions';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
-import { toPreferredUnits } from '@apps/pinch/utils/units';
-import { isMeasureUnit, roundMeasure } from '@/utils/measureUtils';
+import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeLines } from '@apps/pinch/utils/shopping';
@@ -558,23 +557,17 @@ function CookingSession({
     (target: Recipe, targetServings: number) => {
       const repeatedGroups = getRepeatedLineGroups(target.ingredients);
       const result = target.ingredients.map((line) => {
-        const preferred =
+        const scaled =
           line.amount === null
             ? null
-            : toPreferredUnits(
-                scaleAmount(line.amount, targetServings, target.servings),
-                line.unit,
-                units,
-              );
+            : scaleAmount(line.amount, targetServings, target.servings);
         const shown =
-          preferred !== null &&
-          preferred.unit !== line.unit &&
-          isMeasureUnit(preferred.unit)
-            ? {
-                amount: roundMeasure(preferred.amount, preferred.unit),
-                unit: preferred.unit,
-              }
-            : preferred;
+          scaled === null
+            ? null
+            : (adaptAmount(scaled, line.unit, units) ?? {
+                amount: scaled,
+                unit: line.unit,
+              });
         const measure =
           shown === null
             ? null
