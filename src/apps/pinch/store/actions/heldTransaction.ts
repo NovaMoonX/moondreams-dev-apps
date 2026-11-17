@@ -40,7 +40,7 @@ const isLanded = (token: string) => () => {
   ].every(({ hold }) => hold.held.every((held) => held.token !== token));
 };
 
-/** A Pinch transaction whose changes to listed kitchen records show at once, go back if it fails, and are watched until the listeners show them. */
+/** A transaction whose changes to listed kitchen records show at once, go back if it fails, and are watched until the listeners show them. */
 export async function runHeldTransaction<T>(
   uid: string,
   body: (transaction: Transaction) => Promise<T>,
