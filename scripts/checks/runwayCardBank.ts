@@ -9,6 +9,7 @@ import {
   getBankOwedByCard,
   getDueCards,
 } from '../../src/apps/runway/engine/cards.ts';
+import { getMoneyHistory } from '../../src/apps/runway/engine/moneyHistory.ts';
 import type {
   OpenCard,
   OpenCardStatement,
@@ -202,7 +203,7 @@ const started = (
   );
 }
 
-// deriveBalances: at Link a card takes the offset that brings the ledger to its bank figure, on every day, and only while cards count.
+// deriveBalances: at Link a card's bank figure replaces the ledger's, and only while cards count; the money history starts from what the person entered.
 {
   const start = 10 * DAY;
   const moves: OpenMove[] = [
@@ -228,21 +229,21 @@ const started = (
   assert.equal(ledger.reserveByCard.chase ?? 0, 0);
   const banked = deriveBalances({
     ...input,
-    bankCardAdjustByCard: { chase: 30_000 },
+    bankOwedByCard: { chase: 30_000 },
   });
   assert.equal(
     banked.reserveByCard.chase,
     30_000,
-    'the bank offset is added to the ledger’s figure for the card',
+    'the bank figure stands for the card',
   );
   assert.equal(banked.assignedToCardsCents, 30_000);
   assert.equal(
     deriveBalancesBefore(
-      { ...input, bankCardAdjustByCard: { chase: 30_000 } },
+      { ...input, bankOwedByCard: { chase: 30_000 } },
       start + DAY,
     ).reserveByCard.chase,
     30_000,
-    'an earlier day keeps the same offset, so the money history moves only with what the ledger saw',
+    'an earlier day holds today’s bank figure, since the ledger’s card sum is what the bank corrects',
   );
   assert.equal(
     banked.freeToSpendCents,
@@ -252,12 +253,47 @@ const started = (
   const off = deriveBalances({
     ...input,
     isCountingCards: false,
-    bankCardAdjustByCard: { chase: 30_000 },
+    bankOwedByCard: { chase: 30_000 },
   });
   assert.equal(
     off.assignedToCardsCents,
     0,
-    'with cards not counted the bank offset is ignored',
+    'with cards not counted the bank figure is ignored',
+  );
+
+  const withCard = {
+    ...input,
+    moves: [
+      ...moves,
+      {
+        id: 'm2',
+        kind: 'start' as const,
+        date: start,
+        refId: 'chase',
+        reversesMoveId: null,
+        createdAt: 2,
+        payload: { amountCents: 25_000, holding: 'card' as const },
+      },
+    ],
+    bankOwedByCard: { chase: 9_684 },
+  };
+  const today = start + 20 * DAY;
+  const history = getMoneyHistory({
+    balances: { ...withCard, asOf: today },
+    today,
+    from: start,
+    recentFrom: start,
+    closings: [],
+  });
+  assert.equal(
+    history[0].freeCents,
+    100_000 - 25_000,
+    'the starting day reads the card as the person entered it, not today’s bank figure',
+  );
+  assert.equal(
+    history.at(-1)?.freeCents,
+    100_000 - 9_684,
+    'today reads the bank figure',
   );
 }
 

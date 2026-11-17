@@ -66,8 +66,8 @@ export interface BalancesInput {
   closing?: ClosingState | null;
   /** At Link, what the account balances hold beyond (or short of) what the ledger counts, added to the money on hand so Free to Spend matches the banks. Zero when left out. */
   bankAdjustCents?: Cents;
-  /** At Link, what each linked card's bank figure (`getBankOwedByCard`) differs from the ledger's today, added to the card on every day like the bank adjustment, so today shows the bank's figure and earlier days keep the ledger's changes. */
-  bankCardAdjustByCard?: Readonly<Record<string, Cents>>;
+  /** At Link, what each linked card's bank says it holds back (`getBankOwedByCard`), in place of the ledger's figure for that card. Held at today's figure for earlier days too, since the ledger's own card sum is what the bank corrects; the money history's starting point leaves it out. */
+  bankOwedByCard?: Readonly<Record<string, Cents>>;
 }
 
 export interface Balances {
@@ -340,16 +340,12 @@ export function deriveBalances(input: BalancesInput): Balances {
     ...Object.keys(charged),
     ...Object.keys(cardPaid),
   ]);
-  const bankCardAdjust = isCountingCards
-    ? (input.bankCardAdjustByCard ?? {})
-    : {};
+  const bankOwed = isCountingCards ? (input.bankOwedByCard ?? {}) : {};
   const reserveByCard = Object.fromEntries(
-    [...new Set([...cardIds, ...Object.keys(bankCardAdjust)])].map((id) => [
+    [...new Set([...cardIds, ...Object.keys(bankOwed)])].map((id) => [
       id,
-      (started.byItem[id] ?? 0) +
-        (charged[id] ?? 0) -
-        (cardPaid[id] ?? 0) +
-        (bankCardAdjust[id] ?? 0),
+      bankOwed[id] ??
+        (started.byItem[id] ?? 0) + (charged[id] ?? 0) - (cardPaid[id] ?? 0),
     ]),
   );
   const assignedToCardsCents = Object.values(reserveByCard).reduce(
