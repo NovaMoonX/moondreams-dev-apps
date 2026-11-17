@@ -149,9 +149,12 @@ const GLYPH_VALUES: Record<string, number> = {
   '⅛': 1 / 8,
   '¼': 1 / 4,
   '⅓': 1 / 3,
+  '⅜': 3 / 8,
   '½': 1 / 2,
+  '⅝': 5 / 8,
   '⅔': 2 / 3,
   '¾': 3 / 4,
+  '⅞': 7 / 8,
 };
 
 /** A typed amount ("1 ½", "1 1/2", "1½", "3/4", "1.5", "1,5") as a number; null when it isn't one. */
@@ -159,7 +162,7 @@ export function parseAmountText(text: string): number | null {
   const trimmed = text.trim().replace(',', '.');
   if (trimmed === '') return null;
 
-  const glyph = trimmed.match(/^(\d+(?:\.\d+)?)?\s*([⅛¼⅓½⅔¾])$/);
+  const glyph = trimmed.match(/^(\d+(?:\.\d+)?)?\s*([⅛¼⅓⅜½⅝⅔¾⅞])$/);
   if (glyph) return Number(glyph[1] ?? 0) + GLYPH_VALUES[glyph[2]];
 
   const mixed = trimmed.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
@@ -173,4 +176,17 @@ export function parseAmountText(text: string): number | null {
   if (!/^\d*\.?\d+$|^\d+\.$/.test(trimmed)) return null;
   const value = Number(trimmed);
   return Number.isFinite(value) ? value : null;
+}
+
+/** An amount as a cook writes it: "1 ½", "⅓", "2", "0.4"; eighths and thirds are glyphs, anything else up to two decimals. */
+export function formatAmountText(amount: number): string {
+  if (!Number.isFinite(amount)) return '';
+  const whole = Math.floor(amount + 1e-6);
+  const rest = amount - whole;
+  if (Math.abs(rest) < 1e-6) return String(whole);
+  const glyph = Object.entries(GLYPH_VALUES).find(
+    ([, part]) => Math.abs(part - rest) < 1e-6,
+  );
+  if (glyph) return whole === 0 ? glyph[0] : `${whole} ${glyph[0]}`;
+  return String(Math.round(amount * 100) / 100);
 }

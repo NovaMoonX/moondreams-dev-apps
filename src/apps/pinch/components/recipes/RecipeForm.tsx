@@ -53,6 +53,7 @@ import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
 import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
 import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField';
 import {
+  adaptRows,
   getDataFromExtracted,
   getDataFromIdea,
   getInitialData,
@@ -100,6 +101,7 @@ import {
   selectCollectionsById,
   selectIsCollectionsReady,
   selectNotesByRecipe,
+  selectPinchSettings,
   selectRecipesById,
   selectShareBySource,
   selectShowNutrition,
@@ -237,14 +239,22 @@ function RecipeForm({
   );
   const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
+  const units = useAppSelector(selectPinchSettings).units;
+  const [readStart] = useState(() => {
+    if (!initialRead) return null;
+    const read = getDataFromExtracted(
+      initialRead.recipe,
+      ingredients,
+      initialRead.extras,
+    );
+    const adapted = adaptRows(read.ingredients, units);
+    return { data: { ...read, ingredients: adapted.rows }, ids: adapted.ids };
+  });
+  const [adaptedIds, setAdaptedIds] = useState<string[]>(readStart?.ids ?? []);
   const [initialData] = useState(() =>
-    initialRead
+    initialRead && readStart
       ? {
-          ...getDataFromExtracted(
-            initialRead.recipe,
-            ingredients,
-            initialRead.extras,
-          ),
+          ...readStart.data,
           sourceChoice: getReadSourceChoice(
             initialRead.source,
             initialRead.label,
@@ -727,6 +737,9 @@ function RecipeForm({
               rows={props.value as IngredientRow[]}
               onChange={props.onValueChange}
               onRemoved={showUndo}
+              adaptedIds={adaptedIds}
+              onAdaptedIdsChange={setAdaptedIds}
+              adaptUnits={recipe === null ? null : units}
             />
           </FormSection>
         ),
@@ -798,6 +811,8 @@ function RecipeForm({
     isBlankByHand,
     showUndo,
     tracking,
+    adaptedIds,
+    units,
   ]);
 
   const handleDelete = async () => {

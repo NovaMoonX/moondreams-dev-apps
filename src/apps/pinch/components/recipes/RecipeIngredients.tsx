@@ -8,7 +8,17 @@ import {
 
 import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil, Plus, Search, Trash2, Ungroup, X } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Plus,
+  Ruler,
+  Search,
+  Trash2,
+  Ungroup,
+  X,
+} from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
@@ -22,11 +32,21 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
+import {
+  convertMeasure,
+  formatAmountText,
+  isMeasureUnit,
+  parseAmountText,
+  roundMeasure,
+  stepMeasure,
+} from '@/utils/measureUtils';
 import ItemSearch, {
   type ItemSuggestions,
 } from '@apps/pinch/components/plan/ItemSearch';
 import {
+  adaptRows,
   isRowAmountValid,
+  restoreRow,
   type IngredientRow,
 } from '@apps/pinch/components/recipes/recipeFormModel';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
@@ -38,6 +58,7 @@ import {
   MAX_RECIPE_INGREDIENTS,
   UNIT_LABELS,
 } from '@apps/pinch/constants';
+import type { PinchUnitSettings, Unit } from '@apps/pinch/types';
 import {
   selectIngredients,
   selectIngredientsById,
@@ -62,6 +83,7 @@ import {
 } from '@apps/pinch/utils/ingredientMatch';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
+import { hasUnitPreference } from '@apps/pinch/utils/units';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -83,10 +105,30 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
     .filter((row) => getGroupKey(row.group) === getGroupKey(group))
     .map((row) => row.ingredientId);
 
+const getOriginalText = (from: NonNullable<IngredientRow['adaptedFrom']>) =>
+  `${formatAmountText(from.amount)} ${UNIT_LABELS[from.unit]}`;
+
+const UNIT_WORDS = {
+  weight: { AS_WRITTEN: '', METRIC: 'grams', US: 'ounces' },
+  volume: {
+    AS_WRITTEN: '',
+    METRIC: 'millilitres',
+    CUPS: 'cups',
+    FL_OZ: 'fluid ounces',
+  },
+} as const;
+
+/** The units a person's preference names, in words ("grams and cups"). */
+const getUnitsPhrase = (units: PinchUnitSettings) =>
+  [UNIT_WORDS.weight[units.weight], UNIT_WORDS.volume[units.volume]]
+    .filter((word) => word !== '')
+    .join(' and ');
+
 const getAmountLabel = (row: IngredientRow) => {
   if (row.isAmountless) return row.note ?? '';
-  if (isRowAmountValid(row)) {
-    return `${Math.round(Number(row.amount) * 100) / 100} ${UNIT_LABELS[row.unit]}`;
+  const amount = parseAmountText(row.amount);
+  if (amount !== null && isRowAmountValid(row)) {
+    return `${formatAmountText(amount)} ${UNIT_LABELS[row.unit]}`;
   }
   return row.amount.trim() === '' ? 'Add an amount' : 'Check the amount';
 };
@@ -268,6 +310,25 @@ interface IngredientEditorProps {
   onUseExisting: (fromId: string, toId: string) => void;
 }
 
+interface PendingConversion {
+  amount: number;
+  unit: Unit;
+  adaptedFrom: IngredientRow['adaptedFrom'];
+}
+
+/** What the amount the person had becomes in the unit they just chose, when both are measures of one kind. */
+const getConversion = (pending: PendingConversion | null, unit: Unit) => {
+  if (pending === null || pending.unit === unit) return null;
+  if (!isMeasureUnit(pending.unit) || !isMeasureUnit(unit)) return null;
+  const converted = convertMeasure(pending.amount, pending.unit, unit);
+  return converted === null
+    ? null
+    : {
+        from: { amount: pending.amount, unit: pending.unit },
+        amount: roundMeasure(converted, unit),
+      };
+};
+
 /** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. */
 function IngredientEditor({
   uid,
@@ -281,6 +342,7 @@ function IngredientEditor({
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
+  const [pending, setPending] = useState<PendingConversion | null>(null);
   const [groupNames] = useState(() => getGroupNames(rows));
   const noteRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -297,6 +359,38 @@ function IngredientEditor({
   );
   const usedIds = usedInGroup.join(',');
   const isReadyForAmount = !isUnresolved && !row.isAmountless;
+  const typedAmount = parseAmountText(row.amount);
+  const conversion = getConversion(pending, row.unit);
+  const step = (direction: 1 | -1) =>
+    typedAmount !== null && isMeasureUnit(row.unit)
+      ? stepMeasure(typedAmount, row.unit, direction)
+      : null;
+  const down = step(-1);
+  const up = step(1);
+  const changeUnit = (unit: Unit) => {
+    const base =
+      pending ??
+      (typedAmount === null
+        ? null
+        : {
+            amount: typedAmount,
+            unit: row.unit,
+            adaptedFrom: row.adaptedFrom,
+          });
+    setPending(base);
+    onUpdate({ unit, adaptedFrom: null });
+  };
+  const convert = () => {
+    if (pending === null || conversion === null) return;
+    onUpdate({
+      amount: formatAmountText(conversion.amount),
+      adaptedFrom: pending.adaptedFrom ?? {
+        amount: pending.amount,
+        unit: pending.unit,
+      },
+    });
+    setPending(null);
+  };
 
   useEffect(() => {
     if (!isReadyForAmount || !canFocusFieldOnOpen()) {
@@ -431,29 +525,90 @@ function IngredientEditor({
               {(id) => (
                 <Input
                   id={id}
-                  type='number'
                   inputMode='decimal'
-                  min={0}
-                  step='any'
                   variant='outline'
                   ref={amountRef}
                   autoFocus={isAmountJustAdded}
                   value={row.amount}
-                  onChange={(event) => onUpdate({ amount: event.target.value })}
+                  onChange={(event) => {
+                    setPending(null);
+                    onUpdate({ amount: event.target.value, adaptedFrom: null });
+                  }}
                 />
               )}
             </Field>
             <div className='space-y-1.5'>
               <p className='font-medium'>Unit</p>
-              <UnitSelect
-                value={row.unit}
-                onChange={(unit) => onUpdate({ unit })}
-              />
+              <UnitSelect value={row.unit} onChange={changeUnit} />
             </div>
           </div>
+          {conversion !== null && (
+            <div className='flex min-h-10 flex-wrap items-center gap-x-3'>
+              <span className='text-muted-foreground text-sm'>
+                Convert {getOriginalText(conversion.from)} to{' '}
+                {getOriginalText({ amount: conversion.amount, unit: row.unit })}
+                ?
+              </span>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className='h-10'
+                onClick={convert}
+              >
+                Convert
+              </Button>
+            </div>
+          )}
+          {row.adaptedFrom !== null && (
+            <div className='flex min-h-10 items-center gap-1'>
+              <span className='text-muted-foreground min-w-0 flex-1 text-sm'>
+                From {getOriginalText(row.adaptedFrom)}
+              </span>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className='h-10'
+                onClick={() => {
+                  const { amount, unit, adaptedFrom } = restoreRow(row);
+                  onUpdate({ amount, unit, adaptedFrom });
+                }}
+              >
+                Use original
+              </Button>
+              {down !== null && up !== null && isMeasureUnit(row.unit) && (
+                <>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    className='size-10'
+                    disabled={down === typedAmount}
+                    aria-label={`Round down to ${formatAmountText(down)} ${UNIT_LABELS[row.unit]}`}
+                    onClick={() => onUpdate({ amount: formatAmountText(down) })}
+                  >
+                    <ChevronDown className='h-4 w-4' aria-hidden='true' />
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    className='size-10'
+                    disabled={up === typedAmount}
+                    aria-label={`Round up to ${formatAmountText(up)} ${UNIT_LABELS[row.unit]}`}
+                    onClick={() => onUpdate({ amount: formatAmountText(up) })}
+                  >
+                    <ChevronUp className='h-4 w-4' aria-hidden='true' />
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
           <RevealChip
             onClick={() => {
-              onUpdate({ isAmountless: true, amount: '' });
+              setPending(null);
+              onUpdate({ isAmountless: true, amount: '', adaptedFrom: null });
               if (!row.note) noteRef.current?.focus();
             }}
           >
@@ -700,6 +855,11 @@ interface RecipeIngredientsProps {
   onChange: (rows: IngredientRow[]) => void;
   /** Called with what a removal says and how to take it back. */
   onRemoved: (message: string, restore: () => void) => void;
+  /** The rows adapted to the person's units in this form session, which the line at the top counts and puts back. */
+  adaptedIds: string[];
+  onAdaptedIdsChange: (ids: string[]) => void;
+  /** The person's units while a saved recipe is being edited, so its lines can be adapted; null otherwise. */
+  adaptUnits: PinchUnitSettings | null;
 }
 
 /** A new line joins the last group, the one just above the add button, and "Add another" keeps the group of the line before. */
@@ -708,6 +868,9 @@ function RecipeIngredients({
   rows,
   onChange,
   onRemoved,
+  adaptedIds,
+  onAdaptedIdsChange,
+  adaptUnits,
 }: RecipeIngredientsProps) {
   const latest = useRef({ rows, onChange });
   useEffect(() => {
@@ -787,7 +950,7 @@ function RecipeIngredients({
       placeLineInGroup(rows, {
         id,
         ingredientId,
-        amount: String(serving.amount),
+        amount: formatAmountText(serving.amount),
         unit: serving.unit,
         isAmountless: false,
         note: null,
@@ -840,8 +1003,50 @@ function RecipeIngredients({
       ),
     );
 
+  const adaptedCount = rows.filter(
+    (row) => row.adaptedFrom !== null && adaptedIds.includes(row.id),
+  ).length;
+  const offer =
+    adaptUnits !== null && hasUnitPreference(adaptUnits)
+      ? { ...adaptRows(rows, adaptUnits), units: adaptUnits }
+      : null;
+  const putBack = () => {
+    onChange(
+      rows.map((row) => (adaptedIds.includes(row.id) ? restoreRow(row) : row)),
+    );
+    onAdaptedIdsChange([]);
+  };
+
   return (
     <div className='space-y-3' data-recipe-ingredients>
+      {adaptedCount > 0 && (
+        <div className='flex min-h-10 items-center gap-2'>
+          <p className='text-muted-foreground min-w-0 flex-1 text-sm'>
+            Adapted {adaptedCount} {adaptedCount === 1 ? 'line' : 'lines'} to
+            your units
+          </p>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='h-10'
+            onClick={putBack}
+          >
+            Put them back
+          </Button>
+        </div>
+      )}
+      {adaptedCount === 0 && offer !== null && offer.ids.length > 0 && (
+        <ActionRow
+          icon={<Ruler className='h-4 w-4' />}
+          label='Adapt to my units'
+          subtitle={`${offer.ids.length} ${offer.ids.length === 1 ? 'line changes' : 'lines change'} to ${getUnitsPhrase(offer.units)}`}
+          onClick={() => {
+            onChange(offer.rows);
+            onAdaptedIdsChange(offer.ids);
+          }}
+        />
+      )}
       {rows.length > 0 && (
         <div>
           {groups.map((group) => (
@@ -888,7 +1093,7 @@ function RecipeIngredients({
                           type='button'
                           variant='tertiary'
                           aria-haspopup='dialog'
-                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}`}
+                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}${row.adaptedFrom !== null && !row.isAmountless ? `, adapted from ${getOriginalText(row.adaptedFrom)}` : ''}`}
                           onClick={() => setSheet({ kind: 'edit', id: row.id })}
                           className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                         >
@@ -922,6 +1127,12 @@ function RecipeIngredients({
                               )}
                             >
                               {label}
+                              {row.adaptedFrom !== null &&
+                                !row.isAmountless && (
+                                  <span className='text-muted-foreground ml-1 text-xs'>
+                                    from {getOriginalText(row.adaptedFrom)}
+                                  </span>
+                                )}
                             </span>
                           )}
                         </Button>

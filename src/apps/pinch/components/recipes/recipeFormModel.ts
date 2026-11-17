@@ -1,6 +1,7 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { readFormDraft } from '@/lib/app/formDrafts';
 import { generateUuid } from '@/utils';
+import { formatAmountText, parseAmountText } from '@/utils/measureUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import {
@@ -60,8 +61,10 @@ import type {
   ResolvedIngredient,
   WebPhoto,
   Source,
+  PinchUnitSettings,
   Unit,
 } from '@apps/pinch/types';
+import { adaptAmount } from '@apps/pinch/utils/units';
 
 /** Where a recipe is from, as the form's picker reports it: a source id, `NEW_CHOICE` with the label typed, or `''` for none. */
 export interface SourceChoice {
@@ -121,7 +124,7 @@ export const getInitialData = (
   ingredients: (recipe?.ingredients ?? []).map((line) => ({
     id: line.id,
     ingredientId: line.ingredientId,
-    amount: line.amount === null ? '' : String(line.amount),
+    amount: line.amount === null ? '' : formatAmountText(line.amount),
     unit: line.unit,
     isAmountless: line.amount === null,
     note: line.note ?? null,
@@ -197,7 +200,12 @@ export const getDataFromExtracted = (
     if (existing && amount !== null) {
       return acc.map((row) =>
         row === existing
-          ? { ...row, amount: String(Number(row.amount) + amount) }
+          ? {
+              ...row,
+              amount: formatAmountText(
+                (parseAmountText(row.amount) ?? 0) + amount,
+              ),
+            }
           : row,
       );
     }
@@ -207,7 +215,7 @@ export const getDataFromExtracted = (
       {
         id: generateUuid(),
         ingredientId: match?.id ?? stagedId ?? '',
-        amount: amount === null ? '' : String(amount),
+        amount: amount === null ? '' : formatAmountText(amount),
         unit,
         isAmountless: amount === null,
         note: clipNote(
@@ -274,25 +282,54 @@ export const getDataFromIdea = (
 /** Whether a row's amount can be saved: a number above zero and within the cap, or no amount by choice. */
 export const isRowAmountValid = (row: IngredientRow) => {
   if (row.isAmountless) return true;
-  const amount = Number(row.amount);
-  return (
-    row.amount.trim() !== '' &&
-    Number.isFinite(amount) &&
-    amount > 0 &&
-    amount <= MAX_SERVING_AMOUNT
-  );
+  const amount = parseAmountText(row.amount);
+  return amount !== null && amount > 0 && amount <= MAX_SERVING_AMOUNT;
 };
 
 /** The line a row saves as; one with no amount by choice saves none, in `EACH`. */
 export const toRecipeLine = (row: IngredientRow): RecipeIngredient => ({
   id: row.id,
   ingredientId: row.ingredientId,
-  amount: row.isAmountless ? null : Number(row.amount),
+  amount: row.isAmountless ? null : (parseAmountText(row.amount) ?? 0),
   unit: row.isAmountless ? 'EACH' : row.unit,
   note: row.note,
   group: cleanGroupName(row.group),
   adaptedFrom: row.isAmountless ? null : (row.adaptedFrom ?? null),
 });
+
+/** The rows in the person's units, each changed row remembering what it was (a row already adapted keeps its first original); `ids` are the rows that changed. */
+export const adaptRows = (
+  rows: IngredientRow[],
+  units: PinchUnitSettings,
+): { rows: IngredientRow[]; ids: string[] } => {
+  const adapted = rows.map((row) => {
+    const amount = row.isAmountless ? null : parseAmountText(row.amount);
+    const next = amount === null ? null : adaptAmount(amount, row.unit, units);
+    return next === null || amount === null
+      ? row
+      : {
+          ...row,
+          amount: formatAmountText(next.amount),
+          unit: next.unit,
+          adaptedFrom: row.adaptedFrom ?? { amount, unit: row.unit },
+        };
+  });
+  return {
+    rows: adapted,
+    ids: adapted.filter((row, i) => row !== rows[i]).map((row) => row.id),
+  };
+};
+
+/** A row as it was before it was adapted. */
+export const restoreRow = (row: IngredientRow): IngredientRow =>
+  row.adaptedFrom === null
+    ? row
+    : {
+        ...row,
+        amount: formatAmountText(row.adaptedFrom.amount),
+        unit: row.adaptedFrom.unit,
+        adaptedFrom: null,
+      };
 
 const parseTyped = (text: string) => (text.trim() === '' ? null : Number(text));
 
@@ -341,7 +378,14 @@ const isIngredientRow = (value: unknown) =>
   isTextOrNull(value.note) &&
   isTextOrNull(value.proposedName) &&
   isTextOrNull(value.newName) &&
-  isTextOrNull(value.group);
+  isTextOrNull(value.group) &&
+  (value.adaptedFrom === undefined ||
+    value.adaptedFrom === null ||
+    (isRecord(value.adaptedFrom) &&
+      typeof value.adaptedFrom.amount === 'number' &&
+      UNITS.some(
+        (unit) => unit === (value.adaptedFrom as Record<string, unknown>).unit,
+      )));
 
 const isLinkDraft = (value: unknown) =>
   isRecord(value) &&
@@ -405,6 +449,10 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
   if (!isShaped) return null;
   return {
     ...(stored as unknown as RecipeFormData),
+    ingredients: (ingredients as IngredientRow[]).map((row) => ({
+      ...row,
+      adaptedFrom: row.adaptedFrom ?? null,
+    })),
     categories: getCategories({ categories: categories as DishCategory[] }),
   };
 };

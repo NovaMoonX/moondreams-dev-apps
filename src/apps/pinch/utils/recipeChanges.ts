@@ -1,3 +1,4 @@
+import { formatAmountText } from '@/utils/measureUtils';
 import {
   COLLECTION_NOUN,
   COLLECTION_NOUN_PLURAL,
@@ -60,7 +61,10 @@ const truncate = (text: string, max: number) => {
 const clip = (text: string, max: number) =>
   truncate(text.replace(/\s+/g, ' ').trim(), max);
 
-const formatAmount = (amount: number) => String(Math.round(amount * 100) / 100);
+const formatAmount = formatAmountText;
+
+const formatServings = (servings: number) =>
+  String(Math.round(servings * 100) / 100);
 
 const formatQuantity = ({
   amount,
@@ -378,10 +382,10 @@ const getTextChanges = (before: Normalized, after: Normalized) => {
       ? []
       : [`Renamed to “${clip(after.title, TITLE_QUOTE_LENGTH)}”`];
   const servingsChange =
-    formatAmount(before.servings) === formatAmount(after.servings)
+    formatServings(before.servings) === formatServings(after.servings)
       ? []
       : [
-          `Serves ${formatAmount(before.servings)} → ${formatAmount(after.servings)}`,
+          `Serves ${formatServings(before.servings)} → ${formatServings(after.servings)}`,
         ];
   const getDescriptionChange = () => {
     if (before.description === after.description) return [];
