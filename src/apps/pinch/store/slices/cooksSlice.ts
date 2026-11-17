@@ -6,7 +6,8 @@ import {
   deliverHeld,
   emptyHeldList,
   type HeldList,
-} from '@apps/pinch/store/heldLists';
+} from '@/store/heldLists';
+import { pinchHeldActions } from '@apps/pinch/store/heldLists';
 import type { Cook } from '@apps/pinch/types';
 
 export interface CooksState {
@@ -44,8 +45,12 @@ export const cooksSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
-    addHeldCases<Cook, CooksState>(builder, 'cooks', belongs, (state, list) => {
-      state.items = list;
+    addHeldCases<Cook, CooksState>(builder, pinchHeldActions, 'cooks', {
+      belongs,
+      show: (state, list) => {
+        state.items = list;
+      },
+      accepts: (state) => state.loadError === null,
     });
   },
 });

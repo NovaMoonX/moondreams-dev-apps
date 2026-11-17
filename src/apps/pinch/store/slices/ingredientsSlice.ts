@@ -6,7 +6,8 @@ import {
   deliverHeld,
   emptyHeldList,
   type HeldList,
-} from '@apps/pinch/store/heldLists';
+} from '@/store/heldLists';
+import { pinchHeldActions } from '@apps/pinch/store/heldLists';
 import type { IngredientRecord } from '@apps/pinch/types';
 
 export interface IngredientsState {
@@ -45,10 +46,14 @@ export const ingredientsSlice = createSlice({
     builder.addCase(resetAllState, () => initialState);
     addHeldCases<IngredientRecord, IngredientsState>(
       builder,
+      pinchHeldActions,
       'ingredients',
-      belongs,
-      (state, list) => {
-        state.records = list;
+      {
+        belongs,
+        show: (state, list) => {
+          state.records = list;
+        },
+        accepts: (state) => state.loadError === null,
       },
     );
   },

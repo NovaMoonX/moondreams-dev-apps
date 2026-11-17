@@ -1,7 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, deleteField, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import { PLAN_COLLECTIONS } from '@apps/waypoint/constants';
 import { emptyRepaidStatus, flipRepaidStatus, getRepaidStatus, resetRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
 import type {
@@ -209,7 +210,7 @@ export const linkExpenseToPlan = createAsyncThunk<TripExpense, LinkExpenseInput>
   'waypoint/expenses/link',
   async ({ expense, link, dayIndex }) => {
     const expenseRef = doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id);
-    const linked = await runTransaction(db, async (transaction) => {
+    const linked = await runHeldTransaction(expense.tripId, async (transaction) => {
       const snapshot = await transaction.get(expenseRef);
       if (!snapshot.exists()) {
         throw new Error('This expense was removed.');
@@ -248,7 +249,7 @@ export const updateExpenseSplit = createAsyncThunk<
   }
 
   const expenseRef = getExpenseRef(input.expense.tripId, input.expense.id);
-  const result = await runTransaction(db, async (transaction) => {
+  const result = await runHeldTransaction(input.expense.tripId, async (transaction) => {
     const snapshot = await transaction.get(expenseRef);
     if (!snapshot.exists()) {
       return 'This expense was removed.';
@@ -302,7 +303,7 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
     const expenseRef = getExpenseRef(expense.tripId, expense.id);
     // Re-read inside the transaction so a second person tapping Mark paid, or an edit that
     // changed the amount, is never overwritten from a stale copy.
-    const updatedExpense = await runTransaction(db, async (transaction) => {
+    const updatedExpense = await runHeldTransaction(expense.tripId, async (transaction) => {
       const snapshot = await transaction.get(expenseRef);
       if (!snapshot.exists()) {
         throw new Error('This expense no longer exists.');
@@ -336,7 +337,7 @@ export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripEx
   async ({ expense, actorUid }) => {
     const now = Date.now();
     const expenseRef = getExpenseRef(expense.tripId, expense.id);
-    const updatedExpense = await runTransaction(db, async (transaction) => {
+    const updatedExpense = await runHeldTransaction(expense.tripId, async (transaction) => {
       const snapshot = await transaction.get(expenseRef);
       if (!snapshot.exists()) {
         throw new Error('This expense no longer exists.');
@@ -379,7 +380,7 @@ export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInp
   'waypoint/expenses/toggleRepaid',
   async ({ uid, actorUid, tripId, expenseId }) => {
     const expenseRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(tripId, async (transaction) => {
       const snapshot = await transaction.get(expenseRef);
       if (!snapshot.exists()) {
         return;

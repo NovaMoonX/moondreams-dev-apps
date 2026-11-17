@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { buildPinchHolds } from '../../src/apps/pinch/utils/heldHolds.ts';
-import {
-  dropPinchWrites,
-  holdPinchWrites,
-  settlePinchWrites,
-} from '../../src/apps/pinch/store/heldLists.ts';
+import { pinchHeldActions } from '../../src/apps/pinch/store/heldLists.ts';
 import {
   containersReducer,
   setContainers,
@@ -132,8 +128,9 @@ assert.deepEqual(
 
 const box = { id: 'box', status: 'IN_STOCK', servings: 2 } as Container;
 const finished = { ...box, status: 'DONE', servings: 0 } as Container;
-const holdBox = holdPinchWrites({
+const holdBox = pinchHeldActions.hold({
   token: 't',
+  scope: 'u1',
   writes: {
     containers: [
       {
@@ -167,7 +164,7 @@ assert.deepEqual(
   'and the hold lets go once the list drops it',
 );
 assert.deepEqual(
-  containersReducer(eaten, dropPinchWrites('t')).items,
+  containersReducer(eaten, pinchHeldActions.drop('t')).items,
   [box],
   'a failed write puts the box back',
 );
@@ -185,8 +182,9 @@ const milk = {
   updatedAt: 1,
 } as unknown as ShoppingItem;
 const toHold = (id: string, token: string) =>
-  holdPinchWrites({
+  pinchHeldActions.hold({
     token,
+    scope: 'u1',
     writes: {
       shoppingItems: [
         {
@@ -218,7 +216,7 @@ assert.deepEqual(
   ['eggs'],
   'a retried transaction’s holds replace its earlier attempt’s',
 );
-const settled = shoppingReducer(retried, settlePinchWrites('t'));
+const settled = shoppingReducer(retried, pinchHeldActions.settle('t'));
 assert.notEqual(settled.hold.held[0].settledAt, null);
 assert.deepEqual(
   shoppingReducer(settled, setShopping([{ ...milk, id: 'eggs' }])).hold.held,
@@ -232,8 +230,9 @@ const meal = { id: 'm', date: start } as PlannedMeal;
 const moved = { ...meal, date: end + 86_400_000 } as PlannedMeal;
 const planned = plannedMealsReducer(
   plannedMealsReducer(undefined, setPlannedMeals({ windowKey, items: [meal] })),
-  holdPinchWrites({
+  pinchHeldActions.hold({
     token: 'p',
+    scope: 'u1',
     writes: {
       plannedMeals: [
         {

@@ -6,7 +6,8 @@ import {
   deliverHeld,
   emptyHeldList,
   type HeldList,
-} from '@apps/pinch/store/heldLists';
+} from '@/store/heldLists';
+import { pinchHeldActions } from '@apps/pinch/store/heldLists';
 import type { RecipeNote } from '@apps/pinch/types';
 
 export interface NotesState {
@@ -44,14 +45,13 @@ export const notesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
-    addHeldCases<RecipeNote, NotesState>(
-      builder,
-      'notes',
+    addHeldCases<RecipeNote, NotesState>(builder, pinchHeldActions, 'notes', {
       belongs,
-      (state, list) => {
+      show: (state, list) => {
         state.items = list;
       },
-    );
+      accepts: (state) => state.loadError === null,
+    });
   },
 });
 

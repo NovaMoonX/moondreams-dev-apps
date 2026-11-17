@@ -1,7 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import type { Announcement, AnnouncementSeverity, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
@@ -93,7 +94,7 @@ export const dismissAnnouncement = createAsyncThunk<
     'announcements',
     announcementId,
   );
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(trip.id, async (transaction) => {
     const snapshot = await transaction.get(announcementRef);
     if (!snapshot.exists()) {
       return;

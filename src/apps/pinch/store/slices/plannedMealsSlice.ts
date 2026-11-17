@@ -6,7 +6,8 @@ import {
   deliverHeld,
   emptyHeldList,
   type HeldList,
-} from '@apps/pinch/store/heldLists';
+} from '@/store/heldLists';
+import { pinchHeldActions } from '@apps/pinch/store/heldLists';
 import type { PlannedMeal } from '@apps/pinch/types';
 import { getMonthWindow } from '@apps/pinch/utils/dayKeys';
 
@@ -60,10 +61,14 @@ export const plannedMealsSlice = createSlice({
     builder.addCase(resetAllState, () => initialState);
     addHeldCases<PlannedMeal, PlannedMealsState>(
       builder,
+      pinchHeldActions,
       'plannedMeals',
-      (meal, state) => isInWindow(meal, state.windowKey),
-      (state, list) => {
-        state.items = list;
+      {
+        belongs: (meal, state) => isInWindow(meal, state.windowKey),
+        show: (state, list) => {
+          state.items = list;
+        },
+        accepts: (state) => state.loadError === null,
       },
     );
   },
