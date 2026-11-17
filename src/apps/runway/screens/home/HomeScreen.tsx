@@ -32,7 +32,10 @@ import {
   HOME_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
-import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
+import {
+  selectBankDueByCard,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
@@ -84,6 +87,7 @@ function HomeScreen() {
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const bankDueCards = useAppSelector(selectCardsWithBankDue);
+  const bankDue = useAppSelector(selectBankDueByCard);
   const homeMoves = useAppSelector((state) => selectHomeMoves(state, today));
   const isTrack = useAppSelector((state) =>
     isTrackingLevel(selectLevel(state)),
@@ -132,6 +136,7 @@ function HomeScreen() {
         today,
         CARD_DUE_WARN_DAYS,
         startDate,
+        bankDue,
       )
     : [];
   const hasRanges = rangeSides.income || rangeSides.expense;

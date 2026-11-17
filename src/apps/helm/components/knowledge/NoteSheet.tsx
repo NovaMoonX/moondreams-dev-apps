@@ -32,6 +32,7 @@ import {
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
+import QuietRow from '@apps/helm/components/privacy/QuietRow';
 import { filterPrivateOwnPage } from '@apps/helm/utils/privacy';
 
 interface NoteSheetProps {
@@ -259,7 +260,10 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
               </div>
             )}
             <KeptMediaSection record={{ kind: 'note', id: note.id }} />
-            <PrivateRow kind='note' record={note} title={note.title} />
+            <div>
+              <PrivateRow kind='note' record={note} title={note.title} />
+              <QuietRow kind='note' record={note} title={note.title} />
+            </div>
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
               <p className='text-muted-foreground min-w-0 text-[13px]'>
                 {origin.join(' · ')}

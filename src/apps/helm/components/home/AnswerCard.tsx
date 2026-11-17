@@ -1,3 +1,6 @@
+import { useMemo } from 'react';
+
+import MarkdownText from '@/components/MarkdownText';
 import AnswerSources from '@apps/helm/components/home/AnswerSources';
 import QuoteLine from '@apps/helm/components/home/QuoteLine';
 import RecordGroup from '@apps/helm/components/home/RecordGroup';
@@ -6,6 +9,11 @@ import GeneralKnowledgeCard from '@apps/helm/components/home/GeneralKnowledgeCar
 import SaveToKnowledge from '@apps/helm/components/home/SaveToKnowledge';
 import { HELM_COPY } from '@apps/helm/constants';
 import { readConnectorAppId } from '@/lib/connections/contract';
+import { useAppSelector } from '@/store';
+import {
+  readAnswerLinks,
+  readWrittenAnswer,
+} from '@apps/helm/utils/writtenAnswer';
 import type { AnswerQuote, CaptureAnswer } from '@apps/helm/types';
 
 interface AnswerCardProps {
@@ -24,7 +32,19 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
     (scope === 'both' && answer.searched.length === 0
       ? null
       : HELM_COPY.answerNothingInRecords);
-  const quotes = fromRecords === null ? [] : answer.quotes;
+  const quotes = useMemo(
+    () => (fromRecords === null ? [] : answer.quotes),
+    [fromRecords, answer.quotes],
+  );
+  const synced = useAppSelector((state) => state.helm.synced.items);
+  const links = useMemo(
+    () => readAnswerLinks({ quotes, sources: answer.sources }, synced),
+    [quotes, answer.sources, synced],
+  );
+  const written = useMemo(
+    () => (fromRecords === null ? '' : readWrittenAnswer(fromRecords, links)),
+    [fromRecords, links],
+  );
   const appGroups = quotes
     .filter((quote) => readConnectorAppId(quote.connectorId) !== null)
     .reduce(
@@ -45,15 +65,17 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
     >
       {recordsText !== null && (
         <section className='bg-secondary text-secondary-foreground rounded-[14px] px-3.5 py-3'>
-          <p
-            className={
-              fromRecords === null
-                ? 'text-[15px] leading-[21px] break-words'
-                : 'pb-2 text-[15px] leading-[21px] break-words whitespace-pre-wrap'
-            }
-          >
-            {recordsText}
-          </p>
+          {fromRecords === null ? (
+            <p className='text-[15px] leading-[21px] break-words'>
+              {recordsText}
+            </p>
+          ) : (
+            <MarkdownText
+              text={written}
+              allowedLinks={links}
+              className='pb-2 text-[15px] break-words'
+            />
+          )}
           {fromRecords !== null && (
             <AnswerSources sources={answer.sources} canOpen={isInset} />
           )}
