@@ -77,6 +77,7 @@ const getFractions = (unit: MeasureUnit, whole: number): number[] | null => {
 const getStep = (unit: MeasureUnit, value: number): number => {
   switch (unit) {
     case 'G':
+      if (value < 1) return 0.1;
       if (value < 5) return 0.5;
       if (value < 50) return 1;
       if (value < 200) return 5;
@@ -84,13 +85,14 @@ const getStep = (unit: MeasureUnit, value: number): number => {
       return 25;
     case 'ML':
       if (value < 10) return 1;
-      if (value < 250) return 5;
+      if (value < 100) return 5;
       if (value < 1000) return 10;
       return 25;
     case 'KG':
     case 'L':
       return value < 2 ? 0.05 : 0.25;
     case 'OZ':
+      if (value < 1) return 0.125;
       if (value < 2) return 0.25;
       if (value < 16) return 0.5;
       return 1;
@@ -101,34 +103,34 @@ const getStep = (unit: MeasureUnit, value: number): number => {
   }
 };
 
-/** Every amount a cook would measure in this unit, ascending, from the smallest up to past `max`. */
-const getGridPoints = (unit: MeasureUnit, max: number): number[] => {
-  const limit = max * 1.5 + 1;
-  const firstFractions = getFractions(unit, 0);
-  if (firstFractions !== null) {
-    const wholes = Array.from({ length: Math.ceil(limit) + 1 }, (_, i) => i);
-    return wholes
-      .flatMap((whole) =>
-        (getFractions(unit, whole) ?? []).map((part) => whole + part),
-      )
-      .filter((point) => point > 0);
-  }
-  const grow = (points: number[]): number[] => {
-    const last = points[points.length - 1] ?? 0;
-    if (last > limit) return points;
-    const step = getStep(unit, last);
-    return grow([...points, Math.round((last + step) / step) * step]);
-  };
-  return grow([]);
+const clean = (value: number) => Number(value.toFixed(6));
+
+/** The fraction-unit amounts a cook would measure around this one, ascending; null for units read in decimal steps. */
+const getNearbyFractions = (
+  unit: MeasureUnit,
+  amount: number,
+): number[] | null => {
+  if (getFractions(unit, 0) === null) return null;
+  const whole = Math.floor(amount + EPSILON);
+  return [whole - 1, whole, whole + 1, whole + 2]
+    .filter((candidate) => candidate >= 0)
+    .flatMap((candidate) =>
+      (getFractions(unit, candidate) ?? []).map((part) => candidate + part),
+    )
+    .filter((point) => point > 0);
 };
 
 /** An amount snapped to the nearest one a cook would measure in its unit (113.4 g is 115 g, 0.35 cup is ⅓ cup). */
 export function roundMeasure(amount: number, unit: MeasureUnit): number {
   if (!Number.isFinite(amount) || amount <= 0) return amount;
-  const points = getGridPoints(unit, amount);
-  return points.reduce((best, point) =>
-    Math.abs(point - amount) < Math.abs(best - amount) ? point : best,
-  );
+  const fractions = getNearbyFractions(unit, amount);
+  if (fractions !== null) {
+    return fractions.reduce((best, point) =>
+      Math.abs(point - amount) < Math.abs(best - amount) ? point : best,
+    );
+  }
+  const step = getStep(unit, amount);
+  return clean(Math.max(Math.round(amount / step) * step, getStep(unit, 0)));
 }
 
 /** The next amount a cook would measure above (`1`) or below (`-1`) this one; the same amount when nothing is below it. */
@@ -137,12 +139,22 @@ export function stepMeasure(
   unit: MeasureUnit,
   direction: 1 | -1,
 ): number {
-  const points = getGridPoints(unit, Math.max(amount, 0));
-  if (direction === 1) {
-    return points.find((point) => point > amount + EPSILON) ?? amount;
+  if (!Number.isFinite(amount) || amount < 0) return amount;
+  const fractions = getNearbyFractions(unit, amount);
+  if (fractions !== null) {
+    if (direction === 1) {
+      return fractions.find((point) => point > amount + EPSILON) ?? amount;
+    }
+    const below = fractions.filter((point) => point < amount - EPSILON);
+    return below.length === 0 ? amount : below[below.length - 1];
   }
-  const below = points.filter((point) => point < amount - EPSILON);
-  return below.length === 0 ? amount : below[below.length - 1];
+  if (direction === 1) {
+    const step = getStep(unit, amount + EPSILON);
+    return clean((Math.floor(amount / step + EPSILON) + 1) * step);
+  }
+  const step = getStep(unit, amount - EPSILON);
+  const below = clean((Math.ceil(amount / step - EPSILON) - 1) * step);
+  return below < getStep(unit, 0) - EPSILON ? amount : below;
 }
 
 const GLYPH_VALUES: Record<string, number> = {
@@ -159,7 +171,10 @@ const GLYPH_VALUES: Record<string, number> = {
 
 /** A typed amount ("1 ½", "1 1/2", "1½", "3/4", "1.5", "1,5") as a number; null when it isn't one. */
 export function parseAmountText(text: string): number | null {
-  const trimmed = text.trim().replace(',', '.');
+  const raw = text.trim();
+  const trimmed = /^\d{1,3}(,\d{3})+$/.test(raw)
+    ? raw.replace(/,/g, '')
+    : raw.replace(',', '.');
   if (trimmed === '') return null;
 
   const glyph = trimmed.match(/^(\d+(?:\.\d+)?)?\s*([⅛¼⅓⅜½⅝⅔¾⅞])$/);
@@ -178,17 +193,18 @@ export function parseAmountText(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** An amount as a cook writes it: "1 ½", "⅓", "2", "0.4"; eighths and thirds are glyphs, anything else up to two decimals. */
+/** An amount as a cook writes it: "1 ½", "⅓", "2", "0.4"; eighths and thirds are glyphs, anything else as a decimal that reads back to the same number. */
 export function formatAmountText(amount: number): string {
   if (!Number.isFinite(amount)) return '';
-  const whole = Math.floor(amount + 1e-6);
+  const whole = Math.floor(amount + 1e-9);
   const rest = amount - whole;
-  if (Math.abs(rest) < 1e-6) return String(whole);
+  if (Math.abs(rest) < 1e-9) return String(whole);
   const glyph = Object.entries(GLYPH_VALUES).find(
-    ([, part]) => Math.abs(part - rest) < 1e-6,
+    ([, part]) => Math.abs(part - rest) < 1e-9,
   );
   if (glyph) return whole === 0 ? glyph[0] : `${whole} ${glyph[0]}`;
-  return String(Math.round(amount * 100) / 100);
+  const short = Number(amount.toFixed(4));
+  return String(Math.abs(short - amount) < 1e-9 ? short : amount);
 }
 
 const UNIT_WORDS: Record<string, MeasureUnit> = {

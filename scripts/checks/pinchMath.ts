@@ -1879,7 +1879,15 @@ const recipeLine = (
   amount: number,
   unit: Unit,
   note: string | null = null,
-): RecipeIngredient => ({ id, ingredientId, amount, unit, note, group: null });
+): RecipeIngredient => ({
+  id,
+  ingredientId,
+  amount,
+  unit,
+  note,
+  group: null,
+  adaptedFrom: null,
+});
 const baseRecipe: RecipeContent = {
   title: 'Adobo chicken',
   description: 'Sticky and tangy.',
@@ -8322,7 +8330,15 @@ assert.equal(
     amount: number | null,
     unit: Unit,
     note: string | null = null,
-  ): RecipeIngredient => ({ id, ingredientId, amount, unit, note, group: null });
+  ): RecipeIngredient => ({
+    id,
+    ingredientId,
+    amount,
+    unit,
+    note,
+    group: null,
+    adaptedFrom: null,
+  });
   const amtRecipe = (
     id: string,
     servings: number,
@@ -9940,7 +9956,7 @@ assert.equal(
     group: string | null,
     amount: number | null = 1,
     unit: Unit = 'TBSP',
-  ) => ({ id, ingredientId, amount, unit, note: null, group });
+  ) => ({ id, ingredientId, amount, unit, note: null, group, adaptedFrom: null });
   const ids = (lines: { id: string }[]) => lines.map((line) => line.id);
   const heads = (lines: { group?: string | null }[]) =>
     groupIngredientLines(lines).map((group) => [

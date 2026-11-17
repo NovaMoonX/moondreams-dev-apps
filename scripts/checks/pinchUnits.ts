@@ -11,6 +11,7 @@ import {
 import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
 import {
   convertMeasure,
+  formatAmountText,
   parseAmountText,
   roundMeasure,
   stepMeasure,
@@ -35,7 +36,8 @@ assert.equal(roundMeasure(113.4, 'G'), 115);
 assert.equal(roundMeasure(7.05, 'OZ'), 7);
 assert.equal(roundMeasure(0.35, 'CUP'), 1 / 3);
 assert.equal(roundMeasure(0.13, 'TSP'), 1 / 8);
-assert.equal(roundMeasure(236.6, 'ML'), 235);
+assert.equal(roundMeasure(236.6, 'ML'), 240);
+assert.equal(roundMeasure(118.3, 'ML'), 120);
 assert.equal(roundMeasure(2.3, 'LB'), 2.25);
 
 // Stepping goes to the next measurable amount, and stops at the smallest
@@ -46,7 +48,23 @@ assert.equal(stepMeasure(1 / 3, 'CUP', -1), 1 / 4);
 assert.equal(stepMeasure(1 / 8, 'TSP', -1), 1 / 8);
 assert.equal(stepMeasure(7, 'OZ', 1), 7.5);
 
+// Large amounts round without walking a grid
+assert.equal(roundMeasure(1e7, 'G'), 1e7);
+assert.equal(stepMeasure(1e6, 'G', 1), 1000025);
+assert.equal(roundMeasure(1e6 + 0.4, 'CUP'), 1e6 + 1 / 3);
+assert.equal(stepMeasure(50, 'G', -1), 49);
+assert.equal(stepMeasure(200, 'G', -1), 195);
+assert.equal(stepMeasure(4.8, 'G', 1), 5);
+assert.equal(roundMeasure(0.1, 'G'), 0.1);
+
+// Amount text reads back to the same number
+[0.333, 0.667, 0.6667, 2.345, 0.0625, 0.004, 1 / 3, 2 / 3, 1.5, 7.05].forEach(
+  (amount) => assert.equal(parseAmountText(formatAmountText(amount)), amount),
+);
+assert.equal(formatAmountText(1.5), '1 ½');
+
 // Typed amounts
+assert.equal(parseAmountText('1,000'), 1000);
 assert.equal(parseAmountText('1 ½'), 1.5);
 assert.equal(parseAmountText('1 1/2'), 1.5);
 assert.equal(parseAmountText('¾'), 0.75);
@@ -120,9 +138,21 @@ assert.deepEqual(adapted.lines[0], {
 });
 assert.equal(adapted.lines[1].adaptedFrom, null);
 
-// A line adapted twice keeps its first original
+// A line adapted again works from its first original, and goes back to it when that already reads right
 const twice = adaptLines(adapted.lines, metric);
-assert.deepEqual(twice.lines[0].adaptedFrom, { amount: 200, unit: 'G' });
+assert.deepEqual(twice.lines[0], { amount: 200, unit: 'G', adaptedFrom: null });
+assert.equal(adaptLines(adapted.lines, us).count, 0);
+const stepped = {
+  amount: 7.5,
+  unit: 'OZ' as const,
+  adaptedFrom: { amount: 200, unit: 'G' as const },
+};
+assert.equal(adaptLines([stepped], us).count, 0);
+assert.equal(adaptLines([stepped], asWritten).count, 0);
+
+// A small weight that would round far from itself stays as written
+assert.equal(adaptAmount(3, 'G', us), null);
+assert.equal(adaptAmount(5, 'G', us), null);
 
 // Display conversion is unrounded
 const shown = toPreferredUnits(200, 'G', us);

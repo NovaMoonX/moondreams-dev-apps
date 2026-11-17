@@ -61,7 +61,12 @@ const truncate = (text: string, max: number) => {
 const clip = (text: string, max: number) =>
   truncate(text.replace(/\s+/g, ' ').trim(), max);
 
-const formatAmount = formatAmountText;
+const formatAmount = (amount: number) => {
+  const exact = formatAmountText(amount);
+  return /\.\d{3,}/.test(exact)
+    ? formatAmountText(Math.round(amount * 100) / 100)
+    : exact;
+};
 
 const formatServings = (servings: number) =>
   String(Math.round(servings * 100) / 100);

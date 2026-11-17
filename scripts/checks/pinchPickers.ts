@@ -27,6 +27,7 @@ const line = (ingredientId: string) => ({
   unit: 'EACH' as const,
   note: null,
   group: null,
+  adaptedFrom: null,
 });
 const recipe = (
   id: string,

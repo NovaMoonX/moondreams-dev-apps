@@ -48,6 +48,7 @@ const line = (id: string, amount: number | null): RecipeIngredient => ({
   unit: 'TBSP',
   note: null,
   group: null,
+  adaptedFrom: null,
 });
 const ingredients = new Map([
   ['cat-garlic', { name: 'Garlic' }],

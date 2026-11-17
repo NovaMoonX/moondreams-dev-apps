@@ -26,6 +26,7 @@ export const hasUnitPreference = (units: PinchUnitSettings) =>
   units.weight !== 'AS_WRITTEN' || units.volume !== 'AS_WRITTEN';
 
 const SPOONS: MeasureUnit[] = ['TSP', 'TBSP'];
+const MAX_ROUNDING_DRIFT = 0.15;
 const ML_PER_QUARTER_CUP = MEASURE_TO_BASE.CUP / 4;
 
 const pickWeightUnit = (
@@ -69,10 +70,9 @@ export function getPreferredUnit(
 ): MeasureUnit | null {
   if (!isMeasureUnit(unit)) return null;
   const base = amount * MEASURE_TO_BASE[unit];
-  const target =
-    unit === 'G' || unit === 'KG' || unit === 'OZ' || unit === 'LB'
-      ? pickWeightUnit(base, units)
-      : pickVolumeUnit(base, unit, units);
+  const target = isWeightUnit(unit)
+    ? pickWeightUnit(base, units)
+    : pickVolumeUnit(base, unit, units);
   return target === unit ? null : target;
 }
 
@@ -100,40 +100,56 @@ export function adaptAmount(
   if (target === null || !isMeasureUnit(unit)) return null;
   const converted = convertMeasure(amount, unit, target);
   if (converted === null) return null;
-  return { amount: roundMeasure(converted, target), unit: target };
+  const rounded = roundMeasure(converted, target);
+  if (Math.abs(rounded - converted) > converted * MAX_ROUNDING_DRIFT) {
+    return null;
+  }
+  return { amount: rounded, unit: target };
 }
 
-/** A recipe's lines adapted to the person's units, each changed line remembering what it was; a line already adapted keeps its first original. */
-export function adaptLines<
-  Line extends Pick<RecipeIngredient, 'amount' | 'unit' | 'adaptedFrom'>,
->(lines: Line[], units: PinchUnitSettings): { lines: Line[]; count: number } {
-  return lines.reduce<{ lines: Line[]; count: number }>(
-    (acc, line) => {
-      const adapted =
-        line.amount === null
-          ? null
-          : adaptAmount(line.amount, line.unit, units);
-      if (adapted === null || line.amount === null) {
-        return { ...acc, lines: [...acc.lines, line] };
-      }
-      return {
-        lines: [
-          ...acc.lines,
-          {
-            ...line,
-            amount: adapted.amount,
-            unit: adapted.unit,
-            adaptedFrom: line.adaptedFrom ?? {
-              amount: line.amount,
-              unit: line.unit,
-            },
-          },
-        ],
-        count: acc.count + 1,
-      };
-    },
-    { lines: [], count: 0 },
-  );
+const isWeightUnit = (unit: Unit) =>
+  unit === 'G' || unit === 'KG' || unit === 'OZ' || unit === 'LB';
+
+const hasPreferenceFor = (unit: Unit, units: PinchUnitSettings) =>
+  isMeasureUnit(unit) &&
+  (isWeightUnit(unit) ? units.weight : units.volume) !== 'AS_WRITTEN';
+
+type AdaptableLine = Pick<RecipeIngredient, 'amount' | 'unit' | 'adaptedFrom'>;
+
+/** A line's amount, unit and original under the person's units, worked out from its first original; null when the line stays as it is. */
+export function readaptLine(
+  line: AdaptableLine,
+  units: PinchUnitSettings,
+): Required<AdaptableLine> | null {
+  if (line.amount === null) return null;
+  const source = line.adaptedFrom ?? { amount: line.amount, unit: line.unit };
+  const adapted = adaptAmount(source.amount, source.unit, units);
+  if (line.adaptedFrom === null) {
+    return adapted === null ? null : { ...adapted, adaptedFrom: source };
+  }
+  if (adapted === null) {
+    const isAsWrittenNow =
+      hasPreferenceFor(source.unit, units) &&
+      getPreferredUnit(source.amount, source.unit, units) === null;
+    return isAsWrittenNow ? { ...source, adaptedFrom: null } : null;
+  }
+  if (adapted.unit === line.unit) return null;
+  return { ...adapted, adaptedFrom: source };
+}
+
+/** A recipe's lines adapted to the person's units, each changed line remembering its first original. */
+export function adaptLines<Line extends AdaptableLine>(
+  lines: Line[],
+  units: PinchUnitSettings,
+): { lines: Line[]; count: number } {
+  const next = lines.map((line) => {
+    const adapted = readaptLine(line, units);
+    return adapted === null ? line : { ...line, ...adapted };
+  });
+  return {
+    lines: next,
+    count: next.filter((line, i) => line !== lines[i]).length,
+  };
 }
 
 const VOLUME_LADDER: MeasureUnit[] = ['TSP', 'TBSP', 'CUP', 'FL_OZ', 'ML', 'L'];

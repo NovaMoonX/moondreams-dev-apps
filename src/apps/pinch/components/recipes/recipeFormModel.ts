@@ -64,7 +64,7 @@ import type {
   PinchUnitSettings,
   Unit,
 } from '@apps/pinch/types';
-import { adaptAmount } from '@apps/pinch/utils/units';
+import { readaptLine } from '@apps/pinch/utils/units';
 
 /** Where a recipe is from, as the form's picker reports it: a source id, `NEW_CHOICE` with the label typed, or `''` for none. */
 export interface SourceChoice {
@@ -304,14 +304,17 @@ export const adaptRows = (
 ): { rows: IngredientRow[]; ids: string[] } => {
   const adapted = rows.map((row) => {
     const amount = row.isAmountless ? null : parseAmountText(row.amount);
-    const next = amount === null ? null : adaptAmount(amount, row.unit, units);
-    return next === null || amount === null
+    const next = readaptLine(
+      { amount, unit: row.unit, adaptedFrom: row.adaptedFrom },
+      units,
+    );
+    return next === null
       ? row
       : {
           ...row,
-          amount: formatAmountText(next.amount),
+          amount: next.amount === null ? '' : formatAmountText(next.amount),
           unit: next.unit,
-          adaptedFrom: row.adaptedFrom ?? { amount, unit: row.unit },
+          adaptedFrom: next.adaptedFrom,
         };
   });
   return {
