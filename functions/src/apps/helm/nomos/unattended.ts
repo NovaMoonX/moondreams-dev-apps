@@ -160,7 +160,12 @@ export const maskContextRecords = (
   ),
   notes: input.notes?.map((note) =>
     cover(mask, note.isPrivate, 'a private note', [note.title, note.body])
-      ? { id: note.id, title: 'a private note', isPrivate: true }
+      ? {
+          id: note.id,
+          title: 'a private note',
+          isPrivate: true,
+          ...(note.isQuiet ? { isQuiet: true } : {}),
+        }
       : note,
   ),
   procedures: input.procedures?.map((procedure) =>

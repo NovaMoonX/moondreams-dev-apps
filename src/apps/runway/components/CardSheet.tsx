@@ -45,6 +45,7 @@ import {
   AUTO_PAY_WORDS,
   CARD_FEE_WORDS,
   CARD_WORDS,
+  STARTED_PAYMENT_WORDS,
   HELD_WORDS,
   LINK_WORDS,
 } from '@apps/runway/constants';
@@ -67,6 +68,9 @@ import type { OpenCard } from '@apps/runway/types';
 import HelpTip from '@/components/HelpTip';
 import { useNow } from '@/hooks/useNow';
 import CardHistoryView from '@apps/runway/components/CardHistoryView';
+import StartedPaymentRows from '@apps/runway/components/StartedPaymentRows';
+import { selectBankOwedByCard } from '@apps/runway/store/selectors/cardBankSelectors';
+import { selectBankDueByCard } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
@@ -187,12 +191,14 @@ function CardSheet({
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? 0,
   );
+  const bankDue = useAppSelector(selectBankDueByCard);
   const due = getCardDueNow(
     card,
     { [card.id]: reserveCents },
     moves,
     today,
     startDate,
+    bankDue,
   );
 
   const linkedFact = useLinkedFact(card.linkId);
@@ -222,6 +228,8 @@ function CardSheet({
     getLinkedStatement(state.runway, card),
   );
   const isDueFromBank = getBankDueDay(statement) !== null;
+  const bankOwed = useAppSelector(selectBankOwedByCard)[card.id] ?? null;
+  const isDueShown = bankOwed === null || reserveCents > 0;
   const bankUpdated =
     bank === null ? null : describeBankUpdated(bank.asOf, now);
 
@@ -370,7 +378,9 @@ function CardSheet({
             fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-                : describeCardDue(card, today, due),
+                : isDueShown
+                  ? describeCardDue(card, today, due)
+                  : null,
               pendingCents > 0
                 ? CARD_WORDS.pendingAmount(formatCents(pendingCents))
                 : null,
@@ -380,7 +390,7 @@ function CardSheet({
               .join(' \u00b7 ')}
             isFactFresh={bankUpdated?.isFresh ?? false}
             secondFact={
-              isDueFromBank
+              isDueFromBank && isDueShown
                 ? CARD_WORDS.dueFromBank(bankName || LINK_WORDS.fallbackBank)
                 : null
             }
@@ -399,8 +409,17 @@ function CardSheet({
             className='w-full'
             onClick={onPay}
           >
-            {CARD_WORDS.payOffShort}
+            {bankOwed === null
+              ? CARD_WORDS.payOffShort
+              : STARTED_PAYMENT_WORDS.action}
           </Button>
+          {bankOwed !== null && (
+            <StartedPaymentRows
+              waiting={bankOwed.waiting}
+              bankName={bankName || LINK_WORDS.fallbackBank}
+              today={today}
+            />
+          )}
           <ActionGroup>
             <LinkToBankRow
               linkId={card.linkId}
