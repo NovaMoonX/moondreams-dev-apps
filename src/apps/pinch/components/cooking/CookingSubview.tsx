@@ -161,6 +161,7 @@ import {
   describeMeasureConversion,
   getConversionLine,
 } from '@apps/pinch/utils/cookConversions';
+import { getLineKey, getLineName } from '@apps/pinch/utils/freeLines';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
@@ -536,13 +537,18 @@ function CookingSession({
           matchStepIngredients(
             candidate.recipe.steps,
             candidate.recipe.ingredients.map((line) => {
-              const ingredient = ingredientsById.get(line.ingredientId);
+              const ingredient =
+                line.ingredientId === null
+                  ? undefined
+                  : ingredientsById.get(line.ingredientId);
               return {
                 id: line.id,
-                ingredientId: line.ingredientId,
+                ingredientId: getLineKey(line),
                 names: ingredient
                   ? [ingredient.name, ...ingredient.aliases]
-                  : [],
+                  : line.freeText
+                    ? [line.freeText]
+                    : [],
                 group: line.group ?? null,
               };
             }),
@@ -574,14 +580,15 @@ function CookingSession({
             : {
                 ...shown,
                 gramsPerMl:
-                  ingredientsById.get(line.ingredientId)?.gramsPerMl ?? null,
+                  line.ingredientId === null
+                    ? null
+                    : (ingredientsById.get(line.ingredientId)?.gramsPerMl ??
+                      null),
               };
         const conversion = measure === null ? null : getConversionLine(measure);
         return {
           id: line.id,
-          name:
-            ingredientsById.get(line.ingredientId)?.name ??
-            'Removed ingredient',
+          name: getLineName(line, ingredientsById),
           note: line.amount === null ? null : line.note,
           amountText:
             shown === null
@@ -2408,10 +2415,17 @@ function CookingSession({
     timers: timers.timers.map(toVoiceTimerRef),
     choice: getVoiceChoice(),
     lines: voiceStep.recipe.ingredients.map((line) => {
-      const ingredient = ingredientsById.get(line.ingredientId);
+      const ingredient =
+        line.ingredientId === null
+          ? undefined
+          : ingredientsById.get(line.ingredientId);
       return {
         id: line.id,
-        names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
+        names: ingredient
+          ? [ingredient.name, ...ingredient.aliases]
+          : line.freeText
+            ? [line.freeText]
+            : [],
         isInStep: voiceStepMatch?.lineIds.includes(line.id) ?? false,
       };
     }),

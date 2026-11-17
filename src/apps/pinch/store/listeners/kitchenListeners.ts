@@ -92,6 +92,7 @@ const readRecipe = (recipe: Recipe): Recipe => ({
   ingredients: recipe.ingredients.map((line) => ({
     ...line,
     adaptedFrom: line.adaptedFrom ?? null,
+    freeText: line.freeText ?? null,
   })),
 });
 

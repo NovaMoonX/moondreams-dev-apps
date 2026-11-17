@@ -16,6 +16,7 @@ interface RecipePhotoFieldProps {
   canSuggest: boolean;
   sourcePhoto: WebPhoto | null;
   title: string;
+  searchWords: string | null;
   onSelect: (file: File | null) => void;
   onPickWeb: (photo: WebPhoto) => void;
   onRemove: () => void;
@@ -28,6 +29,7 @@ function RecipePhotoField({
   canSuggest,
   sourcePhoto,
   title,
+  searchWords,
   onSelect,
   onPickWeb,
   onRemove,
@@ -77,6 +79,7 @@ function RecipePhotoField({
           <RecipePhotoSuggestions
             uid={uid}
             title={title}
+            searchWords={searchWords}
             sourcePhoto={sourcePhoto}
             selectedUrl={cover?.host ? cover.url : null}
             onPick={onPickWeb}

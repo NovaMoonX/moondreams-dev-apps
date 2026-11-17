@@ -1,10 +1,6 @@
 import type { MeasureUnit } from '@/utils/measureUtils';
 export type PinchTab =
-  | 'calendar'
-  | 'recipes'
-  | 'kitchen'
-  | 'shopping'
-  | 'settings';
+  'calendar' | 'recipes' | 'kitchen' | 'shopping' | 'settings';
 
 /** The tabs a person can open Pinch on; Settings is the place that chooses, so it is never one. */
 export type PinchStartTab = Exclude<PinchTab, 'settings'>;
@@ -568,7 +564,10 @@ export type ShoppingRequest =
 export interface RecipeIngredient {
   /** A row id, so edits and reordering keep stable keys. */
   id: string;
-  ingredientId: string;
+  /** Null for a line that isn't a kitchen ingredient ("reserved pasta water"): it keeps its words in `freeText` and is left out of cost, nutrition, shopping, stock and "Used in". */
+  ingredientId: string | null;
+  /** The words of a line that isn't a kitchen ingredient, shown as its name; null for every ingredient line. Lines written before it lack the key, which reads as null. */
+  freeText: string | null;
   /** Null for a line with no amount ("salt to taste"), whose note says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
   amount: number | null;
   unit: Unit;
@@ -713,6 +712,8 @@ export interface SharedIngredient {
   unit: Unit;
   note: string | null;
   group: string | null;
+  /** A line the owner kept outside their kitchen: it arrives as plain words, never as an ingredient. */
+  isFree: boolean;
 }
 
 export interface SharedRecipeLink {
@@ -748,8 +749,17 @@ export interface SharedRecipe {
 }
 
 export type SharedMealItem =
-  | { kind: 'RECIPE'; servings: number; /** An index into `SharedMeal.recipes`. */ recipeIndex: number }
-  | { kind: 'INGREDIENT'; servings: number; name: string; catalogId: string | null };
+  | {
+      kind: 'RECIPE';
+      servings: number;
+      /** An index into `SharedMeal.recipes`. */ recipeIndex: number;
+    }
+  | {
+      kind: 'INGREDIENT';
+      servings: number;
+      name: string;
+      catalogId: string | null;
+    };
 
 /** A saved meal as a share carries it: its name and items, with each recipe inline once. */
 export interface SharedMeal {

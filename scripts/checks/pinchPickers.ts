@@ -23,6 +23,7 @@ import {
 const line = (ingredientId: string) => ({
   id: `line-${ingredientId}`,
   ingredientId,
+  freeText: null,
   amount: 1,
   unit: 'EACH' as const,
   note: null,

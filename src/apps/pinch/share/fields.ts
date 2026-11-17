@@ -300,6 +300,7 @@ const RECIPE_NOTE_FIELDS = {
 const RECIPE_INGREDIENT_FIELDS = {
   id: 'never',
   ingredientId: 'never',
+  freeText: 'never',
   amount: 'never',
   unit: 'never',
   note: 'never',
