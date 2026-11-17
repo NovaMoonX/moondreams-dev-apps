@@ -66,6 +66,7 @@ export const COMMAND_KINDS = [
   'addMilestone',
   'createNote',
   'setPrivate',
+  'setQuiet',
 ] as const;
 
 /** Commands that delete a record. A deleting command is kept only when its subject is still named once every closing phrase is taken out of the turn's words. */
@@ -470,6 +471,23 @@ export type NomosCommand =
   | { kind: 'completeTask'; taskId: string }
   | { kind: 'setPrivate'; taskId: string; isPrivate: boolean };
 
+export const MAX_QUIET_COMMANDS = 8;
+
+/** Keeps a task, a project or a note quiet (shown on screen, never said aloud), or releases it. `targetId` is a stored id, or a `$new` ref made in the same reply when `isNew`. */
+export interface SetQuietCommand {
+  kind: 'setQuiet';
+  targetKind: 'task' | 'project' | 'note';
+  targetId: string;
+  isNew: boolean;
+  isQuiet: boolean;
+  /** The last quiet day (YYYY-MM-DD, in the person's zone); null keeps it quiet until released. */
+  until: string | null;
+  /** An end day was asked for but could not be read as one, so it stays quiet until released. */
+  isUntilUnread: boolean;
+  /** The assistant read it as a secret; the person did not ask. A guess only ever keeps quiet. */
+  isGuess: boolean;
+}
+
 /** A person, pet or organization the reply names. */
 export interface MentionRead {
   ref: string;
@@ -573,6 +591,8 @@ export type KeyDateCommand = SetKeyDateCommand | RemoveKeyDateCommand;
 /** The person starts something with several steps; its date is date-only (UTC midnight). */
 export interface CreateProjectCommand {
   kind: 'createProject';
+  /** A `$new` name a `setQuiet` of the same reply points at; null when none was given. */
+  ref: string | null;
   name: string;
   emoji: string | null;
   objective: string | null;
@@ -610,6 +630,8 @@ export type ProjectCommand =
 /** Something general to remember that is about no person, pet, place or project, its topics settled to ids of ones the person already has. */
 export interface CreateNoteCommand {
   kind: 'createNote';
+  /** A `$new` name a `setQuiet` of the same reply points at; null when none was given. */
+  ref: string | null;
   title: string;
   body: string;
   topicIds: string[];
@@ -802,6 +824,7 @@ export interface AnswerCommand {
   question: string;
   isHealth: boolean;
   fromRecordsText: string | null;
+  fromRecordsSpoken: string | null;
   sources: SourceRef[];
   quotes: QuoteEntry[];
   syncedKeys: string[];
@@ -927,10 +950,15 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'dueSpanId',
             'isUrgent',
             'isPrivate',
+            'targetAlias',
+            'isQuiet',
+            'untilSpanId',
+            'isGuess',
             'scope',
             'question',
             'isHealth',
             'fromRecordsText',
+            'fromRecordsSpoken',
             'sourceAliases',
             'quoteAliases',
             'generalText',
@@ -1048,7 +1076,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             ref: nullable(
               'string',
-              'createTask: a name for the new task such as $new1, so a later command can point at it; null otherwise.',
+              'createTask, createProject and createNote: a name for the new record such as $new1 (each one its own number), so a later command can point at it; null otherwise.',
             ),
             taskAlias: nullable(
               'string',
@@ -1070,6 +1098,22 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'boolean',
               'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private. createHabit: true only when the person asks to keep the habit private; null for every other kind.',
             ),
+            targetAlias: nullable(
+              'string',
+              'setQuiet: the alias of an open task or a project from the context, a note alias, or the $new ref of a createTask, createProject or createNote in this reply; null for every other kind.',
+            ),
+            isQuiet: nullable(
+              'boolean',
+              'setQuiet: true to keep it quiet (shown on screen, never said aloud), false only when the person asks to let it be said aloud again; null for every other kind.',
+            ),
+            untilSpanId: nullable(
+              'string',
+              'setQuiet: the id of a date span from the reading that is the last day it stays quiet (the day of the surprise or the party), or null to keep it quiet until the person says otherwise. Never write a date yourself.',
+            ),
+            isGuess: nullable(
+              'boolean',
+              'setQuiet: true when the person did not ask and you read it as a secret or surprise; false when they asked; null for every other kind.',
+            ),
             scope: nullable(
               'string',
               `answer: yourThings when the question is about the person's own plans, people, tasks or things; theWorld when it asks about the world; both when the records answer part and the world the rest. null for every other kind.`,
@@ -1084,7 +1128,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             fromRecordsText: nullable(
               'string',
-              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters; null when they say nothing about it.`,
+              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only: bold, italics, lists, links, one short blockquote of a cited passage); null when they say nothing about it.`,
+            ),
+            fromRecordsSpoken: nullable(
+              'string',
+              `answer: only on a spoken turn, fromRecordsText as one or two plain sentences for the ear, at most ${ANSWER_SPOKEN_CAP} characters, with no lists or Markdown; leave null on a typed turn and when fromRecordsText is null.`,
             ),
             sourceAliases: {
               type: ['array', 'null'],
@@ -1099,7 +1147,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             generalText: nullable(
               'string',
-              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and never about the person's own plans, people or things.`,
+              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only), only for what the records do not say and never about the person's own plans, people or things.`,
             ),
             generalSpoken: nullable(
               'string',
@@ -1385,7 +1433,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, updateHabit, connect, updateConnection, disconnect and setQuiet (when isGuess is false): the words of the capture that ask for it, copied exactly; null otherwise.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1663,6 +1711,16 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
           ability: { type: 'string', enum: ['location'] },
           level: { type: 'string', enum: ['city', 'precise'] },
         },
+      },
+      keepQuiet: {
+        type: 'boolean',
+        description:
+          'true when what you say back would give away a secret or surprise even though nothing is marked quiet yet; false otherwise. When true, your reply is kept off the speaker.',
+      },
+      sayHeldLine: {
+        type: 'boolean',
+        description:
+          'true only when the person is asking to hear out loud what was kept on the screen instead of spoken; false otherwise. When true, replyLine is null and nothing else is needed.',
       },
       replyLine: nullable(
         'string',

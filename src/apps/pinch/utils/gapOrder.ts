@@ -68,7 +68,7 @@ function buildIngredientUses(
     .filter((recipe) => recipe.isArchived !== true)
     .reduce((uses, recipe) => {
       recipe.ingredients.forEach(({ ingredientId, amount, unit }) => {
-        if (amount === null) return;
+        if (amount === null || ingredientId === null) return;
         const use = useOf(uses, ingredientId);
         const grams = estimateGrams(
           amount,

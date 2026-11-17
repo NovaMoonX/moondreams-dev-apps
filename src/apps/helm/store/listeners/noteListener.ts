@@ -72,6 +72,13 @@ async function openNote(
       body: toText(payload.body) ?? '',
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
+      quietMark:
+        payload.quietMark === 'person' || payload.quietMark === 'guessed'
+          ? payload.quietMark
+          : null,
+      quietUntil:
+        typeof payload.quietUntil === 'string' ? payload.quietUntil : null,
+      isQuietCleared: payload.isQuietCleared ?? false,
       via: toText(payload.via),
       links: toLinks(payload.links),
       isUnreadable: false,
