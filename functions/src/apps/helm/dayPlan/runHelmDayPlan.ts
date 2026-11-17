@@ -13,6 +13,7 @@ import type { Keyring } from '../../../appKeys/keyring.js';
 import { dayKeyToMs } from '../../../vendor/cadenceUtils.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
 import { unwrapHelmKey, type HelmKey } from '../helmKey.js';
+import { readZoneFor } from '../nomos/whereabouts.js';
 import { readProfile } from '../reminders/readRecords.js';
 import {
   dayAimsPath,
@@ -29,6 +30,7 @@ import {
   planRollover,
   readDayClock,
   readPassLookAt,
+  toDayKeyIn,
   type BusyEvent,
   type SlotRecord,
 } from './dayJob.js';
@@ -305,7 +307,11 @@ async function runPerson(
     await queueRef.delete();
     return;
   }
-  const profile = readProfile(profileSnap.data() as DocumentData);
+  const home = readProfile(profileSnap.data() as DocumentData);
+  const profile = {
+    ...home,
+    timeZone: readZoneFor(toDayKeyIn(now, home.timeZone), home),
+  };
   const fillPercent =
     toNumber(profileSnap.get('planFillPercent')) ?? DEFAULT_FILL;
   const busyAllDayRefs = Array.isArray(profileSnap.get('busyAllDayEventRefs'))
@@ -423,7 +429,6 @@ async function runPerson(
       {
         lookAt: isChanged ? now : lookAt,
         plannedAt: now,
-        plannedChangedAt: toNumber(profileSnap.get('dayAimsChangedAt')),
         leaseUntil: null,
       },
       { merge: true },

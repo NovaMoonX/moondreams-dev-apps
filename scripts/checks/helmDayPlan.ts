@@ -212,7 +212,7 @@ test('an aim that does not fit is returned and worded', () => {
   const titles = { 'call-mom': 'Call Mom', gym: 'Gym' };
   assert.equal(
     describeFit(titles, result.unplaced, result.blockers),
-    "“Gym” doesn't today unless you move “Team call”. The rest fit.",
+    "“Gym” doesn't fit today unless you move “Team call”. The rest fit.",
   );
   assert.equal(describeFit(titles, [], {}), null);
 });
@@ -305,32 +305,39 @@ const slot = (
   overlapsEventRef: null,
 });
 
-test('rollover brings an open aim once and never twice', () => {
+test('rollover brings an aim sent to Tomorrow once and never twice, and leaves an unanswered one', () => {
   const ids = ['n1', 'n2', 'n3'];
   const next = () => ids.shift()!;
   const args = {
     fromDayKey: '2026-11-09',
-    from: view(['t1', 't2', 't3', 't4'], {
-      'a-t2': {
+    from: view(['t1', 't2', 't3', 't4', 't5'], {
+      t5: {
+        result: 'wontHappen',
+        choice: 'tomorrow',
+        reason: null,
+        saidSpanId: null,
+      },
+      t2: {
         result: 'wontHappen',
         choice: 'later',
         reason: null,
         saidSpanId: null,
       },
-      'a-t3': { result: 'done', choice: null, reason: null, saidSpanId: null },
+      t3: { result: 'done', choice: null, reason: null, saidSpanId: null },
     }),
     taskStatus: new Map<string, 'open' | 'done'>([
       ['t1', 'open'],
       ['t2', 'open'],
       ['t3', 'open'],
       ['t4', 'done'],
+      ['t5', 'open'],
     ]),
     newAimId: next,
   };
   const first = planRollover({ ...args, today: view([]) });
   assert.deepEqual(
     first.aims.map((aim) => aim.taskId),
-    ['t1'],
+    ['t5'],
   );
   assert.equal(first.aims[0].broughtFrom, '2026-11-09');
   const again = planRollover({

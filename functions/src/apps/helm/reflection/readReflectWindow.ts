@@ -150,7 +150,7 @@ async function readWindDowns(
   const reasons = days.docs.flatMap((doc) => {
     const view = openAimsView(key, doc.data());
     return view.aims.flatMap((aim) => {
-      const reason = view.windDown[aim.aimId]?.reason ?? null;
+      const reason = view.windDown[aim.taskId]?.reason ?? null;
       const tag = STRUGGLING_TAGS.find((known) => known === reason);
       return tag
         ? [{ dayKey: doc.id, aimId: aim.aimId, taskId: aim.taskId, tag }]

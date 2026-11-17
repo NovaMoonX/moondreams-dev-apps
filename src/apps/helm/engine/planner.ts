@@ -165,10 +165,10 @@ export function describeFit(
     : blocker.kind === 'event'
       ? ` unless you move “${blocker.title}”`
       : ' unless you move something you kept';
-  const verb = unless ? "doesn't today" : "doesn't fit today";
+  const verb = unplacedIds.length > 1 ? "don't fit today" : "doesn't fit today";
   const rest =
     unplacedIds.length < Object.keys(aimTitles).length ? ' The rest fit.' : '';
-  return `${subject} ${unplacedIds.length > 1 ? verb.replace("doesn't", "don't") : verb}${unless}.${rest}`;
+  return `${subject} ${verb}${unless}.${rest}`;
 }
 
 const getObstacles = (

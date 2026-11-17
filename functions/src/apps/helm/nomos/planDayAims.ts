@@ -1,6 +1,11 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { dayKeyToMs } from '../../../vendor/cadenceUtils.js';
 import { MAX_DAY_AIMS, type Aim, type AimsView } from '../dayPlan/dayJob.js';
+import {
+  isPrivateInEffect,
+  type PrivacyFacts,
+  type PrivateParent,
+} from '../privacy.js';
 import type { NomosCommand } from './commands.js';
 import type { Effect, EffectRef } from './executeCommands.js';
 
@@ -17,6 +22,8 @@ export interface DayAimsPlanInput {
       durationMinutes?: number | null;
       title?: string;
       privacy?: string | null;
+      privacyFacts?: PrivacyFacts;
+      privateParents?: PrivateParent[];
     }
   >;
   /** The day as stored: its aims, the sealed payload as it was and its state; null when there is no document yet. */
@@ -148,7 +155,12 @@ export function planDayAims(input: DayAimsPlanInput): DayAimsPlan {
               lengthIsGuess: (task.durationMinutes ?? null) === null,
               isMade: false,
               title:
-                task.privacy === 'private'
+                task.privacy === 'private' ||
+                (task.privacyFacts &&
+                  isPrivateInEffect(
+                    task.privacyFacts,
+                    (task.privateParents ?? []).map((parent) => parent.facts),
+                  ))
                   ? null
                   : (task.title?.trim() ?? null),
             },

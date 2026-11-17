@@ -572,7 +572,7 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   const blocker = { kind: 'event', title: 'Dentist' } as const;
   assert.equal(
     describeFit(titles, ['a'], { a: blocker }),
-    "“A” doesn't today unless you move “Dentist”. The rest fit.",
+    "“A” doesn't fit today unless you move “Dentist”. The rest fit.",
   );
   assert.equal(
     describeFit(titles, ['a', 'b'], { a: blocker, b: null }),

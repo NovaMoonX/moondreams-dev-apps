@@ -214,7 +214,7 @@ const openTitle = (key: HelmKey, data: DocumentData) => {
 
 const toAimFlags = (view: AimsView | undefined, taskId: string) => {
   const aim = view?.aims.find((entry) => entry.taskId === taskId);
-  const choice = aim ? (view?.windDown[aim.aimId]?.choice ?? null) : null;
+  const choice = aim ? (view?.windDown[aim.taskId]?.choice ?? null) : null;
   return { isAim: aim !== undefined, isLetGo: choice !== null };
 };
 

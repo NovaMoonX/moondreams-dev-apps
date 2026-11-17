@@ -144,7 +144,7 @@ export const isRollable = (
   dayKeyToMs(todayKey) - dayKeyToMs(past.dayKey) <=
     ROLLOVER_LOOKBACK_DAYS * 86_400_000;
 
-/** The aims of a past day that carry into today: the task is still open and the person did not send it to Later or drop it. A task already among today's aims is never added twice. */
+/** The aims of a past day that carry into today: the task is still open and the person sent it to Tomorrow; an unanswered aim waits in "From yesterday". A task already among today's aims is never added twice. */
 export function planRollover(input: {
   fromDayKey: string;
   from: AimsView;
@@ -154,13 +154,11 @@ export function planRollover(input: {
 }): { aims: Aim[]; added: number } {
   const have = new Set(input.today.aims.map((aim) => aim.taskId));
   const carried = input.from.aims.filter((aim) => {
-    const entry = input.from.windDown[aim.aimId];
+    const entry = input.from.windDown[aim.taskId];
     return (
       input.taskStatus.get(aim.taskId) === 'open' &&
       !have.has(aim.taskId) &&
-      entry?.choice !== 'later' &&
-      entry?.choice !== 'dropped' &&
-      entry?.result !== 'done'
+      entry?.choice === 'tomorrow'
     );
   });
   const room = Math.max(0, MAX_DAY_AIMS - input.today.aims.length);

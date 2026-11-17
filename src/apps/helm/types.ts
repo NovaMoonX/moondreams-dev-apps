@@ -95,7 +95,7 @@ export interface HelmProfile {
   dayEndTime: string;
   /** Share of free time the planner may fill. */
   planFillPercent: number;
-  /** Stamped when a day's aims change, so the server notices within minutes. */
+  /** @deprecated Nothing reads it: a day's aims are noticed by the server's trigger on the day document. Written `null` going forward. */
   dayAimsChangedAt: number | null;
   /** "{accountId}/{calendarId}" of each calendar marked as shifts. */
   shiftCalendarIds: string[];
@@ -1675,6 +1675,7 @@ export interface PlanSlot {
 
 export type StruggleSignal = (typeof STRUGGLING_TAGS)[number];
 
+/** The sealed part of a day's aims; `windDown` is keyed by taskId. */
 export interface DayAimsSealed {
   aims: {
     aimId: string;

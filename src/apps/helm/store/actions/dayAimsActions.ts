@@ -3,9 +3,13 @@ import {
   doc,
   getDoc,
   getDocFromCache,
+  runTransaction,
   updateDoc,
   writeBatch,
-  type WriteBatch,
+  type DocumentData,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type UpdateData,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -48,8 +52,6 @@ export interface DayAimsChange {
 const dayAimsOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'dayAims');
 
-const profileOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
-
 const toDate = (dayKey: string) => Date.parse(dayKey);
 
 // One day's writes run one after another, so a second tap reads what the first left (offline too, where the cache holds the first before the server does).
@@ -65,13 +67,7 @@ const inLane = <T>(key: string, run: () => Promise<T>): Promise<T> => {
 
 const emptyPayload: DayAimsSealed = { aims: [], windDown: {} };
 
-async function readDay(
-  uid: string,
-  encryption: HelmEncryption,
-  dayKey: string,
-) {
-  const ref = doc(dayAimsOf(uid), dayKey);
-  const snapshot = await getDocFromCache(ref).catch(() => getDoc(ref));
+async function openDay(snapshot: DocumentSnapshot, encryption: HelmEncryption) {
   if (!snapshot.exists()) {
     return { exists: false, readable: null, payload: emptyPayload };
   }
@@ -97,41 +93,51 @@ interface DayEdit {
   dayKey: string;
   change: (payload: DayAimsSealed) => DayAimsSealed;
   readable?: Partial<Readable>;
-  /** Other documents the same tap changes, in the same batch. */
-  alongside?: (batch: WriteBatch) => void;
+  /** Other documents the same tap changes, in the same write. */
+  alongside?: (writer: {
+    update: (ref: DocumentReference, data: UpdateData<DocumentData>) => unknown;
+  }) => void;
 }
 
-/** Re-reads the day, applies one change and writes the whole sealed payload with the profile's `dayAimsChangedAt` in one batch, so the server looks soon. The commit is handed back unawaited so it queues offline. */
+/** Re-reads the day, applies one change and writes the whole sealed payload. Online it reads the server's copy inside a transaction, so a change made on another device is never overwritten; offline it writes a batch from the cache, handed back unawaited so it queues. */
 function editDay(edit: DayEdit) {
   const { uid, dayKey, change, readable, alongside } = edit;
   return inLane(`${uid}|${dayKey}`, async () => {
     const encryption = await getHelmEncryption(uid);
-    const before = await readDay(uid, encryption, dayKey);
+    const ref = doc(dayAimsOf(uid), dayKey);
+    const fresh = {
+      date: toDate(dayKey),
+      state: 'open',
+      windDownState: 'waiting',
+      lookAt: null,
+      rolledAt: null,
+      ...readable,
+    };
+    if (navigator.onLine) {
+      const before = await runTransaction(db, async (transaction) => {
+        const opened = await openDay(await transaction.get(ref), encryption);
+        const sealed = await sealJson<DayAimsSealed>(
+          change(opened.payload),
+          encryption,
+        );
+        if (opened.exists) transaction.update(ref, { sealed, ...readable });
+        else transaction.set(ref, { ...fresh, sealed });
+        alongside?.(transaction);
+        return opened;
+      });
+      return { before, write: Promise.resolve() };
+    }
+    const cached = await getDocFromCache(ref).catch(() => getDoc(ref));
+    const before = await openDay(cached, encryption);
     const sealed = await sealJson<DayAimsSealed>(
       change(before.payload),
       encryption,
     );
     const batch = writeBatch(db);
-    const ref = doc(dayAimsOf(uid), dayKey);
-    if (before.exists) {
-      batch.update(ref, { sealed, ...readable });
-    } else {
-      batch.set(ref, {
-        date: toDate(dayKey),
-        state: 'open',
-        windDownState: 'waiting',
-        lookAt: null,
-        rolledAt: null,
-        ...readable,
-        sealed,
-      });
-    }
-    batch.update(profileOf(uid), { dayAimsChangedAt: Date.now() });
+    if (before.exists) batch.update(ref, { sealed, ...readable });
+    else batch.set(ref, { ...fresh, sealed });
     alongside?.(batch);
-    return {
-      before,
-      write: batch.commit(),
-    };
+    return { before, write: batch.commit() };
   });
 }
 
