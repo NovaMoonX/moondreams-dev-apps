@@ -2,13 +2,15 @@ import { useAppSelector } from '@/store';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import BankBadge from '@apps/runway/components/BankBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { CARD_WORDS } from '@apps/runway/constants';
+import { CARD_WORDS, STARTED_PAYMENT_WORDS } from '@apps/runway/constants';
+import { selectBankOwedByCard } from '@apps/runway/store/selectors/cardBankSelectors';
 import {
   getCardPendingCents,
   selectPendingByCard,
 } from '@apps/runway/store/selectors/cardPendingSelectors';
 import {
   getLinkedStatement,
+  selectBankDueByCard,
   selectCardsWithBankDue,
 } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { getMinimumDue } from '@apps/runway/engine/cards';
@@ -50,12 +52,14 @@ function CardRow({
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? 0,
   );
+  const bankDue = useAppSelector(selectBankDueByCard);
   const due = getCardDueNow(
     card,
     { [card.id]: reserveCents },
     moves,
     today,
     startDate,
+    bankDue,
   );
   const minimumCents = getMinimumDue(
     statement,
@@ -66,7 +70,20 @@ function CardRow({
     card.id,
     reserveCents,
   );
+  const onItsWayCents = (
+    useAppSelector(selectBankOwedByCard)[card.id]?.waiting ?? []
+  ).reduce((sum, entry) => sum + entry.payment.amountCents, 0);
   const isMinimumShown = reserveCents > 0 && minimumCents !== null;
+  const isMinimumAsked = useAppSelector(
+    (state) =>
+      Object.hasOwn(bankDue, card.id) &&
+      state.runway.links.some(
+        (link) =>
+          link.id === card.linkId &&
+          link.status === 'active' &&
+          link.cardDetails === 'needsConsent',
+      ),
+  );
   // Beside a minimum a "not paid by" tail would run the line to three rows at 320px, so only the date stays.
   const dueText =
     isMinimumShown && due?.rolledFrom
@@ -81,7 +98,13 @@ function CardRow({
         : CARD_WORDS.nothingToPay);
   const parts = [
     detail,
-    isMinimumShown ? describeMinimumShort(minimumCents) : null,
+    onItsWayCents > 0
+      ? STARTED_PAYMENT_WORDS.onItsWay(formatCentsShort(onItsWayCents))
+      : isMinimumShown
+        ? describeMinimumShort(minimumCents)
+        : isMinimumAsked && reserveCents > 0
+          ? CARD_WORDS.minimumAskShort
+          : null,
     pendingCents > 0
       ? CARD_WORDS.pendingAmount(formatCentsShort(pendingCents))
       : null,
