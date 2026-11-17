@@ -3192,6 +3192,8 @@ interface SettleInput {
   hadAsks?: boolean;
   /** An answer turn that files nothing is a turn well taken, not an unread one. */
   isAnswerTurn?: boolean;
+  /** The person asked to hear the line kept off the speaker: a turn well taken whose reply the device works out. */
+  asksHeldLine?: boolean;
   /** A line to say back when the turn made no answer of its own: the first open question, or why nothing more was asked. */
   line?: string | null;
   /** The turn touched something kept quiet: only the screen line is spoken, the real one held. */
@@ -3276,7 +3278,8 @@ export function settleCapture(input: SettleInput) {
     !input.hasFacts &&
     !input.hasMedia &&
     !input.hadAsks &&
-    !input.isAnswerTurn;
+    !input.isAnswerTurn &&
+    !input.asksHeldLine;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore
@@ -3313,6 +3316,7 @@ export function settleCapture(input: SettleInput) {
       sortedThrough: input.hasMore
         ? previous + input.filed
         : (opened.sortedThrough ?? null),
+      ...(input.asksHeldLine ? { asksHeldLine: true } : {}),
       ...(input.answer
         ? {
             answer: input.answer.sealed,

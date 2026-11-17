@@ -44,7 +44,7 @@ export function SayAloudButton({ line }: { line: string }) {
       variant='tertiary'
       size='sm'
       className='text-muted-foreground relative ml-[30px] before:absolute before:-inset-2 before:content-[""]'
-      onClick={() => voice.replay(line)}
+      onClick={() => voice.sayHeldAloud(line)}
     >
       <Volume2 className='size-4' aria-hidden='true' />
       {HELM_COPY.quietSayAloud}

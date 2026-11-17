@@ -1711,6 +1711,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       notes: [],
       quietCommands: [],
       keepQuiet: false,
+      sayHeldLine: false,
       quietIndex: buildQuietIndex([]),
       today: '',
       topicCommands: [],
@@ -2656,6 +2657,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     notes: mode === 'full' ? reply.notes : [],
     quietCommands: mode === 'full' ? reply.quietCommands : [],
     keepQuiet: mode === 'full' && reply.keepQuiet,
+    sayHeldLine: mode === 'full' && reply.sayHeldLine,
     quietIndex,
     today,
     topicCommands: mode === 'full' ? reply.topicCommands : [],
@@ -2841,6 +2843,7 @@ async function writeResult(
     notes: CreateNoteCommand[];
     quietCommands: SetQuietCommand[];
     keepQuiet: boolean;
+    sayHeldLine: boolean;
     quietIndex: QuietIndex;
     today: string;
     topicCommands: TopicCommand[];
@@ -2885,6 +2888,7 @@ async function writeResult(
     notes,
     quietCommands,
     keepQuiet,
+    sayHeldLine,
     quietIndex,
     today,
     topicCommands: requestedTopicCommands,
@@ -4075,6 +4079,7 @@ async function writeResult(
       questions,
       hadAsks: asksNow.length > 0 || undoPlan.question !== null,
       isAnswerTurn: answerTurn !== null,
+      asksHeldLine: sayHeldLine && !isStale,
       line: quietLine,
       isQuiet,
     });

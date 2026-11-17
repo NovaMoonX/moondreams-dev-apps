@@ -3,6 +3,9 @@ import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 import { failedSpeech, type TtsProvider } from './types.js';
 
 const SAMPLE_RATE = 24_000;
+const WHISPER_MODEL = 'gemini-2.5-flash-tts';
+const WHISPER_PROMPT =
+  'Whisper this, softly and close, as if no one else in the room should hear.';
 
 // gRPC status codes, answered as the HTTP-like statuses the rest of the voice code reads.
 const STATUS_BY_CODE: Record<number, number> = {
@@ -15,14 +18,14 @@ const STATUS_BY_CODE: Record<number, number> = {
 
 interface SynthesisRequest {
   streamingConfig?: {
-    voice: { languageCode: string; name: string };
+    voice: { languageCode: string; name: string; modelName?: string };
     streamingAudioConfig: {
       audioEncoding: 'PCM';
       sampleRateHertz: number;
       speakingRate: number;
     };
   };
-  input?: { text: string };
+  input?: { text: string; prompt?: string };
 }
 
 /** The part of the duplex call the provider uses. */
@@ -68,7 +71,8 @@ export function createGoogleTts({
   return {
     id: 'googleTts',
     // Streaming synthesis takes plain text and raw PCM only, so `format` is ignored.
-    async speak({ text, voiceId, speed = 1, signal }) {
+    async speak({ text, voiceId, speed = 1, signal, delivery }) {
+      const isWhisper = delivery === 'whisper';
       const call = client.streamingSynthesize();
       const state = { isOver: false, carry: new Uint8Array(0) };
       const stream = new ReadableStream<Uint8Array>({
@@ -107,7 +111,11 @@ export function createGoogleTts({
           call.on('end', () => finish(() => controller.close()));
           call.write({
             streamingConfig: {
-              voice: { languageCode: 'en-US', name: voiceId },
+              voice: {
+                languageCode: 'en-US',
+                name: voiceId,
+                ...(isWhisper && { modelName: WHISPER_MODEL }),
+              },
               streamingAudioConfig: {
                 audioEncoding: 'PCM',
                 sampleRateHertz: SAMPLE_RATE,
@@ -115,7 +123,9 @@ export function createGoogleTts({
               },
             },
           });
-          call.write({ input: { text } });
+          call.write({
+            input: { text, ...(isWhisper && { prompt: WHISPER_PROMPT }) },
+          });
           call.end();
         },
         cancel() {

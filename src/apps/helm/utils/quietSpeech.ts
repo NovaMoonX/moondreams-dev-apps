@@ -1,3 +1,4 @@
+import type { SpeechDelivery } from '@/lib/speech/voice/types';
 import type { OpenCapture, OpenExecution } from '@apps/helm/types';
 import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
 
@@ -14,3 +15,30 @@ export const findHeldLine = (
 /** What a tap on a line's speaker says: the screen line when the turn held its words, never the answer's text. */
 export const readReplayLine = (text: string, heldLine: string | null) =>
   heldLine === null ? text : QUIET_SPOKEN_LINE;
+
+/** How a held line is said: whispered unless the person turned the whisper off, then null (the usual voice). */
+export const heldDelivery = (
+  whisperHeld: boolean | null,
+): SpeechDelivery | null => (whisperHeld === false ? null : 'whisper');
+
+/** The newest line kept off the speaker earlier in the turn's own session; null when none was held. */
+export const findEarlierHeldLine = (
+  captures: readonly OpenCapture[],
+  capture: Pick<OpenCapture, 'sessionId' | 'createdAt'>,
+  executions: ReadonlyMap<string, OpenExecution>,
+) =>
+  captures
+    .filter(
+      (entry) =>
+        entry.sessionId === capture.sessionId &&
+        entry.createdAt < capture.createdAt,
+    )
+    .reduceRight<string | null>(
+      (found, entry) =>
+        found ??
+        findHeldLine(
+          [entry],
+          entry.executionIds.flatMap((id) => executions.get(id) ?? []),
+        ),
+      null,
+    );

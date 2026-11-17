@@ -1193,6 +1193,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
         description:
           'true when what you say back would give away a secret or surprise even though nothing is marked quiet yet; false otherwise. When true, your reply is kept off the speaker.',
       },
+      sayHeldLine: {
+        type: 'boolean',
+        description:
+          'true only when the person is asking to hear out loud what was kept on the screen instead of spoken; false otherwise. When true, replyLine is null and nothing else is needed.',
+      },
       replyLine: nullable(
         'string',
         `What you say back about this turn, at most ${REPLY_LINE_CAP} characters, the way a person would reply ("Added it for Friday.", "Dropped it.", "Both are on the packing list now."): what became of what was said, in your voice and the person's style, past tense, with no "I", "me" or "my", never "Got it", never a template and never the person's words repeated back. Only what this reply really does. Always a line when commands holds anything other than answer or ask, and when the capture is the person's reply to your question (<answered_question>); null only when your reply is only an answer command or only asks.`,

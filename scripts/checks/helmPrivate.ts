@@ -38,6 +38,10 @@ import {
 } from '../../functions/src/apps/helm/projectStore.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
+  findEarlierHeldLine,
+  heldDelivery,
+} from '../../src/apps/helm/utils/quietSpeech.ts';
+import {
   buildInheritedLine,
   buildOnItsPageLine,
   buildUnattendedReleaseLine,
@@ -1772,6 +1776,65 @@ test('a quiet turn swaps its spoken line for the screen line and keeps the real 
     builtBy: 'code',
     heldText: 'The ring is on your list.',
   });
+});
+
+test('the model asking to hear the kept line is read as a flag, and a turn with only that flag is well taken', () => {
+  const read = (raw: Record<string, unknown>) =>
+    normalizeNomosReply(
+      { commands: [], ...raw },
+      { reading: READING, aliases: createAliasBook('t'), captureText: 'x' },
+    );
+  assert.equal(read({ sayHeldLine: true }).sayHeldLine, true);
+  assert.equal(read({ sayHeldLine: false }).sayHeldLine, false);
+  assert.equal(read({}).sayHeldLine, false);
+  const settle = (asksHeldLine: boolean) =>
+    settleCapture({
+      mode: 'full',
+      filed: 0,
+      hasMore: false,
+      executionId: null,
+      now: 5000,
+      newId: () => 'q',
+      opened: { text: 'say it' },
+      questionState: {},
+      executionIds: [],
+      asksHeldLine,
+    });
+  assert.equal(settle(true).status, 'sorted');
+  assert.equal(
+    (settle(true).sealed as { asksHeldLine?: boolean }).asksHeldLine,
+    true,
+  );
+  assert.equal(settle(false).status, 'needsYou');
+  assert.equal('asksHeldLine' in settle(false).sealed, false);
+});
+
+test('a held line is whispered unless the person turned the whisper off, and found from earlier in the same session', () => {
+  assert.equal(heldDelivery(null), 'whisper');
+  assert.equal(heldDelivery(true), 'whisper');
+  assert.equal(heldDelivery(false), null);
+  const turn = (
+    id: string,
+    sessionId: string,
+    createdAt: number,
+    heldLine: string | null,
+  ) => ({ id, sessionId, createdAt, heldLine, executionIds: [] }) as never;
+  const captures = [
+    turn('a', 's1', 1, 'Old one.'),
+    turn('b', 's2', 2, 'Other session.'),
+    turn('c', 's2', 3, 'Newest held.'),
+    turn('d', 's2', 4, null),
+  ];
+  const ask = { sessionId: 's2', createdAt: 5 };
+  assert.equal(findEarlierHeldLine(captures, ask, new Map()), 'Newest held.');
+  assert.equal(
+    findEarlierHeldLine(captures, { sessionId: 's3', createdAt: 5 }, new Map()),
+    null,
+  );
+  assert.equal(
+    findEarlierHeldLine(captures, { sessionId: 's2', createdAt: 3 }, new Map()),
+    'Other session.',
+  );
 });
 
 test('a turn is quiet when a command, a touched record, an answer source, a name or the model says so', () => {

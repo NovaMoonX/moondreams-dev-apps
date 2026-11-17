@@ -54,6 +54,7 @@ export async function ensureHelmProfile(uid: string) {
       voiceMode: 'cloudWhenOnline',
       voiceId: null,
       voiceSpeed: null,
+      whisperHeld: null,
       isWakeWordOn: false,
       isHandsFreeOn: true,
       hasSeenVoiceNotice: null,
@@ -85,6 +86,12 @@ export const setHelmVoiceId = (uid: string, voiceId: string | null) =>
 export const setHelmVoiceSpeed = (uid: string, voiceSpeed: number | null) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     voiceSpeed,
+    lastEditedAt: Date.now(),
+  });
+
+export const setHelmWhisperHeld = (uid: string, whisperHeld: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    whisperHeld,
     lastEditedAt: Date.now(),
   });
 

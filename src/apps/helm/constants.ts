@@ -684,7 +684,8 @@ export const HELM_COPY = {
   nothingToRepeat: 'Nothing to repeat yet.',
   playAgain: 'Play this again',
   replayMuted: 'Voice is muted. Unmute it to hear this again.',
-  replayBusy: 'I can play it again once this turn is done.',
+  whisperFailed: "Couldn't whisper it just now, so it stays on your screen.",
+  nothingHeld: "Nothing's being kept off the speaker right now.",
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
   chipToday: 'About today',
@@ -1418,6 +1419,9 @@ export const HELM_COPY = {
   voiceHandsFreeTitle: 'Keep the conversation going',
   voiceHandsFree:
     'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s it", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
+  voiceWhisperHeldTitle: "Whisper what's kept quiet",
+  voiceWhisperHeld:
+    "Something kept off the speaker is whispered when you ask to hear it. Off: it's said in your usual voice.",
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
     'Takes music and chatter out of what you say, on this device, before anything listens.',

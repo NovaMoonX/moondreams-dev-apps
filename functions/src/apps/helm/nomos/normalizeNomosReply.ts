@@ -2017,6 +2017,7 @@ export function normalizeNomosReply(
   quietCommands: SetQuietCommand[];
   quietDropped: QuietDrop[];
   keepQuiet: boolean;
+  sayHeldLine: boolean;
   topicCommands: TopicCommand[];
   topicDropped: TopicDrop[];
   procedureCommands: ProcedureCommand[];
@@ -2228,6 +2229,7 @@ export function normalizeNomosReply(
     quietCommands,
     quietDropped,
     keepQuiet: raw.keepQuiet === true,
+    sayHeldLine: raw.sayHeldLine === true,
     topicCommands,
     topicDropped,
     procedureCommands,

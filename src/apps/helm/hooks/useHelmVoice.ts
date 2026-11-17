@@ -21,7 +21,7 @@ import {
 import type { ClosingRead } from '@/lib/speech/closingPhrase';
 import { isRepeatRequest } from '@/lib/speech/repeatRequest';
 import { toPlainText } from '@/lib/speech/speechText';
-import type { VoiceIdentity } from '@/lib/speech/voice/types';
+import type { SpeechDelivery, VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
   type MintVoiceTokenRequest,
@@ -100,7 +100,11 @@ import {
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { readPresence } from '@apps/helm/utils/presence';
 import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
-import { findHeldLine } from '@apps/helm/utils/quietSpeech';
+import {
+  findEarlierHeldLine,
+  findHeldLine,
+  heldDelivery,
+} from '@apps/helm/utils/quietSpeech';
 import {
   isAcknowledgement,
   isLiveCloser,
@@ -110,6 +114,7 @@ import {
 const NOTE_MS = 6000;
 const CLOSED_MS = 10_000;
 const CLOSE_FRESH_MS = 30_000;
+const HELD_LOOKBACK = 8;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
 const OFFLINE_WAIT_MS = 20_000;
 const ASK_AGAIN_MAX_WORDS = 3;
@@ -297,7 +302,62 @@ export function useHelmVoice() {
   function sayRepeatRefusal(outcome: VoiceRepeat) {
     if (outcome === 'none') say(HELM_COPY.nothingToRepeat);
     if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
-    if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
+  }
+
+  /** Says a line kept off the speaker: whispered unless the setting is off, and never in the usual voice when the whisper can't play. */
+  function sayHeldAloud(line: string) {
+    const delivery = heldDelivery(
+      store.getState().helm.profile?.whisperHeld ?? null,
+    );
+    sayRepeatRefusal(
+      voice.repeat(line, {
+        ...(delivery !== null && { delivery }),
+        onResult: (result) => {
+          if (delivery !== null && result.status === 'failed') {
+            showNote(HELM_COPY.whisperFailed);
+          }
+        },
+      }),
+    );
+  }
+
+  /** The newest line kept off the speaker earlier in this turn's session; null when nothing is held. */
+  async function findHeldBefore(capture: OpenCapture) {
+    const earlier = selectAllCaptures(store.getState())
+      .filter(
+        (entry) =>
+          entry.sessionId === capture.sessionId &&
+          entry.createdAt < capture.createdAt,
+      )
+      .slice(-HELD_LOOKBACK);
+    if (uid) {
+      await loadExecutionsById(
+        uid,
+        earlier.flatMap((entry) => entry.executionIds),
+      );
+    }
+    return findEarlierHeldLine(
+      earlier,
+      capture,
+      selectExecutionsById(store.getState()),
+    );
+  }
+
+  /** The person asked to hear what was kept off the speaker: the line is shown, and said (whispered) only on a spoken turn; with nothing held, the turn says so. */
+  async function answerHeldAsk(capture: OpenCapture, isSpoken: boolean) {
+    const stops = stopCount.current;
+    const line = await findHeldBefore(capture);
+    if (stopCount.current !== stops) return;
+    showNote(line ?? HELM_COPY.nothingHeld);
+    if (!isSpoken) return;
+    if (line === null) void deliver(capture, HELM_COPY.nothingHeld);
+    else
+      void deliver(
+        capture,
+        line,
+        heldDelivery(store.getState().helm.profile?.whisperHeld ?? null) ??
+          undefined,
+      );
   }
 
   /** Shows the line; `spoken` is what is said when it differs (a line that names a quiet thing is shown, never said). */
@@ -358,7 +418,6 @@ export function useHelmVoice() {
     },
   ) {
     const { isSpoken, sttProvider, interrupted } = opts;
-    // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase or a Send; the compiler flags every clock read once the answer path calls the sender
     const now = Date.now();
     const state = store.getState();
     const timeZone =
@@ -880,7 +939,11 @@ export function useHelmVoice() {
     }
   }
 
-  async function deliver(capture: OpenCapture, line: string) {
+  async function deliver(
+    capture: OpenCapture,
+    line: string,
+    delivery?: SpeechDelivery,
+  ) {
     voice.settle();
     // Nothing shows the voice on this view (no Stop, no Mute), so the written reply stands alone.
     if (!isSurfaceShown.current) return;
@@ -893,7 +956,11 @@ export function useHelmVoice() {
         isHandsFreeOn &&
         isSurfaceShown.current &&
         !finishedIds.current.has(capture.id),
+      ...(delivery && { delivery }),
     });
+    if (delivery && result.status === 'failed') {
+      showNote(HELM_COPY.whisperFailed);
+    }
     if (speakingCaptureId.current === capture.id) {
       speakingCaptureId.current = null;
     }
@@ -942,6 +1009,10 @@ export function useHelmVoice() {
           : null;
         const answered = afterAnswer.current.get(leadId);
         afterAnswer.current.delete(leadId);
+        if (isSettledWithLines && capture.asksHeldLine) {
+          void answerHeldAsk(capture, true);
+          return;
+        }
         const reply =
           spoken ??
           (capture.status === 'sorted' && capture.planDayKey
@@ -1000,6 +1071,31 @@ export function useHelmVoice() {
             ),
         ),
       );
+  }, [captures]);
+
+  // A typed ask to hear what was kept off the speaker shows the line and plays nothing, once, only on the tab that sent it and while it is fresh.
+  const appliedHeldAsks = useRef(new Set<string>());
+  const applyHeldAsk = useRef(answerHeldAsk);
+  useEffect(() => {
+    applyHeldAsk.current = answerHeldAsk;
+  });
+  useEffect(() => {
+    const now = Date.now();
+    captures
+      .filter(
+        (capture) =>
+          capture.asksHeldLine &&
+          capture.inputMode !== 'voice' &&
+          (capture.status === 'sorted' || capture.status === 'needsYou') &&
+          capture.sortedAt !== null &&
+          now - capture.sortedAt < CLOSE_FRESH_MS &&
+          wasSentHere(capture.id) &&
+          !appliedHeldAsks.current.has(capture.id),
+      )
+      .forEach((capture) => {
+        appliedHeldAsks.current.add(capture.id);
+        void applyHeldAsk.current(capture, false);
+      });
   }, [captures]);
 
   useEffect(
@@ -1147,6 +1243,8 @@ export function useHelmVoice() {
     registerField,
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
+    /** Says the line a turn kept off the speaker, whispered by default; never in the usual voice when the whisper can't play. */
+    sayHeldAloud,
   };
 }
 

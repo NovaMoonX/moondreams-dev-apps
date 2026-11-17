@@ -74,6 +74,8 @@ export interface HelmProfile {
   voiceMode: VoiceMode;
   voiceId: string | null;
   voiceSpeed: number | null;
+  /** A line kept off the speaker is whispered when the person asks to hear it; null reads as on. */
+  whisperHeld: boolean | null;
   /** This browser listens for "Hey {name}" while Helm is open on screen. */
   isWakeWordOn: boolean;
   /** After a spoken reply, listening stays open for a few seconds so the person can answer without a tap. */
@@ -451,6 +453,8 @@ export interface CaptureSealed {
   questionAnswer: QuestionAnswerValue | null;
   /** The line the server wrote for the person to hear and read; absent until it wrote one. */
   spoken?: { text: string; heldText: string | null } | null;
+  /** The person asked to hear the line kept off the speaker; absent on every other turn. */
+  asksHeldLine?: boolean;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -466,6 +470,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   line: string | null;
   /** The line the server really wrote when it kept a quiet thing off the speaker and put the screen line in `line`; null on every other turn. */
   heldLine: string | null;
+  /** The person asked to hear the line kept off the speaker, so the device says it instead of a reply; false on every other turn. */
+  asksHeldLine: boolean;
   isUnreadable: boolean;
   /** The turn was a closing phrase the assistant's own reading found ("ugh, doesn't matter"); it made nothing. False on a turn made before closing phrases. */
   endedConversation: boolean;

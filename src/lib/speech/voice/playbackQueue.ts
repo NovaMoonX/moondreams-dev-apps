@@ -1,5 +1,9 @@
 import { setDucked } from '@/lib/speech/voice/duckBus';
-import type { SpeechPriority, TtsAdapter } from '@/lib/speech/voice/types';
+import type {
+  SpeechDelivery,
+  SpeechPriority,
+  TtsAdapter,
+} from '@/lib/speech/voice/types';
 
 export interface SpeakResult {
   status: 'spoken' | 'cancelled' | 'failed';
@@ -10,6 +14,7 @@ export interface SpeakResult {
 interface Line {
   text: string;
   priority: SpeechPriority;
+  delivery?: SpeechDelivery;
   /** Rises with each turn; a line from an older turn than the newest seen is dropped. */
   turnKey: number;
   onStart?: () => void;
@@ -78,9 +83,14 @@ export const createPlaybackQueue = ({
     };
     state.playing = playing;
     onActiveChange?.(true);
+    if (next.delivery === 'whisper' && adapter.route !== 'cloud') {
+      finish(playing, 'failed', true);
+      return;
+    }
     adapter
       .speak(next.text, {
         priority: next.priority,
+        delivery: next.delivery,
         signal: playing.controller.signal,
         onStart: () => next.onStart?.(),
         onEnd: () => undefined,
@@ -96,6 +106,7 @@ export const createPlaybackQueue = ({
       text: string,
       options: {
         priority: SpeechPriority;
+        delivery?: SpeechDelivery;
         turnKey: number;
         onStart?: () => void;
       },

@@ -136,9 +136,14 @@ export const createCloudTts = ({
   route: 'cloud',
   isPlayingThroughWebAudio: true,
   speak: async (text, options) => {
-    const { priority, signal, onStart } = options;
-    const speakFallback = async () =>
-      (await fallback.speak(text, options)) ?? fallback.id;
+    const { priority, delivery, signal, onStart } = options;
+    // A whispered line is never said in the device's voice: the queue reports it as failed instead.
+    const speakFallback = async () => {
+      if (delivery !== undefined) {
+        throw new Error('The cloud voice could not whisper this line');
+      }
+      return (await fallback.speak(text, options)) ?? fallback.id;
+    };
     const spoken = toSpokenText(text);
     if (spoken.length > MAX_CHARS) return speakFallback();
     if (signal.aborted) return;
@@ -170,7 +175,7 @@ export const createCloudTts = ({
     const toFallback = () => {
       controller.abort();
       if (signal.aborted) return undefined;
-      onFallback?.();
+      if (delivery === undefined) onFallback?.();
       return speakFallback();
     };
     const streamPcm = async (
@@ -226,7 +231,13 @@ export const createCloudTts = ({
     const firstByteBy = Date.now() + firstByteMs;
     try {
       const answer = await within(
-        source.fetchSpeech(spoken, priority, controller.signal),
+        source.fetchSpeech(
+          spoken,
+          priority,
+          controller.signal,
+          undefined,
+          delivery,
+        ),
         firstByteMs,
       );
       if (signal.aborted) {
