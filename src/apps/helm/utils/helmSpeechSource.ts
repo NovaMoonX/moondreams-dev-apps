@@ -17,11 +17,13 @@ const getSpeechUrl = () => {
 };
 
 const getSpeechHeaders = async () => {
+  await auth.authStateReady();
   const { currentUser } = auth;
-  if (!currentUser || !appCheck) return null;
+  const check = appCheck;
+  if (!currentUser || !check) return null;
   const [idToken, appCheckToken] = await Promise.all([
     currentUser.getIdToken(),
-    getToken(appCheck),
+    getToken(check).catch(() => getToken(check, true)),
   ]);
   return {
     Authorization: `Bearer ${idToken}`,

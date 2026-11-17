@@ -18,6 +18,9 @@ import type {
   ReleasedChargeDoc,
   ReleasedChargeSealed,
   RunwayEncryption,
+  OpenStartedPayment,
+  StartedPaymentDoc,
+  StartedPaymentSealed,
 } from '@apps/runway/types';
 
 const toError = (error: unknown) =>
@@ -192,6 +195,32 @@ export function startReleasedChargesListener(
         title: payload.title ?? null,
         amountCents: payload.amountCents,
         lines: payload.lines ?? [],
+      };
+    },
+    onChange,
+    onError,
+  );
+}
+
+/** Card payments the person said they started at their bank. */
+export function startStartedPaymentsListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (payments: OpenStartedPayment[]) => void,
+  onError: (error: Error) => void,
+) {
+  const read = createSealedReader(encryption, openJson);
+  return startOpenedListener<StartedPaymentDoc, OpenStartedPayment>(
+    uid,
+    'startedPayments',
+    async (data) => {
+      const payload = await read<StartedPaymentSealed>(data.sealed);
+      return {
+        id: data.id,
+        cardId: data.cardId,
+        startedOn: data.startedOn,
+        createdAt: data.createdAt,
+        amountCents: payload.amountCents,
       };
     },
     onChange,

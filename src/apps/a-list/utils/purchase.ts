@@ -4,7 +4,11 @@ import {
   getInitialTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
-import { centsToInputValue, formatCents } from '@/utils/moneyUtils';
+import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
 
 export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
   return {
@@ -14,32 +18,25 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
     standardPriceCents: option.standardPriceCents,
     taxCents: option.taxCents ?? null,
     purchaseUrl: option.purchaseUrl,
+    isDiscountDay: option.isDiscountDay === true,
     startedAt: null,
   };
 }
 
-function getTaxFromPlan(draft: TicketDraft, taxCents: number | null) {
-  if (taxCents !== null)
-    return {
-      tax: centsToInputValue(taxCents),
-      isTaxEdited: true,
-      isTaxFromAmc: true,
-    };
-  return draft.isTaxFromAmc
-    ? { tax: '', isTaxEdited: false, isTaxFromAmc: false }
-    : {};
-}
-
-/** The ticket form's start for a picked showing: its format and AMC's prices; the fee and tax are still the member's to enter. */
+/** The ticket form's start for a picked showing: its format, AMC's prices and AMC's tax to offer beside the usual rate; a tax set for another price starts over. */
 export function applyPurchaseToDraft(
   draft: TicketDraft,
   plan: Pick<PurchasePlan, 'format' | 'priceCents' | 'standardPriceCents'> &
-    Partial<Pick<PurchasePlan, 'taxCents'>>,
+    Partial<Pick<PurchasePlan, 'taxCents' | 'isDiscountDay'>>,
 ): TicketDraft {
-  const taxCents = plan.taxCents ?? null;
+  const priceCents = plan.priceCents;
+  const isNewPrice =
+    draft.price !== '' && parseMoneyToCents(draft.price) !== priceCents;
   return {
     ...draft,
-    ...getTaxFromPlan(draft, taxCents),
+    ...(isNewPrice ? { tax: '', isTaxEdited: false } : {}),
+    amcTaxCents: plan.taxCents ?? null,
+    isDiscountDay: plan.isDiscountDay === true,
     format: plan.format,
     price: centsToInputValue(plan.priceCents),
     standardPrice:

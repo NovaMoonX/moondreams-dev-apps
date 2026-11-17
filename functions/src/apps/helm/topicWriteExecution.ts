@@ -59,6 +59,7 @@ export const buildWriteExecution = (
       spoken: null,
       goneIds: null,
       undoReason: null,
+      heldSpoken: null,
       said: null,
       lines: null,
     }),

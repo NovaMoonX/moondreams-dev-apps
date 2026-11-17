@@ -731,10 +731,12 @@ const ingredientLine = (
 ) => ({
   id,
   ingredientId,
+  freeText: null,
   amount,
   unit: 'TSP' as const,
   note,
   group: null,
+  adaptedFrom: null,
 });
 const changeBase: RecipeContent = {
   title: 'Adobo chicken',
