@@ -20,7 +20,8 @@ import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSectio
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
-import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
+import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import {
   selectCollectionCounts,
   selectCollections,
@@ -433,8 +434,7 @@ function RecipeFront({
                         )
                       ) : (
                         <span className='text-muted-foreground text-sm whitespace-nowrap'>
-                          {Math.round(line.amount * 100) / 100}{' '}
-                          {UNIT_LABELS[line.unit]}
+                          {formatKitchenAmount(line.amount, line.unit)}
                         </span>
                       )}
                       {pantry !== null && pantryText !== null && (

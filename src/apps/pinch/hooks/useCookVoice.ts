@@ -8,6 +8,7 @@ import { useSpeechCommands } from '@/hooks/useSpeechCommands';
 import type { ListeningCue } from '@/lib/speech/listeningSound';
 import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
+import type { MeasureUnit } from '@/utils/measureUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
   getCookCommandKey,
@@ -78,6 +79,16 @@ export interface CookVoiceActions {
   timeLeft: (target: CookTimerTarget) => CookVoiceResult;
   answerTimer: (answer: CookTimerAnswer) => CookVoiceResult;
   amount: (lineIds: string[], query: string) => CookVoiceResult;
+  convert: (
+    lineIds: string[],
+    query: string,
+    unit: MeasureUnit,
+  ) => CookVoiceResult;
+  convertAmount: (
+    amount: number,
+    from: MeasureUnit,
+    to: MeasureUnit,
+  ) => CookVoiceResult;
   switchRecipe: (
     recipeId: string | null,
     candidates: string[],
@@ -145,6 +156,10 @@ export const runCookCommand = (
       return actions.answerTimer(command.answer);
     case 'AMOUNT':
       return actions.amount(command.lineIds, command.query);
+    case 'CONVERT':
+      return actions.convert(command.lineIds, command.query, command.unit);
+    case 'CONVERT_AMOUNT':
+      return actions.convertAmount(command.amount, command.from, command.to);
     case 'SWITCH_RECIPE':
       return actions.switchRecipe(command.recipeId, command.candidates);
     case 'CYCLE_RECIPE':
@@ -581,7 +596,12 @@ export function useCookVoice({
       readStepKey.current = stepKey;
       notesQueue.current =
         isReadingNotes && segments.length > 0 && stepKey !== null
-          ? { key: stepKey, next: 0, opened: null, segments: segmentsRef.current }
+          ? {
+              key: stepKey,
+              next: 0,
+              opened: null,
+              segments: segmentsRef.current,
+            }
           : null;
       say(spoken);
       if (speech.status === 'speaking') stepSpokenKey.current = stepKey;

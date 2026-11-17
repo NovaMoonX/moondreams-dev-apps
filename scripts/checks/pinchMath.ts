@@ -1931,6 +1931,7 @@ const recipeLine = (
   unit,
   note,
   group: null,
+  adaptedFrom: null,
 });
 const baseRecipe: RecipeContent = {
   title: 'Adobo chicken',
@@ -2006,7 +2007,7 @@ assert.deepEqual(
       baseRecipe.ingredients[2],
     ],
   }),
-  ['Garlic 4 each → 0.5 cup'],
+  ['Garlic 4 each → ½ cup'],
   'a unit change shows both units',
 );
 assert.deepEqual(
@@ -8390,6 +8391,7 @@ assert.equal(
     unit,
     note,
     group: null,
+    adaptedFrom: null,
   });
   const amtRecipe = (
     id: string,
@@ -8891,6 +8893,7 @@ assert.equal(
       unit: 'EACH',
       note: 'to taste',
       group: null,
+      adaptedFrom: null,
     },
     'a row with no amount saves none, in EACH, whatever unit the drawer last had',
   );
@@ -8921,6 +8924,7 @@ assert.equal(
         unit: 'LB' as const,
         note: null,
         group: null,
+        adaptedFrom: null,
       },
       {
         id: 'b',
@@ -8930,6 +8934,7 @@ assert.equal(
         unit: 'EACH' as const,
         note: 'to taste',
         group: null,
+        adaptedFrom: null,
       },
     ],
     steps: [],
@@ -10072,7 +10077,16 @@ assert.equal(
     group: string | null,
     amount: number | null = 1,
     unit: Unit = 'TBSP',
-  ) => ({ id, ingredientId, freeText: null, amount, unit, note: null, group });
+  ) => ({
+    id,
+    ingredientId,
+    freeText: null,
+    amount,
+    unit,
+    note: null,
+    group,
+    adaptedFrom: null,
+  });
   const ids = (lines: { id: string }[]) => lines.map((line) => line.id);
   const heads = (lines: { group?: string | null }[]) =>
     groupIngredientLines(lines).map((group) => [
@@ -10354,6 +10368,7 @@ assert.equal(
         unit: 'TBSP',
         note: null,
         group: null,
+        adaptedFrom: null,
       },
     ],
     'a line saved before groups opens with no group and saves back with `group: null`',
@@ -10502,6 +10517,7 @@ assert.equal(
         isReadingNotes: null,
         isWaiting: null,
       },
+      units: { weight: 'AS_WRITTEN', volume: 'AS_WRITTEN', keepSpoons: true },
       reminders: {
         eatSoon: true,
         expiring: true,

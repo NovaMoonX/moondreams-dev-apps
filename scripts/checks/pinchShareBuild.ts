@@ -78,6 +78,7 @@ const line = (
     unit: amount === null ? 'EACH' : 'G',
     note,
     group,
+    adaptedFrom: null,
     priceCents: 777,
     productId: 'prod-secret',
   }) as RecipeIngredient;
