@@ -1,7 +1,12 @@
-// Keeping the plan in one Google Calendar, both ways: the pure core against a fixed clock, no emulator: `npm run check:helm-calendar-sync`.
 import assert from 'node:assert/strict';
 
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
+import {
+  GoogleHttpError,
+  readGoogleReason,
+  toReconnectOnRefusal,
+} from '../../functions/src/connections/google/client.ts';
+import { ReconnectNeeded } from '../../functions/src/connections/tokens.ts';
 import {
   BUSY_TITLE,
   MAX_EVENTS,
@@ -11,6 +16,7 @@ import {
   readBack,
   toContentHash,
   toEventBody,
+  toEventId,
   toHabitRef,
   toMeetRef,
   toSlotRef,
@@ -246,7 +252,7 @@ test('a private thing is a bare Busy block; anything else carries its words, a l
   assert.equal(body.visibility, 'private');
   assert.ok(!('description' in body), 'a private event has no description');
   assert.ok(!JSON.stringify(body).includes('pills'));
-  assert.equal(body.extendedProperties.private.helmRef, priv.ref);
+  assert.equal(body.extendedProperties.private.siteRef, priv.ref);
   const open = toEventBody(plain, 'Aria');
   assert.equal(open.summary, 'Write report');
   assert.ok(
@@ -368,6 +374,7 @@ test('read-back: a moved slot moves, with the line, and the move is not sent bac
     startAt: at(TODAY, '15:00'),
     endAt: at(TODAY, '15:30'),
     sourceUpdatedAt: link.writtenAt + SKEW_MS + 1,
+    isAllDay: false,
   };
   const back = readBackOf(
     [event],
@@ -381,6 +388,7 @@ test('read-back: a moved slot moves, with the line, and the move is not sent bac
       slotId: 's1',
       startAt: moved.startAt,
       endAt: moved.endAt,
+      expectedChangedAt: NOW - 120 * MINUTE,
       line: 'Moved Dentist to 3:00 PM, from your calendar',
       isPrivate: false,
     },
@@ -416,6 +424,7 @@ test('read-back: a slot deleted in the calendar is set aside, only once the cale
       kind: 'slotRemoved',
       dayKey: TODAY,
       slotId: 's1',
+      expectedChangedAt: null,
       line: "Removed Write report from today's plan, from your calendar",
       isPrivate: false,
     },
@@ -501,6 +510,7 @@ test('read-back: a moved appointment moves the task', () => {
           startAt: at(TODAY, '17:00'),
           endAt: at(TODAY, '17:45'),
           sourceUpdatedAt: link.writtenAt + SKEW_MS + 1,
+          isAllDay: false,
         },
       ],
     ]),
@@ -511,6 +521,8 @@ test('read-back: a moved appointment moves the task', () => {
       taskId: 'm1',
       startAt: at(TODAY, '17:00'),
       endAt: at(TODAY, '17:45'),
+      expectedChangedAt: null,
+      expectedDueAt: event.startAt,
       line: 'Moved Dentist to 5:00 PM, from your calendar',
       isPrivate: false,
     },
@@ -524,6 +536,7 @@ test('read-back: a moved habit window is never applied and never fought', () => 
     startAt: at(TODAY, '07:00'),
     endAt: at(TODAY, '07:30'),
     sourceUpdatedAt: link.writtenAt + SKEW_MS + 1,
+    isAllDay: false,
   };
   const back = readBackOf(
     [event],
@@ -562,6 +575,7 @@ test('newer wins both ways', () => {
     startAt: at(TODAY, '15:00'),
     endAt: at(TODAY, '15:30'),
     sourceUpdatedAt: NOW - minutesAgo * MINUTE,
+    isAllDay: false,
   });
 
   const calendarNewer = readBackOf(
@@ -624,8 +638,61 @@ test('newer wins both ways', () => {
 test('an event the plan writes carries its ref in private extended properties', () => {
   const [event] = desire([slot('s1', 't1')], [task('t1')]);
   const body = toEventBody(event, 'Aria');
-  assert.equal(body.extendedProperties.private.helmRef, event.ref);
+  assert.equal(body.extendedProperties.private.siteRef, event.ref);
   assert.match(event.ref, /^slot:\d{4}-\d{2}-\d{2}:s1$/);
+});
+
+test('an event id is stable, Google-safe, and new after a removal', () => {
+  const id = toEventId('cal@group', 'slot:2026-11-17:s1', 1000);
+  assert.match(id, /^[a-v0-9]{26}$/);
+  assert.equal(id, toEventId('cal@group', 'slot:2026-11-17:s1', 1000));
+  assert.notEqual(id, toEventId('cal@group', 'slot:2026-11-17:s1', '1000:2'));
+  assert.notEqual(id, toEventId('other', 'slot:2026-11-17:s1', 1000));
+});
+
+test('read-back: an all-day change in the calendar is a line only and is never applied', () => {
+  const [event] = desire(
+    [slot('s1', 't1', { decidedAt: NOW - 120 * MINUTE })],
+    [task('t1', { title: 'Dentist' })],
+  );
+  const link = linkFor(event);
+  const allDay: RemoteEvent = {
+    startAt: at(TODAY, '00:00'),
+    endAt: at('2026-11-18', '00:00'),
+    sourceUpdatedAt: link.writtenAt + SKEW_MS + 1,
+    isAllDay: true,
+  };
+  const back = readBackOf(
+    [event],
+    linksOf(link),
+    remoteOf([[event.ref, allDay]]),
+  );
+  assert.deepEqual(
+    back.changes.map((change) => change.kind),
+    ['noted'],
+  );
+});
+
+test('a rate limit is never a reason to reconnect; a plain 403 is', () => {
+  const reason = readGoogleReason({
+    error: { errors: [{ reason: 'userRateLimitExceeded' }] },
+  });
+  assert.equal(reason, 'userRateLimitExceeded');
+  const refusal = (error: unknown) => {
+    try {
+      toReconnectOnRefusal(error);
+    } catch (thrown) {
+      return thrown;
+    }
+  };
+  assert.ok(
+    !(refusal(new GoogleHttpError(403, reason)) instanceof ReconnectNeeded),
+  );
+  assert.ok(!(refusal(new GoogleHttpError(429)) instanceof ReconnectNeeded));
+  assert.ok(
+    refusal(new GoogleHttpError(403, 'forbidden')) instanceof ReconnectNeeded,
+  );
+  assert.ok(refusal(new GoogleHttpError(401)) instanceof ReconnectNeeded);
 });
 
 const failures = tests.flatMap(([name, run]) => {

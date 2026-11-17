@@ -47,9 +47,7 @@ export type SetHelmCalendarSyncRequest =
 
 export interface SetHelmCalendarSyncResult {
   calendarName: string | null;
-  /** Upcoming events taken off the calendar on Stop. */
   removedCount: number;
-  /** Upcoming events Stop could not take off (the account needs reconnecting). */
   leftCount: number;
 }
 
@@ -78,6 +76,15 @@ const readRequest = (data: unknown): SetHelmCalendarSyncRequest => {
     return { action, accountId, calendarId };
   throw badRequest();
 };
+
+const alreadyOn = () =>
+  new HttpsError(
+    'failed-precondition',
+    'Your plan is already kept in a calendar. Stop that first.',
+    { reason: 'alreadyOn' },
+  );
+
+const DELETE_CHUNK = 10;
 
 const needsScope = (scope: string) =>
   new HttpsError(
@@ -113,7 +120,6 @@ const readScopes = async (
   };
 };
 
-/** Sets or clears the one Google calendar the plan is kept in step with. */
 export async function setCalendarSync(
   firestore: Firestore,
   uid: string,
@@ -129,13 +135,7 @@ export async function setCalendarSync(
   if (request.action === 'stop') {
     return stop(firestore, uid, profile, key, timeZone, now);
   }
-  if (profile.calendarSync) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Your plan is already kept in a calendar. Stop that first.',
-      { reason: 'alreadyOn' },
-    );
-  }
+  if (profile.calendarSync) throw alreadyOn();
   const { accountId } = request;
   const { scopes, email } = await readScopes(firestore, uid, accountId);
   const grant = await readGrantState(firestore, uid, accountId);
@@ -163,32 +163,48 @@ export async function setCalendarSync(
       ? await makeCalendar(token, `${assistant}'s plan`, timeZone)
       : await readWritable(token, request.calendarId, email);
   const wasAlreadyRead = grant.calendarIds.includes(chosen.id);
-  await firestore.runTransaction(async (transaction) => {
-    const grantRef = firestore.doc(
-      `connections/${uid}/grants/${toCalendarGrantId(accountId)}`,
-    );
-    const current = await transaction.get(grantRef);
-    const ids: unknown = current.get('options.calendarIds');
-    const known = Array.isArray(ids) ? (ids as string[]) : [];
-    transaction.update(grantRef, {
-      options: {
-        calendarIds: known.includes(chosen.id) ? known : [...known, chosen.id],
-      },
-      updatedAt: now,
+  await firestore
+    .runTransaction(async (transaction) => {
+      const grantRef = firestore.doc(
+        `connections/${uid}/grants/${toCalendarGrantId(accountId)}`,
+      );
+      const [current, latest] = await Promise.all([
+        transaction.get(grantRef),
+        transaction.get(profileRef),
+      ]);
+      if (latest.get('calendarSync')) throw alreadyOn();
+      const ids: unknown = current.get('options.calendarIds');
+      const known = Array.isArray(ids) ? (ids as string[]) : [];
+      transaction.update(grantRef, {
+        options: {
+          calendarIds: known.includes(chosen.id)
+            ? known
+            : [...known, chosen.id],
+        },
+        updatedAt: now,
+      });
+      transaction.update(profileRef, {
+        calendarSync: {
+          accountId,
+          calendarId: chosen.id,
+          calendarName: chosen.name,
+          isMadeByHelm: request.action === 'make',
+          wasAlreadyRead,
+          startedAt: now,
+          lastWrittenAt: null,
+          lastError: null,
+        },
+      });
+    })
+    .catch(async (error: unknown) => {
+      if (request.action === 'make')
+        await googleSend(
+          token,
+          'DELETE',
+          `${CALENDAR_API}/calendars/${encodeURIComponent(chosen.id)}`,
+        ).catch(() => undefined);
+      throw error;
     });
-    transaction.update(profileRef, {
-      calendarSync: {
-        accountId,
-        calendarId: chosen.id,
-        calendarName: chosen.name,
-        isMadeByHelm: request.action === 'make',
-        wasAlreadyRead,
-        startedAt: now,
-        lastWrittenAt: null,
-        lastError: null,
-      },
-    });
-  });
   await writeActivity(
     firestore,
     uid,
@@ -248,6 +264,11 @@ const readWritable = async (
   };
 };
 
+const toChunks = <T>(items: T[], size: number) =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  );
+
 const stop = async (
   firestore: Firestore,
   uid: string,
@@ -289,21 +310,34 @@ const stop = async (
     const removed =
       token === null
         ? []
-        : await Promise.all(
-            upcoming.map((link) =>
-              googleSend(
-                token,
-                'DELETE',
-                `${CALENDAR_API}/calendars/${encodeURIComponent(sync.calendarId)}/events/${encodeURIComponent(link.eventId)}`,
-              ).then(
-                () => true,
-                (error: unknown) => isStatus(error, 404, 410),
-              ),
-            ),
+        : await toChunks(upcoming, DELETE_CHUNK).reduce(
+            async (done, group) => [
+              ...(await done),
+              ...(await Promise.all(
+                group.map((link) =>
+                  googleSend(
+                    token,
+                    'DELETE',
+                    `${CALENDAR_API}/calendars/${encodeURIComponent(sync.calendarId)}/events/${encodeURIComponent(link.eventId)}`,
+                  ).then(
+                    () => true,
+                    (error: unknown) => isStatus(error, 404, 410),
+                  ),
+                ),
+              )),
+            ],
+            Promise.resolve([] as boolean[]),
           );
     const removedCount = removed.filter(Boolean).length;
+    const failed = new Set(
+      upcoming
+        .filter((_, index) => removed[index] !== true)
+        .map((link) => link.helmRef),
+    );
     await Promise.all(
-      links.map((link) => deleteLink(firestore, uid, link.helmRef)),
+      links
+        .filter((link) => !failed.has(link.helmRef))
+        .map((link) => deleteLink(firestore, uid, link.helmRef)),
     );
     await firestore.runTransaction(async (transaction) => {
       const grantRef = firestore.doc(

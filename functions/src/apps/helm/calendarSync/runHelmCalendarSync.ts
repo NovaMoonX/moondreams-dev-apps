@@ -6,7 +6,9 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import type { Keyring } from '../../../appKeys/keyring.js';
 import {
   GoogleHttpError,
+  googleGet,
   googleSend,
+  isRateLimited,
   toReconnectOnRefusal,
 } from '../../../connections/google/client.js';
 import {
@@ -40,6 +42,7 @@ import {
   readBack,
   toContentHash,
   toEventBody,
+  toEventId,
   type DesiredEvent,
   type EventLink,
 } from './plan.js';
@@ -50,13 +53,13 @@ if (getApps().length === 0) {
 
 const MINUTE = 60_000;
 const LEASE = 6 * MINUTE;
-const AT_ONCE = 5;
+const AT_ONCE = 3;
 const PEOPLE_AT_ONCE = 5;
 const PEOPLE_MAX = 500;
 const STOP_STARTING_AFTER = 240_000;
 
 export interface PersonReport {
-  state: 'off' | 'busy' | 'ran' | 'reconnect' | 'calendarGone';
+  state: 'off' | 'busy' | 'ran' | 'reconnect' | 'calendarGone' | 'rateLimited';
   inserted: number;
   patched: number;
   deleted: number;
@@ -82,6 +85,16 @@ const inGroups = async <T>(items: T[], run: (item: T) => Promise<unknown>) =>
     await Promise.all(group.map(run));
   }, Promise.resolve());
 
+const toNumberOr = (value: unknown) => (typeof value === 'number' ? value : 0);
+
+const isStillOn = async (
+  firestore: Firestore,
+  uid: string,
+  calendarId: string,
+) =>
+  (await firestore.doc(userPath(uid)).get()).get('calendarSync.calendarId') ===
+  calendarId;
+
 const isStatus = (error: unknown, status: number) =>
   error instanceof GoogleHttpError && error.status === status;
 
@@ -103,7 +116,6 @@ const setSyncState = (
     });
   });
 
-/** Keeps one person's chosen calendar in step: reads back what changed there, then writes what changed here. */
 export async function syncPerson(
   firestore: Firestore,
   keyring: Keyring,
@@ -127,7 +139,7 @@ export async function syncPerson(
   if (!(await takeLease(firestore, uid, now, LEASE)))
     return { ...EMPTY_REPORT, state: 'busy' };
   try {
-    return await run(firestore, keyring, uid, now, {
+    return await run(firestore, keyring, uid, {
       profile,
       accountId,
       calendarId,
@@ -141,7 +153,6 @@ const run = async (
   firestore: Firestore,
   keyring: Keyring,
   uid: string,
-  now: number,
   target: {
     profile: Record<string, unknown>;
     accountId: string;
@@ -149,6 +160,10 @@ const run = async (
   },
 ): Promise<PersonReport> => {
   const { profile, accountId, calendarId } = target;
+  const now = Date.now();
+  const generation = toNumberOr(
+    (profile.calendarSync as { startedAt?: unknown }).startedAt,
+  );
   const timeZone = String(profile.timeZone ?? 'UTC');
   const name =
     readAssistantName(profile.assistantName) ?? DEFAULT_ASSISTANT_NAME;
@@ -226,23 +241,37 @@ const run = async (
       hash,
     });
 
-    const stillOn =
-      (await firestore.doc(userPath(uid)).get()).get(
-        'calendarSync.calendarId',
-      ) === calendarId;
-    if (!stillOn) return { ...report, state: 'off' };
+    if (!(await isStillOn(firestore, uid, calendarId)))
+      return { ...report, state: 'off' };
 
+    const insert = (event: DesiredEvent, id: string) =>
+      googleSend<{ id?: string }>(token, 'POST', eventsUrl(calendarId), {
+        ...toEventBody(event, name),
+        id,
+      });
+    const made: EventLink[] = [];
     await inGroups(plan.inserts, async (event) => {
-      const made = await googleSend<{ id?: string }>(
-        token,
-        'POST',
-        eventsUrl(calendarId),
-        toEventBody(event, name),
-      ).catch(toReconnectOnRefusal);
-      if (typeof made?.id !== 'string') return;
+      const id = toEventId(calendarId, event.ref, generation);
+      const eventId = await insert(event, id)
+        .then((created) => (typeof created?.id === 'string' ? created.id : id))
+        .catch(async (error: unknown) => {
+          if (!isStatus(error, 409)) return toReconnectOnRefusal(error);
+          const existing = await googleGet<{ status?: string }>(
+            token,
+            `${eventsUrl(calendarId)}/${encodeURIComponent(id)}`,
+          ).catch(() => null);
+          if (existing?.status !== 'cancelled') return id;
+          const fresh = toEventId(
+            calendarId,
+            event.ref,
+            `${generation}:${Date.now()}`,
+          );
+          await insert(event, fresh).catch(toReconnectOnRefusal);
+          return fresh;
+        });
       const link: EventLink = {
         helmRef: event.ref,
-        eventId: made.id,
+        eventId,
         calendarId,
         startAt: event.startAt,
         endAt: event.endAt,
@@ -250,9 +279,21 @@ const run = async (
         writtenAt: Date.now(),
         removedAt: null,
       };
+      made.push(link);
       await writeLink(firestore, uid, link);
       report.inserted += 1;
     });
+    if (made.length > 0 && !(await isStillOn(firestore, uid, calendarId))) {
+      await inGroups(made, async (link) => {
+        await googleSend(
+          token,
+          'DELETE',
+          `${eventsUrl(calendarId)}/${encodeURIComponent(link.eventId)}`,
+        ).catch(() => undefined);
+        await deleteLink(firestore, uid, link.helmRef);
+      });
+      return { ...report, state: 'off' };
+    }
     await inGroups(plan.patches, async ({ event, link }) => {
       try {
         await googleSend(
@@ -297,6 +338,7 @@ const run = async (
     });
     return report;
   } catch (error) {
+    if (isRateLimited(error)) return { ...report, state: 'rateLimited' };
     if (error instanceof ReconnectNeeded) {
       await setSyncState(firestore, uid, calendarId, {
         lastError: 'reconnect',
@@ -320,16 +362,16 @@ export interface RunReport {
   deferred: number;
 }
 
-const readPeople = async (firestore: Firestore) =>
-  (
-    await firestore
-      .collection('apps/helm/users')
-      .where('calendarSync.accountId', '>', '')
-      .limit(PEOPLE_MAX)
-      .get()
-  ).docs.map((doc) => doc.id);
+const readPeople = async (firestore: Firestore) => {
+  const snapshot = await firestore
+    .collection('apps/helm/users')
+    .where('calendarSync.accountId', '>', '')
+    .limit(PEOPLE_MAX)
+    .get();
+  if (snapshot.size >= PEOPLE_MAX) logger.warn('helm.calendarSync.peopleLimit');
+  return snapshot.docs.map((doc) => doc.id);
+};
 
-/** Keeps every person's chosen calendar in step, a few people at a time; a person who fails is logged and the rest go on. */
 export async function runCalendarSync(
   firestore: Firestore,
   keyring: Keyring,
@@ -372,7 +414,6 @@ export async function runCalendarSync(
   return report;
 }
 
-/** Writes each person's kept plan, habit windows and appointments to the one calendar they chose, and reads back what they changed there. */
 export const runHelmCalendarSync = onSchedule(
   {
     schedule: '*/10 * * * *',

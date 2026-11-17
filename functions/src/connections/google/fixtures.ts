@@ -194,8 +194,8 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
       meeting('fx-m-pin-oak', { location: 'Pin Oak Cafe @ 4 Elm St' }),
       meeting('fx-m-teams-word', { location: 'Microsoft Teams Meeting' }),
       meeting('fx-m-range', { location: '2000-2010 Main St, Suite 200' }),
-      meeting('fx-m-helm', {
-        extendedProperties: { private: { helmRef: 'slot:2026-11-17:s1' } },
+      meeting('fx-m-site', {
+        extendedProperties: { private: { siteRef: 'slot:2026-11-17:s1' } },
       }),
     ],
     'work@example.com': [

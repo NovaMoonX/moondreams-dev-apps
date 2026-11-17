@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import { zonedDateTimeToEpoch } from '../../../notifications/zonedTime.js';
 import { dayKeyToMs, shiftDayKeyBy } from '../../../vendor/cadenceUtils.js';
@@ -58,7 +58,6 @@ export interface DesiredEvent {
   isPrivate: boolean;
   startAt: number;
   endAt: number;
-  /** When the plan's own side of it last changed, for telling whose edit is newer. */
   changedAt: number | null;
 }
 
@@ -74,12 +73,32 @@ export interface EventLink {
   removedAt: number | null;
 }
 
-/** What the calendar read last said about an event the plan wrote. */
 export interface RemoteEvent {
   startAt: number | null;
   endAt: number | null;
   sourceUpdatedAt: number | null;
+  isAllDay: boolean;
 }
+
+const BASE32_HEX = '0123456789abcdefghijklmnopqrstuv';
+const EVENT_ID_LENGTH = 26;
+
+/** A calendar event id Google accepts (a-v and 0-9), the same for the same calendar, ref and generation, so a retried insert cannot make a second event. */
+export const toEventId = (
+  calendarId: string,
+  ref: string,
+  generation: string | number,
+) => {
+  const bits = Array.from(
+    createHash('sha256').update(`${calendarId}:${ref}:${generation}`).digest(),
+  )
+    .map((byte) => byte.toString(2).padStart(8, '0'))
+    .join('');
+  return Array.from(
+    { length: EVENT_ID_LENGTH },
+    (_, at) => BASE32_HEX[parseInt(bits.slice(at * 5, at * 5 + 5), 2)],
+  ).join('');
+};
 
 export const toSlotRef = (dayKey: string, slotId: string) =>
   `slot:${dayKey}:${slotId}`;
@@ -115,7 +134,6 @@ export const toWindow = (now: number, timeZone: string) => {
 const byStart = (a: DesiredEvent, b: DesiredEvent) =>
   a.startAt - b.startAt || (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0);
 
-/** The events the calendar should hold for today and the next six days: kept slots, habit windows and appointments, at most 150, soonest first. */
 export function buildDesired(input: {
   now: number;
   timeZone: string;
@@ -235,7 +253,7 @@ export interface EventBody {
   end: { dateTime: string };
   transparency: 'opaque';
   reminders: { useDefault: false };
-  extendedProperties: { private: { helmRef: string } };
+  extendedProperties: { private: { siteRef: string } };
 }
 
 /** The body Google is sent for an event: a private one is a bare "Busy" block with no words from the plan. */
@@ -251,7 +269,7 @@ export const toEventBody = (
   end: { dateTime: new Date(event.endAt).toISOString() },
   transparency: 'opaque',
   reminders: { useDefault: false },
-  extendedProperties: { private: { helmRef: event.ref } },
+  extendedProperties: { private: { siteRef: event.ref } },
 });
 
 const clean = (value: string) => value.replace(/\s+/g, ' ');
@@ -281,6 +299,7 @@ export type ReadBackChange =
       slotId: string;
       startAt: number;
       endAt: number;
+      expectedChangedAt: number | null;
       line: string;
       isPrivate: boolean;
     }
@@ -288,6 +307,7 @@ export type ReadBackChange =
       kind: 'slotRemoved';
       dayKey: string;
       slotId: string;
+      expectedChangedAt: number | null;
       line: string;
       isPrivate: boolean;
     }
@@ -296,6 +316,8 @@ export type ReadBackChange =
       taskId: string;
       startAt: number;
       endAt: number;
+      expectedChangedAt: number | null;
+      expectedDueAt: number;
       line: string;
       isPrivate: boolean;
     }
@@ -303,7 +325,6 @@ export type ReadBackChange =
 
 export interface ReadBack {
   changes: ReadBackChange[];
-  /** Refs whose link changed: the new link, or null to drop it. */
   links: Map<string, EventLink | null>;
 }
 
@@ -314,16 +335,13 @@ const hasMoved = (link: EventLink, remote: RemoteEvent) =>
   remote.sourceUpdatedAt > link.writtenAt + SKEW_MS &&
   (remote.startAt !== link.startAt || remote.endAt !== link.endAt);
 
-/** What the calendar changed since the plan last wrote, as decisions: a moved slot or appointment moves, a deleted slot is set aside, a habit window is only noted; the newer side wins. */
 export function readBack(input: {
   now: number;
   timeZone: string;
   desired: DesiredEvent[];
   links: Map<string, EventLink>;
   remote: Map<string, RemoteEvent>;
-  /** Whether the calendar is among those read back, so a missing copy means a deleted event. */
   isReadBack: boolean;
-  /** When the calendar was last read in full; a copy missing before then is a deleted event, not one not yet read. */
   readThrough: number | null;
   hash: (event: DesiredEvent) => string;
 }): ReadBack {
@@ -349,6 +367,7 @@ export function readBack(input: {
             kind: 'slotRemoved' as const,
             dayKey: source.dayKey,
             slotId: source.slotId,
+            expectedChangedAt: event.changedAt,
             line: `Removed ${event.title} from ${toPlanDay(source.dayKey, today)}, from your calendar`,
             ...base,
           },
@@ -373,6 +392,16 @@ export function readBack(input: {
       event.changedAt !== null &&
       event.changedAt >= (remote.sourceUpdatedAt as number);
     if (isHelmNewer) return null;
+    if (remote.isAllDay)
+      return {
+        ref: event.ref,
+        link: { ...link, writtenAt: now },
+        change: {
+          kind: 'noted' as const,
+          line: `You made ${event.title} an all-day event in your calendar; it stays at ${toWhen(event.startAt, now, timeZone)} here.`,
+          ...base,
+        },
+      };
     const moved = { ...event, startAt, endAt };
     const { source } = event;
     if (source.kind === 'habit')
@@ -409,6 +438,7 @@ export function readBack(input: {
               slotId: source.slotId,
               startAt,
               endAt,
+              expectedChangedAt: event.changedAt,
               line,
               ...base,
             }
@@ -417,6 +447,8 @@ export function readBack(input: {
               taskId: source.taskId,
               startAt,
               endAt,
+              expectedChangedAt: event.changedAt,
+              expectedDueAt: event.startAt,
               line,
               ...base,
             },
@@ -432,9 +464,7 @@ export function readBack(input: {
 export interface WritePlan {
   inserts: DesiredEvent[];
   patches: { event: DesiredEvent; link: EventLink }[];
-  /** Calendar events to delete, with their links. */
   deletes: EventLink[];
-  /** Links to forget without touching the calendar: a deleted event's, or a past event's, which stays. */
   drops: EventLink[];
 }
 

@@ -270,8 +270,8 @@ const toFormat = (event: CalendarEvent): 'video' | 'phone' | null => {
   return types.includes('phone') || DIAL_RE.test(location) ? 'phone' : null;
 };
 
-const toHelmRef = (event: CalendarEvent) => {
-  const ref = event.extendedProperties?.private?.helmRef;
+const toSiteRef = (event: CalendarEvent) => {
+  const ref = event.extendedProperties?.private?.siteRef;
   return typeof ref === 'string' && ref !== '' ? ref.slice(0, 200) : null;
 };
 
@@ -296,7 +296,7 @@ const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
     isFree: event.transparency === 'transparent',
     sameEventKey: toSameEventKey(event),
     format: toFormat(event),
-    helmRef: toHelmRef(event),
+    siteRef: toSiteRef(event),
   },
 });
 

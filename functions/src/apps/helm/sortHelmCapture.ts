@@ -4028,7 +4028,10 @@ async function writeResult(
     ]);
     const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
-    const copyHash: unknown = copySnap?.get('contentHash');
+    const copyHash: unknown =
+      copySnap?.get('helmRef') == null
+        ? copySnap?.get('contentHash')
+        : undefined;
     const noted = settleRemember({
       remember,
       built,

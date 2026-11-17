@@ -253,7 +253,6 @@ export interface StartGoogleConnectionRequest {
   accountId: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount: boolean;
-  /** Further permissions to ask for with the connector's own, from the server's short allowlist; null asks for none. */
   extraScopes: string[] | null;
 }
 
@@ -293,7 +292,6 @@ export interface ConnectorOption {
   isPrimary: boolean;
   /** Holidays, subscriptions and calendars only shared to read start off. */
   isOnByDefault: boolean;
-  /** Whether the person may add to this choice (a calendar they own or can edit); absent where that makes no sense. */
   isWritable?: boolean;
 }
 

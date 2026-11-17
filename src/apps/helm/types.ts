@@ -155,13 +155,11 @@ export interface HelmProfile {
   researchDepth: 'light' | 'thorough' | null;
   /** This month's research allowance as the server last settled it, shown as "About 4 thorough looks left"; the server's own usage decides, never this. */
   researchAllowance: { month: string; leftCents: number } | null;
-  /** The one Google calendar the plan is kept in step with; readable, written only by the server callable. Null is off. */
   calendarSync: HelmCalendarSync | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
 
-/** `accountId` is a connections account, `calendarId` the Google calendar; `lastError` is 'reconnect' or 'calendarGone' while the job can't write. */
 export interface HelmCalendarSync {
   accountId: string;
   calendarId: string;

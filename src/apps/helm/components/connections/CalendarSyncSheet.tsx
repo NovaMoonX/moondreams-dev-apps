@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -8,18 +8,18 @@ import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import MethodPicker from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import {
-  readConnectorOptions,
-  readNeededScope,
-  setHelmCalendarSync,
-  type SetHelmCalendarSyncRequest,
-} from '@/lib/connections/connectionCalls';
+import { readConnectorOptions } from '@/lib/connections/connectionCalls';
 import type { ConnectorOption } from '@/lib/connections/contract';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
+import {
+  readNeededScope,
+  setHelmCalendarSync,
+  type SetHelmCalendarSyncRequest,
+} from '@apps/helm/queries/calendarSyncCalls';
 
 type View = 'start' | 'pick' | 'stop';
 
@@ -46,6 +46,7 @@ function SyncForm({
     isOnHere && !isGone ? 'stop' : 'start',
   );
   const [isWorking, setIsWorking] = useState(false);
+  const inFlight = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
 
   const calendars = useQuery({
@@ -62,7 +63,8 @@ function SyncForm({
     .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 
   const run = async (request: SetHelmCalendarSyncRequest) => {
-    if (isWorking) return;
+    if (isWorking || inFlight.current) return;
+    inFlight.current = true;
     setIsWorking(true);
     setFailure(null);
     try {
@@ -81,6 +83,7 @@ function SyncForm({
         if (outcome === 'cancelled') {
           setFailure(HELM_COPY.calendarSyncCancelled);
           setIsWorking(false);
+          inFlight.current = false;
           return;
         }
         await setHelmCalendarSync(request);
@@ -97,6 +100,7 @@ function SyncForm({
             : HELM_COPY.calendarSyncFailed,
       );
       setIsWorking(false);
+      inFlight.current = false;
     }
   };
 
@@ -299,7 +303,6 @@ function SyncForm({
   );
 }
 
-/** Keeps the plan in one Google Calendar: make one or choose one, and the way to stop. Errors show inside and the sheet stays open. */
 function CalendarSyncSheet({
   isOpen,
   onClose,

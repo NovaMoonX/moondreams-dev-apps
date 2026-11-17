@@ -131,6 +131,7 @@ const toCategoryDocs = async (
 class HelmSinkSession implements SinkSession {
   private key: Promise<HelmKey> | null = null;
   private readonly seen = new Map<string, Set<string>>();
+  private readonly ownCounts = new Map<string, number>();
 
   constructor(
     private readonly firestore: Firestore,
@@ -162,18 +163,25 @@ class HelmSinkSession implements SinkSession {
       now,
     } = args;
     const seen = this.seenIds(grantId, category);
-    const room = Math.max(0, MAX_COPIES_PER_CATEGORY - seen.size);
+    const countKey = `${grantId}|${category}`;
+    const isOwn = (record: SharedRecord) =>
+      typeof record.extra.siteRef === 'string';
+    const ownBefore = this.ownCounts.get(countKey) ?? 0;
+    const room = Math.max(0, MAX_COPIES_PER_CATEGORY - (seen.size - ownBefore));
     const inWindow = records.filter(
       (record) => !hasEndedBefore(record, windowStart),
     );
     const kept = [
-      ...inWindow
-        .filter((record) => record.kind === 'event')
-        .sort((a, b) => toAnchor(a) - toAnchor(b)),
-      ...inWindow
-        .filter((record) => record.kind !== 'event')
-        .sort((a, b) => toAnchor(b) - toAnchor(a)),
-    ].slice(0, room);
+      ...[
+        ...inWindow
+          .filter((record) => record.kind === 'event' && !isOwn(record))
+          .sort((a, b) => toAnchor(a) - toAnchor(b)),
+        ...inWindow
+          .filter((record) => record.kind !== 'event')
+          .sort((a, b) => toAnchor(b) - toAnchor(a)),
+      ].slice(0, room),
+      ...inWindow.filter((record) => record.kind === 'event' && isOwn(record)),
+    ];
     if (kept.length === 0) return;
 
     const key = await this.openKey();
@@ -187,6 +195,10 @@ class HelmSinkSession implements SinkSession {
         hash: toContentHash(subkey, record, deepLink),
       };
     });
+    const ownNew = entries.filter(
+      (entry) => isOwn(entry.record) && !seen.has(entry.id),
+    ).length;
+    this.ownCounts.set(countKey, ownBefore + ownNew);
     entries.forEach((entry) => seen.add(entry.id));
 
     const refs = entries.map((entry) =>
@@ -229,8 +241,8 @@ class HelmSinkSession implements SinkSession {
               : null,
           sourceUpdatedAt: record.sourceUpdatedAt,
           helmRef:
-            typeof record.extra.helmRef === 'string'
-              ? record.extra.helmRef
+            typeof record.extra.siteRef === 'string'
+              ? record.extra.siteRef
               : null,
           contentHash: hash,
           syncedAt: now,

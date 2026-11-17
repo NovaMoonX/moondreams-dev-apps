@@ -1,5 +1,7 @@
 import { createHash, hkdfSync } from 'node:crypto';
 
+import { logger } from 'firebase-functions';
+
 import {
   FieldPath,
   type DocumentData,
@@ -58,7 +60,6 @@ const chunk = <T>(items: T[], size: number): T[][] =>
     items.slice(index * size, (index + 1) * size),
   );
 
-/** Takes the person's lease for a run; false while another run holds it. */
 export const takeLease = (
   firestore: Firestore,
   uid: string,
@@ -122,7 +123,6 @@ export const writeLink = (firestore: Firestore, uid: string, link: EventLink) =>
 export const deleteLink = (firestore: Firestore, uid: string, ref: string) =>
   firestore.doc(`${userPath(uid)}/calendarLinks/${toLinkId(ref)}`).delete();
 
-/** What the calendar read holds for each event the plan wrote, read by the copy's id. */
 export const readRemote = async (
   firestore: Firestore,
   uid: string,
@@ -150,6 +150,7 @@ export const readRemote = async (
                 startAt: toNumber(snap.get('startAt')),
                 endAt: toNumber(snap.get('endAt')),
                 sourceUpdatedAt: toNumber(snap.get('sourceUpdatedAt')),
+                isAllDay: snap.get('isAllDay') === true,
               },
             ],
           ]
@@ -235,7 +236,6 @@ export interface SyncInputs {
   habits: HabitInput[];
 }
 
-/** The plan's side as the calendar is built from it: the window's kept slots, the tasks they and the appointments name, and the habits. Only titles and names are opened. */
 export const readSyncInputs = async (
   firestore: Firestore,
   uid: string,
@@ -253,6 +253,9 @@ export const readSyncInputs = async (
       .collection(`${base}/tasks`)
       .where('status', '==', 'open')
       .where('due.kind', '==', 'moment')
+      .where('due.at', '>=', startAt)
+      .where('due.at', '<', endAt)
+      .orderBy('due.at')
       .limit(TASKS_READ)
       .get(),
     firestore
@@ -261,6 +264,7 @@ export const readSyncInputs = async (
       .limit(HABITS_READ)
       .get(),
   ]);
+  if (meetSnap.size >= TASKS_READ) logger.warn('helm.calendarSync.tasksLimit');
   const slots = days.flatMap((day) => {
     const raw: unknown = day.get('slots');
     return day.exists && isRecord(raw)
@@ -328,6 +332,12 @@ export const applyChange = async (
     return firestore.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       if (!snap.exists || snap.get('status') !== 'open') return false;
+      if (
+        (toNumber(snap.get('lastEditedAt')) ?? null) !==
+          change.expectedChangedAt ||
+        toNumber(snap.get('due.at')) !== change.expectedDueAt
+      )
+        return false;
       transaction.update(
         ref,
         'due.at',
@@ -344,7 +354,12 @@ export const applyChange = async (
   return firestore.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
     const slot: unknown = snap.get(new FieldPath('slots', change.slotId));
-    if (!isRecord(slot) || slot.status !== 'kept') return false;
+    if (
+      !isRecord(slot) ||
+      slot.status !== 'kept' ||
+      toNumber(slot.decidedAt) !== change.expectedChangedAt
+    )
+      return false;
     const at = (field: string) => new FieldPath('slots', change.slotId, field);
     if (change.kind === 'slotRemoved') {
       transaction.update(ref, at('status'), 'notToday', at('decidedAt'), now);
@@ -363,7 +378,6 @@ export const applyChange = async (
   });
 };
 
-/** One Activity line, sealed with the person's key and kept readable only as private or not. */
 export const writeActivity = (
   firestore: Firestore,
   uid: string,
