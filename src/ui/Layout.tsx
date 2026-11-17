@@ -10,6 +10,7 @@ import {
   SITE_VERSION,
 } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
+import FallbackNotices from '@components/FallbackNotices';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
 import { useHideOnScroll } from '@hooks/useHideOnScroll';
@@ -148,6 +149,7 @@ function Layout() {
 
       <OfflineBanner />
       <EmulatorStatus />
+      <FallbackNotices />
 
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       {!isPublicShare && (

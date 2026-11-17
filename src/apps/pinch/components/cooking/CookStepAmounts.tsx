@@ -1,5 +1,9 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import {
+  CookAmountButton,
+  CookConversionLine,
+} from '@apps/pinch/components/cooking/CookAmount';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 
 /** A step's lines as flat rows, name on the left and amount on the right. */
@@ -13,28 +17,27 @@ export function CookAmountRows({
   return (
     <ul className={join('divide-border divide-y', className)}>
       {rows.map((row) => (
-        <li
-          key={row.id}
-          className='flex items-baseline justify-between gap-3 py-1.5 text-sm sm:[@media(min-height:701px)]:py-2 sm:[@media(min-height:701px)]:text-base'
-        >
-          <span className='min-w-0 wrap-break-word'>
-            {row.name}
-            {row.groupLabel && (
-              <span className='text-muted-foreground text-xs sm:[@media(min-height:701px)]:text-sm'>
-                {' '}
-                · {row.groupLabel}
-              </span>
-            )}
-          </span>
-          <span
-            className={
-              row.isMeasured
-                ? 'shrink-0 font-semibold whitespace-nowrap'
-                : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
-            }
-          >
-            {row.amountText}
-          </span>
+        <li key={row.id}>
+          <div className='flex items-baseline justify-between gap-3 py-1.5 text-sm sm:[@media(min-height:701px)]:py-2 sm:[@media(min-height:701px)]:text-base'>
+            <span className='min-w-0 wrap-break-word'>
+              {row.name}
+              {row.groupLabel && (
+                <span className='text-muted-foreground text-xs sm:[@media(min-height:701px)]:text-sm'>
+                  {' '}
+                  · {row.groupLabel}
+                </span>
+              )}
+            </span>
+            <CookAmountButton
+              row={row}
+              className={
+                row.isMeasured
+                  ? 'shrink-0 font-semibold whitespace-nowrap'
+                  : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
+              }
+            />
+          </div>
+          <CookConversionLine row={row} isCompact className='mb-1.5' />
         </li>
       ))}
     </ul>

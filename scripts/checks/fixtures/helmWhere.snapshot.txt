@@ -17,6 +17,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Habits, with their cadence and windows: look in <habits>; change it with createHabit, updateHabit or setCare.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - Whether a thing is private: change it with setPrivate.
+- Whether a thing is kept quiet: change it with setQuiet.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.
 - Helm's plan for a day: call get_calendar; you cannot change it.
@@ -86,6 +87,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Habits, with their cadence and windows: look in <habits>; change it with createHabit, updateHabit or setCare.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - Whether a thing is private: change it with setPrivate.
+- Whether a thing is kept quiet: change it with setQuiet.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.
 - Helm's plan for a day: call get_calendar; you cannot change it.
