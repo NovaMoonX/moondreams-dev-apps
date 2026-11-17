@@ -267,6 +267,7 @@ const toRecipe = (
     return {
       id: makeId(),
       ingredientId: getId(line),
+      freeText: null,
       amount,
       unit: amount === null || !UNITS.includes(line.unit) ? 'EACH' : line.unit,
       note: asText(line.note, MAX_NOTE_LENGTH),
@@ -605,10 +606,7 @@ export function planUndo(
         : null,
     ingredientIds,
     tipIds: written.tips
-      .filter(
-        (tip) =>
-          survey.recipes.has(tip.recipeId),
-      )
+      .filter((tip) => survey.recipes.has(tip.recipeId))
       .map((tip) => tip.id),
     keptIngredients: written.ingredients.filter(
       (entry) =>

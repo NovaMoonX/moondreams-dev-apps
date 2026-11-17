@@ -380,6 +380,7 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'cookMinutes',
   'description',
   'ingredients',
+  'photoSearch',
   'prepMinutes',
   'servings',
   'steps',
@@ -395,6 +396,26 @@ assert.deepEqual(
 );
 assert.deepEqual(hostile.steps, ['Chop.', 'Simmer.']);
 assert.deepEqual(hostile.unread, ['the last line is cut off']);
+assert.equal(
+  normalizeExtractedRecipe({
+    photoSearch: '  creamy   cajun\n chicken linguine ',
+  }).photoSearch,
+  'creamy cajun chicken linguine',
+  'photo search words are trimmed and single-spaced',
+);
+assert.equal(
+  normalizeExtractedRecipe({ photoSearch: '   ' }).photoSearch,
+  null,
+);
+assert.equal(normalizeExtractedRecipe({ photoSearch: 7 }).photoSearch, null);
+assert.equal(
+  (
+    normalizeExtractedRecipe({ photoSearch: 'word '.repeat(40) }).photoSearch ??
+    ''
+  ).length <= 80,
+  true,
+  'photo search words are capped at 80 characters',
+);
 assert.equal(normalizeExtractedRecipe('nonsense').ingredients.length, 0);
 assert.equal(normalizeExtractedRecipe(null).title, null);
 assert.equal(

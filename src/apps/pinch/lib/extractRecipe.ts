@@ -39,6 +39,10 @@ const responseSchema = {
       SchemaType.STRING,
       'One or two sentences describing the dish, only if the source has them.',
     ),
+    photoSearch: nullable(
+      SchemaType.STRING,
+      "A short image search (3–6 words) naming the finished dish by its defining features — the dish name plus the pasta shape, protein or key look when the description or ingredients name them, e.g. 'creamy cajun chicken linguine'; no brand or site names. Null when the source names no dish.",
+    ),
     ingredients: {
       type: SchemaType.ARRAY,
       items: {
@@ -114,6 +118,7 @@ Rules:
 - A line that names two ingredients ("salt and pepper to taste") is two lines, each with the same amount, unit, note and group.
 - Some recipes put their ingredients under headings ("For the sauce:", "Marinade"). Give each line the heading it sits under as its group, as a short plain name of at most ${MAX_INGREDIENT_GROUP_LENGTH} characters with no colon, parentheses or advice ("Bulgogi sauce" for "Bulgogi sauce (don't skip the onion & apple!):"), and null for a line under no heading. The same ingredient under two headings is two lines, each with its own amount. Never invent headings or sort lines into groups yourself.
 - Times are whole minutes (1 h 15 min is 75). Use null for anything the recipe does not say.
+- photoSearch is a short image search (3–6 words) naming the finished dish by its defining features — the dish name plus the pasta shape, protein or key look when the description or ingredients name them, e.g. 'creamy cajun chicken linguine'; no brand or site names.
 - Storage: fill in fridgeDays, freezerDays, reheat and tip only when the recipe itself says how long leftovers keep, how to reheat them or how to store them. Never estimate how long food keeps, and use null when the recipe is silent.
 - Put anything you could not read or are unsure of in "unread", in plain words ("the last two ingredients are cut off").
 - If there is no recipe, return empty lists.`;
@@ -123,6 +128,7 @@ const VIDEO_PROMPT = `This is a cooking video, not a written recipe. Watch all o
 - A step that is only shown (a pan going into the oven, onions cooked until golden) and never said is still a step; write it as a plain instruction.
 - When the audio and the on-screen text give the same amount, use it. When they disagree, use the on-screen text for amounts, times and temperatures, and say so in "unread".
 - When the cook gives no amount ("a splash of soy sauce", "some garlic"), leave amount null and put their words in the note. Never guess an amount from how much looks poured or chopped.
+- photoSearch is a short image search (3–6 words) naming the finished dish as it looks in the video: the dish name plus the pasta shape, protein or key look it shows or names; no brand or channel names.
 - Take the title from the video's own title card or the cook's own words. Ignore sponsor messages, intros, chatter, outros and requests to like or subscribe.
 - If the video makes more than one recipe, return the first and say so in "unread". Also put in "unread" anything you could not hear or read: unclear audio, text that is too small or on screen too briefly, a part that is cut off.`;
 

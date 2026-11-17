@@ -731,6 +731,7 @@ const ingredientLine = (
 ) => ({
   id,
   ingredientId,
+  freeText: null,
   amount,
   unit: 'TSP' as const,
   note,
