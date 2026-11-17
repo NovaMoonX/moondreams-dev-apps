@@ -28,6 +28,7 @@ import {
   MAX_PURCHASE_CENTS,
   STARTED_PAYMENT_WORDS,
 } from '@apps/runway/constants';
+import { isMinimumPaid } from '@apps/runway/engine/cards';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isText, readDraftFields } from '@apps/runway/forms/draftParse';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -41,6 +42,7 @@ import { getLinkedStatement } from '@apps/runway/store/selectors/cardStatementSe
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard, OpenCardStatement } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 interface StartPaymentSheetProps {
   card: OpenCard;
@@ -60,27 +62,20 @@ const parseStartPaymentDraft = (stored: unknown) =>
 /** How far back a payment started at the bank can be dated. */
 const STARTED_BACK_DAYS = 14;
 
-const isOfflineFailure = (error: unknown) =>
-  !navigator.onLine ||
-  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
-
 /** The statement balance while no payment since the statement has covered it, else null. */
 const getUnpaidStatementCents = (statement: OpenCardStatement | null) => {
   if (statement === null) return null;
-  const { statementCents, statementOn, lastPaymentCents, lastPaymentOn } =
-    statement;
+  const { statementCents } = statement;
   if (statementCents === null || statementCents <= 0) return null;
-  const isPaid =
-    statementOn !== null &&
-    lastPaymentOn !== null &&
-    lastPaymentCents !== null &&
-    lastPaymentOn >= statementOn &&
-    lastPaymentCents >= statementCents;
-  return isPaid ? null : statementCents;
+  return isMinimumPaid(statement, statementCents) ? null : statementCents;
 };
 
 /** At Link, notes a card payment the person started at their bank: the amount and the day, then it waits until the bank shows it. Needs a connection. */
-function StartPaymentSheet({ card, onClose, onCancel }: StartPaymentSheetProps) {
+function StartPaymentSheet({
+  card,
+  onClose,
+  onCancel,
+}: StartPaymentSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();

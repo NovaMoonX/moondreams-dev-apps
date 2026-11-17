@@ -49,8 +49,11 @@ export function getPrevDueOn(
   return result;
 }
 
-/** Whether the bank shows a payment of at least the minimum since the statement was made. */
-const isMinimumPaid = (statement: OpenCardStatement, minimumCents: Cents) =>
+/** Whether the bank shows a payment of at least `minimumCents` since the statement was made. */
+export const isMinimumPaid = (
+  statement: OpenCardStatement,
+  minimumCents: Cents,
+) =>
   statement.statementOn !== null &&
   statement.lastPaymentOn !== null &&
   statement.lastPaymentCents !== null &&
@@ -353,8 +356,12 @@ export function getUsualCardId(
 
 /** How far before a started payment's day the bank may date either side of it. */
 const STARTED_PAYMENT_LEAD_DAYS = 3;
-/** How long after a started payment's day either side of it may still turn up. */
+/** How long after a started payment's day either side of it may still turn up; after that it is no longer waited for. */
 const STARTED_PAYMENT_WINDOW_DAYS = 14;
+const CARD_PAYMENT_CATEGORY = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
+
+const isStillWaitedFor = (payment: OpenStartedPayment, today: DateOnly) =>
+  today <= payment.startedOn + STARTED_PAYMENT_WINDOW_DAYS * DAY_MS;
 
 export interface StartedPaymentState {
   payment: OpenStartedPayment;
@@ -376,13 +383,14 @@ export interface BankOwed {
 type BankPurchase = Pick<
   OpenPurchase,
   'id' | 'date' | 'source' | 'status' | 'amountCents' | 'accountId'
-> & { paidByCardId?: string | null };
+> & { paidByCardId?: string | null; category?: string | null };
 
-/** Each linked card's figure from its bank: the posted balance, the pending charges on it, and the payments the person started that the card hasn't shown yet. A started payment is matched one to one by amount, within its window, to the card's own credit (it has landed) or to money out of an account (it has left); one bank transaction settles one payment across every card. */
+/** Each linked card's figure from its bank: the posted balance, the pending charges on it, and the payments the person started that the card hasn't shown yet. A started payment is matched one to one by amount, within its window, to the card's own credit (it has landed) or to money out of an account (it has left); one bank transaction settles one payment across every card, a card payment by the bank's category before any other. A payment not seen within 14 days of its day is no longer waited for. */
 export function getBankOwedByCard(input: {
   cards: readonly { id: string; postedCents: Cents }[];
   purchases: readonly BankPurchase[];
   started: readonly OpenStartedPayment[];
+  today: DateOnly;
 }): Record<string, BankOwed> {
   const fromBank = input.purchases.filter(
     (purchase) => purchase.source === 'link',
@@ -395,7 +403,10 @@ export function getBankOwedByCard(input: {
   );
   const cardIds = new Set(input.cards.map((card) => card.id));
   const ordered = input.started
-    .filter((payment) => cardIds.has(payment.cardId))
+    .filter(
+      (payment) =>
+        cardIds.has(payment.cardId) && isStillWaitedFor(payment, input.today),
+    )
     .sort(
       (a, b) =>
         a.startedOn - b.startedOn ||
@@ -418,7 +429,13 @@ export function getBankOwedByCard(input: {
           purchase.date <=
             payment.startedOn + STARTED_PAYMENT_WINDOW_DAYS * DAY_MS,
       )
-      .sort((a, b) => a.date - b.date || a.id.localeCompare(b.id))[0] ?? null;
+      .sort(
+        (a, b) =>
+          Number(b.category === CARD_PAYMENT_CATEGORY) -
+            Number(a.category === CARD_PAYMENT_CATEGORY) ||
+          a.date - b.date ||
+          a.id.localeCompare(b.id),
+      )[0] ?? null;
   const { waiting } = ordered.reduce<{
     used: ReadonlySet<string>;
     waiting: StartedPaymentState[];
@@ -492,6 +509,7 @@ export function getBankDueState(input: {
   const isStartedCovering = input.started.some(
     (payment) =>
       payment.cardId === input.card.id &&
+      isStillWaitedFor(payment, input.today) &&
       payment.amountCents >= minimumCents &&
       (statementOn === null || payment.startedOn >= statementOn),
   );

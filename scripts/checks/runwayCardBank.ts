@@ -54,6 +54,7 @@ const started = (
       bank('old', d(2026, 11, 1), 9_999, { cardId: 'chase' }),
     ],
     started: [],
+    today: d(2026, 11, 15),
   });
   assert.deepEqual(
     owed.chase,
@@ -72,6 +73,7 @@ const started = (
   const base = {
     cards: [{ id: 'chase', postedCents: 50_000 }],
     started: [started('s1', 'chase', 50_000, today)],
+    today,
   };
   const waiting = getBankOwedByCard({ ...base, purchases: [] }).chase;
   assert.equal(
@@ -142,6 +144,7 @@ const started = (
       started('a', 'chase', 20_000, today, 1),
       started('b', 'amex', 20_000, today, 2),
     ],
+    today,
   });
   assert.equal(
     owed.chase.waiting[0].hasLeft,
@@ -154,6 +157,46 @@ const started = (
     'one bank transfer never settles two cards',
   );
   assert.equal(owed.chase.heldCents + owed.amex.heldCents, 20_000);
+}
+
+{
+  const today = d(2026, 11, 15);
+  const cards = [{ id: 'chase', postedCents: 30_000 }];
+  const note = started('s', 'chase', 30_000, today);
+  const preferred = getBankOwedByCard({
+    cards,
+    purchases: [
+      {
+        ...bank('rent', today, 30_000, { accountId: 'checking' }),
+        category: 'RENT_AND_UTILITIES_RENT',
+      },
+      {
+        ...bank('pay', today + 8 * DAY, 30_000, { accountId: 'checking' }),
+        category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+      },
+    ],
+    started: [note, started('s2', 'chase', 30_000, today + 10 * DAY, 2)],
+    today: today + 10 * DAY,
+  }).chase;
+  assert.deepEqual(
+    preferred.waiting.map((entry) => [entry.payment.id, entry.hasLeft]),
+    [
+      ['s', true],
+      ['s2', false],
+    ],
+    'an outflow the bank marks as a card payment is taken before an earlier one of the same amount, such as rent',
+  );
+  const expired = getBankOwedByCard({
+    cards,
+    purchases: [bank('out', today, 30_000, { accountId: 'checking' })],
+    started: [note],
+    today: today + 15 * DAY,
+  }).chase;
+  assert.deepEqual(
+    expired,
+    { postedCents: 30_000, pendingCents: 0, waiting: [], heldCents: 30_000 },
+    'a note the card never shows within two weeks is no longer waited for, so it never holds Free to Spend up for good',
+  );
 }
 
 // deriveBalances: at Link a card's bank figure replaces the ledger's, and only while cards count.
@@ -292,6 +335,15 @@ const started = (
     }),
     null,
     'a payment the person started since the statement that covers the minimum quiets it',
+  );
+  assert.notEqual(
+    getBankDueState({
+      ...base,
+      today: d(2026, 11, 25),
+      started: [started('s', 'chase', 3_500, d(2026, 11, 9))],
+    }),
+    null,
+    'once a started payment is no longer waited for, the unpaid minimum warns again',
   );
   assert.notEqual(
     getBankDueState({

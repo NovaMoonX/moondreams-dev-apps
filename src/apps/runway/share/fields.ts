@@ -45,6 +45,8 @@ import type {
   AccountBalanceDoc,
   CardStatementDoc,
   CardStatementSealed,
+  StartedPaymentDoc,
+  StartedPaymentSealed,
   ExpenseDoc,
   ExpenseSealed,
   RuleDoc,
@@ -478,6 +480,18 @@ const CARD_STATEMENT_SEALED_FIELDS = {
   lastPaymentOn: 'never',
 } satisfies Record<keyof CardStatementSealed, ShareDecision>;
 
+const STARTED_PAYMENT_DOC_FIELDS = {
+  id: 'notUseful',
+  cardId: 'never',
+  startedOn: 'never',
+  createdAt: 'notUseful',
+  sealed: 'never',
+} satisfies Record<keyof StartedPaymentDoc, ShareDecision>;
+
+const STARTED_PAYMENT_SEALED_FIELDS = {
+  amountCents: 'never',
+} satisfies Record<keyof StartedPaymentSealed, ShareDecision>;
+
 const EXPENSE_DOC_FIELDS = {
   id: 'notUseful',
   createdAt: 'notUseful',
@@ -778,6 +792,8 @@ export const SHARE_FIELDS = {
   AccountBalanceDoc: ACCOUNT_BALANCE_DOC_FIELDS,
   CardStatementDoc: CARD_STATEMENT_DOC_FIELDS,
   CardStatementSealed: CARD_STATEMENT_SEALED_FIELDS,
+  StartedPaymentDoc: STARTED_PAYMENT_DOC_FIELDS,
+  StartedPaymentSealed: STARTED_PAYMENT_SEALED_FIELDS,
   ExpenseDoc: EXPENSE_DOC_FIELDS,
   ExpenseSealed: EXPENSE_SEALED_FIELDS,
   RuleDoc: RULE_DOC_FIELDS,
@@ -818,6 +834,7 @@ export const NOT_STORED: Record<string, string> = {
   OpenLink: 'decrypted view of LinkDoc',
   OpenAccountBalance: 'decrypted view of AccountBalanceDoc',
   OpenCardStatement: 'decrypted view of CardStatementDoc',
+  OpenStartedPayment: 'decrypted view of StartedPaymentDoc',
   OpenExpense: 'decrypted view of ExpenseDoc',
   OpenRule: 'decrypted view of RuleDoc',
   OpenReceiptImage: 'decrypted view of ReceiptImageDoc',

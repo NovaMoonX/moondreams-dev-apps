@@ -2,6 +2,7 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { getBankOwedByCard, type BankOwed } from '@apps/runway/engine/cards';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { Cents } from '@apps/runway/types';
 
@@ -14,6 +15,7 @@ export const selectBankOwedByCard = createSelector(
     (state: RootState) => state.runway.purchases,
     (state: RootState) => state.runway.needsHome,
     (state: RootState) => state.runway.startedPayments,
+    () => todayAsUtcDate(),
   ],
   (
     level,
@@ -22,6 +24,7 @@ export const selectBankOwedByCard = createSelector(
     purchases,
     needsHome,
     started,
+    today,
   ): Record<string, BankOwed> => {
     if (level !== 'link') return {};
     const bankById = new Map(accountBalances.map((entry) => [entry.id, entry]));
@@ -43,6 +46,7 @@ export const selectBankOwedByCard = createSelector(
         ).values(),
       ],
       started,
+      today,
     });
   },
 );
