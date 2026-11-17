@@ -507,13 +507,27 @@ export async function setLinesDone(
       doneLineIds: isDone ? arrayUnion(...lineIds) : arrayRemove(...lineIds),
     });
   } catch (error) {
-    store.dispatch(
-      patchHeld({
-        kind: 'days',
-        id: dayId,
-        fields: { doneLineIds: [...current] },
-      }),
-    );
+    const shown = store
+      .getState()
+      .runway.held.days.find((hold) => hold.id === dayId)?.item;
+    if (shown) {
+      const was = new Set(current);
+      const reverted = isDone
+        ? shown.doneLineIds.filter((id) => !ticked.has(id) || was.has(id))
+        : Array.from(
+            new Set([
+              ...shown.doneLineIds,
+              ...lineIds.filter((id) => was.has(id)),
+            ]),
+          );
+      store.dispatch(
+        patchHeld({
+          kind: 'days',
+          id: dayId,
+          fields: { doneLineIds: reverted },
+        }),
+      );
+    }
     throw error;
   }
 }

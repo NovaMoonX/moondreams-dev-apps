@@ -6,8 +6,8 @@ export interface HeldWrite<T> {
   token: string;
   /** Null while the write is in flight. */
   settledAt: number | null;
-  /** The list's copy the write replaces (null when it had none); followed while in flight, frozen once settled. */
-  baseline: string | null;
+  /** The fields the write set; another device's change to any other field never holds it back. */
+  fields: string[];
 }
 
 /** A settled hold the list never shows, though the list has been delivered since, lets go after this long. */
@@ -28,11 +28,30 @@ const sortKeys = (value: unknown): unknown => {
 export const toFingerprint = (value: unknown): string =>
   JSON.stringify(sortKeys(value));
 
-const hasLanded = <T>(hold: HeldWrite<T>, seen: string | null): boolean => {
-  if (hold.item === null) return seen === null;
-  if (seen === null) return false;
-  if (seen === hold.fingerprint) return true;
-  return hold.settledAt !== null && seen !== hold.baseline;
+const pickFields = (value: unknown, fields: readonly string[]): unknown =>
+  Object.fromEntries(
+    fields.map((field) => [field, (value as Record<string, unknown>)[field]]),
+  );
+
+/** A hold of `item` that waits for the list to show the given fields as they are in it. */
+export const toHeldWrite = <T>(
+  id: string,
+  item: T | null,
+  fields: readonly string[],
+  token: string,
+): HeldWrite<T> => ({
+  id,
+  item,
+  fingerprint: item === null ? '' : toFingerprint(pickFields(item, fields)),
+  token,
+  settledAt: null,
+  fields: [...fields],
+});
+
+const hasLanded = <T>(hold: HeldWrite<T>, incoming: T | undefined): boolean => {
+  if (hold.item === null) return incoming === undefined;
+  if (incoming === undefined) return false;
+  return toFingerprint(pickFields(incoming, hold.fields)) === hold.fingerprint;
 };
 
 const hasExpired = <T>(
@@ -45,8 +64,7 @@ const hasExpired = <T>(
   deliveredAt >= hold.settledAt &&
   now - hold.settledAt >= HELD_WRITE_SETTLED_MS;
 
-export interface ApplyHeldOptions<T> {
-  fingerprintOf?: (item: T) => string;
+export interface ApplyHeldOptions {
   now?: number;
   /** A listener that has delivered nothing since a write settled never lets its hold expire. */
   deliveredAt?: number | null;
@@ -57,26 +75,14 @@ export function applyHeldWrites<T>(
   incoming: readonly T[],
   held: readonly HeldWrite<T>[],
   idOf: (item: T) => string,
-  {
-    fingerprintOf = toFingerprint,
-    now = Date.now(),
-    deliveredAt = null,
-  }: ApplyHeldOptions<T> = {},
+  { now = Date.now(), deliveredAt = null }: ApplyHeldOptions = {},
 ): { list: T[]; held: HeldWrite<T>[] } {
   const byId = new Map(incoming.map((item) => [idOf(item), item]));
-  const seenOf = (id: string) => {
-    const item = byId.get(id);
-    return item === undefined ? null : fingerprintOf(item);
-  };
-  const kept = held
-    .filter(
-      (hold) =>
-        !hasLanded(hold, seenOf(hold.id)) &&
-        !hasExpired(hold, now, deliveredAt),
-    )
-    .map((hold) =>
-      hold.settledAt === null ? { ...hold, baseline: seenOf(hold.id) } : hold,
-    );
+  const kept = held.filter(
+    (hold) =>
+      !hasLanded(hold, byId.get(hold.id)) &&
+      !hasExpired(hold, now, deliveredAt),
+  );
   if (kept.length === 0) return { list: [...incoming], held: [] };
   const holdById = new Map(kept.map((hold) => [hold.id, hold]));
   const list = [
@@ -126,5 +132,11 @@ export const patchHeldWrite = <T>(
   held.map((hold) => {
     if (hold.id !== id || hold.item === null) return hold;
     const item = { ...hold.item, ...fields } as T;
-    return { ...hold, item, fingerprint: toFingerprint(item) };
+    const written = Array.from(
+      new Set([...hold.fields, ...Object.keys(fields)]),
+    );
+    return {
+      ...toHeldWrite(hold.id, item, written, hold.token),
+      settledAt: hold.settledAt,
+    };
   });

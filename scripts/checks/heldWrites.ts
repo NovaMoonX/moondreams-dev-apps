@@ -8,6 +8,7 @@ import {
   patchHeldWrite,
   settleHeldWrites,
   toFingerprint,
+  toHeldWrite,
   type HeldWrite,
 } from '../../src/utils/heldWrites.ts';
 
@@ -23,15 +24,8 @@ const hold = (
   id: string,
   token = 't1',
   settledAt: number | null = null,
-  baseline: Row | null = null,
-): HeldWrite<Row> => ({
-  id,
-  item,
-  fingerprint: item === null ? '' : toFingerprint(item),
-  token,
-  settledAt,
-  baseline: baseline === null ? null : toFingerprint(baseline),
-});
+  fields: string[] = item === null ? [] : Object.keys(item),
+): HeldWrite<Row> => ({ ...toHeldWrite(id, item, fields, token), settledAt });
 const apply = (
   incoming: Row[],
   held: HeldWrite<Row>[],
@@ -71,9 +65,7 @@ assert.deepEqual(
   'and lets go once the list no longer has it',
 );
 
-const stalled = apply(base, [
-  hold({ id: 'a', cents: 9 }, 'a', 't1', 900, base[0]),
-]);
+const stalled = apply(base, [hold({ id: 'a', cents: 9 }, 'a', 't1', 900)]);
 assert.equal(
   stalled.list[0].cents,
   9,
@@ -82,7 +74,7 @@ assert.equal(
 
 const rewritten = apply(
   [{ id: 'a', cents: 9, meta: { a: 1, b: 2 } }],
-  [hold({ id: 'a', cents: 9 }, 'a', 't1', 900, base[0])],
+  [hold({ id: 'a', cents: 9 }, 'a', 't1', 900)],
 );
 assert.equal(
   rewritten.held.length,
@@ -165,23 +157,26 @@ assert.deepEqual(
 );
 assert.deepEqual(dropHeldWrites(twice, 't2'), []);
 
-const followed = apply(
-  [{ id: 'a', cents: 4 }],
-  [hold({ id: 'a', cents: 9 }, 'a', 't1', null, base[0])],
+const partial = () =>
+  hold({ id: 'a', cents: 9, meta: { a: 1, b: 2 } }, 'a', 't1', 900, ['cents']);
+const otherField = apply(
+  [{ id: 'a', cents: 9, meta: { a: 3, b: 4 } }],
+  [partial()],
 );
 assert.equal(
-  followed.held[0].baseline,
-  toFingerprint({ id: 'a', cents: 4 }),
-  'while in flight, the baseline follows the list',
+  otherField.held.length,
+  0,
+  "a copy with the write and another device's change to another field lets go",
 );
-const afterOther = apply(
-  [{ id: 'a', cents: 4 }],
-  settleHeldWrites(followed.held, 't1', 900),
+assert.deepEqual(otherField.list[0].meta, { a: 3, b: 4 });
+const otherOnly = apply(
+  [{ id: 'a', cents: 1, meta: { a: 3, b: 4 } }],
+  [partial()],
 );
 assert.equal(
-  afterOther.list[0].cents,
+  otherOnly.list[0].cents,
   9,
-  "another device's change seen before the write settled never releases it once it does",
+  "another device's change that lacks the write never releases it",
 );
 
 const patched = patchHeldWrite(
@@ -194,10 +189,14 @@ assert.equal(
   12,
   'a plain write shows through the hold',
 );
-assert.equal(
-  patched[0].fingerprint,
-  toFingerprint({ id: 'a', cents: 12 }),
+assert.deepEqual(
+  apply([{ id: 'a', cents: 9 }], patched).held.map((entry) => entry.id),
+  ['a'],
   'and the hold waits for the patched copy',
+);
+assert.equal(
+  apply([{ id: 'a', cents: 12 }], patched.slice(0, 1)).held.length,
+  0,
 );
 assert.equal(patched[1].item, null, 'a removal is never patched');
 

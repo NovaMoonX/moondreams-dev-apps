@@ -2,7 +2,7 @@ import type { DocumentData, Transaction } from 'firebase/firestore';
 
 import { store } from '@/store';
 import { generateUuid } from '@/utils';
-import { toFingerprint, type HeldWrite } from '@/utils/heldWrites';
+import { toHeldWrite, type HeldWrite } from '@/utils/heldWrites';
 import {
   isPlainWrite,
   runRecordedTransaction,
@@ -63,13 +63,6 @@ const openFull = (
   return openRecord({ ...(data as DayRecordDoc), id }, encryption);
 };
 
-const baselineOf = (kind: HeldKind, id: string): string | null => {
-  const delivered = (store.getState().runway.incoming[kind] as Opened[]).find(
-    (item) => item.id === id,
-  );
-  return delivered === undefined ? null : toFingerprint(delivered);
-};
-
 /** What a write lands on: another write's hold, else the list; never this transaction's own earlier attempt. */
 const baseOf = (kind: HeldKind, id: string, token: string): Opened | null => {
   const { held, incoming } = store.getState().runway;
@@ -113,6 +106,7 @@ interface Built {
   kind: HeldKind;
   id: string;
   item: Opened | null;
+  fields: string[];
 }
 
 /** Each record's state after the attempt's writes, in order; null when any write can't be shown, so none is. */
@@ -142,7 +136,18 @@ const buildItems = (
       );
       if (item === UNSHOWABLE) return null;
       if (item === IGNORED) return built;
-      return new Map(built).set(key, { ...target, item });
+      const fields =
+        item === null
+          ? []
+          : write.op === 'set' && !write.isMerge
+            ? Object.keys(item)
+            : Array.from(
+                new Set([
+                  ...(earlier?.fields ?? []),
+                  ...Object.keys(write.data ?? {}),
+                ]),
+              );
+      return new Map(built).set(key, { ...target, item, fields });
     }, Promise.resolve(new Map()))
     .then((built) => (built === null ? null : [...built.values()]));
 
@@ -192,25 +197,20 @@ export async function runHeldTransaction<T>(
     }
     const heldDayIds = new Set(
       built
-        .filter((entry) => entry.kind === 'days' && isWatched(entry, new Set()))
+        .filter(
+          (entry) =>
+            entry.kind === 'days' &&
+            (entry.item as OpenDay | null)?.status === 'confirmed' &&
+            isWatched(entry, new Set()),
+        )
         .map((entry) => entry.id),
     );
     const input = built
       .filter((entry) => isWatched(entry, heldDayIds))
       .reduce<HeldWritesInput>(
-        (sum, { kind, id, item }) => ({
+        (sum, { kind, id, item, fields }) => ({
           ...sum,
-          [kind]: [
-            ...(sum[kind] ?? []),
-            {
-              id,
-              item,
-              fingerprint: item === null ? '' : toFingerprint(item),
-              token,
-              settledAt: null,
-              baseline: baselineOf(kind, id),
-            },
-          ],
+          [kind]: [...(sum[kind] ?? []), toHeldWrite(id, item, fields, token)],
         }),
         { token },
       );
