@@ -603,6 +603,7 @@ export async function makeTaskAsWritten(
     isUrgent: false,
     due: null,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,

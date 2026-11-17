@@ -24,7 +24,12 @@ async function openPlanDay(
   const base = {
     id: entry.id,
     date: data.date ?? 0,
-    slots: data.slots ?? {},
+    slots: Object.fromEntries(
+      Object.entries(data.slots ?? {}).map(([id, slot]) => [
+        id,
+        { ...slot, overlapsEventRef: slot.overlapsEventRef ?? null },
+      ]),
+    ),
     isRestDay: data.isRestDay ?? false,
     restDayOverriddenAt: data.restDayOverriddenAt ?? null,
     generatedAt: data.generatedAt ?? null,

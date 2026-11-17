@@ -3,7 +3,7 @@ import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { ImportancePlace } from '@apps/helm/engine/importance';
 import type { Personality } from '@apps/helm/engine/personality';
-import type { ObservationTag } from '@apps/helm/engine/said';
+import type { ObservationTag, STRUGGLING_TAGS } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type {
   TaskMeeting,
@@ -95,6 +95,8 @@ export interface HelmProfile {
   dayEndTime: string;
   /** Share of free time the planner may fill. */
   planFillPercent: number;
+  /** Stamped when a day's aims change, so the server notices within minutes. */
+  dayAimsChangedAt: number | null;
   /** "{accountId}/{calendarId}" of each calendar marked as shifts. */
   shiftCalendarIds: string[];
   /** Synced ids of all-day events the person said block their day. */
@@ -641,6 +643,7 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
 export type TaskStatus = 'open' | 'done';
 export type Importance = 'must' | 'should' | 'could';
 export type Energy = 'low' | 'medium' | 'high';
+export type TaskEffort = 'light' | 'moderate' | 'heavy';
 export type TaskContext = 'atHome' | 'out' | 'atComputer' | 'onPhone';
 
 export type MeetingFormat = 'inPerson' | 'video' | 'phone';
@@ -657,6 +660,8 @@ export interface Task {
   isUrgent: boolean;
   due: TaskDue | null;
   durationMinutes: number | null;
+  /** How heavy the task is, for the break after it; null reads as moderate. */
+  effort: TaskEffort | null;
   energy: Energy | null;
   context: TaskContext | null;
   projectId: string | null;
@@ -1661,6 +1666,40 @@ export interface PlanSlot {
   status: PlanSlotStatus;
   source: 'nomos' | 'person';
   decidedAt: number | null;
+  /** The synced event a kept slot overlaps, when it does. */
+  overlapsEventRef: string | null;
+}
+
+export type StruggleSignal = (typeof STRUGGLING_TAGS)[number];
+
+export interface DayAimsSealed {
+  aims: {
+    aimId: string;
+    taskId: string;
+    order: number;
+    lengthIsGuess: boolean;
+    broughtFrom: string | null;
+  }[];
+  windDown: Record<
+    string,
+    {
+      result: 'done' | 'tonight' | 'wontHappen';
+      choice: 'tomorrow' | 'later' | 'dropped' | null;
+      reason: StruggleSignal | null;
+      saidSpanId: string | null;
+    }
+  >;
+}
+
+/** One document per day, id = "YYYY-MM-DD" in the profile's zone. */
+export interface DayAims {
+  /** Date-only, UTC midnight. */
+  date: number;
+  state: 'open' | 'answered' | 'dismissed';
+  windDownState: 'waiting' | 'ready' | 'done' | 'dismissed';
+  lookAt: number | null;
+  rolledAt: number | null;
+  sealed: Sealed;
 }
 
 export interface PlanCalendarEntry {

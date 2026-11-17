@@ -253,6 +253,7 @@ export function addKeptSlot(
     ...input,
     status: 'kept',
     decidedAt: Date.now(),
+    overlapsEventRef: null,
   };
   const existingId = Object.entries(
     store.getState().helm.planDays.byId[dayKey]?.slots ?? {},

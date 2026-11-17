@@ -422,6 +422,8 @@ export const HELM_CAPS = {
   indexSplit: 6_000,
   /** Scheduled actions a person has that have not ended; also the listener's cap. */
   scheduledActions: 50,
+  /** Aims in one day. */
+  dayAims: 12,
 } as const;
 
 /** The kinds of date that come back each year, in the order the add sheet offers them. */
@@ -4802,6 +4804,7 @@ export const SEEN_AS_REMOVED_CAP = 200;
 
 export const PLANNER_COPY = {
   estimate: 'about 30 min · estimate',
+  estimateOf: (length: string) => `about ${length} · estimate`,
   fitsBefore: (length: string, title: string) =>
     `${length} · fits before ${title}`,
   fitsAfter: (length: string, title: string) =>

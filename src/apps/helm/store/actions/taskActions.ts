@@ -71,6 +71,7 @@ export async function createTask(
     isUrgent: false,
     due: input.due,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,

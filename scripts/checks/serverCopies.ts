@@ -335,6 +335,26 @@ const COPIES: Copy[] = [
       '@apps/helm/engine/habitDay': './habitDay.js',
     },
   },
+  {
+    src: 'src/apps/helm/engine/restDay.ts',
+    dest: 'functions/src/apps/helm/dayPlan/restDay.ts',
+    importRewrites: {
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/planner.ts',
+    dest: 'functions/src/apps/helm/dayPlan/planner.ts',
+    importRewrites: {
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/constants': './plannerCopy.js',
+      '@apps/helm/engine/freeTime': '../nomos/freeTime.js',
+      '@apps/helm/engine/importance': '../nomos/importanceOrder.js',
+      '@apps/helm/engine/restDay': './restDay.js',
+      '@apps/helm/types': './plannerTypes.js',
+      '@apps/helm/utils/taskDue': './taskDue.js',
+    },
+  },
 ];
 
 interface Generated {

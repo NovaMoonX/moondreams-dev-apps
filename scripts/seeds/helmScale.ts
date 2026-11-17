@@ -1222,6 +1222,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       isUrgent: index % 17 === 0,
       due,
       durationMinutes: index % 3 === 0 ? 15 * between(1, 8) : null,
+      effort: null,
       energy: (['low', 'medium', 'high', null] as const)[index % 4],
       context: (['atHome', 'out', 'atComputer', 'onPhone', null] as const)[
         index % 5

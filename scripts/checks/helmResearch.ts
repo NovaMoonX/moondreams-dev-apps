@@ -1735,6 +1735,8 @@ test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy d
     busy: [],
     slots: {},
     tasks: [],
+    aimTaskIds: [],
+    finishedTasks: [],
   };
   const slot = findLearnSlot({
     plan,
@@ -1883,6 +1885,8 @@ test('learn offers: shown today first, never offered before offered, longest ago
     busy: [],
     slots: {},
     tasks: [],
+    aimTaskIds: [],
+    finishedTasks: [],
   };
   const dayStart = Date.UTC(2026, 10, 16, 13, 0);
   const notNows = (agesInDays: number[]) =>

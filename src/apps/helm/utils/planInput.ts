@@ -5,6 +5,7 @@ import { readRestDay } from '@apps/helm/engine/restDay';
 import {
   findOpenings,
   type BusyBlock,
+  type FinishedTask,
   type PlannerInput,
   type PlannerTask,
 } from '@apps/helm/engine/planner';
@@ -84,6 +85,9 @@ export const toPlannerTask = (
   durationMinutes: task.durationMinutes,
   energy: task.energy,
   placeIds: task.placeIds,
+  projectId: task.projectId,
+  context: task.context,
+  effort: task.effort,
 });
 
 // A stay or rental runs for days and says where the person is, not time it takes.
@@ -153,6 +157,10 @@ export function buildPlanInput(
   sources: PlanSources,
   dayKey: string,
   slots: Record<string, PlanSlot> = sources.planDays[dayKey]?.slots ?? {},
+  aims: { taskIds: string[]; finishedTasks: FinishedTask[] } = {
+    taskIds: [],
+    finishedTasks: [],
+  },
 ) {
   const { profile, timeZone, now, todayKey, grants, tasks, planDays, places } =
     sources;
@@ -212,6 +220,8 @@ export function buildPlanInput(
     busy,
     slots,
     avoidBuckets: sources.avoidBuckets ?? [],
+    aimTaskIds: aims.taskIds,
+    finishedTasks: aims.finishedTasks,
     tasks: tasks
       .filter((task) => !task.isUnreadable && !taken.has(task.id))
       .map((task) => toPlannerTask(task, sources.projectPlaces)),

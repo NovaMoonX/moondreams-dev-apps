@@ -53,6 +53,7 @@ const slot = (taskId: string, status: PlanSlot['status'], from: string) => ({
   status,
   source: 'nomos' as const,
   decidedAt: null,
+  overlapsEventRef: null,
 });
 
 const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
@@ -68,6 +69,8 @@ const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
   busy: [],
   slots: {},
   tasks: [],
+  aimTaskIds: [],
+  finishedTasks: [],
   ...extra,
 });
 
@@ -131,6 +134,9 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     slots: {},
     reasons: {},
     outcome: 'late',
+    unplaced: [],
+    blockers: {},
+    guessedTaskIds: [],
   });
   assert.equal(
     run(base({ now: at('22:30'), tasks: [task('a')] })).outcome,
@@ -248,7 +254,7 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   assert.ok(startOf('plain')! < startOf('low')!);
   assert.equal(startOf('high'), at('09:15'));
   assert.equal(startOf('plain'), at('13:15'));
-  assert.equal(startOf('low'), at('13:45'));
+  assert.equal(startOf('low'), at('14:00'));
 }
 
 {
@@ -453,7 +459,7 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   assert.equal(
     Object.values(timed.slots).find((entry) => entry.taskId === 'home')
       ?.startAt,
-    at('08:30'),
+    at('08:45'),
   );
 }
 

@@ -5,6 +5,7 @@ export const HELM_HOMES = [
   'tasks',
   'facts',
   'planDays',
+  'dayAims',
   'who',
   'places',
   'keyDates',
@@ -493,6 +494,13 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     tools: ['get_calendar'],
     writer: 'actions/planActions',
     taps: ['generatePlan', 'keepSlot', 'skipSlot', 'moveSlot'],
+  }),
+  row({
+    thing: 'The aims a person set for a day and how the day wound down',
+    home: 'dayAims',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server'],
+    writer: 'none',
   }),
   row({
     thing: 'Where the person is right now',

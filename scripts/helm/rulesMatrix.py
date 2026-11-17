@@ -522,7 +522,7 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'apps/helm/server/{uid}/research/usage', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'apps/helm/server/{uid}/research/usage', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}', f'apps/helm/dayQueue/{uid}'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else '/'.join(p.split("/")[-2:]) if p.endswith('/usage') else p.split("/")[-2]
         for a, tok in actors.items():
@@ -541,6 +541,12 @@ def main():
         check(f'actionQueue list [{a}]', get('apps/helm/actionQueue', tok), False)
         check(f'actionQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/actionQueue/{uid}-own', {'lookAt': NOW})]), False)
         check(f'actionQueue delete [{a}]', commit(tok, [rm(f'apps/helm/actionQueue/{uid}')]), False)
+
+    # The day job's queue is Admin SDK only as well.
+    for a, tok in actors.items():
+        check(f'dayQueue list [{a}]', get('apps/helm/dayQueue', tok), False)
+        check(f'dayQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/dayQueue/{uid}-own', {'lookAt': NOW})]), False)
+        check(f'dayQueue delete [{a}]', commit(tok, [rm(f'apps/helm/dayQueue/{uid}')]), False)
 
     if STORAGE_HOST:
         storage_cases(o_tok, x_tok, uid, x_uid, actors)
