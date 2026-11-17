@@ -56,6 +56,9 @@ const projectSealed = (
   importance,
   privateMark: project.privateMark,
   isPrivacyCleared: project.isPrivacyCleared,
+  quietMark: project.quietMark,
+  quietUntil: project.quietUntil,
+  isQuietCleared: project.isQuietCleared,
 });
 
 const habitSealed = (

@@ -35,6 +35,7 @@ export const playSpeechSample = ({
   const done = createCloudTts({
     source: withSpeechVoice(source, voice),
     fallback: noDevice,
+    reportsFallback: false,
   })
     .speak(text, {
       priority: 'reply',

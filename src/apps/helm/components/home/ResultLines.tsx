@@ -25,6 +25,8 @@ import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
 import { shownExecutionLine } from '@apps/helm/utils/activity';
 import { readLastTouchAt, subscribeTouch } from '@apps/helm/utils/presence';
+import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
+import { readReplayLine } from '@apps/helm/utils/quietSpeech';
 import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
 interface ResultLinesProps {
@@ -36,6 +38,8 @@ interface ResultLinesProps {
   showsNotice: boolean;
   /** Only the newest reply on home offers to be played again. */
   canReplay: boolean;
+  /** The turn kept a quiet thing off the speaker, so a replay says only the screen line. */
+  isQuietTurn: boolean;
 }
 
 const toSentence = (summary: string) =>
@@ -99,6 +103,7 @@ function ResultLines({
   isSeen,
   showsNotice,
   canReplay,
+  isQuietTurn,
 }: ResultLinesProps) {
   const { user } = useAuth();
   const card = useRef<HTMLDivElement>(null);
@@ -139,7 +144,18 @@ function ResultLines({
       ) : (
         <>
           {execution.summary && execution.category !== 'answer' && (
-            <AssistantLine speakText={canReplay ? line : undefined}>
+            <AssistantLine
+              speakText={
+                canReplay
+                  ? readReplayLine(
+                      line,
+                      isQuietTurn
+                        ? QUIET_SPOKEN_LINE
+                        : (execution.heldSpoken ?? null),
+                    )
+                  : undefined
+              }
+            >
               {line}
             </AssistantLine>
           )}
