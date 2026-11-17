@@ -1108,7 +1108,7 @@ export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
   isUnreadable: boolean;
 }
 
-/** `apps/helm/users/{uid}/groupings/{groupingId}`: things that look like one thing, found overnight; the id is a hash of the sorted source keys. */
+/** `apps/helm/users/{uid}/groupings/{groupingId}`; the id hashes the sorted source keys. */
 export interface Grouping extends GroupingMeta {
   sealed: Sealed;
 }
@@ -1116,7 +1116,7 @@ export interface Grouping extends GroupingMeta {
 export interface GroupingSealed {
   proposedTitle: string | null;
   emoji: string | null;
-  /** Source key to its title; a private source has none. */
+  /** Source key to its title; none for a private source. */
   titles: Record<string, string>;
 }
 

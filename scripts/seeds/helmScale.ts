@@ -27,6 +27,7 @@ import {
   type ConnectionRelation,
   type CoupleStatus,
 } from '../../src/apps/helm/engine/connections.ts';
+import { toGroupingId } from '../../src/apps/helm/engine/grouping.ts';
 import { sealJson } from '../../src/apps/helm/security.ts';
 import { buildLearningScale } from './helmLearning.ts';
 import type {
@@ -37,6 +38,8 @@ import type {
   HelmDayCounts,
   HelmDaySummary,
   HelmDaySummarySealed,
+  Grouping,
+  GroupingSealed,
   HelmEncryption,
   KeyDate,
   KeyDateIndexEntry,
@@ -1934,6 +1937,61 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   });
   summaryDocs.forEach((entry) =>
     put('daySummaries', `daySummaries/${entry.dayKey}`, entry.value),
+  );
+
+  // Groupings: thirty of mixed states over the tasks, each in the shape the overnight pass writes.
+  const GROUPING_STATE_CYCLE = [
+    'proposed',
+    'proposed',
+    'filed',
+    'groupedByYou',
+    'notRelated',
+    'notNow',
+  ] as const;
+  const groupingDocs = await mapChunked(range(30), async (index) => {
+    const state = GROUPING_STATE_CYCLE[index % GROUPING_STATE_CYCLE.length];
+    const projectIndex = (index * 3) % PROJECT_COUNT;
+    const sourceKeys = range(2 + (index % 4)).map(
+      (offset) =>
+        `tasks/scale-task-${pad((index * 17 + offset * 2) % TASK_COUNT, 3)}`,
+    );
+    const isLinked = state === 'filed' || state === 'groupedByYou';
+    const proposedAt = now - between(1, 40) * DAY_MS;
+    const declineCount = state === 'notNow' ? between(1, 3) : 0;
+    const grouping: Grouping = {
+      parentKind: 'project',
+      parentId: projectIds[projectIndex],
+      sourceKeys,
+      sources: sourceKeys.map((key) => ({ key, app: null, kind: 'task' })),
+      linkedKeys: isLinked ? sourceKeys : [],
+      state,
+      confidence: index % 5 === 0 ? 'certain' : 'likely',
+      evidence: ['titleMatch'],
+      declineCount,
+      nextOfferAfter:
+        state === 'notNow' && declineCount < 3
+          ? now + declineCount * 28 * DAY_MS
+          : null,
+      answeredAt: state === 'proposed' || state === 'filed' ? null : proposedAt,
+      toldAt: state === 'filed' ? proposedAt + 3_600_000 : null,
+      executionId: null,
+      dayKey: habitDayKey(proposedAt, OWNER_TIME_ZONE),
+      proposedAt,
+      updatedAt: proposedAt,
+      privacy: 'ordinary',
+      createdBy: 'nomos',
+      sealed: await seal<GroupingSealed>({
+        proposedTitle: `Project ${pad(projectIndex, 3)}`,
+        emoji: null,
+        titles: Object.fromEntries(
+          sourceKeys.map((key) => [key, `Task ${key.slice(-3)}`]),
+        ),
+      }),
+    };
+    return { id: toGroupingId(uid, sourceKeys), grouping };
+  });
+  groupingDocs.forEach((entry) =>
+    put('groupings', `groupings/${entry.id}`, entry.grouping),
   );
 
   // Learning: live and off patterns, observations over 26 weeks and a fortnight of reflections.

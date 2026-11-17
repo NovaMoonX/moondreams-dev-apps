@@ -1904,7 +1904,7 @@ export function narrowForUndo(
   };
 }
 
-/** The execution as the generic undo reads it: a grouping's own fields are not stepped back field by field (its rule lets only its answer fields change), so its effect is left out and `toGroupingUndoPatch` writes it. */
+/** The execution without a grouping's effect, which its rule lets only `toGroupingUndoPatch` write. */
 export const withoutGroupings = (view: OpenExecution): OpenExecution => {
   const keep = view.effectRefs.flatMap((ref, index) =>
     ref.collection === 'groupings' ? [] : [index],
@@ -1916,7 +1916,7 @@ export const withoutGroupings = (view: OpenExecution): OpenExecution => {
   };
 };
 
-/** A grouping after its execution is taken back: the person's own Group them goes back to where it was, and a link the server made quietly is a no, so those two are never offered again. */
+/** A grouping after Undo: the person's Group them goes back to proposed, a server link becomes a no. */
 export function toGroupingUndoPatch(
   actor: Execution['actor'],
   previous: Record<string, unknown> | null,

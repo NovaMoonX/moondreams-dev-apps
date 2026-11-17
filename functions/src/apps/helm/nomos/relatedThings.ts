@@ -14,7 +14,6 @@ export const MAX_RELATED_THINGS = 6;
 const MAX_SOURCES_SHOWN = 6;
 const MIN_WORD = 3;
 
-/** A grouping as the model sees it: its name, whether the person grouped it or it is only suggested, and its sources; a private source has no title. */
 export interface ContextRelatedThing {
   name: string;
   state: 'grouped' | 'suggested';
@@ -26,7 +25,7 @@ const matcher = createOptionMatcher<string>({
   typos: false,
 });
 
-/** Each word once: the matcher treats two equal options as ambiguous and picks neither. */
+/** Each word once: the matcher picks neither of two equal options. */
 const wordsOf = (text: string) => [
   ...new Set(
     toComparable(text, true)
@@ -41,7 +40,7 @@ interface OpenedGrouping {
   titles: Record<string, string>;
 }
 
-/** Up to six stored groupings whose name or a source's title shares a word with the turn, groupings the person made first. */
+/** Up to six stored groupings the turn's words touch. */
 export function pickRelatedThings(
   opened: readonly OpenedGrouping[],
   text: string,
@@ -95,7 +94,6 @@ const openParentName = (
   }
 };
 
-/** The groupings found overnight that the turn is about, read for the model's context. A grouping whose words will not open is left out. */
 export async function readContextRelatedThings(
   firestore: Firestore,
   base: string,

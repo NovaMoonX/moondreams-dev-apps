@@ -25,7 +25,7 @@ const toTitles = (value: unknown): Record<string, string> =>
       )
     : {};
 
-/** A grouping whose words won't open keeps its readable part, so the offer still holds back what was answered; a document that is not a grouping is left out. */
+/** A grouping whose words won't open keeps its readable part, so an answered one stays held back. */
 export async function openGrouping(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
@@ -57,7 +57,7 @@ export async function openGrouping(
   }
 }
 
-/** Up to the record cap; a slower open never overwrites a newer snapshot or lands after the listener stopped. */
+/** A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startGroupingsListener(
   uid: string,
   read: SealedReader,

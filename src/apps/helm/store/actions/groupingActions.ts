@@ -68,7 +68,6 @@ interface Parent {
   written: Promise<unknown>;
 }
 
-/** The project or topic the grouping files under: the one the nightly pass named when it is still there, else a new one made from the offer's title. */
 async function resolveParent(
   uid: string,
   encryption: HelmEncryption,
@@ -116,7 +115,6 @@ interface Link {
   fields: Record<string, unknown>;
 }
 
-/** The links Group them writes, only into a link that is empty now: a task with no project, a note or topic that does not yet name this one. A synced copy is never written to, and a project or a topic source is only listed. */
 function planLinks(
   uid: string,
   grouping: OpenGrouping,
@@ -278,7 +276,7 @@ export type GroupThemResult =
     }
   | { kind: 'failed' };
 
-/** Files the things under one project or topic: made when the nightly pass named none, links written only where empty, the answer and an execution with it in one batch. The writes are handed back unawaited so it works offline; Undo takes the execution back. */
+/** Group them: files the things under one parent in one batch, unawaited so it works offline. */
 export async function groupThem(
   uid: string,
   grouping: OpenGrouping,
@@ -342,7 +340,7 @@ const answerOf = (grouping: OpenGrouping): Restorable => ({
   answeredAt: grouping.answeredAt,
 });
 
-/** "Not related": never offered again unless a new thing joins it. The write is handed back unawaited; `undo` puts the answer back. */
+/** Not related; unawaited, `undo` puts the answer back. */
 export function markNotRelated(uid: string, grouping: OpenGrouping) {
   const now = Date.now();
   const batch = writeBatch(db);
@@ -357,7 +355,7 @@ export function markNotRelated(uid: string, grouping: OpenGrouping) {
   };
 }
 
-/** "Not now": the wait grows with the count and the third ends it. Returns the weeks it waits (null when it is over) with the unawaited write and its `undo`. */
+/** Not now; returns the weeks it waits, null when over. */
 export function notNowGrouping(uid: string, grouping: OpenGrouping) {
   const now = Date.now();
   const patch = applyGroupingNotNow(grouping, now);
@@ -373,7 +371,6 @@ export function notNowGrouping(uid: string, grouping: OpenGrouping) {
   };
 }
 
-/** The person has seen the quiet line saying things were linked. */
 export function markGroupingTold(uid: string, id: string) {
   const batch = writeBatch(db);
   batch.update(doc(groupingsOf(uid), id), {
@@ -383,7 +380,7 @@ export function markGroupingTold(uid: string, id: string) {
   return batch.commit();
 }
 
-/** A source was deleted: every grouping that holds it loses it, one left with fewer than two goes, and deleting a project or topic removes the groupings filed under it. Each write stands alone and is not awaited, so a delete works offline and a grouping gone elsewhere never holds it back. */
+/** A deleted source leaves its groupings; unawaited so it works offline. */
 export function dropFromGroupings(
   uid: string,
   key: string,
@@ -414,7 +411,7 @@ export function dropFromGroupings(
   });
 }
 
-/** After a whole execution that linked things quietly was taken back by the generic undo: the grouping is a no, never offered again. */
+/** After a quiet link was taken back: the grouping is a no. */
 export function closeGroupings(uid: string, ids: string[], now: number) {
   const batch = writeBatch(db);
   ids.forEach((id) =>
@@ -431,7 +428,7 @@ const ownLinks = (linkedKeys: string[]) =>
     .map(splitKey)
     .filter((one) => ['tasks', 'notes', 'topics'].includes(one.collection));
 
-/** Takes back an execution whose only effect is a grouping: the person's Group them (links taken out where they still name this parent, a parent it made removed when nothing else uses it) or a server link that touched no record of the person's. */
+/** Takes back an execution whose only effect is a grouping. */
 export async function undoGroupingExecution(
   uid: string,
   encryption: HelmEncryption,
@@ -623,7 +620,6 @@ export async function undoGroupingExecution(
   }
 }
 
-/** Whether a parent Group them made holds nothing but what it linked, so Undo may remove it. */
 async function readIsParentUnused(
   uid: string,
   kind: 'project' | 'topic',

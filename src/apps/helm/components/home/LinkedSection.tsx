@@ -14,7 +14,6 @@ interface LinkedSectionProps {
   parentId: string;
 }
 
-/** What was grouped under a project or topic, each thing with its app's logo when it is synced; nothing is drawn while none is. */
 function LinkedSection({ kind, parentId }: LinkedSectionProps) {
   const groupings = useAppSelector(selectOpenGroupings);
   const rows = useMemo(

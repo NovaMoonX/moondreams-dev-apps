@@ -3,7 +3,6 @@ import {
   type GroupingRecord,
 } from '@apps/helm/engine/grouping';
 
-/** What this app open has already shown, so a second offer never follows the first until the app is opened again. */
 export interface GroupingSession {
   offeredId: string | null;
   filedId: string | null;
@@ -14,7 +13,7 @@ export const createGroupingSession = (): GroupingSession => ({
   filedId: null,
 });
 
-/** One offer per app open: the first one chosen stays the only one, answered or not. */
+/** One offer per app open: the first one chosen stays the only one. */
 export function pickGroupingOffer<T extends GroupingRecord>(
   session: GroupingSession,
   groupings: readonly T[],
@@ -32,7 +31,7 @@ export function pickGroupingOffer<T extends GroupingRecord>(
   return offer;
 }
 
-/** The filed grouping not yet told, held for the rest of the open once chosen so marking it told does not take the line away while it is read. */
+/** Held for the rest of the open once chosen, so marking it told keeps the line on screen. */
 export function pickFiledLine<T extends GroupingRecord>(
   session: GroupingSession,
   groupings: readonly T[],
@@ -62,7 +61,6 @@ export type HomeCard = 'day' | 'grouping' | 'filedLine';
 
 export const HOME_CARDS_MAX = 3;
 
-/** The cards home draws, in order: the day, then an offer or, when there is none, the quiet line about what was linked. Never more than three. */
 export const pickHomeCards = (input: {
   hasDay: boolean;
   hasOffer: boolean;

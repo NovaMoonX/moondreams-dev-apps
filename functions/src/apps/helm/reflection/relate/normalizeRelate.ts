@@ -12,9 +12,7 @@ export const MAX_RELATE_GROUPINGS = 6;
 export const TITLE_CAP = 40;
 
 export interface RelateAnswer {
-  /** Codes of the things to group, each once. */
   sources: string[];
-  /** The code of the project or topic they go under; null when there is none. */
   parent: string | null;
   parentKind: GroupingParentKind;
   proposedTitle: string | null;
@@ -45,7 +43,7 @@ const toOrNull = (value: unknown) => {
   return text === '' || text.toLowerCase() === 'none' ? null : text;
 };
 
-/** The model's answer read from unknown: an entry with no sources or a kind or confidence outside the lists is dropped, and what is left is capped. Nothing here says the answer is right; code checks that. */
+/** Reads the answer from unknown; code checks it is right. */
 export function normalizeRelate(raw: unknown): NormalizedRelate {
   const groupings = toList(isRecord(raw) ? raw.groupings : null)
     .filter(isRecord)

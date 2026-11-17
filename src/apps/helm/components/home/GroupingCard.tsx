@@ -22,7 +22,7 @@ interface GroupingCardProps {
   grouping: OpenGrouping;
 }
 
-/** Things that look like one thing, in the offer card's dashed look: Group them is the one button, and the two ways of saying no sit apart below a hairline, at opposite ends, so a quick tap on one never lands on the other. */
+/** The offer card: the two ways of saying no sit apart so a quick tap never lands on the wrong one. */
 function GroupingCard({ grouping }: GroupingCardProps) {
   const { user } = useAuth();
   const { addToast } = useToast();

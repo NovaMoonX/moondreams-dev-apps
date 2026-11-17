@@ -33,7 +33,6 @@ export interface PlannedLink {
   collection: 'tasks' | 'notes' | 'topics';
   id: string;
   projectId: string;
-  /** The project ids the record held before; empty for every link written here. */
   previous: string[];
 }
 
@@ -71,11 +70,10 @@ interface PlanInput {
   world: RelateWorld;
   index: RelateIndex;
   answer: NormalizedRelate;
-  /** Groupings that already have their quiet execution, so one is never written twice. */
   executedIds: ReadonlySet<string>;
 }
 
-/** Each word once: the matcher treats two equal options as ambiguous and picks neither. */
+/** Each word once: the matcher picks neither of two equal options. */
 const wordsOf = (title: string | null) =>
   title === null
     ? []
@@ -109,7 +107,7 @@ const pairs = <T>(items: T[]) =>
     items.slice(at + 1).map((right) => [left, right] as const),
   );
 
-/** What ties the things together, found by code from the records themselves; the model's own list is only a fallback. */
+/** What ties the things together, found by code; the model's own list is a fallback. */
 const findEvidence = (items: RelateItem[]): GroupingEvidence[] => {
   const shared = (pick: (item: RelateItem) => string[]) =>
     pairs(items).some(([left, right]) =>
@@ -140,7 +138,7 @@ const toSource = (item: RelateItem) => ({
   kind: item.kind,
 });
 
-/** The groupings a night writes, from the model's answer held to the bar: an unknown code, fewer than two things, things from one place only, or a thing already grouped is refused. A link is written only when the model is certain, the parent is an existing project, every thing passes a code check against it and holds no link yet; everything else is a proposal that writes no link. Overlap with a stored grouping updates it, and a Not related or an ended Not now reopens only for a thing the person has not already answered about. Pure. */
+/** The groupings a night writes, held to the bar; a proposal writes no link. Pure. */
 export function planRelate(input: PlanInput): RelatePlan {
   const { uid, now, dayKey, world, index, answer, executedIds } = input;
   const byKey = new Map(world.items.map((item) => [item.key, item]));

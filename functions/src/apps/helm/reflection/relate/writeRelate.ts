@@ -43,7 +43,7 @@ interface Backstop {
   edits: { id: string; isGone: boolean; patch: Partial<GroupingRecord> }[];
 }
 
-/** The stored groupings with any source that is gone dropped (deleted, or its connection ended), and the edits that make the stored ones match. A source missing only from this night's read is looked up, never assumed gone. */
+/** Drops gone sources from stored groupings; one missing only from tonight's read is looked up. */
 async function dropGoneSources(
   firestore: Firestore,
   base: string,
@@ -185,7 +185,7 @@ const toExecution = (
   };
 };
 
-/** Settles one request's answer in one transaction: the model's groupings held to the bar, written under the person's own record with any link written only where it was empty and each filed grouping's execution, or the answer is dropped (learning off, forgotten since it was sent, replaced by a newer request) or counted as a failed try. Running it again for the same request changes nothing. */
+/** Settles one request's answer in one transaction; running it again changes nothing. */
 export async function applyRelateOutcome(
   firestore: Firestore,
   keyring: Keyring,

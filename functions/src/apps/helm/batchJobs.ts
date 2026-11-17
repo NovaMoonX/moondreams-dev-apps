@@ -1,7 +1,7 @@
 import { REFLECT_BATCH } from './reflection/reflectionRuns.js';
 import { RELATE_BATCH } from './reflection/relate/relateRuns.js';
 
-/** The seven questions a job answers before it may run in a batch; each is true, and the terms are the standard data-handling terms. */
+/** The seven answers a job gives before it may run in a batch. */
 export interface BatchJobAnswers {
   nobodyWaits: boolean;
   canWait24h: boolean;
@@ -14,12 +14,11 @@ export interface BatchJobAnswers {
 
 export interface BatchJobSettings {
   jobId: string;
-  /** Longest an answer may take, in hours; a batch offers 24. */
   maxWaitHours: number;
   maxAttempts: number;
   deleteAfterCollect: boolean;
   answers: BatchJobAnswers;
-  /** What happens when the person wants the result now: the item itself runs at once, or the turn answers from what is already stored. */
+  /** Run the item at once, or answer the turn from what is stored. */
   whenWantedNow: 'runAtOnce' | 'answerAtOnce';
 }
 

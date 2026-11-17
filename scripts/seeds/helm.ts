@@ -31,6 +31,10 @@ import {
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '../../src/apps/helm/constants.ts';
+import {
+  toGroupingId,
+  type GroupingSource,
+} from '../../src/apps/helm/engine/grouping.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
   buildConnection,
@@ -101,6 +105,8 @@ import type {
   StyleSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
+  Grouping,
+  GroupingSealed,
   Topic,
   TopicDepth,
   TopicSealed,
@@ -189,6 +195,24 @@ const SEED_PROFILES = [
 ];
 
 const SORT_DELAY_MS = 4_000;
+
+const toSyncedId = (grantId: string, category: string, sourceRef: string) =>
+  createHash('sha256')
+    .update(`${grantId}|${category}|${sourceRef}`)
+    .digest('hex')
+    .slice(0, 40);
+const SEED_RUNWAY_GRANT_ID = toGrantId(
+  'helm',
+  toAppConnectorId('runway'),
+  SITE_ACCOUNT_ID,
+);
+const SEED_GOING_ONCE_GRANT_ID = toGrantId(
+  'helm',
+  toAppConnectorId('going-once'),
+  SITE_ACCOUNT_ID,
+);
+const SEED_GOING_ONCE_SALE_REF = 'sales/seed-going-once-fall-clear-out';
+const SEED_MOVING_HORIZON_REF = 'horizon/seed-moving-fund';
 
 // Alex's one fixture Google account: its calendars are the two a fixture read offers, the second marked as shifts.
 const GOOGLE_ACCOUNT_ID = `${GOOGLE_ACCOUNT_PREFIX}${createHash('sha256').update('fixture-personal').digest('hex').slice(0, 16)}`;
@@ -2270,6 +2294,317 @@ async function buildProjects(input: {
     }),
   ]);
   return { projects, tasks };
+}
+
+/** Alex's Moving project with what the overnight grouping did with it: two tasks the filed grouping linked to it quietly, with its server execution (the home's "Linked 3 things to Moving. · Undo" line), and a proposed grouping of a task, a topic and two Going Once records (the home's "These look like one thing" card). */
+async function buildGroupings(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const today = getSeedToday(now);
+  const projectId = 'seed-project-moving';
+  const dayKey = habitDayKey(now, timeZone);
+  const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const project: Project = {
+    privacy: 'ordinary',
+    kind: 'project',
+    targetDate: today + 26 * DAY_MS,
+    status: 'active',
+    whoRoles: {},
+    pausedAt: null,
+    pausedUntil: null,
+    researchOffers: [],
+    milestoneState: {},
+    mediaIds: [],
+    createdBy: 'person',
+    executionId: null,
+    lastEditedAt: null,
+    createdAt: now - 12 * DAY_MS,
+    finishedAt: null,
+    sealed: await seal<ProjectSealed>({
+      name: 'Moving',
+      emoji: '🚚',
+      objective: null,
+      milestones: {},
+      roleNotes: {},
+      why: null,
+      importance: null,
+      aheadAsks: null,
+      privateMark: null,
+      isPrivacyCleared: false,
+    }),
+  };
+  const taskOf = async (
+    title: string,
+    fields: Pick<Task, 'projectId' | 'createdAt'>,
+  ): Promise<Task> => ({
+    privacy: 'ordinary',
+    status: 'open',
+    importance: null,
+    isUrgent: false,
+    due: null,
+    durationMinutes: null,
+    effort: null,
+    energy: null,
+    context: null,
+    milestoneId: null,
+    whoIds: [],
+    placeIds: [],
+    notUntil: null,
+    waitsOnTaskIds: [],
+    waitsOnWhoId: null,
+    stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
+    mediaIds: [],
+    createdBy: 'person',
+    sourceCaptureId: null,
+    executionId: null,
+    lastEditedAt: null,
+    completedAt: null,
+    clearedAt: null,
+    ...fields,
+    sealed: await seal<TaskSealed>({
+      title,
+      notes: null,
+      steps: {},
+      meetingLabel: null,
+      privateMark: null,
+      isPrivacyCleared: false,
+    }),
+  });
+  const tasks = [
+    {
+      id: 'seed-task-moving-boxes',
+      title: 'Pick up packing boxes',
+      task: await taskOf('Pick up packing boxes', {
+        projectId,
+        createdAt: now - 6 * DAY_MS,
+      }),
+    },
+    {
+      id: 'seed-task-moving-utilities',
+      title: 'Move the electricity account',
+      task: await taskOf('Move the electricity account', {
+        projectId,
+        createdAt: now - 5 * DAY_MS,
+      }),
+    },
+    {
+      id: 'seed-task-moving-movers',
+      title: 'Book the movers',
+      task: await taskOf('Book the movers', {
+        projectId: null,
+        createdAt: now - 2 * DAY_MS,
+      }),
+    },
+  ];
+  const topic: Topic = {
+    privacy: 'ordinary',
+    parentId: null,
+    depth: 1,
+    projectIds: [],
+    version: 0,
+    docState: 'empty',
+    pendingNoteIds: [],
+    writeClaim: null,
+    overviewOf: {},
+    createdBy: 'person',
+    executionId: null,
+    createdAt: now - 4 * DAY_MS,
+    lastEditedAt: null,
+    lastWrittenAt: null,
+    sealed: await seal<TopicSealed>({
+      name: 'Moving day tips',
+      emoji: '📦',
+      overview: null,
+      sections: [],
+      privateMark: null,
+      isPrivacyCleared: false,
+    }),
+  };
+  const syncedKey = (grantId: string, category: string, ref: string) =>
+    `synced/${toSyncedId(grantId, category, ref)}`;
+  const horizonKey = syncedKey(
+    SEED_RUNWAY_GRANT_ID,
+    'horizon',
+    SEED_MOVING_HORIZON_REF,
+  );
+  const deskKey = syncedKey(
+    SEED_GOING_ONCE_GRANT_ID,
+    'pickups',
+    `${SEED_GOING_ONCE_SALE_REF}/items/seed-go-oak-desk`,
+  );
+  const saleKey = syncedKey(
+    SEED_GOING_ONCE_GRANT_ID,
+    'sales',
+    SEED_GOING_ONCE_SALE_REF,
+  );
+  const filedKeys = [
+    'tasks/seed-task-moving-boxes',
+    'tasks/seed-task-moving-utilities',
+    horizonKey,
+  ];
+  const proposedKeys = [
+    'tasks/seed-task-moving-movers',
+    'topics/seed-topic-moving-tips',
+    deskKey,
+    saleKey,
+  ];
+  const filedId = toGroupingId(uid, filedKeys);
+  const proposedId = toGroupingId(uid, proposedKeys);
+  const executionId = `relate-${filedId}`;
+  const filedAt = now - 9 * 3_600_000;
+  const groupingOf = async (
+    keys: string[],
+    sources: GroupingSource[],
+    fields: Pick<
+      Grouping,
+      | 'state'
+      | 'confidence'
+      | 'evidence'
+      | 'linkedKeys'
+      | 'executionId'
+      | 'answeredAt'
+      | 'proposedAt'
+    >,
+    words: GroupingSealed,
+  ): Promise<Grouping> => ({
+    parentKind: 'project',
+    parentId: projectId,
+    sourceKeys: keys,
+    sources,
+    declineCount: 0,
+    nextOfferAfter: null,
+    toldAt: null,
+    dayKey,
+    updatedAt: fields.proposedAt,
+    privacy: 'ordinary',
+    createdBy: 'nomos',
+    ...fields,
+    sealed: await seal<GroupingSealed>(words),
+  });
+  const filed = await groupingOf(
+    filedKeys,
+    [
+      { key: filedKeys[0], app: null, kind: 'task' },
+      { key: filedKeys[1], app: null, kind: 'task' },
+      {
+        key: horizonKey,
+        app: toAppConnectorId('runway'),
+        kind: 'project',
+      },
+    ],
+    {
+      state: 'filed',
+      confidence: 'certain',
+      evidence: ['titleMatch', 'datedEvent'],
+      linkedKeys: filedKeys,
+      executionId,
+      answeredAt: null,
+      proposedAt: filedAt,
+    },
+    {
+      proposedTitle: 'Moving',
+      emoji: '🚚',
+      titles: {
+        [filedKeys[0]]: 'Pick up packing boxes',
+        [filedKeys[1]]: 'Move the electricity account',
+        [horizonKey]: 'Moving',
+      },
+    },
+  );
+  const proposed = await groupingOf(
+    proposedKeys,
+    [
+      { key: proposedKeys[0], app: null, kind: 'task' },
+      { key: proposedKeys[1], app: null, kind: 'topic' },
+      { key: deskKey, app: toAppConnectorId('going-once'), kind: 'event' },
+      { key: saleKey, app: toAppConnectorId('going-once'), kind: 'project' },
+    ],
+    {
+      state: 'proposed',
+      confidence: 'likely',
+      evidence: ['titleMatch', 'datedEvent'],
+      linkedKeys: [],
+      executionId: null,
+      answeredAt: null,
+      proposedAt: now - 3_600_000,
+    },
+    {
+      proposedTitle: 'Moving',
+      emoji: '🚚',
+      titles: {
+        [proposedKeys[0]]: 'Book the movers',
+        [proposedKeys[1]]: 'Moving day tips',
+        [deskKey]: 'Oak desk',
+        [saleKey]: 'Fall clear-out',
+      },
+    },
+  );
+  const execution: Execution = {
+    privacy: 'ordinary',
+    captureId: null,
+    actor: 'nomos',
+    via: null,
+    category: 'organize',
+    autonomyLevel: 1,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'update', collection: 'tasks', docId: 'seed-task-moving-boxes' },
+      {
+        op: 'update',
+        collection: 'tasks',
+        docId: 'seed-task-moving-utilities',
+      },
+      { op: 'create', collection: 'groupings', docId: filedId },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: filedAt,
+    decidedAt: filedAt,
+    finishedAt: filedAt,
+    sealed: await seal<ExecutionSealed>({
+      summary: 'Linked 3 things to Moving.',
+      said: null,
+      commands: [],
+      effects: [
+        { written: { projectId }, previous: { projectId: null } },
+        { written: { projectId }, previous: { projectId: null } },
+        {
+          written: { state: 'filed', linkedKeys: filedKeys },
+          previous: null,
+        },
+      ],
+      undoReport: null,
+      spoken: null,
+      goneIds: null,
+      undoReason: null,
+      lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
+    }),
+  };
+  return {
+    project: { id: projectId, project },
+    tasks,
+    topic: { id: 'seed-topic-moving-tips', topic },
+    groupings: [
+      { id: filedId, grouping: filed },
+      { id: proposedId, grouping: proposed },
+    ],
+    execution: { id: executionId, execution },
+  };
 }
 
 /** A habit as stored: every key written, its words sealed. */
@@ -7774,6 +8109,37 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             batch.set(person.collection('tasks').doc(entry.id), entry.task),
           );
         }
+        const groupingWorld = people
+          ? await buildGroupings({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+        if (groupingWorld) {
+          batch.set(
+            person.collection('projects').doc(groupingWorld.project.id),
+            groupingWorld.project.project,
+          );
+          groupingWorld.tasks.forEach((entry) =>
+            batch.set(person.collection('tasks').doc(entry.id), entry.task),
+          );
+          batch.set(
+            person.collection('topics').doc(groupingWorld.topic.id),
+            groupingWorld.topic.topic,
+          );
+          groupingWorld.groupings.forEach((entry) =>
+            batch.set(
+              person.collection('groupings').doc(entry.id),
+              entry.grouping,
+            ),
+          );
+          batch.set(
+            person.collection('executions').doc(groupingWorld.execution.id),
+            groupingWorld.execution.execution,
+          );
+        }
         const habitWorld = people
           ? await buildHabits({ now: context.now, encryption })
           : null;
@@ -7977,6 +8343,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             1 +
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
+            (groupingWorld
+              ? 1 + groupingWorld.tasks.length + 1 + groupingWorld.groupings.length + 1
+              : 0) +
             (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
             (scheduledWorld ? scheduledWorld.length : 0) +
             (researchWorld ? researchWorld.length : 0) +
@@ -8104,10 +8473,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   ) => {
     const data = deriveSeedDataKey(keyring, uid);
     copies.forEach((copy) => {
-      const id = createHash('sha256')
-        .update(`${source.grantId}|${copy.category}|${copy.sourceRef}`)
-        .digest('hex')
-        .slice(0, 40);
+      const id = toSyncedId(source.grantId, copy.category, copy.sourceRef);
       batch.set(users.doc(uid).collection('synced').doc(id), {
         connectorId: source.connectorId,
         accountId: SITE_ACCOUNT_ID,
@@ -8315,7 +8681,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     goingOnceConnectorId,
     SITE_ACCOUNT_ID,
   );
-  const goingOnceSaleRef = 'sales/seed-going-once-fall-clear-out';
+  const goingOnceSaleRef = SEED_GOING_ONCE_SALE_REF;
   const goingOnceCopies: CopyDefinition[] = [
     {
       category: 'pickups',
@@ -8633,6 +8999,19 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       },
       deepLink: '/runway',
     },
+    {
+      category: 'horizon',
+      sourceRef: SEED_MOVING_HORIZON_REF,
+      kind: 'project',
+      title: 'Moving',
+      subtitle: null,
+      startAt: null,
+      dueAt: Math.floor((context.now + 26 * DAY_MS) / DAY_MS) * DAY_MS,
+      isAllDay: true,
+      amountCents: 450_000,
+      currency: runwaySummary.currency,
+      deepLink: '/runway',
+    },
   ];
   const runwayGrant: ConnectionGrant = {
     readerAppId: 'helm',
@@ -8649,7 +9028,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         changedAt: connectedAt,
         seenScopeVersion: null,
       },
-      horizon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      horizon: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       transactions: {
         isOn: true,
         changedAt: connectedAt,
@@ -9110,6 +9489,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       1 +
       6,

@@ -40,7 +40,6 @@ const TITLE_CAP = 120;
 const SOMEONE = 'someone';
 const NINE_LIVES = 'app:nine-lives';
 
-/** How many of each kind of thing a night looks at; together they make the 400. */
 const ROOM = {
   open: 150,
   done: 30,
@@ -55,16 +54,12 @@ export interface RelateItem {
   key: string;
   collection: RelateCollection;
   id: string;
-  /** The connector id of a connected app's copy; null for the person's own. */
   app: string | null;
   kind: string;
-  /** Null for anything private: the model sees only that it exists. */
   title: string | null;
   isPrivate: boolean;
-  /** The projects it is filed under, by id. */
   projectIds: string[];
   whoIds: string[];
-  /** A topic's parent. */
   parentId: string | null;
   date: number | null;
   isDone: boolean;
@@ -82,7 +77,6 @@ export interface RelateWorld {
   projects: Map<string, RelateProject>;
   items: RelateItem[];
   groupings: GroupingRecord[];
-  /** What each stored grouping's sealed words hold, by grouping id. */
   groupingWords: Map<
     string,
     {
@@ -91,7 +85,6 @@ export interface RelateWorld {
       titles: Record<string, string>;
     }
   >;
-  /** Every name and alias of a person other than the person themself. */
   whoNames: string[];
 }
 
@@ -144,7 +137,7 @@ const toTaskDate = (due: unknown) => {
       : null;
 };
 
-/** What a night may look at: active projects as parents, and the open and recently done tasks, notes, topics and synced copies as the things to relate. A care item is never in it; any other private one is there without its words. Reads only, through `read`, so a transaction can hold it. */
+/** What a night may look at; a care item is never in it. */
 export async function readRelateWorld(
   read: Read,
   firestore: Firestore,
@@ -485,7 +478,7 @@ const toDataJson = (value: unknown) =>
 const toDayText = (at: number | null) =>
   at === null ? null : new Date(at).toISOString().slice(0, 10);
 
-/** The user message: aliases for every record, no name of another person, no words from anything private, and no care item at all. Null when there are fewer than two things to relate. */
+/** The user message: no name of another person, no words from anything private, no care item. */
 export function buildRelateMessage(
   uid: string,
   dayKey: string,
@@ -565,7 +558,7 @@ export function buildRelateMessage(
   ].join('\n');
 }
 
-/** The request for one person, or null when there are not two things to relate. Reads only; every record it reads is theirs. */
+/** The request for one person; `null` with fewer than two things to relate. */
 export async function buildRelateRequest(
   firestore: Firestore,
   uid: string,

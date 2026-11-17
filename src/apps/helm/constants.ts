@@ -4883,7 +4883,7 @@ export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;
 
 export { GROUPING_CONFIDENCE } from '@apps/helm/engine/grouping';
 
-/** The connected categories the nightly grouping may read: copies already synced into Helm, never a live read. Each is `<connector id>/<category id>`. */
+/** Synced categories the nightly grouping may read, never live ones; each `<connector id>/<category id>`. */
 export const RELATE_SYNCED_CATEGORIES = [
   'app:going-once/sales',
   'app:going-once/things',

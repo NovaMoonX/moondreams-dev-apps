@@ -9,7 +9,6 @@ interface GroupingSourcesSheetProps {
   onClose: () => void;
 }
 
-/** Every thing a grouping holds, for the ones the card has no room for. */
 function GroupingSourcesSheet({
   grouping,
   isOpen,

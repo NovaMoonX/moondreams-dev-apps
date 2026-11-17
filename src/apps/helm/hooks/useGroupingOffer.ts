@@ -13,7 +13,6 @@ import {
 
 const session = createGroupingSession();
 
-/** The one grouping home offers this app open, and the filed one its quiet line tells of when nothing is on offer. */
 export function useGroupingOffer(now: number) {
   const groupings = useAppSelector(selectOpenGroupings);
   const liveKeys = useAppSelector(selectLiveSourceKeys);

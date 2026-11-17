@@ -2,7 +2,6 @@ import type { BatchJobSettings } from '../../batchJobs.js';
 
 export const RELATE_BATCH = {
   jobId: 'relate',
-  /** Longest an answer may take, in hours; a batch offers 24. */
   maxWaitHours: 24,
   maxAttempts: 3,
   deleteAfterCollect: true,
@@ -18,7 +17,7 @@ export const RELATE_BATCH = {
   whenWantedNow: 'answerAtOnce',
 } as const satisfies BatchJobSettings;
 
-/** The connected categories the nightly grouping may read, each `<connector id>/<category id>`. */
+/** Connected categories the pass may read, each `<connector id>/<category id>`. */
 export const RELATE_SYNCED_CATEGORIES = [
   'app:going-once/sales',
   'app:going-once/things',

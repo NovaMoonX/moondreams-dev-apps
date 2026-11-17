@@ -14,7 +14,7 @@ interface GroupingFiledLineProps {
   grouping: OpenGrouping;
 }
 
-/** "Linked 2 things to Moving. · Undo": what was filed quietly overnight, told once and marked told as soon as it is on screen. */
+/** The quiet "Linked 2 things to Moving. · Undo" line, marked told once it is on screen. */
 function GroupingFiledLine({ grouping }: GroupingFiledLineProps) {
   const { user } = useAuth();
   const { addToast } = useToast();

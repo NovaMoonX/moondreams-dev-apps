@@ -1,4 +1,3 @@
-// The nightly grouping against the Firestore emulator with the fake batch provider: `npm run check:helm-relate`.
 import assert from 'node:assert/strict';
 
 // The functions' own copy of the SDK, so the sentinels the server code writes are the classes this client expects.
@@ -187,7 +186,6 @@ const answerOf = (entries: Entry[]) => ({
 const prompts: string[] = [];
 let night = 0;
 
-/** One whole night: the request is sent, then the answer is collected a few hours later. */
 const runNight = async (entries: Entry[]) => {
   night += 1;
   const start = NOW + night * 2 * DAY_MS;

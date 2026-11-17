@@ -284,7 +284,6 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
   noticed?: string[];
-  /** Groupings found overnight that the turn is about; private sources carry no title. */
   relatedThings?: ContextRelatedThing[];
   seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */

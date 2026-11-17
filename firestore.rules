@@ -297,7 +297,7 @@ service cloud.firestore {
         && (request.resource.data.staleAt == null || request.resource.data.staleAt is int);
     }
 
-    // A grouping of related things is made by the server; the owner reads it, answers it (state, the parent it was filed under, the links it wrote, the back-off) and deletes it. What the server decided (the day, how sure, the evidence) stays out of reach.
+    // Server-created; the owner reads, answers and deletes it, never the fields the server decided.
     match /apps/helm/users/{uid}/groupings/{groupingId} {
       allow read, delete: if isHelmOwner(uid);
       allow update: if isHelmOwner(uid)

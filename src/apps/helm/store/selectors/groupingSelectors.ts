@@ -11,14 +11,12 @@ const selectTopics = (state: RootState) => state.helm.topics.items;
 const selectProjects = (state: RootState) => state.helm.projects.items;
 const selectSynced = (state: RootState) => state.helm.synced.items;
 
-/** Groupings whose readable part opened, newest first. */
 export const selectOpenGroupings = createSelector(
   [selectGroupings],
   (groupings): OpenGrouping[] =>
     groupings.filter((grouping) => !grouping.isUnreadable),
 );
 
-/** Every source key still there (`<collection>/<id>`), so a deleted thing never counts toward an offer. */
 export const selectLiveSourceKeys = createSelector(
   [
     selectTasks,
@@ -38,7 +36,6 @@ export const selectLiveSourceKeys = createSelector(
     ]),
 );
 
-/** The groupings filed under one project or topic, for its Linked section: answered yes, by the person or quietly. */
 export const selectGroupingsUnder = (
   groupings: readonly OpenGrouping[],
   kind: 'project' | 'topic',

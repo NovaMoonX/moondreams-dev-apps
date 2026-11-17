@@ -105,7 +105,6 @@ export interface HelmState {
   patterns: LoadedSet<OpenPattern>;
   /** Guardrails whose yes is being written or not yet heard back: their subject is already paused, so they must not read as no longer true meanwhile. Cleared when the stored pattern stops asking. */
   answeringPatternIds: string[];
-  /** Things the nightly pass found that look like one thing, every state; a screen reads `groupingSelectors`. */
   groupings: LoadedSet<OpenGrouping>;
   /** What was said about habits, goals, tasks and the day in the last two weeks, oldest first. */
   observations: LoadedSet<OpenObservation>;

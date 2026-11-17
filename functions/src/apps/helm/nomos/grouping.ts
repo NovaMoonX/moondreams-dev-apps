@@ -2,8 +2,6 @@
 import { sha256Hex } from '../../../vendor/sha256.js';
 import type { PrivacyClass } from '../privacy.js';
 
-/** Related things grouped overnight: a grouping's id, how it reads back, which one is offered, its back-off and what a deleted source does to it. Pure, shared by the device and the server (vendored). */
-
 const DAY_MS = 86_400_000;
 
 export const GROUPING_STATES = [
@@ -33,14 +31,13 @@ export type GroupingParentKind = (typeof GROUPING_PARENT_KINDS)[number];
 export const GROUPING_LIMITS = {
   minSources: 2,
   maxSources: 12,
-  /** Groupings kept per person. */
   records: 200,
 } as const;
 
-/** Weeks an offer waits after the first and the second Not now (the same back-off as a noticed pattern); the third ends it. */
+/** Weeks an offer waits after the first and second Not now; the third ends it. */
 export const GROUPING_BACKOFF_WEEKS = [4, 8] as const;
 
-/** A source key is `<collection>/<id>`. */
+/** Keys read `<collection>/<id>`. */
 export const GROUPING_COLLECTIONS = [
   'tasks',
   'notes',
@@ -51,24 +48,21 @@ export const GROUPING_COLLECTIONS = [
 
 export interface GroupingSource {
   key: string;
-  /** The connector id of an app's synced record; null for the person's own. */
   app: string | null;
   kind: string;
 }
 
-/** The readable part of `apps/helm/users/{uid}/groupings/{id}`; its words are sealed. */
 export interface GroupingMeta {
   parentKind: GroupingParentKind;
   parentId: string | null;
   sourceKeys: string[];
   sources: GroupingSource[];
-  /** The links this grouping wrote, so Undo and a deleted source know what to take back. */
+  /** Links this grouping wrote, for Undo and a deleted source. */
   linkedKeys: string[];
   state: GroupingState;
   confidence: GroupingConfidence;
   evidence: GroupingEvidence[];
   declineCount: number;
-  /** After a Not now, the first instant it may be offered again. */
   nextOfferAfter: number | null;
   answeredAt: number | null;
   toldAt: number | null;
@@ -85,7 +79,7 @@ export type GroupingRecord = GroupingMeta & { id: string };
 const uniqueSorted = (keys: readonly string[]) =>
   Array.from(new Set(keys)).sort();
 
-/** `g_` and the first 24 hex of the sha256 of the person and the sorted source keys, so the same things written twice, on any device or retry, are one document. */
+/** Same sources, same id on any device or retry. */
 export const toGroupingId = (uid: string, sourceKeys: readonly string[]) =>
   `g_${sha256Hex(`${uid}|${uniqueSorted(sourceKeys).join('|')}`).slice(0, 24)}`;
 
@@ -107,7 +101,7 @@ const readSource = (value: unknown): GroupingSource | null => {
     : null;
 };
 
-/** Reads a stored grouping from unknown; a record missing what makes it one (state, parent kind, two sources) is `null`, and any other missing field takes its quiet default. */
+/** `null` when what makes it a grouping is missing. */
 export function readGrouping(id: string, data: unknown): GroupingRecord | null {
   const raw = (data ?? {}) as Record<string, unknown>;
   const state = pick(GROUPING_STATES, raw.state);
@@ -175,7 +169,7 @@ const isOfferable = (
   (grouping.state === 'proposed' || grouping.nextOfferAfter !== null) &&
   liveCount(grouping, liveKeys) >= GROUPING_LIMITS.minSources;
 
-/** The one grouping to offer now: not answered, past any wait, fewer than three Not nows, and at least two of its sources still there; the surest first, then the newest. */
+/** The one grouping to offer now; the surest first, then the newest. */
 export function selectGroupingOffer<T extends GroupingRecord>(
   groupings: readonly T[],
   now: number,
@@ -203,7 +197,7 @@ export interface GroupingNotNowPatch {
   updatedAt: number;
 }
 
-/** A Not now: the wait grows with the count (4 weeks, then 8) and the third ends the offer (`nextOfferAfter` null, never selected again unless new evidence reopens it). */
+/** Waits 4 weeks, then 8; the third ends the offer. */
 export function applyGroupingNotNow(
   grouping: Pick<GroupingMeta, 'declineCount'>,
   now: number,
@@ -221,13 +215,13 @@ export function applyGroupingNotNow(
   };
 }
 
-/** Whether a new run's sources bring a key the person has not already answered about; only then may a Not related or ended Not now reopen. */
+/** Whether a run brings a source the person has not answered about. */
 export const isNewEvidence = (
   grouping: Pick<GroupingMeta, 'sourceKeys'>,
   sourceKeys: readonly string[],
 ) => sourceKeys.some((key) => !grouping.sourceKeys.includes(key));
 
-/** A source was deleted (or stopped being shared): what is left of the grouping, and whether it fell below two sources and goes. `null` when the key was never in it. */
+/** What is left after a deleted source; `null` when the key was never in it. */
 export function dropSource(
   grouping: Pick<GroupingMeta, 'sourceKeys' | 'sources' | 'linkedKeys'>,
   key: string,

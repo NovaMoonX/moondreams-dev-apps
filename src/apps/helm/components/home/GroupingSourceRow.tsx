@@ -8,7 +8,6 @@ import type { GroupingSource } from '@apps/helm/engine/grouping';
 
 interface GroupingSourceRowProps {
   source: GroupingSource;
-  /** The source's own words; a private source has none. */
   title: string | undefined;
 }
 
@@ -23,7 +22,6 @@ const ownLineOf = (key: string) => {
         : HELM_COPY.groupingYourTask;
 };
 
-/** One thing a grouping holds: where it comes from as a mark, its words and who it belongs to. */
 function GroupingSourceRow({ source, title }: GroupingSourceRowProps) {
   const name = useAssistantName();
   const { nameOf } = useSourceAppName();
