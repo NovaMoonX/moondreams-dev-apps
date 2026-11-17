@@ -9,6 +9,7 @@ import {
   type CreateProjectCommand,
   type SetProjectRoleCommand,
 } from './commands.js';
+import type { PrivacyFacts } from '../privacy.js';
 import {
   buildMilestoneLine,
   buildMilestonesFullLine,
@@ -126,6 +127,8 @@ export function planProjectRoles(input: {
   executionId: string;
   now: number;
   seal: (fields: Record<string, unknown>) => SealedPayload;
+  /** What the project this turn starts says about being private and quiet, when a quiet command marked it. */
+  createdFacts?: PrivacyFacts | null;
 }): {
   creates: { id: string; data: Record<string, unknown> }[];
   updates: { id: string; data: Record<string, unknown> }[];
@@ -288,6 +291,7 @@ export function planProjectRoles(input: {
     return {
       id,
       data: {
+        ...(input.createdFacts && { privacy: 'private' }),
         targetDate: command.targetDate,
         status: 'active',
         milestoneState: Object.fromEntries(
@@ -308,6 +312,13 @@ export function planProjectRoles(input: {
             added.map((entry) => [entry.id, { title: entry.title }]),
           ),
           roleNotes,
+          ...(input.createdFacts && {
+            privateMark: input.createdFacts.privateMark,
+            isPrivacyCleared: input.createdFacts.isPrivacyCleared,
+            quietMark: input.createdFacts.quietMark ?? null,
+            quietUntil: input.createdFacts.quietUntil ?? null,
+            isQuietCleared: input.createdFacts.isQuietCleared ?? false,
+          }),
         }),
       },
       milestoneEffects: added.map((entry) => milestoneEffect(id, entry)),

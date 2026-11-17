@@ -594,6 +594,43 @@ export const HELM_COPY = {
   privateLeftOut: (count: number) =>
     `${count} private ${count === 1 ? 'thing' : 'things'} left out`,
   privateIncludeThem: 'Include them',
+  quietRowTitle: 'Keep it quiet',
+  quietRowSubtitle: 'Shown on screen, never said aloud',
+  quietRowSubtitleProject: 'Shown on screen, never said aloud, with its tasks',
+  quietUntilDay: (day: string) => `Through ${day}`,
+  quietUntilOff: 'Until you turn it off',
+  quietFromParent: (name: string) => `Kept quiet because ${name} is quiet`,
+  quietGuessed: (assistant: string) =>
+    `${assistant} kept this quiet because it sounded like a surprise`,
+  quietOnToast: (title: string) => `Kept \u201c${title}\u201d quiet`,
+  quietOffToast: (title: string) =>
+    `\u201c${title}\u201d is no longer quiet. It stays private.`,
+  quietUntilToast: (title: string, until: string) =>
+    `\u201c${title}\u201d stays quiet through ${until}`,
+  quietNoEndToast: (title: string) =>
+    `\u201c${title}\u201d stays quiet until you turn it off`,
+  quietFailed: "That didn't save. Try again.",
+  quietDayLabel: 'Last quiet day',
+  quietSetDay: 'Keep quiet through that day',
+  quietNoEnd: 'No end date',
+  quietCancel: 'Cancel',
+  quietTitle: 'Kept quiet',
+  quietRowHint: 'What stays on screen and is never said aloud',
+  quietLead: (assistant: string) =>
+    `${assistant} shows these on screen and never says them aloud.`,
+  quietEmpty: (assistant: string) =>
+    `Nothing is kept quiet. Tell ${assistant} something is a surprise and it stays on screen, never said aloud.`,
+  quietStateYou: 'You asked',
+  quietStateGuess: (assistant: string) => `${assistant} guessed`,
+  quietStateUntil: (day: string) => `through ${day}`,
+  quietStateOpen: 'until you turn it off',
+  quietStop: 'Stop keeping it quiet',
+  quietChange: 'Change when it ends',
+  quietOpen: (kind: 'task' | 'project' | 'note') => `Open the ${kind}`,
+  quietKind: { task: 'Task', project: 'Project', note: 'Note' } as const,
+  quietSheetLead:
+    'Shown on screen, never said aloud. If you stop keeping it quiet, it stays private.',
+  quietSayAloud: 'Say it aloud this time',
   copyNothing: 'Nothing to copy',
   copyEmpty: 'The list is empty',
   homeHint: 'Tap to talk, or type',
@@ -661,7 +698,10 @@ export const HELM_COPY = {
   nothingToRepeat: 'Nothing to repeat yet.',
   playAgain: 'Play this again',
   replayMuted: 'Voice is muted. Unmute it to hear this again.',
-  replayBusy: 'I can play it again once this turn is done.',
+  whisperFailed: "Couldn't whisper it, so it stays on your screen.",
+  whisperNeedsCloud:
+    "With Keep voice on this device on, it can't be whispered, so it stays on your screen. Turn off whispering in Voice settings to hear it out loud.",
+  nothingHeld: "Nothing's being kept off the speaker right now.",
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
   chipToday: 'About today',
@@ -914,6 +954,14 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  tookBackKeptChange: (count: number, names: string[]) =>
+    count === 1 && names.length === 1
+      ? `Put back how ${names[0]} was kept`
+      : `Put back how ${count} things were kept`,
+  undoReportKept: (count: number, names: string[]) =>
+    count === 1 && names.length === 1
+      ? `Put back how ${names[0]} was kept.`
+      : `Put back how ${count} things were kept.`,
   tookBackFacts: (count: number) =>
     `Took back ${count} ${count === 1 ? 'fact' : 'facts'}`,
   undoReportFacts: (takenBack: number, kept: number, gone: number) =>
@@ -1110,6 +1158,13 @@ export const HELM_COPY = {
         ? `${name} can look up what your apps share with ${app}, including copies ${app} keeps after an app is disconnected.`
         : `${name} can't see what your apps share.`,
     })[scope],
+  assistantNeedsSource: (scope: 'mail' | 'drive' | 'apps') =>
+    ({
+      mail: 'Connect Gmail first.',
+      drive: 'Connect Google Drive first.',
+      apps: 'Connect an app first.',
+    })[scope],
+  assistantOpenConnectedApps: 'Open Connected apps',
   assistantWrites: (app: string) => `Add things to ${app}`,
   assistantWritesHint: (canWrite: boolean) =>
     canWrite
@@ -1244,6 +1299,11 @@ export const HELM_COPY = {
   syncedCouldNot: "Couldn't update just now.",
   syncedNowFailed: "That didn't update. Try again.",
   googleCalendarName: 'Google Calendar',
+  googleDriveRowName: 'Google Drive',
+  googleServiceMeta: (email: string, reads: string) => `${email} · ${reads}`,
+  gmailAddHint: (name: string) => `Let ${name} search your email when you ask.`,
+  driveAddHint: (name: string) =>
+    `Let ${name} search your Docs and PDFs when you ask.`,
   googleAddAccount: 'Add a Google account',
   googleAddAccountHint: (name: string) =>
     `Start with Calendar, so ${name} can plan around your events.`,
@@ -1261,6 +1321,7 @@ export const HELM_COPY = {
   googleContinue: 'Continue to Google',
   googleTryAgain: 'Try again',
   googleReconnected: 'Reconnected',
+  googleServiceConnected: (service: string) => `${service} connected`,
   googleNeedsPermission: (name: string) =>
     `${name} needs permission to see your events to plan around them. Nothing was connected.`,
   googleConnectFailed: "That didn't connect. Try again.",
@@ -1387,6 +1448,9 @@ export const HELM_COPY = {
   voiceHandsFreeTitle: 'Keep the conversation going',
   voiceHandsFree:
     'Talk starts a back-and-forth: after each answer it listens again, until you say "that\'s it", tap End or stay quiet for two minutes. Nothing is sent until you speak. Off: Talk takes one question at a time.',
+  voiceWhisperHeldTitle: "Whisper what's kept quiet",
+  voiceWhisperHeld:
+    'Whispered when you ask to hear something kept off the speaker. Needs a connection, with Keep voice on this device off; otherwise it stays on your screen. Off: said in your usual voice.',
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
     'Takes music and chatter out of what you say, on this device, before anything listens.',
@@ -1477,6 +1541,7 @@ export const HELM_COPY = {
   voicePickerNormal: 'Normal',
   voicePickerFaster: 'Faster',
   voiceOnPhone: 'Listening with this browser for the rest of today.',
+  voiceUsingDevice: "In this device's voice for now",
   voiceNoticeTitle: 'Where your speech goes',
   voiceNotice:
     "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",
