@@ -41,6 +41,7 @@ import {
   type CoupleStatus,
   type Gender,
 } from '../../src/apps/helm/engine/connections.ts';
+import { holdQuietSpoken } from '../../src/apps/helm/utils/privacy.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
 import { whyFingerprint } from '../../src/apps/helm/utils/goalWhy.ts';
 import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
@@ -273,10 +274,14 @@ const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
       { title: 'Book the hair trial', dueWords: null },
       { title: 'Send the save-the-dates', dueWords: 'Saturday' },
     ],
+    9: [{ title: "Book the anniversary dinner at Lucia's", dueWords: null }],
   };
 
 /** The turns that were spoken; their line is the one the server would seal for them. */
-const SEED_VOICE_TURNS = new Set([1, 2]);
+const SEED_VOICE_TURNS = new Set([1, 2, 3, 9]);
+
+/** The tasks the person kept quiet: they show on screen, and the spoken turns that made them were held behind "Say it aloud this time" (the newest is the latest answer, so it shows the button). */
+const QUIET_TASK_IDS = new Set(['seed-task-4-1', 'seed-task-10-1']);
 
 /** The turn whose two tasks were taken back: the first is deleted, the second kept because its day was moved to Sunday afterwards. */
 const UNDONE_TURN = 4;
@@ -369,9 +374,20 @@ const SEED_HELD_TURNS = [
   },
 ] as const;
 
+/** The newest turn: a spoken plan the person kept quiet, so the latest answer shows Say it aloud this time. */
+const SEED_LATE_TURNS = [
+  {
+    session: 'today',
+    minutesAgo: 0.5,
+    text: "Book the anniversary dinner at Lucia's, and don't let Sam hear about it",
+    isSeen: false,
+  },
+] as const;
+
 const ALL_TURNS = [
   ...SEED_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
   ...SEED_HELD_TURNS.map((turn) => ({ ...turn, held: turn.held as SeedHold })),
+  ...SEED_LATE_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
 ];
 
 const toHeldFields = (
@@ -482,6 +498,7 @@ async function buildUndone(input: {
       effects,
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: [],
@@ -581,6 +598,7 @@ async function buildMove(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -716,6 +734,9 @@ async function buildBackToBack(input: {
             steps: {},
             privateMark: null,
             isPrivacyCleared: false,
+            quietMark: null,
+            quietUntil: null,
+            isQuietCleared: false,
           },
           encryption,
         ),
@@ -767,6 +788,7 @@ async function buildBackToBack(input: {
         })),
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -1086,6 +1108,7 @@ async function buildGmailTurn(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -1240,6 +1263,7 @@ async function buildAnswerTurns(input: {
             effects: [],
             undoReport: null,
             spoken: null,
+            heldSpoken: null,
             goneIds: null,
             undoReason: null,
             lines: [],
@@ -1285,6 +1309,9 @@ async function buildAnswerTurns(input: {
                   links: [],
                   privateMark: null,
                   isPrivacyCleared: false,
+                  quietMark: null,
+                  quietUntil: null,
+                  isQuietCleared: false,
                 },
                 encryption,
               ),
@@ -1327,6 +1354,9 @@ async function buildAnswerTurns(input: {
             steps: {},
             privateMark: entry.isHealth ? 'health' : null,
             isPrivacyCleared: false,
+            quietMark: null,
+            quietUntil: null,
+            isQuietCleared: false,
           },
           encryption,
         ),
@@ -1432,6 +1462,9 @@ async function buildPlanDays(input: {
         steps: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
@@ -1804,6 +1837,9 @@ async function buildProjects(input: {
         steps: {},
         privateMark: fields.privacy === 'private' ? 'health' : null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     },
   });
@@ -1844,6 +1880,9 @@ async function buildProjects(input: {
         },
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       {
         'seed-milestone-wedding-1': {
@@ -1876,6 +1915,9 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       {
         'seed-milestone-move-1': {
@@ -1921,6 +1963,9 @@ async function buildProjects(input: {
         },
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       {
         'seed-milestone-guitar-1': {
@@ -1952,6 +1997,9 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
     ),
     projectOf(
@@ -1978,6 +2026,9 @@ async function buildProjects(input: {
         },
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
     ),
   ]);
@@ -2124,7 +2175,10 @@ const seedReminder = (turnedOnAt: number): Habit['reminder'] => ({
 });
 
 /** Three scheduled actions: Friday's weekend plan running with last Friday's run done, a paused water reminder, and an ended weekly review. */
-async function buildScheduled(input: { now: number; encryption: HelmEncryption }) {
+async function buildScheduled(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
   const { now, encryption } = input;
   const today = getSeedToday(now);
   const dayKey = (at: number) => new Date(at).toISOString().slice(0, 10);
@@ -2170,16 +2224,30 @@ async function buildScheduled(input: { now: number; encryption: HelmEncryption }
       'seed-scheduled-weekend',
       {
         title: 'Plan the weekend',
-        instruction: 'Look at my week and plan the weekend, then add what is left to my tasks',
+        instruction:
+          'Look at my week and plan the weekend, then add what is left to my tasks',
       },
       {
         repeat: 'FREQ=WEEKLY;BYDAY=FR',
         startsOn: dayKey(lastFriday - 14 * DAY_MS),
         time: '17:00',
-        nextRunAt: zonedDateTimeToEpoch(dayKey(nextFriday), '17:00', 'America/Los_Angeles'),
+        nextRunAt: zonedDateTimeToEpoch(
+          dayKey(nextFriday),
+          '17:00',
+          'America/Los_Angeles',
+        ),
         nextRunKey: dayKey(nextFriday),
-        lastRunAt: zonedDateTimeToEpoch(dayKey(lastFriday), '17:00', 'America/Los_Angeles') + 60_000,
-        lastRunDueAt: zonedDateTimeToEpoch(dayKey(lastFriday), '17:00', 'America/Los_Angeles'),
+        lastRunAt:
+          zonedDateTimeToEpoch(
+            dayKey(lastFriday),
+            '17:00',
+            'America/Los_Angeles',
+          ) + 60_000,
+        lastRunDueAt: zonedDateTimeToEpoch(
+          dayKey(lastFriday),
+          '17:00',
+          'America/Los_Angeles',
+        ),
         lastOutcome: 'done',
         createdAt: now - 21 * DAY_MS,
       },
@@ -2518,6 +2586,7 @@ async function buildNoteTurn(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -2549,6 +2618,9 @@ async function buildNoteTurn(input: {
         links: [],
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
@@ -2945,6 +3017,9 @@ async function buildKnowledge(input: {
           links: [],
           privateMark: null,
           isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         },
         encryption,
       ),
@@ -3244,6 +3319,7 @@ async function buildKnowledge(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -3318,6 +3394,7 @@ async function buildKnowledge(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -3360,6 +3437,9 @@ async function buildKnowledge(input: {
           ],
           privateMark: null,
           isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         },
         encryption,
       ),
@@ -4089,6 +4169,9 @@ async function buildPhotoTurns(input: {
         steps: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
@@ -4146,6 +4229,7 @@ async function buildPhotoTurns(input: {
         ],
         undoReport: null,
         spoken: null,
+        heldSpoken: null,
         goneIds: null,
         undoReason: null,
         lines: [],
@@ -4473,6 +4557,9 @@ async function buildFileTurns(input: {
         steps: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id, task };
@@ -4515,6 +4602,7 @@ async function buildFileTurns(input: {
       effects: fields.effects,
       undoReport: null,
       spoken: fields.spoken,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: fields.lines ?? [],
@@ -4578,6 +4666,9 @@ async function buildFileTurns(input: {
       links: [],
       privateMark: null,
       isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
     }),
   };
   const topic: Topic = {
@@ -5215,6 +5306,9 @@ async function buildPeople(input: {
         steps: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     },
   });
@@ -6199,6 +6293,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           voiceMode: 'cloudWhenOnline',
           isWakeWordOn: false,
           isHandsFreeOn: true,
+          whisperHeld: null,
           hasSeenVoiceNotice: null,
           selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
           currentPlace: null,
@@ -6321,7 +6416,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             const tasks = await Promise.all(
               sortedTasks.map(async ({ id, title, due }) => {
                 const task: Task = {
-                  privacy: 'ordinary',
+                  privacy: QUIET_TASK_IDS.has(id) ? 'private' : 'ordinary',
                   status: 'open',
                   importance: null,
                   isUrgent: false,
@@ -6350,8 +6445,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       title,
                       notes: null,
                       steps: {},
-                      privateMark: null,
+                      privateMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
                       isPrivacyCleared: false,
+                      quietMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
+                      quietUntil: null,
+                      isQuietCleared: false,
                     },
                     encryption,
                   ),
@@ -6404,7 +6502,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       })),
                       effects,
                       undoReport: null,
-                      spoken: spoken ?? null,
+                      ...holdQuietSpoken(
+                        spoken ?? null,
+                        sortedTasks.some(({ id }) => QUIET_TASK_IDS.has(id)),
+                      ),
                       goneIds: null,
                       undoReason: null,
                       lines: [],
@@ -6560,6 +6661,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   ),
                   privateMark: null,
                   isPrivacyCleared: false,
+                  quietMark: null,
+                  quietUntil: null,
+                  isQuietCleared: false,
                 },
                 encryption,
               ),
@@ -7041,7 +7145,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             1 +
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
-            (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
+            (habitWorld
+              ? habitWorld.habits.length + habitWorld.days.length
+              : 0) +
             (scheduledWorld ? scheduledWorld.length : 0) +
             (learning
               ? learning.patterns.length +

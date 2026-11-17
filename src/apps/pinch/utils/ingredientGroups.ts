@@ -1,5 +1,6 @@
 import { clipAtWord } from '@/utils/stringUtils';
 import { MAX_INGREDIENT_GROUP_LENGTH } from '@apps/pinch/constants';
+import { getLineKey } from '@apps/pinch/utils/freeLines';
 
 /** A line as grouping sees it: `group` is missing on lines written before groups, which reads as none. */
 interface GroupedLine {
@@ -100,13 +101,11 @@ export const getGroupNames = (lines: GroupedLine[]) =>
 
 /** For a line shown away from its heading (a step, a change note), the group that tells it apart, spelled as its heading: set only when its ingredient has lines in more than one group. */
 export function getRepeatedLineGroups(
-  lines: (GroupedLine & { id: string; ingredientId: string })[],
+  lines: (GroupedLine & { id: string; ingredientId: string | null })[],
 ): Map<string, string> {
   const groups = groupIngredientLines(lines);
   const groupCounts = groups
-    .flatMap((group) => [
-      ...new Set(group.lines.map((line) => line.ingredientId)),
-    ])
+    .flatMap((group) => [...new Set(group.lines.map(getLineKey))])
     .reduce(
       (acc, ingredientId) =>
         acc.set(ingredientId, (acc.get(ingredientId) ?? 0) + 1),
@@ -117,7 +116,7 @@ export function getRepeatedLineGroups(
       const { name } = group;
       if (name === null) return [];
       return group.lines
-        .filter((line) => (groupCounts.get(line.ingredientId) ?? 0) > 1)
+        .filter((line) => (groupCounts.get(getLineKey(line)) ?? 0) > 1)
         .map((line) => [line.id, name] as const);
     }),
   );

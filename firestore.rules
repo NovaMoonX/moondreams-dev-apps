@@ -248,10 +248,11 @@ service cloud.firestore {
       return !('theme' in data) || data.theme == null || data.theme in ['chestnut', 'plum', 'teal', 'indigo'];
     }
 
-    // A profile written before voices has neither key; a written voice is a short name and its speed stays within what the server speaks.
+    // A profile written before voices has none of these keys; a written voice is a short name, its speed stays within what the server speaks and whisperHeld is a plain switch.
     function isHelmVoice(data) {
       return (!('voiceId' in data) || data.voiceId == null || (data.voiceId is string && data.voiceId.size() <= 32))
-        && (!('voiceSpeed' in data) || data.voiceSpeed == null || (data.voiceSpeed is number && data.voiceSpeed >= 0.8 && data.voiceSpeed <= 1.2));
+        && (!('voiceSpeed' in data) || data.voiceSpeed == null || (data.voiceSpeed is number && data.voiceSpeed >= 0.8 && data.voiceSpeed <= 1.2))
+        && (!('whisperHeld' in data) || data.whisperHeld == null || data.whisperHeld is bool);
     }
 
     // A profile written before the learning switch has no key; a written one is a plain true or false, so the server's read of it never meets another type.
@@ -486,7 +487,8 @@ service cloud.firestore {
     // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it. A purchase brought
     // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
     // neither and never changes either. `releasedCharges` notes (a pending charge the bank dropped) are made only by
-    // Functions; the app deletes one once it has told the person.
+    // Functions; the app deletes one once it has told the person. A `startedPayments` note (a card payment the person
+    // started at their bank) is created and deleted by the app, never changed.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
@@ -504,7 +506,7 @@ service cloud.firestore {
         && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {
