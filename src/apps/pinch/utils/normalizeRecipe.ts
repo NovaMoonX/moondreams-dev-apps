@@ -296,9 +296,9 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       )
       .slice(0, 10),
     guided: list(parsed.guided)
-      .flatMap((entry) =>
-        asString(entry) ? [asString(entry)!.slice(0, MAX_GUIDED_LENGTH)] : [],
-      )
+      .map(asString)
+      .filter((entry): entry is string => entry !== null)
+      .map((entry) => entry.slice(0, MAX_GUIDED_LENGTH))
       .slice(0, MAX_GUIDED_ITEMS),
   };
 }
