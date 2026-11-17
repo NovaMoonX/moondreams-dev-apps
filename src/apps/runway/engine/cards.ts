@@ -6,6 +6,7 @@ import type {
   OpenCardStatement,
   OpenMove,
   OpenPurchase,
+  OpenStartedPayment,
 } from '@apps/runway/types';
 
 import { DAY_MS, daysInUtcMonth, todayAsUtcDate } from './dates';
@@ -179,7 +180,7 @@ export function getCardDueState(
   };
 }
 
-/** Every card that needs a warning today, soonest due first. */
+/** Every card that needs a warning today, soonest due first; a card in `bankDue` (read from its bank at Link) takes that answer instead. */
 export function getDueCards(
   cards: readonly OpenCard[],
   reserveByCard: Readonly<Record<string, Cents>>,
@@ -187,9 +188,14 @@ export function getDueCards(
   today: DateOnly,
   days: number,
   startDate: DateOnly,
+  bankDue: Readonly<Record<string, DueCard | null>> = {},
 ): DueCard[] {
   const result = cards
     .flatMap((card) => {
+      if (Object.hasOwn(bankDue, card.id)) {
+        const due = bankDue[card.id];
+        return due ? [{ ...due, card }] : [];
+      }
       const payments = collectCardHistory(card.id, [], moves).flatMap(
         (entry): CoveringPayment[] =>
           entry.kind === 'payment' && !entry.isTakenBack
@@ -343,4 +349,161 @@ export function getUsualCardId(
   );
   if (usual === undefined || usual === null) return usual;
   return cardIds.includes(usual) ? usual : undefined;
+}
+
+/** How far before a started payment's day the bank may date either side of it. */
+const STARTED_PAYMENT_LEAD_DAYS = 3;
+/** How long after a started payment's day either side of it may still turn up. */
+const STARTED_PAYMENT_WINDOW_DAYS = 14;
+
+export interface StartedPaymentState {
+  payment: OpenStartedPayment;
+  /** The money has left one of the person's accounts, so their cash already counts it gone. */
+  hasLeft: boolean;
+}
+
+export interface BankOwed {
+  /** The bank's posted balance: what it says the card owes now, pending charges left out. */
+  postedCents: Cents;
+  /** Charges, less refunds and payments, the bank lists on the card and hasn't posted yet. */
+  pendingCents: Cents;
+  /** Payments started that the card doesn't show yet, oldest first. */
+  waiting: StartedPaymentState[];
+  /** What the card holds back from Free to Spend: posted and pending, less a waiting payment once it has left an account. */
+  heldCents: Cents;
+}
+
+type BankPurchase = Pick<
+  OpenPurchase,
+  'id' | 'date' | 'source' | 'status' | 'amountCents' | 'accountId'
+> & { paidByCardId?: string | null };
+
+/** Each linked card's figure from its bank: the posted balance, the pending charges on it, and the payments the person started that the card hasn't shown yet. A started payment is matched one to one by amount, within its window, to the card's own credit (it has landed) or to money out of an account (it has left); one bank transaction settles one payment across every card. */
+export function getBankOwedByCard(input: {
+  cards: readonly { id: string; postedCents: Cents }[];
+  purchases: readonly BankPurchase[];
+  started: readonly OpenStartedPayment[];
+}): Record<string, BankOwed> {
+  const fromBank = input.purchases.filter(
+    (purchase) => purchase.source === 'link',
+  );
+  const onCard = (cardId: string) =>
+    fromBank.filter((purchase) => (purchase.paidByCardId ?? null) === cardId);
+  const outOfAccounts = fromBank.filter(
+    (purchase) =>
+      purchase.accountId !== null && (purchase.paidByCardId ?? null) === null,
+  );
+  const cardIds = new Set(input.cards.map((card) => card.id));
+  const ordered = input.started
+    .filter((payment) => cardIds.has(payment.cardId))
+    .sort(
+      (a, b) =>
+        a.startedOn - b.startedOn ||
+        a.createdAt - b.createdAt ||
+        a.id.localeCompare(b.id),
+    );
+  const takeMatch = (
+    used: ReadonlySet<string>,
+    side: readonly BankPurchase[],
+    payment: OpenStartedPayment,
+    cents: Cents,
+  ) =>
+    side
+      .filter(
+        (purchase) =>
+          !used.has(purchase.id) &&
+          purchase.amountCents === cents &&
+          purchase.date >=
+            payment.startedOn - STARTED_PAYMENT_LEAD_DAYS * DAY_MS &&
+          purchase.date <=
+            payment.startedOn + STARTED_PAYMENT_WINDOW_DAYS * DAY_MS,
+      )
+      .sort((a, b) => a.date - b.date || a.id.localeCompare(b.id))[0] ?? null;
+  const { waiting } = ordered.reduce<{
+    used: ReadonlySet<string>;
+    waiting: StartedPaymentState[];
+  }>(
+    (acc, payment) => {
+      const landed = takeMatch(
+        acc.used,
+        onCard(payment.cardId),
+        payment,
+        -payment.amountCents,
+      );
+      if (landed !== null) {
+        return { ...acc, used: new Set([...acc.used, landed.id]) };
+      }
+      const left = takeMatch(
+        acc.used,
+        outOfAccounts,
+        payment,
+        payment.amountCents,
+      );
+      return {
+        used: left === null ? acc.used : new Set([...acc.used, left.id]),
+        waiting: [...acc.waiting, { payment, hasLeft: left !== null }],
+      };
+    },
+    { used: new Set<string>(), waiting: [] },
+  );
+  return Object.fromEntries(
+    input.cards.map((card) => {
+      const pendingCents = onCard(card.id)
+        .filter((purchase) => purchase.status === 'pending')
+        .reduce((sum, purchase) => sum + purchase.amountCents, 0);
+      const mine = waiting.filter((entry) => entry.payment.cardId === card.id);
+      const leftCents = mine
+        .filter((entry) => entry.hasLeft)
+        .reduce((sum, entry) => sum + entry.payment.amountCents, 0);
+      return [
+        card.id,
+        {
+          postedCents: card.postedCents,
+          pendingCents,
+          waiting: mine,
+          heldCents: card.postedCents + pendingCents - leftCents,
+        },
+      ];
+    }),
+  );
+}
+
+/**
+ * At Link, a card read from its bank warns only for a minimum that is unpaid: the statement's minimum is above zero,
+ * its due day is within `days` or past, and neither the bank's last payment since the statement nor a payment the
+ * person started since it covers the minimum. A card whose bank doesn't share the minimum never warns. A due day
+ * before `since` never warns.
+ */
+export function getBankDueState(input: {
+  card: OpenCard;
+  statement: OpenCardStatement | null;
+  started: readonly OpenStartedPayment[];
+  owedCents: Cents;
+  today: DateOnly;
+  days: number;
+  since: DateOnly;
+}): DueCard | null {
+  const { statement } = input;
+  if (statement === null || input.owedCents <= 0) return null;
+  const { minimumCents, dueOn, statementOn } = statement;
+  if (minimumCents === null || minimumCents <= 0 || dueOn === null) return null;
+  if (dueOn < input.since || isMinimumPaid(statement, minimumCents))
+    return null;
+  const isStartedCovering = input.started.some(
+    (payment) =>
+      payment.cardId === input.card.id &&
+      payment.amountCents >= minimumCents &&
+      (statementOn === null || payment.startedOn >= statementOn),
+  );
+  if (isStartedCovering) return null;
+  const inDays = Math.round((dueOn - input.today) / DAY_MS);
+  if (inDays > input.days) return null;
+  return {
+    card: input.card,
+    dueOn,
+    inDays,
+    isPastDue: inDays < 0,
+    rolledFrom: null,
+    waitingCents: input.owedCents,
+  };
 }
