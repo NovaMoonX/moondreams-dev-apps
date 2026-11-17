@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 
-import { deriveBalances } from '../../src/apps/runway/engine/balances.ts';
+import {
+  deriveBalances,
+  deriveBalancesBefore,
+} from '../../src/apps/runway/engine/balances.ts';
 import {
   getBankDueState,
   getBankOwedByCard,
@@ -199,7 +202,7 @@ const started = (
   );
 }
 
-// deriveBalances: at Link a card's bank figure replaces the ledger's, and only while cards count.
+// deriveBalances: at Link a card takes the offset that brings the ledger to its bank figure, on every day, and only while cards count.
 {
   const start = 10 * DAY;
   const moves: OpenMove[] = [
@@ -225,14 +228,22 @@ const started = (
   assert.equal(ledger.reserveByCard.chase ?? 0, 0);
   const banked = deriveBalances({
     ...input,
-    bankOwedByCard: { chase: 30_000 },
+    bankCardAdjustByCard: { chase: 30_000 },
   });
   assert.equal(
     banked.reserveByCard.chase,
     30_000,
-    'the bank figure stands for the card',
+    'the bank offset is added to the ledger’s figure for the card',
   );
   assert.equal(banked.assignedToCardsCents, 30_000);
+  assert.equal(
+    deriveBalancesBefore(
+      { ...input, bankCardAdjustByCard: { chase: 30_000 } },
+      start + DAY,
+    ).reserveByCard.chase,
+    30_000,
+    'an earlier day keeps the same offset, so the money history moves only with what the ledger saw',
+  );
   assert.equal(
     banked.freeToSpendCents,
     ledger.freeToSpendCents - 30_000,
@@ -241,12 +252,12 @@ const started = (
   const off = deriveBalances({
     ...input,
     isCountingCards: false,
-    bankOwedByCard: { chase: 30_000 },
+    bankCardAdjustByCard: { chase: 30_000 },
   });
   assert.equal(
     off.assignedToCardsCents,
     0,
-    'with cards not counted the bank figure is ignored',
+    'with cards not counted the bank offset is ignored',
   );
 }
 

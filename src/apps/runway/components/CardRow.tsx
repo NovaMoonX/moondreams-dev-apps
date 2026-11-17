@@ -2,7 +2,8 @@ import { useAppSelector } from '@/store';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import BankBadge from '@apps/runway/components/BankBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { CARD_WORDS } from '@apps/runway/constants';
+import { CARD_WORDS, STARTED_PAYMENT_WORDS } from '@apps/runway/constants';
+import { selectBankOwedByCard } from '@apps/runway/store/selectors/cardBankSelectors';
 import {
   getCardPendingCents,
   selectPendingByCard,
@@ -69,6 +70,9 @@ function CardRow({
     card.id,
     reserveCents,
   );
+  const onItsWayCents = (
+    useAppSelector(selectBankOwedByCard)[card.id]?.waiting ?? []
+  ).reduce((sum, entry) => sum + entry.payment.amountCents, 0);
   const isMinimumShown = reserveCents > 0 && minimumCents !== null;
   const isMinimumAsked = useAppSelector(
     (state) =>
@@ -94,11 +98,13 @@ function CardRow({
         : CARD_WORDS.nothingToPay);
   const parts = [
     detail,
-    isMinimumShown
-      ? describeMinimumShort(minimumCents)
-      : isMinimumAsked && reserveCents > 0
-        ? CARD_WORDS.minimumAskShort
-        : null,
+    onItsWayCents > 0
+      ? STARTED_PAYMENT_WORDS.onItsWay(formatCentsShort(onItsWayCents))
+      : isMinimumShown
+        ? describeMinimumShort(minimumCents)
+        : isMinimumAsked && reserveCents > 0
+          ? CARD_WORDS.minimumAskShort
+          : null,
     pendingCents > 0
       ? CARD_WORDS.pendingAmount(formatCentsShort(pendingCents))
       : null,

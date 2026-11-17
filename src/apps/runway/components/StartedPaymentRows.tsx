@@ -10,7 +10,10 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { CARD_WORDS, STARTED_PAYMENT_WORDS } from '@apps/runway/constants';
-import type { StartedPaymentState } from '@apps/runway/engine/cards';
+import {
+  STARTED_PAYMENT_WINDOW_DAYS,
+  type StartedPaymentState,
+} from '@apps/runway/engine/cards';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { removeStartedPayment } from '@apps/runway/store/actions/cardActions';
@@ -43,7 +46,12 @@ function StartedPaymentRows({
     const day = formatDateOrdinalUTC(payment.startedOn);
     if (hasLeft) return STARTED_PAYMENT_WORDS.rowLeft(day);
     return today - payment.startedOn > LATE_AFTER_DAYS * DAY_MS
-      ? STARTED_PAYMENT_WORDS.rowLate(day)
+      ? STARTED_PAYMENT_WORDS.rowLate(
+          day,
+          formatDateOrdinalUTC(
+            payment.startedOn + STARTED_PAYMENT_WINDOW_DAYS * DAY_MS,
+          ),
+        )
       : STARTED_PAYMENT_WORDS.rowStarted(day);
   };
 

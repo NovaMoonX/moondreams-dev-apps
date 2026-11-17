@@ -4935,9 +4935,7 @@ export const RELEASED_WORDS = {
 /** Words for a card payment the person started at their bank, at Link. */
 export const STARTED_PAYMENT_WORDS = {
   action: 'I started a payment',
-  title: (name: string) =>
-    `A payment to ${name.replace(/ (\S+)$/, '\u00a0$1')}`,
-  amount: 'Amount you sent',
+  amount: (name: string) => `Sent to ${name}`,
   day: 'Started',
   statementQuick: (amount: string) => `Statement balance ${amount}`,
   balanceQuick: (amount: string) => `Balance now ${amount}`,
@@ -4952,10 +4950,11 @@ export const STARTED_PAYMENT_WORDS = {
   undone: 'Payment removed',
   undoFailed: 'The payment was not removed',
   onItsWay: (amount: string) => `${amount}\u00a0on its way`,
-  rowTitle: (amount: string) => `${amount} payment on its way`,
+  rowTitle: (amount: string) => `${amount}\u00a0on its way`,
   rowStarted: (day: string) => `Started ${day}`,
   rowLeft: (day: string) => `Started ${day} · left your account`,
-  rowLate: (day: string) => `Started ${day} · not showing after a week`,
+  rowLate: (day: string, until: string) =>
+    `Started ${day} · not showing yet, Runway waits until ${until}`,
   removeTitle: 'Remove this payment?',
   removeText: (amount: string, bank: string) =>
     `If you didn\u2019t send the ${amount} after all, remove it. Once ${bank} shows a payment, the card follows the bank anyway.`,

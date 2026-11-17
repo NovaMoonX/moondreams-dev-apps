@@ -88,9 +88,9 @@ export const selectLedgerBalanceInputs = createSelector(
     closing,
     today,
     level,
-    bankOwedByCard,
-  ): BalancesInput => ({
-    ...toBalanceInputs(level)(
+    bankHeldByCard,
+  ): BalancesInput => {
+    const inputs = toBalanceInputs(level)(
       startDate,
       moves,
       records,
@@ -100,9 +100,19 @@ export const selectLedgerBalanceInputs = createSelector(
       cards,
       closing,
       today,
-    ),
-    bankOwedByCard,
-  }),
+    );
+    if (Object.keys(bankHeldByCard).length === 0) return inputs;
+    const ledger = deriveBalances(inputs).reserveByCard;
+    return {
+      ...inputs,
+      bankCardAdjustByCard: Object.fromEntries(
+        Object.entries(bankHeldByCard).map(([id, cents]) => [
+          id,
+          cents - (ledger[id] ?? 0),
+        ]),
+      ),
+    };
+  },
 );
 
 /** The balances from the ledger alone: what a check against the bank compares with. */

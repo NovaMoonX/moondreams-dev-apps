@@ -229,10 +229,7 @@ function CardSheet({
   );
   const isDueFromBank = getBankDueDay(statement) !== null;
   const bankOwed = useAppSelector(selectBankOwedByCard)[card.id] ?? null;
-  const onItsWayCents = (bankOwed?.waiting ?? []).reduce(
-    (sum, entry) => sum + entry.payment.amountCents,
-    0,
-  );
+  const isDueShown = bankOwed === null || reserveCents > 0;
   const bankUpdated =
     bank === null ? null : describeBankUpdated(bank.asOf, now);
 
@@ -381,12 +378,11 @@ function CardSheet({
             fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-                : describeCardDue(card, today, due),
+                : isDueShown
+                  ? describeCardDue(card, today, due)
+                  : null,
               pendingCents > 0
                 ? CARD_WORDS.pendingAmount(formatCents(pendingCents))
-                : null,
-              onItsWayCents > 0
-                ? STARTED_PAYMENT_WORDS.onItsWay(formatCents(onItsWayCents))
                 : null,
               bankUpdated?.text ?? linkedFact,
             ]
@@ -394,7 +390,7 @@ function CardSheet({
               .join(' \u00b7 ')}
             isFactFresh={bankUpdated?.isFresh ?? false}
             secondFact={
-              isDueFromBank
+              isDueFromBank && isDueShown
                 ? CARD_WORDS.dueFromBank(bankName || LINK_WORDS.fallbackBank)
                 : null
             }

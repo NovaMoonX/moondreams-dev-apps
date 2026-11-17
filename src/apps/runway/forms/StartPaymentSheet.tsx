@@ -62,12 +62,17 @@ const parseStartPaymentDraft = (stored: unknown) =>
 /** How far back a payment started at the bank can be dated. */
 const STARTED_BACK_DAYS = 14;
 
-/** The statement balance while no payment since the statement has covered it, else null. */
-const getUnpaidStatementCents = (statement: OpenCardStatement | null) => {
-  if (statement === null) return null;
+/** The statement balance while no payment since the statement has covered it, never above what the card owes now; else null. */
+const getUnpaidStatementCents = (
+  statement: OpenCardStatement | null,
+  balanceCents: number,
+) => {
+  if (statement === null || balanceCents <= 0) return null;
   const { statementCents } = statement;
   if (statementCents === null || statementCents <= 0) return null;
-  return isMinimumPaid(statement, statementCents) ? null : statementCents;
+  return isMinimumPaid(statement, statementCents)
+    ? null
+    : Math.min(statementCents, balanceCents);
 };
 
 /** At Link, notes a card payment the person started at their bank: the amount and the day, then it waits until the bank shows it. Needs a connection. */
@@ -97,7 +102,7 @@ function StartPaymentSheet({
     0,
   );
   const balanceCents = Math.max(0, (owed?.postedCents ?? 0) - waitingCents);
-  const statementCents = getUnpaidStatementCents(statement);
+  const statementCents = getUnpaidStatementCents(statement, balanceCents);
   const minimumCents =
     statement?.minimumCents !== null &&
     statement?.minimumCents !== undefined &&
@@ -152,6 +157,8 @@ function StartPaymentSheet({
         }
       : null,
     minimumCents === null ||
+    balanceCents <= 0 ||
+    (statement !== null && isMinimumPaid(statement, minimumCents)) ||
     minimumCents === statementCents ||
     minimumCents === balanceCents
       ? null
@@ -246,7 +253,7 @@ function StartPaymentSheet({
     <FormSheet
       isOpen
       onClose={requestClose}
-      title={STARTED_PAYMENT_WORDS.title(name)}
+      title={STARTED_PAYMENT_WORDS.action}
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-5'>
@@ -258,7 +265,7 @@ function StartPaymentSheet({
         )}
         <div className='space-y-3'>
           <AmountHero
-            label={STARTED_PAYMENT_WORDS.amount}
+            label={STARTED_PAYMENT_WORDS.amount(name)}
             value={amount}
             onChange={setAmount}
             disabled={isSaving}

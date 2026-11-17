@@ -357,7 +357,8 @@ export function getUsualCardId(
 /** How far before a started payment's day the bank may date either side of it. */
 const STARTED_PAYMENT_LEAD_DAYS = 3;
 /** How long after a started payment's day either side of it may still turn up; after that it is no longer waited for. */
-const STARTED_PAYMENT_WINDOW_DAYS = 14;
+/** How long a started payment is waited for after its day. */
+export const STARTED_PAYMENT_WINDOW_DAYS = 14;
 const CARD_PAYMENT_CATEGORY = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
 
 const isStillWaitedFor = (payment: OpenStartedPayment, today: DateOnly) =>
