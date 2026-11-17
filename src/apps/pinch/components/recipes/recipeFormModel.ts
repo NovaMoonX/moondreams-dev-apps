@@ -86,6 +86,8 @@ export interface IngredientRow {
   newName: string | null;
   /** The heading it sits under, or null; rows are kept in the order the list shows them, so the saved order is the shown one. */
   group: string | null;
+  /** What the line was before it was adapted to the person's units, or null when it is as written. */
+  adaptedFrom: RecipeIngredient['adaptedFrom'];
 }
 
 export interface RecipeFormData {
@@ -126,6 +128,7 @@ export const getInitialData = (
     proposedName: null,
     newName: null,
     group: cleanGroupName(line.group),
+    adaptedFrom: line.adaptedFrom ?? null,
   })),
   steps: recipe?.steps ?? [],
   care: recipe ? getCareText(getRecipeCare(recipe)) : { ...EMPTY_CARE_TEXT },
@@ -216,6 +219,7 @@ export const getDataFromExtracted = (
             : null,
         newName,
         group,
+        adaptedFrom: null,
       },
     ];
   }, []);
@@ -287,6 +291,7 @@ export const toRecipeLine = (row: IngredientRow): RecipeIngredient => ({
   unit: row.isAmountless ? 'EACH' : row.unit,
   note: row.note,
   group: cleanGroupName(row.group),
+  adaptedFrom: row.isAmountless ? null : (row.adaptedFrom ?? null),
 });
 
 const parseTyped = (text: string) => (text.trim() === '' ? null : Number(text));

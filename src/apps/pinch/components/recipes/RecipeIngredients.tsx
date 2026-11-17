@@ -794,6 +794,7 @@ function RecipeIngredients({
         proposedName: null,
         newName,
         group: resolveGroupName(group, rows),
+        adaptedFrom: null,
       }),
     );
     return id;

@@ -70,7 +70,7 @@ const formatQuantity = ({
     ? 'no amount'
     : `${formatAmount(amount)} ${UNIT_LABELS[unit]}`;
 
-type ComparedLine = Omit<RecipeIngredient, 'group'>;
+type ComparedLine = Omit<RecipeIngredient, 'group' | 'adaptedFrom'>;
 
 const normalizeLine = (line: RecipeIngredient): ComparedLine => ({
   id: line.id,

@@ -102,6 +102,7 @@ const PINCH_SETTINGS_FIELDS = {
   calendarStats: 'notUseful',
   defaultTab: 'notUseful',
   voice: 'notUseful',
+  units: 'notUseful',
   reminders: 'shared',
   updatedAt: 'notUseful',
   lastDigestDay: 'notUseful',
@@ -296,6 +297,7 @@ const RECIPE_INGREDIENT_FIELDS = {
   unit: 'never',
   note: 'never',
   group: 'never',
+  adaptedFrom: 'never',
 } satisfies Record<keyof RecipeIngredient, ShareDecision>;
 
 const RECIPE_CARE_FIELDS = {

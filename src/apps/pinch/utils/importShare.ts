@@ -271,6 +271,7 @@ const toRecipe = (
       unit: amount === null || !UNITS.includes(line.unit) ? 'EACH' : line.unit,
       note: asText(line.note, MAX_NOTE_LENGTH),
       group: cleanGroupName(line.group),
+      adaptedFrom: null,
     };
   }),
   steps: shared.steps
