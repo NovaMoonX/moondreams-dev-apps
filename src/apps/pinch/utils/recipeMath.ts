@@ -9,13 +9,13 @@ import type {
 import { bridge, toBase } from '@apps/pinch/utils/quantity';
 import { getUnitCost } from '@apps/pinch/utils/unitCost';
 
-/** What one recipe line costs from the ingredient's product: unrounded cents, or the gap that kept it from being priced. A line with no amount is neither priced nor a gap. */
+/** What one recipe line costs from the ingredient's product: unrounded cents, or the gap that kept it from being priced. A line with no amount, or one that isn't a kitchen ingredient, is neither priced nor a gap. */
 export function getLineCost(
-  line: Omit<RecipeIngredient, 'group'>,
+  line: Pick<RecipeIngredient, 'ingredientId' | 'amount' | 'unit'>,
   ingredient: ResolvedIngredient | undefined,
   product: Product | undefined,
 ): LineCost {
-  if (line.amount === null) {
+  if (line.amount === null || line.ingredientId === null) {
     return { cents: null, gap: null };
   }
   if (!product) {
@@ -56,8 +56,12 @@ export function getRecipeCost(
       line.id,
       getLineCost(
         line,
-        ingredientsById.get(line.ingredientId),
-        defaultProducts.get(line.ingredientId),
+        line.ingredientId === null
+          ? undefined
+          : ingredientsById.get(line.ingredientId),
+        line.ingredientId === null
+          ? undefined
+          : defaultProducts.get(line.ingredientId),
       ),
     ]),
   );
