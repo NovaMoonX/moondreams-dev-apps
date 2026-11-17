@@ -447,6 +447,15 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   };
 };
 
+const KEPT_PATHS = [
+  'privacy',
+  'sealed.privateMark',
+  'sealed.isPrivacyCleared',
+  'sealed.quietMark',
+  'sealed.quietUntil',
+  'sealed.isQuietCleared',
+];
+
 const isEntity = (name: EffectRef['collection']) =>
   name === 'who' || name === 'places';
 
@@ -1289,7 +1298,7 @@ export function planUndo(input: {
     outcome.kind === 'gone' ? [docId] : [],
   );
   const gone = goneIds.length;
-  const done = [
+  const allDone = [
     ...outcomes,
     ...topicOutcomes,
     ...procedureOutcomes,
@@ -1303,6 +1312,16 @@ export function planUndo(input: {
       ? [{ docId, outcome }]
       : [],
   );
+  const isKeptOnly = ({ outcome }: (typeof allDone)[number]) =>
+    outcome.kind === 'restored' &&
+    Object.keys(outcome.effect.written).some((path) =>
+      KEPT_PATHS.includes(path),
+    ) &&
+    Object.keys(outcome.effect.written).every(
+      (path) => path === 'sealed.title' || KEPT_PATHS.includes(path),
+    );
+  const keptDone = allDone.filter(isKeptOnly);
+  const done = allDone.filter((entry) => !isKeptOnly(entry));
   const isImport = original.category === 'import';
   const isFactDoc = (docId: string) => collectionOf.get(docId) === 'facts';
   const isKeyDateDoc = (docId: string) =>
@@ -1420,7 +1439,8 @@ export function planUndo(input: {
     procedureCount === 0 &&
     runCount === 0 &&
     habitCount === 0 &&
-    seenAsCount === 0
+    seenAsCount === 0 &&
+    keptDone.length === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -1563,10 +1583,16 @@ export function planUndo(input: {
     : runCount > 0
       ? `${withProcedures} ${HELM_COPY.undoReportRunsToo(runTitles, untickedCount)}`
       : withProcedures;
+  const keptNames = [...new Set(keptDone.map(({ outcome }) => outcome.title))];
+  const keptCount = keptDone.length;
+  const keptReport =
+    keptCount > 0 ? HELM_COPY.undoReportKept(keptCount, keptNames) : '';
+  const isKeptOnlyUndo = keptCount > 0 && done.length === 0;
   const habitsTicked = habitDaysDone.length;
   const habitsChanged = habitsDone.length;
   const isHabitsOnly =
     habitCount > 0 &&
+    keptCount === 0 &&
     photoCount === 0 &&
     notesDone.length === 0 &&
     records.length === 0 &&
@@ -1583,7 +1609,8 @@ export function planUndo(input: {
       : withRuns;
   const isSeenAsOnly =
     seenAsCount > 0 &&
-    photoCount +
+    keptCount +
+      photoCount +
       records.length +
       factsDone.length +
       datesDone.length +
@@ -1596,12 +1623,14 @@ export function planUndo(input: {
       0;
   const otherReport = isPhotosOnly
     ? HELM_COPY.undoReportPhotos(photoCount)
-    : [withHabits, photosToo].filter(Boolean).join(' ');
-  const report = isSeenAsOnly
-    ? HELM_COPY.undoReportSeenAs(seenAsCount, kept.length, gone)
-    : seenAsCount > 0
-      ? `${otherReport} ${HELM_COPY.undoReportSeenAsToo(seenAsCount)}`
-      : otherReport;
+    : [withHabits, photosToo, keptReport].filter(Boolean).join(' ');
+  const report = isKeptOnlyUndo
+    ? keptReport
+    : isSeenAsOnly
+      ? HELM_COPY.undoReportSeenAs(seenAsCount, kept.length, gone)
+      : seenAsCount > 0
+        ? `${otherReport} ${HELM_COPY.undoReportSeenAsToo(seenAsCount)}`
+        : otherReport;
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1642,12 +1671,12 @@ export function planUndo(input: {
     : habitCount > 0
       ? `${withRunsSummary} and ${HELM_COPY.undoHabitPhrase(habitsTicked, habitsChanged)}`
       : withRunsSummary;
-  const deletes = done.flatMap(({ docId, outcome }) =>
+  const deletes = allDone.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
       : [],
   );
-  const updates = done.flatMap(({ docId, outcome }) =>
+  const updates = allDone.flatMap(({ docId, outcome }) =>
     outcome.kind === 'restored'
       ? [
           {
@@ -1659,7 +1688,7 @@ export function planUndo(input: {
         ]
       : [],
   );
-  const creates = done.flatMap(({ docId, outcome }) =>
+  const creates = allDone.flatMap(({ docId, outcome }) =>
     outcome.kind === 'recreated'
       ? [
           {
@@ -1676,7 +1705,7 @@ export function planUndo(input: {
     deletes,
     updates,
     creates,
-    versionRestores: done.flatMap(({ docId, outcome }) =>
+    versionRestores: allDone.flatMap(({ docId, outcome }) =>
       outcome.kind === 'versionBack'
         ? [
             {
@@ -1698,7 +1727,7 @@ export function planUndo(input: {
       category: 'undo',
       autonomyLevel: 1,
       state: 'succeeded',
-      effectRefs: done.map(({ docId, outcome }) => ({
+      effectRefs: allDone.map(({ docId, outcome }) => ({
         op: outcome.kind === 'deleted' ? 'delete' : 'update',
         collection: collectionOf.get(docId) ?? 'tasks',
         docId,
@@ -1717,18 +1746,21 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isSeenAsOnly
-        ? HELM_COPY.tookBackSeenAs(seenAsCount)
-        : `${
-            isPhotosOnly
-              ? HELM_COPY.tookBackPhotos(photoCount)
-              : withHabitsSummary
-          }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}`,
+      summary: isKeptOnlyUndo
+        ? HELM_COPY.tookBackKeptChange(keptCount, keptNames)
+        : isSeenAsOnly
+          ? HELM_COPY.tookBackSeenAs(seenAsCount)
+          : `${
+              isPhotosOnly
+                ? HELM_COPY.tookBackPhotos(photoCount)
+                : withHabitsSummary
+            }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}`,
       said: null,
       commands: [],
-      effects: done.map(({ outcome }) => outcome.effect),
+      effects: allDone.map(({ outcome }) => outcome.effect),
       undoReport: report,
       spoken: null,
+      heldSpoken: null,
       goneIds,
       undoReason: input.reason ?? null,
       lines: null,

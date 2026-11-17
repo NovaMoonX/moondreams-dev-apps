@@ -16,7 +16,7 @@ export interface TtsProvider {
     signal?: AbortSignal;
     /** Speaking rate, 1 is normal; a provider with no rate control ignores it. */
     speed?: number;
-    /** How to say it ("Say this in a calm, even voice"); only a provider that reads instructions uses it. */
+    /** How to say it: 'whisper' for Google's Gemini voice, or an instruction ("Say this in a calm, even voice") for a provider that reads them; any other provider ignores it. */
     delivery?: string;
   }): Promise<TtsSpeech>;
 }

@@ -10,7 +10,9 @@ import { useNow } from '@/hooks/useNow';
 import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
-import AssistantLine from '@apps/helm/components/activity/AssistantLine';
+import AssistantLine, {
+  SayAloudButton,
+} from '@apps/helm/components/activity/AssistantLine';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import AnsweredQuestion from '@apps/helm/components/home/AnsweredQuestion';
 import MediaLine, {
@@ -33,6 +35,7 @@ import {
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import { selectStartGuardrail } from '@apps/helm/store/selectors/patternSelectors';
 import type { OpenCapture } from '@apps/helm/types';
+import { findHeldLine, readReplayLine } from '@apps/helm/utils/quietSpeech';
 import {
   getAnsweredQuestions,
   getDismissedQuestions,
@@ -162,10 +165,11 @@ function TurnCard({
     !capture.planDayKey &&
     heldLine === null &&
     openQuestions.length === 0;
+  const quietHeld = findHeldLine([capture, ...joined], executions);
   const quietLine = isQuietAnswer
-    ? (capture.line ?? HELM_COPY.answerNoted)
+    ? (capture.heldLine ?? capture.line ?? HELM_COPY.answerNoted)
     : hasNothingShown
-      ? capture.line
+      ? (capture.heldLine ?? capture.line)
       : null;
   const heldKind = toHeldKind(capture);
   const canRetry =
@@ -276,6 +280,7 @@ function TurnCard({
               isSeen={capture.seenAt !== null}
               showsNotice={showsNotice}
               canReplay={showsOutcome && isOnHome}
+              isQuietTurn={quietHeld !== null}
             />
           ))}
         </div>
@@ -305,7 +310,11 @@ function TurnCard({
       {planLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
           <AssistantLine
-            speakText={showsOutcome && isOnHome ? planLine : undefined}
+            speakText={
+              showsOutcome && isOnHome
+                ? readReplayLine(planLine, quietHeld)
+                : undefined
+            }
           >
             {planLine}
           </AssistantLine>
@@ -314,7 +323,11 @@ function TurnCard({
       {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
           <AssistantLine
-            speakText={showsOutcome && isOnHome ? quietLine : undefined}
+            speakText={
+              showsOutcome && isOnHome
+                ? readReplayLine(quietLine, quietHeld)
+                : undefined
+            }
           >
             {quietLine}
           </AssistantLine>
@@ -326,6 +339,9 @@ function TurnCard({
         isSorted && (
           <NotedRow captureId={capture.id} createdAt={capture.createdAt} />
         )}
+      {quietHeld !== null && showsOutcome && isOnHome && (
+        <SayAloudButton line={quietHeld} />
+      )}
       {capture.answer && !capture.isUnreadable && (
         <AnswerCard answer={capture.answer} isInset capture={capture} />
       )}

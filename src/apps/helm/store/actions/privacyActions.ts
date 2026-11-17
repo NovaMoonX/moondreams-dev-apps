@@ -15,11 +15,15 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson, sealJson } from '@apps/helm/security';
 import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import type { HelmEncryption, Sealed } from '@apps/helm/types';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import { toDayKey } from '@apps/helm/utils/planDays';
 import {
+  isQuietInEffect,
   readEffectivePrivacy,
   readPersonMark,
   readPrivacyFacts,
   readSetPrivate,
+  readSetQuiet,
   type PrivacyFacts,
 } from '@apps/helm/utils/privacy';
 import {
@@ -245,6 +249,9 @@ export async function writePrivacy(
           ...opened,
           privateMark: next.privateMark,
           isPrivacyCleared: next.isPrivacyCleared,
+          quietMark: next.quietMark ?? null,
+          quietUntil: next.quietUntil ?? null,
+          isQuietCleared: next.isQuietCleared ?? false,
         },
         encryption,
       ),
@@ -357,6 +364,10 @@ export async function setPrivate(
     current: readPrivacyFacts(record),
     isPrivate,
     parents,
+    today: toDayKey(
+      Date.now(),
+      store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
+    ),
   });
   if (outcome.kind === 'refused') return outcome;
   if (outcome.kind === 'unchanged') {
@@ -404,6 +415,115 @@ export async function setPrivate(
       await cascade(written.previous);
     },
   };
+}
+
+export type QuietKind = 'task' | 'project' | 'note';
+
+/** The person's switch or date for keeping one thing quiet (shown on screen, never said aloud). Keeping it quiet makes it private too, with the same cascade; releasing leaves it private, and a quiet that comes from a parent is refused with its own line. `until` is the last quiet day, or null for no end. */
+export async function setQuiet(
+  uid: string,
+  kind: QuietKind,
+  id: string,
+  isQuiet: boolean,
+  until: string | null,
+): Promise<SetPrivateResult> {
+  const record = readRecords(kind).find((entry) => entry.id === id);
+  if (!record) return { kind: 'missing' };
+  const parents = parentsOf(kind, record, readParentIndex());
+  const zone =
+    store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+  const today = toDayKey(Date.now(), zone);
+  const read = (current: PrivacyFacts) =>
+    readSetQuiet({ current, isQuiet, until, mark: 'person', parents, today });
+  const outcome = read(readPrivacyFacts(record));
+  if (outcome.kind === 'refused') return outcome;
+  if (outcome.kind === 'unchanged') {
+    const retried = toParent(
+      kind,
+      id,
+      await getHelmEncryption(uid),
+      readPrivacyFacts(record),
+    );
+    if (!retried || (await rewriteChildren(uid, retried)) === 0) return outcome;
+    return {
+      kind: 'saved',
+      isCascadeIncomplete: true,
+      undo: async () => {},
+    };
+  }
+  const encryption = await getHelmEncryption(uid);
+  const parentFacts = parents.map((parent) => parent.facts);
+  const written = await writePrivacy(
+    uid,
+    encryption,
+    kind,
+    id,
+    (facts) => {
+      const next = read(facts);
+      return next.kind === 'applied' ? next.facts : facts;
+    },
+    parentFacts,
+  );
+  if (written.kind !== 'saved') return written;
+  const cascade = async (facts: PrivacyFacts) => {
+    const parent = toParent(kind, id, encryption, facts);
+    return parent ? (await rewriteChildren(uid, parent)) > 0 : false;
+  };
+  const isCascadeIncomplete = await cascade(written.next);
+  return {
+    kind: 'saved',
+    isCascadeIncomplete,
+    undo: async () => {
+      const { previous } = written;
+      const putBack = await writePrivacy(
+        uid,
+        encryption,
+        kind,
+        id,
+        (facts) => ({
+          ...facts,
+          privateMark: previous.privateMark,
+          isPrivacyCleared: previous.isPrivacyCleared,
+          quietMark: previous.quietMark ?? null,
+          quietUntil: previous.quietUntil ?? null,
+          isQuietCleared: previous.isQuietCleared ?? false,
+        }),
+        parentFacts,
+      );
+      if (putBack.kind !== 'saved')
+        throw new Error(`The quiet change was not put back: ${putBack.kind}`);
+      await cascade(putBack.next);
+    },
+  };
+}
+
+/** Whether a record on the device is kept quiet today, by its own mark or a quiet parent; a record the device doesn't hold is not. */
+export function isKeptQuietOnDevice(kind: PrivateKind, id: string) {
+  const record = readRecords(kind).find((entry) => entry.id === id);
+  if (!record) return false;
+  const zone =
+    store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+  return isQuietInEffect(
+    readPrivacyFacts(record),
+    parentsOf(kind, record, readParentIndex()).map((parent) => parent.facts),
+    toDayKey(Date.now(), zone),
+  );
+}
+
+/** Whether a turn's words must stay unspoken: it held its line, or it touched something kept quiet on this device. */
+export function isExecutionHeld(execution: {
+  heldSpoken?: string | null;
+  effectRefs: { collection: string; docId: string }[];
+}) {
+  return (
+    (execution.heldSpoken ?? null) !== null ||
+    execution.effectRefs.some((ref) => {
+      const kind = (Object.keys(PRIVATE_COLLECTIONS) as PrivateKind[]).find(
+        (each) => PRIVATE_COLLECTIONS[each] === ref.collection,
+      );
+      return kind ? isKeptQuietOnDevice(kind, ref.docId) : false;
+    })
+  );
 }
 
 /** Thrown when a child that is private only through a parent about to go could not be given its own mark: the parent stays. */

@@ -253,6 +253,13 @@ async function openProject(
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
       aheadAsks: toAsks(payload.aheadAsks),
+      quietMark:
+        payload.quietMark === 'person' || payload.quietMark === 'guessed'
+          ? payload.quietMark
+          : null,
+      quietUntil:
+        typeof payload.quietUntil === 'string' ? payload.quietUntil : null,
+      isQuietCleared: payload.isQuietCleared ?? false,
       isUnreadable: false,
     };
   } catch {
@@ -269,6 +276,9 @@ async function openProject(
       privateMark: null,
       isPrivacyCleared: false,
       aheadAsks: null,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
     };
   }
 }

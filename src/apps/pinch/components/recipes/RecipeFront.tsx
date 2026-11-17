@@ -1,4 +1,3 @@
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
@@ -21,7 +20,8 @@ import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSectio
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
-import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
+import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import {
   selectCollectionCounts,
   selectCollections,
@@ -40,6 +40,7 @@ import {
   getRecipeCollections,
 } from '@apps/pinch/utils/collections';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { getLineName } from '@apps/pinch/utils/freeLines';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
@@ -146,20 +147,23 @@ function RecipeFront({
 
   const pantryStocks = hasPantry
     ? new Map<string, LineStock>(
-        recipe.ingredients.map((line) => {
+        recipe.ingredients.flatMap((line) => {
+          if (line.ingredientId === null) return [];
           const ingredient = ingredientsById.get(line.ingredientId);
           return [
-            line.id,
-            getLineStock(
-              line,
-              packagesByIngredient.get(line.ingredientId),
-              undefined,
-              {
-                gramsPerMl: ingredient?.gramsPerMl ?? null,
-                gramsEach: ingredient?.gramsEach ?? null,
-              },
-              ingredient,
-            ),
+            [
+              line.id,
+              getLineStock(
+                { ...line, ingredientId: line.ingredientId },
+                packagesByIngredient.get(line.ingredientId),
+                undefined,
+                {
+                  gramsPerMl: ingredient?.gramsPerMl ?? null,
+                  gramsEach: ingredient?.gramsEach ?? null,
+                },
+                ingredient,
+              ),
+            ] as const,
           ];
         }),
       )
@@ -409,8 +413,7 @@ function RecipeFront({
                     className='flex items-baseline justify-between gap-3 py-2'
                   >
                     <span className='min-w-0'>
-                      {ingredientsById.get(line.ingredientId)?.name ??
-                        'Removed ingredient'}
+                      {getLineName(line, ingredientsById)}
                       {line.note && line.amount !== null && (
                         <span className='text-muted-foreground block text-xs'>
                           {line.note}
@@ -431,8 +434,7 @@ function RecipeFront({
                         )
                       ) : (
                         <span className='text-muted-foreground text-sm whitespace-nowrap'>
-                          {Math.round(line.amount * 100) / 100}{' '}
-                          {UNIT_LABELS[line.unit]}
+                          {formatKitchenAmount(line.amount, line.unit)}
                         </span>
                       )}
                       {pantry !== null && pantryText !== null && (

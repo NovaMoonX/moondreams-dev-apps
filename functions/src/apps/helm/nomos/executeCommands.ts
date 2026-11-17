@@ -1,11 +1,14 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
+  holdQuietSpoken,
+  QUIET_SPOKEN_LINE,
   isPrivateInEffect,
   readEffectivePrivacy,
   readPersonMark,
   readPrivacyFacts,
   readPrivateMark,
   readSetPrivate,
+  readSetQuiet,
   type PrivacyFacts,
   type PrivateParent,
 } from '../privacy.js';
@@ -36,6 +39,7 @@ import {
   type ProcedureCommand,
   type QuestionsMeeting,
   type RunCommand,
+  type SetQuietCommand,
   type TaskDue,
   type TopicCommand,
 } from './commands.js';
@@ -88,6 +92,7 @@ import type { ByWho } from '../keyDateIndex.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { shouldKeepSensitive } from './sensitive.js';
+import { readQuietFacts, toQuietKey } from './quietTurn.js';
 import { buildSpokenAck, toKnownZone } from './spoken.js';
 import {
   buildAskedQuestion,
@@ -118,6 +123,7 @@ import {
   buildFactLine,
   buildFactSource,
   buildNotKeptLine,
+  buildQuietLine,
   buildSpokenWhichIsTrue,
   buildWhichIsTrueQuestion,
   describeFacts,
@@ -150,6 +156,30 @@ export interface ExistingTask {
   /** The class stored on the task, which an unreadable parent may be the only source of. */
   privacy?: string | null;
 }
+
+/** A note the person already has, opened, with the parents its class and quiet can come from. */
+export interface ExistingNote {
+  title: string;
+  sealed: Record<string, unknown>;
+  privacy: string | null;
+  parents: PrivateParent[];
+}
+
+/** A task, note or topic filed under a project, read to follow the project's class. */
+export interface ProjectChildRef {
+  kind: 'task' | 'note' | 'topic';
+  id: string;
+  title: string;
+  privacy: string | null;
+}
+
+/** What a project's children read found; `isMore` when the read stopped at its limit. */
+export interface ProjectChildren {
+  children: ProjectChildRef[];
+  isMore: boolean;
+}
+
+const MAX_QUIET_CHILD_WRITES = 200;
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {
@@ -623,6 +653,8 @@ export interface WritePlan {
   /** What each research offer this turn adds says, for the summary. */
   offerLines: string[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
+  noteUpdates: { id: string; data: Record<string, unknown> }[];
+  topicPrivacyUpdates: { id: string; data: Record<string, unknown> }[];
   /** Photos kept by this turn, and photos let go for a day. */
   mediaKept: { id: string; data: Record<string, unknown> }[];
   mediaLetGo: { id: string; data: Record<string, unknown> }[];
@@ -664,6 +696,10 @@ export interface WritePlan {
   notKept: string[];
   /** Whether a task the turn changed is private, before or after it. */
   isPrivate: boolean;
+  /** Whether the turn touched something kept quiet, so its spoken line is only the screen line. */
+  isQuiet: boolean;
+  /** The result line of each thing kept quiet or let be said aloud again. */
+  quietLines: string[];
   /** The result line of each change the turn made to a topic. */
   topicLines: string[];
   /** The result line of each procedure the turn made or changed. */
@@ -758,6 +794,15 @@ interface PlanInput {
   media?: MediaInput;
   /** The wake phrase began this turn and nobody is looking at the screen. */
   isUnattended?: boolean;
+  quietCommands?: SetQuietCommand[];
+  /** The calendar day in the person's zone, YYYY-MM-DD. */
+  today?: string;
+  /** The notes a quiet command names, opened. */
+  existingNotes?: Map<string, ExistingNote>;
+  /** The tasks (any status), notes and topics of each project, by project id, which follow it when it is kept quiet. */
+  projectChildren?: Map<string, ProjectChildren>;
+  /** The `task:id` and `project:id` keys of everything quiet today. */
+  quietKeys?: ReadonlySet<string>;
 }
 
 interface Draft {
@@ -773,6 +818,7 @@ interface Draft {
   questions: string[];
   meeting: QuestionsMeeting | null;
   meetsHow: MeetsHow | null;
+  quiet: PrivacyFacts | null;
 }
 
 /** How a task meets counts only when its due has a time. */
@@ -790,6 +836,22 @@ const toMeetsAfter = (
     ? (before ?? null)
     : { how, setBy: 'person' as const };
 };
+
+const toQuietSealed = (facts: PrivacyFacts) => ({
+  privateMark: facts.privateMark,
+  isPrivacyCleared: facts.isPrivacyCleared === true,
+  quietMark: facts.quietMark ?? null,
+  quietUntil: facts.quietUntil ?? null,
+  isQuietCleared: facts.isQuietCleared === true,
+});
+
+const toQuietKeys = (facts: PrivacyFacts) => ({
+  'sealed.privateMark': facts.privateMark,
+  'sealed.isPrivacyCleared': facts.isPrivacyCleared === true,
+  'sealed.quietMark': facts.quietMark ?? null,
+  'sealed.quietUntil': facts.quietUntil ?? null,
+  'sealed.isQuietCleared': facts.isQuietCleared === true,
+});
 
 const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
@@ -1181,6 +1243,17 @@ export function planWrites(input: PlanInput): WritePlan {
     patches.set(id, { ...patches.get(id), ...data });
   const privacyLines: string[] = [];
   const NO_FACTS: PrivacyFacts = { privateMark: null, isPrivacyCleared: false };
+  const personalFactsOf = (draft: Draft) => {
+    const marked = readPrivateMark({
+      current: NO_FACTS,
+      isCare: false,
+      isForOtherWho: false,
+      commandMark: null,
+      isSensitiveHealth: false,
+      words: draft.title,
+    });
+    return draft.isPrivate ? readPersonMark(marked, true) : marked;
+  };
   const linkedFactsOf = (whoIds: string[], placeIds: string[]) => [
     ...whoIds.flatMap(
       (id) =>
@@ -1222,6 +1295,7 @@ export function planWrites(input: PlanInput): WritePlan {
         questions: command.questions,
         meeting: command.meeting,
         meetsHow: toMeetsHow(command.due, command.meetsHow),
+        quiet: null,
       });
       return;
     }
@@ -1242,6 +1316,7 @@ export function planWrites(input: PlanInput): WritePlan {
         current: facts,
         isPrivate: command.isPrivate,
         parents,
+        today: input.today ?? '',
         byTurn: { isUnattended: input.isUnattended === true },
       });
       if (outcome.kind === 'refused') {
@@ -1453,6 +1528,236 @@ export function planWrites(input: PlanInput): WritePlan {
     counts.updated += 1;
   });
 
+  const quietCommands = [...(input.quietCommands ?? [])].sort(
+    (left, right) =>
+      Number(left.targetKind === 'project') -
+      Number(right.targetKind === 'project'),
+  );
+  const quietLines: string[] = [];
+  const quietNew = new Map<string, PrivacyFacts>();
+  const workingProjects = new Map(
+    (input.existingProjects ?? []).map((project) => [project.id, project]),
+  );
+  const projectQuiet = new Map<string, Record<string, unknown>>();
+  const noteQuiet = new Map<string, Record<string, unknown>>();
+  const topicPrivate = new Map<string, Record<string, unknown>>();
+  const childWrites = { spent: 0 };
+  const refNames = new Map(
+    projectCommands.flatMap((command): [string, string][] =>
+      command.kind === 'createProject' && command.ref
+        ? [[command.ref, command.name]]
+        : [],
+    ),
+  );
+  const settleQuiet = (
+    command: SetQuietCommand,
+    current: PrivacyFacts,
+    parents: PrivateParent[],
+    name: string,
+  ) => {
+    const outcome = readSetQuiet({
+      current,
+      isQuiet: command.isQuiet,
+      until: command.until,
+      mark: command.isGuess ? 'guessed' : 'person',
+      parents,
+      today: input.today ?? '',
+      byTurn: { isUnattended: input.isUnattended === true },
+    });
+    if (outcome.kind === 'refused') privacyLines.push(outcome.line);
+    if (outcome.kind !== 'applied') return null;
+    quietLines.push(
+      buildQuietLine({
+        name,
+        isQuiet: command.isQuiet,
+        isGuess: command.isGuess,
+        isUntilUnread: command.isUntilUnread,
+      }),
+    );
+    return outcome.facts;
+  };
+  quietCommands.forEach((command) => {
+    if (command.targetKind === 'task' && command.isNew) {
+      const draft = drafts.get(command.targetId);
+      if (!draft || !command.isQuiet) return;
+      draft.quiet = settleQuiet(
+        command,
+        personalFactsOf(draft),
+        [],
+        draft.title,
+      );
+      return;
+    }
+    if (command.targetKind === 'task') {
+      const settled = working.get(command.targetId);
+      if (!settled) return;
+      const facts = settled.privacyFacts ?? NO_FACTS;
+      const parents = settled.privateParents ?? [];
+      const next = settleQuiet(command, facts, parents, settled.title);
+      if (!next) return;
+      const parentFacts = parents.map((parent) => parent.facts);
+      const privacy = readEffectivePrivacy(next, parentFacts);
+      const sealed = {
+        ...settled.sealed,
+        title: settled.title,
+        ...toQuietSealed(next),
+      };
+      record(
+        command.targetId,
+        'update',
+        {
+          'sealed.title': settled.title,
+          privacy,
+          ...toQuietKeys(next),
+        },
+        {
+          'sealed.title': settled.title,
+          privacy: settled.privacy === 'private' ? 'private' : 'ordinary',
+          ...toQuietKeys(facts),
+        },
+      );
+      patch(command.targetId, {
+        privacy,
+        sealed: seal(sealed),
+        lastEditedAt: now,
+      });
+      working.set(command.targetId, {
+        ...settled,
+        sealed,
+        privacyFacts: next,
+        privacy,
+      });
+      return;
+    }
+    if (command.targetKind === 'note' && command.isNew) {
+      if (!command.isQuiet) return;
+      const next = readSetQuiet({
+        current: NO_FACTS,
+        isQuiet: true,
+        until: command.until,
+        mark: command.isGuess ? 'guessed' : 'person',
+        parents: [],
+        today: input.today ?? '',
+      });
+      if (next.kind === 'applied') quietNew.set(command.targetId, next.facts);
+      return;
+    }
+    if (command.targetKind === 'note') {
+      const note = input.existingNotes?.get(command.targetId);
+      if (!note) return;
+      const facts = readQuietFacts(note.sealed);
+      const next = settleQuiet(command, facts, note.parents, note.title);
+      if (!next) return;
+      const line = quietLines[quietLines.length - 1];
+      record(
+        command.targetId,
+        'update',
+        { 'sealed.title': line, privacy: 'private', ...toQuietKeys(next) },
+        {
+          'sealed.title': line,
+          privacy: note.privacy === 'private' ? 'private' : 'ordinary',
+          ...toQuietKeys(facts),
+        },
+        'notes',
+      );
+      noteQuiet.set(command.targetId, {
+        ...noteQuiet.get(command.targetId),
+        privacy: 'private',
+        sealed: seal({ ...note.sealed, ...toQuietSealed(next) }),
+        lastEditedAt: now,
+      });
+      return;
+    }
+    const projectId = command.isNew
+      ? matchProject(refNames.get(command.targetId) ?? '', projectStart.pool)
+      : command.targetId;
+    if (!projectId) return;
+    if (projectId === projectStart.created?.id) {
+      if (!command.isQuiet) return;
+      const next = settleQuiet(
+        command,
+        NO_FACTS,
+        [],
+        projectStart.created.command.name,
+      );
+      if (next && projectStart.created.command.ref) {
+        quietNew.set(projectStart.created.command.ref, next);
+      }
+      return;
+    }
+    const project = workingProjects.get(projectId);
+    if (!project) return;
+    const facts = readQuietFacts(project.sealed);
+    const next = settleQuiet(command, facts, [], project.name);
+    if (!next) return;
+    const line = quietLines[quietLines.length - 1];
+    const sealed = { ...project.sealed, ...toQuietSealed(next) };
+    record(
+      projectId,
+      'update',
+      { 'sealed.title': line, privacy: 'private', ...toQuietKeys(next) },
+      {
+        'sealed.title': line,
+        privacy: project.isPrivate ? 'private' : 'ordinary',
+        ...toQuietKeys(facts),
+      },
+      'projects',
+    );
+    workingProjects.set(projectId, { ...project, isPrivate: true, sealed });
+    projectQuiet.set(projectId, {
+      privacy: 'private',
+      sealed: seal(sealed),
+      lastEditedAt: now,
+    });
+    if (!command.isQuiet) return;
+    const read = input.projectChildren?.get(projectId);
+    const unmarked = (read?.children ?? []).filter(
+      (child) =>
+        child.privacy !== 'private' &&
+        !noteQuiet.has(child.id) &&
+        patches.get(child.id)?.privacy !== 'private',
+    );
+    const writable = unmarked.slice(
+      0,
+      Math.max(0, MAX_QUIET_CHILD_WRITES - childWrites.spent),
+    );
+    childWrites.spent += writable.length;
+    const left = unmarked.length - writable.length;
+    if (read?.isMore || left > 0) {
+      quietLines.push(
+        read?.isMore
+          ? `Some of ${project.name}'s things aren't private yet`
+          : `${left} of ${project.name}'s things aren't private yet`,
+      );
+    }
+    const room = Math.max(0, MAX_EFFECTS - effects.length - drafts.size);
+    writable.forEach((child, at) => {
+      const isUndoable =
+        at < room && child.kind !== 'topic' && child.title !== '';
+      if (isUndoable) {
+        record(
+          child.id,
+          'update',
+          { 'sealed.title': child.title, privacy: 'private' },
+          { 'sealed.title': child.title, privacy: 'ordinary' },
+          child.kind === 'note' ? 'notes' : 'tasks',
+        );
+      }
+      if (child.kind === 'task') {
+        patch(child.id, { privacy: 'private', lastEditedAt: now });
+      } else if (child.kind === 'note') {
+        noteQuiet.set(child.id, {
+          ...noteQuiet.get(child.id),
+          privacy: 'private',
+        });
+      } else {
+        topicPrivate.set(child.id, { privacy: 'private' });
+      }
+    });
+  });
+  const createdFacts =
+    quietNew.get(projectStart.created?.command.ref ?? '') ?? null;
+
   const nameOf = new Map<string, string>([
     ...(input.people?.known ?? []).map((who): [string, string] => [
       who.id,
@@ -1491,7 +1796,8 @@ export function planWrites(input: PlanInput): WritePlan {
   const selfWhoId = input.selfWhoId ?? null;
   const projectPlan = planProjectRoles({
     created: projectStart.created,
-    existing: input.existingProjects ?? [],
+    createdFacts,
+    existing: [...workingProjects.values()],
     pool: projectStart.pool,
     commands: projectCommands.flatMap((command) =>
       command.kind === 'setProjectRole' ? [command] : [],
@@ -1959,6 +2265,7 @@ export function planWrites(input: PlanInput): WritePlan {
         (topicId) => input.topics?.get(topicId)?.name ?? '',
       );
       const line = buildNoteLine(note.title, topicNames);
+      const quiet = note.ref ? (quietNew.get(note.ref) ?? null) : null;
       record(id, 'create', { 'sealed.title': line }, null, 'notes');
       const stepped = filedIds
         .filter((topicId) => !skipFiling.has(`${topicId}:${id}`))
@@ -1991,6 +2298,7 @@ export function planWrites(input: PlanInput): WritePlan {
           {
             id,
             data: {
+              ...(quiet && { privacy: 'private' }),
               topicIds: filedIds,
               source: 'capture',
               isFromGeneralAnswer: false,
@@ -2003,7 +2311,11 @@ export function planWrites(input: PlanInput): WritePlan {
               executionId: input.executionId,
               createdAt: now,
               lastEditedAt: null,
-              sealed: seal({ title: note.title, body: note.body }),
+              sealed: seal({
+                title: note.title,
+                body: note.body,
+                ...(quiet && toQuietSealed(quiet)),
+              }),
             },
           },
         ],
@@ -2030,6 +2342,18 @@ export function planWrites(input: PlanInput): WritePlan {
       names: [],
     },
   );
+  turnNotes.forEach((note, index) => {
+    const quiet = note.ref ? quietNew.get(note.ref) : undefined;
+    if (!quiet || !noteSteps.creates.some((made) => made.id === noteIds[index]))
+      return;
+    quietLines.push(
+      buildQuietLine({
+        name: note.title,
+        isQuiet: true,
+        isGuess: quiet.quietMark === 'guessed',
+      }),
+    );
+  });
   const topicPlan = planTopicCommands({
     ...topicInput,
     madeNoteIds: new Set(noteSteps.creates.map((created) => created.id)),
@@ -2150,21 +2474,12 @@ export function planWrites(input: PlanInput): WritePlan {
           ?.privacyFacts ?? [],
     ),
     ...(draft.projectId
-      ? (input.existingProjects ?? []).flatMap((project) =>
-          project.id === draft.projectId
-            ? [
-                readPrivacyFacts({
-                  privateMark:
-                    project.sealed.privateMark === 'health' ||
-                    project.sealed.privateMark === 'care' ||
-                    project.sealed.privateMark === 'person'
-                      ? project.sealed.privateMark
-                      : null,
-                  isPrivacyCleared: project.sealed.isPrivacyCleared === true,
-                }),
-              ]
-            : [],
-        )
+      ? [...workingProjects.values()]
+          .filter((project) => project.id === draft.projectId)
+          .map((project) => readQuietFacts(project.sealed))
+      : []),
+    ...(createdFacts && draft.projectId === projectStart.created?.id
+      ? [createdFacts]
       : []),
   ];
   const kinIds = new Set(entities.kinNamed.values());
@@ -2181,15 +2496,7 @@ export function planWrites(input: PlanInput): WritePlan {
   });
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
-    const marked = readPrivateMark({
-      current: { privateMark: null, isPrivacyCleared: false },
-      isCare: false,
-      isForOtherWho: false,
-      commandMark: null,
-      isSensitiveHealth: false,
-      words: draft.title,
-    });
-    const facts = draft.isPrivate ? readPersonMark(marked, true) : marked;
+    const facts = draft.quiet ?? personalFactsOf(draft);
     record(
       draft.id,
       'create',
@@ -2249,6 +2556,7 @@ export function planWrites(input: PlanInput): WritePlan {
           ),
           meetingLabel: draft.meeting?.label ?? null,
           ...(facts.privateMark && { privateMark: facts.privateMark }),
+          ...(draft.quiet && toQuietSealed(draft.quiet)),
         }),
       },
     };
@@ -2650,7 +2958,20 @@ export function planWrites(input: PlanInput): WritePlan {
     keyDateUpdates: keyDatePlan.updates,
     keyDateDeletes: keyDatePlan.deletes,
     projectCreates: projectPlan.creates,
-    projectUpdates: projectPlan.updates,
+    projectUpdates: [
+      ...projectPlan.updates.map(({ id, data }) => ({
+        id,
+        data: { ...projectQuiet.get(id), ...data },
+      })),
+      ...[...projectQuiet.entries()]
+        .filter(([id]) => !projectPlan.updates.some((entry) => entry.id === id))
+        .map(([id, data]) => ({ id, data })),
+    ],
+    noteUpdates: [...noteQuiet.entries()].map(([id, data]) => ({ id, data })),
+    topicPrivacyUpdates: [...topicPrivate.entries()].map(([id, data]) => ({
+      id,
+      data,
+    })),
     offerLines: projectPlan.offerLines,
     noteCreates: [
       ...noteSteps.creates,
@@ -2712,6 +3033,25 @@ export function planWrites(input: PlanInput): WritePlan {
             (task) => task !== undefined && isTaskPrivate(task),
           ),
       ),
+    isQuiet:
+      quietCommands.length > 0 ||
+      input.commands.some(
+        (command) =>
+          command.kind !== 'createTask' &&
+          input.quietKeys?.has(toQuietKey('task', command.taskId)),
+      ) ||
+      [...drafts.values()].some(
+        (draft) =>
+          draft.quiet !== null ||
+          (draft.projectId !== null &&
+            input.quietKeys?.has(toQuietKey('project', draft.projectId))),
+      ) ||
+      projectCommands.some((command) => {
+        if (command.kind === 'createProject') return false;
+        const id = matchProject(command.projectRef, projectStart.pool);
+        return id !== null && input.quietKeys?.has(toQuietKey('project', id));
+      }),
+    quietLines,
     topicLines: topicPlan.topicLines,
     procedureLines: procedurePlan.lines,
     runLines: runPlan.lines,
@@ -3074,6 +3414,8 @@ export function buildExecution(
     inputMode?: string;
     timeZone?: string;
     offers?: Record<string, unknown>;
+    /** The turn touched something kept quiet: only the screen line is spoken. */
+    isQuiet?: boolean;
   },
 ): Record<string, unknown> {
   const created = plan.effectRefs.flatMap((ref, index) => {
@@ -3118,6 +3460,24 @@ export function buildExecution(
     extraLines.length === 0
       ? said
       : null;
+  const line =
+    (own && isVoice
+      ? own
+      : [
+          ack,
+          spokenProject,
+          spokenNote,
+          spokenKept,
+          spokenHome,
+          isVoice ? extraLines.map((line) => `${line}.`).join(' ') : null,
+        ]
+          .filter(Boolean)
+          .join(' ')) || null;
+  const held = holdQuietSpoken(
+    withQuestion(line, plan.questions[0]?.spoken ?? null) ??
+      (input.isQuiet && isVoice ? QUIET_SPOKEN_LINE : null),
+    input.isQuiet === true,
+  );
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -3166,6 +3526,7 @@ export function buildExecution(
           plan.rolesSet,
           plan.milestonesAdded,
         ),
+        ...plan.quietLines,
         describeNotes(plan.notesMade),
         describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
         ...plan.fileSummaries,
@@ -3191,21 +3552,8 @@ export function buildExecution(
       undoReport: null,
       goneIds: null,
       undoReason: null,
-      spoken: withQuestion(
-        (own && isVoice
-          ? own
-          : [
-              ack,
-              spokenProject,
-              spokenNote,
-              spokenKept,
-              spokenHome,
-              isVoice ? extraLines.map((line) => `${line}.`).join(' ') : null,
-            ]
-              .filter(Boolean)
-              .join(' ')) || null,
-        plan.questions[0]?.spoken ?? null,
-      ),
+      spoken: held.spoken,
+      heldSpoken: held.heldSpoken,
     }),
   };
 }
@@ -3223,7 +3571,9 @@ export function buildAnswerExecution(input: {
   seal: (fields: Record<string, unknown>) => SealedPayload;
   fact?: { effectRef: EffectRef; effect: Effect; note: string } | null;
   notDone?: string[];
+  isQuiet?: boolean;
 }): Record<string, unknown> {
+  const held = holdQuietSpoken(input.spoken, input.isQuiet === true);
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -3257,7 +3607,8 @@ export function buildAnswerExecution(input: {
       undoReason: null,
       said: null,
       lines: null,
-      spoken: input.spoken,
+      spoken: held.spoken,
+      heldSpoken: held.heldSpoken,
     }),
   };
 }
@@ -3297,8 +3648,12 @@ interface SettleInput {
   hadAsks?: boolean;
   /** An answer turn that files nothing is a turn well taken, not an unread one. */
   isAnswerTurn?: boolean;
+  /** The person asked to hear the line kept off the speaker: a turn well taken whose reply the device works out. */
+  asksHeldLine?: boolean;
   /** A line to say back when the turn made no answer of its own: the first open question, or why nothing more was asked. */
   line?: string | null;
+  /** The turn touched something kept quiet: only the screen line is spoken, the real one held. */
+  isQuiet?: boolean;
 }
 
 const isPickKind = (kind: string) =>
@@ -3348,6 +3703,19 @@ const asked = (kind: CodeQuestionKind, id: string, now: number) => ({
   sealed: { [id]: buildCodeQuestion(kind) },
 });
 
+const toCaptureSpoken = (
+  spoken: { text: string; priority: 'reply'; builtBy: 'code' } | null,
+  isQuiet: boolean | undefined,
+) => {
+  if (!spoken) return null;
+  const held = holdQuietSpoken(spoken.text, isQuiet === true);
+  return {
+    ...spoken,
+    text: held.spoken ?? spoken.text,
+    heldText: held.heldSpoken,
+  };
+};
+
 /** Where a capture lands once a reading is filed: sorted, still more to sort, or nothing could be made of it. The opened payload is spread so its text and reading are never dropped. */
 export function settleCapture(input: SettleInput) {
   const { now, mode, opened } = input;
@@ -3382,7 +3750,8 @@ export function settleCapture(input: SettleInput) {
     !input.hasFacts &&
     !input.hasMedia &&
     !input.hadAsks &&
-    !input.isAnswerTurn;
+    !input.isAnswerTurn &&
+    !input.asksHeldLine;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore
@@ -3419,15 +3788,18 @@ export function settleCapture(input: SettleInput) {
       sortedThrough: input.hasMore
         ? previous + input.filed
         : (opened.sortedThrough ?? null),
+      ...(input.asksHeldLine ? { asksHeldLine: true } : {}),
       ...(input.answer
-        ? { answer: input.answer.sealed, spoken: input.answer.spoken }
+        ? {
+            answer: input.answer.sealed,
+            spoken: toCaptureSpoken(input.answer.spoken, input.isQuiet),
+          }
         : input.line
           ? {
-              spoken: {
-                text: input.line,
-                priority: 'reply',
-                builtBy: 'code',
-              },
+              spoken: toCaptureSpoken(
+                { text: input.line, priority: 'reply', builtBy: 'code' },
+                input.isQuiet,
+              ),
             }
           : {}),
     },

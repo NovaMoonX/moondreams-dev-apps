@@ -1,4 +1,5 @@
 import { toComparable } from '@/utils/optionMatchUtils';
+import { stripProseMarks } from '@/utils/proseUtils';
 import { NOTE_TITLE_MAX } from '@apps/helm/constants';
 import type { CaptureAnswer, OpenNote, OpenTopic } from '@apps/helm/types';
 import { pickFittingTopic } from '@apps/helm/utils/noteSearch';
@@ -28,7 +29,7 @@ export function planSavedAnswer(
   notes: OpenNote[],
   topics: OpenTopic[],
 ): SavedAnswerPlan {
-  const body = (answer.general ?? '').trim();
+  const body = stripProseMarks(answer.general ?? '', { keepBreaks: true });
   const kept = notes.find(
     (note) =>
       !note.isUnreadable && toComparable(note.body) === toComparable(body),
