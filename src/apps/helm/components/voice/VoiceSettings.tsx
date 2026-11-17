@@ -30,6 +30,7 @@ import {
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   setHandsFreeOn,
+  setHelmWhisperHeld,
   setVoiceMode,
   setWakeWordOn,
 } from '@apps/helm/store/actions/settingsActions';
@@ -277,6 +278,9 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
   const isWakeWordOn = useAppSelector(
     (state) => state.helm.profile?.isWakeWordOn ?? false,
   );
+  const isWhisperHeldOn = useAppSelector(
+    (state) => state.helm.profile?.whisperHeld ?? true,
+  );
   const isHandsFreeOn = useAppSelector(
     (state) => state.helm.profile?.isHandsFreeOn ?? true,
   );
@@ -395,6 +399,12 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
             description={HELM_COPY.voiceHandsFree}
             checked={isHandsFreeOn}
             onChange={(isOn) => changeSwitch(setHandsFreeOn, isOn)}
+          />
+          <SwitchRow
+            title={HELM_COPY.voiceWhisperHeldTitle}
+            description={HELM_COPY.voiceWhisperHeld}
+            checked={isWhisperHeldOn}
+            onChange={(isOn) => changeSwitch(setHelmWhisperHeld, isOn)}
           />
           <SwitchRow
             title={HELM_COPY.voiceWakeTitle(name)}

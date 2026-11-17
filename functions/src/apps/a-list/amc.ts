@@ -2,11 +2,18 @@ import { defineSecret } from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { isForcedFixture } from '../../emulator.js';
-import type { AmcFormat, ShowtimeOption, TheatreResult, TicketPriceKind, TicketPrices } from './types.js';
+import type {
+  AmcFormat,
+  ShowtimeOption,
+  TheatreResult,
+  TicketPriceKind,
+  TicketPrices,
+} from './types.js';
 
 export const AMC_API_KEY = defineSecret('AMC_API_KEY');
 
-export const readAmcKey = () => (isForcedFixture('amc') ? '' : AMC_API_KEY.value());
+export const readAmcKey = () =>
+  isForcedFixture('amc') ? '' : AMC_API_KEY.value();
 
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_THEATRES = 10;
@@ -17,7 +24,13 @@ interface AmcLink {
 }
 
 interface AmcSuggestionsResponse {
-  _embedded?: { suggestions?: Array<{ title?: string; type?: string; _links?: Record<string, AmcLink | undefined> }> };
+  _embedded?: {
+    suggestions?: Array<{
+      title?: string;
+      type?: string;
+      _links?: Record<string, AmcLink | undefined>;
+    }>;
+  };
 }
 
 interface AmcTheatresResponse {
@@ -40,7 +53,14 @@ interface AmcTheatre {
 }
 
 interface AmcLocationsResponse {
-  _embedded?: Record<string, Array<{ distance?: number; _embedded?: Record<string, AmcTheatre | undefined> }> | undefined>;
+  _embedded?: Record<
+    string,
+    | Array<{
+        distance?: number;
+        _embedded?: Record<string, AmcTheatre | undefined>;
+      }>
+    | undefined
+  >;
 }
 
 function getBaseUrl() {
@@ -53,8 +73,17 @@ export function isFixtureMode(apiKey: string) {
 }
 
 // Only the suggestions lookup answers "nothing matches" with a 400; on any other call a 4xx means our request is wrong, which must not read as an empty result.
-async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>): Promise<T>;
-async function callAmc<T>(apiKey: string, path: string, params: Record<string, string>, isNoMatchAnswer: true): Promise<T | null>;
+async function callAmc<T>(
+  apiKey: string,
+  path: string,
+  params: Record<string, string>,
+): Promise<T>;
+async function callAmc<T>(
+  apiKey: string,
+  path: string,
+  params: Record<string, string>,
+  isNoMatchAnswer: true,
+): Promise<T | null>;
 async function callAmc<T>(
   apiKey: string,
   path: string,
@@ -66,7 +95,9 @@ async function callAmc<T>(
   }
 
   const url = new URL(`${getBaseUrl()}${path}`);
-  Object.entries(params).forEach(([name, value]) => url.searchParams.set(name, value));
+  Object.entries(params).forEach(([name, value]) =>
+    url.searchParams.set(name, value),
+  );
 
   try {
     const response = await fetch(url, {
@@ -76,14 +107,23 @@ async function callAmc<T>(
     if (response.status === 401 || response.status === 403) {
       throw new HttpsError('failed-precondition', NOT_SET_UP);
     }
-    if (isNoMatchAnswer && (response.status === 400 || response.status === 404)) {
+    if (
+      isNoMatchAnswer &&
+      (response.status === 400 || response.status === 404)
+    ) {
       return null;
     }
     if (response.status === 429) {
-      throw new HttpsError('resource-exhausted', 'Theater search is resting for today. Try again tomorrow.');
+      throw new HttpsError(
+        'resource-exhausted',
+        'Theater search is resting for today. Try again tomorrow.',
+      );
     }
     if (!response.ok) {
-      throw new HttpsError('unavailable', 'Theater search is unavailable right now.');
+      throw new HttpsError(
+        'unavailable',
+        'Theater search is unavailable right now.',
+      );
     }
     const result = (await response.json()) as T;
     return result;
@@ -92,7 +132,10 @@ async function callAmc<T>(
       throw error;
     }
     // The request carries the key, so neither the URL nor the raw error is logged.
-    throw new HttpsError('unavailable', 'Theater search is unavailable right now.');
+    throw new HttpsError(
+      'unavailable',
+      'Theater search is unavailable right now.',
+    );
   }
 }
 
@@ -106,27 +149,50 @@ export interface AmcPlace {
 }
 
 const FIXTURE_PLACES: AmcPlace[] = [
-  { label: 'Overland Park, KS', kind: 'city', latitude: 38.98, longitude: -94.67, state: null },
-  { label: 'Kansas', kind: 'state', latitude: null, longitude: null, state: 'kansas' },
+  {
+    label: 'Overland Park, KS',
+    kind: 'city',
+    latitude: 38.98,
+    longitude: -94.67,
+    state: null,
+  },
+  {
+    label: 'Kansas',
+    kind: 'state',
+    latitude: null,
+    longitude: null,
+    state: 'kansas',
+  },
 ];
 
 const PLACE_KINDS = ['zipcode', 'city', 'state'];
 
-function toPlace(suggestion: { title?: string; type?: string; _links?: Record<string, AmcLink | undefined> }): AmcPlace | null {
+function toPlace(suggestion: {
+  title?: string;
+  type?: string;
+  _links?: Record<string, AmcLink | undefined>;
+}): AmcPlace | null {
   const label = toText(suggestion.title);
-  const kind = PLACE_KINDS.find((candidate) => candidate === suggestion.type) as AmcPlace['kind'] | undefined;
+  const kind = PLACE_KINDS.find(
+    (candidate) => candidate === suggestion.type,
+  ) as AmcPlace['kind'] | undefined;
   if (!label || !kind) {
     return null;
   }
 
-  const links = Object.entries(suggestion._links ?? {}).filter(([name]) => name !== 'self');
+  const links = Object.entries(suggestion._links ?? {}).filter(
+    ([name]) => name !== 'self',
+  );
   const places = links.flatMap(([, link]): AmcPlace[] => {
     const url = toUrl(link?.href);
-    const stateName = url?.pathname.match(/\/states\/([a-z0-9-]{2,40})$/)?.[1] ?? null;
+    const stateName =
+      url?.pathname.match(/\/states\/([a-z0-9-]{2,40})$/)?.[1] ?? null;
     const latitude = Number(url?.searchParams.get('latitude') || Number.NaN);
     const longitude = Number(url?.searchParams.get('longitude') || Number.NaN);
     if (stateName) {
-      return [{ label, kind, latitude: null, longitude: null, state: stateName }];
+      return [
+        { label, kind, latitude: null, longitude: null, state: stateName },
+      ];
     }
     return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
       ? [{ label, kind, latitude, longitude, state: null }]
@@ -136,12 +202,20 @@ function toPlace(suggestion: { title?: string; type?: string; _links?: Record<st
 }
 
 /** AMC's suggestions for typed text: the zip codes, cities and states it matches, each with where to look. Theaters by name come from the theater list instead. */
-export async function suggestPlaces(apiKey: string, query: string): Promise<AmcPlace[]> {
+export async function suggestPlaces(
+  apiKey: string,
+  query: string,
+): Promise<AmcPlace[]> {
   if (isFixtureMode(apiKey)) {
     return /^[0-9]/.test(query) ? FIXTURE_PLACES.slice(0, 1) : FIXTURE_PLACES;
   }
 
-  const data = await callAmc<AmcSuggestionsResponse>(apiKey, '/v2/location-suggestions', { query }, true);
+  const data = await callAmc<AmcSuggestionsResponse>(
+    apiKey,
+    '/v2/location-suggestions',
+    { query },
+    true,
+  );
   const places = (data?._embedded?.suggestions ?? []).flatMap((suggestion) => {
     const place = toPlace(suggestion);
     return place ? [place] : [];
@@ -181,9 +255,19 @@ function toTimeZone(theatre: AmcTheatre | undefined) {
 export function toTitleCase(text: string) {
   const result = text
     .toLowerCase()
-    .replace(/(^|[\s\-.(])([a-z])/g, (_match, edge: string, letter: string) => edge + letter.toUpperCase())
-    .replace(/^([a-z])'([a-z])/i, (_match, first: string, second: string) => `${first.toUpperCase()}'${second.toUpperCase()}`)
-    .replace(/\bMc([a-z])/g, (_match, letter: string) => `Mc${letter.toUpperCase()}`);
+    .replace(
+      /(^|[\s\-.(])([a-z])/g,
+      (_match, edge: string, letter: string) => edge + letter.toUpperCase(),
+    )
+    .replace(
+      /^([a-z])'([a-z])/i,
+      (_match, first: string, second: string) =>
+        `${first.toUpperCase()}'${second.toUpperCase()}`,
+    )
+    .replace(
+      /\bMc([a-z])/g,
+      (_match, letter: string) => `Mc${letter.toUpperCase()}`,
+    );
   return result;
 }
 
@@ -191,7 +275,10 @@ function toNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function toTheatreResult(theatre: AmcTheatre | undefined, distance: unknown): TheatreResult | null {
+function toTheatreResult(
+  theatre: AmcTheatre | undefined,
+  distance: unknown,
+): TheatreResult | null {
   const theatreId = String(theatre?.id ?? '');
   const name = toText(theatre?.name);
   if (!/^[0-9]{1,8}$/.test(theatreId) || !name || theatre?.isClosed === true) {
@@ -215,28 +302,74 @@ function toTheatreResult(theatre: AmcTheatre | undefined, distance: unknown): Th
 }
 
 const FIXTURE_THEATRES: TheatreResult[] = [
-  ['2105', 'AMC Town Center 20', '4701 Town Center Dr', 'Leawood', 'KS', '66211', 38.9, -94.62, 4.1],
-  ['2078', 'AMC Dine-In Mission Valley 20', '5000 Metcalf Ave', 'Overland Park', 'KS', '66202', 38.99, -94.66, 1.2],
-  ['2236', 'AMC Barrywoods 24', '8600 N Church Rd', 'Kansas City', 'MO', '64157', 39.25, -94.57, 19.4],
-].map(([theatreId, name, addressLine, city, state, postalCode, latitude, longitude, distanceMiles]) => ({
-  timeZone: 'America/Chicago',
-  theatreId: theatreId as string,
-  name: name as string,
-  addressLine: addressLine as string,
-  city: city as string,
-  state: state as string,
-  postalCode: postalCode as string,
-  latitude: latitude as number,
-  longitude: longitude as number,
-  distanceMiles: distanceMiles as number,
-}));
+  [
+    '2105',
+    'AMC Town Center 20',
+    '4701 Town Center Dr',
+    'Leawood',
+    'KS',
+    '66211',
+    38.9,
+    -94.62,
+    4.1,
+  ],
+  [
+    '2078',
+    'AMC Dine-In Mission Valley 20',
+    '5000 Metcalf Ave',
+    'Overland Park',
+    'KS',
+    '66202',
+    38.99,
+    -94.66,
+    1.2,
+  ],
+  [
+    '2236',
+    'AMC Barrywoods 24',
+    '8600 N Church Rd',
+    'Kansas City',
+    'MO',
+    '64157',
+    39.25,
+    -94.57,
+    19.4,
+  ],
+].map(
+  ([
+    theatreId,
+    name,
+    addressLine,
+    city,
+    state,
+    postalCode,
+    latitude,
+    longitude,
+    distanceMiles,
+  ]) => ({
+    timeZone: 'America/Chicago',
+    theatreId: theatreId as string,
+    name: name as string,
+    addressLine: addressLine as string,
+    city: city as string,
+    state: state as string,
+    postalCode: postalCode as string,
+    latitude: latitude as number,
+    longitude: longitude as number,
+    distanceMiles: distanceMiles as number,
+  }),
+);
 
 function toTheatreResults(data: AmcLocationsResponse | null, limit: number) {
-  const locations = Object.values(data?._embedded ?? {}).flatMap((entries) => entries ?? []);
+  const locations = Object.values(data?._embedded ?? {}).flatMap(
+    (entries) => entries ?? [],
+  );
   const result = locations
     .map((location) =>
       toTheatreResult(
-        Object.values(location._embedded ?? {}).find((embedded) => embedded?.id !== undefined),
+        Object.values(location._embedded ?? {}).find(
+          (embedded) => embedded?.id !== undefined,
+        ),
         location.distance,
       ),
     )
@@ -246,7 +379,11 @@ function toTheatreResults(data: AmcLocationsResponse | null, limit: number) {
 }
 
 /** The closest theaters to a point, nearest first. */
-export async function findNearbyTheatres(apiKey: string, latitude: number, longitude: number): Promise<TheatreResult[]> {
+export async function findNearbyTheatres(
+  apiKey: string,
+  latitude: number,
+  longitude: number,
+): Promise<TheatreResult[]> {
   if (isFixtureMode(apiKey)) {
     return FIXTURE_THEATRES;
   }
@@ -263,25 +400,39 @@ export async function findNearbyTheatres(apiKey: string, latitude: number, longi
 export const MAX_STATE_THEATRES = 25;
 
 /** The theaters AMC lists for a state, by AMC's own name for it ("washington"). */
-export async function findStateTheatres(apiKey: string, state: string): Promise<TheatreResult[]> {
+export async function findStateTheatres(
+  apiKey: string,
+  state: string,
+): Promise<TheatreResult[]> {
   if (isFixtureMode(apiKey)) {
     return FIXTURE_THEATRES;
   }
 
-  const data = await callAmc<AmcLocationsResponse>(apiKey, `/v2/locations/states/${encodeURIComponent(state)}`, {
-    'page-size': String(MAX_STATE_THEATRES),
-  });
+  const data = await callAmc<AmcLocationsResponse>(
+    apiKey,
+    `/v2/locations/states/${encodeURIComponent(state)}`,
+    {
+      'page-size': String(MAX_STATE_THEATRES),
+    },
+  );
   const result = toTheatreResults(data, MAX_STATE_THEATRES);
   return result;
 }
 
 /** Every open AMC theater, for matching a typed name. */
-export async function listAllTheatres(apiKey: string): Promise<TheatreResult[]> {
+export async function listAllTheatres(
+  apiKey: string,
+): Promise<TheatreResult[]> {
   if (isFixtureMode(apiKey)) {
-    return FIXTURE_THEATRES.map((theatre) => ({ ...theatre, distanceMiles: null }));
+    return FIXTURE_THEATRES.map((theatre) => ({
+      ...theatre,
+      distanceMiles: null,
+    }));
   }
 
-  const data = await callAmc<AmcTheatresResponse>(apiKey, '/v2/theatres', { 'page-size': '1000' });
+  const data = await callAmc<AmcTheatresResponse>(apiKey, '/v2/theatres', {
+    'page-size': '1000',
+  });
   const result = (data?._embedded?.theatres ?? []).flatMap((theatre) => {
     const entry = toTheatreResult(theatre, null);
     return entry ? [entry] : [];
@@ -293,12 +444,20 @@ interface AmcShowtime {
   id?: number | string;
   movieName?: string;
   showDateTimeUtc?: string;
+  showDateTimeLocal?: string;
   isSoldOut?: boolean;
+  isDiscountDaysEligible?: boolean;
   isCanceled?: boolean;
   purchaseUrl?: string;
   mobilePurchaseUrl?: string;
   attributes?: Array<{ code?: string; name?: string }>;
-  ticketPrices?: Array<{ type?: string; agePolicy?: string; name?: string; price?: number; tax?: number }>;
+  ticketPrices?: Array<{
+    type?: string;
+    agePolicy?: string;
+    name?: string;
+    price?: number;
+    tax?: number;
+  }>;
 }
 
 interface AmcShowtimesResponse {
@@ -312,7 +471,11 @@ const AMC_HOST = /^https:\/\/([a-z0-9-]+\.)*amctheatres\.com(\/|$)/;
 
 // A caption or format tag in parentheses is not part of the title; anything else is, so a sequel never matches its predecessor.
 function normalizeTitle(value: string | undefined) {
-  return (value ?? '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function isSameMovie(amcTitle: string | undefined, title: string) {
@@ -326,40 +489,67 @@ function toAmcDate(isoDate: string) {
   return `${month}-${day}-${year}`;
 }
 
+// "Laser at AMC" tags most ordinary showings at some theaters and is priced as Standard, so it never makes a showing premium.
 const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
   ['imax', 'IMAX'],
   ['dolby', 'DOLBY_CINEMA'],
   ['prime', 'PRIME'],
   ['reald', 'REALD_3D'],
   ['3d', 'REALD_3D'],
-  ['laser', 'LASER'],
 ];
 
+// AMC lists a discount-day showing at its regular price and takes the discount off at checkout; its flag already
+// follows AMC's current days and blackout dates, so no weekday is assumed here.
+function isDiscountDay(showtime: AmcShowtime) {
+  return Boolean(showtime.isDiscountDaysEligible);
+}
+
 function toFormat(showtime: AmcShowtime): AmcFormat {
-  const text = (showtime.attributes ?? []).map((attribute) => `${attribute.code ?? ''} ${attribute.name ?? ''}`.toLowerCase()).join(' ');
+  const text = (showtime.attributes ?? [])
+    .map((attribute) =>
+      `${attribute.code ?? ''} ${attribute.name ?? ''}`.toLowerCase(),
+    )
+    .join(' ');
   const match = FORMAT_KEYWORDS.find(([keyword]) => text.includes(keyword));
   return match ? match[1] : 'STANDARD';
 }
 
 const NO_PRICES: TicketPrices = { ADULT: null, SENIOR: null, CHILD: null };
 
-function toTicketKind(entry: { type?: string; agePolicy?: string; name?: string }): TicketPriceKind | null {
+function toTicketKind(entry: {
+  type?: string;
+  agePolicy?: string;
+  name?: string;
+}): TicketPriceKind | null {
   const read = (text: string) => {
     if (/\bsenior/.test(text)) return 'SENIOR';
     if (/\b(child|kid|youth)/.test(text)) return 'CHILD';
     return /\badult/.test(text) ? 'ADULT' : null;
   };
-  return read((entry.type ?? '').toLowerCase()) ?? read([entry.agePolicy, entry.name].join(' ').toLowerCase());
+  return (
+    read((entry.type ?? '').toLowerCase()) ??
+    read([entry.agePolicy, entry.name].join(' ').toLowerCase())
+  );
 }
 
 // An exact "Adult" entry wins over a variant of it; the first entry of each kind otherwise.
-function toTicketAmounts(showtime: AmcShowtime): { prices: TicketPrices; taxes: TicketPrices } {
-  const entries = (showtime.ticketPrices ?? []).filter((entry) => typeof entry.price === 'number' && entry.price >= 0);
+function toTicketAmounts(showtime: AmcShowtime): {
+  prices: TicketPrices;
+  taxes: TicketPrices;
+} {
+  const entries = (showtime.ticketPrices ?? []).filter(
+    (entry) => typeof entry.price === 'number' && entry.price >= 0,
+  );
   const entryOf = (kind: TicketPriceKind) => {
     const ofKind = entries.filter((entry) => toTicketKind(entry) === kind);
-    return ofKind.find((entry) => entry.type?.trim().toLowerCase() === kind.toLowerCase()) ?? ofKind[0];
+    return (
+      ofKind.find(
+        (entry) => entry.type?.trim().toLowerCase() === kind.toLowerCase(),
+      ) ?? ofKind[0]
+    );
   };
-  const toCents = (value: number | undefined) => (typeof value === 'number' && value >= 0 ? Math.round(value * 100) : null);
+  const toCents = (value: number | undefined) =>
+    typeof value === 'number' && value >= 0 ? Math.round(value * 100) : null;
   const kinds: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
   const isTaxUsable = (kind: TicketPriceKind) => {
     const entry = entryOf(kind);
@@ -367,7 +557,10 @@ function toTicketAmounts(showtime: AmcShowtime): { prices: TicketPrices; taxes: 
   };
   // A listed tax of 0, or one larger than the price, is read as unknown, so the member's learned rate still applies.
   const taxes = Object.fromEntries(
-    kinds.map((kind) => [kind, isTaxUsable(kind) ? toCents(entryOf(kind)?.tax) : null]),
+    kinds.map((kind) => [
+      kind,
+      isTaxUsable(kind) ? toCents(entryOf(kind)?.tax) : null,
+    ]),
   ) as TicketPrices;
   // AMC's `price` already includes `tax` (Adult 14.19 with tax 1.20 is the 12.99 amctheatres.com shows), so the list price before tax is the difference.
   const prices = Object.fromEntries(
@@ -381,7 +574,12 @@ function toTicketAmounts(showtime: AmcShowtime): { prices: TicketPrices; taxes: 
 }
 
 function toHttpsUrl(value: string | undefined) {
-  return typeof value === 'string' && AMC_HOST.test(value) && !/\s/.test(value) && value.length <= 500 ? value : null;
+  return typeof value === 'string' &&
+    AMC_HOST.test(value) &&
+    !/\s/.test(value) &&
+    value.length <= 500
+    ? value
+    : null;
 }
 
 /** One showing of any movie; `movieTitle` is what AMC calls it, matched later against the member's title. */
@@ -408,30 +606,53 @@ function fixtureDay(date: string): DayShowtime[] {
     format: format as AmcFormat,
     priceCents: priceCents as number,
     standardPriceCents: null,
-    prices: { ADULT: priceCents as number, SENIOR: Math.max(0, (priceCents as number) - 300), CHILD: Math.max(0, (priceCents as number) - 400) },
+    prices: {
+      ADULT: priceCents as number,
+      SENIOR: Math.max(0, (priceCents as number) - 300),
+      CHILD: Math.max(0, (priceCents as number) - 400),
+    },
     standardPrices: NO_PRICES,
-    taxes: { ADULT: Math.round((priceCents as number) * 0.08), SENIOR: Math.round((priceCents as number) * 0.08), CHILD: Math.round((priceCents as number) * 0.08) },
+    taxes: {
+      ADULT: Math.round((priceCents as number) * 0.08),
+      SENIOR: Math.round((priceCents as number) * 0.08),
+      CHILD: Math.round((priceCents as number) * 0.08),
+    },
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
     isSoldOut: index === 9,
+    isDiscountDay: [2, 3].includes(new Date(`${date}T00:00:00Z`).getUTCDay()),
     // Matches every title, so any movie the emulator is asked about has showings.
     movieTitle: '*',
   }));
 }
 
 /** Every showing at one theater on one day (`YYYY-MM-DD`), all movies, earliest first. */
-export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: string): Promise<DayShowtime[]> {
+export async function fetchShowtimeDay(
+  apiKey: string,
+  theatreId: string,
+  date: string,
+): Promise<DayShowtime[]> {
   if (isFixtureMode(apiKey)) {
     return fixtureDay(date);
   }
 
-  const fetchPages = async (page: number, found: AmcShowtime[]): Promise<AmcShowtime[]> => {
-    const data = await callAmc<AmcShowtimesResponse>(apiKey, `/v2/theatres/${theatreId}/showtimes/${toAmcDate(date)}`, {
-      'page-number': String(page),
-      'page-size': String(SHOWTIMES_PAGE_SIZE),
-    });
+  const fetchPages = async (
+    page: number,
+    found: AmcShowtime[],
+  ): Promise<AmcShowtime[]> => {
+    const data = await callAmc<AmcShowtimesResponse>(
+      apiKey,
+      `/v2/theatres/${theatreId}/showtimes/${toAmcDate(date)}`,
+      {
+        'page-number': String(page),
+        'page-size': String(SHOWTIMES_PAGE_SIZE),
+      },
+    );
     const embedded = data._embedded?.showtimes ?? [];
     const all = [...found, ...embedded];
-    const isDone = embedded.length < SHOWTIMES_PAGE_SIZE || all.length >= (data.count ?? 0) || page >= MAX_SHOWTIME_PAGES;
+    const isDone =
+      embedded.length < SHOWTIMES_PAGE_SIZE ||
+      all.length >= (data.count ?? 0) ||
+      page >= MAX_SHOWTIME_PAGES;
     return isDone ? all : fetchPages(page + 1, all);
   };
   const collected = await fetchPages(1, []);
@@ -440,9 +661,14 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
     .filter((showtime) => !showtime.isCanceled)
     .flatMap((showtime) => {
       const startsAt = Date.parse(showtime.showDateTimeUtc ?? '');
-      const purchaseUrl = toHttpsUrl(showtime.purchaseUrl) ?? toHttpsUrl(showtime.mobilePurchaseUrl);
+      const purchaseUrl =
+        toHttpsUrl(showtime.purchaseUrl) ??
+        toHttpsUrl(showtime.mobilePurchaseUrl);
       const { prices, taxes } = toTicketAmounts(showtime);
-      return Number.isFinite(startsAt) && purchaseUrl && showtime.id !== undefined && showtime.movieName
+      return Number.isFinite(startsAt) &&
+        purchaseUrl &&
+        showtime.id !== undefined &&
+        showtime.movieName
         ? [
             {
               showtimeId: String(showtime.id),
@@ -455,6 +681,7 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
               taxes,
               purchaseUrl,
               isSoldOut: Boolean(showtime.isSoldOut),
+              isDiscountDay: isDiscountDay(showtime),
               movieTitle: showtime.movieName,
             } satisfies DayShowtime,
           ]
@@ -465,20 +692,35 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
 }
 
 /** One movie's showings from a day's list; each premium one carries the Standard price of the showing nearest in time that is still on sale, so a prime-time IMAX isn't compared with a matinee. */
-export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeOption[] {
-  const matches = day.filter((showtime) => showtime.movieTitle === '*' || isSameMovie(showtime.movieTitle, title));
+export function pickMovieShowtimes(
+  day: DayShowtime[],
+  title: string,
+): ShowtimeOption[] {
+  const matches = day.filter(
+    (showtime) =>
+      showtime.movieTitle === '*' || isSameMovie(showtime.movieTitle, title),
+  );
   const now = Date.now();
   const standards = matches.filter(
-    (showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null && !showtime.isSoldOut && showtime.startsAt > now,
+    (showtime) =>
+      showtime.format === 'STANDARD' &&
+      showtime.priceCents !== null &&
+      !showtime.isSoldOut &&
+      showtime.startsAt > now,
   );
   const getBaseline = (startsAt: number): TicketPrices => {
     const nearest = [...standards].sort(
-      (left, right) => Math.abs(left.startsAt - startsAt) - Math.abs(right.startsAt - startsAt) || left.startsAt - right.startsAt,
+      (left, right) =>
+        Math.abs(left.startsAt - startsAt) -
+          Math.abs(right.startsAt - startsAt) || left.startsAt - right.startsAt,
     )[0];
     return nearest ? nearest.prices : NO_PRICES;
   };
   const result = matches.map((showtime) => {
-    const standardPrices = showtime.format === 'STANDARD' ? NO_PRICES : getBaseline(showtime.startsAt);
+    const standardPrices =
+      showtime.format === 'STANDARD'
+        ? NO_PRICES
+        : getBaseline(showtime.startsAt);
     return {
       showtimeId: showtime.showtimeId,
       startsAt: showtime.startsAt,
@@ -490,6 +732,7 @@ export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeO
       taxes: showtime.taxes,
       purchaseUrl: showtime.purchaseUrl,
       isSoldOut: showtime.isSoldOut,
+      isDiscountDay: showtime.isDiscountDay,
     };
   });
   return result;

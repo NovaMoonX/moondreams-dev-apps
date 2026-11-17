@@ -461,7 +461,7 @@ Above the month, a stats row shows what the month cost and the average cost per 
 **Prerequisites:** Issue 12, Issue 3
 **Target PR Size:** ~500 lines
 **Files:**
-- `src/apps/pinch/components/settings/NutritionSection.tsx` (the four switches, in the Settings tab), `components/shared/ListViewControls.tsx` (each list's View options and its door to them), `CalendarScreen.tsx` (the eye)
+- `src/apps/pinch/components/settings/NumbersRow.tsx` (the four switches, in the Settings tab), `components/shared/ListViewControls.tsx` (each list's View options and its door to them), `CalendarScreen.tsx` (the eye)
 - `src/apps/pinch/components/shared/NutritionLine.tsx`
 - `src/apps/pinch/utils/recipeMath.ts` (nutrition), `mealMath.ts`, `stats.ts`
 - `src/apps/pinch/components/recipes/RecipeForm.tsx` ("+ My own nutrition" chip), `RecipeDrawer.tsx`, `MealDrawer.tsx`, `PlannedMealView.tsx`
@@ -474,7 +474,7 @@ Above the month, a stats row shows what the month cost and the average cost per 
 Nutrition is always stored and shown only when switched on. The Settings tab has four `AppToggle`s under "Numbers" (calories, protein, carbs, fat), all off to start, and each View options sheet points to them while none is on. A recipe's nutrition adds up from its ingredients, and the person can type their own over it. With a metric on, it shows per serving on recipes and meals and as a daily average on the calendar's stats row; with protein on, the row adds average price per gram of protein.
 
 ### Possible Approach
-1. `saveSettings({ showNutrition })` with dotted-path writes; the Settings tab's Numbers group (`NutritionSection`) carries the switches and an "About the numbers" line for licences and attributions, and the eye on the Calendar, Recipes, Meals and Kitchen holds a door row to it (`ListViewControls`, `CalendarViewOptions`).
+1. `saveSettings({ showNutrition })` with dotted-path writes; the Settings tab's "Calories and macros" row (`NumbersRow`) carries the switches and an "About the numbers" line for licences and attributions, and the eye on the Calendar, Recipes, Meals and Kitchen holds a door row to it (`ListViewControls`, `CalendarViewOptions`).
 2. Nutrition math per metric as in the TDD (grams from the same bridge as cost; the override replaces a derived metric when non-null); `NO_NUTRITION` gaps only for metrics that are on.
 3. `NutritionLine` renders only the metrics that are on and renders nothing when all are off; wire it into the recipe row and drawer, meal drawer, planned meal view and the summary sheet; `selectMonthStats` adds daily averages and `proteinPriceCentsPerGram` over meals where both are known.
 4. Recipe form: "+ My own nutrition" chip (visible whether or not anything is on) with four optional per-serving fields.
@@ -1122,7 +1122,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 **Files:**
 - `PinchSettings`, `ReminderKind` in `types.ts`; `REMINDER_KINDS`, the day ranges and choices in `constants.ts`; `utils/settings.ts`; `getEatByDefault`'s `usual` argument in `utils/containers.ts`
 - `store/slices/pinchSettingsSlice.ts`, `store/actions/pinchSettingsActions.ts`, `startPinchSettingsListener`, `usePinchSettings`, `usePinchSync`
-- `components/settings/` (`SettingsScreen`, `NutritionSection`, `RemindersSection`, `KeepingSection`), `src/components/SettingsGroup.tsx` and `SettingsRow.tsx`, the Settings tab in `PinchNav` and `Pinch.tsx` (it was a gear in `KitchenScreen`'s header opening a subview until round 10), `?open=fridge` in `Pinch.tsx`
+- `components/settings/` (`SettingsScreen`, `NumbersRow`, `RemindersSection`, `KeepingSection`), `src/components/SettingsGroup.tsx` and `SettingsRow.tsx`, the Settings tab in `PinchNav` and `Pinch.tsx` (it was a gear in `KitchenScreen`'s header opening a subview until round 10), `?open=fridge` in `Pinch.tsx`
 - `src/lib/notifications/devicePush.ts`, `notificationsQueries.ts`, `registerDeviceToken.ts`, `enablePushNotifications.ts`
 - `hooks/useTimerPush.ts` and one call in `useCookTimers`
 - `functions/src/apps/pinch/` (`sendEatSoonDigest`, `eatSoonDigest`), `functions/src/notifications/sendPush.ts` and `sendScheduledReminders.ts`, `functions/README.md`, `firestore.indexes.json`

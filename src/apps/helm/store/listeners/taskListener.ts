@@ -65,6 +65,13 @@ export async function openTask(
       steps: payload.steps ?? {},
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
+      quietMark:
+        payload.quietMark === 'person' || payload.quietMark === 'guessed'
+          ? payload.quietMark
+          : null,
+      quietUntil:
+        typeof payload.quietUntil === 'string' ? payload.quietUntil : null,
+      isQuietCleared: payload.isQuietCleared ?? false,
       isUnreadable: false,
     };
   } catch {
@@ -76,6 +83,9 @@ export async function openTask(
       isUnreadable: true,
       privateMark: null,
       isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
     };
   }
 }

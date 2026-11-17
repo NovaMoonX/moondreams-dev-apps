@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Turns on Google's Text-to-Speech API for the project and checks it answers; nothing secret is created or kept.
+# Turns on Google's Text-to-Speech API for the project, lets the functions use its Gemini voices (a whispered line) and checks it answers; nothing secret is created or kept.
 #   npm run voice:google-setup
 set -euo pipefail
 
@@ -16,6 +16,7 @@ if ! command -v gcloud >/dev/null 2>&1; then
   echo "gcloud isn't installed, so here are the clicks instead:"
   echo "  1. Open $API_PAGE"
   echo "  2. Click \"Enable\""
+  echo "  3. For the whispered voice: open https://console.cloud.google.com/iam-admin/iam?project=$PROJECT, edit the \"Compute Engine default service account\" row, Add another role, pick \"Vertex AI User\", Save"
   echo "The benchmark skips the Google voices until \"gcloud auth application-default login\" has been run once on this machine."
   exit 0
 fi
@@ -23,7 +24,17 @@ fi
 gcloud services enable texttospeech.googleapis.com --project "$PROJECT"
 echo "✓ Text-to-Speech is enabled for $PROJECT"
 
-if [[ -t 0 ]]; then
+# Gemini voices (the whispered line) are checked against Vertex AI's predict permission on the calling account.
+gcloud services enable aiplatform.googleapis.com --project "$PROJECT"
+number="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+  --role="roles/aiplatform.user" --condition=None >/dev/null
+echo "✓ The functions can use the Gemini voices (whispered lines)"
+
+if gcloud auth application-default print-access-token >/dev/null 2>&1; then
+  echo "✓ This machine is already signed in for the Google voices"
+elif [[ -t 0 ]]; then
   printf 'Sign in so the benchmark can use the Google voices from this machine? [Y/n] '
   read -r answer || true
   if [[ ! "$answer" =~ ^[Nn] ]]; then
