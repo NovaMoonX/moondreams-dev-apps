@@ -23,7 +23,7 @@ function DiscountDayNotice({
   return (
     <div className={step === 'pick' ? 'pb-1' : undefined}>
       <HelpTip
-        badgeLabel={
+        infoLabel={
           isSomeShowings
             ? 'Some showings may cost less'
             : 'Discount day: you may pay less'
