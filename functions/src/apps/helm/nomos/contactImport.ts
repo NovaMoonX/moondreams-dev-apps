@@ -769,6 +769,7 @@ export const buildImportExecution = (input: {
     abilityOffer: null,
     awayZoneOffer: null,
     goneIds: null,
+    heldSpoken: null,
     undoReason: null,
     said: null,
     lines: null,

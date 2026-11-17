@@ -486,7 +486,9 @@ export const selectUsedIngredientIds = createSelector(
     new Set([
       ...recipes.flatMap((recipe) =>
         recipe.ingredients.flatMap((line) =>
-          line.amount === null ? [] : [line.ingredientId],
+          line.amount === null || line.ingredientId === null
+            ? []
+            : [line.ingredientId],
         ),
       ),
       ...[

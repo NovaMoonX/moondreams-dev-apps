@@ -591,6 +591,7 @@ test('an answer turn that files nothing settles sorted', () => {
     text: 'That was already answered.',
     priority: 'reply',
     builtBy: 'code',
+    heldText: null,
   });
 });
 
