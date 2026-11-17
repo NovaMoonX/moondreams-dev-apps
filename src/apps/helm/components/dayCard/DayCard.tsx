@@ -10,7 +10,7 @@ import MorningCard from '@apps/helm/components/dayCard/MorningCard';
 import WindDownCard from '@apps/helm/components/dayCard/WindDownCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { useDayCard, type AimRow } from '@apps/helm/hooks/useDayCard';
+import type { AimRow, useDayCard } from '@apps/helm/hooks/useDayCard';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import {
@@ -30,10 +30,10 @@ import { foldedAimsLine, readWindDownCounts } from '@apps/helm/utils/dayCard';
 const attempted = new Set<string>();
 
 /** Home's day card: in the morning it asks what the person wants done and carries yesterday's leftovers; once answered it is one folded line; in the last 2 hours it winds the day down. The server turns the day over while the app is closed, so the card is already right when it opens. */
-function DayCard({ now }: { now: number }) {
+function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   const name = useAssistantName();
   const { addToast } = useToast();
-  const { uid, model, filing } = useDayCard(now);
+  const { uid, model, filing } = card;
   const { held, tick, undoTick } = useTaskTicks(uid);
   const { plan, isReady } = usePlanDay();
   const [unfolded, setUnfolded] = useState<string | null>(null);

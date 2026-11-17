@@ -39,6 +39,7 @@ import {
 } from '@apps/helm/hooks/useCaptureOutbox';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useDayCard } from '@apps/helm/hooks/useDayCard';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
@@ -306,6 +307,9 @@ function HomeSurface({
     !hasTurns && !isCapturesLoaded && !isCapturesFailed && !isWaitingOnKey;
   const voice = useHelmVoiceContext();
   const now = useNow(60_000);
+  const dayCard = useDayCard(now);
+  const isDayCardAsking =
+    dayCard.model?.mode === 'ask' || dayCard.model?.mode === 'windDown';
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const todayStart = zonedDateTimeToEpoch(
@@ -383,7 +387,7 @@ function HomeSurface({
         {keyStatus === 'ready' && <QuietLines now={now} />}
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
-        {keyStatus === 'ready' && <DayCard now={now} />}
+        {keyStatus === 'ready' && <DayCard card={dayCard} />}
         {isOpening && (
           <div
             className='flex flex-1 flex-col items-center justify-center gap-4 pb-16'
@@ -416,6 +420,7 @@ function HomeSurface({
             loadsEarlier
             foldsBefore={todayStart}
             freshFrom={homeFrom}
+            holdsTop={keyStatus === 'ready' && isDayCardAsking}
           />
         )}
         {!hasFreshTurns && !isOpening && !isWaitingOnKey && (

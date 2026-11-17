@@ -30,6 +30,8 @@ interface ConversationThreadProps {
   foldsBefore?: number | null;
   /** Sessions that started before this moment fold too, the newest included (a fresh start, or today's midnight with Start each day fresh on). */
   freshFrom?: number;
+  /** Something above the thread is asking the person first (home's day card): the page rests at its top until a new turn arrives or the person moves. */
+  holdsTop?: boolean;
 }
 
 type Place = { id: string; top: number } | null;
@@ -144,6 +146,7 @@ function ConversationThread({
   loadsEarlier,
   foldsBefore = null,
   freshFrom = 0,
+  holdsTop = false,
 }: ConversationThreadProps) {
   const { user } = useAuth();
   const [isUnfolded, setIsUnfolded] = useState(false);
@@ -159,10 +162,20 @@ function ConversationThread({
       .at(-1)?.id ?? null;
 
   // The newest turn stays in view while earlier sessions mount above it, until the person scrolls or types.
+  const hasMoved = useRef(false);
+  const heldFor = useRef<string | null>(null);
   useEffect(() => {
     if (!latestId) return;
     const scroller = getScroller(root.current, scroll);
-    isFollowing.current = true;
+    // Held only over the turn it was first shown with and only until the person moves, so a card that appears later never jumps the page.
+    const hold = {
+      isOn:
+        holdsTop &&
+        !hasMoved.current &&
+        (heldFor.current === null || heldFor.current === latestId),
+    };
+    if (hold.isOn) heldFor.current = latestId;
+    isFollowing.current = !hold.isOn;
     // The scroll our own correction causes is not the person moving, so it doesn't move the remembered place.
     const adjusted = { at: 0 };
     const keepPlace = () => {
@@ -170,6 +183,11 @@ function ConversationThread({
       place.current = readPlace(root.current, scroller);
     };
     const toBottom = () => {
+      if (hold.isOn) {
+        if (scroller) scroller.scrollTo({ top: 0 });
+        else window.scrollTo({ top: 0 });
+        return;
+      }
       if (!isFollowing.current) {
         if (returnToPlace(root.current, scroller, place.current)) {
           adjusted.at = performance.now();
@@ -180,6 +198,8 @@ function ConversationThread({
       else window.scrollTo({ top: document.documentElement.scrollHeight });
     };
     const stop = () => {
+      hasMoved.current = true;
+      hold.isOn = false;
       isFollowing.current = false;
       keepPlace();
     };
@@ -197,7 +217,7 @@ function ConversationThread({
       target.removeEventListener('scroll', keepPlace);
       intents.forEach((name) => window.removeEventListener(name, stop));
     };
-  }, [latestId, scroll]);
+  }, [latestId, scroll, holdsTop]);
 
   if (sessions.length === 0) return null;
 
