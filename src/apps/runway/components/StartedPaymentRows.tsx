@@ -19,8 +19,8 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { removeStartedPayment } from '@apps/runway/store/actions/cardActions';
 import type { DateOnly } from '@apps/runway/types';
 
-/** After this many days a payment the bank hasn't shown says so. */
-const LATE_AFTER_DAYS = 7;
+/** Halfway through the wait, a payment the bank hasn't shown says when Runway stops waiting for it. */
+const LATE_AFTER_DAYS = STARTED_PAYMENT_WINDOW_DAYS / 2;
 
 interface StartedPaymentRowsProps {
   waiting: readonly StartedPaymentState[];
