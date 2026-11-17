@@ -1,6 +1,18 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import {
+  createAction,
+  createSlice,
+  type PayloadAction,
+} from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import {
+  addHeldWrites,
+  applyHeldWrites,
+  dropHeldWrites,
+  patchHeldWrite,
+  settleHeldWrites,
+  type HeldWrite,
+} from '@/utils/heldWrites';
 import { withBankBalances } from '@apps/runway/engine/accounts';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -104,7 +116,38 @@ export interface RunwayState {
   /** The confirmed day ids the history records were read for, as the selector joins them. */
   historyRecordsFor: string | null;
   historyFailedFor: string | null;
+  incoming: HeldLists;
+  held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
+  deliveredAt: { [K in HeldKind]: number | null };
 }
+
+interface HeldLists {
+  days: OpenDay[];
+  records: OpenRecord[];
+  moves: OpenMove[];
+}
+
+export type HeldKind = keyof HeldLists;
+
+export interface HeldWritesInput {
+  token: string;
+  days?: HeldWrite<OpenDay>[];
+  records?: HeldWrite<OpenRecord>[];
+  moves?: HeldWrite<OpenMove>[];
+}
+
+const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves'];
+
+const layHeld = (state: RunwayState, kind: HeldKind) => {
+  const { list, held } = applyHeldWrites<HeldLists[typeof kind][number]>(
+    state.incoming[kind],
+    state.held[kind],
+    (item) => item.id,
+    { deliveredAt: state.deliveredAt[kind] },
+  );
+  (state[kind] as HeldLists[typeof kind]) = list as HeldLists[typeof kind];
+  (state.held[kind] as HeldWrite<HeldLists[typeof kind][number]>[]) = held;
+};
 
 const initialState: RunwayState = {
   keyStatus: 'idle',
@@ -158,7 +201,20 @@ const initialState: RunwayState = {
   historyFor: null,
   historyRecordsFor: null,
   historyFailedFor: null,
+  incoming: { days: [], records: [], moves: [] },
+  deliveredAt: { days: null, records: null, moves: null },
+  held: { days: [], records: [], moves: [] },
 };
+
+export const holdWrites = createAction<HeldWritesInput>('runway/holdWrites');
+export const settleWrites = createAction<string>('runway/settleWrites');
+export const dropWrites = createAction<string>('runway/dropWrites');
+// A plain write to a held record shows through the hold, which would otherwise hide Firestore's own local copy.
+export const patchHeld = createAction<{
+  kind: HeldKind;
+  id: string;
+  fields: Record<string, unknown>;
+}>('runway/patchHeld');
 
 export const runwaySlice = createSlice({
   name: 'runway',
@@ -188,7 +244,9 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ from: DateOnly; days: OpenDay[] }>,
     ) => {
-      state.days = action.payload.days;
+      state.incoming.days = action.payload.days;
+      state.deliveredAt.days = Date.now();
+      layHeld(state, 'days');
       state.daysFrom = action.payload.from;
     },
     setChanges: (
@@ -206,7 +264,9 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ dayIds: string; records: OpenRecord[] }>,
     ) => {
-      state.records = action.payload.records;
+      state.incoming.records = action.payload.records;
+      state.deliveredAt.records = Date.now();
+      layHeld(state, 'records');
       state.recordsFor = action.payload.dayIds;
     },
     setExpenses: (state, action: PayloadAction<OpenExpense[]>) => {
@@ -254,7 +314,9 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
     ) => {
-      state.moves = action.payload.moves;
+      state.incoming.moves = action.payload.moves;
+      state.deliveredAt.moves = Date.now();
+      layHeld(state, 'moves');
       state.movesFrom = action.payload.from;
     },
     setPurchases: (
@@ -330,6 +392,48 @@ export const runwaySlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    builder.addCase(holdWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        const added = action.payload[kind] ?? [];
+        const before = state.held[kind] as HeldWrite<unknown>[];
+        if (added.length === 0 && before.length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = addHeldWrites<unknown>(
+          dropHeldWrites<unknown>(before, action.payload.token),
+          added,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(settleWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        if (state.held[kind].length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = settleHeldWrites<unknown>(
+          state.held[kind],
+          action.payload,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(dropWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        if (state.held[kind].length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = dropHeldWrites<unknown>(
+          state.held[kind],
+          action.payload,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(patchHeld, (state, action) => {
+      const { kind, id, fields } = action.payload;
+      if (!state.held[kind].some((hold) => hold.id === id)) return;
+      (state.held[kind] as HeldWrite<unknown>[]) = patchHeldWrite<unknown>(
+        state.held[kind],
+        id,
+        fields,
+      );
+      layHeld(state, kind);
+    });
     builder.addCase(resetAllState, () => initialState);
   },
 });
