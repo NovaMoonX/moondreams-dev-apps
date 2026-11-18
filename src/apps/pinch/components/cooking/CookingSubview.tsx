@@ -618,6 +618,7 @@ function CookingSession({
               ? undefined
               : ingredientsById.get(line.ingredientId),
           ),
+          ingredientKey: getLineKey(line),
         };
       });
       return result;
@@ -3076,6 +3077,7 @@ function CookingSession({
             </div>
           ) : isGatherView ? (
             <CookGatherView
+              uid={uid}
               dishes={entries.map((candidate) => {
                 const state = plate[candidate.recipe.id];
                 const dishServings =

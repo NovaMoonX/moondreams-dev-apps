@@ -9,6 +9,7 @@ import {
   toPreferredUnits,
 } from '../../src/apps/pinch/utils/units.ts';
 import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
+import { combineCookLines } from '../../src/apps/pinch/utils/combineCookLines.ts';
 import { getMeasuringTools } from '../../src/apps/pinch/utils/measuringTools.ts';
 import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
 import {
@@ -186,7 +187,8 @@ const line = (
   amount: number,
   unit: Parameters<typeof getMeasuringTools>[0][number]['unit'],
   isLiquid = false,
-) => ({ name, amount, unit, isLiquid });
+  gramsPerMl: number | null = null,
+) => ({ name, amount, unit, isLiquid, gramsPerMl });
 const tools = getMeasuringTools([
   line('Flour', 4 / 3, 'CUP'),
   line('Milk', 0.75, 'CUP', true),
@@ -194,7 +196,7 @@ const tools = getMeasuringTools([
   line('Soy sauce', 0.31, 'CUP', true),
   line('Salt', 0.5, 'TSP'),
   line('Vanilla', 1.5, 'TBSP'),
-  line('Butter', 113, 'G'),
+  line('Butter', 113, 'G', false, 0.96),
   line('Ground beef', 1, 'LB'),
   line('Chicken', 1.5, 'LB'),
   line('Pepper', 0.01, 'TSP'),
@@ -203,12 +205,14 @@ const tools = getMeasuringTools([
 assert.deepEqual(
   tools.map((tool) => [tool.key, tool.sizes, tool.names]),
   [
-    ['SCALE', [], ['Butter', 'Chicken']],
-    ['LIQUID_CUP', [], ['Milk', 'Stock']],
+    ['SCALE', ['113 g', '1½ lb'], ['Butter', 'Chicken']],
+    ['LIQUID_CUP', ['¾ cup', '500 ml'], ['Milk', 'Stock']],
     ['DRY_CUPS', ['1 cup', '⅓ cup'], ['Flour']],
     ['SPOONS', ['1 tbsp', '1 tsp', '½ tsp'], ['Soy sauce', 'Salt', 'Vanilla']],
   ],
 );
+// A weighed line with a known density says what it is without a scale; one without says nothing
+assert.deepEqual(tools[0].swaps, [{ name: 'Butter', text: '½ cup' }]);
 // 0.31 cup reads as 5 tbsp, so it is spoons, not a cup
 assert.equal(formatKitchenAmount(0.31, 'CUP'), '5 tbsp');
 assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')])[0].sizes, [
@@ -216,5 +220,49 @@ assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')])[0].sizes, [
   '¼ tsp',
 ]);
 assert.deepEqual(getMeasuringTools([line('Salt', 0.01, 'TSP')]), []);
+
+// "All together" adds one ingredient's lines up and says where each part goes
+const source = (
+  lineId: string,
+  key: string,
+  amount: number | null,
+  unit: Parameters<typeof getMeasuringTools>[0][number]['unit'],
+  group: string | null,
+  recipeId = 'r1',
+) => ({
+  recipeId,
+  recipeTitle: recipeId === 'r1' ? 'Adobo chicken' : 'Rice',
+  lineId,
+  key,
+  name: key,
+  note: null,
+  amountText: amount === null ? 'to taste' : formatKitchenAmount(amount, unit),
+  isMeasured: amount !== null,
+  group,
+  measure: amount === null ? null : { amount, unit, gramsPerMl: null },
+});
+const combined = combineCookLines(
+  [
+    source('a', 'Soy sauce', 0.25, 'CUP', 'For the chicken'),
+    source('b', 'Garlic', 4, 'EACH', 'For the chicken'),
+    source('c', 'Soy sauce', 2, 'TBSP', 'For the sauce'),
+    source('d', 'Salt', null, 'PINCH', null),
+    source('e', 'Salt', null, 'PINCH', null, 'r2'),
+    source('f', 'Garlic', 1, 'TBSP', null, 'r2'),
+  ],
+  true,
+);
+assert.deepEqual(
+  combined.map((line) => [line.key, line.amountText, line.note]),
+  [
+    ['Soy sauce', '6 tbsp', '¼ cup for the chicken · 2 tbsp for the sauce'],
+    ['Garlic', '4 + 1 tbsp', '4 for the chicken · 1 tbsp for Rice'],
+    ['Salt', 'to taste', 'to taste for Adobo chicken · to taste for Rice'],
+  ],
+);
+assert.deepEqual(combined[0].sources, [
+  { recipeId: 'r1', lineId: 'a' },
+  { recipeId: 'r1', lineId: 'c' },
+]);
 
 console.log('pinch units: ok');

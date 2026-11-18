@@ -1,20 +1,28 @@
 import type { Unit } from '@apps/pinch/types';
-import { getSpoonMeasure } from '@apps/pinch/utils/kitchenMeasure';
+import {
+  formatKitchenAmount,
+  getSpoonMeasure,
+} from '@apps/pinch/utils/kitchenMeasure';
+import { convertForIngredient } from '@apps/pinch/utils/units';
 
 export interface ToolLine {
   name: string;
   amount: number;
   unit: Unit;
   isLiquid: boolean;
+  /** What turns its weight into a volume, so a weighed line can say what it is in cups without a scale. */
+  gramsPerMl: number | null;
 }
 
 export interface MeasuringTool {
   key: 'SCALE' | 'LIQUID_CUP' | 'DRY_CUPS' | 'SPOONS';
   name: string;
-  /** The sizes the lines call for, smallest last ("1 cup, ⅓ cup"); empty when sizes don't apply. */
+  /** What to reach for, largest first: the cup and spoon sizes ("1 cup", "⅓ cup"), or for a scale or a liquid cup the amounts it measures ("8 oz", "¼ cup"). */
   sizes: string[];
   /** The lines it measures, in recipe order. */
   names: string[];
+  /** For a scale: each weighed line in cups or spoons, where its ingredient's density is known. */
+  swaps: { name: string; text: string }[];
 }
 
 const EPSILON = 0.02;
@@ -137,6 +145,25 @@ const TOOL_ORDER: MeasuringTool['key'][] = [
   'SPOONS',
 ];
 
+const getSwap = (line: ToolLine) => {
+  if (line.gramsPerMl === null) return [];
+  const cups = convertForIngredient(line.amount, line.unit, 'CUP', {
+    gramsPerMl: line.gramsPerMl,
+  });
+  return cups === null || cups <= 0
+    ? []
+    : [{ name: line.name, text: formatKitchenAmount(cups, 'CUP') }];
+};
+
+const getToolSizes = (key: MeasuringTool['key'], lines: ToolLine[]) =>
+  key === 'SPOONS' || key === 'DRY_CUPS'
+    ? sortSizes(lines.flatMap(getSizes))
+    : Array.from(
+        new Set(
+          lines.map((line) => formatKitchenAmount(line.amount, line.unit)),
+        ),
+      );
+
 /** The measuring tools a set of measured lines calls for, with the cup and spoon sizes each needs. */
 export function getMeasuringTools(lines: ToolLine[]): MeasuringTool[] {
   const grouped = lines.reduce<Map<MeasuringTool['key'], ToolLine[]>>(
@@ -151,16 +178,13 @@ export function getMeasuringTools(lines: ToolLine[]): MeasuringTool[] {
   return TOOL_ORDER.flatMap((key) => {
     const matched = grouped.get(key);
     if (!matched) return [];
-    const sizes =
-      key === 'SPOONS' || key === 'DRY_CUPS'
-        ? sortSizes(matched.flatMap(getSizes))
-        : [];
     return [
       {
         key,
         name: TOOL_NAMES[key],
-        sizes,
+        sizes: getToolSizes(key, matched),
         names: Array.from(new Set(matched.map((line) => line.name))),
+        swaps: key === 'SCALE' ? matched.flatMap(getSwap) : [],
       },
     ];
   });
