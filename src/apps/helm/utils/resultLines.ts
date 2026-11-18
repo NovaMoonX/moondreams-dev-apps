@@ -70,6 +70,19 @@ export function buildResultLines(
         },
       ];
     }
+    if (
+      ref.collection === 'profile' &&
+      'personality' in (effect?.written ?? {})
+    ) {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: toText(effect?.written['sealed.title']) ?? '',
+          detail: toText(effect?.written['sealed.detail']),
+        },
+      ];
+    }
     if (ref.collection === 'profile') {
       return [
         {

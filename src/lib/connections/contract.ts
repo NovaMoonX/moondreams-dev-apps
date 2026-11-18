@@ -126,6 +126,8 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'sameEventKey',
     'hasTicket',
     'format',
+    'buyerFirstName',
+    'status',
   ],
   task: [],
   project: [
@@ -137,7 +139,7 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'leftCents',
   ],
   knowledge: ['rating'],
-  artifact: ['status'],
+  artifact: ['status', 'state', 'condition', 'floorPriceCents'],
   scenario: [],
   trip: [],
   pet: [],
@@ -250,6 +252,7 @@ export interface StartGoogleConnectionRequest {
   accountId: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount: boolean;
+  extraScopes: string[] | null;
 }
 
 export interface StartGoogleConnectionResult {
@@ -288,6 +291,7 @@ export interface ConnectorOption {
   isPrimary: boolean;
   /** Holidays, subscriptions and calendars only shared to read start off. */
   isOnByDefault: boolean;
+  isWritable?: boolean;
 }
 
 export interface EndConnectionRequest {

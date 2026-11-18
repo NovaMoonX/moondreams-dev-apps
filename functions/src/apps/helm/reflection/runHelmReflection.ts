@@ -26,6 +26,8 @@ import {
   estimateReflectCost,
   type PreparedReflection,
 } from './buildReflectRequest.js';
+import { buildRelateRequest } from './relate/buildRelateRequest.js';
+import { applyRelateOutcome } from './relate/writeRelate.js';
 import {
   OPEN_RUN_STATUSES,
   readRun,
@@ -34,6 +36,7 @@ import {
   releaseLeaseIn,
   RUNS_PATH,
   statePath,
+  type JobId,
   type ReflectionRun,
 } from './reflectionRuns.js';
 import { applyReflectionOutcome } from './writeReflection.js';
@@ -68,6 +71,7 @@ export interface ReflectionPass {
 }
 
 interface Prepared extends PreparedReflection {
+  jobId: JobId;
   uid: string;
   customId: string;
   answersDueAt: number;
@@ -80,16 +84,21 @@ class OutOfTime extends Error {}
 const toCode = (error: unknown) =>
   (error as { code?: unknown } | null)?.code ?? null;
 
-const toDueAt = (profile: DocumentData) =>
-  typeof profile.reflectDueAt === 'number' ? profile.reflectDueAt : 0;
+const DUE_FIELDS = { reflect: 'reflectDueAt', relate: 'relateDueAt' } as const;
+
+const toDueAt = (profile: DocumentData, jobId: JobId) => {
+  const due: unknown = profile[DUE_FIELDS[jobId]];
+  return typeof due === 'number' ? due : 0;
+};
 
 async function takeLease(
   firestore: Firestore,
   uid: string,
+  jobId: JobId,
   lease: { runId: string; customId: string; answersDueAt: number },
   now: number,
 ) {
-  const ref = firestore.doc(statePath(uid));
+  const ref = firestore.doc(statePath(uid, jobId));
   return firestore.runTransaction(async (transaction) => {
     const state = readState((await transaction.get(ref)).data());
     if (state.customId !== null && state.leaseUntil > now) return null;
@@ -115,10 +124,13 @@ const releaseLease = (
   firestore: Firestore,
   uid: string,
   customId: string,
+  jobId: JobId,
   clear: { answersDueAt: number } | null,
 ) =>
   firestore.runTransaction(async (transaction) => {
-    const stateSnap = await transaction.get(firestore.doc(statePath(uid)));
+    const stateSnap = await transaction.get(
+      firestore.doc(statePath(uid, jobId)),
+    );
     const profileRef = firestore.doc(`apps/helm/users/${uid}`);
     const profileSnap = clear ? await transaction.get(profileRef) : null;
     const state = readState(stateSnap.data());
@@ -129,9 +141,10 @@ const releaseLease = (
         uid,
         state.attempts,
         state.lastDayKey,
+        jobId,
       );
-    if (clear && profileSnap?.get('reflectDueAt') === clear.answersDueAt)
-      transaction.update(profileRef, { reflectDueAt: null });
+    if (clear && profileSnap?.get(DUE_FIELDS[jobId]) === clear.answersDueAt)
+      transaction.update(profileRef, { [DUE_FIELDS[jobId]]: null });
   });
 
 async function prepare(
@@ -140,24 +153,27 @@ async function prepare(
   doc: QueryDocumentSnapshot,
   runId: string,
   now: number,
+  jobId: JobId,
 ): Promise<Prepared | null> {
   const uid = doc.id;
   const profile = doc.data();
-  const answersDueAt = toDueAt(profile);
+  const answersDueAt = toDueAt(profile, jobId);
   if (profile.isLearningOn === false) {
-    await doc.ref.update({ reflectDueAt: null });
+    await doc.ref.update({ [DUE_FIELDS[jobId]]: null });
     return null;
   }
   const customId = newId('b', 16);
   const lease = await takeLease(
     firestore,
     uid,
+    jobId,
     { runId, customId, answersDueAt },
     now,
   );
   if (!lease) return null;
   try {
-    const built = await buildReflectRequest(
+    const build = jobId === 'relate' ? buildRelateRequest : buildReflectRequest;
+    const built = await build(
       firestore,
       uid,
       await unwrapHelmKey(firestore, keyring, uid),
@@ -165,20 +181,21 @@ async function prepare(
       now,
     );
     if (!built) {
-      await releaseLease(firestore, uid, customId, { answersDueAt });
+      await releaseLease(firestore, uid, customId, jobId, { answersDueAt });
       return null;
     }
     if (lease.lastDayKey === built.dayKey) {
-      await releaseLease(firestore, uid, customId, { answersDueAt });
+      await releaseLease(firestore, uid, customId, jobId, { answersDueAt });
       return null;
     }
     const reserved = estimateReflectCost(built.request);
     if (!(await reserveBatchSpend(firestore, now, reserved))) {
-      await releaseLease(firestore, uid, customId, null);
+      await releaseLease(firestore, uid, customId, jobId, null);
       return null;
     }
     return {
       ...built,
+      jobId,
       uid,
       customId,
       answersDueAt,
@@ -187,7 +204,7 @@ async function prepare(
     };
   } catch (error) {
     logger.warn('helm.reflect.prepareFailed', { runId, code: toCode(error) });
-    await releaseLease(firestore, uid, customId, null).catch(() => null);
+    await releaseLease(firestore, uid, customId, jobId, null).catch(() => null);
     return null;
   }
 }
@@ -198,8 +215,8 @@ async function markLost(firestore: Firestore, runId: string): Promise<void> {
   const run = readRun((await runRef.get()).data());
   if (!run) return;
   await Promise.all(
-    Object.entries(run.requests).map(([customId, { uid }]) =>
-      releaseLease(firestore, uid, customId, null),
+    Object.entries(run.requests).map(([customId, { uid, jobId }]) =>
+      releaseLease(firestore, uid, customId, jobId, null),
     ),
   );
   await firestore.runTransaction(async (transaction) => {
@@ -228,8 +245,8 @@ async function closeCollected(
   const runRef = firestore.doc(`${RUNS_PATH}/${runId}`);
   const leftover = readRun((await runRef.get()).data())?.requests ?? {};
   await Promise.all(
-    Object.entries(leftover).map(([customId, { uid }]) =>
-      releaseLease(firestore, uid, customId, null),
+    Object.entries(leftover).map(([customId, { uid, jobId }]) =>
+      releaseLease(firestore, uid, customId, jobId, null),
     ),
   );
   await firestore.runTransaction(async (transaction) => {
@@ -282,11 +299,23 @@ async function collectRun(
   await results.reduce(async (previous, result) => {
     await previous;
     if (Date.now() > deadline) throw new OutOfTime();
-    await applyReflectionOutcome(firestore, keyring, {
+    const apply =
+      run.requests[result.customId]?.jobId === 'relate'
+        ? applyRelateOutcome
+        : applyReflectionOutcome;
+    await apply(firestore, keyring, {
       runId,
       customId: result.customId,
       result,
       now,
+    }).catch((error: unknown) => {
+      logger.error('helm.reflect.applyFailed', {
+        runId,
+        uid: run.requests[result.customId]?.uid,
+        jobId: run.requests[result.customId]?.jobId,
+        customId: result.customId,
+        code: toCode(error),
+      });
     });
   }, Promise.resolve());
   if (REFLECT_BATCH.deleteAfterCollect) await client.remove(run.batchId);
@@ -338,28 +367,38 @@ async function prepareDue(
   runId: string,
   now: number,
 ) {
-  const due = await firestore
-    .collection('apps/helm/users')
-    .where('reflectDueAt', '<=', now)
-    .limit(DUE_LIMIT)
-    .select(
-      'isLearningOn',
-      'reflectDueAt',
-      'timeZone',
-      'forgottenAt',
-      'seenAsRebuiltAt',
-    )
-    .get();
+  const [reflectDue, relateDue] = await Promise.all(
+    (['reflect', 'relate'] as const).map((jobId) =>
+      firestore
+        .collection('apps/helm/users')
+        .where(DUE_FIELDS[jobId], '<=', now)
+        .limit(DUE_LIMIT)
+        .select(
+          'isLearningOn',
+          DUE_FIELDS[jobId],
+          'timeZone',
+          'forgottenAt',
+          'seenAsRebuiltAt',
+        )
+        .get(),
+    ),
+  );
+  const due = [
+    ...reflectDue.docs.map((doc) => ({ doc, jobId: 'reflect' as const })),
+    ...relateDue.docs.map((doc) => ({ doc, jobId: 'relate' as const })),
+  ];
   const startedAt = Date.now();
   const chunks = Array.from(
-    { length: Math.ceil(due.size / CHUNK) },
-    (_, index) => due.docs.slice(index * CHUNK, (index + 1) * CHUNK),
+    { length: Math.ceil(due.length / CHUNK) },
+    (_, index) => due.slice(index * CHUNK, (index + 1) * CHUNK),
   );
   return chunks.reduce(async (previous, chunk) => {
     const prepared = await previous;
     if (Date.now() - startedAt > BUILD_BUDGET_MS) return prepared;
     const next = await Promise.all(
-      chunk.map((doc) => prepare(firestore, keyring, doc, runId, now)),
+      chunk.map(({ doc, jobId }) =>
+        prepare(firestore, keyring, doc, runId, now, jobId),
+      ),
     );
     return [...prepared, ...next.filter((entry) => entry !== null)];
   }, Promise.resolve<Prepared[]>([]));
@@ -374,9 +413,9 @@ async function submitPrepared(
 ) {
   const runRef = firestore.doc(`${RUNS_PATH}/${runId}`);
   const requests = Object.fromEntries(
-    prepared.map(({ customId, uid, dayKey, answersDueAt, reserved }) => [
+    prepared.map(({ customId, jobId, uid, dayKey, answersDueAt, reserved }) => [
       customId,
-      { uid, dayKey, answersDueAt, reserved },
+      { jobId, uid, dayKey, answersDueAt, reserved },
     ]),
   );
   await runRef.set({
@@ -433,9 +472,9 @@ async function submitPrepared(
       }),
     );
   const writer = firestore.bulkWriter();
-  prepared.forEach(({ uid }) =>
+  prepared.forEach(({ jobId, uid }) =>
     writer
-      .update(firestore.doc(statePath(uid)), {
+      .update(firestore.doc(statePath(uid, jobId)), {
         leaseUntil: now + SUBMITTED_LEASE_MS,
       })
       .catch((error: unknown) =>

@@ -5,6 +5,7 @@ export const HELM_HOMES = [
   'tasks',
   'facts',
   'planDays',
+  'dayAims',
   'who',
   'places',
   'keyDates',
@@ -26,6 +27,7 @@ export const HELM_HOMES = [
   'style',
   'executions',
   'daySummaries',
+  'groupings',
   'synced',
   'profile',
   'live',
@@ -75,6 +77,7 @@ export const TURN_BLOCKS = [
   '<screen>',
   '<files>',
   '<already_made>',
+  '<aims_turn>',
 ] as const;
 
 const row = (
@@ -112,12 +115,18 @@ const connected = (
     ...fields,
   });
 
-const syncedApp = (source: string, category: string, thing: string) =>
+const syncedApp = (
+  source: string,
+  category: string,
+  thing: string,
+  batchJobs: string[] = [],
+) =>
   connected(source, category, thing, {
     home: 'synced',
     contextBlock: '<synced_records>',
     tools: ['search_synced'],
     isSynced: true,
+    batchJobs,
   });
 
 const liveApp = (source: string, category: string, thing: string) =>
@@ -127,7 +136,9 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: 'Tasks',
     home: 'tasks',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<open_tasks>',
+    batchJobs: ['relate'],
     tools: ['search_tasks'],
     commands: ['createTask', 'updateTask', 'completeTask', 'offerQuestionTask'],
     writer: 'actions/taskActions',
@@ -136,8 +147,9 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: 'Goals and projects, with their milestones',
     home: 'projects',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<open_projects>',
-    batchJobs: ['reflect'],
+    batchJobs: ['reflect', 'relate'],
     commands: ['createProject', 'setProjectRole', 'addMilestone'],
     writer: 'actions/projectActions',
     taps: ['createProject', 'changeProjectRole', 'addMilestone'],
@@ -219,6 +231,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     thing: 'Notes',
     home: 'notes',
     contextBlock: '<related_notes>',
+    batchJobs: ['relate'],
     commands: ['createNote'],
     writer: 'actions/noteActions',
     taps: ['createNote', 'editNote', 'deleteNote'],
@@ -227,6 +240,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     thing: 'Topics',
     home: 'topics',
     contextBlock: '<your_topics>',
+    batchJobs: ['relate'],
     commands: ['moveTopic', 'createParentTopic'],
     writer: 'actions/topicActions',
     taps: ['createTopic', 'moveTopic', 'deleteTopic'],
@@ -504,9 +518,21 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: "Helm's plan for a day",
     home: 'planDays',
+    readers: ['device', 'server', 'turn', 'quick'],
     tools: ['get_calendar'],
     writer: 'actions/planActions',
     taps: ['generatePlan', 'keepSlot', 'skipSlot', 'moveSlot'],
+  }),
+  row({
+    thing: 'The aims a person set for a day and how the day wound down',
+    home: 'dayAims',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server'],
+    writer: 'server/sortHelmCapture',
+    jobFields: [
+      { field: 'windDownState', job: 'runHelmDayPlan' },
+      { field: 'rolledAt', job: 'runHelmDayPlan' },
+    ],
   }),
   row({
     thing: 'Where the person is right now',
@@ -561,6 +587,21 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     contextBlock: '<abilities>',
     writer: 'actions/settingsActions',
     taps: ['setPhoneLocation', 'forgetNearNow', 'declineAbilityOffer'],
+  }),
+  row({
+    thing: 'How the assistant talks, with its traits and how honest it is',
+    home: 'profile',
+    classes: ['readable'],
+    readers: ['device', 'server', 'turn', 'quick'],
+    commands: ['setPersonality'],
+    writer: 'actions/personalityActions',
+    taps: ['setPersonality', 'askPersonalityPreview'],
+    jobFields: [
+      {
+        field: 'personalityPreview (the sample replies for one personality)',
+        job: 'previewHelmPersonality',
+      },
+    ],
   }),
   row({
     thing: 'Settings, the name and the way Helm talks',
@@ -619,8 +660,28 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     jobFields: [{ field: 'staleAt', job: 'writeDaySummary' }],
   }),
   row({
+    thing: 'Things that look like one thing, grouped overnight',
+    home: 'groupings',
+    classes: ['sealed', 'readable'],
+    readers: ['device', 'server', 'turn', 'night'],
+    contextBlock: '<related_things>',
+    writer: 'actions/groupingActions',
+    taps: [
+      'groupThem',
+      'markNotRelated',
+      'notNowGrouping',
+      'markGroupingTold',
+      'dropFromGroupings',
+    ],
+    jobFields: [{ field: 'state, sources and linkedKeys', job: 'writeRelate' }],
+    batchJobs: ['relate'],
+    derivedFrom: ['tasks', 'notes', 'topics', 'projects', 'synced'],
+    sourceKeys: 'sourceKeys',
+  }),
+  row({
     thing: 'Calendar events',
     home: 'synced',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<synced_records>',
     tools: ['get_calendar', 'search_synced'],
     writer: 'platform/sink',
@@ -641,6 +702,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   }),
   connected('google:calendar', 'events', 'Google Calendar events', {
     home: 'synced',
+    readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<synced_records>',
     tools: ['get_calendar', 'search_synced'],
     isSynced: true,
@@ -660,15 +722,22 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   syncedApp('app:a-list', 'savedTheaters', 'Saved theaters'),
   syncedApp('app:a-list', 'seenMovies', 'Movies the person has seen'),
   syncedApp('app:a-list', 'watchlist', 'The movie watchlist'),
-  syncedApp('app:going-once', 'pickups', 'Pickups'),
-  syncedApp('app:going-once', 'sales', 'Sales'),
-  syncedApp('app:going-once', 'things', 'Things for sale'),
+  liveApp('app:a-list', 'savings', 'Movie membership savings'),
+  syncedApp('app:going-once', 'pickups', 'Pickups', ['relate']),
+  syncedApp('app:going-once', 'sales', 'Sales', ['relate']),
+  syncedApp('app:going-once', 'things', 'Things for sale', ['relate']),
+  liveApp('app:going-once', 'allThings', 'Everything in the sales'),
+  liveApp('app:going-once', 'questions', "Buyers' questions"),
   syncedApp('app:nine-lives', 'cats', 'Cats'),
   syncedApp('app:nine-lives', 'vetVisits', 'Vet visits'),
   syncedApp('app:nine-lives', 'dueCare', 'Vaccines and preventives due'),
   syncedApp('app:nine-lives', 'clinics', 'Vet clinics'),
   syncedApp('app:nine-lives', 'conditions', 'Health conditions'),
   syncedApp('app:nine-lives', 'symptoms', 'Symptoms'),
+  liveApp('app:nine-lives', 'visitNotes', 'Vet visit notes'),
+  liveApp('app:nine-lives', 'doseHistory', 'Vaccines and preventives given'),
+  liveApp('app:nine-lives', 'weights', 'Cat weights'),
+  liveApp('app:nine-lives', 'catExpenses', 'Cat spending'),
   syncedApp('app:pinch', 'plannedMeals', 'Planned meals'),
   syncedApp('app:pinch', 'shoppingList', 'The shopping list'),
   syncedApp('app:pinch', 'useSoon', 'Food to use soon'),
@@ -676,17 +745,26 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   syncedApp('app:pinch', 'recipes', 'Recipes'),
   syncedApp('app:pinch', 'savedMeals', 'Saved meals'),
   syncedApp('app:pinch', 'ideas', 'Recipe ideas'),
+  liveApp('app:pinch', 'recipeIngredients', 'Recipe ingredients'),
+  liveApp('app:pinch', 'cooked', 'Recipes the person cooked'),
   syncedApp('app:runway', 'moneySummary', 'Free to Spend'),
-  syncedApp('app:runway', 'upcomingBills', 'Bills coming up'),
-  syncedApp('app:runway', 'horizon', 'Horizon goals'),
+  syncedApp('app:runway', 'upcomingBills', 'Bills coming up', ['relate']),
+  syncedApp('app:runway', 'horizon', 'Horizon goals', ['relate']),
   syncedApp('app:runway', 'envelopes', 'Envelopes'),
   liveApp('app:runway', 'transactions', 'Transactions'),
-  syncedApp('app:waypoint', 'trips', 'Trips'),
+  liveApp('app:runway', 'envelopeBalances', 'Envelope spending'),
+  liveApp('app:runway', 'accountBalances', 'Account balances'),
+  liveApp('app:runway', 'cardsDue', 'Cards due'),
+  syncedApp('app:waypoint', 'trips', 'Trips', ['relate']),
   syncedApp('app:waypoint', 'itinerary', 'Trip plans'),
-  syncedApp('app:waypoint', 'myTasks', 'Trip to-dos'),
+  syncedApp('app:waypoint', 'myTasks', 'Trip to-dos', ['relate']),
   syncedApp('app:waypoint', 'tripBalances', 'What is owed on trips'),
   syncedApp('app:waypoint', 'tripChecklist', 'Trip checklists'),
+  liveApp('app:waypoint', 'fullChecklist', 'The whole trip checklist'),
+  liveApp('app:waypoint', 'tripIdeas', 'Trip ideas'),
+  liveApp('app:waypoint', 'announcements', 'Trip announcements'),
   syncedApp('app:worth-the-wait', 'boxCounts', 'Box counts'),
+  liveApp('app:worth-the-wait', 'revealedItems', 'Revealed items'),
 ];
 
 /** Command or terminal-tool kind to the writer that makes the change, for a sentence and a tap alike. */

@@ -20,6 +20,8 @@ import {
   planReopen,
   planUndo,
   procedureEffectKind,
+  toGroupingUndoPatch,
+  withoutGroupings,
   toOfferDocIds,
   readUndoFields,
   topicEffectKind,
@@ -760,6 +762,107 @@ test('"I\'m home" taken back to an earlier home that still holds says so', () =>
   assert.equal(result.undoSealed.summary, 'Took back being home');
 });
 
+const PERSONALITY_WRITTEN = {
+  traits: ['honest', 'brief', 'warm', 'blunt'],
+  honesty: 'straight',
+  keptClashes: [],
+};
+
+const sayPersonality = (previous: Record<string, unknown> | null) => ({
+  ref: { op: 'update', collection: 'profile', docId: 'uid-1' } as EffectRef,
+  effect: {
+    written: {
+      personality: PERSONALITY_WRITTEN,
+      personalitySetAt: EARLIER,
+      'sealed.title': 'How Juniper talks',
+      'sealed.detail': 'Blunt added · Honest, Brief, Warm, Blunt',
+    },
+    previous: {
+      personality: previous,
+      personalitySetAt: previous ? EARLIER - 1000 : null,
+      'sealed.title': 'How Juniper talks',
+      'sealed.detail': 'Blunt added · Honest, Brief, Warm, Blunt',
+    },
+  },
+});
+
+test('a changed personality is taken back by putting the previous one back', () => {
+  const { ref, effect } = sayPersonality(null);
+  const result = asWrite(
+    plan(execution([{ ref, effect }], { category: 'organize' }), [
+      target(
+        'uid-1',
+        {
+          personality: PERSONALITY_WRITTEN,
+          personalitySetAt: EARLIER,
+          lastEditedAt: EARLIER,
+        },
+        null,
+      ),
+    ]),
+  );
+  assert.deepEqual(result.deletes, []);
+  assert.deepEqual(result.updates, [
+    {
+      docId: 'uid-1',
+      collection: 'profile',
+      fields: { personality: null, personalitySetAt: null, lastEditedAt: NOW },
+      reseal: null,
+    },
+  ]);
+  assert.equal(result.report, 'Put back how it talks.');
+  assert.equal(result.undoSealed.summary, 'Put back how it talks');
+});
+
+test('a personality changed since is kept and said so', () => {
+  const { ref, effect } = sayPersonality({
+    traits: ['honest'],
+    honesty: 'straight',
+    keptClashes: [],
+  });
+  const result = asRefused(
+    plan(execution([{ ref, effect }]), [
+      target(
+        'uid-1',
+        {
+          personality: { ...PERSONALITY_WRITTEN, traits: ['honest', 'dry'] },
+          personalitySetAt: NOW,
+          lastEditedAt: NOW,
+        },
+        null,
+      ),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['How Juniper talks']);
+  assert.ok(result.report?.includes('How Juniper talks'));
+});
+
+test('a personality change is its own unit and result row, and a clash answer reopens', () => {
+  const { ref, effect } = sayPersonality(null);
+  const original = execution([{ ref, effect }]);
+  const { units } = buildUndoUnits(original);
+  assert.equal(units.length, 1);
+  assert.equal(units[0].kind, 'personality');
+  assert.equal(units[0].change, 'changed');
+  assert.equal(units[0].title, 'How Juniper talks');
+  const lines = buildResultLines(original, new Map(), 'UTC', NOW);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].title, 'How Juniper talks');
+  assert.equal(lines[0].detail, 'Blunt added · Honest, Brief, Warm, Blunt');
+  assert.equal(lines[0].unitKey, units[0].key);
+  assert.deepEqual(
+    planReopen(
+      { questionRef: { captureId: 'turn-1', questionId: 'q1' } },
+      {
+        status: 'sorted',
+        questionState: { q1: { kind: 'clashChoice', answeredAt: NOW } },
+      },
+    ),
+    { 'questionState.q1.answeredAt': null, status: 'needsYou' },
+  );
+});
+
 test('an import keeps a person who is in use and says so', () => {
   const result = asWrite(
     plan(
@@ -1168,6 +1271,137 @@ test('a project the turn made is deleted by its undo, and says projects', () => 
     ['projects:p1'],
   );
   assert.equal(result.report, 'Took back 1 project.');
+});
+
+test('a quiet link is taken back record by record, then the grouping is a no and the generic plan never writes it', () => {
+  const link = update('t1', { projectId: 'p1' }, { projectId: null });
+  const grouping = {
+    ref: { op: 'update', collection: 'groupings', docId: 'g_1' } as EffectRef,
+    effect: {
+      written: { state: 'filed', linkedKeys: ['tasks/t1'] },
+      previous: { state: 'proposed', linkedKeys: [] },
+    },
+  };
+  const original = execution([link, grouping]);
+  const view = withoutGroupings(original);
+  assert.deepEqual(
+    view.effectRefs.map((ref) => ref.collection),
+    ['tasks'],
+  );
+  const result = asWrite(
+    plan(view, [target('t1', { projectId: 'p1' }, sealedOf('Pack the boxes'))]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => entry.docId),
+    ['t1'],
+  );
+  assert.equal(result.updates[0].fields.projectId, null);
+  const quiet = toGroupingUndoPatch('nomos', grouping.effect.previous, NOW);
+  assert.equal(quiet.state, 'notRelated');
+  assert.deepEqual(quiet.linkedKeys, []);
+  assert.deepEqual(
+    Object.keys(quiet).filter(
+      (key) =>
+        !['state', 'linkedKeys', 'answeredAt', 'updatedAt'].includes(key),
+    ),
+    [],
+  );
+  const own = toGroupingUndoPatch(
+    'person',
+    { state: 'proposed', parentId: null, answeredAt: null },
+    NOW,
+  );
+  assert.equal(own.state, 'proposed');
+  assert.equal(own.executionId, null);
+  assert.equal(
+    toGroupingUndoPatch('person', { state: 'notNow' }, NOW).state,
+    'notNow',
+  );
+});
+
+const quietExecution = () => {
+  const entry = (
+    collection: string,
+    docId: string,
+    written: Record<string, unknown>,
+    previous: Record<string, unknown>,
+  ) => ({
+    ref: { op: 'update', collection, docId } as EffectRef,
+    effect: { written, previous },
+  });
+  return execution([
+    entry('tasks', 't1', { projectId: 'p1' }, { projectId: null }),
+    entry('tasks', 't2', { projectId: 'p1' }, { projectId: null }),
+    entry('notes', 'n1', { projectIds: ['p0', 'p1'] }, { projectIds: ['p0'] }),
+    entry('topics', 'tp1', { projectIds: ['p1'] }, { projectIds: [] }),
+    entry(
+      'groupings',
+      'g_1',
+      { state: 'filed', linkedKeys: ['tasks/t1', 'tasks/t2'] },
+      { state: 'proposed', linkedKeys: [] },
+    ),
+  ]);
+};
+
+test('a quiet link with a grouping has no grouping unit and the grouping rides with the final undo', () => {
+  const original = quietExecution();
+  const built = buildUndoUnits(original);
+  assert.equal(built.units.length, 3);
+  assert.ok(
+    built.units.every((unit) => !unit.docIds.includes('g_1')),
+    'no unit holds the grouping',
+  );
+  const groupingIndex = original.effectRefs.findIndex(
+    (ref) => ref.collection === 'groupings',
+  );
+  assert.deepEqual(built.rest, [groupingIndex]);
+  const finals = ['t1', 't2', 'n1'].map((docId, at, all) => {
+    const done = new Set(all.slice(0, at));
+    const narrowed = narrowForUndo({ ...original, undoneDocIds: [...done] }, [
+      docId,
+    ]);
+    assert.equal(narrowed.kind, 'ok');
+    if (narrowed.kind !== 'ok') throw new Error('expected ok');
+    return {
+      isFinal: narrowed.isFinal,
+      hasGrouping: narrowed.view.effectRefs.some(
+        (ref) => ref.collection === 'groupings',
+      ),
+    };
+  });
+  assert.deepEqual(
+    finals.map((one) => one.isFinal),
+    [false, false, true],
+  );
+  assert.deepEqual(
+    finals.map((one) => one.hasGrouping),
+    [false, false, true],
+  );
+  assert.equal(toGroupingUndoPatch('nomos', null, NOW).state, 'notRelated');
+});
+
+test('a note quiet link and a topic quiet link are put back to their earlier project lists', () => {
+  const original = quietExecution();
+  const view = withoutGroupings(original);
+  const result = asWrite(
+    plan(view, [
+      target('t1', { projectId: 'p1' }, sealedOf('One')),
+      target('t2', { projectId: 'p1' }, sealedOf('Two')),
+      [
+        'n1',
+        {
+          docId: 'n1',
+          data: { projectIds: ['p0', 'p1'] },
+          opened: null,
+        },
+      ],
+      topicTarget('tp1', { projectIds: ['p1'] }),
+    ]),
+  );
+  const fieldsOf = (docId: string) =>
+    result.updates.find((entry) => entry.docId === docId)?.fields;
+  assert.deepEqual(fieldsOf('n1')?.projectIds, ['p0']);
+  assert.deepEqual(fieldsOf('tp1')?.projectIds, []);
 });
 
 test('a role the turn gave is stepped back with the earlier roles and notes, and a role changed since is kept', () => {

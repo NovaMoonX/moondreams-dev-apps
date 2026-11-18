@@ -25,6 +25,7 @@ import {
   type HabitCommand,
   type SeenAsCommand,
   type SetImportanceCommand,
+  type SetPersonalityCommand,
 } from './nomos/commands.js';
 import {
   importanceToday,
@@ -34,6 +35,8 @@ import {
 } from './importanceStore.js';
 import { planImportance } from './nomos/planImportance.js';
 import { planSeenAs } from './nomos/planSeenAs.js';
+import { planPersonality } from './nomos/planPersonality.js';
+import { readPersonality } from './nomos/personality.js';
 import { readSeenAsForContext, readSeenAsRecordsIn } from './seenAsStore.js';
 import { decideHabit } from './nomos/policy.js';
 import {
@@ -176,7 +179,9 @@ import {
   type CaptureDisposition,
   type ObservationRead,
 } from './nomos/actNow.js';
+import { readContextRelatedThings } from './nomos/relatedThings.js';
 import {
+  nextReflectionAt,
   planObservations,
   readTurnSubjects,
 } from './nomos/planObservations.js';
@@ -332,6 +337,9 @@ import {
   SCHEDULE_DROP_LINES,
   planScheduledActions,
 } from './nomos/planScheduledActions.js';
+import { planDayAims } from './nomos/planDayAims.js';
+import { openAimsView } from './dayPlan/dayAimsStore.js';
+import { toDayKeyIn } from './dayPlan/dayJob.js';
 import {
   planResearch,
   readUsageDoc,
@@ -436,6 +444,7 @@ import {
   PROCEDURE_PROMPT,
   HABIT_PROMPT,
   IMPORTANCE_PROMPT,
+  PERSONALITY_PROMPT,
   SEEN_AS_PROMPT,
 } from './nomos/prompt.js';
 import { renderWhereBlock } from './nomos/whereThingsLive.js';
@@ -584,6 +593,8 @@ export interface CaptureDoc {
     isUntouched?: boolean;
   } | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
+  /** The day whose aims this turn files, set by the device when the morning card is answered. */
+  aimsDayKey?: string | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
   abilities?: unknown;
@@ -592,11 +603,19 @@ export interface CaptureDoc {
   sealed: SealedPayload;
 }
 
+const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const readAimsDayKey = (capture: Pick<CaptureDoc, 'aimsDayKey'>) =>
+  typeof capture.aimsDayKey === 'string' && DAY_KEY_RE.test(capture.aimsDayKey)
+    ? capture.aimsDayKey
+    : null;
+
 /** A spoken turn, or a choice tapped while a spoken conversation was open; a turn from before the flag reads its input mode. */
 const isSpokenDoc = (capture: Pick<CaptureDoc, 'inputMode' | 'isSpokenTurn'>) =>
   capture.isSpokenTurn ?? capture.inputMode === 'voice';
 
 interface TaskDoc {
+  durationMinutes?: number | null;
   status: 'open' | 'done';
   due: TaskDue | null;
   isUrgent: boolean;
@@ -2325,6 +2344,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       habitCommands: [],
       importanceCommands: [],
       seenAsCommands: [],
+      personalityCommands: [],
       scheduleCommands: [],
       scheduleDropped: [],
       researchCommands: [],
@@ -3043,6 +3063,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       importance: contextImportance,
       synced: contextSynced,
     });
+    const relatedThings =
+      mode === 'rest'
+        ? []
+        : await readContextRelatedThings(
+            firestore,
+            base,
+            key,
+            combined.text,
+            unattendedMask.isOn,
+          ).catch((error): never[] => {
+            logger.warn('helm.related.read', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          });
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -3061,6 +3096,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : screen,
       earlierTurns,
       answeredQuestion,
+      aimsDayKey: readAimsDayKey(capture),
       facts: masked.facts,
       people: contextPeople,
       heardNames: toContextHeard(
@@ -3075,6 +3111,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topics: masked.topics,
       style,
       noticed,
+      relatedThings,
       seenAs: seenAsLines,
       whereabouts: contextWhereabouts,
       fit: contextFit,
@@ -3182,6 +3219,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       isHabitsInPlay ? HABIT_PROMPT : null,
       isLearningOn && mode !== 'rest' ? LEARNING_PROMPT : null,
       seenAsLines.length > 0 ? SEEN_AS_PROMPT : null,
+      mode !== 'rest' ? PERSONALITY_PROMPT : null,
       contextImportance ? IMPORTANCE_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
@@ -3193,7 +3231,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       read.isOutside
         ? toHeldBackPrompt(read.via, read.outsideReadScopes, heldBackNames)
         : null,
-      toPersonaPrompt(assistantName, profile.data()?.assistantTone),
+      toPersonaPrompt(
+        assistantName,
+        profile.data()?.personality,
+        profile.data()?.assistantTone,
+      ),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
@@ -3471,6 +3513,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       keyDateNames,
       seenAs: context.seenAs,
       seenAsWords: context.seenAsWords,
+      personality: readPersonality(
+        profile.data()?.personality,
+        profile.data()?.assistantTone,
+      ),
       quotes,
       alreadyMade,
       timeZone,
@@ -3552,6 +3598,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.runCommands.length +
     reply.importanceCommands.length +
     reply.seenAsCommands.length +
+    reply.personalityCommands.length +
     reply.soundsLike.length +
     reply.contactPoints.length +
     reply.connectionCommands.length +
@@ -3636,6 +3683,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       : [],
     importanceCommands: keeps ? reply.importanceCommands : [],
     seenAsCommands: keeps ? reply.seenAsCommands : [],
+    personalityCommands: keeps ? reply.personalityCommands : [],
     scheduleCommands: keeps ? reply.scheduleCommands : [],
     scheduleDropped: keeps ? reply.scheduleDropped : [],
     researchCommands: keeps ? reply.researchCommands : [],
@@ -3695,6 +3743,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             reply.scheduleDropped,
             reply.importanceDropped,
             reply.seenAsDropped,
+            reply.personalityDropped,
             commands.length < reply.commands.length,
           )
         ? hide(reply.replyLine)
@@ -3873,6 +3922,7 @@ async function writeResult(
     isMidTask: boolean;
     importanceCommands: SetImportanceCommand[];
     seenAsCommands: SeenAsCommand[];
+    personalityCommands: SetPersonalityCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
     connectionCommands: ConnectionCommand[];
@@ -3934,6 +3984,7 @@ async function writeResult(
     habitCommands,
     importanceCommands,
     seenAsCommands,
+    personalityCommands,
     scheduleCommands,
     scheduleDropped,
     researchCommands,
@@ -4208,7 +4259,10 @@ async function writeResult(
     ]);
     const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
-    const copyHash: unknown = copySnap?.get('contentHash');
+    const copyHash: unknown =
+      copySnap?.get('helmRef') == null
+        ? copySnap?.get('contentHash')
+        : undefined;
     const noted = settleRemember({
       remember,
       built,
@@ -4631,6 +4685,7 @@ async function writeResult(
               whoIds: task.whoIds ?? [],
               placeIds: task.placeIds ?? [],
               meets: readMeets(task.meets),
+              durationMinutes: task.durationMinutes ?? null,
               sealed: words.sealed,
               privacyFacts: readQuietFacts(words.sealed),
               privateParents: readParents(task),
@@ -5090,6 +5145,38 @@ async function writeResult(
           habitPlan.effects.length,
       ),
     });
+    const aimsDayKey = isStale ? null : readAimsDayKey(capture);
+    const aimsRef = aimsDayKey
+      ? firestore.doc(`${base}/dayAims/${aimsDayKey}`)
+      : null;
+    const reopenRef =
+      !isStale && planDayKey === toDayKeyIn(now, timeZone)
+        ? firestore.doc(`${base}/dayAims/${planDayKey}`)
+        : null;
+    const [aimsSnap, reopenSnap] = await Promise.all([
+      aimsRef ? transaction.get(aimsRef) : null,
+      reopenRef && reopenRef.path !== aimsRef?.path
+        ? transaction.get(reopenRef)
+        : null,
+    ]);
+    const dayAimsPlan =
+      aimsDayKey && aimsRef
+        ? planDayAims({
+            dayKey: aimsDayKey,
+            commands,
+            taskIdByRef: written.taskIdByRef,
+            existing,
+            current: aimsSnap?.exists
+              ? {
+                  view: openAimsView(key, aimsSnap.data()),
+                  sealed: aimsSnap.get('sealed') as SealedPayload,
+                  state: String(aimsSnap.get('state') ?? 'open'),
+                }
+              : null,
+            newAimId: () => crypto.randomUUID(),
+            seal,
+          })
+        : null;
     const keptSchedule = isStale ? [] : scheduleCommands;
     const scheduledStored =
       keptSchedule.length > 0
@@ -5273,6 +5360,37 @@ async function writeResult(
           learnPlan.effects.length,
       ),
     });
+    const personalityPlan = planPersonality({
+      command: isStale ? null : (personalityCommands[0] ?? null),
+      stored: profileSnap?.get('personality') ?? null,
+      legacyTone: profileSnap?.get('assistantTone'),
+      storedSetAt:
+        typeof profileSnap?.get('personalitySetAt') === 'number'
+          ? (profileSnap.get('personalitySetAt') as number)
+          : null,
+      profileId: firestore.doc(base).id,
+      assistantName: assistantName ?? DEFAULT_ASSISTANT_NAME,
+      now,
+      isUnattended: input.isUnattended === true,
+      newId: () => crypto.randomUUID(),
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length -
+          researchPlan.effects.length -
+          learnPlan.effects.length -
+          seenAsPlan.effects.length,
+      ),
+      isProfileTaken: home !== null,
+      hasProfile: profileSnap?.exists === true,
+    });
     const scheduleNotKept = [
       ...schedulePlan.notKept,
       ...(isStale ? [] : scheduleDropped).flatMap(
@@ -5302,6 +5420,8 @@ async function writeResult(
         ...researchPlan.effectRefs,
         ...learnPlan.effectRefs,
         ...seenAsPlan.effectRefs,
+        ...personalityPlan.effectRefs,
+        ...(dayAimsPlan?.effectRefs ?? []),
       ],
       effects: [
         ...written.effects,
@@ -5316,6 +5436,8 @@ async function writeResult(
         ...researchPlan.effects,
         ...learnPlan.effects,
         ...seenAsPlan.effects,
+        ...personalityPlan.effects,
+        ...(dayAimsPlan?.effects ?? []),
       ],
       notKept: [
         ...written.notKept,
@@ -5328,6 +5450,7 @@ async function writeResult(
         ...researchPlan.notKept,
         ...learnPlan.notKept,
         ...seenAsPlan.notKept,
+        ...personalityPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -5452,6 +5575,7 @@ async function writeResult(
       ...(undoPlan.question ? [undoPlan.question] : []),
       ...habitPlan.questions,
       ...importancePlan.questions,
+      ...personalityPlan.questions,
       ...schedulePlan.questions,
       ...researchPlan.questions,
       ...learnPlan.questions,
@@ -5682,6 +5806,13 @@ async function writeResult(
       seenAsPlan.updates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/seenAs/${id}`), data),
       );
+      if (aimsRef && dayAimsPlan?.write) {
+        if (dayAimsPlan.write.op === 'create')
+          transaction.create(aimsRef, dayAimsPlan.write.data);
+        else transaction.update(aimsRef, dayAimsPlan.write.data);
+      }
+      if (reopenSnap?.exists && reopenSnap.get('state') === 'dismissed')
+        transaction.update(reopenSnap.ref, { state: 'open' });
       schedulePlan.creates.forEach(({ id, doc }) =>
         transaction.create(
           firestore.doc(`${base}/scheduledActions/${id}`),
@@ -5786,6 +5917,8 @@ async function writeResult(
         });
       }
       if (home) transaction.update(firestore.doc(base), home.data);
+      if (profileSnap?.exists && personalityPlan.data)
+        transaction.update(firestore.doc(base), personalityPlan.data);
       transaction.create(executionRef, {
         via: capture.via ?? null,
         ...buildExecution(
@@ -5803,6 +5936,7 @@ async function writeResult(
               ...researchPlan.lines,
               ...learnPlan.lines,
               ...seenAsPlan.lines,
+              ...personalityPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -5815,6 +5949,8 @@ async function writeResult(
               importancePlan.lines,
               seenAsPlan.lines,
               seenAsPlan.notKept,
+              personalityPlan.notKept,
+              personalityPlan.questions,
               schedulePlan.lines,
               scheduleNotKept,
               researchPlan.lines,
@@ -5840,6 +5976,7 @@ async function writeResult(
             inputMode: isSpoken ? 'voice' : capture.inputMode,
             timeZone,
             offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
+            aims: dayAimsPlan,
             isQuiet,
           },
         ),
@@ -5851,9 +5988,30 @@ async function writeResult(
     learning.writes.forEach(({ id, data }) =>
       transaction.create(firestore.doc(`${base}/observations/${id}`), data),
     );
-    if (learning.reflectDueAt !== null)
+    const hasRelatable =
+      isFiling &&
+      [
+        plan.creates,
+        plan.updates,
+        soundsPlan.taskUpdates,
+        plan.projectCreates,
+        plan.projectUpdates,
+        plan.noteCreates,
+        plan.topicVersions,
+      ].some((writes) => writes.length > 0);
+    const relateDueAt =
+      hasRelatable &&
+      profileSnap?.get('isLearningOn') !== false &&
+      ((profileSnap?.get('relateDueAt') as number | null | undefined) ??
+        null) === null
+        ? nextReflectionAt(now, timeZone)
+        : null;
+    if (learning.reflectDueAt !== null || relateDueAt !== null)
       transaction.update(firestore.doc(base), {
-        reflectDueAt: learning.reflectDueAt,
+        ...(learning.reflectDueAt !== null
+          ? { reflectDueAt: learning.reflectDueAt }
+          : {}),
+        ...(relateDueAt !== null ? { relateDueAt } : {}),
       });
     const spokenAnswer = reply && isSpoken ? reply.spoken : null;
     const spokenLine =
@@ -5930,6 +6088,9 @@ async function writeResult(
           importancePlan.notKept.length +
           seenAsPlan.lines.length +
           seenAsPlan.notKept.length +
+          personalityPlan.lines.length +
+          personalityPlan.notKept.length +
+          personalityPlan.questions.length +
           schedulePlan.lines.length +
           scheduleNotKept.length +
           schedulePlan.questions.length +
