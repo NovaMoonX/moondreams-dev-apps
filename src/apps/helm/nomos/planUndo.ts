@@ -12,6 +12,7 @@ import type {
   EffectRef,
   Execution,
   ExecutionEffect,
+  ConnectionSealed,
   ExecutionSealed,
   HabitDaySealed,
   HabitSealed,
@@ -19,6 +20,8 @@ import type {
   NoteSealed,
   OpenExecution,
   ProjectSealed,
+  ResearchSealed,
+  SeenAsSealed,
   TaskSealed,
   ProcedureSealed,
   RunSealed,
@@ -90,6 +93,9 @@ export interface UndoTarget {
     | TopicSealed
     | ProcedureSealed
     | RunSealed
+    | ConnectionSealed
+    | ResearchSealed
+    | SeenAsSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -113,6 +119,9 @@ export type UndoPlan =
           | ProjectSealed
           | HabitSealed
           | HabitDaySealed
+          | ConnectionSealed
+          | ResearchSealed
+          | SeenAsSealed
           | null;
       }[];
       /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
@@ -127,7 +136,7 @@ export type UndoPlan =
         docId: string;
         collection: EffectRef['collection'];
         fields: Values;
-        seal: KeyDateSealed;
+        seal: KeyDateSealed | ConnectionSealed;
       }[];
       undoExecution: Omit<Execution, 'sealed'>;
       undoSealed: ExecutionSealed;
@@ -213,6 +222,9 @@ type RecordOutcome =
         | ProjectSealed
         | HabitSealed
         | HabitDaySealed
+        | ConnectionSealed
+        | ResearchSealed
+        | SeenAsSealed
         | null;
       effect: ExecutionEffect;
     }
@@ -220,7 +232,7 @@ type RecordOutcome =
       kind: 'recreated';
       title: string;
       fields: Values;
-      seal: KeyDateSealed;
+      seal: KeyDateSealed | ConnectionSealed;
       effect: ExecutionEffect;
     };
 
@@ -256,6 +268,24 @@ const isStillHome = (value: unknown, now: number) =>
   'saidAt' in value &&
   typeof value.saidAt === 'number' &&
   now - value.saidAt < CURRENT_PLACE_MS;
+
+const PERSONALITY_UNDO = {
+  summary: 'Put back how it talks',
+  phrase: 'how it talks',
+  report: (kept: number) =>
+    [
+      'Put back how it talks.',
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  reportToo: 'How it talks too.',
+};
+
+const isPersonalityEffect = (
+  ref: EffectRef | undefined,
+  effect: ExecutionEffect | undefined,
+) => ref?.collection === 'profile' && 'personality' in (effect?.written ?? {});
 
 const MILESTONE_PATHS = ['milestoneState.', 'sealed.milestones.'];
 
@@ -301,6 +331,39 @@ const writePaths = (
     source,
   );
 
+const OFFERS_PATH = 'researchOffers';
+const ASKS_PATH = 'sealed.aheadAsks';
+
+const toEntries = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter(
+        (entry): entry is Values & { id: string } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as Values).id === 'string',
+      )
+    : [];
+
+const toKeyed = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Values)
+    : null;
+
+/** Offers the turn added, by id: the device stamps a seen day on them, so only what the person answered keeps one. */
+const madeOfferIds = (written: Values, previous: Values) => {
+  const before = new Set(toEntries(previous[OFFERS_PATH]).map((e) => e.id));
+  return new Set(
+    toEntries(written[OFFERS_PATH])
+      .map((entry) => entry.id)
+      .filter((id) => !before.has(id)),
+  );
+};
+
+const isOfferUnanswered = (entry: Values) =>
+  entry.state === 'waiting' &&
+  entry.declineCount === 0 &&
+  (entry.researchId ?? null) === null;
+
 const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   if (step.isKept) return step;
   const { written, previous } = effect;
@@ -318,45 +381,82 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
       : readPath(step.data, path);
     return isMilestonePath(path) ? (value ?? null) : value;
   };
-  const isMatch = own.every((path) =>
-    path.startsWith(SEALED_PREFIX)
-      ? step.opened !== null && isSame(live(path), written[path])
-      : step.data !== null && isSame(live(path), written[path]),
-  );
+  const madeIds = madeOfferIds(written, previous);
+  const isByEntry = (path: string) =>
+    madeIds.size > 0 && (path === OFFERS_PATH || path === ASKS_PATH);
+  const isEntryMatch = (path: string) => {
+    if (path === OFFERS_PATH) {
+      const liveOffers = toEntries(live(path));
+      return [...madeIds].every((id) =>
+        liveOffers.some((entry) => entry.id === id && isOfferUnanswered(entry)),
+      );
+    }
+    const liveAsks = toKeyed(live(path));
+    return [...madeIds].every((id) => liveAsks !== null && id in liveAsks);
+  };
+  const isMatch = own.every((path) => {
+    if (
+      path.startsWith(SEALED_PREFIX) ? step.opened === null : step.data === null
+    ) {
+      return false;
+    }
+    return isByEntry(path)
+      ? isEntryMatch(path)
+      : isSame(live(path), written[path]);
+  });
   if (!isMatch) {
     // A milestone the person changed since stays; the rest of the turn is still taken back.
     return own.every(isMilestonePath)
       ? { ...step, hasKeptEntry: true }
       : { ...step, isKept: true };
   }
+  const withoutMade = (path: string) => {
+    if (path === OFFERS_PATH) {
+      return toEntries(live(path)).filter((entry) => !madeIds.has(entry.id));
+    }
+    const rest = Object.fromEntries(
+      Object.entries(toKeyed(live(path)) ?? {}).filter(
+        ([key]) => !madeIds.has(key),
+      ),
+    );
+    return Object.keys(rest).length === 0 && previous[path] === null
+      ? null
+      : rest;
+  };
+  const back: Values = {
+    ...previous,
+    ...Object.fromEntries(
+      own.filter(isByEntry).map((path) => [path, withoutMade(path)]),
+    ),
+  };
   const sealedPaths = own.filter((path) => path.startsWith(SEALED_PREFIX));
   const dataPaths = own.filter((path) => !path.startsWith(SEALED_PREFIX));
   const identity = (path: string) => path;
   return {
     ...step,
-    data: step.data && writePaths(step.data, dataPaths, previous, identity),
+    data: step.data && writePaths(step.data, dataPaths, back, identity),
     opened:
       sealedPaths.length > 0 && step.opened
         ? (writePaths(
             step.opened as unknown as Values,
             sealedPaths,
-            previous,
+            back,
             toField,
           ) as unknown as Step['opened'])
         : step.opened,
     fields: {
       ...step.fields,
-      ...Object.fromEntries(dataPaths.map((path) => [path, previous[path]])),
+      ...Object.fromEntries(dataPaths.map((path) => [path, back[path]])),
     },
     sealedFields: {
       ...step.sealedFields,
       ...Object.fromEntries(
-        sealedPaths.map((path) => [toField(path), previous[path]]),
+        sealedPaths.map((path) => [toField(path), back[path]]),
       ),
     },
     restored: {
       ...step.restored,
-      ...Object.fromEntries(own.map((path) => [path, previous[path]])),
+      ...Object.fromEntries(own.map((path) => [path, back[path]])),
     },
     current: {
       ...Object.fromEntries(own.map((path) => [path, written[path]])),
@@ -426,6 +526,46 @@ const planRecreate = (
   };
 };
 
+const toRelation = (value: unknown): ConnectionSealed['fromFirst'] =>
+  typeof value === 'string' ? (value as ConnectionSealed['fromFirst']) : null;
+
+/** A removed connection comes back under its id from what the removal sealed; it is not brought back when either person is gone. */
+const planRecreateConnection = (
+  target: UndoTarget,
+  effect: ExecutionEffect,
+): RecordOutcome => {
+  const previous = effect.previous;
+  const title = toText(effect.written['sealed.title']) ?? '';
+  if (!previous || target.data !== null) return { kind: 'skipped' };
+  if (target.isOwnerHere === false || !Array.isArray(previous.whoIds)) {
+    return { kind: 'gone' };
+  }
+  return {
+    kind: 'recreated',
+    title,
+    seal: {
+      fromFirst: toRelation(previous['sealed.fromFirst']),
+      fromSecond: toRelation(previous['sealed.fromSecond']),
+      status: (toText(previous['sealed.status']) ??
+        null) as ConnectionSealed['status'],
+      since: toNumber(previous['sealed.since']),
+    },
+    fields: {
+      whoIds: previous.whoIds,
+      kind: previous.kind,
+      source: toText(previous.source) ?? 'said',
+      createdBy: toText(previous.createdBy) ?? 'nomos',
+      executionId: null,
+      createdAt: toNumber(previous.createdAt) ?? 0,
+      lastEditedAt: null,
+    },
+    effect: {
+      written: { 'sealed.title': title, ...previous },
+      previous: null,
+    },
+  };
+};
+
 const isKnowledge = (name: EffectRef['collection'] | undefined) =>
   name === 'notes' || name === 'topics';
 
@@ -443,6 +583,35 @@ const isRunUntouched = (data: Record<string, unknown>) => {
   );
 };
 
+/** A saved question goes back to dismissed while nobody has answered it, kept or opened it since; while it is being prepared the rules allow no change, so it stays. */
+const planLearnCreate = (
+  target: UndoTarget,
+  title: string,
+  now: number,
+): RecordOutcome => {
+  const data = target.data ?? {};
+  const status = data.status;
+  const offers = Array.isArray(data.offers) ? data.offers : [];
+  const isUntouched =
+    (status === 'planned' || status === 'ready' || status === 'offered') &&
+    offers.length === 0 &&
+    ((data.notNowStreak as number | undefined) ?? 0) === 0 &&
+    (data.resultNoteId ?? null) === null &&
+    (data.mergedInto ?? null) === null;
+  return isUntouched
+    ? {
+        kind: 'restored',
+        title,
+        fields: { status: 'dismissed', lastEditedAt: now },
+        reseal: null,
+        effect: {
+          written: { status: 'dismissed', 'sealed.title': title },
+          previous: { status, 'sealed.title': title },
+        },
+      }
+    : { kind: 'kept', title };
+};
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
@@ -452,10 +621,16 @@ const planRecord = (
   isImport: boolean,
 ): RecordOutcome => {
   const removal = entries.find((entry) => entry.ref.op === 'delete');
-  if (removal) return planRecreate(target, removal.effect);
+  if (removal)
+    return removal.ref.collection === 'connections'
+      ? planRecreateConnection(target, removal.effect)
+      : planRecreate(target, removal.effect);
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
-  const title = toTitle(target, effects);
+  const isSeenAs = entries[0]?.ref.collection === 'seenAs';
+  const title = isSeenAs
+    ? HELM_COPY.resultSeenAsFallback
+    : toTitle(target, effects);
   const left: RecordOutcome = isImport
     ? { kind: 'kept', title }
     : { kind: 'skipped' };
@@ -485,14 +660,35 @@ const planRecord = (
         target.data.lastEditedAt !== madeAt);
     if (isUsed) return left;
   }
+  if (create?.ref.collection === 'research') {
+    const status = target.data.status;
+    if (status === 'dismissed') return left;
+    if (target.data.mode === 'learnLater')
+      return planLearnCreate(target, title, now);
+    return (status === 'asking' || status === 'preparing') &&
+      (target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt)
+      ? {
+          kind: 'restored',
+          title,
+          fields: { status: 'dismissed', cancelledAt: null, lastEditedAt: now },
+          reseal: null,
+          effect: {
+            written: { status: 'dismissed', 'sealed.title': title },
+            previous: { status, 'sealed.title': title },
+          },
+        }
+      : { kind: 'kept', title };
+  }
   if (create) {
     if (updated.hasKeptEntry) return { kind: 'kept', title };
     // Its own later effects stamp the record with the execution's time, which is not an edit since.
     const isUntouched =
       create.ref.collection === 'procedureRuns'
         ? isRunUntouched(target.data)
-        : target.data.lastEditedAt === null ||
-          target.data.lastEditedAt === madeAt;
+        : create.ref.collection === 'dayAims'
+          ? isSame(target.data.sealed, create.effect.written.sealed)
+          : target.data.lastEditedAt === null ||
+            target.data.lastEditedAt === madeAt;
     return isUntouched
       ? {
           kind: 'deleted',
@@ -507,6 +703,12 @@ const planRecord = (
   if (Object.keys(updated.restored).length === 0) {
     return updated.hasKeptEntry ? { kind: 'kept', title } : left;
   }
+  if (
+    entries[0]?.ref.collection === 'research' &&
+    updated.restored.status === 'planned' &&
+    (target.data.prepareAt ?? null) === null
+  )
+    return { kind: 'kept', title };
   const reseal =
     Object.keys(updated.sealedFields).length > 0
       ? (updated.opened as Exclude<
@@ -514,13 +716,16 @@ const planRecord = (
           NoteSealed | TopicSealed | ProcedureSealed | RunSealed
         >)
       : null;
-  const restoredTitle = toOpenedTitle(updated.opened) || title;
+  const restoredTitle = isSeenAs
+    ? title
+    : toOpenedTitle(updated.opened) || title;
   return {
     kind: 'restored',
     title: restoredTitle,
-    fields: isKnowledge(entries[0]?.ref.collection)
-      ? updated.fields
-      : { ...updated.fields, lastEditedAt: now },
+    fields:
+      isKnowledge(entries[0]?.ref.collection) || isSeenAs
+        ? updated.fields
+        : { ...updated.fields, lastEditedAt: now },
     reseal,
     effect: {
       written: { ...updated.restored, 'sealed.title': restoredTitle },
@@ -884,6 +1089,38 @@ export function planUndo(input: {
       const last = filing[filing.length - 1]?.effect;
       const pending = toIds(target.data?.pendingNoteIds);
       const left = pending.filter((id) => !takenBackNoteIds.has(id));
+      const linkWas = last && toIds(last.written.projectIds);
+      if (
+        target.data &&
+        first?.previous &&
+        linkWas &&
+        'projectIds' in last.written &&
+        left.length === pending.length &&
+        toIds(target.data.projectIds).length === linkWas.length &&
+        toIds(target.data.projectIds).every((id) => linkWas.includes(id))
+      ) {
+        const title = toTitle(
+          target,
+          filing.map((entry) => entry.effect),
+        );
+        const fields: Values = { projectIds: toIds(first.previous.projectIds) };
+        return {
+          docId,
+          outcome: {
+            kind: 'restored',
+            title,
+            fields,
+            reseal: null,
+            effect: {
+              written: { ...fields, 'sealed.title': title },
+              previous: {
+                projectIds: toIds(target.data.projectIds),
+                'sealed.title': title,
+              },
+            },
+          },
+        };
+      }
       if (
         !target.data ||
         !first?.previous ||
@@ -1144,6 +1381,17 @@ export function planUndo(input: {
   const isProjectDoc = (docId: string) =>
     collectionOf.get(docId) === 'projects';
   const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
+  const isSeenAsDoc = (docId: string) => collectionOf.get(docId) === 'seenAs';
+  const isDayAimsDoc = (docId: string) => collectionOf.get(docId) === 'dayAims';
+  const personalityDocIds = new Set(
+    original.effectRefs.flatMap((ref, index) =>
+      isPersonalityEffect(ref, original.effects[index]) ? [ref.docId] : [],
+    ),
+  );
+  const isPersonalityDoc = (docId: string) => personalityDocIds.has(docId);
+  const personalityCount = done.filter(({ docId }) =>
+    isPersonalityDoc(docId),
+  ).length;
   const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
   const notesDeleted = done.filter(
     ({ docId, outcome }) => isNoteDoc(docId) && outcome.kind === 'deleted',
@@ -1167,8 +1415,12 @@ export function planUndo(input: {
         !isProcedureDoc(docId) &&
         !isRunDoc(docId) &&
         !isHabitDoc(docId) &&
-        !isHabitDayDoc(docId),
+        !isHabitDayDoc(docId) &&
+        !isSeenAsDoc(docId) &&
+        !isDayAimsDoc(docId) &&
+        !isPersonalityDoc(docId),
   );
+  const seenAsCount = done.filter(({ docId }) => isSeenAsDoc(docId)).length;
   const habitsDone = done.filter(({ docId }) => isHabitDoc(docId));
   const habitDaysDone = done.filter(({ docId }) => isHabitDayDoc(docId));
   const habitCount = habitsDone.length + habitDaysDone.length;
@@ -1251,6 +1503,8 @@ export function planUndo(input: {
     procedureCount === 0 &&
     runCount === 0 &&
     habitCount === 0 &&
+    seenAsCount === 0 &&
+    personalityCount === 0 &&
     keptDone.length === 0
   ) {
     return refuse(
@@ -1264,8 +1518,10 @@ export function planUndo(input: {
     ({ docId }) => collectionOf.get(docId) !== 'profile',
   );
   const homeEffect =
-    done.find(({ docId }) => collectionOf.get(docId) === 'profile')?.outcome
-      .effect ?? null;
+    done.find(
+      ({ docId }) =>
+        collectionOf.get(docId) === 'profile' && !isPersonalityDoc(docId),
+    )?.outcome.effect ?? null;
   const isHomeRestored = isStillHome(homeEffect?.written.currentPlace, now);
   const wasLeaving = homeEffect?.previous?.currentPlace === null;
   const factCount = factsDone.length;
@@ -1418,11 +1674,51 @@ export function planUndo(input: {
     : habitCount > 0
       ? `${withRuns} ${HELM_COPY.undoReportHabitsToo(habitsTicked, habitsChanged)}`
       : withRuns;
+  const isSeenAsOnly =
+    seenAsCount > 0 &&
+    keptCount +
+      photoCount +
+      records.length +
+      factsDone.length +
+      datesDone.length +
+      notesDone.length +
+      projectCount +
+      topicCount +
+      procedureCount +
+      runCount +
+      habitCount +
+      personalityCount ===
+      0;
+  const isPersonalityOnly =
+    personalityCount > 0 &&
+    keptCount +
+      photoCount +
+      records.length +
+      factsDone.length +
+      datesDone.length +
+      notesDone.length +
+      projectCount +
+      topicCount +
+      procedureCount +
+      runCount +
+      habitCount +
+      seenAsCount ===
+      0;
+  const otherReport = isPhotosOnly
+    ? HELM_COPY.undoReportPhotos(photoCount)
+    : [withHabits, photosToo, keptReport].filter(Boolean).join(' ');
+  const withSeenAs = isSeenAsOnly
+    ? HELM_COPY.undoReportSeenAs(seenAsCount, kept.length, gone)
+    : seenAsCount > 0
+      ? `${otherReport} ${HELM_COPY.undoReportSeenAsToo(seenAsCount)}`
+      : otherReport;
   const report = isKeptOnlyUndo
     ? keptReport
-    : isPhotosOnly
-      ? HELM_COPY.undoReportPhotos(photoCount)
-      : [withHabits, photosToo, keptReport].filter(Boolean).join(' ');
+    : isPersonalityOnly
+      ? PERSONALITY_UNDO.report(kept.length)
+      : personalityCount > 0
+        ? `${withSeenAs} ${PERSONALITY_UNDO.reportToo}`
+        : withSeenAs;
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1540,9 +1836,15 @@ export function planUndo(input: {
     undoSealed: {
       summary: isKeptOnlyUndo
         ? HELM_COPY.tookBackKeptChange(keptCount, keptNames)
-        : isPhotosOnly
-          ? HELM_COPY.tookBackPhotos(photoCount)
-          : withHabitsSummary,
+        : isPersonalityOnly
+          ? PERSONALITY_UNDO.summary
+          : isSeenAsOnly
+            ? HELM_COPY.tookBackSeenAs(seenAsCount)
+            : `${
+                isPhotosOnly
+                  ? HELM_COPY.tookBackPhotos(photoCount)
+                  : withHabitsSummary
+              }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}${personalityCount > 0 ? ` and ${PERSONALITY_UNDO.phrase}` : ''}`,
       said: null,
       commands: [],
       effects: allDone.map(({ outcome }) => outcome.effect),
@@ -1566,6 +1868,7 @@ export function planUndo(input: {
       ...runsUnticked,
       ...habitsDone,
       ...habitDaysDone,
+      ...done.filter(({ docId }) => isSeenAsDoc(docId)),
     ].map(({ outcome }) => outcome.title),
     kept,
     gone,
@@ -1666,6 +1969,45 @@ export function narrowForUndo(
   };
 }
 
+/** The execution without a grouping's effect, which its rule lets only `toGroupingUndoPatch` write. */
+export const withoutGroupings = (view: OpenExecution): OpenExecution => {
+  const keep = view.effectRefs.flatMap((ref, index) =>
+    ref.collection === 'groupings' ? [] : [index],
+  );
+  return {
+    ...view,
+    effectRefs: keep.map((index) => view.effectRefs[index]),
+    effects: keep.map((index) => view.effects[index]),
+  };
+};
+
+/** A grouping after Undo: the person's Group them goes back to proposed, a server link becomes a no. */
+export function toGroupingUndoPatch(
+  actor: Execution['actor'],
+  previous: Record<string, unknown> | null,
+  now: number,
+) {
+  if (actor === 'nomos')
+    return {
+      state: 'notRelated' as const,
+      linkedKeys: [] as string[],
+      answeredAt: now,
+      updatedAt: now,
+    };
+  return {
+    state:
+      previous?.state === 'notNow'
+        ? ('notNow' as const)
+        : ('proposed' as const),
+    parentId: typeof previous?.parentId === 'string' ? previous.parentId : null,
+    linkedKeys: [] as string[],
+    answeredAt:
+      typeof previous?.answeredAt === 'number' ? previous.answeredAt : null,
+    executionId: null,
+    updatedAt: now,
+  };
+}
+
 /** The records an undo offer's choice would still take back from an execution: every unit left when it is the whole turn, else the ones it names that are not yet undone; empty once nothing is left. */
 export function toOfferDocIds(
   choice: Pick<UndoChoice, 'docIds' | 'isAll'>,
@@ -1701,12 +2043,15 @@ export const getTakenBackIds = (undo: OpenExecution | null) =>
 const REOPENABLE_KINDS = [
   'whichIsTrue',
   'groupTopics',
+  'whichComesFirst',
   'isThisWho',
   'whichKin',
   'kinOrder',
+  'questionsTask',
+  'clashChoice',
 ];
 
-/** What taking back an answer to a "which is true now?", "group these?", "is this who?" or family question writes to its turn so the question asks again; null for any other execution. */
+/** What taking back an answer to a "which is true now?", "group these?", "is this who?", family or "make these questions a task?" question writes to its turn so the question asks again; null for any other execution. */
 export const planReopen = (
   original: Pick<OpenExecution, 'questionRef'>,
   capture: {

@@ -32,10 +32,13 @@ import {
   type MentionRead,
   type NomosCommand,
   type NoteFactCommand,
+  type MeetsHow,
+  type TaskEffort,
   type NoteFactKind,
   type PlaceRead,
   type ProjectCommand,
   type ProcedureCommand,
+  type QuestionsMeeting,
   type RunCommand,
   type SetQuietCommand,
   type TaskDue,
@@ -146,6 +149,8 @@ export interface ExistingTask {
   title: string;
   whoIds: string[];
   placeIds: string[];
+  meets?: { how: MeetsHow; setBy: 'person' | 'calendar' } | null;
+  durationMinutes?: number | null;
   sealed: Record<string, unknown>;
   /** What the task says about being private and the parents it is filed under, read with it. */
   privacyFacts?: PrivacyFacts;
@@ -243,7 +248,12 @@ export interface EffectRef {
     | 'procedures'
     | 'procedureRuns'
     | 'habits'
-    | 'habitDays';
+    | 'habitDays'
+    | 'connections'
+    | 'scheduledActions'
+    | 'research'
+    | 'seenAs'
+    | 'dayAims';
   docId: string;
 }
 
@@ -643,6 +653,8 @@ export interface WritePlan {
   keyDateDeletes: string[];
   projectCreates: { id: string; data: Record<string, unknown> }[];
   projectUpdates: { id: string; data: Record<string, unknown> }[];
+  /** What each research offer this turn adds says, for the summary. */
+  offerLines: string[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
   noteUpdates: { id: string; data: Record<string, unknown> }[];
   topicPrivacyUpdates: { id: string; data: Record<string, unknown> }[];
@@ -705,6 +717,8 @@ export interface WritePlan {
   counts: EffectCounts;
   /** One "which one?" question for each unsure name a filed task points at, at most MAX_PICK_QUESTIONS. */
   questions: PlannedQuestion[];
+  /** The id each task this turn makes was given, by its `$new` ref. */
+  taskIdByRef: Record<string, string>;
 }
 
 export interface PlannedQuestion {
@@ -737,6 +751,10 @@ interface PlanInput {
   selfWhoId?: string | null;
   timeZone?: string;
   keyDates?: KeyDateCommand[];
+  /** People a key date command names by a ref that is no mention of the turn, with the name their line shows. */
+  extraWho?: Map<string, { id: string; name: string }>;
+  /** Effects another part of the turn already records, so the turn stays within its cap. */
+  reservedEffects?: number;
   /** The yearly index as read in the transaction. */
   keyDateIndex?: { byWho: ByWho; entryCount: number };
   /** The index could not be opened, so the turn's date commands are skipped lines and never written over an index taken for empty. */
@@ -802,8 +820,29 @@ interface Draft {
   status: 'open' | 'done';
   projectId: string | null;
   isPrivate: boolean;
+  questions: string[];
+  meeting: QuestionsMeeting | null;
+  meetsHow: MeetsHow | null;
+  effort: TaskEffort | null;
+  durationMinutes: number | null;
   quiet: PrivacyFacts | null;
 }
+
+/** How a task meets counts only when its due has a time. */
+const toMeetsHow = (due: TaskDue | null, how: MeetsHow | null | undefined) =>
+  due?.kind === 'moment' ? (how ?? null) : null;
+
+/** An update's meets: absent leaves it, null clears it, a format sets it as the person's only while the due has a time. */
+const toMeetsAfter = (
+  before: ExistingTask['meets'],
+  how: MeetsHow | null | undefined,
+  due: TaskDue | null,
+) => {
+  if (due?.kind !== 'moment' || how === null) return null;
+  return how === undefined
+    ? (before ?? null)
+    : { how, setBy: 'person' as const };
+};
 
 const toQuietSealed = (facts: PrivacyFacts) => ({
   privateMark: facts.privateMark,
@@ -864,6 +903,8 @@ export const buildWhoDoc = (input: {
     soundsLike: null,
     refusedAliases: null,
     relation: input.mention.relation,
+    phones: [],
+    emails: [],
     phone: null,
     email: null,
     notes: null,
@@ -1246,7 +1287,10 @@ export function planWrites(input: PlanInput): WritePlan {
       drafts.set(command.ref, {
         id,
         title: command.title,
-        whoIds: idsOf(command.whoRefs, entities.whoIdOf),
+        whoIds: union(
+          idsOf(command.whoRefs, entities.whoIdOf),
+          command.whoIds ?? [],
+        ),
         placeIds: idsOf(command.placeRefs, entities.placeIdOf),
         due: command.due,
         isUrgent: command.isUrgent,
@@ -1255,6 +1299,11 @@ export function planWrites(input: PlanInput): WritePlan {
           ? matchProject(command.projectRef, projectStart.pool)
           : null,
         isPrivate: false,
+        questions: command.questions,
+        meeting: command.meeting,
+        meetsHow: toMeetsHow(command.due, command.meetsHow),
+        effort: command.effort ?? null,
+        durationMinutes: command.durationMinutes ?? null,
         quiet: null,
       });
       return;
@@ -1334,6 +1383,9 @@ export function planWrites(input: PlanInput): WritePlan {
         draft.title = command.title ?? draft.title;
         if (command.hasDue) draft.due = command.due;
         draft.isUrgent = command.isUrgent ?? draft.isUrgent;
+        if (command.meetsHow !== undefined) {
+          draft.meetsHow = toMeetsHow(draft.due, command.meetsHow);
+        }
         draft.whoIds = union(
           draft.whoIds,
           idsOf(command.whoRefs, entities.whoIdOf),
@@ -1391,12 +1443,22 @@ export function planWrites(input: PlanInput): WritePlan {
     );
     const hasNewWho = whoIds.length > current.whoIds.length;
     const hasNewPlace = placeIds.length > current.placeIds.length;
+    const meetsBefore = current.meets ?? null;
+    const meetsAfter = toMeetsAfter(
+      meetsBefore,
+      command.meetsHow,
+      due === undefined ? current.due : due,
+    );
+    const hasNewMeets =
+      meetsAfter?.how !== meetsBefore?.how ||
+      meetsAfter?.setBy !== meetsBefore?.setBy;
     if (
       title === null &&
       due === undefined &&
       isUrgent === null &&
       !hasNewWho &&
-      !hasNewPlace
+      !hasNewPlace &&
+      !hasNewMeets
     ) {
       return;
     }
@@ -1430,6 +1492,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMeets && { meets: meetsAfter }),
       ...(hasNewMark && { 'sealed.privateMark': marked.privateMark }),
       ...(hasNewClass && { privacy: 'private' }),
     };
@@ -1439,6 +1502,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent: current.isUrgent }),
       ...(hasNewWho && { whoIds: current.whoIds }),
       ...(hasNewPlace && { placeIds: current.placeIds }),
+      ...(hasNewMeets && { meets: meetsBefore }),
       ...(hasNewMark && { 'sealed.privateMark': before.privateMark }),
       ...(hasNewClass && { privacy: 'ordinary' }),
     };
@@ -1455,6 +1519,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMeets && { meets: meetsAfter }),
       ...(hasNewClass && { privacy: 'private' }),
       lastEditedAt: now,
     });
@@ -1462,6 +1527,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...current,
       whoIds,
       placeIds,
+      meets: meetsAfter,
       title: title ?? current.title,
       due: due === undefined ? current.due : due,
       isUrgent: isUrgent ?? current.isUrgent,
@@ -1710,6 +1776,10 @@ export function planWrites(input: PlanInput): WritePlan {
       place.id,
       place.name,
     ]),
+    ...[...(input.extraWho ?? []).values()].map((who): [string, string] => [
+      who.id,
+      who.name,
+    ]),
     ...entities.newWho.map(({ id, mention }): [string, string] => [
       id,
       toNameCase(mention.name),
@@ -1744,6 +1814,9 @@ export function planWrites(input: PlanInput): WritePlan {
     milestones: projectCommands.flatMap((command) =>
       command.kind === 'addMilestone' ? [command] : [],
     ),
+    offers: projectCommands.flatMap((command) =>
+      command.kind === 'offerResearch' ? [command] : [],
+    ),
     newId: input.newId,
     taskWho: [...drafts.values()].map((draft) => ({
       projectId: draft.projectId,
@@ -1755,6 +1828,7 @@ export function planWrites(input: PlanInput): WritePlan {
     whoIdOf: entities.whoIdOf,
     nameOf,
     executionId: input.executionId,
+    captureId: input.captureId,
     now,
     seal,
   });
@@ -2054,7 +2128,13 @@ export function planWrites(input: PlanInput): WritePlan {
   }));
   const keyDatePlan = planKeyDates({
     commands: input.keyDates ?? [],
-    whoIdOf: entities.whoIdOf,
+    whoIdOf: new Map([
+      ...entities.whoIdOf,
+      ...[...(input.extraWho ?? [])].map(([ref, who]): [string, string] => [
+        ref,
+        who.id,
+      ]),
+    ]),
     selfWhoId,
     nameOf,
     whoCounts: new Map([
@@ -2092,7 +2172,8 @@ export function planWrites(input: PlanInput): WritePlan {
         (effects.length +
           drafts.size +
           entities.newWho.length +
-          entities.newPlaces.length),
+          entities.newPlaces.length +
+          (input.reservedEffects ?? 0)),
     ),
   });
   keyDatePlan.effects.forEach(({ ref, effect }) =>
@@ -2438,6 +2519,7 @@ export function planWrites(input: PlanInput): WritePlan {
       null,
     );
     counts.made += 1;
+    const stepIds = draft.questions.map(() => input.newId());
     return {
       id: draft.id,
       data: {
@@ -2446,17 +2528,25 @@ export function planWrites(input: PlanInput): WritePlan {
         importance: null,
         isUrgent: draft.isUrgent,
         due: draft.due,
-        durationMinutes: null,
+        durationMinutes: draft.durationMinutes,
+        effort: draft.effort,
         energy: null,
         context: null,
         projectId: draft.projectId,
         milestoneId: null,
         whoIds: draft.whoIds,
         placeIds: draft.placeIds,
+        meets: draft.meetsHow ? { how: draft.meetsHow, setBy: 'person' } : null,
         notUntil: null,
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
-        stepState: {},
+        stepState: Object.fromEntries(
+          stepIds.map((stepId, order) => [stepId, { order, doneAt: null }]),
+        ),
+        meeting: draft.meeting
+          ? { syncedId: draft.meeting.syncedId, startAt: draft.meeting.startAt }
+          : null,
+        readyAnswer: null,
         mediaIds: [],
         createdBy: 'nomos',
         sourceCaptureId: input.captureId,
@@ -2468,7 +2558,13 @@ export function planWrites(input: PlanInput): WritePlan {
         sealed: seal({
           title: draft.title,
           notes: null,
-          steps: {},
+          steps: Object.fromEntries(
+            stepIds.map((stepId, order) => [
+              stepId,
+              { text: draft.questions[order] },
+            ]),
+          ),
+          meetingLabel: draft.meeting?.label ?? null,
           ...(facts.privateMark && { privateMark: facts.privateMark }),
           ...(draft.quiet && toQuietSealed(draft.quiet)),
         }),
@@ -2886,6 +2982,7 @@ export function planWrites(input: PlanInput): WritePlan {
       id,
       data,
     })),
+    offerLines: projectPlan.offerLines,
     noteCreates: [
       ...noteSteps.creates,
       ...knowledge.imports.map((made) => ({
@@ -2979,6 +3076,9 @@ export function planWrites(input: PlanInput): WritePlan {
     effects: [...effects, ...mediaPlan.effects],
     counts,
     questions,
+    taskIdByRef: Object.fromEntries(
+      [...drafts.entries()].map(([ref, draft]) => [ref, draft.id]),
+    ),
   };
 }
 
@@ -3327,10 +3427,24 @@ export function buildExecution(
     inputMode?: string;
     timeZone?: string;
     offers?: Record<string, unknown>;
+    /** The day's aims filed this turn: their line replaces the made and updated counts they would be worded as. */
+    aims?: {
+      line: string | null;
+      madeCount: number;
+      linkedCount: number;
+    } | null;
     /** The turn touched something kept quiet: only the screen line is spoken. */
     isQuiet?: boolean;
   },
 ): Record<string, unknown> {
+  const aims = input.aims?.line ? input.aims : null;
+  const counts = aims
+    ? {
+        ...plan.counts,
+        made: Math.max(0, plan.counts.made - aims.madeCount),
+        updated: Math.max(0, plan.counts.updated - aims.linkedCount),
+      }
+    : plan.counts;
   const created = plan.effectRefs.flatMap((ref, index) => {
     const { written } = plan.effects[index];
     return ref.op === 'create' && ref.collection === 'tasks'
@@ -3345,8 +3459,9 @@ export function buildExecution(
   const { homeLine = null, said = null, extraLines = [] } = input;
   const ack = buildSpokenAck({
     inputMode: input.inputMode,
-    counts: plan.counts,
+    counts,
     messageCount: input.messageCount ?? 1,
+    aimsLine: aims?.line ?? null,
     created,
     timeZone: input.timeZone ?? 'UTC',
     now: input.now,
@@ -3423,41 +3538,47 @@ export function buildExecution(
       abilityOffer: null,
       awayZoneOffer: null,
       ...input.offers,
-      summary: [
-        summarize(plan.counts, input.messageCount),
-        ...plan.kinLines,
-        describeFacts(plan.factCreates.length + plan.factConfirms.length),
-        describeKeyDates(
-          plan.effectRefs.flatMap((ref, position) =>
-            ref.collection === 'keyDates'
-              ? [String(plan.effects[position].written['sealed.title'] ?? '')]
-              : [],
+      summary: withAims(
+        [
+          summarize(counts, input.messageCount),
+          ...plan.kinLines,
+          describeFacts(plan.factCreates.length + plan.factConfirms.length),
+          describeKeyDates(
+            plan.effectRefs.flatMap((ref, position) =>
+              ref.collection === 'keyDates'
+                ? [String(plan.effects[position].written['sealed.title'] ?? '')]
+                : [],
+            ),
           ),
-        ),
-        describeProjects(
-          plan.projectsMade,
-          plan.rolesSet,
-          plan.milestonesAdded,
-        ),
-        ...plan.quietLines,
-        describeNotes(plan.notesMade),
-        describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
-        ...plan.fileSummaries,
-        describeTopicChanges(plan.topicLines.length),
-        describeProcedureChanges(
-          plan.procedureCreates.length,
-          plan.procedureVersions.length,
-        ),
-        describeRunChanges(
-          plan.runCreates.length,
-          plan.runTicks.reduce((total, tick) => total + tick.stepIds.length, 0),
-        ),
-        ...plan.notKept,
-        ...extraLines,
-        homeLine,
-      ]
-        .filter(Boolean)
-        .join('. '),
+          describeProjects(
+            plan.projectsMade,
+            plan.rolesSet,
+            plan.milestonesAdded,
+          ),
+          ...plan.quietLines,
+          describeNotes(plan.notesMade),
+          describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
+          ...plan.fileSummaries,
+          describeTopicChanges(plan.topicLines.length),
+          describeProcedureChanges(
+            plan.procedureCreates.length,
+            plan.procedureVersions.length,
+          ),
+          describeRunChanges(
+            plan.runCreates.length,
+            plan.runTicks.reduce(
+              (total, tick) => total + tick.stepIds.length,
+              0,
+            ),
+          ),
+          ...plan.notKept,
+          ...extraLines,
+          homeLine,
+        ]
+          .filter(Boolean)
+          .join('. '),
+        aims?.line ?? null,
+      ),
       said: own,
       commands: input.commands,
       effects: plan.effects,
@@ -3470,6 +3591,10 @@ export function buildExecution(
     }),
   };
 }
+
+/** The aims line keeps its own full stop, so it ends the summary rather than joining the others. */
+const withAims = (summary: string, line: string | null) =>
+  [summary, line].filter(Boolean).join(summary ? '. ' : '');
 
 const withQuestion = (ack: string | null, question: string | null) =>
   ack && question ? `${ack} ${question}` : ack;
@@ -3579,10 +3704,20 @@ const isPickKind = (kind: string) =>
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||
   kind === 'whichHabit' ||
+  kind === 'whichComesFirst' ||
+  kind === 'clashChoice' ||
   kind === 'isMedicine' ||
+  kind === 'isConnection' ||
   kind === 'whichMedicine' ||
   kind === 'howWasIt' ||
   kind === 'undoOffer' ||
+  kind === 'researchDepth' ||
+  kind === 'researchRerun' ||
+  kind === 'learnKind' ||
+  kind === 'learnGoal' ||
+  kind === 'learnStill' ||
+  kind === 'learnTogether' ||
+  kind === 'questionsTask' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

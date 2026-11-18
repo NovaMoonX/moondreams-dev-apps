@@ -5,8 +5,10 @@ import { db } from '@lib/firebase/config';
 import { EMPTY_READING } from '@apps/helm/utils/captureReading';
 import { sealJson } from '@apps/helm/security';
 import { store } from '@/store';
+import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import {
   isMissingDay,
+  markHabitDay,
   untallyHabit,
   untickHabit,
 } from '@apps/helm/store/actions/habitDayWrites';
@@ -98,11 +100,15 @@ const toCapture = async (
   const { turn } = input;
   return {
     inputMode: turn.inputMode,
+    isSpokenTurn: turn.inputMode === 'voice',
     sttProvider: turn.sttProvider,
     interruptedCaptureId: turn.interruptedCaptureId,
     answersQuestion: null,
     ttsProvider: null,
     arrivedVia: 'direct',
+    scheduledActionId: null,
+    aheadOffer: null,
+    disposition: null,
     medium: 'web',
     via: null,
     outsideReadScopes: null,
@@ -127,11 +133,13 @@ const toCapture = async (
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt: turn.createdAt,
     sortedAt: turn.createdAt,
     screen: null,
     privacy: input.isPrivate ? 'private' : 'ordinary',
     touchesPrivate: input.isPrivate,
+    noticedCount: null,
     presence: turn.presence,
     abilities: null,
     sealed: await sealJson<CaptureSealed>(
@@ -197,6 +205,7 @@ export async function writeDeviceCheckIn(
       { merge: true },
     );
   }
+  const isBack = markHabitDay(batch, uid, effect.dayKey, effect.habitId, true);
   if (input.encryption) {
     const path =
       effect.kind === 'tick'
@@ -250,7 +259,9 @@ export async function writeDeviceCheckIn(
     recorded: input.encryption
       ? { captureId: captureRef.id, executionId: executionRef.id }
       : null,
-    committed: batch.commit(),
+    committed: batch.commit().then(() => {
+      if (isBack) notifyRemindersBack();
+    }),
     undo: () =>
       effect.kind === 'tick'
         ? untickHabit(

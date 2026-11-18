@@ -13,6 +13,7 @@ export const FIXTURE_SERVICES = [
   'tmdb',
   'amc',
   'plaid',
+  'youtube',
 ] as const;
 
 export type FixtureService = (typeof FIXTURE_SERVICES)[number];

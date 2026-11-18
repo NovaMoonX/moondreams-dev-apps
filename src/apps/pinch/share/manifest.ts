@@ -187,12 +187,66 @@ export const PINCH_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'recipeIngredients',
+          kind: 'artifact',
+          label: 'Recipe ingredients',
+          meaning:
+            "What each of the person's recipes is made of: its ingredients with amounts, how long it takes and the collections it is in. Never the steps, notes or links.",
+          detail:
+            'Each recipe, its ingredients and amounts, time and collections',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each recipe's ingredients and how much of each",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'How long it takes',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The collections it is in',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'cooked',
+          kind: 'event',
+          label: 'What you cooked',
+          meaning:
+            'Recipes the person has made, each with the day it was cooked. Never how it turned out, its servings or photos.',
+          detail: 'Each recipe you cooked and when',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: 'The recipe you cooked',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The day you cooked it',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
-        'Recipe steps and ingredients',
+        'Recipe steps, notes and links',
         'prices and costs',
         'nutrition',
-        'cooking history',
+        'how a cook turned out',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },

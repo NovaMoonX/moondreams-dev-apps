@@ -10,10 +10,13 @@ const selectRecentRaw = (state: RootState) =>
 const selectOutside = (state: RootState) => state.helm.outsideCaptures.captures;
 const selectEarlierRaw = (state: RootState) => state.helm.earlier.captures;
 
+// A scheduled run's turn is told by its own line on Today and in Activity, never as a bubble on home.
 const toHomeTurns = (captures: OpenCapture[]) =>
-  captures.filter((capture) => !isOutsideTurn(capture));
+  captures.filter(
+    (capture) => !isOutsideTurn(capture) && capture.arrivedVia !== 'scheduled',
+  );
 
-// Home's thread, counts and Needs you all read these; an outside assistant's turn is dropped here and nowhere else.
+// Home's thread, counts and Needs you all read these; an outside assistant's turn and a scheduled run's are dropped here and nowhere else.
 const selectRecent = createSelector([selectRecentRaw], toHomeTurns);
 const selectUnseen = createSelector(
   [(state: RootState) => state.helm.unseenCaptures.captures],

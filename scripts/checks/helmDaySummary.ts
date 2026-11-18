@@ -45,6 +45,7 @@ const ZERO: HelmDayCounts = {
   placesAdded: 0,
   habitsStarted: 0,
   habitChecksDone: 0,
+  connectionsAdded: 0,
   tasksDone: 0,
   planned: 0,
   answered: 0,
@@ -88,6 +89,7 @@ const count = (input: {
   executions?: DayExecution[];
   tasks?: { completedAt: number | null }[];
   habits?: { createdAt: number; isOutside: boolean }[];
+  connections?: { createdAt: number; isOutside: boolean }[];
   habitChecks?: { at: number; status: string; isOutside: boolean }[];
 }) =>
   countHelmDay({
@@ -95,6 +97,7 @@ const count = (input: {
     executions: [],
     tasks: [],
     habits: [],
+    connections: [],
     habitChecks: [],
     ...input,
     ...utc,
@@ -219,6 +222,7 @@ assert.deepEqual(
       executions: [],
       tasks: [],
       habits: [],
+      connections: [],
       habitChecks: [],
       ...getDayBounds(day, NY),
     }).messages;
@@ -262,14 +266,44 @@ assert.equal(
 );
 assert.deepEqual(
   toEffectTitles(
-    [{ written: { name: 'Take pills' } }, { written: { name: 'Call Dana' } }],
+    [
+      { written: { name: 'Take pills' } },
+      { written: { name: 'Sam' } },
+      { written: { name: 'Call Dana' } },
+    ],
     [
       { op: 'create', collection: 'habits' },
+      { op: 'create', collection: 'connections' },
       { op: 'create', collection: 'tasks' },
     ],
   ),
   ['Call Dana'],
-  'a habit name never reaches the summary prompt',
+  'a habit or connection name never reaches the summary prompt',
+);
+assert.equal(
+  count({
+    executions: [
+      execution({
+        createdAt: at,
+        effectRefs: [{ op: 'create', collection: 'connections', docId: 'd' }],
+      }),
+    ],
+  }).connectionsAdded,
+  0,
+  'a connection made in a turn is counted from its record, not as another kind added',
+);
+assert.equal(
+  count({
+    connections: [
+      { createdAt: at, isOutside: false },
+      { createdAt: at, isOutside: false },
+      { createdAt: at, isOutside: true },
+      { createdAt: utc.dayEnd, isOutside: false },
+      { createdAt: utc.dayStart - 1, isOutside: false },
+    ],
+  }).connectionsAdded,
+  2,
+  'connections count on their own day and an outside turn never counts',
 );
 
 // The code line.
@@ -324,6 +358,12 @@ assert.equal(
   'Logged 1 habit check-in',
 );
 assert.equal(toDayLine(counts({ habitsStarted: 2 })), 'Started 2 habits');
+
+assert.equal(
+  toDayLine(counts({ messages: 2, tasksAdded: 1, connectionsAdded: 2 })),
+  'Sent 2 messages · added 2 connections and a task',
+);
+assert.equal(toDayLine(counts({ connectionsAdded: 1 })), 'Added a connection');
 
 // The model's sentence.
 const day = counts({ messages: 8, tasksAdded: 2, tasksDone: 1 });
@@ -627,6 +667,7 @@ const provider = (fails: boolean): BatchProvider => ({
     return Promise.resolve('b1');
   },
   collect: () => Promise.resolve(null),
+  remove: () => Promise.resolve(),
 });
 const released: string[] = [];
 const release = (entry: QueuedSummary) => {
