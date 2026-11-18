@@ -5,11 +5,12 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { Check, ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { signInInPlace, signOutInPlace } from '@/lib/dev/devSignOut';
 import {
+  DEV_SIGN_IN_PARAM,
   FIXTURE_PASSWORD,
   FIXTURE_USERS,
   FixtureAccount,
@@ -26,6 +27,22 @@ export function DevAccountSwitcher() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string>();
   const { option, group, separator } = DropdownMenuFactories;
+
+  useEffect(() => {
+    if (!isUsingFirebaseEmulators || !import.meta.env.DEV) return;
+    const url = new URL(window.location.href);
+    const email = url.searchParams.get(DEV_SIGN_IN_PARAM);
+    if (!email) return;
+    url.searchParams.delete(DEV_SIGN_IN_PARAM);
+    window.history.replaceState(window.history.state, '', url);
+    const isFixture = Object.values(FIXTURE_USERS).some(
+      (account) => account.email === email,
+    );
+    if (!isFixture) return;
+    signInInPlace(email, FIXTURE_PASSWORD).catch(() =>
+      setError(`Could not sign in as ${email}. Pick an account below.`),
+    );
+  }, []);
 
   if (!isUsingFirebaseEmulators || !import.meta.env.DEV) {
     return null;
