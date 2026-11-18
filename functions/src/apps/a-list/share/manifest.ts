@@ -46,7 +46,7 @@ export const A_LIST_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
-              label: "A link to the movie's poster",
+              label: "The movie's poster, shown from where it is hosted",
               sinceVersion: 4,
               addedOn: '2026-11-18',
             },
@@ -110,7 +110,7 @@ export const A_LIST_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
-              label: "A link to the movie's poster",
+              label: "The movie's poster, shown from where it is hosted",
               sinceVersion: 4,
               addedOn: '2026-11-18',
             },
@@ -146,7 +146,7 @@ export const A_LIST_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
-              label: "A link to the movie's poster",
+              label: "The movie's poster, shown from where it is hosted",
               sinceVersion: 3,
               addedOn: '2026-11-18',
             },

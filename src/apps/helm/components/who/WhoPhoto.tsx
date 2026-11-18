@@ -1,9 +1,9 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAppSelector } from '@/store';
+import { SyncedAvatar } from '@apps/helm/components/connections/SyncedPictures';
 import MediaThumb from '@apps/helm/components/media/MediaThumb';
 import WhoMark from '@apps/helm/components/who/WhoMark';
-import { SyncedAvatar } from '@apps/helm/components/connections/SyncedPictures';
 import type { AppSource, WhoKind } from '@apps/helm/types';
 import { findAppPicture } from '@apps/helm/utils/syncedPictures';
 
@@ -33,7 +33,7 @@ function WhoPhoto({
         ) ?? null),
   );
   const appRecord = useAppSelector((state) =>
-    media === null && appSources.length > 0
+    (media === null || media.isUnreadable) && appSources.length > 0
       ? findAppPicture(state.helm.synced.items, appSources)
       : null,
   );

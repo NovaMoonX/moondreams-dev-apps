@@ -5,7 +5,6 @@ import { openBytes } from '@apps/helm/security';
 import type { SyncedRecord } from '@apps/helm/types';
 import { getSyncedPicturePath } from '@apps/helm/utils/syncedPictures';
 
-/** An object URL for a synced record's sealed picture copy once it is opened on this device, or `null` while it opens, when it has none or when it can't be opened. */
 export function useSyncedPictureUrl(record: SyncedRecord | null) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;

@@ -30,7 +30,6 @@ import {
   formatMeetingWhere,
 } from '@apps/helm/utils/meetingWhere';
 import { isCalendarEvent, toFirstDay } from '@apps/helm/utils/synced';
-import { getPosterLink } from '@apps/helm/utils/syncedPictures';
 
 interface SyncedSheetProps {
   record: SyncedRecord | null;
@@ -137,9 +136,7 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
               className='size-14 rounded-full'
             />
           )}
-          {getPosterLink(record) !== null && (
-            <PosterThumb record={record} className='w-14' />
-          )}
+          <PosterThumb record={record} className='w-14' />
           {[
             isCalendar ? getEventFacts(record, now, timeZone) : null,
             other && other.startAt !== null

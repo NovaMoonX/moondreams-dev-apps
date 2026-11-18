@@ -15,7 +15,6 @@ interface SyncedAvatarProps {
   className: string;
 }
 
-/** The small sealed copy of another app's photo (a pet's), opened on this device and drawn avatar-sized in the box `className` gives it. */
 export function SyncedAvatar({
   record,
   fallback,

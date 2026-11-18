@@ -1215,6 +1215,7 @@ interface SyncedRecord {               // synced/{syncedId}: client reads; only 
   connectionEndedAt: number | null;    // set when the grant ends and the copy is kept ("no longer updated")
   deleteAfter: number | null;          // set for a kept copy: connectionEndedAt + 90 days; null while connected
   picture: { hash: string; nonce: string; contentType: string; keyId: string } | null; // a pet's photo kept as a small sealed copy (below); null for every other record
+  pictureFailedSource: string | null;  // the source photo version that would not decode, so it is not fetched again until it changes; null on a copy from before
   sealed: Sealed;                      // { title, subtitle, detail (≤500), placeLabel, amountCents, currency, deepLink, extra }
 }
 ```
@@ -1226,7 +1227,9 @@ interface SyncedRecord {               // synced/{syncedId}: client reads; only 
 - **Storage rule.** `apps/helm/syncedPictures/{uid}/{fileName}`: the person reads their own; no client writes or deletes (`check:helm-rules`).
 - **Shown** only avatar-sized (at most 56 px): `SyncedAvatar` opens it through `useSyncedPictureUrl` (`useSealedObjectUrl`, the key's `keyId` checked) in a synced pet record's sheet and as a pet who's photo when the who has none of its own (`findAppPicture` matches the who's `appSources` to the synced record).
 - **Poster (A-List).** `extra.posterUrl` on a showing, a watchlist movie and a seen movie, only when `readPictureLink` accepts it (https, at most 500 characters), is a link only: no copy and no Storage. `PosterThumb` draws it with `FallbackImage` at `IMAGE_SHAPES.poster` (2/3), about 40 px wide on a showing's card and 56 px in the sheet.
-- `check:helm-app-pictures` covers the copy rules and each deletion.
+- **Orphan sweep.** The copy is saved before its record's batch, so a disconnect or a category switched off can list the records in between and leave an object. `sweepOrphanPictures` lists `apps/helm/syncedPictures/{uid}/` and deletes each object whose id has no record (existence checked with `getAll`, in chunks); it runs at the end of `deleteGrant` and `deleteCategory` and per person in the expiry sweep, and a page that finds its connection or category ended after committing drops its own copies. A source over 10 MB or one that will not decode keeps what is stored (a bad one is remembered in `pictureFailedSource`), and a page makes its copies five at a time.
+- **Posters load from the source's own host.** The image is requested straight from wherever the source hosts it, with no referrer, so that host sees the request.
+- `check:helm-app-pictures` covers the copy rules, each deletion, the orphan sweep, a photo that will not decode and an oversize source.
 
 `SharedKind` and each kind's sealed fields are the platform contract's (section 19), not Helm's; Helm's type re-exports them. A record sealed by an older `transformVersion` is rewritten at its next sync, never migrated.
 

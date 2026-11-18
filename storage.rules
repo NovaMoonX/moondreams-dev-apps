@@ -64,7 +64,7 @@ service firebase.storage {
         && request.resource.contentType == 'application/octet-stream';
     }
 
-    // A small sealed copy of another app's photo (a pet's) that Helm's server makes and removes; the person only reads their own.
+    // Written only by the server; the person reads their own.
     match /apps/helm/syncedPictures/{uid}/{fileName} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;

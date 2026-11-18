@@ -30,7 +30,7 @@ export const NINE_LIVES_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
-              label: "A small copy of each cat's photo",
+              label: "A small private copy of each cat's photo",
               sinceVersion: 3,
               addedOn: '2026-11-18',
             },

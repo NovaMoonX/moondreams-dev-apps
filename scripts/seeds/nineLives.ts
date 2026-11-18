@@ -2332,7 +2332,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   );
 
   await batch.commit();
-  // The photo Helm's synced pet picture is made from; missing when the Storage emulator is down.
+  // Missing when the Storage emulator is down.
   await uploadSeedPhoto(MOCHI_PHOTO_PATH, 2);
 
   const result: SeedResult = {

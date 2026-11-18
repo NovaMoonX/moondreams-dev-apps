@@ -2,10 +2,10 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { CalendarDays, ChevronRight, Clock, ListChecks } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
-import { PosterThumb } from '@apps/helm/components/connections/SyncedPictures';
 import { readConnectorAppId } from '@/lib/connections/contract';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import { PosterThumb } from '@apps/helm/components/connections/SyncedPictures';
 import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import DiscrepancyLine from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';

@@ -34,7 +34,6 @@ function movie(
   return { title, releaseDate, posterUrl, runtimeMinutes, contentRating };
 }
 
-// A stand-in 2:3 poster link; Helm draws it from its address and never copies it.
 const posterFor = (title: string) =>
   `https://placehold.co/200x300.png?text=${encodeURIComponent(title)}`;
 

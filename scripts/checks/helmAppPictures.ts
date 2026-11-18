@@ -20,9 +20,11 @@ import {
   toSyncedId,
 } from '../../functions/src/apps/helm/connections/sink.ts';
 import {
+  MAX_SOURCE_BYTES,
   planPicture,
   readPictureSource,
   syncedPicturePath,
+  sweepOrphanPictures,
   PICTURE_PX,
   type PictureBucket,
 } from '../../functions/src/apps/helm/connections/syncedPictures.ts';
@@ -63,11 +65,23 @@ class FakeBucket {
   downloads = 0;
   saves = 0;
   failing = false;
+  reportedSize: number | null = null;
   private generation = 0;
   put(path: string, data: Buffer) {
     this.generation += 1;
     this.objects.set(path, { data, generation: this.generation });
   }
+  getFiles = async ({ prefix }: { prefix: string }) =>
+    [
+      Array.from(this.objects.keys())
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => ({
+          name,
+          delete: async () => {
+            this.objects.delete(name);
+          },
+        })),
+    ] as [{ name: string; delete(): Promise<unknown> }[]];
   file(path: string) {
     const find = () => {
       const found = this.objects.get(path);
@@ -82,8 +96,9 @@ class FakeBucket {
           {
             md5Hash: createHash('md5').update(found.data).digest('base64'),
             generation: found.generation,
+            size: this.reportedSize ?? found.data.length,
           },
-        ] as [{ md5Hash: string; generation: number }];
+        ] as [{ md5Hash: string; generation: number; size: number }];
       },
       download: async () => {
         this.downloads += 1;
@@ -133,6 +148,9 @@ const setup = async () => {
     .set(
       wrapDataKey(DEV_KEYRING, uid, deriveSeedDataKey(DEV_KEYRING, uid), NOW),
     );
+  await firestore
+    .doc(`connections/${uid}/grants/${GRANT_ID}`)
+    .set({ status: 'live', categories: { cats: { isOn: true } } });
   const bucket = new FakeBucket();
   const session = openHelmSession(
     firestore,
@@ -390,6 +408,66 @@ test('an ended connection, a category switched off, a record that left and an ex
     NOW,
   );
   assert.equal(expired.bucket.objects.has(expired.path('miso')), false);
+});
+
+test('an object with no record is swept and one with a record stays', async () => {
+  const t = await setup();
+  t.bucket.put(PHOTO, await makeJpeg(10));
+  await t.write([cat('miso', PHOTO)]);
+  const orphan = syncedPicturePath(t.uid, 'f'.repeat(40));
+  t.bucket.put(orphan, Buffer.from('left behind'));
+  const removed = await sweepOrphanPictures(
+    t.bucket as unknown as PictureBucket,
+    firestore,
+    t.uid,
+  );
+  assert.equal(removed, 1);
+  assert.equal(t.bucket.objects.has(orphan), false);
+  assert.ok(t.bucket.objects.has(t.path('miso')));
+  const other = await setup();
+  const strangers = syncedPicturePath(other.uid, 'a'.repeat(40));
+  other.bucket.put(strangers, Buffer.from('x'));
+  await other.session.deleteGrant(GRANT_ID);
+  assert.equal(
+    other.bucket.objects.has(strangers),
+    false,
+    'deleteGrant sweeps',
+  );
+});
+
+test('a photo that cannot be decoded is not fetched again until it changes', async () => {
+  const t = await setup();
+  t.bucket.put(PHOTO, Buffer.from('not an image'));
+  await t.write([cat('miso', PHOTO)]);
+  assert.equal(t.bucket.downloads, 1);
+  assert.equal((await t.doc('miso')).get('picture'), null);
+  const failed = (await t.doc('miso')).get('pictureFailedSource');
+  assert.equal(typeof failed, 'string');
+  await t.write([cat('miso', PHOTO)], NOW + DAY);
+  assert.equal(t.bucket.downloads, 1, 'no second download');
+  t.bucket.put(PHOTO, await makeJpeg(10));
+  await t.write([cat('miso', PHOTO)], NOW + 2 * DAY);
+  assert.equal(t.bucket.downloads, 2);
+  const doc = await t.doc('miso');
+  assert.ok(doc.get('picture'));
+  assert.equal(doc.get('pictureFailedSource'), null);
+});
+
+test('a source over the size limit is refused and what is stored stays', async () => {
+  const t = await setup();
+  t.bucket.put(PHOTO, await makeJpeg(10));
+  t.bucket.reportedSize = MAX_SOURCE_BYTES + 1;
+  await t.write([cat('miso', PHOTO)]);
+  assert.equal(t.bucket.downloads, 0);
+  assert.equal((await t.doc('miso')).get('picture'), null);
+  t.bucket.reportedSize = null;
+  await t.write([cat('miso', PHOTO)], NOW + DAY);
+  const stored = (await t.doc('miso')).get('picture');
+  assert.ok(stored);
+  t.bucket.put(PHOTO, await makeJpeg(200));
+  t.bucket.reportedSize = MAX_SOURCE_BYTES + 1;
+  await t.write([cat('miso', PHOTO)], NOW + 2 * DAY);
+  assert.equal((await t.doc('miso')).get('picture').nonce, stored.nonce);
 });
 
 const run = async () => {

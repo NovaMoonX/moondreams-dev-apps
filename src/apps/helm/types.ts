@@ -1634,7 +1634,6 @@ export interface SyncedContent {
   extra: Record<string, ExtraValue>;
 }
 
-/** The small sealed copy of another app's photo (a pet's) kept in Helm's own Storage area; the server makes and deletes it. */
 export interface SyncedPicture {
   hash: string;
   nonce: string;
