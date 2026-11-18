@@ -13,8 +13,10 @@ import type {
   PinchReminderSettings,
   PinchSettings,
   PinchStartTab,
+  PinchUnitSettings,
   PinchVoiceSettings,
 } from '@apps/pinch/types';
+import { AS_WRITTEN_UNITS } from '@apps/pinch/utils/units';
 
 export interface UsualDays {
   fridge: number;
@@ -34,6 +36,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
     isReadingNotes: null,
     isWaiting: null,
   },
+  units: AS_WRITTEN_UNITS,
   reminders: {
     eatSoon: true,
     expiring: true,
@@ -59,6 +62,7 @@ export const getSettingsWithDefaults = (
         ...DEFAULT_PINCH_SETTINGS,
         ...document,
         voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...document.voice },
+        units: { ...DEFAULT_PINCH_SETTINGS.units, ...document.units },
         reminders: {
           ...DEFAULT_PINCH_SETTINGS.reminders,
           ...PREDATING_REMINDERS,
@@ -102,6 +106,7 @@ export interface PinchSettingsPatch {
   calendarStats?: boolean;
   defaultTab?: PinchStartTab;
   voice?: Partial<PinchVoiceSettings>;
+  units?: Partial<PinchUnitSettings>;
   reminders?: Partial<PinchReminderSettings>;
 }
 
@@ -118,6 +123,7 @@ export const createSettings = (
   calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
   defaultTab: patch.defaultTab ?? DEFAULT_PINCH_SETTINGS.defaultTab,
   voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...patch.voice },
+  units: { ...DEFAULT_PINCH_SETTINGS.units, ...patch.units },
   reminders: {
     ...DEFAULT_PINCH_SETTINGS.reminders,
     timeZone,
@@ -148,6 +154,9 @@ export const getSettingsUpdates = (
     : [{ path: ['defaultTab'], value: patch.defaultTab }]),
   ...Object.entries(patch.voice ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['voice', key], value }],
+  ),
+  ...Object.entries(patch.units ?? {}).flatMap(([key, value]) =>
+    value === undefined ? [] : [{ path: ['units', key], value }],
   ),
   ...Object.entries(patch.reminders ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['reminders', key], value }],

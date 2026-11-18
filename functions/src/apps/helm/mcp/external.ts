@@ -574,6 +574,7 @@ async function saveTurn({
           undoReport: null,
           goneIds: null,
           undoReason: null,
+          heldSpoken: null,
           spoken: null,
         }),
       });

@@ -414,6 +414,8 @@ test('a question sends the hinted notes with their bodies, anything else sends t
       body: 'Keeps 3 days',
       isUnchecked: true,
       topicIds: ['baking'],
+      projectIds: [],
+      quietFacts: { privateMark: null, isPrivacyCleared: false },
     },
   ];
   assert.deepEqual(toContextNotes(hinted, 'How long do cakes keep?'), hinted);

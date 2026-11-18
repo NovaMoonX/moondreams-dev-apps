@@ -50,6 +50,22 @@ import {
   isLiveDeepLink,
   toDocumentLink,
 } from '../../functions/src/connections/deepLinks.ts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import MarkdownText from '../../src/components/MarkdownText.tsx';
+import {
+  createLinkGate,
+  extractLinks,
+  labelForLink,
+  normalizeProse,
+  stripProseMarks,
+} from '../../src/utils/proseUtils.ts';
+import {
+  readAnswerLinks,
+  readWrittenAnswer,
+} from '../../src/apps/helm/utils/writtenAnswer.ts';
+import { SYSTEM_PROMPT } from '../../functions/src/apps/helm/nomos/prompt.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   sealForHelm,
@@ -314,6 +330,7 @@ const answer = (fields: Partial<AnswerCommand> = {}): AnswerCommand => ({
   question: 'When is the cake tasting?',
   isHealth: false,
   fromRecordsText: 'Friday at 2.',
+  fromRecordsSpoken: null,
   sources: [TASK],
   quotes: [],
   syncedKeys: [],
@@ -461,10 +478,136 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
-    'the records part is spoken from the stored records text, never a separate model line',
+    'with no spoken records line, the records part is spoken from the stored text',
     () => {
       const built = buildAnswer(answer({ fromRecordsText: 'Friday at 2.' }));
       assert.ok(built.spoken.startsWith('Friday at 2.'));
+    },
+  ],
+  [
+    'a spoken records line is said instead of a cut of the written text',
+    () => {
+      const written = 'You have 6 boxes. '.repeat(40);
+      const built = buildAnswer(
+        answer({
+          fromRecordsText: written,
+          fromRecordsSpoken: 'Six boxes, and the first is the Pike Place one.',
+        }),
+      );
+      assert.equal(
+        built.spoken,
+        'Six boxes, and the first is the Pike Place one.',
+      );
+      assert.equal(built.answer.fromRecords, written.trim());
+    },
+  ],
+  [
+    'a both and health answer keeps the spoken records sentence whole and ends the general part at a sentence end',
+    () => {
+      const records = 'You have 6 boxes, and the first is the Pike Place one.';
+      const built = buildAnswer(
+        answer({
+          scope: 'both',
+          isHealth: true,
+          fromRecordsText: `${records} More about the rest.`,
+          fromRecordsSpoken: records,
+          generalText: 'b',
+          generalSpoken:
+            'Cake keeps for a few days in a cool place. Wrapped well it keeps even longer in the fridge, but let it come back to room temperature before you eat it.',
+        }),
+      );
+      assert.ok(built.spoken.length <= SPOKEN_MAX_CHARS);
+      assert.ok(built.spoken.startsWith(`${records} ${GENERAL_LABEL} `));
+      assert.ok(built.spoken.endsWith(`. ${HEALTH_CAUTION_SPOKEN}`));
+      const general = built.spoken
+        .slice(`${records} ${GENERAL_LABEL} `.length)
+        .replace(` ${HEALTH_CAUTION_SPOKEN}`, '');
+      assert.equal(general, 'Cake keeps for a few days in a cool place.');
+    },
+  ],
+  [
+    'a general part with no whole sentence that fits is dropped with its label',
+    () => {
+      const records = 'You have 6 boxes, and the first is the Pike Place one.';
+      const built = buildAnswer(
+        answer({
+          scope: 'both',
+          isHealth: true,
+          fromRecordsText: records,
+          fromRecordsSpoken: records,
+          generalText: 'b',
+          generalSpoken: `${'general '.repeat(25)}done.`,
+        }),
+      );
+      assert.equal(built.spoken, `${records} ${HEALTH_CAUTION_SPOKEN}`);
+    },
+  ],
+  [
+    'a spoken records line that speaks as I, carries markup or names a number the records lack falls back to the cut of the written text',
+    () => {
+      const written = 'You have 6 boxes. '.repeat(40).trim();
+      [
+        'I found 6 boxes.',
+        'You have **6** boxes.',
+        'You have 7 boxes.',
+      ].forEach((spoken) => {
+        const built = buildAnswer(
+          answer({ fromRecordsText: written, fromRecordsSpoken: spoken }),
+        );
+        assert.ok(built.spoken.startsWith('You have 6 boxes. You have'));
+        assert.ok(built.spoken.length > 200);
+      });
+    },
+  ],
+  [
+    'with no spoken records line the written text is cut as before',
+    () => {
+      const written = 'word '.repeat(200).trim();
+      const built = buildAnswer(
+        answer({ fromRecordsText: written, fromRecordsSpoken: null }),
+      );
+      assert.ok(built.spoken.length <= SPOKEN_MAX_CHARS);
+      assert.ok(written.startsWith(built.spoken));
+      assert.ok(built.spoken.length > 200);
+    },
+  ],
+  [
+    'a spoken records line never speaks an answer the guards dropped',
+    () => {
+      const built = buildAnswer(
+        answer({
+          fromRecordsText: 'Friday at 2.',
+          fromRecordsSpoken: 'Friday at two.',
+          sources: [],
+        }),
+      );
+      assert.equal(built.answer.fromRecords, null);
+      assert.equal(built.spoken, 'Nothing in your records answers that.');
+    },
+  ],
+  [
+    "the model's spoken records line is read within its cap, and absent when missing",
+    () => {
+      const base = {
+        kind: 'answer',
+        scope: 'yourThings',
+        question: 'q',
+        fromRecordsText: 'Friday at 2.',
+      };
+      const read = (extra: Record<string, unknown>) =>
+        normalizeNomosReply(
+          { commands: [{ ...base, ...extra }] },
+          { reading: READING, aliases: createAliasBook('t') },
+        ).answer;
+      assert.equal(
+        read({ fromRecordsSpoken: 'w '.repeat(300) })?.fromRecordsSpoken,
+        null,
+      );
+      assert.equal(
+        read({ fromRecordsSpoken: '  Friday   at 2. ' })?.fromRecordsSpoken,
+        'Friday at 2.',
+      );
+      assert.equal(read({})?.fromRecordsSpoken, null);
     },
   ],
   [
@@ -2256,6 +2399,7 @@ const tests: [string, () => void | Promise<void>][] = [
             scope: 'yourThings',
             isHealth: false,
             fromRecordsText: text,
+            fromRecordsSpoken: null,
             sources: [],
             quotes: [],
             syncedKeys: [],
@@ -2332,6 +2476,664 @@ const tests: [string, () => void | Promise<void>][] = [
         answer(none, failed.entries()),
         null,
         'an app whose live look failed rests nothing, whatever a stored look found',
+      );
+    },
+  ],
+  [
+    'written text keeps one blank line between paragraphs and flattens inside them',
+    () => {
+      const text = normalizeProse(
+        '  Your tasting is Friday at 2.\nBring   the deposit.\r\n\r\n\r\n\n  The venue is Pike Place.  ',
+        1_200,
+      );
+      assert.equal(
+        text,
+        'Your tasting is Friday at 2. Bring the deposit.\n\nThe venue is Pike Place.',
+      );
+      assert.equal(normalizeProse(' \n\n ', 1_200), null);
+      assert.equal(normalizeProse('One line only.', 1_200), 'One line only.');
+    },
+  ],
+  [
+    'lists are kept as lists, numbered on from the first number, and a list item continues on an indented line',
+    () => {
+      assert.equal(
+        normalizeProse(
+          'Next steps:\n* Call the florist\n* Book the van\n  for Saturday\n\n3. Pay\n7. Confirm',
+          1_200,
+        ),
+        'Next steps:\n\n- Call the florist\n- Book the van for Saturday\n\n3. Pay\n4. Confirm',
+      );
+    },
+  ],
+  [
+    'headings, tables, images, code and raw html are reduced to plain words',
+    () => {
+      assert.equal(
+        normalizeProse(
+          '# Plan\n<b>Friday</b> at `2` ![map](https://x.example/m.png)\n| a | b |\n|---|---|\n| 1 | 2 |',
+          1_200,
+        ),
+        'Plan\n\nFriday at 2 map\n\na, b\n\n1, 2',
+      );
+    },
+  ],
+  [
+    'a link stays only for a web address the answer rests on, every other link is its words',
+    () => {
+      const allowed = extractLinks([
+        'See https://docs.example/contract. Also https://x.example/a?b=1,',
+      ]);
+      assert.deepEqual(allowed, [
+        'https://docs.example/contract',
+        'https://x.example/a?b=1',
+      ]);
+      assert.equal(
+        normalizeProse(
+          'Open the [contract](https://docs.example/contract) or [this](https://evil.example/x) or <https://evil.example/y>.',
+          1_200,
+          allowed,
+        ),
+        'Open the [contract](https://docs.example/contract) or this or https://evil.example/y.',
+      );
+      assert.equal(
+        normalizeProse('[contract](https://docs.example/contract)', 1_200),
+        'contract',
+        'general text has no records to link to',
+      );
+    },
+  ],
+  [
+    'a hard-wrapped line that only looks like a list item stays in its paragraph',
+    () => {
+      assert.equal(
+        normalizeProse('It was cold at night,\n3. then warm.', 1_200),
+        'It was cold at night, 3. then warm.',
+      );
+      assert.equal(
+        normalizeProse('Set the oven to\n- 5 degrees more', 1_200),
+        'Set the oven to - 5 degrees more',
+      );
+      assert.equal(
+        normalizeProse('Steps:\n3. Pay\n4. Confirm\n\n- Done', 1_200),
+        'Steps:\n\n3. Pay\n4. Confirm\n\n- Done',
+      );
+    },
+  ],
+  [
+    'a reference-style link never becomes a link, and its definition is dropped',
+    () => {
+      assert.equal(
+        normalizeProse(
+          'See [the form][1] or [this][].\n\n[1]: https://evil.example',
+          1_200,
+          ['https://evil.example'],
+        ),
+        'See the form or this.',
+      );
+    },
+  ],
+  [
+    'a label that names another web address shows the link host; plain labels stay; only https stays',
+    () => {
+      const allowed = ['https://a.example/x', 'http://b.example/y'];
+      assert.equal(
+        normalizeProse(
+          '[https://paypal.com](https://a.example/x)',
+          1_200,
+          allowed,
+        ),
+        '[a.example](https://a.example/x)',
+      );
+      assert.equal(
+        normalizeProse(
+          '[log in at www.paypal.com now](https://a.example/x)',
+          1_200,
+          allowed,
+        ),
+        '[a.example](https://a.example/x)',
+      );
+      assert.equal(
+        normalizeProse(
+          '[the a.example guide](https://www.a.example/x)',
+          1_200,
+          ['https://www.a.example/x'],
+        ),
+        '[the a.example guide](https://www.a.example/x)',
+      );
+      assert.equal(
+        normalizeProse(
+          '[tasting guide](https://a.example/x) and [old](http://b.example/y)',
+          1_200,
+          allowed,
+        ),
+        '[tasting guide](https://a.example/x) and old',
+      );
+      assert.equal(
+        normalizeProse('[x](//evil.example)', 1_200, ['//evil.example']),
+        'x',
+      );
+    },
+  ],
+  [
+    'a stored answer is made safe on the device: structure kept, only its own https links, hosts for spoofed labels',
+    () => {
+      const stored =
+        '# Hi\n\n[a](//evil.example) [b](https://ok.example/p_(1)) [https://paypal.com](https://ok.example/p_(1)) [c](http://nope.example)';
+      assert.equal(
+        readWrittenAnswer(stored, new Set(['https://ok.example/p_(1)'])),
+        'Hi\n\na [b](https://ok.example/p_(1)) [ok.example](https://ok.example/p_(1)) c',
+      );
+      assert.equal(
+        readWrittenAnswer(stored, new Set()),
+        'Hi\n\na b https://paypal.com c',
+      );
+      const clean = normalizeProse('One **two** *three*\n\n3. a\n4. b', 1_200)!;
+      assert.equal(
+        readWrittenAnswer(clean, new Set()),
+        clean,
+        'normalizing twice changes nothing',
+      );
+    },
+  ],
+  [
+    'a link address with balanced parentheses is read whole',
+    () => {
+      assert.deepEqual(
+        extractLinks([
+          'See https://a.example/x_(1). And (https://b.example/y).',
+        ]),
+        ['https://a.example/x_(1)', 'https://b.example/y'],
+      );
+      assert.equal(
+        normalizeProse('[x](https://a.example/x_(1))', 1_200, [
+          'https://a.example/x_(1)',
+        ]),
+        '[x](https://a.example/x_(1))',
+      );
+    },
+  ],
+  [
+    'a star between numbers is a times sign, never emphasis, and spoken as such',
+    () => {
+      assert.equal(
+        normalizeProse('2*3*4 and 5 * 3 = 15', 1_200),
+        '2\\*3\\*4 and 5 \\* 3 = 15',
+      );
+      assert.equal(stripProseMarks('2*3*4'), '2 times 3 times 4');
+      assert.equal(stripProseMarks('5 * 3 = 15'), '5 times 3 = 15');
+      assert.equal(
+        stripProseMarks('**bold** and *soft* and 2*3'),
+        'bold and soft and 2 times 3',
+      );
+      assert.equal(
+        stripProseMarks('5 * 3 = 15', { keepBreaks: true }),
+        '5 * 3 = 15',
+      );
+      assert.equal(
+        readWrittenAnswer(
+          normalizeProse('It is 2*3 and *very* big', 1_200)!,
+          new Set(),
+        ),
+        'It is 2\\*3 and *very* big',
+      );
+    },
+  ],
+  [
+    'a cut never leaves a mark or a link half open on screen',
+    () => {
+      const bold = normalizeProse(
+        `Start **Friday at 2 and everything after it that runs on`,
+        1_200,
+      );
+      assert.equal(
+        bold,
+        'Start Friday at 2 and everything after it that runs on',
+      );
+      const cut = normalizeProse(
+        'The tasting is **Friday at 2 PM** at the bakery on Pike Place today.',
+        30,
+      );
+      assert.ok(cut !== null && !cut.includes('*'), `cut left a mark: ${cut}`);
+      assert.ok(cut !== null && cut.length <= 30);
+      const link = normalizeProse(
+        'Read [the whole contract](https://docs.example/contract) now',
+        30,
+        ['https://docs.example/contract'],
+      );
+      assert.ok(
+        link !== null && !link.includes('[') && !link.includes(']('),
+        `cut left a link open: ${link}`,
+      );
+      const italic = normalizeProse('A *rare* and *odd', 1_200);
+      assert.equal(italic, 'A *rare* and odd');
+    },
+  ],
+  [
+    'a link with nested brackets is reduced to its label unless its address is allowed, and a list-item definition is dropped',
+    () => {
+      assert.equal(
+        normalizeProse('See [[x]](https://evil.example/a).', 1_200),
+        'See x.',
+      );
+      assert.equal(
+        normalizeProse(
+          'See [a [b]](https://evil.example/a) and [[[c]]](https://evil.example/b).',
+          1_200,
+        ),
+        'See a b and c.',
+      );
+      assert.equal(
+        normalizeProse('See [a [b] c](https://ok.example/a).', 1_200, [
+          'https://ok.example/a',
+        ]),
+        'See [a b c](https://ok.example/a).',
+      );
+      assert.equal(
+        normalizeProse(
+          'Hi\n\n- [x]: https://evil.example\n1. [y]: https://evil.example\n> [z]: https://evil.example\n\nBye',
+          1_200,
+          ['https://evil.example'],
+        ),
+        'Hi\n\nBye',
+      );
+    },
+  ],
+  [
+    'a label spoofing another address shows the host at render, zero-width and look-alike letters included, and ordinary labels stay',
+    () => {
+      const href = 'https://ok.example/p';
+      assert.equal(labelForLink('paypal.com', href), 'ok.example');
+      assert.equal(labelForLink('pay\u200bpal.com', href), 'ok.example');
+      assert.equal(labelForLink('\u0440aypal.com', href), 'ok.example');
+      assert.equal(labelForLink('paypal\uFF0Ecom', href), 'ok.example');
+      assert.equal(
+        labelForLink('HTTPS://www.paypal.com/login', href),
+        'ok.example',
+      );
+      assert.equal(labelForLink('Node.js', href), 'Node.js');
+      assert.equal(labelForLink('report.pdf', href), 'report.pdf');
+      assert.equal(
+        labelForLink('the ok.example guide', href),
+        'the ok.example guide',
+      );
+      assert.equal(
+        labelForLink('see end.then', href),
+        'see end.then (ok.example)',
+      );
+      assert.equal(labelForLink('a\u200b b', href), 'a b');
+      assert.equal(labelForLink('', href), 'ok.example');
+      assert.equal(
+        normalizeProse('[pay\u200bpal.com](https://ok.example/p)', 1_200, [
+          href,
+        ]),
+        '[ok.example](https://ok.example/p)',
+      );
+      assert.equal(
+        normalizeProse('[\u0440aypal.com](https://ok.example/p)', 1_200, [
+          href,
+        ]),
+        '[ok.example](https://ok.example/p)',
+      );
+      assert.equal(
+        normalizeProse('[Node.js](https://ok.example/p)', 1_200, [href]),
+        '[Node.js](https://ok.example/p)',
+      );
+    },
+  ],
+  [
+    'a label spoofing another address shows the host whatever its casing, spacing or hidden characters; names and file names stay as decided',
+    () => {
+      const href = 'https://ok.example/p';
+      const hidden = [
+        ['pay⁢pal.com', 'invisible times'],
+        ['pay⁤pal.com', 'invisible plus'],
+        ['pay⁪pal.com', 'inhibit symmetric swapping'],
+        ['pay⁯pal.com', 'nominal digit shapes'],
+        ['payㅤpal.com', 'hangul filler'],
+        ['payᅟpal.com', 'hangul choseong filler'],
+        ['payᅠpal.com', 'hangul jungseong filler'],
+        ['payﾠpal.com', 'halfwidth hangul filler'],
+        ['pay⠀pal.com', 'braille blank'],
+        ['pay️pal.com', 'variation selector'],
+        ['pay\u{E0041}pal.com', 'tag character'],
+        ['paypal.comㅤ', 'filler after the name'],
+      ];
+      hidden.forEach(([label, what]) =>
+        assert.equal(labelForLink(label, href), 'ok.example', what),
+      );
+      assert.equal(labelForLink('PayPal.Com', href), 'ok.example');
+      assert.equal(labelForLink('PAYPAL.COM', href), 'ok.example');
+      assert.equal(
+        labelForLink('paypal . com', href),
+        'ok.example',
+        'spaces around the dot',
+      );
+      assert.equal(labelForLink('paypal .com', href), 'ok.example');
+      assert.equal(
+        labelForLink('Done. Then go', href),
+        'Done. Then go',
+        'a sentence end is not a web address',
+      );
+      assert.equal(
+        labelForLink('ASP.NET', href),
+        'ok.example',
+        'NET is a real ending in capitals, so an ASP.NET label shows the host',
+      );
+      assert.equal(
+        labelForLink('Node.js', href),
+        'Node.js',
+        'a file-style ending in one case is a name',
+      );
+      assert.equal(labelForLink('report.pdf', href), 'report.pdf');
+      assert.equal(
+        labelForLink('Report.Pdf', href),
+        'Report.Pdf (ok.example)',
+        'mixed case is never a file name, so the host sits beside it',
+      );
+      assert.equal(
+        labelForLink('Dr.Smith', href),
+        'Dr.Smith (ok.example)',
+        'mixed case after a dot is doubtful, so the host sits beside it',
+      );
+    },
+  ],
+  [
+    'a very long reply or label is handled in one pass, never recursing per link and never slowing per word',
+    () => {
+      const href = 'https://ok.example/p';
+      const timed = <T>(run: () => T) => {
+        const start = performance.now();
+        const value = run();
+        return { ms: performance.now() - start, value };
+      };
+      const links = '[a](b)'.repeat(5_000);
+      const many = timed(() => normalizeProse(links, Infinity));
+      assert.ok(many.ms < 200);
+      assert.equal(many.value, 'a'.repeat(5_000));
+      assert.ok(
+        timed(() => normalizeProse(']('.repeat(8_000), Infinity)).ms < 200,
+      );
+      assert.ok(
+        timed(() => normalizeProse('<a'.repeat(8_000), Infinity)).ms < 200,
+      );
+      assert.ok(
+        timed(() => normalizeProse('!['.repeat(8_000), Infinity)).ms < 200,
+      );
+      assert.ok(timed(() => normalizeProse('['.repeat(8_000), 1_200)).ms < 200);
+      assert.ok(timed(() => labelForLink('a.'.repeat(50_000), href)).ms < 50);
+      assert.ok(timed(() => labelForLink('x'.repeat(100_000), href)).ms < 50);
+      const cutLabel = labelForLink('word '.repeat(100), href);
+      assert.ok(
+        cutLabel.length <= 301 && cutLabel.endsWith('…'),
+        'a label is cut at 300 characters with an ellipsis',
+      );
+      assert.equal(
+        normalizeProse(links.repeat(10), 1_200, [])!.length,
+        800,
+        'a reply far past its cap is read only as far as four times the cap',
+      );
+    },
+  ],
+  [
+    'a bracket escaped before its address leaves no stray backslash, and a blank quote line keeps two paragraphs in one quote',
+    () => {
+      assert.equal(
+        normalizeProse('See [x\\](https://ok.example/p).', 1_200, [
+          'https://ok.example/p',
+        ]),
+        'See [x](https://ok.example/p).',
+      );
+      assert.equal(
+        normalizeProse('See [x\\](https://evil.example).', 1_200),
+        'See x.',
+      );
+      assert.equal(
+        normalizeProse('> a\n>\n> b', 1_200),
+        '> a\n>\n> b',
+        'one quote, two paragraphs',
+      );
+      assert.equal(
+        normalizeProse('> a\n> b\n>\n>\n> c', 1_200),
+        '> a b\n>\n> c',
+        'lines of a paragraph join, repeated blank quote lines are one break',
+      );
+      assert.equal(
+        normalizeProse('> a\n\n> b', 1_200),
+        '> a\n\nb',
+        'a blank line outside the quote ends it, a later quote is a plain paragraph',
+      );
+      assert.equal(
+        normalizeProse(normalizeProse('> a\n>\n> b', 1_200)!, 1_200),
+        '> a\n>\n> b',
+      );
+      assert.equal(
+        stripProseMarks('> a\n>\n> b', { keepBreaks: true }),
+        '“a”\n\n“b”',
+      );
+      assert.equal(stripProseMarks('> a\n>\n> b'), 'a b');
+    },
+  ],
+  [
+    'an answer is not cut by its own normalising',
+    () => {
+      assert.equal(
+        readWrittenAnswer('Items:\n- a\n- bb cc', new Set()),
+        'Items:\n\n- a\n- bb cc',
+      );
+      assert.equal(
+        readWrittenAnswer('Use 2*3 and \\* stars\n\n\nlast word', new Set()),
+        'Use 2\\*3 and \\* stars\n\nlast word',
+      );
+    },
+  ],
+  [
+    'a list opens after a line ending in a colon, with or without closing emphasis, or when two items follow a line',
+    () => {
+      assert.equal(
+        normalizeProse('**Today:**\n- a\n- b', 1_200),
+        '**Today:**\n\n- a\n- b',
+      );
+      assert.equal(normalizeProse('_Today:_\n- a', 1_200), '_Today:_\n\n- a');
+      assert.equal(
+        normalizeProse('Here are the steps\n1. a\n2. b', 1_200),
+        'Here are the steps\n\n1. a\n2. b',
+      );
+      assert.equal(
+        normalizeProse('It was cold,\n3. then warm.', 1_200),
+        'It was cold, 3. then warm.',
+      );
+    },
+  ],
+  [
+    'italics after a digit and a space stay italics; a star between touching digits is a times sign',
+    () => {
+      assert.equal(
+        normalizeProse('In 2024 *3 things changed*', 1_200),
+        'In 2024 *3 things changed*',
+      );
+      assert.equal(normalizeProse('It is 2*3', 1_200), 'It is 2\\*3');
+      assert.equal(normalizeProse('5 * 3 = 15', 1_200), '5 \\* 3 = 15');
+    },
+  ],
+  [
+    'a blockquote is kept once, one level, links normalised, definitions dropped; later ones are plain; speech has no marker',
+    () => {
+      assert.equal(
+        normalizeProse(
+          'She wrote:\n\n> Pick me up at **six**.\n> Bring the [map](https://ok.example/m).',
+          1_200,
+          ['https://ok.example/m'],
+        ),
+        'She wrote:\n\n> Pick me up at **six**. Bring the [map](https://ok.example/m).',
+      );
+      assert.equal(normalizeProse('> > deep\n> - item', 1_200), '> deep item');
+      assert.equal(
+        normalizeProse('> one\n\n> two\n\n> three', 1_200),
+        '> one\n\ntwo\n\nthree',
+      );
+      assert.equal(
+        normalizeProse('> [1]: https://evil.example\n> kept', 1_200),
+        '> kept',
+      );
+      const again = normalizeProse('> one\n\ntwo', 1_200)!;
+      assert.equal(normalizeProse(again, 1_200), again);
+      assert.equal(
+        stripProseMarks('Hi.\n\n> “Six” sharp.\n\nBye.'),
+        'Hi. “Six” sharp. Bye.',
+      );
+      assert.equal(
+        stripProseMarks('Hi.\n\n> Six sharp.', { keepBreaks: true }),
+        'Hi.\n\n“Six sharp.”',
+      );
+      assert.ok(!stripProseMarks('> a\n> b').includes('>'));
+      assert.equal(
+        normalizeProse("He said “yes” and 'no'.", 1_200),
+        "He said “yes” and 'no'.",
+      );
+    },
+  ],
+  [
+    'a rendered link is a link only for an http(s) address, and only an allowed one when a set is given',
+    () => {
+      const html = (text: string, allowed?: ReadonlySet<string> | null) =>
+        renderToStaticMarkup(
+          createElement(MarkdownText, { text, allowedLinks: allowed }),
+        );
+      const ok = new Set(['https://ok.example/a']);
+      assert.ok(
+        html('[x](https://ok.example/a)', ok).includes(
+          'href="https://ok.example/a"',
+        ),
+      );
+      assert.ok(!html('[x](https://evil.example/a)', ok).includes('<a '));
+      assert.ok(!html('[x](https://ok.example/a)', new Set()).includes('<a '));
+      assert.ok(
+        html('[x](https://anywhere.example/a)').includes('<a '),
+        'a note has no set',
+      );
+      assert.ok(!html('[x](javascript:alert(1))').includes('<a '));
+      assert.ok(!html('[x](mailto:a@b.example)').includes('<a '));
+      assert.ok(!html('[x](/relative)').includes('<a '));
+      assert.ok(!html('[x](data:text/html;base64,AAAA)').includes('<a '));
+      assert.ok(!html('[x](http://ok.example/a)', ok).includes('<a '));
+      assert.ok(
+        html('[paypal.com](https://ok.example/a)', ok).includes('>ok.example'),
+      );
+      assert.ok(
+        !html('[\u0440aypal.com](https://ok.example/a)', ok).includes('aypal'),
+      );
+      assert.ok(html('x\n\n> quoted words').includes('<blockquote'));
+      const gate = createLinkGate(new Set(['https://a.example/50%']));
+      assert.equal(gate('https://a.example/50%25'), 'https://a.example/50%');
+      assert.equal(
+        createLinkGate(null)('HTTPS://A.example'),
+        'https://a.example/',
+      );
+    },
+  ],
+  [
+    "the links an answer may carry are its quotes' deep links and addresses written in the records it cites, never a quote's words",
+    () => {
+      const quote = (deepLink: string | null, text: string) => ({
+        id: 'q',
+        connectorId: 'google:gmail',
+        accountId: 'a',
+        sourceLabel: 's',
+        at: null,
+        text,
+        record: null,
+        deepLink,
+        deletedAt: null,
+      });
+      const record = (id: string, title: string, detail: string | null) =>
+        ({
+          id,
+          sealed: {
+            title,
+            subtitle: null,
+            detail,
+            placeLabel: null,
+            extra: { site: 'https://x.example/e' },
+          },
+        }) as never;
+      const links = readAnswerLinks(
+        {
+          quotes: [
+            quote('https://mail.example/m1', 'see https://evil.example/q'),
+          ],
+          sources: [
+            {
+              kind: 'synced',
+              id: 's1',
+              connectorId: 'c',
+              title: null,
+              startAt: null,
+            },
+          ],
+        },
+        [
+          record('s1', 'Menu https://a.example/menu.', 'https://b.example/d'),
+          record('s2', 'Other https://c.example/uncited', null),
+        ],
+      );
+      assert.deepEqual([...links].sort(), [
+        'https://a.example/menu',
+        'https://b.example/d',
+        'https://mail.example/m1',
+        'https://x.example/e',
+      ]);
+    },
+  ],
+  [
+    'the prompt says how italics, quotation marks and a blockquote are used',
+    () => {
+      const prompt = SYSTEM_PROMPT;
+      assert.ok(
+        prompt.includes('title of a book, film, show, song or publication'),
+      );
+      assert.ok(prompt.includes('never a whole sentence or decoration'));
+      assert.ok(prompt.includes('never a paraphrase or scare quotes'));
+      assert.ok(prompt.includes('at most one per answer'));
+      assert.ok(prompt.includes('No headings, tables, images, code or HTML'));
+      assert.ok(prompt.includes('never a `>`'));
+    },
+  ],
+  [
+    'the spoken line is one plain line: no marks, no newlines, list items as sentences, no addresses',
+    () => {
+      const built = buildAnswer(
+        answer({
+          fromRecordsText:
+            'You have **two** things.\n\n- Call [the florist](https://docs.example/c)\n- Book the van\n\nSee https://docs.example/c for more.',
+          generalText: null,
+        }),
+      );
+      assert.equal(
+        built.spoken,
+        'You have two things. Call the florist. Book the van. See for more.',
+      );
+      assert.ok(!/[\n*_[\]]/.test(built.spoken));
+      assert.ok(
+        built.answer.fromRecords?.includes('\n\n'),
+        'the stored text keeps its paragraphs',
+      );
+      const general = buildAnswer(
+        answer({
+          scope: 'both',
+          generalText: 'Cake keeps **a few days**.\n\nKeep it cool.',
+          generalSpoken: null,
+        }),
+      );
+      assert.ok(
+        general.spoken.includes('Cake keeps a few days. Keep it cool.'),
+      );
+      assert.ok(!general.spoken.includes('\n'));
+      assert.equal(
+        stripProseMarks('**Bold** and *soft*\n\n1. One\n2. Two', {
+          keepBreaks: true,
+        }),
+        'Bold and soft\n\n1. One\n2. Two',
       );
     },
   ],

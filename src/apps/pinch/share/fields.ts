@@ -8,6 +8,7 @@ import type {
   PinchReminderSettings,
   PinchVoiceSettings,
   PinchSettings,
+  PinchUnitSettings,
   MealItem,
   Meal,
   PlannedSnapshot,
@@ -95,6 +96,12 @@ const PINCH_VOICE_SETTINGS_FIELDS = {
   isWaiting: 'notUseful',
 } satisfies Record<keyof PinchVoiceSettings, ShareDecision>;
 
+const PINCH_UNIT_SETTINGS_FIELDS = {
+  weight: 'notUseful',
+  volume: 'notUseful',
+  keepSpoons: 'notUseful',
+} satisfies Record<keyof PinchUnitSettings, ShareDecision>;
+
 const PINCH_SETTINGS_FIELDS = {
   fridgeDays: 'notUseful',
   freezerDays: 'notUseful',
@@ -102,6 +109,7 @@ const PINCH_SETTINGS_FIELDS = {
   calendarStats: 'notUseful',
   defaultTab: 'notUseful',
   voice: 'notUseful',
+  units: 'notUseful',
   reminders: 'shared',
   updatedAt: 'notUseful',
   lastDigestDay: 'notUseful',
@@ -292,10 +300,12 @@ const RECIPE_NOTE_FIELDS = {
 const RECIPE_INGREDIENT_FIELDS = {
   id: 'never',
   ingredientId: 'shared',
+  freeText: 'shared',
   amount: 'shared',
   unit: 'shared',
   note: 'never',
   group: 'never',
+  adaptedFrom: 'never',
 } satisfies Record<keyof RecipeIngredient, ShareDecision>;
 
 const RECIPE_CARE_FIELDS = {
@@ -366,6 +376,7 @@ export const SHARE_FIELDS = {
   PinchReminderSettings: PINCH_REMINDER_SETTINGS_FIELDS,
   PinchVoiceSettings: PINCH_VOICE_SETTINGS_FIELDS,
   PinchSettings: PINCH_SETTINGS_FIELDS,
+  PinchUnitSettings: PINCH_UNIT_SETTINGS_FIELDS,
   MealItem: MEAL_ITEM_FIELDS,
   Meal: MEAL_FIELDS,
   PlannedSnapshot: PLANNED_SNAPSHOT_FIELDS,
