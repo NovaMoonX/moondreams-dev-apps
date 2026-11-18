@@ -36,7 +36,7 @@ import {
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
 import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
 import { getShopSection, isUsuallyAtHome } from '@apps/pinch/utils/shopping';
 
@@ -287,7 +287,7 @@ export const sumAmounts = (
   });
 
 export const formatTotal = (total: Pick<AmountTotal, 'amount' | 'unit'>) =>
-  formatSize(total.amount, total.unit);
+  formatReadableSize(total.amount, total.unit);
 
 /** An amount said the way a cook says it ("2½ cups", "about ½ lb"); a bare count keeps its "each" so it still reads as an amount, and "about" is said once. */
 export const formatKitchenTotal = (
@@ -487,7 +487,7 @@ export const getPackageBulkNames = (
     .map((pkg) => ({
       title: getName(pkg),
       details: [
-        formatSize(pkg.amount, pkg.unit),
+        formatReadableSize(pkg.amount, pkg.unit),
         pkg.expiresAt === null
           ? 'No date'
           : `Use by ${formatDayShort(getPlannedDayKey(pkg.expiresAt), now)}`,
@@ -531,7 +531,7 @@ export const planUse = (
   if (!isValidPackageAmount(used)) return { error: 'Say how much you used.' };
   if (used > pkg.amount + EPSILON) {
     return {
-      error: `Only ${formatSize(pkg.amount, pkg.unit)} is left, so nothing was changed.`,
+      error: `Only ${formatReadableSize(pkg.amount, pkg.unit)} is left, so nothing was changed.`,
     };
   }
 
@@ -645,7 +645,7 @@ export const planPackageEdit = (
 
   const notes = [
     isAmountChanged &&
-      `Amount ${formatSize(pkg.amount, pkg.unit)} → ${formatSize(amount, unit)}`,
+      `Amount ${formatReadableSize(pkg.amount, pkg.unit)} → ${formatReadableSize(amount, unit)}`,
     isDateChanged &&
       `Use by ${getDayText(pkg.expiresAt, now)} → ${getDayText(expiresAt, now)}`,
   ].filter((part) => part !== false);
@@ -1251,7 +1251,8 @@ export const getLineMarkers = (
 };
 
 export const getPackageEventText = (event: PackageEvent, unit: Unit) => {
-  const amount = event.amount === null ? '' : formatSize(event.amount, unit);
+  const amount =
+    event.amount === null ? '' : formatReadableSize(event.amount, unit);
   const where = event.place === null ? '' : getPlaceText(event.place);
   switch (event.kind) {
     case 'ADDED':

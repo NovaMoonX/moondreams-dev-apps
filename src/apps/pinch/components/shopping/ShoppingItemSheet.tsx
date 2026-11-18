@@ -35,6 +35,7 @@ import {
   roundAmount,
   sumShopAmounts,
 } from '@apps/pinch/utils/shopping';
+import { formatSize } from '@apps/pinch/utils/productFormat';
 
 const SHARES_SHOWN = 5;
 const SHARES_FOLD_MIN_HIDDEN = 4;
@@ -114,7 +115,13 @@ function ShoppingItemSheet({
       if (amounts.length > 1) {
         return `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`;
       }
-      return isChanged ? null : 'Change the amount or unit to save.';
+      const readable = formatShopAmount({ amount, unit }, units);
+      const isStepped =
+        readable !== null && readable !== formatSize(amount, unit);
+      if (isChanged) return isStepped ? `That's ${readable}.` : null;
+      return isStepped
+        ? `That's ${readable} on your list. Change the amount or unit to save.`
+        : 'Change the amount or unit to save.';
     }
     const there =
       inNewUnit.amount === null

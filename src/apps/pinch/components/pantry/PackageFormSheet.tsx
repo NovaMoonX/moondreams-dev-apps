@@ -45,7 +45,10 @@ import {
   round2,
 } from '@apps/pinch/utils/packages';
 import { getPantryPickIds } from '@apps/pinch/utils/pickerSuggestions';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import {
+  formatReadableSize,
+  formatSize,
+} from '@apps/pinch/utils/productFormat';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
 const { custom } = FormFactories;
@@ -235,7 +238,7 @@ function PackageFormSheet({
       setJustAdded({
         id: created.id,
         text: [
-          `${name} ${formatSize(created.amount, created.unit)}`,
+          `${name} ${formatReadableSize(created.amount, created.unit)}`,
           lowerFirst(getPackageLabel(created.expiresAt) ?? 'no date'),
         ].join(', '),
       });
