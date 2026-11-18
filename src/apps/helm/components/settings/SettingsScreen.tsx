@@ -18,6 +18,7 @@ import {
   Sun,
   Sunrise,
   UserRound,
+  VolumeX,
 } from 'lucide-react';
 
 import { signOut } from 'firebase/auth';
@@ -39,6 +40,7 @@ import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantName
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
 import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
+import KeptQuietScreen from '@apps/helm/components/privacy/KeptQuietScreen';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import PhoneLocationSheet from '@apps/helm/components/settings/PhoneLocationSheet';
 import HabitRemindersList from '@apps/helm/components/settings/HabitRemindersList';
@@ -124,6 +126,7 @@ function SettingsScreen({
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isPersonalityOpen, setIsPersonalityOpen] = useState(false);
   const [isSeesOpen, setIsSeesOpen] = useState(false);
+  const [isQuietOpen, setIsQuietOpen] = useState(false);
   const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
   const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
@@ -344,6 +347,13 @@ function SettingsScreen({
             hasChevron
           />
           <SettingsRow
+            icon={<VolumeX className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.quietTitle}
+            description={HELM_COPY.quietRowHint}
+            onClick={() => setIsQuietOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
             icon={<Eye className='size-5' aria-hidden='true' />}
             title={HELM_COPY.whatTheAiSees}
             description={HELM_COPY.whatTheAiSeesRowHint}
@@ -387,6 +397,7 @@ function SettingsScreen({
         }}
       />
       <WhatTheAiSees isOpen={isSeesOpen} onClose={() => setIsSeesOpen(false)} />
+      {isQuietOpen && <KeptQuietScreen onClose={() => setIsQuietOpen(false)} />}
     </>
   );
 }

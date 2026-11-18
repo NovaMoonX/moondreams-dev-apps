@@ -159,6 +159,7 @@ const toExecution = async (
       effects: [],
       undoReport: input.report,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: null,

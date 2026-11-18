@@ -6,6 +6,8 @@ import type {
 
 import type { SealedPayload } from '../../appKeys/seal.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
+import { isQuietOn } from './privacy.js';
+import { readQuietFacts } from './nomos/quietTurn.js';
 import { MAX_CONTEXT_MILESTONES } from './nomos/commands.js';
 import { readShownWhy, type GoalWhy } from './goalWhy.js';
 import type { AheadOfferMeta } from './nomos/researchAhead.js';
@@ -19,6 +21,7 @@ const MAX_PROJECTS_READ = 200;
 
 /** A project as the model sees it: its name and the milestones still open, dates as YYYY-MM-DD. */
 export interface ContextProject {
+  id: string;
   name: string;
   milestones: { title: string; date: string | null }[];
   isPrivate?: boolean;
@@ -31,6 +34,8 @@ export interface ContextProject {
   date: string | null;
   /** What research is already offered for it, so the same subject is not offered twice. */
   researchOffered: string[];
+  /** Kept quiet today by its own mark. */
+  isQuiet?: boolean;
 }
 
 const isRole = (value: unknown): value is ProjectRoleName =>
@@ -186,49 +191,72 @@ export async function readActiveProjectsIn(
   );
 }
 
-/** The active projects, newest first, each with its open milestones (soonest first, undated last), for the model to point a task or a milestone at. */
-export async function readContextProjects(
+/** The active projects as one read serves a whole turn: those that opened, the ids of those that did not, and whether the read stopped at its limit. */
+export interface ActiveProjectsRead {
+  projects: (ExistingProject & { isPaused: boolean })[];
+  unreadableIds: Set<string>;
+  isCapped: boolean;
+}
+
+export async function readActiveProjects(
   firestore: Firestore,
   base: string,
   key: HelmKey,
-  max: number,
-): Promise<ContextProject[]> {
-  const docs = (
-    await firestore
-      .collection(`${base}/projects`)
-      .where('status', 'in', ['active', 'paused'])
-      .limit(MAX_PROJECTS_READ)
-      .get()
-  ).docs;
-  return openProjects(key, docs)
-    .slice(0, max)
-    .map((project) => ({
-      name: project.name,
-      isPrivate: project.isPrivate === true,
-      kind: project.kind,
-      ...(project.isPaused && { status: 'set aside' as const }),
-      date:
-        project.targetDate === null
-          ? null
-          : new Date(project.targetDate).toISOString().slice(0, 10),
-      researchOffered: toAheadSubjects(project.sealed.aheadAsks),
-      ...(project.kind === 'goal' && {
-        why: readShownWhy(toGoalWhy(project.sealed.why))?.text,
-      }),
-      milestones: Object.entries(project.milestoneState)
-        .flatMap(([id, state]) =>
-          state.doneAt === null && project.milestoneTitles[id]
-            ? [{ title: project.milestoneTitles[id], date: state.date }]
-            : [],
-        )
-        .sort(
-          (left, right) => (left.date ?? Infinity) - (right.date ?? Infinity),
-        )
-        .slice(0, MAX_CONTEXT_MILESTONES)
-        .map(({ title, date }) => ({
-          title,
-          date:
-            date === null ? null : new Date(date).toISOString().slice(0, 10),
-        })),
-    }));
+): Promise<ActiveProjectsRead> {
+  const docs = (await activeQuery(firestore, base).get()).docs;
+  const projects = openProjects(key, docs);
+  const opened = new Set(projects.map((project) => project.id));
+  return {
+    projects,
+    unreadableIds: new Set(
+      docs.filter((doc) => !opened.has(doc.id)).map((doc) => doc.id),
+    ),
+    isCapped: docs.length >= MAX_PROJECTS_READ,
+  };
 }
+
+/** Every quiet active project with its name, the projects that could not be opened (their children are treated as quiet), and `isComplete`, false only when the read hit its limit so a quiet one may be missing. */
+export const readQuietProjects = (read: ActiveProjectsRead, today: string) => ({
+  projects: read.projects.flatMap((project) =>
+    isQuietOn(readQuietFacts(project.sealed), today)
+      ? [{ id: project.id, name: project.name }]
+      : [],
+  ),
+  unreadableIds: read.unreadableIds,
+  isComplete: !read.isCapped,
+});
+
+/** The active projects, newest first, each with its open milestones (soonest first, undated last), for the model to point a task or a milestone at. */
+export const toContextProjects = (
+  read: ActiveProjectsRead,
+  max: number,
+  today: string,
+): ContextProject[] =>
+  read.projects.slice(0, max).map((project) => ({
+    id: project.id,
+    name: project.name,
+    isPrivate: project.isPrivate === true,
+    isQuiet: isQuietOn(readQuietFacts(project.sealed), today),
+    kind: project.kind,
+    ...(project.isPaused && { status: 'set aside' as const }),
+    date:
+      project.targetDate === null
+        ? null
+        : new Date(project.targetDate).toISOString().slice(0, 10),
+    researchOffered: toAheadSubjects(project.sealed.aheadAsks),
+    ...(project.kind === 'goal' && {
+      why: readShownWhy(toGoalWhy(project.sealed.why))?.text,
+    }),
+    milestones: Object.entries(project.milestoneState)
+      .flatMap(([id, state]) =>
+        state.doneAt === null && project.milestoneTitles[id]
+          ? [{ title: project.milestoneTitles[id], date: state.date }]
+          : [],
+      )
+      .sort((left, right) => (left.date ?? Infinity) - (right.date ?? Infinity))
+      .slice(0, MAX_CONTEXT_MILESTONES)
+      .map(({ title, date }) => ({
+        title,
+        date: date === null ? null : new Date(date).toISOString().slice(0, 10),
+      })),
+  }));
