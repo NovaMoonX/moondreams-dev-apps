@@ -6713,7 +6713,7 @@ assert.deepEqual(
     '6 tbsp',
     '½ cup',
     '1½ tbsp',
-    '2100 g',
+    '2.1 kg',
     '0.37 lb',
     '12 lb',
     '1.5 l',
