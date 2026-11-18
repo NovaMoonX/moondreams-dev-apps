@@ -7,12 +7,12 @@ import {
   getDoc,
   getDocFromCache,
   getDocs,
-  runTransaction,
   setDoc,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { generateUuid } from '@/utils';
 import {
@@ -132,14 +132,17 @@ export async function createTopic(
   if (!navigator.onLine) return { kind: 'offline' };
   const parentRef = doc(topicsOf(uid), input.parentId);
   try {
-    return await runTransaction(db, async (transaction): Promise<TopicMade> => {
-      const parent = await transaction.get(parentRef);
-      const depth = parent.exists() ? (parent.data() as Topic).depth : null;
-      if (depth === null) return { kind: 'missing' };
-      if (depth >= 3) return { kind: 'tooDeep' };
-      transaction.set(ref, await make(toDepth(depth + 1)));
-      return { kind: 'made', id, written: Promise.resolve() };
-    });
+    return await runHeldTransaction(
+      uid,
+      async (transaction): Promise<TopicMade> => {
+        const parent = await transaction.get(parentRef);
+        const depth = parent.exists() ? (parent.data() as Topic).depth : null;
+        if (depth === null) return { kind: 'missing' };
+        if (depth >= 3) return { kind: 'tooDeep' };
+        transaction.set(ref, await make(toDepth(depth + 1)));
+        return { kind: 'made', id, written: Promise.resolve() };
+      },
+    );
   } catch (error) {
     if (isUnavailable(error)) return { kind: 'offline' };
     throw error;
@@ -159,8 +162,8 @@ export async function renameTopic(
   const words = toWords(edit);
   const ref = doc(topicsOf(uid), topicId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<TopicRename> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
@@ -209,47 +212,52 @@ export async function moveTopic(
   const placements = depthAfterMove(topicId, parentId, topics);
   const before = topics.find((topic) => topic.id === topicId)?.parentId ?? null;
   try {
-    return await runTransaction(db, async (transaction): Promise<TopicMove> => {
-      const snapshots = await Promise.all(
-        watched.map((topic) => transaction.get(doc(topicsOf(uid), topic.id))),
-      );
-      const isAsSeen = snapshots.every((snapshot, index) => {
-        const live = snapshot.data() as Topic | undefined;
-        return (
-          live !== undefined &&
-          live.parentId === watched[index].parentId &&
-          live.depth === watched[index].depth
+    return await runHeldTransaction(
+      uid,
+      async (transaction): Promise<TopicMove> => {
+        const snapshots = await Promise.all(
+          watched.map((topic) => transaction.get(doc(topicsOf(uid), topic.id))),
         );
-      });
-      if (!isAsSeen) return { kind: 'changed' };
-      const now = Date.now();
-      placements.forEach((placement) =>
-        transaction.update(doc(topicsOf(uid), placement.id), {
-          ...(placement.id === topicId ? { parentId } : {}),
-          depth: placement.depth,
-          lastEditedAt: now,
-        }),
-      );
-      return {
-        kind: 'moved',
-        undo: () =>
-          moveTopic(
-            uid,
-            topicId,
-            before,
-            topics.map((topic) => {
-              const placed = placements.find((entry) => entry.id === topic.id);
-              return placed
-                ? {
-                    ...topic,
-                    parentId: placed.parentId,
-                    depth: toDepth(placed.depth),
-                  }
-                : topic;
-            }),
-          ),
-      };
-    });
+        const isAsSeen = snapshots.every((snapshot, index) => {
+          const live = snapshot.data() as Topic | undefined;
+          return (
+            live !== undefined &&
+            live.parentId === watched[index].parentId &&
+            live.depth === watched[index].depth
+          );
+        });
+        if (!isAsSeen) return { kind: 'changed' };
+        const now = Date.now();
+        placements.forEach((placement) =>
+          transaction.update(doc(topicsOf(uid), placement.id), {
+            ...(placement.id === topicId ? { parentId } : {}),
+            depth: placement.depth,
+            lastEditedAt: now,
+          }),
+        );
+        return {
+          kind: 'moved',
+          undo: () =>
+            moveTopic(
+              uid,
+              topicId,
+              before,
+              topics.map((topic) => {
+                const placed = placements.find(
+                  (entry) => entry.id === topic.id,
+                );
+                return placed
+                  ? {
+                      ...topic,
+                      parentId: placed.parentId,
+                      depth: toDepth(placed.depth),
+                    }
+                  : topic;
+              }),
+            ),
+        };
+      },
+    );
   } catch (error) {
     if (isUnavailable(error)) return { kind: 'offline' };
     throw error;
@@ -269,7 +277,7 @@ const refile = (uid: string, topicId: string, noteIds: string[]) =>
   toChunks(noteIds).reduce(
     (chain, chunk) =>
       chain.then(async (skipped) => {
-        const left = await runTransaction(db, async (transaction) => {
+        const left = await runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(doc(notesOf(uid), id))),
           );
@@ -342,7 +350,7 @@ export async function deleteTopic(
       (chain, chunk) =>
         chain.then(async () => {
           cut.push(...chunk);
-          await runTransaction(db, async (transaction) => {
+          await runHeldTransaction(uid, async (transaction) => {
             const snapshots = await Promise.all(
               chunk.map((id) => transaction.get(doc(notesOf(uid), id))),
             );
@@ -361,7 +369,7 @@ export async function deleteTopic(
         }),
       Promise.resolve(),
     );
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(uid, async (transaction) => {
       const snapshots = await Promise.all(
         [topicId, ...lifted.map((entry) => entry.id)].map((id) =>
           transaction.get(doc(topicsOf(uid), id)),
@@ -395,7 +403,7 @@ export async function deleteTopic(
     console.error('Helm topic history was not deleted', error),
   );
   const restoreChildren = (placements: TopicPlacement[], shift: number) =>
-    runTransaction(db, async (transaction) => {
+    runHeldTransaction(uid, async (transaction) => {
       const snapshots = await Promise.all(
         placements.map((entry) =>
           transaction.get(doc(topicsOf(uid), entry.id)),
@@ -423,7 +431,7 @@ export async function deleteTopic(
   return {
     noteCount: cut.length,
     restore: async (): Promise<TopicRestore> => {
-      const back = await runTransaction(db, async (transaction) => {
+      const back = await runHeldTransaction(uid, async (transaction) => {
         if ((await transaction.get(ref)).exists()) return null;
         const parentId = (raw.parentId as string | null) ?? null;
         const parent =
@@ -539,8 +547,8 @@ async function writeVersion(
   if (!navigator.onLine) return 'offline';
   const ref = doc(topicsOf(uid), topicId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<DocumentChange> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
