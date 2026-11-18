@@ -2391,7 +2391,7 @@ function CookingSession({
         );
       }
       updateRecipe(target.id, { servings: next });
-      const was = `${next > current ? 'up' : 'down'} from ${current}`;
+      const was = `${next > current ? 'up' : 'down'} from ${Math.round(current * 100) / 100}`;
       return done(
         `${lead}Now ${formatServings(next)}, ${was}`,
         `${lead}Okay, ${formatServings(next)}, ${was}. The amounts are updated.`,

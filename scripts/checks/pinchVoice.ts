@@ -2160,7 +2160,13 @@ expectKind(
   'tens and ones',
 );
 expectKind(
-  ['one serving', 'make one serving', 'make a serving'],
+  [
+    'one serving',
+    'make one serving',
+    'make a serving',
+    'i need one serving',
+    'give me a serving',
+  ],
   servingsTo(1),
   'one serving is a number, not one more',
 );

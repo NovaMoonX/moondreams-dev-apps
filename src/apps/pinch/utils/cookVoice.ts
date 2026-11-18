@@ -1385,7 +1385,7 @@ const SET_SERVINGS_PATTERNS: CountPattern[] = [
 const ADD_SERVINGS_PATTERNS: (CountPattern & { sign: 1 | -1 })[] = [
   {
     pattern: new RegExp(
-      String.raw`^(?:(?:add|give me|i need|we need) ${ONE_SERVING}|(?:(?:add|give me|make|i need|we need) )?${EXTRA_SERVING}|${ONE_SERVING} more) ${STRICT_NOUN}(?: more)?$`,
+      String.raw`^(?:add ${ONE_SERVING}|(?:(?:add|give me|make|i need|we need) )?${EXTRA_SERVING}|${ONE_SERVING} more) ${STRICT_NOUN}(?: more)?$`,
     ),
     soundAlikes: 'all',
     sign: 1,
@@ -1477,7 +1477,7 @@ const TIMES_PATTERNS = [
   /^(?:make )?(?<factor>double|triple|quadruple|halve|half) (?:the recipe|recipe|the servings|servings|the batch|the amounts)$/,
   /^(?:make )?(?:a )?(?<factor>double|triple|quadruple|half) (?:batch|recipe|the recipe)$/,
   /^make (?:it|this) (?<factor>double|triple|half)$/,
-  /^make half (?:a batch|the recipe|as much)$/,
+  /^make (?<factor>half) (?:a batch|as much)$/,
 ];
 const TWICE_PATTERN =
   /^make (?:it |this )?(?:twice as (?:much|big)|double the amount)$/;

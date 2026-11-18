@@ -625,7 +625,7 @@ export const getSpokenServings = (
   }
   const reached = current + change.delta;
   const isPastEnd =
-    reached > MAX_COOKED_SERVINGS ||
+    reached >= MAX_COOKED_SERVINGS + 1 ||
     (reached < MIN_COOK_SERVINGS && Math.abs(change.delta) > 1);
   if (isPastEnd) return reached;
   const direction = change.delta > 0 ? 1 : -1;

@@ -11,16 +11,12 @@ interface CookResultCardProps {
 function CookResultCard({ uid, cookId, caption }: CookResultCardProps) {
   return (
     <section
-      aria-label={
-        caption ? `${caption}: How did it turn out?` : 'How did it turn out?'
-      }
+      aria-label={caption ? `${caption}: How did it turn out?` : 'How did it turn out?'}
       className='bg-muted/50 border-border w-full space-y-3 rounded-2xl border px-4 py-4'
     >
       <div className='text-center'>
         {caption && (
-          <p className='text-muted-foreground text-xs wrap-break-word'>
-            {caption}
-          </p>
+          <p className='text-muted-foreground text-xs wrap-break-word'>{caption}</p>
         )}
         <p className='font-medium'>How did it turn out?</p>
       </div>
