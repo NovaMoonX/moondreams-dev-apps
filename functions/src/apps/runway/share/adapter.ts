@@ -306,7 +306,19 @@ const readBillDetail = (bill: Summary['bills'][number]) =>
     .filter((part) => part !== null)
     .join(', ') || null;
 
-const toRecords = (category: string, summary: Summary): SharedRecord[] => {
+/** Past this age a summary no longer says whether a bill already past due was paid since. */
+const STALE_SUMMARY_DAYS = 7;
+
+const toRecords = (
+  category: string,
+  summary: Summary,
+  now: number,
+): SharedRecord[] => {
+  const isStale = now - summary.computedAt > STALE_SUMMARY_DAYS * DAY_MS;
+  const computedDay = Math.floor(summary.computedAt / DAY_MS) * DAY_MS;
+  const bills = summary.bills.filter(
+    (bill) => !(isStale && bill.paidAt === null && bill.dueAt < computedDay),
+  );
   const billKeys = summary.bills.map(
     (bill) => `${bill.name}\n${formatDay(bill.dueAt)}`,
   );
@@ -331,9 +343,9 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
         }),
       ];
     case 'upcomingBills':
-      return summary.bills.map((bill, index) =>
+      return bills.map((bill) =>
         toRecord({
-          sourceRef: toRef('bills', billKeys, index),
+          sourceRef: toRef('bills', billKeys, summary.bills.indexOf(bill)),
           kind: 'task',
           title: bill.name,
           detail: readBillDetail(bill),
@@ -594,7 +606,7 @@ export function createRunwayAdapter(
       return {
         records:
           stored.kind === 'summary'
-            ? toRecords(req.category, stored.summary)
+            ? toRecords(req.category, stored.summary, deps.now())
             : [],
         isFull: stored.kind !== 'unknown',
         deletedRefs: [],

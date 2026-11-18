@@ -29,6 +29,16 @@ assert.equal(
 );
 assert.equal(needsYouOnDay(bill(5), today), false, 'a bill due later does not');
 assert.equal(
+  needsYouOnDay(bill(-59), today),
+  true,
+  'a task 59 days overdue still asks',
+);
+assert.equal(
+  needsYouOnDay(bill(-61), today),
+  false,
+  'a task 61 days overdue no longer asks',
+);
+assert.equal(
   needsYouOnDay(bill(0, { isAutomatic: true }), today),
   false,
   'an autopay bill never asks',

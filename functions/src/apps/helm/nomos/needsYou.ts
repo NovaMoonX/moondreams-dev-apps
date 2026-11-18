@@ -27,6 +27,12 @@ export const isOpenTask = (task: Pick<NeedsYouTask, 'kind' | 'extra'>) =>
   task.extra.isDone !== true &&
   task.extra.isAutomatic !== true;
 
-/** Whether an open task asks for the person on `day` (UTC midnight): due that day or overdue. A task with no due day is a list the person keeps. A due day ahead never asks yet. */
+/** How far back an overdue task still asks for the person. */
+export const OVERDUE_LOOKBACK_DAYS = 60;
+
+/** Whether an open task asks for the person on `day` (UTC midnight): due that day or overdue up to `OVERDUE_LOOKBACK_DAYS` back. A task with no due day is a list the person keeps. A due day ahead never asks yet. */
 export const needsYouOnDay = (task: NeedsYouTask, day: number) =>
-  isOpenTask(task) && (task.dueAt === null || task.dueAt <= day);
+  isOpenTask(task) &&
+  (task.dueAt === null ||
+    (task.dueAt <= day &&
+      task.dueAt >= day - OVERDUE_LOOKBACK_DAYS * 86_400_000));

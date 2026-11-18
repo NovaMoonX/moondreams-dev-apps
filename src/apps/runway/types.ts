@@ -113,7 +113,7 @@ export interface ShareSummary {
   nextIncomeOn: string | null;
   /** Every bill due before that day at the Want dial, overdue ones included. */
   dueBeforeIncomeCents: Cents;
-  /** Unpaid ones overdue or due within 30 days (else the next one within a year), and those paid this month. A summary an older phone wrote lacks the last four and `paysItself`, which is true when Runway pays that payment itself. */
+  /** Unpaid ones overdue or due within 30 days (else the next one within a year), and those paid this month. A summary an older phone wrote lacks the last four and `paysItself` (true when Runway pays that payment itself; null or missing reads as false). */
   bills: {
     name: string;
     amountCents: Cents;
@@ -122,7 +122,7 @@ export interface ShareSummary {
     endsOn: string | null;
     endsAfter: number | null;
     paidOn: string | null;
-    paysItself?: boolean;
+    paysItself: boolean | null;
   }[];
   horizon: {
     name: string;

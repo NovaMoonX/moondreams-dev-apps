@@ -3286,6 +3286,20 @@ assert.deepEqual(
   [],
   'a trip that has ended sends none of its to-dos, not even an undated one',
 );
+const withinSlack = await createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 10, 4, 12),
+}).syncPage(waypointCtx(OWNER), {
+  category: 'myTasks',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.ok(
+  withinSlack.records.length > 0,
+  'the day after a trip ends its to-dos still show, whatever the zone',
+);
 const tasks = await runWaypoint(OWNER, 'myTasks');
 assert.deepEqual(refs(tasks).sort(), [
   'trips/nyc/checklist/passports',
@@ -4005,6 +4019,24 @@ await Promise.all([
     sealRunway({ ...runwaySummary, freeToSpendCents: '123456' }),
   ),
   runwayPlanWith(
+    'runway-stale',
+    sealRunway({
+      ...runwaySummary,
+      computedAt: NOW - 10 * DAY,
+      bills: [
+        { name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' },
+        { name: 'Ahead', amountCents: 6_000, dueOn: '2026-11-20' },
+      ],
+    }),
+  ),
+  runwayPlanWith(
+    'runway-fresh',
+    sealRunway({
+      ...runwaySummary,
+      bills: [{ name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' }],
+    }),
+  ),
+  runwayPlanWith(
     'runway-twins',
     sealRunway({
       ...runwaySummary,
@@ -4100,6 +4132,16 @@ assert.deepEqual(
   titles(runwayBills),
   ['Car insurance', 'Gym', 'Overdue', 'Phone', 'Rent'],
   'an unpaid bill already past stays as overdue, a paid one this month and a yearly one stay',
+);
+assert.deepEqual(
+  titles(await runRunway('runway-stale', 'upcomingBills')),
+  ['Ahead'],
+  'a summary older than a week no longer says a past-due bill is unpaid',
+);
+assert.deepEqual(
+  titles(await runRunway('runway-fresh', 'upcomingBills')),
+  ['Long past'],
+  'a fresh summary keeps its past-due bill as overdue',
 );
 const billExtra = (title: string) =>
   runwayBills.find((record) => record.title === title)?.extra;

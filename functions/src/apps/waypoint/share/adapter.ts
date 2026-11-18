@@ -616,7 +616,8 @@ const syncTasks = async (
 ): Promise<CategoryRead> => {
   const read = await readTrips(firestore, uid, windowStart);
   const { isFull } = read;
-  const trips = read.trips.filter((trip) => trip.endDate + DAY_MS > now);
+  // No person time zone here: a day of slack keeps the last day's to-dos on every zone.
+  const trips = read.trips.filter((trip) => trip.endDate + 2 * DAY_MS > now);
   const tripsById = new Map(trips.map((trip) => [trip.id, trip]));
   const [assigned, privateRead] = await Promise.all([
     Promise.all(
