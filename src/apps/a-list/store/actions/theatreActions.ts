@@ -4,12 +4,12 @@ import {
   doc,
   getDocs,
   query,
-  runTransaction,
   where,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { runHeldTransaction } from '@apps/a-list/store/actions/heldTransaction';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { AListTheatre, TheatreDraft } from '@apps/a-list/types';
 import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
@@ -55,7 +55,7 @@ export const addTheatre = createAsyncThunk<
     const theatreRef = getTheatreRef(uid, theatre.theatreId);
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const [membershipSnapshot, theatreSnapshot] = await Promise.all([
           transaction.get(membershipRef),
           transaction.get(theatreRef),
@@ -98,7 +98,7 @@ export const removeTheatre = createAsyncThunk<
     const membershipRef = getMembershipRef(uid);
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const membershipSnapshot = await transaction.get(membershipRef);
         const nextSnapshot = nextFavoriteId
           ? await transaction.get(getTheatreRef(uid, nextFavoriteId))
@@ -134,7 +134,7 @@ export const setFavoriteTheatre = createAsyncThunk<
   'aList/theatres/setFavorite',
   async ({ uid, theatreId }, { rejectWithValue }) => {
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         if (theatreId !== null) {
           const theatreSnapshot = await transaction.get(
             getTheatreRef(uid, theatreId),
@@ -205,7 +205,7 @@ export const linkTheatre = createAsyncThunk<
         await batch.commit();
       }, Promise.resolve());
 
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const toRef = getTheatreRef(uid, to.theatreId);
         const [membershipSnapshot, fromSnapshot, toSnapshot] =
           await Promise.all([

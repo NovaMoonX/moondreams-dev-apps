@@ -6,7 +6,6 @@ import {
   getDoc,
   getDocs,
   query,
-  runTransaction,
   setDoc,
   updateDoc,
   where,
@@ -16,6 +15,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getBytes, ref, uploadBytes } from 'firebase/storage';
 
 import { db, functions, storage } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 import { deleteFile } from '@lib/firebase/storage';
 
 import { generateUuid } from '@/utils/idUtils';
@@ -236,8 +236,8 @@ export async function addPhoto(
 
   try {
     await upload();
-    const result = await runTransaction(
-      db,
+    const result = await runHeldTransaction(
+      uid,
       async (transaction): Promise<AddPhotoResult> => {
         const target = ownerRef(uid, owner);
         const snapshot = await transaction.get(target);
@@ -278,7 +278,7 @@ export async function makeMainPhoto(
   mediaId: string,
 ): Promise<{ restore: () => Promise<void> } | 'missing'> {
   const target = ownerRef(uid, owner);
-  const before = await runTransaction(db, async (transaction) => {
+  const before = await runHeldTransaction(uid, async (transaction) => {
     const data = (await transaction.get(target)).data();
     if (!data) return null;
     const ids = idsOf(data, owner);
@@ -294,7 +294,7 @@ export async function makeMainPhoto(
   if (!before) return 'missing';
   return {
     restore: () =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const data = (await transaction.get(target)).data();
         if (!data) return;
         const current = idsOf(data, owner);
@@ -399,7 +399,7 @@ export async function removePhoto(
   const held = await holdObjects(paths);
   const target = ownerRef(uid, owner);
   const mediaRef = doc(mediaOf(uid), mediaId);
-  const taken = await runTransaction(db, async (transaction) => {
+  const taken = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(target);
     const mediaSnapshot = await transaction.get(mediaRef);
     const data = snapshot.data();
@@ -437,7 +437,7 @@ export async function removePhoto(
   return {
     restore: async () => {
       await putObjectsBack(held, gone);
-      const outcome = await runTransaction(db, async (transaction) => {
+      const outcome = await runHeldTransaction(uid, async (transaction) => {
         const data = (await transaction.get(target)).data();
         if (!data) return 'missing';
         const ids = idsOf(data, owner);
@@ -613,7 +613,7 @@ export async function keepLetGoMedia(
     finishedAt: now,
     sealed,
   };
-  return runTransaction(db, async (transaction): Promise<KeepResult> => {
+  return runHeldTransaction(uid, async (transaction): Promise<KeepResult> => {
     const data = (await transaction.get(mediaRef)).data();
     if (
       !data ||
