@@ -19,7 +19,10 @@ import {
   planNextHorizon,
   undoPlanNextHorizon,
 } from '@apps/runway/store/actions/horizonActions';
-import { selectCostPaid } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectAllHorizonItems,
+  selectCostPaid,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed } from '@apps/runway/types';
 import {
   makeNextDraft,
@@ -61,6 +64,14 @@ function HorizonPlanNextView({
       return;
     }
     const { items, versions, moves } = store.getState().runway;
+    const found =
+      selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
+        ({ item }) => item.id === itemId,
+      )?.version ?? null;
+    if (found === null || found.payload.state === 'open') {
+      setError(HORIZON_NEXT_WORDS.changedFirst);
+      return;
+    }
     if (
       findNextOf(
         itemId,
@@ -83,10 +94,12 @@ function HorizonPlanNextView({
         fromId: itemId,
         nextId,
         horizon: next,
+        from: found.payload,
+        baseVersionId: found.id,
         today: todayAsUtcDate(),
       });
       if (written === null) {
-        setError(HORIZON_NEXT_WORDS.alreadyPlanned);
+        setError(HORIZON_NEXT_WORDS.changedFirst);
         return;
       }
       addToast({

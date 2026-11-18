@@ -979,8 +979,6 @@ export const HORIZON_END_WORDS = {
   releaseFailed: (name: string) => `${name} was not changed`,
   bringBackRow: 'Bring it back',
   bringBackSub: 'Its costs plan again from today',
-  bringBackHeldSub:
-    'Its costs plan again from today. Bring it back first to put the money somewhere else.',
   bringBackTitle: (name: string) => `Bring ${name} back?`,
   bringBackNote: 'Its unpaid costs plan again from today.',
   whatComesBack: 'What comes back',
@@ -4313,6 +4311,8 @@ export const HORIZON_NEXT_WORDS = {
   planFailed: 'That did not save. Try again.',
   alreadyPlanned: 'The next one is already planned.',
   changedSince: 'The next one changed since, so it stays.',
+  changedFirst:
+    'This event changed since you opened it, so nothing was planned.',
   gone: 'This event is gone.',
 } as const;
 

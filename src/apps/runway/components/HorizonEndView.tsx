@@ -758,7 +758,7 @@ function HorizonEndView({
           type='button'
           variant='tertiary'
           size='sm'
-          className='text-muted-foreground self-center'
+          className="text-muted-foreground relative self-center after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
           aria-pressed={pick === 'keep'}
           onClick={() => choose('keep')}
         >

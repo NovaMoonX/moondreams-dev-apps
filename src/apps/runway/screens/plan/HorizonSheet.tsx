@@ -178,7 +178,7 @@ function HorizonSheet({
   const { addToast } = useToast();
   const mask = useMaskedText();
   const [isReleasing, setIsReleasing] = useState(false);
-  const [isNextOpen, setIsNextOpen] = useState(false);
+  const [linkedId, setLinkedId] = useState<string | null>(null);
   const [view, setView] = useState<
     | 'main'
     | 'change'
@@ -248,6 +248,7 @@ function HorizonSheet({
     : null;
   const nextEvent = events.find(({ item }) => item.id === next?.itemId) ?? null;
   const earlier = listEarlierEvents(itemId, versions);
+  const linkedEvent = events.find(({ item }) => item.id === linkedId) ?? null;
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -840,23 +841,28 @@ function HorizonSheet({
               <p className='text-muted-foreground text-sm font-medium'>
                 {HORIZON_END_WORDS.earlierCaption}
               </p>
-              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              <ul className='border-border divide-border bg-card divide-y overflow-hidden rounded-2xl border'>
                 {earlier.map((event) => (
-                  <li
-                    key={event.itemId}
-                    className='flex items-baseline justify-between gap-3 px-3 py-2 text-sm'
-                  >
-                    <span className='min-w-0 break-words'>{event.name}</span>
-                    <span className='text-muted-foreground shrink-0 text-right'>
-                      <MaskedText>
-                        {HORIZON_END_WORDS.earlierRow(
-                          formatDateOrdinalUTC(event.happensOn),
-                          formatCents(
-                            balances.costPaidByItem[event.itemId] ?? 0,
-                          ),
-                        )}
-                      </MaskedText>
-                    </span>
+                  <li key={event.itemId}>
+                    <Button
+                      type='button'
+                      variant='base'
+                      className='flex min-h-11 w-full items-center justify-between gap-3 rounded-none px-3 py-2 text-left text-sm font-normal'
+                      onClick={() => setLinkedId(event.itemId)}
+                    >
+                      <span className='min-w-0 break-words'>{event.name}</span>
+                      <span className='text-muted-foreground flex shrink-0 items-center gap-1 text-right'>
+                        <MaskedText>
+                          {HORIZON_END_WORDS.earlierRow(
+                            formatDateOrdinalUTC(event.happensOn),
+                            formatCents(
+                              balances.costPaidByItem[event.itemId] ?? 0,
+                            ),
+                          )}
+                        </MaskedText>
+                        <ChevronRight className='size-4' aria-hidden='true' />
+                      </span>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -960,7 +966,7 @@ function HorizonSheet({
                 variant='tertiary'
                 size='sm'
                 className='text-muted-foreground! -ml-2 h-auto gap-1 py-0.5 text-sm font-normal'
-                onClick={() => setIsNextOpen(true)}
+                onClick={() => setLinkedId(next.itemId)}
               >
                 {HORIZON_END_WORDS.nextFact(
                   formatDateOrdinalUTC(next.happensOn),
@@ -1024,11 +1030,7 @@ function HorizonSheet({
               hasChevron
               icon={<RotateCcw />}
               label={HORIZON_END_WORDS.bringBackRow}
-              subtitle={
-                figures.leftCents > 0
-                  ? HORIZON_END_WORDS.bringBackHeldSub
-                  : HORIZON_END_WORDS.bringBackSub
-              }
+              subtitle={HORIZON_END_WORDS.bringBackSub}
               onClick={() => setView('bringBack')}
             />
             {figures.leftCents > 0 && (
@@ -1309,13 +1311,13 @@ function HorizonSheet({
           )}
         </div>
       )}
-      {isNextOpen && nextEvent && (
+      {linkedEvent && (
         <HorizonSheet
-          itemId={nextEvent.item.id}
-          horizon={nextEvent.version.payload}
+          itemId={linkedEvent.item.id}
+          horizon={linkedEvent.version.payload}
           today={today}
           stance={stance}
-          onClose={() => setIsNextOpen(false)}
+          onClose={() => setLinkedId(null)}
         />
       )}
       {unlinking && (
