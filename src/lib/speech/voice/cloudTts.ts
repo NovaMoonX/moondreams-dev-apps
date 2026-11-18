@@ -417,6 +417,7 @@ export const createCloudTts = ({
           }, PROGRESS_MS),
         );
         sink.push(first);
+        startPrefetch(index + 1);
         const pump = async (): Promise<void> => {
           const next = await within(reader.read(), gapMs);
           if (next === 'late' && !signal.aborted) {
@@ -434,9 +435,11 @@ export const createCloudTts = ({
         try {
           await pump();
         } catch (error) {
-          const wasPlaying = hasSound();
+          if (!hasSound()) {
+            sink.stop();
+            throw error;
+          }
           sink.end();
-          if (!wasPlaying) throw error;
           if (!signal.aborted) {
             state.isCut = true;
             fail(
@@ -532,7 +535,9 @@ export const createCloudTts = ({
         const pcm = parsePcmFormat(answer.contentType);
         if (pcm !== null && !first.done) {
           await streamPcm(pcm, reader, first.value);
-          if (!hasSound()) return 'aborted';
+          if (!state.isPlaying && (signal.aborted || !hasSound())) {
+            return 'aborted';
+          }
           return state.isCut ? 'cut' : 'played';
         }
         const bodyLimitMs =
@@ -556,7 +561,7 @@ export const createCloudTts = ({
         const audio = await player.decode(concat(rest));
         if (signal.aborted) return 'aborted';
         await player.play(audio, signal, markSounding, report, readyAt);
-        return 'played';
+        return signal.aborted && !state.isPlaying ? 'aborted' : 'played';
       } catch (error) {
         if (signal.aborted) return 'aborted';
         if (hasSound()) {

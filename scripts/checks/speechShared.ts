@@ -2742,6 +2742,30 @@ console.log('speechShared: voice router and playback queue checks passed');
     'a short line scheduled while the speakers wake is played, not taken for no audio',
   );
 
+  const wakeAbort = new AbortController();
+  const playedLines: string[] = [];
+  const abortedBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0, 2, 0])])),
+    fallback,
+    onPlayed: () => playedLines.push('played'),
+    player: {
+      ...player([]),
+      openStream: async () => ({
+        push: () => wakeAbort.abort(),
+        end: () => undefined,
+        remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 80, isEnded: true }),
+        stop: () => undefined,
+        done: Promise.resolve(),
+      }),
+    },
+  }).speak('Never heard', options(wakeAbort.signal));
+  assert.deepEqual(
+    [abortedBy, playedLines],
+    [undefined, []],
+    'a line stopped before the speakers woke is never counted as played',
+  );
+
   const emptyBy = await createCloudTts({
     source: streamed(pcmBody([new Uint8Array(0)])),
     fallback,
