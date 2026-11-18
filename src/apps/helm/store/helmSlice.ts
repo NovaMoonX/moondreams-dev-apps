@@ -1,6 +1,23 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+import {
+  addHeldWrites,
+  dropHeldWrites,
+  settleHeldWrites,
+  type HeldWrite,
+} from '@/utils/heldWrites';
 import { ACTIVITY_PAGE } from '@apps/helm/constants';
+import {
+  emptyHelmHeld,
+  HELM_HELD_KINDS,
+  kindOfList,
+  layHelmKind,
+  type HelmHeldItems,
+  type HelmHeldKind,
+  type HelmHeldLists,
+  type HelmHeldState,
+  type HelmListName,
+} from '@apps/helm/utils/heldLists';
 import { resetAllState } from '@/store/actions/globalActions';
 import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
@@ -133,7 +150,69 @@ export interface HelmState {
     isFailed: boolean;
     isExhausted: boolean;
   };
+  /** The listeners' own lists and this device's transaction writes held over them until they show. */
+  hold: HelmHeldState;
 }
+
+export interface HelmHoldInput {
+  token: string;
+  writes: { [K in HelmHeldKind]?: HeldWrite<HelmHeldItems[K]>[] };
+}
+
+const layKind = (state: HelmState, kind: HelmHeldKind) => {
+  const laid = layHelmKind(kind, state.hold);
+  (Object.entries(laid.lists) as [HelmListName, unknown[]][]).forEach(
+    ([name, items]) => {
+      (state[name] as LoadedSet<unknown>).items = items;
+    },
+  );
+  (state.hold.held[kind] as HeldWrite<unknown>[]) = laid.held;
+  state.hold.landed[kind] = laid.landed;
+};
+
+const deliver = <L extends HelmListName>(
+  state: HelmState,
+  name: L,
+  items: HelmHeldLists[L][],
+) => {
+  (state.hold.incoming[name] as HelmHeldLists[L][]) = items;
+  state.hold.deliveredAt[name] = Date.now();
+  state.hold.failed[name] = false;
+  const kind = kindOfList(name);
+  if (state.hold.held[kind].length === 0) {
+    (state[name] as LoadedSet<HelmHeldLists[L]>) = {
+      items,
+      isLoaded: true,
+      isFailed: false,
+    };
+    return;
+  }
+  layKind(state, kind);
+  state[name].isLoaded = true;
+  state[name].isFailed = false;
+};
+
+const fail = (state: HelmState, name: HelmListName) => {
+  state[name].isFailed = true;
+  state.hold.failed[name] = true;
+  const kind = kindOfList(name);
+  if (state.hold.held[kind].length > 0) layKind(state, kind);
+};
+
+const changeHolds = (
+  state: HelmState,
+  change: (
+    held: HeldWrite<unknown>[],
+    kind: HelmHeldKind,
+  ) => HeldWrite<unknown>[],
+) =>
+  HELM_HELD_KINDS.forEach((kind) => {
+    const before = state.hold.held[kind] as HeldWrite<unknown>[];
+    const after = change(before, kind);
+    if (before.length === 0 && after.length === 0) return;
+    (state.hold.held[kind] as HeldWrite<unknown>[]) = after;
+    layKind(state, kind);
+  });
 
 const emptySet: CaptureSet = { captures: [], isLoaded: false, isFailed: false };
 
@@ -203,6 +282,7 @@ const initialState: HelmState = {
     isFailed: false,
     isExhausted: false,
   },
+  hold: emptyHelmHeld(),
 };
 
 const helmSlice = createSlice({
@@ -268,25 +348,13 @@ const helmSlice = createSlice({
       state.outsideCaptures.isFailed = true;
     },
     setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
-      state.openTasks = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'openTasks', action.payload);
     },
-    setOpenTasksFailed: (state) => {
-      state.openTasks.isFailed = true;
-    },
+    setOpenTasksFailed: (state) => fail(state, 'openTasks'),
     setProjectTasks: (state, action: PayloadAction<OpenTask[]>) => {
-      state.projectTasks = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'projectTasks', action.payload);
     },
-    setProjectTasksFailed: (state) => {
-      state.projectTasks.isFailed = true;
-    },
+    setProjectTasksFailed: (state) => fail(state, 'projectTasks'),
     setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
       state.planDays = {
         byId: Object.fromEntries(
@@ -300,17 +368,13 @@ const helmSlice = createSlice({
       state.planDays.isFailed = true;
     },
     setFacts: (state, action: PayloadAction<OpenFact[]>) => {
-      state.facts = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'facts', action.payload);
     },
-    setFactsFailed: (state) => {
-      state.facts.isFailed = true;
-    },
+    setFactsFailed: (state) => fail(state, 'facts'),
     setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
-      state.style = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'style', action.payload);
     },
-    setStyleFailed: (state) => {
-      state.style.isFailed = true;
-    },
+    setStyleFailed: (state) => fail(state, 'style'),
     setAssistants: (state, action: PayloadAction<OpenConnectedAssistant[]>) => {
       state.assistants = {
         items: action.payload,
@@ -322,11 +386,9 @@ const helmSlice = createSlice({
       state.assistants.isFailed = true;
     },
     setWho: (state, action: PayloadAction<OpenWho[]>) => {
-      state.who = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'who', action.payload);
     },
-    setWhoFailed: (state) => {
-      state.who.isFailed = true;
-    },
+    setWhoFailed: (state) => fail(state, 'who'),
     setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
       state.habits = { items: action.payload, isLoaded: true, isFailed: false };
     },
@@ -356,67 +418,33 @@ const helmSlice = createSlice({
       state.keyDateIndex.isFailed = true;
     },
     setPlaces: (state, action: PayloadAction<OpenPlace[]>) => {
-      state.places = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'places', action.payload);
     },
-    setPlacesFailed: (state) => {
-      state.places.isFailed = true;
-    },
+    setPlacesFailed: (state) => fail(state, 'places'),
     setProjects: (state, action: PayloadAction<OpenProject[]>) => {
-      state.projects = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'projects', action.payload);
     },
-    setProjectsFailed: (state) => {
-      state.projects.isFailed = true;
-    },
+    setProjectsFailed: (state) => fail(state, 'projects'),
     setNotes: (state, action: PayloadAction<OpenNote[]>) => {
-      state.notes = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'notes', action.payload);
     },
-    setNotesFailed: (state) => {
-      state.notes.isFailed = true;
-    },
+    setNotesFailed: (state) => fail(state, 'notes'),
     setTopics: (state, action: PayloadAction<OpenTopic[]>) => {
-      state.topics = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'topics', action.payload);
     },
-    setTopicsFailed: (state) => {
-      state.topics.isFailed = true;
-    },
+    setTopicsFailed: (state) => fail(state, 'topics'),
     setProcedures: (state, action: PayloadAction<OpenProcedure[]>) => {
-      state.procedures = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'procedures', action.payload);
     },
-    setProceduresFailed: (state) => {
-      state.procedures.isFailed = true;
-    },
+    setProceduresFailed: (state) => fail(state, 'procedures'),
     setOpenRuns: (state, action: PayloadAction<OpenRun[]>) => {
-      state.openRuns = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'openRuns', action.payload);
     },
-    setOpenRunsFailed: (state) => {
-      state.openRuns.isFailed = true;
-    },
+    setOpenRunsFailed: (state) => fail(state, 'openRuns'),
     setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
-      state.media = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'media', action.payload);
     },
-    setMediaFailed: (state) => {
-      state.media.isFailed = true;
-    },
+    setMediaFailed: (state) => fail(state, 'media'),
     setSynced: (state, action: PayloadAction<SyncedRecord[]>) => {
       state.synced = {
         items: action.payload,
@@ -514,6 +542,17 @@ const helmSlice = createSlice({
       state.earlier.isLoading = false;
       state.earlier.isFailed = true;
     },
+    holdHelmWrites: (state, action: PayloadAction<HelmHoldInput>) =>
+      changeHolds(state, (held, kind) =>
+        addHeldWrites(
+          dropHeldWrites(held, action.payload.token),
+          (action.payload.writes[kind] ?? []) as HeldWrite<unknown>[],
+        ),
+      ),
+    settleHelmWrites: (state, action: PayloadAction<string>) =>
+      changeHolds(state, (held) => settleHeldWrites(held, action.payload)),
+    dropHelmWrites: (state, action: PayloadAction<string>) =>
+      changeHolds(state, (held) => dropHeldWrites(held, action.payload)),
     clearHelm: () => initialState,
   },
   extraReducers: (builder) => {
@@ -522,6 +561,9 @@ const helmSlice = createSlice({
 });
 
 export const {
+  holdHelmWrites,
+  settleHelmWrites,
+  dropHelmWrites,
   setProfile,
   setRecentCaptures,
   setRecentCapturesFailed,

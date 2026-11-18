@@ -8,12 +8,12 @@ import {
   getCountFromServer,
   getDocs,
   query,
-  runTransaction,
   updateDoc,
   where,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { openJson, sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -98,8 +98,8 @@ export async function updateWho(
   if (!navigator.onLine) return 'offline';
   const ref = doc(userOf(uid), 'who', whoId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<EditResult | ContactEditRefusal> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
@@ -155,8 +155,8 @@ async function rewriteWhoWords<Refusal extends string = never>(
   if (!navigator.onLine) return 'offline';
   const ref = doc(userOf(uid), 'who', whoId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<EditResult | Refusal> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
@@ -488,7 +488,7 @@ export async function forgetLinked(
   );
   const outcomes = await Promise.allSettled(
     jobs.map(({ source, field, chunk }) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map((entryId) =>
             transaction.get(doc(collection(userOf(uid), source), entryId)),
@@ -514,7 +514,7 @@ export async function forgetLinked(
   const putBackLinks = () =>
     inSequence(taken, ({ source, field, ids }) =>
       inSequence(toChunks(ids), (chunk) =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((entryId) =>
               transaction.get(doc(collection(userOf(uid), source), entryId)),
@@ -539,7 +539,7 @@ export async function forgetLinked(
   ).docs.map((entry) => entry.id);
   const factOutcomes = await Promise.allSettled(
     toChunks(factIds).map((chunk) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map((entryId) =>
             transaction.get(doc(collection(userOf(uid), 'facts'), entryId)),
@@ -569,7 +569,7 @@ export async function forgetLinked(
   );
   const putBackFacts = () =>
     inSequence(factsTaken, (entry) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const factRef = doc(collection(userOf(uid), 'facts'), entry.id);
         const current = await transaction.get(factRef);
         if (entry.kind === 'deleted') {
@@ -602,7 +602,7 @@ export async function forgetLinked(
     target === 'who' ? await getHelmEncryption(uid).catch(abandon) : null;
   const dateIds =
     encryption !== null ? await readWhoDateIds(uid, id).catch(abandon) : [];
-  const removed = await runTransaction(db, async (transaction) => {
+  const removed = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() as DocumentData | undefined;
     if (!data) return null;
@@ -634,7 +634,7 @@ export async function forgetLinked(
             )
           ).docs.map((entry) => entry.id)
         : [];
-    const isBack = await runTransaction(db, async (transaction) => {
+    const isBack = await runHeldTransaction(uid, async (transaction) => {
       if ((await transaction.get(ref)).exists()) return false;
       const homes = await Promise.all(
         homeIds.map((homeId) =>
@@ -776,7 +776,7 @@ export async function ensureSelfWho(
     sealed,
   };
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(profileRef);
     if (!snapshot.exists()) return;
     const profile = snapshot.data() as Partial<HelmProfile>;

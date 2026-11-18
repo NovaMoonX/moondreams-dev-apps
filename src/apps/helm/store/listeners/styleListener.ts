@@ -45,7 +45,7 @@ const toTraits = (value: unknown): StyleSealed['traits'] =>
         }),
       );
 
-async function openStyle(
+export async function openStyle(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenStyle> {

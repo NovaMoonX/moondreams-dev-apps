@@ -4,7 +4,6 @@ import {
   deleteField,
   doc,
   FieldPath,
-  runTransaction,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -12,6 +11,7 @@ import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import type { Product, Unit } from '@apps/pinch/types';
 import { buildCatalogRecord } from '@apps/pinch/utils/ingredientRecord';
@@ -148,7 +148,7 @@ export const setDefaultProduct = createAsyncThunk<
   async ({ uid, ingredientId, productId }, { getState, rejectWithValue }) => {
     try {
       await freezeBeforeEdit(uid, getState());
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const productSnapshot = await transaction.get(
           kitchenDoc(uid, 'products', productId),
         );
@@ -226,7 +226,7 @@ export const removeProduct = createAsyncThunk<
         return id;
       }
 
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const recordRef = kitchenDoc(uid, 'ingredients', target.ingredientId);
         const recordSnapshot = await transaction.get(recordRef);
         const candidateSnapshot = candidateId
