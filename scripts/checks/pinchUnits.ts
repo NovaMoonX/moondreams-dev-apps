@@ -213,6 +213,14 @@ assert.deepEqual(
 );
 // A weighed line with a known density says what it is without a scale; one without says nothing
 assert.deepEqual(tools[0].swaps, [{ name: 'Butter', text: '½ cup' }]);
+// Two weighed lines of one ingredient make one swap, added up
+assert.deepEqual(
+  getMeasuringTools([
+    line('Butter', 113, 'G', false, 0.96),
+    line('Butter', 113, 'G', false, 0.96),
+  ])[0].swaps,
+  [{ name: 'Butter', text: '1 cup' }],
+);
 // 0.31 cup reads as 5 tbsp, so it is spoons, not a cup
 assert.equal(formatKitchenAmount(0.31, 'CUP'), '5 tbsp');
 assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')])[0].sizes, [

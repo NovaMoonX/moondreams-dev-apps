@@ -67,6 +67,12 @@ const sayWhere = (source: CombineSource, isPlate: boolean) => {
   return isPlate ? `for ${source.recipeTitle}` : null;
 };
 
+/** Amounts that couldn't be added, each kept once it counts something ("1 lemon + 1 lemon"), a wordy one ("to taste") once. */
+const joinAmounts = (texts: string[]) =>
+  texts
+    .filter((text, index) => /\d/.test(text) || texts.indexOf(text) === index)
+    .join(' + ');
+
 const combineOne = (
   key: string,
   sources: CombineSource[],
@@ -94,7 +100,9 @@ const combineOne = (
       .filter((part) => part !== null && part !== '')
       .join(' '),
   );
-  const hasWhere = sources.some((source) => sayWhere(source, isPlate) !== null);
+  const hasWhere = sources.some(
+    (source) => sayWhere(source, isPlate) !== null || source.note !== null,
+  );
   return {
     key,
     name: first.name,
@@ -102,9 +110,7 @@ const combineOne = (
     amountText:
       isTotalShown && totalText !== null
         ? totalText
-        : Array.from(new Set(sources.map((source) => source.amountText))).join(
-            ' + ',
-          ),
+        : joinAmounts(sources.map((source) => source.amountText)),
     isMeasured: sources.some((source) => source.isMeasured),
     measure: isTotalShown ? total : null,
     sources: ids,

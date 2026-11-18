@@ -43,6 +43,14 @@ function ServingsCard({
   onServingsChange,
 }: Pick<CookGatherViewProps, 'dishes' | 'onServingsChange'>) {
   const isPlate = dishes.length > 1;
+  const isPlanned = (dish: CookGatherDish) =>
+    dish.plannedServings !== null && dish.plannedServings < dish.servings;
+  const plans = new Set(
+    dishes.map((dish) => (isPlanned(dish) ? dish.plannedServings : null)),
+  );
+  const sharedPlan =
+    isPlate && plans.size === 1 ? (dishes[0].plannedServings ?? null) : null;
+  const isPlanShared = sharedPlan !== null && isPlanned(dishes[0]);
   const renderStepper = (dish: CookGatherDish) => (
     <Stepper
       label={isPlate ? `${dish.recipe.title} servings` : 'Servings'}
@@ -64,20 +72,16 @@ function ServingsCard({
       className='border-border space-y-3 rounded-xl border p-4'
     >
       <div className='flex items-center justify-between gap-3'>
-        <h3
-          id='cook-servings-heading'
-          className='text-base font-medium min-[420px]:text-lg'
-        >
-          <span className='min-[360px]:hidden'>Servings</span>
-          <span className='max-[359px]:hidden'>How many servings?</span>
+        <h3 id='cook-servings-heading' className='text-lg font-medium'>
+          <span className='min-[400px]:hidden'>Servings</span>
+          <span className='max-[399px]:hidden'>How many servings?</span>
         </h3>
         {!isPlate && renderStepper(dishes[0])}
       </div>
       {dishes.map((dish) => {
         const isScaled =
           dish.recipe.servings > 0 && dish.servings !== dish.recipe.servings;
-        const isPlanShown =
-          dish.plannedServings !== null && dish.plannedServings < dish.servings;
+        const isPlanShown = isPlanned(dish) && !isPlanShared;
         if (!isPlate && !isScaled && !isPlanShown) return null;
         return (
           <div key={dish.recipe.id} className='space-y-1'>
@@ -105,6 +109,12 @@ function ServingsCard({
           </div>
         );
       })}
+      {isPlanShared && (
+        <p className='text-muted-foreground text-sm'>
+          You planned {sharedPlan} of each for tonight. The rest can be put
+          away.
+        </p>
+      )}
     </section>
   );
 }
@@ -151,7 +161,7 @@ function AllTogetherList({
       <div className='flex h-10 items-center justify-between gap-3'>
         <p className='text-muted-foreground text-sm'>
           {outCount === 0
-            ? "Tick what you've got out"
+            ? "Tick what you've got out · tap an amount for other units"
             : `${outCount} of ${lines.length} got out`}
         </p>
         {outCount > 0 && (

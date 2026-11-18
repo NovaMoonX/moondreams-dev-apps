@@ -145,14 +145,25 @@ const TOOL_ORDER: MeasuringTool['key'][] = [
   'SPOONS',
 ];
 
-const getSwap = (line: ToolLine) => {
-  if (line.gramsPerMl === null) return [];
-  const cups = convertForIngredient(line.amount, line.unit, 'CUP', {
-    gramsPerMl: line.gramsPerMl,
-  });
-  return cups === null || cups <= 0
-    ? []
-    : [{ name: line.name, text: formatKitchenAmount(cups, 'CUP') }];
+const toCups = (line: ToolLine) =>
+  line.gramsPerMl === null
+    ? null
+    : convertForIngredient(line.amount, line.unit, 'CUP', {
+        gramsPerMl: line.gramsPerMl,
+      });
+
+/** One swap per ingredient, its weighed lines added up in cups; an ingredient with no density has none. */
+const getSwaps = (lines: ToolLine[]) => {
+  const cupsByName = lines.reduce<Map<string, number>>((result, line) => {
+    const cups = toCups(line);
+    return cups === null || cups <= 0
+      ? result
+      : result.set(line.name, (result.get(line.name) ?? 0) + cups);
+  }, new Map());
+  return Array.from(cupsByName, ([name, cups]) => ({
+    name,
+    text: formatKitchenAmount(cups, 'CUP'),
+  }));
 };
 
 const getToolSizes = (key: MeasuringTool['key'], lines: ToolLine[]) =>
@@ -184,7 +195,7 @@ export function getMeasuringTools(lines: ToolLine[]): MeasuringTool[] {
         name: TOOL_NAMES[key],
         sizes: getToolSizes(key, matched),
         names: Array.from(new Set(matched.map((line) => line.name))),
-        swaps: key === 'SCALE' ? matched.flatMap(getSwap) : [],
+        swaps: key === 'SCALE' ? getSwaps(matched) : [],
       },
     ];
   });

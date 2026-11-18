@@ -12,8 +12,8 @@ const joinWords = (words: string[]) =>
 
 const sayNames = (names: string[]) => {
   const words = names.map(lowerName);
-  return words.length > 4
-    ? `${words.slice(0, 3).join(', ')} and ${words.length - 3} more`
+  return words.length > 3
+    ? `${words.slice(0, 2).join(', ')} and ${words.length - 2} more`
     : joinWords(words);
 };
 
@@ -35,7 +35,6 @@ function CookToolsStrip({ rows }: { rows: CookRow[] }) {
     ),
   );
   if (tools.length === 0) return null;
-  const swaps = tools.find((tool) => tool.key === 'SCALE')?.swaps ?? [];
 
   return (
     <section aria-labelledby='cook-tools-heading' className='space-y-2'>
@@ -45,44 +44,51 @@ function CookToolsStrip({ rows }: { rows: CookRow[] }) {
       >
         What you'll measure with
       </h3>
-      <ul data-no-swipe className='flex snap-x gap-2 overflow-x-auto pb-1'>
+      <ul
+        data-no-swipe
+        className='grid grid-cols-2 gap-2 [@media(max-height:640px)]:flex [@media(max-height:640px)]:snap-x [@media(max-height:640px)]:overflow-x-auto [@media(max-height:640px)]:pb-1'
+      >
         {tools.map((tool) => (
           <li
             key={tool.key}
-            className='bg-accent w-44 shrink-0 snap-start rounded-xl p-3'
+            className='bg-accent min-w-0 rounded-xl p-3 [@media(max-height:640px)]:w-36 [@media(max-height:640px)]:shrink-0 [@media(max-height:640px)]:snap-start'
           >
-            <p className='text-muted-foreground flex items-center gap-1.5 text-xs'>
+            <p className='text-muted-foreground flex items-center gap-1.5 text-xs leading-tight'>
               <MeasuringToolIcon
                 tool={tool.key}
                 className='text-foreground size-5 shrink-0'
               />
-              {tool.name}
+              <span className='min-w-0'>{tool.name}</span>
             </p>
-            <p className='mt-2 flex flex-wrap gap-x-2 text-lg leading-snug font-semibold'>
+            <p className='mt-2 -ml-1.5 flex flex-wrap gap-1.5 text-lg leading-snug font-semibold'>
               {tool.sizes.map((size) => (
-                <span key={size} className='whitespace-nowrap'>
+                <span
+                  key={size}
+                  className='bg-background/70 rounded-md px-1.5 whitespace-nowrap'
+                >
                   {size}
                 </span>
               ))}
             </p>
-            <p className='text-muted-foreground mt-1 text-xs wrap-break-word [@media(max-height:640px)]:hidden'>
+            <p className='text-muted-foreground mt-1 line-clamp-3 text-xs wrap-break-word [@media(max-height:640px)]:hidden'>
               For {sayNames(tool.names)}
             </p>
+            {tool.swaps.length > 0 && (
+              <p className='mt-1 text-xs'>
+                No scale?{' '}
+                {tool.swaps.length === 1 && tool.names.length === 1
+                  ? `About ${tool.swaps[0].text}.`
+                  : `${joinWords(
+                      tool.swaps.map(
+                        (swap, index) =>
+                          `${index === 0 ? swap.name : lowerName(swap.name)} is about ${swap.text}`,
+                      ),
+                    )}.`}
+              </p>
+            )}
           </li>
         ))}
       </ul>
-      {swaps.length > 0 && (
-        <p className='text-muted-foreground text-sm'>
-          No scale?{' '}
-          {joinWords(
-            swaps.map(
-              (swap, index) =>
-                `${index === 0 ? swap.name : lowerName(swap.name)} is about ${swap.text}`,
-            ),
-          )}
-          .
-        </p>
-      )}
     </section>
   );
 }
