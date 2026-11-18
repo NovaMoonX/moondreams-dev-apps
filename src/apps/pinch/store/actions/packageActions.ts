@@ -4,7 +4,6 @@ import {
   deleteDoc,
   doc,
   increment,
-  runTransaction,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
@@ -12,6 +11,7 @@ import {
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { runInChunks } from '@apps/pinch/store/actions/containerActions';
 import { selectPackagesById } from '@apps/pinch/store/selectors';
 import type { Package, PackagePlace } from '@apps/pinch/types';
@@ -56,7 +56,7 @@ const applyPlan = (
   id: string,
   getPlan: (pkg: Package, now: number) => PackagePlan,
 ) =>
-  runTransaction(db, async (transaction) => {
+  runHeldTransaction(uid, async (transaction) => {
     const ref = packageDoc(uid, id);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(GONE);
@@ -118,7 +118,7 @@ export const undoPackageAdd = createAsyncThunk<
   { rejectValue: string }
 >('pinch/packages/undoAdd', async ({ uid, id }, { rejectWithValue }) => {
   try {
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(uid, async (transaction) => {
       const snapshot = await transaction.get(packageDoc(uid, id));
       if (!snapshot.exists()) return;
 
@@ -285,7 +285,7 @@ export const changePackagesInPlace = createAsyncThunk<
       (
         chunk,
       ): Promise<{ changed: ChangedPackage[]; skipped: PackageSkipCounts }[]> =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(packageDoc(uid, id))),
           );
@@ -425,7 +425,7 @@ export const undoPackageChanges = createAsyncThunk<
   'pinch/packages/undoChanges',
   async ({ uid, changed }, { rejectWithValue }) => {
     const { done, error } = await runInChunks(changed, (chunk) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map(({ id }) => transaction.get(packageDoc(uid, id))),
         );
