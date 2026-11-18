@@ -4,11 +4,11 @@ import {
   documentId,
   getDocs,
   query,
-  runTransaction,
   where,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { shiftDayKeyBy } from '@/utils/cadenceUtils';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -183,7 +183,7 @@ async function judgeOne(
   encryption: HelmEncryption,
 ) {
   const ref = doc(collection(userOf(uid), 'habits'), habit.id);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return;
     const current = snapshot.data() as Habit;
@@ -245,7 +245,7 @@ async function tellOne(
   encryption: HelmEncryption,
 ) {
   const ref = doc(collection(userOf(uid), 'habits'), habit.id);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? (snapshot.data() as Habit) : null;
     if (!current || current.untoldSince == null || !current.stage) return;
