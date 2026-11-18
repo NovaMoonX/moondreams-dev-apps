@@ -136,7 +136,7 @@ const toGoalWhy = (value: unknown) =>
 
 const orNullNumber = (value: unknown) => (isNumber(value) ? value : null);
 
-const openProjects = (
+export const openProjects = (
   key: HelmKey,
   docs: QueryDocumentSnapshot[],
 ): (ExistingProject & { isPaused: boolean })[] =>
@@ -172,7 +172,7 @@ const openProjects = (
     .sort((left, right) => right[0] - left[0])
     .map(([, project]) => project);
 
-const activeQuery = (firestore: Firestore, base: string) =>
+export const activeQuery = (firestore: Firestore, base: string) =>
   firestore
     .collection(`${base}/projects`)
     .where('status', 'in', ['active', 'paused'])

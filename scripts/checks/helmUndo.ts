@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 
+import { DEV_KEYRING } from '../../functions/src/appKeys/keyring.ts';
+import {
+  deriveSeedDataKey,
+  sealForHelm,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import { planSeenAs } from '../../functions/src/apps/helm/nomos/planSeenAs.ts';
+import { toSeenAsRecord } from '../../functions/src/apps/helm/seenAsStore.ts';
 import { MAX_EXECUTION_EFFECTS } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { buildWriteExecution } from '../../functions/src/apps/helm/topicWriteExecution.ts';
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
@@ -13,6 +20,8 @@ import {
   planReopen,
   planUndo,
   procedureEffectKind,
+  toGroupingUndoPatch,
+  withoutGroupings,
   toOfferDocIds,
   readUndoFields,
   topicEffectKind,
@@ -35,6 +44,7 @@ import type {
   ProcedureSealed,
   ResearchSealed,
   RunSealed,
+  SeenAsSealed,
   TaskSealed,
   TopicSealed,
 } from '../../src/apps/helm/types.ts';
@@ -48,6 +58,7 @@ const sealedOf = (title: string): TaskSealed => ({
   title,
   notes: 'Ask about the cake',
   steps: { a: { text: 'Find the number' } },
+  meetingLabel: null,
   privateMark: null,
   isPrivacyCleared: false,
   quietMark: null,
@@ -190,6 +201,45 @@ test('full undo deletes every task the execution made', () => {
   assert.equal(result.undoExecution.createdAt, NOW);
 });
 
+test('a task made for a meeting from a document question goes with its turn untouched and stays once a question is ticked', () => {
+  const made = [
+    create('q1', 'Questions for Priya and Sam'),
+    create('t2', 'Send the save-the-dates'),
+  ];
+  const stepState = (doneAt: number | null) => ({
+    a: { order: 0, doneAt },
+    b: { order: 1, doneAt: null },
+  });
+  const untouched = asWrite(
+    plan(
+      execution(made, {
+        questionRef: { captureId: 'turn-1', questionId: 'q' },
+      }),
+      [
+        target('q1', { lastEditedAt: null, stepState: stepState(null) }),
+        target('t2', { lastEditedAt: null }),
+      ],
+    ),
+  );
+  assert.deepEqual(
+    untouched.deletes.map((entry) => entry.docId),
+    ['q1', 't2'],
+  );
+  const ticked = asWrite(
+    plan(execution(made), [
+      target('q1', {
+        lastEditedAt: EARLIER + 1,
+        stepState: stepState(EARLIER + 1),
+      }),
+      target('t2', { lastEditedAt: null }),
+    ]),
+  );
+  assert.deepEqual(
+    ticked.deletes.map((entry) => entry.docId),
+    ['t2'],
+  );
+});
+
 test('a task the person changed is kept and the rest is taken back', () => {
   const result = asWrite(
     plan(execution(TWO_CREATES), [
@@ -247,6 +297,37 @@ test('an update still as written is reverted, resealed with notes and steps kept
     due: FRIDAY,
     isUrgent: true,
     'sealed.title': 'Call Dana now',
+  });
+});
+
+test('an update that set how a meeting happens puts the earlier value back', () => {
+  const written = { meets: { how: 'video', setBy: 'person' } };
+  const entry = update('t1', written, { meets: null });
+  const result = asWrite(
+    plan(execution([entry]), [
+      target('t1', { ...written, lastEditedAt: EARLIER }),
+    ]),
+  );
+  assert.equal(result.updates[0].fields.meets, null);
+  const kept = asRefused(
+    plan(execution([entry]), [
+      target('t1', { meets: { how: 'phone', setBy: 'person' } }),
+    ]),
+  );
+  assert.ok(kept);
+  const earlier = update(
+    't1',
+    { meets: { how: 'video', setBy: 'person' } },
+    { meets: { how: 'inPerson', setBy: 'calendar' } },
+  );
+  const back = asWrite(
+    plan(execution([earlier]), [
+      target('t1', { meets: { setBy: 'person', how: 'video' } }),
+    ]),
+  );
+  assert.deepEqual(back.updates[0].fields.meets, {
+    how: 'inPerson',
+    setBy: 'calendar',
   });
 });
 
@@ -681,6 +762,107 @@ test('"I\'m home" taken back to an earlier home that still holds says so', () =>
   assert.equal(result.undoSealed.summary, 'Took back being home');
 });
 
+const PERSONALITY_WRITTEN = {
+  traits: ['honest', 'brief', 'warm', 'blunt'],
+  honesty: 'straight',
+  keptClashes: [],
+};
+
+const sayPersonality = (previous: Record<string, unknown> | null) => ({
+  ref: { op: 'update', collection: 'profile', docId: 'uid-1' } as EffectRef,
+  effect: {
+    written: {
+      personality: PERSONALITY_WRITTEN,
+      personalitySetAt: EARLIER,
+      'sealed.title': 'How Juniper talks',
+      'sealed.detail': 'Blunt added · Honest, Brief, Warm, Blunt',
+    },
+    previous: {
+      personality: previous,
+      personalitySetAt: previous ? EARLIER - 1000 : null,
+      'sealed.title': 'How Juniper talks',
+      'sealed.detail': 'Blunt added · Honest, Brief, Warm, Blunt',
+    },
+  },
+});
+
+test('a changed personality is taken back by putting the previous one back', () => {
+  const { ref, effect } = sayPersonality(null);
+  const result = asWrite(
+    plan(execution([{ ref, effect }], { category: 'organize' }), [
+      target(
+        'uid-1',
+        {
+          personality: PERSONALITY_WRITTEN,
+          personalitySetAt: EARLIER,
+          lastEditedAt: EARLIER,
+        },
+        null,
+      ),
+    ]),
+  );
+  assert.deepEqual(result.deletes, []);
+  assert.deepEqual(result.updates, [
+    {
+      docId: 'uid-1',
+      collection: 'profile',
+      fields: { personality: null, personalitySetAt: null, lastEditedAt: NOW },
+      reseal: null,
+    },
+  ]);
+  assert.equal(result.report, 'Put back how it talks.');
+  assert.equal(result.undoSealed.summary, 'Put back how it talks');
+});
+
+test('a personality changed since is kept and said so', () => {
+  const { ref, effect } = sayPersonality({
+    traits: ['honest'],
+    honesty: 'straight',
+    keptClashes: [],
+  });
+  const result = asRefused(
+    plan(execution([{ ref, effect }]), [
+      target(
+        'uid-1',
+        {
+          personality: { ...PERSONALITY_WRITTEN, traits: ['honest', 'dry'] },
+          personalitySetAt: NOW,
+          lastEditedAt: NOW,
+        },
+        null,
+      ),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['How Juniper talks']);
+  assert.ok(result.report?.includes('How Juniper talks'));
+});
+
+test('a personality change is its own unit and result row, and a clash answer reopens', () => {
+  const { ref, effect } = sayPersonality(null);
+  const original = execution([{ ref, effect }]);
+  const { units } = buildUndoUnits(original);
+  assert.equal(units.length, 1);
+  assert.equal(units[0].kind, 'personality');
+  assert.equal(units[0].change, 'changed');
+  assert.equal(units[0].title, 'How Juniper talks');
+  const lines = buildResultLines(original, new Map(), 'UTC', NOW);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].title, 'How Juniper talks');
+  assert.equal(lines[0].detail, 'Blunt added · Honest, Brief, Warm, Blunt');
+  assert.equal(lines[0].unitKey, units[0].key);
+  assert.deepEqual(
+    planReopen(
+      { questionRef: { captureId: 'turn-1', questionId: 'q1' } },
+      {
+        status: 'sorted',
+        questionState: { q1: { kind: 'clashChoice', answeredAt: NOW } },
+      },
+    ),
+    { 'questionState.q1.answeredAt': null, status: 'needsYou' },
+  );
+});
+
 test('an import keeps a person who is in use and says so', () => {
   const result = asWrite(
     plan(
@@ -789,6 +971,10 @@ test('taking back a settle reopens its question and the turn; no other answer do
   assert.deepEqual(
     planReopen({ questionRef: ref }, capture('groupTopics', NOW, 'needsYou')),
     { 'questionState.q1.answeredAt': null },
+  );
+  assert.deepEqual(
+    planReopen({ questionRef: ref }, capture('questionsTask', NOW, 'sorted')),
+    { 'questionState.q1.answeredAt': null, status: 'needsYou' },
   );
   assert.equal(
     planReopen({ questionRef: ref }, capture('groupTopics', null, 'needsYou')),
@@ -1085,6 +1271,137 @@ test('a project the turn made is deleted by its undo, and says projects', () => 
     ['projects:p1'],
   );
   assert.equal(result.report, 'Took back 1 project.');
+});
+
+test('a quiet link is taken back record by record, then the grouping is a no and the generic plan never writes it', () => {
+  const link = update('t1', { projectId: 'p1' }, { projectId: null });
+  const grouping = {
+    ref: { op: 'update', collection: 'groupings', docId: 'g_1' } as EffectRef,
+    effect: {
+      written: { state: 'filed', linkedKeys: ['tasks/t1'] },
+      previous: { state: 'proposed', linkedKeys: [] },
+    },
+  };
+  const original = execution([link, grouping]);
+  const view = withoutGroupings(original);
+  assert.deepEqual(
+    view.effectRefs.map((ref) => ref.collection),
+    ['tasks'],
+  );
+  const result = asWrite(
+    plan(view, [target('t1', { projectId: 'p1' }, sealedOf('Pack the boxes'))]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => entry.docId),
+    ['t1'],
+  );
+  assert.equal(result.updates[0].fields.projectId, null);
+  const quiet = toGroupingUndoPatch('nomos', grouping.effect.previous, NOW);
+  assert.equal(quiet.state, 'notRelated');
+  assert.deepEqual(quiet.linkedKeys, []);
+  assert.deepEqual(
+    Object.keys(quiet).filter(
+      (key) =>
+        !['state', 'linkedKeys', 'answeredAt', 'updatedAt'].includes(key),
+    ),
+    [],
+  );
+  const own = toGroupingUndoPatch(
+    'person',
+    { state: 'proposed', parentId: null, answeredAt: null },
+    NOW,
+  );
+  assert.equal(own.state, 'proposed');
+  assert.equal(own.executionId, null);
+  assert.equal(
+    toGroupingUndoPatch('person', { state: 'notNow' }, NOW).state,
+    'notNow',
+  );
+});
+
+const quietExecution = () => {
+  const entry = (
+    collection: string,
+    docId: string,
+    written: Record<string, unknown>,
+    previous: Record<string, unknown>,
+  ) => ({
+    ref: { op: 'update', collection, docId } as EffectRef,
+    effect: { written, previous },
+  });
+  return execution([
+    entry('tasks', 't1', { projectId: 'p1' }, { projectId: null }),
+    entry('tasks', 't2', { projectId: 'p1' }, { projectId: null }),
+    entry('notes', 'n1', { projectIds: ['p0', 'p1'] }, { projectIds: ['p0'] }),
+    entry('topics', 'tp1', { projectIds: ['p1'] }, { projectIds: [] }),
+    entry(
+      'groupings',
+      'g_1',
+      { state: 'filed', linkedKeys: ['tasks/t1', 'tasks/t2'] },
+      { state: 'proposed', linkedKeys: [] },
+    ),
+  ]);
+};
+
+test('a quiet link with a grouping has no grouping unit and the grouping rides with the final undo', () => {
+  const original = quietExecution();
+  const built = buildUndoUnits(original);
+  assert.equal(built.units.length, 3);
+  assert.ok(
+    built.units.every((unit) => !unit.docIds.includes('g_1')),
+    'no unit holds the grouping',
+  );
+  const groupingIndex = original.effectRefs.findIndex(
+    (ref) => ref.collection === 'groupings',
+  );
+  assert.deepEqual(built.rest, [groupingIndex]);
+  const finals = ['t1', 't2', 'n1'].map((docId, at, all) => {
+    const done = new Set(all.slice(0, at));
+    const narrowed = narrowForUndo({ ...original, undoneDocIds: [...done] }, [
+      docId,
+    ]);
+    assert.equal(narrowed.kind, 'ok');
+    if (narrowed.kind !== 'ok') throw new Error('expected ok');
+    return {
+      isFinal: narrowed.isFinal,
+      hasGrouping: narrowed.view.effectRefs.some(
+        (ref) => ref.collection === 'groupings',
+      ),
+    };
+  });
+  assert.deepEqual(
+    finals.map((one) => one.isFinal),
+    [false, false, true],
+  );
+  assert.deepEqual(
+    finals.map((one) => one.hasGrouping),
+    [false, false, true],
+  );
+  assert.equal(toGroupingUndoPatch('nomos', null, NOW).state, 'notRelated');
+});
+
+test('a note quiet link and a topic quiet link are put back to their earlier project lists', () => {
+  const original = quietExecution();
+  const view = withoutGroupings(original);
+  const result = asWrite(
+    plan(view, [
+      target('t1', { projectId: 'p1' }, sealedOf('One')),
+      target('t2', { projectId: 'p1' }, sealedOf('Two')),
+      [
+        'n1',
+        {
+          docId: 'n1',
+          data: { projectIds: ['p0', 'p1'] },
+          opened: null,
+        },
+      ],
+      topicTarget('tp1', { projectIds: ['p1'] }),
+    ]),
+  );
+  const fieldsOf = (docId: string) =>
+    result.updates.find((entry) => entry.docId === docId)?.fields;
+  assert.deepEqual(fieldsOf('n1')?.projectIds, ['p0']);
+  assert.deepEqual(fieldsOf('tp1')?.projectIds, []);
 });
 
 test('a role the turn gave is stepped back with the earlier roles and notes, and a role changed since is kept', () => {
@@ -3275,6 +3592,192 @@ test('Save to my knowledge takes the note away while unedited and puts the quest
   const edited = asWrite(plan(kept, targets(NOW)));
   assert.deepEqual(edited.deletes, []);
   assert.deepEqual(edited.kept, ['Engines']);
+});
+
+const seenKey = {
+  ...deriveSeedDataKey(DEV_KEYRING, 'undo-seen-as'),
+  keyVersion: 1,
+};
+
+const seenDoc = (id: string, line: string, state: string, extra = {}) => {
+  const words: SeenAsSealed = {
+    line,
+    basis: 'From 2 things you said',
+    corrected: null,
+  };
+  const data = {
+    kind: 'whatWorks',
+    state,
+    sourceKeys: ['observations/a', 'observations/b'],
+    subjectRefs: [],
+    writtenBy: 'reflection',
+    dontDrawFrom: [],
+    derivedAt: EARLIER,
+    correctedAt: null,
+    removedAt: null,
+    privacy: 'ordinary',
+    createdAt: EARLIER,
+    sealed: sealForHelm(seenKey, { ...words }),
+    ...extra,
+  };
+  const record = toSeenAsRecord(seenKey, id, data);
+  assert.ok(record);
+  return { data, words, record };
+};
+
+const seenTurn = () => {
+  const one = seenDoc('sa_one', 'You work best in the morning', 'shown');
+  const two = seenDoc('sa_two', 'You skip the gym on Fridays', 'shown');
+  const planned = planSeenAs({
+    commands: [
+      {
+        kind: 'correctSeenAs',
+        lineId: 'sa_one',
+        words: 'I work best at night',
+      },
+      { kind: 'removeSeenAs', lineId: 'sa_two' },
+    ],
+    records: new Map([
+      ['sa_one', one.record],
+      ['sa_two', two.record],
+    ]),
+    now: EARLIER,
+    seal: (fields) => sealForHelm(seenKey, fields),
+    room: 10,
+  });
+  assert.equal(planned.effects.length, 2);
+  const original = execution(
+    planned.effectRefs.map((ref, index) => ({
+      ref: { ...ref, op: 'update' } as EffectRef,
+      effect: planned.effects[index] as ExecutionEffect,
+    })),
+  );
+  return { original, one, two };
+};
+
+test('undoing a turn that corrected one line and removed another puts both back exactly', () => {
+  const { original, one, two } = seenTurn();
+  const result = asWrite(
+    plan(original, [
+      [
+        'sa_one',
+        {
+          docId: 'sa_one',
+          data: {
+            ...one.data,
+            state: 'corrected',
+            correctedAt: EARLIER,
+            writtenBy: 'person',
+          },
+          opened: { ...one.words, corrected: 'I work best at night' },
+        },
+      ],
+      [
+        'sa_two',
+        {
+          docId: 'sa_two',
+          data: {
+            ...two.data,
+            state: 'removed',
+            removedAt: EARLIER,
+            dontDrawFrom: ['observations/a', 'observations/b'],
+          },
+          opened: { ...two.words, line: 'you skip the gym on fridays' },
+        },
+      ],
+    ]),
+  );
+  const byId = Object.fromEntries(result.updates.map((u) => [u.docId, u]));
+  assert.deepEqual(byId.sa_one.fields, {
+    state: 'shown',
+    correctedAt: null,
+    writtenBy: 'reflection',
+  });
+  assert.deepEqual(byId.sa_one.reseal, one.words);
+  assert.deepEqual(byId.sa_two.fields, {
+    state: 'shown',
+    removedAt: null,
+    dontDrawFrom: [],
+  });
+  assert.deepEqual(byId.sa_two.reseal, two.words);
+  assert.ok(result.updates.every((u) => u.collection === 'seenAs'));
+  assert.ok(!result.updates.some((u) => 'lastEditedAt' in u.fields));
+  assert.equal(result.undoSealed.summary, 'Put back 2 lines about you');
+  assert.equal(result.undoSealed.undoReport, 'Put back 2 lines about you.');
+});
+
+test('a line about the person is drawn and offered back under its own words, never as a task', () => {
+  const { original } = seenTurn();
+  const rows = buildResultLines(original, new Map(), 'UTC', NOW);
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    [HELM_COPY.resultSeenAsFallback, HELM_COPY.resultSeenAsFallback],
+  );
+  assert.ok(rows.every((row) => row.title !== HELM_COPY.resultTaskFallback));
+  const { units } = buildUndoUnits(original);
+  assert.deepEqual(
+    units.map((unit) => unit.kind),
+    ['seenAs', 'seenAs'],
+  );
+});
+
+test('a line changed again since the turn is left alone and the other still comes back', () => {
+  const { original, one, two } = seenTurn();
+  const result = asWrite(
+    plan(original, [
+      [
+        'sa_one',
+        {
+          docId: 'sa_one',
+          data: { ...one.data, state: 'corrected', correctedAt: EARLIER + 5 },
+          opened: { ...one.words, corrected: 'Something I said later' },
+        },
+      ],
+      [
+        'sa_two',
+        {
+          docId: 'sa_two',
+          data: {
+            ...two.data,
+            state: 'removed',
+            removedAt: EARLIER,
+            dontDrawFrom: ['observations/a', 'observations/b'],
+          },
+          opened: { ...two.words, line: 'you skip the gym on fridays' },
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    result.updates.map((u) => u.docId),
+    ['sa_two'],
+  );
+  assert.equal(result.kept.length, 1);
+});
+
+test('a turn whose lines were all changed since takes nothing back', () => {
+  const { original, one, two } = seenTurn();
+  const refused = asRefused(
+    plan(original, [
+      [
+        'sa_one',
+        {
+          docId: 'sa_one',
+          data: { ...one.data, state: 'corrected', correctedAt: EARLIER + 5 },
+          opened: { ...one.words, corrected: 'later' },
+        },
+      ],
+      [
+        'sa_two',
+        {
+          docId: 'sa_two',
+          data: { ...two.data, state: 'shown' },
+          opened: two.words,
+        },
+      ],
+    ]),
+  );
+  assert.equal(refused.reason, 'nothingToTakeBack');
 });
 
 const failures: string[] = [];

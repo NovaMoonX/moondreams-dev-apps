@@ -31,6 +31,10 @@ import {
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '../../src/apps/helm/constants.ts';
+import {
+  toGroupingId,
+  type GroupingSource,
+} from '../../src/apps/helm/engine/grouping.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
   buildConnection,
@@ -89,6 +93,8 @@ import type {
   HelmDaySummarySealed,
   HelmEncryption,
   PlanDaySealed,
+  DayAims,
+  DayAimsSealed,
   PlanSlot,
   Task,
   TaskDue,
@@ -100,6 +106,8 @@ import type {
   StyleSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
+  Grouping,
+  GroupingSealed,
   Topic,
   TopicDepth,
   TopicSealed,
@@ -167,6 +175,11 @@ const SEED_PROFILES = [
     assistantName: null,
     assistantTone: null,
     theme: null,
+    personality: {
+      traits: ['honest', 'brief', 'warm'],
+      honesty: 'straight',
+      keptClashes: [],
+    },
   },
   {
     user: FIXTURE_USERS.partnerTwo,
@@ -174,10 +187,33 @@ const SEED_PROFILES = [
     assistantName: 'Juniper',
     assistantTone: 'warm',
     theme: 'plum',
+    personality: {
+      traits: ['warm', 'blunt', 'gentle'],
+      honesty: 'straight',
+      keptClashes: ['blunt+gentle'],
+    },
   },
 ];
 
 const SORT_DELAY_MS = 4_000;
+
+const toSyncedId = (grantId: string, category: string, sourceRef: string) =>
+  createHash('sha256')
+    .update(`${grantId}|${category}|${sourceRef}`)
+    .digest('hex')
+    .slice(0, 40);
+const SEED_RUNWAY_GRANT_ID = toGrantId(
+  'helm',
+  toAppConnectorId('runway'),
+  SITE_ACCOUNT_ID,
+);
+const SEED_GOING_ONCE_GRANT_ID = toGrantId(
+  'helm',
+  toAppConnectorId('going-once'),
+  SITE_ACCOUNT_ID,
+);
+const SEED_GOING_ONCE_SALE_REF = 'sales/seed-going-once-fall-clear-out';
+const SEED_MOVING_HORIZON_REF = 'horizon/seed-moving-fund';
 
 // Alex's one fixture Google account: its calendars are the two a fixture read offers, the second marked as shifts.
 const GOOGLE_ACCOUNT_ID = `${GOOGLE_ACCOUNT_PREFIX}${createHash('sha256').update('fixture-personal').digest('hex').slice(0, 16)}`;
@@ -202,6 +238,12 @@ const NIGHT_SHIFT_COPY_ID = createHash('sha256')
   .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${NIGHT_SHIFT_SOURCE_REF}`)
   .digest('hex')
   .slice(0, 40);
+const PLANNING_SOURCE_REF = `${GOOGLE_PRIMARY_CALENDAR}|fx-planning-call`;
+const PLANNING_COPY_ID = createHash('sha256')
+  .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${PLANNING_SOURCE_REF}`)
+  .digest('hex')
+  .slice(0, 40);
+const PLANNING_TITLE = 'Planning call with Priya and Sam';
 const CAKE_TITLE = 'Cake tasting at Sweet Layer Bakery';
 const CAKE_ZONE = 'America/Los_Angeles';
 const GMAIL_GATE_ID = 'google-mail-and-drive';
@@ -681,6 +723,7 @@ async function buildBackToBack(input: {
         whoIds: [],
         placeIds: [],
         planDayKey: null,
+        aimsDayKey: null,
         createdAt,
         sortedAt,
         screen: null,
@@ -711,6 +754,7 @@ async function buildBackToBack(input: {
         isUrgent: false,
         due: null,
         durationMinutes: null,
+        effort: null,
         energy: null,
         context: null,
         projectId: null,
@@ -721,6 +765,9 @@ async function buildBackToBack(input: {
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
         stepState: {},
+        meeting: null,
+        readyAnswer: null,
+        meets: null,
         mediaIds: [],
         createdBy: 'nomos',
         sourceCaptureId: leadId,
@@ -734,6 +781,7 @@ async function buildBackToBack(input: {
             title,
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: null,
             isPrivacyCleared: false,
             quietMark: null,
@@ -950,6 +998,15 @@ const toCakeTimes = (now: number) => {
   };
 };
 
+// Tomorrow 10:00 to 10:45 AM, so the questions for the couple are due their "Do they feel ready?" on Today.
+const toPlanningCallTimes = (now: number) => {
+  const date = new Date(getSeedToday(now) + DAY_MS).toISOString().slice(0, 10);
+  return {
+    startAt: zonedDateTimeToEpoch(date, '10:00', CAKE_ZONE),
+    endAt: zonedDateTimeToEpoch(date, '10:45', CAKE_ZONE),
+  };
+};
+
 // Tonight 7:30 PM to tomorrow 7:30 AM, so tomorrow is a rest day and today stays a normal one.
 const toNightShiftTimes = (now: number) => {
   const today = getSeedToday(now);
@@ -1056,6 +1113,7 @@ async function buildGmailTurn(input: {
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt,
     screen: null,
@@ -1221,6 +1279,7 @@ async function buildAnswerTurns(input: {
         whoIds: [],
         placeIds: [],
         planDayKey: null,
+        aimsDayKey: null,
         createdAt,
         sortedAt,
         screen: null,
@@ -1333,6 +1392,7 @@ async function buildAnswerTurns(input: {
         isUrgent: false,
         due: { kind: 'day', date: today + entry.dueDays * DAY_MS },
         durationMinutes: null,
+        effort: null,
         energy: null,
         context: null,
         projectId: null,
@@ -1343,6 +1403,9 @@ async function buildAnswerTurns(input: {
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
         stepState: {},
+        meeting: null,
+        readyAnswer: null,
+        meets: null,
         mediaIds: [],
         createdBy: 'person',
         sourceCaptureId: null,
@@ -1356,6 +1419,7 @@ async function buildAnswerTurns(input: {
             title: entry.title,
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: entry.isHealth ? 'health' : null,
             isPrivacyCleared: false,
             quietMark: null,
@@ -1432,6 +1496,7 @@ async function buildPlanDays(input: {
     status: 'kept',
     source,
     decidedAt: at(key, from) - 2 * 60 * MINUTE_MS,
+    overlapsEventRef: null,
   });
   const doneTitle = "Send RSVP for Priya's party";
   const doneTask: Task = {
@@ -1441,6 +1506,7 @@ async function buildPlanDays(input: {
     isUrgent: false,
     due: null,
     durationMinutes: 30,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,
@@ -1451,6 +1517,9 @@ async function buildPlanDays(input: {
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: null,
@@ -1464,6 +1533,7 @@ async function buildPlanDays(input: {
         title: doneTitle,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,
@@ -1586,8 +1656,50 @@ async function buildPlanDays(input: {
       sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
     },
   };
+  const aim = (taskId: string, order: number, broughtFrom: string | null) => ({
+    aimId: `seed-aim-${taskId}`,
+    taskId,
+    order,
+    lengthIsGuess: false,
+    broughtFrom,
+  });
+  const dayAims = async (
+    key: string,
+    payload: DayAimsSealed,
+    state: DayAims['state'],
+  ): Promise<{ id: string; doc: DayAims }> => ({
+    id: key,
+    doc: {
+      date: Date.parse(key),
+      state,
+      windDownState: 'waiting',
+      lookAt: null,
+      rolledAt: null,
+      sealed: await sealJson<DayAimsSealed>(payload, encryption),
+    },
+  });
+  // Today is still open with one aim, so the morning card asks, lists "From yesterday" and, in the last 2 hours of the day, winds down.
+  const aimDays = await Promise.all([
+    dayAims(
+      yesterdayKey,
+      {
+        aims: [
+          aim('seed-task-plan-done', 1, null),
+          aim('seed-task-3-1', 2, null),
+        ],
+        windDown: {},
+      },
+      'answered',
+    ),
+    dayAims(
+      todayKey,
+      { aims: [aim('seed-task-hand-2', 1, null)], windDown: {} },
+      'open',
+    ),
+  ]);
   return {
     days,
+    aimDays,
     summary,
     task: { id: 'seed-task-plan-done', task: doneTask },
   };
@@ -1758,7 +1870,7 @@ export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone, plus 🎨 Paint the spare room, active and just made, which the start-time hold guardrail is about. */
+/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, five tasks: one overdue, one waiting on Dana, "Finish the ceremony draft", one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone, plus 🎨 Paint the spare room, active and just made, which the start-time hold guardrail is about, and the project-less tasks "Questions for Priya and Sam" (six steps, two answered) for tomorrow's planning call and "Send Priya the readings list". */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1814,6 +1926,7 @@ async function buildProjects(input: {
     id: string,
     title: string,
     fields: Partial<Task> & Pick<Task, 'projectId' | 'createdAt'>,
+    words: Partial<TaskSealed> = {},
   ): Promise<{ id: string; task: Task }> => ({
     id,
     task: {
@@ -1823,6 +1936,7 @@ async function buildProjects(input: {
       isUrgent: false,
       due: null,
       durationMinutes: null,
+      effort: null,
       energy: null,
       context: null,
       milestoneId: null,
@@ -1832,6 +1946,9 @@ async function buildProjects(input: {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
+      meets: null,
       mediaIds: [],
       createdBy: 'person',
       sourceCaptureId: null,
@@ -1844,11 +1961,13 @@ async function buildProjects(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: fields.privacy === 'private' ? 'health' : null,
         isPrivacyCleared: false,
         quietMark: null,
         quietUntil: null,
         isQuietCleared: false,
+        ...words,
       }),
     },
   });
@@ -2126,6 +2245,7 @@ async function buildProjects(input: {
       },
     ),
   ]);
+  const planningStartAt = toPlanningCallTimes(now).startAt;
   const tasks = await Promise.all([
     taskOf('seed-task-wedding-1', 'Book the string quartet', {
       projectId: 'seed-project-wedding',
@@ -2149,6 +2269,18 @@ async function buildProjects(input: {
       createdAt: now - 44 * DAY_MS,
       completedAt: now - 30 * DAY_MS,
     }),
+    taskOf('seed-task-ceremony-draft', 'Finish the ceremony draft', {
+      projectId: 'seed-project-wedding',
+      due: { kind: 'day', date: today + 2 * DAY_MS },
+      durationMinutes: 120,
+      createdAt: now - 6 * DAY_MS,
+    }),
+    taskOf('seed-task-readings-list', 'Send Priya the readings list', {
+      projectId: null,
+      due: { kind: 'day', date: today + DAY_MS },
+      durationMinutes: 20,
+      createdAt: now - 4 * DAY_MS,
+    }),
     taskOf('seed-task-medicine', 'Take the morning medicine', {
       projectId: null,
       privacy: 'private',
@@ -2162,6 +2294,55 @@ async function buildProjects(input: {
       },
       createdAt: now - 2 * DAY_MS,
     }),
+    taskOf(
+      'seed-task-questions-couple',
+      'Questions for Priya and Sam',
+      {
+        projectId: null,
+        whoIds: ['seed-who-priya-raman', 'seed-who-sam-rivera'],
+        stepState: Object.fromEntries(
+          Array.from({ length: 6 }, (_, order) => [
+            `seed-step-question-${order + 1}`,
+            {
+              order,
+              doneAt: order < 2 ? now - (2 - order) * 60 * MINUTE_MS : null,
+            },
+          ]),
+        ),
+        meeting: { syncedId: PLANNING_COPY_ID, startAt: planningStartAt },
+        readyAnswer: null,
+        meets: null,
+        createdAt: now - 2 * DAY_MS,
+      },
+      {
+        steps: Object.fromEntries(
+          [
+            'How did you two meet?',
+            'What do you want people to feel at the ceremony?',
+            'Is there a story you want told, or one you want left out?',
+            'Who should I thank by name?',
+            'Do you want to write any of your own vows?',
+            'How long should the ceremony run?',
+          ].map((text, index) => [`seed-step-question-${index + 1}`, { text }]),
+        ),
+        meetingLabel: PLANNING_TITLE,
+      },
+    ),
+    taskOf('seed-task-coffee-priya', 'Coffee with Priya', {
+      projectId: null,
+      whoIds: ['seed-who-priya-raman'],
+      placeIds: ['seed-place-milstead'],
+      due: {
+        kind: 'moment',
+        at: zonedDateTimeToEpoch(
+          new Date(today + DAY_MS).toISOString().slice(0, 10),
+          '08:30',
+          'America/Los_Angeles',
+        ),
+      },
+      meets: { how: 'inPerson', setBy: 'person' },
+      createdAt: now - DAY_MS,
+    }),
     taskOf('seed-task-move-1', 'Change the address', {
       projectId: 'seed-project-move',
       status: 'done',
@@ -2170,6 +2351,324 @@ async function buildProjects(input: {
     }),
   ]);
   return { projects, tasks };
+}
+
+/** Alex's Moving project with what the overnight grouping did with it: two tasks the filed grouping linked to it quietly, with its server execution (the home's "Linked 3 things to Moving. · Undo" line), and a proposed grouping of a task, a topic and two Going Once records (the home's "These look like one thing" card). */
+async function buildGroupings(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const today = getSeedToday(now);
+  const projectId = 'seed-project-moving';
+  const dayKey = habitDayKey(now, timeZone);
+  const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const project: Project = {
+    privacy: 'ordinary',
+    kind: 'project',
+    targetDate: today + 26 * DAY_MS,
+    status: 'active',
+    whoRoles: {},
+    pausedAt: null,
+    pausedUntil: null,
+    researchOffers: [],
+    milestoneState: {},
+    mediaIds: [],
+    createdBy: 'person',
+    executionId: null,
+    lastEditedAt: null,
+    createdAt: now - 12 * DAY_MS,
+    finishedAt: null,
+    sealed: await seal<ProjectSealed>({
+      name: 'Moving',
+      emoji: '🚚',
+      objective: null,
+      milestones: {},
+      roleNotes: {},
+      why: null,
+      importance: null,
+      aheadAsks: null,
+      privateMark: null,
+      isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
+    }),
+  };
+  const taskOf = async (
+    title: string,
+    fields: Pick<Task, 'projectId' | 'createdAt'>,
+  ): Promise<Task> => ({
+    privacy: 'ordinary',
+    status: 'open',
+    importance: null,
+    isUrgent: false,
+    due: null,
+    durationMinutes: null,
+    effort: null,
+    energy: null,
+    context: null,
+    milestoneId: null,
+    whoIds: [],
+    placeIds: [],
+    notUntil: null,
+    waitsOnTaskIds: [],
+    waitsOnWhoId: null,
+    stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
+    mediaIds: [],
+    createdBy: 'person',
+    sourceCaptureId: null,
+    executionId: null,
+    lastEditedAt: null,
+    completedAt: null,
+    clearedAt: null,
+    ...fields,
+    sealed: await seal<TaskSealed>({
+      title,
+      notes: null,
+      steps: {},
+      meetingLabel: null,
+      privateMark: null,
+      isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
+    }),
+  });
+  const tasks = [
+    {
+      id: 'seed-task-moving-boxes',
+      title: 'Pick up packing boxes',
+      task: await taskOf('Pick up packing boxes', {
+        projectId,
+        createdAt: now - 6 * DAY_MS,
+      }),
+    },
+    {
+      id: 'seed-task-moving-utilities',
+      title: 'Move the electricity account',
+      task: await taskOf('Move the electricity account', {
+        projectId,
+        createdAt: now - 5 * DAY_MS,
+      }),
+    },
+    {
+      id: 'seed-task-moving-movers',
+      title: 'Book the movers',
+      task: await taskOf('Book the movers', {
+        projectId: null,
+        createdAt: now - 2 * DAY_MS,
+      }),
+    },
+  ];
+  const topic: Topic = {
+    privacy: 'ordinary',
+    parentId: null,
+    depth: 1,
+    projectIds: [],
+    version: 0,
+    docState: 'empty',
+    pendingNoteIds: [],
+    writeClaim: null,
+    overviewOf: {},
+    createdBy: 'person',
+    executionId: null,
+    createdAt: now - 4 * DAY_MS,
+    lastEditedAt: null,
+    lastWrittenAt: null,
+    sealed: await seal<TopicSealed>({
+      name: 'Moving day tips',
+      emoji: '📦',
+      overview: null,
+      sections: [],
+      privateMark: null,
+      isPrivacyCleared: false,
+    }),
+  };
+  const syncedKey = (grantId: string, category: string, ref: string) =>
+    `synced/${toSyncedId(grantId, category, ref)}`;
+  const horizonKey = syncedKey(
+    SEED_RUNWAY_GRANT_ID,
+    'horizon',
+    SEED_MOVING_HORIZON_REF,
+  );
+  const deskKey = syncedKey(
+    SEED_GOING_ONCE_GRANT_ID,
+    'pickups',
+    `${SEED_GOING_ONCE_SALE_REF}/items/seed-go-oak-desk`,
+  );
+  const saleKey = syncedKey(
+    SEED_GOING_ONCE_GRANT_ID,
+    'sales',
+    SEED_GOING_ONCE_SALE_REF,
+  );
+  const filedKeys = [
+    'tasks/seed-task-moving-boxes',
+    'tasks/seed-task-moving-utilities',
+    horizonKey,
+  ];
+  const proposedKeys = [
+    'tasks/seed-task-moving-movers',
+    'topics/seed-topic-moving-tips',
+    deskKey,
+    saleKey,
+  ];
+  const filedId = toGroupingId(uid, filedKeys);
+  const proposedId = toGroupingId(uid, proposedKeys);
+  const executionId = `relate-${filedId}`;
+  const filedAt = now - 9 * 3_600_000;
+  const groupingOf = async (
+    keys: string[],
+    sources: GroupingSource[],
+    fields: Pick<
+      Grouping,
+      | 'state'
+      | 'confidence'
+      | 'evidence'
+      | 'linkedKeys'
+      | 'executionId'
+      | 'answeredAt'
+      | 'proposedAt'
+    >,
+    words: GroupingSealed,
+  ): Promise<Grouping> => ({
+    parentKind: 'project',
+    parentId: projectId,
+    sourceKeys: keys,
+    sources,
+    declineCount: 0,
+    nextOfferAfter: null,
+    toldAt: null,
+    dayKey,
+    updatedAt: fields.proposedAt,
+    privacy: 'ordinary',
+    createdBy: 'nomos',
+    ...fields,
+    sealed: await seal<GroupingSealed>(words),
+  });
+  const filed = await groupingOf(
+    filedKeys,
+    [
+      { key: filedKeys[0], app: null, kind: 'task' },
+      { key: filedKeys[1], app: null, kind: 'task' },
+      {
+        key: horizonKey,
+        app: toAppConnectorId('runway'),
+        kind: 'project',
+      },
+    ],
+    {
+      state: 'filed',
+      confidence: 'certain',
+      evidence: ['titleMatch', 'datedEvent'],
+      linkedKeys: filedKeys,
+      executionId,
+      answeredAt: null,
+      proposedAt: filedAt,
+    },
+    {
+      proposedTitle: 'Moving',
+      emoji: '🚚',
+      titles: {
+        [filedKeys[0]]: 'Pick up packing boxes',
+        [filedKeys[1]]: 'Move the electricity account',
+        [horizonKey]: 'Moving',
+      },
+    },
+  );
+  const proposed = await groupingOf(
+    proposedKeys,
+    [
+      { key: proposedKeys[0], app: null, kind: 'task' },
+      { key: proposedKeys[1], app: null, kind: 'topic' },
+      { key: deskKey, app: toAppConnectorId('going-once'), kind: 'event' },
+      { key: saleKey, app: toAppConnectorId('going-once'), kind: 'project' },
+    ],
+    {
+      state: 'proposed',
+      confidence: 'likely',
+      evidence: ['titleMatch', 'datedEvent'],
+      linkedKeys: [],
+      executionId: null,
+      answeredAt: null,
+      proposedAt: now - 3_600_000,
+    },
+    {
+      proposedTitle: 'Moving',
+      emoji: '🚚',
+      titles: {
+        [proposedKeys[0]]: 'Book the movers',
+        [proposedKeys[1]]: 'Moving day tips',
+        [deskKey]: 'Oak desk',
+        [saleKey]: 'Fall clear-out',
+      },
+    },
+  );
+  const execution: Execution = {
+    privacy: 'ordinary',
+    captureId: null,
+    actor: 'nomos',
+    via: null,
+    category: 'organize',
+    autonomyLevel: 1,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'update', collection: 'tasks', docId: 'seed-task-moving-boxes' },
+      {
+        op: 'update',
+        collection: 'tasks',
+        docId: 'seed-task-moving-utilities',
+      },
+      { op: 'create', collection: 'groupings', docId: filedId },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: filedAt,
+    decidedAt: filedAt,
+    finishedAt: filedAt,
+    sealed: await seal<ExecutionSealed>({
+      summary: 'Linked 3 things to Moving.',
+      said: null,
+      commands: [],
+      effects: [
+        { written: { projectId }, previous: { projectId: null } },
+        { written: { projectId }, previous: { projectId: null } },
+        {
+          written: { state: 'filed', linkedKeys: filedKeys },
+          previous: null,
+        },
+      ],
+      undoReport: null,
+      spoken: null,
+      heldSpoken: null,
+      goneIds: null,
+      undoReason: null,
+      lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
+    }),
+  };
+  return {
+    project: { id: projectId, project },
+    tasks,
+    topic: { id: 'seed-topic-moving-tips', topic },
+    groupings: [
+      { id: filedId, grouping: filed },
+      { id: proposedId, grouping: proposed },
+    ],
+    execution: { id: executionId, execution },
+  };
 }
 
 /** A habit as stored: every key written, its words sealed. */
@@ -3283,6 +3782,7 @@ async function buildNoteTurn(input: {
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt,
     screen: null,
@@ -3998,6 +4498,7 @@ async function buildKnowledge(input: {
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt,
     sortedAt: createdAt + SORT_DELAY_MS,
     screen: null,
@@ -4815,6 +5316,7 @@ async function buildPhotoTurns(input: {
       whoIds: [],
       placeIds: [],
       planDayKey: null,
+      aimsDayKey: null,
       createdAt,
       sortedAt: createdAt + SORT_DELAY_MS,
       screen: null,
@@ -4905,6 +5407,7 @@ async function buildPhotoTurns(input: {
     isUrgent: false,
     due: null,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,
@@ -4915,6 +5418,9 @@ async function buildPhotoTurns(input: {
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'nomos',
     sourceCaptureId: keptTurn,
@@ -4928,6 +5434,7 @@ async function buildPhotoTurns(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,
@@ -5142,6 +5649,7 @@ async function buildFileTurns(input: {
       whoIds: [],
       placeIds: [],
       planDayKey: null,
+      aimsDayKey: null,
       createdAt,
       sortedAt: createdAt + SORT_DELAY_MS,
       screen: null,
@@ -5295,6 +5803,7 @@ async function buildFileTurns(input: {
       isUrgent: false,
       due,
       durationMinutes: null,
+      effort: null,
       energy: null,
       context: null,
       projectId: null,
@@ -5305,6 +5814,9 @@ async function buildFileTurns(input: {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
+      meets: null,
       mediaIds: [],
       createdBy: 'nomos',
       sourceCaptureId: turn.id,
@@ -5317,6 +5829,7 @@ async function buildFileTurns(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,
@@ -6032,6 +6545,18 @@ async function buildPeople(input: {
       isPrivacyCleared: false,
     }),
   };
+  const milstead: Place = {
+    ...home,
+    isHome: false,
+    sealed: await seal<PlaceSealed>({
+      name: 'Milstead & Co.',
+      aliases: [],
+      address: null,
+      notes: null,
+      privateMark: null,
+      isPrivacyCleared: false,
+    }),
+  };
   const taskOf = async (
     title: string,
     links: Pick<Task, 'whoIds' | 'placeIds'>,
@@ -6045,6 +6570,7 @@ async function buildPeople(input: {
       isUrgent: false,
       due: null,
       durationMinutes: null,
+      effort: null,
       energy: null,
       context: null,
       projectId: null,
@@ -6054,6 +6580,9 @@ async function buildPeople(input: {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
+      meets: null,
       mediaIds: [],
       createdBy: 'person',
       sourceCaptureId: null,
@@ -6066,6 +6595,7 @@ async function buildPeople(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,
@@ -6189,6 +6719,7 @@ async function buildPeople(input: {
     createdAt: questionAt,
     sortedAt: questionAt + SORT_DELAY_MS,
     planDayKey: null,
+    aimsDayKey: null,
     screen: null,
     sealed: await seal({
       text: questionText,
@@ -6292,6 +6823,7 @@ async function buildPeople(input: {
     createdAt: askedAt,
     sortedAt: askedAt + SORT_DELAY_MS,
     planDayKey: null,
+    aimsDayKey: null,
     screen: null,
     sealed: await seal({
       text: askedText,
@@ -6352,6 +6884,7 @@ async function buildPeople(input: {
     createdAt: turnAt,
     sortedAt: turnAt + SORT_DELAY_MS,
     planDayKey: null,
+    aimsDayKey: null,
     screen: null,
     sealed: await seal<CaptureSealed>({
       text,
@@ -6986,6 +7519,7 @@ async function buildPeople(input: {
         id: 'seed-place-home',
         place: { ...home, photoMediaIds: [homePhoto.id] },
       },
+      { id: 'seed-place-milstead', place: milstead },
     ],
     media: [misoPhoto, homePhoto],
     tasks,
@@ -7033,13 +7567,23 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
 
   const turnCounts = await Promise.all(
     SEED_PROFILES.map(
-      async ({ user, timeZone, assistantName, assistantTone, theme }) => {
+      async ({
+        user,
+        timeZone,
+        assistantName,
+        assistantTone,
+        theme,
+        personality,
+      }) => {
         batch.set(users.doc(user.uid), {
           timeZone,
           assistantName,
           assistantNameVariants:
             assistantName === 'Juniper' ? ['juniper', 'june per'] : null,
           assistantTone,
+          personality,
+          personalitySetAt: null,
+          personalityPreview: null,
           theme,
           dayStartTime: DEFAULT_DAY_START_TIME,
           dayEndTime: DEFAULT_DAY_END_TIME,
@@ -7070,11 +7614,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           isLearningOn: true,
           patternsCheckedOn: habitDayKey(context.now, HABIT_ZONE),
           reflectDueAt: null,
+          relateDueAt: null,
           forgottenAt: null,
           prunedOn: habitDayKey(context.now, HABIT_ZONE),
           outsideSeenAt: null,
           researchDepth: null,
           researchAllowance: null,
+          calendarSync: null,
           createdAt,
           lastEditedAt: null,
         });
@@ -7168,6 +7714,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               whoIds: [],
               placeIds: [],
               planDayKey: null,
+              aimsDayKey: null,
               createdAt: turnTime,
               sortedAt: isSorted ? sortedAt : null,
               screen: isMove ? MOVE_SCREEN : null,
@@ -7191,6 +7738,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   isUrgent: false,
                   due,
                   durationMinutes: null,
+                  effort: null,
                   energy: null,
                   context: null,
                   projectId: null,
@@ -7201,6 +7749,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   waitsOnTaskIds: [],
                   waitsOnWhoId: null,
                   stepState: {},
+                  meeting: null,
+                  readyAnswer: null,
+                  meets: null,
                   mediaIds: [],
                   createdBy: 'nomos',
                   sourceCaptureId: `seed-turn-${index + 1}`,
@@ -7214,6 +7765,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       title,
                       notes: null,
                       steps: {},
+                      meetingLabel: null,
                       privateMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
                       isPrivacyCleared: false,
                       quietMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
@@ -7388,6 +7940,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   ? { kind: 'day', date: today + entry.dueDays * DAY_MS }
                   : null,
               durationMinutes: entry.durationMinutes ?? null,
+              effort: null,
               energy: entry.energy ?? null,
               context: entry.context ?? null,
               projectId: null,
@@ -7410,6 +7963,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   },
                 ]),
               ),
+              meeting: null,
+              readyAnswer: null,
+              meets: null,
               mediaIds: [],
               createdBy: 'person',
               sourceCaptureId: null,
@@ -7428,6 +7984,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       { text: (entry.steps ?? [])[order] },
                     ]),
                   ),
+                  meetingLabel: null,
                   privateMark: null,
                   isPrivacyCleared: false,
                   quietMark: null,
@@ -7563,6 +8120,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         if (planDays) {
           planDays.days.forEach((entry) =>
             batch.set(person.collection('planDays').doc(entry.id), entry.day),
+          );
+          planDays.aimDays.forEach((entry) =>
+            batch.set(person.collection('dayAims').doc(entry.id), entry.doc),
           );
           batch.set(
             person.collection('daySummaries').doc(planDays.summary.id),
@@ -7753,6 +8313,37 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             batch.set(person.collection('tasks').doc(entry.id), entry.task),
           );
         }
+        const groupingWorld = people
+          ? await buildGroupings({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+        if (groupingWorld) {
+          batch.set(
+            person.collection('projects').doc(groupingWorld.project.id),
+            groupingWorld.project.project,
+          );
+          groupingWorld.tasks.forEach((entry) =>
+            batch.set(person.collection('tasks').doc(entry.id), entry.task),
+          );
+          batch.set(
+            person.collection('topics').doc(groupingWorld.topic.id),
+            groupingWorld.topic.topic,
+          );
+          groupingWorld.groupings.forEach((entry) =>
+            batch.set(
+              person.collection('groupings').doc(entry.id),
+              entry.grouping,
+            ),
+          );
+          batch.set(
+            person.collection('executions').doc(groupingWorld.execution.id),
+            groupingWorld.execution.execution,
+          );
+        }
         const habitWorld = people
           ? await buildHabits({ now: context.now, encryption })
           : null;
@@ -7845,6 +8436,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               person.collection('executions').doc(entry.id),
               entry.execution,
             ),
+          );
+          learning.seenAs.forEach((entry) =>
+            batch.set(person.collection('seenAs').doc(entry.id), entry.line),
           );
         }
         const knowledge = people
@@ -7953,6 +8547,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             1 +
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
+            (groupingWorld
+              ? 1 +
+                groupingWorld.tasks.length +
+                1 +
+                groupingWorld.groupings.length +
+                1
+              : 0) +
             (habitWorld
               ? habitWorld.habits.length + habitWorld.days.length
               : 0) +
@@ -7962,7 +8563,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               ? learning.patterns.length +
                 learning.observations.length +
                 learning.reflections.length +
-                learning.executions.length
+                learning.executions.length +
+                learning.seenAs.length
               : 0) +
             (knowledge
               ? knowledge.topics.length +
@@ -7987,7 +8589,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           answerTurns.notes.length +
           (gmailTurn ? 3 : 0) +
           (noteTurn ? 3 : 0) +
-          (planDays ? planDays.days.length + 2 : 0);
+          (planDays ? planDays.days.length + planDays.aimDays.length + 2 : 0);
         return (
           backToBackCount +
           turns.reduce(
@@ -8081,10 +8683,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   ) => {
     const data = deriveSeedDataKey(keyring, uid);
     copies.forEach((copy) => {
-      const id = createHash('sha256')
-        .update(`${source.grantId}|${copy.category}|${copy.sourceRef}`)
-        .digest('hex')
-        .slice(0, 40);
+      const id = toSyncedId(source.grantId, copy.category, copy.sourceRef);
       batch.set(users.doc(uid).collection('synced').doc(id), {
         connectorId: source.connectorId,
         accountId: SITE_ACCOUNT_ID,
@@ -8292,7 +8891,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     goingOnceConnectorId,
     SITE_ACCOUNT_ID,
   );
-  const goingOnceSaleRef = 'sales/seed-going-once-fall-clear-out';
+  const goingOnceSaleRef = SEED_GOING_ONCE_SALE_REF;
   const goingOnceCopies: CopyDefinition[] = [
     {
       category: 'pickups',
@@ -8610,6 +9209,19 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       },
       deepLink: '/runway',
     },
+    {
+      category: 'horizon',
+      sourceRef: SEED_MOVING_HORIZON_REF,
+      kind: 'project',
+      title: 'Moving',
+      subtitle: null,
+      startAt: null,
+      dueAt: Math.floor((context.now + 26 * DAY_MS) / DAY_MS) * DAY_MS,
+      isAllDay: true,
+      amountCents: 450_000,
+      currency: runwaySummary.currency,
+      deepLink: '/runway',
+    },
   ];
   const runwayGrant: ConnectionGrant = {
     readerAppId: 'helm',
@@ -8626,7 +9238,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         changedAt: connectedAt,
         seenScopeVersion: null,
       },
-      horizon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      horizon: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       transactions: {
         isOn: true,
         changedAt: connectedAt,
@@ -8765,7 +9377,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
     categoryState: {
-      events: { lastOkAt: syncedAt, lastError: null, count: 2 },
+      events: { lastOkAt: syncedAt, lastError: null, count: 3 },
     },
     errors: [],
     newCategoryIds: [],
@@ -8886,6 +9498,51 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             calendarId: GOOGLE_PRIMARY_CALENDAR,
             isTentative: false,
             isFree: false,
+          },
+        },
+      ),
+    },
+  );
+  const planningTimes = toPlanningCallTimes(context.now);
+  batch.set(
+    users
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('synced')
+      .doc(PLANNING_COPY_ID),
+    {
+      connectorId: googleConnectorId,
+      accountId: GOOGLE_ACCOUNT_ID,
+      grantId: GOOGLE_CALENDAR_GRANT_ID,
+      category: 'events',
+      kind: 'event',
+      sourceRef: PLANNING_SOURCE_REF,
+      startAt: planningTimes.startAt,
+      endAt: planningTimes.endAt,
+      isAllDay: false,
+      dueAt: null,
+      calendarKey: `${GOOGLE_ACCOUNT_ID}/${GOOGLE_PRIMARY_CALENDAR}`,
+      isBusy: true,
+      sourceUpdatedAt: syncedAt - DAY_MS,
+      contentHash: `seed-${PLANNING_COPY_ID}`,
+      syncedAt,
+      transformVersion: 1,
+      connectionEndedAt: null,
+      deleteAfter: null,
+      sealed: sealForHelm(
+        { ...alexKey, keyVersion: 1 },
+        {
+          title: PLANNING_TITLE,
+          subtitle: null,
+          detail: null,
+          placeLabel: null,
+          amountCents: null,
+          currency: null,
+          deepLink: null,
+          extra: {
+            calendarId: GOOGLE_PRIMARY_CALENDAR,
+            isTentative: false,
+            isFree: false,
+            format: 'video',
           },
         },
       ),
@@ -9042,6 +9699,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       1 +
       6,

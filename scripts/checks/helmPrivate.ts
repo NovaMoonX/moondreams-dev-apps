@@ -1,6 +1,10 @@
 // Private things: each source of the class, what code may and may not change, the copy filter and the unattended turn.
 import assert from 'node:assert/strict';
 
+import {
+  buildDesired,
+  toEventBody,
+} from '../../functions/src/apps/helm/calendarSync/plan.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -619,6 +623,7 @@ test('the Undo of that turn restores the class and the mark through the same Und
             title: 'Dentist',
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: 'person',
             isPrivacyCleared: false,
             quietMark: null,
@@ -662,6 +667,8 @@ test('a task made with a health word is private and carries the reason, one with
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$new1',
           title,
           due: null,
@@ -705,6 +712,8 @@ test('a task made under a private project is stored private from the start, one 
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$new1',
           title: 'Book the visit',
           due: null,
@@ -1084,6 +1093,8 @@ test('make this and keep it private starts the new task private', () => {
   const plan = planOf([
     {
       kind: 'createTask',
+      questions: [],
+      meeting: null,
       ref: '$new1',
       title: 'Plan the surprise',
       due: null,
@@ -1941,6 +1952,45 @@ test('a private habit name is never in the line said while unattended, and showi
   assert.ok(!toNameLine(hide, pills!, true).includes('Pills'));
 });
 
+test('a private thing is a bare Busy block in the calendar the plan is kept in', () => {
+  const START = Date.parse('2026-11-17T22:00:00Z');
+  const [event] = buildDesired({
+    now: Date.parse('2026-11-17T17:00:00Z'),
+    timeZone: 'America/Los_Angeles',
+    slots: [
+      {
+        dayKey: '2026-11-17',
+        slotId: 's1',
+        taskId: 't1',
+        startAt: START,
+        endAt: START + 1_800_000,
+        status: 'kept',
+        decidedAt: null,
+        isAim: false,
+        isLetGo: false,
+      },
+    ],
+    tasks: [
+      {
+        id: 't1',
+        title: 'Refill the inhaler',
+        isPrivate: true,
+        status: 'open',
+        dueAt: null,
+        durationMinutes: null,
+        hasMeets: false,
+        lastEditedAt: null,
+      },
+    ],
+    habits: [],
+  });
+  const body = toEventBody(event, 'Aria');
+  assert.equal(body.summary, 'Busy');
+  assert.equal(body.visibility, 'private');
+  assert.ok(!JSON.stringify(body).includes('inhaler'));
+  assert.ok(!('description' in body));
+});
+
 const DAY = '2026-11-16';
 const quiet = (
   facts: PrivacyFacts,
@@ -2148,6 +2198,8 @@ test('a project made quiet in the same reply is stored quiet and private, with i
         whoRefs: [],
         placeRefs: [],
         projectRef: 'Anniversary trip',
+        questions: [],
+        meeting: null,
       },
     ],
     projectCommands: [quietProject('Anniversary trip')],
@@ -2326,6 +2378,8 @@ test('a quiet turn swaps its spoken line for the screen line and keeps the real 
         whoRefs: [],
         placeRefs: [],
         projectRef: null,
+        questions: [],
+        meeting: null,
       },
     ],
     quietCommands: [
@@ -2760,6 +2814,8 @@ test('a new task kept quiet keeps the health mark code gave it', () => {
         whoRefs: [],
         placeRefs: [],
         projectRef: null,
+        questions: [],
+        meeting: null,
       },
     ] as never,
     quietCommands: [

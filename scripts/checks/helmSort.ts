@@ -23,7 +23,12 @@ import {
   settleAttempts,
 } from '../../functions/src/apps/helm/sortAttempts.ts';
 import { createHelmMcpServer } from '../../functions/src/apps/helm/mcp/server.ts';
-import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import {
+  createAliasBook,
+  createQuoteBook,
+  createSyncedBook,
+} from '../../functions/src/apps/helm/nomos/aliases.ts';
+import type { TaskDue } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
   buildContext,
   readMadeTitles,
@@ -40,11 +45,27 @@ import {
   settleCapture,
   type ExistingFact,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  readContextFit,
+  isAskingDays,
+  readFitRange,
+} from '../../functions/src/apps/helm/nomos/fitContext.ts';
+import { maskPrivateNames } from '../../functions/src/apps/helm/privacy.ts';
+import {
+  toContextTask,
+  type MaskedName,
+} from '../../functions/src/apps/helm/nomos/unattended.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
 import {
   normalizeNomosReply,
   NomosReplyError,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  readPrivacyFacts,
+  type PrivacyFacts,
+} from '../../functions/src/apps/helm/privacy.ts';
+import { planLearnLater } from '../../functions/src/apps/helm/nomos/planLearnLater.ts';
+import { planResolveQuestionsTask } from '../../functions/src/apps/helm/nomos/planQuestionsTask.ts';
 import { planUndoOffer } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import {
@@ -63,7 +84,6 @@ import {
   readHeardNames,
   toContextHeard,
 } from '../../functions/src/apps/helm/nomos/heardNames.ts';
-import { readPrivacyFacts } from '../../functions/src/apps/helm/privacy.ts';
 import { readDates } from '../../functions/src/apps/helm/dateReading.ts';
 import { planScheduledActions } from '../../functions/src/apps/helm/nomos/planScheduledActions.ts';
 import { planSoundsLike } from '../../functions/src/apps/helm/nomos/planSoundsLike.ts';
@@ -233,6 +253,8 @@ test('a sound reply resolves its alias and its day', () => {
   assert.equal(commands.length, 2);
   assert.deepEqual(commands[0], {
     kind: 'createTask',
+    questions: [],
+    meeting: null,
     ref: '$new1',
     title: 'Call Dana',
     due: { kind: 'day', date: FRIDAY },
@@ -240,6 +262,8 @@ test('a sound reply resolves its alias and its day', () => {
     whoRefs: ['$w1'],
     placeRefs: [],
     projectRef: null,
+    durationMinutes: null,
+    effort: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -1406,6 +1430,8 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     ref: `$t${index}`,
     whoRefs: [],
     placeRefs: [],
+    questions: [],
+    meeting: null,
   })) as unknown as Parameters<typeof planWrites>[0]['commands'];
   const squeezed = plan([fact()], [older], null, crowded);
   assert.equal(squeezed.factCreates.length, 1);
@@ -1930,6 +1956,155 @@ test('every task effect carries the title, so a card can name the task', () => {
   );
   assert.equal(resealed.title, 'Order the gold rings');
   assert.equal(resealed.extra, 1, 'other sealed keys survive a rename');
+});
+
+test('meetsHow is written for a task with a moment due, dropped for one without, and undone with its earlier value', () => {
+  const at = Date.UTC(2026, 10, 16, 18, 0);
+  const task = (due: TaskDue | null, meets: unknown = null) => ({
+    status: 'open' as const,
+    due,
+    isUrgent: false,
+    title: 'Call with Priya',
+    whoIds: [],
+    placeIds: [],
+    meets: meets as null,
+    sealed: { title: 'Call with Priya', notes: null, steps: {} },
+  });
+  const run = (
+    commands: Parameters<typeof planWrites>[0]['commands'],
+    existing: Map<string, ReturnType<typeof task>>,
+  ) =>
+    planWrites({
+      commands,
+      existing,
+      captureId: CAPTURE_ID,
+      executionId: 'exec-meets',
+      now: 6000,
+      seal,
+      newId: createIdCounter(),
+    });
+  const update = (meetsHow: 'video' | 'phone' | null | undefined) => ({
+    kind: 'updateTask' as const,
+    taskId: TASK_IDS[0],
+    title: null,
+    hasDue: false,
+    due: null,
+    isUrgent: null,
+    whoRefs: [],
+    placeRefs: [],
+    ...(meetsHow !== undefined && { meetsHow }),
+  });
+  const timed = new Map([[TASK_IDS[0], task({ kind: 'moment', at })]]);
+  const set = run([update('video')], timed);
+  assert.deepEqual(set.effects[0].written.meets, {
+    how: 'video',
+    setBy: 'person',
+  });
+  assert.equal(set.effects[0].previous?.meets, null);
+  assert.deepEqual(set.updates[0].data.meets, {
+    how: 'video',
+    setBy: 'person',
+  });
+  assert.equal(
+    run(
+      [update('video')],
+      new Map([[TASK_IDS[0], task({ kind: 'day', date: at })]]),
+    ).effects.length,
+    0,
+    'a task with no time takes no format',
+  );
+  assert.equal(run([update(undefined)], timed).effects.length, 0);
+  const calendar = { how: 'inPerson', setBy: 'calendar' };
+  const changed = run(
+    [update('phone')],
+    new Map([[TASK_IDS[0], task({ kind: 'moment', at }, calendar)]]),
+  );
+  assert.deepEqual(changed.effects[0].previous?.meets, calendar);
+  const cleared = run(
+    [update(null)],
+    new Map([[TASK_IDS[0], task({ kind: 'moment', at }, calendar)]]),
+  );
+  assert.equal(cleared.effects[0].written.meets, null);
+  const made = run(
+    [
+      {
+        kind: 'createTask',
+        ref: '$new1',
+        title: 'Call with Priya',
+        due: { kind: 'moment', at },
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: null,
+        questions: [],
+        meeting: null,
+        meetsHow: 'video',
+      },
+      {
+        kind: 'createTask',
+        ref: '$new2',
+        title: 'Ring Sam',
+        due: { kind: 'day', date: at },
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: null,
+        questions: [],
+        meeting: null,
+        meetsHow: 'phone',
+      },
+    ],
+    new Map(),
+  );
+  assert.deepEqual(
+    made.creates.map((entry) => entry.data.meets),
+    [{ how: 'video', setBy: 'person' }, null],
+  );
+});
+
+test('a task line in the context carries how it meets, and a synced event its format and place', () => {
+  const at = Date.UTC(2026, 10, 16, 18, 0);
+  const { message } = buildContext({
+    text: 'what is on Monday',
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 15, 22, 0),
+    timeZone: 'UTC',
+    tasks: [
+      {
+        id: TASK_IDS[0],
+        title: 'Call',
+        due: { kind: 'moment', at },
+        meetsHow: 'video',
+      },
+      { id: TASK_IDS[1], title: 'Lunch', due: { kind: 'moment', at } },
+    ],
+    synced: [
+      {
+        id: 's1',
+        connectorId: 'google:calendar',
+        accountId: 'a',
+        kind: 'event',
+        category: 'events',
+        title: 'Standup',
+        subtitle: null,
+        startAt: at,
+        endAt: at + 3_600_000,
+        dueAt: null,
+        isAllDay: false,
+        isEnded: false,
+        detail: null,
+        placeLabel: '12 Orchard Rd',
+        amountCents: null,
+        currency: null,
+        extra: { format: 'video' },
+        asOf: null,
+      },
+    ],
+  });
+  assert.ok(/"title":"Call"[^}]*"meets":"video"/.test(message));
+  assert.ok(!/"title":"Lunch"[^}]*"meets"/.test(message));
+  assert.ok(message.includes('"place":"12 Orchard Rd"'));
+  assert.ok(message.includes('"format":"video"'));
 });
 
 test('a loop stays inside its turns and its time, and the ask counts as a turn', async () => {
@@ -2913,6 +3088,802 @@ test('"never mind" after a filed turn reaches an undo offer through the context,
     hadAsks: true,
   });
   assert.equal(settled.status, 'needsYou');
+});
+
+const QUESTION_NOW = Date.UTC(2026, 10, 16, 15, 0);
+const NO_TOKENS: CaptureReading = { ...READING, people: [], dates: [] };
+const MEETING_AT = Date.UTC(2026, 10, 23, 18, 0);
+const copyOf = (id: string, over: Record<string, unknown> = {}) => ({
+  id,
+  connectorId: 'google:calendar',
+  accountId: 'a1',
+  kind: 'event',
+  category: null,
+  title: 'Call with Priya and Sam',
+  subtitle: null,
+  startAt: MEETING_AT,
+  endAt: MEETING_AT + 3_600_000,
+  dueAt: null,
+  isAllDay: false,
+  isEnded: false,
+  detail: null,
+  placeLabel: null,
+  amountCents: null,
+  currency: null,
+  extra: {},
+  asOf: null,
+  ...over,
+});
+const meetingBook = () => {
+  const synced = createSyncedBook();
+  const aliasOf = (over: Record<string, unknown>, id: string) =>
+    synced.add(copyOf(id, over) as never);
+  return {
+    synced,
+    event: aliasOf({}, 'ev-1'),
+    trip: aliasOf({ kind: 'trip', title: 'Lisbon' }, 'trip-1'),
+    past: aliasOf({ startAt: QUESTION_NOW - 3_600_000 }, 'ev-2'),
+    itinerary: aliasOf({ category: 'itinerary' }, 'ev-3'),
+  };
+};
+const questionNormalize = (
+  commands: unknown[],
+  extra: Record<string, unknown> = {},
+) =>
+  normalizeNomosReply(
+    { commands },
+    {
+      reading: NO_TOKENS,
+      aliases: newContext().aliases,
+      now: QUESTION_NOW,
+      ...extra,
+    },
+  );
+const keepSeal = (fields: Record<string, unknown>) => fields as never;
+const planQuestionTask = (command: Record<string, unknown>) => {
+  let next = 0;
+  return planWrites({
+    commands: [command as never],
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: QUESTION_NOW,
+    seal: keepSeal,
+    newId: () => `id-${(next += 1)}`,
+  });
+};
+
+test('a createTask with questions and a meeting writes a step for each question, the meeting and its label', () => {
+  const book = meetingBook();
+  const [command] = questionNormalize(
+    [
+      create('Questions for Priya and Sam', {
+        ref: '$new1',
+        aboutAlias: book.event,
+        questions: [
+          '  What is the venue? ',
+          'What is the budget?',
+          '',
+          'What is the date?',
+        ],
+      }),
+    ],
+    { synced: book.synced },
+  ).commands;
+  assert.ok(command.kind === 'createTask');
+  if (command.kind !== 'createTask') return;
+  assert.deepEqual(command.questions, [
+    'What is the venue?',
+    'What is the budget?',
+    'What is the date?',
+  ]);
+  assert.deepEqual(command.meeting, {
+    syncedId: 'ev-1',
+    startAt: MEETING_AT,
+    label: 'Call with Priya and Sam',
+  });
+  const made = planQuestionTask(command);
+  const [{ data }] = made.creates;
+  const sealed = data.sealed as unknown as {
+    steps: Record<string, { text: string }>;
+    meetingLabel: string | null;
+  };
+  assert.deepEqual(
+    Object.values(sealed.steps).map((step) => step.text),
+    command.questions,
+  );
+  assert.deepEqual(
+    Object.keys(sealed.steps),
+    Object.keys(data.stepState as object),
+  );
+  assert.deepEqual(Object.values(data.stepState as Record<string, unknown>), [
+    { order: 0, doneAt: null },
+    { order: 1, doneAt: null },
+    { order: 2, doneAt: null },
+  ]);
+  assert.deepEqual(data.meeting, { syncedId: 'ev-1', startAt: MEETING_AT });
+  assert.equal(data.readyAnswer, null);
+  assert.equal(sealed.meetingLabel, 'Call with Priya and Sam');
+});
+
+test('a meeting alias that is not a later event is dropped, and a plain task still carries empty fields', () => {
+  const book = meetingBook();
+  const meetingFor = (aboutAlias: string | null) => {
+    const [command] = questionNormalize(
+      [
+        create('Questions', {
+          ref: '$new1',
+          aboutAlias,
+          questions: ['One?'],
+        }),
+      ],
+      { synced: book.synced },
+    ).commands;
+    return command.kind === 'createTask' ? command.meeting : 'wrong kind';
+  };
+  assert.equal(meetingFor(book.trip), null);
+  assert.equal(meetingFor(book.past), null);
+  assert.equal(meetingFor(book.itinerary), null);
+  assert.equal(meetingFor('e99'), null);
+  assert.equal(meetingFor(null), null);
+  const long = Array.from({ length: 15 }, (_, index) => `Question ${index}?`);
+  const [capped] = questionNormalize([
+    create('Questions', {
+      ref: '$new1',
+      questions: [...long, 'x'.repeat(300)],
+    }),
+  ]).commands;
+  assert.ok(capped.kind === 'createTask' && capped.questions.length === 12);
+  const [plain] = questionNormalize([
+    create('Buy milk', { ref: '$new1' }),
+  ]).commands;
+  const [{ data }] = planQuestionTask(plain).creates;
+  const sealed = data.sealed as unknown as {
+    steps: object;
+    meetingLabel: string | null;
+  };
+  assert.deepEqual(sealed.steps, {});
+  assert.equal(sealed.meetingLabel, null);
+  assert.deepEqual(data.stepState, {});
+  assert.equal(data.meeting, null);
+  assert.equal(data.readyAnswer, null);
+});
+
+const driveQuotes = () => {
+  const quotes = createQuoteBook();
+  const alias = quotes.add({
+    connectorId: 'google:drive',
+    accountId: 'acct-1',
+    ref: 'file-1',
+    title: 'Call prep',
+    from: 'Priya',
+    at: null,
+    snippet: 'Ask about the venue',
+    deepLink: null,
+  });
+  const mailAlias = quotes.add({
+    connectorId: 'google:gmail',
+    accountId: 'acct-1',
+    ref: 'mail-1',
+    title: 'Re: call',
+    from: 'Priya',
+    at: null,
+    snippet: 'See you then',
+    deepLink: null,
+  });
+  return { quotes, alias, mailAlias };
+};
+const offerItem = (over: Record<string, unknown>) => ({
+  kind: 'offerQuestionTask',
+  title: 'Questions for Priya and Sam',
+  questions: ['What is the venue?', 'What is the budget?'],
+  whoRefs: ['$w1', '$w2'],
+  ...over,
+});
+const MENTIONS = [
+  { ref: '$w1', name: 'Priya', kind: 'person', relation: null },
+  { ref: '$w2', name: 'Sam', kind: 'person', relation: null },
+];
+
+test('offerQuestions needs a Drive document read this turn; it is read with its people, meeting and a hash of the document', () => {
+  const book = meetingBook();
+  const { quotes, alias, mailAlias } = driveQuotes();
+  const read = (over: Record<string, unknown>) =>
+    normalizeNomosReply(
+      {
+        commands: [offerItem({ aboutAlias: book.event, ...over })],
+        mentions: MENTIONS,
+      },
+      {
+        reading: NO_TOKENS,
+        aliases: newContext().aliases,
+        now: QUESTION_NOW,
+        synced: book.synced,
+        quotes,
+      },
+    ).learnCommands;
+  assert.equal(read({ quoteAlias: null }).length, 0);
+  assert.equal(read({ quoteAlias: 'q9' }).length, 0);
+  assert.equal(read({ quoteAlias: mailAlias }).length, 0);
+  assert.equal(read({ quoteAlias: alias, questions: [] }).length, 0);
+  const [offer] = read({ quoteAlias: alias });
+  assert.ok(offer.kind === 'offerQuestionTask');
+  if (offer.kind !== 'offerQuestionTask') return;
+  assert.deepEqual(offer.who, ['Priya', 'Sam']);
+  assert.equal(offer.meeting?.syncedId, 'ev-1');
+  assert.ok(!offer.documentKey.includes('file-1'));
+});
+
+const offerPlan = (
+  offeredDocuments: string[] = [],
+  knownPeople: { id: string; names: string[] }[] = [],
+) => {
+  const book = meetingBook();
+  const { quotes, alias } = driveQuotes();
+  const [offer] = normalizeNomosReply(
+    {
+      commands: [offerItem({ aboutAlias: book.event, quoteAlias: alias })],
+      mentions: MENTIONS,
+    },
+    {
+      reading: NO_TOKENS,
+      aliases: newContext().aliases,
+      now: QUESTION_NOW,
+      synced: book.synced,
+      quotes,
+    },
+  ).learnCommands;
+  let next = 0;
+  return planLearnLater({
+    commands: [offer],
+    asks: [],
+    items: [],
+    isSpoken: false,
+    isMidTask: false,
+    timeZone: 'UTC',
+    now: QUESTION_NOW,
+    captureId: 'capture-1',
+    newId: () => `q-${(next += 1)}`,
+    seal: keepSeal,
+    room: 20,
+    offeredDocuments,
+    knownPeople,
+  });
+};
+
+test('an offered document asks once, yes writes the task with its steps and meeting, no writes nothing, a second offer is dropped', () => {
+  const asked = offerPlan();
+  assert.equal(asked.questions.length, 1);
+  const [question] = asked.questions;
+  assert.equal(question.state.kind, 'questionsTask');
+  assert.equal(
+    question.sealed.prompt,
+    'Make "Questions for Priya and Sam" a task for your call on Nov 23? It has 2 questions.',
+  );
+  assert.deepEqual(question.sealed.options, [
+    { id: 'yes', label: 'Make the task' },
+    { id: 'no', label: 'No thanks' },
+  ]);
+  assert.equal(asked.creates.length + asked.effects.length, 0);
+  assert.equal(asked.offeredDocuments?.length, 1);
+  const answer = (optionId: string) =>
+    planResolveQuestionsTask({
+      whoFacts: [],
+      captureId: 'capture-1',
+      executionId: 'exec-2',
+      questionId: question.id,
+      optionId,
+      by: 'tap',
+      now: QUESTION_NOW + 1000,
+      seal: keepSeal,
+      newId: createIdCounter(),
+      capture: {
+        status: 'needsYou',
+        executionIds: [],
+        questionState: { [question.id]: question.state },
+      },
+      opened: { questions: { [question.id]: question.sealed } },
+    });
+  const yes = answer('yes');
+  assert.ok(yes.refused === null && yes.create !== null);
+  if (yes.refused !== null || yes.create === null) return;
+  assert.equal(yes.effectRefs[0].op, 'create');
+  assert.equal(yes.effectRefs[0].collection, 'tasks');
+  assert.equal(Object.keys(yes.create.data.stepState as object).length, 2);
+  assert.deepEqual(yes.create.data.meeting, {
+    syncedId: 'ev-1',
+    startAt: MEETING_AT,
+  });
+  assert.equal(yes.create.data.readyAnswer, null);
+  assert.equal(yes.capture.status, 'sorted');
+  const no = answer('no');
+  assert.ok(no.refused === null && no.create === null);
+  if (no.refused === null) assert.equal(no.effects.length, 0);
+  assert.deepEqual(answer('maybe'), { refused: 'unknown' });
+  const again = offerPlan(asked.offeredDocuments ?? []);
+  assert.equal(again.questions.length, 0);
+  assert.equal(again.offeredDocuments, null);
+  const full = offerPlan(Array.from({ length: 50 }, (_, index) => `d${index}`));
+  assert.equal(full.offeredDocuments?.length, 50);
+  assert.equal(full.offeredDocuments?.[0], 'd1');
+});
+
+test('an offer for an existing person makes a task for that person, a new name makes none, and a meeting already past is left off', () => {
+  const answerYes = (
+    knownPeople: { id: string; names: string[] }[],
+    now: number,
+    whoFacts: { id: string; privacyFacts: PrivacyFacts }[] = [],
+  ) => {
+    const [question] = offerPlan([], knownPeople).questions;
+    const result = planResolveQuestionsTask({
+      whoFacts,
+      captureId: 'capture-1',
+      executionId: 'exec-2',
+      questionId: question.id,
+      optionId: 'yes',
+      by: 'tap',
+      now,
+      seal: keepSeal,
+      newId: createIdCounter(),
+      capture: {
+        status: 'needsYou',
+        executionIds: [],
+        questionState: { [question.id]: question.state },
+      },
+      opened: { questions: { [question.id]: question.sealed } },
+    });
+    if (result.refused !== null || result.create === null) {
+      throw new Error('expected a task');
+    }
+    return Object.assign(result.create.data, { execution: result });
+  };
+  const priya = { id: 'who-priya', names: ['Priya', 'Pri'] };
+  const open = (id: string, privateMark: 'person' | null = null) => ({
+    id,
+    privacyFacts: readPrivacyFacts({ privateMark, isPrivacyCleared: false }),
+  });
+  const known = answerYes(
+    [priya, { id: 'who-x', names: ['Xavier'] }],
+    QUESTION_NOW,
+    [open('who-priya')],
+  );
+  assert.deepEqual(known.whoIds, ['who-priya']);
+  const unopened = answerYes(
+    [priya, { id: 'who-sam', names: ['Sam'] }],
+    QUESTION_NOW,
+    [open('who-priya')],
+  );
+  assert.deepEqual(unopened.whoIds, ['who-priya']);
+  assert.deepEqual(answerYes([], QUESTION_NOW).whoIds, []);
+  const marked = (privateMark: 'person' | null) =>
+    answerYes([priya], QUESTION_NOW, [
+      {
+        id: 'who-priya',
+        privacyFacts: readPrivacyFacts({
+          privateMark,
+          isPrivacyCleared: false,
+        }),
+      },
+    ]);
+  assert.equal(marked('person').privacy, 'private');
+  assert.equal(
+    (marked('person').sealed as { privateMark?: string }).privateMark,
+    undefined,
+  );
+  assert.equal(marked(null).privacy, 'ordinary');
+  assert.equal(marked('person').execution.isPrivate, true);
+  assert.equal(marked(null).execution.isPrivate, false);
+  assert.deepEqual(marked('person').execution.linkedWhoIds, ['who-priya']);
+  const past = answerYes([priya], MEETING_AT + 1);
+  assert.equal(past.meeting, null);
+  assert.equal(
+    (past.sealed as { meetingLabel: string | null }).meetingLabel,
+    null,
+  );
+});
+
+test('an open task reads out how many of its questions are answered and when its meeting is', () => {
+  const { message } = buildContext({
+    text: 'how are my questions for Priya?',
+    reading: NO_TOKENS,
+    createdAt: QUESTION_NOW,
+    timeZone: 'UTC',
+    tasks: [
+      {
+        id: TASK_IDS[0],
+        title: 'Questions for Priya and Sam',
+        due: null,
+        questions: { answered: 2, total: 6, meetingAt: MEETING_AT },
+      },
+    ],
+  });
+  assert.ok(message.includes('"questions":"2 of 6 answered"'));
+  assert.ok(message.includes('"meeting":"Mon, Nov 23"'));
+});
+
+const FIT_TODAY = '2026-11-16';
+const fitDay = (key: string, text = key, start = 0) => ({
+  id: `date:${key}`,
+  text,
+  start,
+  end: start + text.length,
+  precision: null,
+  due: { kind: 'day' as const, date: Date.parse(`${key}T00:00:00Z`) },
+});
+const fitRange = (
+  text: string,
+  over: Partial<Parameters<typeof readFitRange>[0]> = {},
+) =>
+  readFitRange({
+    text,
+    answeredQuestion: null,
+    dates: [],
+    away: [],
+    todayKey: FIT_TODAY,
+    timeZone: 'UTC',
+    isQuestion: true,
+    ...over,
+  });
+const awayOn = (from: string, to: string) => ({
+  from: Date.parse(`${from}T00:00:00Z`),
+  to: Date.parse(`${to}T00:00:00Z`),
+});
+
+test('a can-I-go question names the days it is about, widened to the stretch away they start', () => {
+  assert.deepEqual(
+    fitRange('What would I need to get done before leaving Sunday?', {
+      dates: [fitDay('2026-11-22')],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+  assert.deepEqual(
+    fitRange('Could I hit the road Sunday?', {
+      dates: [fitDay('2026-11-22')],
+      away: [awayOn('2026-11-22', '2026-11-24')],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-24' },
+  );
+  assert.deepEqual(
+    fitRange('Could I go from Friday to the 20th?', {
+      dates: [
+        fitDay('2026-11-20', 'the 20th', 26),
+        fitDay('2026-11-18', 'Friday', 16),
+      ],
+    }),
+    { firstDay: '2026-11-18', lastDay: '2026-11-20' },
+  );
+  assert.deepEqual(
+    fitRange('Could I leave Sunday and be back Wednesday?', {
+      dates: [
+        fitDay('2026-11-18', 'Wednesday', 33),
+        fitDay('2026-11-22', 'Sunday', 14),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-25' },
+  );
+  assert.deepEqual(
+    fitRange('What do I need to get done today before leaving Sunday?', {
+      dates: [
+        fitDay('2026-11-16', 'today', 27),
+        fitDay('2026-11-22', 'Sunday', 48),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+  assert.deepEqual(
+    fitRange('When do you leave?', {
+      text: 'Sunday',
+      answeredQuestion: 'When do you leave?',
+      dates: [fitDay('2026-11-22')],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+});
+
+test('days keep their spoken roles: a day after leave or from starts, one after back, to or through ends, and a bare weekday end moves forward by weeks', () => {
+  assert.deepEqual(
+    fitRange('Could I leave Friday, back the 27th?', {
+      dates: [
+        fitDay('2026-11-27', 'the 27th', 27),
+        fitDay('2026-11-20', 'Friday', 14),
+      ],
+    }),
+    { firstDay: '2026-11-20', lastDay: '2026-11-27' },
+  );
+  assert.deepEqual(
+    fitRange('Could I leave the 18th?', {
+      dates: [fitDay('2026-11-18', 'the 18th', 14)],
+    }),
+    { firstDay: '2026-11-18', lastDay: '2026-11-18' },
+  );
+  assert.deepEqual(
+    fitRange('Sunday through Tuesday', {
+      answeredQuestion: 'When do you leave?',
+      dates: [
+        fitDay('2026-11-17', 'Tuesday', 15),
+        fitDay('2026-11-22', 'Sunday', 0),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-24' },
+  );
+  assert.deepEqual(
+    fitRange('Could I leave Sunday and be back Friday?', {
+      todayKey: '2026-11-20',
+      dates: [
+        fitDay('2026-11-20', 'Friday', 33),
+        fitDay('2026-11-22', 'Sunday', 14),
+      ],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-27' },
+  );
+  assert.deepEqual(
+    fitRange('Could I go from Friday to the 20th?', {
+      dates: [
+        fitDay('2026-11-20', 'the 20th', 26),
+        fitDay('2026-11-18', 'Friday', 16),
+      ],
+    }),
+    { firstDay: '2026-11-18', lastDay: '2026-11-20' },
+  );
+});
+
+test('only a clear leaving cue asks when the person leaves, and never again right after the answer', () => {
+  assert.equal(
+    isAskingDays({ text: "What's left before I go?", answeredQuestion: null }),
+    true,
+  );
+  assert.equal(
+    isAskingDays({ text: 'Can I go to bed early?', answeredQuestion: null }),
+    false,
+  );
+  assert.equal(
+    isAskingDays({
+      text: 'Should I leave for the airport at 5?',
+      answeredQuestion: null,
+    }),
+    false,
+  );
+  assert.equal(
+    isAskingDays({
+      text: 'Next week, before I go away',
+      answeredQuestion: 'When are you leaving?',
+    }),
+    false,
+  );
+});
+
+test('a question about a trip taken or a person leaving is not a fit turn', () => {
+  assert.equal(
+    fitRange('How was the trip?', { dates: [fitDay('2026-11-22')] }),
+    null,
+  );
+  assert.equal(
+    fitRange('When is Priya leaving?', { dates: [fitDay('2026-11-22')] }),
+    null,
+  );
+});
+
+test("what's left before I go uses the nearest trip within two weeks, and nothing without one", () => {
+  assert.deepEqual(
+    fitRange("What's left before I go?", {
+      away: [
+        awayOn('2026-12-20', '2026-12-24'),
+        awayOn('2026-11-19', '2026-11-21'),
+      ],
+    }),
+    { firstDay: '2026-11-19', lastDay: '2026-11-21' },
+  );
+  assert.equal(
+    fitRange("What's left before I go?", {
+      away: [awayOn('2026-12-20', '2026-12-24')],
+    }),
+    null,
+  );
+});
+
+test('a statement, a question with no cue, or a past day gives no range, and a long one is cut to 14 days', () => {
+  const sunday = { dates: [fitDay('2026-11-22')] };
+  assert.equal(
+    fitRange("I'm leaving Sunday.", { ...sunday, isQuestion: false }),
+    null,
+  );
+  assert.equal(fitRange('What is on Sunday?', sunday), null);
+  assert.deepEqual(
+    fitRange('Could I go away from the 10th to Dec 20?', {
+      dates: [fitDay('2026-11-10'), fitDay('2026-12-20')],
+    }),
+    { firstDay: '2026-11-16', lastDay: '2026-11-29' },
+  );
+});
+
+test('the fit block carries aliases, only for tasks and projects the model is shown', () => {
+  const copy = copyOf('ev-fit', { title: 'Call with Priya and Sam' });
+  const fit = {
+    firstDay: '2026-11-22',
+    lastDay: '2026-11-24',
+    events: [copy],
+    fit: {
+      mustDoCount: 12,
+      mustDoFirst: [
+        {
+          id: TASK_IDS[0],
+          dueDay: Date.UTC(2026, 10, 20),
+          minutes: 120,
+          isOverdue: true,
+        },
+        {
+          id: 'task-not-listed',
+          dueDay: Date.UTC(2026, 10, 21),
+          minutes: 20,
+          isOverdue: false,
+        },
+      ],
+      workMinutes: 140,
+      freeMinutesBefore: 61.4,
+      hasCalendar: false,
+      isWontFit: true,
+      wouldMove: ['ev-fit'],
+      deadlines: [
+        {
+          thingId: 'p1',
+          id: 'project-wedding',
+          name: 'Wedding',
+          date: Date.UTC(2026, 10, 27),
+          taskCount: 3,
+          workMinutes: 200,
+          freeMinutes: 90,
+          hasCalendar: true,
+          isCare: false,
+          isWontFit: true,
+          isBecauseAway: true,
+        },
+        {
+          thingId: 'p2',
+          name: 'Hidden project',
+          date: Date.UTC(2026, 10, 27),
+          taskCount: 3,
+          workMinutes: 200,
+          freeMinutes: 90,
+          hasCalendar: true,
+          isCare: false,
+          isWontFit: true,
+          isBecauseAway: false,
+        },
+      ],
+    },
+  };
+  const input = {
+    text: TEXT,
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 16, 15, 0),
+    timeZone: 'UTC',
+    tasks: [{ id: TASK_IDS[0], title: 'Finish the ceremony draft', due: null }],
+    synced: [copy as never],
+    projects: [
+      {
+        id: 'project-wedding',
+        name: 'Wedding',
+        milestones: [],
+        kind: 'project' as const,
+        date: null,
+        researchOffered: [],
+      },
+    ],
+  };
+  const block = /<fit>(.*)<\/fit>/.exec(
+    buildContext({ ...input, fit }).message,
+  );
+  assert.ok(block, 'a <fit> block');
+  const read = JSON.parse(block[1]);
+  assert.deepEqual(read.mustDoFirst, [
+    { task: 't1', due: '2026-11-20', minutes: 120, isOverdue: true },
+  ]);
+  assert.equal(read.mustDoCount, 12);
+  assert.deepEqual(read.wouldMove, ['e1']);
+  assert.equal(read.noCalendar, true);
+  assert.equal(read.wontFit, true);
+  assert.equal(read.freeMinutesBefore, 61);
+  assert.deepEqual(
+    read.deadlines.map((entry: { name: string }) => entry.name),
+    ['Wedding'],
+  );
+  assert.ok(
+    !block[0].includes('task-not-listed') && !block[0].includes('ev-fit'),
+  );
+  assert.ok(!buildContext(input).message.includes('<fit>'));
+});
+
+const fitProject = (id: string, privateMark: string | null) => ({
+  id,
+  get: (field: string) =>
+    ({
+      sealed: seal({ name: `Project ${id}`, privateMark }),
+      status: 'active',
+      kind: 'project',
+      targetDate: Date.UTC(2026, 10, 27),
+      milestoneState: {},
+      createdAt: 1,
+    })[field],
+});
+const fitFirestore = (projects: ReturnType<typeof fitProject>[]) =>
+  ({
+    collection: () => {
+      const query = {
+        where: () => query,
+        limit: () => query,
+        get: async () => ({ docs: projects }),
+      };
+      return query;
+    },
+  }) as never;
+const fitTask = (id: string, projectId: string) => ({
+  id,
+  get: (field: string) =>
+    ({
+      projectId,
+      due: null,
+      durationMinutes: 2000,
+    })[field],
+});
+const readFit = (
+  text: string,
+  projects: ReturnType<typeof fitProject>[],
+  dates: CaptureReading['dates'],
+) =>
+  readContextFit({
+    firestore: fitFirestore(projects),
+    uid: UID,
+    base: `apps/helm/users/${UID}`,
+    key: KEY,
+    profile: undefined,
+    taskDocs: ['plain', 'care'].flatMap((project) =>
+      [1, 2, 3].map((at) => fitTask(`${project}-${at}`, project)),
+    ) as never,
+    selfWhoId: null,
+    trips: [],
+    text,
+    answeredQuestion: null,
+    dates,
+    isQuestion: true,
+    isAppsHeld: true,
+    now: Date.UTC(2026, 10, 16, 15, 0),
+    timeZone: 'UTC',
+  });
+
+test('a fit turn naming no day asks for the days, and a care project is left out of the deadlines', async () => {
+  assert.deepEqual(await readFit("What's left before I go?", [], []), {
+    needsDays: true,
+  });
+  const found = await readFit(
+    'Could I leave Tuesday?',
+    [fitProject('plain', null), fitProject('care', 'health')],
+    [fitDay('2026-11-17', 'Tuesday', 16)],
+  );
+  assert.ok(found && 'fit' in found);
+  assert.deepEqual(
+    found.fit.deadlines.map((deadline) => deadline.name),
+    ['Project plain'],
+  );
+});
+
+test('an attended answer naming a private task is quoting something private', () => {
+  const mask = {
+    isOn: false,
+    timeZone: 'UTC',
+    names: [],
+    quoted: [] as MaskedName[],
+  };
+  toContextTask(
+    't9',
+    { privacy: 'private', due: null },
+    { title: 'Call the clinic' },
+    mask,
+  );
+  toContextTask('t8', { due: null }, { title: 'Buy milk' }, mask);
+  const quotes = (text: string) => maskPrivateNames(text, mask.quoted) !== text;
+  assert.ok(quotes('You still need to call the clinic.'));
+  assert.ok(!quotes('You still need to buy milk.'));
+  assert.equal(mask.names.length, 0);
 });
 
 const failures: string[] = [];

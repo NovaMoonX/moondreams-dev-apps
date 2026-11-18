@@ -21,6 +21,7 @@ import type {
   OpenExecution,
   ProjectSealed,
   ResearchSealed,
+  SeenAsSealed,
   TaskSealed,
   ProcedureSealed,
   RunSealed,
@@ -94,6 +95,7 @@ export interface UndoTarget {
     | RunSealed
     | ConnectionSealed
     | ResearchSealed
+    | SeenAsSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -119,6 +121,7 @@ export type UndoPlan =
           | HabitDaySealed
           | ConnectionSealed
           | ResearchSealed
+          | SeenAsSealed
           | null;
       }[];
       /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
@@ -221,6 +224,7 @@ type RecordOutcome =
         | HabitDaySealed
         | ConnectionSealed
         | ResearchSealed
+        | SeenAsSealed
         | null;
       effect: ExecutionEffect;
     }
@@ -264,6 +268,24 @@ const isStillHome = (value: unknown, now: number) =>
   'saidAt' in value &&
   typeof value.saidAt === 'number' &&
   now - value.saidAt < CURRENT_PLACE_MS;
+
+const PERSONALITY_UNDO = {
+  summary: 'Put back how it talks',
+  phrase: 'how it talks',
+  report: (kept: number) =>
+    [
+      'Put back how it talks.',
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  reportToo: 'How it talks too.',
+};
+
+const isPersonalityEffect = (
+  ref: EffectRef | undefined,
+  effect: ExecutionEffect | undefined,
+) => ref?.collection === 'profile' && 'personality' in (effect?.written ?? {});
 
 const MILESTONE_PATHS = ['milestoneState.', 'sealed.milestones.'];
 
@@ -605,7 +627,10 @@ const planRecord = (
       : planRecreate(target, removal.effect);
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
-  const title = toTitle(target, effects);
+  const isSeenAs = entries[0]?.ref.collection === 'seenAs';
+  const title = isSeenAs
+    ? HELM_COPY.resultSeenAsFallback
+    : toTitle(target, effects);
   const left: RecordOutcome = isImport
     ? { kind: 'kept', title }
     : { kind: 'skipped' };
@@ -660,8 +685,10 @@ const planRecord = (
     const isUntouched =
       create.ref.collection === 'procedureRuns'
         ? isRunUntouched(target.data)
-        : target.data.lastEditedAt === null ||
-          target.data.lastEditedAt === madeAt;
+        : create.ref.collection === 'dayAims'
+          ? isSame(target.data.sealed, create.effect.written.sealed)
+          : target.data.lastEditedAt === null ||
+            target.data.lastEditedAt === madeAt;
     return isUntouched
       ? {
           kind: 'deleted',
@@ -689,13 +716,16 @@ const planRecord = (
           NoteSealed | TopicSealed | ProcedureSealed | RunSealed
         >)
       : null;
-  const restoredTitle = toOpenedTitle(updated.opened) || title;
+  const restoredTitle = isSeenAs
+    ? title
+    : toOpenedTitle(updated.opened) || title;
   return {
     kind: 'restored',
     title: restoredTitle,
-    fields: isKnowledge(entries[0]?.ref.collection)
-      ? updated.fields
-      : { ...updated.fields, lastEditedAt: now },
+    fields:
+      isKnowledge(entries[0]?.ref.collection) || isSeenAs
+        ? updated.fields
+        : { ...updated.fields, lastEditedAt: now },
     reseal,
     effect: {
       written: { ...updated.restored, 'sealed.title': restoredTitle },
@@ -1059,6 +1089,38 @@ export function planUndo(input: {
       const last = filing[filing.length - 1]?.effect;
       const pending = toIds(target.data?.pendingNoteIds);
       const left = pending.filter((id) => !takenBackNoteIds.has(id));
+      const linkWas = last && toIds(last.written.projectIds);
+      if (
+        target.data &&
+        first?.previous &&
+        linkWas &&
+        'projectIds' in last.written &&
+        left.length === pending.length &&
+        toIds(target.data.projectIds).length === linkWas.length &&
+        toIds(target.data.projectIds).every((id) => linkWas.includes(id))
+      ) {
+        const title = toTitle(
+          target,
+          filing.map((entry) => entry.effect),
+        );
+        const fields: Values = { projectIds: toIds(first.previous.projectIds) };
+        return {
+          docId,
+          outcome: {
+            kind: 'restored',
+            title,
+            fields,
+            reseal: null,
+            effect: {
+              written: { ...fields, 'sealed.title': title },
+              previous: {
+                projectIds: toIds(target.data.projectIds),
+                'sealed.title': title,
+              },
+            },
+          },
+        };
+      }
       if (
         !target.data ||
         !first?.previous ||
@@ -1319,6 +1381,17 @@ export function planUndo(input: {
   const isProjectDoc = (docId: string) =>
     collectionOf.get(docId) === 'projects';
   const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
+  const isSeenAsDoc = (docId: string) => collectionOf.get(docId) === 'seenAs';
+  const isDayAimsDoc = (docId: string) => collectionOf.get(docId) === 'dayAims';
+  const personalityDocIds = new Set(
+    original.effectRefs.flatMap((ref, index) =>
+      isPersonalityEffect(ref, original.effects[index]) ? [ref.docId] : [],
+    ),
+  );
+  const isPersonalityDoc = (docId: string) => personalityDocIds.has(docId);
+  const personalityCount = done.filter(({ docId }) =>
+    isPersonalityDoc(docId),
+  ).length;
   const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
   const notesDeleted = done.filter(
     ({ docId, outcome }) => isNoteDoc(docId) && outcome.kind === 'deleted',
@@ -1342,8 +1415,12 @@ export function planUndo(input: {
         !isProcedureDoc(docId) &&
         !isRunDoc(docId) &&
         !isHabitDoc(docId) &&
-        !isHabitDayDoc(docId),
+        !isHabitDayDoc(docId) &&
+        !isSeenAsDoc(docId) &&
+        !isDayAimsDoc(docId) &&
+        !isPersonalityDoc(docId),
   );
+  const seenAsCount = done.filter(({ docId }) => isSeenAsDoc(docId)).length;
   const habitsDone = done.filter(({ docId }) => isHabitDoc(docId));
   const habitDaysDone = done.filter(({ docId }) => isHabitDayDoc(docId));
   const habitCount = habitsDone.length + habitDaysDone.length;
@@ -1426,6 +1503,8 @@ export function planUndo(input: {
     procedureCount === 0 &&
     runCount === 0 &&
     habitCount === 0 &&
+    seenAsCount === 0 &&
+    personalityCount === 0 &&
     keptDone.length === 0
   ) {
     return refuse(
@@ -1439,8 +1518,10 @@ export function planUndo(input: {
     ({ docId }) => collectionOf.get(docId) !== 'profile',
   );
   const homeEffect =
-    done.find(({ docId }) => collectionOf.get(docId) === 'profile')?.outcome
-      .effect ?? null;
+    done.find(
+      ({ docId }) =>
+        collectionOf.get(docId) === 'profile' && !isPersonalityDoc(docId),
+    )?.outcome.effect ?? null;
   const isHomeRestored = isStillHome(homeEffect?.written.currentPlace, now);
   const wasLeaving = homeEffect?.previous?.currentPlace === null;
   const factCount = factsDone.length;
@@ -1593,11 +1674,51 @@ export function planUndo(input: {
     : habitCount > 0
       ? `${withRuns} ${HELM_COPY.undoReportHabitsToo(habitsTicked, habitsChanged)}`
       : withRuns;
+  const isSeenAsOnly =
+    seenAsCount > 0 &&
+    keptCount +
+      photoCount +
+      records.length +
+      factsDone.length +
+      datesDone.length +
+      notesDone.length +
+      projectCount +
+      topicCount +
+      procedureCount +
+      runCount +
+      habitCount +
+      personalityCount ===
+      0;
+  const isPersonalityOnly =
+    personalityCount > 0 &&
+    keptCount +
+      photoCount +
+      records.length +
+      factsDone.length +
+      datesDone.length +
+      notesDone.length +
+      projectCount +
+      topicCount +
+      procedureCount +
+      runCount +
+      habitCount +
+      seenAsCount ===
+      0;
+  const otherReport = isPhotosOnly
+    ? HELM_COPY.undoReportPhotos(photoCount)
+    : [withHabits, photosToo, keptReport].filter(Boolean).join(' ');
+  const withSeenAs = isSeenAsOnly
+    ? HELM_COPY.undoReportSeenAs(seenAsCount, kept.length, gone)
+    : seenAsCount > 0
+      ? `${otherReport} ${HELM_COPY.undoReportSeenAsToo(seenAsCount)}`
+      : otherReport;
   const report = isKeptOnlyUndo
     ? keptReport
-    : isPhotosOnly
-      ? HELM_COPY.undoReportPhotos(photoCount)
-      : [withHabits, photosToo, keptReport].filter(Boolean).join(' ');
+    : isPersonalityOnly
+      ? PERSONALITY_UNDO.report(kept.length)
+      : personalityCount > 0
+        ? `${withSeenAs} ${PERSONALITY_UNDO.reportToo}`
+        : withSeenAs;
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1715,9 +1836,15 @@ export function planUndo(input: {
     undoSealed: {
       summary: isKeptOnlyUndo
         ? HELM_COPY.tookBackKeptChange(keptCount, keptNames)
-        : isPhotosOnly
-          ? HELM_COPY.tookBackPhotos(photoCount)
-          : withHabitsSummary,
+        : isPersonalityOnly
+          ? PERSONALITY_UNDO.summary
+          : isSeenAsOnly
+            ? HELM_COPY.tookBackSeenAs(seenAsCount)
+            : `${
+                isPhotosOnly
+                  ? HELM_COPY.tookBackPhotos(photoCount)
+                  : withHabitsSummary
+              }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}${personalityCount > 0 ? ` and ${PERSONALITY_UNDO.phrase}` : ''}`,
       said: null,
       commands: [],
       effects: allDone.map(({ outcome }) => outcome.effect),
@@ -1741,6 +1868,7 @@ export function planUndo(input: {
       ...runsUnticked,
       ...habitsDone,
       ...habitDaysDone,
+      ...done.filter(({ docId }) => isSeenAsDoc(docId)),
     ].map(({ outcome }) => outcome.title),
     kept,
     gone,
@@ -1841,6 +1969,45 @@ export function narrowForUndo(
   };
 }
 
+/** The execution without a grouping's effect, which its rule lets only `toGroupingUndoPatch` write. */
+export const withoutGroupings = (view: OpenExecution): OpenExecution => {
+  const keep = view.effectRefs.flatMap((ref, index) =>
+    ref.collection === 'groupings' ? [] : [index],
+  );
+  return {
+    ...view,
+    effectRefs: keep.map((index) => view.effectRefs[index]),
+    effects: keep.map((index) => view.effects[index]),
+  };
+};
+
+/** A grouping after Undo: the person's Group them goes back to proposed, a server link becomes a no. */
+export function toGroupingUndoPatch(
+  actor: Execution['actor'],
+  previous: Record<string, unknown> | null,
+  now: number,
+) {
+  if (actor === 'nomos')
+    return {
+      state: 'notRelated' as const,
+      linkedKeys: [] as string[],
+      answeredAt: now,
+      updatedAt: now,
+    };
+  return {
+    state:
+      previous?.state === 'notNow'
+        ? ('notNow' as const)
+        : ('proposed' as const),
+    parentId: typeof previous?.parentId === 'string' ? previous.parentId : null,
+    linkedKeys: [] as string[],
+    answeredAt:
+      typeof previous?.answeredAt === 'number' ? previous.answeredAt : null,
+    executionId: null,
+    updatedAt: now,
+  };
+}
+
 /** The records an undo offer's choice would still take back from an execution: every unit left when it is the whole turn, else the ones it names that are not yet undone; empty once nothing is left. */
 export function toOfferDocIds(
   choice: Pick<UndoChoice, 'docIds' | 'isAll'>,
@@ -1880,9 +2047,11 @@ const REOPENABLE_KINDS = [
   'isThisWho',
   'whichKin',
   'kinOrder',
+  'questionsTask',
+  'clashChoice',
 ];
 
-/** What taking back an answer to a "which is true now?", "group these?", "is this who?" or family question writes to its turn so the question asks again; null for any other execution. */
+/** What taking back an answer to a "which is true now?", "group these?", "is this who?", family or "make these questions a task?" question writes to its turn so the question asks again; null for any other execution. */
 export const planReopen = (
   original: Pick<OpenExecution, 'questionRef'>,
   capture: {

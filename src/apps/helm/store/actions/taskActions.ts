@@ -15,6 +15,7 @@ import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { TASK_TITLE_CAP } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
+import type { TaskReadyAnswer } from '@apps/helm/engine/questionsTask';
 import type {
   HelmEncryption,
   Sealed,
@@ -25,6 +26,7 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import { readPrivacyFacts, readPrivateMark } from '@apps/helm/utils/privacy';
 import {
@@ -70,6 +72,7 @@ export async function createTask(
     isUrgent: false,
     due: input.due,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,
@@ -80,6 +83,9 @@ export async function createTask(
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: null,
@@ -94,6 +100,7 @@ export async function createTask(
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: facts.privateMark,
         isPrivacyCleared: facts.isPrivacyCleared,
         quietMark: null,
@@ -138,6 +145,13 @@ export const updateTaskFields = (
     ...(hasLinkChange(fields) ? readLinkedPrivacy(taskId, fields) : {}),
     lastEditedAt: Date.now(),
   });
+
+/** Answers "Do you feel ready?" for a meeting, or null takes the answer back; the edit stamp is left alone so Undo of the turn that made the task still works. */
+export const setReadyAnswer = (
+  uid: string,
+  taskId: string,
+  readyAnswer: TaskReadyAnswer | null,
+) => updateDoc(doc(tasksOf(uid), taskId), { readyAnswer });
 
 /** Changes a task's words in one transaction that re-reads them first, so a change made on another device meanwhile is kept. Needs a connection. */
 export async function updateTaskWords(
@@ -296,6 +310,7 @@ export async function deleteTask(
   const mediaRef = (id: string) =>
     doc(db, 'apps', 'helm', 'users', uid, 'media', id);
   const write = deleteDoc(ref);
+  dropFromGroupings(uid, `tasks/${taskId}`);
   released.forEach((entry) =>
     updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
   );
