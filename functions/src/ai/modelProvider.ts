@@ -60,3 +60,28 @@ export interface ToolLoopResult {
 export interface ModelProvider {
   runToolLoop(request: ToolLoopRequest): Promise<ToolLoopResult>;
 }
+
+export interface WebSearchRequest {
+  role: ModelRole;
+  system: string;
+  message: string;
+  /** How many searches the model may make; 0 gives it no web tool at all. */
+  maxSearches: number;
+  maxMillis: number;
+  terminalTool: TerminalTool;
+  signal?: AbortSignal;
+}
+
+export interface WebSearchResult {
+  terminalInput: unknown;
+  endedBy: ToolLoopEnd;
+  errorCode: string | null;
+  usage: ModelUsage;
+  /** Searches the API billed, from its own count. */
+  searches: number;
+}
+
+/** One question answered with live web search, ending in the terminal tool's input. */
+export interface SearchProvider {
+  runWebSearch(request: WebSearchRequest): Promise<WebSearchResult>;
+}

@@ -5,8 +5,10 @@ import { db } from '@lib/firebase/config';
 import { EMPTY_READING } from '@apps/helm/utils/captureReading';
 import { sealJson } from '@apps/helm/security';
 import { store } from '@/store';
+import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import {
   isMissingDay,
+  markHabitDay,
   untallyHabit,
   untickHabit,
 } from '@apps/helm/store/actions/habitDayWrites';
@@ -33,6 +35,7 @@ const toExecution = async (
   captureId: string,
   summary: string,
   spoken: string | null,
+  said: string | null,
   at: number,
   encryption: HelmEncryption,
   isPrivate: boolean,
@@ -67,7 +70,7 @@ const toExecution = async (
       heldSpoken: null,
       goneIds: null,
       undoReason: null,
-      said: null,
+      said,
       lines: null,
       abilityOffer: null,
       awayZoneOffer: null,
@@ -97,11 +100,15 @@ const toCapture = async (
   const { turn } = input;
   return {
     inputMode: turn.inputMode,
+    isSpokenTurn: turn.inputMode === 'voice',
     sttProvider: turn.sttProvider,
     interruptedCaptureId: turn.interruptedCaptureId,
     answersQuestion: null,
     ttsProvider: null,
     arrivedVia: 'direct',
+    scheduledActionId: null,
+    aheadOffer: null,
+    disposition: null,
     medium: 'web',
     via: null,
     outsideReadScopes: null,
@@ -126,11 +133,13 @@ const toCapture = async (
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt: turn.createdAt,
     sortedAt: turn.createdAt,
     screen: null,
     privacy: input.isPrivate ? 'private' : 'ordinary',
     touchesPrivate: input.isPrivate,
+    noticedCount: null,
     presence: turn.presence,
     abilities: null,
     sealed: await sealJson<CaptureSealed>(
@@ -153,6 +162,8 @@ export async function writeDeviceCheckIn(
   input: {
     summary: string;
     spoken: string | null;
+    /** The line the thread shows until the first tap, when the turn was heard while nobody was looking; null otherwise. */
+    said: string | null;
     encryption: HelmEncryption | null;
     isPrivate: boolean;
     habitName: string;
@@ -194,6 +205,7 @@ export async function writeDeviceCheckIn(
       { merge: true },
     );
   }
+  const isBack = markHabitDay(batch, uid, effect.dayKey, effect.habitId, true);
   if (input.encryption) {
     const path =
       effect.kind === 'tick'
@@ -207,6 +219,7 @@ export async function writeDeviceCheckIn(
         captureRef.id,
         input.summary,
         input.spoken,
+        input.said,
         effect.at,
         input.encryption,
         input.isPrivate,
@@ -246,7 +259,9 @@ export async function writeDeviceCheckIn(
     recorded: input.encryption
       ? { captureId: captureRef.id, executionId: executionRef.id }
       : null,
-    committed: batch.commit(),
+    committed: batch.commit().then(() => {
+      if (isBack) notifyRemindersBack();
+    }),
     undo: () =>
       effect.kind === 'tick'
         ? untickHabit(

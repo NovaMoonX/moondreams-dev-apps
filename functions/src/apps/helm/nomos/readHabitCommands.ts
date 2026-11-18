@@ -159,7 +159,7 @@ const toWindowReads = (
     .slice(0, HABIT_WINDOWS_MAX);
 
 /** The words of the capture that read as the quote, with their own letters, spacing and punctuation. */
-const sliceOfCapture = (captureText: string, quote: string) => {
+export const sliceOfCapture = (captureText: string, quote: string) => {
   const wanted = toComparable(quote).split(' ').filter(Boolean);
   const tokens = [...captureText.matchAll(/[\p{L}\p{M}\p{N}]+/gu)].map(
     (found) => ({

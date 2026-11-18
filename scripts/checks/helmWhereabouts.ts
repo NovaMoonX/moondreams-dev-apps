@@ -68,6 +68,7 @@ const span = (
   label: null,
   source: 'said',
   zoneOffered: false,
+  pausesScheduled: null,
   ...extra,
 });
 

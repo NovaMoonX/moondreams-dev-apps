@@ -9,7 +9,17 @@ import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
+import ContactListField from '@apps/helm/components/who/ContactListField';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  diffContactPoints,
+  ensureOnePrimary,
+  MAX_CONTACT_POINTS,
+  toContactKey,
+  toContactLabel,
+  type ContactKind,
+  type ContactPoint,
+} from '@apps/helm/engine/contactPoints';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { updateWho } from '@apps/helm/store/actions/whoActions';
 import type { OpenWho, WhoKind } from '@apps/helm/types';
@@ -31,6 +41,25 @@ const KIND_OPTIONS = [
   { value: 'organization', label: HELM_COPY.whoKindOrganization },
 ] as const;
 
+const keepFilled = (kind: ContactKind, points: ContactPoint[]) =>
+  ensureOnePrimary(
+    points.flatMap((point) =>
+      toContactKey(kind, point.value) === null
+        ? []
+        : [
+            {
+              ...point,
+              value: point.value.trim().replace(/\s+/g, ' '),
+              label: toContactLabel(point.label),
+            },
+          ],
+    ),
+  );
+
+const hasRepeat = (kind: ContactKind, points: ContactPoint[]) =>
+  new Set(points.map((point) => toContactKey(kind, point.value))).size <
+  points.length;
+
 const toNullable = (text: string) => (text.trim() === '' ? null : text.trim());
 
 function WhoEditForm({
@@ -49,8 +78,9 @@ function WhoEditForm({
   const [organizationKind, setOrganizationKind] = useState(
     who.organizationKind ?? '',
   );
-  const [phone, setPhone] = useState(who.phone ?? '');
-  const [email, setEmail] = useState(who.email ?? '');
+  const [phones, setPhones] = useState(who.phones);
+  const [emails, setEmails] = useState(who.emails);
+  const [contactNote, setContactNote] = useState<string | null>(null);
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = name.trim() === '';
@@ -68,6 +98,18 @@ function WhoEditForm({
       setIsTouched(true);
       return;
     }
+    const kept = {
+      phones: keepFilled('phone', phones),
+      emails: keepFilled('email', emails),
+    };
+    const repeated = (['phone', 'email'] as const).find((kind) =>
+      hasRepeat(kind, kept[kind === 'phone' ? 'phones' : 'emails']),
+    );
+    if (repeated) {
+      setContactNote(HELM_COPY.contactDuplicate(repeated));
+      return;
+    }
+    setContactNote(null);
     setIsSaving(true);
     try {
       const result = await updateWho(
@@ -81,12 +123,23 @@ function WhoEditForm({
           species: kind === 'pet' ? toNullable(species) : null,
           organizationKind:
             kind === 'organization' ? toNullable(organizationKind) : null,
-          phone: toNullable(phone),
-          email: toNullable(email),
+          phones: diffContactPoints(who.phones, kept.phones),
+          emails: diffContactPoints(who.emails, kept.emails),
         },
       );
       if (result === 'saved') {
         onClose();
+        return;
+      }
+      if (typeof result === 'object') {
+        setContactNote(
+          result.refusal === 'full'
+            ? HELM_COPY.contactFull(MAX_CONTACT_POINTS)
+            : result.refusal === 'duplicate'
+              ? HELM_COPY.contactDuplicate(result.kind)
+              : HELM_COPY.contactEmpty(result.kind),
+        );
+        setIsSaving(false);
         return;
       }
       addToast({
@@ -174,30 +227,21 @@ function WhoEditForm({
           />
         </div>
       )}
-      <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-phone`} className='text-sm font-medium'>
-          {HELM_COPY.whoPhoneField}
-        </label>
-        <Input
-          id={`${fieldId}-phone`}
-          type='tel'
-          value={phone}
-          onChange={(event) => edit(setPhone)(event.target.value)}
-        />
-      </div>
-      <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-email`} className='text-sm font-medium'>
-          {HELM_COPY.whoEmailField}
-        </label>
-        <Input
-          id={`${fieldId}-email`}
-          type='email'
-          value={email}
-          onChange={(event) => edit(setEmail)(event.target.value)}
-        />
-      </div>
+      <ContactListField
+        kind='phone'
+        points={phones}
+        onChange={edit(setPhones)}
+      />
+      <ContactListField
+        kind='email'
+        points={emails}
+        onChange={edit(setEmails)}
+      />
       <ModalFooterActions
-        note={isTouched && isMissing ? HELM_COPY.whoNameMissing : null}
+        note={
+          contactNote ??
+          (isTouched && isMissing ? HELM_COPY.whoNameMissing : null)
+        }
         cancelAction={
           <Button
             type='button'

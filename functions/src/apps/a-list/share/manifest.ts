@@ -71,7 +71,8 @@ export const A_LIST_SHARES: SourceShares = {
           label: 'Movies you have seen',
           meaning:
             'Movies the person has already watched, with the day, the theater, the star rating they gave if any and their movie-watching goals.',
-          detail: 'The title, the day, the theater, your star rating and your goals',
+          detail:
+            'The title, the day, the theater, your star rating and your goals',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -137,8 +138,38 @@ export const A_LIST_SHARES: SourceShares = {
           ],
           scopeVersion: 2,
         },
+        {
+          id: 'savings',
+          kind: 'moneySummary',
+          label: 'Membership savings',
+          meaning:
+            "How much the person's movie membership has saved them: what their tickets would have cost, what the membership cost and what is left, for this year and since they joined. Sums only; never what any one ticket cost.",
+          detail:
+            'Your ticket savings, membership cost and net savings, this year and since you joined',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label:
+                'What your tickets saved you, this year and since you joined',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'What the membership has cost and what is left',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
-      never: ['what you paid', 'savings', 'membership', 'share links'],
+      never: [
+        'what you paid for each ticket',
+        'your monthly bill and tax',
+        'share links',
+      ],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

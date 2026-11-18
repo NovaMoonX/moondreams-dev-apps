@@ -1,21 +1,40 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   Button,
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarCheck, ChevronRight, CircleStop } from 'lucide-react';
+import {
+  CalendarCheck,
+  ChevronRight,
+  CircleStop,
+  RotateCcw,
+} from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
+import HabitFormedOffer from '@apps/helm/components/habits/HabitFormedOffer';
+import HabitReminderOffer from '@apps/helm/components/habits/HabitReminderOffer';
+import { isInOfferWindow } from '@apps/helm/components/habits/habitOfferWindow';
+import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
+import HabitReminderRow from '@apps/helm/components/habits/HabitReminderRow';
+import HabitStage from '@apps/helm/components/habits/HabitStage';
+import { useHabitChange } from '@apps/helm/components/habits/useHabitChange';
+import HabitMedicineCard from '@apps/helm/components/habits/HabitMedicineCard';
 import HabitEditSheet from '@apps/helm/components/habits/HabitEditSheet';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import HabitWeek from '@apps/helm/components/habits/HabitWeek';
 import HabitWhenSheet from '@apps/helm/components/habits/HabitWhenSheet';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
+import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import {
+  selectHabitOffer,
+  selectSubjectGuardrail,
+} from '@apps/helm/store/selectors/patternSelectors';
 import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
@@ -27,10 +46,16 @@ import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
+  bringHabitBack,
+  retireHabit,
   setHabitCare,
   setHabitStatus,
 } from '@apps/helm/store/actions/habitActions';
-import { selectHabitById } from '@apps/helm/store/selectors/habitSelectors';
+import { readFormedSummary } from '@apps/helm/store/actions/habitJudgementActions';
+import {
+  readPausedLine,
+  selectHabitById,
+} from '@apps/helm/store/selectors/habitSelectors';
 import type { OpenHabit } from '@apps/helm/types';
 import { formatCadence } from '@apps/helm/utils/habitDraft';
 import { readHabitStatus } from '@apps/helm/utils/habitToday';
@@ -39,11 +64,33 @@ import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
 const { option, separator } = DropdownMenuFactories;
 
+const FORMED_OFFER_WAIT_MS = 7 * 86_400_000;
+const FORMED_KEPT_WAITS_MS = [28 * 86_400_000, 56 * 86_400_000];
+
+/** The offer comes a week after Formed, then after four weeks, then eight, from each "Keep it on Today", then never; a habit brought back stays quiet until it next becomes Formed afresh. */
+const isFormedOfferDue = (habit: OpenHabit, now: number) => {
+  if (habit.formedAt === null) return false;
+  const formedAt = habit.formedAt;
+  if (
+    habit.history.some(
+      (entry) => entry.kind === 'broughtBack' && entry.at > formedAt,
+    )
+  ) {
+    return false;
+  }
+  if (habit.formedKeptAt === null || habit.formedKeptCount === 0) {
+    return now >= formedAt + FORMED_OFFER_WAIT_MS;
+  }
+  const wait = FORMED_KEPT_WAITS_MS[habit.formedKeptCount - 1];
+  return wait !== undefined && now >= habit.formedKeptAt + wait;
+};
+
 interface HabitScreenProps {
   habitId: string | null;
   backLabel: string;
   onBack: () => void;
   onHome: () => void;
+  onOpenImportance: (focusId: string) => void;
 }
 
 const readWindowsLine = (habit: OpenHabit) => {
@@ -60,7 +107,13 @@ const readWindowsLine = (habit: OpenHabit) => {
 };
 
 /** One habit: what it is, how often, this week and its notes; a way to change its words and times, pause it, stop it, and mark it medicine or care. */
-function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
+function HabitScreen({
+  habitId,
+  backLabel,
+  onBack,
+  onHome,
+  onOpenImportance,
+}: HabitScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -69,12 +122,24 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
   const { isLoaded } = useAppSelector((state) => state.helm.habits);
   const habit = useAppSelector(selectHabitById).get(habitId ?? '') ?? null;
   const days = useAppSelector((state) => state.helm.habitDays.byId);
+  const offer = useAppSelector((state) =>
+    selectHabitOffer(state, habitId ?? ''),
+  );
+  const guardrail = useAppSelector((state) =>
+    selectSubjectGuardrail(state, habitId ?? ''),
+  );
   const whoName = useHabitWhoName(habit ?? { forWhoId: null });
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingWhen, setIsChangingWhen] = useState(false);
+  const whenSavedRef = useRef<(() => void) | null>(null);
   const [isPausing, setIsPausing] = useState(false);
   const [isAllNotes, setIsAllNotes] = useState(false);
   const [isWritingCare, setIsWritingCare] = useState(false);
+  const [isRetiring, setIsRetiring] = useState(false);
+  const [isNewHabit] = useState(
+    () => habit !== null && isInOfferWindow(habit, Date.now()),
+  );
+  const report = useHabitChange();
   const name = habit && !habit.isUnreadable ? habit.name : '';
 
   useScreenContext('habit', null, [], {
@@ -143,6 +208,55 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
     }
   };
 
+  const isRetired = habit?.status === 'retired';
+  const isFormedOffered =
+    habit !== null &&
+    habit.status === 'active' &&
+    habit.stage === 'formed' &&
+    !habit.isCare &&
+    habit.forWhoId === null &&
+    isFormedOfferDue(habit, clock.now);
+
+  const takeOffToday = async (
+    read: Awaited<ReturnType<typeof readFormedSummary>> | null,
+  ) => {
+    if (!user || !habit || isRetiring) return;
+    setIsRetiring(true);
+    try {
+      const summary =
+        read ??
+        (await readFormedSummary(
+          user.uid,
+          habit,
+          clock.dayKey,
+          clock.timeZone,
+        ));
+      report(
+        retireHabit(user.uid, habit, summary),
+        HELM_COPY.habitFormedTakenOffToast(
+          habit.name,
+          summary.doneCount,
+          formatDateShortUTC(summary.since),
+        ),
+        HELM_COPY.habitFormedFailed,
+      );
+    } catch (error) {
+      console.error('Helm habit was not taken off Today', error);
+      addToast({ title: HELM_COPY.habitFormedFailed, type: 'error' });
+    } finally {
+      setIsRetiring(false);
+    }
+  };
+
+  const bringBack = () => {
+    if (!user || !habit) return;
+    report(
+      bringHabitBack(user.uid, habit),
+      HELM_COPY.habitBroughtBackToast(habit.name),
+      HELM_COPY.habitFormedFailed,
+    );
+  };
+
   const toggleCare = async (isCare: boolean) => {
     if (!user || !habit || isWritingCare) return;
     if (!isCare && habit.forWhoId !== null) {
@@ -197,38 +311,47 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
       ? {
           items: [
             option({ label: HELM_COPY.habitMenuEdit, value: 'edit' }),
-            ...(habit.status === 'ended'
+            ...(isRetired
               ? [
                   option({
-                    label: HELM_COPY.habitMenuRestart,
-                    value: 'restart',
+                    label: HELM_COPY.habitMenuBringBack,
+                    value: 'bringBack',
+                    icon: <RotateCcw className='size-4' aria-hidden='true' />,
                   }),
                 ]
-              : [
-                  isPaused
-                    ? option({
-                        label: HELM_COPY.habitMenuResume,
-                        value: 'resume',
-                      })
-                    : option({
-                        label: HELM_COPY.habitMenuPause,
-                        value: 'pause',
-                      }),
-                  separator(),
-                  option({
-                    label: HELM_COPY.habitMenuStop,
-                    value: 'stop',
-                    icon: (
-                      <CircleStop
-                        className='text-destructive size-4'
-                        aria-hidden='true'
-                      />
-                    ),
-                  }),
-                ]),
+              : habit.status === 'ended'
+                ? [
+                    option({
+                      label: HELM_COPY.habitMenuRestart,
+                      value: 'restart',
+                    }),
+                  ]
+                : [
+                    isPaused
+                      ? option({
+                          label: HELM_COPY.habitMenuResume,
+                          value: 'resume',
+                        })
+                      : option({
+                          label: HELM_COPY.habitMenuPause,
+                          value: 'pause',
+                        }),
+                    separator(),
+                    option({
+                      label: HELM_COPY.habitMenuStop,
+                      value: 'stop',
+                      icon: (
+                        <CircleStop
+                          className='text-destructive size-4'
+                          aria-hidden='true'
+                        />
+                      ),
+                    }),
+                  ]),
           ],
           onItemSelect: (value: string) => {
             if (value === 'edit') setIsEditing(true);
+            else if (value === 'bringBack') bringBack();
             else if (value === 'pause') setIsPausing(true);
             else if (value === 'resume') {
               changeStatus('active', HELM_COPY.habitResumedToast(habit.name));
@@ -240,11 +363,13 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
       : undefined;
 
   const statusLine =
-    habit?.status === 'ended' && habit.endedAt !== null
-      ? HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt))
-      : isPaused && habit?.pausedUntil != null
-        ? HELM_COPY.habitsPausedUntil(formatWeekdayDayUTC(habit.pausedUntil))
-        : null;
+    habit?.status === 'retired' && habit.retiredAt !== null
+      ? HELM_COPY.habitFormedRetiredLine(formatDateShort(habit.retiredAt))
+      : habit?.status === 'ended' && habit.endedAt !== null
+        ? HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt))
+        : habit
+          ? readPausedLine(habit, clock.dayKey)
+          : null;
 
   return (
     <>
@@ -307,7 +432,48 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                 </p>
               )}
             </div>
+            <HabitStage habit={habit} />
+            <ImportancePlaceRow
+              id={habit.id}
+              variant='summary'
+              onOpen={onOpenImportance}
+            />
+            {isFormedOffered && (
+              <HabitFormedOffer
+                habit={habit}
+                dayKey={clock.dayKey}
+                timeZone={clock.timeZone}
+                isTaking={isRetiring}
+                onTakeOff={(summary) => void takeOffToday(summary)}
+              />
+            )}
+            {isRetired && habit.formedSummary && (
+              <section className='space-y-1'>
+                <h2 className='text-muted-foreground text-[13px]'>
+                  {HELM_COPY.habitWhatItLeft}
+                </h2>
+                <p className='helm-serif text-[28px] leading-[34px]'>
+                  {HELM_COPY.habitLeftCount(habit.formedSummary.doneCount)}
+                </p>
+                <p className='text-muted-foreground text-[13px]'>
+                  {HELM_COPY.habitLeftRange(
+                    formatDateShortUTC(habit.formedSummary.since),
+                    formatDateShort(habit.retiredAt ?? clock.now),
+                  )}
+                </p>
+              </section>
+            )}
             <HabitWeek habit={habit} days={days} clock={clock} />
+            {guardrail && !offer && <GuardrailLine pattern={guardrail} />}
+            {offer && (
+              <PatternOfferCard
+                pattern={offer}
+                onChange={(onSaved) => {
+                  whenSavedRef.current = onSaved;
+                  setIsChangingWhen(true);
+                }}
+              />
+            )}
             {notes.length > 0 && (
               <section className='space-y-3'>
                 <h2 className='text-muted-foreground text-[13px]'>
@@ -383,6 +549,16 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                 />
               </Button>
             </section>
+            {!isRetired && habit.status !== 'ended' && (
+              <>
+                {isNewHabit && <HabitReminderOffer habit={habit} />}
+                <HabitReminderRow
+                  habit={habit}
+                  now={clock.now}
+                  isOptInHidden={isNewHabit}
+                />
+              </>
+            )}
             <section className='helm-card'>
               <div className='flex items-center gap-3 px-4 py-3'>
                 <div className='min-w-0 flex-1'>
@@ -402,6 +578,7 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                 />
               </div>
             </section>
+            {habit.isCare && <HabitMedicineCard habit={habit} />}
             {!habit.isCare && (
               <PrivateRow kind='habit' record={habit} title={habit.name} />
             )}
@@ -417,7 +594,11 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
           />
           <HabitWhenSheet
             isOpen={isChangingWhen}
-            onClose={() => setIsChangingWhen(false)}
+            onClose={() => {
+              whenSavedRef.current = null;
+              setIsChangingWhen(false);
+            }}
+            onSaved={() => whenSavedRef.current?.()}
             habit={habit}
           />
           <HabitPauseSheet

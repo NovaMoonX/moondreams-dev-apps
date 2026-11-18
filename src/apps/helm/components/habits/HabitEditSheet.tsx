@@ -14,6 +14,8 @@ import {
   HABIT_NAME_MAX,
   HABIT_NOTES_MAX,
   HELM_COPY,
+  MEDICINE_DOSE_MAX,
+  MEDICINE_NAME_MAX,
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { updateHabitWords } from '@apps/helm/store/actions/habitActions';
@@ -46,6 +48,8 @@ function HabitEditForm({
   const [emoji, setEmoji] = useState(habit.emoji ?? '');
   const [notes, setNotes] = useState(habit.notes ?? '');
   const [forWhoId, setForWhoId] = useState(habit.forWhoId);
+  const [medicine, setMedicine] = useState(habit.medicine?.name ?? '');
+  const [dose, setDose] = useState(habit.medicine?.dose ?? '');
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = name.trim() === '';
@@ -74,6 +78,9 @@ function HabitEditForm({
           emoji: emoji || null,
           notes: notes.trim() || null,
           forWhoId: habit.isCare ? forWhoId : habit.forWhoId,
+          medicine: habit.isCare
+            ? { name: medicine, dose: dose.trim() || null }
+            : undefined,
         },
       );
       if (result === 'saved') {
@@ -133,6 +140,34 @@ function HabitEditForm({
       </div>
       {habit.isCare && (
         <div className='space-y-1.5'>
+          <label
+            htmlFor={`${fieldId}-medicine`}
+            className='text-sm font-medium'
+          >
+            {HELM_COPY.habitMedicineField}
+          </label>
+          <div className='flex items-start gap-3'>
+            <Input
+              id={`${fieldId}-medicine`}
+              className='min-w-0 flex-[2]'
+              value={medicine}
+              maxLength={MEDICINE_NAME_MAX}
+              placeholder={HELM_COPY.habitMedicinePlaceholder}
+              onChange={(event) => edit(setMedicine)(event.target.value)}
+            />
+            <Input
+              className='min-w-0 flex-1'
+              aria-label={HELM_COPY.habitDoseField}
+              value={dose}
+              maxLength={MEDICINE_DOSE_MAX}
+              placeholder={HELM_COPY.habitDosePlaceholder}
+              onChange={(event) => edit(setDose)(event.target.value)}
+            />
+          </div>
+        </div>
+      )}
+      {habit.isCare && (
+        <div className='space-y-1.5'>
           <span className='block text-sm font-medium'>
             {HELM_COPY.habitWhoQuestion}
           </span>
@@ -161,7 +196,7 @@ function HabitEditForm({
   );
 }
 
-/** Change a habit's name, emoji and notes. */
+/** Change a habit's name, emoji, notes and, for care, its medicine. */
 function HabitEditSheet({ isOpen, onClose, habit }: HabitEditSheetProps) {
   const [isDirty, setIsDirty] = useState(false);
   const close = () => {

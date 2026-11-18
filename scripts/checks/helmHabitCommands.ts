@@ -11,6 +11,8 @@ import {
   planHabitAnswer,
   planHabitCommands,
   planResolveHabit,
+  isMedicineQuestion,
+  readMedicineAnswer,
   type HabitPlanInput,
 } from '../../functions/src/apps/helm/nomos/planHabitCommands.ts';
 import { isHabitTurn } from '../../functions/src/apps/helm/nomos/route.ts';
@@ -62,6 +64,7 @@ const habit = (over: Partial<LiveHabit> & { id: string; name: string }) =>
     endsOn: null,
     pausedUntil: null,
     careAskedAt: null,
+    medicineAskedAt: null,
     stage: null,
     reminder: null,
     history: [],
@@ -282,7 +285,130 @@ const forMom = plan([
   },
 ]);
 assert.equal(forMom.creates[0].doc.isCare, true);
-assert.equal(forMom.questions.length, 0);
+assert.deepEqual(
+  forMom.questions.map((question) => question.state.kind),
+  ['whichMedicine'],
+);
+assert.notEqual(forMom.creates[0].doc.medicineAskedAt, null);
+
+const marked = plan([
+  { kind: 'setCare', habitId: 'pills-pm', isCare: true, requestQuote: '' },
+]);
+assert.deepEqual(
+  marked.questions.map((question) => question.state.kind),
+  ['whichMedicine'],
+);
+assert.equal(marked.questions[0].sealed.prompt, 'Which medicine is it?');
+assert.notEqual(marked.updates[0].data.medicineAskedAt, undefined);
+const askedAlready = plan(
+  [{ kind: 'setCare', habitId: 'pills-pm', isCare: true, requestQuote: '' }],
+  { habits: [habit({ ...evening, medicineAskedAt: 5 })] },
+);
+assert.equal(askedAlready.questions.length, 0);
+const hasMedicine = plan(
+  [{ kind: 'setCare', habitId: 'pills-pm', isCare: true, requestQuote: '' }],
+  {
+    habits: [
+      habit({ ...evening, medicine: { name: 'Lisinopril', dose: null } }),
+    ],
+  },
+);
+assert.equal(hasMedicine.questions.length, 0);
+assert.equal(
+  plan(
+    [{ kind: 'setCare', habitId: 'pills-pm', isCare: true, requestQuote: '' }],
+    { isUnattended: true },
+  ).questions.length,
+  0,
+);
+
+const medicineAsked = {
+  opened: {
+    questions: { q1: marked.questions[0].sealed },
+  },
+};
+const medicineRead = readMedicineAnswer(
+  medicineAsked,
+  'q1',
+  "It's metoprolol 25 mg.",
+);
+assert.deepEqual(medicineRead, {
+  kind: 'setMedicine',
+  habitId: 'pills-pm',
+  name: 'metoprolol',
+  dose: '25 mg',
+});
+assert.equal(readMedicineAnswer(medicineAsked, 'q1', 'skip'), null);
+assert.equal(readMedicineAnswer(medicineAsked, 'nope', 'metoprolol'), null);
+assert.equal(isMedicineQuestion(medicineAsked, 'q1'), true);
+assert.equal(isMedicineQuestion(medicineAsked, 'nope'), false);
+assert.equal(
+  isMedicineQuestion(
+    { opened: { questions: { q1: { kind: 'whichHabit' } } } },
+    'q1',
+  ),
+  false,
+);
+[
+  'yes',
+  'Yeah',
+  'yep',
+  'ok',
+  'okay',
+  'sure',
+  'cancel',
+  'stop',
+  'none',
+  'nothing',
+  'n/a',
+  'not sure',
+  'no idea',
+  "don't know",
+  'dont know',
+  'dunno',
+  'forgot',
+  'I forgot',
+  'maybe',
+  'remind me to call the pharmacy tomorrow morning',
+].forEach((words) =>
+  assert.equal(readMedicineAnswer(medicineAsked, 'q1', words), null, words),
+);
+assert.equal(
+  readMedicineAnswer(medicineAsked, 'q1', 'metoprolol 25 mg')?.name,
+  'metoprolol',
+);
+assert.equal(
+  readMedicineAnswer(medicineAsked, 'q1', "it's lisinopril")?.name,
+  'lisinopril',
+);
+const saved = plan(medicineRead ? [medicineRead] : [], {
+  habits: [habit({ ...evening, isCare: true, privacy: 'private' })],
+});
+assert.equal(saved.updates.length, 1);
+assert.deepEqual(
+  (saved.updates[0].data.sealed as unknown as { medicine: unknown }).medicine,
+  { name: 'metoprolol', dose: '25 mg' },
+);
+
+const tickLine = (over: Partial<HabitPlanInput>, who: string | null) =>
+  plan([checkIn({ habitIds: ['mom-meds'] })], {
+    habits: [
+      habit({
+        ...evening,
+        id: 'mom-meds',
+        name: 'Mom pills',
+        isCare: true,
+        forWhoId: who,
+        privacy: 'private',
+        medicine: { name: 'Metoprolol', dose: null },
+      }),
+    ],
+    whoNames: new Map([['mom', 'Mom']]),
+    ...over,
+  }).lines[0];
+assert.equal(tickLine({}, 'mom'), "Done: Mom's evening metoprolol");
+assert.equal(tickLine({}, null), 'Done: evening metoprolol');
+assert.ok(!/metoprolol|mom/i.test(tickLine({ isUnattended: true }, 'mom')));
 
 const careYes = planHabitAnswer({
   held: { kind: 'askCare', habitId: 'pills-pm' },

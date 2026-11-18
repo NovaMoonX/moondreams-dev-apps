@@ -562,6 +562,8 @@ const UNDO_KIND_WORDS: Record<string, string> = {
   procedure: 'a procedure',
   run: 'a run',
   home: 'the home place',
+  seenAs: 'a line about you',
+  personality: 'how it talks',
 };
 
 /** What one line of a turn is called when it is offered back: "adding Book flights", "marking Call the vet done", "the change to Wedding". */
@@ -729,6 +731,18 @@ export const buildHeardPrompt = (name: string, labels: string[]) => {
 /** The execution line of a spelled correction: "Kept “Shivon” as how Siobhan sounds". */
 export const buildSoundsLikeLine = (heard: string, name: string) =>
   `Kept \u201c${heard}\u201d as how ${name} sounds`;
+
+/** The execution line of a number or address said for a person: "Added Dana's work phone number". The value itself stays out of the line. */
+export const buildContactLine = (input: {
+  name: string;
+  kind: 'phone' | 'email';
+  label: string | null;
+}) => {
+  const what = input.kind === 'phone' ? 'phone number' : 'email address';
+  return input.label === null || input.label.toLowerCase() === 'other'
+    ? `Added ${input.kind === 'phone' ? 'a' : 'an'} ${what} for ${input.name}`
+    : `Added ${input.name}\u2019s ${input.label.toLowerCase()} ${what}`;
+};
 
 export const WHICH_IS_TRUE_WORDS = {
   prompt: 'Which is true now?',

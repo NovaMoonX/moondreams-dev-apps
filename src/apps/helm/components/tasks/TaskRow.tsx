@@ -9,6 +9,7 @@ import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenTask } from '@apps/helm/types';
 import { formatTaskDue, isOverdue } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
+import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
 interface TaskRowProps {
@@ -43,8 +44,14 @@ function TaskRow({
 }: TaskRowProps) {
   const title = task.isUnreadable ? HELM_COPY.unreadable : task.title;
   const steps = getOrderedSteps(task);
-  const linkedLine = useLinkedNames(task)
-    .filter((entry) => entry.id !== omitLinkedId)
+  const linkedNames = useLinkedNames(task);
+  const hasWhere =
+    !isDone && task.meets !== null && task.due?.kind === 'moment';
+  const meetingPlace = hasWhere
+    ? (linkedNames.find((entry) => entry.kind === 'place') ?? null)
+    : null;
+  const linkedLine = linkedNames
+    .filter((entry) => entry.id !== omitLinkedId && entry !== meetingPlace)
     .map((entry) => entry.name)
     .join(', ');
   const dueLine = task.due && formatTaskDue(task.due, timeZone, now);
@@ -110,7 +117,7 @@ function TaskRow({
           >
             {title}
           </PrivateTitle>
-          {(dayPart || otherParts.length > 0) && (
+          {(dayPart || otherParts.length > 0 || hasWhere) && (
             <span className='text-muted-foreground block text-[13px] break-words'>
               {dayPart && (
                 <span className={join(isLate && 'text-[var(--helm-overdue)]')}>
@@ -123,6 +130,13 @@ function TaskRow({
                   {part}
                 </span>
               ))}
+              {hasWhere && task.meets && (
+                <MeetingWhere
+                  how={task.meets.how}
+                  place={meetingPlace?.name ?? null}
+                  hasBefore={Boolean(dayPart) || otherParts.length > 0}
+                />
+              )}
             </span>
           )}
         </span>

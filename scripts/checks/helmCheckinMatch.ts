@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   CHECKIN_VERBS,
+  checkInLine,
   matchCheckIn,
   resolveCheckIn,
   type CheckInHabit,
@@ -271,6 +272,65 @@ test('the result line says what was ticked, and a late-night tick counts for the
       plain.effect.kind === 'tick' &&
       plain.effect.windowId,
     'day',
+  );
+});
+
+test('a care tick names the medicine and whose it is, anything else reads as before', () => {
+  const tick = (
+    target: CheckInHabit,
+    care: { whoName: string | null; medicine: string | null } | null,
+    entry: ReturnType<typeof day> | null = day(),
+  ) => resolveCheckIn(target, 'm', at('2026-11-08', '09:00'), LA, entry, care);
+  const lineOf = (result: ReturnType<typeof tick>) => result.line;
+  assert.equal(
+    lineOf(tick(metoprolol, { whoName: 'Mom', medicine: 'Metoprolol' })),
+    "Done: Mom's morning metoprolol.",
+  );
+  assert.equal(
+    lineOf(tick(metoprolol, { whoName: null, medicine: 'Metoprolol' })),
+    'Done: morning metoprolol.',
+  );
+  assert.equal(
+    lineOf(tick(metoprolol, { whoName: 'Mom', medicine: null })),
+    "Done: Mom's morning metoprolol.",
+  );
+  const ownPills = habit('own', 'Evening pills', {
+    isCare: true,
+    windowState: { m: { start: '08:00', end: '10:00', order: 0 } },
+    windows: { m: { label: 'Morning' } },
+  });
+  assert.equal(
+    lineOf(tick(ownPills, { whoName: null, medicine: 'Lisinopril' })),
+    'Done: morning lisinopril.',
+  );
+  assert.equal(
+    lineOf(tick(ownPills, { whoName: null, medicine: null })),
+    'Done: morning evening pills.',
+  );
+  assert.equal(
+    lineOf(
+      tick(
+        metoprolol,
+        { whoName: 'Mom', medicine: 'Metoprolol' },
+        day({ m: { status: 'done' } }),
+      ),
+    ),
+    "Mom's morning metoprolol already ticked.",
+  );
+  assert.equal(
+    lineOf(tick(pills, { whoName: null, medicine: 'Vitamin D' })),
+    'Done. Morning pills ticked.',
+  );
+  assert.equal(
+    checkInLine('done', pills, 'e', null),
+    'Done. Evening pills ticked.',
+  );
+  assert.equal(
+    checkInLine('done', metoprolol, null, {
+      whoName: 'Mom',
+      medicine: 'Metoprolol',
+    }),
+    "Done: Mom's metoprolol.",
   );
 });
 

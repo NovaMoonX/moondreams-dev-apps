@@ -41,6 +41,8 @@ interface HabitQuestionFlowProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenHabit: (habitId: string) => void;
+  /** The goal the habit belongs to, when it is added from a goal's page. */
+  projectId?: string | null;
 }
 
 interface Answers {
@@ -82,6 +84,7 @@ interface HabitFlowFormProps extends Omit<HabitQuestionFlowProps, 'isOpen'> {
 function HabitFlowForm({
   onClose,
   onOpenHabit,
+  projectId = null,
   requestClose,
   onDirtyChange,
 }: HabitFlowFormProps) {
@@ -278,6 +281,7 @@ function HabitFlowForm({
           notes: answers.notes.trim() || null,
           isCare: answers.isCare,
           forWhoId: answers.isCare ? answers.forWhoId : null,
+          projectId,
           startsOn: Date.parse(`${clock.dayKey}T00:00:00Z`),
           when: fromWhenDraft(answers.when, null, Date.now()),
         },
@@ -359,6 +363,7 @@ function HabitQuestionFlow({
   isOpen,
   onClose,
   onOpenHabit,
+  projectId = null,
 }: HabitQuestionFlowProps) {
   const [isDirty, setIsDirty] = useState(false);
   const close = () => {
@@ -377,6 +382,7 @@ function HabitQuestionFlow({
         <HabitFlowForm
           onClose={close}
           onOpenHabit={onOpenHabit}
+          projectId={projectId}
           requestClose={requestClose}
           onDirtyChange={setIsDirty}
         />
