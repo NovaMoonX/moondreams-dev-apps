@@ -762,7 +762,7 @@ function ExpenseFormModal({
     return { category: parsed?.category ?? null, customCategoryLabel: parsed?.customCategoryLabel ?? null };
   };
   const canSplitReceipt = !isEditing && !isPrivate && canShare && Boolean(onSplitReceipt);
-  const receiptChip = { key: 'receipt', label: 'Split a receipt', icon: <Receipt className='h-4 w-4' /> };
+  const receiptChip = { key: 'receipt', label: 'Split a receipt', icon: <Receipt className='h-4 w-4' />, isWide: true };
   const splitReceipt = () =>
     onSplitReceipt?.({
       title: formData.title.trim() || pickedSubject?.title || '',
