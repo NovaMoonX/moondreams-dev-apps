@@ -1,6 +1,7 @@
-import { collection, doc, runTransaction } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -69,7 +70,7 @@ export async function confirmCalendarRight(
   );
   const now = Date.now();
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       const current = await transaction.get(oldRef);
       const data = current.data() as Partial<Fact> | undefined;
       if (data?.status !== 'inferred') return { kind: 'changed' as const };
@@ -135,7 +136,7 @@ export async function undoCalendarRight(
   const facts = factsOf(uid);
   const oldRef = doc(facts, previous.factId);
   try {
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(uid, async (transaction) => {
       const old = await transaction.get(oldRef);
       transaction.delete(doc(facts, newFactId));
       if (old.exists()) {

@@ -1,11 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  deleteDoc,
-  doc,
-  runTransaction,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
+import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
@@ -13,6 +7,7 @@ import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { compressImageForUse } from '@/utils/imageCompression';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import type { Store } from '@apps/pinch/types';
@@ -46,7 +41,7 @@ export const ensureCatalogStore = createAsyncThunk<
     }
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const ref = storeDoc(uid, catalogStore.id);
         const current = await transaction.get(ref);
         if (current.exists()) {
