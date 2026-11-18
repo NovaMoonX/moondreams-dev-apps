@@ -12,6 +12,8 @@ export interface SpokenAckInput {
   created: { title: string; due: TaskDue | null }[];
   timeZone: string;
   now: number;
+  /** The line for the day's aims filed this turn, which counts already leave out. */
+  aimsLine?: string | null;
 }
 
 /** The calendar day an instant falls on in `timeZone`, as UTC midnight so two days subtract cleanly. */
@@ -80,6 +82,12 @@ const limit = (line: string) =>
 export function buildSpokenAck(input: SpokenAckInput): string | null {
   if (input.inputMode !== 'voice') return null;
   const summary = summarize(input.counts, input.messageCount);
+  if (input.aimsLine)
+    return limit(
+      [summary ? `${trimEnd(summary)}.` : null, input.aimsLine]
+        .filter(Boolean)
+        .join(' '),
+    );
   if (!summary) return null;
   if (input.messageCount > 1) return limit(`${trimEnd(summary)}.`);
   const [only] = input.created;

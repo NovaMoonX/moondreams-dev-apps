@@ -1,14 +1,33 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { arrayUnion, collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
-import type { Stay, StayChangeSnapshot, StayFieldChange, TripSpace } from '@apps/waypoint/types';
+import type {
+  Stay,
+  StayChangeSnapshot,
+  StayFieldChange,
+  TripSpace,
+} from '@apps/waypoint/types';
 import { compareDayTime } from '@/utils/dayTimeUtils';
-import { canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
+import {
+  canCreateItem,
+  canEditExistingItem,
+  isTripActive,
+} from '@apps/waypoint/utils/roleGuards';
 import { getStayTime, isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
-type StayFields = Omit<Stay, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'>;
+type StayFields = Omit<
+  Stay,
+  'id' | 'tripId' | 'createdBy' | 'createdAt' | 'lastEditedAt'
+>;
 
 interface CreateStayInput {
   uid: string;
@@ -39,11 +58,15 @@ function buildStayChangeSnapshot(
   uid: string,
 ): StayChangeSnapshot | null {
   const now = Date.now();
-  const trackedFields: readonly StayFieldChange['field'][] = isRelativeTrip(trip)
+  const trackedFields: readonly StayFieldChange['field'][] = isRelativeTrip(
+    trip,
+  )
     ? RELATIVE_TRACKED_FIELDS
     : ABSOLUTE_TRACKED_FIELDS;
   const changes: StayFieldChange[] = trackedFields
-    .filter((field) => (previousStay[field] ?? null) !== (nextStay[field] ?? null))
+    .filter(
+      (field) => (previousStay[field] ?? null) !== (nextStay[field] ?? null),
+    )
     .map((field) => ({
       field,
       previousValue: previousStay[field] ?? null,
@@ -80,7 +103,9 @@ export const createStay = createAsyncThunk<
     return rejectWithValue(validationError);
   }
 
-  const stayRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'stays'));
+  const stayRef = doc(
+    collection(db, 'apps', 'waypoint', 'trips', trip.id, 'stays'),
+  );
   const now = Date.now();
   const createdStay: Stay = {
     ...stay,
@@ -109,22 +134,31 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 function validateStayTimes(trip: TripSpace, stay: StayFields) {
   const message = 'Choose valid check-in and check-out times.';
   if (!isRelativeTrip(trip)) {
-    const { checkInAt, checkOutAt, plannedArrivalAt, plannedDepartureAt } = stay;
+    const { checkInAt, checkOutAt, plannedArrivalAt, plannedDepartureAt } =
+      stay;
     const isValid =
       checkInAt !== null &&
       checkOutAt !== null &&
       plannedArrivalAt !== null &&
       plannedDepartureAt !== null &&
-      [checkInAt, checkOutAt, plannedArrivalAt, plannedDepartureAt].every(Number.isFinite) &&
+      [checkInAt, checkOutAt, plannedArrivalAt, plannedDepartureAt].every(
+        Number.isFinite,
+      ) &&
       checkOutAt > checkInAt &&
       plannedDepartureAt > plannedArrivalAt;
     return isValid ? null : message;
   }
 
-  const { checkIn, checkOut, plannedArrival, plannedDeparture } = getStayTime(trip, stay);
+  const { checkIn, checkOut, plannedArrival, plannedDeparture } = getStayTime(
+    trip,
+    stay,
+  );
   const points = [checkIn, checkOut, plannedArrival, plannedDeparture];
   const hasEveryPoint = points.every(
-    (point) => point.dayIndex !== null && point.time !== null && TIME_PATTERN.test(point.time),
+    (point) =>
+      point.dayIndex !== null &&
+      point.time !== null &&
+      TIME_PATTERN.test(point.time),
   );
   if (!hasEveryPoint) {
     return message;
@@ -151,41 +185,56 @@ export const updateStay = createAsyncThunk<
   StayFields,
   UpdateStayInput,
   { rejectValue: string }
->('waypoint/stays/update', async ({ uid, trip, stayId, stay, previousStay }, { rejectWithValue }) => {
-  if (!canEditExistingItem(trip, uid)) {
-    return rejectWithValue('You do not have permission to edit stays.');
-  }
-  const validationError = validateStay(trip, stay);
-  if (validationError) {
-    return rejectWithValue(validationError);
-  }
+>(
+  'waypoint/stays/update',
+  async ({ uid, trip, stayId, stay, previousStay }, { rejectWithValue }) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to edit stays.');
+    }
+    const validationError = validateStay(trip, stay);
+    if (validationError) {
+      return rejectWithValue(validationError);
+    }
 
-  const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
-  const newSnapshot = isTripActive(trip) ? buildStayChangeSnapshot(trip, previousStay, stay, uid) : null;
-  // `seenBy` and `changeHistory` change independently of this form, so the cached copies
-  // are never written back — history is appended server-side instead.
-  const editableFields = Object.fromEntries(
-    Object.entries(stay).filter(([key]) => key !== 'seenBy' && key !== 'changeHistory'),
-  );
-  const changes = {
-    ...getMissingStayFields(previousStay),
-    ...editableFields,
-    id: stayId,
-    tripId: trip.id,
-    name: stay.name.trim(),
-    address: stay.address.trim(),
-    checkInTimezone: stay.checkInTimezone?.trim() || null,
-    confirmationCode: stay.confirmationCode?.trim() || null,
-    notes: stay.notes?.trim() || null,
-    linkUrl: stay.linkUrl?.trim() || null,
-    linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
-    ...(newSnapshot ? { changeHistory: arrayUnion(newSnapshot) } : {}),
-    lastEditedAt: Date.now(),
-  };
+    const stayRef = doc(
+      db,
+      'apps',
+      'waypoint',
+      'trips',
+      trip.id,
+      'stays',
+      stayId,
+    );
+    const newSnapshot = isTripActive(trip)
+      ? buildStayChangeSnapshot(trip, previousStay, stay, uid)
+      : null;
+    // `seenBy` and `changeHistory` change independently of this form, so the cached copies
+    // are never written back — history is appended server-side instead.
+    const editableFields = Object.fromEntries(
+      Object.entries(stay).filter(
+        ([key]) => key !== 'seenBy' && key !== 'changeHistory',
+      ),
+    );
+    const changes = {
+      ...getMissingStayFields(previousStay),
+      ...editableFields,
+      id: stayId,
+      tripId: trip.id,
+      name: stay.name.trim(),
+      address: stay.address.trim(),
+      checkInTimezone: stay.checkInTimezone?.trim() || null,
+      confirmationCode: stay.confirmationCode?.trim() || null,
+      notes: stay.notes?.trim() || null,
+      linkUrl: stay.linkUrl?.trim() || null,
+      linkPreview: stay.linkUrl?.trim() ? stay.linkPreview : null,
+      ...(newSnapshot ? { changeHistory: arrayUnion(newSnapshot) } : {}),
+      lastEditedAt: Date.now(),
+    };
 
-  await updateDoc(stayRef, changes);
-  return stay;
-});
+    await updateDoc(stayRef, changes);
+    return stay;
+  },
+);
 
 // The rule validates the whole merged document, so a stay saved before these
 // fields existed needs them written alongside any partial update.
@@ -227,31 +276,42 @@ export const updateStayNotes = createAsyncThunk<
   Stay,
   UpdateStayNotesInput,
   { rejectValue: string }
->('waypoint/stays/updateNotes', async ({ uid, trip, stay, notes }, { rejectWithValue }) => {
-  if (!canEditExistingItem(trip, uid)) {
-    return rejectWithValue('You do not have permission to edit this stay.');
-  }
+>(
+  'waypoint/stays/updateNotes',
+  async ({ uid, trip, stay, notes }, { rejectWithValue }) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to edit this stay.');
+    }
 
-  const changes = {
-    ...getMissingStayFields(stay),
-    notes: notes.trim() || null,
-    lastEditedAt: Date.now(),
-  };
-  await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stay.id), changes);
-  return { ...stay, ...changes };
-});
+    const changes = {
+      ...getMissingStayFields(stay),
+      notes: notes.trim() || null,
+      lastEditedAt: Date.now(),
+    };
+    await updateDoc(
+      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stay.id),
+      changes,
+    );
+    return { ...stay, ...changes };
+  },
+);
 
 export const deleteStay = createAsyncThunk<
   string,
   DeleteStayInput,
   { rejectValue: string }
->('waypoint/stays/delete', async ({ uid, trip, stayId }, { rejectWithValue }) => {
-  if (!canEditExistingItem(trip, uid)) {
-    return rejectWithValue('You do not have permission to delete stays.');
-  }
-  await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId));
-  return stayId;
-});
+>(
+  'waypoint/stays/delete',
+  async ({ uid, trip, stayId }, { rejectWithValue }) => {
+    if (!canEditExistingItem(trip, uid)) {
+      return rejectWithValue('You do not have permission to delete stays.');
+    }
+    await deleteDoc(
+      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId),
+    );
+    return stayId;
+  },
+);
 
 interface MarkStaySeenInput {
   uid: string;
@@ -259,17 +319,26 @@ interface MarkStaySeenInput {
   stayId: string;
 }
 
-export const markStaySeen = createAsyncThunk<void, MarkStaySeenInput, { rejectValue: string }>(
-  'waypoint/stays/markSeen',
-  async ({ uid, trip, stayId }) => {
-    const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
-    await runHeldTransaction(trip.id, async (transaction) => {
-      const snapshot = await transaction.get(stayRef);
-      if (!snapshot.exists()) {
-        return;
-      }
-      const seenBy = (snapshot.data().seenBy ?? {}) as Record<string, number>;
-      transaction.update(stayRef, { seenBy: { ...seenBy, [uid]: Date.now() } });
-    });
-  },
-);
+export const markStaySeen = createAsyncThunk<
+  void,
+  MarkStaySeenInput,
+  { rejectValue: string }
+>('waypoint/stays/markSeen', async ({ uid, trip, stayId }) => {
+  const stayRef = doc(
+    db,
+    'apps',
+    'waypoint',
+    'trips',
+    trip.id,
+    'stays',
+    stayId,
+  );
+  await runHeldTransaction(trip.id, async (transaction) => {
+    const snapshot = await transaction.get(stayRef);
+    if (!snapshot.exists()) {
+      return;
+    }
+    const seenBy = (snapshot.data().seenBy ?? {}) as Record<string, number>;
+    transaction.update(stayRef, { seenBy: { ...seenBy, [uid]: Date.now() } });
+  });
+});

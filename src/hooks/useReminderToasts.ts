@@ -110,6 +110,7 @@ export function useReminderToasts() {
         link: '/waypoint',
         recurrence: 'none',
         inAppToast: null,
+        subjectRefs: null,
         lastSentAt: null,
         createdBy: '',
         createdAt: Date.now(),

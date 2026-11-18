@@ -1,11 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  setDoc,
-} from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -23,7 +17,10 @@ import {
   removeTripPendingRequest,
   upsertMyPendingRequest,
 } from '@apps/waypoint/store/slices/pendingRequestsSlice';
-import { canChangeRole, canRemoveMembers } from '@apps/waypoint/utils/roleGuards';
+import {
+  canChangeRole,
+  canRemoveMembers,
+} from '@apps/waypoint/utils/roleGuards';
 
 const PENDING_REQUESTS_COLLECTION = collection(
   db,

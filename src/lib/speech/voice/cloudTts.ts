@@ -230,7 +230,8 @@ export const createCloudTts = ({
     options: Parameters<TtsAdapter['speak']>[1],
     readyAt: number,
   ) {
-    const { priority, signal, onStart, onProgress, onRouteChange } = options;
+    const { priority, delivery, signal, onStart, onProgress, onRouteChange } =
+      options;
     const spoken = toSpokenText(text);
     const pieces = toPieces(spoken);
     const totalChars = pieces.reduce((sum, piece) => sum + piece.length, 0);
@@ -248,6 +249,7 @@ export const createCloudTts = ({
     };
     const reportFailure = (index: number, isCut: boolean) =>
       reportsFallback &&
+      delivery === undefined &&
       reportFallback({
         key: CLOUD_VOICE_FALLBACK_KEY,
         feature: 'Speaking',
@@ -276,7 +278,13 @@ export const createCloudTts = ({
         return;
       }
       const controller = new AbortController();
-      const answer = source.fetchSpeech(piece, priority, controller.signal);
+      const answer = source.fetchSpeech(
+        piece,
+        priority,
+        controller.signal,
+        undefined,
+        delivery,
+      );
       answer.catch(() => undefined);
       Object.assign(prefetch, {
         index,
@@ -297,6 +305,10 @@ export const createCloudTts = ({
         : (charsBefore(index) + fraction * (pieces[index]?.length ?? 0)) /
           totalChars;
     const speakRest = async (index: number) => {
+      // A whispered line is never said in the device's voice: the queue reports it as failed instead.
+      if (delivery !== undefined) {
+        throw new Error('The cloud voice could not whisper this line');
+      }
       live.isFallingBack = true;
       live.isSounding = false;
       onRouteChange?.();
@@ -436,7 +448,13 @@ export const createCloudTts = ({
       try {
         const answer = await within(
           (isPrefetched ? prefetch.answer : null) ??
-            source.fetchSpeech(piece, priority, controller.signal),
+            source.fetchSpeech(
+              piece,
+              priority,
+              controller.signal,
+              undefined,
+              delivery,
+            ),
           firstByteMs,
         );
         if (signal.aborted) {
@@ -557,7 +575,7 @@ export const createCloudTts = ({
       if (outcome === 'aborted') return index === 0 ? undefined : run.playedBy;
       if (outcome === 'failed') {
         reportFailure(index, false);
-        onFallback?.(run.failure.cause);
+        if (delivery === undefined) onFallback?.(run.failure.cause);
         return speakRest(index);
       }
       if (outcome === 'cut') {

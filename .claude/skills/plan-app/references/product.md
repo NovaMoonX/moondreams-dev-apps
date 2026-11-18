@@ -13,10 +13,11 @@ The product track writes two files. `PRODUCT.md` is the full product doc: every 
 
 Keep a domain-appropriate section for what makes this app different from a generic version of the same idea, if that distinction actually changes what gets built (e.g., a cat-specific app vs. a generic pet app, because the seeded reference data and quick-tag vocabulary differ) — not just as scene-setting. Skip it if the app doesn't have this kind of distinguishing angle.
 
-Two questions every plan answers before its build plan is settled:
+Three questions every plan answers before its build plan is settled:
 
 - **What does the real input look like?** An entry point that reads a person's existing material (a file, a pasted list, an import) is planned for what that material really is: several files at once, a spreadsheet with several tabs (exported one per tab), mixed formats, the same item in two of them. Say how many it takes, how they merge, and what is said about a conflict (Runway's "Start from your budget" was first planned for one file).
 - **Change it, or look it up?** For every record a person can reach in history, say whether they need to change it or only to find it, and what changing an old one does to today's figures. Plan the look-up first; an old edit that would quietly move a figure the person has already checked is offered only with its effect, or not at all (Runway's history window).
+- **Where does it live?** For every piece of a large area, ask four things: does it need a surface the person opens on purpose; does it get better from knowing the rest of their life; who else touches its data (anything shared with another person is its own app); and how long they spend in it (seconds fit inside an existing app, a session earns its own). No surface and coupled to their life: it lives in the app it couples to. A surface and coupled: its own app, reading or reporting through connected apps (`docs/conventions/connections.md`). A surface and not coupled: its own app. Neither: don't build it. Record the verdict for each piece in PRODUCT.md (owner, Helm growth: habits and goals stayed in Helm, a practice app would be its own).
 
 - **Under the Hood**: Tech stack summary. Now that Redux Toolkit is the established state-management pattern (see Phase 3), mention it here alongside Firestore/Storage rather than leaving state management unstated.
 

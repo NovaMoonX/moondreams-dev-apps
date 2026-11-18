@@ -36,6 +36,9 @@ const getOverlayLeft = (
       'ml-px',
   );
 
+const hasOwnWidth = (className: string | undefined) =>
+  /(^|\s)!?w-/.test(className ?? '');
+
 /** A native date input that always shows a placeholder while empty (the format, or `placeholder`), since phones draw an empty date box blank. `className` styles the input, `wrapperClassName` sizes the field. */
 function DateInput({
   className,
@@ -50,7 +53,13 @@ function DateInput({
 }: DateInputProps) {
   const hasValue = typeof value === 'string' && value !== '';
   return (
-    <div className={join('w-full min-w-0', wrapperClassName)}>
+    <div
+      className={join(
+        'min-w-0',
+        !hasOwnWidth(wrapperClassName) && 'w-full',
+        wrapperClassName,
+      )}
+    >
       <div className='relative'>
         <Input
           {...rest}
