@@ -27,12 +27,14 @@ function RepeatPicker({ picker }: RepeatPickerProps) {
           aria-hidden='true'
         />
       </Button>
-      <RepeatSummary
-        rule={value}
-        startsOn={startsOn}
-        time={time}
-        timeFormat={timeFormat}
-      />
+      {value && (
+        <RepeatSummary
+          rule={value}
+          startsOn={startsOn}
+          time={time}
+          timeFormat={timeFormat}
+        />
+      )}
     </div>
   );
 }

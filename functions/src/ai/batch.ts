@@ -16,6 +16,8 @@ export interface BatchRequest {
   /** JSON Schema of the answer, with `additionalProperties: false` and `required`. */
   schema: Record<string, unknown>;
   maxTokens: number;
+  /** Sent as one cached block (kept an hour) so requests that share it read it from the cache. */
+  isSystemCached?: boolean;
 }
 
 export interface BatchResult {
@@ -31,6 +33,8 @@ export interface BatchProvider {
   submit(requests: BatchRequest[]): Promise<string>;
   /** Every result of an ended batch, in any order; null while it is still running. */
   collect(batchId: string): Promise<BatchResult[] | null>;
+  /** Deletes an ended batch at the provider, where it is otherwise kept for up to 29 days. */
+  remove(batchId: string): Promise<void>;
 }
 
 const readAll = async <T>(items: AsyncIterable<T>) => {
@@ -95,7 +99,18 @@ export function createAnthropicBatchProvider(
           params: {
             model: spec.id,
             max_tokens: request.maxTokens,
-            system: request.system,
+            system: request.isSystemCached
+              ? [
+                  {
+                    type: 'text' as const,
+                    text: request.system,
+                    cache_control: {
+                      type: 'ephemeral' as const,
+                      ttl: '1h' as const,
+                    },
+                  },
+                ]
+              : request.system,
             messages: [{ role: 'user' as const, content: request.message }],
             output_config: {
               effort: spec.effort,
@@ -115,5 +130,9 @@ export function createAnthropicBatchProvider(
     return items.map(toResult);
   };
 
-  return { submit, collect };
+  const remove = async (batchId: string) => {
+    await client.messages.batches.delete(batchId);
+  };
+
+  return { submit, collect, remove };
 }

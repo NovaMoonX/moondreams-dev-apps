@@ -152,11 +152,84 @@ export const WAYPOINT_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'fullChecklist',
+          kind: 'task',
+          label: 'The whole trip checklist',
+          meaning:
+            "Every Before the Road item on the person's trips, whoever it is for or whether anyone has taken it, with its category, its due day, whether it is done and the first names of the travelers it is assigned to.",
+          detail:
+            'Every item, its category, due day, status and who it is assigned to',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: 'Every item on the trip checklist, assigned or not',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The first names of the travelers it is assigned to',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'tripIdeas',
+          kind: 'artifact',
+          label: 'Trip ideas',
+          meaning:
+            "Ideas the travelers on the person's trips have added to try, each with its title, a short note and the site a link goes to. Never the link itself.",
+          detail: 'Each idea, a short note and the site its link goes to',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each idea's title and a short note",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The site its link goes to, never the link',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'announcements',
+          kind: 'artifact',
+          label: 'Trip announcements',
+          meaning:
+            "What trip admins announced to the travelers on the person's trips, each with its trip, a short text and the day it was posted. A text with a link, an email or a phone number is left out.",
+          detail: 'Each announcement, its trip and when it was posted',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "The announcement's title and a short text",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The trip and the day it was posted',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
         "other members' private to-dos",
         'contact details',
-        'suggestions',
+        'timeline suggestions',
         'expense lines',
         'booking confirmation codes',
         'receipts',

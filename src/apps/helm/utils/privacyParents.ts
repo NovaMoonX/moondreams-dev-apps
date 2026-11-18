@@ -17,7 +17,8 @@ export type PrivateKind =
   | 'note'
   | 'topic'
   | 'fact'
-  | 'procedure';
+  | 'procedure'
+  | 'habit';
 
 export type ParentKind = 'project' | 'who' | 'place';
 
@@ -30,16 +31,20 @@ export const PRIVATE_COLLECTIONS: Record<PrivateKind, string> = {
   topic: 'topics',
   fact: 'facts',
   procedure: 'procedures',
+  habit: 'habits',
 };
 
 export interface PrivacyRecord extends Partial<PrivacyFacts> {
   id: string;
   privacy?: PrivacyClass | null;
   projectId?: string | null;
+  forWhoId?: string | null;
   projectIds?: string[];
   whoIds?: string[];
   placeIds?: string[];
   subjectIds?: string[];
+  lockScreenName?: string | null;
+  history?: unknown[];
 }
 
 export type ParentIndex = Record<ParentKind, Map<string, PrivateParent>>;
@@ -76,6 +81,11 @@ const linksOf = (
       ['project', record.projectId ? [record.projectId] : []],
       ['who', record.whoIds ?? []],
       ['place', record.placeIds ?? []],
+    ];
+  if (kind === 'habit')
+    return [
+      ['project', record.projectId ? [record.projectId] : []],
+      ['who', record.forWhoId ? [record.forWhoId] : []],
     ];
   if (kind === 'fact')
     return [

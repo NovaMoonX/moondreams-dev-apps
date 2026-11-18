@@ -18,16 +18,23 @@ export const MAX_BATCH = 50;
 const MAX_NAME = 100;
 const MAX_EMAIL = 254;
 const MAX_PHONE = 40;
-const MAX_ENTRIES = 5;
+const MAX_LABEL = 40;
+const MAX_ENTRIES = 10;
 const RESOURCE_PATTERN = /^people\/[A-Za-z0-9_-]{1,64}$/;
 const PHOTO_HOST_PATTERN = /^lh\d{1,2}\.googleusercontent\.com$/;
+
+/** A phone or email with the label Google gives it ("Mobile", "Work"), null when it gives none. */
+export interface ContactEntry {
+  value: string;
+  label: string | null;
+}
 
 /** What a contact is read as: only these things, each cut to a sane length. */
 export interface Contact {
   resourceName: string;
   name: string;
-  emails: string[];
-  phones: string[];
+  emails: ContactEntry[];
+  phones: ContactEntry[];
   photoUrl: string | null;
   /** Google's birthday; the year is null when it gives none. */
   birthday: { month: number; day: number; year: number | null } | null;
@@ -40,6 +47,8 @@ interface Entry {
   displayName?: unknown;
   default?: unknown;
   metadata?: { primary?: unknown };
+  type?: unknown;
+  formattedType?: unknown;
 }
 
 interface Person {
@@ -74,12 +83,19 @@ const primaryFirst = (entries: Entry[] | undefined) =>
       Number(left.metadata?.primary === true),
   );
 
-const texts = (entries: Entry[] | undefined, key: 'value', max: number) =>
+const toLabel = (entry: Entry) => {
+  const label = [entry.formattedType, entry.type].find(
+    (word): word is string => typeof word === 'string' && word.trim() !== '',
+  );
+  return label ? label.trim().slice(0, MAX_LABEL) : null;
+};
+
+const toEntries = (entries: Entry[] | undefined, max: number) =>
   primaryFirst(entries)
-    .flatMap((entry) => {
-      const text = entry[key];
+    .flatMap((entry): ContactEntry[] => {
+      const text = entry.value;
       return typeof text === 'string' && text.trim() !== ''
-        ? [text.trim().slice(0, max)]
+        ? [{ value: text.trim().slice(0, max), label: toLabel(entry) }]
         : [];
     })
     .slice(0, MAX_ENTRIES);
@@ -133,8 +149,8 @@ export const toContact = (person: Person): Contact | null => {
   return {
     resourceName,
     name: name.trim().slice(0, MAX_NAME),
-    emails: texts(person.emailAddresses, 'value', MAX_EMAIL),
-    phones: texts(person.phoneNumbers, 'value', MAX_PHONE),
+    emails: toEntries(person.emailAddresses, MAX_EMAIL),
+    phones: toEntries(person.phoneNumbers, MAX_PHONE),
     photoUrl: toPhotoUrl(person.photos),
     birthday: toBirthday(person.birthdays),
   };
@@ -214,7 +230,7 @@ export const toContactOption = (contact: Contact): ConnectorOption => ({
   id: contact.resourceName,
   name: contact.name,
   colour: null,
-  detail: contact.emails[0] ?? contact.phones[0] ?? null,
+  detail: contact.emails[0]?.value ?? contact.phones[0]?.value ?? null,
   photoUrl: contact.photoUrl,
   isPrimary: false,
   isOnByDefault: false,

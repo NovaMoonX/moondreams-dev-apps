@@ -1,7 +1,9 @@
 import { CLOSING_PHRASES } from '@/lib/speech/closingPhrase';
-import { formatList } from '@/utils/formatUtils';
+import { formatList, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { ThemeOption } from '@/components/ThemePicker';
+import { DEADLINE_FIT_LIMITS } from '@apps/helm/engine/freeTime';
+import type { DayPart } from '@apps/helm/engine/habitDay';
 import type {
   AssistantTone,
   HelmTheme,
@@ -232,7 +234,7 @@ export const ACKNOWLEDGEMENT_WORDS = [
   'so',
 ];
 /** Commands that delete a record. A closing phrase never reaches one: the reading keeps one only when its subject is still named once every closing phrase is taken out of the words. */
-export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+export const DELETING_COMMANDS = ['removeKeyDate', 'removeSeenAs'] as const;
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
 export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];
 
@@ -255,6 +257,12 @@ export const IMPORTANCE_OPTIONS = [
   { value: 'must', label: 'Must' },
   { value: 'should', label: 'Should' },
   { value: 'could', label: 'Could' },
+] as const;
+
+export const MEETING_FORMAT_OPTIONS = [
+  { value: 'inPerson', label: 'In person' },
+  { value: 'video', label: 'Video' },
+  { value: 'phone', label: 'Phone' },
 ] as const;
 
 export const ENERGY_OPTIONS = [
@@ -295,6 +303,23 @@ export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
+/** The most connections between people the app keeps listening to. */
+export const CONNECTIONS_LIMIT = 5_000;
+/** 30 active or paused habits plus the 200 ended or retired ones kept. */
+export const HABITS_LIMIT = 230;
+export const HABITS_ACTIVE_MAX = 30;
+export const HABIT_NAME_MAX = 60;
+/** The plain-text copy of a habit's name a lock screen may show. */
+export const LOCK_SCREEN_NAME_MAX = HABIT_NAME_MAX;
+export const HABIT_LABEL_MAX = 30;
+export const HABIT_NOTES_MAX = 500;
+export const MEDICINE_NAME_MAX = 60;
+export const MEDICINE_DOSE_MAX = 40;
+export const HABIT_WINDOWS_MAX = 4;
+export const HABIT_PER_DAY_MAX = 20;
+export const HABIT_NOTES_SHOWN = 2;
+/** Habit days read for Today and the week: from two weeks back to tomorrow. */
+export const HABIT_DAYS_BEHIND = 14;
 export const PROJECTS_LIMIT = 500;
 export const NOTES_LIMIT = 1_000;
 export const TOPICS_LIMIT = 100;
@@ -395,6 +420,10 @@ export const HELM_CAPS = {
   yearlyPerWho: 20,
   momentsPerWho: 500,
   indexSplit: 6_000,
+  /** Scheduled actions a person has that have not ended; also the listener's cap. */
+  scheduledActions: 50,
+  /** Aims in one day. */
+  dayAims: 12,
 } as const;
 
 /** The kinds of date that come back each year, in the order the add sheet offers them. */
@@ -465,6 +494,11 @@ const forgetDatesLine = (dates: number) =>
     ? ''
     : ` ${dates === 1 ? 'Its date is' : `Its ${dates} dates are`} deleted too.`;
 
+const forgetConnectionsLine = (connections: number) =>
+  connections === 0
+    ? ''
+    : ` ${connections === 1 ? 'Their link to another person goes' : `Their ${connections} links to other people go`} too.`;
+
 const forgetMomentsLine = (moments: number) =>
   moments === 0
     ? ''
@@ -520,6 +554,16 @@ const toRunParts = (deleted: string[], unticked: number) =>
 
 const toCapital = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
+
+const toHabitParts = (ticked: number, changed: number) =>
+  [
+    ticked === 0
+      ? ''
+      : `unticked ${ticked === 1 ? '1 check-in' : `${ticked} check-ins`}`,
+    changed === 0
+      ? ''
+      : `took back ${changed === 1 ? '1 habit change' : `${changed} habit changes`}`,
+  ].filter(Boolean);
 
 /** Each kind of medium in a sentence: its word, its titled and "the" forms, its sheet title, and whether its file name stands in for them. */
 const MEDIA_WORDS: Record<
@@ -648,6 +692,13 @@ export const HELM_COPY = {
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
+  questionListening: (hint: string) => `Listening · ${hint}`,
+  questionSay: (phrases: string) => `say ${phrases}`,
+  questionSaySeveral: (phrases: string) =>
+    `say ${phrases}, as many as you like`,
+  questionSayAnswer: 'say your answer',
+  questionSayMore: 'another one',
+  questionWakeToAnswer: (name: string) => `Say “Hey ${name}” to answer`,
   talkGettingReady: 'Getting ready…',
   heardAsTitle: (heard: string) => `Heard “${heard}”`,
   heardAsShownAs: (name: string) =>
@@ -1114,7 +1165,7 @@ export const HELM_COPY = {
   connectedAppsCount: (count: number) => `${count} connected`,
   connectedAppsNone: 'Not connected',
   connectedAppsLead: (name: string) =>
-    `${name} can read these. It can't add, change or delete anything in them.`,
+    `${name} can read these. It doesn't change anything in them, apart from keeping your plan in a Google Calendar when you ask it to.`,
   connectReadOnlyPromise: (name: string, app: string) =>
     `${name} can read these. It can't add, change or delete anything in ${app}.`,
   connectedSection: 'Connected',
@@ -1316,7 +1367,7 @@ export const HELM_COPY = {
   googleReconnectTitle: 'Reconnect Google Calendar',
   googleReconnectAccount: (account: string) => `Reconnecting ${account}.`,
   googleConnectReadOnly: (name: string) =>
-    `${name} reads each event's title, time and calendar so it can plan around your day. It can't add, change or delete anything in Google Calendar.`,
+    `${name} reads each event's title, time and calendar so it can plan around your day. It changes nothing in Google Calendar unless you ask it to keep your plan there.`,
   googleConnectTesting: (name: string) =>
     `While ${name} is private, Google shows an "unverified app" screen before you agree, and may ask you to reconnect about once a week.`,
   googleContinue: 'Continue to Google',
@@ -1362,7 +1413,7 @@ export const HELM_COPY = {
     'People you brought in stay in your circle, just as they are.',
   googleContactsFailed: "Google Contacts didn't connect. Try again.",
   googleReadOnly: (name: string) =>
-    `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
+    `${name} can read your events. It only adds to Google Calendar when you ask it to keep your plan there.`,
   googleDisconnectNote: 'Google also forgets this access to the account.',
   googleDisconnectNoteTitle: 'Access at Google',
   googleLabelRow: 'Label',
@@ -1375,6 +1426,62 @@ export const HELM_COPY = {
   googleWhichCalendars: 'Which calendars',
   googleCalendarsCount: (count: number) =>
     `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
+  calendarSyncTitle: 'Keep your plan in a calendar',
+  calendarSyncOff: 'Show your plan in Google Calendar',
+  calendarSyncOn: (calendarName: string) => `Your plan is in ${calendarName}`,
+  calendarSyncPending: (calendarName: string) =>
+    `Getting ${calendarName} ready`,
+  calendarSyncReconnect: 'Reconnect Google to keep going',
+  calendarSyncGone: 'That calendar is gone. Choose one again.',
+  calendarSyncLead: (name: string) =>
+    `${name} puts your kept plan, habit windows and appointments in one calendar, and moves you make there come back here.`,
+  calendarSyncLeadNote: (name: string) =>
+    `It updates about every 10 minutes. A habit window you move there stays put here, and ${name} tells you.`,
+  calendarSyncMakeTitle: 'Make a calendar for your plan',
+  calendarSyncMakeDetail: (name: string) =>
+    `Recommended. ${name} can only touch this one, never your others.`,
+  calendarSyncChooseTitle: 'Use one of your calendars',
+  calendarSyncChooseDetail: (name: string) =>
+    `Pick one you already look at. Google asks for wider access; ${name} only uses that one.`,
+  calendarSyncPickLead: 'Which calendar should carry your plan?',
+  calendarSyncNoneWritable:
+    "None of your calendars can have events added. Make a new one instead and it's ready straight away.",
+  calendarSyncLoadingCalendars: 'Opening your calendars',
+  calendarSyncBack: 'Back',
+  calendarSyncGoneLead: (name: string) =>
+    `The calendar ${name} was keeping your plan in was deleted in Google, so nothing is being kept there now. Choose a calendar again to pick it back up.`,
+  calendarSyncOnLead: (calendarName: string, lastWrittenAt: string | null) =>
+    lastWrittenAt === null
+      ? `Your plan lands in ${calendarName} within about 10 minutes, then updates about every 10 minutes.`
+      : `Your plan is in ${calendarName} and updates about every 10 minutes. Last updated ${lastWrittenAt}.`,
+  calendarSyncReconnectLead: (name: string) =>
+    `Google needs you to reconnect before ${name} can keep your plan in your calendar again.`,
+  calendarSyncStopRow: 'Stop keeping your plan there',
+  calendarSyncStopRowDetail: 'Removes its upcoming events',
+  calendarSyncStopTitle: 'Stop keeping your plan there?',
+  calendarSyncStopDetail: (name: string, calendarName: string) =>
+    `${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, your plan here is untouched, and you can turn it back on any time.`,
+  calendarSyncStopMade:
+    ' The calendar itself stays; delete it in Google Calendar if you no longer want it.',
+  calendarSyncStopAction: 'Stop and remove',
+  calendarSyncStopped: (count: number, calendarName: string) =>
+    count === 0
+      ? `Stopped. Nothing upcoming was left in ${calendarName}.`
+      : `Stopped. Removed ${count} upcoming ${count === 1 ? 'event' : 'events'} from ${calendarName}.`,
+  calendarSyncStoppedLeft: (count: number) =>
+    `${count} ${count === 1 ? 'event' : 'events'} couldn't be removed yet; they'll be tried again.`,
+  calendarSyncDone: 'Done',
+  calendarSyncReconnectAction: 'Reconnect Google',
+  calendarSyncWorking: 'Setting it up',
+  calendarSyncStopping: 'Removing upcoming events',
+  calendarSyncCancelled:
+    "Google didn't get your OK, so nothing changed. Try again whenever you're ready.",
+  calendarSyncNotWritable:
+    "That calendar can't have events added. Pick another, or make a new one.",
+  calendarSyncFailed:
+    "That didn't work and nothing changed. Give it another try.",
+  calendarSyncStopFailed:
+    "That didn't stop and nothing was removed. Give it another try.",
   calendarPickerLead: (name: string) =>
     `Pick the calendars ${name} plans around. Holidays and subscriptions start off.`,
   calendarPickerLoading: 'Opening your calendars',
@@ -1631,6 +1738,194 @@ export const HELM_COPY = {
   sheetChanged: 'What it changed',
   answerNothingInRecords: 'Nothing in your records answers this.',
   answerNotFromRecords: 'Not from your records',
+  researchNotFromWeb: 'Not from the web',
+  researchLookingInto: (subject: string) => `Looking into ${subject}…`,
+  researchArrival: {
+    fewMinutes: 'Give me about 2 minutes.',
+    fiveToTen: "About 5 to 10 minutes; I'll tell you when it's in.",
+    byMorning: 'It will be ready by morning.',
+  },
+  researchIn: (subject: string) => `What I found on ${subject}`,
+  researchOpen: 'Open',
+  researchCancel: 'Stop looking',
+  researchCancelled: 'Stopped looking.',
+  researchStoppedLine: (subject: string) =>
+    `You stopped the look into ${subject}.`,
+  researchStopFailed: "Couldn't stop that look. Try again in a moment.",
+  researchRerunOn: (resetOn: string) => `I'll look on the web on ${resetOn}`,
+  researchSources: 'Sources',
+  researchDepthQuestion: (subject: string) =>
+    `How deep should I look into ${subject}?`,
+  researchDepthQuick: 'A quick look',
+  researchDepthThorough: 'A thorough look',
+  researchDepthAlwaysQuick: 'Always a quick look',
+  researchDepthAlwaysThorough: 'Always a thorough look',
+  researchThoroughLocked: (resetOn: string) =>
+    `Thorough looks are used up this month; they come back ${resetOn}.`,
+  researchCappedLine: (resetOn: string) =>
+    `This month's web searches are used up, so this is from what I already know. Want me to look on the web on ${resetOn}?`,
+  researchRerunYes: (resetOn: string) => `Look on ${resetOn}`,
+  researchRerunNo: 'This is enough',
+  researchSettingsTitle: 'Research',
+  researchSettingsDefault: 'How deep to look',
+  researchSettingsAsk: 'Ask me when it matters',
+  researchSettingsIntro: (name: string) =>
+    `How deep ${name} looks on the web. A thorough look reads more and uses more of this month's allowance.`,
+  researchSettingsFailed: "Couldn't save that. Check your connection.",
+  researchNothingToShow: "I couldn't put anything together for this one.",
+  researchComparisonLabel: 'Side by side',
+  researchThoroughLeft: (count: number, resetOn: string) =>
+    count === 0
+      ? `No thorough looks left this month; they come back ${resetOn}.`
+      : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
+  aheadStatement: (subject: string, project: string) =>
+    `Want me to look into ${subject} before ${project}?`,
+  aheadDateReason: (date: string, days: number, project: string) =>
+    days <= 1
+      ? `${project}'s date is ${date}, tomorrow.`
+      : days < 14
+        ? `${project}'s date is ${date}, in ${days} days.`
+        : `${project}'s date is ${date}, ${Math.round(days / 7)} weeks from now.`,
+  aheadAsk: 'Ask me a few things first',
+  aheadNotNow: 'Not now',
+  aheadNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave it."
+      : `I won't bring it up for ${weeks} weeks.`,
+  groupingTitle: (name: string) => `These look like one thing: ${name}`,
+  groupingTitleUnnamed: 'These look like one thing',
+  groupingGroup: 'Group them',
+  groupingNotRelated: 'Not related',
+  groupingNotNow: 'Ask me later',
+  groupingSubtitleExisting: (name: string) =>
+    `Link them to ${name} so they stay together.`,
+  groupingSubtitleNew: (name: string) => `Make ${name} to hold them.`,
+  groupingMore: (count: number) => `+${count} more`,
+  groupingFromApp: (app: string) => `From ${app}`,
+  groupingPrivateItem: 'A private item',
+  groupingYourTask: 'Your task',
+  groupingYourNote: 'Your note',
+  groupingYourTopic: 'Your topic',
+  groupingYourProject: 'Your project',
+  groupingGroupedToast: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}.`,
+  groupingNotRelatedToast: "Okay, I won't suggest these together.",
+  groupingNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave those alone."
+      : `I won't bring these up for ${weeks} weeks.`,
+  groupingLinkedLine: (count: number, name: string) =>
+    `Linked ${count} things to ${name}.`,
+  groupingActivityGrouped: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}`,
+  groupingActivityLinked: (count: number, name: string) =>
+    `Linked ${count} things to ${name}`,
+  groupingActionFailed: "Couldn't save that. Check your connection.",
+  groupingTookBackSummary: 'Took back the grouping',
+  groupingTookBackReport: 'Took those links back.',
+  groupingLinkedHeading: 'Linked',
+  groupingSourcesTitle: 'What goes together',
+  groupingFiledUndoFailed: "Couldn't take that back. Try again.",
+  aheadActionFailed: "Couldn't save that. Check your connection.",
+  aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
+  aheadBriefLabel: "What I'll send:",
+  aheadOptional: 'Everything here is optional. Skip what you like.',
+  aheadInferred: (assistant: string, from: string) =>
+    `${assistant} inferred · ${from}`,
+  aheadMinField: 'From',
+  aheadMaxField: 'Up to',
+  aheadDepthLabel: 'How deep',
+  aheadDepthQuick: 'Quick look',
+  aheadDepthQuickLine: 'Reads a few good sources',
+  aheadDepthThorough: 'Thorough',
+  aheadDepthThoroughLine: (left: number) =>
+    `Reads more widely · ${left} left this month`,
+  aheadStartNow: 'Start now',
+  aheadStartNowLine: (arrival: string | null) =>
+    arrival === null
+      ? 'Ready by morning. Turn this on to start right away.'
+      : `Starts right away. ${arrival}`,
+  aheadSend: 'Look into it',
+  aheadCancel: 'Cancel',
+  aheadSendFailed: "Couldn't send that. Check your connection and try again.",
+  aheadGone: 'This offer is no longer here.',
+  aheadAlreadyAnswered: 'That was already answered.',
+  aheadArrival: {
+    fewMinutes: 'Ready in a few minutes.',
+    fiveToTen: 'Ready in about 5 to 10 minutes.',
+    byMorning: 'Ready by morning.',
+  },
+  aheadSent: (subject: string, arrival: string) =>
+    `Looking into ${subject}. ${arrival}`,
+  aheadLooking: (subject: string, arrival: string) =>
+    `Looking into ${subject} · ${arrival.replace(/\.$/, '')}`,
+  aheadTold: (subject: string) => `Looked into ${subject} for you.`,
+  aheadOpenIt: 'Open it',
+  aheadToldDismiss: 'Dismiss',
+  learnLaterRow: (count: number) =>
+    count === 0 ? 'Learn later' : `Learn later · ${count}`,
+  learnLaterTitle: 'Learn later',
+  learnMatchRow: (count: number) => `${count} in Learn later`,
+  learnSaved: (subject: string) =>
+    `Saved to learn later: ${subject}. I'll bring it up when you have a free half hour.`,
+  learnSavedPlain:
+    "Saved to learn later. I'll bring it up when you have a free half hour.",
+  learnMerged: (subject: string) =>
+    `Added that to what you wanted to learn about ${subject}.`,
+  learnRevived: (subject: string) =>
+    `${subject} is back on your learn later list.`,
+  learnRemoved: (subject: string) => `Okay, I took ${subject} off your list.`,
+  learnNotNowLine: 'Okay, it stays on your list.',
+  learnCardTitle: (subject: string) =>
+    `${subject.charAt(0).toUpperCase()}${subject.slice(1)}, the longer version`,
+  learnCardLine: 'Remember that thing you wanted to learn?',
+  learnCardMeta: (minutes: number, savedOn: string) =>
+    `${minutes} min · you saved it ${savedOn} · Suggested`,
+  learnShowMe: 'Show me',
+  learnNotNow: 'Not now',
+  learnStill: (subject: string) =>
+    `Do you still want to learn about ${subject}?`,
+  learnKeepIt: 'Keep it',
+  learnRemoveIt: 'Remove it',
+  learnTogether: (subject: string) => `Want these as one: ${subject}?`,
+  learnTogetherYes: 'Together',
+  learnApart: 'Keep them apart',
+  learnMergedTogether: (subject: string) => `Put those together as ${subject}.`,
+  learnKindQuestion: (subject: string) =>
+    `What would you like to do with ${subject}?`,
+  learnRead: 'Read up on it later',
+  learnGoal: 'Make it a goal you practise',
+  learnGoalOffer: (name: string) => `Make ${name} a goal?`,
+  learnGoalMade: (name: string) => `Made ${name} a goal.`,
+  learnCaution:
+    'From general knowledge and the web, not checked against your records.',
+  learnCautionGeneral:
+    'From general knowledge, not checked against your records. It may be out of date.',
+  learnKeep: 'Save to my knowledge',
+  learnKept: 'Saved to your knowledge.',
+  learnKeptIn: (topicName: string) => `Saved to ${topicName}.`,
+  learnDone: 'Done with it',
+  learnDoneLine: (subject: string) => `Marked ${subject} as learned.`,
+  learnRemove: 'Remove',
+  learnVideos: (count: number) => `Videos · ${count}`,
+  learnVideoMeta: (channel: string, minutes: number) =>
+    `${channel} · ${minutes} min`,
+  learnFailed: "Couldn't put the overview together. It'll try again tomorrow.",
+  learnPreparing: 'Preparing this for you. Ready by tomorrow morning.',
+  learnPreparingLine: (savedOn: string) =>
+    `Saved ${savedOn} · ready by tomorrow morning`,
+  learnSavedLine: (savedOn: string, context: string | null) =>
+    context ? `Saved ${savedOn} · ${context}` : `Saved ${savedOn}`,
+  learnEmpty:
+    'Nothing saved yet. Say "one day I want to learn…" and it waits here for a free half hour.',
+  learnActionFailed: "Couldn't save that. Check your connection.",
+  learnRowMeta: (savedOn: string) => `Learn later · saved ${savedOn}`,
+  learnToday: 'today',
+  learnNoMatch: 'Nothing you saved matches that.',
+  learnSearch: 'Search what you saved',
+  learnOpen: (subject: string) => `Open ${subject}`,
+  learnVideoPlay: (title: string) => `Play ${title}`,
+  searchGroupLearn: 'Learn later',
   answerGeneralHeading: 'General knowledge',
   answerGeneralCaution: (name: string) =>
     `From general knowledge, not checked against anything you've told ${name}. It may be out of date.`,
@@ -1705,7 +2000,7 @@ export const HELM_COPY = {
     `What you tell ${name}, and the records it needs to file or answer it.`,
   aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools. While you're away, a timer on the server carries your unfinished aims into the next day and keeps your plan up to date; it never opens what a task says and never sends anything to Anthropic.`,
   aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
     "What you say, your records and every line in Activity are encrypted before they're saved.",
@@ -1713,18 +2008,43 @@ export const HELM_COPY = {
   aiSeesKept:
     "What you say and every change in Activity. The server's logs keep counts and codes, never your words.",
   newTask: 'New task',
+  newHabit: 'New habit',
   moreActions: 'More',
   taskFormTitle: 'Task',
   taskTitleLabel: 'What to do',
   taskTitleMissing: 'Write what to do first',
   addTask: 'Add task',
   whenLabel: 'When',
+  meetsLabel: 'How it meets',
+  meetsSet: (how: string) => `Marked as ${how.toLowerCase()}.`,
+  meetsCleared: 'Cleared how it meets.',
+  meetsFrom: (source: string) => `From ${source}`,
   noDay: 'No day',
   addTime: 'Add a time',
   removeField: 'Remove',
   doneEditing: 'Done',
   stepsLabel: 'Steps',
   stepsCount: (done: number, total: number) => `${done} of ${total}`,
+  stepsCountMeeting: (answered: number, toAsk: number, day: string) =>
+    toAsk === 0
+      ? `All ${answered} answered`
+      : answered === 0
+        ? `${toAsk} to ask ${day}`
+        : `${answered} answered · ${toAsk} to ask ${day}`,
+  taskMeetingLabel: (label: string) => `For ${label} `,
+  taskMeetingWhen: (when: string) => `· ${when}`,
+  questionsMeetingLabel: (label: string) => `${label} `,
+  questionsMeetingWhen: (time: string) => `· ${time}`,
+  questionsReadyAsk: 'Do you feel ready?',
+  questionsReadyToast: (day: string) => `Marked ready for ${day}'s call`,
+  questionsReady: "I'm ready",
+  questionsNotYet: 'Not yet',
+  questionsOpenLabel: (label: string) => `Open your questions for ${label}`,
+  questionsNotYetToast: (time: string, day: string) =>
+    `Set aside ${time} ${day} for your questions`,
+  questionsNoTime:
+    "There's no free time before the meeting, so here are your questions.",
+  questionsActionFailed: "Couldn't save that. Check your connection.",
   noneValue: 'None',
   addStep: 'Add a step',
   stepPlaceholder: 'A step',
@@ -1796,6 +2116,92 @@ export const HELM_COPY = {
   planSuggestedSummary: (count: number, day: string) =>
     `Suggested ${count} ${count === 1 ? 'task' : 'tasks'} for ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
   planFailed: "Couldn't plan the day. Try again.",
+  todayAimMark: 'Your aim',
+  dayAimsQuestion: 'What do you want to get done today?',
+  dayAimsField: 'What you want to get done today',
+  dayAimsPlaceholder: 'Say it or type it',
+  dayAimsFiling: 'Filing what you said…',
+  dayAimsFilingOffline: "Saved here. It will be filed when you're back online.",
+  dayAimsFailedFiling: "That didn't get filed. Say it again when you're ready.",
+  dayAimsFromYesterday: 'From yesterday',
+  dayAimsBring: 'Bring to today',
+  dayAimsNotToday: 'Not today',
+  dayAimsBrought: (title: string) => `${title} is on today.`,
+  dayAimsLeftOff: (title: string) => `${title} stays off today.`,
+  dayAimsAnyTime: 'Any time',
+  dayAimsNoFit: "Doesn't fit today",
+  dayAimsMoveOnToday: 'Make room on Today',
+  dayAimsGuess: (length: string) => `about ${length}?`,
+  dayAimsFixLength: (title: string) => `Set how long ${title} takes`,
+  dayAimsLengthTitle: 'How long will it take?',
+  dayAimsLengthSaved: (title: string, length: string) =>
+    `${title} takes ${length}.`,
+  dayAimsLengthFailed: "Couldn't save the length. Try again.",
+  dayAimsDone: (title: string) => `Mark ${title} done`,
+  dayAimsFolded: (aims: number, planned: number) =>
+    `Today: ${aims} ${aims === 1 ? 'aim' : 'aims'} · ${planned} planned`,
+  dayAimsSkipped: "Skipped today's aims.",
+  dayAimsSayIt: 'Say what you want done',
+  dayAimsSkip: 'Skip for today',
+  dayAimsSkippedToast: "Skipped today's aims.",
+  dayAimsOpen: "Show today's aims",
+  dayAimsHide: "Fold today's aims",
+  dayAimsPlanFailed: "Couldn't plan today. Your aims are saved.",
+  dayAimsTryAgain: 'Try again',
+  dayAimsRestDay: 'Nothing planned after a late night.',
+  dayAimsSaveFailed: "Couldn't save that. Try again.",
+  windDownTitle: 'How did today go?',
+  windDownDone: (count: number) => `Done · ${count}`,
+  windDownTonight: (count: number) => `Still possible tonight · ${count}`,
+  windDownWont: (count: number) => `Won't happen today · ${count}`,
+  windDownChoice: (title: string) => `What to do with ${title}`,
+  windDownTomorrow: 'Tomorrow',
+  windDownLater: 'Later',
+  windDownDrop: 'Drop it',
+  windDownWhy: 'Why?',
+  windDownReasonChosen: (reason: string) => `Why: ${reason}`,
+  windDownFinish: 'Done',
+  windDownChose: (title: string, choice: 'tomorrow' | 'later' | 'dropped') =>
+    choice === 'tomorrow'
+      ? `${title} moves to tomorrow.`
+      : choice === 'later'
+        ? `${title} moved to later.`
+        : `Dropped ${title}. The task stays.`,
+  windDownReasonSaved: (reason: string | null) =>
+    reason ? `Noted: ${reason.toLowerCase()}.` : 'Reason cleared.',
+  windDownSummary: (counts: {
+    done: number;
+    tomorrow: number;
+    later: number;
+    dropped: number;
+    left: number;
+  }) => {
+    const parts = [
+      counts.done > 0 ? `${counts.done} done` : null,
+      counts.tomorrow > 0 ? `${counts.tomorrow} to tomorrow` : null,
+      counts.later > 0 ? `${counts.later} for later` : null,
+      counts.dropped > 0 ? `${counts.dropped} dropped` : null,
+      counts.left > 0 ? `${counts.left} left as they were` : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0
+      ? `Wound down: ${parts.join(', ')}.`
+      : 'Wound down.';
+  },
+  windDownReview: 'Show how the day wound down',
+  windDownLeft: 'Left as it was',
+  windDownChange: (title: string) => `Change ${title}`,
+  windDownEmpty: 'Nothing left for today.',
+  planNowOverlaps: (title: string) => `Now overlaps ${title}`,
+  planKeepOverlap: 'Keep it as it is',
+  planKeptOverlap: 'Kept where it is.',
+  dayAimsStruggle: {
+    tired: 'Tired',
+    reluctant: "Didn't feel like it",
+    tooBusy: 'Too busy',
+    unwell: 'Unwell',
+    bored: 'Bored',
+    stressed: 'Stressed',
+  },
   dayStripLabel: 'Day',
   dayStripToday: 'Today',
   planEvents: (count: number) => `${count} ${count === 1 ? 'event' : 'events'}`,
@@ -1843,6 +2249,12 @@ export const HELM_COPY = {
     `${count} ${count === 1 ? 'person' : 'people'} added`,
   daySummaryPlacesAdded: (count: number) =>
     `${count} ${count === 1 ? 'place' : 'places'} added`,
+  daySummaryHabitChecksDone: (count: number) =>
+    `${count} habit ${count === 1 ? 'check-in' : 'check-ins'}`,
+  daySummaryHabitsStarted: (count: number) =>
+    `${count} ${count === 1 ? 'habit' : 'habits'} started`,
+  daySummaryConnectionsAdded: (count: number) =>
+    `${count} ${count === 1 ? 'connection' : 'connections'} added`,
   daySummaryTasksDone: (count: number) =>
     `${count} ${count === 1 ? 'task' : 'tasks'} finished`,
   daySummaryPlanned: (count: number) =>
@@ -1884,9 +2296,8 @@ export const HELM_COPY = {
   coloursLabel: 'Colour theme',
   coloursLight: 'Light',
   coloursDark: 'Dark',
-  assistantRow: 'Name and tone',
+  assistantRow: 'Name',
   assistantSheetTitle: 'Your assistant',
-  assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
     "With Hey on in Voice service, it's also the name you say.",
@@ -1895,9 +2306,33 @@ export const HELM_COPY = {
   assistantNameError:
     'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
   assistantUseDefault: (name: string) => `Use ${name}`,
-  assistantToneLabel: 'How it answers',
-  assistantToneHint:
-    'Shapes its written answers. Names, dates and what it files never change.',
+  personalityRow: (assistant: string) => `How ${assistant} talks`,
+  personalityLead: (assistant: string) =>
+    `Pick what ${assistant} should be like. It shows you how replies will read.`,
+  personalityTraitsHeader: (count: number, max: number) =>
+    `Traits · ${count} of up to ${max}`,
+  personalityTraitsLabel: 'Traits',
+  personalityTooMany: 'Up to five. Drop one first.',
+  personalityHonestHeader: 'How honest',
+  personalityClashTitle: (left: string, right: string) =>
+    `${left} and ${right} pull against each other.`,
+  personalityClashLabel: (assistant: string) =>
+    `What should ${assistant} do when they do?`,
+  personalityKeepBoth: 'Keep both',
+  personalityDrop: (trait: string) => `Drop ${trait}`,
+  personalityPreviewHeader: 'How replies will read',
+  personalityPreviewWaiting: 'Writing a sample',
+  personalitySampleReal: 'Example replies to two set questions.',
+  personalitySampleOffline:
+    'A plain example for now. Real samples come back with a connection.',
+  personalitySampleFailed:
+    "A plain example for now. Real samples couldn't be written.",
+  personalityDropped: (trait: string) => `Dropped ${trait}`,
+  personalityUndo: 'Undo',
+  personalityKept: (left: string, right: string, line: string) =>
+    `Keeping both ${left} and ${right}: ${line}`,
+  personalityAskAgain: 'Ask me again',
+  personalityCareNote: 'Health and care stay careful whatever you pick.',
   assistantSave: 'Save',
   settingsPlanning: 'Planning',
   yourDayRow: 'Your day',
@@ -2258,6 +2693,204 @@ export const HELM_COPY = {
   whoOrganizationKindPlaceholder: 'Bakery',
   whoPhoneField: 'Phone',
   whoEmailField: 'Email',
+  whoReachTitle: 'How to reach',
+  connectionsTitle: 'Connections',
+  connectionAdd: 'Add a connection',
+  connectionAddTitle: 'Add a connection',
+  connectionTitle: 'Connection',
+  connectionPickLead: (name: string) => `Who is connected to ${name}?`,
+  connectionSearch: 'Search people',
+  connectionNoMatch: 'Nobody matches that.',
+  connectionNobodyElse: 'There is nobody else to connect yet.',
+  connectionPicked: 'Connected to',
+  connectionKindField: 'How are they connected?',
+  connectionKinds: {
+    family: 'Family',
+    couple: 'Couple',
+    friend: 'Friends',
+    work: 'Work',
+  },
+  connectionFamilyField: (other: string, name: string | null) =>
+    `${other} is ${name === null ? 'your' : `${name}'s`}…`,
+  connectionFamilyNotSure: 'Family, not sure how',
+  connectionStatusField: 'Where they are',
+  connectionStatuses: {
+    dating: 'Dating',
+    engaged: 'Engaged',
+    married: 'Married',
+    separated: 'Separated',
+    divorced: 'Divorced',
+    widowed: 'Widowed',
+  },
+  connectionSinceField: 'Since (optional)',
+  connectionSave: 'Add it',
+  connectionSaveChange: 'Save',
+  connectionDuplicate: (other: string) =>
+    `${other} is already connected that way.`,
+  connectionNeedsPerson: 'Choose who they are connected to first.',
+  connectionChange: {
+    couple: 'Change status or since',
+    family: 'Change the family word',
+  },
+  connectionChangeSubtitle: {
+    couple: 'Married, engaged, divorced…',
+    family: 'Mother, cousin, in-law…',
+  },
+  connectionRemove: 'Remove this link',
+  connectionRemoveSubtitle: 'You can undo it right after',
+  connectionRemovedToast: (other: string) => `Removed the link to ${other}`,
+  connectionRestoredToast: (other: string) => `Linked ${other} again`,
+  connectionRestoreExists: 'That link was made again meanwhile.',
+  connectionAddedToast: (line: string) => `Added: ${line}`,
+  connectionChangedToast: (line: string) => `Now: ${line}`,
+  connectionLinkGone: 'This link is gone.',
+  connectionSideLine: {
+    family: (name: string | null, word: string | null) =>
+      name === null
+        ? `Your ${word ?? 'family'}`
+        : `${name}'s ${word ?? 'family'}`,
+    friend: (name: string | null) =>
+      name === null ? 'Your friend' : `${name}'s friend`,
+    work: (name: string | null) => `Works with ${name ?? 'you'}`,
+    couple: {
+      partner: (name: string | null) => `Partner of ${name ?? 'you'}`,
+      dating: (name: string | null) => `Dating ${name ?? 'you'}`,
+      engaged: (name: string | null) => `Engaged to ${name ?? 'you'}`,
+      married: (name: string | null) => `Married to ${name ?? 'you'}`,
+      separated: (name: string | null) => `Separated from ${name ?? 'you'}`,
+      divorced: (name: string | null) => `Divorced from ${name ?? 'you'}`,
+      widowed: (name: string | null) => `Was married to ${name ?? 'you'}`,
+    },
+  },
+  connectionLine: {
+    family: (other: string, name: string | null, word: string | null) =>
+      word === null
+        ? `${other} and ${name ?? 'you'} are family.`
+        : `${other} is ${name === null ? 'your' : `${name}'s`} ${word}.`,
+    friend: (other: string, name: string | null) =>
+      `${other} and ${name ?? 'you'} are friends.`,
+    work: (other: string, name: string | null) =>
+      `${other} and ${name ?? 'you'} work together.`,
+    couple: (other: string, name: string | null, status: string | null) =>
+      status === null
+        ? `${other} and ${name ?? 'you'} are a couple.`
+        : status === 'widowed'
+          ? `${other} and ${name ?? 'you'} were married.`
+          : `${other} and ${name ?? 'you'} are ${status}.`,
+  },
+  connectionSince: (date: string) => `Since ${date}`,
+  connectionSinceInline: (date: string) => `since ${date}`,
+  figuredOut: 'Figured out',
+  figuredSuffix: '· Figured out',
+  figuredFixPick: "Pick how they're related.",
+  figuredBecause: {
+    siblings: (first: string | null, second: string | null) =>
+      `Because ${first ?? 'you'} and ${second ?? 'you'} are both your siblings`,
+    sameParent: (
+      parent: string | null,
+      first: string | null,
+      second: string | null,
+    ) =>
+      `Because ${parent ?? 'you'} ${parent === null ? 'are' : 'is'} a parent of both ${first ?? 'you'} and ${second ?? 'you'}`,
+    step: (subject: string | null, owner: string | null, word: string | null) =>
+      `${subject ?? 'you'} ${subject === null ? 'are' : 'is'} ${owner === null ? 'your' : `${owner}'s`} ${word ?? 'family'}`,
+    steps: (steps: string[]) =>
+      `Because ${steps.length > 1 ? `${steps.slice(0, -1).join(', ')} and ${steps[steps.length - 1]}` : steps.join('')}`,
+  },
+  figuredConfirm: "That's right",
+  figuredConfirmSubtitle: 'Keep it as a link',
+  figuredWrong: 'Not right',
+  figuredWrongSubtitle: "Say how they're related, or that they aren't",
+  figuredNotRelated: 'Not related',
+  figuredFixLead: 'How are they related?',
+  figuredFixSave: 'Save',
+  figuredLinkedToast: (line: string) => `Linked: ${line}`,
+  figuredRefusedToast: (other: string, name: string | null) =>
+    `Noted: ${other} and ${name ?? 'you'} aren't family`,
+  figuredUndone: 'Put back as it was.',
+  figuredUndoChanged: 'It was changed since, so it was left as it is.',
+  figuredMore: (count: number) => `Show ${count} more figured out`,
+  peopleViewsLabel: 'People view',
+  peopleViewList: 'List',
+  peopleViewMap: 'Map',
+  mapFiltersLabel: 'Who to show',
+  mapFilterClose: 'Close only',
+  mapFilterFamily: 'Family',
+  mapFilterEveryone: 'Everyone',
+  mapLabel: 'Your circle drawn as a map. The List shows the same people.',
+  mapLoading: 'Drawing your circle…',
+  mapFailed: "The map didn't open. Try again in a moment.",
+  mapNoLinks: 'Link people to each other and the lines show up here.',
+  mapNoLinksFiltered: 'Nobody here is linked yet. Try Everyone.',
+  mapHint: "Tap someone to open them. Lines show who's linked to whom.",
+  mapCovered: 'Tap to show your map.',
+  mapAddForYou: 'Link someone to you',
+  mapPrivateName: 'Private',
+  mapYou: 'You',
+  mapConnectionCount: (count: number) =>
+    count === 1 ? '1 connection' : `${count} connections`,
+  mapOpen: 'Open',
+  mapAddConnection: 'Add a connection',
+  mapCardClose: 'Close',
+  mapLegendOpen: 'Lines and layout',
+  mapLegendTitle: 'Lines and layout',
+  mapLegendFamily: 'Family',
+  mapLegendCouple: 'Couple',
+  mapLegendFriend: 'Friends',
+  mapLegendWork: 'Work',
+  mapLegendFigured: 'Figured out',
+  mapLegendFiguredLine:
+    'Lighter lines are links worked out from what you said.',
+  mapLegendPast: 'Past couple',
+  mapLegendPastLine: 'Faint lines are couples who are no longer together.',
+  mapLegendMoveLine:
+    'Drag a person to place them. Where you put them stays on this phone.',
+  mapResetLayout: 'Reset layout',
+  mapResetLayoutLine: 'Put everyone back where they started.',
+  mapResetDone: 'Layout reset.',
+  figuredDuplicate: 'You already linked these two meanwhile.',
+  figuredGone: "That link isn't worked out any more.",
+  contactAddPhone: 'Add a phone',
+  contactAddEmail: 'Add an email',
+  contactPrimary: 'Primary',
+  contactPhoneTitle: 'Phone number',
+  contactEmailTitle: 'Email address',
+  contactNewPhoneTitle: 'New phone number',
+  contactNewEmailTitle: 'New email address',
+  contactPhoneField: 'Number',
+  contactEmailField: 'Address',
+  contactLabelField: 'Label',
+  contactOwnLabel: 'Your own word',
+  contactOwnLabelPlaceholder: 'Your own word',
+  contactCall: 'Call',
+  contactText: 'Text',
+  contactWriteEmail: 'Email',
+  contactCopy: 'Copy',
+  contactCopySubtitle: 'Put it on the clipboard',
+  contactMakePrimary: 'Make primary',
+  contactMakePrimarySubtitle: 'The one tried first',
+  contactChange: 'Change',
+  contactChangeSubtitle: 'The number or address, or its label',
+  contactRemove: 'Remove',
+  contactRemoveSubtitle: 'You can undo it right after',
+  contactSave: 'Save',
+  contactCopied: 'Copied',
+  contactCopyFailed: "Couldn't copy that.",
+  contactRemovedToast: (value: string) => `Removed ${value}`,
+  contactMadePrimaryToast: (value: string) => `${value} is primary now`,
+  contactEmpty: (kind: 'phone' | 'email') =>
+    kind === 'phone' ? 'Type a number first.' : 'Type an address first.',
+  contactDuplicate: (kind: 'phone' | 'email') =>
+    kind === 'phone'
+      ? "That number's already there."
+      : 'That address is already there.',
+  contactFull: (max: number) =>
+    `That is as many as fit (${max}). Remove one to add another.`,
+  contactEditPhones: 'Phone numbers',
+  contactEditEmails: 'Emails',
+  contactRemoveEntry: (value: string) => `Remove ${value || 'this entry'}`,
+  contactNumberPlaceholder: 'Number',
+  contactAddressPlaceholder: 'Address',
   whoNameMissing: 'A name is needed.',
   editSave: 'Save',
   editCancel: 'Cancel',
@@ -2267,15 +2900,17 @@ export const HELM_COPY = {
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
       ? 'That changed since.'
-      : kind === 'whichTopic'
-        ? 'That note or one of those topics was removed.'
-        : kind === 'groupTopics'
-          ? 'Those topics changed since.'
-          : kind === 'undoOffer'
-            ? 'That was already taken back.'
-            : kind === 'whichPlace'
-              ? 'That place was removed.'
-              : 'That person was removed.',
+      : kind === 'whichComesFirst' || kind === 'clashChoice'
+        ? 'That changed since.'
+        : kind === 'whichTopic'
+          ? 'That note or one of those topics was removed.'
+          : kind === 'groupTopics'
+            ? 'Those topics changed since.'
+            : kind === 'undoOffer'
+              ? 'That was already taken back.'
+              : kind === 'whichPlace'
+                ? 'That place was removed.'
+                : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>
@@ -2291,12 +2926,13 @@ export const HELM_COPY = {
     facts: number,
     dates: number,
     moments: number,
+    connections: number,
   ) =>
     `${
       tasks === 0
         ? `Forget ${name}? No tasks are linked to them.`
         : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`
-    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetMomentsLine(moments)}${forgetPhotosLine(photos)}`,
+    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetMomentsLine(moments)}${forgetConnectionsLine(connections)}${forgetPhotosLine(photos)}`,
   forgetConfirmPlace: (
     name: string,
     tasks: number,
@@ -2590,6 +3226,41 @@ export const HELM_COPY = {
       .join(' '),
   undoReportRunsToo: (deleted: string[], unticked: number) =>
     `${toRunParts(deleted, unticked).map(toCapital).join('. ')}.`,
+  undoHabitChanges: (ticked: number, changed: number) =>
+    toCapital(toHabitParts(ticked, changed).join(' and ')),
+  undoHabitPhrase: (ticked: number, changed: number) =>
+    toHabitParts(ticked, changed).join(' and '),
+  undoReportHabits: (
+    ticked: number,
+    changed: number,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportHabitsToo: (ticked: number, changed: number) =>
+    `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
+  resultHabitFallback: 'Habit',
+  resultSeenAsFallback: 'A line about you',
+  tookBackSeenAs: (count: number) =>
+    `Put back ${count} ${count === 1 ? 'line' : 'lines'} about you`,
+  undoSeenAsPhrase: (count: number) =>
+    `${count} ${count === 1 ? 'line' : 'lines'} about you`,
+  undoReportSeenAs: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Put back ${takenBack} ${takenBack === 1 ? 'line' : 'lines'} about you.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportSeenAsToo: (count: number) =>
+    `${count === 1 ? '1 line' : `${count} lines`} about you too.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
@@ -2608,6 +3279,202 @@ export const HELM_COPY = {
   projectsFinishedHide: 'Hide finished',
   backToProjects: 'Back to Projects',
   backToProject: (name: string) => `Back to ${name}`,
+  habitsTitle: 'Habits',
+  habitsFailed: "Your habits couldn't be opened.",
+  habitsEmpty:
+    'Nothing here yet. Say "remind me to take vitamin D every morning", or add one yourself.',
+  habitsAdd: 'Add a habit',
+  habitsStoppedRow: (count: number) => `Stopped · ${count}`,
+  habitsStoppedHide: 'Hide stopped',
+  habitsPausedUntil: (date: string) => `Paused until ${date}`,
+  habitsPausedOpen: 'Paused for a while',
+  habitsStoppedOn: (date: string) => `Stopped ${date}`,
+  habitsWeekLine: (done: number, due: number) => `${done} of ${due} this week`,
+  habitsStartsToday: 'Starts today',
+  habitsStartsOn: (day: string) => `Starts ${day}`,
+  habitsNothingYet: 'Nothing asked yet this week',
+  askHabits: 'Ask about your habits',
+  chipHabits: 'About your habits',
+  backToHabits: 'Back to Habits',
+  askHabit: (name: string) => `Ask about ${name}`,
+  backToHabit: (name: string) => `Back to ${name}`,
+  habitGone: 'This habit is gone.',
+  habitUnreadable: "This habit couldn't be opened.",
+  habitMarkDone: (name: string) => `Mark ${name} done`,
+  habitMarkNotDone: (name: string) => `Take back ${name}`,
+  habitAddOne: (name: string) => `Add one to ${name}`,
+  habitLineCount: (name: string, count: number, perDay: number) =>
+    count > perDay
+      ? `${name} · ${count} today`
+      : `${name} · ${count} of ${perDay}`,
+  habitMetaThroughDay: 'Through the day',
+  habitMetaUntil: (time: string) => `until ${time}`,
+  habitMetaEnded: (time: string) => `Window ended ${time}`,
+  habitDoneAt: (time: string) => `Done ${time}`,
+  habitLastAt: (time: string) => `Last at ${time}`,
+  habitSkippedLine: 'Skipped today',
+  habitSkip: 'Skip',
+  habitSkipLabel: (name: string) => `Skip ${name} today`,
+  habitUndo: 'Undo',
+  habitNotSaved: "That didn't save. Try again.",
+  habitCadenceEveryDay: 'Every day',
+  habitCadenceWeek: (count: number) =>
+    count === 1 ? 'Once a week' : `${count} times a week`,
+  habitCadenceEveryN: (days: number) => `Every ${days} days`,
+  habitWeekdaysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  habitWeekdaysLong: [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ],
+  habitWindowsThroughDay: 'Through the day',
+  habitWindowsCount: (count: number) =>
+    count === 1 ? 'Once a day' : `${count} times a day`,
+  habitSinceBySaid: (date: string) => `Since ${date} · from what you said`,
+  habitSinceByHand: (date: string) => `Since ${date} · added by you`,
+  habitWeekDayLabel: (day: string, state: string) => `${day}: ${state}`,
+  habitWeekDone: 'marked',
+  habitWeekOpen: 'not marked',
+  habitWeekLater: 'still to come',
+  habitWeekOff: 'not asked',
+  habitWeekReached: 'reached the number',
+  habitWeekSkipped: 'skipped',
+  habitNotesTitle: 'Notes',
+  habitNoteHeading: (day: string, label: string | null) =>
+    label ? `${day} · ${label.toLowerCase()}` : day,
+  habitNotesShowAll: (count: number) => `Show all ${count} notes`,
+  habitNotesShowFewer: 'Show fewer',
+  habitNotesField: 'Notes',
+  habitNotesPlaceholder: 'Anything worth remembering about it',
+  habitWhenRow: 'When',
+  habitMenuEdit: 'Change name, emoji or notes',
+  habitMenuPause: 'Pause for a while',
+  habitMenuResume: 'Resume now',
+  habitMenuStop: 'Stop this habit',
+  habitMenuRestart: 'Start again',
+  habitCareRowTitle: 'This is medicine or care',
+  habitCareRowSubtitle: (assistant: string) =>
+    `Kept private, and ${assistant} never moves it, only asks.`,
+  habitCareForWho: 'Always on for someone you look after.',
+  habitMedicineQuestion: 'Which medicine is it?',
+  habitMedicineHelp: (assistant: string) =>
+    `${assistant} will say it each time you tick it, so a wrong tick is caught at once.`,
+  habitMedicineField: 'Medicine',
+  habitMedicinePlaceholder: 'Name',
+  habitDoseField: 'Dose (optional)',
+  habitDosePlaceholder: 'Dose',
+  habitMedicineSave: 'Save',
+  habitMedicineNotNow: 'Not now',
+  habitMedicineFailed: "That didn't save. Try again.",
+  habitCareOnToast: (name: string) => `${name} is kept private as care`,
+  habitForWho: (name: string) => `For ${name}`,
+  habitWhoQuestion: 'Who is it for?',
+  habitWhoLabel: 'Who it is for',
+  habitWhoYou: 'You',
+  habitWhoSummary: (name: string | null) => name ?? 'You',
+  habitCareOffTitle: 'Not medicine or care?',
+  habitCareOffMessage: (name: string) =>
+    `${name} stops being kept private, and is treated like any other habit.`,
+  habitCareOffAction: 'Not medicine or care',
+  habitCareKeep: 'Keep it',
+  habitCareNeedsConnection: 'Changing this needs a connection.',
+  habitCareFailed: "That didn't change. Try again.",
+  habitEditTitle: 'Change habit',
+  habitEditName: 'Name',
+  habitEditEmoji: 'Emoji',
+  habitEditSave: 'Save',
+  habitEditNameMissing: 'A habit needs a name.',
+  habitEditNeedsConnection: 'Changing a habit needs a connection.',
+  habitEditFailed: "That didn't save. Try again.",
+  habitWhenTitle: 'Days and times',
+  habitWhenHint:
+    'Times are on your own clock. A time that passes stays quiet and can still be ticked.',
+  habitWhenOftenLabel: 'How often',
+  habitWhenTimesLabel: 'When',
+  habitWhenTimesHeading: 'When in the day',
+  habitWhenWeekdaysLabel: 'Which days',
+  habitWhenWeekCountLabel: 'Times a week',
+  habitWhenPerDayLabel: 'Times a day',
+  habitWhenNeedsDay: 'Pick at least one day.',
+  habitWhenNeedsWindow: 'Pick at least one time of day.',
+  habitWhenBadWindow: 'A time needs a start and an end, ending by 3:00 AM.',
+  habitWindowName: 'Name of this time',
+  habitWindowRemove: (label: string) => `Remove ${label || 'this time'}`,
+  habitWhenStart: 'Starts',
+  habitWhenEnd: 'Ends',
+  habitWhenSave: 'Save',
+  habitOftenEveryDay: 'Every day',
+  habitOftenDays: 'Certain days',
+  habitOftenWeek: 'A few times a week',
+  habitModeParts: 'At set times',
+  habitModeAny: 'Any time of the day',
+  habitModeCount: 'A number a day',
+  habitPartLabels: {
+    morning: 'Morning',
+    midday: 'Midday',
+    afternoon: 'Afternoon',
+    evening: 'Evening',
+    bedtime: 'Bedtime',
+  },
+  habitPauseTitle: (name: string) => `Pause ${name}`,
+  habitPauseHint:
+    "It's off from today, and paused days don't count against it.",
+  habitPauseQuickLabel: 'How long',
+  habitPauseWeek: 'A week',
+  habitPauseTwoWeeks: 'Two weeks',
+  habitPauseOpen: 'Until I resume',
+  habitPauseUntil: 'Or pick the day it is back on',
+  habitPauseAction: 'Pause',
+  habitPauseNeedsDay: 'Pick a day after today.',
+  habitPausedToast: (name: string, date: string) =>
+    `Paused ${name} until ${date}`,
+  habitPausedOpenToast: (name: string) => `Paused ${name}`,
+  habitResumedToast: (name: string) => `${name} is back on Today`,
+  habitStopTitle: (name: string) => `Stop ${name}?`,
+  habitStopMessage: 'Off Today for good. Its weeks stay.',
+  habitStopAction: 'Stop habit',
+  habitStoppedToast: (name: string) => `Stopped ${name}`,
+  habitRestartedToast: (name: string) => `${name} is on Today again`,
+  habitStatusFailed: "That didn't change. Try again.",
+  habitUndoFailed: "That couldn't be taken back. Try again.",
+  habitFlowTitle: 'New habit',
+  habitFlowNameQuestion: 'What do you want to keep up?',
+  habitFlowNamePlaceholder: 'Take vitamin D',
+  habitFlowNameLabel: 'Habit',
+  habitFlowOftenQuestion: 'How often?',
+  habitFlowOftenLabel: 'How often',
+  habitFlowWhenQuestion: 'When in the day?',
+  habitFlowWhenLabel: 'When',
+  habitFlowCareQuestion: 'Is this medicine or care?',
+  habitFlowCareLabel: 'Medicine or care',
+  habitFlowCareHint:
+    "It's kept private, and only ever asked about, never moved around.",
+  habitFlowYes: 'Yes, medicine or care',
+  habitFlowNo: 'No, just a habit',
+  habitFlowNotesQuestion: 'Anything to remember about it?',
+  habitFlowNotesLabel: 'Notes',
+  habitFlowNone: 'None',
+  habitFlowSkip: 'Skip',
+  habitFlowNext: 'Next',
+  habitFlowCreate: 'Add habit',
+  habitFlowTooMany: (limit: number) =>
+    `You have ${limit} habits going. Stop one to add another.`,
+  habitFlowDuplicate: (name: string) => `You already have ${name}.`,
+  habitCreatedToast: (name: string) => `Added ${name}`,
+  habitCreateFailed: "That didn't add. Try again.",
+  habitMaskedName: 'Private habit',
+  habitCheckInTakenBack: 'Took that back.',
+  habitCheckInFailed: "That didn't tick. Try again.",
+  habitAlreadyDoneAt: (subject: string, time: string) =>
+    `${subject} already done at ${time}.`,
+  habitAlreadyDoneParts: (name: string, parts: string[]) =>
+    `${name} already done: ${parts.join(', ')}.`,
+  habitAlreadyDonePart: (label: string, time: string) => `${label} at ${time}`,
+  habitUndoKept: 'Kept it as it is now: it changed after that.',
   projectGone: 'This project is gone.',
   projectUnreadable: "This project couldn't be opened.",
   projectUntitled: 'A project',
@@ -2630,6 +3497,14 @@ export const HELM_COPY = {
     `${name}${note ? ` (${note})` : ''} has ${count} open`,
   projectQuiet: (days: number, open: number) =>
     `Nothing done in ${days} days · ${open} open`,
+  goalNoStep: 'No regular step yet',
+  goalWeeksLine: (met: number, of: number) =>
+    `Showed up ${met} of the last ${of} weeks`,
+  goalLastReached: (title: string, dayLabel: string) => {
+    const short =
+      title.length > 40 ? `${title.slice(0, 39).trimEnd()}…` : title;
+    return `Reached ${short} on ${dayLabel}`;
+  },
   projectTargetLine: (
     dateLabel: string,
     daysAway: number,
@@ -2769,6 +3644,112 @@ export const HELM_COPY = {
   projectCreatedToast: (name: string) => `Started ${name}`,
   projectCreateFailed: "That didn't start. Try again.",
   projectRemoved: (name: string) => `Took back ${name}`,
+  goalsTitle: 'Goals',
+  goalsNew: 'New goal',
+  goalsSetAsideRow: (count: number) => `Set aside · ${count}`,
+  goalsSetAsideLine: (date: string) => `Set aside ${date}`,
+  goalsSetAsideListLine: (date: string) => `Goal · Set aside ${date}`,
+  goalsTidyRow: 'Want it tidied up?',
+  goalsSetAsideHide: 'Hide set aside',
+  goalsAskProjects: 'Ask about your projects and goals',
+  projectKindTitle: 'Something to finish, or something to grow into?',
+  projectKindProject: 'A project',
+  projectKindProjectHint: 'Has a finish line, like a wedding or a move',
+  projectKindGoal: 'A goal',
+  projectKindGoalHint: 'Something you want to get better at, like guitar',
+  goalFlowTitle: 'New goal',
+  goalFlowNameQuestion: 'What do you want to grow into?',
+  goalFlowNamePlaceholder: 'Get back into guitar',
+  goalFlowWhyQuestion: 'Why does it matter to you?',
+  goalFlowWhyLabel: 'Why',
+  goalFlowWhyPlaceholder:
+    'I used to play every night in college, and I miss it',
+  goalFlowWhyHint: "Optional. It sits at the top of the goal's page.",
+  goalFlowWhySkip: 'Skip for now',
+  goalFlowWhySkipNote: 'You can add it later from the goal.',
+  goalFlowStepQuestion: 'A regular step?',
+  goalFlowStepLabel: 'Regular step',
+  goalFlowStepHabit: 'A habit',
+  goalFlowStepNone: 'Not yet',
+  goalFlowStepSkipNote: 'You can add a habit later from the goal',
+  goalFlowStepHint:
+    'A small thing you do on a rhythm, like practising twice a week.',
+  goalFlowHabitName: 'What will you do?',
+  goalFlowHabitPlaceholder: 'Practice guitar',
+  goalFlowCreate: 'Create goal',
+  goalFlowDuplicate: (name: string) => `You already have ${name} going.`,
+  goalFlowTooManyHabits: (limit: number) =>
+    `You keep ${limit} habits already. Pick Not yet, and add this one after you let another go.`,
+  goalCreatedToast: (name: string) => `Started ${name}`,
+  goalCreateFailed: "That didn't start. Try again.",
+  goalHabitFailed: (name: string) =>
+    `${name} was made, but its regular step didn't save. Add it from the goal's page.`,
+  goalKindLine: (date: string) => `A goal · since ${date}`,
+  goalWhySaid: (date: string) => `You said ${date}`,
+  goalWhyWrote: (date: string) => `You wrote ${date}`,
+  goalWhyTidiedSaid: (date: string) => `Tidied from what you said · ${date}`,
+  goalWhyTidiedWrote: (date: string) => `Tidied from what you wrote · ${date}`,
+  goalWhyAdd: 'Add why it matters',
+  goalWhySheetTitle: 'Why it matters',
+  goalWhySeeSaid: 'See what I said',
+  goalWhySeeWrote: 'See what I wrote',
+  goalWhyHideOriginal: 'Hide it',
+  goalWhyInShort: 'In short',
+  goalWhySummaryHelp: (name: string) =>
+    `${name}'s summary, used to link this goal to related things. It's never shown in place of your words.`,
+  goalWhyChange: 'Change the why',
+  goalWhyShowMine: 'Show mine instead',
+  goalWhyChoiceFailed: "That didn't save. Try again.",
+  goalTidyTitle: 'Want it tidied up?',
+  goalTidyNote: 'Same meaning, fewer filler words. Your words stay either way.',
+  goalTidyKeep: 'Keep mine',
+  goalTidyUse: 'Use this',
+  goalWhyField: 'Why it matters',
+  goalWhyEditPlaceholder: 'Why does it matter to you?',
+  goalEditTitle: 'Change goal',
+  goalMenuEdit: 'Change name, why or emoji',
+  goalMenuAside: 'Set it aside',
+  goalMenuBackUp: 'Pick it back up',
+  goalMenuFinish: 'Finish',
+  goalMenuReopen: 'Reopen',
+  goalMenuToProject: 'Turn into a project',
+  goalMenuDelete: 'Delete goal',
+  goalAsideToast: (name: string) => `Set ${name} aside`,
+  goalBackUpToast: (name: string) => `Picked ${name} back up`,
+  goalPickBackUp: 'Pick it back up',
+  goalActionFailed: "That didn't change. Try again.",
+  goalToProjectToast: (name: string) => `${name} is a project now`,
+  goalDeletedToast: (name: string) => `Deleted ${name}`,
+  goalHabitsKeptToast: (count: number, name: string) =>
+    count === 1
+      ? `${name} is now a habit on its own`
+      : `${count} habits are now on their own`,
+  goalHabitsHeading: 'Habits',
+  goalHabitsAdd: 'Add a habit',
+  goalHabitsNone: 'No regular step yet',
+  goalTasksHeading: 'Tasks',
+  goalMilestoneReachedToast: (title: string) => `${title} · Reached today`,
+  goalHabitsKeep: (count: number) => (count === 1 ? 'Keep it' : 'Keep them'),
+  goalHabitsKeepHint: (count: number) =>
+    count === 1
+      ? 'It stays as a habit on its own.'
+      : 'They stay as habits on their own.',
+  goalHabitsDelete: (count: number) =>
+    count === 1 ? 'Delete it' : 'Delete them',
+  goalHabitsDeleteHint: (count: number) =>
+    count === 1
+      ? 'It goes, with its reminders.'
+      : 'They go, with their reminders.',
+  goalHabitsChoiceLabel: (names: string[]) =>
+    names.length === 1
+      ? `What happens to ${names[0]}?`
+      : `What happens to its ${names.length} habits?`,
+  goalDeleteConfirm: (name: string) =>
+    `${name} and its milestones will be deleted. Its tasks stay.`,
+  goalDeleteAction: 'Delete goal',
+  goalToProjectConfirm: (name: string) =>
+    `${name} becomes a project, with a finish line instead of a why. Its milestones and tasks come with it.`,
+  goalToProjectAction: 'Turn into a project',
   whoProjectsTitle: 'Projects',
   whoProjectPart: (role: 'key' | 'involved') =>
     role === 'key' ? 'Their part: key' : 'Their part: involved',
@@ -3282,10 +4263,747 @@ export const HELM_COPY = {
   zoneOfferOn: (city: string, days: string) => `Using ${city} time ${days}`,
   zoneOfferUndo: 'Undo',
   zoneOfferLater: 'Okay, home time stays.',
+  stageBuilding: 'Building',
+  stageHolding: 'Holding',
+  stageFormed: 'Formed',
+  stageAgain: 'again',
+  stageLabel: (stage: string) =>
+    ({
+      building: 'Building',
+      buildingAgain: 'Building',
+      holding: 'Holding',
+      formed: 'Formed',
+    })[stage] ?? 'Building',
+  stageSince: (date: string) => `since ${date}`,
+  stageHelp:
+    "A week counts when you kept it every time but once at most: three in a row is holding, and most weeks for about ten, lately before any reminder, is formed. Two weeks that don't count start it building again, and weeks you paused or days you didn't open the app count neither way.",
+  stageHelpLabel: 'How a habit’s stage is worked out',
+  stageTold: (day: string, stage: string) =>
+    ({
+      holding: `Since ${day}: Holding, kept each of the last 3 weeks`,
+      formed: `Since ${day}: Formed, kept nearly every week for ten weeks`,
+      buildingAgain: `Since ${day}: Building again, 2 weeks in a row didn't count`,
+      building: `Since ${day}: Building`,
+    })[stage] ?? `Since ${day}: Building`,
+  stageToldSummary: (name: string, line: string) => `${name}. ${line}`,
+  remindersRowTitle: 'Reminders',
+  remindersRowOff: 'Off',
+  remindersPaceLine: (pace: string, isCare: boolean, name: boolean) =>
+    `${
+      pace === 'late'
+        ? "Only if you're late"
+        : pace === 'start'
+          ? isCare
+            ? 'At the start, and they stay on'
+            : 'At the start of its time'
+          : 'While it builds, fewer as it holds'
+    }${name ? ' · name shown' : ''}`,
+  remindersNext: (time: string) => `Next reminder ${time}`,
+  remindersStartsSoon: 'Starts within a few minutes',
+  remindersNoneToday: 'No more reminders today',
+  remindersFormedQuiet: "No reminders: it's holding on its own",
+  remindersAgainLine: 'Reminders come at the start again',
+  remindersMore: 'Pace, quiet hours, lock screen',
+  remindersTurnOnFailed: "Reminders didn't change. Try again.",
+  remindersNeedsConnection: 'Changing reminders needs a connection.',
+  remindersPrivateName: 'a private habit',
+  remindersOnToast: (name: string) => `Reminders on for ${name}`,
+  remindersOffToast: (name: string) => `Reminders off for ${name}`,
+  remindersPushIcon: '🔔',
+  remindersPushTitle: 'Not on this device yet',
+  remindersPushModalTitle: (name: string) => `Reminders while ${name} builds`,
+  remindersPushBody: (assistant: string) =>
+    `${assistant} sends a reminder at its time, unless you've already ticked it. As it sticks they get fewer, and once it's formed they stop. Change it any time on the habit's page.`,
+  remindersPushPrivacy: (assistant: string) =>
+    `${assistant}'s server knows when your habit's times are and whether you ticked them, never what the habit is called. The reminder says “Time for your evening habit”.`,
+  remindersPushDone: (assistant: string) =>
+    `Done. ${assistant} will send the first one at its time. It can take a few minutes to start.`,
+  remindersSheetTitle: 'Reminders',
+  remindersPaceTitle: 'When it reminds you',
+  remindersPaceAdaptive: 'As it builds',
+  remindersPaceAdaptiveHelp:
+    'At its start while it builds, fewer once it holds',
+  remindersPaceStart: 'At the start',
+  remindersPaceStartHelp: 'At the start of its time, every time',
+  remindersPaceLate: "Only if I'm late",
+  remindersPaceLateHelp: 'Once, near the end of its time, if it is still open',
+  remindersEaseTitle: 'Fewer reminders?',
+  remindersEaseHelp: "Only if you're late",
+  remindersQuietTitle: 'Remind me in quiet hours',
+  remindersQuietHelp:
+    'Off: a time inside your quiet hours is moved to the nearest time outside them, or skipped.',
+  remindersSheetSaveFailed: "That didn't save. Try again.",
+  remindersPaceToast: (name: string) => `Reminders for ${name} changed`,
+  remindersQuietToast: (name: string) => `Quiet hours for ${name} changed`,
+  remindersSheetDone: 'Done',
+  lockScreenNameSection: 'On the lock screen',
+  lockScreenNameTitle: 'Show its name on the lock screen',
+  lockScreenNameOff: (words: string) => `Off: “${words}”.`,
+  lockScreenNameOffWords: (part: DayPart | null) =>
+    part === null
+      ? 'A habit is waiting for you'
+      : `Time for your ${part} habit`,
+  lockScreenNameWarning:
+    "A name shown here isn't sealed like the rest of your things. A readable copy is kept so the reminder can show it, it passes through Google's push service (Apple's on an iPhone), and anyone who picks up this device can read it.",
+  lockScreenNameOn: (name: string) => `On: “${name}”.`,
+  lockScreenNamePrivate: (name: string) =>
+    `${name} is private, so this asks once more.`,
+  lockScreenNameConfirmTitle: 'Show its name on the lock screen?',
+  lockScreenNameConfirmAction: 'Show it',
+  lockScreenNameConfirmKeep: 'Keep it hidden',
+  lockScreenNameFailed: "That didn't change. Try again.",
+  lockScreenNameShownToast: (name: string) =>
+    `${name} will show on the lock screen`,
+  lockScreenNameHiddenToast: (name: string) =>
+    `${name} is hidden again, and its readable copy is gone.`,
+  lockScreenNameAsk: (warning: string) => `${warning} Show it?`,
+  lockScreenNameVoiceShown: (name: string) =>
+    `Done. ${name} will show on the lock screen.`,
+  lockScreenNameVoiceHidden: (name: string) =>
+    `Done. ${name} is hidden on the lock screen again.`,
+  lockScreenNameVoiceKept: 'Okay, it stays hidden.',
+  lockScreenNameConfirmOnScreen:
+    'That one is private, so tap Show it on the screen to put its name on the lock screen.',
+  settingsOnItsOwn: (name: string) => `${name} on its own`,
+  habitRemindersTitle: 'Habit reminders',
+  habitRemindersOnFor: (count: number) =>
+    count === 0
+      ? 'Off for every habit'
+      : `On for ${count} ${count === 1 ? 'habit' : 'habits'}`,
+  habitRemindersPauseAll: 'Pause all habit reminders',
+  habitRemindersPauseAllHelp: 'Nothing is sent until you turn this off.',
+  habitRemindersQuietTitle: 'Quiet hours',
+  habitRemindersQuietHelp:
+    "Reminders wait outside these hours. Leave them off to use your day's hours.",
+  habitRemindersQuietFrom: 'From',
+  habitRemindersQuietTo: 'Until',
+  habitRemindersFoot:
+    'At most 6 a day; ones close together come as one. Whether this device shows notifications at all is set in your browser.',
+  habitRemindersLoading: 'Opening your reminders',
+  habitRemindersLoadFailed:
+    "Your reminders didn't open. Close this page and open it again.",
+  habitRemindersEmpty:
+    'No habit has reminders on yet. Turn them on from a habit’s page.',
+  habitRemindersBackOn: 'Reminders are back on',
+  habitRemindersBackDismiss: 'Dismiss',
+  habitRemindersSaveFailed: "That didn't save. Try again.",
+  habitOfferTitle: 'Remind me while it builds',
+  habitOfferAction: 'Turn on',
+  habitFormedTitle: (name: string) =>
+    `${name} seems to be part of your day now`,
+  habitFormedAsk: 'Take it off Today?',
+  habitFormedEvidence: (count: number, since: string) =>
+    `Kept ${count} ${count === 1 ? 'time' : 'times'} since ${since}.`,
+  habitFormedTake: 'Take it off Today',
+  habitFormedKeep: 'Keep it on Today',
+  habitFormedKeepReminding: "Remind me only if I'm late",
+  habitFormedKeepRemindingDone: 'Reminders stay on, only if you are late.',
+  habitFormedTakenOffToast: (name: string, count: number, since: string) =>
+    `${name} is off Today. Kept ${count} ${count === 1 ? 'time' : 'times'} since ${since}.`,
+  habitFormedKept: 'Okay, it stays on Today.',
+  habitFormedFailed: "That didn't change. Try again.",
+  habitFormedRetiredLine: (date: string) => `Formed · off Today since ${date}`,
+  habitMenuBringBack: 'Bring it back to Today',
+  habitBroughtBackToast: (name: string) =>
+    `${name} is back on Today as Formed. Reminders stay off.`,
+  habitWhatItLeft: 'What it left',
+  habitLeftCount: (count: number) =>
+    `${count} ${count === 1 ? 'time' : 'times'}`,
+  habitLeftRange: (from: string, to: string) => `kept, ${from} to ${to}`,
+  habitsFormedFold: (count: number) => `Formed · ${count}`,
+  habitsFormedOn: (date: string) => `Formed · off Today since ${date}`,
+  importanceTitle: 'What matters most',
+  importanceYouMoved: (date: string) => `you moved it ${date}`,
+  importanceSaidOn: (date: string, words: string) =>
+    `On ${date} you said \u201c${words}\u201d`,
+  importanceMakeFirstFromCanWaitNote:
+    'Leaves Can wait. Everything else moves down one.',
+  importanceIntro: (assistantName: string) =>
+    `What comes first gets planned first, and ${assistantName} never suggests pausing it.`,
+  importanceInOrder: 'In order',
+  importanceNotSaid: 'Not said yet',
+  importanceNotSaidTrailing: 'by date',
+  importanceCanWait: 'Can wait',
+  importanceAlwaysKept: (count: number) => `Always kept · ${count}`,
+  importanceAlwaysKeptTitle: 'Health and care, always kept',
+  importanceAlwaysKeptNote: (assistantName: string) =>
+    `${assistantName} never suggests pausing these, whatever the order.`,
+  importanceNothingSaid: (assistantName: string) =>
+    `Nothing said yet, so ${assistantName} goes by dates: the nearest deadline comes first. Tell ${assistantName} what matters most, like \u201cthe wedding matters most\u201d.`,
+  importanceChange: 'Change the order',
+  importanceClear: 'Clear the order',
+  importancePlaceTitle: (name: string) => `${name}\u2019s place`,
+  importanceMakeFirst: 'Make it come first',
+  importanceMakeFirstNote: 'Everything else moves down one.',
+  importancePutAbove: 'Put it above\u2026',
+  importancePutAboveNote: 'Pick what it should come before.',
+  importancePutAboveTitle: (name: string) => `Put ${name} above\u2026`,
+  importanceCanWaitAction: 'It can wait',
+  importanceCanWaitNote: 'Moves to Can wait.',
+  importanceTakeOut: 'Take it out of the order',
+  importanceTakeOutNote: 'Goes by its date again.',
+  importanceOpenThing: (name: string) => `Open ${name}`,
+  importanceMovedFirst: (name: string) => `Moved ${name} to first.`,
+  importanceMovedAbove: (name: string, other: string) =>
+    `Moved ${name} above ${other}.`,
+  importanceMovedAfter: (name: string, other: string) =>
+    `Moved ${name} after ${other}.`,
+  importanceMovedBeside: (name: string, other: string) =>
+    `Moved ${name} beside ${other}.`,
+  importanceMovedUp: (name: string) => `Moved ${name} up.`,
+  importanceMovedDown: (name: string) => `Moved ${name} down.`,
+  importanceMovedCanWait: (name: string) => `Moved ${name} to Can wait.`,
+  importanceMovedOut: (name: string) =>
+    `Took ${name} out of what matters most.`,
+  importanceUnchanged: (name: string) => `${name} is already there.`,
+  importanceRefusedCare: (name: string) =>
+    `${name} is always kept, so it doesn\u2019t need a place.`,
+  importanceRowFirst: 'First in what matters',
+  importanceRowNth: (position: number, of: number) =>
+    `${toDayOrdinal(position)} of ${of} in what matters`,
+  importanceRowShares: (position: number, other: string) =>
+    `Shares ${toDayOrdinal(position)} with ${other}`,
+  importanceRowCanWait: (date: string | null) =>
+    date ? `Can wait \u00b7 you said ${date}` : 'Can wait',
+  importanceRowNotSaidByDate: (date: string) =>
+    `Not said \u00b7 goes by its date, ${date}`,
+  importanceRowNotSaid: 'Not said',
+  importanceRowAlwaysKept: 'Always kept \u00b7 health',
+  importanceRowThrough: (goal: string, position: number | null) =>
+    position === null
+      ? `Through ${goal}`
+      : `Through ${goal} \u00b7 ${toDayOrdinal(position)}`,
+  importanceNoLongerFirst: (date: string) =>
+    `No longer first since ${date}, as you said`,
+  importanceWhichComesFirst: 'Which comes first?',
+  importanceWhichComesBefore: 'Which of these comes before the others?',
+  importanceWhichSkipped:
+    'Okay, nothing\u2019s changed. It\u2019s waiting in Needs you.',
+  importanceYouSaid: (date: string) => `you said ${date}`,
+  importanceSearch: 'Search what matters most',
+  importanceNoMatch: 'Nothing matches that.',
+  askImportance: 'Ask about what matters',
+  chipImportance: 'About what matters most',
+  backToImportance: 'Back to What matters most',
+  importanceFew:
+    'Once there are two projects, goals or habits to put in order, they show up here.',
+  importanceDoorFirst: (names: string[]) => `${formatList(names)} first`,
+  importanceDoorNone: 'Not said yet \u00b7 by date',
+  importanceClearConfirm:
+    'Clear the whole order? Everything goes back to being ordered by date.',
+  importanceClearAction: 'Clear it',
+  importanceCleared: 'Cleared what matters most.',
+  importanceDragHandle: 'Move',
+  importancePutAboveSearch: 'Search what it should come before',
+  importancePutAboveNone: 'Nothing is in order yet to put it above.',
+  importanceWhichRest: 'The other two can share second place.',
+  importanceWhichRestMany: 'The others can share second place.',
+  importanceWhichFirstSince: (date: string) => `First since ${date}`,
+  importanceWhichPlaceSince: (place: string, date: string) =>
+    `${place} since ${date}`,
+  patternPartPlural: {
+    morning: 'mornings',
+    midday: 'middays',
+    afternoon: 'afternoons',
+    evening: 'evenings',
+    bedtime: 'nights',
+  },
+  patternWindowMissedStatement: (name: string, weekday: string, part: string) =>
+    `${name} doesn't tend to happen on ${weekday} ${part}`,
+  patternWindowMissedEvidence: (
+    matched: number,
+    total: number,
+    weekday: string,
+  ) => `Not done on ${matched} of the last ${total} ${weekday}s`,
+  patternDoneOutsideStatement: (name: string, side: 'before' | 'after') =>
+    `${name} usually happens ${side === 'before' ? 'earlier' : 'later'} than planned`,
+  patternDoneOutsideEvidence: (matched: number, total: number, time: string) =>
+    `${matched} of the last ${total} times, around ${time}`,
+  patternPlannedSlotStatement: (weekday: string, part: string) =>
+    `What's planned for ${weekday} ${part} tends not to get done`,
+  patternPlannedSlotEvidence: (matched: number, total: number, weeks: number) =>
+    `${matched} of ${total} planned slots over ${weeks} weeks`,
+  patternPlannedSlotActed: (part: string) => `Today's ${part} left empty`,
+  patternSaidStrugglingStatement: (name: string) =>
+    `${name} has felt hard lately`,
+  patternSaidWorkingStatement: (name: string) => `${name} is going well`,
+  patternSaidEvidence: (dates: string) => `You said so on ${dates}`,
+  patternSaidLinkStatement: (name: string, link: string) =>
+    `${name} tends to slip on ${link}`,
+  patternLinkPhrases: {
+    shift: 'days around your shifts',
+    busyDay: 'busy days',
+    lateDay: 'days that ran late',
+    weekday: 'certain days of the week',
+    other: 'some days',
+  },
+  patternCareStatement: (name: string) =>
+    `You've mentioned how ${name} has been going`,
+  patternPartSingular: {
+    morning: 'morning',
+    midday: 'midday',
+    afternoon: 'afternoon',
+    evening: 'evening',
+    bedtime: 'night',
+  },
+  noticedTitle: "What I've noticed",
+  noticedHelp: (assistant: string) =>
+    `Patterns in when things get done, and in what you've said about them. ${assistant} quotes your words and never guesses how you feel.`,
+  noticedHelpOff:
+    "Noticing is off, so nothing new is picked up. What you've already answered stays.",
+  noticedEmpty: (assistant: string) =>
+    `Nothing yet. As you and ${assistant} get to know each other's days, patterns about when things work will show up here, with what they're based on.`,
+  noticedOffNote:
+    "Noticing is off, so nothing new shows up here. What you've already answered stays.",
+  noticedShowAll: (count: number) => `Show all ${count}`,
+  noticedShowFewer: 'Show fewer',
+  noticedNotUsed: (count: number) => `Not used \u00b7 ${count}`,
+  noticedRingLabel: (assistant: string) => `Noticed by ${assistant}`,
+  noticedStateAsking: 'Asking you',
+  noticedStateNoticed: 'Noticed',
+  noticedStateChanged: (assistant: string, date: string) =>
+    `Changed by ${assistant} \u00b7 ${date}`,
+  noticedStateKept: (date: string) => `Kept \u00b7 ${date}`,
+  noticedStateNotNow: (date: string) => `Not now \u00b7 not before ${date}`,
+  noticedStateStopped: 'Stopped',
+  noticedStateRetired: 'No longer true',
+  noticedStateWords: {
+    asking: (assistant: string) =>
+      `${assistant} is waiting for your answer before it does anything.`,
+    noticed: (assistant: string) =>
+      `${assistant} has noticed this and hasn't asked about it yet.`,
+    changed: (assistant: string, date: string) =>
+      `${assistant} changed this on ${date}, on its own plans only. You can take it back.`,
+    kept: (date: string) => `You said yes on ${date}.`,
+    notNow: (date: string) =>
+      `You said not now. It won't come up again before ${date}, and only if it keeps happening.`,
+    stopped: (assistant: string) =>
+      `${assistant} won't suggest this again unless you ask it to.`,
+    retired: "This doesn't hold anymore, so it isn't used.",
+  },
+  noticedBasedOn: "What it's based on",
+  noticedBasedOnDone: 'Not done',
+  noticedBasedOnOutside: 'Done at another time',
+  noticedBasedOnSaid: 'You said so',
+  noticedBasedOnMore: (count: number) => `And ${count} earlier`,
+  noticedSheetOpen: (statement: string) => `Open: ${statement}`,
+  noticedYes: {
+    moveWindow: (time: string) => `Move to ${time}`,
+    lowerCadence: 'Do it less often',
+    raiseCadence: 'Do it more often',
+    keepTime: 'Keep this time',
+    changeTime: 'Change the time',
+  },
+  noticedYesSubtitle: {
+    moveWindow: "Changes this habit's time. You can change it back.",
+    lowerCadence: 'Changes how often it comes up. You can change it back.',
+    raiseCadence: 'Changes how often it comes up. You can change it back.',
+    keepTime: 'Keeps things just as they are.',
+    changeTime: "Opens this habit's times. It counts as a yes once you save.",
+  },
+  noticedNotNow: 'Not now',
+  noticedNotNowSubtitle: (weeks: number | null, assistant: string) =>
+    weeks === null
+      ? `${assistant} won't bring this up again.`
+      : `Back in ${weeks} weeks, and only if it keeps happening.`,
+  noticedItsRight: "It's right",
+  noticedItsRightSubtitle:
+    "Keeps things as they are. It won't ask for a while.",
+  noticedOfferConfirmed: (date: string) =>
+    `Okay, I'll leave it. I'll check again ${date}.`,
+  noticedStateConfirmed: (date: string) => `Confirmed \u00b7 ${date}`,
+  noticedConfirmedSentence: (date: string) => `You said it's right on ${date}.`,
+  noticedStop: 'Stop suggesting that',
+  noticedStopSubtitle: "Won't bring this up again unless you ask.",
+  noticedStartAgain: 'Start suggesting again',
+  noticedStartAgainSubtitle: 'It can notice and ask about this again.',
+  noticedNoLonger: "This isn't true anymore",
+  noticedNoLongerSubtitle:
+    'Stops using it. It can come back if it starts showing up again.',
+  noticedTakeBack: 'Take this back',
+  noticedTakeBackSubtitle:
+    'Goes back to suggesting here, and waits before trying again.',
+  noticedForgetWords: 'Forget these words',
+  noticedForgetWordsSubtitle:
+    'Removes them from this pattern; your notes and the conversation stay.',
+  noticedWhyOther: 'Why, and other choices',
+  noticedOtherChoices: 'Other choices',
+  noticedCareAsk: (name: string) => `Is the time still right for ${name}?`,
+  noticedWorkingTitle: 'Going well',
+  noticedOfferDone: {
+    moveWindow: (time: string) => `Moved to ${time}`,
+    lowerCadence: 'Now it comes up less often',
+    raiseCadence: 'Now it comes up more often',
+    keepTime: 'Okay, keeping this time',
+    change: 'Okay, your change is saved',
+  },
+  noticedOfferNotNow: (date: string | null) =>
+    date === null
+      ? "Okay. I won't bring this up again unless you ask."
+      : `Okay. Not before ${date}, and only if it keeps happening.`,
+  noticedOfferStopped: "Okay. I won't suggest that again.",
+  noticedOfferReopened: 'Okay, it can come up again.',
+  noticedOfferRetired: 'Okay, no longer used.',
+  noticedOfferMissing: 'That changed in the meantime, so nothing was saved.',
+  noticedOfferFailed: "Couldn't save that. Check your connection.",
+  noticedActedLine: (dayName: string, part: string) =>
+    `${dayName}'s ${part} left empty`,
+  noticedForget: "Forget what you've noticed",
+  noticedForgetDivider: 'Start fresh',
+  noticedForgetSubtitle:
+    'Clears every pattern and the words it was based on. Ones you stopped stay only as a \u201cdon\u2019t suggest\u201d mark, with no words. Your notes and conversations stay.',
+  noticedForgotten: "Forgot what I'd noticed.",
+  noticedForgotUndone: 'Put back what I had noticed.',
+  noticedWordsForgotten: 'Forgot those words.',
+  learningTitle: 'Notice what works for me',
+  learningRowOn: 'On',
+  learningRowOff: 'Off',
+  learningDescription: (assistant: string) =>
+    `${assistant} looks at when things get done and what you say about them, to plan better and to ask about what isn't working. It quotes your words and never guesses how you feel.`,
+  learningServerLine:
+    "To notice from your words, the day's notes and turns are read overnight, and what it finds is sealed again.",
+  learningOffTitle: 'Stop noticing?',
+  learningOffBody: (assistant: string) =>
+    `${assistant} stops changing its own plans from patterns and puts away anything waiting for your answer. What you already said yes to stays.`,
+  learningKeep: 'Keep noticing',
+  learningTurnOff: 'Turn off',
+  learningFailed: "Couldn't save that. Check your connection.",
+  notedLine: (assistant: string) =>
+    `Noted \u00b7 ${assistant} will think it over tonight`,
+  notedLinePlain: 'Noted',
+  notedForgetIt: 'Forget what I noted',
+  notedForgotten: "Okay, I won't keep that.",
+  notedNothingKept: 'Nothing from this is kept anymore.',
+  patternTookBack: (line: string) => `Took back: ${line}`,
+  patternTookBackReport: 'Okay, back the way it was.',
+  guardrailGroupTitle: 'About taking things on',
+  guardrailHoldStatement: (name: string, date: string | null) =>
+    date === null
+      ? `Maybe hold ${name} for a while?`
+      : `Maybe hold ${name} until ${date}?`,
+  guardrailHoldOtherStatement: (name: string, started: string) =>
+    `Maybe hold ${name} while ${started} gets going?`,
+  guardrailPauseStatement: (name: string) => `Pause ${name} for a while?`,
+  guardrailTaskStatement: (weekday: string, title: string) =>
+    `${weekday} looks full for ${title}`,
+  guardrailGoalsReason: (count: number, names: string[]) =>
+    names.length === 0
+      ? `${count} goals already going.`
+      : names.length >= count && count <= 3
+        ? `${count} goals already going: ${formatList(names)}.`
+        : `${count} goals already going, including ${formatList(names.slice(0, 3))}.`,
+  guardrailQuietGoalReason: (count: number, name: string, days: number) =>
+    `${count} goals going, and nothing's been done on ${name} in ${days} days.`,
+  guardrailBusyReason: (days: number, through: string) =>
+    `${days} full days on your calendar through ${through}.`,
+  guardrailBusyStepReason: (name: string, days: number, through: string) =>
+    `${name}'s regular step falls on ${days} full days through ${through}.`,
+  guardrailDeadlineReason: (
+    name: string,
+    tasks: number,
+    date: string,
+    work: string,
+    free: string,
+    hasCalendar: boolean,
+  ) =>
+    `${name}: ${tasks} tasks due by ${date} need about ${work}; ${
+      hasCalendar ? 'your calendar has' : 'your day has'
+    } about ${free} free.`,
+  guardrailTaskReason: (date: string, work: string, free: string) =>
+    `Due ${date}: about ${work} of work, ${free} free before then.`,
+  guardrailStarvedReason: (days: number) =>
+    `What matters most has had nothing done in ${days} days.`,
+  guardrailHoursFromCalendar:
+    "From the lengths on your tasks and your calendar's free time",
+  guardrailHoursNoCalendar: 'No calendar connected, so counting your whole day',
+  guardrailHold: (date: string | null) =>
+    date === null ? 'Hold it for now' : `Hold it until ${date}`,
+  guardrailHoldSubtitle: (date: string | null) =>
+    date === null
+      ? 'It stays off your plans until you resume it. You can undo it.'
+      : 'It stays off your plans until then. You can undo it.',
+  guardrailPause: (date: string | null) =>
+    date === null ? 'Pause for a while' : `Pause until ${date}`,
+  guardrailStartNow: 'Start it now',
+  guardrailStartNowSubtitle: (name: string, date: string | null) =>
+    date === null
+      ? `Keeps ${name} going. I won't ask again.`
+      : `Keeps ${name} going. I won't ask again before ${date}.`,
+  guardrailKeepGoing: 'Keep going',
+  guardrailKeepDay: (weekday: string) => `Keep ${weekday}`,
+  guardrailKeepDate: 'Keep the date',
+  guardrailFindLater: 'Find a later day',
+  guardrailFindLaterSubtitle: "Opens the task's due date.",
+  guardrailKeepGoingSubtitle: (date: string | null, assistant: string) =>
+    date === null
+      ? `${assistant} won't raise this again. You can still ask.`
+      : `${assistant} won't raise this before ${date}.`,
+  guardrailPickDay: 'Pause until a day you pick',
+  guardrailPickDaySubtitle: 'Choose when it comes back.',
+  guardrailPickDayConfirm: 'Pause',
+  guardrailOthers: 'Pause something else instead',
+  guardrailOthersSubtitle: 'Choose what to set aside.',
+  guardrailOthersHint: (name: string) =>
+    `Keeps ${name} going. You can undo it.`,
+  guardrailOthersBack: 'Back to the choices',
+  guardrailInstead: (name: string, date: string | null) =>
+    date === null
+      ? `Set ${name} aside for a while`
+      : `Set ${name} aside until ${date}`,
+  guardrailRowPaused: (name: string, date: string | null) =>
+    date === null ? `Paused ${name}` : `Paused ${name} until ${date}`,
+  guardrailRowHeld: (name: string, date: string | null) =>
+    date === null ? `Held ${name} for now` : `Held ${name} until ${date}`,
+  guardrailAnsweredSentence: (done: string, date: string) =>
+    `${done}. You said yes on ${date}.`,
+  guardrailUndo: 'Undo this',
+  guardrailUndoSubtitle: (name: string) => `Puts ${name} back on your plans.`,
+  guardrailUndone: (name: string) => `Okay, ${name} is back on your plans.`,
+  guardrailStop: 'Stop suggesting this',
+  guardrailStopSubtitle: (name: string, isHold = false) =>
+    `Won't suggest ${isHold ? 'holding' : 'pausing'} ${name} again unless you ask.`,
+  guardrailStopTaskSubtitle: (title: string) =>
+    `Won't flag a full day for ${title} again unless you ask.`,
+  guardrailHeld: (name: string, date: string | null) =>
+    date === null
+      ? `Holding ${name} for now. You can start it any time.`
+      : `Holding ${name} until ${date}. It starts that morning.`,
+  guardrailPaused: (name: string, date: string | null, assistant: string) =>
+    date === null
+      ? `Paused ${name}. ${assistant} won't plan it until you pick it back up.`
+      : `Paused ${name} until ${date}. ${assistant} won't plan it until then.`,
+  guardrailSetAside: (name: string, date: string | null) =>
+    date === null
+      ? `Set ${name} aside for a while.`
+      : `Set ${name} aside until ${date}.`,
+  guardrailNo: (date: string | null) =>
+    date === null
+      ? "Okay. I won't raise this again. You can still ask."
+      : `Okay. I won't bring this up before ${date}.`,
+  guardrailStopped: (assistant: string, name: string) =>
+    `${assistant} won't suggest pausing ${name} again. You can still ask.`,
+  guardrailStoppedTask: (assistant: string, title: string) =>
+    `${assistant} won't flag a full day for ${title} again. You can still ask.`,
+  guardrailOneThought: 'One thought on timing is on screen.',
+  guardrailStateSentence: (assistant: string) =>
+    `${assistant} is only suggesting this. Nothing changes unless you say so.`,
+  guardrailRowLabel: (statement: string) => `Open: ${statement}`,
+
+  scheduledTitle: 'Scheduled',
+  askScheduled: 'Ask about what runs by itself',
+  chipScheduled: 'About what runs by itself',
+  backToScheduled: 'Back to Scheduled',
+  scheduledFailed: "Scheduled actions couldn't be loaded right now.",
+  scheduledEmpty: (assistant: string) =>
+    `Nothing runs by itself yet. Tell ${assistant} what you'd like done and when, like "every Friday at 5, plan my weekend", and it shows up here.`,
+  scheduledAdd: 'Schedule something',
+  scheduledSearch: 'Search what runs by itself',
+  scheduledCount: (count: number, max: number) =>
+    `${count} of ${max} scheduled`,
+  scheduledFullLine: (max: number) =>
+    `That's all ${max} you can have at once. End one to make room.`,
+  scheduledFoot: (assistant: string) =>
+    `${assistant} tells you here and on Today how each run went.`,
+  scheduledEndedRow: (count: number) => `Ended · ${count}`,
+  scheduledEndedHide: 'Hide ended',
+  scheduledEndedOn: (day: string) => `Ended ${day}`,
+  scheduledDidntRun: (when: string, reason: string | null) =>
+    reason ? `Didn't run ${when} · ${reason}` : `Didn't run ${when}`,
+  scheduledWhyNotConnected: 'an app it needs is not connected',
+  scheduledWhyExpired: 'an app needs to be reconnected',
+  scheduledWhyNotAllowed: 'it is not allowed to do that',
+  scheduledWhyFailed: 'something went wrong',
+  scheduledWhyRule: 'its repeat no longer works',
+  scheduledPausedOpen: 'Paused until you say',
+  scheduledPausedUntil: (day: string) => `Paused until ${day}`,
+  scheduledPausedNoRuns: 'Nothing is coming up while it is paused.',
+  scheduledNext: (run: string) => `Next: ${run}`,
+  scheduledNoMoreRuns: 'No more runs',
+  scheduledWhatItDoes: 'What it does',
+  scheduledMayTasks: 'your tasks',
+  scheduledMayDay: "today's plan",
+  scheduledMayChange: (list: string) => `It may change ${list}.`,
+  scheduledMayChangeNothing: 'It only tells you; it changes nothing.',
+  scheduledComingUp: 'Coming up',
+  scheduledWhatItDid: 'What it did',
+  scheduledSeeAll: 'See all in Activity',
+  scheduledSkippedMark: 'Skipped',
+  scheduledMovedFrom: (day: string) => `Moved from ${day}`,
+  scheduledPause: 'Pause for a while',
+  scheduledPauseSubtitle: 'Wait until a day you pick, or until you say',
+  scheduledResume: 'Resume now',
+  scheduledResumeSubtitle: (run: string) => `Picks up again ${run}`,
+  scheduledChange: 'Change when or what it does',
+  scheduledChangeSubtitle: 'Its name, its words, its time or how often',
+  scheduledChangeShort: 'Change',
+  scheduledOtherChoices: 'Or',
+  scheduledEnd: 'End it',
+  scheduledEndSubtitle: 'It stops for good; you can undo it right after',
+  scheduledEndTitle: (title: string) => `End "${title}"?`,
+  scheduledEndMessage: 'It will not run again. Its past runs stay in Activity.',
+  scheduledEndAction: 'End it',
+  scheduledKeep: 'Keep it',
+  scheduledSaid: 'You said it',
+  scheduledMadeHere: 'You made it here',
+  scheduledPauseTitle: (title: string) => `Pause "${title}"`,
+  scheduledPauseNext: 'Just the next run',
+  scheduledPauseNextSubtitle: (day: string) => `Skips ${day}, then carries on`,
+  scheduledPauseUntil: 'Until a day you pick',
+  scheduledPauseOpen: 'Until I say',
+  scheduledPauseOpenSubtitle: 'It waits until you resume it',
+  scheduledPauseNeedsDay: 'Pick a day after today.',
+  scheduledPauseAction: 'Pause it',
+  scheduledPausedToast: (title: string) => `Paused ${title}.`,
+  scheduledPausedUntilToast: (title: string, day: string) =>
+    `Paused ${title} until ${day}.`,
+  scheduledResumed: (title: string) => `${title} is running again.`,
+  scheduledEnded: (title: string) => `Ended ${title}.`,
+  scheduledMade: (title: string) => `Scheduled ${title}.`,
+  scheduledChanged: (title: string) => `Changed ${title}.`,
+  scheduledSkipped: (next: string | null) =>
+    next ? `Skipped that run. Next is ${next}.` : 'Skipped that run.',
+  scheduledMoved: (when: string) => `Moved to ${when}.`,
+  scheduledSkipThis: 'Skip this one',
+  scheduledSkipSubtitle: (next: string) => `Next is ${next}`,
+  scheduledSkipLast: 'Nothing is lined up after it',
+  scheduledMoveThis: 'Move this one',
+  scheduledMoveSubtitle: 'Pick another day or time for just this run',
+  scheduledMoveTitle: 'Move this run',
+  scheduledMoveAction: 'Move it',
+  scheduledMoveStays: (after: string, rule: string, time: string) =>
+    `The runs after it stay as they were: ${rule}, next on ${after} at ${time}.`,
+  scheduledChangeRun: 'Change it',
+  scheduledChangeRunSubtitle: 'This run, or this one and the ones after',
+  scheduledMoveRange: (from: string, to: string) => `Between ${from} and ${to}`,
+  scheduledMoveFrom: (from: string) => `From ${from}`,
+  scheduledFormChangeTitle: (title: string) => `Change ${title}`,
+  scheduledFormNewTitle: 'Schedule something',
+  scheduledTimePassed: (time: string) =>
+    `${time} today has passed. Pick a later time or another day.`,
+  scheduledFormChangeBack: (title: string) => title,
+  scheduledHowOften: 'How often',
+  scheduledScopeOne: 'Just this one',
+  scheduledScopeOneSubtitle: (day: string) => `Only the run on ${day}`,
+  scheduledScopeFollowing: 'This and following',
+  scheduledScopeFollowingSubtitle: (day: string) =>
+    `From ${day} on; earlier runs stay as they were`,
+  scheduledNameLabel: 'Name',
+  scheduledNamePlaceholder: 'Weekend plan',
+  scheduledWhatLabel: 'What should it do?',
+  scheduledWhatPlaceholder: 'Look at my week and plan the weekend',
+  scheduledFirstDayLabel: 'First day',
+  scheduledDayLabel: 'Day',
+  scheduledTimeLabel: 'Time',
+  scheduledMake: 'Schedule it',
+  scheduledSave: 'Save changes',
+  scheduledSaveFailed: "That didn't save. Check your connection.",
+  scheduledUndoKept: 'Something changed since, so that stays as it is.',
+  scheduledUndoFailed: "That couldn't be put back right now.",
+  scheduledDropped: (count: number) =>
+    `${count} skipped or moved ${count === 1 ? 'run' : 'runs'} no longer applied and ${count === 1 ? 'was' : 'were'} cleared.`,
+  scheduledRefusal: {
+    ended: 'That one has ended.',
+    noRun: 'It has no run left to change.',
+    past: "That day has already gone by, so a run can't move there.",
+    ran: 'It already ran that day.',
+    tooLate: 'A run can move up to the day before the one after it, no later.',
+    tooMany: 'It has a lot of skipped or moved runs. Let some pass first.',
+    countSpent: 'Its repeat has already gone round that many times.',
+    shape: "That isn't a repeat that can be kept.",
+    neverComes: 'That never comes round.',
+    notNow: "It can't run right now.",
+    gone: "That one isn't there anymore.",
+    tooOften: 'That repeats too often.',
+    interval: 'That repeat is spaced too far apart.',
+    count: 'That repeats too many times.',
+    untilBeforeStart: 'The end day comes before the first run.',
+    full: "That's all 50 you can have at once. End one to make room.",
+    words: 'Give it a name and say what it should do.',
+  },
+  scheduledReconnect: 'Reconnect',
+  scheduledRunNow: 'Run it now',
+  scheduledMoreInActivity: (count: number) => `${count} more in Activity`,
+  awayPauseTitle: 'Pause what runs at home',
+  awayPauseLine: (days: string) =>
+    `Hold what runs by itself while you're away (${days}), including anything you schedule meanwhile.`,
+  awayPauseAction: 'Pause them',
+  awayPauseOn: (days: string) =>
+    `What runs at home is paused while you're away (${days}).`,
+  awayPauseKept: (count: number) =>
+    count === 1
+      ? 'One is already paused on other days, so it keeps running.'
+      : `${count} are already paused on other days, so they keep running.`,
+  awayPauseNotPutBack: (count: number) =>
+    count === 1
+      ? 'One was changed since, so it stays as it is.'
+      : `${count} were changed since, so they stay as they are.`,
 } as const;
+
+/** What was said, in the closed set the model and the code both read. */
+export const WATCHING_PHRASES = [
+  'keep an eye',
+  'watch for',
+  "i'll notice",
+  'noted',
+] as const;
+
+/** Weeks Helm waits after the first and the second no; the third is final. */
+export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;
+
+export { GROUPING_CONFIDENCE } from '@apps/helm/engine/grouping';
+
+/** Synced categories the nightly grouping may read, never live ones; each `<connector id>/<category id>`. */
+export const RELATE_SYNCED_CATEGORIES = [
+  'app:going-once/sales',
+  'app:going-once/things',
+  'app:going-once/pickups',
+  'app:runway/horizon',
+  'app:runway/upcomingBills',
+  'app:waypoint/trips',
+  'app:waypoint/myTasks',
+] as const;
+
+export const PATTERN_THRESHOLDS = {
+  windowMissedMatched: 4,
+  windowMissedOf: 5,
+  windowMissedWeeks: 10,
+  outsideMatched: 5,
+  outsideOf: 6,
+  slotCount: 5,
+  slotWeeksNeeded: 4,
+  slotWeeks: 8,
+  slotMissedShare: 0.8,
+  suggestedAtOnce: 3,
+  newPerDay: 1,
+} as const;
+
+export const GUARDRAIL_LIMITS = {
+  goalsOnStart: 3,
+  goalsDaily: 4,
+  quietGoalDays: 21,
+  ...DEADLINE_FIT_LIMITS,
+  starvedDays: 14,
+  starvedOtherMin: 3,
+  busyDayShare: 0.75,
+  busyRun: 3,
+  busyTotal: 5,
+  busyWindowDays: 14,
+  firstDaysQuiet: 7,
+  nearDeadlineDays: 14,
+} as const;
+
+export const OBSERVATION_KEEP_WEEKS = 26;
+export const REFLECTION_KEEP_DAYS = 14;
+export const EXECUTION_KEEP_DAYS = 396;
+export const PATTERN_LIVE_CAP = 500;
+export const PATTERN_OFF_CAP = 5000;
+export const PRUNE_RUN_CAP = 400;
+export const SEEN_AS_SHOWN_CAP = 40;
+export const SEEN_AS_REMOVED_CAP = 200;
 
 export const PLANNER_COPY = {
   estimate: 'about 30 min · estimate',
+  estimateOf: (length: string) => `about ${length} · estimate`,
   fitsBefore: (length: string, title: string) =>
     `${length} · fits before ${title}`,
   fitsAfter: (length: string, title: string) =>
@@ -3300,3 +5018,9 @@ export const PLANNER_COPY = {
   worthDoing: 'Worth doing today',
   home: "You're home",
 } as const;
+
+export {
+  OBSERVATION_TAGS,
+  STRUGGLING_TAGS,
+  WORKING_TAGS,
+} from '@apps/helm/engine/said';

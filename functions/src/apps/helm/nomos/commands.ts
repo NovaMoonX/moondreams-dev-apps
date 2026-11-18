@@ -1,15 +1,68 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
+import {
+  MAX_OBSERVATIONS_PER_TURN,
+  OBSERVATION_KINDS,
+  OBSERVATION_QUOTE_CAP,
+  TURN_INTENTS,
+} from './actNow.js';
+import { OBSERVATION_TAGS } from './said.js';
+import {
+  QUESTIONS_MAX,
+  QUESTION_CAP as TASK_QUESTION_CAP,
+} from './questionsTask.js';
+import { LEAD_QUESTIONS_MAX, type LeadQuestion } from './researchAhead.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 import { toPlainText } from '../../../vendor/speechText.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
+import {
+  WHY_CLEANED_CAP,
+  WHY_SUMMARY_CAP,
+  WHY_TAGS_CAP,
+  WHY_VERBATIM_CAP,
+} from '../goalWhy.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
+import { CONTACT_LABEL_CAP, CONTACT_VALUE_CAP } from './contactPoints.js';
+import type { Cadence } from '../../../vendor/cadenceUtils.js';
+import type { DayPart } from './habitDay.js';
+import { SEEN_AS_LIMITS } from './seenAs.js';
+import {
+  HONESTY_LEVELS,
+  PERSONALITY_TRAITS,
+  type HonestyLevel,
+  type PersonalityTrait,
+} from './personality.js';
+import {
+  CONNECTION_KINDS,
+  CONNECTION_STATUSES,
+  type ConnectionKind,
+  type ConnectionRelation,
+  type CoupleStatus,
+} from './connections.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
+
+export const MEETS_HOWS = ['inPerson', 'video', 'phone'] as const;
+export type MeetsHow = (typeof MEETS_HOWS)[number];
+
+export const TASK_EFFORTS = ['light', 'moderate', 'heavy'] as const;
+export type TaskEffort = (typeof TASK_EFFORTS)[number];
+export const MAX_TASK_MINUTES = 12 * 60;
+
+/** What a task stores about how it meets; a missing or odd field reads as none. */
+export const readMeets = (
+  value: unknown,
+): { how: MeetsHow; setBy: 'person' | 'calendar' } | null => {
+  const entry = value as { how?: unknown; setBy?: unknown } | null | undefined;
+  const how = MEETS_HOWS.find((known) => known === entry?.how);
+  return how
+    ? { how, setBy: entry?.setBy === 'calendar' ? 'calendar' : 'person' }
+    : null;
+};
 
 export interface Token {
   id: string;
@@ -48,13 +101,14 @@ export const COMMAND_KINDS = [
   'createProject',
   'setProjectRole',
   'addMilestone',
+  'offerResearch',
   'createNote',
   'setPrivate',
   'setQuiet',
 ] as const;
 
 /** Commands that delete a record. A deleting command is kept only when its subject is still named once every closing phrase is taken out of the turn's words. */
-export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+export const DELETING_COMMANDS = ['removeKeyDate', 'removeSeenAs'] as const;
 
 /** A terminal tool beside `file_results`: the turn only ends the conversation. It carries no command, so a close can never delete or change anything. */
 export const CLOSE_CONVERSATION_TOOL: TerminalTool = {
@@ -112,6 +166,18 @@ export const RUN_COMMAND_KINDS = ['startRun', 'tickRun'] as const;
 /** A spelled correction of a heard name; read from its own list and is no `NomosCommand`. */
 export const SOUNDS_LIKE_COMMAND_KINDS = ['noteSoundsLike'] as const;
 
+/** A phone number or email the person says for someone they have; read from its own list and is no `NomosCommand`. */
+export const CONTACT_COMMAND_KINDS = ['addContactPoint'] as const;
+
+/** Read from their own list; none is a `NomosCommand`. */
+export const CONNECTION_COMMAND_KINDS = [
+  'connect',
+  'updateConnection',
+  'disconnect',
+] as const;
+
+export const MAX_CONNECTIONS_PER_TURN = 3;
+
 /** Why the person wants something taken back, read from their words. */
 export const UNDO_REASONS = [
   'wrongThing',
@@ -138,6 +204,372 @@ export const RUN_STEPS_MAX = 80;
 export const RUN_EXTRA_MAX = 20;
 export const RUN_EXTRA_TEXT_CAP = 200;
 export const MAX_TICKS_PER_TURN = 20;
+
+/** The kinds the reply may carry that make or change a scheduled action; each is read from its own list and is no `NomosCommand`. */
+export const SCHEDULE_COMMAND_KINDS = [
+  'scheduleAction',
+  'changeScheduledAction',
+] as const;
+
+/** Read from its own list; the one kind that starts a live web look-up and is no `NomosCommand`. */
+export const RESEARCH_COMMAND_KINDS = ['research'] as const;
+
+export const RESEARCH_QUESTION_CAP = 400;
+export const RESEARCH_SUBJECT_CAP = 60;
+export const MAX_RESEARCH_PER_TURN = 1;
+
+/** A look-up on the web the person asked for. `depth` is what they said ("look into it properly" is thorough), null when they didn't. */
+export interface ResearchCommand {
+  kind: 'research';
+  question: string;
+  subject: string;
+  depth: 'light' | 'thorough' | null;
+  /** True when the answer will feed a choice the person is making, which is when asking how deep is worth a question. */
+  isDecision: boolean;
+}
+
+/** Read from their own lists: the kinds that save a question to learn later, put one off, relate two, offer a skill as a goal or offer a document's questions as a task. None is a `NomosCommand`. */
+export const LEARN_COMMAND_KINDS = [
+  'saveForLater',
+  'declineLearn',
+  'relatedLearn',
+  'offerLearnGoal',
+  'offerQuestionTask',
+] as const;
+
+export const LEARN_QUESTION_CAP = 400;
+export const LEARN_SUBJECT_CAP = 60;
+export const LEARN_CONTEXT_CAP = 60;
+export const LEARN_NAME_CAP = 80;
+export const MAX_SAVES_PER_TURN = 3;
+export const LEARN_DECLINE_REASONS = [
+  'timing',
+  'lostInterest',
+  'changedMind',
+] as const;
+
+export type LearnDeclineReason = (typeof LEARN_DECLINE_REASONS)[number];
+
+/** A question the person wants to learn about later; `practise` says whether it is something to read up on, a skill to practise (a goal) or unclear, which code asks about. `quote` is the person's own words, kept only when the capture holds them. */
+export interface SaveForLaterCommand {
+  kind: 'saveForLater';
+  question: string;
+  subject: string;
+  contextLine: string | null;
+  needsLiveFacts: boolean;
+  practise: 'read' | 'goal' | 'unclear';
+  quote: string | null;
+}
+
+/** The person puts a saved question off (`timing`), lets it go (`lostInterest`) or asks for it differently (`changedMind`, the only one that carries words). `itemId` is the saved question it names. */
+export interface DeclineLearnCommand {
+  kind: 'declineLearn';
+  itemId: string;
+  reason: LearnDeclineReason;
+  question: string | null;
+  subject: string | null;
+}
+
+/** Two saved questions that are one subject, with the subject they would share. */
+export interface RelatedLearnCommand {
+  kind: 'relatedLearn';
+  firstId: string;
+  secondId: string;
+  together: string;
+}
+
+/** A clear skill to practise ("learn piano"), offered as a goal. */
+export interface OfferLearnGoalCommand {
+  kind: 'offerLearnGoal';
+  name: string;
+  quote: string | null;
+}
+
+/** The meeting a task's questions are for, settled from a synced event that starts later. */
+export interface QuestionsMeeting {
+  syncedId: string;
+  startAt: number;
+  label: string;
+}
+
+/** Questions for someone found in a document read this turn, offered as a task. `documentKey` is a hash of the Drive file's stable key, so one document is offered once; `who` is the names the questions are for. */
+export interface OfferQuestionsCommand {
+  kind: 'offerQuestionTask';
+  title: string;
+  questions: string[];
+  who: string[];
+  /** The people the questions are for that the person already has, by id; new names are not here. */
+  whoIds: string[];
+  meeting: QuestionsMeeting | null;
+  documentKey: string;
+}
+
+export type LearnCommand =
+  | SaveForLaterCommand
+  | DeclineLearnCommand
+  | RelatedLearnCommand
+  | OfferLearnGoalCommand
+  | OfferQuestionsCommand;
+
+/** What code asks when it cannot tell reading from practising: the words to save and the goal's name. */
+export interface LearnAsk {
+  question: string;
+  subject: string;
+  contextLine: string | null;
+  needsLiveFacts: boolean;
+  goalName: string | null;
+}
+
+export const SCHEDULE_CHANGES = [
+  'skip',
+  'move',
+  'pause',
+  'resume',
+  'end',
+  'reschedule',
+] as const;
+
+export const SCHEDULE_SCOPES = ['thisOne', 'thisAndFollowing'] as const;
+
+export const SCHEDULE_FREQS = ['daily', 'weekly', 'monthly', 'yearly'] as const;
+
+export const SCHEDULE_TITLE_CAP = 80;
+export const SCHEDULE_INSTRUCTION_CAP = 400;
+export const MAX_HELD_COMMANDS = 3;
+export const MAX_SCHEDULE_COMMANDS_PER_TURN = 3;
+
+/** The command kinds a scheduled run may write while only Helm's own kinds are allowed. */
+export const SCHEDULED_OWN_KINDS = [
+  'createTask',
+  'updateTask',
+  'planDay',
+] as const;
+
+/** Kinds that reach outside Helm; a scheduled action may not hold one until the approval queue exists. */
+export const SCHEDULED_OUTBOUND_KINDS = [
+  'addCalendarEvent',
+  'sendMessage',
+  'sendEmail',
+] as const;
+
+export const SCHEDULED_ALLOWED_ENUM = [
+  ...SCHEDULED_OWN_KINDS,
+  ...SCHEDULED_OUTBOUND_KINDS,
+] as const;
+
+export interface ScheduleRepeatRead {
+  freq: (typeof SCHEDULE_FREQS)[number] | 'subDaily' | null;
+  interval: number;
+  weekdays: ('MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU')[];
+  monthBy: 'day' | 'nthWeekday' | 'lastDay' | null;
+  nth: 1 | 2 | 3 | 4 | -1 | null;
+  endsKind: 'never' | 'on' | 'after';
+  /** A day key. */
+  until: string | null;
+  count: number | null;
+}
+
+export interface HeldScheduleCommand {
+  kind: (typeof SCHEDULED_ALLOWED_ENUM)[number];
+  title: string | null;
+}
+
+/** Something the assistant does for the person at a set time. Dates and times come from the reading's spans, never the model's words. */
+export interface ScheduleActionCommand {
+  kind: 'scheduleAction';
+  title: string;
+  repeat: ScheduleRepeatRead;
+  /** A day key; null means the first day the rule gives from today. */
+  startsOn: string | null;
+  /** Floating "HH:mm". */
+  time: string | null;
+  /** Every time of day the turn's words name, in order; what "at 8 and at 6" splits into. */
+  times: string[];
+  instruction: string | null;
+  held: HeldScheduleCommand[];
+  allowedKinds: string[];
+  quote: string;
+}
+
+/** Skip, move, pause, resume, end or change one scheduled action, or the runs from one on. */
+export interface ChangeScheduledActionCommand {
+  kind: 'changeScheduledAction';
+  actionId: string;
+  scope: (typeof SCHEDULE_SCOPES)[number];
+  change: (typeof SCHEDULE_CHANGES)[number];
+  /** The original day key of the run named; null means the next run. */
+  fromKey: string | null;
+  /** A move's new day, and a reschedule's new first day. */
+  toDay: string | null;
+  time: string | null;
+  repeat: ScheduleRepeatRead | null;
+  quote: string;
+}
+
+/** The kinds the reply may carry that make or change a habit, tick it or mark it care; each is read from its own list and is no `NomosCommand`. */
+export const HABIT_COMMAND_KINDS = [
+  'createHabit',
+  'updateHabit',
+  'checkIn',
+  'setCare',
+] as const;
+
+export const HABIT_PARTS = [
+  'morning',
+  'midday',
+  'afternoon',
+  'evening',
+  'bedtime',
+] as const;
+export const HABIT_CADENCE_KINDS = [
+  'everyDay',
+  'onWeekdays',
+  'timesPerWeek',
+  'everyNDays',
+] as const;
+export const HABIT_CHANGES = [
+  'pause',
+  'resume',
+  'end',
+  'reschedule',
+  'retire',
+  'bringBack',
+] as const;
+export const HABIT_CHECK_DAYS = ['today', 'yesterday'] as const;
+export const HABIT_CHECK_STATUSES = ['done', 'skipped'] as const;
+export const HABIT_NAME_CAP = 60;
+export const HABIT_LABEL_CAP = 30;
+export const HABIT_WINDOWS_MAX = 4;
+export const HABIT_TIMES_PER_DAY_MAX = 20;
+export const ACTIVE_HABITS_MAX = 30;
+export const HABIT_NOTE_CAP = 500;
+export const HABIT_HISTORY_MAX = 30;
+export const MAX_HABITS_PER_TURN = 3;
+export const MAX_CHECKINS_PER_TURN = 10;
+export const MAX_CARE_PER_TURN = 3;
+export const MAX_HABIT_CANDIDATES = 4;
+export const MAX_IMPORTANCE_PER_TURN = 3;
+export const MAX_CONTEXT_IMPORTANCE = 30;
+
+/** The kind the reply may carry that places a project or habit in the person's order of what matters; read from its own list and no `NomosCommand`. */
+export const IMPORTANCE_COMMAND_KINDS = ['setImportance'] as const;
+
+export const SEEN_AS_COMMAND_KINDS = ['correctSeenAs', 'removeSeenAs'] as const;
+export const MAX_SEEN_AS_PER_TURN = 3;
+
+export const PERSONALITY_COMMAND_KINDS = ['setPersonality'] as const;
+export const MAX_PERSONALITY_PER_TURN = 1;
+
+export const IMPORTANCE_RELATIONS = [
+  'most',
+  'above',
+  'below',
+  'same',
+  'matters',
+  'canWait',
+  'clear',
+] as const;
+
+export const MAX_CONTEXT_HABITS = 30;
+
+/** One window of a new or rescheduled habit: a named part of the day, or times from the reading; code settles both to "HH:mm". */
+export interface HabitWindowRead {
+  part: DayPart | null;
+  start: string | null;
+  end: string | null;
+  label: string | null;
+}
+
+export interface CreateHabitCommand {
+  kind: 'createHabit';
+  name: string;
+  emoji: string | null;
+  cadence: Cadence;
+  windows: HabitWindowRead[];
+  timesPerDay: number | null;
+  /** The who it is kept for; null is the person themself. */
+  forWhoId: string | null;
+  isCare: boolean;
+  isPrivate: boolean;
+  /** The words of the turn the habit was made from, for its dose and its private mark. */
+  words: string;
+}
+
+export interface UpdateHabitCommand {
+  kind: 'updateHabit';
+  habitId: string;
+  change: (typeof HABIT_CHANGES)[number];
+  cadence: Cadence | null;
+  windows: HabitWindowRead[] | null;
+  /** Date-only: the day a pause ends. */
+  until: number | null;
+  requestQuote: string;
+}
+
+/** A tick, a "not today" or one more on a tally; `habitIds` holds the one habit named, or up to four the model could not choose between. */
+export interface CheckInCommand {
+  kind: 'checkIn';
+  habitIds: string[];
+  windowKey: string | null;
+  day: (typeof HABIT_CHECK_DAYS)[number];
+  status: (typeof HABIT_CHECK_STATUSES)[number];
+  note: string | null;
+}
+
+export interface SetCareCommand {
+  kind: 'setCare';
+  habitId: string;
+  isCare: boolean;
+  requestQuote: string;
+}
+
+/** Built by code from the answer to "Which medicine is it?", never read from the model. */
+export interface SetMedicineCommand {
+  kind: 'setMedicine';
+  habitId: string;
+  name: string;
+  dose: string | null;
+}
+
+/** One sentence about what matters: `subjectId` placed by `relation` to `otherId`, in words copied from the capture. A name no project has comes as `unknownName`. */
+export interface SetImportanceCommand {
+  kind: 'setImportance';
+  subjectId: string | null;
+  unknownName: string | null;
+  relation: (typeof IMPORTANCE_RELATIONS)[number];
+  otherId: string | null;
+  words: string;
+  until: number | null;
+}
+
+/** The person says a line of how the assistant sees them is not right, in their own words. */
+export interface CorrectSeenAsCommand {
+  kind: 'correctSeenAs';
+  lineId: string;
+  words: string;
+}
+
+export interface RemoveSeenAsCommand {
+  kind: 'removeSeenAs';
+  lineId: string;
+}
+
+export type SeenAsCommand = CorrectSeenAsCommand | RemoveSeenAsCommand;
+
+/** The person asks how the assistant talks to change ("be more blunt with me"): traits to add or take off and how honest, each read only from the closed set. */
+export interface SetPersonalityCommand {
+  kind: 'setPersonality';
+  addTraits: PersonalityTrait[];
+  removeTraits: PersonalityTrait[];
+  honesty: HonestyLevel | null;
+}
+
+export type HabitCommand =
+  | CreateHabitCommand
+  | UpdateHabitCommand
+  | CheckInCommand
+  | SetCareCommand
+  | SetMedicineCommand;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
 
@@ -292,6 +724,19 @@ export type NomosCommand =
       placeRefs: string[];
       /** A project's name as the person said it; code matches it. */
       projectRef: string | null;
+      /** Questions to ask someone, each one a step; empty for any other task. */
+      questions: string[];
+      meeting: QuestionsMeeting | null;
+      /** People already settled by id, for a task made from an answer rather than a reply's mentions. */
+      whoIds?: string[];
+      /** How the task meets; absent or null means it was not said. */
+      meetsHow?: MeetsHow | null;
+      /** How heavy the task is, judged once when it is made; absent or null reads as moderate. */
+      effort?: TaskEffort | null;
+      /** The length the person said, in minutes; absent or null when none was said. */
+      durationMinutes?: number | null;
+      /** Said on the day's aims; a turn that answers the morning card files each thing it names. */
+      isAim?: boolean;
     }
   | {
       kind: 'updateTask';
@@ -302,6 +747,10 @@ export type NomosCommand =
       isUrgent: boolean | null;
       whoRefs: string[];
       placeRefs: string[];
+      /** Absent leaves it as it is; null clears it. */
+      meetsHow?: MeetsHow | null;
+      /** An existing task named as one of the day's aims; changes nothing about the task itself. */
+      isAim?: boolean;
     }
   | { kind: 'completeTask'; taskId: string }
   | { kind: 'setPrivate'; taskId: string; isPrivate: boolean };
@@ -432,6 +881,14 @@ export interface CreateProjectCommand {
   emoji: string | null;
   objective: string | null;
   targetDate: number | null;
+  projectKind: 'project' | 'goal';
+  /** For a goal only: the person's own words copied from the capture, and the model's tidy-up, summary and tags, each already cut. */
+  why: {
+    verbatim: string;
+    cleaned: string | null;
+    summary: string | null;
+    tags: string[];
+  } | null;
 }
 
 /** A person is key to or involved in a project, named by words code matches; it only raises a role. */
@@ -451,8 +908,36 @@ export interface AddMilestoneCommand {
   date: number | null;
 }
 
+export const OFFER_SUBJECT_CAP = 60;
+export const OFFER_QUESTION_CAP = 300;
+export const OFFER_WHY_CAP = 120;
+export const OFFER_LABEL_CAP = 40;
+export const OFFER_OPTION_CAP = 40;
+export const OFFER_OPTIONS_MAX = 8;
+export const OFFER_FROM_CAP = 60;
+export const OFFER_PREFILL_CAP = 200;
+export const MAX_OFFERS_PER_TURN = 2;
+
+/** A question the offer will ask before looking, as the model wrote it; code gives it its id. */
+export type OfferQuestionInput = Omit<LeadQuestion, 'id'>;
+
+/** Research to offer ahead of a project's date, from the project's date and what needs finding out first; the offer's words are sealed on the project. */
+export interface OfferResearchCommand {
+  kind: 'offerResearch';
+  projectRef: string;
+  subject: string;
+  question: string;
+  whyNow: string | null;
+  leadDays: number;
+  isDecision: boolean;
+  questions: OfferQuestionInput[];
+}
+
 export type ProjectCommand =
-  CreateProjectCommand | SetProjectRoleCommand | AddMilestoneCommand;
+  | CreateProjectCommand
+  | SetProjectRoleCommand
+  | AddMilestoneCommand
+  | OfferResearchCommand;
 
 /** Something general to remember that is about no person, pet, place or project, its topics settled to ids of ones the person already has. */
 export interface CreateNoteCommand {
@@ -569,6 +1054,52 @@ export interface NoteSoundsLikeCommand {
   heardSpan: string;
 }
 
+/** A number or address said for a person, with the word the person used for it. */
+export interface AddContactPointCommand {
+  kind: 'addContactPoint';
+  whoId: string;
+  contactKind: 'phone' | 'email';
+  value: string;
+  /** Null when none was said; the plan files it as Other. */
+  label: string | null;
+}
+
+/** `firstWhoId` is `relation` to `secondWhoId` ("Joan is Dana's mother"); a null id is the person themself; `since` is date-only. */
+export interface ConnectCommand {
+  kind: 'connect';
+  firstWhoId: string | null;
+  secondWhoId: string | null;
+  connectionKind: ConnectionKind;
+  relation: ConnectionRelation | null;
+  status: CoupleStatus | null;
+  since: number | null;
+  requestQuote: string;
+}
+
+/** A null part is left as it is. */
+export interface UpdateConnectionCommand {
+  kind: 'updateConnection';
+  firstWhoId: string | null;
+  secondWhoId: string | null;
+  /** Null names the only shown link the pair has. */
+  connectionKind: ConnectionKind | null;
+  relation: ConnectionRelation | null;
+  status: CoupleStatus | null;
+  since: number | null;
+  requestQuote: string;
+}
+
+export interface DisconnectCommand {
+  kind: 'disconnect';
+  firstWhoId: string | null;
+  secondWhoId: string | null;
+  connectionKind: ConnectionKind | null;
+  requestQuote: string;
+}
+
+export type ConnectionCommand =
+  ConnectCommand | UpdateConnectionCommand | DisconnectCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -660,15 +1191,54 @@ export interface MediaDecision {
 }
 
 /** One flat object per command, every field required and nullable; sent non-strict (too many nullable fields for strict mode), so `normalizeNomosReply` checks the reply's shape. */
-export const FILE_RESULTS_TOOL: TerminalTool = {
+export const buildFileResultsTool = ({
+  isLearningOn,
+}: {
+  isLearningOn: boolean;
+}): TerminalTool => ({
   name: 'file_results',
   description:
     'Files what the capture asks for as commands. Call it once, last, with every command.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    required: ['commands', 'replyLine'],
+    required: ['intent', 'commands', 'replyLine'],
     properties: {
+      intent: {
+        type: 'string',
+        enum: [...TURN_INTENTS],
+        description:
+          'question: the person asks something and your answer command answers it. request: the person asks you to do something. remark: the person only says how things are going or went, asking for nothing.',
+      },
+      ...(isLearningOn
+        ? {
+            observations: {
+              type: 'array',
+              description: `At most ${MAX_OBSERVATIONS_PER_TURN}. What the person said about how a habit, project, task or their day felt or went, only when they said it themselves. Never a guess, a diagnosis or a mood they did not name. Empty when they said nothing of the kind.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['aboutAlias', 'kind', 'tags', 'quote'],
+                properties: {
+                  aboutAlias: nullable(
+                    'string',
+                    'The habit (h1…), project (p1…) or task (t1…) it is about; null when it is about their day.',
+                  ),
+                  kind: { type: 'string', enum: [...OBSERVATION_KINDS] },
+                  tags: {
+                    type: 'array',
+                    description: '1 to 3 from the list.',
+                    items: { type: 'string', enum: [...OBSERVATION_TAGS] },
+                  },
+                  quote: {
+                    type: 'string',
+                    description: `The person's own words, copied exactly from the turn, at most ${OBSERVATION_QUOTE_CAP} characters.`,
+                  },
+                },
+              },
+            },
+          }
+        : {}),
       media: {
         type: 'array',
         description:
@@ -730,6 +1300,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'title',
             'dueSpanId',
             'isUrgent',
+            'meetsHow',
+            'effort',
+            'durationMinutes',
+            'isAim',
             'isPrivate',
             'targetAlias',
             'isQuiet',
@@ -786,6 +1360,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'projectRef',
             'projectEmoji',
             'objective',
+            'projectKind',
+            'whyQuote',
+            'whyCleaned',
+            'whySummary',
+            'whyTags',
             'role',
             'roleNote',
             'bodyQuote',
@@ -806,10 +1385,65 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'runStepAliases',
             'whoAlias',
             'heardSpan',
+            'contactKind',
+            'contactValue',
+            'contactLabel',
+            'otherWhoAlias',
+            'connectionKind',
+            'connectionRelation',
+            'coupleStatus',
+            'habitAlias',
+            'cadence',
+            'windows',
+            'timesPerDay',
+            'isCare',
+            'habitChange',
+            'windowKey',
+            'candidateAliases',
+            'checkDay',
+            'checkStatus',
+            'subjectAlias',
+            'otherAlias',
+            'importanceRelation',
+            'subjectName',
+            'seenAsAlias',
+            'seenAsWords',
+            'addTraits',
+            'removeTraits',
+            'honesty',
+            'repeat',
+            'startsSpanId',
+            'timeSpanId',
+            'instruction',
+            'heldCommands',
+            'allowedKinds',
+            'actionAlias',
             'undoTurn',
             'undoLines',
             'undoReason',
             'undoQuote',
+            'offerSubject',
+            'offerQuestion',
+            'offerWhyNow',
+            'offerLeadDays',
+            'offerIsDecision',
+            'offerQuestionTask',
+            'researchQuestion',
+            'researchSubject',
+            'researchDepth',
+            'researchIsDecision',
+            'learnQuestion',
+            'learnSubject',
+            'learnContext',
+            'learnNeedsLiveFacts',
+            'learnPractise',
+            'learnQuote',
+            'learnAlias',
+            'learnOtherAlias',
+            'learnTogether',
+            'learnReason',
+            'learnGoalName',
+            'questions',
           ],
           properties: {
             kind: {
@@ -819,7 +1453,16 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...TOPIC_COMMAND_KINDS,
                 ...PROCEDURE_COMMAND_KINDS,
                 ...RUN_COMMAND_KINDS,
+                ...SCHEDULE_COMMAND_KINDS,
+                ...RESEARCH_COMMAND_KINDS,
+                ...LEARN_COMMAND_KINDS,
+                ...HABIT_COMMAND_KINDS,
+                ...IMPORTANCE_COMMAND_KINDS,
+                ...SEEN_AS_COMMAND_KINDS,
+                ...PERSONALITY_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
+                ...CONTACT_COMMAND_KINDS,
+                ...CONNECTION_COMMAND_KINDS,
                 'offerUndo',
                 'answer',
                 'ask',
@@ -835,7 +1478,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it.`,
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it. createHabit: the habit's name ("Evening pills", "Water"), at most ${HABIT_NAME_CAP} characters. offerQuestionTask: the task's name ("Questions for Priya and Sam").`,
             ),
             dueSpanId: nullable(
               'string',
@@ -845,9 +1488,29 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'boolean',
               'true when the capture marks this task urgent; null to leave it as it is.',
             ),
+            meetsHow: {
+              type: ['string', 'null'],
+              enum: [...MEETS_HOWS, null],
+              description:
+                'createTask and updateTask: inPerson, video or phone only when the person says how that meeting or call happens; null for every other kind and whenever it is not said.',
+            },
+            effort: {
+              type: ['string', 'null'],
+              enum: [...TASK_EFFORTS, null],
+              description:
+                'createTask: how heavy the task is, judged once now: light (a quick errand or message), moderate, or heavy (deep or draining work); null when unsure.',
+            },
+            durationMinutes: nullable(
+              'integer',
+              `createTask: the length in minutes only when the person says how long it takes ("an hour" is 60); null when they do not say, never a guess.`,
+            ),
+            isAim: nullable(
+              'boolean',
+              'createTask and updateTask: true on each thing the person names when <aims_turn> is present, in the order said, for an existing task an updateTask with its alias and every other field null; null otherwise.',
+            ),
             isPrivate: nullable(
               'boolean',
-              'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private; null for every other kind.',
+              'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private. createHabit: true only when the person asks to keep the habit private; null for every other kind.',
             ),
             targetAlias: nullable(
               'string',
@@ -922,11 +1585,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             quoteAlias: nullable(
               'string',
-              "remember: the alias of the email from search_mail that says it; it must also be in the answer's quoteAliases.",
+              "remember: the alias of the email from search_mail that says it; it must also be in the answer's quoteAliases. offerQuestionTask: the quote alias read_document gave a passage of the document that lists the questions; null for every other kind.",
             ),
             aboutAlias: nullable(
               'string',
-              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null. startRun: the alias (e1, s1, …) of the trip or event in <synced_records> the run is for, only when the person names it; null otherwise.',
+              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null. startRun: the alias (e1, s1, …) of the trip or event in <synced_records> the run is for, only when the person names it. createTask and offerQuestionTask: the alias (e1…) of the meeting in <synced_records> these questions are for; null otherwise.',
             ),
             aboutField: {
               type: ['string', 'null'],
@@ -939,7 +1602,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters. noteFact: the preferred or favorite thing ("Shell", "Arrival"), at most ${VALUE_CAP} characters; null otherwise.`,
             ),
             whoRefs: NAMED_BY_REF(
-              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; setProjectRole: the people given the role; null or empty when none.',
+              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; offerQuestionTask: the people the questions are for; setProjectRole: the people given the role; null or empty when none.',
             ),
             placeRefs: NAMED_BY_REF(
               'createTask, updateTask and noteFact: the ref ($p1, …) of each entry in places this task or fact is about; null or empty when none.',
@@ -952,9 +1615,9 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             change: {
               type: ['string', 'null'],
-              enum: [...WHEREABOUTS_CHANGES, null],
+              enum: [...WHEREABOUTS_CHANGES, ...SCHEDULE_CHANGES, null],
               description:
-                'setWhereabouts: home for where someone lives ("Priya lives in Leavenworth"), away for where someone will be or is for some days ("I\'m in Lisbon Dec 2 to 9"), back when the person says they are back home from being away; null for every other kind.',
+                'changeScheduledAction: skip or move one run, pause, resume or end the action, or reschedule it (a new repeat or time). setWhereabouts: home for where someone lives ("Priya lives in Leavenworth"), away for where someone will be or is for some days ("I\'m in Lisbon Dec 2 to 9"), back when the person says they are back home from being away; null for every other kind.',
             },
             cityName: nullable(
               'string',
@@ -1044,7 +1707,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             quote: nullable(
               'string',
-              `noteFact and setWhereabouts: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none.`,
+              `noteFact, setWhereabouts, scheduleAction and changeScheduledAction: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none. checkIn: only words said with the tick ("felt dizzy"), copied exactly, at most ${HABIT_NOTE_CAP} characters; null when none.`,
             ),
             isStated: nullable(
               'boolean',
@@ -1084,7 +1747,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             dateSpanId: nullable(
               'string',
-              'setKeyDate: the id of the date span in the reading that gives the date. Never write a date yourself.',
+              'setKeyDate: the id of the date span in the reading that gives the date; updateHabit pause: the date span of the day it comes back, or null; connect and updateConnection for a couple: the date span of when they got together, got engaged or got married, or null. Never write a date yourself.',
             ),
             comesBack: nullable(
               'boolean',
@@ -1092,16 +1755,39 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             projectRef: nullable(
               'string',
-              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. startRun: the name of the project from <open_projects> the run is for, only when the person names it and no trip or event. null otherwise.',
+              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole, addMilestone and offerResearch: the name of the project. startRun: the name of the project from <open_projects> the run is for, only when the person names it and no trip or event. null otherwise.',
             ),
             projectEmoji: nullable(
               'string',
-              'createProject: one emoji that fits it; null when none does.',
+              'createProject and createHabit: one emoji that fits it; null when none does.',
             ),
             objective: nullable(
               'string',
               `createProject: what done looks like in one plain sentence, only when said, at most ${PROJECT_OBJECTIVE_CAP} characters; null otherwise.`,
             ),
+            projectKind: {
+              type: ['string', 'null'],
+              enum: ['project', 'goal', null],
+              description:
+                'createProject: goal for something the person wants to grow into or become ("get back into guitar", "be a calmer parent") that has no finish line; project for something with steps that ends; null means project.',
+            },
+            whyQuote: nullable(
+              'string',
+              `createProject goal only: the exact words from <capture> where the person says why it matters to them ("I miss playing"), copied as written, at most ${WHY_VERBATIM_CAP} characters; null when they gave no reason. Never write or invent a reason.`,
+            ),
+            whyCleaned: nullable(
+              'string',
+              `createProject goal only: whyQuote with punctuation and grammar tidied and nothing added or dropped, at most ${WHY_CLEANED_CAP} characters; null when there is no whyQuote.`,
+            ),
+            whySummary: nullable(
+              'string',
+              `createProject goal only: one short line that sums up whyQuote, at most ${WHY_SUMMARY_CAP} characters; null when there is no whyQuote.`,
+            ),
+            whyTags: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `createProject goal only: up to ${WHY_TAGS_CAP} short lowercase tags for the why ("music", "calm"); null when there is no whyQuote.`,
+            },
             role: {
               type: ['string', 'null'],
               enum: [...PROJECT_ROLES, null],
@@ -1161,7 +1847,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate and setQuiet (when isGuess is false): the words of the capture that ask for it, copied exactly; null otherwise.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, correctSeenAs, removeSeenAs, setPersonality, updateHabit, connect, updateConnection, disconnect and setQuiet (when isGuess is false): the words of the capture that ask for it, copied exactly; null otherwise.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1250,11 +1936,285 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             whoAlias: nullable(
               'string',
-              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise. setWhereabouts: the alias from <people> of who it is about, or "me" for the person talking.',
+              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise. createHabit: the alias from <people> of who it is for, only when it is for someone else; null for the person themself. setWhereabouts: the alias from <people> of who it is about, or "me" for the person talking.',
             ),
             heardSpan: nullable(
               'string',
               'noteSoundsLike: the words as they were written in the turn before, which the person is correcting ("Shivon"), copied exactly; null otherwise.',
+            ),
+            contactKind: {
+              type: ['string', 'null'],
+              enum: ['phone', 'email', null],
+              description:
+                'addContactPoint: phone or email; null otherwise. The person is whoAlias.',
+            },
+            contactValue: nullable(
+              'string',
+              `addContactPoint: the number or address exactly as said, at most ${CONTACT_VALUE_CAP} characters; null otherwise.`,
+            ),
+            contactLabel: nullable(
+              'string',
+              `addContactPoint: the word the person used for it ("work", "mobile", "home"), at most ${CONTACT_LABEL_CAP} characters; null when none was said.`,
+            ),
+            otherWhoAlias: nullable(
+              'string',
+              'connect, updateConnection and disconnect: the alias (w1, w2, …) from <people> of the second person, or "me" for the person talking; the first is whoAlias, also "me" when it is the person talking. Null otherwise.',
+            ),
+            connectionKind: {
+              type: ['string', 'null'],
+              enum: [...CONNECTION_KINDS, null],
+              description:
+                'connect: family, couple, friend or work. updateConnection and disconnect: the kind of the link, or null when the pair has one. Null otherwise.',
+            },
+            connectionRelation: {
+              type: ['string', 'null'],
+              enum: [
+                ...KIN_KINDS.map((entry) => entry.kind),
+                'friend',
+                'coworker',
+                null,
+              ],
+              description:
+                'connect and updateConnection: what whoAlias is to otherWhoAlias, as a family word from the list ("Joan is Dana\'s mom" is mother with Joan first); null for a couple, a friend or work, and when no family word changes.',
+            },
+            coupleStatus: {
+              type: ['string', 'null'],
+              enum: [...CONNECTION_STATUSES, null],
+              description:
+                'connect and updateConnection for a couple: dating, engaged, married, separated, divorced or widowed, only as the words say; null otherwise. "got engaged" and "got married" are updateConnection with engaged or married. A date is dateSpanId.',
+            },
+            habitAlias: nullable(
+              'string',
+              'updateHabit, setCare and checkIn: the alias (h1, h2, …) of the habit in <habits> the words are about; null for createHabit, and for a checkIn that cannot tell which habit (use candidateAliases).',
+            ),
+            cadence: {
+              type: ['object', 'null'],
+              description:
+                'createHabit and updateHabit reschedule: how often, only in these shapes; null for every day (createHabit) or no change (updateHabit).',
+              additionalProperties: false,
+              required: ['kind', 'weekdays', 'count', 'days'],
+              properties: {
+                kind: { type: 'string', enum: [...HABIT_CADENCE_KINDS] },
+                weekdays: {
+                  type: ['array', 'null'],
+                  items: { type: 'integer', enum: [0, 1, 2, 3, 4, 5, 6] },
+                  description:
+                    'onWeekdays: the days, 0 for Sunday; null otherwise.',
+                },
+                count: nullable(
+                  'integer',
+                  'timesPerWeek: how many days a week, 1 to 6; null otherwise.',
+                ),
+                days: nullable(
+                  'integer',
+                  'everyNDays: the gap in days, 2 to 30; null otherwise.',
+                ),
+              },
+            },
+            windows: {
+              type: ['array', 'null'],
+              description: `createHabit and updateHabit reschedule: when in the day, at most ${HABIT_WINDOWS_MAX}; [] or null when it can be done any time. Times only from a named part or the reading's time spans, never written yourself.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['part', 'startSpanId', 'endSpanId', 'label'],
+                properties: {
+                  part: {
+                    type: ['string', 'null'],
+                    enum: [...HABIT_PARTS, null],
+                    description:
+                      'A named part of the day; null when times are given.',
+                  },
+                  startSpanId: nullable(
+                    'string',
+                    'The id of a time span from the reading that gives the start; a time said alone ("at 8") is a window around it.',
+                  ),
+                  endSpanId: nullable(
+                    'string',
+                    'The id of a time span that gives the end; null when none.',
+                  ),
+                  label: nullable(
+                    'string',
+                    `A short name for the window ("Morning"), at most ${HABIT_LABEL_CAP} characters; null when the part names it.`,
+                  ),
+                },
+              },
+            },
+            timesPerDay: nullable(
+              'integer',
+              `createHabit: how many times a day for something counted rather than ticked ("8 glasses of water"), 2 to ${HABIT_TIMES_PER_DAY_MAX}; null for a habit with windows or done once.`,
+            ),
+            isCare: nullable(
+              'boolean',
+              'createHabit: true for a medicine, a dose, a treatment or care for someone else. setCare: true to mark the habit as medicine or care, false only when the person says it is not; null otherwise.',
+            ),
+            habitChange: {
+              type: ['string', 'null'],
+              enum: [...HABIT_CHANGES, null],
+              description:
+                'updateHabit: pause, resume, end, reschedule, retire ("I\'ve got this one"), or bringBack, only when the person asks for it; null for every other kind.',
+            },
+            windowKey: nullable(
+              'string',
+              'checkIn: the part of the day or window name the person said ("morning", "tonight"); null when none was said.',
+            ),
+            candidateAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `checkIn: when it cannot tell which habit was meant, the alias of each habit it could be, at most ${MAX_HABIT_CANDIDATES}; null otherwise.`,
+            },
+            checkDay: {
+              type: ['string', 'null'],
+              enum: [...HABIT_CHECK_DAYS, null],
+              description: 'checkIn: yesterday only when said; null is today.',
+            },
+            checkStatus: {
+              type: ['string', 'null'],
+              enum: [...HABIT_CHECK_STATUSES, null],
+              description:
+                'checkIn: skipped for "not today", "skipped it"; null is done.',
+            },
+            subjectAlias: nullable(
+              'string',
+              'setImportance: the alias (p1 for a project, h1 for a habit) in <importance> or <habits> of the one the person places; null when no project or habit by that name is listed.',
+            ),
+            otherAlias: nullable(
+              'string',
+              'setImportance with above, below or same: the alias of the one it is placed against; null otherwise.',
+            ),
+            importanceRelation: {
+              type: ['string', 'null'],
+              enum: [...IMPORTANCE_RELATIONS, null],
+              description:
+                'setImportance: most for "X matters most", above for "X before Y" or "X matters more than Y", below for "Y comes after X", same for "equally important", matters for "X matters" with nothing to compare, canWait for "X can wait", clear for "forget what I said about X"; null otherwise. A sentence naming several is one setImportance each, in the order said. Never for medicine or care.',
+            },
+            subjectName: nullable(
+              'string',
+              'setImportance: the name the person said when subjectAlias is null, at most 80 characters; null otherwise. The words of the placement are requestQuote and a "until Friday" is dateSpanId.',
+            ),
+            seenAsAlias: nullable(
+              'string',
+              'correctSeenAs and removeSeenAs: the alias (sy1, sy2, …) in <how_you_seem> of the line the person is talking about; null otherwise.',
+            ),
+            seenAsWords: nullable(
+              'string',
+              `correctSeenAs: what the person says is true instead, in their own words, at most ${SEEN_AS_LIMITS.corrected} characters; null otherwise. The words of the request are requestQuote.`,
+            ),
+            addTraits: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...PERSONALITY_TRAITS] },
+              description:
+                'setPersonality: the traits the person asks the assistant to be or have more of ("be more blunt with me" is blunt); null otherwise.',
+            },
+            removeTraits: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...PERSONALITY_TRAITS] },
+              description:
+                'setPersonality: the traits the person asks the assistant to stop being ("stop being so formal" is formal); null otherwise.',
+            },
+            honesty: {
+              type: ['string', 'null'],
+              enum: [...HONESTY_LEVELS, null],
+              description:
+                'setPersonality: tactful to soften hard news, straight to say it plainly, unvarnished to hold nothing back ("be more honest with me" is unvarnished); null when the request is about traits only.',
+            },
+            repeat: {
+              type: ['object', 'null'],
+              description:
+                'scheduleAction: how often, in fields only, never a rule written out: freq daily, weekly, monthly or yearly ("every Sunday" is weekly with weekdays ["SU"]); subDaily when it says more than once a day ("every 2 hours", "at 8 and at 6"); null freq for a single run. changeScheduledAction reschedule: the new repeat; null for every other change.',
+              additionalProperties: false,
+              required: [
+                'freq',
+                'interval',
+                'weekdays',
+                'monthBy',
+                'nth',
+                'endsKind',
+                'untilSpanId',
+                'count',
+              ],
+              properties: {
+                freq: {
+                  type: ['string', 'null'],
+                  enum: [...SCHEDULE_FREQS, 'subDaily', null],
+                },
+                interval: {
+                  type: 'integer',
+                  description:
+                    'Every how many days, weeks, months or years: "every other Tuesday" is weekly with interval 2; 1 otherwise.',
+                },
+                weekdays: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'],
+                  },
+                  description:
+                    'weekly: the days; "weekdays" is MO to FR. monthly on a weekday ("the last Friday"): that one day. Empty otherwise.',
+                },
+                monthBy: {
+                  type: ['string', 'null'],
+                  enum: ['day', 'nthWeekday', 'lastDay', null],
+                  description:
+                    'monthly only: day for "on the 23rd", nthWeekday for "the second Monday" or "the last Friday", lastDay for "on the last day"; null otherwise.',
+                },
+                nth: {
+                  type: ['integer', 'null'],
+                  enum: [1, 2, 3, 4, -1, null],
+                  description:
+                    'monthly nthWeekday: 1 to 4, or -1 for the last; null otherwise.',
+                },
+                endsKind: {
+                  type: 'string',
+                  enum: ['never', 'on', 'after'],
+                },
+                untilSpanId: nullable(
+                  'string',
+                  'endsKind on: the id of the date span in the reading that gives the last day; null otherwise. Never write a date yourself.',
+                ),
+                count: nullable(
+                  'integer',
+                  'endsKind after: how many times; null otherwise.',
+                ),
+              },
+            },
+            startsSpanId: nullable(
+              'string',
+              'scheduleAction: the id of the date span that gives the first day; null starts from the next time the rule comes round. Never write a date yourself.',
+            ),
+            timeSpanId: nullable(
+              'string',
+              'scheduleAction, and changeScheduledAction reschedule or move: the id of the time span in the reading that gives the time of day; null when none was said. Never write a time yourself.',
+            ),
+            instruction: nullable(
+              'string',
+              `scheduleAction: when the work needs judgment, what to do in the person's words, at most ${SCHEDULE_INSTRUCTION_CAP} characters; null when heldCommands holds it.`,
+            ),
+            heldCommands: {
+              type: ['array', 'null'],
+              description: `scheduleAction: the plain Helm commands to run each time, at most ${MAX_HELD_COMMANDS}; null for an instruction.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['kind', 'title'],
+                properties: {
+                  kind: { type: 'string', enum: [...SCHEDULED_ALLOWED_ENUM] },
+                  title: nullable(
+                    'string',
+                    'createTask: the task in plain words; null for the other kinds.',
+                  ),
+                },
+              },
+            },
+            allowedKinds: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...SCHEDULED_ALLOWED_ENUM] },
+              description:
+                'scheduleAction with an instruction: the command kinds a run may write, as few as will do; null for heldCommands.',
+            },
+            actionAlias: nullable(
+              'string',
+              'changeScheduledAction: the alias (sa1, sa2, …) of the scheduled action in <scheduled_actions>; null for every other kind. scope is thisOne for one run only, thisAndFollowing from that run on; fromSpanId is the date span of the run named, null for the next one; toSpanId is the day a skipped or moved run goes to.',
             ),
             undoTurn: nullable(
               'string',
@@ -1276,6 +2236,144 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               `offerUndo: the words from THIS capture that show the reason, copied exactly, at most ${UNDO_QUOTE_CAP} characters; null when no words do.`,
             ),
+            offerSubject: nullable(
+              'string',
+              `offerResearch: two to five words naming what to look into ("apartments", "Lisbon bookings"), at most ${OFFER_SUBJECT_CAP} characters; null for every other kind.`,
+            ),
+            offerQuestion: nullable(
+              'string',
+              `offerResearch: what to find out, self-contained, at most ${OFFER_QUESTION_CAP} characters; null for every other kind.`,
+            ),
+            offerWhyNow: nullable(
+              'string',
+              `offerResearch: one line on why it helps now ("Nothing in Move yet says what you're looking for."), at most ${OFFER_WHY_CAP} characters; null when there is none.`,
+            ),
+            offerLeadDays: {
+              type: ['integer', 'null'],
+              description:
+                "offerResearch: how many days before the project's date to offer it, by the kind of work (a home search 56 to 105, a trip's bookings about 42, a gift about 21); null for every other kind.",
+            },
+            offerIsDecision: nullable(
+              'boolean',
+              'offerResearch: true when the answer feeds a choice with money or a date; false otherwise; null for every other kind.',
+            ),
+            offerQuestions: {
+              type: ['array', 'null'],
+              description: `offerResearch: what you would need to know first, at most ${LEAD_QUESTIONS_MAX}; null for every other kind.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: [
+                  'label',
+                  'shape',
+                  'options',
+                  'prefill',
+                  'from',
+                  'isInferred',
+                ],
+                properties: {
+                  label: {
+                    type: 'string',
+                    description: `The question as a short label, at most ${OFFER_LABEL_CAP} characters ("Where", "Rent a month").`,
+                  },
+                  shape: {
+                    type: 'string',
+                    enum: ['text', 'pickOne', 'pickMany', 'amountRange'],
+                  },
+                  options: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: `pickOne and pickMany only, at most ${OFFER_OPTIONS_MAX} of at most ${OFFER_OPTION_CAP} characters; [] otherwise.`,
+                  },
+                  prefill: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                      'What the person already said: the chosen options, the text, or "min-max" in cents for an amountRange (a bound may be empty); [] when they said nothing.',
+                  },
+                  from: nullable(
+                    'string',
+                    `Where the prefill came from ("What you said today"), at most ${OFFER_FROM_CAP} characters; null when nothing was filled.`,
+                  ),
+                  isInferred: {
+                    type: 'boolean',
+                    description:
+                      'true when the prefill is your inference, not something the person said.',
+                  },
+                },
+              },
+            },
+            researchQuestion: nullable(
+              'string',
+              `research: what to look up on the web, in the person's words made self-contained, at most ${RESEARCH_QUESTION_CAP} characters; never a name or detail from their records unless they said it in this capture; null for every other kind.`,
+            ),
+            researchSubject: nullable(
+              'string',
+              `research: two to five words naming what is looked into ("AWD vs 4WD", "Lisbon in December"), at most ${RESEARCH_SUBJECT_CAP} characters; null for every other kind.`,
+            ),
+            researchDepth: {
+              type: ['string', 'null'],
+              enum: ['light', 'thorough', null],
+              description:
+                'research: thorough only when the person asks for it ("look into it properly", "dig deep", "compare them all"), light only when they ask for a quick one; null when they did not say, which is the usual case.',
+            },
+            researchIsDecision: nullable(
+              'boolean',
+              'research: true when the answer will feed a choice the person is making ("which one should I buy", "where should we stay"); false for plain curiosity; null for every other kind.',
+            ),
+            learnQuestion: nullable(
+              'string',
+              `saveForLater: what the person wants to learn, in their words made self-contained, at most ${LEARN_QUESTION_CAP} characters. declineLearn with changedMind: the new question; null otherwise.`,
+            ),
+            learnSubject: nullable(
+              'string',
+              `saveForLater: two to five words naming it ("how engines work", "AWD vs 4WD"), at most ${LEARN_SUBJECT_CAP} characters. declineLearn with changedMind: the new subject; null otherwise.`,
+            ),
+            learnContext: nullable(
+              'string',
+              `saveForLater: where the wish came up, only when the capture says it ("while planning the Leavenworth drive"), at most ${LEARN_CONTEXT_CAP} characters; null otherwise.`,
+            ),
+            learnNeedsLiveFacts: nullable(
+              'boolean',
+              'saveForLater: true only when the answer depends on facts that change (prices, models, rules, current events); false for how something works; null for every other kind.',
+            ),
+            learnPractise: {
+              type: ['string', 'null'],
+              enum: ['read', 'goal', 'unclear', null],
+              description:
+                'saveForLater: read for something to understand, goal for a skill to practise, unclear when you cannot tell ("learn to fix my car\'s engine"); null for every other kind.',
+            },
+            learnQuote: nullable(
+              'string',
+              'saveForLater and offerLearnGoal: the words of this capture the wish came from, copied exactly; null for every other kind.',
+            ),
+            learnAlias: nullable(
+              'string',
+              'declineLearn: the alias (r1, r2, …) of the saved question in <learn_later>. relatedLearn: the first of the two; null for every other kind.',
+            ),
+            learnOtherAlias: nullable(
+              'string',
+              'relatedLearn: the alias of the second saved question; null for every other kind.',
+            ),
+            learnTogether: nullable(
+              'string',
+              `relatedLearn: the subject the two would share ("How engines and electric motors work"), at most ${LEARN_SUBJECT_CAP} characters; null for every other kind.`,
+            ),
+            learnReason: {
+              type: ['string', 'null'],
+              enum: [...LEARN_DECLINE_REASONS, null],
+              description:
+                'declineLearn: timing for "not now" or "later", lostInterest for "I don\'t care about that any more", changedMind for "actually I meant …". null for every other kind.',
+            },
+            learnGoalName: nullable(
+              'string',
+              `offerLearnGoal: the skill as a goal's name ("Learn piano"), at most ${LEARN_NAME_CAP} characters; null for every other kind.`,
+            ),
+            questions: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `createTask: the questions to ask someone, one item each in the person's words, at most ${QUESTIONS_MAX} and ${TASK_QUESTION_CAP} characters each; empty for a task that is not questions. offerQuestionTask: the questions the document lists, the same way; null for every other kind.`,
+            },
           },
         },
       },
@@ -1375,7 +2473,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
       },
     },
   },
-};
+});
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;

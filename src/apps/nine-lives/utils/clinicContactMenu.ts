@@ -1,6 +1,7 @@
 import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { toDialableNumber, toMailtoUrl } from '@/utils/contactUtils';
 import { toWebLink } from '@/utils/urlUtils';
 
 import type { VetClinic } from '../types';
@@ -38,12 +39,12 @@ export async function handleClinicContactAction(
   addToast: (toast: { title: string; description: string }) => void,
 ): Promise<boolean> {
   if (value === 'call-clinic' && clinic.phone) {
-    window.location.href = `tel:${clinic.phone.replace(/[^+\d]/g, '')}`;
+    window.location.href = `tel:${toDialableNumber(clinic.phone)}`;
     return true;
   }
 
   if (value === 'email-clinic' && clinic.email) {
-    window.location.href = `mailto:${clinic.email}`;
+    window.location.href = toMailtoUrl(clinic.email);
     return true;
   }
 

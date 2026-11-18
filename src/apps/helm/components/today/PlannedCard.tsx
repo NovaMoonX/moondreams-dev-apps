@@ -15,6 +15,9 @@ interface PlannedCardProps {
   isDone: boolean;
   /** Title of the busy event the slot now sits on, or null. */
   overlapTitle: string | null;
+  /** The overlap came from a calendar change after the slot was kept ("Now overlaps"), so the person may keep it as it is. */
+  isNewOverlap?: boolean;
+  onKeepOverlap?: () => void;
   onAnotherTime: () => void;
   onOpen: (task: OpenTask) => void;
   onTick: (task: OpenTask) => void;
@@ -27,6 +30,8 @@ function PlannedCard({
   timeLine,
   isDone,
   overlapTitle,
+  isNewOverlap = false,
+  onKeepOverlap,
   onAnotherTime,
   onOpen,
   onTick,
@@ -91,7 +96,9 @@ function PlannedCard({
             aria-hidden='true'
           />
           <p className='line-clamp-2 min-w-0 flex-1 text-[13px] break-words text-[var(--helm-overdue)] max-[359px]:basis-[calc(100%-1.625rem)]'>
-            {HELM_COPY.planOverlaps(overlapTitle)}
+            {isNewOverlap
+              ? HELM_COPY.planNowOverlaps(overlapTitle)
+              : HELM_COPY.planOverlaps(overlapTitle)}
           </p>
           <Button
             type='button'
@@ -102,6 +109,17 @@ function PlannedCard({
           >
             {HELM_COPY.planAnotherTime}
           </Button>
+          {onKeepOverlap && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="relative basis-full justify-start px-0! after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-[''] max-[359px]:ml-[26px]"
+              onClick={onKeepOverlap}
+            >
+              {HELM_COPY.planKeepOverlap}
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -4,11 +4,15 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { canOpenApp } from '../../../appAccess.js';
 import { gcmDecrypt } from '../../../appKeys/gcm.js';
 import type {
+  LiveQueryArgs,
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import {
+  MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
@@ -179,6 +183,138 @@ const syncBoxCounts = async (firestore: Firestore, uid: string) => {
   };
 };
 
+const DETAIL_LIMIT = 120;
+
+const clipTo = (text: string, limit: number) =>
+  text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`;
+
+const readDay = (value: unknown) =>
+  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? Date.parse(`${value}T00:00:00Z`)
+    : null;
+
+const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+
+const readArgs = (args: unknown) => {
+  const given = (
+    typeof args === 'object' && args !== null ? args : {}
+  ) as LiveQueryArgs & { timeZone?: unknown };
+  const from = readDay(given.from);
+  const to = readDay(given.to);
+  const { fromMs, toMsExclusive } = dayRangeMs(
+    from === null ? null : toDayText(from),
+    to === null ? null : toDayText(to),
+    typeof given.timeZone === 'string' ? given.timeZone : null,
+  );
+  return {
+    text: readText(given.text)?.toLowerCase() ?? null,
+    from,
+    to,
+    fromMs,
+    toMsExclusive,
+  };
+};
+
+const formatDay = (at: number) =>
+  new Date(at).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+/** Only the items already revealed, opened one box at a time; an item still hidden is never fetched. */
+async function queryRevealedItems(
+  firestore: Firestore,
+  uid: string,
+  args: unknown,
+): Promise<LiveQueryResult> {
+  const { text, from, to, fromMs, toMsExclusive } = readArgs(args);
+  const { spaces } = await readSpaces(firestore, uid);
+  const perSpace = await Promise.all(
+    spaces.map(async (space) => {
+      const boxes = await space.ref
+        .collection('boxes')
+        .select('name')
+        .limit(BOX_LIMIT)
+        .get();
+      const isBoxCapHit = boxes.size >= BOX_LIMIT;
+      const perBox = await Promise.all(
+        boxes.docs.map(async (box) => {
+          const boxName = openField(box.get('name'), space.key);
+          if (boxName === null) return { rows: [], isOver: false };
+          const items = await box.ref
+            .collection('items')
+            .where('isRevealed', '==', true)
+            .select('content', 'revealedAt')
+            .limit(MAX_RECORDS_PER_CATEGORY + 1)
+            .get();
+          const rows = items.docs
+            .slice(0, MAX_RECORDS_PER_CATEGORY)
+            .flatMap((item) => {
+              const name = openField(item.get('content'), space.key);
+              const at = item.get('revealedAt');
+              if (name === null) return [];
+              return [
+                {
+                  ref: `spaces/${space.id}/boxes/${box.id}/items/${item.id}`,
+                  boxName,
+                  name,
+                  at: typeof at === 'number' ? at : null,
+                },
+              ];
+            });
+          return { rows, isOver: items.size > MAX_RECORDS_PER_CATEGORY };
+        }),
+      );
+      return {
+        rows: perBox.flatMap((box) => box.rows),
+        isCapped: isBoxCapHit || perBox.some((box) => box.isOver),
+      };
+    }),
+  );
+  const matched = perSpace
+    .flatMap((space) => space.rows)
+    .filter(
+      (entry) =>
+        (text === null ||
+          entry.name.toLowerCase().includes(text) ||
+          entry.boxName.toLowerCase().includes(text)) &&
+        (fromMs === null || (entry.at !== null && entry.at >= fromMs)) &&
+        (toMsExclusive === null ||
+          (entry.at !== null && entry.at < toMsExclusive)),
+    )
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
+  const shown = matched.slice(0, MAX_RECORDS_PER_CATEGORY);
+  return {
+    records: shown.map((entry) =>
+      toRecord({
+        sourceRef: entry.ref,
+        kind: 'knowledge',
+        title: clipTo(entry.name, DETAIL_LIMIT),
+        subtitle: entry.boxName,
+        detail:
+          entry.at === null
+            ? null
+            : clipTo(
+                `${entry.boxName} · revealed ${formatDay(entry.at)}`,
+                DETAIL_LIMIT,
+              ),
+        startAt: entry.at,
+        isAllDay: false,
+      }),
+    ),
+    matchedCount: matched.length,
+    totalCents: null,
+    currency: null,
+    isPartial:
+      matched.length > MAX_RECORDS_PER_CATEGORY ||
+      perSpace.some((space) => space.isCapped),
+    from: from === null ? null : toDayText(from),
+    to: to === null ? null : toDayText(to),
+  };
+}
+
 export interface WorthTheWaitAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -215,6 +351,11 @@ export function createWorthTheWaitAdapter(
         isDone: true,
         resumeState: null,
       };
+    },
+    query: async (ctx, req): Promise<LiveQueryResult> => {
+      if (req.category !== 'revealedItems')
+        throw new Error('Unknown category.');
+      return queryRevealedItems(deps.firestore(), ctx.uid, req.args);
     },
     deepLink: () => '/worth-the-wait',
   };
