@@ -208,12 +208,14 @@ function SearchScreen({
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.searchTitle}
         </h1>
-        <SearchInput
-          value={query}
-          onChange={onQueryChange}
-          placeholder={HELM_COPY.searchPlaceholder}
-          autoFocus={canFocusFieldOnOpen()}
-        />
+        <div data-search-field>
+          <SearchInput
+            value={query}
+            onChange={onQueryChange}
+            placeholder={HELM_COPY.searchPlaceholder}
+            autoFocus={canFocusFieldOnOpen()}
+          />
+        </div>
         {!hasQuery && (
           <p className='text-muted-foreground text-[15px] text-pretty'>
             {HELM_COPY.searchHint(assistant)}

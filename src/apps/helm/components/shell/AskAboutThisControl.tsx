@@ -70,8 +70,8 @@ function AskAboutThisControl({ placement }: AskAboutThisControlProps) {
     );
   }
   return (
-    <div className='bg-background border-border fixed inset-x-0 bottom-0 z-20 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'>
-      <div className='mx-auto max-w-xl'>{row}</div>
+    <div className='bg-background border-border fixed inset-x-0 bottom-0 z-20 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:left-65'>
+      <div className='mx-auto max-w-xl lg:max-w-3xl'>{row}</div>
     </div>
   );
 }
