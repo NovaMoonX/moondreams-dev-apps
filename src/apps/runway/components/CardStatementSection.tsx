@@ -134,16 +134,20 @@ function CardStatementSection({
       if (isBusy) return;
       setIsBusy(true);
       try {
+        const syncedBefore = link.lastSyncAt;
         const result = await agreeToCardDetails(link.id);
         if (result === null) return;
         if (result.state === 'ok') {
-          await waitUntil(
-            () =>
-              store
-                .getState()
-                .runway.links.find((entry) => entry.id === link.id)
-                ?.cardDetails !== 'needsConsent',
-          );
+          await waitUntil(() => {
+            const shown = store
+              .getState()
+              .runway.links.find((entry) => entry.id === link.id);
+            return (
+              shown === undefined ||
+              shown.cardDetails !== 'needsConsent' ||
+              shown.lastSyncAt !== syncedBefore
+            );
+          });
         }
         addToast({
           title:

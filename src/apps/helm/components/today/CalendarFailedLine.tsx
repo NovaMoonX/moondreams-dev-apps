@@ -28,7 +28,7 @@ function CalendarFailedLine({ grants, hasPlan }: CalendarFailedLineProps) {
     Promise.all(
       grants.map(async (grant) => ({
         id: grant.id,
-        lastSyncAt: grant.lastSyncAt,
+        updatedAt: grant.updatedAt,
         synced: await syncConnections({ grantId: grant.id }),
       })),
     )
@@ -36,9 +36,9 @@ function CalendarFailedLine({ grants, hasPlan }: CalendarFailedLineProps) {
         waitFor((current) =>
           results
             .filter((result) => result.synced > 0)
-            .every(({ id, lastSyncAt }) =>
+            .every(({ id, updatedAt }) =>
               current.every(
-                (entry) => entry.id !== id || entry.lastSyncAt !== lastSyncAt,
+                (entry) => entry.id !== id || entry.updatedAt !== updatedAt,
               ),
             ),
         ),

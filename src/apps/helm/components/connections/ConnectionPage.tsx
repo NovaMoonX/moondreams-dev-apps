@@ -111,10 +111,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
-  const [isGmailDisconnectOpen, setIsGmailDisconnectOpen] = useState(false);
-  const [isDriveDisconnectOpen, setIsDriveDisconnectOpen] = useState(false);
-  const [isContactsDisconnectOpen, setIsContactsDisconnectOpen] =
-    useState(false);
+  const [gmailDisconnectFor, setGmailDisconnectFor] = useState<string | null>(
+    null,
+  );
+  const [driveDisconnectFor, setDriveDisconnectFor] = useState<string | null>(
+    null,
+  );
+  const [contactsDisconnectFor, setContactsDisconnectFor] = useState<
+    string | null
+  >(null);
   const [isDriveWorking, setIsDriveWorking] = useState(false);
   const [driveFailure, setDriveFailure] = useState<string | null>(null);
   const [isGmailWorking, setIsGmailWorking] = useState(false);
@@ -323,12 +328,12 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     setIsSyncing(true);
     setSyncFailure(null);
     try {
-      const { lastSyncAt } = grant;
+      const { updatedAt } = grant;
       const synced = await syncConnections({ grantId: grant.id });
       if (synced > 0) {
         await waitFor((current) =>
           current.every(
-            (entry) => entry.id !== grant.id || entry.lastSyncAt !== lastSyncAt,
+            (entry) => entry.id !== grant.id || entry.updatedAt !== updatedAt,
           ),
         );
       }
@@ -339,6 +344,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     setIsSyncing(false);
   };
 
+  // A sheet keeps the grant it opened for until it closes, so the stop it confirms shows first.
+  const gmailSheetId = gmailDisconnectFor ?? gmailGrant?.id ?? null;
+  const driveSheetId = driveDisconnectFor ?? driveGrant?.id ?? null;
+  const contactsSheetId =
+    contactsDisconnectFor ??
+    (showsContactsRow ? contactsGrant?.id : null) ??
+    null;
   const newestOkAt = getNewestOkAt(grant);
   const hasError = Object.values(grant.categoryState).some(
     (state) => state.lastError !== null,
@@ -638,7 +650,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     onCheckedChange={(next) => {
                       if (isGmailWorking) return;
                       if (next) void turnGmailOn();
-                      else setIsGmailDisconnectOpen(true);
+                      else setGmailDisconnectFor(gmailGrant?.id ?? null);
                     }}
                   />
                 )}
@@ -670,7 +682,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     onCheckedChange={(next) => {
                       if (isDriveWorking) return;
                       if (next) void turnDriveOn();
-                      else setIsDriveDisconnectOpen(true);
+                      else setDriveDisconnectFor(driveGrant?.id ?? null);
                     }}
                   />
                 )}
@@ -705,7 +717,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                             accountId: grant.accountId,
                             connectorId: 'google:contacts',
                           })
-                        : setIsContactsDisconnectOpen(true)
+                        : setContactsDisconnectFor(contactsGrant?.id ?? null)
                     }
                   />
                 )}
@@ -799,11 +811,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           failureLine(error, appName, HELM_COPY.disconnectFailed)
         }
       />
-      {gmailGrant && (
+      {gmailSheetId !== null && (
         <DisconnectSheet
-          isOpen={isGmailDisconnectOpen}
-          onClose={() => setIsGmailDisconnectOpen(false)}
-          grantId={gmailGrant.id}
+          isOpen={gmailDisconnectFor !== null}
+          onClose={() => setGmailDisconnectFor(null)}
+          grantId={gmailSheetId}
           appName={HELM_COPY.googleGmailName}
           count={0}
           accountName={account?.email ?? null}
@@ -821,11 +833,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           }
         />
       )}
-      {driveGrant && (
+      {driveSheetId !== null && (
         <DisconnectSheet
-          isOpen={isDriveDisconnectOpen}
-          onClose={() => setIsDriveDisconnectOpen(false)}
-          grantId={driveGrant.id}
+          isOpen={driveDisconnectFor !== null}
+          onClose={() => setDriveDisconnectFor(null)}
+          grantId={driveSheetId}
           appName={HELM_COPY.googleDriveName}
           count={0}
           accountName={account?.email ?? null}
@@ -843,11 +855,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           }
         />
       )}
-      {contactsGrant && showsContactsRow && (
+      {contactsSheetId !== null && (
         <DisconnectSheet
-          isOpen={isContactsDisconnectOpen}
-          onClose={() => setIsContactsDisconnectOpen(false)}
-          grantId={contactsGrant.id}
+          isOpen={contactsDisconnectFor !== null}
+          onClose={() => setContactsDisconnectFor(null)}
+          grantId={contactsSheetId}
           appName={HELM_COPY.googleContactsName}
           count={0}
           accountName={account?.email ?? null}
