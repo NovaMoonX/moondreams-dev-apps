@@ -297,6 +297,7 @@ export const planBringIn = (
     const plan = planOne(candidate, circle);
     if (plan.kind === 'new') return [plan];
     if (options.isMasked && isPrivateRead(plan.who)) return [];
+    if (plan.kind !== 'same') return [plan];
     if (taken.has(plan.who.id)) return [{ ...plan, kind: 'maybe' }];
     taken.add(plan.who.id);
     return [plan];

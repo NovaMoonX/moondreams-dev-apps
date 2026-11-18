@@ -154,28 +154,29 @@ const syncTravelers = async (
     })
     .catch(() => null);
   if (snapshots === null) return { records: [], isFull: false };
+  const records = snapshots.flatMap((snapshot) => {
+    const name = toTravelerName(snapshot.get('displayName'));
+    if (name === null) return [];
+    const titles = tripsByPerson.get(snapshot.id) ?? [];
+    const shown = titles
+      .slice(0, TRAVELER_TRIP_LIMIT)
+      .map((title) => clip(title, 30));
+    const more = titles.length - shown.length;
+    return [
+      toRecord({
+        sourceRef: `users/${snapshot.id}`,
+        kind: 'person',
+        title: name,
+        detail: clip(
+          `Travels with you: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`,
+          DETAIL_CHARS,
+        ),
+      }),
+    ];
+  });
   return {
-    records: snapshots.flatMap((snapshot) => {
-      const name = toTravelerName(snapshot.get('displayName'));
-      if (name === null) return [];
-      const titles = tripsByPerson.get(snapshot.id) ?? [];
-      const shown = titles
-        .slice(0, TRAVELER_TRIP_LIMIT)
-        .map((title) => clip(title, 30));
-      const more = titles.length - shown.length;
-      return [
-        toRecord({
-          sourceRef: `users/${snapshot.id}`,
-          kind: 'person',
-          title: name,
-          detail: clip(
-            `Travels with you: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`,
-            DETAIL_CHARS,
-          ),
-        }),
-      ];
-    }),
-    isFull: read.isFull,
+    records: records.slice(0, MAX_RECORDS_PER_CATEGORY),
+    isFull: read.isFull && records.length <= MAX_RECORDS_PER_CATEGORY,
   };
 };
 

@@ -1371,9 +1371,9 @@ export const HELM_COPY = {
       .filter((part): part is string => part !== null)
       .join('. '),
   bringInDone: (summary: string, skipped: number) =>
-    `${summary}.${skipped === 0 ? '' : ` ${skipped} ${skipped === 1 ? 'was' : 'were'} left out because the person they matched was removed.`}`,
+    `${summary}.${skipped === 0 ? '' : ` ${skipped} ${skipped === 1 ? 'was' : 'were'} left out because who they matched in your circle was removed.`}`,
   bringInNothingDone:
-    'Nothing was brought in: the person they matched was removed or no longer opens.',
+    'Nothing was brought in: who they matched in your circle was removed or no longer opens.',
   bringInUndo: 'Undo',
   bringInUndone: 'Taken back.',
   bringInUndoFailed: "That couldn't be undone. Try Activity.",

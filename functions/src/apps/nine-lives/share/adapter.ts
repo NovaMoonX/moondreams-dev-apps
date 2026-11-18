@@ -284,6 +284,8 @@ const syncCats = (firestore: Firestore, uid: string) =>
     };
   });
 
+const hasPlainName = (doctor: { name: string }) => !doctor.name.includes('@');
+
 const syncClinics = (firestore: Firestore, uid: string) =>
   inEveryHousehold(firestore, uid, async (household) => {
     const [clinicRead, doctorRead] = await Promise.all([
@@ -293,7 +295,9 @@ const syncClinics = (firestore: Firestore, uid: string) =>
     return {
       records: clinicRead.clinics.map((clinic) => {
         const doctors = doctorRead.doctors
-          .filter((doctor) => doctor.clinicId === clinic.id)
+          .filter(
+            (doctor) => doctor.clinicId === clinic.id && hasPlainName(doctor),
+          )
           .slice(0, DOCTOR_LIMIT)
           .map((doctor) => doctor.name);
         return toRecord({
@@ -322,21 +326,19 @@ const syncVets = (firestore: Firestore, uid: string) =>
       clinicRead.clinics.map((clinic) => [clinic.id, clinic.name]),
     );
     return {
-      records: doctorRead.doctors
-        .filter((doctor) => !doctor.name.includes('@'))
-        .map((doctor) => {
-          const clinic =
-            doctor.clinicId === null
-              ? undefined
-              : clinicNames.get(doctor.clinicId);
-          return toRecord({
-            sourceRef: `households/${household.id}/doctors/${doctor.id}`,
-            kind: 'person',
-            title: doctor.name,
-            detail: clinic === undefined ? 'Veterinarian' : `Vet at ${clinic}`,
-            placeLabel: clinic ?? null,
-          });
-        }),
+      records: doctorRead.doctors.filter(hasPlainName).map((doctor) => {
+        const clinic =
+          doctor.clinicId === null
+            ? undefined
+            : clinicNames.get(doctor.clinicId);
+        return toRecord({
+          sourceRef: `households/${household.id}/doctors/${doctor.id}`,
+          kind: 'person',
+          title: doctor.name,
+          detail: clinic === undefined ? 'Veterinarian' : `Vet at ${clinic}`,
+          placeLabel: clinic ?? null,
+        });
+      }),
       isFull: clinicRead.isFull && doctorRead.isFull,
     };
   });
