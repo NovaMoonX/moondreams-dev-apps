@@ -4,6 +4,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { CircleCheck, RotateCcw } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { formatDateShort } from '@/utils/formatUtils';
 import { FINISHED_SALE_STATUS } from '@apps/going-once/constants';
 import { finishSale } from '@apps/going-once/store/actions/saleActions';
@@ -26,14 +27,20 @@ function FinishSection({ sale, isSeller, summary }: FinishSectionProps) {
   const { confirm } = useActionModal();
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const waitFor = useWaitUntilShown(sale);
   const isFinished = sale.status === FINISHED_SALE_STATUS;
 
   const run = async (action: 'finish' | 'reopen') => {
     setIsWorking(true);
     setError(null);
     const result = await finishSale(sale.id, action);
-    setIsWorking(false);
     if (result.outcome === 'failed') setError(result.reason);
+    else
+      await waitFor(
+        (current) =>
+          (current.status === FINISHED_SALE_STATUS) === (action === 'finish'),
+      );
+    setIsWorking(false);
   };
 
   const handleFinish = async () => {
