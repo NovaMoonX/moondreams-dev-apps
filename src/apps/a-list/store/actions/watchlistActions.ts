@@ -1,7 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { runHeldTransaction } from '@apps/a-list/store/actions/heldTransaction';
 import type {
   AmcFormat,
   MovieSnapshot,
@@ -46,7 +47,7 @@ export const addWatchlistItem = createAsyncThunk<
     const itemRef = getItemRef(uid, movieKey);
 
     try {
-      const outcome = await runTransaction(db, async (transaction) => {
+      const outcome = await runHeldTransaction(uid, async (transaction) => {
         const snapshot = await transaction.get(itemRef);
         if (snapshot.exists()) {
           if (snapshot.get('archivedAt') == null) {
@@ -195,7 +196,7 @@ export const restoreWatchlistItem = createAsyncThunk<
   async ({ uid, movieKey, ifArchivedAt }, { rejectWithValue }) => {
     const itemRef = getItemRef(uid, movieKey);
     try {
-      const restored = await runTransaction(db, async (transaction) => {
+      const restored = await runHeldTransaction(uid, async (transaction) => {
         const snapshot = await transaction.get(itemRef);
         if (
           !snapshot.exists() ||

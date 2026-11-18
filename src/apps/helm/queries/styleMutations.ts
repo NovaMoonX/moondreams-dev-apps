@@ -1,12 +1,7 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  runTransaction,
-  writeBatch,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 import { generateUuid } from '@/utils';
 import {
   STYLE_AVOID_LIMIT,
@@ -69,7 +64,7 @@ async function changeStyle(
   const encryption = await getHelmEncryption(uid);
   const ref = doc(db, 'apps', 'helm', 'users', uid, 'style', styleId);
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       const current = await transaction.get(ref);
       const data = current.data() as Partial<StyleProfile> | undefined;
       const before =
