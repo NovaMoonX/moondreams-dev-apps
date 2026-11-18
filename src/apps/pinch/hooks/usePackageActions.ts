@@ -22,7 +22,7 @@ import {
   selectPackagesLoadError,
 } from '@apps/pinch/store/selectors';
 import type { Package, PackagePlace } from '@apps/pinch/types';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 import {
   buildPackage,
   getNewPackagesProblem,
@@ -172,10 +172,10 @@ export function usePackageActions(uid: string) {
       addUndoToast(
         isFinished
           ? `Used up ${name}`
-          : `Used ${formatSize(used, pkg.unit)} of ${name}`,
+          : `Used ${formatReadableSize(used, pkg.unit)} of ${name}`,
         isFinished || amountLeft === null
           ? undefined
-          : `${formatSize(amountLeft, pkg.unit)} left`,
+          : `${formatReadableSize(amountLeft, pkg.unit)} left`,
         () => undoEnd(pkg.id, at),
       );
       return isFinished;

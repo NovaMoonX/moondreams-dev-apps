@@ -787,6 +787,20 @@ assert.ok(
   'a weight is given in oz or lb, not both',
 );
 assert.equal(
+  getConversionLine({ amount: 1.5, unit: 'KG', gramsPerMl: null }),
+  '= 3¼\u00A0lb',
+  'an amount stepped up to kg never repeats itself in grams',
+);
+assert.deepEqual(
+  [
+    toSpokenAmount('2 lb 8 oz'),
+    toSpokenAmount('1 lb 1 oz'),
+    toSpokenAmount('about 1 lb 2 oz'),
+  ],
+  ['2 pounds 8 ounces', '1 pound 1 ounce', 'about 1 pound 2 ounces'],
+  'pounds and ounces are said as both',
+);
+assert.equal(
   getConversionLine({ amount: 2, unit: 'EACH', gramsPerMl: null }),
   null,
   'a count has nothing to convert',

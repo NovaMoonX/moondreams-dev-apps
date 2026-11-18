@@ -19,6 +19,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import { updateShoppingItem } from '@apps/pinch/store/actions/shoppingActions';
 import {
+  selectPinchSettings,
   selectShoppingById,
   selectShoppingItems,
   selectShoppingPlannedParts,
@@ -62,6 +63,7 @@ function ShoppingItemSheet({
 }: ShoppingItemSheetProps) {
   const dispatch = useAppDispatch();
   const itemsById = useAppSelector(selectShoppingById);
+  const { units } = useAppSelector(selectPinchSettings);
   const allItems = useAppSelector(selectShoppingItems);
   const labels = useAppSelector(selectShoppingSourceLabels);
   const context = useAppSelector(selectShoppingSourceContext);
@@ -102,7 +104,12 @@ function ShoppingItemSheet({
       const amounts = items.flatMap((rowItem) =>
         rowItem.amount === null
           ? []
-          : [formatShopAmount({ amount: rowItem.amount, unit: rowItem.unit })],
+          : [
+              formatShopAmount(
+                { amount: rowItem.amount, unit: rowItem.unit },
+                units,
+              ),
+            ],
       );
       if (amounts.length > 1) {
         return `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`;
@@ -112,12 +119,15 @@ function ShoppingItemSheet({
     const there =
       inNewUnit.amount === null
         ? name
-        : formatShopAmount({ amount: inNewUnit.amount, unit: inNewUnit.unit });
+        : formatShopAmount(
+            { amount: inNewUnit.amount, unit: inNewUnit.unit },
+            units,
+          );
     if (!inNewUnit.isChecked) {
       return `You already have ${there} on your list. This adds to it.`;
     }
     return isValid
-      ? `You already got ${there}. This puts it back on your list at ${formatShopAmount({ amount, unit })}.`
+      ? `You already got ${there}. This puts it back on your list at ${formatShopAmount({ amount, unit }, units)}.`
       : `You already got ${there}. This puts it back on your list.`;
   };
 
@@ -185,7 +195,7 @@ function ShoppingItemSheet({
           <p className='text-muted-foreground mb-1.5 text-xs'>For</p>
           <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
             {shownShares.map((share) => {
-              const amountText = formatShopAmount(share.amount);
+              const amountText = formatShopAmount(share.amount, units);
               return (
                 <li
                   key={share.source}

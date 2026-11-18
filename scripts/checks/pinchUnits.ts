@@ -9,6 +9,7 @@ import {
   toPreferredUnits,
 } from '../../src/apps/pinch/utils/units.ts';
 import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
+import { formatReadableSize } from '../../src/apps/pinch/utils/productFormat.ts';
 import {
   convertMeasure,
   formatAmountText,
@@ -179,12 +180,10 @@ assert.equal(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: null }), null);
 near(convertForIngredient(1, 'CUP', 'ML', { gramsPerMl: null }), 236.588);
 
 // An amount that has outgrown its unit reads in the next one up, on screen only
-const { formatReadableAmount } = await import(
-  '../../src/apps/pinch/utils/kitchenMeasure.ts'
-);
-const { formatShopAmount } = await import(
-  '../../src/apps/pinch/utils/shopping.ts'
-);
+const { formatReadableAmount } =
+  await import('../../src/apps/pinch/utils/kitchenMeasure.ts');
+const { formatShopAmount } =
+  await import('../../src/apps/pinch/utils/shopping.ts');
 const metricSpoons: PinchUnitSettings = {
   weight: 'METRIC',
   volume: 'METRIC',
@@ -236,4 +235,19 @@ assert.deepEqual(
   'the shopping list steps a summed amount up too',
 );
 
+assert.deepEqual(
+  [
+    formatReadableSize(40, 'OZ'),
+    formatReadableSize(12.5, 'OZ'),
+    formatReadableSize(1500, 'G'),
+    formatReadableSize(750, 'ML'),
+  ],
+  ['2 lb 8 oz', '12.5 oz', '1.5 kg', '750 ml'],
+  'what is left of a package reads in the unit it has grown into',
+);
+assert.equal(
+  formatShopAmount({ amount: 16, unit: 'TBSP' }, metricSpoons),
+  '16 tbsp',
+  'a list amount never steps into cups for a person who measures in metric',
+);
 console.log('pinch units: ok');

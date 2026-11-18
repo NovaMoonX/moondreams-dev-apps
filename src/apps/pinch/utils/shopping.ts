@@ -17,6 +17,7 @@ import type {
   Meal,
   MealItem,
   MealType,
+  PinchUnitSettings,
   PlannedMeal,
   Product,
   Recipe,
@@ -211,12 +212,15 @@ const SPOON_UNITS: Unit[] = ['CUP', 'TBSP', 'TSP'];
 const TWO_FIGURE_UNITS: Unit[] = ['G', 'KG', 'OZ', 'LB', 'ML', 'L', 'FL_OZ'];
 
 /** An amount on the list the way a person shops and measures: cups and spoons as in a recipe ("¼ cup", "6 tbsp"), a unit it has outgrown stepped up ("2 lb 8 oz", "2.1 kg"), weights and volumes to two figures ("2.1 kg", not "2056.35 g"). Display only: the item keeps its exact amount, which its own sheet edits. */
-export const formatShopAmount = (amount: ShopAmount | null) => {
+export const formatShopAmount = (
+  amount: ShopAmount | null,
+  units: PinchUnitSettings | null = null,
+) => {
   if (!amount) return null;
   if (amount.unit === 'OZ' && amount.amount >= 16) {
-    return formatReadableAmount(amount.amount, amount.unit);
+    return formatReadableAmount(amount.amount, amount.unit, units);
   }
-  const shown = stepUpAmount(amount.amount, amount.unit);
+  const shown = stepUpAmount(amount.amount, amount.unit, units);
   if (SPOON_UNITS.includes(shown.unit)) {
     return formatKitchenAmount(shown.amount, shown.unit);
   }
@@ -246,6 +250,7 @@ export interface ShopLineRow {
 export function groupShopLines(
   lines: SourcedLine[],
   ingredientsById: Map<string, ResolvedIngredient>,
+  units: PinchUnitSettings | null = null,
 ): ShopLineRow[] {
   const byRow = lines.reduce((acc, line) => {
     const id = getShopRowId(line.ingredientId, line.unit);
@@ -276,7 +281,7 @@ export function groupShopLines(
       name: ingredient?.name ?? 'Removed ingredient',
       section,
       lines: rowLines,
-      amountText: formatShopAmount(getShopAmount(rowLines, section)),
+      amountText: formatShopAmount(getShopAmount(rowLines, section), units),
     };
   });
   return result;
@@ -1470,6 +1475,7 @@ export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
   held: ReadonlyMap<string, boolean> = new Map(),
+  units: PinchUnitSettings | null = null,
 ): Record<ShoppingHalf, ShoppingGroup[]> {
   const toRows = (side: ShoppingItem[], suffix: string) => {
     const rowIds = getItemRowIds(side);
@@ -1489,7 +1495,7 @@ export function groupShoppingItems(
         id,
         itemIds: byBase.map((item) => item.id),
         name: ingredient?.name ?? 'Removed ingredient',
-        amountText: formatShopAmount(getShopAmount(rowItems, section)),
+        amountText: formatShopAmount(getShopAmount(rowItems, section), units),
         isChecked: byBase[0].isChecked,
         sources: getSourceKeys(byBase.flatMap((item) => item.sources ?? [])),
       };

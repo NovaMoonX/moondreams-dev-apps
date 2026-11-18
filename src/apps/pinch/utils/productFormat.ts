@@ -5,6 +5,10 @@ import {
   UNIT_TO_BASE,
 } from '@apps/pinch/constants';
 import type { Product, Unit } from '@apps/pinch/types';
+import {
+  formatReadableAmount,
+  stepUpAmount,
+} from '@apps/pinch/utils/kitchenMeasure';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
 import { getUnitCost } from '@apps/pinch/utils/unitCost';
 
@@ -15,6 +19,16 @@ type PriceAndSize = Pick<Product, 'priceCents' | 'sizeAmount' | 'sizeUnit'>;
 /** "3 lb": a package size as people say it. */
 export const formatSize = (amount: number, unit: Product['sizeUnit']) =>
   `${roundAmount(amount)} ${UNIT_LABELS[unit]}`;
+
+/** What is left of a package or used from it, in the unit it has grown into: "2 lb 8 oz", "1.5 kg". Not for a product's pack size, which reads as printed. */
+export const formatReadableSize = (amount: number, unit: Unit) => {
+  if (unit === 'OZ' && amount >= 16) return formatReadableAmount(amount, unit);
+  const shown =
+    unit === 'G' || unit === 'ML' ? stepUpAmount(amount, unit) : null;
+  return shown === null
+    ? formatSize(amount, unit)
+    : formatSize(shown.amount, shown.unit);
+};
 
 /** "$9.48 / 3 lb". */
 export const formatPriceAndSize = (product: Product) =>

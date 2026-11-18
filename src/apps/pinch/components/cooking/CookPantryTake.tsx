@@ -11,7 +11,7 @@ import {
   getTakenHeadline,
   type TakeGroup,
 } from '@apps/pinch/utils/packages';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 
 const SHOWN_FIRST = 3;
 const HIDDEN_WORTH_A_BUTTON = 2;
@@ -141,7 +141,7 @@ function GroupText({ group }: { group: TakeGroup }) {
           ? 'From 1 package'
           : `From ${group.packageCount} packages, starting with the one that expires first`}
         {group.short !== null &&
-          `. ${formatSize(group.short.amount, group.short.unit)} more than you had`}
+          `. ${formatReadableSize(group.short.amount, group.short.unit)} more than you had`}
       </span>
     </span>
   );

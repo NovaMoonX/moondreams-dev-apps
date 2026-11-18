@@ -62,7 +62,7 @@ import {
   round2,
   type DateAnswer,
 } from '@apps/pinch/utils/packages';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 import PackageRow from '@apps/pinch/components/pantry/PackageRow';
 
 type SheetView =
@@ -104,12 +104,12 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
 
   const getLine = () => {
     if (isOver) {
-      return `Only ${formatSize(pkg.amount, pkg.unit)} is left.`;
+      return `Only ${formatReadableSize(pkg.amount, pkg.unit)} is left.`;
     }
     if (isAll) return 'That uses it up, so it leaves your pantry.';
     return left === null
-      ? `${formatSize(pkg.amount, pkg.unit)} left now.`
-      : `Leaves ${formatSize(left, pkg.unit)}.`;
+      ? `${formatReadableSize(pkg.amount, pkg.unit)} left now.`
+      : `Leaves ${formatReadableSize(left, pkg.unit)}.`;
   };
 
   const handleSave = async () => {
@@ -137,7 +137,7 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
       <div className='space-y-1'>
         <p className='font-medium'>How much did you use?</p>
         <p className='text-muted-foreground text-sm'>
-          {formatSize(pkg.amount, pkg.unit)} left now.
+          {formatReadableSize(pkg.amount, pkg.unit)} left now.
         </p>
       </div>
       <div className='space-y-2'>
@@ -403,7 +403,7 @@ function Facts({ pkg, soonDays }: FactsProps) {
           {PACKAGE_PLACE_LABELS[pkg.place]}
         </span>
         <span className='whitespace-nowrap'>
-          {formatSize(pkg.amount, pkg.unit)} left
+          {formatReadableSize(pkg.amount, pkg.unit)} left
         </span>
         {opened !== null && <span className='whitespace-nowrap'>{opened}</span>}
       </p>

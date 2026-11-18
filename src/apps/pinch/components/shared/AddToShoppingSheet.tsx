@@ -40,6 +40,7 @@ import {
   selectHasPackages,
   selectMealsById,
   selectPackagesByIngredient,
+  selectPinchSettings,
   selectPlannedByDay,
   selectRecipesById,
   selectShoppingById,
@@ -219,6 +220,7 @@ export function ShoppingPick({
   const { showShoppingTab } = usePinchOverlay();
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const { units } = useAppSelector(selectPinchSettings);
   const onList = useAppSelector(selectShoppingById);
   const listCount = useAppSelector(selectShoppingItems).length;
   const loadError = useAppSelector(selectShoppingLoadError);
@@ -309,8 +311,8 @@ export function ShoppingPick({
             source: getRecipeShoppingSource(recipe.id, servings),
           }))
         : [];
-    return groupShopLines(lines, ingredientsById);
-  }, [groups, recipe, recipesById, ingredientsById, servings]);
+    return groupShopLines(lines, ingredientsById, units);
+  }, [groups, recipe, recipesById, ingredientsById, servings, units]);
   const openByRow = useMemo(
     () => getOpenItemsByRow(rows, [...onList.values()]),
     [rows, onList],
@@ -327,13 +329,13 @@ export function ShoppingPick({
             ...getRowOnList(row.lines, rowItems),
             openText:
               open.length > 0
-                ? formatShopAmount(getShopAmount(open, row.section))
+                ? formatShopAmount(getShopAmount(open, row.section), units)
                 : undefined,
           },
         ];
       }),
     );
-  }, [onList, rows, openByRow]);
+  }, [onList, rows, openByRow, units]);
   const getState = (row: ShopLineRow) =>
     states.get(row.id) ?? {
       ...getRowOnList(row.lines, []),
@@ -585,6 +587,7 @@ export function ShoppingPick({
       ) ?? getPantryHint(row);
     const amountText = formatShopAmount(
       getShopAmount(state.addLines, row.section),
+      units,
     );
     return (
       <li
