@@ -402,16 +402,23 @@ class HelmSinkSession implements SinkSession {
         this.uid,
         pictured.map((entry) => entry.id),
       );
-      await chunk(pictured, BATCH_SIZE).reduce(async (done, group) => {
-        await done;
-        const batch = this.firestore.batch();
-        group.forEach(({ id }) =>
-          batch.update(this.firestore.doc(`${syncedPath(this.uid)}/${id}`), {
-            picture: null,
+      // Switching the category off can delete these records meanwhile; the next sync settles them.
+      await chunk(pictured, BATCH_SIZE)
+        .reduce(async (done, group) => {
+          await done;
+          const batch = this.firestore.batch();
+          group.forEach(({ id }) =>
+            batch.update(this.firestore.doc(`${syncedPath(this.uid)}/${id}`), {
+              picture: null,
+            }),
+          );
+          await batch.commit();
+        }, Promise.resolve())
+        .catch((error: unknown) =>
+          logger.warn('helm.syncedPicture.clearFailed', {
+            cause: error instanceof Error ? error.name : 'error',
           }),
         );
-        await batch.commit();
-      }, Promise.resolve());
     }
     if (
       contentChangedCount > 0 &&
