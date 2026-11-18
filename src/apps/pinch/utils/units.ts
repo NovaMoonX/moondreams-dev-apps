@@ -31,11 +31,19 @@ const ML_PER_QUARTER_CUP = MEASURE_TO_BASE.CUP / 4;
 
 const pickWeightUnit = (
   grams: number,
+  from: MeasureUnit,
   units: PinchUnitSettings,
 ): MeasureUnit | null => {
-  if (units.weight === 'METRIC') return grams < 1000 ? 'G' : 'KG';
-  if (units.weight === 'US') return grams < MEASURE_TO_BASE.LB ? 'OZ' : 'LB';
-  return null;
+  switch (units.weight) {
+    case 'METRIC':
+      return grams < 1000 ? 'G' : 'KG';
+    case 'US':
+      return grams < MEASURE_TO_BASE.LB ? 'OZ' : 'LB';
+    case 'LB_OZ':
+      return from === 'LB' && grams >= MEASURE_TO_BASE.LB ? 'LB' : 'OZ';
+    default:
+      return null;
+  }
 };
 
 const pickSmallSpoon = (ml: number): MeasureUnit =>
@@ -71,7 +79,7 @@ export function getPreferredUnit(
   if (!isMeasureUnit(unit)) return null;
   const base = amount * MEASURE_TO_BASE[unit];
   const target = isWeightUnit(unit)
-    ? pickWeightUnit(base, units)
+    ? pickWeightUnit(base, unit, units)
     : pickVolumeUnit(base, unit, units);
   return target === unit ? null : target;
 }
