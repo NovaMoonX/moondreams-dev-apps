@@ -698,6 +698,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       voiceMode: 'cloudWhenOnline',
       isWakeWordOn: false,
       isHandsFreeOn: true,
+      whisperHeld: null,
       hasSeenVoiceNotice: null,
       selfWhoId: 'self',
       currentPlace: null,
@@ -920,7 +921,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     projectIds.map(async (id, index) => {
       const isDone = index % 10 === 9;
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
-      const targetDate = isDone ? null : dayStart(now + between(5, 365) * DAY_MS);
+      const targetDate = isDone
+        ? null
+        : dayStart(now + between(5, 365) * DAY_MS);
       const hasOffer = !isDone && index % 8 === 0;
       const offerId = `scale-ahead-${pad(index, 3)}`;
       const project: Project = {
@@ -1011,6 +1014,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
                 },
           privateMark: isPrivateProject(index) ? 'person' : null,
           isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         }),
       };
       return { id, project };
@@ -1252,6 +1258,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id: `scale-task-${pad(index, 3)}`, task };
@@ -1418,6 +1427,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         links: [],
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id, note };

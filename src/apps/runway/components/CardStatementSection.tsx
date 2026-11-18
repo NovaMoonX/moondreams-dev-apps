@@ -15,6 +15,7 @@ import { CARD_WORDS, LINK_WORDS } from '@apps/runway/constants';
 import { getStatementMinimum } from '@apps/runway/engine/cards';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import { agreeToCardDetails } from '@apps/runway/store/actions/linkActions';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   DateOnly,
@@ -113,6 +114,8 @@ function CardStatementSection({
   const canLink = useCanLinkBank();
   const cards = useAppSelector(selectAllCards);
   const links = useAppSelector((state) => state.runway.links);
+  // At Link a card warns about its due date only from the bank's minimum, so the offer to share it is never put off.
+  const isLink = useAppSelector(selectLevel) === 'link';
   const [isBusy, setIsBusy] = useState(false);
   const [isOfferHidden, setIsOfferHidden] = useLocalStorageState(
     `${OFFER_HIDDEN_PREFIX}:${link?.id ?? 'none'}`,
@@ -174,16 +177,18 @@ function CardStatementSection({
     return (
       <FeatureOffer
         title={CARD_WORDS.offerTitle}
-        body={CARD_WORDS.offerBody(bank)}
+        body={
+          isLink ? CARD_WORDS.offerBodyLink(bank) : CARD_WORDS.offerBody(bank)
+        }
         scope={scope}
         badge={CARD_WORDS.offerBadge}
         actionLabel={
           isBusy ? LINK_WORDS.refreshing : CARD_WORDS.offerAction(bank)
         }
-        laterLabel={CARD_WORDS.offerLater}
+        laterLabel={isLink ? undefined : CARD_WORDS.offerLater}
         isBusy={isBusy}
         onAction={() => void agree()}
-        onLater={() => setIsOfferHidden(true)}
+        onLater={isLink ? undefined : () => setIsOfferHidden(true)}
         folded={{
           isFolded: isOfferHidden,
           icon: <Landmark />,
@@ -214,7 +219,9 @@ function CardStatementSection({
         )}
         {(minimum === null || minimum.kind === 'notShared') && (
           <li className='text-muted-foreground px-4 py-3 text-sm'>
-            {CARD_WORDS.minimumNotShared(bank)}
+            {isLink
+              ? CARD_WORDS.minimumNotSharedLink(bank)
+              : CARD_WORDS.minimumNotShared(bank)}
           </li>
         )}
       </ul>

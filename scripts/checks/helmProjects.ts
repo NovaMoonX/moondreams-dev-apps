@@ -697,8 +697,9 @@ test('the write pool reads set-aside projects too, like the model context', () =
   );
   assert.equal(
     source.split(".where('status', 'in', ['active', 'paused'])").length - 1,
-    2,
+    1,
   );
+  assert.equal(source.split('activeQuery(firestore, base)').length - 1, 2);
   assert.doesNotMatch(source, /where\('status', '==', 'active'\)/);
 });
 
