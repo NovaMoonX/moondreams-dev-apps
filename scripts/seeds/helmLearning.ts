@@ -227,6 +227,7 @@ export const toSeedActExecution = async (
       ],
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: null,
@@ -864,7 +865,8 @@ export async function buildLearning(input: {
     toSeedSeenAs(
       {
         kind: 'tendency',
-        claim: 'Evenings get crowded: things planned after 7 PM slip more often',
+        claim:
+          'Evenings get crowded: things planned after 7 PM slip more often',
         sourceKeys: [patternKey(0), patternKey(3)],
         derivedAt: now - 6 * DAY_MS,
       },

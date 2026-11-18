@@ -1,4 +1,8 @@
 import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
+import {
   createNoiseNode,
   isNoiseCleaningOn,
   NOISE_SAMPLE_RATE,
@@ -141,6 +145,9 @@ export const startPcmCapture = async ({
         error instanceof Error && error.message === CLEANING_TIMEOUT
       );
       console.warn('Noise cleaning is off for this listen', error);
+      recordSpeechEvent(
+        `Noise cleaning failed, listening without it: ${describeThrown(error)}`,
+      );
     }
   }
   return openCapture({ stream, onFrame, isCleaned: false });

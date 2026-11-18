@@ -12,11 +12,12 @@ interface FeatureOfferProps {
   /** What it covers beyond this thing, or why it asks here; null when there is nothing to say. */
   scope?: string | null;
   actionLabel: string;
-  laterLabel: string;
+  /** Left out (with `onLater`) when the offer is too important to put off: it then never folds. */
+  laterLabel?: string;
   /** The small label above the title. */
   badge?: string;
   onAction: () => void;
-  onLater: () => void;
+  onLater?: () => void;
   isBusy?: boolean;
   /** After "Not now": the same offer as one quiet row, so it stays in reach without asking again. */
   folded: {
@@ -40,7 +41,7 @@ function FeatureOffer({
   isBusy = false,
   folded,
 }: FeatureOfferProps) {
-  if (folded.isFolded) {
+  if (folded.isFolded && onLater !== undefined) {
     return (
       <ActionRow
         icon={folded.icon}
@@ -75,16 +76,18 @@ function FeatureOffer({
         >
           {actionLabel}
         </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className='min-h-10'
-          disabled={isBusy}
-          onClick={onLater}
-        >
-          {laterLabel}
-        </Button>
+        {onLater !== undefined && laterLabel !== undefined && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='min-h-10'
+            disabled={isBusy}
+            onClick={onLater}
+          >
+            {laterLabel}
+          </Button>
+        )}
       </div>
     </section>
   );
