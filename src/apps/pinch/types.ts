@@ -510,7 +510,7 @@ export interface Package {
   updatedAt: number;
 }
 
-/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. */
+/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. A snapshot from before step sections lacks `stepSections`, and undoing it leaves no step in a section, which is the recipe as it was. */
 export type RecipeSnapshot = Pick<
   Recipe,
   | 'title'
@@ -523,7 +523,7 @@ export type RecipeSnapshot = Pick<
   | 'nutritionOverride'
   | 'sourceId'
 > &
-  Partial<Pick<Recipe, 'categories' | 'care' | 'links'>>;
+  Partial<Pick<Recipe, 'categories' | 'care' | 'links' | 'stepSections'>>;
 
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {

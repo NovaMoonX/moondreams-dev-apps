@@ -16,7 +16,7 @@ import {
 import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowUp, X } from 'lucide-react';
+import { ArrowUp, Sparkles, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -73,6 +73,8 @@ import {
   type RecipeFormData,
 } from '@apps/pinch/components/recipes/recipeFormModel';
 import RecipeSteps from '@apps/pinch/components/recipes/RecipeSteps';
+import StepSectionsReview from '@apps/pinch/components/recipes/StepSectionsReview';
+import ActionRow from '@/components/ActionRow';
 import RecipeWhyStep from '@apps/pinch/components/recipes/RecipeWhyStep';
 import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
@@ -356,6 +358,8 @@ function RecipeForm({
     };
   });
   const [formData, setFormData] = useState<RecipeFormData>(formStart);
+  const sectionsRef = useRef(formStart.stepSections);
+  const [isSplitOpen, setIsSplitOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const isDraftDirty = useMemo(
     () =>
@@ -386,6 +390,7 @@ function RecipeForm({
     hasChosenCover.current = false;
     setFormStart(initialData);
     setFormData(initialData);
+    sectionsRef.current = initialData.stepSections;
     setFormKey((current) => current + 1);
     onTitleChange(initialData.title);
     isDirtyRef.current = false;
@@ -448,6 +453,7 @@ function RecipeForm({
         coverUrl: null,
         ingredients: lines.map(toRecipeLine),
         steps: [],
+        stepSections: [],
         care: null,
         links: [],
         nutritionOverride: null,
@@ -792,9 +798,37 @@ function RecipeForm({
           <FormSection title='Steps'>
             <RecipeSteps
               steps={props.value as string[]}
-              onChange={props.onValueChange}
+              sections={formData.stepSections}
+              onChange={(steps, stepSections) => {
+                sectionsRef.current = stepSections;
+                props.onValueChange(steps);
+              }}
               onRemoved={showUndo}
+              footerAction={
+                (props.value as string[]).filter((step) => step.trim()).length >
+                  1 && (
+                  <ActionRow
+                    icon={<Sparkles className='h-4 w-4' />}
+                    label='Split into sections'
+                    subtitle='An AI reads your steps; you see the result before anything changes'
+                    onClick={() => setIsSplitOpen(true)}
+                  />
+                )
+              }
             />
+            {isSplitOpen && (
+              <StepSectionsReview
+                isOpen
+                steps={(props.value as string[]).filter((step) => step.trim())}
+                title={formData.title}
+                onApply={(steps, stepSections) => {
+                  sectionsRef.current = stepSections;
+                  props.onValueChange(steps);
+                  setIsSplitOpen(false);
+                }}
+                onClose={() => setIsSplitOpen(false)}
+              />
+            )}
           </FormSection>
         ),
       }),
@@ -839,6 +873,7 @@ function RecipeForm({
     sourcePhoto,
     recipe,
     formData.title,
+    formData.stepSections,
     coverError,
     pickCover,
     clearCover,
@@ -853,6 +888,7 @@ function RecipeForm({
     isBlankByHand,
     initialRead,
     showUndo,
+    isSplitOpen,
     tracking,
     adaptedIds,
     units,
@@ -960,6 +996,12 @@ function RecipeForm({
     coverFile: File | null = upload.file,
   ): RecipeDraft => {
     const settled = settleNewIngredients(data.ingredients);
+    const kept = data.steps
+      .map((step, at) => ({
+        step: step.trim(),
+        section: data.stepSections[at] ?? null,
+      }))
+      .filter(({ step }) => step !== '');
     const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
     const { collectionIds, newCollections } = ownsCollections
       ? getCollectionsToSave(data.collections, collections)
@@ -985,7 +1027,8 @@ function RecipeForm({
       nutritionOverride: parseNutrition(data.nutrition),
       care: parseCareText(data.care),
       links: toRecipeLinks(data.links),
-      steps: data.steps.map((step) => step.trim()).filter(Boolean),
+      steps: kept.map(({ step }) => step),
+      stepSections: kept.map(({ section }) => section),
       coverFile,
       coverUrl: coverFile ? null : (webCover?.imageUrl ?? null),
       removeCover: isCoverRemoved,
@@ -1246,7 +1289,10 @@ function RecipeForm({
         initialData={formStart}
         columns={1}
         onDataChange={(data) => {
-          const next = data as RecipeFormData;
+          const next = {
+            ...(data as RecipeFormData),
+            stepSections: sectionsRef.current,
+          };
           setFormData(next);
           setError(null);
           onTitleChange(next.title);
@@ -1256,7 +1302,10 @@ function RecipeForm({
             JSON.stringify(next) !== JSON.stringify(initialData);
         }}
         onSubmit={(data) => {
-          void handleSubmit(data as RecipeFormData);
+          void handleSubmit({
+            ...(data as RecipeFormData),
+            stepSections: sectionsRef.current,
+          });
         }}
         submitButton={
           <ModalFooterActions

@@ -120,6 +120,7 @@ check(
       'prepMinutes',
       'servings',
       'sourceId',
+      'stepSections',
       'steps',
       'title',
     ]);
@@ -162,6 +163,7 @@ check(
       categories: [],
       care: null,
       links: [],
+      stepSections: [],
     });
     assert.notEqual(getRecipeChanges(before, after, ingredients).length, 0);
   },
