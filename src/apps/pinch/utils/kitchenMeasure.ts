@@ -1,5 +1,5 @@
 import { UNIT_LABELS } from '@apps/pinch/constants';
-import type { Unit } from '@apps/pinch/types';
+import type { PinchUnitSettings, Unit } from '@apps/pinch/types';
 
 const CLOSE_ENOUGH = 0.05;
 const EPSILON = 1e-6;
@@ -48,32 +48,80 @@ const readGrid = (value: number, fractions: number[], label: string) => {
   return say(rounded, label, !isClose(value, rounded));
 };
 
-const readTeaspoons = (value: number) => {
-  if (value < 1 / 16) return 'a pinch';
-  return readGrid(
+/** A spoon or cup amount rounded the way a cook measures it, or a pinch. */
+export type SpoonMeasure =
+  | { kind: 'PINCH' }
+  | {
+      kind: 'MEASURE';
+      value: number;
+      unit: 'TSP' | 'TBSP' | 'CUP';
+      isApprox: boolean;
+    };
+
+const onGrid = (
+  value: number,
+  fractions: number[],
+  unit: 'TSP' | 'TBSP' | 'CUP',
+): SpoonMeasure => {
+  const rounded = nearestOnGrid(value, fractions);
+  return {
+    kind: 'MEASURE',
+    value: rounded,
+    unit,
+    isApprox: !isClose(value, rounded),
+  };
+};
+
+const measureTeaspoons = (value: number): SpoonMeasure => {
+  if (value < 1 / 16) return { kind: 'PINCH' };
+  return onGrid(
     value,
     value < 1 ? SMALL_SPOON_FRACTIONS : CUP_FRACTIONS,
-    UNIT_LABELS.TSP,
+    'TSP',
   );
 };
 
-const readTablespoons = (value: number) => {
-  if (value < 1 - EPSILON) return readTeaspoons(value * 3);
+const measureTablespoons = (value: number): SpoonMeasure => {
+  if (value < 1 - EPSILON) return measureTeaspoons(value * 3);
 
   const rounded = nearestOnGrid(value, HALVES);
-  if (isClose(value, rounded)) return say(rounded, UNIT_LABELS.TBSP, false);
-  if (value < 2) return readTeaspoons(value * 3);
-  return say(rounded, UNIT_LABELS.TBSP, true);
+  if (isClose(value, rounded)) {
+    return { kind: 'MEASURE', value: rounded, unit: 'TBSP', isApprox: false };
+  }
+  if (value < 2) return measureTeaspoons(value * 3);
+  return { kind: 'MEASURE', value: rounded, unit: 'TBSP', isApprox: true };
 };
 
-const readCups = (value: number) => {
-  if (value < 1 / 4 - EPSILON) return readTablespoons(value * 16);
+const measureCups = (value: number): SpoonMeasure => {
+  if (value < 1 / 4 - EPSILON) return measureTablespoons(value * 16);
 
   const rounded = nearestOnGrid(value, CUP_FRACTIONS);
-  const label = rounded > 1 ? 'cups' : UNIT_LABELS.CUP;
-  if (isClose(value, rounded)) return say(rounded, label, false);
-  if (value <= 1 / 2) return readTablespoons(value * 16);
-  return say(rounded, label, true);
+  if (isClose(value, rounded)) {
+    return { kind: 'MEASURE', value: rounded, unit: 'CUP', isApprox: false };
+  }
+  if (value <= 1 / 2) return measureTablespoons(value * 16);
+  return { kind: 'MEASURE', value: rounded, unit: 'CUP', isApprox: true };
+};
+
+/** The spoon or cup a volume is measured with, rounded as `formatKitchenAmount` shows it; null for any other unit. */
+export function getSpoonMeasure(
+  amount: number,
+  unit: Unit,
+): SpoonMeasure | null {
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (unit === 'CUP') return measureCups(amount);
+  if (unit === 'TBSP') return measureTablespoons(amount);
+  if (unit === 'TSP') return measureTeaspoons(amount);
+  return null;
+}
+
+const saySpoon = (measure: SpoonMeasure) => {
+  if (measure.kind === 'PINCH') return 'a pinch';
+  const label =
+    measure.unit === 'CUP' && measure.value > 1
+      ? 'cups'
+      : UNIT_LABELS[measure.unit];
+  return say(measure.value, label, measure.isApprox);
 };
 
 const readCount = (value: number, label: string) => {
@@ -101,11 +149,11 @@ export function formatKitchenAmount(amount: number, unit: Unit) {
 
   switch (unit) {
     case 'CUP':
-      return readCups(amount);
+      return saySpoon(measureCups(amount));
     case 'TBSP':
-      return readTablespoons(amount);
+      return saySpoon(measureTablespoons(amount));
     case 'TSP':
-      return readTeaspoons(amount);
+      return saySpoon(measureTeaspoons(amount));
     case 'LB':
       return amount < 1 / 4 - EPSILON
         ? readGrid(amount * 16, HALVES, UNIT_LABELS.OZ)
@@ -129,4 +177,75 @@ export function formatKitchenAmount(amount: number, unit: Unit) {
     case 'EACH':
       return readCount(amount, '');
   }
+}
+
+const OUNCES_PER_POUND = 16;
+
+const readPoundsAndOunces = (ounces: number) => {
+  const whole = Math.round(ounces);
+  const pounds = Math.floor(whole / OUNCES_PER_POUND);
+  const rest = whole % OUNCES_PER_POUND;
+  const about = isClose(ounces, whole) ? '' : 'about ';
+  return `${about}${pounds} ${UNIT_LABELS.LB}${rest === 0 ? '' : ` ${rest} ${UNIT_LABELS.OZ}`}`;
+};
+
+const landsOn = (value: number, fractions: number[]) =>
+  isClose(value, nearestOnGrid(value, fractions));
+
+const allowsCups = (units: PinchUnitSettings | null) =>
+  units === null || units.volume === 'AS_WRITTEN' || units.volume === 'CUPS';
+
+/** The amount in the next unit up when it has outgrown its own and reads cleanly there (6 tsp is 2 tbsp, 16 tbsp is 1 cup, 1500 g is 1.5 kg); cups only for someone who measures in cups. */
+export function stepUpAmount(
+  amount: number,
+  unit: Unit,
+  units: PinchUnitSettings | null = null,
+): { amount: number; unit: Unit } {
+  if (!Number.isFinite(amount) || amount <= 0) return { amount, unit };
+  if (unit === 'TSP' && amount >= 3 - EPSILON && landsOn(amount / 3, HALVES)) {
+    return stepUpAmount(amount / 3, 'TBSP', units);
+  }
+  if (
+    unit === 'TBSP' &&
+    amount >= 4 - EPSILON &&
+    allowsCups(units) &&
+    landsOn(amount / 16, CUP_FRACTIONS)
+  ) {
+    return { amount: amount / 16, unit: 'CUP' };
+  }
+  if (unit === 'G' && amount >= 1000 - EPSILON) {
+    return { amount: amount / 1000, unit: 'KG' };
+  }
+  if (unit === 'ML' && amount >= 1000 - EPSILON) {
+    return { amount: amount / 1000, unit: 'L' };
+  }
+  return { amount, unit };
+}
+
+/** A weight in pounds and ounces together, as a scale's lb:oz mode shows it ("2 lb 8 oz", "12 oz"); null for anything that isn't ounces or pounds, or when the person didn't pick that way of weighing. */
+export function readScaleWeight(
+  amount: number,
+  unit: Unit,
+  units: PinchUnitSettings | null,
+) {
+  if (units?.weight !== 'LB_OZ' || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  if (unit !== 'OZ' && unit !== 'LB') return null;
+  const ounces = unit === 'LB' ? amount * OUNCES_PER_POUND : amount;
+  return ounces >= OUNCES_PER_POUND - EPSILON
+    ? readPoundsAndOunces(ounces)
+    : formatKitchenAmount(ounces, 'OZ');
+}
+
+/** An amount to read on a recipe, in cooking or on a list: `formatKitchenAmount` after stepping up to the larger unit it has outgrown ("2 tbsp", not "6 tsp"); ounces stay ounces unless the person weighs in pounds and ounces. Never for an answer in a unit the person asked for. */
+export function formatReadableAmount(
+  amount: number,
+  unit: Unit,
+  units: PinchUnitSettings | null = null,
+) {
+  const scale = readScaleWeight(amount, unit, units);
+  if (scale !== null) return scale;
+  const shown = stepUpAmount(amount, unit, units);
+  return formatKitchenAmount(shown.amount, shown.unit);
 }

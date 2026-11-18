@@ -442,10 +442,18 @@ const selectHeldShoppingRows = (
   held: ReadonlyMap<string, boolean>,
 ) => held;
 
+export const selectUnitSettings = (state: RootState) =>
+  selectPinchSettings(state).units;
+
 export const selectShoppingRows = createSelector(
-  [selectShoppingItems, selectIngredientsById, selectHeldShoppingRows],
-  (items, ingredientsById, held) =>
-    groupShoppingItems(items, ingredientsById, held),
+  [
+    selectShoppingItems,
+    selectIngredientsById,
+    selectHeldShoppingRows,
+    selectUnitSettings,
+  ],
+  (items, ingredientsById, held, units) =>
+    groupShoppingItems(items, ingredientsById, held, units),
 );
 
 export const selectShoppingCost = createSelector(
