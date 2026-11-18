@@ -1,3 +1,4 @@
+// Module state, not the store: the send path reads it once and clears it, and nothing renders from it.
 let liveDayKey: string | null = null;
 
 /** The day whose aims the morning question in home's thread is asking for, or null while it isn't live. A turn sent while it is live may be the answer. */

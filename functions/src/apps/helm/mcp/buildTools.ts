@@ -1351,6 +1351,7 @@ export function buildHelmTools(scope: HelmToolScope) {
       const open = docs
         .flatMap((doc) => {
           const data = doc.data();
+          if (data.medium === 'mcp') return [];
           if (data.privacy === 'private' && scope.mask?.isOn !== false)
             return [];
           const state = (data.questionState ?? {}) as Record<

@@ -172,7 +172,7 @@ interface Capture {
   heldReason: HeldReason | null;
   claimId: string | null; claimedAt: number | null; attempts: number;
   lastErrorCode: string | null;
-  questionState: Record<string, { kind: NomosQuestionKind; shape: QuestionShape; askedAt: number; answeredAt: number | null; skippedAt: number | null; reaskedAt?: number | null }>; // round 6c: shape, askedAt, skippedAt; reaskedAt: asked again, live at the bottom of the thread (absent = null)
+  questionState: Record<string, { kind: NomosQuestionKind; shape: QuestionShape; askedAt: number; answeredAt: number | null; skippedAt: number | null; reaskedAt: number | null }>; // round 6c: shape, askedAt, skippedAt; reaskedAt: asked again, live at the bottom of the thread (absent on older documents, read as null)
   answersQuestion: { captureId: string; questionId: string } | null; // round 6c: this turn is the answer to that question (section 5)
   executionIds: string[];
   hasAnswer: boolean;
