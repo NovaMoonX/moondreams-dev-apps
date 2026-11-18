@@ -116,6 +116,8 @@ const EXTRA_EMULATOR_PORTS = [4400, 4500, 9150];
 const PROCESS_LABELS = [
   { pattern: /vite/i, label: 'Vite dev server', isEmulator: false },
   { pattern: /emulators:start/, label: 'Firebase emulator suite', isEmulator: true },
+  { pattern: /emulators:exec/, label: 'Firebase emulator run (emulators:exec)', isEmulator: true },
+  { pattern: /functionsEmulatorRuntime/, label: 'Functions emulator', isEmulator: true },
   { pattern: /firebase-auth-emulator/, label: 'Auth emulator', isEmulator: true },
   { pattern: /cloud-firestore-emulator/, label: 'Firestore emulator', isEmulator: true },
   { pattern: /firebase-database-emulator/, label: 'Realtime Database emulator', isEmulator: true },
@@ -181,16 +183,20 @@ async function stopProcess(pid: number) {
 }
 
 /** Stops our own leftover dev server and emulators, saying what it stopped; fails if something else holds a port. */
-async function freePorts() {
-  const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+const getDefaultPorts = () => {
   const override = process.env.SHARE_CLEANUP_PORTS;
-  const ports = override
-    ? override.split(',').map(Number)
-    : [
-        VITE_PORT,
-        ...EXTRA_EMULATOR_PORTS,
-        ...Object.values<{ port?: number }>(config.emulators).flatMap(({ port }) => (port ? [port] : [])),
-      ];
+  return override ? override.split(',').map(Number) : [VITE_PORT, ...getEmulatorPorts()];
+};
+
+const getEmulatorPorts = () => {
+  const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+  return [
+    ...EXTRA_EMULATOR_PORTS,
+    ...Object.values<{ port?: number }>(config.emulators).flatMap(({ port }) => (port ? [port] : [])),
+  ];
+};
+
+async function freePorts(ports = getDefaultPorts()) {
   const listeners = getListeners(ports);
   const ours = listeners.filter(({ command }) => OUR_PROCESS.test(command));
   const others = listeners.filter(({ command }) => !OUR_PROCESS.test(command));
@@ -213,7 +219,7 @@ async function freePorts() {
   }
 }
 
-/** Stops every Firebase emulator process (not the dev server), saying which ones it stopped. */
+/** Stops every Firebase emulator process (not the dev server) and frees the emulator ports, saying what it stopped; fails if a program that isn't ours holds one. */
 async function stopEmulators() {
   const processes = execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' })
     .split('\n')
@@ -227,16 +233,12 @@ async function stopEmulators() {
         PROCESS_LABELS.some(({ pattern, isEmulator }) => isEmulator && pattern.test(command)),
     );
 
-  if (processes.length === 0) {
-    console.log('✅ No emulators were running.');
-    return;
-  }
-
   await Promise.all(processes.map(({ pid }) => stopProcess(pid)));
   new Set(processes.map(({ command }) => describeProcess(command))).forEach((label) =>
     console.log(`🛑 Stopped the ${label}`),
   );
-  console.log('✅ All emulators are stopped.');
+  // A crashed run can leave a child on an emulator port that the names above miss.
+  await freePorts(getEmulatorPorts());
 }
 
 /** Your Mac's Tailscale address, which only people on (or shared into) your tailnet can reach. */

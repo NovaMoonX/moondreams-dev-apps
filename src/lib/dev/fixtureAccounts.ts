@@ -59,3 +59,15 @@ export const FIXTURE_USERS = {
     apps: ['Runway', 'Helm'],
   },
 } satisfies Record<string, FixtureAccount>;
+
+// The account each app's own seed gives the most data; a scale seed is opt-in, so its account isn't one.
+const DEFAULT_FIXTURE_BY_APP: Record<string, keyof typeof FIXTURE_USERS> = {
+  'nine-lives': 'nineLivesCaretaker',
+  'going-once': 'goingOnceSeller',
+};
+
+/** The fixture account a local run of an app opens signed in as. Emulators only. */
+export const getDefaultFixture = (appId: string) =>
+  FIXTURE_USERS[DEFAULT_FIXTURE_BY_APP[appId] ?? 'partnerOne'];
+
+export const DEV_SIGN_IN_PARAM = 'devAs';
