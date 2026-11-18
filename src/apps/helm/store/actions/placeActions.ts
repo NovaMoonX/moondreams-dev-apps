@@ -1,13 +1,7 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  runTransaction,
-  where,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, query, where } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { openJson, sealJson } from '@apps/helm/security';
 import {
@@ -52,8 +46,8 @@ export async function updatePlace(
           .map((entry) => entry.id)
           .filter((id) => id !== placeId)
       : [];
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<EditResult> => {
         const snapshot = await transaction.get(ref);
         const others = await Promise.all(

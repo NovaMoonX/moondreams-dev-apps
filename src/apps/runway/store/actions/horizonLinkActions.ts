@@ -1,4 +1,5 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -106,7 +107,7 @@ export async function setChangeLink(
         ]
       : []),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const taken = await Promise.all(
       writes.map(({ version }) =>
         transaction.get(planPath(uid, 'versions', version.id)),

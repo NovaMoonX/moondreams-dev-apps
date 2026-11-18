@@ -1,16 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  deleteField,
-  doc,
-  FieldPath,
-  runTransaction,
-  writeBatch,
-} from 'firebase/firestore';
+import { deleteField, doc, FieldPath, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import { isInUse } from '@apps/pinch/utils/references';
@@ -176,7 +171,7 @@ export const removeIngredient = createAsyncThunk<
       const inUse =
         isCustom && isInUse(await readUsage(uid, getState(), 'INGREDIENT', id));
       const recordRef = kitchenDoc(uid, 'ingredients', id);
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const snapshot = await transaction.get(recordRef);
         if (!snapshot.exists()) {
           return;
