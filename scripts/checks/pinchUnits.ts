@@ -9,6 +9,9 @@ import {
   toPreferredUnits,
 } from '../../src/apps/pinch/utils/units.ts';
 import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
+import { combineCookLines } from '../../src/apps/pinch/utils/combineCookLines.ts';
+import { getMeasuringTools } from '../../src/apps/pinch/utils/measuringTools.ts';
+import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
 import { formatReadableSize } from '../../src/apps/pinch/utils/productFormat.ts';
 import {
   convertMeasure,
@@ -178,6 +181,137 @@ assert.deepEqual(getConversions(2, 'EACH', { gramsPerMl: 1 }), []);
 near(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: 0.53 }), 125.39, 1);
 assert.equal(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: null }), null);
 near(convertForIngredient(1, 'CUP', 'ML', { gramsPerMl: null }), 236.588);
+
+// Measuring tools follow the amount as the row shows it
+const line = (
+  name: string,
+  amount: number,
+  unit: Parameters<typeof getMeasuringTools>[0][number]['unit'],
+  isLiquid = false,
+  gramsPerMl: number | null = null,
+) => ({ name, amount, unit, isLiquid, gramsPerMl });
+const tools = getMeasuringTools(
+  [
+    line('Flour', 4 / 3, 'CUP'),
+    line('Milk', 0.75, 'CUP', true),
+    line('Stock', 500, 'ML', true),
+    line('Soy sauce', 0.31, 'CUP', true),
+    line('Salt', 0.5, 'TSP'),
+    line('Vanilla', 1.5, 'TBSP'),
+    line('Butter', 113, 'G', false, 0.96),
+    line('Ground beef', 1, 'LB'),
+    line('Chicken', 1.5, 'LB'),
+    line('Pepper', 0.01, 'TSP'),
+    line('Eggs', 2, 'EACH'),
+  ],
+  null,
+);
+assert.deepEqual(
+  tools.map((tool) => [tool.key, tool.sizes, tool.names]),
+  [
+    ['SCALE', ['113 g', '1½ lb'], ['Butter', 'Chicken']],
+    ['LIQUID_CUP', ['¾ cup', '500 ml'], ['Milk', 'Stock']],
+    ['DRY_CUPS', ['1 cup', '⅓ cup'], ['Flour']],
+    ['SPOONS', ['1 tbsp', '1 tsp', '½ tsp'], ['Soy sauce', 'Salt', 'Vanilla']],
+  ],
+);
+// A weighed line with a known density says what it is without a scale; one without says nothing
+assert.deepEqual(tools[0].swaps, [{ name: 'Butter', text: '½ cup' }]);
+// Two weighed lines of one ingredient make one swap, added up
+assert.deepEqual(
+  getMeasuringTools(
+    [
+      line('Butter', 113, 'G', false, 0.96),
+      line('Butter', 113, 'G', false, 0.96),
+    ],
+    null,
+  )[0].swaps,
+  [{ name: 'Butter', text: '1 cup' }],
+);
+// 0.31 cup reads as 5 tbsp, so it is spoons, not a cup
+assert.equal(formatKitchenAmount(0.31, 'CUP'), '5 tbsp');
+assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')], null)[0].sizes, [
+  '½ tsp',
+  '¼ tsp',
+]);
+assert.deepEqual(getMeasuringTools([line('Salt', 0.01, 'TSP')], null), []);
+// A scale tile reads its weights the way the rows do, pounds and ounces included
+assert.deepEqual(
+  getMeasuringTools([line('Chicken', 20, 'OZ')], {
+    weight: 'LB_OZ',
+    volume: 'AS_WRITTEN',
+    keepSpoons: false,
+  })[0].sizes,
+  ['1 lb 4 oz'],
+);
+
+// "All together" adds one ingredient's lines up and says where each part goes
+const source = (
+  lineId: string,
+  key: string,
+  amount: number | null,
+  unit: Parameters<typeof getMeasuringTools>[0][number]['unit'],
+  group: string | null,
+  recipeId = 'r1',
+) => ({
+  recipeId,
+  recipeTitle: recipeId === 'r1' ? 'Adobo chicken' : 'Rice',
+  lineId,
+  key,
+  name: key,
+  note: null,
+  amountText: amount === null ? 'to taste' : formatKitchenAmount(amount, unit),
+  isMeasured: amount !== null,
+  group,
+  measure: amount === null ? null : { amount, unit, gramsPerMl: null },
+});
+const combined = combineCookLines(
+  [
+    source('a', 'Soy sauce', 0.25, 'CUP', 'For the chicken'),
+    source('b', 'Garlic', 4, 'EACH', 'For the chicken'),
+    source('c', 'Soy sauce', 2, 'TBSP', 'For the sauce'),
+    source('d', 'Salt', null, 'PINCH', null),
+    source('e', 'Salt', null, 'PINCH', null, 'r2'),
+    source('f', 'Garlic', 1, 'TBSP', null, 'r2'),
+  ],
+  true,
+  null,
+);
+assert.equal(
+  combineCookLines(
+    [
+      source('g', 'Salt', 2, 'TSP', 'For the chicken'),
+      source('h', 'Salt', 1, 'TSP', 'For the sauce'),
+    ],
+    false,
+    null,
+  )[0].amountText,
+  '1 tbsp',
+);
+// The total's measure is the stepped one, so its conversion line never repeats it
+assert.deepEqual(
+  combineCookLines(
+    [
+      source('i', 'Oil', 3, 'TSP', 'For the chicken'),
+      source('j', 'Oil', 3, 'TSP', 'For the sauce'),
+    ],
+    false,
+    null,
+  )[0].measure,
+  { amount: 2, unit: 'TBSP', gramsPerMl: null },
+);
+assert.deepEqual(
+  combined.map((line) => [line.key, line.amountText, line.note]),
+  [
+    ['Soy sauce', '6 tbsp', '¼ cup for the chicken · 2 tbsp for the sauce'],
+    ['Garlic', '4 + 1 tbsp', '4 for the chicken · 1 tbsp for Rice'],
+    ['Salt', 'to taste', 'to taste for Adobo chicken · to taste for Rice'],
+  ],
+);
+assert.deepEqual(combined[0].sources, [
+  { recipeId: 'r1', lineId: 'a' },
+  { recipeId: 'r1', lineId: 'c' },
+]);
 
 // An amount that has outgrown its unit reads in the next one up, on screen only
 const { formatReadableAmount } =
