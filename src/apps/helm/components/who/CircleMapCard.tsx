@@ -8,6 +8,8 @@ import type { MapCard } from '@apps/helm/utils/circleMap';
 
 interface CircleMapCardProps {
   card: MapCard | null;
+  /** What the card adds under the line: links here, the next thing, a near date. */
+  summary: string[];
   /** Null when the person has no page of their own to open. */
   onOpen: (() => void) | null;
   onAddConnection: (() => void) | null;
@@ -17,6 +19,7 @@ interface CircleMapCardProps {
 /** A tapped person: their name, what they are to the owner, and the two next steps. */
 function CircleMapCard({
   card,
+  summary,
   onOpen,
   onAddConnection,
   onClose,
@@ -28,17 +31,14 @@ function CircleMapCard({
       title={card?.title ?? ''}
     >
       <div className='space-y-4 pb-2'>
-        {card && (card.line || card.count !== null) && (
-          <p className='text-muted-foreground text-[15px] text-pretty'>
-            {[
-              card.line,
-              card.count !== null && card.count > 0
-                ? HELM_COPY.mapConnectionCount(card.count)
-                : '',
-            ]
+        {card && (card.line || summary.length > 0) && (
+          <ul className='text-muted-foreground space-y-1 text-[15px] text-pretty'>
+            {[card.line, ...summary]
               .filter((part) => part)
-              .join(' · ')}
-          </p>
+              .map((part) => (
+                <li key={part}>{part}</li>
+              ))}
+          </ul>
         )}
         <ActionGroup>
           {onOpen && (
