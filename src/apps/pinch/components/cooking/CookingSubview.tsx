@@ -1073,10 +1073,10 @@ function CookingSession({
     return isConfirmed;
   };
 
-  /** A finished cook leaves quietly unless a timer is going; a cook still under way always asks, since leaving drops its place. */
+  /** Once a cook is recorded (or this is the finish tap) leaving asks only about live timers; a cook not yet recorded always asks, since leaving drops its place. */
   const confirmLeave = async (isFinishing: boolean) => {
     if (timers.liveCount === 0) {
-      if (isFinishing) return true;
+      if (isFinishing || isRecorded) return true;
       return ask({
         title: 'Leave cooking?',
         message:
@@ -1155,7 +1155,7 @@ function CookingSession({
     else replaceSubviewIf(isStillOpen, then);
   };
 
-  const leave = async (isFinishing = isFinished) => {
+  const leave = async (isFinishing = false) => {
     if (!(await confirmDiscard())) return;
     if (!(await confirmLeave(isFinishing))) return;
     leaveNow();

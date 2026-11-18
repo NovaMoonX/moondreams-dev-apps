@@ -18,7 +18,7 @@ function CookStopwatch({ startedAt }: CookStopwatchProps) {
       aria-label={`Cooking for ${minutes === 0 ? 'under a minute' : formatDuration(minutes * 60)}`}
       className='text-muted-foreground flex h-10 shrink-0 items-center gap-1 text-sm font-medium tabular-nums'
     >
-      <Clock aria-hidden='true' className='h-3.5 w-3.5' />
+      <Clock aria-hidden='true' className='h-3.5 w-3.5 max-[359px]:hidden' />
       {formatClock(Math.floor(elapsedMs / 1000) * 1000)}
     </p>
   );
