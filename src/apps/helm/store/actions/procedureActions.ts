@@ -6,12 +6,12 @@ import {
   getDocFromCache,
   getDocsFromServer,
   query,
-  runTransaction,
   where,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { generateUuid } from '@/utils';
 import {
@@ -194,8 +194,8 @@ async function writeVersion(
   if (!navigator.onLine) return 'offline';
   const ref = doc(proceduresOf(uid), procedureId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<DocumentChange> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
