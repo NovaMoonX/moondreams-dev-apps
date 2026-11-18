@@ -65,6 +65,8 @@ import {
   isMapCovered,
   toCircleCard,
   toCircleElements,
+  toCircleLine,
+  toCircleSummary,
 } from '../../src/apps/helm/utils/circleMap.ts';
 import {
   buildInheritedLine,
@@ -1638,6 +1640,7 @@ test("a private person's name, initial and photo never reach the map's elements 
     fromSecond: null,
     status: null,
     since: null,
+    lastEditedAt: null,
   }));
   const base = {
     people,
@@ -1720,6 +1723,7 @@ test('two identical connections draw one line', () => {
     fromSecond: null,
     status: null,
     since: null,
+    lastEditedAt: null,
   };
   const edges = toCircleElements({
     people: [who('me'), who('a')],
@@ -1732,6 +1736,114 @@ test('two identical connections draw one line', () => {
     photoUrls: {},
   }).filter((element) => element.group === 'edges');
   assert.equal(edges.length, 1);
+});
+
+test("a map line says what it means, its date and when it is a guess, and the person's card adds what is next", () => {
+  const who = (id: string, name: string) => ({
+    id,
+    kind: 'person' as const,
+    name,
+    tier: 'close' as const,
+    isSelf: id === 'me',
+    isUnreadable: false,
+    photoMediaId: null,
+  });
+  const people = [who('me', 'Riley'), who('dana', 'Dana'), who('sam', 'Sam')];
+  const since = Date.UTC(2019, 5, 20);
+  const base = {
+    people,
+    connections: [
+      {
+        whoIds: ['dana', 'sam'] as [string, string],
+        kind: 'couple' as const,
+        fromFirst: 'partner' as const,
+        fromSecond: 'partner' as const,
+        status: 'divorced' as const,
+        since,
+        lastEditedAt: Date.UTC(2024, 2, 5, 12),
+      },
+      {
+        whoIds: ['dana', 'me'] as [string, string],
+        kind: 'friend' as const,
+        fromFirst: 'friend' as const,
+        fromSecond: 'friend' as const,
+        status: null,
+        since: null,
+        lastEditedAt: null,
+      },
+    ],
+    figuredOut: new Map(),
+    selfId: 'me',
+    isMasked: false,
+    privateIds: new Set<string>(),
+  };
+  const couple = toCircleLine({ ...base, id: 'dana_sam_couple' });
+  assert.ok(
+    couple?.sentence.includes('Dana') && couple.sentence.includes('2019'),
+  );
+  assert.ok(couple?.note?.startsWith('Last changed'));
+  assert.equal(couple?.isGuess, false);
+  const friend = toCircleLine({ ...base, id: 'dana_me_friend' });
+  assert.ok(friend?.sentence.includes('Dana') && friend.note === null);
+  assert.equal(toCircleLine({ ...base, id: 'nope' }), null);
+  const todayKey = '2026-11-18';
+  const summary = toCircleSummary({
+    ...base,
+    id: 'dana',
+    tasks: [
+      {
+        title: 'Call about the move',
+        whoIds: ['dana'],
+        due: { kind: 'day', date: Date.parse('2026-11-20') },
+        status: 'open',
+        isUnreadable: false,
+        isPrivate: false,
+      },
+    ],
+    keyDates: [['k1', 'birthday', 11, 25, 1990, null]],
+    todayKey,
+    lastMentionedAt: null,
+  });
+  assert.ok(summary.some((line) => line.includes('Sam')));
+  assert.ok(summary.some((line) => line.includes('Call about the move')));
+  assert.ok(summary.some((line) => line.includes('7 days')));
+  assert.deepEqual(
+    toCircleSummary({
+      ...base,
+      id: 'me',
+      tasks: [],
+      keyDates: [],
+      todayKey,
+      lastMentionedAt: null,
+    }),
+    [],
+  );
+  const masked = {
+    ...base,
+    isMasked: true,
+    privateIds: new Set(['sam']),
+  };
+  const maskedSummary = toCircleSummary({
+    ...masked,
+    id: 'dana',
+    tasks: [
+      {
+        title: 'Book the consult',
+        whoIds: ['dana'],
+        due: { kind: 'day', date: Date.parse('2026-11-19') },
+        status: 'open',
+        isUnreadable: false,
+        isPrivate: true,
+      },
+    ],
+    keyDates: [],
+    todayKey,
+    lastMentionedAt: null,
+  });
+  assert.ok(!maskedSummary.some((line) => line.includes('Book the consult')));
+  assert.ok(!maskedSummary.some((line) => line.includes('Sam')));
+  const maskedLine = toCircleLine({ ...masked, id: 'dana_sam_couple' });
+  assert.ok(maskedLine && !maskedLine.sentence.includes('Sam'));
 });
 
 test('passing people never reach the map, and a pet appears only when linked', () => {
@@ -1755,6 +1867,7 @@ test('passing people never reach the map, and a pet appears only when linked', (
     fromSecond: null,
     status: null,
     since: null,
+    lastEditedAt: null,
   });
   const ids = (connections: ReturnType<typeof link>[]) =>
     toCircleElements({
