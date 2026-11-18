@@ -21,6 +21,7 @@ import {
 import HeaderIconButton from '@/components/HeaderIconButton';
 import WorkingRing from '@/components/WorkingRing';
 import { useAuth } from '@/hooks/useAuth';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
 import { getDeviceTimeZone, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
@@ -33,6 +34,8 @@ import GroupingFiledLine from '@apps/helm/components/home/GroupingFiledLine';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
+import TalkNotice from '@apps/helm/components/voice/TalkNotice';
+import VoiceStatus from '@apps/helm/components/voice/VoiceStatus';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
 import { DAY_MS, HELM_COPY, HOME_COMPOSER_ID } from '@apps/helm/constants';
 import OutboxSummary from '@apps/helm/components/inbox/OutboxRow';
@@ -312,6 +315,7 @@ function HomeSurface({
   const isOpening =
     !hasTurns && !isCapturesLoaded && !isCapturesFailed && !isWaitingOnKey;
   const voice = useHelmVoiceContext();
+  const isDesktop = useMediaQuery().isAtLeast('lg');
   const now = useNow(60_000);
   const dayCard = useDayCard(now);
   const grouping = useGroupingOffer(now);
@@ -374,8 +378,8 @@ function HomeSurface({
         data-home-header
         className='bg-background sticky top-0 z-10 -mx-4 px-4 pt-0'
       >
-        <div className='flex h-[60px] items-center justify-between gap-3'>
-          <div className='flex min-w-0 items-center gap-2'>
+        <div className='flex h-[60px] items-center justify-between gap-3 lg:justify-end'>
+          <div className='flex min-w-0 items-center gap-2 lg:hidden'>
             <AssistantMark name={name} isLarge />
             <h1 className='helm-serif truncate text-[28px] leading-[34px]'>
               {name}
@@ -384,16 +388,18 @@ function HomeSurface({
           {keyStatus === 'ready' && (
             <div className='flex shrink-0 items-center gap-3'>
               {hasFreshTurns && uid && <NewConversationButton uid={uid} />}
-              <HeaderIconButton
-                icon={<Search className='size-4' aria-hidden='true' />}
-                label={HELM_COPY.searchTitle}
-                onClick={onOpenSearch}
-              />
-              <HeaderIconButton
-                icon={<Settings2 className='size-4' aria-hidden='true' />}
-                label={HELM_COPY.settingsTitle}
-                onClick={onOpenSettings}
-              />
+              <div className='flex items-center gap-3 lg:hidden'>
+                <HeaderIconButton
+                  icon={<Search className='size-4' aria-hidden='true' />}
+                  label={HELM_COPY.searchTitle}
+                  onClick={onOpenSearch}
+                />
+                <HeaderIconButton
+                  icon={<Settings2 className='size-4' aria-hidden='true' />}
+                  label={HELM_COPY.settingsTitle}
+                  onClick={onOpenSettings}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -483,8 +489,9 @@ function HomeSurface({
       {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4 transition-[bottom,translate,opacity,visibility] duration-200 ease-out motion-reduce:transition-none',
-          voice.state !== 'idle' &&
+          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4 transition-[bottom,translate,opacity,visibility] duration-200 ease-out motion-reduce:transition-none lg:bottom-6 lg:left-65',
+          !isDesktop &&
+            voice.state !== 'idle' &&
             voice.dictationOwner !== HOME_COMPOSER_ID &&
             'invisible translate-y-8 opacity-0',
         )}
@@ -492,14 +499,21 @@ function HomeSurface({
         <div
           ref={composerBox}
           className={join(
-            "before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-['']",
+            "before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-[''] lg:max-w-3xl",
             isComposing &&
               "after:bg-background after:pointer-events-none after:absolute after:inset-x-[-1rem] after:top-1/2 after:-bottom-24 after:-z-10 after:content-['']",
           )}
         >
+          {isDesktop && (
+            <div className='mb-3 flex flex-col gap-3'>
+              {!isComposing && <TalkNotice />}
+              <VoiceStatus hasControls={voice.state !== 'idle'} />
+            </div>
+          )}
           <Composer
             key={keyStatus === 'ready' ? 'ready' : 'waiting'}
             fieldRef={composerRef}
+            hasTalkButton={isDesktop}
             dictationId={HOME_COMPOSER_ID}
             maxLines={10}
             screen={null}
