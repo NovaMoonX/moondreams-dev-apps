@@ -10302,7 +10302,7 @@ assert.equal(
       ['Renamed the section “A” to “a”'],
       ['Took step 3 out of its section'],
       [],
-      ['Steps split into sections'],
+      ['Steps sorted into sections'],
       ['Steps taken out of their sections'],
     ],
     'every edit to step sections is recorded, one line for many at once, and none for a recipe whose sections did not change',
@@ -10340,6 +10340,17 @@ assert.equal(
     splitDraft(['Marinate.', 'Wait.', 'Simmer.', 'Reduce.', 'Plate.']),
     new Map(),
     new Map(),
+  );
+  const undoneSplit = getDraftChanges(
+    sectioned([]),
+    { ...splitDraft(sectioned([]).steps), stepSections: [] },
+    new Map(),
+    new Map(),
+  );
+  assert.deepEqual(
+    undoneSplit.changes,
+    [],
+    'a split put back by hand before saving records nothing',
   );
   const editedSplit = getDraftChanges(
     sectioned([]),

@@ -491,7 +491,7 @@ const getStepSectionChanges = (before: Normalized, after: Normalized) => {
     entries.length > MAX_SECTION_LINES
       ? [
           entries.some((entry) => entry.isInto)
-            ? STEPS_SPLIT_LINE
+            ? 'Steps sorted into sections'
             : 'Steps taken out of their sections',
         ]
       : entries.map((entry) => entry.line);
@@ -861,15 +861,19 @@ export const getDraftChanges = (
   ]);
   const labelsOf = (ids: string[] | undefined) =>
     (ids ?? []).map((id) => collectionLabels.get(id)?.label ?? null);
+  const stepsOf = (content: RecipeContent) => {
+    const kept = normalize(content);
+    return JSON.stringify([kept.steps, kept.stepSections]);
+  };
+  const isSplitKept =
+    draft.splitSteps != null && stepsOf(draft) !== stepsOf(existing);
   const extras: ChangeExtras = {
     photo: getPhotoExtra(existing, draft),
     addedCollections: labelsOf(draft.collectionChange?.add),
     removedCollections: labelsOf(draft.collectionChange?.remove),
-    isStepsSplit: draft.splitSteps != null,
+    isStepsSplit: isSplitKept,
   };
-  const base = draft.splitSteps
-    ? { ...existing, ...draft.splitSteps }
-    : existing;
+  const base = isSplitKept ? { ...existing, ...draft.splitSteps } : existing;
   const result = {
     changes: getRecipeChanges(
       base,
