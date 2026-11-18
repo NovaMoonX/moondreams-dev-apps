@@ -9,6 +9,8 @@ import { openForHelm, type HelmKey } from './helmKey.js';
 import { isQuietOn } from './privacy.js';
 import { readQuietFacts } from './nomos/quietTurn.js';
 import { MAX_CONTEXT_MILESTONES } from './nomos/commands.js';
+import { readShownWhy, type GoalWhy } from './goalWhy.js';
+import type { AheadOfferMeta } from './nomos/researchAhead.js';
 import type {
   ExistingMilestoneState,
   ExistingProject,
@@ -23,6 +25,15 @@ export interface ContextProject {
   name: string;
   milestones: { title: string; date: string | null }[];
   isPrivate?: boolean;
+  kind: 'project' | 'goal';
+  /** Present only for a goal set aside. */
+  status?: 'set aside';
+  /** A goal's why as the person has it: their words, or the tidy version once chosen. */
+  why?: string;
+  /** The day the project is due, YYYY-MM-DD; null while it has none. */
+  date: string | null;
+  /** What research is already offered for it, so the same subject is not offered twice. */
+  researchOffered: string[];
   /** Kept quiet today by its own mark. */
   isQuiet?: boolean;
 }
@@ -79,12 +90,58 @@ const toMilestoneTitles = (value: unknown): Record<string, string> =>
       )
     : {};
 
-const openProjects = (
+const AHEAD_STATES = ['waiting', 'taken', 'off'];
+
+export const readProjectOffers = (value: unknown): AheadOfferMeta[] =>
+  (Array.isArray(value) ? value : []).flatMap((entry): AheadOfferMeta[] => {
+    if (typeof entry !== 'object' || entry === null) return [];
+    const offer = entry as Record<string, unknown>;
+    const orNull = (field: unknown) => (isNumber(field) ? field : null);
+    return typeof offer.id === 'string' &&
+      isNumber(offer.leadDays) &&
+      typeof offer.state === 'string' &&
+      AHEAD_STATES.includes(offer.state)
+      ? [
+          {
+            id: offer.id,
+            leadDays: offer.leadDays,
+            offerOn: orNull(offer.offerOn),
+            state: offer.state as AheadOfferMeta['state'],
+            declineCount: isNumber(offer.declineCount) ? offer.declineCount : 0,
+            nextEligibleOn: orNull(offer.nextEligibleOn),
+            shownOn: typeof offer.shownOn === 'string' ? offer.shownOn : null,
+            researchId:
+              typeof offer.researchId === 'string' ? offer.researchId : null,
+            toldAt: orNull(offer.toldAt),
+            createdAt: isNumber(offer.createdAt) ? offer.createdAt : 0,
+          },
+        ]
+      : [];
+  });
+
+const toAheadSubjects = (value: unknown): string[] =>
+  typeof value === 'object' && value !== null
+    ? Object.values(value).flatMap((ask) => {
+        const subject = (ask as { subject?: unknown } | null)?.subject;
+        return typeof subject === 'string' ? [subject] : [];
+      })
+    : [];
+
+const toGoalWhy = (value: unknown) =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as GoalWhy).verbatim === 'string'
+    ? (value as GoalWhy)
+    : null;
+
+const orNullNumber = (value: unknown) => (isNumber(value) ? value : null);
+
+export const openProjects = (
   key: HelmKey,
   docs: QueryDocumentSnapshot[],
-): ExistingProject[] =>
+): (ExistingProject & { isPaused: boolean })[] =>
   docs
-    .flatMap((doc): [number, ExistingProject][] => {
+    .flatMap((doc): [number, ExistingProject & { isPaused: boolean }][] => {
       try {
         const words = openForHelm(key, doc.get('sealed') as SealedPayload);
         if (typeof words.name !== 'string' || words.name === '') return [];
@@ -100,6 +157,10 @@ const openProjects = (
               milestoneState: toMilestoneState(doc.get('milestoneState')),
               milestoneTitles: toMilestoneTitles(words.milestones),
               isPrivate: doc.get('privacy') === 'private',
+              kind: doc.get('kind') === 'goal' ? 'goal' : 'project',
+              targetDate: orNullNumber(doc.get('targetDate')),
+              researchOffers: readProjectOffers(doc.get('researchOffers')),
+              isPaused: doc.get('status') === 'paused',
               sealed: words,
             },
           ],
@@ -111,13 +172,13 @@ const openProjects = (
     .sort((left, right) => right[0] - left[0])
     .map(([, project]) => project);
 
-const activeQuery = (firestore: Firestore, base: string) =>
+export const activeQuery = (firestore: Firestore, base: string) =>
   firestore
     .collection(`${base}/projects`)
-    .where('status', '==', 'active')
+    .where('status', 'in', ['active', 'paused'])
     .limit(MAX_PROJECTS_READ);
 
-/** The person's active projects, most recently touched first, for the turn's transaction. */
+/** The person's active and set-aside projects, most recently touched first, for the turn's transaction: the same ones the model is shown, so a goal set aside is found instead of made again. */
 export async function readActiveProjectsIn(
   transaction: Transaction,
   firestore: Firestore,
@@ -132,7 +193,7 @@ export async function readActiveProjectsIn(
 
 /** The active projects as one read serves a whole turn: those that opened, the ids of those that did not, and whether the read stopped at its limit. */
 export interface ActiveProjectsRead {
-  projects: ExistingProject[];
+  projects: (ExistingProject & { isPaused: boolean })[];
   unreadableIds: Set<string>;
   isCapped: boolean;
 }
@@ -176,6 +237,16 @@ export const toContextProjects = (
     name: project.name,
     isPrivate: project.isPrivate === true,
     isQuiet: isQuietOn(readQuietFacts(project.sealed), today),
+    kind: project.kind,
+    ...(project.isPaused && { status: 'set aside' as const }),
+    date:
+      project.targetDate === null
+        ? null
+        : new Date(project.targetDate).toISOString().slice(0, 10),
+    researchOffered: toAheadSubjects(project.sealed.aheadAsks),
+    ...(project.kind === 'goal' && {
+      why: readShownWhy(toGoalWhy(project.sealed.why))?.text,
+    }),
     milestones: Object.entries(project.milestoneState)
       .flatMap(([id, state]) =>
         state.doneAt === null && project.milestoneTitles[id]

@@ -1,3 +1,4 @@
+import type { EmbedVideo } from '@/components/VideoEmbed';
 import { generateUuid } from '@/utils/idUtils';
 import {
   getWebLinkHost,
@@ -95,11 +96,7 @@ export const getYouTubeWatchUrl = (text: string) => {
   return result;
 };
 
-/** A how-to video the recipe drawer can play in place: the address the player loads, and the host's own picture when we can name it without asking anyone. */
-export interface InlineVideo {
-  src: string;
-  thumbnailUrl: string | null;
-}
+export type InlineVideo = EmbedVideo;
 
 const VIMEO_HOSTS = new Set(['vimeo.com', 'player.vimeo.com']);
 

@@ -35,6 +35,7 @@ import type {
   ReminderPace,
   Sealed,
 } from '@apps/helm/types';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import type { fromWhenDraft } from '@apps/helm/utils/habitDraft';
 import {
   readEffectivePrivacy,
@@ -67,7 +68,7 @@ const event = (
   stage: null,
 });
 
-const addEvent = (
+export const addEvent = (
   history: readonly HabitHistoryEvent[],
   kind: HabitEventKind,
   at: number,
@@ -80,6 +81,7 @@ export interface NewHabit {
   notes: string | null;
   isCare: boolean;
   forWhoId: string | null;
+  projectId: string | null;
   /** The habit day it starts on, as UTC midnight. */
   startsOn: number;
   when: ReturnType<typeof fromWhenDraft>;
@@ -100,7 +102,7 @@ export async function createHabit(
     cadence: input.when.cadence,
     windowState: input.when.windowState,
     timesPerDay: input.when.timesPerDay,
-    projectId: null,
+    projectId: input.projectId,
     forWhoId: input.isCare ? input.forWhoId : null,
     isCare: input.isCare,
     startsOn: input.startsOn,
@@ -144,6 +146,7 @@ export async function createHabit(
     ),
   };
   const ref = doc(habitsOf(uid), id);
+  markCreatedHere(id);
   return { id, written: setDoc(ref, habit), undo: () => deleteDoc(ref) };
 }
 

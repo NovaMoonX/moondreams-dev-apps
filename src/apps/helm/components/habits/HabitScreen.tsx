@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   Button,
@@ -20,6 +20,7 @@ import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import HabitFormedOffer from '@apps/helm/components/habits/HabitFormedOffer';
 import HabitReminderOffer from '@apps/helm/components/habits/HabitReminderOffer';
 import { isInOfferWindow } from '@apps/helm/components/habits/habitOfferWindow';
+import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import HabitReminderRow from '@apps/helm/components/habits/HabitReminderRow';
 import HabitStage from '@apps/helm/components/habits/HabitStage';
 import { useHabitChange } from '@apps/helm/components/habits/useHabitChange';
@@ -28,6 +29,12 @@ import HabitEditSheet from '@apps/helm/components/habits/HabitEditSheet';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import HabitWeek from '@apps/helm/components/habits/HabitWeek';
 import HabitWhenSheet from '@apps/helm/components/habits/HabitWhenSheet';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
+import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import {
+  selectHabitOffer,
+  selectSubjectGuardrail,
+} from '@apps/helm/store/selectors/patternSelectors';
 import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
@@ -45,7 +52,10 @@ import {
   setHabitStatus,
 } from '@apps/helm/store/actions/habitActions';
 import { readFormedSummary } from '@apps/helm/store/actions/habitJudgementActions';
-import { selectHabitById } from '@apps/helm/store/selectors/habitSelectors';
+import {
+  readPausedLine,
+  selectHabitById,
+} from '@apps/helm/store/selectors/habitSelectors';
 import type { OpenHabit } from '@apps/helm/types';
 import { formatCadence } from '@apps/helm/utils/habitDraft';
 import { readHabitStatus } from '@apps/helm/utils/habitToday';
@@ -80,6 +90,7 @@ interface HabitScreenProps {
   backLabel: string;
   onBack: () => void;
   onHome: () => void;
+  onOpenImportance: (focusId: string) => void;
 }
 
 const readWindowsLine = (habit: OpenHabit) => {
@@ -96,7 +107,13 @@ const readWindowsLine = (habit: OpenHabit) => {
 };
 
 /** One habit: what it is, how often, this week and its notes; a way to change its words and times, pause it, stop it, and mark it medicine or care. */
-function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
+function HabitScreen({
+  habitId,
+  backLabel,
+  onBack,
+  onHome,
+  onOpenImportance,
+}: HabitScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -105,9 +122,16 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
   const { isLoaded } = useAppSelector((state) => state.helm.habits);
   const habit = useAppSelector(selectHabitById).get(habitId ?? '') ?? null;
   const days = useAppSelector((state) => state.helm.habitDays.byId);
+  const offer = useAppSelector((state) =>
+    selectHabitOffer(state, habitId ?? ''),
+  );
+  const guardrail = useAppSelector((state) =>
+    selectSubjectGuardrail(state, habitId ?? ''),
+  );
   const whoName = useHabitWhoName(habit ?? { forWhoId: null });
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingWhen, setIsChangingWhen] = useState(false);
+  const whenSavedRef = useRef<(() => void) | null>(null);
   const [isPausing, setIsPausing] = useState(false);
   const [isAllNotes, setIsAllNotes] = useState(false);
   const [isWritingCare, setIsWritingCare] = useState(false);
@@ -343,8 +367,8 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
       ? HELM_COPY.habitFormedRetiredLine(formatDateShort(habit.retiredAt))
       : habit?.status === 'ended' && habit.endedAt !== null
         ? HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt))
-        : isPaused && habit?.pausedUntil != null
-          ? HELM_COPY.habitsPausedUntil(formatWeekdayDayUTC(habit.pausedUntil))
+        : habit
+          ? readPausedLine(habit, clock.dayKey)
           : null;
 
   return (
@@ -409,6 +433,11 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
               )}
             </div>
             <HabitStage habit={habit} />
+            <ImportancePlaceRow
+              id={habit.id}
+              variant='summary'
+              onOpen={onOpenImportance}
+            />
             {isFormedOffered && (
               <HabitFormedOffer
                 habit={habit}
@@ -435,6 +464,16 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
               </section>
             )}
             <HabitWeek habit={habit} days={days} clock={clock} />
+            {guardrail && !offer && <GuardrailLine pattern={guardrail} />}
+            {offer && (
+              <PatternOfferCard
+                pattern={offer}
+                onChange={(onSaved) => {
+                  whenSavedRef.current = onSaved;
+                  setIsChangingWhen(true);
+                }}
+              />
+            )}
             {notes.length > 0 && (
               <section className='space-y-3'>
                 <h2 className='text-muted-foreground text-[13px]'>
@@ -555,7 +594,11 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
           />
           <HabitWhenSheet
             isOpen={isChangingWhen}
-            onClose={() => setIsChangingWhen(false)}
+            onClose={() => {
+              whenSavedRef.current = null;
+              setIsChangingWhen(false);
+            }}
+            onSaved={() => whenSavedRef.current?.()}
             habit={habit}
           />
           <HabitPauseSheet

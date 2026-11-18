@@ -34,11 +34,17 @@ import { buildProcedureVersionDoc } from '@apps/helm/store/actions/procedureActi
 import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
 import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
+import {
+  closeGroupings,
+  undoGroupingExecution,
+} from '@apps/helm/store/actions/groupingActions';
+import { undoPatternExecution } from '@apps/helm/store/actions/patternActions';
 import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import {
   narrowForUndo,
   planReopen,
   planUndo,
+  withoutGroupings,
   type UndoPlan,
   type UndoRefusal,
   type UndoTarget,
@@ -56,6 +62,8 @@ import type {
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
+  ResearchSealed,
+  SeenAsSealed,
   RunSealed,
   ProjectSealed,
   Sealed,
@@ -409,6 +417,26 @@ export async function undoExecution(
   const undoRef = doc(executions);
   const executionRef = doc(executions, executionId);
   const read = createSealedReader(encryption, openJson);
+  const peek = await getDoc(executionRef).catch((error: unknown) => {
+    if (isUnavailable(error)) return null;
+    throw error;
+  });
+  if (peek === null) return { kind: 'offline' };
+  if (
+    peek.exists() &&
+    (peek.data().effectRefs as EffectRef[] | undefined)?.some(
+      (ref) => ref.collection === 'patterns',
+    )
+  )
+    return undoPatternExecution(uid, encryption, executionId);
+  const peekRefs = peek.exists()
+    ? ((peek.data().effectRefs as EffectRef[] | undefined) ?? [])
+    : [];
+  const groupingIds = peekRefs
+    .filter((ref) => ref.collection === 'groupings')
+    .map((ref) => ref.docId);
+  if (groupingIds.length > 0 && groupingIds.length === peekRefs.length)
+    return undoGroupingExecution(uid, encryption, executionId);
 
   try {
     const first = await getDoc(executionRef);
@@ -416,7 +444,7 @@ export async function undoExecution(
       return { kind: 'refused', reason: 'missing', report: null };
     }
     const earlier = narrowForUndo(
-      await openExecution(first, read),
+      withoutGroupings(await openExecution(first, read)),
       options.docIds ?? null,
     );
     if (earlier.kind === 'refused') {
@@ -437,7 +465,7 @@ export async function undoExecution(
         if (!snapshot.exists()) {
           return { kind: 'refused', reason: 'missing', report: null };
         }
-        const original = await openExecution(snapshot, read);
+        const original = withoutGroupings(await openExecution(snapshot, read));
         const refs = [
           ...new Map(
             original.effectRefs.map((ref) => [ref.docId, ref]),
@@ -457,7 +485,10 @@ export async function undoExecution(
                 ref.collection === 'procedureRuns' ||
                 ref.collection === 'habits' ||
                 ref.collection === 'habitDays' ||
-                ref.collection === 'connections';
+                ref.collection === 'scheduledActions' ||
+                ref.collection === 'research' ||
+                ref.collection === 'connections' ||
+                ref.collection === 'seenAs';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'connections' && ref.op === 'delete') {
                 const whoIds =
@@ -553,6 +584,8 @@ export async function undoExecution(
                       | HabitSealed
                       | HabitDaySealed
                       | ConnectionSealed
+                      | ResearchSealed
+                      | SeenAsSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
@@ -658,6 +691,8 @@ export async function undoExecution(
                     | HabitSealed
                     | HabitDaySealed
                     | ConnectionSealed
+                    | ResearchSealed
+                    | SeenAsSealed
                   >(update.reseal, encryption),
                 }
               : {},
@@ -808,6 +843,10 @@ export async function undoExecution(
     );
     if (result.kind === 'done') {
       void markDaySummaryStale(uid, executionId);
+      if (groupingIds.length > 0 && result.isFinal)
+        closeGroupings(uid, groupingIds, Date.now()).catch((error: unknown) =>
+          console.error('A taken-back grouping was not closed', error),
+        );
       const deleted = await Promise.allSettled(
         result.objectPaths.map((path) => deleteFile(path)),
       );

@@ -10,6 +10,7 @@ import {
   query,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -42,8 +43,11 @@ import {
   type ContactRefusal,
 } from '@apps/helm/engine/contactPoints';
 import { normalizeKin } from '@apps/helm/engine/kin';
+import { addEvent } from '@apps/helm/store/actions/habitActions';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type { City } from '@/lib/cities/types';
+import { store } from '@/store';
 import { keepCurrentAway, MAX_AWAY_SPANS } from '@apps/helm/engine/whereabouts';
 import type {
   AwaySpan,
@@ -51,6 +55,7 @@ import type {
   ContactPoint,
   HelmEncryption,
   NearNow,
+  OpenHabit,
   HelmProfile,
   Sealed,
   Who,
@@ -185,6 +190,7 @@ export type WhereChange =
   | { kind: 'home'; city: City | null }
   | { kind: 'save'; span: AwaySpan }
   | { kind: 'remove'; id: string }
+  | { kind: 'pauses'; id: string; value: boolean | null }
   | { kind: 'back'; id: string; todayKey: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -196,6 +202,11 @@ const nextAway = (
 ): AwaySpan[] => {
   if (change.kind === 'remove') {
     return away.filter((span) => span.id !== change.id);
+  }
+  if (change.kind === 'pauses') {
+    return away.map((span) =>
+      span.id === change.id ? { ...span, pausesScheduled: change.value } : span,
+    );
   }
   if (change.kind === 'back') {
     const yesterday = Date.parse(todayKey) - DAY_MS;
@@ -790,9 +801,100 @@ export async function forgetWithPhotos(
   };
 }
 
+const CARE_WRITES_MAX = 399;
+
+/** Ends the person's care habits from the store (reminder off, off the lock screen, an `ended` event) and stamps reminders, in batches of at most 399 writes, so it works offline. Undo puts back what it wrote on each habit still as this left it. */
+function endCareHabits(uid: string, whoId: string) {
+  const caring = store
+    .getState()
+    .helm.habits.items.filter(
+      (habit) =>
+        habit.forWhoId === whoId &&
+        habit.isCare === true &&
+        habit.status !== 'ended',
+    );
+  const now = Date.now();
+  const refOf = (id: string) => doc(collection(userOf(uid), 'habits'), id);
+  const commit = (writes: { id: string; data: Record<string, unknown> }[]) =>
+    Promise.all(
+      Array.from(
+        { length: Math.ceil(writes.length / CARE_WRITES_MAX) },
+        (_, index) => {
+          const batch = writeBatch(db);
+          writes
+            .slice(index * CARE_WRITES_MAX, (index + 1) * CARE_WRITES_MAX)
+            .forEach((write) => batch.update(refOf(write.id), write.data));
+          markRemindersChanged(batch, uid, now);
+          return batch.commit();
+        },
+      ),
+    ).then(() => undefined);
+  const written = commit(
+    caring.map((habit) => ({
+      id: habit.id,
+      data: {
+        status: 'ended',
+        endedAt: now,
+        history: addEvent(habit.history, 'ended', now),
+        reminder: habit.reminder ? { ...habit.reminder, isOn: false } : null,
+        lockScreenName: null,
+        lastEditedAt: now,
+      },
+    })),
+  );
+  return {
+    written,
+    restore: async () => {
+      const ids = new Set(caring.map((habit) => habit.id));
+      const live = store
+        .getState()
+        .helm.habits.items.filter(
+          (habit) => ids.has(habit.id) && habit.endedAt === now,
+        );
+      const before = new Map(caring.map((habit) => [habit.id, habit]));
+      const undoNow = Date.now();
+      await commit(
+        live.map((habit) => {
+          const earlier = before.get(habit.id) as OpenHabit;
+          return {
+            id: habit.id,
+            data: {
+              status: earlier.status,
+              endedAt: earlier.endedAt,
+              history: earlier.history,
+              reminder: earlier.reminder,
+              lockScreenName: earlier.lockScreenName,
+              lastEditedAt: undoNow,
+            },
+          };
+        }),
+      );
+    },
+  };
+}
+
+/** Forgets a person; their care habits end with them, and Undo brings the person and those habits back. */
 export const forgetWho = async (uid: string, whoId: string) => {
   await keepInheritedPrivate(uid, 'who', whoId);
-  return forgetWithPhotos(uid, 'who', whoId);
+  const forgotten = await forgetWithPhotos(uid, 'who', whoId);
+  const ended = endCareHabits(uid, whoId);
+  ended.written.catch(async (error: unknown) => {
+    console.error('Helm care habits were not ended', error);
+    await forgotten.restore().catch((restoreError: unknown) => {
+      console.error('Helm forgotten person was not put back', restoreError);
+    });
+  });
+  return {
+    ...forgotten,
+    restore: async () => {
+      const outcome = await forgotten.restore();
+      await ended.restore().catch((error: unknown) => {
+        console.error('Helm care habits were not put back', error);
+        throw error;
+      });
+      return outcome;
+    },
+  };
 };
 
 /** Makes the person's own who once; the transaction keeps two tabs from making two. */

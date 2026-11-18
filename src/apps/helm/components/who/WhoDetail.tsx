@@ -33,7 +33,7 @@ import {
   PROJECTS_SHOWN,
 } from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
-import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { selectOpenProjects } from '@apps/helm/store/selectors/projectSelectors';
 import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
@@ -70,7 +70,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const connections = useAppSelector((state) => state.helm.connections.items);
   const captures = useAppSelector(selectEveryCapture);
-  const activeProjects = useAppSelector(selectActiveProjects);
+  const activeProjects = useAppSelector(selectOpenProjects);
   const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);
   const [isAllProjects, setIsAllProjects] = useState(false);

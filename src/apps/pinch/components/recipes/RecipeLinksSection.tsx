@@ -20,9 +20,7 @@ const DEFAULT_REL = 'noopener noreferrer';
 const ROW_CLASS =
   'hover:bg-muted text-foreground! w-full justify-start gap-3 px-3 py-2 text-left font-normal whitespace-normal';
 
-const HowToVideo = lazy(
-  () => import('@apps/pinch/components/recipes/HowToVideo'),
-);
+const VideoEmbed = lazy(() => import('@/components/VideoEmbed'));
 
 const VIDEO_FRAME_CLASS =
   'bg-accent border-border aspect-video rounded-2xl border';
@@ -38,7 +36,7 @@ function HowToPlayer({ link, video }: HowToPlayerProps) {
   return (
     <div className='space-y-2'>
       <Suspense fallback={<div className={VIDEO_FRAME_CLASS} />}>
-        <HowToVideo
+        <VideoEmbed
           video={video}
           ariaLabel={`Play ${getLinkLabel(link)} from ${host}`}
         />

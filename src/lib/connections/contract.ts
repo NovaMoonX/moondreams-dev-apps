@@ -119,7 +119,16 @@ export const SHARED_RECORD_KEYS: (keyof SharedRecord)[] = [
 export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey', 'hasTicket'],
+  event: [
+    'calendarId',
+    'isTentative',
+    'isFree',
+    'sameEventKey',
+    'hasTicket',
+    'format',
+    'buyerFirstName',
+    'status',
+  ],
   task: [],
   project: [
     'available',
@@ -130,7 +139,7 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'leftCents',
   ],
   knowledge: ['rating'],
-  artifact: ['status'],
+  artifact: ['status', 'state', 'condition', 'floorPriceCents'],
   scenario: [],
   trip: [],
   pet: [],
@@ -243,6 +252,7 @@ export interface StartGoogleConnectionRequest {
   accountId: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount: boolean;
+  extraScopes: string[] | null;
 }
 
 export interface StartGoogleConnectionResult {
@@ -281,6 +291,7 @@ export interface ConnectorOption {
   isPrimary: boolean;
   /** Holidays, subscriptions and calendars only shared to read start off. */
   isOnByDefault: boolean;
+  isWritable?: boolean;
 }
 
 export interface EndConnectionRequest {

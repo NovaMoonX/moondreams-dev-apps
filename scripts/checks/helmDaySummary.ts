@@ -667,6 +667,7 @@ const provider = (fails: boolean): BatchProvider => ({
     return Promise.resolve('b1');
   },
   collect: () => Promise.resolve(null),
+  remove: () => Promise.resolve(),
 });
 const released: string[] = [];
 const release = (entry: QueuedSummary) => {
