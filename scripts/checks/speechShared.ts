@@ -2343,6 +2343,21 @@ console.log('speechShared: voice router and playback queue checks passed');
     Math.abs(fake.starts[1]!.at - (fake.starts[0]!.at + 1 / 24000)) < 1e-9,
     'each chunk starts where the one before ends',
   );
+
+  const waking = makeContext();
+  const wakingSink = createPcmSink({
+    context: waking.context,
+    sampleRate: 24000,
+    prebufferSeconds: 0,
+    firstStartAt: 2.5,
+    onStart: () => undefined,
+  });
+  wakingSink.push(new Uint8Array([1, 0]));
+  assert.equal(
+    waking.starts[0]!.at,
+    2.5,
+    'the first sound waits for speakers that are still waking',
+  );
   fake.clock.now = 5;
   sink.push(new Uint8Array([1, 0]));
   assert.ok(

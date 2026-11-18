@@ -3,7 +3,7 @@ import {
   reportFallback,
   type FallbackCause,
 } from '@/lib/fallbacks/fallbacks';
-import { getAudioContext } from '@/lib/speech/audioContext';
+import { getAudioContext, wakeAudioOutput } from '@/lib/speech/audioContext';
 import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
 import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import { toSpokenText } from '@/lib/speech/spokenText';
@@ -58,7 +58,8 @@ const webAudioPlayer: CloudPlayer = {
     if (context === null) throw new Error('Audio is not available');
     await resumeContext(context);
     if (context.state !== 'running') throw new Error('Audio could not start');
-    return createPcmSink({
+    const wake = wakeAudioOutput(context);
+    const sink = createPcmSink({
       context: {
         get currentTime() {
           return context.currentTime;
@@ -70,7 +71,10 @@ const webAudioPlayer: CloudPlayer = {
       },
       sampleRate: format.sampleRate,
       onStart,
+      firstStartAt: wake.readyAt,
     });
+    void sink.done.then(wake.release);
+    return sink;
   },
   decode: async (bytes) => {
     const context = getAudioContext();
@@ -89,11 +93,13 @@ const webAudioPlayer: CloudPlayer = {
         resolve();
         return;
       }
+      const wake = wakeAudioOutput(context);
       const node = context.createBufferSource();
       node.buffer = audio;
       node.connect(getDuckBus(context));
       const progress = { id: 0 };
       const finish = () => {
+        wake.release();
         window.clearInterval(progress.id);
         signal.removeEventListener('abort', abort);
         resolve();
@@ -109,14 +115,17 @@ const webAudioPlayer: CloudPlayer = {
       }
       signal.addEventListener('abort', abort);
       node.onended = finish;
-      const startedAt = context.currentTime;
-      node.start();
+      const startedAt = Math.max(context.currentTime, wake.readyAt);
+      node.start(startedAt);
       onStart();
       if (onProgress) {
         progress.id = window.setInterval(
           () =>
             onProgress(
-              Math.min(1, (context.currentTime - startedAt) / audio.duration),
+              Math.min(
+                1,
+                Math.max(0, (context.currentTime - startedAt) / audio.duration),
+              ),
             ),
           PROGRESS_MS,
         );

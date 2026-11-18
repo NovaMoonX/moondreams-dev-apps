@@ -1,5 +1,5 @@
 import { reportFallback, type FallbackCause } from '@/lib/fallbacks/fallbacks';
-import { getAudioContext } from '@/lib/speech/audioContext';
+import { getAudioContext, wakeAudioOutput } from '@/lib/speech/audioContext';
 import {
   isNaturalVoiceLang,
   NATURAL_START_TIMEOUT_MS,
@@ -83,12 +83,13 @@ const readNatural = (
   context: AudioContext,
   options: ReadAloudOptions,
 ) => {
+  const wake = wakeAudioOutput(context);
   const run: Run = {
     isStopped: false,
     isDone: false,
     isStarted: false,
     isEnded: false,
-    playUntil: 0,
+    playUntil: wake.readyAt,
     rest: null,
     restFrom: 0,
     sources: new Set(),
@@ -102,6 +103,7 @@ const readNatural = (
   const end = () => {
     if (run.isEnded) return;
     run.isEnded = true;
+    wake.release();
     window.clearTimeout(run.startId);
     window.clearInterval(run.progressId);
     options.onEnd?.();

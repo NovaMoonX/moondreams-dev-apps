@@ -207,6 +207,13 @@ The project's consent screen (Google Cloud console, Google Auth Platform, Audien
 - **Fix:** the wait is 6 s (`TOKEN_WAIT_MS` in `deepgramStream.ts`). What is said meanwhile is buffered (up to 10 s) and sent once the socket opens, so nothing is lost, and a token slower than 1.5 s is noted in the speech trace as "Cloud listening token took N ms".
 - **Telling it apart:** a trace line "token took 3000 ms" and no fallback is a cold start, handled. A timeout at 6 s points at App Check or the network, not a cold start. A fallback with Step "token request" or "token refused by the server" is a different cause, and its Error names it.
 
+### A tapped read-aloud starts a few words in
+
+- **Symptom:** tapping the speaker on one of Helm's typed answers, the voice began about six words into the line.
+- **Cause (likely, not confirmed on the owner's phone):** phone speakers and Bluetooth headphones sleep after a few seconds of silence and drop the first second or two of the sound that wakes them. A replayed line comes from kept audio with no request first, so it started straight into the sleeping output. The replay tap also didn't resume the audio inside the tap.
+- **Fix:** `wakeAudioOutput` (`src/lib/speech/audioContext.ts`). After 3 s of quiet it plays an inaudible hiss, and every player (the cloud voice streamed or whole, the natural voice) schedules its first sound 1.5 s after the hiss began. The replay tap calls `unlockAudio`. The speech trace notes "Speakers were quiet; woke them before speaking".
+- **Telling it apart:** if the start is still cut with that trace line present, the output needs longer than 1.5 s (raise `WAKE_SECONDS`). A cut with no trace line means the speakers weren't idle, so look at the playback queue cutting the line instead.
+
 ### Music stops when Helm opens with "Hey Nomos" on
 
 - **Symptom:** on an Android phone, music from another app paused or went quiet as soon as Helm was open with the wake phrase switched on.

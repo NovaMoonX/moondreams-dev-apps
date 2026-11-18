@@ -65,16 +65,19 @@ export const createPcmSink = ({
   onStart,
   leadSeconds = PCM_LEAD_SECONDS,
   prebufferSeconds = PCM_PREBUFFER_SECONDS,
+  firstStartAt = 0,
 }: {
   context: PcmContext;
   sampleRate: number;
   onStart: () => void;
   leadSeconds?: number;
   prebufferSeconds?: number;
+  /** The earliest context time the first sound may start (speakers still waking). */
+  firstStartAt?: number;
 }): PcmSink => {
   const state = {
     carry: null as number | null,
-    nextStartTime: 0,
+    nextStartTime: firstStartAt,
     firstStartTime: 0,
     isStarted: false,
     isEnded: false,
