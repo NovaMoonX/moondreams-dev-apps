@@ -1,9 +1,12 @@
+import { reportFallback } from '@/lib/fallbacks/fallbacks';
 import { setDucked } from '@/lib/speech/voice/duckBus';
 import type {
   SpeechDelivery,
   SpeechPriority,
   TtsAdapter,
 } from '@/lib/speech/voice/types';
+
+export const WHISPER_FALLBACK_KEY = 'speech:whisper';
 
 export interface SpeakResult {
   status: 'spoken' | 'cancelled' | 'failed';
@@ -164,6 +167,16 @@ export const createPlaybackQueue = ({
     state.playing = playing;
     onActiveChange?.(true);
     if (next.delivery === 'whisper' && adapter.route !== 'cloud') {
+      reportFallback({
+        key: WHISPER_FALLBACK_KEY,
+        feature: 'Speaking',
+        wanted: 'a whispered line',
+        used: 'nothing: a whispered line is never said in the device voice',
+        reason:
+          "The cloud voice wasn't the one speaking, so the line was not said.",
+        cause: { stage: 'whisper routing', detail: `route: ${adapter.route}` },
+        facts: [`Adapter: ${adapter.id}`],
+      });
       finish(playing, 'failed', true);
       return;
     }

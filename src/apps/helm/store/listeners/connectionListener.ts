@@ -37,7 +37,7 @@ const toRelation = (value: unknown): ConnectionRelation | null =>
     : null;
 
 /** A connection that won't open is kept, with no words, so a screen never draws it but a count still sees it. */
-async function openConnection(
+export async function openConnection(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenConnection | null> {

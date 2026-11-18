@@ -1,9 +1,14 @@
 import { layHeldLists, type HeldWrite } from '@/utils/heldWrites';
+import type { OpenSeenAs } from '@apps/helm/store/listeners/seenAsListener';
 import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 import type {
+  OpenConnection,
   OpenFact,
+  OpenGrouping,
+  OpenHabit,
   OpenMedia,
   OpenNote,
+  OpenPattern,
   OpenPlace,
   OpenProcedure,
   OpenProject,
@@ -26,6 +31,11 @@ export interface HelmHeldItems {
   runs: OpenRun;
   media: OpenMedia;
   style: OpenStyle;
+  habits: OpenHabit;
+  patterns: OpenPattern;
+  groupings: OpenGrouping;
+  seenAs: OpenSeenAs;
+  connections: OpenConnection;
 }
 
 export type HelmHeldKind = keyof HelmHeldItems;
@@ -44,6 +54,11 @@ export interface HelmHeldLists {
   openRuns: OpenRun;
   media: OpenMedia;
   style: OpenStyle;
+  habits: OpenHabit;
+  patterns: OpenPattern;
+  groupings: OpenGrouping;
+  seenAs: OpenSeenAs;
+  connections: OpenConnection;
 }
 
 export type HelmListName = keyof HelmHeldLists;
@@ -91,6 +106,11 @@ export const HELM_HELD_LISTS: KindLists = {
   runs: { openRuns: { belongs: (run) => run.finishedAt === null } },
   media: { media: { belongs: always } },
   style: { style: { belongs: always } },
+  habits: { habits: { belongs: always } },
+  patterns: { patterns: { belongs: (pattern) => pattern.isLive } },
+  groupings: { groupings: { belongs: always } },
+  seenAs: { seenAs: { belongs: always } },
+  connections: { connections: { belongs: always } },
 };
 
 export const HELM_HELD_KINDS = Object.keys(HELM_HELD_LISTS) as HelmHeldKind[];
