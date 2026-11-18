@@ -166,6 +166,8 @@ import {
   resolveNoteStep,
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
+  getChangeTopics,
+  getDraftChanges,
   getRecipeChanges,
   type RecipeContent,
 } from '../../src/apps/pinch/utils/recipeChanges.ts';
@@ -3061,6 +3063,7 @@ const reading: ExtractedRecipe = {
     },
   ],
   steps: ['Braise.'],
+  stepSections: [],
   care: null,
   photoSearch: null,
   unread: [],
@@ -8861,6 +8864,7 @@ assert.equal(
         },
       ],
       steps: [],
+      stepSections: [],
       care: null,
       photoSearch: null,
       unread: [],
@@ -8938,6 +8942,7 @@ assert.equal(
       },
     ],
     steps: [],
+    stepSections: [],
     nutritionOverride: null,
     source: 'MANUAL' as const,
     sourceId: null,
@@ -10275,6 +10280,105 @@ assert.equal(
     'removing a group and moving a line to another group are recorded, and a change to an ingredient in several groups names its group',
   );
 
+  const sectioned = (sections: (string | null)[]) => ({
+    ...baseRecipe,
+    steps: ['Marinate.', 'Simmer.', 'Reduce.', 'Plate.'],
+    stepSections: sections,
+  });
+  const sectionLines = (before: (string | null)[], after: (string | null)[]) =>
+    getRecipeChanges(sectioned(before), sectioned(after), new Map());
+  assert.deepEqual(
+    [
+      sectionLines([], [null, 'Cook the chicken', 'Cook the chicken', null]),
+      sectionLines([null, null, 'Sauce', null], [null, null, null, null]),
+      sectionLines([null, 'A', 'A', null], [null, 'B', 'B', null]),
+      sectionLines([null, 'A', 'A', null], [null, 'a', 'a', null]),
+      sectionLines(['A', 'A', 'A', 'A'], ['A', 'A', null, 'A']),
+      sectionLines(['A', 'A', 'A', 'A'], ['A', 'A', 'A', 'A']),
+      sectionLines([], ['A', 'B', 'C', 'D']),
+      sectionLines(['A', 'B', 'C', 'D'], [null, null, null, null]),
+    ],
+    [
+      ['Moved 2 steps to “Cook the chicken”'],
+      ['Removed the section “Sauce”'],
+      ['Renamed the section “A” to “B”'],
+      ['Renamed the section “A” to “a”'],
+      ['Took step 3 out of its section'],
+      [],
+      ['Steps sorted into sections'],
+      ['Steps taken out of their sections'],
+    ],
+    'every edit to step sections is recorded, one line for many at once, and none for a recipe whose sections did not change',
+  );
+  assert.deepEqual(
+    getRecipeChanges(
+      sectioned([null, null, null, null]),
+      {
+        ...sectioned([null, 'Sauce', 'Sauce', null]),
+        steps: ['Marinate.', 'Simmer longer.', 'Reduce.', 'Plate.'],
+      },
+      new Map(),
+    ),
+    ['Step 2 now reads: “Simmer longer.”', 'Moved step 3 to “Sauce”'],
+    'a step reworded and put in a section keeps its own lines; only the unchanged step is matched',
+  );
+  assert.deepEqual(
+    getChangeTopics(sectioned([]), sectioned(['A', 'A', null, null])),
+    { hasIngredients: false, hasSteps: false },
+    'an edit that only puts steps in sections asks nothing',
+  );
+  const splitDraft = (steps: string[]) => ({
+    ...sectioned([]),
+    steps,
+    stepSections: steps.map((_, at) => (at < 2 ? 'Marinate' : 'Finish')),
+    newIngredients: [],
+    newSource: null,
+    splitSteps: {
+      steps: ['Marinate.', 'Wait.', 'Simmer.', 'Reduce.', 'Plate.'],
+      stepSections: ['Marinate', 'Marinate', 'Finish', 'Finish', 'Finish'],
+    },
+  });
+  const usedSplit = getDraftChanges(
+    sectioned([]),
+    splitDraft(['Marinate.', 'Wait.', 'Simmer.', 'Reduce.', 'Plate.']),
+    new Map(),
+    new Map(),
+  );
+  const undoneSplit = getDraftChanges(
+    sectioned([]),
+    { ...splitDraft(sectioned([]).steps), stepSections: [] },
+    new Map(),
+    new Map(),
+  );
+  assert.deepEqual(
+    undoneSplit.changes,
+    [],
+    'a split put back by hand before saving records nothing',
+  );
+  const editedSplit = getDraftChanges(
+    sectioned([]),
+    splitDraft(['Marinate.', 'Wait.', 'Simmer gently.', 'Reduce.', 'Plate.']),
+    new Map(),
+    new Map(),
+  );
+  assert.deepEqual(
+    [usedSplit, editedSplit],
+    [
+      {
+        changes: ['Steps split into sections'],
+        topics: { hasIngredients: false, hasSteps: false },
+      },
+      {
+        changes: [
+          'Steps split into sections',
+          'Step 3 now reads: “Simmer gently.”',
+        ],
+        topics: { hasIngredients: false, hasSteps: true },
+      },
+    ],
+    'a split the person used is one line and asks nothing; an edit on top of it is recorded against the split',
+  );
+
   const read = getDataFromExtracted(
     {
       title: 'Adobo',
@@ -10333,6 +10437,7 @@ assert.equal(
         },
       ],
       steps: [],
+      stepSections: [],
       care: null,
       photoSearch: null,
       unread: [],
