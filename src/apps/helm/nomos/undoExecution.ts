@@ -8,12 +8,12 @@ import {
   query,
   updateDoc,
   increment,
-  runTransaction,
   type Transaction,
   where,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 import { deleteFile } from '@lib/firebase/storage';
 import { createSealedReader } from '@lib/security';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
@@ -430,8 +430,8 @@ export async function undoExecution(
         ...(earlier.view.captureId ? [earlier.view.captureId] : []),
       ]),
     );
-    const result = await runTransaction(
-      db,
+    const result = await runHeldTransaction(
+      uid,
       async (transaction): Promise<UndoResult> => {
         const snapshot = await transaction.get(executionRef);
         if (!snapshot.exists()) {
