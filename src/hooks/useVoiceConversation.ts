@@ -1187,6 +1187,7 @@ export function useVoiceConversation({
 
   /** Says the last reply or summary again, or a line the person tapped (kept audio costs no request), at the current turn so a reply on its way still plays; says why when it can't. */
   const repeat = (text?: string): VoiceRepeat => {
+    unlockAudio();
     endFollowUp(true);
     const { lastLine } = run.current;
     const line = text ?? lastLine?.text ?? null;

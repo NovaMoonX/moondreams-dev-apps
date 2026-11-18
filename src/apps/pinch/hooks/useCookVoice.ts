@@ -17,6 +17,7 @@ import {
   type CookEntryKind,
   type CookReadingQueue,
   type CookReadingSegment,
+  type CookServingsChange,
   type CookSpokenView,
   type CookTimerAnswer,
   type CookTimerScope,
@@ -94,6 +95,8 @@ export interface CookVoiceActions {
     candidates: string[],
   ) => CookVoiceResult;
   cycleRecipe: (direction: 1 | -1) => CookVoiceResult;
+  setServings: (change: CookServingsChange) => CookVoiceResult;
+  tellServings: () => CookVoiceResult;
   readTips: () => CookVoiceResult;
   readNotes: () => CookVoiceResult;
   readChanges: () => CookVoiceResult;
@@ -164,6 +167,10 @@ export const runCookCommand = (
       return actions.switchRecipe(command.recipeId, command.candidates);
     case 'CYCLE_RECIPE':
       return actions.cycleRecipe(command.direction);
+    case 'SET_SERVINGS':
+      return actions.setServings(command.change);
+    case 'TELL_SERVINGS':
+      return actions.tellServings();
     case 'READ_TIPS':
       return actions.readTips();
     case 'READ_NOTES':

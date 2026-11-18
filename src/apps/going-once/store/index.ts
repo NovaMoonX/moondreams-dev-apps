@@ -2,6 +2,13 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { resetAllState } from '@/store/actions/globalActions';
+import {
+  addHeldCases,
+  deliverHeld,
+  emptyHeldList,
+  type HeldList,
+} from '@/store/heldLists';
+import { goingOnceHeldActions } from '@apps/going-once/store/heldLists';
 import type {
   Inquiry,
   Item,
@@ -23,6 +30,7 @@ export interface GoingOnceState {
   openSale: { sale: Sale | null; status: LoadStatus };
   /** Tagged with the sale they were read for, so a stale list is never shown. */
   items: { saleId: string | null; items: Item[]; status: LoadStatus };
+  hold: HeldList<Item>;
   inquiries: {
     saleId: string | null;
     new: { items: Inquiry[]; status: LoadStatus };
@@ -48,6 +56,7 @@ const initialState: GoingOnceState = {
   sales: { items: [], status: 'loading' },
   openSale: { sale: null, status: 'loading' },
   items: { saleId: null, items: [], status: 'loading' },
+  hold: emptyHeldList<Item>(),
   inquiries: {
     saleId: null,
     new: { items: [], status: 'loading' },
@@ -93,12 +102,22 @@ export const goingOnceSlice = createSlice({
       state.openSale = initialState.openSale;
     },
     setItems(state, action: PayloadAction<{ saleId: string; items: Item[] }>) {
-      state.items = { ...action.payload, status: 'ready' };
+      const { saleId, items } = action.payload;
+      if (state.items.saleId !== saleId) state.hold = emptyHeldList();
+      state.items = {
+        saleId,
+        items: deliverHeld(state.hold, items, () => true),
+        status: 'ready',
+      };
     },
     setItemsError(state) {
+      if (state.hold.deliveredAt !== null)
+        state.items.items = state.hold.incoming;
+      state.hold = emptyHeldList();
       state.items.status = 'error';
     },
     clearItems(state) {
+      state.hold = emptyHeldList();
       state.items = initialState.items;
     },
     setInquiries(
@@ -170,6 +189,14 @@ export const goingOnceSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
+    addHeldCases<Item, GoingOnceState>(builder, goingOnceHeldActions, 'items', {
+      belongs: () => true,
+      show: (state, list) => {
+        state.items.items = list;
+      },
+      accepts: (state, scope) =>
+        state.items.status === 'ready' && state.items.saleId === scope,
+    });
   },
 });
 

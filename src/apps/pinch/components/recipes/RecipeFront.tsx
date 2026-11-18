@@ -17,6 +17,7 @@ import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection'
 import RecipeEntryRows from '@apps/pinch/components/recipes/RecipeEntryRows';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
+import RecipeStepList from '@apps/pinch/components/recipes/RecipeStepList';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
@@ -61,6 +62,7 @@ import {
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
+import { getStepSections } from '@apps/pinch/utils/stepSections';
 
 const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NO_PRODUCT') return 'No price yet';
@@ -451,18 +453,10 @@ function RecipeFront({
 
       {recipe.steps.length > 0 && (
         <FormSection title='Steps'>
-          <ol className='space-y-3'>
-            {recipe.steps.map((step, index) => (
-              <li key={index} className='flex gap-3 text-sm'>
-                <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
-                  {index + 1}
-                </span>
-                <span className='min-w-0 space-y-1'>
-                  <span className='block whitespace-pre-wrap'>{step}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+          <RecipeStepList
+            steps={recipe.steps}
+            sections={getStepSections(recipe)}
+          />
         </FormSection>
       )}
 

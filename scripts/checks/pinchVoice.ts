@@ -16,6 +16,8 @@ import {
   roundMeasure,
 } from '../../src/utils/measureUtils.ts';
 import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
+import { getSpokenServings } from '../../src/apps/pinch/utils/cooks.ts';
+import { readHeardCount } from '../../src/lib/speech/heardCount.ts';
 
 import {
   describeAmounts,
@@ -526,7 +528,7 @@ assert.deepEqual(
   ],
   [
     { kind: 'CONVERT', query: 'cilantro', lineIds: [], unit: 'CUP' },
-    { kind: 'AMOUNT', query: 'people', lineIds: [] },
+    { kind: 'TELL_SERVINGS' },
     { kind: 'AMOUNT', query: 'minutes', lineIds: [] },
   ],
   'a question with nothing found keeps the words searched, so the answer can name them',
@@ -2082,6 +2084,259 @@ assert.equal(
   readSpokenAnswer(several, '   '),
   null,
   'silence is not an answer',
+);
+
+// Servings by voice, including the numbers a recognizer mishears.
+const servingsTo = (servings: number): CookCommand => ({
+  kind: 'SET_SERVINGS',
+  change: { kind: 'TO', servings },
+});
+const servingsBy = (delta: number): CookCommand => ({
+  kind: 'SET_SERVINGS',
+  change: { kind: 'BY', delta },
+});
+const servingsTimes = (factor: number): CookCommand => ({
+  kind: 'SET_SERVINGS',
+  change: { kind: 'TIMES', factor },
+});
+expectKind(
+  [
+    'make six servings',
+    'make 6 servings',
+    'make sick servings',
+    'sick servings',
+    'sex servings',
+    'six portions',
+    'set servings to 6',
+    'set the servings to sick',
+    'change the serving size to six',
+    'servings 6',
+    'serves six',
+    'make it for six',
+    'make it for sick',
+    'make it for 6 people',
+    'scale to 6',
+    'scale it up to six',
+    'make it for six people',
+    'enough for six people',
+    'make enough for six',
+    'i need six servings',
+    'id like 6 servings',
+    'make it serve six',
+    'it should feed six people',
+    'okay pepper make six servings please',
+  ],
+  servingsTo(6),
+  'six servings',
+);
+expectKind(
+  [
+    'make four servings',
+    'change servings to for',
+    'make for servings',
+    'make it for four',
+  ],
+  servingsTo(4),
+  'four servings, heard as "for"',
+);
+expectKind(
+  ['servings ate', 'make eight servings'],
+  servingsTo(8),
+  'eight servings, heard as "ate"',
+);
+expectKind(
+  ['make to servings', 'a couple of servings', 'two servings'],
+  servingsTo(2),
+  'two servings',
+);
+expectKind(
+  ['make two and a half servings', 'make it for two and a half'],
+  servingsTo(2.5),
+  'a half on a count',
+);
+expectKind(
+  ['make twenty four servings', 'make 24 servings'],
+  servingsTo(24),
+  'tens and ones',
+);
+expectKind(
+  [
+    'one serving',
+    'make one serving',
+    'make a serving',
+    'i need one serving',
+    'give me a serving',
+  ],
+  servingsTo(1),
+  'one serving is a number, not one more',
+);
+expectKind(
+  [
+    'add a serving',
+    'one more serving',
+    'another serving',
+    'an extra serving',
+    'more servings',
+    'increase the servings',
+  ],
+  servingsBy(1),
+  'one more serving',
+);
+expectKind(
+  [
+    'two more servings',
+    'to more servings',
+    'add 2 servings',
+    'increase servings by two',
+    'two extra servings',
+  ],
+  servingsBy(2),
+  'two more servings',
+);
+expectKind(
+  [
+    'one less serving',
+    'fewer servings',
+    'remove a serving',
+    'take one serving off',
+    'reduce the servings',
+  ],
+  servingsBy(-1),
+  'one less serving',
+);
+expectKind(
+  ['take away two servings', 'two fewer servings', 'reduce servings by 2'],
+  servingsBy(-2),
+  'two fewer servings',
+);
+expectKind(
+  [
+    'double the recipe',
+    'make a double batch',
+    'make it double',
+    'make twice as much',
+  ],
+  servingsTimes(2),
+  'double',
+);
+expectKind(
+  [
+    'halve the recipe',
+    'half the recipe',
+    'make it half',
+    'cut the recipe in half',
+  ],
+  servingsTimes(0.5),
+  'halve',
+);
+expectKind(['triple the recipe'], servingsTimes(3), 'triple');
+expectKind(
+  [
+    'how many servings',
+    'how many servings is this',
+    'how many people does this serve',
+    'how many is this for',
+    'how many people is this for',
+    'how much does it make',
+    'servings',
+  ],
+  { kind: 'TELL_SERVINGS' },
+  'asking the servings',
+);
+[
+  'six',
+  'sick',
+  'cook for ten',
+  'cook for 10 minutes',
+  'make it for',
+  'make dinner for my family',
+  'serve it hot',
+  'double check the oven',
+  'a serving',
+  'a plate',
+  'another plate',
+  'remove a plate',
+  'four people',
+  'for people',
+  'to people',
+  'make it for free',
+  'make it for then',
+  'make it to a',
+  'servings for',
+  'cook for six people',
+  'double it',
+  'halve it',
+  'cut it in half',
+  'go to servings',
+  'add to servings',
+  'add 0.5 servings',
+].forEach((phrase) =>
+  assert.equal(parse(phrase), null, `not a servings command: "${phrase}"`),
+);
+assert.deepEqual(
+  parse('how much garlic'),
+  { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+  'an amount stays an amount',
+);
+
+assert.equal(readHeardCount('sick'), 6, 'sick is six');
+assert.equal(
+  readHeardCount('for', 'all'),
+  4,
+  'for is four where only a number fits',
+);
+assert.equal(
+  readHeardCount('for'),
+  null,
+  'an everyday word is no number by default',
+);
+assert.equal(readHeardCount('sick', 'none'), null, 'no sound-alikes asked');
+assert.equal(readHeardCount('ate'), 8, 'ate is eight');
+assert.equal(readHeardCount('twenty four'), 24, 'twenty four');
+assert.equal(
+  readHeardCount('twenty for'),
+  null,
+  'a sound-alike is a whole slot only',
+);
+assert.equal(readHeardCount('2.5'), 2.5, 'a decimal');
+assert.equal(readHeardCount('chicken'), null, 'a word that is no number');
+
+assert.equal(getSpokenServings(4, { kind: 'TO', servings: 6 }), 6, 'set to 6');
+assert.equal(
+  getSpokenServings(4, { kind: 'TO', servings: 2.4 }),
+  2.5,
+  'a number rounds to a half',
+);
+assert.equal(getSpokenServings(4, { kind: 'BY', delta: 2 }), 6, 'two more');
+assert.equal(
+  getSpokenServings(2, { kind: 'BY', delta: -3 }),
+  -1,
+  'three fewer than two is past the end, so it is refused, not clamped',
+);
+assert.equal(
+  getSpokenServings(1, { kind: 'BY', delta: -1 }),
+  0.5,
+  'one less from one is a half, as the stepper does',
+);
+assert.equal(
+  getSpokenServings(0.5, { kind: 'BY', delta: 1 }),
+  1,
+  'one more from a half is one',
+);
+assert.equal(
+  getSpokenServings(2.5, { kind: 'BY', delta: 1 }),
+  3,
+  'a whole serving a step',
+);
+assert.equal(
+  getSpokenServings(3, { kind: 'TIMES', factor: 0.5 }),
+  1.5,
+  'halve three',
+);
+assert.equal(
+  getSpokenServings(4, { kind: 'TIMES', factor: 2 }),
+  8,
+  'double four',
 );
 
 console.log('pinchVoice: all checks passed');
