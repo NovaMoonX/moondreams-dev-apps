@@ -46,6 +46,7 @@ const ingredient = (extra: Record<string, unknown> = {}) => ({
   unit: 'LB',
   note: null,
   group: null,
+  isFree: false,
   ...extra,
 });
 
@@ -129,6 +130,7 @@ check(
       'notes',
       'prepMinutes',
       'servings',
+      'stepSections',
       'steps',
       'tips',
       'title',
@@ -137,6 +139,7 @@ check(
       'amount',
       'catalogId',
       'group',
+      'isFree',
       'name',
       'note',
       'unit',
@@ -305,6 +308,25 @@ check(
   },
 );
 
+check(
+  'a free line stays free and an old snapshot without the key reads false',
+  () => {
+    const legacy: Record<string, unknown> = ingredient();
+    delete legacy.isFree;
+    const result = recipeOf({
+      ingredients: [
+        ingredient({ isFree: true, catalogId: null }),
+        ingredient({ isFree: 'yes' }),
+        legacy,
+      ],
+    });
+    assert.deepEqual(
+      result.ingredients.map((line) => line.isFree),
+      [true, false, false],
+    );
+  },
+);
+
 check('a catalog id is kept only when it has the cat- shape', () => {
   const ids = [
     'cat-chicken-thigh',
@@ -363,6 +385,25 @@ check('every text and list cap holds at the cap and one past it', () => {
   assert.equal(steps(500)?.length, L.MAX_RECIPE_STEPS);
   assert.equal(steps(1, L.MAX_STEP_LENGTH)?.[0].length, L.MAX_STEP_LENGTH);
   assert.equal(steps(1, L.MAX_STEP_LENGTH + 1)?.[0].length, L.MAX_STEP_LENGTH);
+
+  const sectioned = toSharedRecipe(
+    recipe({
+      steps: ['Dice', '', 'Boil', 'Drain'],
+      stepSections: ['Prep', 'Lost', text(L.MAX_STEP_SECTION_LENGTH + 5), 42],
+    }),
+  );
+  assert.deepEqual(sectioned?.steps, ['Dice', 'Boil', 'Drain']);
+  assert.equal(sectioned?.stepSections.length, 3);
+  assert.equal(sectioned?.stepSections[0], 'Prep');
+  assert.equal(
+    sectioned?.stepSections[1]?.length,
+    L.MAX_STEP_SECTION_LENGTH,
+  );
+  assert.equal(sectioned?.stepSections[2], null);
+  assert.deepEqual(
+    toSharedRecipe(recipe({ steps: ['A', 'B'] }))?.stepSections,
+    [],
+  );
 
   const lines = (count: number) =>
     toSharedRecipe(recipe({ ingredients: many(count, () => ingredient()) }))
@@ -810,51 +851,62 @@ check("the unit list and every cap and list here equal the app's own", () => {
   );
 });
 
-check('a tip keeps only its words and its step, never a date, id or cook', () => {
-  const result = recipeOf({
-    steps: ['One.', 'Two.'],
-    tips: [
-      {
-        text: 'Pat it dry.',
-        step: 1,
-        id: 'note-id-secret',
-        cookId: 'cook-secret',
-        createdAt: 5,
-        kind: 'NOTE',
-      },
-    ],
-  });
-  assert.deepEqual(result.tips, [{ text: 'Pat it dry.', step: 1 }]);
-});
+check(
+  'a tip keeps only its words and its step, never a date, id or cook',
+  () => {
+    const result = recipeOf({
+      steps: ['One.', 'Two.'],
+      tips: [
+        {
+          text: 'Pat it dry.',
+          step: 1,
+          id: 'note-id-secret',
+          cookId: 'cook-secret',
+          createdAt: 5,
+          kind: 'NOTE',
+        },
+      ],
+    });
+    assert.deepEqual(result.tips, [{ text: 'Pat it dry.', step: 1 }]);
+  },
+);
 
-check('a tip step that is not a step of the recipe reads as the whole recipe', () => {
-  const result = recipeOf({
-    steps: ['One.'],
-    tips: [
-      { text: 'a', step: 1 },
-      { text: 'b', step: -1 },
-      { text: 'c', step: 0.5 },
-      { text: 'd', step: '0' },
-      { text: 'e', step: null },
-    ],
-  });
-  assert.deepEqual(
-    result.tips.map((tip) => tip.step),
-    [null, null, null, null, null],
-  );
-});
+check(
+  'a tip step that is not a step of the recipe reads as the whole recipe',
+  () => {
+    const result = recipeOf({
+      steps: ['One.'],
+      tips: [
+        { text: 'a', step: 1 },
+        { text: 'b', step: -1 },
+        { text: 'c', step: 0.5 },
+        { text: 'd', step: '0' },
+        { text: 'e', step: null },
+      ],
+    });
+    assert.deepEqual(
+      result.tips.map((tip) => tip.step),
+      [null, null, null, null, null],
+    );
+  },
+);
 
 check('tips are capped in number and length, and junk is dropped', () => {
   const result = recipeOf({
     tips: [
-      ...many(L.MAX_SHARED_TIPS + 5, (index) => ({ text: `Tip ${index}`, step: null })),
+      ...many(L.MAX_SHARED_TIPS + 5, (index) => ({
+        text: `Tip ${index}`,
+        step: null,
+      })),
       { text: '' },
       { text: 7 },
       null,
     ],
   });
   assert.equal(result.tips.length, L.MAX_SHARED_TIPS);
-  const long = recipeOf({ tips: [{ text: text(L.MAX_SHARED_TIP_LENGTH + 1), step: null }] });
+  const long = recipeOf({
+    tips: [{ text: text(L.MAX_SHARED_TIP_LENGTH + 1), step: null }],
+  });
   assert.equal(long.tips[0]?.text.length, L.MAX_SHARED_TIP_LENGTH);
 });
 
@@ -866,44 +918,91 @@ check('a copy taken before tips existed reads as having none', () => {
   assert.deepEqual(toSharedRecipe(legacy)?.notes, []);
 });
 
-check('a note keeps only its words and its step, and is capped on its own limits', () => {
-  const result = recipeOf({
-    steps: ['One.', 'Two.'],
-    notes: [
-      { text: 'Better with less vinegar.', step: 1, id: 'secret', cookId: 'cook-secret', createdAt: 5, reason: 'why' },
-      ...many(L.MAX_SHARED_NOTES + 5, (index) => ({ text: `Note ${index}`, step: null })),
-      { text: '' },
-      null,
-    ],
-  });
-  assert.deepEqual(result.notes[0], { text: 'Better with less vinegar.', step: 1 });
-  assert.equal(result.notes.length, L.MAX_SHARED_NOTES);
-  const long = recipeOf({ notes: [{ text: text(L.MAX_SHARED_NOTE_LENGTH + 1), step: null }] });
-  assert.equal(long.notes[0]?.text.length, L.MAX_SHARED_NOTE_LENGTH);
-});
+check(
+  'a note keeps only its words and its step, and is capped on its own limits',
+  () => {
+    const result = recipeOf({
+      steps: ['One.', 'Two.'],
+      notes: [
+        {
+          text: 'Better with less vinegar.',
+          step: 1,
+          id: 'secret',
+          cookId: 'cook-secret',
+          createdAt: 5,
+          reason: 'why',
+        },
+        ...many(L.MAX_SHARED_NOTES + 5, (index) => ({
+          text: `Note ${index}`,
+          step: null,
+        })),
+        { text: '' },
+        null,
+      ],
+    });
+    assert.deepEqual(result.notes[0], {
+      text: 'Better with less vinegar.',
+      step: 1,
+    });
+    assert.equal(result.notes.length, L.MAX_SHARED_NOTES);
+    const long = recipeOf({
+      notes: [{ text: text(L.MAX_SHARED_NOTE_LENGTH + 1), step: null }],
+    });
+    assert.equal(long.notes[0]?.text.length, L.MAX_SHARED_NOTE_LENGTH);
+  },
+);
 
-check('tips and notes are separate lists: one sent as the other stays where it was sent', () => {
-  const result = recipeOf({ tips: [{ text: 'tip', step: null }], notes: [{ text: 'note', step: null }] });
-  assert.deepEqual(result.tips.map((e) => e.text), ['tip']);
-  assert.deepEqual(result.notes.map((e) => e.text), ['note']);
-});
+check(
+  'tips and notes are separate lists: one sent as the other stays where it was sent',
+  () => {
+    const result = recipeOf({
+      tips: [{ text: 'tip', step: null }],
+      notes: [{ text: 'note', step: null }],
+    });
+    assert.deepEqual(
+      result.tips.map((e) => e.text),
+      ['tip'],
+    );
+    assert.deepEqual(
+      result.notes.map((e) => e.text),
+      ['note'],
+    );
+  },
+);
 
-check('only an explicit true includes tips or notes, and the rest are stripped from every recipe', () => {
-  const body = recipeOf({ tips: [{ text: 'tip', step: null }], notes: [{ text: 'note', step: null }] });
-  const copy = { recipe: body, meal: { name: 'Dinner', recipes: [body], items: [] } };
-  [undefined, null, 'true', 1, {}, false].forEach((odd) => {
-    const includes = toShareIncludes(odd, odd);
-    assert.deepEqual(includes, { tips: false, notes: false });
-  });
-  const none = toIncludedCopy(copy, toShareIncludes(false, false));
-  assert.deepEqual([none.recipe?.tips, none.recipe?.notes, none.meal?.recipes[0]?.tips, none.meal?.recipes[0]?.notes], [[], [], [], []]);
-  const tipsOnly = toIncludedCopy(copy, toShareIncludes(true, 'yes'));
-  assert.equal(tipsOnly.recipe?.tips.length, 1);
-  assert.equal(tipsOnly.recipe?.notes.length, 0);
-  const notesOnly = toIncludedCopy(copy, toShareIncludes(undefined, true));
-  assert.equal(notesOnly.meal?.recipes[0]?.tips.length, 0);
-  assert.equal(notesOnly.meal?.recipes[0]?.notes.length, 1);
-});
+check(
+  'only an explicit true includes tips or notes, and the rest are stripped from every recipe',
+  () => {
+    const body = recipeOf({
+      tips: [{ text: 'tip', step: null }],
+      notes: [{ text: 'note', step: null }],
+    });
+    const copy = {
+      recipe: body,
+      meal: { name: 'Dinner', recipes: [body], items: [] },
+    };
+    [undefined, null, 'true', 1, {}, false].forEach((odd) => {
+      const includes = toShareIncludes(odd, odd);
+      assert.deepEqual(includes, { tips: false, notes: false });
+    });
+    const none = toIncludedCopy(copy, toShareIncludes(false, false));
+    assert.deepEqual(
+      [
+        none.recipe?.tips,
+        none.recipe?.notes,
+        none.meal?.recipes[0]?.tips,
+        none.meal?.recipes[0]?.notes,
+      ],
+      [[], [], [], []],
+    );
+    const tipsOnly = toIncludedCopy(copy, toShareIncludes(true, 'yes'));
+    assert.equal(tipsOnly.recipe?.tips.length, 1);
+    assert.equal(tipsOnly.recipe?.notes.length, 0);
+    const notesOnly = toIncludedCopy(copy, toShareIncludes(undefined, true));
+    assert.equal(notesOnly.meal?.recipes[0]?.tips.length, 0);
+    assert.equal(notesOnly.meal?.recipes[0]?.notes.length, 1);
+  },
+);
 
 const idPatternIn = (rules: string, header: string) => {
   const start = rules.indexOf(header);

@@ -33,13 +33,15 @@ const problems = APP_REGISTRY.flatMap((app) => {
 });
 
 // A theme sets the floating-surface tokens in its light and dark blocks, or its popovers, dropdowns and tooltips keep the
-// site's white/zinc defaults; `--subview-backdrop:` tints the page behind a subview's card (its dark value has a default).
+// site's white/zinc defaults; `--subview-backdrop:` tints the page behind a subview's card (its dark value has a default);
+// `--checkbox-radius:` makes each app choose its tick's shape (square, soft or round) rather than inherit the site's.
 const THEME_TOKENS = [
   { token: '--color-popover:', inEachBlock: true },
   { token: '--color-popover-foreground:', inEachBlock: true },
   { token: '--color-tooltip:', inEachBlock: true },
   { token: '--color-tooltip-foreground:', inEachBlock: true },
   { token: '--subview-backdrop:', inEachBlock: false },
+  { token: '--checkbox-radius:', inEachBlock: false },
 ];
 
 const themeProblems = listFiles('src/apps')

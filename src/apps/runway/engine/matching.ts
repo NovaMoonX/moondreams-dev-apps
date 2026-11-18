@@ -1,5 +1,6 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { getRefundableCents } from '@apps/runway/engine/purchases';
 import type {
   Cents,
   DateOnly,
@@ -286,6 +287,82 @@ export const isBankMove = (purchase: OpenPurchase) =>
   purchase.incomeDayId === null &&
   (purchase.billRef ?? null) === null &&
   OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
+/** Money in that is a refund: one tied to a purchase, one typed by hand, or a credit on a card the bank doesn't call a payment or a move. Money paired as a move or linked to a pay is never one. */
+export const isRefundLike = (purchase: OpenPurchase) =>
+  purchase.amountCents < 0 &&
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '') &&
+  (purchase.refundOfId !== null ||
+    purchase.source !== 'link' ||
+    (purchase.paidByCardId ?? null) !== null);
+
+/** How far back a bank refund looks for the purchase it returns. */
+export const REFUND_LOOKBACK_DAYS = 120;
+
+const getMerchantWords = (name: string | null) =>
+  toComparable(name?.trim() || '')
+    .split(' ')
+    .filter((word) => word !== '' && !/^\d+$/.test(word));
+
+const getNameOf = (purchase: Pick<OpenPurchase, 'merchant' | 'label'>) =>
+  purchase.merchant?.trim() || purchase.label?.trim() || null;
+
+// A bank adds store numbers and short codes ("KOHLS #1234", "TARGET T-0456"); a longer word ("Venmo cash out", "Applebees") is another merchant.
+const isSameMerchant = (a: readonly string[], b: readonly string[]) => {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (Math.min(a.join('').length, b.join('').length) < 3) return false;
+  if (a.join('') === b.join('')) return true;
+  return (
+    short.length > 0 &&
+    short.every((word, index) => long[index] === word) &&
+    long
+      .slice(short.length)
+      .every((word) => word.length <= 2 || /\d/.test(word))
+  );
+};
+
+/** Whether two merchant names (or labels) name the same store, store numbers, spacing and punctuation aside. */
+export const isSameStore = (a: string | null, b: string | null) =>
+  isSameMerchant(getMerchantWords(a), getMerchantWords(b));
+
+const isIncomeOrMoveIn = (category: string | null) =>
+  /^(INCOME_|TRANSFER_IN_)/.test(category ?? '');
+
+/** A purchase a refund could return: posted money out that is not a move between the person's own accounts. */
+export const isRefundCandidate = (purchase: OpenPurchase) =>
+  purchase.amountCents > 0 &&
+  purchase.status !== 'pending' &&
+  purchase.pairedWithId === null &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
+/** The one purchase a waiting bank refund most likely returns, when that purchase went to an envelope or goal: same merchant (store numbers and short codes aside), posted and not a move, on or before the refund's day within `REFUND_LOOKBACK_DAYS` of the purchases passed in (the loaded window), and never for money the bank calls income or a move in, with at least the refund left to return; the newest wins. Null when none does, since a refund of a Free to Spend purchase already counts where it belongs. */
+export function findRefundOriginal(
+  refund: OpenPurchase,
+  purchases: readonly OpenPurchase[],
+): OpenPurchase | null {
+  const words = getMerchantWords(getNameOf(refund));
+  if (refund.amountCents >= 0 || isIncomeOrMoveIn(refund.category ?? null)) {
+    return null;
+  }
+  const result =
+    purchases
+      .filter(
+        (purchase) =>
+          purchase.id !== refund.id &&
+          isRefundCandidate(purchase) &&
+          purchase.date <= refund.date &&
+          purchase.date >= refund.date - REFUND_LOOKBACK_DAYS * DAY_MS &&
+          purchase.lines.some(
+            (line) => line.cents > 0 && line.envelopeId !== null,
+          ) &&
+          isSameMerchant(getMerchantWords(getNameOf(purchase)), words) &&
+          getRefundableCents(purchase, purchases) >= -refund.amountCents,
+      )
+      .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)[0] ?? null;
+  return result;
+}
 
 /** The two sides of a move between the person's own accounts are paired only this close in date. */
 export const PAIR_DAYS = 3;

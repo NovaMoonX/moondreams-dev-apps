@@ -2,16 +2,14 @@
 import assert from 'node:assert/strict';
 import { START_DAY_KEY } from '../../src/apps/runway/constants.ts';
 
+import { createSealedReader } from '../../src/lib/security/sealedReader.ts';
+import { openJson, sealJson } from '../../src/apps/runway/security.ts';
 import {
   listChangesBetweenIncomeDays,
   listPlanChangeDays,
 } from '../../src/apps/runway/engine/planChanges.ts';
 import { parseAmountDraft } from '../../src/apps/runway/utils/rangeInput.ts';
 import { cleanBankName } from '../../src/apps/runway/utils/accountText.ts';
-import {
-  createSealedReader,
-  sealJson,
-} from '../../src/apps/runway/security.ts';
 import {
   addLink,
   canCancelChange,
@@ -34,7 +32,11 @@ import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
 import {
   findAccountPairs,
   findLostPairs,
+  findRefundOriginal,
+  isRefundCandidate,
+  isSameStore,
   isBankMove,
+  isRefundLike,
   findDepositDays,
   findPendingMoveHolds,
   findPurchaseMatches,
@@ -7843,7 +7845,7 @@ const version = (
   };
   const first = await sealJson({ name: 'Rent' }, encryption);
   const second = await sealJson({ name: 'Rent' }, encryption);
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const [again, once, other] = await Promise.all([
     read<{ name: string }>(first),
     read<{ name: string }>(first),
@@ -11367,6 +11369,121 @@ const version = (
     false,
     'a cash withdrawal still counts as spending',
   );
+
+  const checkRefunds = () => {
+    const kohls = (
+      id: string,
+      cents: number,
+      dayOffset: number,
+      extra: Partial<OpenPurchase> = {},
+    ) =>
+      side(id, cents, dayOffset, { merchant: "Kohl's", ...onCard, ...extra });
+    const clothes = {
+      envelopeId: 'clothes',
+      cents: 6_000,
+      via: 'chosen' as const,
+    };
+    const cardRefund = kohls('back', -4_894, 9);
+    assert.equal(
+      isRefundLike(cardRefund),
+      true,
+      'a credit on a card the bank does not call a payment is a refund',
+    );
+    assert.equal(
+      isRefundLike(cardPay),
+      false,
+      'a card payment is never a refund',
+    );
+    assert.equal(
+      isRefundLike(side('pay', -200_000, 0)),
+      false,
+      'a bank deposit with no purchase is not a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [cardRefund, kohls('buy', 6_000, 0)]),
+      null,
+      'a refund of a Free to Spend purchase asks nothing',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { needsHome: false, lines: [clothes] }),
+      ])?.id,
+      'buy',
+      'a refund of a purchase that went to an envelope finds it',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { lines: [clothes] }),
+        kohls('was', -2_000, 2, { refundOfId: 'buy' }),
+      ]),
+      null,
+      'a purchase already refunded below the amount is not it',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { lines: [clothes], merchant: 'Target' }),
+        kohls('late', 6_000, 10, { lines: [clothes] }),
+        kohls('old', 6_000, -200, { lines: [clothes] }),
+      ]),
+      null,
+      'another merchant, a later purchase or one past the lookback is not it',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { merchant: 'KOHLS #1234' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      )?.id,
+      'buy',
+      'a store number or an apostrophe does not hide the same store',
+    );
+    assert.equal(
+      isSameStore('TARGET T-0456', 'Target'),
+      true,
+      'a bank suffix is the same store',
+    );
+    assert.equal(
+      isSameStore('Applebees', 'Apple') ||
+        isSameStore('Venmo cash out', 'Venmo'),
+      false,
+      'a longer word names another merchant',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { category: 'TRANSFER_IN_ACCOUNT_TRANSFER' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      ),
+      null,
+      'money the bank calls a move in is never asked as a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        kohls('buy', 6_000, 0, { lines: [clothes], status: 'pending' }),
+      ]),
+      null,
+      'a pending charge is never the one-tap original',
+    );
+    assert.equal(
+      isSameStore('Ta', 'Target'),
+      false,
+      'two letters name no store',
+    );
+    assert.equal(
+      isRefundCandidate(kohls('pend', 6_000, 0, { status: 'pending' })),
+      false,
+      'a pending charge is never what a refund returns',
+    );
+    assert.equal(
+      isRefundCandidate(
+        side('move', 25_000, 0, { category: 'TRANSFER_OUT_ACCOUNT_TRANSFER' }),
+      ),
+      false,
+      'a move between accounts is never what a refund returns',
+    );
+  };
+  checkRefunds();
 
   const transfer = findAccountPairs([
     side('out', 25_000, 0),

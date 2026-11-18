@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CircleHelp, TriangleAlert } from 'lucide-react';
+import { CircleHelp, Info, TriangleAlert } from 'lucide-react';
 
 import LabelChip from '@/components/LabelChip';
 import { useSheetHistory } from '@/hooks/useBackHistory';
@@ -52,6 +52,8 @@ interface HelpTipProps {
   linkLabel?: string;
   /** Shows this text as a soft accent badge, the icon's place taken by a state the person can tap to learn more about; it opens the explanation in a modal at every size. */
   badgeLabel?: string;
+  /** Shows this text after an info icon, in the colours of the surface it sits on (no fill of its own), for a heads-up a few words can carry; it opens the explanation in a modal at every size. */
+  infoLabel?: string;
   /** Which side of the icon the tooltip prefers on a computer; it flips when that side has no room. */
   placement?: 'top' | 'bottom';
   /** A caution ("this number leaves something out") instead of a question mark; opens the same way. */
@@ -98,6 +100,7 @@ function HelpTip({
   children,
   linkLabel,
   badgeLabel,
+  infoLabel,
   placement = 'bottom',
   variant = 'help',
   dismissLabel = 'Got it',
@@ -111,7 +114,11 @@ function HelpTip({
     () => true,
   );
   const usesModal =
-    Boolean(linkLabel) || Boolean(badgeLabel) || isPhone || !canHover;
+    Boolean(linkLabel) ||
+    Boolean(badgeLabel) ||
+    Boolean(infoLabel) ||
+    isPhone ||
+    !canHover;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLSpanElement>(null);
@@ -197,6 +204,28 @@ function HelpTip({
           onClick={() => setIsOpen(true)}
         >
           {linkLabel}
+        </Button>
+        {modal}
+      </>
+    );
+  }
+
+  if (infoLabel) {
+    return (
+      <>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          aria-label={`${infoLabel}: ${title}`}
+          className={join(
+            "text-muted-foreground! hover:text-foreground! relative h-auto! min-h-0! gap-1.5 bg-transparent! p-0! text-left text-xs font-normal before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']",
+            className,
+          )}
+          onClick={() => setIsOpen(true)}
+        >
+          <Info className='size-3.5 shrink-0' aria-hidden='true' />
+          <span>{infoLabel}</span>
         </Button>
         {modal}
       </>

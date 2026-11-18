@@ -42,6 +42,7 @@ Run this against the canvas. Each item is a problem a real review turned up.
 - [ ] Check labels for words not everyone knows.
 - [ ] Primary actions on phones sit where a thumb reaches, such as the bottom of the screen or bottom right.
 - [ ] Lists you tick through have a checkbox for each group and one for the whole list, with a partial state and an "N of M" count.
+- [ ] The app has one checkbox, named in Look and tokens beside its shape language: its shape (square, soft or round), its weight, filled or open once ticked, and its accent, drawn ticked, unticked and mixed in light and dark.
 
 **Coverage**
 - [ ] Every segmented choice has a board for each side (an Expense / Income switch needs both).

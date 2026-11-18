@@ -8,7 +8,8 @@ export type AuthContextValue = {
   loading: boolean;
   isAdmin: boolean;
   signInWithGoogle: () => Promise<void>;
-  logOut: () => Promise<void>;
+  /** `hasAskedFirst` skips the unsent-work questions a caller already asked; `landingNote` is said once on the signed-out home. */
+  logOut: (options?: { hasAskedFirst?: boolean; landingNote?: string }) => Promise<void>;
   /** Accounts used on this device, most recent first, the signed-in one included. */
   rememberedAccounts: RememberedAccount[];
   /** Switches to `account` with the session this device kept for it, else through Google's picker (on its email), and reloads as whoever signs in. Call it from a tap. */

@@ -5,6 +5,7 @@ export const SHARE_LIMITS = {
   MAX_NAME_LENGTH: 120,
   MAX_NOTE_LENGTH: 200,
   MAX_INGREDIENT_GROUP_LENGTH: 40,
+  MAX_STEP_SECTION_LENGTH: 40,
   MAX_RECIPE_INGREDIENTS: 60,
   MAX_RECIPE_STEPS: 60,
   MAX_STEP_LENGTH: 2000,
@@ -61,6 +62,7 @@ export interface SharedIngredient {
   unit: ShareUnit;
   note: string | null;
   group: string | null;
+  isFree: boolean;
 }
 
 export interface SharedRecipeLink {
@@ -89,6 +91,7 @@ export interface SharedRecipe {
   cookMinutes: number | null;
   ingredients: SharedIngredient[];
   steps: string[];
+  stepSections: (string | null)[];
   care: SharedRecipeCare | null;
   links: SharedRecipeLink[];
   tips: SharedRecipeEntry[];
@@ -257,6 +260,7 @@ function toIngredient(raw: unknown): SharedIngredient | null {
     unit: unit ?? 'EACH',
     note: toText(raw.note, SHARE_LIMITS.MAX_NOTE_LENGTH),
     group: toText(raw.group, SHARE_LIMITS.MAX_INGREDIENT_GROUP_LENGTH),
+    isFree: raw.isFree === true,
   };
   return result;
 }
@@ -329,11 +333,27 @@ export function toSharedRecipe(
     toIngredient,
     SHARE_LIMITS.MAX_RECIPE_INGREDIENTS,
   );
-  const steps = toList(
-    raw.steps,
-    (step) => toText(step, SHARE_LIMITS.MAX_STEP_LENGTH),
-    SHARE_LIMITS.MAX_RECIPE_STEPS,
-  );
+  const rawSections = Array.isArray(raw.stepSections) ? raw.stepSections : [];
+  const stepPairs = (Array.isArray(raw.steps) ? raw.steps : [])
+    .flatMap((step: unknown, index: number) => {
+      const text = toText(step, SHARE_LIMITS.MAX_STEP_LENGTH);
+      return text === null
+        ? []
+        : [
+            {
+              text,
+              section: toText(
+                rawSections[index],
+                SHARE_LIMITS.MAX_STEP_SECTION_LENGTH,
+              ),
+            },
+          ];
+    })
+    .slice(0, SHARE_LIMITS.MAX_RECIPE_STEPS);
+  const steps = stepPairs.map((pair) => pair.text);
+  const stepSections = stepPairs.some((pair) => pair.section !== null)
+    ? stepPairs.map((pair) => pair.section)
+    : [];
   if (
     title === null ||
     servings === null ||
@@ -360,6 +380,7 @@ export function toSharedRecipe(
     cookMinutes: toInt(raw.cookMinutes, 0, SHARE_LIMITS.MAX_MINUTES),
     ingredients,
     steps,
+    stepSections,
     care: toCare(raw.care),
     links,
     tips: toList(

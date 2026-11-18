@@ -69,8 +69,8 @@ export default defineConfig({
         // Firebase Hosting serves its auth handler under /__/; the SPA fallback would swallow the sign-in popup.
         navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        // Fetched only when someone turns the natural voice on.
-        globIgnores: ['**/piperWorker-*.js'],
+        // Fetched only when someone turns on the natural voice or offline listening.
+        globIgnores: ['**/piperWorker-*.js', '**/speech/asr/**'],
         importScripts: [
           'firebase-messaging-sw-config.js',
           'firebase-messaging-sw-additions.js',
@@ -116,7 +116,10 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Reached only from a lazy worker: left out, the dev server finds them on first use, re-optimizes and reloads the page.
-    include: ['onnxruntime-web/wasm', '@diffusionstudio/piper-wasm/build/piper_phonemize.js'],
+    include: [
+      'onnxruntime-web/wasm',
+      '@diffusionstudio/piper-wasm/build/piper_phonemize.js',
+    ],
   },
   build: {
     chunkSizeWarningLimit: 1000, // in KB. 1000 - 1500 is good for most apps.

@@ -30,7 +30,7 @@ All components are imported from `@moondreamsdev/dreamer-ui/components`.
 - **Button**: Versatile button component with multiple variants, sizes, and states.
 - **Calendar**: Comprehensive calendar component supporting single date and range selection with multiple views.
 - **Date input**: never a raw `Input type='date'`; use `@/components/DateInput` (a form factory field is `createDateInputField`), which draws the format as a placeholder while empty since phones show an empty date box blank. `className` styles the input, `wrapperClassName` sizes the field (`w-44`, `flex-1`), `errorMessage` draws under it.
-- **Checkbox**: Customizable checkbox with different sizes and colors.
+- **Checkbox**: Not used: `@/components/AppCheckbox` replaces it (ESLint refuses the import), so every tick takes the app theme's shape and weight.
 - **Clickable**: Generic clickable wrapper component with hover and focus states.
 - **Form**: Flexible form component using factory pattern with built-in validation and state management.
 - **Input**: Flexible input component with validation states and different types.
@@ -88,4 +88,4 @@ Some components use factory patterns for type-safe creation:
 ## Utilities
 
 - **join**: Import from `@moondreamsdev/dreamer-ui/utils` - Utility function for conditionally joining class names.
-- **A row that overrides a `Button`'s horizontal padding writes `px-N!`.** The library's own `px-4` wins over a plain `px-1` without any warning, so a row drawn for a 4px inset sat 12px off its card's heading (design review, the pipeline dashboard).
+- **A row that overrides a `Button`'s horizontal padding writes `px-N!`.** `Button` doesn't merge classes, so the library's own `px-4` wins over a plain `px-1` or `px-3` without any warning (and of two gaps on one button the larger wins, so a variant sets only its own), so a row drawn for a 4px inset sat 12px off its card's heading (design review, the pipeline dashboard).

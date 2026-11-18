@@ -1,4 +1,5 @@
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   Ban,
@@ -638,9 +639,9 @@ export function DecisionFields({
           return (
             <li key={text} className='space-y-2'>
               <div className='flex items-start gap-3'>
-                <Checkbox
+                <AppCheckbox
                   id={id}
-                  className={TICK_HIT_CLASS}
+                  className='mt-0.5'
                   checked={isTicked}
                   disabled={isSending || (isAtLimit && !isTicked)}
                   onCheckedChange={(next) => onChange(text, next ? '' : null)}
@@ -737,9 +738,6 @@ interface SettleProps {
   onSettle: (choice: SettleChoice) => void;
 }
 
-// A 20px box gets a 40px hit area from a pseudo-element.
-const TICK_HIT_CLASS =
-  "relative mt-0.5 before:absolute before:-inset-[10px] before:content-['']";
 
 function SettledLine({
   words,
@@ -850,8 +848,8 @@ export function TaskRow({
   return (
     <div className='space-y-1'>
       <div className='flex items-start gap-3'>
-        <Checkbox
-          className={TICK_HIT_CLASS}
+        <AppCheckbox
+          className='mt-0.5'
           checked={settled === 'done'}
           disabled={isBusy}
           onCheckedChange={(next) => onSettle(next ? 'done' : 'open')}

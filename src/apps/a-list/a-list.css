@@ -15,6 +15,14 @@ html.a-list-theme {
   --a-list-release: var(--color-amber-500);
 }
 
+/* A tick is round and a touch bolder, like the app's pills and posters. */
+html.a-list-theme {
+  --checkbox-radius: 9999px;
+  --checkbox-border-width: 2px;
+  --checkbox-mark-width: 3.25;
+  --checkbox-filled: 1;
+}
+
 /* A subview is a card with a thin gold hairline on a deep red backdrop. */
 html.a-list-theme {
   --subview-backdrop: color-mix(in oklab, var(--color-primary) 18%, var(--color-background));

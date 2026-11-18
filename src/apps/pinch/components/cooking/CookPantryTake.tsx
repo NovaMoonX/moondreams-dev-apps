@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 import TickMark from '@/components/TickMark';
@@ -90,7 +91,7 @@ function CookPantryTake({ take }: CookPantryTakeProps) {
               {taken === null ? (
                 <label className='flex min-h-12 w-full cursor-pointer items-start gap-3 px-4 py-2.5 select-none'>
                   <span className='mt-0.5 inline-flex shrink-0'>
-                    <Checkbox
+                    <AppCheckbox
                       aria-label={`Take ${group.name} out`}
                       checked={!take.left.has(group.ingredientId)}
                       onCheckedChange={() => take.toggle(group.ingredientId)}

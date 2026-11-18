@@ -1,6 +1,7 @@
 import { memo } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
@@ -92,7 +93,7 @@ function PackageRow({
         )}
       >
         <span className='mt-0.5 inline-flex shrink-0'>
-          <Checkbox
+          <AppCheckbox
             aria-label={`${title ?? amountText}, ${placeText}${label === null ? '' : `, ${label}`}`}
             checked={isSelected}
             onCheckedChange={() => onToggle?.(pkg)}

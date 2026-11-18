@@ -1,8 +1,11 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import {
+  MAX_GUIDED_ITEMS,
+  MAX_GUIDED_LENGTH,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
+  PHOTO_QUERY_MAX_WORDS_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
@@ -20,6 +23,10 @@ import {
 import { splitAsides, splitPrep } from '@apps/pinch/utils/ingredientNames';
 import { toBase } from '@apps/pinch/utils/quantity';
 import { toCare } from '@apps/pinch/utils/recipeCare';
+import {
+  cleanStepSection,
+  toStoredStepSections,
+} from '@apps/pinch/utils/stepSections';
 
 export interface ExtractedIngredient {
   name: string;
@@ -39,16 +46,45 @@ export interface ExtractedRecipe {
   prepMinutes: number | null;
   cookMinutes: number | null;
   description: string | null;
+  /** Words to search the web for a photo of the finished dish; null when the source names none. */
+  photoSearch: string | null;
   ingredients: ExtractedIngredient[];
   steps: string[];
+  /** The section each step sits under, index for index with `steps`; the reader groups the steps into sections when the source doesn't. */
+  stepSections: (string | null)[];
   /** Only what the source says, never a guess. */
   care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
+  /** Changes the person's guidance made to the reading, in a few words each; empty without guidance. */
+  guided: string[];
 }
 
 const asString = (value: unknown) =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+/** A step the reader returns is a `{ text, section }` object, or a plain string from an older shape; a blank one is dropped with its section. */
+export const readSteps = (entries: unknown[]) => {
+  const steps = entries
+    .flatMap((entry) => {
+      const item =
+        typeof entry === 'object' && entry !== null
+          ? (entry as Record<string, unknown>)
+          : { text: entry, section: null };
+      const text = asString(item.text);
+      return text
+        ? [{ text: text.slice(0, MAX_STEP_LENGTH), section: cleanStepSection(asString(item.section)) }]
+        : [];
+    })
+    .slice(0, MAX_RECIPE_STEPS);
+  return {
+    steps: steps.map((step) => step.text),
+    stepSections: toStoredStepSections(
+      steps.map((step) => step.text),
+      steps.map((step) => step.section),
+    ),
+  };
+};
+
 const asNumber = (value: unknown) =>
   typeof value === 'number' &&
   Number.isFinite(value) &&
@@ -246,6 +282,11 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
     description:
       asString(parsed.description)?.slice(0, MAX_RECIPE_DESCRIPTION_LENGTH) ??
       null,
+    photoSearch:
+      asString(parsed.photoSearch)
+        ?.replace(/\s+/g, ' ')
+        .slice(0, PHOTO_QUERY_MAX_WORDS_LENGTH)
+        .trim() || null,
     ingredients: list(parsed.ingredients)
       .flatMap((entry) => {
         const item = (
@@ -267,11 +308,7 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       })
       .reduce<ExtractedIngredient[]>(mergeOtherMeasures, [])
       .slice(0, MAX_RECIPE_INGREDIENTS),
-    steps: list(parsed.steps)
-      .flatMap((step) =>
-        asString(step) ? [asString(step)!.slice(0, MAX_STEP_LENGTH)] : [],
-      )
-      .slice(0, MAX_RECIPE_STEPS),
+    ...readSteps(list(parsed.steps)),
     care: toCare({
       fridgeDays: asWholeDays(parsed.fridgeDays),
       freezerDays: asWholeDays(parsed.freezerDays),
@@ -283,5 +320,10 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],
       )
       .slice(0, 10),
+    guided: list(parsed.guided)
+      .map(asString)
+      .filter((entry): entry is string => entry !== null)
+      .map((entry) => entry.slice(0, MAX_GUIDED_LENGTH))
+      .slice(0, MAX_GUIDED_ITEMS),
   };
 }

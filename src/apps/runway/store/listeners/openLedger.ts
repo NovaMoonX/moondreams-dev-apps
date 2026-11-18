@@ -1,9 +1,6 @@
 import type { ClosingEntries } from '@apps/runway/engine/closings';
-import {
-  createSealedReader,
-  openJson,
-  type SealedReader,
-} from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import type {
   BillPaidSealed,
   CardPaymentSealed,
@@ -186,7 +183,7 @@ export async function openMonthEntries(
   startDate: DateOnly,
   billIds: ReadonlySet<string>,
 ): Promise<ClosingEntries> {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const days = docs.days.map((entry) => ({
     ...(entry.data() as IncomeDayDoc),
     id: entry.id,

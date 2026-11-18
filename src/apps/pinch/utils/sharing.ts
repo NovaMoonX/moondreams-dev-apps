@@ -1,3 +1,7 @@
+import {
+  getStepSections,
+  toStoredStepSections,
+} from '@apps/pinch/utils/stepSections';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import {
   MAX_SHARED_MEAL_LINES,
@@ -76,16 +80,19 @@ const toSharedLine = (
   line: RecipeIngredient,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): SharedIngredient[] => {
-  const ingredient = ingredientsById.get(line.ingredientId);
-  if (!ingredient) return [];
+  const ingredient =
+    line.ingredientId === null ? null : ingredientsById.get(line.ingredientId);
+  const name = line.ingredientId === null ? line.freeText : ingredient?.name;
+  if (!name) return [];
 
   return [
     {
-      name: ingredient.name,
-      catalogId: ingredient.isCustom ? null : ingredient.id,
+      name,
+      catalogId: ingredient && !ingredient.isCustom ? ingredient.id : null,
       amount: line.amount ?? null,
       unit: line.unit,
       note: line.note ?? null,
+      isFree: line.ingredientId === null,
       group: line.group ?? null,
     },
   ];
@@ -117,8 +124,7 @@ const pickSharedEntries = (
     .map((note) => ({ note, step: resolveNoteStep(note, recipe.steps) }))
     .sort(
       (a, b) =>
-        (a.step ?? -1) - (b.step ?? -1) ||
-        a.note.createdAt - b.note.createdAt,
+        (a.step ?? -1) - (b.step ?? -1) || a.note.createdAt - b.note.createdAt,
     )
     .slice(0, maxCount);
 
@@ -166,13 +172,26 @@ export function buildSharedRecipe(
       toSharedLine(line, ingredientsById),
     ),
     steps: [...recipe.steps],
+    stepSections: toStoredStepSections(recipe.steps, getStepSections(recipe)),
     care: getRecipeCare(recipe),
     links: toSharedLinks(recipe.links),
     tips: includes.tips
-      ? toSharedEntries(recipe, notes, 'TIP', MAX_SHARED_TIPS, MAX_SHARED_TIP_LENGTH)
+      ? toSharedEntries(
+          recipe,
+          notes,
+          'TIP',
+          MAX_SHARED_TIPS,
+          MAX_SHARED_TIP_LENGTH,
+        )
       : [],
     notes: includes.notes
-      ? toSharedEntries(recipe, notes, 'NOTE', MAX_SHARED_NOTES, MAX_SHARED_NOTE_LENGTH)
+      ? toSharedEntries(
+          recipe,
+          notes,
+          'NOTE',
+          MAX_SHARED_NOTES,
+          MAX_SHARED_NOTE_LENGTH,
+        )
       : [],
     hasCover: recipe.coverPath != null,
   };
@@ -398,12 +417,7 @@ export function getShareStatus(
     isGone: false,
     isStale: isShareStale(
       share,
-      getShareSourceStamp(
-        source,
-        recipesById,
-        notesByRecipe,
-        includes,
-      ),
+      getShareSourceStamp(source, recipesById, notesByRecipe, includes),
     ),
   };
 

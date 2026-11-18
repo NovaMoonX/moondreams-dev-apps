@@ -1,6 +1,7 @@
 import { memo } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
@@ -28,7 +29,7 @@ function ShoppingRow({
     <li className='flex items-start gap-1'>
       <label className='flex min-h-12 min-w-0 flex-1 cursor-pointer items-start gap-3 py-2 select-none'>
         <span className='mt-0.5 inline-flex shrink-0'>
-          <Checkbox
+          <AppCheckbox
             aria-label={`Got ${name}`}
             checked={isChecked}
             onCheckedChange={(checked) => onToggle(id, checked === true)}

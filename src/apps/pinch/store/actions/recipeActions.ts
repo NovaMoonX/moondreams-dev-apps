@@ -5,7 +5,6 @@ import {
   arrayUnion,
   deleteDoc,
   doc,
-  runTransaction,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
@@ -15,6 +14,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
@@ -40,6 +40,7 @@ import {
   isCoverUrl,
 } from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
+import { toStoredStepSections } from '@apps/pinch/utils/stepSections';
 import { compressImageForUse } from '@/utils/imageCompression';
 import type {
   Collection,
@@ -120,6 +121,8 @@ export interface RecipeDraft {
   cookMinutes: number | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** Index for index with `steps`; written on every save (`[]` when no step has a section), so older recipes gain the key. */
+  stepSections: (string | null)[];
   /** How to keep the leftovers, or null; written on every save, so older recipes gain the key. */
   care: RecipeCare | null;
   /** The how-to video and other links; written on every save, so older recipes gain the key. */
@@ -132,6 +135,8 @@ export interface RecipeDraft {
   sourceId: string | null;
   /** What the form added to and took out of the collections it opened with; null when it couldn't offer them (they hadn't loaded), which leaves the stored list as it is. */
   collectionChange: CollectionChange | null;
+  /** What the reader's split gave, when the person used one in this edit. */
+  splitSteps: Pick<Recipe, 'steps' | 'stepSections'> | null;
   /** Collections typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
   newCollections: { id: string; label: string }[];
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
@@ -284,6 +289,7 @@ export const saveRecipe = createAsyncThunk<
         ...cover,
         ingredients: draft.ingredients,
         steps: draft.steps,
+        stepSections: toStoredStepSections(draft.steps, draft.stepSections),
         care: draft.care,
         links: draft.links,
         nutritionOverride: draft.nutritionOverride,
@@ -427,7 +433,7 @@ export const undoRecipeChange = createAsyncThunk<
     );
     try {
       await freezeBeforeEdit(uid, getState());
-      const refusal = await runTransaction(db, async (transaction) => {
+      const refusal = await runHeldTransaction(uid, async (transaction) => {
         const recipeSnapshot = await transaction.get(recipeDoc(uid, recipeId));
         const noteSnapshots = await Promise.all(
           noteDocs.map((ref) => transaction.get(ref)),

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { RotateCcw } from 'lucide-react';
 
@@ -8,7 +8,12 @@ import ActionChips from '@/components/ActionChips';
 import SectionDivider from '@/components/SectionDivider';
 import Stepper from '@/components/Stepper';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
+import {
+  CookAmountButton,
+  CookConversionLine,
+} from '@apps/pinch/components/cooking/CookAmount';
 import type { Recipe } from '@apps/pinch/types';
+import type { CookMeasure } from '@apps/pinch/utils/cookConversions';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -22,11 +27,18 @@ export interface CookRow {
   isMeasured: boolean;
   /** The heading it sits under in the list, or null. */
   group: string | null;
+  /** The amount as shown, for a spoken conversion; null for a line with no amount. */
+  measure: CookMeasure | null;
+  /** The other units of the amount shown and the key that says which row is open, or null for a line with nothing to convert. */
+  conversion: { key: string; text: string } | null;
   /** Its group again where it is shown away from its heading (a step), set only when its ingredient is in more than one group. */
   groupLabel: string | null;
 }
 
-interface CookIngredientRowProps extends Omit<CookRow, 'group' | 'groupLabel'> {
+interface CookIngredientRowProps extends Omit<
+  CookRow,
+  'group' | 'groupLabel' | 'measure'
+> {
   isInStep: boolean;
   isOut: boolean;
   onToggle: (id: string, isOut: boolean) => void;
@@ -39,46 +51,48 @@ const CookIngredientRow = memo(function CookIngredientRow({
   note,
   amountText,
   isMeasured,
+  conversion,
   isInStep,
   isOut,
   onToggle,
 }: CookIngredientRowProps) {
   return (
     <li>
-      <label
+      <div
         className={join(
-          'flex cursor-pointer items-start gap-3 py-2.5',
+          'flex items-start gap-3 py-2.5',
           isInStep && 'bg-accent/60 -mx-2 rounded-lg px-2',
         )}
       >
-        <span className='mt-0.5 inline-flex shrink-0'>
-          <Checkbox
-            aria-label={`Got out ${name}`}
-            data-tick='mark'
-            checked={isOut}
-            onCheckedChange={(checked) => onToggle(id, checked === true)}
-            className="relative after:absolute after:-inset-2.5 after:content-['']"
-          />
-        </span>
-        <span className='min-w-0 flex-1'>
-          <span className='block text-base wrap-break-word'>{name}</span>
-          {note && (
-            <span className='text-muted-foreground block text-xs wrap-break-word'>
-              {note}
-            </span>
-          )}
-        </span>
-        <span
+        <label className='flex min-w-0 flex-1 cursor-pointer items-start gap-3'>
+          <span className='mt-0.5 inline-flex shrink-0'>
+            <AppCheckbox
+              aria-label={`Got out ${name}`}
+              isMark
+              checked={isOut}
+              onCheckedChange={(checked) => onToggle(id, checked === true)}
+            />
+          </span>
+          <span className='min-w-0 flex-1'>
+            <span className='block text-base wrap-break-word'>{name}</span>
+            {note && (
+              <span className='text-muted-foreground block text-xs wrap-break-word'>
+                {note}
+              </span>
+            )}
+          </span>
+        </label>
+        <CookAmountButton
+          row={{ amountText, conversion }}
           className={join(
             'text-base',
             isMeasured
               ? 'shrink-0 font-medium whitespace-nowrap'
               : 'text-muted-foreground max-w-[50%] text-right wrap-break-word',
           )}
-        >
-          {amountText}
-        </span>
-      </label>
+        />
+      </div>
+      <CookConversionLine row={{ conversion }} className='mb-2.5 ml-8' />
     </li>
   );
 });
@@ -157,6 +171,8 @@ function CookIngredientsView({
               {outCount === 0
                 ? "Tick what you've got out"
                 : `${outCount} of ${rows.length} got out`}
+              {rows.some((row) => row.conversion !== null) &&
+                ' · tap an amount for other units'}
             </p>
             {outCount > 0 && (
               <ActionChips
@@ -185,6 +201,7 @@ function CookIngredientsView({
                     note={row.note}
                     amountText={row.amountText}
                     isMeasured={row.isMeasured}
+                    conversion={row.conversion}
                     isInStep={stepLineIds?.includes(row.id) ?? false}
                     isOut={gotOut[row.id] === true}
                     onToggle={onToggle}

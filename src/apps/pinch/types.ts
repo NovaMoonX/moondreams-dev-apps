@@ -1,26 +1,11 @@
+import type { MeasureUnit } from '@/utils/measureUtils';
 export type PinchTab =
-  | 'calendar'
-  | 'recipes'
-  | 'kitchen'
-  | 'shopping'
-  | 'settings';
+  'calendar' | 'recipes' | 'kitchen' | 'shopping' | 'settings';
 
 /** The tabs a person can open Pinch on; Settings is the place that chooses, so it is never one. */
 export type PinchStartTab = Exclude<PinchTab, 'settings'>;
 
-export type Unit =
-  | 'G'
-  | 'KG'
-  | 'OZ'
-  | 'LB'
-  | 'ML'
-  | 'L'
-  | 'TSP'
-  | 'TBSP'
-  | 'CUP'
-  | 'FL_OZ'
-  | 'PINCH'
-  | 'EACH';
+export type Unit = MeasureUnit | 'PINCH' | 'EACH';
 
 export type Dimension = 'MASS' | 'VOLUME' | 'COUNT';
 
@@ -156,6 +141,19 @@ export interface PinchVoiceSettings {
   isWaiting: boolean | null;
 }
 
+/** How weights are written in the person's recipes: as each recipe wrote them, grams and kilograms, or ounces and pounds. */
+export type WeightUnits = 'AS_WRITTEN' | 'METRIC' | 'US';
+/** How volumes are written: as written, millilitres and litres, cups (with spoons for small amounts), or fluid ounces. */
+export type VolumeUnits = 'AS_WRITTEN' | 'METRIC' | 'CUPS' | 'FL_OZ';
+
+/** The units a person cooks in. New readings arrive in them and cooking mode shows amounts in them; a saved recipe changes only when the person adapts it. */
+export interface PinchUnitSettings {
+  weight: WeightUnits;
+  volume: VolumeUnits;
+  /** Leave teaspoons and tablespoons as they are when volumes are metric. */
+  keepSpoons: boolean;
+}
+
 /** The person's own choices, at `apps/pinch/settings/{uid}`: reminders, how long a new box keeps and whether the Calendar draws its stat tiles. Created the first time Pinch opens with the defaults, or by their first change. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
 export interface PinchSettings {
   /** Days a box starts with in the fridge; null is the built-in number. */
@@ -170,6 +168,8 @@ export interface PinchSettings {
   defaultTab: PinchStartTab;
   /** Hands-free cooking choices. A document written before this key lacks it, which reads as every choice not made yet. */
   voice: PinchVoiceSettings;
+  /** The units recipes are adapted to. A document written before this key lacks it, which reads as everything as written. */
+  units: PinchUnitSettings;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
@@ -510,7 +510,7 @@ export interface Package {
   updatedAt: number;
 }
 
-/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. */
+/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. A snapshot from before step sections lacks `stepSections`, and undoing it leaves no step in a section, which is the recipe as it was. */
 export type RecipeSnapshot = Pick<
   Recipe,
   | 'title'
@@ -523,7 +523,7 @@ export type RecipeSnapshot = Pick<
   | 'nutritionOverride'
   | 'sourceId'
 > &
-  Partial<Pick<Recipe, 'categories' | 'care' | 'links'>>;
+  Partial<Pick<Recipe, 'categories' | 'care' | 'links' | 'stepSections'>>;
 
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
@@ -564,13 +564,18 @@ export type ShoppingRequest =
 export interface RecipeIngredient {
   /** A row id, so edits and reordering keep stable keys. */
   id: string;
-  ingredientId: string;
+  /** Null for a line that isn't a kitchen ingredient ("reserved pasta water"): it keeps its words in `freeText` and is left out of cost, nutrition, shopping, stock and "Used in". */
+  ingredientId: string | null;
+  /** The words of a line that isn't a kitchen ingredient, shown as its name; null for every ingredient line. Lines written before it lack the key, which reads as null. */
+  freeText: string | null;
   /** Null for a line with no amount ("salt to taste"), whose note says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
   amount: number | null;
   unit: Unit;
   note: string | null;
   /** The heading the line sits under ("For the sauce"), or null for none; one ingredient may have a line in several groups. Lines written before groups lack the key, which reads as null. */
   group: string | null;
+  /** The amount and unit the line had before it was adapted to the person's units, or null when it is as written. Lines written before adapting lack the key, which reads as null. */
+  adaptedFrom: { amount: number; unit: Unit } | null;
 }
 
 export interface RecipeCare {
@@ -615,6 +620,8 @@ export interface Recipe {
   coverUrl: string | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** The section each step sits in ("Cook the chicken"), index for index with `steps`; consecutive steps with one name are one section. A recipe written before sections lacks the key, and a missing or short entry reads as null; read through `getStepSections`. */
+  stepSections: (string | null)[];
   /** Per serving; a null metric falls back to the value added up from the ingredients. */
   nutritionOverride: NutritionValues | null;
   source: RecipeSource;
@@ -694,6 +701,8 @@ export interface CookingResume {
   timers: ResumeTimer[];
   /** The journal entries written on this screen, for the review at the end. A session saved before them lacks the key, which reads as none. */
   captured?: string[];
+  /** When this cook began, for the stopwatch. A session saved before it lacks the key and counts from when it was picked up. */
+  startedAt?: number;
 }
 
 export type ShareKind = 'RECIPE' | 'MEAL';
@@ -707,6 +716,8 @@ export interface SharedIngredient {
   unit: Unit;
   note: string | null;
   group: string | null;
+  /** A line the owner kept outside their kitchen: it arrives as plain words, never as an ingredient. */
+  isFree: boolean;
 }
 
 export interface SharedRecipeLink {
@@ -731,6 +742,8 @@ export interface SharedRecipe {
   cookMinutes: number | null;
   ingredients: SharedIngredient[];
   steps: string[];
+  /** Index for index with `steps`; a snapshot from before sections lacks the key, which reads as no sections. */
+  stepSections: (string | null)[];
   care: RecipeCare | null;
   links: SharedRecipeLink[];
   /** Empty unless the owner includes their tips. */
@@ -742,8 +755,17 @@ export interface SharedRecipe {
 }
 
 export type SharedMealItem =
-  | { kind: 'RECIPE'; servings: number; /** An index into `SharedMeal.recipes`. */ recipeIndex: number }
-  | { kind: 'INGREDIENT'; servings: number; name: string; catalogId: string | null };
+  | {
+      kind: 'RECIPE';
+      servings: number;
+      /** An index into `SharedMeal.recipes`. */ recipeIndex: number;
+    }
+  | {
+      kind: 'INGREDIENT';
+      servings: number;
+      name: string;
+      catalogId: string | null;
+    };
 
 /** A saved meal as a share carries it: its name and items, with each recipe inline once. */
 export interface SharedMeal {

@@ -1,3 +1,7 @@
+import {
+  cleanStepSection,
+  toStoredStepSections,
+} from '@apps/pinch/utils/stepSections';
 import { generateUuid } from '@/utils/idUtils';
 import { CATALOG_INGREDIENTS_BY_ID } from '@apps/pinch/catalog';
 import {
@@ -26,6 +30,7 @@ import type {
   RecipeIngredient,
   RecipeNote,
   ShareKind,
+  SharedIngredient,
   SharedRecipe,
   SharedMeal,
 } from '@apps/pinch/types';
@@ -242,10 +247,31 @@ export function mapIngredients(
   return { created, getId };
 }
 
+const isFreeLine = (line: SharedIngredient) => line.isFree === true;
+
 const getUsableLines = (recipe: SharedRecipe) =>
   recipe.ingredients
     .filter((line) => typeof line.name === 'string')
     .slice(0, MAX_RECIPE_INGREDIENTS);
+
+/** The shared steps with their sections, a blank step dropped along with its section so the two stay index for index. */
+const toImportedSteps = (shared: SharedRecipe) => {
+  const kept = shared.steps
+    .map((step, index) => ({
+      text: asText(step, MAX_STEP_LENGTH),
+      section: cleanStepSection(shared.stepSections?.[index] ?? null),
+    }))
+    .filter((step): step is { text: string; section: string | null } => step.text !== null)
+    .slice(0, MAX_RECIPE_STEPS);
+  const steps = kept.map((step) => step.text);
+  return {
+    steps,
+    stepSections: toStoredStepSections(
+      steps,
+      kept.map((step) => step.section),
+    ),
+  };
+};
 
 const toRecipe = (
   shared: SharedRecipe,
@@ -266,17 +292,16 @@ const toRecipe = (
     const amount = asPositiveNumber(line.amount);
     return {
       id: makeId(),
-      ingredientId: getId(line),
+      ingredientId: isFreeLine(line) ? null : getId(line),
+      freeText: isFreeLine(line) ? asName(line.name) : null,
       amount,
       unit: amount === null || !UNITS.includes(line.unit) ? 'EACH' : line.unit,
       note: asText(line.note, MAX_NOTE_LENGTH),
       group: cleanGroupName(line.group),
+      adaptedFrom: null,
     };
   }),
-  steps: shared.steps
-    .map((step) => asText(step, MAX_STEP_LENGTH))
-    .filter((step) => step !== null)
-    .slice(0, MAX_RECIPE_STEPS),
+  ...toImportedSteps(shared),
   nutritionOverride: null,
   source: 'MANUAL',
   sourceId: null,
@@ -368,7 +393,12 @@ export function planRecipeImport(
   const lines = getUsableLines(shared);
   if (lines.length === 0) return withProblem(NO_INGREDIENTS_PROBLEM);
 
-  const { created, getId } = mapIngredients(lines, records, now, makeId);
+  const { created, getId } = mapIngredients(
+    lines.filter((line) => !isFreeLine(line)),
+    records,
+    now,
+    makeId,
+  );
   const plan: ShareImportPlan = {
     recipes: limitTips([
       withTips(
@@ -426,7 +456,9 @@ export function planMealImport(
   const { created, getId } = mapIngredients(
     [
       ...recipeIndexes.flatMap((index) =>
-        getUsableLines(shared.recipes[index]),
+        getUsableLines(shared.recipes[index]).filter(
+          (line) => !isFreeLine(line),
+        ),
       ),
       ...items.flatMap((item) => (item.kind === 'INGREDIENT' ? [item] : [])),
     ],
@@ -605,10 +637,7 @@ export function planUndo(
         : null,
     ingredientIds,
     tipIds: written.tips
-      .filter(
-        (tip) =>
-          survey.recipes.has(tip.recipeId),
-      )
+      .filter((tip) => survey.recipes.has(tip.recipeId))
       .map((tip) => tip.id),
     keptIngredients: written.ingredients.filter(
       (entry) =>

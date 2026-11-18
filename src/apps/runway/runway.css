@@ -30,6 +30,14 @@ html.runway-theme {
   --subview-backdrop: color-mix(in oklab, var(--color-primary) 14%, var(--color-background));
 }
 
+/* A tick is a near-square box with a fine border, matter-of-fact like the rest of the app. */
+html.runway-theme {
+  --checkbox-radius: 0.25rem;
+  --checkbox-border-width: 1.5px;
+  --checkbox-mark-width: 2.75;
+  --checkbox-filled: 1;
+}
+
 html.runway-theme.dark {
   --color-background: oklch(0.17 0.012 255);
   --color-primary: oklch(0.82 0.08 250);

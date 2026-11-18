@@ -3,7 +3,6 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  runTransaction,
   setDoc,
   updateDoc,
   type DocumentReference,
@@ -13,6 +12,7 @@ import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import { generateUuid } from '@/utils';
 import { getStorageErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/going-once/store/actions/heldTransaction';
 import { MAX_ITEM_PHOTOS } from '@apps/going-once/constants';
 import { photoUploadEnded, photoUploadStarted } from '@apps/going-once/store';
 import type { Item, ItemPhoto } from '@apps/going-once/types';
@@ -191,7 +191,7 @@ export const addItemPhoto = createAsyncThunk<
 
     const ref = getItemRef(saleId, itemId);
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(saleId, async (transaction) => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) throw new Error('missing');
         const photos = (snapshot.data().photos ?? []) as ItemPhoto[];
@@ -226,7 +226,7 @@ export async function reorderItemPhotos(
   orderedIds: string[],
 ): Promise<void> {
   const ref = getItemRef(saleId, itemId);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(saleId, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const photos = (snapshot.data()?.photos ?? []) as ItemPhoto[];
     const ordered = orderedIds.flatMap((id) =>
@@ -249,7 +249,7 @@ export async function removeItemPhoto(
   photoId: string,
 ): Promise<void> {
   const ref = getItemRef(saleId, itemId);
-  const removed = await runTransaction(db, async (transaction) => {
+  const removed = await runHeldTransaction(saleId, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const photos = (snapshot.data()?.photos ?? []) as ItemPhoto[];
     const found = photos.find((photo) => photo.id === photoId) ?? null;

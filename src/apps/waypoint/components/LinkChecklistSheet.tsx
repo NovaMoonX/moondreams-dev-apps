@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -164,7 +165,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
                 <li key={item.id} className='flex min-h-12 items-start gap-3 py-3'>
                   <label className='flex min-w-0 flex-1 cursor-pointer items-start gap-3'>
                     <span className='inline-flex h-5 w-5 shrink-0 items-center justify-center'>
-                      <Checkbox
+                      <AppCheckbox
                         checked={item.isCompleted}
                         disabled={isBusy || !(canEditExistingItem(trip, currentUserId) || item.assignedToUids.includes(currentUserId))}
                         aria-label={`Mark ${item.title} done`}
@@ -201,7 +202,7 @@ function LinkChecklistSheet({ trip, subject, currentUserId, onAddNew, onClose }:
                   <li key={item.id}>
                     <label className='flex min-h-12 cursor-pointer items-center gap-3 py-2'>
                       <span className='inline-flex w-5 shrink-0 justify-center'>
-                        <Checkbox
+                        <AppCheckbox
                           checked={picked.includes(item.id)}
                           onCheckedChange={(checked) =>
                             setPicked((current) =>

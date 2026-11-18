@@ -1203,9 +1203,6 @@ export const START_HOLDINGS = [
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
-/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
-export const TICK_HIT_CLASS =
-  "relative before:absolute before:-inset-[11px] before:content-['']";
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
@@ -2229,12 +2226,14 @@ export const SPEND_WORDS = {
   refundOf: 'Refund of',
   noOriginal: 'Not tied to a purchase',
   pickOriginal: 'Which purchase is it for?',
-  returnsTo: 'Returns to',
+  returnsTo: 'Goes to',
+  refundGoesTo: (where: string, purchase: string) =>
+    `${where} · refund of ${purchase}`,
   freeToSpend: 'Free to Spend',
   add: 'Add',
   needsAmount: 'Enter the amount.',
   needsEnvelope: 'Pick the envelope.',
-  needsReturnTo: 'Pick where it goes back to.',
+  needsReturnTo: 'Pick where the refund goes.',
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
   needsTwo: 'Pick at least two envelopes.',
@@ -3216,7 +3215,7 @@ export const FORM_FLOW_WORDS = {
   purchaseAmountTitle: 'How much was it?',
   refundAmountTitle: 'How much came back?',
   purchaseForTitle: 'What was it for?',
-  refundForTitle: 'Where does it go back?',
+  refundForTitle: 'Where should the refund go?',
   dayTitle: 'Which day?',
   more: 'More',
   moreTitle: 'Which envelope?',
@@ -3664,7 +3663,12 @@ export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
 
 /** What Spend's Kind filter narrows to, as the URL keeps it; none shows every purchase and refund that counts. */
-export const SPEND_KINDS = ['purchases', 'moneyIn', 'notCounted'] as const;
+export const SPEND_KINDS = [
+  'purchases',
+  'moneyIn',
+  'refunds',
+  'notCounted',
+] as const;
 
 export const SPEND_FILTER_WORDS = {
   label: 'Filter purchases',
@@ -3672,6 +3676,7 @@ export const SPEND_FILTER_WORDS = {
   kinds: {
     purchases: 'Purchases',
     moneyIn: 'Money in',
+    refunds: 'Refunds',
     notCounted: 'Not counted',
   },
   paidWith: 'Card or account',
@@ -3683,6 +3688,8 @@ export const SPEND_FILTER_WORDS = {
   notCountedHelp: 'Left out of spending, or from before you linked.',
   moneyInHelp:
     'Deposits and refunds. Moves between your own accounts are left out.',
+  refundsHelp: 'Money a store or a card gave back.',
+  cameBack: 'Came back',
   inFree: 'In Free to Spend',
   toPay: 'Your pay',
   cameIn: 'Came in',
@@ -4836,10 +4843,15 @@ export const CARD_WORDS = {
   minimumNone: 'Nothing to pay on this statement',
   minimumNotShared: (bank: string) =>
     `${bank} doesn\u2019t share this card\u2019s minimum`,
+  minimumNotSharedLink: (bank: string) =>
+    `${bank} doesn\u2019t share this card\u2019s minimum, so Runway can\u2019t warn you before it\u2019s due`,
+  minimumAskShort: 'Minimum not shared',
   offerBadge: 'New',
   offerTitle: 'See your minimum payment',
   offerBody: (bank: string) =>
     `${bank} shares it once you agree. Not every card has one.`,
+  offerBodyLink: (bank: string) =>
+    `Runway warns you before a due date only when a minimum is unpaid, so it needs ${bank} to share it. Not every card has one.`,
   offerCovers: (names: string) => `Covers ${names} too`,
   offerSeparate: (bank: string) =>
     `This card is on its own ${bank} sign-in, so it asks separately`,
@@ -4968,6 +4980,37 @@ export const RELEASED_WORDS = {
   manySub: 'They no longer count. History says where each one was.',
 };
 
+/** Words for a card payment the person started at their bank, at Link. */
+export const STARTED_PAYMENT_WORDS = {
+  action: 'I started a payment',
+  amount: (name: string) => `Sent to ${name}`,
+  day: 'Started',
+  statementQuick: (amount: string) => `Statement balance ${amount}`,
+  balanceQuick: (amount: string) => `Balance now ${amount}`,
+  note: (bank: string) => `Runway waits for ${bank} to show it.`,
+  save: 'Save the payment',
+  needsAmount: 'Enter how much you sent.',
+  needsDay: 'Pick today or a day in the last 2 weeks.',
+  savedToast: (amount: string, name: string) =>
+    `${amount} on its way to ${name}`,
+  savedDetail: (bank: string) => `It comes off once ${bank} shows it.`,
+  failed: 'The payment was not saved',
+  undone: 'Payment removed',
+  undoFailed: 'The payment was not removed',
+  onItsWay: (amount: string) => `${amount}\u00a0on its way`,
+  rowTitle: (amount: string) => `${amount}\u00a0on its way`,
+  rowStarted: (day: string) => `Started ${day}`,
+  rowLeft: (day: string) => `Started ${day} · left your account`,
+  rowLate: (day: string, until: string) =>
+    `Started ${day} · not showing yet, Runway waits until ${until}`,
+  removeTitle: 'Remove this payment?',
+  removeText: (amount: string, bank: string) =>
+    `If you didn\u2019t send the ${amount} after all, remove it. Once ${bank} shows a payment, the card follows the bank anyway.`,
+  removeConfirm: 'Remove it',
+  removed: 'Payment removed',
+  removeFailed: 'The payment was not removed',
+} as const;
+
 /** Words for a card's annual fee and the bill and group Runway keeps in step with it. */
 export const CARD_FEE_WORDS = {
   groupName: 'Card annual fees',
@@ -5037,6 +5080,7 @@ export const NEEDS_HOME_WORDS = {
   fromBank: 'from your bank',
   untitled: 'Purchase',
   moneyIn: 'Money in',
+  refundLabel: 'Refund',
   moneyInHelp:
     'Deposits that may be a pay or a move between your accounts. Runway links one to your pay when it is clearly that day’s. Any other money in is already in Free to Spend, under Spend’s Money in.',
   maybeTwice: 'Might be in twice',
@@ -5098,6 +5142,15 @@ export const NEEDS_HOME_WORDS = {
   cardPaymentKind: 'Card payment',
   refundRow: 'This is a refund',
   refundRowSub: 'It goes back where the purchase came from',
+  refundOfRow: (name: string, day: string) => `Refund of ${name}, ${day}`,
+  refundOfRowSub: (where: string) => `Goes to ${where}`,
+  refundOtherRow: 'A refund of something else',
+  refundOtherRowSub: 'Pick the purchase, or where it goes',
+  refundAlreadyIn: 'A refund, already counted in Free to Spend.',
+  putBackRow: 'Put it back in an envelope',
+  putBackRowSub: 'Only if it came out of one',
+  notRefundRow: 'It wasn’t a refund',
+  notRefundRowSub: 'A payment from an account Runway doesn’t see',
   unseenRow: 'A payment from an account Runway doesn’t see',
   unseenRowSub: 'It will not count as income',
   select: 'Select',

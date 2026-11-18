@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 
 import BackLink from '@/components/BackLink';
@@ -13,17 +14,30 @@ import {
   MAX_INQUIRY_MESSAGE_LENGTH,
   MAX_INQUIRY_NAME_LENGTH,
 } from '@apps/going-once/constants';
+import PickupDaysQuestion from '@apps/going-once/components/public/PickupDaysQuestion';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
-import { sendInterest } from '@apps/going-once/queries/salePageQueries';
+import {
+  salePageQueryKeys,
+  sendInterest,
+} from '@apps/going-once/queries/salePageQueries';
 import type { InterestResult, PublicThing } from '@apps/going-once/types';
 import { formatPhone, readContact } from '@apps/going-once/utils/contact';
 import { toPrefilledMessage } from '@apps/going-once/utils/inquiries';
 import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
+import {
+  isDaysAnswered,
+  type DaysAnswer,
+} from '@apps/going-once/utils/pickupDays';
 
 interface InterestViewProps {
   thing: PublicThing;
   linkId: string;
   paymentMethods: string[];
+  /** The sale's pickup days that haven't passed; the buyer must answer when there are any. */
+  openDays: number[];
+  /** What the buyer said about days earlier in this visit. */
+  daysAnswer: DaysAnswer;
+  onDaysAnswered: (answer: DaysAnswer) => void;
   footerNode: HTMLElement | null;
   onBack: () => void;
   onDone: () => void;
@@ -57,6 +71,9 @@ function InterestView({
   thing,
   linkId,
   paymentMethods,
+  openDays,
+  daysAnswer,
+  onDaysAnswered,
   footerNode,
   onBack,
   onDone,
@@ -67,13 +84,21 @@ function InterestView({
   const [message, setMessage] = useState(
     toPrefilledMessage(thing.title, thing.status === 'PENDING'),
   );
+  const [pickedDays, setDays] = useState<DaysAnswer>(daysAnswer);
+  const days = {
+    ...pickedDays,
+    days: pickedDays.days.filter((day) => openDays.includes(day)),
+  };
+  const queryClient = useQueryClient();
   const [website, setWebsite] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);
   const { isWorking, run } = useSingleFlight();
   const read = readContact(contact);
   const [touched, setTouched] = useState({ name: false, contact: false });
-  const isReady = name.trim() !== '' && read !== null;
+  const isAsked = openDays.length > 0;
+  const hasDays = !isAsked || isDaysAnswered(days);
+  const isReady = name.trim() !== '' && read !== null && hasDays;
   const nameNote = touched.name && name.trim() === '' ? NAME_NOTE : null;
   const contactNote = getContactNote(touched.contact, contact, read);
   const touch = (field: 'name' | 'contact') => () =>
@@ -89,9 +114,14 @@ function InterestView({
           name: name.trim(),
           contact: contact.trim(),
           message: message.trim(),
+          pickupDays: isAsked ? days.days : [],
+          needsAnotherDay: isAsked && days.needsAnotherDay,
+          anotherDayNote:
+            isAsked && days.needsAnotherDay ? days.note.trim() : '',
           website,
         });
         if (result.status === 'sent') {
+          if (isAsked) onDaysAnswered(days);
           setSent({
             contact:
               read?.kind === 'phone'
@@ -102,13 +132,24 @@ function InterestView({
         }
         if (result.status === 'not_available' || result.status === 'not_found')
           onRefused(result.status);
+        if (result.status === 'invalid' && result.field === 'days')
+          void queryClient.invalidateQueries({
+            queryKey: [...salePageQueryKeys.all, linkId],
+          });
         setError(getRefusal(result));
       } catch {
         setError(INTEREST_FAILURE);
       }
     });
 
-  const footerNote = sent === null ? error : null;
+  const getFooterNote = () => {
+    if (sent !== null) return null;
+    if (error !== null) return error;
+    if (!hasDays && name.trim() !== '' && read !== null)
+      return 'Pick the days that work for you to send it.';
+    return null;
+  };
+  const footerNote = getFooterNote();
   const footer =
     footerNode === null
       ? null
@@ -116,11 +157,19 @@ function InterestView({
           <div className='space-y-2'>
             {sent === null && paymentMethods.length > 0 && (
               <p className='text-muted-foreground text-center text-xs text-pretty'>
-                Pay with {formatPaymentMethods(paymentMethods)} when you pick it up.
+                Pay with {formatPaymentMethods(paymentMethods)} when you pick it
+                up.
               </p>
             )}
             {footerNote && (
-              <p role='alert' className='text-destructive text-sm'>
+              <p
+                role={error === null ? 'status' : 'alert'}
+                className={
+                  error === null
+                    ? 'text-center text-sm text-(--going-once-hint)'
+                    : 'text-destructive text-sm'
+                }
+              >
                 {footerNote}
               </p>
             )}
@@ -130,6 +179,7 @@ function InterestView({
                 size='lg'
                 rounded='full'
                 className='w-full'
+                loading={isWorking}
                 disabled={isWorking || !isReady}
                 onClick={() => void send()}
               >
@@ -207,6 +257,16 @@ function InterestView({
           {contactNote}
         </p>
       </div>
+      {isAsked && (
+        <PickupDaysQuestion
+          openDays={openDays}
+          answer={days}
+          onChange={(answer) => {
+            setDays(answer);
+            setError(null);
+          }}
+        />
+      )}
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Message</p>
         <Textarea

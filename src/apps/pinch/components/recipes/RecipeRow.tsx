@@ -1,7 +1,8 @@
 import { memo } from 'react';
 import { shallowEqual } from 'react-redux';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
@@ -115,7 +116,7 @@ function RecipeRow({
     return (
       <label className='flex w-full cursor-pointer items-start gap-3 py-2 select-none'>
         <span className='mt-4 inline-flex shrink-0'>
-          <Checkbox
+          <AppCheckbox
             aria-label={`${recipe.title}, ${detail}`}
             checked={isSelected}
             onCheckedChange={() => onToggle?.(recipe.id)}

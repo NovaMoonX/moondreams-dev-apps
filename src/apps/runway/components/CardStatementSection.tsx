@@ -1,20 +1,23 @@
 import { useState, type ReactNode } from 'react';
+import { useStore } from 'react-redux';
 import { CalendarClock, Landmark, Receipt } from 'lucide-react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FeatureOffer from '@/components/FeatureOffer';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { useAppSelector } from '@/store';
+import { useAppSelector, type RootState } from '@/store';
 import { formatList } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { waitUntil } from '@/utils/waitUntil';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS, LINK_WORDS } from '@apps/runway/constants';
 import { getStatementMinimum } from '@apps/runway/engine/cards';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import { agreeToCardDetails } from '@apps/runway/store/actions/linkActions';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   DateOnly,
@@ -111,8 +114,11 @@ function CardStatementSection({
 }: CardStatementSectionProps) {
   const { addToast } = useToast();
   const canLink = useCanLinkBank();
+  const store = useStore<RootState>();
   const cards = useAppSelector(selectAllCards);
   const links = useAppSelector((state) => state.runway.links);
+  // At Link a card warns about its due date only from the bank's minimum, so the offer to share it is never put off.
+  const isLink = useAppSelector(selectLevel) === 'link';
   const [isBusy, setIsBusy] = useState(false);
   const [isOfferHidden, setIsOfferHidden] = useLocalStorageState(
     `${OFFER_HIDDEN_PREFIX}:${link?.id ?? 'none'}`,
@@ -128,8 +134,21 @@ function CardStatementSection({
       if (isBusy) return;
       setIsBusy(true);
       try {
+        const syncedBefore = link.lastSyncAt;
         const result = await agreeToCardDetails(link.id);
         if (result === null) return;
+        if (result.state === 'ok') {
+          await waitUntil(() => {
+            const shown = store
+              .getState()
+              .runway.links.find((entry) => entry.id === link.id);
+            return (
+              shown === undefined ||
+              shown.cardDetails !== 'needsConsent' ||
+              shown.lastSyncAt !== syncedBefore
+            );
+          });
+        }
         addToast({
           title:
             result.state === 'ok'
@@ -174,16 +193,18 @@ function CardStatementSection({
     return (
       <FeatureOffer
         title={CARD_WORDS.offerTitle}
-        body={CARD_WORDS.offerBody(bank)}
+        body={
+          isLink ? CARD_WORDS.offerBodyLink(bank) : CARD_WORDS.offerBody(bank)
+        }
         scope={scope}
         badge={CARD_WORDS.offerBadge}
         actionLabel={
           isBusy ? LINK_WORDS.refreshing : CARD_WORDS.offerAction(bank)
         }
-        laterLabel={CARD_WORDS.offerLater}
+        laterLabel={isLink ? undefined : CARD_WORDS.offerLater}
         isBusy={isBusy}
         onAction={() => void agree()}
-        onLater={() => setIsOfferHidden(true)}
+        onLater={isLink ? undefined : () => setIsOfferHidden(true)}
         folded={{
           isFolded: isOfferHidden,
           icon: <Landmark />,
@@ -214,7 +235,9 @@ function CardStatementSection({
         )}
         {(minimum === null || minimum.kind === 'notShared') && (
           <li className='text-muted-foreground px-4 py-3 text-sm'>
-            {CARD_WORDS.minimumNotShared(bank)}
+            {isLink
+              ? CARD_WORDS.minimumNotSharedLink(bank)
+              : CARD_WORDS.minimumNotShared(bank)}
           </li>
         )}
       </ul>
