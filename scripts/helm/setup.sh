@@ -17,6 +17,7 @@ done
 
 source scripts/lib/firebaseLogin.sh
 source scripts/lib/gcloudTracks.sh
+source scripts/lib/setupState.sh
 
 CURRENT="starting"
 trap 'status=$?; (( status == 0 )) || echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' EXIT
@@ -190,7 +191,12 @@ anthropic_run() {
   pause "Set the spend cap with the steps above, then press Enter: "
 }
 
-google_done() { secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.googleapis.com && api_enabled gmail.googleapis.com && api_enabled drive.googleapis.com && api_enabled people.googleapis.com; }
+# The consent screen's calendar write scopes are recorded by googleSetup.sh once added, so a run from before they existed goes back through it.
+google_scopes_done() {
+  local SETUP_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/google-setup"
+  [[ -z "$(missing_from scopes https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.app.created)" ]]
+}
+google_done() { google_scopes_done && secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.googleapis.com && api_enabled gmail.googleapis.com && api_enabled drive.googleapis.com && api_enabled people.googleapis.com; }
 google_run() {
   bash scripts/connections/googleSetup.sh
 }
