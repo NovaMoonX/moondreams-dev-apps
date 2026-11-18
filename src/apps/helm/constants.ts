@@ -1208,6 +1208,7 @@ export const HELM_COPY = {
   googleCalendarName: 'Google Calendar',
   googleDriveRowName: 'Google Drive',
   googleServiceMeta: (email: string, reads: string) => `${email} · ${reads}`,
+  googleServiceConnecting: 'Connecting…',
   gmailAddHint: (name: string) => `Let ${name} search your email when you ask.`,
   driveAddHint: (name: string) =>
     `Let ${name} search your Docs and PDFs when you ask.`,

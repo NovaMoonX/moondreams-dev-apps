@@ -14,7 +14,9 @@ import {
 } from '@/lib/connections/connectionCalls';
 import { SITE_ACCOUNT_ID, toAppConnectorId } from '@/lib/connections/contract';
 import { getSourceManifest } from '@/lib/connections/sources';
+import { useConnections } from '@/lib/connections/useConnections';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
@@ -59,6 +61,8 @@ function ConnectForm({
   const [isTouched, setIsTouched] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { grants } = useConnections({ readerAppId: 'helm' });
+  const waitFor = useWaitUntilShown(grants);
 
   const startsTicked = categories
     .filter((category) => category.isOnAtConnect)
@@ -81,6 +85,7 @@ function ConnectForm({
       syncConnections({ grantId }).catch((error: unknown) =>
         console.error('Helm first sync did not run', error),
       );
+      await waitFor((current) => current.some((grant) => grant.id === grantId));
       onClose();
     } catch (error) {
       console.error('Helm connection did not start', error);
