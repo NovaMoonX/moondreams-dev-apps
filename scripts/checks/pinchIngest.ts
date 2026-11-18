@@ -395,6 +395,7 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'photoSearch',
   'prepMinutes',
   'servings',
+  'stepSections',
   'steps',
   'title',
   'unread',
@@ -407,6 +408,30 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(hostile.steps, ['Chop.', 'Simmer.']);
+assert.deepEqual(hostile.stepSections, [], 'plain steps carry no sections');
+
+const sectioned = normalizeExtractedRecipe({
+  title: 'Pasta',
+  ingredients: [],
+  steps: [
+    { text: 'Boil the water.', section: ' Boil the pasta: ' },
+    { text: '', section: 'Lost' },
+    { text: 'Add the penne.', section: 'Boil the pasta' },
+    { text: 'Sear the chicken.', section: null },
+    'Serve.',
+  ],
+});
+assert.deepEqual(sectioned.steps, [
+  'Boil the water.',
+  'Add the penne.',
+  'Sear the chicken.',
+  'Serve.',
+]);
+assert.deepEqual(
+  sectioned.stepSections,
+  ['Boil the pasta', 'Boil the pasta', null, null],
+  'a blank step leaves with its section, and a section name is tidied',
+);
 assert.deepEqual(hostile.unread, ['the last line is cut off']);
 assert.deepEqual(hostile.guided, [
   'swapped the chicken for tofu',
