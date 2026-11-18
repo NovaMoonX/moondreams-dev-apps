@@ -15,9 +15,17 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { selectSubjectGuardrail } from '@apps/helm/store/selectors/patternSelectors';
 import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
+import AheadLines from '@apps/helm/components/projects/AheadLines';
+import AheadOfferCard, {
+  type AheadSheetTarget,
+} from '@apps/helm/components/projects/AheadOfferCard';
+import AheadSheet from '@apps/helm/components/projects/AheadSheet';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
+import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
 import GoalHabits from '@apps/helm/components/projects/GoalHabits';
 import GoalHabitsChoiceSheet from '@apps/helm/components/projects/GoalHabitsChoiceSheet';
@@ -29,9 +37,12 @@ import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
 import ProjectPeople from '@apps/helm/components/projects/ProjectPeople';
 import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import LinkedSection from '@apps/helm/components/home/LinkedSection';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import { DAY_MS, HELM_COPY, PROJECT_TASKS_SHOWN } from '@apps/helm/constants';
+import { pickAheadOffer } from '@apps/helm/engine/researchAhead';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { useImportanceToday } from '@apps/helm/hooks/useImportancePlace';
 import {
   deleteProject,
   countProjectTasks,
@@ -64,6 +75,8 @@ interface ProjectDetailProps {
   onOpenWho: (whoId: string) => void;
   onOpenRun: (runId: string) => void;
   onOpenHabit: (habitId: string) => void;
+  onOpenImportance: (focusId: string) => void;
+  onOpenTopic: (topicId: string) => void;
 }
 
 /** One project: what it is, what its tasks show, and tabs for its tasks and its people. A finished project reads only, with a way to reopen it. */
@@ -75,6 +88,8 @@ function ProjectDetail({
   onOpenWho,
   onOpenRun,
   onOpenHabit,
+  onOpenImportance,
+  onOpenTopic,
 }: ProjectDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -83,9 +98,19 @@ function ProjectDetail({
   const { isLoaded } = useAppSelector((state) => state.helm.projects);
   const project =
     useAppSelector(selectProjectById).get(projectId ?? '') ?? null;
+  const guardrail = useAppSelector((state) =>
+    selectSubjectGuardrail(state, projectId ?? ''),
+  );
   const projectTasks = useAppSelector((state) => state.helm.projectTasks.items);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const todayUtc = useImportanceToday();
+  const aheadOffer =
+    project && project.status === 'active'
+      ? pickAheadOffer(project.researchOffers, project.targetDate, todayUtc)
+      : null;
+  const [aheadTarget, setAheadTarget] = useState<AheadSheetTarget | null>(null);
+  const [isAheadOpen, setIsAheadOpen] = useState(false);
   const [tab, setTab] = useState<ProjectTab>('tasks');
   const [isAllTasks, setIsAllTasks] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -465,6 +490,25 @@ function ProjectDetail({
                 </p>
               )}
             </div>
+            <AheadLines project={project} onOpenTopic={onOpenTopic} />
+            {aheadOffer && (
+              <AheadOfferCard
+                project={project}
+                offer={aheadOffer}
+                today={todayUtc}
+                onOpen={(target) => {
+                  setAheadTarget(target);
+                  setIsAheadOpen(true);
+                }}
+              />
+            )}
+            {aheadTarget && (
+              <AheadSheet
+                isOpen={isAheadOpen}
+                onClose={() => setIsAheadOpen(false)}
+                {...aheadTarget}
+              />
+            )}
             {isGoal && !isFinished && tidyOffer && (
               <Button
                 type='button'
@@ -518,6 +562,14 @@ function ProjectDetail({
                 />
               )
             )}
+            {guardrail && !(isGoal && !isFinished && tidyOffer) && (
+              <GuardrailLine pattern={guardrail} />
+            )}
+            <ImportancePlaceRow
+              id={project.id}
+              variant='quiet'
+              onOpen={onOpenImportance}
+            />
             <RunsSection
               field='attachedTo.id'
               id={project.id}
@@ -594,6 +646,9 @@ function ProjectDetail({
               />
             )}
           </>
+        )}
+        {project && !project.isUnreadable && (
+          <LinkedSection kind='project' parentId={project.id} />
         )}
         {project && !project.isUnreadable && (
           <>

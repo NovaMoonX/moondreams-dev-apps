@@ -104,7 +104,7 @@ export function TurnPhotos({ capture }: TurnPhotosProps) {
   );
 }
 
-function OpenTask({
+export function OpenTask({
   taskId,
   isOpen,
   onClose,

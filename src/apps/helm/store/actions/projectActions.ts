@@ -24,8 +24,10 @@ import {
   PROJECT_OBJECTIVE_MAX,
   PROJECT_ROLE_NOTE_MAX,
 } from '@apps/helm/constants';
+import { rewriteOfferDays } from '@apps/helm/engine/researchAhead';
 import { readWhoTier } from '@apps/helm/engine/whoTier';
 import { openJson, sealJson } from '@apps/helm/security';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
@@ -37,6 +39,7 @@ import type {
   Who,
   WhoSealed,
 } from '@apps/helm/types';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
 import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 
 const CHUNK = 200;
@@ -44,6 +47,9 @@ const CHUNK = 200;
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 const projectsOf = (uid: string) => collection(userOf(uid), 'projects');
 const tasksOf = (uid: string) => collection(userOf(uid), 'tasks');
+
+const readOffers = (value: Project['researchOffers'] | undefined) =>
+  Array.isArray(value) ? value : [];
 
 const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
@@ -91,6 +97,7 @@ export async function createProject(
     createdAt: Date.now(),
     lastEditedAt: null,
     finishedAt: null,
+    researchOffers: [],
     sealed: await sealJson<ProjectSealed>(
       {
         name: words.name,
@@ -99,8 +106,10 @@ export async function createProject(
         milestones: {},
         roleNotes: {},
         why: input.why ?? null,
+        importance: null,
         privateMark: null,
         isPrivacyCleared: false,
+        aheadAsks: null,
         quietMark: null,
         quietUntil: null,
         isQuietCleared: false,
@@ -109,6 +118,7 @@ export async function createProject(
     ),
   };
   const ref = doc(projectsOf(uid), id);
+  markCreatedHere(id);
   return {
     id,
     written: setDoc(ref, project),
@@ -134,8 +144,9 @@ export async function updateProject(
       async (transaction): Promise<ProjectEditResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
+        const current = snapshot.data() as Project;
         const opened = await openJson<ProjectSealed>(
-          (snapshot.data() as Project).sealed as Sealed,
+          current.sealed as Sealed,
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
@@ -152,6 +163,14 @@ export async function updateProject(
         transaction.update(ref, {
           sealed,
           targetDate: words.targetDate,
+          ...((current.targetDate ?? null) === words.targetDate
+            ? {}
+            : {
+                researchOffers: rewriteOfferDays(
+                  readOffers(current.researchOffers),
+                  words.targetDate,
+                ),
+              }),
           lastEditedAt: Date.now(),
         });
         return 'saved';
@@ -163,7 +182,7 @@ export async function updateProject(
   }
 }
 
-/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone and has no end date. */
+/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone. */
 export function setProjectStatus(
   uid: string,
   project: {
@@ -174,13 +193,14 @@ export function setProjectStatus(
     pausedUntil: number | null;
   },
   status: Project['status'],
+  pausedUntil: number | null = null,
 ) {
   const now = Date.now();
   const written = updateDoc(doc(projectsOf(uid), project.id), {
     status,
     finishedAt: status === 'finished' ? now : null,
     pausedAt: status === 'paused' ? now : null,
-    pausedUntil: null,
+    pausedUntil: status === 'paused' ? pausedUntil : null,
     lastEditedAt: now,
   });
   return {
@@ -522,6 +542,10 @@ export async function deleteProject(uid: string, projectId: string) {
     return snapshot.data() as DocumentData;
   }).catch(abandon);
   if (!raw) throw new Error('This is already gone.');
+  dropFromGroupings(uid, `projects/${projectId}`, {
+    kind: 'project',
+    id: projectId,
+  });
   return {
     taskCount: cut.length,
     restore: async (): Promise<'restored' | 'exists'> => {

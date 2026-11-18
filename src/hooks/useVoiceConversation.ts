@@ -190,7 +190,8 @@ const FIRST_LINE_FIRST_BYTE_MS = 6000;
 const CLOUD_FAILURES_MAX = 2;
 const LATCH_FALLBACK_KEY = 'speech:device-voice-latch';
 const CLOUD_LISTEN_FALLBACK_KEY = 'speech:cloud-listening';
-const FOLLOW_UP_MS = 8000;
+/** How long the short window after an answer listens. */
+export const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
 // A phrase heard by mistake (a TV, a passing remark) must not hold the microphone for the full quiet limit.
 const LIVE_FIRST_IDLE_MS = 15 * 1000;

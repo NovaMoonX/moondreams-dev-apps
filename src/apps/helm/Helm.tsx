@@ -5,6 +5,7 @@ import { store, useAppSelector } from '@/store';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import Loading from '@/ui/Loading';
+import ImportanceView from '@apps/helm/components/importance/ImportanceView';
 import HowNomosSeesYou from '@apps/helm/components/howNomosSeesYou/HowNomosSeesYou';
 import HomeSurface from '@apps/helm/components/home/HomeSurface';
 import InboxView from '@apps/helm/components/inbox/InboxView';
@@ -30,6 +31,7 @@ import ProjectDetail from '@apps/helm/components/projects/ProjectDetail';
 import ProjectsView from '@apps/helm/components/projects/ProjectsView';
 import HabitScreen from '@apps/helm/components/habits/HabitScreen';
 import HabitsView from '@apps/helm/components/habits/HabitsView';
+import ScheduledView from '@apps/helm/components/scheduled/ScheduledView';
 import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
 import WhoDetail from '@apps/helm/components/who/WhoDetail';
 import WhoView from '@apps/helm/components/who/WhoView';
@@ -52,6 +54,7 @@ const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
   people: HELM_COPY.peopleTitle,
   projects: HELM_COPY.projectsTitle,
   habits: HELM_COPY.habitsTitle,
+  scheduled: HELM_COPY.scheduledTitle,
   procedures: HELM_COPY.proceduresTitle,
   search: HELM_COPY.searchTitle,
 };
@@ -143,6 +146,8 @@ function HelmApp() {
             onOpenComingUp={() => showView('comingUp')}
             onOpenWho={(whoId) => showView('who', whoId)}
             onOpenHabit={(habitId) => showView('habit', habitId)}
+            onOpenConnectedApps={() => showView('connectedApps')}
+            onOpenActivity={() => showView('activity')}
           />
         )}
         {!isLocked && view === 'comingUp' && (
@@ -182,6 +187,7 @@ function HelmApp() {
           <ActivityScreen
             onBack={goBack}
             onOpenOutside={() => showView('outside')}
+            onOpenConnectedApps={() => showView('connectedApps')}
           />
         )}
         {!isLocked && view === 'outside' && (
@@ -225,6 +231,7 @@ function HelmApp() {
             onBack={goBack}
             onHome={goHome}
             onOpenProject={(projectId) => showView('project', projectId)}
+            onOpenImportance={() => showView('importance')}
           />
         )}
         {!isLocked && view === 'project' && (
@@ -236,6 +243,8 @@ function HelmApp() {
             onOpenWho={(whoId) => showView('who', whoId)}
             onOpenRun={(runId) => showView('run', runId)}
             onOpenHabit={(habitId) => showView('habit', habitId)}
+            onOpenImportance={(id) => showView('importance', id)}
+            onOpenTopic={(topicId) => showView('topic', topicId)}
           />
         )}
         {!isLocked && view === 'habits' && (
@@ -245,12 +254,20 @@ function HelmApp() {
             onOpenHabit={(habitId) => showView('habit', habitId)}
           />
         )}
+        {!isLocked && view === 'scheduled' && (
+          <ScheduledView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenActivity={() => showView('activity')}
+          />
+        )}
         {!isLocked && view === 'habit' && (
           <HabitScreen
             habitId={item}
             backLabel={toBackLabel(HELM_COPY.habitsTitle)}
             onBack={goBackToOrigin}
             onHome={goHome}
+            onOpenImportance={(id) => showView('importance', id)}
           />
         )}
         {!isLocked && view === 'knowledge' && (
@@ -309,6 +326,16 @@ function HelmApp() {
             backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
             onBack={isFromSearch ? goBackToOrigin : goBack}
             onHome={goHome}
+          />
+        )}
+        {!isLocked && view === 'importance' && (
+          <ImportanceView
+            focusId={item}
+            backLabel={toBackLabel(HELM_COPY.projectsTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenProject={(projectId) => showView('project', projectId)}
+            onOpenHabit={(habitId) => showView('habit', habitId)}
           />
         )}
         {!isLocked && view === 'place' && (

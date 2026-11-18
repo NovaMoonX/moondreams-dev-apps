@@ -26,6 +26,8 @@ import {
 interface HabitWhenSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Called once the new times are saved, before the sheet closes. */
+  onSaved?: () => void;
   habit: OpenHabit;
 }
 
@@ -37,6 +39,7 @@ interface HabitWhenFormProps extends Omit<HabitWhenSheetProps, 'isOpen'> {
 function HabitWhenForm({
   habit,
   onClose,
+  onSaved,
   requestClose,
   onDirtyChange,
 }: HabitWhenFormProps) {
@@ -63,6 +66,7 @@ function HabitWhenForm({
         fromWhenDraft(draft, habit, Date.now()),
       );
       if (result === 'saved') {
+        onSaved?.();
         onClose();
         return;
       }
@@ -125,7 +129,12 @@ function HabitWhenForm({
 }
 
 /** Change which days a habit asks for something and when in the day, on the person's own clock. */
-function HabitWhenSheet({ isOpen, onClose, habit }: HabitWhenSheetProps) {
+function HabitWhenSheet({
+  isOpen,
+  onClose,
+  onSaved,
+  habit,
+}: HabitWhenSheetProps) {
   const [isDirty, setIsDirty] = useState(false);
   const close = () => {
     setIsDirty(false);
@@ -143,6 +152,7 @@ function HabitWhenSheet({ isOpen, onClose, habit }: HabitWhenSheetProps) {
         <HabitWhenForm
           habit={habit}
           onClose={close}
+          onSaved={onSaved}
           requestClose={requestClose}
           onDirtyChange={setIsDirty}
         />

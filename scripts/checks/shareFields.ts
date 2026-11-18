@@ -13,7 +13,12 @@ import type { ShareDecision } from '../../src/lib/connections/fieldDecisions.ts'
 const ROOT = join(import.meta.dirname, '..', '..');
 
 /** Names an adapter reads that no stored type holds, each with why: sealed payload keys opened with the app's key are not document fields. */
-const ADAPTER_EXEMPT: Record<string, Record<string, string>> = {};
+const ADAPTER_EXEMPT: Record<string, Record<string, string>> = {
+  waypoint: {
+    displayName:
+      "a traveler's profile name, read only for the first name of whoever a checklist item is assigned to",
+  },
+};
 
 interface FieldsModule {
   SHARE_FIELDS: Record<string, Record<string, ShareDecision>>;

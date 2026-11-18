@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
@@ -24,21 +25,8 @@ const quietClass = 'text-muted-foreground ml-[30px] text-[13px] text-pretty';
 
 const dismissedKey = (awayId: string) => `helm-zone-offer-not-now:${awayId}`;
 
-const readDismissed = (awayId: string) => {
-  try {
-    return localStorage.getItem(dismissedKey(awayId)) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const keepDismissed = (awayId: string) => {
-  try {
-    localStorage.setItem(dismissedKey(awayId), '1');
-  } catch {
-    return;
-  }
-};
+const parseDismissed = (stored: unknown) =>
+  stored === true || stored === 1 ? true : null;
 
 /** Under the answer that wrote an away span in another zone: those days follow its clock, once per span, with Not now and Use it, then one line with Undo. */
 function AwayZoneOfferRow({ offer }: AwayZoneOfferRowProps) {
@@ -48,8 +36,10 @@ function AwayZoneOfferRow({ offer }: AwayZoneOfferRowProps) {
   const isUsed = useAppSelector((state) =>
     state.helm.profile?.zoneSpans.some((span) => span.awayId === offer.awayId),
   );
-  const [isDismissed, setIsDismissed] = useState(() =>
-    readDismissed(offer.awayId),
+  const [isDismissed, setIsDismissed] = useLocalStorageState(
+    dismissedKey(offer.awayId),
+    false,
+    parseDismissed,
   );
   const [isBusy, setIsBusy] = useState(false);
 
@@ -103,7 +93,6 @@ function AwayZoneOfferRow({ offer }: AwayZoneOfferRowProps) {
           variant='tertiary'
           size='sm'
           onClick={() => {
-            keepDismissed(offer.awayId);
             setIsDismissed(true);
           }}
         >
