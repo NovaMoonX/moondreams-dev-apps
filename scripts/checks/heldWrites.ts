@@ -6,6 +6,7 @@ import {
   applyHeldWrites,
   dropHeldWrites,
   forHeldList,
+  layHeldLists,
   patchHeldWrite,
   settleHeldWrites,
   toFingerprint,
@@ -363,6 +364,19 @@ assert.deepEqual(
   ).list,
   [],
   'an expired create never lets a later edit bring back a record the list lost',
+);
+const laidMove = (before: Row) =>
+  layHeldLists<Row, 'week'>({
+    lists: { week: { incoming: [], deliveredAt: 10, belongs: inWindow } },
+    held: [{ ...moved, before }],
+    landed: {},
+    idOf,
+    now: 20,
+  }).lists.week;
+assert.deepEqual(
+  [laidMove({ id: 'a', cents: 50 }), laidMove({ id: 'a', cents: 1 })],
+  [[{ id: 'a', cents: 5 }], []],
+  'laid lists judge an edit by whether the list held its record before',
 );
 const takenOver = addHeldWrites(
   [hold({ id: 'a', cents: 1 }, 'a', 'c1', null, ['cents'])],
