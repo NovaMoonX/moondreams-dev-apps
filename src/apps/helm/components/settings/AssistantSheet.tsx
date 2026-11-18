@@ -8,6 +8,7 @@ import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useConnections } from '@/lib/connections/useConnections';
 import {
@@ -47,9 +48,12 @@ function AssistantSheet({
 }: AssistantSheetProps) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
+  const [pendingCanWrite, setPendingCanWrite] = useState<boolean | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [busyScopes, setBusyScopes] = useState<McpReadScope[]>([]);
+  const [pendingScopes, setPendingScopes] = useState<
+    Partial<Record<McpReadScope, boolean>>
+  >({});
+  const waitFor = useWaitUntilShown(assistant);
   const { grants } = useConnections({ readerAppId: 'helm' });
   const isGoogleReadOpen = useIsGateOpen('helm', 'google-mail-and-drive');
   const shownScopes = READ_SCOPE_ORDER.filter(
@@ -62,28 +66,39 @@ function AssistantSheet({
     );
 
   const setReadScope = async (scope: McpReadScope, isOn: boolean) => {
-    if (!assistant || busyScopes.includes(scope)) return;
-    setBusyScopes((busy) => [...busy, scope]);
+    if (!assistant || pendingScopes[scope] !== undefined) return;
+    setPendingScopes((pending) => ({ ...pending, [scope]: isOn }));
     try {
       await setMcpReadScope(assistant.clientKey, scope, isOn);
+      await waitFor(
+        (current) =>
+          current === null || current.readScopes.includes(scope) === isOn,
+      );
     } catch (error) {
       console.error('Helm assistant permission was not updated', error);
       addToast({ title: HELM_COPY.assistantUpdateFailed, type: 'error' });
     } finally {
-      setBusyScopes((busy) => busy.filter((entry) => entry !== scope));
+      setPendingScopes((pending) =>
+        Object.fromEntries(
+          Object.entries(pending).filter(([key]) => key !== scope),
+        ),
+      );
     }
   };
 
   const setCanWrite = async (canWrite: boolean) => {
-    if (!assistant || isSaving) return;
-    setIsSaving(true);
+    if (!assistant || pendingCanWrite !== null) return;
+    setPendingCanWrite(canWrite);
     try {
       await updateMcpClient(assistant.clientKey, canWrite);
+      await waitFor(
+        (current) => current === null || current.canWrite === canWrite,
+      );
     } catch (error) {
       console.error('Helm assistant was not updated', error);
       addToast({ title: HELM_COPY.assistantUpdateFailed, type: 'error' });
     } finally {
-      setIsSaving(false);
+      setPendingCanWrite(null);
     }
   };
 
@@ -112,6 +127,8 @@ function AssistantSheet({
     }
   };
 
+  const canWrite = pendingCanWrite ?? assistant?.canWrite ?? false;
+
   return (
     <DetailSheet
       isOpen={assistant !== null}
@@ -136,17 +153,18 @@ function AssistantSheet({
                 {HELM_COPY.assistantWrites(helmAppName)}
               </p>
               <p className='text-muted-foreground text-[13px] text-pretty'>
-                {HELM_COPY.assistantWritesHint(assistant.canWrite)}
+                {HELM_COPY.assistantWritesHint(canWrite)}
               </p>
             </div>
             <AppToggle
               aria-label={HELM_COPY.assistantWrites(helmAppName)}
-              checked={assistant.canWrite}
+              checked={canWrite}
               onCheckedChange={(checked) => void setCanWrite(checked)}
             />
           </div>
           {shownScopes.map((scope) => {
-            const isOn = assistant.readScopes.includes(scope);
+            const isOn =
+              pendingScopes[scope] ?? assistant.readScopes.includes(scope);
             return (
               <div
                 key={scope}
@@ -162,7 +180,7 @@ function AssistantSheet({
                         scope,
                         assistant.name,
                         helmAppName,
-                        { isOn, canWrite: assistant.canWrite },
+                        { isOn, canWrite },
                       )}
                     </p>
                   ) : (
@@ -176,7 +194,6 @@ function AssistantSheet({
                   <AppToggle
                     aria-label={HELM_COPY.assistantReadScopeLabels[scope]}
                     checked={isOn}
-                    disabled={busyScopes.includes(scope)}
                     onCheckedChange={(checked) =>
                       void setReadScope(scope, checked)
                     }
