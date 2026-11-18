@@ -348,8 +348,11 @@ function HomeSurface({
     setLiveAimsDay(liveAimsDay);
     return () => setLiveAimsDay(null);
   }, [liveAimsDay]);
+  const morningBox = useRef<HTMLDivElement>(null);
   const morningTurn = isMorningLive ? (
-    <MorningQuestionTurn card={dayCard} />
+    <div ref={morningBox}>
+      <MorningQuestionTurn card={dayCard} />
+    </div>
   ) : null;
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
@@ -483,7 +486,11 @@ function HomeSurface({
             foldsBefore={todayStart}
             freshFrom={homeFrom}
             holdsOn={
-              keyStatus === 'ready' && isDayCardAsking ? dayCardBox : null
+              isMorningLive
+                ? morningBox
+                : keyStatus === 'ready' && isDayCardAsking
+                  ? dayCardBox
+                  : null
             }
             tail={morningTurn}
           />

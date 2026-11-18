@@ -43,8 +43,10 @@ const readRestTop = (
   const composer = readPx('--helm-composer-h');
   // The composer floats 8px above the dock, so it covers its own height plus everything under it.
   const dock = composer > 0 ? composer + readPx('--helm-dock-top') + 8 : 0;
+  // The pinned header covers the top of the page, so the question rests just under it.
+  const header = readPx('--helm-home-header-h');
   const current = scroller ? scroller.scrollTop : window.scrollY;
-  const top = current + box.top - viewTop;
+  const top = current + box.top - viewTop - header - 8;
   const endClear = current + box.bottom - viewTop - (viewHeight - dock - 16);
   return Math.max(0, Math.min(top, endClear));
 };
@@ -60,7 +62,7 @@ interface ConversationThreadProps {
   foldsBefore?: number | null;
   /** Sessions that started before this moment fold too, the newest included (a fresh start, or today's midnight with Start each day fresh on). */
   freshFrom?: number;
-  /** While the page opens, rest on this element with its end clear of the dock instead of following the newest turn. */
+  /** While the page opens, rest on this element, its top clear of the header and its end of the dock, instead of following the newest turn. */
   holdsOn?: RefObject<HTMLElement | null> | null;
   /** What the assistant is asking now, drawn after the newest turn (the morning question). */
   tail?: ReactNode;

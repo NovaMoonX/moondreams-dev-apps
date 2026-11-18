@@ -375,9 +375,9 @@ function QuestionCard({
         {onAskAgain && (
           <Button
             type='button'
-            variant='tertiary'
+            variant='outline'
             size='sm'
-            className={join(QUIET_CLASS, 'text-muted-foreground! ml-[30px]')}
+            className={join(QUIET_CLASS, 'ml-[30px] rounded-full')}
             onClick={onAskAgain}
           >
             {HELM_COPY.questionAskMeAgain}
