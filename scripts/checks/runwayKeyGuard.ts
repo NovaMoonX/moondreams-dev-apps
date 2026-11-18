@@ -13,14 +13,15 @@ import {
   type Keyring,
 } from '../../functions/src/apps/runway/planKey.ts';
 import { checkRunwayKeys } from '../../functions/src/apps/runway/verifyRunwayKeys.ts';
-import { openTestPlan, seedTestPlan } from '../runway/drillKeyring.ts';
+import { APP_KEYS } from '../appKeys/apps.ts';
+import { openTestPlan, seedTestPlan } from '../appKeys/drillKeyring.ts';
 import {
   addKeyToKeyring,
   assertPublishable,
   fileStore,
   publishKeyring,
   Refusal,
-} from '../runway/publishKeyring.ts';
+} from '../appKeys/publishKeyring.ts';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 if (getApps().length === 0) initializeApp({ projectId: 'moondreams-dev-apps' });
@@ -86,6 +87,7 @@ const dir = mkdtempSync(join(tmpdir(), 'runway-keys-'));
 const file = join(dir, 'keyring.json');
 const store = fileStore(file);
 const options = {
+  app: APP_KEYS.runway,
   newId: 'm2',
   newKeyHex: hex('b'),
   makeCurrent: true,
@@ -196,24 +198,27 @@ for (const run of [ok, missingId, noCanary, wrongKey, badDigest]) {
 const drillRing = JSON.stringify(ring('m2', { m1: hex('a'), m2: hex('b') }));
 await firestore.doc('apps/runway/server/drill-test-plan/keys/data').delete();
 await assert.rejects(
-  openTestPlan(firestore, drillRing),
+  openTestPlan(firestore, drillRing, APP_KEYS.runway),
   (error) => error instanceof Refusal && /not been seeded/.test(error.message),
 );
-assert.deepEqual(await seedTestPlan(firestore, drillRing), {
+assert.deepEqual(await seedTestPlan(firestore, drillRing, APP_KEYS.runway), {
   masterKeyId: 'm2',
 });
-await assert.rejects(seedTestPlan(firestore, drillRing));
-assert.deepEqual(await openTestPlan(firestore, drillRing), {
+await assert.rejects(seedTestPlan(firestore, drillRing, APP_KEYS.runway));
+assert.deepEqual(await openTestPlan(firestore, drillRing, APP_KEYS.runway), {
   opened: true,
   masterKeyId: 'm2',
 });
 const withoutM2 = JSON.stringify(ring('m1', { m1: hex('a') }));
-assert.deepEqual(await openTestPlan(firestore, withoutM2), {
+assert.deepEqual(await openTestPlan(firestore, withoutM2, APP_KEYS.runway), {
   opened: false,
   masterKeyId: 'm2',
 });
 const otherM2 = JSON.stringify(ring('m2', { m2: hex('c') }));
-assert.equal((await openTestPlan(firestore, otherM2)).opened, false);
+assert.equal(
+  (await openTestPlan(firestore, otherM2, APP_KEYS.runway)).opened,
+  false,
+);
 await firestore.doc('apps/runway/server/drill-test-plan/keys/data').delete();
 
 await clearChecks();

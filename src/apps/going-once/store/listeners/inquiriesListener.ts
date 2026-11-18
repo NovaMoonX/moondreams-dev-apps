@@ -39,6 +39,11 @@ export function toInquiry(
     createdAt: inquiry.createdAt ?? 0,
     lastSentAt: inquiry.lastSentAt ?? 0,
     contactClearedAt: inquiry.contactClearedAt ?? null,
+    pickupDays: Array.isArray(inquiry.pickupDays)
+      ? inquiry.pickupDays.filter((day) => typeof day === 'number')
+      : null,
+    needsAnotherDay: inquiry.needsAnotherDay === true,
+    anotherDayNote: inquiry.anotherDayNote ?? null,
   };
 }
 

@@ -1,4 +1,6 @@
-import { fetchLatestVersion } from './appVersionQueries';
+import { hasUnsavedWork } from './unsavedWork';
+import { updateToLatest } from './appUpdate';
+import { fetchLatestVersion, getVersionStatus, type VersionStatus } from './appVersionQueries';
 import { SITE_VERSION } from './app.constants';
 
 const TAPS_NEEDED = 8;
@@ -7,20 +9,7 @@ const MAX_DRIFT_PX = 40;
 const PANEL_ID = 'version-peek';
 const INTERACTIVE = 'a,button,input,textarea,select,label,[role="button"],[contenteditable="true"]';
 
-type Status = 'checking' | 'latest' | 'outdated' | 'ahead' | 'unknown';
-
-const compareVersions = (a: string, b: string) => {
-  const [pa, pb] = [a, b].map((v) => v.split('.').map((n) => Number.parseInt(n, 10) || 0));
-  return [0, 1, 2].map((i) => (pa[i] ?? 0) - (pb[i] ?? 0)).find((d) => d !== 0) ?? 0;
-};
-
-const getStatus = (remote: string | null): Status => {
-  if (!remote) return 'unknown';
-  if (SITE_VERSION === 'dev') return 'ahead';
-  const diff = compareVersions(SITE_VERSION, remote);
-  if (diff === 0) return 'latest';
-  return diff < 0 ? 'outdated' : 'ahead';
-};
+type Status = VersionStatus | 'checking';
 
 const getStatusCopy = (status: Status, remote: string | null) => {
   if (status === 'checking') return 'Checking for updates…';
@@ -37,7 +26,11 @@ const el = (tag: string, css: string, text?: string) => {
   return node;
 };
 
-const closePanel = () => document.getElementById(PANEL_ID)?.remove();
+const closePanel = () => {
+  const panel = document.getElementById(PANEL_ID);
+  panel?.dispatchEvent(new Event('remove-listeners'));
+  panel?.remove();
+};
 
 const openPanel = () => {
   closePanel();
@@ -75,16 +68,53 @@ const openPanel = () => {
     'border-radius:999px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--color-border,rgba(128,128,128,.4));background:transparent;color:inherit';
   const closeButton = el('button', actionCss, 'Close');
   closeButton.addEventListener('click', closePanel);
-  actions.append(closeButton);
+  const updateButton = el(
+    'button',
+    `${actionCss};display:none;border-color:transparent;background:var(--color-primary,#6d28d9);color:var(--color-primary-foreground,#fff)`,
+    'Update to the latest',
+  ) as HTMLButtonElement;
+  actions.append(updateButton, closeButton);
 
   panel.append(title, version, status, actions);
   document.body.append(panel);
 
+  const state = { isConfirming: false };
+  const showUpdate = (remote: string | null) => {
+    const canUpdate = getVersionStatus(SITE_VERSION, remote) === 'outdated' && navigator.onLine;
+    updateButton.style.display = canUpdate ? '' : 'none';
+  };
+
   fetchLatestVersion()
     .catch(() => null)
     .then((remote) => {
-      const result = getStatus(remote);
-      status.textContent = getStatusCopy(result, remote);
+      if (!panel.isConnected) return;
+      status.textContent = getStatusCopy(getVersionStatus(SITE_VERSION, remote), remote);
+      showUpdate(remote);
+      const onConnectionChange = () => showUpdate(remote);
+      window.addEventListener('online', onConnectionChange);
+      window.addEventListener('offline', onConnectionChange);
+      panel.addEventListener('remove-listeners', () => {
+        window.removeEventListener('online', onConnectionChange);
+        window.removeEventListener('offline', onConnectionChange);
+      });
+
+      updateButton.addEventListener('click', () => {
+        if (!remote) return;
+        if (hasUnsavedWork() && !state.isConfirming) {
+          state.isConfirming = true;
+          status.textContent = 'Updating throws away what you typed. Save it first, or tap again to update anyway.';
+          updateButton.textContent = 'Update anyway';
+          return;
+        }
+        updateButton.disabled = true;
+        updateButton.textContent = 'Updating…';
+        void updateToLatest(remote).then((isReloading) => {
+          if (isReloading) return;
+          updateButton.disabled = false;
+          updateButton.textContent = 'Update to the latest';
+          status.textContent = "You're offline. Update once you're back online.";
+        });
+      });
     });
 };
 

@@ -92,6 +92,7 @@ import {
   getHoldStart,
   getSoldDraft,
   isDraftChanged,
+  isHoldChanged,
   type HoldDraft,
   type SoldDraft,
 } from '@apps/going-once/utils/statusDrafts';
@@ -351,9 +352,9 @@ function ThingDrawer({
     (item.status === 'PENDING' || (item.status === 'AVAILABLE' && isOnTheList));
 
   const getIsDirty = () => {
-    if (view === 'markPending') return isDraftChanged(hold, holdStart);
+    if (view === 'markPending') return isHoldChanged(hold, holdStart);
     if (view === 'changeHold')
-      return isDraftChanged(hold, getHoldDraft(item.pending, now));
+      return isHoldChanged(hold, getHoldDraft(item.pending));
     if (view === 'markSold')
       return isDraftChanged(soldDraft, getSoldDraft(item, now));
     if (view === 'changePaid')
@@ -369,7 +370,7 @@ function ThingDrawer({
       setHold(start);
       setHoldStart(start);
     }
-    if (next === 'changeHold') setHold(getHoldDraft(item.pending, now));
+    if (next === 'changeHold') setHold(getHoldDraft(item.pending));
     if (next === 'markSold') setSoldDraft(getSoldDraft(item, now));
     if (next === 'changePaid')
       setPaidAmount(centsToInputValue(item.sale?.priceCents ?? 0));

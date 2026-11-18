@@ -72,7 +72,6 @@ const row = (createdAt: number, date: number, amountCents: number) => ({
   createdAt,
   date,
   amountCents,
-  isOnCard: false,
   isPending: false,
 });
 const rows = [row(100, 0, 500), row(300, 0, 700)];
@@ -83,10 +82,8 @@ assert.equal(countWaiting(rows, { isPaused: true, from: 200 }), 0);
 assert.equal(countWaiting(rows, { isPaused: false, from: 200 }), 1);
 assert.equal(countWaiting(rows, null), 2);
 const paused = { isPaused: true, from: 200 };
-// Money in with nothing to pair and not on a card is counted already and never waits.
+// Money in with nothing to pair, a card refund included, is counted already and never waits.
 assert.equal(countWaiting([row(100, 0, -900)], null), 0);
-// Money in on a card still asks (card payment, refund or unseen account).
-assert.equal(countWaiting([{ ...row(100, 0, -900), isOnCard: true }], null), 1);
 // A quiet charge and money in of its amount within three days are a possible move: both count, as the screen keeps them.
 assert.equal(
   countWaiting([row(100, 0, -900), row(100, 2 * DAY, 900)], paused),
@@ -97,12 +94,9 @@ assert.equal(
   countWaiting([row(100, 0, -900), row(100, 40 * DAY, 900)], paused),
   0,
 );
-// Pending money in is on its way: it never counts, even on a card, and a pending charge is never the other side of a move.
+// Pending money in is on its way: it never counts, and a pending charge is never the other side of a move.
 assert.equal(
-  countWaiting(
-    [{ ...row(100, 0, -900), isOnCard: true, isPending: true }],
-    null,
-  ),
+  countWaiting([{ ...row(100, 0, -900), isPending: true }], null),
   0,
 );
 assert.equal(
@@ -112,13 +106,10 @@ assert.equal(
   ),
   1,
 );
-// Card money in that a pending charge of its amount may be the other side of waits with it and doesn't count.
+// Money in that only a pending charge of its amount may be the other side of waits with it and doesn't count.
 assert.equal(
   countWaiting(
-    [
-      { ...row(100, 0, -900), isOnCard: true },
-      { ...row(100, DAY, 900), isPending: true },
-    ],
+    [row(100, 0, -900), { ...row(100, DAY, 900), isPending: true }],
     null,
   ),
   1,

@@ -19,6 +19,8 @@ export interface Sale {
   buyerNote: string | null;
   /** The ways buyers can pay, as the seller words them ("Cash", "Venmo"); empty when none are named. Public. */
   paymentMethods: string[];
+  /** The days the sellers can hand things over: date-only values (UTC midnight), sorted, at most `MAX_PICKUP_DAYS`; empty when none are set. Public once they haven't passed. */
+  pickupDays: number[];
   currency: SaleCurrency;
   /** The seller's IANA zone, which the push's quiet hours follow; `null` on a sale from before it was kept, until the seller opens it. */
   timeZone: string | null;
@@ -285,7 +287,11 @@ export type SalePageResult =
   | { status: 'not_found' }
   | {
       status: 'ok';
-      sale: Pick<Sale, 'name' | 'pickupArea' | 'buyerNote' | 'paymentMethods'>;
+      /** `pickupDays` holds only the days that haven't passed, in the sale's time zone. */
+      sale: Pick<
+        Sale,
+        'name' | 'pickupArea' | 'buyerNote' | 'paymentMethods' | 'pickupDays'
+      >;
       things: PublicThing[];
       bundles: PublicBundle[];
       /** True when the signed-in visitor is the seller or a co-seller. */
@@ -320,6 +326,12 @@ export interface Inquiry {
   createdAt: number;
   lastSentAt: number;
   contactClearedAt: number | null;
+  /** The sale's pickup days the buyer said work (date-only values); `null` when the sale asked for none. */
+  pickupDays: number[] | null;
+  /** The buyer said none of the pickup days work. */
+  needsAnotherDay: boolean;
+  /** When they could come instead, in their words; cleared with their details. */
+  anotherDayNote: string | null;
 }
 
 export type InterestResult =
@@ -327,7 +339,7 @@ export type InterestResult =
   | {
       status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down';
     }
-  | { status: 'invalid'; field: 'name' | 'contact' | 'message' };
+  | { status: 'invalid'; field: 'name' | 'contact' | 'message' | 'days' };
 
 export interface InterestRequest {
   linkId: string;
@@ -337,6 +349,10 @@ export interface InterestRequest {
   name: string;
   contact: string;
   message: string;
+  /** The pickup days that work for the buyer; empty when the sale has none or they need another day. */
+  pickupDays: number[];
+  needsAnotherDay: boolean;
+  anotherDayNote: string;
   /** Left empty by a person; anything in it is a bot. */
   website: string;
 }

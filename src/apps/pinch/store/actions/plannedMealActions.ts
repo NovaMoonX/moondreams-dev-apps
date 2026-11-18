@@ -1,10 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, runTransaction, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import type {
   ItemKind,
   MealItem,
@@ -110,7 +111,7 @@ export const updatePlannedMeal = createAsyncThunk<
   'pinch/plannedMeals/update',
   async ({ uid, id, date, mealType, items }, { rejectWithValue }) => {
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const ref = plannedMealDoc(uid, id);
         const current = await transaction.get(ref);
         if (current.exists() && current.data().snapshot != null) {

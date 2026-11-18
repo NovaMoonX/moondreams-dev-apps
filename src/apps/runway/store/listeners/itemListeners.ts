@@ -2,11 +2,8 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import {
-  createSealedReader,
-  openJson,
-  type SealedReader,
-} from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import type {
   BillSealed,
   EnvelopeSealed,
@@ -208,7 +205,7 @@ export function startVersionsListener(
   onError: (error: Error) => void,
 ): Unsubscribe {
   const sequence = { latest: 0 };
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
 
   const stop = onSnapshot(
     planPath(uid, 'versions'),

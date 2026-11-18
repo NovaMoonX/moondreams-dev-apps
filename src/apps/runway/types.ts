@@ -99,6 +99,36 @@ export interface PlanDoc {
   sorting: SortingState | null;
   keyId: string | null;
   sealed: Sealed | null;
+  /** The sealed totals-and-names summary a connected app reads; null when Free to Spend is unknown, and absent on a plan made before it existed. */
+  shareSummary: Sealed | null;
+}
+
+/** What a plan shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
+export interface ShareSummary {
+  computedAt: number;
+  currency: string;
+  /** Signed: negative means over. */
+  freeToSpendCents: Cents;
+  /** 'YYYY-MM-DD' of the next income day; null when none is coming. */
+  nextIncomeOn: string | null;
+  /** Every bill due before that day at the Want dial, overdue ones included. */
+  dueBeforeIncomeCents: Cents;
+  /** Unpaid ones due today or later (all within 30 days, else the next one within a year), and those paid this month. A summary an older phone wrote lacks the last four. */
+  bills: {
+    name: string;
+    amountCents: Cents;
+    dueOn: string;
+    repeats: string;
+    endsOn: string | null;
+    endsAfter: number | null;
+    paidOn: string | null;
+  }[];
+  horizon: {
+    name: string;
+    targetCents: Cents;
+    setAsideCents: Cents;
+    targetOn: string | null;
+  }[];
 }
 
 export interface OpenPlan extends PlanSealedFields {
@@ -802,6 +832,26 @@ export interface OpenRule extends RuleSealed {
   id: string;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A card payment the person says they started at their bank, under `startedPayments`; at Link it waits for the bank to show it. */
+export interface StartedPaymentDoc {
+  id: string;
+  cardId: string;
+  startedOn: DateOnly;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface StartedPaymentSealed {
+  amountCents: Cents;
+}
+
+export interface OpenStartedPayment extends StartedPaymentSealed {
+  id: string;
+  cardId: string;
+  startedOn: DateOnly;
+  createdAt: number;
 }
 
 /** Something the person confirmed by hand that Runway uses to settle a later match, under `memories`. */

@@ -10,6 +10,7 @@ import {
   getInquirerName,
   isPrefilledMessage,
 } from '@apps/going-once/utils/inquiries';
+import { describeBuyerDays } from '@apps/going-once/utils/pickupDays';
 
 interface InquiryRowProps {
   inquiry: Inquiry;
@@ -37,6 +38,7 @@ function InquiryRow({
     inquiry.bundleId === null
       ? null
       : `Bundle: ${inquiry.bundleLabelAtSend ?? 'a bundle'}`,
+    describeBuyerDays(inquiry, true),
     formatSentAt(
       isNew ? inquiry.lastSentAt : (inquiry.handledAt ?? inquiry.lastSentAt),
       now,

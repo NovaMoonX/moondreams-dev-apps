@@ -1,4 +1,5 @@
-import { doc, runTransaction, type Transaction } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { deleteDoc, doc, setDoc, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -25,6 +26,8 @@ import type {
   MoveDoc,
   PlanDoc,
   RunwayEncryption,
+  StartedPaymentDoc,
+  StartedPaymentSealed,
   StartSealed,
 } from '@apps/runway/types';
 
@@ -106,7 +109,7 @@ export async function createCard(
     ),
     getChangeDoc(encryption, summary, null),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
     const feeReads = fee ? await readFeePlan(transaction, uid, fee) : null;
     const data = plan.data() as Partial<PlanDoc> | undefined;
@@ -174,7 +177,7 @@ export async function updateCard(
     ),
     getChangeDoc(encryption, summary, null),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     if (options.seenUpdatedAt !== undefined)
       await readCardFresh(transaction, uid, cardId, options.seenUpdatedAt);
     const feeReads = fee ? await readFeePlan(transaction, uid, fee) : null;
@@ -197,7 +200,7 @@ export async function archiveCard(
     getChangeDoc(encryption, summary, null),
     fee ? sealFeePlan(encryption, fee) : Promise.resolve(null),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const feeReads = sealedFee
       ? await readFeePlan(transaction, uid, sealedFee)
       : null;
@@ -240,7 +243,7 @@ export async function payCard(
     ),
     getChangeDoc(encryption, input.summary, null),
   ]);
-  const id = await runTransaction(db, async (transaction) => {
+  const id = await runHeldTransaction(uid, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
     const findFree = async (count: number): Promise<string> => {
       if (count >= input.count + MAX_PAYMENT_PROBES) {
@@ -292,7 +295,7 @@ export async function undoCardPayment(
     ),
     getChangeDoc(encryption, paid.summary, null),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [existing, plan] = await Promise.all([
       transaction.get(moveRef(uid, id)),
       transaction.get(planRef(uid)),
@@ -310,4 +313,32 @@ export async function undoCardPayment(
     } satisfies MoveDoc);
     transaction.set(changeRef(uid, change.id), change);
   });
+}
+
+const startedPaymentRef = (uid: string, id: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'startedPayments', id);
+
+/** Notes a card payment the person started at their bank, which waits until the bank shows it; returns its id for an Undo. Needs a connection. */
+export async function startCardPayment(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: { cardId: string; amountCents: Cents; startedOn: DateOnly },
+): Promise<string> {
+  const id = generateUuid();
+  await setDoc(startedPaymentRef(uid, id), {
+    id,
+    cardId: input.cardId,
+    startedOn: input.startedOn,
+    createdAt: Date.now(),
+    sealed: await sealJson(
+      { amountCents: input.amountCents } satisfies StartedPaymentSealed,
+      encryption,
+    ),
+  } satisfies StartedPaymentDoc);
+  return id;
+}
+
+/** Forgets a started payment: one the person didn't make after all, or an Undo. */
+export async function removeStartedPayment(uid: string, id: string) {
+  await deleteDoc(startedPaymentRef(uid, id));
 }

@@ -1,0 +1,278 @@
+/**
+ * Maintainer-only: adds a master key to an app's keyring and publishes it as a new secret version.
+ *
+ *   tsx scripts/appKeys/publishKeyring.ts --app runway|helm|connections --project moondreams-dev-apps --new-id m2 [--keep-current] [--dry-run]
+ *   tsx scripts/appKeys/publishKeyring.ts --app runway|helm|connections --project moondreams-dev-apps --canary-only --new-id m1
+ *
+ * A supplied key (a restore) comes from the app's `<APP>_NEW_KEY` variable (64 hex), never from an argument. Nothing prints key bytes.
+ * `--canary-only` writes the canary of an id the secret already holds (the first keyring's id, once the secret exists).
+ * `--emulator --secret-file <path>` runs the whole flow against the Firestore emulator and a local keyring file.
+ */
+import { randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+
+import {
+  KEY_BYTES,
+  readKeyring,
+  type Keyring,
+} from '../../functions/src/appKeys/keyring.ts';
+import { readAppFlag, type AppKeys } from './apps.ts';
+
+const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+export class Refusal extends Error {}
+
+export interface SecretStore {
+  readLatest(): Promise<string | null>;
+  addVersion(keyringJson: string): Promise<void>;
+}
+
+/** Throws a `Refusal` unless `next` only adds ids to `previous`, names a `current` it holds and holds only 32-byte keys. */
+export function assertPublishable(previous: Keyring, next: Keyring) {
+  const dropped = Object.keys(previous.keys).filter(
+    (id) => !Object.hasOwn(next.keys, id),
+  );
+  if (dropped.length > 0) {
+    throw new Refusal(
+      `Refused: the new keyring drops ${dropped.join(', ')}. Ids are only ever added.`,
+    );
+  }
+  const changed = Object.keys(previous.keys).filter(
+    (id) => next.keys[id] !== previous.keys[id],
+  );
+  if (changed.length > 0) {
+    throw new Refusal(
+      `Refused: the new keyring changes the key behind ${changed.join(', ')}. Ids are never reused.`,
+    );
+  }
+  if (!Object.hasOwn(next.keys, next.current)) {
+    throw new Refusal(
+      `Refused: current is ${next.current}, which is not in keys.`,
+    );
+  }
+  const wrongSize = Object.entries(next.keys)
+    .filter(([, hex]) => !/^[0-9a-f]{64}$/i.test(String(hex)))
+    .map(([id]) => id);
+  if (wrongSize.length > 0) {
+    throw new Refusal(
+      `Refused: the key for ${wrongSize.join(', ')} is not ${KEY_BYTES} bytes of hex.`,
+    );
+  }
+}
+
+/** The keyring after adding one key; refuses a malformed id, a reused id or a key that is not 32 bytes. */
+export function addKeyToKeyring(
+  previous: Keyring,
+  newId: string,
+  newKeyHex: string,
+  makeCurrent: boolean,
+) {
+  if (!ID_PATTERN.test(newId)) {
+    throw new Refusal(
+      'Refused: an id is 1 to 32 characters of a-z, 0-9 and "-".',
+    );
+  }
+  if (Object.hasOwn(previous.keys, newId)) {
+    throw new Refusal(`Refused: ${newId} is already in the keyring.`);
+  }
+  const next: Keyring = {
+    current: makeCurrent ? newId : previous.current,
+    keys: { ...previous.keys, [newId]: newKeyHex.toLowerCase() },
+  };
+  assertPublishable(previous, next);
+  return next;
+}
+
+export interface PublishOptions {
+  app: AppKeys;
+  newId: string;
+  newKeyHex: string | null;
+  makeCurrent: boolean;
+  dryRun: boolean;
+}
+
+/** Order: validate, write the new canary, add the version. A failed add removes the canary again. */
+export async function publishKeyring(
+  store: SecretStore,
+  firestore: Firestore | null,
+  options: PublishOptions,
+  now = Date.now(),
+) {
+  const raw = await store.readLatest();
+  if (!raw) {
+    throw new Refusal(
+      `Refused: ${options.app.secretName} has no version to build on. Create the first one with the runbook command.`,
+    );
+  }
+  const previous = (() => {
+    try {
+      return readKeyring(raw);
+    } catch {
+      throw new Refusal(
+        'Refused: the latest version is not a valid keyring, so nothing can be added to it.',
+      );
+    }
+  })();
+  const keyHex = options.newKeyHex ?? randomBytes(KEY_BYTES).toString('hex');
+  const next = addKeyToKeyring(
+    previous,
+    options.newId,
+    keyHex,
+    options.makeCurrent,
+  );
+
+  const summary = {
+    added: options.newId,
+    previousCurrent: previous.current,
+    current: next.current,
+    ids: Object.keys(next.keys),
+    keySource: options.newKeyHex ? 'supplied' : 'generated',
+    published: false,
+  };
+  if (options.dryRun || !firestore) return summary;
+
+  const checkRef = firestore.doc(options.app.keyCheckPath(options.newId));
+  await checkRef.create(options.app.makeKeyCheck(next, options.newId, now));
+  try {
+    await store.addVersion(JSON.stringify(next));
+  } catch (error) {
+    await checkRef.delete();
+    throw error;
+  }
+  return { ...summary, published: true };
+}
+
+/** Writes the canary of an id the secret already holds; refuses an id it does not hold. */
+export async function writeCanary(
+  store: SecretStore,
+  firestore: Firestore,
+  app: AppKeys,
+  masterKeyId: string,
+  now = Date.now(),
+) {
+  const raw = await store.readLatest();
+  if (!raw) {
+    throw new Refusal(`Refused: ${app.secretName} has no version.`);
+  }
+  const keyring = readKeyring(raw);
+  if (!Object.hasOwn(keyring.keys, masterKeyId)) {
+    throw new Refusal(`Refused: ${masterKeyId} is not in the keyring.`);
+  }
+  try {
+    await firestore
+      .doc(app.keyCheckPath(masterKeyId))
+      .create(app.makeKeyCheck(keyring, masterKeyId, now));
+  } catch (error) {
+    const isAlreadyThere = (error as { code?: number }).code === 6;
+    if (isAlreadyThere)
+      throw new Refusal(`The canary for ${masterKeyId} already exists.`);
+    throw error;
+  }
+  return { canary: masterKeyId };
+}
+
+export function gcloudStore(project: string, secretName: string): SecretStore {
+  const base = ['secrets', 'versions'];
+  const common = [`--secret=${secretName}`, `--project=${project}`];
+  return {
+    async readLatest() {
+      try {
+        return execFileSync(
+          'gcloud',
+          [...base, 'access', 'latest', ...common],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+        );
+      } catch {
+        return null;
+      }
+    },
+    async addVersion(keyringJson) {
+      execFileSync(
+        'gcloud',
+        [...base, 'add', secretName, '--data-file=-', `--project=${project}`],
+        {
+          input: keyringJson,
+          stdio: ['pipe', 'ignore', 'inherit'],
+        },
+      );
+    },
+  };
+}
+
+export function fileStore(path: string): SecretStore {
+  return {
+    async readLatest() {
+      try {
+        return readFileSync(path, 'utf8');
+      } catch {
+        return null;
+      }
+    },
+    async addVersion(keyringJson) {
+      writeFileSync(path, keyringJson);
+    },
+  };
+}
+
+const flag = (name: string) => {
+  const index = process.argv.indexOf(`--${name}`);
+  return index < 0 ? null : (process.argv[index + 1] ?? '');
+};
+const has = (name: string) => process.argv.includes(`--${name}`);
+
+async function main() {
+  const app = readAppFlag(flag('app'));
+  const project = flag('project') ?? 'moondreams-dev-apps';
+  const newId = flag('new-id');
+  if (!newId) throw new Refusal('Refused: --new-id is required.');
+  const isEmulator = has('emulator');
+  const secretFile = flag('secret-file');
+  if (isEmulator) {
+    process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
+    if (!secretFile)
+      throw new Refusal('Refused: --emulator needs --secret-file.');
+  }
+  if (!isEmulator && process.env.FIRESTORE_EMULATOR_HOST) {
+    throw new Refusal(
+      'Refused: FIRESTORE_EMULATOR_HOST is set, so the canary would go to the emulator while the secret version goes to the real project. Unset it, or pass --emulator.',
+    );
+  }
+  const dryRun = has('dry-run');
+  if (getApps().length === 0) initializeApp({ projectId: project });
+
+  const store =
+    isEmulator && secretFile
+      ? fileStore(secretFile)
+      : gcloudStore(project, app.secretName);
+  if (has('canary-only')) {
+    console.log(
+      JSON.stringify(await writeCanary(store, getFirestore(), app, newId)),
+    );
+    return;
+  }
+
+  const summary = await publishKeyring(store, dryRun ? null : getFirestore(), {
+    app,
+    newId,
+    newKeyHex: process.env[app.newKeyEnv] ?? null,
+    makeCurrent: !has('keep-current'),
+    dryRun,
+  });
+  console.log(JSON.stringify(summary, null, 2));
+  console.log(
+    summary.published
+      ? `Published. Save the new keyring to escrow now (read it with: gcloud secrets versions access latest --secret=${app.secretName} --project=${project}).`
+      : 'Dry run: nothing was written.',
+  );
+}
+
+if (process.argv[1]?.endsWith('publishKeyring.ts')) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Refusal ? error.message : 'Publish failed.');
+    process.exitCode = 1;
+  });
+}

@@ -17,6 +17,14 @@ import {
 const SALE_ID = 'seed-going-once-scale';
 const THING_COUNT = 50;
 const DAY_MS = 86_400_000;
+
+/** 40 days in five stretches, a few months of Saturdays among them, so the day pickers and lists are checked full. */
+const SCALE_PICKUP_DAYS = [
+  ...Array.from({ length: 12 }, (_, index) => 2 + index),
+  ...Array.from({ length: 10 }, (_, index) => 20 + index),
+  ...Array.from({ length: 8 }, (_, index) => 40 + index),
+  ...[55, 58, 63, 70, 77, 84, 91, 98, 105, 112],
+];
 const MINUTE_MS = 60_000;
 const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'WELL_USED'] as const;
 const NOUNS = [
@@ -156,6 +164,12 @@ export async function seedGoingOnceScale(
 ): Promise<SeedResult> {
   const maya = FIXTURE_USERS.goingOnceSeller;
   const theo = FIXTURE_USERS.goingOnceCoSeller;
+  const today = new Date(context.now);
+  const saleDays = SCALE_PICKUP_DAYS.map((offset) =>
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + offset),
+  );
+  const scalePickupDays = (index: number) =>
+    saleDays.slice(index % 5, (index % 5) + 3);
   const sale = context.firestore
     .collection('apps')
     .doc('going-once')
@@ -177,6 +191,7 @@ export async function seedGoingOnceScale(
       'Apple Cash',
       'Check or money order in person',
     ],
+    pickupDays: saleDays,
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
@@ -418,6 +433,9 @@ export async function seedGoingOnceScale(
             ? 'Hello! I saw this on the link a friend sent me and wondered whether it is still available, whether you would take a little less, and whether I could pick it up on a weekday evening after work because I do not drive on weekends.'
             : 'Is this still available?',
           sentAt: context.now - (index + 1) * 47 * MINUTE_MS,
+          pickupDays: index % 4 === 0 ? scalePickupDays(index) : null,
+          needsAnotherDay: index % 7 === 3,
+          anotherDayNote: index % 7 === 3 ? 'Weekday evenings after 6' : null,
           handled: isHandled
             ? {
                 by: index % 2 === 0 ? maya.uid : theo.uid,

@@ -3,6 +3,7 @@ import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 
 export interface StepIngredientLine {
   id: string;
+  /** One key per ingredient (a free line has a key of its own). */
   ingredientId: string;
   /** The ingredient's name and the other names it goes by. */
   names: string[];

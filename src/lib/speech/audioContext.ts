@@ -1,3 +1,8 @@
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
+
 const holder: { context: AudioContext | null; isArmed: boolean } = {
   context: null,
   isArmed: false,
@@ -11,6 +16,7 @@ export const getAudioContext = () => {
     return holder.context;
   } catch (error) {
     console.error('Audio is not available', error);
+    recordSpeechEvent(`Audio could not start: ${describeThrown(error)}`);
     return null;
   }
 };
@@ -19,7 +25,9 @@ export const getAudioContext = () => {
 export const unlockAudio = () => {
   getAudioContext()
     ?.resume()
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      recordSpeechEvent(`Audio could not resume: ${describeThrown(error)}`);
+    });
 };
 
 const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchend'] as const;

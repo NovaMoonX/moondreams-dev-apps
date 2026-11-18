@@ -12,6 +12,7 @@ import PriceTag from '@apps/going-once/components/things/PriceTag';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { usePublicPhotoUrls } from '@apps/going-once/queries/publicPhotoQueries';
 import type { PublicBundle, PublicThing } from '@apps/going-once/types';
+import type { DaysAnswer } from '@apps/going-once/utils/pickupDays';
 
 interface BuyerBundleDrawerProps {
   bundle: PublicBundle;
@@ -19,6 +20,9 @@ interface BuyerBundleDrawerProps {
   things: PublicThing[];
   linkId: string;
   paymentMethods: string[];
+  openDays: number[];
+  daysAnswer: DaysAnswer;
+  onDaysAnswered: (answer: DaysAnswer) => void;
   onOpenThing: (id: string) => void;
   onClose: () => void;
 }
@@ -67,6 +71,9 @@ function BuyerBundleDrawer({
   things,
   linkId,
   paymentMethods,
+  openDays,
+  daysAnswer,
+  onDaysAnswered,
   onOpenThing,
   onClose,
 }: BuyerBundleDrawerProps) {
@@ -128,6 +135,9 @@ function BuyerBundleDrawer({
           bundle={bundle}
           linkId={linkId}
           paymentMethods={paymentMethods}
+          openDays={openDays}
+          daysAnswer={daysAnswer}
+          onDaysAnswered={onDaysAnswered}
           footerNode={footerNode}
           onBack={() => setIsAsking(false)}
           onDone={onClose}

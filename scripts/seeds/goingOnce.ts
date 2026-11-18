@@ -89,6 +89,10 @@ export interface SeedInquiry {
   message: string;
   sentAt: number;
   sendCount?: number;
+  /** The sale's days the buyer said work; null (the default) for an inquiry from before days were asked. */
+  pickupDays?: number[] | null;
+  needsAnotherDay?: boolean;
+  anotherDayNote?: string | null;
   handled?: { by: string; at: number };
 }
 
@@ -109,6 +113,10 @@ export function buildSeedInquiry(saleId: string, seed: SeedInquiry) {
     email: isEmail ? seed.contact : null,
     phone: isEmail ? null : seed.contact,
     message: seed.message,
+    pickupDays: seed.pickupDays ?? null,
+    needsAnotherDay: seed.needsAnotherDay ?? false,
+    anotherDayNote:
+      seed.needsAnotherDay === true ? (seed.anotherDayNote ?? null) : null,
     status: seed.handled === undefined ? 'NEW' : 'HANDLED',
     handledBy: seed.handled?.by ?? null,
     handledAt: seed.handled?.at ?? null,
@@ -119,20 +127,32 @@ export function buildSeedInquiry(saleId: string, seed: SeedInquiry) {
   };
 }
 
+/** A seeded hold's pickup day as the date-only value a date picker writes, counted from the seed's "now". */
+export function getSeedPickupOn(
+  now: number,
+  pickup: number | 'saturday' | null,
+) {
+  if (pickup === null) return null;
+  const today = new Date(now);
+  const untilSaturday = (6 - today.getDay() + 7) % 7 || 7;
+  // The person's calendar day (local getters), stored as UTC midnight.
+  return Date.UTC(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + (pickup === 'saturday' ? untilSaturday : pickup),
+  );
+}
+
 /** Builds a thing's status fields relative to the seed's "now", so the sale reads the same on any day. */
 export function buildSeedStatus(
   status: SeedStatus,
   now: number,
 ): SeedStatusFields {
   const today = new Date(now);
-  // The person's calendar day (local getters), stored as the date-only value a date picker writes (UTC midnight).
   const dayOnly = (offset: number) =>
     Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-  const untilSaturday = (6 - today.getDay() + 7) % 7 || 7;
-  const getPickupOn = (pickup: number | 'saturday' | null) => {
-    if (pickup === null) return null;
-    return dayOnly(pickup === 'saturday' ? untilSaturday : pickup);
-  };
+  const getPickupOn = (pickup: number | 'saturday' | null) =>
+    getSeedPickupOn(now, pickup);
   if (status.kind === 'AVAILABLE')
     return {
       status: 'AVAILABLE',
@@ -702,18 +722,32 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     .collection('sales')
     .doc(SALE_ID);
 
+  const day = (offset: number) =>
+    Date.UTC(
+      new Date(context.now).getFullYear(),
+      new Date(context.now).getMonth(),
+      new Date(context.now).getDate() + offset,
+    );
+
   await sale.set({
     id: SALE_ID,
     name: 'Fall clear-out',
     pickupArea: 'Capitol Hill, Seattle',
     buyerNote: 'Evenings and weekends.',
     paymentMethods: ['Cash', 'Venmo', 'Zelle'],
+    pickupDays: [
+      ...[10, 11, 12, 14].map(day),
+      ...[35, 36, 37, 38, 39, 40, 41].map(day),
+    ],
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
     createdBy: maya.uid,
-    members: [maya.uid, theo.uid],
-    memberJoinedAt: { [theo.uid]: context.now - 5 * DAY_MS },
+    members: [maya.uid, theo.uid, FIXTURE_USERS.partnerOne.uid],
+    memberJoinedAt: {
+      [theo.uid]: context.now - 5 * DAY_MS,
+      [FIXTURE_USERS.partnerOne.uid]: context.now - 3 * DAY_MS,
+    },
     publicLinkId: SEED_SALE_LINK_ID,
     publicLinkChangedAt: context.now - 4 * DAY_MS,
     ...OPEN_SALE_FIELDS,
@@ -881,6 +915,7 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       name: 'Priya',
       contact: '2065550142',
       message: 'Could I come see it Thursday after 6?',
+      pickupDays: [day(10), day(11)],
       sentAt: context.now - 2 * HOUR_MS,
     },
     {
@@ -888,6 +923,7 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       name: 'Dan',
       contact: 'dan.w@example.com',
       message: 'Hi! Is the Gray sofa still available?',
+      pickupDays: [day(12), day(14), day(36)],
       sentAt: context.now - 3 * HOUR_MS,
     },
     {
@@ -896,6 +932,7 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       name: 'Marcus',
       contact: 'marcus.l@example.com',
       message: 'What size is the frame?',
+      pickupDays: [day(10), day(11), day(12)],
       sentAt: context.now - 4 * HOUR_MS,
     },
     {
@@ -953,11 +990,14 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     },
     {
       ...sofa,
-      name: 'Alex',
-      contact: 'alex.m@example.com',
+      name: 'Morgan',
+      contact: 'morgan.m@example.com',
       message:
         "Hi! I saw the sofa on your page and I'm really interested. I'm moving into a third-floor walk-up on Saturday, so before I make the trip I wanted to ask a few things. First, how deep is the seat? My doorway is narrow and I'd like to be sure it fits through, and the stairwell turns twice. Second, does it come apart at all, like legs that unscrew or a back that lifts off?\n\nI have a friend with a pickup truck who can help me carry it, so I can come any evening this week after 6, or Sunday afternoon if that suits you better. I'd bring cash, or send it with Venmo ahead of time if you would rather hold it for me until then.\n\nOne more thing: are there any pets or smoke in the home? I'm allergic to cat hair, so a quick honest answer would help me a lot. Thanks so much, and sorry for all the questions!",
       sentAt: context.now - 5 * HOUR_MS,
+      pickupDays: [],
+      needsAnotherDay: true,
+      anotherDayNote: 'Weekday evenings after 6',
     },
   ];
   await Promise.all(

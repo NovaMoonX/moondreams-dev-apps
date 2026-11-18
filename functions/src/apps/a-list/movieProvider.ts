@@ -1,5 +1,6 @@
 import { defineSecret } from 'firebase-functions/params';
 
+import { isForcedFixture } from '../../emulator.js';
 import { getOmdbTitle, popularOmdb, searchOmdb } from './omdb.js';
 import { getTmdbTitle, popularTmdb, searchTmdb } from './tmdb.js';
 import type { MovieSearchResult, MovieSnapshot, PopularMovie } from './types.js';
@@ -18,8 +19,8 @@ export interface MovieProvider {
 }
 
 const PROVIDERS: Record<MovieProvider['id'], MovieProvider> = {
-  tmdb: { id: 'tmdb', isBudgeted: false, getKey: () => TMDB_API_KEY.value(), search: searchTmdb, popular: popularTmdb, getTitle: getTmdbTitle },
-  omdb: { id: 'omdb', isBudgeted: true, getKey: () => OMDB_API_KEY.value(), search: searchOmdb, popular: popularOmdb, getTitle: getOmdbTitle },
+  tmdb: { id: 'tmdb', isBudgeted: false, getKey: () => (isForcedFixture('tmdb') ? '' : TMDB_API_KEY.value()), search: searchTmdb, popular: popularTmdb, getTitle: getTmdbTitle },
+  omdb: { id: 'omdb', isBudgeted: true, getKey: () => (isForcedFixture('omdb') ? '' : OMDB_API_KEY.value()), search: searchOmdb, popular: popularOmdb, getTitle: getOmdbTitle },
 };
 
 /** TMDB whenever its key is set, otherwise OMDb; `MOVIE_PROVIDER=omdb|tmdb` forces one. */
@@ -29,7 +30,7 @@ export function pickProvider(): MovieProvider {
     return PROVIDERS[forced];
   }
 
-  const result = TMDB_API_KEY.value() ? PROVIDERS.tmdb : PROVIDERS.omdb;
+  const result = !isForcedFixture('tmdb') && TMDB_API_KEY.value() ? PROVIDERS.tmdb : PROVIDERS.omdb;
   return result;
 }
 

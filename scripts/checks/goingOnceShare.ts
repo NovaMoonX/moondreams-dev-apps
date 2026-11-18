@@ -49,6 +49,7 @@ function check(title: string, run: () => void) {
   passed += 1;
 }
 
+const NOW = Date.UTC(2026, 10, 15, 12);
 const OWNER = 'owner-uid-secret';
 const photo = {
   id: 'p1',
@@ -272,7 +273,7 @@ check(
     const sealed = sealPage(
       {
         status: 'ok',
-        sale: toPublicSale(sale()) as never,
+        sale: toPublicSale(sale(), NOW) as never,
         things: [
           { ...toPublicThing(thing())!, storeUrl: 'javascript:alert(1)' },
         ],
@@ -320,21 +321,39 @@ check(
 );
 
 check('the sale keeps its name, pickup area and note and nothing else', () => {
-  const result = toPublicSale(sale());
+  const result = toPublicSale(sale(), NOW);
   assert.deepEqual(result, {
     name: 'Fall clear-out',
     pickupArea: 'Capitol Hill, Seattle',
     buyerNote: 'Evenings.',
     paymentMethods: ['Cash', 'Venmo'],
+    pickupDays: [],
   });
-  assert.equal(toPublicSale(sale({ name: '' })), null);
+  assert.equal(toPublicSale(sale({ name: '' }), NOW), null);
+});
+
+check('pickup days are the open ones: whole, sorted, unique, capped', () => {
+  const day = (offset: number) => Date.UTC(2026, 10, 15 + offset);
+  const days = (pickupDays: unknown, timeZone: unknown = null) =>
+    toPublicSale(sale({ pickupDays, timeZone }), NOW)?.pickupDays;
+  assert.deepEqual(days([day(3), day(-1), day(0), day(3), 1.5, 'x']), [
+    day(0),
+    day(3),
+  ]);
+  assert.deepEqual(days(undefined), []);
+  assert.deepEqual(days([day(0)], 'Pacific/Kiritimati'), []);
+  assert.deepEqual(days([day(0)], 'Not/AZone'), [day(0)]);
+  assert.equal(
+    days(Array.from({ length: 90 }, (_, index) => day(index)))?.length,
+    SALE_PAGE_LIMITS.MAX_PICKUP_DAYS,
+  );
 });
 
 check(
   'the ways to pay are trimmed, capped, emptied of blanks and at most 8',
   () => {
     const methods = (paymentMethods: unknown) =>
-      toPublicSale(sale({ paymentMethods }))?.paymentMethods;
+      toPublicSale(sale({ paymentMethods }), NOW)?.paymentMethods;
     const long = 'x'.repeat(100);
     assert.deepEqual(methods([' Cash ', '', '   ', 7, null, long]), [
       'Cash',
@@ -348,12 +367,12 @@ check(
       assert.deepEqual(methods(value), [], String(value)),
     );
     const legacy = { ...sale(), paymentMethods: undefined };
-    assert.deepEqual(toPublicSale(legacy)?.paymentMethods, []);
+    assert.deepEqual(toPublicSale(legacy, NOW)?.paymentMethods, []);
     const sealed = sealPage(
       {
         status: 'ok',
         sale: {
-          ...toPublicSale(sale())!,
+          ...toPublicSale(sale(), NOW)!,
           paymentMethods: [long, ' ', 'Zelle'],
         },
         things: [],
@@ -430,6 +449,7 @@ check(
       'name',
       'paymentMethods',
       'pickupArea',
+      'pickupDays',
     ]);
     assert.equal(sealed.things.length, 1);
     assert.deepEqual(Object.keys(sealed.things[0]).sort(), THING_KEYS);
@@ -669,13 +689,18 @@ check(
   () => {
     assert.ok(
       saleBlock.includes(
-        "hasOnly(['name', 'pickupArea', 'buyerNote', 'paymentMethods', 'lastEditedAt'])",
+        "hasOnly(['name', 'pickupArea', 'buyerNote', 'paymentMethods', 'pickupDays', 'lastEditedAt'])",
       ),
     );
     assert.equal(
       saleBlock.split("get('paymentMethods', []).size() <= 8").length - 1,
       2,
       'create and update both cap the ways to pay at 8',
+    );
+    assert.equal(
+      saleBlock.split("get('pickupDays', []).size() <= 60").length - 1,
+      2,
+      'create and update both cap the pickup days at 60',
     );
     assert.ok(saleBlock.includes("get('publicLinkId', null) == null"));
     assert.ok(saleBlock.includes("get('publicLinkChangedAt', null) == null"));

@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -7,7 +13,7 @@ import { ChevronLeft } from 'lucide-react';
 
 import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
 import { useSubviewHistory } from '@/hooks/useSubviewHistory';
-import { hasDialogOnTop } from '@/utils/dialogUtils';
+import { getDialogsAbove, hasDialogOnTop } from '@/utils/dialogUtils';
 
 const OPEN_POPUP_SELECTOR =
   '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
@@ -40,7 +46,13 @@ interface SubviewHeaderProps {
 }
 
 /** The round back chip every subview and site screen opens with, with a 40px tap area. */
-export function SubviewBackButton({ label = 'Back', onClick }: { label?: string; onClick: () => void }) {
+export function SubviewBackButton({
+  label = 'Back',
+  onClick,
+}: {
+  label?: string;
+  onClick: () => void;
+}) {
   return (
     <Button
       type='button'
@@ -123,6 +135,7 @@ function Subview({
   useSubviewOpenMarker();
 
   const [escapeToken] = useState<object>(() => ({}));
+  const overlayRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     escapeOrder.push(escapeToken);
     return () => {
@@ -144,11 +157,14 @@ function Subview({
     }
     // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown; an open
     // dropdown is found by where focus is and a tooltip by being on screen, as neither has handled it yet.
+    // A handled Escape stops here: the re-render it causes would otherwise reach a sheet underneath.
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
         event.key !== 'Escape' ||
         event.defaultPrevented ||
-        hasDialogOnTop() ||
+        (overlay
+          ? getDialogsAbove(overlayRef.current).length > 0
+          : hasDialogOnTop()) ||
         escapeOrder[escapeOrder.length - 1] !== escapeToken
       ) {
         return;
@@ -158,6 +174,7 @@ function Subview({
           event.target.closest(OPEN_POPUP_SELECTOR) !== null) ||
         document.querySelector('[role="tooltip"]') !== null;
       if (!isPopupOpen) {
+        event.stopPropagation();
         goBack();
       }
     };
@@ -174,15 +191,13 @@ function Subview({
     return createPortal(
       <div className='subview-backdrop' data-subview-scroller=''>
         <div
+          ref={overlayRef}
           role='dialog'
           data-subview-overlay=''
           aria-label={title}
-          className={join(
-            'subview-card flex max-w-2xl flex-col',
-            className,
-          )}
+          className={join('subview-card flex max-w-2xl flex-col', className)}
         >
-          <div className='flex flex-1 flex-col px-(--subview-pad) pb-(--subview-pad) *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0 [&_.form-footer]:bg-background [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
+          <div className='[&_.form-footer]:bg-background [&_.form-footer]:border-border flex flex-1 flex-col px-(--subview-pad) pb-(--subview-pad) *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0 [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
             {title !== undefined && (
               <div className='bg-background sticky top-0 z-20 -mx-(--subview-pad) px-(--subview-pad) pt-3 pb-3 [@media(max-height:499px)]:pt-1'>
                 <SubviewHeader
