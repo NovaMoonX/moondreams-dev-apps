@@ -68,8 +68,10 @@ export async function splitRecipeSteps(steps: string[], title: string) {
       ? (parsed as { steps: unknown[] }).steps
       : [];
   const split = readSteps(list);
-  if (split.steps.length === 0) {
-    throw new Error('The reader returned no steps.');
+  if (split.steps.length < steps.length) {
+    throw new Error(
+      `The reader returned ${split.steps.length} steps for ${steps.length}; a split never drops one.`,
+    );
   }
   return split;
 }

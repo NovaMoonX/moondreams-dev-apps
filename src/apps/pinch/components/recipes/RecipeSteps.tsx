@@ -127,7 +127,6 @@ interface SectionHeadingProps {
   onRemove: () => void;
 }
 
-/** Closing the editor keeps the typed name. */
 function SectionHeading({
   name,
   stepCount,
@@ -400,7 +399,6 @@ interface RecipeStepsProps {
   footerAction?: ReactNode;
 }
 
-/** The method as a column of one-line summaries, under a heading for each section. On a phone writing a step happens in a drawer; from `sm` up the step being written is the one row open in place. */
 function RecipeSteps({
   steps,
   sections: storedSections,

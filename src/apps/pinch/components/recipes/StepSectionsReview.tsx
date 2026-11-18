@@ -22,7 +22,6 @@ interface StepSectionsReviewProps {
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? '' : 's'}`;
 
-/** Shows what an AI split of the recipe's steps would look like and changes nothing until the person accepts it. */
 function StepSectionsReview({
   isOpen,
   steps,
@@ -99,7 +98,7 @@ function StepSectionsReview({
           Cancel
         </Button>
         <Button type='button' className='flex-1' onClick={apply}>
-          Use these steps
+          Use these
         </Button>
       </div>
     );

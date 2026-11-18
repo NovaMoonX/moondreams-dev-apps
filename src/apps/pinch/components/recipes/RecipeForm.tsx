@@ -1217,7 +1217,7 @@ function RecipeForm({
               : initialChanges.slice(0, 3)
             ).map((change) => (
               <li key={change.id} className='flex items-start gap-3'>
-                {initialChanges.length > 1 && (
+                {initialChanges.length > 3 && (
                   <AppCheckbox
                     aria-label={`Apply: ${change.text ?? ''}`}
                     checked={appliedIds.includes(change.id)}

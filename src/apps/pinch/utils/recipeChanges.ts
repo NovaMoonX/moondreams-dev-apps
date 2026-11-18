@@ -406,7 +406,7 @@ const getStepChanges = (before: string[], after: string[]) => {
 
 const MAX_SECTION_LINES = 3;
 
-/** The sections an edit renamed, removed or moved steps between, worded like the ingredient groups'. Steps are matched by their text (the one at the same place first), so a step reworded in the same edit has only its own line. Past a few moves one line says so. */
+// Steps are matched by text, the same place first, so a step reworded in the same edit has only its own line.
 const getStepSectionChanges = (before: Normalized, after: Normalized) => {
   const taken = new Set<number>();
   const pairs = before.steps.flatMap((text, beforeAt) => {

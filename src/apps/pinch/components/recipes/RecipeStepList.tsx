@@ -9,11 +9,9 @@ import {
 interface RecipeStepListProps {
   steps: string[];
   sections: (string | null)[];
-  /** The larger type the shared page reads at. */
   isRoomy?: boolean;
 }
 
-/** A recipe's steps in order with numbers running through every section; a named section gets a heading and its steps are joined by a dotted line. */
 function RecipeStepList({ steps, sections, isRoomy }: RecipeStepListProps) {
   const node = isRoomy ? 'size-7 text-sm' : 'h-6 w-6 text-xs';
   const text = isRoomy ? 'text-base/7 wrap-break-word' : 'text-sm';
