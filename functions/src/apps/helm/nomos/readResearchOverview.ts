@@ -4,6 +4,8 @@ export interface ResearchOverviewRead {
   summary: string;
   sections: { heading: string; points: string[] }[];
   comparison: { columns: string[]; rows: string[][] } | null;
+  /** How a learn-later overview is drawn; always null for a look the person asked for. */
+  form: 'comparison' | 'steps' | 'points' | null;
 }
 
 export interface ResearchSourceRead {
@@ -64,10 +66,21 @@ const readComparison = (value: unknown): ResearchOverviewRead['comparison'] => {
   return rows.length > 0 ? { columns, rows } : null;
 };
 
-/** The overview and sources the model submitted, cut to the depth's caps; null when there is no summary to show. */
+const readForm = (
+  value: unknown,
+  comparison: ResearchOverviewRead['comparison'],
+): ResearchOverviewRead['form'] =>
+  value === 'steps' || value === 'points'
+    ? value
+    : value === 'comparison' && comparison !== null
+      ? 'comparison'
+      : 'points';
+
+/** The overview and sources the model submitted, cut to the depth's caps; null when there is no summary to show. A saved wish may carry a comparison at any depth and says how it is drawn; every other look has no form. */
 export function readResearchOverview(
   raw: unknown,
   depth: ResearchDepth,
+  mode: 'asked' | 'learnLater' = 'asked',
 ): { overview: ResearchOverviewRead; sources: ResearchSourceRead[] } | null {
   if (!isRecord(raw)) return null;
   const summary = toWords(raw.summary, OVERVIEW_SUMMARY_CAP);
@@ -99,11 +112,15 @@ export function readResearchOverview(
       ];
     })
     .slice(0, SOURCES_MAX);
+  const isLearn = mode === 'learnLater';
+  const comparison =
+    budget.hasComparison || isLearn ? readComparison(raw.comparison) : null;
   return {
     overview: {
       summary,
       sections,
-      comparison: budget.hasComparison ? readComparison(raw.comparison) : null,
+      comparison,
+      form: isLearn ? readForm(raw.form, comparison) : null,
     },
     sources,
   };

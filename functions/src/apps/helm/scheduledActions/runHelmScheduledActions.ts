@@ -114,6 +114,7 @@ const makeCapture = async (input: {
       whoIds: [],
       placeIds: [],
       planDayKey: null,
+      aimsDayKey: null,
       createdAt: input.now,
       sortedAt: null,
       screen: null,

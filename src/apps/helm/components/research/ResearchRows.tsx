@@ -63,7 +63,7 @@ function LookingRow({ research }: { research: OpenResearch }) {
   );
 }
 
-/** What a reply that asked for a look says: still looking (the reply above says when) with a quiet Stop looking, then a row that opens what it found; one the person stopped says so, and one dropped otherwise draws nothing. */
+/** What a reply that asked for a look says (a question saved to learn later is drawn by `ResultLines`, never here): still looking (the reply above says when) with a quiet Stop looking, then a row that opens what it found; one the person stopped says so, and one dropped otherwise draws nothing. */
 function ResearchRows({ captureId, execution }: ResearchRowsProps) {
   const all = useAppSelector(selectResearch);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -74,6 +74,7 @@ function ResearchRows({ captureId, execution }: ResearchRowsProps) {
   );
   const items = all.filter(
     (one) =>
+      one.mode !== 'learnLater' &&
       (ids.has(one.id) || one.captureId === captureId) &&
       (one.status === 'preparing' ||
         one.status === 'ready' ||

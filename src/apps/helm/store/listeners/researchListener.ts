@@ -5,22 +5,28 @@ import {
   orderBy,
   query,
   type QueryDocumentSnapshot,
+  type Query,
   type Unsubscribe,
+  where,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
 import type {
+  LearnDeclineReason,
+  LearnOffer,
   OpenResearch,
   Research,
   ResearchMode,
   ResearchOverview,
   ResearchSealed,
   ResearchStatus,
+  ResearchVideo,
 } from '@apps/helm/types';
 
 const RESEARCH_SHOWN = 50;
+const LEARN_LATER_SHOWN = 500;
 
 const MODES: ResearchMode[] = ['asked', 'learnLater', 'leadTime'];
 const STATUSES: ResearchStatus[] = [
@@ -61,6 +67,12 @@ const toOverview = (value: unknown): ResearchOverview | null => {
             rows: comparison.rows.map((row) => strings(row)),
           }
         : null,
+    form:
+      data.form === 'comparison' ||
+      data.form === 'steps' ||
+      data.form === 'points'
+        ? data.form
+        : null,
   };
 };
 
@@ -80,6 +92,57 @@ const toSources = (value: unknown): ResearchSealed['sources'] => {
     ];
   });
 };
+
+const REASONS: LearnDeclineReason[] = ['timing', 'lostInterest', 'changedMind'];
+
+const toOffers = (value: unknown): LearnOffer[] =>
+  Array.isArray(value)
+    ? value.flatMap((one) =>
+        typeof one?.at === 'number' &&
+        (one.outcome === 'yes' || one.outcome === 'notNow')
+          ? [
+              {
+                at: one.at,
+                dayKind:
+                  one.dayKind === 'weekday' || one.dayKind === 'weekend'
+                    ? one.dayKind
+                    : null,
+                gapMinutes: numberOrNull(one.gapMinutes),
+                afterBusyDay:
+                  typeof one.afterBusyDay === 'boolean'
+                    ? one.afterBusyDay
+                    : null,
+                outcome: one.outcome,
+              },
+            ]
+          : [],
+      )
+    : [];
+
+const toRelated = (value: unknown): Record<string, number> =>
+  value && typeof value === 'object'
+    ? Object.fromEntries(
+        Object.entries(value).filter(
+          (pair): pair is [string, number] => typeof pair[1] === 'number',
+        ),
+      )
+    : {};
+
+const toVideos = (value: unknown): ResearchVideo[] =>
+  Array.isArray(value)
+    ? value.flatMap((one) =>
+        typeof one?.videoId === 'string' && one.videoId !== ''
+          ? [
+              {
+                videoId: one.videoId,
+                title: typeof one.title === 'string' ? one.title : '',
+                channel: typeof one.channel === 'string' ? one.channel : '',
+                durationSec: numberOrNull(one.durationSec) ?? 0,
+              },
+            ]
+          : [],
+      )
+    : [];
 
 /** A research item that won't open is kept with no words, so a screen never draws it. */
 async function openResearch(
@@ -105,6 +168,21 @@ async function openResearch(
     cancelledAt: numberOrNull(data.cancelledAt),
     createdAt: numberOrNull(data.createdAt) ?? 0,
     lastEditedAt: numberOrNull(data.lastEditedAt),
+    prepareAt: numberOrNull(data.prepareAt),
+    needsLiveFacts: data.needsLiveFacts === true,
+    notNowStreak: numberOrNull(data.notNowStreak) ?? 0,
+    prepareFailures: numberOrNull(data.prepareFailures) ?? 0,
+    declineReason: REASONS.find((one) => one === data.declineReason) ?? null,
+    offeredOn: stringOrNull(data.offeredOn),
+    offers: toOffers(data.offers),
+    relatedOfferedAt: toRelated(data.relatedOfferedAt),
+    mergedInto: stringOrNull(data.mergedInto),
+    videosFetchedAt: numberOrNull(data.videosFetchedAt),
+    prepareFailedAt: numberOrNull(data.prepareFailedAt),
+    resultNoteId: stringOrNull(data.resultNoteId),
+    aheadOfferId: stringOrNull(data.aheadOfferId),
+    resultTopicId: stringOrNull(data.resultTopicId),
+    removedAt: numberOrNull(data.removedAt),
     isUnreadable: false,
   };
   try {
@@ -116,6 +194,10 @@ async function openResearch(
       subject: typeof payload.subject === 'string' ? payload.subject : '',
       overview: toOverview(payload.overview),
       sources: toSources(payload.sources),
+      moreAsked: strings(payload.moreAsked),
+      videos: toVideos(payload.videos),
+      searchQuery: stringOrNull(payload.searchQuery),
+      contextLine: stringOrNull(payload.contextLine),
     };
   } catch {
     return {
@@ -124,25 +206,24 @@ async function openResearch(
       subject: '',
       overview: null,
       sources: [],
+      moreAsked: [],
+      videos: [],
+      searchQuery: null,
+      contextLine: null,
       isUnreadable: true,
     };
   }
 }
 
-/** The person's latest research items, newest first. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
-export function startResearchListener(
-  uid: string,
+function listenToResearch(
+  source: Query,
   read: SealedReader,
   onChange: (items: OpenResearch[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const run = { isStopped: false, sequence: 0 };
   const stop = onSnapshot(
-    query(
-      collection(db, 'apps', 'helm', 'users', uid, 'research'),
-      orderBy('createdAt', 'desc'),
-      limit(RESEARCH_SHOWN),
-    ),
+    source,
     async (snapshot) => {
       run.sequence += 1;
       const current = run.sequence;
@@ -164,3 +245,39 @@ export function startResearchListener(
     stop();
   };
 }
+
+const researchOf = (uid: string) =>
+  collection(db, 'apps', 'helm', 'users', uid, 'research');
+
+/** The person's latest research items, newest first. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+export const startResearchListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (items: OpenResearch[]) => void,
+  onError: (error: Error) => void,
+) =>
+  listenToResearch(
+    query(researchOf(uid), orderBy('createdAt', 'desc'), limit(RESEARCH_SHOWN)),
+    read,
+    onChange,
+    onError,
+  );
+
+/** Every question saved to learn later, newest first, apart from the 50 latest research items so an old saved question never falls out of the list. */
+export const startLearnLaterListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (items: OpenResearch[]) => void,
+  onError: (error: Error) => void,
+) =>
+  listenToResearch(
+    query(
+      researchOf(uid),
+      where('mode', '==', 'learnLater'),
+      orderBy('createdAt', 'desc'),
+      limit(LEARN_LATER_SHOWN),
+    ),
+    read,
+    onChange,
+    onError,
+  );

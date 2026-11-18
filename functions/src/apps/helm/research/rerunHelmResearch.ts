@@ -15,6 +15,7 @@ import {
   readResearchStartedSince,
 } from '../nomos/research.js';
 import { ANTHROPIC_API_KEY, loadKeyringOrFail } from '../sortHelmCapture.js';
+import { refreshOldVideos, startDueLearnLater } from './learnLaterPass.js';
 import { readUsageIn, usageRef } from './researchStore.js';
 import { STUCK_AFTER_MS, settleResearch } from './runResearch.js';
 
@@ -105,7 +106,7 @@ async function sweepOne(
     key,
     uid,
     researchId,
-    { result: null, spentCents: 0, searches: 0, hundredths: 0 },
+    { result: null, spentCents: 0, searches: 0, hundredths: 0, learn: null },
     now,
   );
 }
@@ -156,9 +157,17 @@ export const rerunHelmResearch = onSchedule(
         ),
       );
     }
+    const learnStarted = await startDueLearnLater(firestore, now);
+    const videosRefreshed = await refreshOldVideos(
+      firestore,
+      loadKeyringOrFail(),
+      now,
+    );
     logger.info('helm.research.rerun', {
       started: reruns.filter(Boolean).length,
       abandoned: stuck.length,
+      learnStarted,
+      videosRefreshed,
     });
   },
 );

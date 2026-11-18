@@ -6,6 +6,15 @@ import {
   HELM_COPY,
 } from '@apps/helm/constants';
 import {
+  minutesOf,
+  readDeadlineFit,
+  readFreeThrough,
+  todayOf,
+  type DeadlineFit,
+  type FitTask,
+  type FreeDay,
+} from '@apps/helm/engine/freeTime';
+import {
   readImportanceOrder,
   type ImportanceItem,
   type ImportanceOrder,
@@ -30,19 +39,9 @@ export interface GuardrailThing extends ImportanceItem {
   isStepDue: ((dayKey: string) => boolean) | null;
 }
 
-export interface GuardrailTask {
-  id: string;
+export { readDeadlineFit, type DeadlineFit, type FreeDay };
+export interface GuardrailTask extends FitTask {
   title: string;
-  projectId: string | null;
-  dueDay: number | null;
-  minutes: number | null;
-  isLatent: boolean;
-}
-
-export interface FreeDay {
-  minutes: number;
-  busyShare: number;
-  hasCalendar: boolean;
 }
 
 export interface GuardrailInput {
@@ -92,8 +91,6 @@ const REASON_ORDER: PatternKind[] = [
 const REASONS_SHOWN = 3;
 const NO_CALENDAR = 'noCalendar';
 
-const todayOf = (input: GuardrailInput) => dayKeyToMs(input.todayKey);
-
 const dayKeys = (input: GuardrailInput, count: number) =>
   Array.from({ length: count }, (_, at) => shiftDayKeyBy(input.todayKey, at));
 
@@ -108,15 +105,6 @@ const isRunning = (thing: GuardrailThing) => thing.status === 'running';
 
 const toOrder = (input: GuardrailInput): ImportanceOrder =>
   readImportanceOrder(input.things, todayOf(input));
-
-const freeThrough = (input: GuardrailInput, day: number) => {
-  const count = Math.max(0, Math.round((day - todayOf(input)) / DAY_MS) + 1);
-  const days = dayKeys(input, count).map(input.freeDay);
-  return {
-    minutes: days.reduce((sum, one) => sum + one.minutes, 0),
-    hasCalendar: days.length > 0 && days.every((one) => one.hasCalendar),
-  };
-};
 
 const lastActive = (thing: GuardrailThing) =>
   Math.max(thing.createdAt, ...thing.activity);
@@ -206,73 +194,6 @@ export function readGoalLoad(
           ),
         },
       };
-}
-
-export interface DeadlineFit {
-  thingId: string;
-  name: string;
-  date: number;
-  taskCount: number;
-  workMinutes: number;
-  freeMinutes: number;
-  hasCalendar: boolean;
-  isCare: boolean;
-  isWontFit: boolean;
-}
-
-const minutesOf = (task: GuardrailTask) =>
-  task.minutes ?? LIMITS.defaultTaskMinutes;
-
-/** The work due by each deadline in the next 60 days against the free time to it, earliest date first. */
-export function readDeadlineFit(input: GuardrailInput): DeadlineFit[] {
-  const today = todayOf(input);
-  const horizon = today + LIMITS.deadlineWindowDays * DAY_MS;
-  const ownDates = (thing: GuardrailThing) =>
-    [...new Set(thing.dates)]
-      .filter((date) => date >= today && date <= horizon)
-      .sort((a, b) => a - b);
-  const deadlines = input.things
-    .filter((thing) => thing.kind !== 'habit' && isRunning(thing))
-    .flatMap((thing) =>
-      ownDates(thing).map((date) => ({ thing, date, own: ownDates(thing) })),
-    )
-    .sort((a, b) => a.date - b.date || a.thing.id.localeCompare(b.thing.id));
-  return deadlines.reduce<{ used: number; fits: DeadlineFit[] }>(
-    (state, { thing, date, own }) => {
-      const work = input.tasks.filter(
-        (task) =>
-          task.projectId === thing.id &&
-          !task.isLatent &&
-          own.find((one) => task.dueDay === null || one >= task.dueDay) ===
-            date,
-      );
-      const minutes = work.reduce((sum, task) => sum + minutesOf(task), 0);
-      const free = freeThrough(input, date);
-      const known = work.filter((task) => task.minutes !== null).length;
-      const shortfall = minutes - Math.max(0, free.minutes - state.used);
-      return {
-        used: state.used + minutes,
-        fits: [
-          ...state.fits,
-          {
-            thingId: thing.id,
-            name: thing.name,
-            date,
-            taskCount: work.length,
-            workMinutes: minutes,
-            freeMinutes: Math.max(0, free.minutes - state.used),
-            hasCalendar: free.hasCalendar,
-            isCare: thing.isCare,
-            isWontFit:
-              shortfall >= LIMITS.deadlineSlackMinutes &&
-              work.length >= LIMITS.deadlineMinTasks &&
-              known >= work.length * LIMITS.lengthsKnownShare,
-          },
-        ],
-      };
-    },
-    { used: 0, fits: [] },
-  ).fits;
 }
 
 const toDeadlineReason = (
@@ -635,7 +556,7 @@ function checkTask(
   const known = due.filter((one) => one.minutes !== null).length;
   if (known < due.length * LIMITS.lengthsKnownShare) return null;
   const work = due.reduce((sum, one) => sum + minutesOf(one), 0);
-  const free = freeThrough(input, dueDay);
+  const free = readFreeThrough(input, dueDay);
   if (work - free.minutes < LIMITS.deadlineSlackMinutes) return null;
   const line = HELM_COPY.guardrailTaskReason(
     formatDateShortUTC(dueDay),

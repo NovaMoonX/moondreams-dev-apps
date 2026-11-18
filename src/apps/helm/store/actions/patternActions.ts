@@ -702,14 +702,14 @@ const deleteInChunks = async (refs: ReturnType<typeof doc>[]) => {
   }, Promise.resolve());
 };
 
-/** Makes what Forget hid go: observations, reflections and patterns made at or before the stamp are deleted, except a stopped pattern, which is kept cut down to its signature so its stop still holds. At most a run's cap each time. */
+/** Makes what Forget hid go: observations, reflections, seen-as lines and patterns made at or before the stamp are deleted, except a stopped pattern, which is kept cut down to its signature so its stop still holds. At most a run's cap each time. */
 export async function deleteForgotten(
   uid: string,
   encryption: HelmEncryption,
   forgottenAt: number,
 ) {
-  const [observations, reflections, patterns] = await Promise.all(
-    ['observations', 'reflections', 'patterns'].map((name) =>
+  const [observations, reflections, patterns, seenAs] = await Promise.all(
+    ['observations', 'reflections', 'patterns', 'seenAs'].map((name) =>
       getDocs(
         query(
           collection(userOf(uid), name),
@@ -724,6 +724,7 @@ export async function deleteForgotten(
   await deleteInChunks([
     ...observations.docs.map((entry) => entry.ref),
     ...reflections.docs.map((entry) => entry.ref),
+    ...seenAs.docs.map((entry) => entry.ref),
     ...patterns.docs
       .filter((entry) => !isStopped(entry))
       .map((entry) => entry.ref),

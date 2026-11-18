@@ -24,8 +24,10 @@ import {
   PROJECT_OBJECTIVE_MAX,
   PROJECT_ROLE_NOTE_MAX,
 } from '@apps/helm/constants';
+import { rewriteOfferDays } from '@apps/helm/engine/researchAhead';
 import { readWhoTier } from '@apps/helm/engine/whoTier';
 import { openJson, sealJson } from '@apps/helm/security';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
@@ -45,6 +47,9 @@ const CHUNK = 200;
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 const projectsOf = (uid: string) => collection(userOf(uid), 'projects');
 const tasksOf = (uid: string) => collection(userOf(uid), 'tasks');
+
+const readOffers = (value: Project['researchOffers'] | undefined) =>
+  Array.isArray(value) ? value : [];
 
 const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
@@ -92,6 +97,7 @@ export async function createProject(
     createdAt: Date.now(),
     lastEditedAt: null,
     finishedAt: null,
+    researchOffers: [],
     sealed: await sealJson<ProjectSealed>(
       {
         name: words.name,
@@ -103,6 +109,7 @@ export async function createProject(
         importance: null,
         privateMark: null,
         isPrivacyCleared: false,
+        aheadAsks: null,
         quietMark: null,
         quietUntil: null,
         isQuietCleared: false,
@@ -137,8 +144,9 @@ export async function updateProject(
       async (transaction): Promise<ProjectEditResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
+        const current = snapshot.data() as Project;
         const opened = await openJson<ProjectSealed>(
-          (snapshot.data() as Project).sealed as Sealed,
+          current.sealed as Sealed,
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
@@ -155,6 +163,14 @@ export async function updateProject(
         transaction.update(ref, {
           sealed,
           targetDate: words.targetDate,
+          ...((current.targetDate ?? null) === words.targetDate
+            ? {}
+            : {
+                researchOffers: rewriteOfferDays(
+                  readOffers(current.researchOffers),
+                  words.targetDate,
+                ),
+              }),
           lastEditedAt: Date.now(),
         });
         return 'saved';
@@ -526,6 +542,10 @@ export async function deleteProject(uid: string, projectId: string) {
     return snapshot.data() as DocumentData;
   }).catch(abandon);
   if (!raw) throw new Error('This is already gone.');
+  dropFromGroupings(uid, `projects/${projectId}`, {
+    kind: 'project',
+    id: projectId,
+  });
   return {
     taskCount: cut.length,
     restore: async (): Promise<'restored' | 'exists'> => {

@@ -34,6 +34,8 @@ import {
   retryKey,
   setFacts,
   setFactsFailed,
+  setSeenAs,
+  setSeenAsFailed,
   setStyle,
   setStyleFailed,
   setAssistants,
@@ -66,6 +68,8 @@ import {
   setScheduledActionsFailed,
   setResearch,
   setResearchFailed,
+  setLearnLater,
+  setLearnLaterFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,
@@ -75,11 +79,15 @@ import {
   setOpenTasksFailed,
   setPatterns,
   setPatternsFailed,
+  setGroupings,
+  setGroupingsFailed,
   setObservationsFailed,
   setUnseenReflections,
   setUnseenReflectionsFailed,
   setPlanDays,
   setPlanDaysFailed,
+  setDayAims,
+  setDayAimsFailed,
   setProfile,
   setRecentCaptures,
   setRecentCapturesFailed,
@@ -100,7 +108,9 @@ import {
   startUnseenCapturesListener,
   startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
+import { startGroupingsListener } from '@apps/helm/store/listeners/groupingListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
+import { startSeenAsListener } from '@apps/helm/store/listeners/seenAsListener';
 import { startStyleListener } from '@apps/helm/store/listeners/styleListener';
 import { startPatternsListener } from '@apps/helm/store/listeners/patternListener';
 import { startObservationsListener } from '@apps/helm/store/listeners/observationListener';
@@ -116,7 +126,10 @@ import { startProceduresListener } from '@apps/helm/store/listeners/procedureLis
 import { startOpenRunsListener } from '@apps/helm/store/listeners/runListener';
 import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
 import { stampWaitingScheduledActions } from '@apps/helm/store/actions/scheduledActionWrites';
-import { startResearchListener } from '@apps/helm/store/listeners/researchListener';
+import {
+  startLearnLaterListener,
+  startResearchListener,
+} from '@apps/helm/store/listeners/researchListener';
 import { startScheduledActionsListener } from '@apps/helm/store/listeners/scheduledActionListener';
 import { startConnectionsListener } from '@apps/helm/store/listeners/connectionListener';
 import { startHabitsListener } from '@apps/helm/store/listeners/habitListener';
@@ -127,6 +140,7 @@ import {
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
+import { startDayAimsListener } from '@apps/helm/store/listeners/dayAimsListener';
 import { startAssistantsListener } from '@apps/helm/store/listeners/assistantListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import {
@@ -465,10 +479,21 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             uid,
             read,
             getPlanDaysWindow(Date.now()),
-            (days) => dispatch(setPlanDays(days)),
+            (days, isFromServer) =>
+              dispatch(setPlanDays({ days, isFromServer })),
             (error) => {
               console.error('Helm plan days listener failed', error);
               dispatch(setPlanDaysFailed());
+            },
+          ),
+          startDayAimsListener(
+            uid,
+            read,
+            getPlanDaysWindow(Date.now()),
+            (days) => dispatch(setDayAims(days)),
+            (error) => {
+              console.error('Helm day aims listener failed', error);
+              dispatch(setDayAimsFailed());
             },
           ),
           startPatternsListener(
@@ -478,6 +503,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm patterns listener failed', error);
               dispatch(setPatternsFailed());
+            },
+          ),
+          startGroupingsListener(
+            uid,
+            read,
+            (groupings) => dispatch(setGroupings(groupings)),
+            (error) => {
+              console.error('Helm groupings listener failed', error);
+              dispatch(setGroupingsFailed());
             },
           ),
           startReflectionsListener(
@@ -496,6 +530,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm facts listener failed', error);
               dispatch(setFactsFailed());
+            },
+          ),
+          startSeenAsListener(
+            uid,
+            read,
+            (lines) => dispatch(setSeenAs(lines)),
+            (error) => {
+              console.error('Helm seen-as listener failed', error);
+              dispatch(setSeenAsFailed());
             },
           ),
           startStyleListener(
@@ -541,6 +584,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm research listener failed', error);
               dispatch(setResearchFailed());
+            },
+          ),
+          startLearnLaterListener(
+            uid,
+            read,
+            (items) => dispatch(setLearnLater(items)),
+            (error) => {
+              console.error('Helm learn later listener failed', error);
+              dispatch(setLearnLaterFailed());
             },
           ),
           startHabitsListener(

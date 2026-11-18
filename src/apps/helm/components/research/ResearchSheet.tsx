@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import DetailSheet from '@/components/DetailSheet';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import SectionDivider from '@/components/SectionDivider';
@@ -7,6 +11,12 @@ import type { OpenResearch } from '@apps/helm/types';
 interface ResearchSheetProps {
   research: OpenResearch | null;
   onClose: () => void;
+  /** What a saved-for-later item adds below the overview (its videos). */
+  extra?: ReactNode;
+  /** Where a saved-for-later item's actions sit, apart from what it says. */
+  footer?: ReactNode;
+  /** Said in place of "couldn't put anything together" while there is no overview yet. */
+  emptyText?: string;
 }
 
 function Comparison({
@@ -15,13 +25,22 @@ function Comparison({
   comparison: NonNullable<OpenResearch['overview']>['comparison'];
 }) {
   if (!comparison || comparison.rows.length === 0) return null;
+  const columnCount = Math.max(
+    comparison.columns.length,
+    ...comparison.rows.map((row) => row.length),
+  );
   return (
     <section className='space-y-2'>
       <h3 className='text-muted-foreground text-[13px] font-semibold'>
         {HELM_COPY.researchComparisonLabel}
       </h3>
       <div className='border-border max-w-full overflow-x-auto rounded-[10px] border'>
-        <table className='w-full min-w-max border-collapse text-left text-[13px] leading-[18px]'>
+        <table
+          className={join(
+            'w-full border-collapse text-left text-[13px] leading-[18px]',
+            columnCount >= 4 ? 'min-w-max' : 'table-fixed',
+          )}
+        >
           {comparison.columns.length > 0 && (
             <thead>
               <tr className='bg-muted'>
@@ -29,7 +48,7 @@ function Comparison({
                   <th
                     key={`${column}-${index}`}
                     scope='col'
-                    className='max-w-[180px] px-3 py-2 align-top font-semibold break-words'
+                    className='px-3 py-2 align-top font-semibold break-words'
                   >
                     {column}
                   </th>
@@ -45,14 +64,14 @@ function Comparison({
                     <th
                       key={cellIndex}
                       scope='row'
-                      className='max-w-[180px] px-3 py-2 align-top font-semibold break-words'
+                      className='px-3 py-2 align-top font-semibold break-words'
                     >
                       {cell}
                     </th>
                   ) : (
                     <td
                       key={cellIndex}
-                      className='max-w-[180px] px-3 py-2 align-top break-words'
+                      className='px-3 py-2 align-top break-words'
                     >
                       {cell}
                     </td>
@@ -68,12 +87,22 @@ function Comparison({
 }
 
 /** What a look into something found: the summary, its sections, a comparison and its sources, always labelled as not from the person's records. */
-function ResearchSheet({ research, onClose }: ResearchSheetProps) {
+function ResearchSheet({
+  research,
+  onClose,
+  extra,
+  footer,
+  emptyText,
+}: ResearchSheetProps) {
   const overview = research?.overview ?? null;
+  const isLearn = research?.mode === 'learnLater';
+  const isSteps = overview?.form === 'steps';
+  const List = isSteps ? 'ol' : 'ul';
   return (
     <DetailSheet
       isOpen={research !== null}
       onClose={onClose}
+      footer={footer}
       title={
         research
           ? research.subject.charAt(0).toUpperCase() + research.subject.slice(1)
@@ -82,15 +111,23 @@ function ResearchSheet({ research, onClose }: ResearchSheetProps) {
     >
       {research && (
         <div className='space-y-4'>
-          <div className='space-y-2'>
-            <SectionDivider label={HELM_COPY.answerNotFromRecords} />
-            {research.isWithoutWeb && (
-              <SectionDivider label={HELM_COPY.researchNotFromWeb} />
-            )}
-          </div>
+          {isLearn ? (
+            <p className='text-muted-foreground text-[13px] leading-[18px] text-pretty'>
+              {research.isWithoutWeb
+                ? HELM_COPY.learnCautionGeneral
+                : HELM_COPY.learnCaution}
+            </p>
+          ) : (
+            <div className='space-y-2'>
+              <SectionDivider label={HELM_COPY.answerNotFromRecords} />
+              {research.isWithoutWeb && (
+                <SectionDivider label={HELM_COPY.researchNotFromWeb} />
+              )}
+            </div>
+          )}
           {overview === null ? (
             <p className='text-muted-foreground text-[15px] text-pretty'>
-              {HELM_COPY.researchNothingToShow}
+              {emptyText ?? HELM_COPY.researchNothingToShow}
             </p>
           ) : (
             <>
@@ -109,18 +146,24 @@ function ResearchSheet({ research, onClose }: ResearchSheetProps) {
                       {section.heading}
                     </h3>
                   )}
-                  <ul className='list-disc space-y-1 pl-5 text-[15px] leading-[21px]'>
+                  <List
+                    className={join(
+                      isSteps ? 'list-decimal' : 'list-disc',
+                      'space-y-1 pl-5 text-[15px] leading-[21px]',
+                    )}
+                  >
                     {section.points.map((point, pointIndex) => (
                       <li key={pointIndex} className='break-words'>
                         {point}
                       </li>
                     ))}
-                  </ul>
+                  </List>
                 </section>
               ))}
               <Comparison comparison={overview.comparison} />
             </>
           )}
+          {extra}
           {research.sources.length > 0 && (
             <section className='space-y-2'>
               <h3 className='text-muted-foreground text-[13px] font-semibold'>

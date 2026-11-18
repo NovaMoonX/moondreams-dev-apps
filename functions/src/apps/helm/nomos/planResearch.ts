@@ -178,7 +178,7 @@ const arrivalWords = (depth: ResearchDepth) =>
   RESEARCH_WORDS.arrival[readResearchArrival(depth, 'now')];
 
 /** What the reply says about a look that starts: when it arrives, that a thorough look was cut to a quick one, or that the month's searches are used up (and when a look on the web is booked). */
-const toReplyLine = (input: {
+export const toReplyLine = (input: {
   start: ReturnType<typeof planStart>;
   said: ResearchDepth | 'ask';
   isRerunBooked: boolean;
