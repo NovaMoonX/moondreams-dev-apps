@@ -311,7 +311,10 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               openSheet={sheet === 'names' || sheet === 'kin' ? sheet : null}
               onOpen={setSheet}
             />
-            <ContactRowsSection who={who} />
+            {(who.kind !== 'pet' ||
+              who.phones.length + who.emails.length > 0) && (
+              <ContactRowsSection who={who} />
+            )}
             {who.kind === 'person' && <ConnectionsSection who={who} />}
             {projectLines.length > 0 && (
               <section className='space-y-3'>

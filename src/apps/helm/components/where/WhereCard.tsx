@@ -95,7 +95,10 @@ function WhereCard({ who }: WhereCardProps) {
       ? [
           {
             key: 'home',
-            line: HELM_COPY.whereHomeLine(who.home.name),
+            line:
+              who.kind === 'organization'
+                ? HELM_COPY.whereBasedLine(who.home.name)
+                : HELM_COPY.whereHomeLine(who.home.name),
             source:
               who.homeSource === 'said'
                 ? HELM_COPY.whereSourceSaid
@@ -171,19 +174,25 @@ function WhereCard({ who }: WhereCardProps) {
         {!who.home && (
           <li>
             <AddRow
-              label={HELM_COPY.whereAddHome}
+              label={
+                who.kind === 'organization'
+                  ? HELM_COPY.whereAddBased
+                  : HELM_COPY.whereAddHome
+              }
               isInList
               onClick={() => setTarget({ kind: 'home' })}
             />
           </li>
         )}
-        <li>
-          <AddRow
-            label={HELM_COPY.whereAddAway}
-            isInList
-            onClick={() => setTarget({ kind: 'away', spanId: null })}
-          />
-        </li>
+        {who.kind !== 'organization' && (
+          <li>
+            <AddRow
+              label={HELM_COPY.whereAddAway}
+              isInList
+              onClick={() => setTarget({ kind: 'away', spanId: null })}
+            />
+          </li>
+        )}
       </ul>
       <WhereSheet
         who={who}

@@ -227,16 +227,20 @@ function WhoEditForm({
           />
         </div>
       )}
-      <ContactListField
-        kind='phone'
-        points={phones}
-        onChange={edit(setPhones)}
-      />
-      <ContactListField
-        kind='email'
-        points={emails}
-        onChange={edit(setEmails)}
-      />
+      {(kind !== 'pet' || phones.length + emails.length > 0) && (
+        <>
+          <ContactListField
+            kind='phone'
+            points={phones}
+            onChange={edit(setPhones)}
+          />
+          <ContactListField
+            kind='email'
+            points={emails}
+            onChange={edit(setEmails)}
+          />
+        </>
+      )}
       <ModalFooterActions
         note={
           contactNote ??

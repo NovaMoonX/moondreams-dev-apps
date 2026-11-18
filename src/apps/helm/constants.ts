@@ -10,6 +10,7 @@ import type {
   MediaKind,
   ProcedureVersionReason,
   TopicVersionReason,
+  WhoKind,
 } from '@apps/helm/types';
 import {
   MAX_ATTACHMENTS_PER_TURN,
@@ -439,6 +440,16 @@ export const MOMENT_KINDS = [
   'adopted',
   'passedAway',
 ] as const;
+
+/** The moments that fit each kind: a pet has no job, a business never graduates. */
+export const MOMENT_KINDS_BY_WHO: Record<
+  WhoKind,
+  readonly (typeof MOMENT_KINDS)[number][]
+> = {
+  person: MOMENT_KINDS,
+  pet: ['met', 'moved', 'adopted', 'passedAway'],
+  organization: ['met', 'moved'],
+};
 
 /** How many moments a who page shows before "See all". */
 export const MOMENTS_PREVIEW = 3;
@@ -4204,10 +4215,12 @@ export const HELM_COPY = {
   searchOpenResult: (title: string) => `Open ${title}`,
   whereTitle: 'Where',
   whereHomeLine: (city: string) => `Lives in ${city}`,
+  whereBasedLine: (city: string) => `Based in ${city}`,
   whereSourceSaid: 'You said so',
   whereSourcePage: 'Set here',
   whereSourceTrip: 'from Waypoint',
   whereAddHome: 'Add home',
+  whereAddBased: 'Add where it is based',
   wherePickCity: 'Pick a city to save.',
   whereAddAway: 'Add a time away',
   whereHomeSheetTitle: 'Home',
