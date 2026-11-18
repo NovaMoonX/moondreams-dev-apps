@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import Loading from '@/ui/Loading';
 import ImportanceView from '@apps/helm/components/importance/ImportanceView';
 import HowNomosSeesYou from '@apps/helm/components/howNomosSeesYou/HowNomosSeesYou';
@@ -90,6 +92,18 @@ function HelmApp() {
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const screen = useAppSelector(selectTopScreen);
   const isLocked = keyStatus === 'offline' || keyStatus === 'failed';
+  const isDesktop = useMediaQuery().isAtLeast('lg');
+
+  useKeyboardShortcuts(
+    {
+      'mod+k': () => {
+        if (voice.isLive) return;
+        if (view !== 'search') void showView('search');
+        else document.querySelector<HTMLInputElement>('main input')?.focus();
+      },
+    },
+    !isLocked,
+  );
 
   // A reload with the conversation open waits for the page to publish (children's effects run before this one); a view with nothing to ask about drops the request.
   useEffect(() => {
@@ -124,6 +138,7 @@ function HelmApp() {
           // The keyboard takes the dock's place while the field is in use, so what is typed stays in view.
           isHome &&
           !isLocked &&
+          !isDesktop &&
           !isComposing && (
             <VoiceDock onBrowse={openBrowse} onType={focusComposer} />
           )
@@ -351,7 +366,7 @@ function HelmApp() {
         )}
         {voice.isLive && <LiveConversation />}
         <BrowseSheet
-          isOpen={isBrowseOpen && isHome && !isLocked}
+          isOpen={isBrowseOpen && isHome && !isLocked && !isDesktop}
           onClose={closeBrowse}
           onOpenView={showView}
         />

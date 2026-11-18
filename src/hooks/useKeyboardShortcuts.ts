@@ -8,10 +8,21 @@ const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 const isLayerOpen = () =>
   Array.from(document.querySelectorAll(LAYER_SELECTOR)).some((layer) => {
     const style = getComputedStyle(layer);
-    return style.pointerEvents !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden';
+    return (
+      style.pointerEvents !== 'none' &&
+      style.opacity !== '0' &&
+      style.visibility !== 'hidden'
+    );
   });
 
-/** Runs the handler for a pressed key (lower-case; `?` for Shift+/) while `isEnabled`. Desktop only: ignores typing in a field, an open dialog or drawer, and Ctrl, Meta or Alt. */
+/** The platform's command key as printed on a keycap: ⌘ on Apple devices, Ctrl elsewhere. */
+export const getModifierKeyLabel = () =>
+  typeof navigator !== 'undefined' &&
+  /mac|iphone|ipad|ipod/i.test(navigator.userAgent)
+    ? '⌘'
+    : 'Ctrl';
+
+/** Runs the handler for a pressed key (lower-case; `?` for Shift+/) while `isEnabled`. A plain key is ignored while typing in a field or with a dialog or drawer open, and with Ctrl, Meta or Alt held. A `mod+<key>` handler (`mod+k`) answers ⌘ on Apple devices and Ctrl elsewhere, and works while typing and over a dialog. */
 export function useKeyboardShortcuts(
   handlers: Record<string, () => void>,
   isEnabled: boolean,
@@ -25,21 +36,22 @@ export function useKeyboardShortcuts(
   useEffect(() => {
     if (!isEnabled) return undefined;
     const handleKeyDown = (keyEvent: KeyboardEvent) => {
-      if (
-        keyEvent.ctrlKey ||
-        keyEvent.metaKey ||
-        keyEvent.altKey ||
-        keyEvent.repeat
-      )
+      if (keyEvent.repeat) return;
+      const key = keyEvent.key?.toLowerCase() ?? '';
+      if (keyEvent.ctrlKey || keyEvent.metaKey) {
+        const combo = keyEvent.altKey
+          ? undefined
+          : handlersRef.current[`mod+${key}`];
+        if (!combo) return;
+        keyEvent.preventDefault();
+        combo();
         return;
+      }
+      if (keyEvent.altKey) return;
       const target =
         keyEvent.target instanceof Element ? keyEvent.target : null;
-      if (
-        target?.closest(TYPING_SELECTOR) ||
-        isLayerOpen()
-      )
-        return;
-      const handler = handlersRef.current[keyEvent.key?.toLowerCase() ?? ''];
+      if (target?.closest(TYPING_SELECTOR) || isLayerOpen()) return;
+      const handler = handlersRef.current[key];
       if (!handler) return;
       keyEvent.preventDefault();
       handler();
