@@ -2800,7 +2800,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ...synced,
       ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
     ];
-    const placeTrips =
+    const readPlaceTrips = async () =>
       mode === 'rest'
         ? []
         : procedureRecords.length > 0
@@ -2809,6 +2809,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               firstDay: getLocalDay(capture.createdAt, toKnownZone(timeZone)),
               limit: MAX_CONTEXT_TRIPS,
             }).catch((): Awaited<ReturnType<typeof readSyncedTrips>> => []);
+    const placeTrips = read.isOutside
+      ? filterSourcesForOutside(read.outsideReadScopes, await readPlaceTrips())
+      : await readPlaceTrips();
     const contextWhereabouts =
       mode === 'rest'
         ? null

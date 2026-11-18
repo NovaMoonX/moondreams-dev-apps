@@ -51,7 +51,6 @@ interface ConversationThreadProps {
   foldsBefore?: number | null;
   /** Sessions that started before this moment fold too, the newest included (a fresh start, or today's midnight with Start each day fresh on). */
   freshFrom?: number;
-  /** Something above the thread is asking the person first (home's day card): the page rests at its top until a new turn arrives or the person moves. */
   /** While the page opens, rest on this element with its end clear of the dock instead of following the newest turn. */
   holdsOn?: RefObject<HTMLElement | null> | null;
 }

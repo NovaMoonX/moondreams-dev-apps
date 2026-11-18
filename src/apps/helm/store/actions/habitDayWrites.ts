@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  updateDoc,
   writeBatch,
   type WriteBatch,
 } from 'firebase/firestore';
@@ -8,10 +9,12 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { store } from '@/store';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { readRejudgeFrom } from '@apps/helm/engine/habitLife';
 import { clearRemindersIdle } from '@apps/helm/store/actions/markRemindersChanged';
 import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import type { HabitCheck } from '@apps/helm/types';
+import { toDayKey } from '@apps/helm/utils/planDays';
 import {
   buildCheckPatch,
   buildTallyPatch,
@@ -45,6 +48,19 @@ export const markHabitDay = (
   return isCheck && clearRemindersIdle(batch, uid, Date.now());
 };
 
+/** Marks a past day's summary so it is written again when that day next opens. Best effort: a missing summary or a failure never touches the tick. */
+const markSummaryStale = async (uid: string, dayKey: string) => {
+  const timeZone =
+    store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+  const now = Date.now();
+  if (dayKey >= toDayKey(now, timeZone)) return;
+  if (dayKey < toDayKey(now - 30 * 24 * 60 * 60 * 1000, timeZone)) return;
+  await updateDoc(
+    doc(db, 'apps', 'helm', 'users', uid, 'daySummaries', dayKey),
+    { staleAt: now },
+  ).catch(() => undefined);
+};
+
 const writeDay = (
   uid: string,
   dayKey: string,
@@ -57,6 +73,7 @@ const writeDay = (
   const isBack = markHabitDay(batch, uid, dayKey, habitId, isCheck);
   return batch.commit().then(() => {
     if (isBack) notifyRemindersBack();
+    void markSummaryStale(uid, dayKey);
   });
 };
 

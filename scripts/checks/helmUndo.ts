@@ -3780,6 +3780,232 @@ test('a turn whose lines were all changed since takes nothing back', () => {
   assert.equal(refused.reason, 'nothingToTakeBack');
 });
 
+const PLACE_BEFORE = {
+  rank: 1,
+  words: 'work comes first',
+  saidAt: EARLIER - 9,
+  until: null,
+  captureId: 'turn-0',
+};
+const PLACE_NOW = {
+  rank: 2,
+  words: 'the wedding matters most',
+  saidAt: EARLIER,
+  until: null,
+  captureId: 'turn-1',
+};
+
+const importanceEntry = (collection: 'projects' | 'habits') =>
+  entry(
+    collection,
+    'x1',
+    {
+      'sealed.importance': PLACE_NOW,
+      lastEditedAt: EARLIER,
+      'sealed.title': 'Wedding',
+    },
+    {
+      'sealed.importance': PLACE_BEFORE,
+      lastEditedAt: null,
+      'sealed.title': 'Wedding',
+    },
+  );
+
+test('setImportance on a project puts back where it stood', () => {
+  const result = asWrite(
+    plan(execution([importanceEntry('projects')]), [
+      [
+        'x1',
+        {
+          docId: 'x1',
+          data: { lastEditedAt: EARLIER },
+          opened: { ...projectSealed(), importance: PLACE_NOW },
+        },
+      ],
+    ]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'projects');
+  assert.deepEqual(
+    (result.updates[0].reseal as { importance: unknown }).importance,
+    PLACE_BEFORE,
+  );
+});
+
+test('setImportance on a habit puts back where it stood', () => {
+  const result = asWrite(
+    plan(execution([importanceEntry('habits')]), [
+      [
+        'x1',
+        {
+          docId: 'x1',
+          data: { lastEditedAt: EARLIER },
+          opened: { ...habitSealed('Wedding'), importance: PLACE_NOW },
+        },
+      ],
+    ]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'habits');
+  assert.deepEqual(
+    (result.updates[0].reseal as { importance: unknown }).importance,
+    PLACE_BEFORE,
+  );
+});
+
+test('a place the person moved since is left, and says so', () => {
+  const moved = asRefused(
+    plan(execution([importanceEntry('projects')]), [
+      [
+        'x1',
+        {
+          docId: 'x1',
+          data: { lastEditedAt: EARLIER + 9 },
+          opened: {
+            ...projectSealed(),
+            importance: { ...PLACE_NOW, rank: 5 },
+          },
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(moved.kept, ['Wedding']);
+});
+
+test('a scheduled action the turn made is deleted, and a change to one is put back', () => {
+  const made = entry(
+    'scheduledActions',
+    's1',
+    { 'sealed.title': 'Groceries' },
+    null,
+  );
+  const deleted = asWrite(
+    plan(execution([made]), [
+      ['s1', { docId: 's1', data: { lastEditedAt: null }, opened: null }],
+    ]),
+  );
+  assert.deepEqual(deleted.deletes, [
+    { docId: 's1', collection: 'scheduledActions' },
+  ]);
+  const paused = entry(
+    'scheduledActions',
+    's1',
+    {
+      status: 'paused',
+      pausedAt: EARLIER,
+      lastEditedAt: EARLIER,
+      'sealed.title': 'Groceries',
+    },
+    {
+      status: 'active',
+      pausedAt: null,
+      lastEditedAt: null,
+      'sealed.title': 'Groceries',
+    },
+  );
+  const back = asWrite(
+    plan(execution([paused]), [
+      [
+        's1',
+        {
+          docId: 's1',
+          data: { status: 'paused', pausedAt: EARLIER, lastEditedAt: EARLIER },
+          opened: null,
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(back.updates[0].fields, {
+    status: 'active',
+    pausedAt: null,
+    lastEditedAt: NOW,
+  });
+  const changedSince = asRefused(
+    plan(execution([paused]), [
+      [
+        's1',
+        {
+          docId: 's1',
+          data: { status: 'ended', pausedAt: EARLIER, lastEditedAt: EARLIER },
+          opened: null,
+        },
+      ],
+    ]),
+  );
+  assert.equal(changedSince.kind, 'refused');
+});
+
+test('setWhereabouts puts back where the person lived or was', () => {
+  const HOME_BEFORE = { name: 'Seattle' };
+  const HOME_NOW = { name: 'Leavenworth' };
+  const homeChange = entry(
+    'who',
+    'w1',
+    {
+      'sealed.home': HOME_NOW,
+      'sealed.homeSource': 'said',
+      'sealed.name': 'Priya',
+    },
+    {
+      'sealed.home': HOME_BEFORE,
+      'sealed.homeSource': null,
+      'sealed.name': 'Priya',
+    },
+  );
+  const opened = {
+    name: 'Priya',
+    home: HOME_NOW,
+    homeSource: 'said',
+    away: [],
+  };
+  const result = asWrite(
+    plan(execution([homeChange]), [
+      [
+        'w1',
+        {
+          docId: 'w1',
+          data: { lastEditedAt: null },
+          opened: opened as unknown as UndoTarget['opened'],
+        },
+      ],
+    ]),
+  );
+  const resealed = result.updates[0].reseal as unknown as {
+    home: unknown;
+    homeSource: unknown;
+  };
+  assert.deepEqual(resealed.home, HOME_BEFORE);
+  assert.equal(resealed.homeSource, null);
+  assert.match(result.report, /details of/);
+  assert.doesNotMatch(result.report, /task/);
+  const span = { id: 'a1', from: FRIDAY, to: SUNDAY };
+  const away = entry(
+    'who',
+    'w1',
+    { 'sealed.away': [span], 'sealed.name': 'Priya' },
+    { 'sealed.away': [], 'sealed.name': 'Priya' },
+  );
+  const awayBack = asWrite(
+    plan(execution([away]), [
+      [
+        'w1',
+        {
+          docId: 'w1',
+          data: { lastEditedAt: null },
+          opened: {
+            ...opened,
+            away: [span],
+          } as unknown as UndoTarget['opened'],
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    (awayBack.updates[0].reseal as unknown as { away: unknown }).away,
+    [],
+  );
+});
+
 const failures: string[] = [];
 for (const [name, run] of tests) {
   try {
