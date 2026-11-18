@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocFromCache,
-  runTransaction,
   updateDoc,
   writeBatch,
   type DocumentData,
@@ -13,6 +12,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import { generateUuid } from '@/utils';
@@ -114,7 +114,7 @@ function editDay(edit: DayEdit) {
       ...readable,
     };
     if (navigator.onLine) {
-      const before = await runTransaction(db, async (transaction) => {
+      const before = await runHeldTransaction(uid, async (transaction) => {
         const opened = await openDay(await transaction.get(ref), encryption);
         const sealed = await sealJson<DayAimsSealed>(
           change(opened.payload),
