@@ -93,11 +93,17 @@ jobs:
       - run: npm run check:helm-copy
       - run: npm run check:natural-dates
       - run: npm run check:helm-close
-      - run: npm run check:helm-undo
+      - run: npm run check:helm-voice-turn
       - run: npm run check:helm-activation
       - run: npm run check:helm-task-edits
       - run: npm ci --prefix functions
+      - run: npm run check:helm-undo
+      - run: npm run check:batch-jobs
       - run: npm run check:helm-sort
+      - run: npm run check:helm-name-hints
+      - run: npm run check:repeat-rule
+      - run: npm run check:helm-private
+      - run: npm run check:helm-kin
       - run: npm run check:helm-screen
       - run: npm run check:helm-topic-tree
       - run: npm run check:helm-notes
@@ -108,6 +114,20 @@ jobs:
       - run: npm run check:helm-runs
       - run: npm run check:helm-style
       - run: npm run check:helm-assistant
+      - run: npm run check:helm-personality
       - run: npm run check:helm-search
       - run: npm run check:helm-drop-box
       - run: npm run check:helm-trust
+      - run: npm run check:helm-where
+      - run: npm run check:helm-whereabouts
+      - run: npm run check:helm-habits
+      - run: npm run check:helm-checkin-match
+      - run: npm run check:helm-habit-commands
+      - run: npm run check:helm-importance
+      - run: npm run check:helm-said
+      - run: npm run check:helm-patterns
+      - run: npm run check:helm-seen-as
+      - run: npm run check:helm-scheduled
+      - run: npm run check:helm-guardrails
+      - run: npm run check:helm-act-now
+      - run: npm run check:helm-retention

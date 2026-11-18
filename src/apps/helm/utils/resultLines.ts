@@ -17,6 +17,8 @@ export interface ResultLine {
   };
   /** A line the turn said without writing anything, so an Undo has nothing to take back on it. */
   isNoEffect?: boolean;
+  /** The thing is private, so its row carries the lock. */
+  isPrivate?: boolean;
 }
 
 const toText = (value: unknown) =>
@@ -68,6 +70,19 @@ export function buildResultLines(
         },
       ];
     }
+    if (
+      ref.collection === 'profile' &&
+      'personality' in (effect?.written ?? {})
+    ) {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: toText(effect?.written['sealed.title']) ?? '',
+          detail: toText(effect?.written['sealed.detail']),
+        },
+      ];
+    }
     if (ref.collection === 'profile') {
       return [
         {
@@ -96,6 +111,32 @@ export function buildResultLines(
                   name,
                 )
               : HELM_COPY.projectUntitled),
+          detail: null,
+        },
+      ];
+    }
+    if (ref.collection === 'habits' || ref.collection === 'habitDays') {
+      const check = Object.values(effect?.written ?? {}).find(
+        (value): value is { status: string } =>
+          typeof value === 'object' && value !== null && 'status' in value,
+      );
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            toText(effect?.written['sealed.title']) ??
+            HELM_COPY.resultHabitFallback,
+          detail: check?.status === 'done' ? HELM_COPY.resultDone : null,
+        },
+      ];
+    }
+    if (ref.collection === 'seenAs') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: HELM_COPY.resultSeenAsFallback,
           detail: null,
         },
       ];
@@ -144,7 +185,17 @@ export function buildResultLines(
       : due
         ? HELM_COPY.resultTaskDue(formatTaskDue(due, timeZone, now))
         : null;
-    return [{ key: `${ref.docId}:${index}`, docId: ref.docId, title, detail }];
+    const isPrivate =
+      task?.privacy === 'private' || effect?.written.privacy === 'private';
+    return [
+      {
+        key: `${ref.docId}:${index}`,
+        docId: ref.docId,
+        title,
+        detail,
+        ...(isPrivate ? { isPrivate } : {}),
+      },
+    ];
   };
   const effectLines = execution.effectRefs.flatMap((ref, index) =>
     toRows(ref, index).map((line) => ({ ...line, unitKey: unitKeyOf(index) })),

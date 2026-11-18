@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { HELM_COPY, TASK_TITLE_CAP } from '@apps/helm/constants';
+import PrivateSwitchLine from '@apps/helm/components/privacy/PrivateSwitchLine';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createTask } from '@apps/helm/store/actions/taskActions';
 
@@ -36,6 +37,7 @@ function NewTaskForm({
   const fieldId = useId();
   const [title, setTitle] = useState('');
   const [day, setDay] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = title.trim() === '';
@@ -59,6 +61,7 @@ function NewTaskForm({
       const { id, write } = await createTask(user.uid, encryption, {
         title,
         due: date === undefined ? null : { kind: 'day', date },
+        isPrivate,
       });
       write.catch((error: unknown) => {
         console.error('Helm task was not saved', error);
@@ -98,6 +101,7 @@ function NewTaskForm({
           onChange={(event) => change(title, event.target.value)}
         />
       </div>
+      <PrivateSwitchLine checked={isPrivate} onCheckedChange={setIsPrivate} />
       <ModalFooterActions
         note={isTouched && isMissing ? HELM_COPY.taskTitleMissing : null}
         cancelAction={

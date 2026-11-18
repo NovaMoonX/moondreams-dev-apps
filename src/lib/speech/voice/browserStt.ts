@@ -12,6 +12,8 @@ const toErrorCode = (error: SpeechCommandsError): SttErrorCode =>
 /** Whether the browser can listen on this page. */
 export const canUseBrowserStt = canUseSpeechCommands;
 
+const refused = { arePhrasesRefused: false };
+
 /** What a running listener had heard when it was handed over, with the phrase that opened the turn to take off the front of the words. */
 export interface BrowserSttAdoption {
   listener: ReturnType<typeof createSpeechListener>;
@@ -25,11 +27,13 @@ export const createBrowserStt = ({
   lang,
   adopt = null,
   isFromTap = true,
+  nameHints = null,
 }: {
   lang: string;
   adopt?: BrowserSttAdoption | null;
   /** False when no tap caused this listen, so the browser's voice is not readied for it. */
   isFromTap?: boolean;
+  nameHints?: string[] | null;
 }): SttAdapter => {
   const run = { stop: null as (() => void) | null };
   return {
@@ -93,6 +97,10 @@ export const createBrowserStt = ({
       listener.setOptions({
         lang,
         speechLang: lang,
+        phrases: refused.arePhrasesRefused ? null : nameHints,
+        onPhrasesRefused: () => {
+          refused.arePhrasesRefused = true;
+        },
         onHalt: (error) => options.onError(toErrorCode(error)),
         onFinalTranscript: (alternatives) => {
           heard.finals = [...heard.finals, alternatives[0]];

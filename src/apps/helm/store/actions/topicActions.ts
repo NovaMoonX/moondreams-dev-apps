@@ -27,6 +27,7 @@ import {
   TOPIC_NAME_MAX,
   TOPIC_SECTIONS_MAX,
 } from '@apps/helm/constants';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { openJson, sealJson } from '@apps/helm/security';
 import type {
   HelmEncryption,
@@ -110,11 +111,19 @@ export async function createTopic(
     overviewOf: {},
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     lastWrittenAt: null,
     sealed: await sealJson<TopicSealed>(
-      { name: words.name, emoji: words.emoji, overview: null, sections: [] },
+      {
+        name: words.name,
+        emoji: words.emoji,
+        overview: null,
+        sections: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   });
@@ -391,6 +400,10 @@ export async function deleteTopic(
   } catch (error) {
     await abandon(error);
   }
+  dropFromGroupings(uid, `topics/${topicId}`, {
+    kind: 'topic',
+    id: topicId,
+  });
   await deleteVersions(uid, topicId).catch((error: unknown) =>
     console.error('Helm topic history was not deleted', error),
   );

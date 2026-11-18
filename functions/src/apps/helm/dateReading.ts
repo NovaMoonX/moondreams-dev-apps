@@ -72,9 +72,45 @@ function readCoarseDates(text: string, thisYear: number): DateSpan[] {
   return [...months, ...years, ...decades];
 }
 
+const RANGE_END_RE =
+  /^\s*(?:to|through|thru|until|-|–)\s*(\d{1,2})(?:st|nd|rd|th)?\b/i;
+
+const NOT_A_DAY_RE =
+  /^(?:\s*(?::|\d|[ap]\.?m\b)|\s+(?!(?:in|for|at|and|so|but|then|because|since|while|when|on|with|to|from)\b)[a-z])/;
+
+/** The bare day that closes a range ("Dec 2 to 9"), as a day in the same month as the date before it. */
+function readRangeEnds(text: string, natural: DateSpan[]): DateSpan[] {
+  return natural.flatMap((span) => {
+    const match = RANGE_END_RE.exec(text.slice(span.end));
+    if (!match || span.due.kind !== 'day') return [];
+    if (NOT_A_DAY_RE.test(text.slice(span.end + match[0].length))) return [];
+    const first = new Date(span.due.date);
+    const day = Number(match[1]);
+    const date = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), day);
+    if (
+      day <= first.getUTCDate() ||
+      new Date(date).getUTCMonth() !== first.getUTCMonth()
+    ) {
+      return [];
+    }
+    const start = span.end + match[0].search(/\d/);
+    const end = span.end + match[0].length;
+    return [
+      {
+        id: `date:${start}`,
+        text: text.slice(start, end),
+        start,
+        end,
+        due: { kind: 'day' as const, date },
+        precision: null,
+      },
+    ];
+  });
+}
+
 export const readIsUrgent = (text: string) => URGENT_RE.test(text);
 
-/** The dates the words give: natural phrases ("Friday", "tomorrow at 3") and month, year or decade spans, none overlapping, in order of the text. */
+/** The dates the words give: natural phrases ("Friday", "tomorrow at 3"), a range's bare last day ("Dec 2 to 9") and month, year or decade spans, none overlapping, in order of the text. */
 export function readDates(
   text: string,
   options: { now: number; timeZone: string },
@@ -88,6 +124,7 @@ export function readDates(
     precision: null,
   }));
   return readCoarseDates(text, new Date(options.now).getUTCFullYear())
+    .concat(readRangeEnds(text, natural))
     .filter(
       (coarse) =>
         !natural.some(

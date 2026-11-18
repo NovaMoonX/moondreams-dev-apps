@@ -2911,6 +2911,82 @@ console.log('speechShared: voice router and playback queue checks passed');
     globalThis.fetch = realFetch;
   }
 }
+{
+  const system: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async () => undefined,
+  };
+  const whisperFetches: (string | undefined)[] = [];
+  const whisperFallback = { calls: 0 };
+  const countingSystem: TtsAdapter = {
+    ...system,
+    speak: async () => {
+      whisperFallback.calls += 1;
+    },
+  };
+  const whisperSpeak = (
+    fetchSpeech: () => Promise<SpeechFetch>,
+    extra: { onHeld?: () => void } = {},
+  ) =>
+    createCloudTts({
+      source: {
+        fetchSpeech: (_text, _priority, _signal, _voice, delivery) => {
+          whisperFetches.push(delivery);
+          return fetchSpeech();
+        },
+      },
+      fallback: countingSystem,
+      firstByteMs: 10,
+      ...extra,
+    }).speak('Whisper this', {
+      priority: 'reply',
+      signal: new AbortController().signal,
+      onStart: () => undefined,
+      onEnd: () => undefined,
+      delivery: 'whisper',
+    });
+  const heldWhispers: string[] = [];
+  const whisperOutcomes = await Promise.allSettled([
+    whisperSpeak(async () => ({ status: 'unavailable', detail: 'test' })),
+    whisperSpeak(() => new Promise<never>(() => undefined)),
+    whisperSpeak(async () => ({ status: 'held', reason: 'speechLimit' }), {
+      onHeld: () => heldWhispers.push('held'),
+    }),
+  ]);
+  assert.deepEqual(
+    [
+      whisperOutcomes.map((outcome) => outcome.status),
+      whisperFallback.calls,
+      whisperFetches,
+      heldWhispers,
+    ],
+    [
+      ['rejected', 'rejected', 'rejected'],
+      0,
+      ['whisper', 'whisper', 'whisper'],
+      ['held'],
+    ],
+    'a whispered line that is unavailable, late or held rejects instead of falling back, asks for the whisper and still reports a hold',
+  );
+  const whisperRoute = createPlaybackQueue({ pick: () => system });
+  assert.deepEqual(
+    await whisperRoute.enqueue('Softly', {
+      priority: 'reply',
+      turnKey: 1,
+      delivery: 'whisper',
+    }),
+    { status: 'failed', adapterId: 'system' },
+    'the queue fails a whispered line a device adapter was picked for',
+  );
+  assert.equal(
+    (await whisperRoute.enqueue('Plainly', { priority: 'reply', turnKey: 2 }))
+      .status,
+    'spoken',
+    'an ordinary line still plays on the device adapter',
+  );
+}
 console.log('speechShared: cloud voice checks passed');
 
 const apiKey = 'sk-test-key-123';
@@ -3205,6 +3281,39 @@ assert.deepEqual(
     true,
   ],
   'Google is sent the voice, rate and PCM encoding, then the text, then the write side ends',
+);
+const whisperCall = fakeGoogleCall();
+await googleFrom(whisperCall.call).speak({
+  ...speakInput,
+  voiceId: 'Aoede',
+  speed: 1.1,
+  delivery: 'whisper',
+});
+assert.deepEqual(
+  whisperCall.state.writes,
+  [
+    {
+      streamingConfig: {
+        voice: {
+          languageCode: 'en-US',
+          name: 'Aoede',
+          modelName: 'gemini-2.5-flash-tts',
+        },
+        streamingAudioConfig: {
+          audioEncoding: 'PCM',
+          sampleRateHertz: 24_000,
+        },
+      },
+    },
+    {
+      input: {
+        text: 'Hello there.',
+        prompt:
+          'Whisper this, softly and close, as if no one else in the room should hear.',
+      },
+    },
+  ],
+  'a whisper names the Gemini model and carries the prompt beside the text',
 );
 const googleReader = googleSpeech.stream.getReader();
 googleCall.emit('data', { audioContent: new Uint8Array([1, 2, 3]) });
@@ -3756,6 +3865,26 @@ const goodRead = read();
 assert.ok(
   goodRead.ok && goodRead.text === 'Hello there' && goodRead.appId === 'helm',
   'a good request passes',
+);
+assert.deepEqual(
+  [
+    read({ body: { ...speechBody, delivery: 'whisper' } }),
+    read({ body: { ...speechBody, delivery: null } }),
+    read(),
+  ].map((result) => (result.ok ? result.delivery : 'refused')),
+  ['whisper', null, null],
+  'a whisper, a null and a missing delivery are read',
+);
+assert.deepEqual(
+  ['shout', 1, ''].map((delivery) =>
+    readFailure(read({ body: { ...speechBody, delivery } })),
+  ),
+  [
+    [400, 'delivery'],
+    [400, 'delivery'],
+    [400, 'delivery'],
+  ],
+  'any other delivery is refused',
 );
 const longZone = read({ body: { ...speechBody, timeZone: 'x'.repeat(65) } });
 assert.ok(

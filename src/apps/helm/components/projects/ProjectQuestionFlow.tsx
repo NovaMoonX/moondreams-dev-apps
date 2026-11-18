@@ -22,7 +22,7 @@ import {
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createProject } from '@apps/helm/store/actions/projectActions';
-import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { selectOpenProjects } from '@apps/helm/store/selectors/projectSelectors';
 
 interface ProjectQuestionFlowProps {
   isOpen: boolean;
@@ -66,7 +66,7 @@ function ProjectFlowForm({
 }: ProjectFlowFormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const active = useAppSelector(selectActiveProjects);
+  const active = useAppSelector(selectOpenProjects);
   const [answers, setAnswers] = useState<Answers>(INITIAL);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<Answers>) => {

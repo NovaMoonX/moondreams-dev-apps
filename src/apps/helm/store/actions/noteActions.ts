@@ -9,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   writeBatch,
+  type WriteBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -21,6 +22,7 @@ import {
   NOTE_TOPICS_MAX,
   NOTES_LIMIT,
 } from '@apps/helm/constants';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { openJson, sealJson } from '@apps/helm/security';
 import {
   planPhotoRelease,
@@ -99,10 +101,21 @@ export async function createNote(
     projectIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
-      { title: words.title, body: words.body, via: null, links: [] },
+      {
+        title: words.title,
+        body: words.body,
+        via: null,
+        links: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
+      },
       encryption,
     ),
   };
@@ -304,6 +317,7 @@ export async function deleteNote(
     ...topicsCitingNote(topics, noteId),
   ]);
   const write = deleteDoc(ref);
+  dropFromGroupings(uid, `notes/${noteId}`);
   const released = planPhotoRelease(
     media,
     [{ kind: 'note', id: noteId }],
@@ -393,10 +407,21 @@ export async function saveAnswerAsNote(
     projectIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
-      { title: words.title, body: words.body, via: null, links: [] },
+      {
+        title: words.title,
+        body: words.body,
+        via: null,
+        links: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
+      },
       encryption,
     ),
   };
@@ -412,6 +437,71 @@ export async function saveAnswerAsNote(
     );
   }
   return { kind: 'saved', noteId: id, written: batch.commit() };
+}
+
+/** What Keep it files from a learn-later overview: its words as a note, filed under a topic or loose. */
+export interface OverviewNoteInput {
+  id: string;
+  title: string;
+  body: string;
+  topic: OpenTopic | null;
+  noteCount: number;
+  sourceCaptureId: string | null;
+  executionId: string;
+}
+
+export type OverviewNoteSaved =
+  { kind: 'saved'; written: Promise<void> } | { kind: 'empty' | 'full' };
+
+/** Keeps an overview as a note in one batch with the topic's pending mark and whatever else the caller writes with it (`alsoWrite`). Handed back unawaited so it works offline. */
+export async function saveOverviewAsNote(
+  uid: string,
+  encryption: HelmEncryption,
+  input: OverviewNoteInput,
+  alsoWrite: (batch: WriteBatch) => void,
+): Promise<OverviewNoteSaved> {
+  const words = toWords({ title: input.title, body: input.body, topicIds: [] });
+  if (!words.body) return { kind: 'empty' };
+  if (input.noteCount >= NOTES_LIMIT) return { kind: 'full' };
+  const note: Note = {
+    topicIds: input.topic ? [input.topic.id] : [],
+    source: 'learnedLater',
+    isFromGeneralAnswer: true,
+    checkedAt: null,
+    hasHealthCaution: false,
+    sourceCaptureId: input.sourceCaptureId,
+    sourceMediaId: null,
+    projectIds: [],
+    createdBy: 'person',
+    executionId: input.executionId,
+    privacy: 'ordinary',
+    createdAt: Date.now(),
+    lastEditedAt: null,
+    sealed: await sealJson<NoteSealed>(
+      {
+        title: words.title,
+        body: words.body,
+        via: null,
+        links: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
+      },
+      encryption,
+    ),
+  };
+  const batch = writeBatch(db);
+  batch.set(doc(notesOf(uid), input.id), note);
+  if (input.topic) {
+    batch.update(
+      doc(topicsOf(uid), input.topic.id),
+      withNoteAdded(input.topic.docState, input.id),
+    );
+  }
+  alsoWrite(batch);
+  return { kind: 'saved', written: batch.commit() };
 }
 
 export type SavedAnswerUndo = 'undone' | 'edited' | 'offline';

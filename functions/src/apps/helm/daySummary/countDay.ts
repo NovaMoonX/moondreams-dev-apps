@@ -27,6 +27,9 @@ export interface HelmDayCounts {
   factsAdded: number;
   peopleAdded: number;
   placesAdded: number;
+  habitsStarted: number;
+  habitChecksDone: number;
+  connectionsAdded: number;
   tasksDone: number;
   planned: number;
   answered: number;
@@ -42,6 +45,13 @@ export interface DayCapture {
     string,
     { answeredAt: number | null; dismissedAt: number | null }
   >;
+}
+
+/** One tick or skip from a habit's day document, with whether an outside assistant's turn made it. */
+export interface DayHabitCheck {
+  at: number;
+  status: string;
+  isOutside: boolean;
 }
 
 export interface DayExecution {
@@ -69,6 +79,9 @@ const NO_COUNTS: HelmDayCounts = {
   factsAdded: 0,
   peopleAdded: 0,
   placesAdded: 0,
+  habitsStarted: 0,
+  habitChecksDone: 0,
+  connectionsAdded: 0,
   tasksDone: 0,
   planned: 0,
   answered: 0,
@@ -113,11 +126,14 @@ export const getDayBounds = (dayKey: string, timeZone: string): DayBounds => {
 const isIn = (at: number | null, { dayStart, dayEnd }: DayBounds) =>
   at !== null && at >= dayStart && at < dayEnd;
 
-/** What happened on one day, each item counted on the day it happened; an outside assistant's turns, an undone or failed execution and an undo itself count for nothing. */
+/** What happened on one day, each item counted on the day it happened; an outside assistant's turns, habits and connections, an undone or failed execution and an undo itself count for nothing, and a habit or connection started or a check-in removed by an undo is no longer in the records read. */
 export const countHelmDay = (input: {
   captures: DayCapture[];
   executions: DayExecution[];
   tasks: { completedAt: number | null }[];
+  habits: { createdAt: number; isOutside: boolean }[];
+  connections: { createdAt: number; isOutside: boolean }[];
+  habitChecks: DayHabitCheck[];
   dayStart: number;
   dayEnd: number;
 }): HelmDayCounts => {
@@ -154,6 +170,17 @@ export const countHelmDay = (input: {
       (capture) =>
         capture.turnLeadId === null && isIn(capture.createdAt, bounds),
     ).length,
+    habitsStarted: input.habits.filter(
+      (habit) => !habit.isOutside && isIn(habit.createdAt, bounds),
+    ).length,
+    connectionsAdded: input.connections.filter(
+      (connection) =>
+        !connection.isOutside && isIn(connection.createdAt, bounds),
+    ).length,
+    habitChecksDone: input.habitChecks.filter(
+      (check) =>
+        check.status === 'done' && !check.isOutside && isIn(check.at, bounds),
+    ).length,
     tasksDone: input.tasks.filter((task) => isIn(task.completedAt, bounds))
       .length,
     answered: questions.filter(
@@ -179,6 +206,21 @@ const joinAnd = (parts: string[]) =>
 
 const MAX_CLAUSES = 3;
 
+const toHabitClause = (counts: HelmDayCounts) => {
+  const parts = [
+    counts.habitChecksDone > 0
+      ? `logged ${plural(counts.habitChecksDone, 'habit check-in', 'habit check-ins')}`
+      : null,
+    counts.habitsStarted > 0
+      ? `started ${counts.habitsStarted === 1 ? 'a habit' : `${counts.habitsStarted} habits`}`
+      : null,
+  ].filter((part): part is string => part !== null);
+  return {
+    size: counts.habitChecksDone + counts.habitsStarted,
+    text: joinAnd(parts),
+  };
+};
+
 const toAddedClause = (counts: HelmDayCounts) => {
   const kinds = (
     [
@@ -188,6 +230,7 @@ const toAddedClause = (counts: HelmDayCounts) => {
       [counts.factsAdded, 'fact', 'facts'],
       [counts.peopleAdded, 'person', 'people'],
       [counts.placesAdded, 'place', 'places'],
+      [counts.connectionsAdded, 'connection', 'connections'],
     ] as const
   )
     .filter(([count]) => count > 0)
@@ -206,6 +249,7 @@ const toAddedClause = (counts: HelmDayCounts) => {
 export const toDayLine = (counts: HelmDayCounts) => {
   const clauses = [
     toAddedClause(counts),
+    toHabitClause(counts),
     {
       size: counts.tasksDone,
       text: `finished ${plural(counts.tasksDone, 'task', 'tasks')}`,
@@ -350,7 +394,11 @@ export const toEffectTitles = (
     const ref = refs[index];
     if (ref?.docId && undoneDocIds.includes(ref.docId)) return [];
     const written = effect.written ?? {};
-    const isMade = ref?.op === 'create';
+    const isMade =
+      ref?.op === 'create' &&
+      ref.collection !== 'habits' &&
+      ref.collection !== 'connections' &&
+      ref.collection !== 'scheduledActions';
     const isDone =
       ref?.collection === 'tasks' &&
       ref.op === 'update' &&

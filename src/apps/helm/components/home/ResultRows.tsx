@@ -18,6 +18,7 @@ import type { OpenExecution } from '@apps/helm/types';
 import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelectors';
 import { selectOpenRunById } from '@apps/helm/store/selectors/runSelectors';
 import type { ResultLine } from '@apps/helm/utils/resultLines';
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
 interface ResultRowsProps {
   execution: OpenExecution;
@@ -100,14 +101,16 @@ function ResultRows({ execution, lines, undos, isFlat }: ResultRowsProps) {
                       afterBackLayersClose(() => void showView('run', runId))
                   : null;
           const titleLine = (
-            <p
+            <PrivateTitle
+              as='p'
+              isPrivate={line.isPrivate === true}
               className={join(
-                'text-[15px] leading-[21px] break-words',
+                'text-[15px] leading-[21px]',
                 isStruck && 'text-muted-foreground line-through',
               )}
             >
               {line.title}
-            </p>
+            </PrivateTitle>
           );
           const detailLine = note && (
             <p className='text-muted-foreground text-[13px] break-words'>
