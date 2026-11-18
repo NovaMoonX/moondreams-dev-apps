@@ -1,6 +1,7 @@
 import { useAppSelector } from '@/store';
 import { getDateTimeFormat } from '@/utils/timezoneUtils';
 import type { OpenTask, SyncedRecord } from '@apps/helm/types';
+import { readMeetingFormat } from '@apps/helm/utils/meetingWhere';
 import {
   formatDayName,
   shiftDayKey,
@@ -24,7 +25,7 @@ export function getMeetingDay(startAt: number, now: number, timeZone: string) {
   return formatDayName(key, todayKey);
 }
 
-/** A task's meeting as it stands now: the synced event's live start and title, or what the task stored when the event isn't among those read. */
+/** A task's meeting as it stands now: the synced event's live start, title, format and place, or what the task stored when the event isn't among those read. */
 export const resolveMeeting = (
   task: Pick<OpenTask, 'meeting' | 'meetingLabel'> | null,
   synced: SyncedRecord[],
@@ -34,6 +35,8 @@ export const resolveMeeting = (
   return {
     startAt: record?.startAt ?? task.meeting.startAt,
     label: record?.sealed.title || task.meetingLabel,
+    format: readMeetingFormat(record?.sealed.extra.format),
+    place: record?.sealed.placeLabel ?? null,
   };
 };
 

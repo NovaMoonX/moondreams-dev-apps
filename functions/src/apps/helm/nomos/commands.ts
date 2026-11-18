@@ -28,6 +28,13 @@ import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
 import { CONTACT_LABEL_CAP, CONTACT_VALUE_CAP } from './contactPoints.js';
 import type { Cadence } from '../../../vendor/cadenceUtils.js';
 import type { DayPart } from './habitDay.js';
+import { SEEN_AS_LIMITS } from './seenAs.js';
+import {
+  HONESTY_LEVELS,
+  PERSONALITY_TRAITS,
+  type HonestyLevel,
+  type PersonalityTrait,
+} from './personality.js';
 import {
   CONNECTION_KINDS,
   CONNECTION_STATUSES,
@@ -38,6 +45,24 @@ import {
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
+
+export const MEETS_HOWS = ['inPerson', 'video', 'phone'] as const;
+export type MeetsHow = (typeof MEETS_HOWS)[number];
+
+export const TASK_EFFORTS = ['light', 'moderate', 'heavy'] as const;
+export type TaskEffort = (typeof TASK_EFFORTS)[number];
+export const MAX_TASK_MINUTES = 12 * 60;
+
+/** What a task stores about how it meets; a missing or odd field reads as none. */
+export const readMeets = (
+  value: unknown,
+): { how: MeetsHow; setBy: 'person' | 'calendar' } | null => {
+  const entry = value as { how?: unknown; setBy?: unknown } | null | undefined;
+  const how = MEETS_HOWS.find((known) => known === entry?.how);
+  return how
+    ? { how, setBy: entry?.setBy === 'calendar' ? 'calendar' : 'person' }
+    : null;
+};
 
 export interface Token {
   id: string;
@@ -83,7 +108,7 @@ export const COMMAND_KINDS = [
 ] as const;
 
 /** Commands that delete a record. A deleting command is kept only when its subject is still named once every closing phrase is taken out of the turn's words. */
-export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+export const DELETING_COMMANDS = ['removeKeyDate', 'removeSeenAs'] as const;
 
 /** A terminal tool beside `file_results`: the turn only ends the conversation. It carries no command, so a close can never delete or change anything. */
 export const CLOSE_CONVERSATION_TOOL: TerminalTool = {
@@ -429,6 +454,12 @@ export const MAX_CONTEXT_IMPORTANCE = 30;
 /** The kind the reply may carry that places a project or habit in the person's order of what matters; read from its own list and no `NomosCommand`. */
 export const IMPORTANCE_COMMAND_KINDS = ['setImportance'] as const;
 
+export const SEEN_AS_COMMAND_KINDS = ['correctSeenAs', 'removeSeenAs'] as const;
+export const MAX_SEEN_AS_PER_TURN = 3;
+
+export const PERSONALITY_COMMAND_KINDS = ['setPersonality'] as const;
+export const MAX_PERSONALITY_PER_TURN = 1;
+
 export const IMPORTANCE_RELATIONS = [
   'most',
   'above',
@@ -509,6 +540,28 @@ export interface SetImportanceCommand {
   otherId: string | null;
   words: string;
   until: number | null;
+}
+
+/** The person says a line of how the assistant sees them is not right, in their own words. */
+export interface CorrectSeenAsCommand {
+  kind: 'correctSeenAs';
+  lineId: string;
+  words: string;
+}
+
+export interface RemoveSeenAsCommand {
+  kind: 'removeSeenAs';
+  lineId: string;
+}
+
+export type SeenAsCommand = CorrectSeenAsCommand | RemoveSeenAsCommand;
+
+/** The person asks how the assistant talks to change ("be more blunt with me"): traits to add or take off and how honest, each read only from the closed set. */
+export interface SetPersonalityCommand {
+  kind: 'setPersonality';
+  addTraits: PersonalityTrait[];
+  removeTraits: PersonalityTrait[];
+  honesty: HonestyLevel | null;
 }
 
 export type HabitCommand =
@@ -676,6 +729,14 @@ export type NomosCommand =
       meeting: QuestionsMeeting | null;
       /** People already settled by id, for a task made from an answer rather than a reply's mentions. */
       whoIds?: string[];
+      /** How the task meets; absent or null means it was not said. */
+      meetsHow?: MeetsHow | null;
+      /** How heavy the task is, judged once when it is made; absent or null reads as moderate. */
+      effort?: TaskEffort | null;
+      /** The length the person said, in minutes; absent or null when none was said. */
+      durationMinutes?: number | null;
+      /** Said on the day's aims; a turn that answers the morning card files each thing it names. */
+      isAim?: boolean;
     }
   | {
       kind: 'updateTask';
@@ -686,6 +747,10 @@ export type NomosCommand =
       isUrgent: boolean | null;
       whoRefs: string[];
       placeRefs: string[];
+      /** Absent leaves it as it is; null clears it. */
+      meetsHow?: MeetsHow | null;
+      /** An existing task named as one of the day's aims; changes nothing about the task itself. */
+      isAim?: boolean;
     }
   | { kind: 'completeTask'; taskId: string }
   | { kind: 'setPrivate'; taskId: string; isPrivate: boolean };
@@ -1235,6 +1300,10 @@ export const buildFileResultsTool = ({
             'title',
             'dueSpanId',
             'isUrgent',
+            'meetsHow',
+            'effort',
+            'durationMinutes',
+            'isAim',
             'isPrivate',
             'targetAlias',
             'isQuiet',
@@ -1337,6 +1406,11 @@ export const buildFileResultsTool = ({
             'otherAlias',
             'importanceRelation',
             'subjectName',
+            'seenAsAlias',
+            'seenAsWords',
+            'addTraits',
+            'removeTraits',
+            'honesty',
             'repeat',
             'startsSpanId',
             'timeSpanId',
@@ -1384,6 +1458,8 @@ export const buildFileResultsTool = ({
                 ...LEARN_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
                 ...IMPORTANCE_COMMAND_KINDS,
+                ...SEEN_AS_COMMAND_KINDS,
+                ...PERSONALITY_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 ...CONTACT_COMMAND_KINDS,
                 ...CONNECTION_COMMAND_KINDS,
@@ -1411,6 +1487,26 @@ export const buildFileResultsTool = ({
             isUrgent: nullable(
               'boolean',
               'true when the capture marks this task urgent; null to leave it as it is.',
+            ),
+            meetsHow: {
+              type: ['string', 'null'],
+              enum: [...MEETS_HOWS, null],
+              description:
+                'createTask and updateTask: inPerson, video or phone only when the person says how that meeting or call happens; null for every other kind and whenever it is not said.',
+            },
+            effort: {
+              type: ['string', 'null'],
+              enum: [...TASK_EFFORTS, null],
+              description:
+                'createTask: how heavy the task is, judged once now: light (a quick errand or message), moderate, or heavy (deep or draining work); null when unsure.',
+            },
+            durationMinutes: nullable(
+              'integer',
+              `createTask: the length in minutes only when the person says how long it takes ("an hour" is 60); null when they do not say, never a guess.`,
+            ),
+            isAim: nullable(
+              'boolean',
+              'createTask and updateTask: true on each thing the person names when <aims_turn> is present, in the order said, for an existing task an updateTask with its alias and every other field null; null otherwise.',
             ),
             isPrivate: nullable(
               'boolean',
@@ -1751,7 +1847,7 @@ export const buildFileResultsTool = ({
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, updateHabit, connect, updateConnection, disconnect and setQuiet (when isGuess is false): the words of the capture that ask for it, copied exactly; null otherwise.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, correctSeenAs, removeSeenAs, setPersonality, updateHabit, connect, updateConnection, disconnect and setQuiet (when isGuess is false): the words of the capture that ask for it, copied exactly; null otherwise.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1996,6 +2092,32 @@ export const buildFileResultsTool = ({
               'string',
               'setImportance: the name the person said when subjectAlias is null, at most 80 characters; null otherwise. The words of the placement are requestQuote and a "until Friday" is dateSpanId.',
             ),
+            seenAsAlias: nullable(
+              'string',
+              'correctSeenAs and removeSeenAs: the alias (sy1, sy2, …) in <how_you_seem> of the line the person is talking about; null otherwise.',
+            ),
+            seenAsWords: nullable(
+              'string',
+              `correctSeenAs: what the person says is true instead, in their own words, at most ${SEEN_AS_LIMITS.corrected} characters; null otherwise. The words of the request are requestQuote.`,
+            ),
+            addTraits: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...PERSONALITY_TRAITS] },
+              description:
+                'setPersonality: the traits the person asks the assistant to be or have more of ("be more blunt with me" is blunt); null otherwise.',
+            },
+            removeTraits: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...PERSONALITY_TRAITS] },
+              description:
+                'setPersonality: the traits the person asks the assistant to stop being ("stop being so formal" is formal); null otherwise.',
+            },
+            honesty: {
+              type: ['string', 'null'],
+              enum: [...HONESTY_LEVELS, null],
+              description:
+                'setPersonality: tactful to soften hard news, straight to say it plainly, unvarnished to hold nothing back ("be more honest with me" is unvarnished); null when the request is about traits only.',
+            },
             repeat: {
               type: ['object', 'null'],
               description:

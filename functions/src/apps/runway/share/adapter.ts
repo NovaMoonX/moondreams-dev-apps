@@ -26,6 +26,14 @@ import {
   type SealedPayload,
 } from '../planKey.js';
 import { RUNWAY_SHARES } from './manifest.js';
+import {
+  readAccountBalances,
+  readCardsDue,
+  readEnvelopeSpending,
+  readLiveArgs,
+  readToday,
+  toDayText,
+} from './balances.js';
 import { readTransactions } from './transactions.js';
 
 const readManifest = () => {
@@ -457,6 +465,23 @@ async function readStoredEnvelopes(
   };
 }
 
+const toHashedRef = (prefix: string, id: string) =>
+  `${prefix}/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
+
+const toKindLabel = (kind: string) =>
+  `${kind.slice(0, 1).toUpperCase()}${kind.slice(1).replace(/[_-]/g, ' ')}`;
+
+/** An amount leaves only with its currency. */
+const toAmount = (cents: number | null, currency: string | null) =>
+  cents === null || currency === null
+    ? { amountCents: null, currency: null }
+    : { amountCents: cents, currency };
+
+const toTotal = (cents: number, currency: string | null) => ({
+  totalCents: currency === null ? null : cents,
+  currency,
+});
+
 const toTransactionRef = (id: string) =>
   `purchases/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
 
@@ -483,6 +508,50 @@ const defaultDeps: RunwayAdapterDeps = {
     });
   },
 };
+
+async function queryEnvelopeSpending(
+  deps: RunwayAdapterDeps,
+  uid: string,
+  rawArgs: unknown,
+): Promise<LiveQueryResult> {
+  const firestore = deps.firestore();
+  const now = deps.now();
+  const args = readLiveArgs(rawArgs);
+  const stored = await readStoredEnvelopes(
+    firestore,
+    deps.keyring(),
+    uid,
+    readToday(args.zone, now),
+  );
+  const read = await readEnvelopeSpending(
+    firestore,
+    deps.keyring(),
+    uid,
+    stored.kind === 'envelopes' ? stored.envelopes : [],
+    stored.kind === 'envelopes' && stored.isFull,
+    args,
+    now,
+  );
+  return {
+    records: read.rows.map((row) =>
+      toRecord({
+        sourceRef: toHashedRef('envelopes', row.id),
+        kind: 'artifact',
+        title: row.name,
+        detail: `Spent ${DAY_WORDS.format(read.from)} to ${DAY_WORDS.format(read.to)}`,
+        startAt: read.from,
+        endAt: read.to,
+        isAllDay: true,
+        ...toAmount(row.spentCents, read.currency),
+      }),
+    ),
+    matchedCount: read.rows.length,
+    ...toTotal(read.totalCents, read.currency),
+    isPartial: read.isPartial,
+    from: toDayText(read.from),
+    to: toDayText(read.to),
+  };
+}
 
 export function createRunwayAdapter(
   deps: RunwayAdapterDeps = defaultDeps,
@@ -541,6 +610,72 @@ export function createRunwayAdapter(
       };
     },
     query: async (ctx, req): Promise<LiveQueryResult> => {
+      if (req.category === 'envelopeBalances')
+        return queryEnvelopeSpending(deps, ctx.uid, req.args);
+      if (req.category === 'accountBalances') {
+        const read = await readAccountBalances(
+          deps.firestore(),
+          deps.keyring(),
+          ctx.uid,
+          readLiveArgs(req.args),
+        );
+        return {
+          records: read.rows.map((row) =>
+            toRecord({
+              sourceRef: toHashedRef('accounts', row.id),
+              kind: 'artifact',
+              title: row.name,
+              subtitle: row.kind === null ? null : toKindLabel(row.kind),
+              detail:
+                row.balanceOn === null
+                  ? null
+                  : `Balance as of ${DAY_WORDS.format(row.balanceOn)}`,
+              ...toAmount(row.balanceCents, read.currency),
+            }),
+          ),
+          matchedCount: read.rows.length,
+          ...toTotal(read.totalCents, read.currency),
+          isPartial: read.isPartial,
+          from: null,
+          to: null,
+        };
+      }
+      if (req.category === 'cardsDue') {
+        const read = await readCardsDue(
+          deps.firestore(),
+          deps.keyring(),
+          ctx.uid,
+          readLiveArgs(req.args),
+          deps.now(),
+        );
+        return {
+          records: read.rows.map((row) =>
+            toRecord({
+              sourceRef: toHashedRef('cards', row.id),
+              kind: 'task',
+              title: row.name,
+              subtitle:
+                row.amountKind === null
+                  ? null
+                  : row.amountKind === 'statement'
+                    ? 'Statement balance'
+                    : 'Minimum payment',
+              detail:
+                row.dueAt === null
+                  ? 'No due day is set'
+                  : `Due ${DAY_WORDS.format(row.dueAt)}`,
+              dueAt: row.dueAt,
+              isAllDay: row.dueAt !== null,
+              ...toAmount(row.amountCents, read.currency),
+            }),
+          ),
+          matchedCount: read.rows.length,
+          ...toTotal(read.totalCents, read.currency),
+          isPartial: read.isPartial,
+          from: null,
+          to: null,
+        };
+      }
       if (req.category !== 'transactions') throw new Error('Unknown category.');
       const read = await readTransactions(
         deps.firestore(),

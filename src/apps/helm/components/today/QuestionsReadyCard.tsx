@@ -17,6 +17,7 @@ import {
 } from '@apps/helm/store/actions/planActions';
 import { setReadyAnswer } from '@apps/helm/store/actions/taskActions';
 import type { OpenTask } from '@apps/helm/types';
+import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import {
   getMeetingDay,
@@ -177,6 +178,11 @@ function QuestionsReadyCard({
                   formatClock(meeting.startAt, timeZone),
                 )}
               </span>
+              <MeetingWhere
+                how={meeting.format}
+                place={meeting.place}
+                hasBefore
+              />
             </span>
           </span>
         )}

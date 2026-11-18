@@ -28,6 +28,7 @@ import {
   createQuoteBook,
   createSyncedBook,
 } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import type { TaskDue } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
   buildContext,
   readMadeTitles,
@@ -261,6 +262,8 @@ test('a sound reply resolves its alias and its day', () => {
     whoRefs: ['$w1'],
     placeRefs: [],
     projectRef: null,
+    durationMinutes: null,
+    effort: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -1953,6 +1956,155 @@ test('every task effect carries the title, so a card can name the task', () => {
   );
   assert.equal(resealed.title, 'Order the gold rings');
   assert.equal(resealed.extra, 1, 'other sealed keys survive a rename');
+});
+
+test('meetsHow is written for a task with a moment due, dropped for one without, and undone with its earlier value', () => {
+  const at = Date.UTC(2026, 10, 16, 18, 0);
+  const task = (due: TaskDue | null, meets: unknown = null) => ({
+    status: 'open' as const,
+    due,
+    isUrgent: false,
+    title: 'Call with Priya',
+    whoIds: [],
+    placeIds: [],
+    meets: meets as null,
+    sealed: { title: 'Call with Priya', notes: null, steps: {} },
+  });
+  const run = (
+    commands: Parameters<typeof planWrites>[0]['commands'],
+    existing: Map<string, ReturnType<typeof task>>,
+  ) =>
+    planWrites({
+      commands,
+      existing,
+      captureId: CAPTURE_ID,
+      executionId: 'exec-meets',
+      now: 6000,
+      seal,
+      newId: createIdCounter(),
+    });
+  const update = (meetsHow: 'video' | 'phone' | null | undefined) => ({
+    kind: 'updateTask' as const,
+    taskId: TASK_IDS[0],
+    title: null,
+    hasDue: false,
+    due: null,
+    isUrgent: null,
+    whoRefs: [],
+    placeRefs: [],
+    ...(meetsHow !== undefined && { meetsHow }),
+  });
+  const timed = new Map([[TASK_IDS[0], task({ kind: 'moment', at })]]);
+  const set = run([update('video')], timed);
+  assert.deepEqual(set.effects[0].written.meets, {
+    how: 'video',
+    setBy: 'person',
+  });
+  assert.equal(set.effects[0].previous?.meets, null);
+  assert.deepEqual(set.updates[0].data.meets, {
+    how: 'video',
+    setBy: 'person',
+  });
+  assert.equal(
+    run(
+      [update('video')],
+      new Map([[TASK_IDS[0], task({ kind: 'day', date: at })]]),
+    ).effects.length,
+    0,
+    'a task with no time takes no format',
+  );
+  assert.equal(run([update(undefined)], timed).effects.length, 0);
+  const calendar = { how: 'inPerson', setBy: 'calendar' };
+  const changed = run(
+    [update('phone')],
+    new Map([[TASK_IDS[0], task({ kind: 'moment', at }, calendar)]]),
+  );
+  assert.deepEqual(changed.effects[0].previous?.meets, calendar);
+  const cleared = run(
+    [update(null)],
+    new Map([[TASK_IDS[0], task({ kind: 'moment', at }, calendar)]]),
+  );
+  assert.equal(cleared.effects[0].written.meets, null);
+  const made = run(
+    [
+      {
+        kind: 'createTask',
+        ref: '$new1',
+        title: 'Call with Priya',
+        due: { kind: 'moment', at },
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: null,
+        questions: [],
+        meeting: null,
+        meetsHow: 'video',
+      },
+      {
+        kind: 'createTask',
+        ref: '$new2',
+        title: 'Ring Sam',
+        due: { kind: 'day', date: at },
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: null,
+        questions: [],
+        meeting: null,
+        meetsHow: 'phone',
+      },
+    ],
+    new Map(),
+  );
+  assert.deepEqual(
+    made.creates.map((entry) => entry.data.meets),
+    [{ how: 'video', setBy: 'person' }, null],
+  );
+});
+
+test('a task line in the context carries how it meets, and a synced event its format and place', () => {
+  const at = Date.UTC(2026, 10, 16, 18, 0);
+  const { message } = buildContext({
+    text: 'what is on Monday',
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 15, 22, 0),
+    timeZone: 'UTC',
+    tasks: [
+      {
+        id: TASK_IDS[0],
+        title: 'Call',
+        due: { kind: 'moment', at },
+        meetsHow: 'video',
+      },
+      { id: TASK_IDS[1], title: 'Lunch', due: { kind: 'moment', at } },
+    ],
+    synced: [
+      {
+        id: 's1',
+        connectorId: 'google:calendar',
+        accountId: 'a',
+        kind: 'event',
+        category: 'events',
+        title: 'Standup',
+        subtitle: null,
+        startAt: at,
+        endAt: at + 3_600_000,
+        dueAt: null,
+        isAllDay: false,
+        isEnded: false,
+        detail: null,
+        placeLabel: '12 Orchard Rd',
+        amountCents: null,
+        currency: null,
+        extra: { format: 'video' },
+        asOf: null,
+      },
+    ],
+  });
+  assert.ok(/"title":"Call"[^}]*"meets":"video"/.test(message));
+  assert.ok(!/"title":"Lunch"[^}]*"meets"/.test(message));
+  assert.ok(message.includes('"place":"12 Orchard Rd"'));
+  assert.ok(message.includes('"format":"video"'));
 });
 
 test('a loop stays inside its turns and its time, and the ask counts as a turn', async () => {

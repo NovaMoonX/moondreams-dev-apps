@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Bell,
   Bot,
+  Drama,
   Eye,
   History,
   Lightbulb,
@@ -34,6 +35,7 @@ import GatesClosedNote from '@/components/GatesClosedNote';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import NewBadge from '@/components/NewBadge';
 import SettingsRow from '@/components/SettingsRow';
+import PersonalityScreen from '@apps/helm/components/personality/PersonalityScreen';
 import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
@@ -54,10 +56,11 @@ import { useNow } from '@/hooks/useNow';
 import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
 import { selectHasOutsideSource } from '@apps/helm/store/selectors/captureSelectors';
-import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
+import { useAssistantPersonality } from '@apps/helm/hooks/useAssistantPersonality';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { describeTraits } from '@apps/helm/engine/personality';
 import { formatClockTime } from '@/utils/formatUtils';
 import { setDailyFreshOn } from '@apps/helm/store/actions/settingsActions';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
@@ -119,8 +122,9 @@ function SettingsScreen({
 }: SettingsScreenProps) {
   const { user, logOut } = useAuth();
   const assistant = useAssistantName();
-  const tone = useAssistantTone();
+  const traits = describeTraits(useAssistantPersonality().traits);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [isPersonalityOpen, setIsPersonalityOpen] = useState(false);
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isQuietOpen, setIsQuietOpen] = useState(false);
   const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
@@ -171,12 +175,15 @@ function SettingsScreen({
           <SettingsRow
             icon={<Sparkles className='size-5' aria-hidden='true' />}
             title={HELM_COPY.assistantRow}
-            description={HELM_COPY.assistantLine(
-              assistant,
-              ASSISTANT_TONES.find((option) => option.value === tone)?.label ??
-                '',
-            )}
+            description={assistant}
             onClick={() => setIsAssistantOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<Drama className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.personalityRow(assistant)}
+            description={traits}
+            onClick={() => setIsPersonalityOpen(true)}
             hasChevron
           />
           <SettingsRow
@@ -361,6 +368,9 @@ function SettingsScreen({
         isOpen={isAssistantOpen}
         onClose={() => setIsAssistantOpen(false)}
       />
+      {isPersonalityOpen && (
+        <PersonalityScreen onClose={() => setIsPersonalityOpen(false)} />
+      )}
       <PhoneLocationSheet
         isOpen={isLocationOpen}
         onClose={() => setIsLocationOpen(false)}

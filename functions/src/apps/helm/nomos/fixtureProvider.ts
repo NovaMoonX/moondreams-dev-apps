@@ -108,6 +108,7 @@ const toUpdate = (
   alias: string,
   dueSpanId: string | null,
   isUrgent: true | null,
+  meetsHow: 'inPerson' | 'video' | 'phone' | null = null,
 ) => ({
   kind: 'updateTask',
   ref: null,
@@ -115,7 +116,39 @@ const toUpdate = (
   title: null,
   dueSpanId,
   isUrgent,
+  meetsHow,
 });
+
+const HOW_WORDS: [RegExp, 'inPerson' | 'video' | 'phone'][] = [
+  [/^(on )?(video|zoom|a video call)$/i, 'video'],
+  [/^(on )?(the )?(phone|a phone call)$/i, 'phone'],
+  [/^in person$/i, 'inPerson'],
+];
+
+/** "Monday's call is on video": the task of that name gets the format; an event of that name is a copy and is left alone. */
+function readMeetsFollowUp(text: string, message: string) {
+  const said = text
+    .trim()
+    .match(
+      /^(.+?) is (on video|on zoom|on the phone|in person|a video call|a phone call)\b/i,
+    );
+  const how = said ? HOW_WORDS.find(([word]) => word.test(said[2]))?.[1] : null;
+  if (!said || !how) return null;
+  const name = said[1].toLowerCase();
+  const isNamed = (title: string) => {
+    const words = title.toLowerCase();
+    return words.includes(name) || name.includes(words);
+  };
+  const task = (readBlock<ListedRecord[]>(message, 'open_tasks') ?? []).find(
+    (entry) => isNamed(entry.title),
+  );
+  if (task) return [toUpdate(task.alias, null, null, how)];
+  return (readBlock<ListedRecord[]>(message, 'synced_records') ?? []).some(
+    (entry) => isNamed(entry.title),
+  )
+    ? []
+    : null;
+}
 
 /** The follow-ups a page makes possible, read from the context blocks: "move this to Saturday", "make it urgent", "the second one is done", "this is done". Null when the words are none of them or what they point at is missing. */
 function readFollowUp(text: string, reading: CaptureReading, message: string) {
@@ -130,6 +163,8 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
   if (/\bmove (this|it|that) to\b/i.test(text)) {
     return focus && span ? [toUpdate(focus, span.id, null)] : [];
   }
+  const meets = readMeetsFollowUp(text, message);
+  if (meets) return meets;
   const urgentTarget = focus ?? lastMade;
   if (/\bmake (this|it|that) urgent\b/i.test(text)) {
     return urgentTarget ? [toUpdate(urgentTarget, null, true)] : [];
@@ -500,7 +535,7 @@ const toSpendRange = (question: string, now: number, timeZone: string) => {
 };
 
 interface SpendResult {
-  records?: { alias?: string; payee: string; amount: string }[];
+  records?: { alias?: string; title: string; amount: string }[];
   matchedCount?: number;
   total?: string;
   from?: string | null;

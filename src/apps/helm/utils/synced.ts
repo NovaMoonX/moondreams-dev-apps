@@ -97,16 +97,19 @@ export const isDueForRefresh = (grant: ConnectionGrant, now: number) => {
   );
 };
 
+export const isOutsideEvent = (record: SyncedRecord) => record.helmRef == null;
+
 export const isCalendarEvent = (record: SyncedRecord) =>
   record.connectorId === 'google:calendar';
 
-/** The copies whose connection still shares them: live with their category on, or kept copies of an ended connection when `includeEnded`. */
+/** The copies whose connection still shares them, never the events the assistant wrote itself: live with their category on, or kept copies of an ended connection when `includeEnded`. */
 export const getLiveRecords = (
   stored: SyncedRecord[],
   grants: ConnectionGrantWithId[],
   includeEnded: boolean,
 ) =>
   stored.filter((record) => {
+    if (!isOutsideEvent(record)) return false;
     const grant = grants.find((entry) => entry.id === record.grantId);
     if (!grant) return false;
     return grant.status === 'ended'
