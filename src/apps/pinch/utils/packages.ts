@@ -18,6 +18,7 @@ import type {
   PackageEvent,
   PackageEventKind,
   PackagePlace,
+  PinchUnitSettings,
   Recipe,
   ResolvedIngredient,
   Unit,
@@ -293,8 +294,9 @@ export const formatTotal = (total: Pick<AmountTotal, 'amount' | 'unit'>) =>
 export const formatKitchenTotal = (
   total: Pick<AmountTotal, 'amount' | 'unit'>,
   isConverted = false,
+  units: PinchUnitSettings | null = null,
 ) => {
-  const text = formatReadableAmount(total.amount, total.unit);
+  const text = formatReadableAmount(total.amount, total.unit, units);
   const bare = text.replace(/^about /, '');
   const isAbout = isConverted || bare !== text;
   return `${isAbout ? 'about ' : ''}${total.unit === 'EACH' ? `${bare} each` : bare}`;
@@ -962,10 +964,13 @@ export const getTakeGroups = (
   );
 
 /** "2 cup", "about 0.42 lb", "1 cup and 1.25 lb". */
-export const getTakeAmountText = (group: TakeGroup) =>
+export const getTakeAmountText = (
+  group: TakeGroup,
+  units: PinchUnitSettings | null = null,
+) =>
   group.totals
     .map((total, index) =>
-      formatKitchenTotal(total, group.isConverted && index === 0),
+      formatKitchenTotal(total, group.isConverted && index === 0, units),
     )
     .join(' and ');
 
@@ -1250,9 +1255,13 @@ export const getLineMarkers = (
   };
 };
 
-export const getPackageEventText = (event: PackageEvent, unit: Unit) => {
+export const getPackageEventText = (
+  event: PackageEvent,
+  unit: Unit,
+  units: PinchUnitSettings | null = null,
+) => {
   const amount =
-    event.amount === null ? '' : formatReadableSize(event.amount, unit);
+    event.amount === null ? '' : formatReadableSize(event.amount, unit, units);
   const where = event.place === null ? '' : getPlaceText(event.place);
   switch (event.kind) {
     case 'ADDED':

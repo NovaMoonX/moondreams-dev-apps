@@ -442,7 +442,7 @@ const selectHeldShoppingRows = (
   held: ReadonlyMap<string, boolean>,
 ) => held;
 
-const selectUnitSettings = (state: RootState) =>
+export const selectUnitSettings = (state: RootState) =>
   selectPinchSettings(state).units;
 
 export const selectShoppingRows = createSelector(

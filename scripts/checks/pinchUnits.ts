@@ -207,10 +207,10 @@ assert.deepEqual(
     formatReadableAmount(16, 'FL_OZ'),
   ],
   [
-    '2 lb 8 oz',
-    '2 lb',
+    '40 oz',
+    '32 oz',
     '15½ oz',
-    '1 lb 2 oz',
+    '17½ oz',
     '2 tbsp',
     '1 cup',
     '7 tsp',
@@ -231,7 +231,7 @@ assert.deepEqual(
     formatShopAmount({ amount: 16, unit: 'TBSP' }),
     formatShopAmount({ amount: 900, unit: 'G' }),
   ],
-  ['2 lb 8 oz', '2.1 kg', '1 cup', '900 g'],
+  ['40 oz', '2.1 kg', '1 cup', '900 g'],
   'the shopping list steps a summed amount up too',
 );
 
@@ -242,7 +242,7 @@ assert.deepEqual(
     formatReadableSize(1500, 'G'),
     formatReadableSize(750, 'ML'),
   ],
-  ['2 lb 8 oz', '12.5 oz', '1.5 kg', '750 ml'],
+  ['40 oz', '12.5 oz', '1.5 kg', '750 ml'],
   'what is left of a package reads in the unit it has grown into',
 );
 assert.equal(
@@ -250,4 +250,39 @@ assert.equal(
   '16 tbsp',
   'a list amount never steps into cups for a person who measures in metric',
 );
+
+const lbOz: PinchUnitSettings = {
+  weight: 'LB_OZ',
+  volume: 'CUPS',
+  keepSpoons: true,
+};
+assert.deepEqual(
+  [
+    formatReadableAmount(40, 'OZ', lbOz),
+    formatReadableAmount(32, 'OZ', lbOz),
+    formatReadableAmount(17.6, 'OZ', lbOz),
+    formatReadableAmount(12, 'OZ', lbOz),
+    formatReadableAmount(2.5, 'LB', lbOz),
+    formatReadableAmount(0.5, 'LB', lbOz),
+    formatReadableAmount(16, 'FL_OZ', lbOz),
+    formatShopAmount({ amount: 40, unit: 'OZ' }, lbOz),
+    formatReadableSize(40, 'OZ', lbOz),
+  ],
+  [
+    '2 lb 8 oz',
+    '2 lb',
+    '1 lb 2 oz',
+    '12 oz',
+    '2 lb 8 oz',
+    '8 oz',
+    '16 fl oz',
+    '2 lb 8 oz',
+    '2 lb 8 oz',
+  ],
+  'pounds and ounces reads a weight as a scale in lb:oz mode does, and only for someone who picked it',
+);
+assert.deepEqual(adaptAmount(1, 'KG', lbOz), { amount: 35, unit: 'OZ' });
+assert.equal(adaptAmount(2, 'LB', lbOz), null);
+assert.equal(adaptAmount(8, 'OZ', lbOz), null);
+assert.deepEqual(adaptAmount(0.5, 'LB', lbOz), { amount: 8, unit: 'OZ' });
 console.log('pinch units: ok');

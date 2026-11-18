@@ -40,7 +40,7 @@ import {
 } from '@apps/pinch/utils/mealFormat';
 import {
   formatKitchenAmount,
-  formatReadableAmount,
+  readScaleWeight,
   stepUpAmount,
 } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -217,9 +217,8 @@ export const formatShopAmount = (
   units: PinchUnitSettings | null = null,
 ) => {
   if (!amount) return null;
-  if (amount.unit === 'OZ' && amount.amount >= 16) {
-    return formatReadableAmount(amount.amount, amount.unit, units);
-  }
+  const scale = readScaleWeight(amount.amount, amount.unit, units);
+  if (scale !== null) return scale;
   const shown = stepUpAmount(amount.amount, amount.unit, units);
   if (SPOON_UNITS.includes(shown.unit)) {
     return formatKitchenAmount(shown.amount, shown.unit);

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import AppCheckbox from '@/components/AppCheckbox';
 
+import { useAppSelector } from '@/store';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import TickMark from '@/components/TickMark';
 import type { PantryTake } from '@apps/pinch/hooks/usePantryTake';
@@ -11,6 +12,7 @@ import {
   getTakenHeadline,
   type TakeGroup,
 } from '@apps/pinch/utils/packages';
+import { selectUnitSettings } from '@apps/pinch/store/selectors';
 import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 
 const SHOWN_FIRST = 3;
@@ -128,12 +130,13 @@ function CookPantryTake({ take }: CookPantryTakeProps) {
 }
 
 function GroupText({ group }: { group: TakeGroup }) {
+  const units = useAppSelector(selectUnitSettings);
   return (
     <span className='min-w-0 flex-1'>
       <span className='flex items-baseline justify-between gap-3'>
         <span className='min-w-0 text-sm wrap-break-word'>{group.name}</span>
         <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-          {getTakeAmountText(group)}
+          {getTakeAmountText(group, units)}
         </span>
       </span>
       <span className='text-muted-foreground block text-xs'>
@@ -141,7 +144,7 @@ function GroupText({ group }: { group: TakeGroup }) {
           ? 'From 1 package'
           : `From ${group.packageCount} packages, starting with the one that expires first`}
         {group.short !== null &&
-          `. ${formatReadableSize(group.short.amount, group.short.unit)} more than you had`}
+          `. ${formatReadableSize(group.short.amount, group.short.unit, units)} more than you had`}
       </span>
     </span>
   );

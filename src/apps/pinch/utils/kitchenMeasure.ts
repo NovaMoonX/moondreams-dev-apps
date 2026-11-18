@@ -174,15 +174,30 @@ export function stepUpAmount(
   return { amount, unit };
 }
 
-/** An amount to read on a recipe, in cooking or on a list: `formatKitchenAmount` after stepping up to the larger unit it has outgrown ("2 lb 8 oz", not "40 oz"). Never for an answer in a unit the person asked for. */
+/** A weight in pounds and ounces together, as a scale's lb:oz mode shows it ("2 lb 8 oz", "12 oz"); null for anything that isn't ounces or pounds, or when the person didn't pick that way of weighing. */
+export function readScaleWeight(
+  amount: number,
+  unit: Unit,
+  units: PinchUnitSettings | null,
+) {
+  if (units?.weight !== 'LB_OZ' || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  if (unit !== 'OZ' && unit !== 'LB') return null;
+  const ounces = unit === 'LB' ? amount * OUNCES_PER_POUND : amount;
+  return ounces >= OUNCES_PER_POUND - EPSILON
+    ? readPoundsAndOunces(ounces)
+    : formatKitchenAmount(ounces, 'OZ');
+}
+
+/** An amount to read on a recipe, in cooking or on a list: `formatKitchenAmount` after stepping up to the larger unit it has outgrown ("2 tbsp", not "6 tsp"); ounces stay ounces unless the person weighs in pounds and ounces. Never for an answer in a unit the person asked for. */
 export function formatReadableAmount(
   amount: number,
   unit: Unit,
   units: PinchUnitSettings | null = null,
 ) {
-  if (unit === 'OZ' && amount >= OUNCES_PER_POUND - EPSILON) {
-    return readPoundsAndOunces(amount);
-  }
+  const scale = readScaleWeight(amount, unit, units);
+  if (scale !== null) return scale;
   const shown = stepUpAmount(amount, unit, units);
   return formatKitchenAmount(shown.amount, shown.unit);
 }

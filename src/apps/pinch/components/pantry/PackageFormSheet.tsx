@@ -29,6 +29,7 @@ import {
   selectRecipes,
   selectRecipesById,
   selectShoppingItems,
+  selectUnitSettings,
 } from '@apps/pinch/store/selectors';
 import type { Package, Product } from '@apps/pinch/types';
 import { getIngredientUses, getPackageUnit } from '@apps/pinch/utils/gapOrder';
@@ -80,6 +81,7 @@ function PackageFormSheet({
   const { isReady, loadError, add, edit, remove, undoAdd } =
     usePackageActions(uid);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const units = useAppSelector(selectUnitSettings);
   const productsByIngredient = useAppSelector(selectProductsByIngredient);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const recipes = useAppSelector(selectRecipes);
@@ -238,7 +240,7 @@ function PackageFormSheet({
       setJustAdded({
         id: created.id,
         text: [
-          `${name} ${formatReadableSize(created.amount, created.unit)}`,
+          `${name} ${formatReadableSize(created.amount, created.unit, units)}`,
           lowerFirst(getPackageLabel(created.expiresAt) ?? 'no date'),
         ].join(', '),
       });
