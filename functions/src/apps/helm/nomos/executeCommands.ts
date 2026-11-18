@@ -3085,7 +3085,7 @@ export function planWrites(input: PlanInput): WritePlan {
 const KIND_WORDS: Record<string, string> = {
   person: 'Person',
   pet: 'Pet',
-  organization: 'Organization',
+  organization: 'Business',
 };
 
 /** What tells a candidate apart: its relation, a pet's species, an organization's kind, else its kind word when the candidates differ in kind. */

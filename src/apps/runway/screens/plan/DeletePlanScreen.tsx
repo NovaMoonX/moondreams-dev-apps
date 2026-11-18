@@ -11,6 +11,7 @@ import { useStore } from 'react-redux';
 
 import { useAppDispatch, type RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { waitUntil } from '@/utils/waitUntil';
 import { DELETE_PLAN_WORDS } from '@apps/runway/constants';
 import {
   deleteRunwayPlan,
@@ -23,20 +24,7 @@ interface DeletePlanScreenProps {
   onDeleted: () => void;
 }
 
-const GONE_POLL_MS = 100;
 const GONE_WAIT_MS = 5000;
-
-/** The listeners stay on through the delete so the device's own copy drops what the server removed, and are stopped once they report it gone. */
-async function waitUntilGone(getState: () => RootState) {
-  const deadline = Date.now() + GONE_WAIT_MS;
-  const isGone = () => {
-    const { runway } = getState();
-    return runway.plan === null && runway.items.length === 0;
-  };
-  while (!isGone() && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, GONE_POLL_MS));
-  }
-}
 
 /** Asks for the typed phrase, then deletes; a failed run leaves the screen open to run again. */
 function DeletePlanScreen({ onClose, onDeleted }: DeletePlanScreenProps) {
@@ -62,7 +50,14 @@ function DeletePlanScreen({ onClose, onDeleted }: DeletePlanScreenProps) {
     setError(null);
     try {
       await deleteRunwayPlan(user.uid, phrase);
-      await waitUntilGone(store.getState);
+      // The listeners stay on through the delete so the device's copy drops what the server removed.
+      await waitUntil(
+        () => {
+          const { runway } = store.getState();
+          return runway.plan === null && runway.items.length === 0;
+        },
+        { timeoutMs: GONE_WAIT_MS },
+      );
       dispatch(clearRunway());
       dispatch(setKeyStatus('loading'));
       onDeleted();

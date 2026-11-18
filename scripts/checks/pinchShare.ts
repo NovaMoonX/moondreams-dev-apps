@@ -130,6 +130,7 @@ check(
       'notes',
       'prepMinutes',
       'servings',
+      'stepSections',
       'steps',
       'tips',
       'title',
@@ -384,6 +385,25 @@ check('every text and list cap holds at the cap and one past it', () => {
   assert.equal(steps(500)?.length, L.MAX_RECIPE_STEPS);
   assert.equal(steps(1, L.MAX_STEP_LENGTH)?.[0].length, L.MAX_STEP_LENGTH);
   assert.equal(steps(1, L.MAX_STEP_LENGTH + 1)?.[0].length, L.MAX_STEP_LENGTH);
+
+  const sectioned = toSharedRecipe(
+    recipe({
+      steps: ['Dice', '', 'Boil', 'Drain'],
+      stepSections: ['Prep', 'Lost', text(L.MAX_STEP_SECTION_LENGTH + 5), 42],
+    }),
+  );
+  assert.deepEqual(sectioned?.steps, ['Dice', 'Boil', 'Drain']);
+  assert.equal(sectioned?.stepSections.length, 3);
+  assert.equal(sectioned?.stepSections[0], 'Prep');
+  assert.equal(
+    sectioned?.stepSections[1]?.length,
+    L.MAX_STEP_SECTION_LENGTH,
+  );
+  assert.equal(sectioned?.stepSections[2], null);
+  assert.deepEqual(
+    toSharedRecipe(recipe({ steps: ['A', 'B'] }))?.stepSections,
+    [],
+  );
 
   const lines = (count: number) =>
     toSharedRecipe(recipe({ ingredients: many(count, () => ingredient()) }))
