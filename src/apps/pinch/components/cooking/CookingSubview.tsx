@@ -168,6 +168,10 @@ import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeLines } from '@apps/pinch/utils/shopping';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
+import {
+  getStepSectionPlace,
+  getStepSections,
+} from '@apps/pinch/utils/stepSections';
 import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
@@ -836,7 +840,13 @@ function CookingSession({
     };
   });
 
-  const spokenStep = `${isPlate ? `${recipe.title}. ` : ''}Step ${index + 1} of ${recipe.steps.length}. ${stepText}`;
+  const stepPlace = getStepSectionPlace(
+    recipe.steps,
+    getStepSections(recipe),
+    index,
+  );
+  const spokenSection = stepPlace?.position === 1 ? `${stepPlace.name}. ` : '';
+  const spokenStep = `${isPlate ? `${recipe.title}. ` : ''}${spokenSection}Step ${index + 1} of ${recipe.steps.length}. ${stepText}`;
   /** The tips, planned changes and notes for a step (the whole recipe's too on the first); the note the first step leads with is left out unless asked for, since its card is on screen. */
   const getEntriesAt = (target: Recipe, at: number, withLastTime: boolean) => {
     const all = notesByRecipe.get(target.id) ?? NO_RECIPE_NOTES;
@@ -2620,6 +2630,7 @@ function CookingSession({
     <CookStepView
       key={`steps-${recipe.id}`}
       steps={recipe.steps}
+      sections={getStepSections(recipe)}
       index={index}
       ingredients={isWide ? [] : stepRows}
       isAmountNoteShown={

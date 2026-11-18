@@ -857,6 +857,7 @@ block-beta
   T9["2 lb"]:1
   T10["STEPS"]:2
   T11["1. Marinate the chicken…"]:2
+  T11b["— Cook the chicken — (section headings, only when the recipe has sections; numbered steps joined by a dotted line under each, numbers running through the whole recipe)"]:2
   C1["KEEPING IT (only when there is something to say)"]:2
   C2["🧊 Keeps 3 days in the fridge · ❄️ Keeps 3 months in the freezer · ♨️ Reheat… · 💡 the tip"]:2
   T4["$12.80 so far · Cost · For 4 servings (no tile while nothing is priced)"]:2

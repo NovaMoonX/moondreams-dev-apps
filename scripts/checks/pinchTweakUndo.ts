@@ -120,6 +120,7 @@ check(
       'prepMinutes',
       'servings',
       'sourceId',
+      'stepSections',
       'steps',
       'title',
     ]);
@@ -162,6 +163,7 @@ check(
       categories: [],
       care: null,
       links: [],
+      stepSections: [],
     });
     assert.notEqual(getRecipeChanges(before, after, ingredients).length, 0);
   },
@@ -299,6 +301,7 @@ check('editing an older tweak backfills the previous key as null', () => {
 
 const full: Recipe = {
   ...before,
+  stepSections: before.stepSections ?? [],
   id: 'adobo',
   coverPath: null,
   coverUrl: null,
@@ -591,7 +594,12 @@ check(
       },
       names,
       new Map(),
-      { photo: 'ADDED', addedCollections: ['A'], removedCollections: ['B'] },
+      {
+        photo: 'ADDED',
+        addedCollections: ['A'],
+        removedCollections: ['B'],
+        isStepsSplit: false,
+      },
     );
     assert.equal(many.length, 8);
     assert.match(many[7], /^and \d+ more$/);

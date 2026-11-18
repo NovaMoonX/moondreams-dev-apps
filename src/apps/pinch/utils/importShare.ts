@@ -1,3 +1,7 @@
+import {
+  cleanStepSection,
+  toStoredStepSections,
+} from '@apps/pinch/utils/stepSections';
 import { generateUuid } from '@/utils/idUtils';
 import { CATALOG_INGREDIENTS_BY_ID } from '@apps/pinch/catalog';
 import {
@@ -250,6 +254,25 @@ const getUsableLines = (recipe: SharedRecipe) =>
     .filter((line) => typeof line.name === 'string')
     .slice(0, MAX_RECIPE_INGREDIENTS);
 
+/** The shared steps with their sections, a blank step dropped along with its section so the two stay index for index. */
+const toImportedSteps = (shared: SharedRecipe) => {
+  const kept = shared.steps
+    .map((step, index) => ({
+      text: asText(step, MAX_STEP_LENGTH),
+      section: cleanStepSection(shared.stepSections?.[index] ?? null),
+    }))
+    .filter((step): step is { text: string; section: string | null } => step.text !== null)
+    .slice(0, MAX_RECIPE_STEPS);
+  const steps = kept.map((step) => step.text);
+  return {
+    steps,
+    stepSections: toStoredStepSections(
+      steps,
+      kept.map((step) => step.section),
+    ),
+  };
+};
+
 const toRecipe = (
   shared: SharedRecipe,
   id: string,
@@ -278,10 +301,7 @@ const toRecipe = (
       adaptedFrom: null,
     };
   }),
-  steps: shared.steps
-    .map((step) => asText(step, MAX_STEP_LENGTH))
-    .filter((step) => step !== null)
-    .slice(0, MAX_RECIPE_STEPS),
+  ...toImportedSteps(shared),
   nutritionOverride: null,
   source: 'MANUAL',
   sourceId: null,

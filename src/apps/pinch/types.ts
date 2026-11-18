@@ -510,7 +510,7 @@ export interface Package {
   updatedAt: number;
 }
 
-/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. */
+/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. A snapshot from before step sections lacks `stepSections`, and undoing it leaves no step in a section, which is the recipe as it was. */
 export type RecipeSnapshot = Pick<
   Recipe,
   | 'title'
@@ -523,7 +523,7 @@ export type RecipeSnapshot = Pick<
   | 'nutritionOverride'
   | 'sourceId'
 > &
-  Partial<Pick<Recipe, 'categories' | 'care' | 'links'>>;
+  Partial<Pick<Recipe, 'categories' | 'care' | 'links' | 'stepSections'>>;
 
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
@@ -620,6 +620,8 @@ export interface Recipe {
   coverUrl: string | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** The section each step sits in ("Cook the chicken"), index for index with `steps`; consecutive steps with one name are one section. A recipe written before sections lacks the key, and a missing or short entry reads as null; read through `getStepSections`. */
+  stepSections: (string | null)[];
   /** Per serving; a null metric falls back to the value added up from the ingredients. */
   nutritionOverride: NutritionValues | null;
   source: RecipeSource;
@@ -738,6 +740,8 @@ export interface SharedRecipe {
   cookMinutes: number | null;
   ingredients: SharedIngredient[];
   steps: string[];
+  /** Index for index with `steps`; a snapshot from before sections lacks the key, which reads as no sections. */
+  stepSections: (string | null)[];
   care: RecipeCare | null;
   links: SharedRecipeLink[];
   /** Empty unless the owner includes their tips. */
