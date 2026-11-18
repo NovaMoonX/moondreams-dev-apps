@@ -2,12 +2,12 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
   collection,
   doc,
-  runTransaction,
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { runHeldTransaction } from '@apps/a-list/store/actions/heldTransaction';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DEFAULT_WATCH_PRIORITY } from '@apps/a-list/constants';
 import type {
@@ -67,7 +67,7 @@ export const addViewing = createAsyncThunk<
     const trailerReminderId = newTrailerReminderId(showtimeAt);
 
     try {
-      const viewing = await runTransaction(db, async (transaction) => {
+      const viewing = await runHeldTransaction(uid, async (transaction) => {
         const itemSnapshot = await transaction.get(itemRef);
         const now = Date.now();
 
@@ -159,7 +159,7 @@ async function editViewing(
     id,
   );
 
-  const previous = await runTransaction(db, async (transaction) => {
+  const previous = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(viewingRef);
     if (!snapshot.exists()) {
       throw new Error('This showing was removed.');
@@ -267,7 +267,7 @@ export const removeViewing = createAsyncThunk<
   );
 
   try {
-    const stored = await runTransaction(db, async (transaction) => {
+    const stored = await runHeldTransaction(uid, async (transaction) => {
       const snapshot = await transaction.get(viewingRef);
       transaction.delete(viewingRef);
       return snapshot.data();

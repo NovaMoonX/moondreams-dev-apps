@@ -44,7 +44,7 @@ const toIds = (value: unknown): string[] =>
     : [];
 
 /** A note that won't open is skipped, so a half-written one never shows as a blank row. */
-async function openNote(
+export async function openNote(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenNote | null> {

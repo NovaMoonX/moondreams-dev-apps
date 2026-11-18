@@ -6,13 +6,13 @@ import {
   doc,
   getDoc,
   getDocFromCache,
-  runTransaction,
   setDoc,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { generateUuid } from '@/utils';
 import {
@@ -123,7 +123,7 @@ export async function createNote(
     id,
     written: batch.commit(),
     undo: () =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const live = await transaction.get(ref);
         if (!live.exists()) return true;
         if ((live.data() as Note).lastEditedAt !== null) return false;
@@ -170,114 +170,117 @@ export async function editNote(
   if (!after.title && !after.body) return { kind: 'empty' };
   const ref = doc(notesOf(uid), noteId);
   try {
-    return await runTransaction(db, async (transaction): Promise<NoteEdit> => {
-      const snapshot = await transaction.get(ref);
-      if (!snapshot.exists()) return { kind: 'missing' };
-      const data = snapshot.data() as Note;
-      const opened = await openJson<NoteSealed>(
-        data.sealed as Sealed,
-        encryption,
-      ).catch(() => null);
-      if (!opened) return { kind: 'unreadable' };
-      const isTitleChanged = after.title !== before.title;
-      const isBodyChanged = after.body !== before.body;
-      const addedTopics = after.topicIds.filter(
-        (id) => !before.topicIds.includes(id),
-      );
-      const removedTopics = before.topicIds.filter(
-        (id) => !after.topicIds.includes(id),
-      );
-      const isTopicsChanged = addedTopics.length + removedTopics.length > 0;
-      const isTextChanged = isTitleChanged || isBodyChanged;
-      const marked = new Set([
-        ...addedTopics,
-        ...removedTopics.filter((id) => citingTopicIds.includes(id)),
-        ...(isTextChanged
-          ? [
-              ...data.topicIds.filter((id) => !removedTopics.includes(id)),
-              ...citingTopicIds,
-            ]
-          : []),
-      ]);
-      const unmarked = removedTopics.filter((id) => !marked.has(id));
-      const topicSnapshots = await Promise.all(
-        [...marked, ...unmarked].map((id) =>
-          transaction.get(doc(topicsOf(uid), id)),
-        ),
-      );
-      const topicIds = [
-        ...data.topicIds.filter((id) => !removedTopics.includes(id)),
-        ...addedTopics.filter((id) => !data.topicIds.includes(id)),
-      ];
-      if (topicIds.length > NOTE_TOPICS_MAX) {
-        return { kind: 'tooManyTopics' };
-      }
-      const now = Date.now();
-      const sealed =
-        isTitleChanged || isBodyChanged
-          ? await sealJson<NoteSealed>(
-              {
-                ...opened,
-                ...(isTitleChanged ? { title: after.title } : {}),
-                ...(isBodyChanged ? { body: after.body } : {}),
-              },
-              encryption,
-            )
-          : null;
-      transaction.update(ref, {
-        ...(sealed ? { sealed } : {}),
-        ...(isTopicsChanged ? { topicIds } : {}),
-        checkedAt: now,
-        lastEditedAt: now,
-      });
-      topicSnapshots.forEach((snapshot) => {
-        if (!snapshot.exists()) return;
-        transaction.update(
-          snapshot.ref,
-          marked.has(snapshot.id)
-            ? withNoteAdded((snapshot.data() as Topic).docState, noteId)
-            : withNoteRemoved(snapshot.data() as Topic, noteId),
+    return await runHeldTransaction(
+      uid,
+      async (transaction): Promise<NoteEdit> => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists()) return { kind: 'missing' };
+        const data = snapshot.data() as Note;
+        const opened = await openJson<NoteSealed>(
+          data.sealed as Sealed,
+          encryption,
+        ).catch(() => null);
+        if (!opened) return { kind: 'unreadable' };
+        const isTitleChanged = after.title !== before.title;
+        const isBodyChanged = after.body !== before.body;
+        const addedTopics = after.topicIds.filter(
+          (id) => !before.topicIds.includes(id),
         );
-      });
-      return {
-        kind: 'saved',
-        undo: () =>
-          runTransaction(db, async (undoing) => {
-            const live = await undoing.get(ref);
-            if (!live.exists()) return false;
-            const liveData = live.data() as Note;
-            const liveOpened = await openJson<NoteSealed>(
-              liveData.sealed as Sealed,
-              encryption,
-            ).catch(() => null);
-            if (!liveOpened) return false;
-            const isAsLeft =
-              (!isTitleChanged || liveOpened.title === after.title) &&
-              (!isBodyChanged || liveOpened.body === after.body) &&
-              (!isTopicsChanged || sameIds(liveData.topicIds, topicIds)) &&
-              liveData.lastEditedAt === now;
-            if (!isAsLeft) return false;
-            const restored =
-              isTitleChanged || isBodyChanged
-                ? await sealJson<NoteSealed>(
-                    {
-                      ...liveOpened,
-                      ...(isTitleChanged ? { title: before.title } : {}),
-                      ...(isBodyChanged ? { body: before.body } : {}),
-                    },
-                    encryption,
-                  )
-                : null;
-            undoing.update(ref, {
-              ...(restored ? { sealed: restored } : {}),
-              ...(isTopicsChanged ? { topicIds: data.topicIds } : {}),
-              checkedAt: data.checkedAt,
-              lastEditedAt: data.lastEditedAt,
-            });
-            return true;
-          }),
-      };
-    });
+        const removedTopics = before.topicIds.filter(
+          (id) => !after.topicIds.includes(id),
+        );
+        const isTopicsChanged = addedTopics.length + removedTopics.length > 0;
+        const isTextChanged = isTitleChanged || isBodyChanged;
+        const marked = new Set([
+          ...addedTopics,
+          ...removedTopics.filter((id) => citingTopicIds.includes(id)),
+          ...(isTextChanged
+            ? [
+                ...data.topicIds.filter((id) => !removedTopics.includes(id)),
+                ...citingTopicIds,
+              ]
+            : []),
+        ]);
+        const unmarked = removedTopics.filter((id) => !marked.has(id));
+        const topicSnapshots = await Promise.all(
+          [...marked, ...unmarked].map((id) =>
+            transaction.get(doc(topicsOf(uid), id)),
+          ),
+        );
+        const topicIds = [
+          ...data.topicIds.filter((id) => !removedTopics.includes(id)),
+          ...addedTopics.filter((id) => !data.topicIds.includes(id)),
+        ];
+        if (topicIds.length > NOTE_TOPICS_MAX) {
+          return { kind: 'tooManyTopics' };
+        }
+        const now = Date.now();
+        const sealed =
+          isTitleChanged || isBodyChanged
+            ? await sealJson<NoteSealed>(
+                {
+                  ...opened,
+                  ...(isTitleChanged ? { title: after.title } : {}),
+                  ...(isBodyChanged ? { body: after.body } : {}),
+                },
+                encryption,
+              )
+            : null;
+        transaction.update(ref, {
+          ...(sealed ? { sealed } : {}),
+          ...(isTopicsChanged ? { topicIds } : {}),
+          checkedAt: now,
+          lastEditedAt: now,
+        });
+        topicSnapshots.forEach((snapshot) => {
+          if (!snapshot.exists()) return;
+          transaction.update(
+            snapshot.ref,
+            marked.has(snapshot.id)
+              ? withNoteAdded((snapshot.data() as Topic).docState, noteId)
+              : withNoteRemoved(snapshot.data() as Topic, noteId),
+          );
+        });
+        return {
+          kind: 'saved',
+          undo: () =>
+            runHeldTransaction(uid, async (undoing) => {
+              const live = await undoing.get(ref);
+              if (!live.exists()) return false;
+              const liveData = live.data() as Note;
+              const liveOpened = await openJson<NoteSealed>(
+                liveData.sealed as Sealed,
+                encryption,
+              ).catch(() => null);
+              if (!liveOpened) return false;
+              const isAsLeft =
+                (!isTitleChanged || liveOpened.title === after.title) &&
+                (!isBodyChanged || liveOpened.body === after.body) &&
+                (!isTopicsChanged || sameIds(liveData.topicIds, topicIds)) &&
+                liveData.lastEditedAt === now;
+              if (!isAsLeft) return false;
+              const restored =
+                isTitleChanged || isBodyChanged
+                  ? await sealJson<NoteSealed>(
+                      {
+                        ...liveOpened,
+                        ...(isTitleChanged ? { title: before.title } : {}),
+                        ...(isBodyChanged ? { body: before.body } : {}),
+                      },
+                      encryption,
+                    )
+                  : null;
+              undoing.update(ref, {
+                ...(restored ? { sealed: restored } : {}),
+                ...(isTopicsChanged ? { topicIds: data.topicIds } : {}),
+                checkedAt: data.checkedAt,
+                lastEditedAt: data.lastEditedAt,
+              });
+              return true;
+            }),
+        };
+      },
+    );
   } catch (error) {
     if (isUnavailable(error)) return { kind: 'offline' };
     throw error;
@@ -423,7 +426,7 @@ export async function undoSavedAnswer(
   const noteRef = doc(notesOf(uid), noteId);
   const captureRef = doc(capturesOf(uid), captureId);
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       const [noteSnap, captureSnap] = await Promise.all([
         transaction.get(noteRef),
         transaction.get(captureRef),
@@ -468,8 +471,8 @@ export async function fileNoteInTopics(
   if (wanted.length > NOTE_TOPICS_MAX) return 'tooMany';
   const noteRef = doc(notesOf(uid), noteId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<NoteFiling> => {
         const noteSnap = await transaction.get(noteRef);
         if (!noteSnap.exists()) return 'missing';
