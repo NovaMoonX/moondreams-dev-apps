@@ -1,6 +1,7 @@
-import { collection, doc, runTransaction, updateDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import {
@@ -33,7 +34,7 @@ interface Written {
 const restore = async (uid: string, before: OpenSeenAs, written: Written) => {
   const encryption = await getHelmEncryption(uid);
   const ref = lineRef(uid, before.id);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const live = await transaction.get(ref);
     if (!live.exists()) return false;
     const data = live.data();

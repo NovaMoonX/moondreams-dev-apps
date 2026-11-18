@@ -7,12 +7,12 @@ import {
   getDoc,
   getDocs,
   query,
-  runTransaction,
   where,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -67,7 +67,7 @@ async function changeSealed(
 ) {
   const encryption = await getHelmEncryption(uid);
   const ref = projectRef(uid, projectId);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error('This goal is already gone.');
     const opened = await openJson<ProjectSealed>(
@@ -165,7 +165,7 @@ const restoreSteps = (uid: string, steps: RestoreStep[]) =>
   toGroups(steps, TRANSACTION_MAX).reduce(
     (chain, group) =>
       chain.then(() =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const live = await Promise.all(
             group.map((step) => transaction.get(step.ref)),
           );
@@ -484,7 +484,7 @@ export async function deleteGoal(
       now,
     ),
     restore: async (): Promise<'restored' | 'exists'> => {
-      const isBack = await runTransaction(db, async (transaction) => {
+      const isBack = await runHeldTransaction(uid, async (transaction) => {
         if ((await transaction.get(ref)).exists()) return false;
         transaction.set(ref, { ...project, lastEditedAt: Date.now() });
         return true;
