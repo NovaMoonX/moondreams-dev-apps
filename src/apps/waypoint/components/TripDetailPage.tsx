@@ -342,16 +342,30 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       await dispatch(editTrip({ uid: currentUserId, trip, values })).unwrap();
       if (isShifting)
         await waitUntil(() => {
-          const { events: eventsState, stays: staysState } = store.getState().waypoint;
-          const isEventShifted = (event: { id: string; dayIndex: number | null }) => {
-            const was = before.events.items.find((item) => item.id === event.id)?.dayIndex;
+          const { events: eventsState, stays: staysState } =
+            store.getState().waypoint;
+          const isEventShifted = (event: {
+            id: string;
+            dayIndex: number | null;
+          }) => {
+            const was = before.events.items.find(
+              (item) => item.id === event.id,
+            )?.dayIndex;
             return was == null || was - shiftDays === event.dayIndex;
           };
-          const isStayShifted = (stay: { id: string; checkInDayIndex: number | null }) => {
-            const was = before.stays.items.find((item) => item.id === stay.id)?.checkInDayIndex;
+          const isStayShifted = (stay: {
+            id: string;
+            checkInDayIndex: number | null;
+          }) => {
+            const was = before.stays.items.find(
+              (item) => item.id === stay.id,
+            )?.checkInDayIndex;
             return was == null || was - shiftDays === stay.checkInDayIndex;
           };
-          return eventsState.items.every(isEventShifted) && staysState.items.every(isStayShifted);
+          return (
+            eventsState.items.every(isEventShifted) &&
+            staysState.items.every(isStayShifted)
+          );
         });
       setEditingField(null);
     } catch (editError) {
