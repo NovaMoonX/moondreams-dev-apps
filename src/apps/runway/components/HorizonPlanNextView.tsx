@@ -10,7 +10,9 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { generateUuid } from '@/utils/idUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
-import HorizonNextFields from '@apps/runway/components/HorizonNextFields';
+import HorizonNextFields, {
+  HorizonNextCosts,
+} from '@apps/runway/components/HorizonNextFields';
 import { HORIZON_END_WORDS, HORIZON_NEXT_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findNextOf, getNextHorizon } from '@apps/runway/engine/horizon';
@@ -54,6 +56,7 @@ function HorizonPlanNextView({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCostsOpen, setIsCostsOpen] = useState(false);
   const { plan, blocker } = readNextDraft(draft, horizon, paid, today);
 
   const save = async () => {
@@ -155,6 +158,41 @@ function HorizonPlanNextView({
     }
   };
 
+  const cancelAction = (
+    <Button
+      type='button'
+      variant='secondary'
+      onClick={onBack}
+      disabled={isSaving}
+    >
+      Cancel
+    </Button>
+  );
+
+  if (isCostsOpen) {
+    return (
+      <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+        <HorizonNextCosts
+          horizon={horizon}
+          paid={paid}
+          draft={draft}
+          onChange={setDraft}
+          today={today}
+          onBack={() => setIsCostsOpen(false)}
+        />
+        <ModalFooterActions
+          note={blocker}
+          cancelAction={cancelAction}
+          rightActions={
+            <Button type='button' onClick={() => setIsCostsOpen(false)}>
+              {HORIZON_NEXT_WORDS.costsDone}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
@@ -166,19 +204,11 @@ function HorizonPlanNextView({
         onChange={setDraft}
         today={today}
         isDisabled={isSaving}
+        onOpenCosts={() => setIsCostsOpen(true)}
       />
       <ModalFooterActions
         note={error ?? blocker}
-        cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={onBack}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-        }
+        cancelAction={cancelAction}
         rightActions={
           <Button
             type='button'

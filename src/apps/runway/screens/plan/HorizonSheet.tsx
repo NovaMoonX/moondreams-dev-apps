@@ -258,7 +258,7 @@ function HorizonSheet({
       type='button'
       variant='tertiary'
       size='sm'
-      className='text-muted-foreground! -ml-2 h-auto gap-1 self-start py-0.5 text-sm font-normal'
+      className="text-muted-foreground! relative -ml-2 h-auto gap-1 self-start py-0.5 text-sm font-normal after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
       onClick={() => setLinkedId(fromEvent.item.id)}
     >
       {HORIZON_END_WORDS.fromFact(
@@ -984,7 +984,7 @@ function HorizonSheet({
                 type='button'
                 variant='tertiary'
                 size='sm'
-                className='text-muted-foreground! -ml-2 h-auto gap-1 py-0.5 text-sm font-normal'
+                className="text-muted-foreground! relative -ml-2 h-auto gap-1 py-0.5 text-sm font-normal after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
                 onClick={() => setLinkedId(next.itemId)}
               >
                 {HORIZON_END_WORDS.nextFact(

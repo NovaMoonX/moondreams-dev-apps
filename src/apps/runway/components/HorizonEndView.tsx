@@ -26,7 +26,9 @@ import {
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
 import EffectPreview from '@apps/runway/components/EffectPreview';
-import HorizonNextFields from '@apps/runway/components/HorizonNextFields';
+import HorizonNextFields, {
+  HorizonNextCosts,
+} from '@apps/runway/components/HorizonNextFields';
 import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
@@ -128,6 +130,8 @@ function HorizonEndView({
   const [pickBeforePicker, setPickBeforePicker] = useState<Choice>(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Step | null>(null);
+  const [returnTo, setReturnTo] = useState<'review' | 'earlier'>('review');
+  const [isCostsOpen, setIsCostsOpen] = useState(false);
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -559,8 +563,21 @@ function HorizonEndView({
     }
     setError(null);
   };
+  const openRow = (target: Step) => {
+    setReturnTo('review');
+    setEditing(target);
+  };
   const goBack = () => {
-    if (step === 'review') return onBack();
+    if (step === 'review') {
+      if (!holdsMoney && changeRows.length === 0) return onBack();
+      setReturnTo('earlier');
+      return setEditing(holdsMoney ? 'money' : 'changes');
+    }
+    if (returnTo === 'earlier' && (step === 'money' || step === 'changes')) {
+      if (step === 'money' && changeRows.length > 0)
+        return setEditing('changes');
+      return onBack();
+    }
     if (step === 'details' || (editing !== null && firstOpen() === null))
       return setEditing(null);
     if (step === 'money' && changeRows.length > 0) return setEditing('changes');
@@ -594,6 +611,10 @@ function HorizonEndView({
           >
             {primary}
           </Button>
+        ) : step === 'next' && isCostsOpen ? (
+          <Button type='button' onClick={() => setIsCostsOpen(false)}>
+            {HORIZON_NEXT_WORDS.costsDone}
+          </Button>
         ) : step === 'next' ? (
           <Button
             type='button'
@@ -610,16 +631,30 @@ function HorizonEndView({
   if (step === 'next' && nextDraft) {
     return (
       <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-        <BackLink onBack={goBack} />
-        <ActionTitle>{HORIZON_NEXT_WORDS.title}</ActionTitle>
-        <HorizonNextFields
-          horizon={horizon}
-          paid={paid ?? []}
-          draft={nextDraft}
-          onChange={setNextDraft}
-          today={today}
-        />
-        {!holdsMoney && (
+        {isCostsOpen ? (
+          <HorizonNextCosts
+            horizon={horizon}
+            paid={paid ?? []}
+            draft={nextDraft}
+            onChange={setNextDraft}
+            today={today}
+            onBack={() => setIsCostsOpen(false)}
+          />
+        ) : (
+          <>
+            <BackLink onBack={goBack} />
+            <ActionTitle>{HORIZON_NEXT_WORDS.title}</ActionTitle>
+            <HorizonNextFields
+              horizon={horizon}
+              paid={paid ?? []}
+              draft={nextDraft}
+              onChange={setNextDraft}
+              today={today}
+              onOpenCosts={() => setIsCostsOpen(true)}
+            />
+          </>
+        )}
+        {!holdsMoney && !isCostsOpen && (
           <div>
             <RevealChip
               onClick={() => {
@@ -760,7 +795,7 @@ function HorizonEndView({
           type='button'
           variant='tertiary'
           size='sm'
-          className="text-muted-foreground relative self-center after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+          className="text-muted-foreground relative mb-6 self-center after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
           aria-pressed={pick === 'keep'}
           onClick={() => choose('keep')}
         >
@@ -848,7 +883,7 @@ function HorizonEndView({
         {changeRows.length > 0 && changesPick !== null && (
           <SummaryRow
             label={HORIZON_END_WORDS.changesRowLabel(changeRows.length)}
-            onClick={() => setEditing('changes')}
+            onClick={() => openRow('changes')}
           >
             {HORIZON_END_WORDS.changesAnswer(changesPick, changeRows.length)}
           </SummaryRow>
@@ -860,7 +895,7 @@ function HorizonEndView({
                 {HORIZON_END_WORDS.moneyRowLabel(formatCents(leftCents))}
               </MaskedText>
             }
-            onClick={() => setEditing('money')}
+            onClick={() => openRow('money')}
           >
             {getMoneyAnswer(where)}
           </SummaryRow>
@@ -868,7 +903,7 @@ function HorizonEndView({
         {nextRead?.plan && (
           <SummaryRow
             label={HORIZON_END_WORDS.nextRowLabel}
-            onClick={() => setEditing('next')}
+            onClick={() => openRow('next')}
           >
             {formatDateOrdinalUTC(nextRead.plan.happensOn)}
           </SummaryRow>
@@ -876,7 +911,7 @@ function HorizonEndView({
         {changeJson !== null && (
           <SummaryRow
             label={HORIZON_END_WORDS.detailsTitle}
-            onClick={() => setEditing('details')}
+            onClick={() => openRow('details')}
           >
             {isCallOff && rows.length > 0
               ? HORIZON_END_WORDS.detailsStops(stopCount, billCount)
@@ -889,7 +924,7 @@ function HorizonEndView({
           <RevealChip
             onClick={() => {
               setNextDraft(makeNextDraft(horizon, paid ?? [], today));
-              setEditing('next');
+              openRow('next');
             }}
           >
             {HORIZON_END_WORDS.nextTitle}
