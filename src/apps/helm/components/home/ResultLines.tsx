@@ -1,10 +1,16 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatTime } from '@/utils/formatUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import UndoButton from '@apps/helm/components/activity/UndoButton';
+import AbilityOfferRow from '@apps/helm/components/home/AbilityOfferRow';
+import AwayPauseOfferRow from '@apps/helm/components/home/AwayPauseOfferRow';
+import AwayZoneOfferRow from '@apps/helm/components/home/AwayZoneOfferRow';
+import LearnRows from '@apps/helm/components/research/LearnRows';
+import ResearchRows from '@apps/helm/components/research/ResearchRows';
+import ScheduledRuleRows from '@apps/helm/components/scheduled/ScheduledRuleRows';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -19,6 +25,10 @@ import { useUndosOf } from '@apps/helm/hooks/useUndosOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
+import { shownExecutionLine } from '@apps/helm/utils/activity';
+import { readLastTouchAt, subscribeTouch } from '@apps/helm/utils/presence';
+import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
+import { readReplayLine } from '@apps/helm/utils/quietSpeech';
 import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
 interface ResultLinesProps {
@@ -30,6 +40,8 @@ interface ResultLinesProps {
   showsNotice: boolean;
   /** Only the newest reply on home offers to be played again. */
   canReplay: boolean;
+  /** The turn kept a quiet thing off the speaker, so a replay says only the screen line. */
+  isQuietTurn: boolean;
 }
 
 const toSentence = (summary: string) =>
@@ -93,12 +105,23 @@ function ResultLines({
   isSeen,
   showsNotice,
   canReplay,
+  isQuietTurn,
 }: ResultLinesProps) {
   const { user } = useAuth();
   const card = useRef<HTMLDivElement>(null);
   const lines = useResultLines(execution);
   const { undos, latest } = useUndosOf(execution);
   const { units } = useUndoChoices(execution);
+  // Re-renders only when the first touch after the turn lands, and only for a turn that has a masked line.
+  useSyncExternalStore(
+    subscribeTouch,
+    () => execution.said !== null && readLastTouchAt() > execution.createdAt,
+  );
+  const line = toSentence(
+    execution.actor === 'person'
+      ? shownExecutionLine(execution, readLastTouchAt())
+      : (execution.said ?? execution.summary),
+  );
   const isUndone = execution.undoneByExecutionId !== null;
   const isPartlyUndone = !isUndone && execution.partUndoIds.length > 0;
   const hasFoot = canUndo(execution) || isUndone || isPartlyUndone;
@@ -126,11 +149,16 @@ function ResultLines({
             <AssistantLine
               speakText={
                 canReplay
-                  ? (execution.said ?? toSentence(execution.summary))
+                  ? readReplayLine(
+                      line,
+                      isQuietTurn
+                        ? QUIET_SPOKEN_LINE
+                        : (execution.heldSpoken ?? null),
+                    )
                   : undefined
               }
             >
-              {execution.said ?? toSentence(execution.summary)}
+              {line}
             </AssistantLine>
           )}
           {lines.length > 0 && (
@@ -167,6 +195,21 @@ function ResultLines({
                 </div>
               )}
             </div>
+          )}
+          <ScheduledRuleRows
+            execution={execution}
+            hasUndoHere={lines.length === 0 && !isUndone}
+          />
+          <ResearchRows captureId={captureId} execution={execution} />
+          <LearnRows execution={execution} />
+          {execution.awayZoneOffer && (
+            <AwayZoneOfferRow offer={execution.awayZoneOffer} />
+          )}
+          {execution.awayZoneOffer && (
+            <AwayPauseOfferRow offer={execution.awayZoneOffer} />
+          )}
+          {execution.abilityOffer && (
+            <AbilityOfferRow offer={execution.abilityOffer} />
           )}
           {isOnHome && showsNotice && <AiNotice />}
         </>

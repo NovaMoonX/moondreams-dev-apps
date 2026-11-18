@@ -63,7 +63,7 @@ export type AnswerDrop = 'answer-unsourced' | 'answer-general-refused';
 /** Said whatever the question's grammar, so the line never has to be bent around it. */
 export const NOTHING_LINE = 'Nothing in your records answers that.';
 
-const toSourceKey = (source: SourceRef) =>
+export const toSourceKey = (source: SourceRef) =>
   source.kind === 'connection'
     ? `connection:${source.connectorId}:${source.accountId}`
     : `${source.kind}:${source.id}`;

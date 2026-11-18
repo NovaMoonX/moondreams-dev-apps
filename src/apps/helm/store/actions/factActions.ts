@@ -5,12 +5,15 @@ import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
 import type {
   Fact,
   FactSealed,
   OpenFact,
   SyncedRecord,
 } from '@apps/helm/types';
+import { readPrivacyFacts } from '@apps/helm/utils/privacy';
+import { readNewRecordPrivacy } from '@apps/helm/utils/privacyParents';
 
 export type CalendarRightResult =
   | { kind: 'done'; newFactId: string; previous: PreviousFact }
@@ -47,8 +50,22 @@ export async function confirmCalendarRight(
   const facts = factsOf(uid);
   const oldRef = doc(facts, fact.id);
   const newRef = doc(facts);
+  const own = readNewRecordPrivacy(
+    'fact',
+    { ...fact },
+    statement,
+    readParentIndex(),
+    { current: readPrivacyFacts(fact) },
+  );
   const sealed = await sealJson<FactSealed>(
-    { statement, quote: null, topic: fact.topic, value },
+    {
+      statement,
+      quote: null,
+      topic: fact.topic,
+      value,
+      privateMark: own.facts.privateMark,
+      isPrivacyCleared: own.facts.isPrivacyCleared,
+    },
     encryption,
   );
   const now = Date.now();
@@ -79,6 +96,10 @@ export async function confirmCalendarRight(
         supersededById: null,
         supersededAt: null,
         disputedWithId: null,
+        privacy:
+          own.privacy === 'private' || data.privacy === 'private'
+            ? 'private'
+            : 'ordinary',
         createdAt: now,
         confirmedAt: now,
         lastEditedAt: null,

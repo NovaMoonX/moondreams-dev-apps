@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Turns on Google's Text-to-Speech API for the project and checks it answers; nothing secret is created or kept.
+# Turns on Google's Text-to-Speech API for the project, lets the functions use its Gemini voices (a whispered line) and checks it answers; nothing secret is created or kept.
+# Each part checks the project first and only changes what is missing, so a re-run just reports what is already done.
 #   npm run voice:google-setup
 set -euo pipefail
 
@@ -16,12 +17,35 @@ if ! command -v gcloud >/dev/null 2>&1; then
   echo "gcloud isn't installed, so here are the clicks instead:"
   echo "  1. Open $API_PAGE"
   echo "  2. Click \"Enable\""
+  echo "  3. For the whispered voice: open https://console.cloud.google.com/iam-admin/iam?project=$PROJECT, edit the \"Compute Engine default service account\" row, Add another role, pick \"Vertex AI User\", Save"
   echo "The benchmark skips the Google voices until \"gcloud auth application-default login\" has been run once on this machine."
   exit 0
 fi
 
-gcloud services enable texttospeech.googleapis.com --project "$PROJECT"
-echo "✓ Text-to-Speech is enabled for $PROJECT"
+enabled="$(gcloud services list --enabled --project "$PROJECT" --format='value(config.name)')"
+turn_on() {
+  if grep -qxF "$1" <<<"$enabled"; then
+    echo "✓ $2 was already on for $PROJECT"
+  else
+    gcloud services enable "$1" --project "$PROJECT"
+    echo "✓ Turned on $2 for $PROJECT"
+  fi
+}
+turn_on texttospeech.googleapis.com "Text-to-Speech"
+# Gemini voices (the whispered line) are checked against Vertex AI's predict permission on the calling account.
+turn_on aiplatform.googleapis.com "Vertex AI"
+
+number="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+member="serviceAccount:${number}-compute@developer.gserviceaccount.com"
+holders="$(gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' \
+  --filter='bindings.role=roles/aiplatform.user' --format='value(bindings.members)')"
+if grep -qxF "$member" <<<"$holders"; then
+  echo "✓ The functions could already use the Gemini voices (whispered lines)"
+else
+  gcloud projects add-iam-policy-binding "$PROJECT" --member="$member" \
+    --role="roles/aiplatform.user" --condition=None >/dev/null
+  echo "✓ The functions can now use the Gemini voices (whispered lines)"
+fi
 
 if gcloud auth application-default print-access-token >/dev/null 2>&1; then
   echo "✓ This machine is already signed in for the Google voices"

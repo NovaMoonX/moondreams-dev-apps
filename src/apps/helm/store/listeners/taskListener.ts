@@ -17,6 +17,7 @@ import type { SealedReader } from '@lib/security';
 
 import { OPEN_TASKS_LIMIT, PROJECT_TASKS_LIMIT } from '@apps/helm/constants';
 import type { OpenTask, Task, TaskSealed } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your tasks did not open.');
@@ -34,6 +35,7 @@ export async function openTask(
     isUrgent: data.isUrgent ?? false,
     due: data.due ?? null,
     durationMinutes: data.durationMinutes ?? null,
+    effort: data.effort ?? null,
     energy: data.energy ?? null,
     context: data.context ?? null,
     projectId: data.projectId ?? null,
@@ -44,11 +46,15 @@ export async function openTask(
     waitsOnTaskIds: data.waitsOnTaskIds ?? [],
     waitsOnWhoId: data.waitsOnWhoId ?? null,
     stepState: data.stepState ?? {},
+    meeting: data.meeting ?? null,
+    readyAnswer: data.readyAnswer ?? null,
+    meets: data.meets ?? null,
     mediaIds: data.mediaIds ?? [],
     createdBy: data.createdBy ?? 'person',
     sourceCaptureId: data.sourceCaptureId ?? null,
     executionId: data.executionId ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     lastEditedAt: data.lastEditedAt ?? null,
     completedAt: data.completedAt ?? null,
     clearedAt: data.clearedAt ?? null,
@@ -61,10 +67,32 @@ export async function openTask(
       title: payload.title ?? '',
       notes: payload.notes ?? null,
       steps: payload.steps ?? {},
+      meetingLabel: payload.meetingLabel ?? null,
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
+      quietMark:
+        payload.quietMark === 'person' || payload.quietMark === 'guessed'
+          ? payload.quietMark
+          : null,
+      quietUntil:
+        typeof payload.quietUntil === 'string' ? payload.quietUntil : null,
+      isQuietCleared: payload.isQuietCleared ?? false,
       isUnreadable: false,
     };
   } catch {
-    return { ...base, title: '', notes: null, steps: {}, isUnreadable: true };
+    return {
+      ...base,
+      title: '',
+      notes: null,
+      steps: {},
+      meetingLabel: null,
+      isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
+    };
   }
 }
 

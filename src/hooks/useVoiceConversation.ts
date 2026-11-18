@@ -72,6 +72,7 @@ import {
 import type {
   CloudHeldReason,
   FrameSource,
+  SpeechDelivery,
   SpeechPriority,
   SttAdapter,
   SttErrorCode,
@@ -112,6 +113,8 @@ interface VoiceConversationOptions {
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
   isOnDeviceReady?: boolean;
+  /** Read at the start of each listen, never sent mid-stream. */
+  getNameHints?: () => string[];
   /** Silence this long before anything is heard ends the listen; once words are heard, the turn ends when they stop changing (`getSettleMs`). */
   quietMs?: number;
   /** The cloud turned this device away for the rest of the local day; called once per day. */
@@ -176,7 +179,7 @@ export type VoiceSpeaking = 'chosen' | 'device';
 export type VoiceLiveEnd =
   'phrase' | 'quiet' | 'left' | 'unavailable' | 'failed';
 /** What a repeat did: played, or why it could not. */
-export type VoiceRepeat = 'played' | 'none' | 'muted' | 'busy';
+export type VoiceRepeat = 'played' | 'none' | 'muted';
 
 const LISTEN_SHOW_DELAY_MS = 400;
 const QUIET_MS = 8000;
@@ -187,7 +190,8 @@ const FIRST_LINE_FIRST_BYTE_MS = 6000;
 const CLOUD_FAILURES_MAX = 2;
 const LATCH_FALLBACK_KEY = 'speech:device-voice-latch';
 const CLOUD_LISTEN_FALLBACK_KEY = 'speech:cloud-listening';
-const FOLLOW_UP_MS = 8000;
+/** How long the short window after an answer listens. */
+export const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
 // A phrase heard by mistake (a TV, a passing remark) must not hold the microphone for the full quiet limit.
 const LIVE_FIRST_IDLE_MS = 15 * 1000;
@@ -269,6 +273,7 @@ export function useVoiceConversation({
   liveIdleMs = LIVE_IDLE_MS,
   onLiveEnd,
   wake = null,
+  getNameHints,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -322,6 +327,7 @@ export function useVoiceConversation({
     liveIdleMs,
     onLiveEnd,
     wake,
+    getNameHints,
     reason,
   });
   const gateHandler = useRef<
@@ -364,7 +370,11 @@ export function useVoiceConversation({
     gate: null as { close: () => void } | null,
     heardWords: '',
     pending: null as { text: string; timerId: number } | null,
-    lastLine: null as { text: string; voice: SpeechVoice | null } | null,
+    lastLine: null as {
+      text: string;
+      voice: SpeechVoice | null;
+      delivery: SpeechDelivery | undefined;
+    } | null,
     turnKey: 0,
     isLive: false,
     isLiveMuted: false,
@@ -372,6 +382,8 @@ export function useVoiceConversation({
     isLiveClosing: false,
     hasLiveTurn: false,
     liveErrors: 0,
+    repeatId: 0,
+    isGone: false,
   });
   const speechCache = useRef(createSpeechCache());
   const [lineProgress] = useState(createLineProgress);
@@ -410,6 +422,7 @@ export function useVoiceConversation({
       liveIdleMs,
       onLiveEnd,
       wake,
+      getNameHints,
       reason,
     };
   });
@@ -913,6 +926,7 @@ export function useVoiceConversation({
         if (isCurrent()) handleError('unavailable');
       });
     };
+    const nameHints = latest.current.getNameHints?.() ?? null;
     const startDevice = (source: FrameSource | null) => {
       if (latest.current.canHearOnDevice) {
         if (run.current.heardWords === '') {
@@ -928,6 +942,7 @@ export function useVoiceConversation({
         createBrowserStt({
           lang: latest.current.lang,
           isFromTap: !run.current.isUnasked,
+          nameHints,
         }),
       );
     };
@@ -969,6 +984,7 @@ export function useVoiceConversation({
         createDeepgramStt({
           lang: latest.current.lang,
           source: options.source ?? null,
+          keyterms: nameHints,
           getToken: cloud.tokenSource.getToken,
           onUnavailable: (heldReason, cause) => {
             if (
@@ -1090,6 +1106,7 @@ export function useVoiceConversation({
   };
 
   const stop = () => {
+    run.current.repeatId += 1;
     if (run.current.pending) {
       abortPending();
       getQueue().clear();
@@ -1120,6 +1137,8 @@ export function useVoiceConversation({
       turnKey: number;
       /** The person may answer once this line has been said: when it is the last one waiting, a short window opens in which speaking starts a listen without a tap. */
       canAnswer?: boolean;
+      /** A whispered line plays only in the cloud voice, never the device's. */
+      delivery?: SpeechDelivery;
       /** Said after what plays or waits, and dropped if a newer turn has spoken since; the `turnKey` passed is the earlier turn's that this line answers. */
       joinsLine?: boolean;
     },
@@ -1138,6 +1157,13 @@ export function useVoiceConversation({
     ) {
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
+    return sayLine(text, options);
+  };
+
+  const sayLine = (
+    text: string,
+    options: Parameters<typeof speak>[1],
+  ): Promise<VoiceSpoken> => {
     const { joinsLine = false, canAnswer = false, ...line } = options;
     const turnKey = joinsLine
       ? toJoinKey({
@@ -1174,7 +1200,11 @@ export function useVoiceConversation({
       run.current.liveAt = Date.now();
       if (result.status !== 'cancelled') defer(() => setIsThinking(false));
       if (result.status === 'spoken' && line.priority !== 'ack') {
-        run.current.lastLine = { text, voice: run.current.voice };
+        run.current.lastLine = {
+          text,
+          voice: run.current.voice,
+          delivery: line.delivery,
+        };
       }
     });
     if (canAnswer) {
@@ -1185,19 +1215,57 @@ export function useVoiceConversation({
     return spoken;
   };
 
-  /** Says the last reply or summary again, or a line the person tapped (kept audio costs no request), at the current turn so a reply on its way still plays; says why when it can't. */
-  const repeat = (text?: string): VoiceRepeat => {
+  /** Says the last reply or summary again, or a line the person tapped (kept audio costs no request), at the current turn so a reply on its way still plays; says why when it can't. A listen in progress is dropped unsent and opens again once the line ends (a live conversation reopens its own). */
+  const repeat = (
+    text?: string,
+    options: {
+      delivery?: SpeechDelivery;
+      onResult?: (
+        result: VoiceSpoken,
+        delivery: SpeechDelivery | undefined,
+      ) => void;
+    } = {},
+  ): VoiceRepeat => {
     unlockAudio();
     endFollowUp(true);
     const { lastLine } = run.current;
     const line = text ?? lastLine?.text ?? null;
     if (line === null) return 'none';
     if (latest.current.isMuted) return 'muted';
-    if (run.current.mode.phase !== 'OFF' && run.current.pending === null) {
-      return 'busy';
-    }
+    const wasListening =
+      run.current.mode.phase !== 'OFF' && run.current.pending === null;
+    if (wasListening) cancel();
     if (lastLine !== null) run.current.voice ??= lastLine.voice;
-    void speak(line, { priority: 'reply', turnKey: run.current.turnKey });
+    run.current.repeatId += 1;
+    const { repeatId, listenId, turnKey } = run.current;
+    // Saying the last line again keeps how it was said, so a whispered line is never repeated aloud.
+    const delivery =
+      options.delivery ?? (text === undefined ? lastLine?.delivery : undefined);
+    void sayLine(line, {
+      priority: 'reply',
+      turnKey,
+      delivery,
+    }).then((result) => {
+      options.onResult?.(result, delivery);
+      const { current } = run;
+      if (
+        !wasListening ||
+        current.isGone ||
+        current.isLive ||
+        current.repeatId !== repeatId ||
+        current.listenId !== listenId ||
+        current.turnKey !== turnKey ||
+        current.isFollowUp ||
+        current.pending !== null ||
+        current.mode.phase !== 'OFF' ||
+        latest.current.isMuted ||
+        document.visibilityState === 'hidden' ||
+        (queueRef.current?.isActive() ?? false)
+      ) {
+        return;
+      }
+      listen({ isUnasked: current.isUnasked });
+    });
     return 'played';
   };
 
@@ -1303,8 +1371,14 @@ export function useVoiceConversation({
     return () => document.removeEventListener('visibilitychange', handleHidden);
   }, []);
 
+  // A strict-mode remount runs the cleanup once before the screen is really gone.
+  useEffect(() => {
+    run.current.isGone = false;
+  }, []);
+
   useEffect(
     () => () => {
+      run.current.isGone = true;
       run.current.isCancelled = true;
       window.clearTimeout(run.current.quietId);
       window.clearTimeout(run.current.holdId);

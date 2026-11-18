@@ -1,9 +1,16 @@
 // shared helpers for throwaway validation scripts
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-export const BASE = 'http://127.0.0.1:5173';
+export const BASE = process.env.PW_BASE ?? 'http://127.0.0.1:5173';
 // The sandbox can't reach outside services, so a screen fed by them would look complete without them: answer with fixtures.
 const FIXTURE_IMAGE = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6c177"/><stop offset=".6" stop-color="#e07a5f"/><stop offset="1" stop-color="#2a9d8f"/></linearGradient></defs><rect width="800" height="450" fill="url(#g)"/></svg>`;
 export async function fillOutsideData(ctx) {
+  // App Check's debug-token exchange goes to Google, which the sandbox can't reach; without a token every enforced callable answers 401. The emulator accepts any well-formed token.
+  await ctx.route(/firebaseappcheck\.googleapis\.com/, (route) => {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const token = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ sub: 'local', provider: 'debug', iat: now, exp: now + 3600 })}.sig`;
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ token, ttl: '3600s' }) });
+  });
   await ctx.route(/picsum\.photos|images\.unsplash\.com/, (route) => route.fulfill({ contentType: 'image/svg+xml', body: FIXTURE_IMAGE }));
   await ctx.route(/api\.open-meteo\.com\/v1\/forecast/, (route) => {
     const url = new URL(route.request().url());

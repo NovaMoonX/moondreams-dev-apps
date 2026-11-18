@@ -9,6 +9,7 @@ import {
 } from '@apps/helm/store/selectors/captureSelectors';
 import { BROWSE_FOOT, BROWSE_TILES } from '@apps/helm/screen/views';
 import { selectHasKeyDates } from '@apps/helm/store/selectors/keyDateSelectors';
+import { selectHasHabits } from '@apps/helm/store/selectors/habitSelectors';
 import { selectHasProjects } from '@apps/helm/store/selectors/projectSelectors';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { HelmView } from '@apps/helm/types';
@@ -28,11 +29,13 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
   const needsYouCount = useAppSelector(selectHeldItems).needsYou.length;
   const hasKeyDates = useAppSelector(selectHasKeyDates);
   const hasProjects = useAppSelector(selectHasProjects);
+  const hasHabits = useAppSelector(selectHasHabits);
   const todayLine = useTodayTileLine();
   const tiles = BROWSE_TILES.filter(
     (tile) =>
       (tile.view !== 'comingUp' || hasKeyDates) &&
-      (tile.view !== 'projects' || hasProjects),
+      (tile.view !== 'projects' || hasProjects) &&
+      (tile.view !== 'habits' || hasHabits),
   );
   const singles = tiles.filter((tile) => tile.importance !== 'lead');
   const lastSingleView = singles.length % 2 === 1 ? singles.at(-1)?.view : null;
