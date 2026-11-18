@@ -456,6 +456,8 @@ test('a keep on a task this reply makes lands on its new id, in the turn summary
     commands: [
       {
         kind: 'createTask',
+        questions: [],
+        meeting: null,
         ref: '$new1',
         title: 'Book the venue',
         due: null,

@@ -74,7 +74,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'plan',
-    covers: ['Plan an app', 'Create issues', 'Put issues on the board'],
+    covers: ['Plan an app', 'Gap hunting', 'Create issues', 'Put issues on the board'],
     lane: 'work',
     step: 3,
     title: 'Plan and issues',

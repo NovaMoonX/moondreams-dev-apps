@@ -17,6 +17,7 @@ import {
   type CookEntryKind,
   type CookReadingQueue,
   type CookReadingSegment,
+  type CookServingsChange,
   type CookSpokenView,
   type CookTimerAnswer,
   type CookTimerScope,
@@ -94,6 +95,12 @@ export interface CookVoiceActions {
     candidates: string[],
   ) => CookVoiceResult;
   cycleRecipe: (direction: 1 | -1) => CookVoiceResult;
+  setServings: (
+    change: CookServingsChange,
+    recipeId: string | null,
+  ) => CookVoiceResult;
+  answerDish: (recipeId: string) => CookVoiceResult;
+  tellServings: () => CookVoiceResult;
   readTips: () => CookVoiceResult;
   readNotes: () => CookVoiceResult;
   readChanges: () => CookVoiceResult;
@@ -104,6 +111,13 @@ export interface CookVoiceActions {
   addEntry: (kind: CookEntryKind) => CookVoiceResult;
   dictation: (text: string) => CookVoiceResult;
   undoEntry: () => CookVoiceResult;
+  startCooking: () => CookVoiceResult;
+  gotIngredient: (queries: string[], isOut: boolean) => CookVoiceResult;
+  tickAll: () => CookVoiceResult;
+  untickAll: () => CookVoiceResult;
+  readLeft: () => CookVoiceResult;
+  readTools: () => CookVoiceResult;
+  setGatherLayout: (layout: 'ALL' | 'PARTS') => CookVoiceResult;
 }
 
 export interface CookVoiceMessage {
@@ -164,6 +178,12 @@ export const runCookCommand = (
       return actions.switchRecipe(command.recipeId, command.candidates);
     case 'CYCLE_RECIPE':
       return actions.cycleRecipe(command.direction);
+    case 'SET_SERVINGS':
+      return actions.setServings(command.change, command.recipeId ?? null);
+    case 'DISH_ANSWER':
+      return actions.answerDish(command.recipeId);
+    case 'TELL_SERVINGS':
+      return actions.tellServings();
     case 'READ_TIPS':
       return actions.readTips();
     case 'READ_NOTES':
@@ -184,6 +204,20 @@ export const runCookCommand = (
       return actions.dictation(command.text);
     case 'UNDO_ENTRY':
       return actions.undoEntry();
+    case 'START_COOKING':
+      return actions.startCooking();
+    case 'GOT_INGREDIENT':
+      return actions.gotIngredient(command.queries, command.isOut);
+    case 'TICK_ALL':
+      return actions.tickAll();
+    case 'UNTICK_ALL':
+      return actions.untickAll();
+    case 'READ_LEFT':
+      return actions.readLeft();
+    case 'READ_TOOLS':
+      return actions.readTools();
+    case 'SET_GATHER_LAYOUT':
+      return actions.setGatherLayout(command.layout);
   }
 };
 

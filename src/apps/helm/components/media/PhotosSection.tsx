@@ -3,12 +3,10 @@ import { useMemo, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import SectionDivider from '@/components/SectionDivider';
-import PhotoPicker from '@/components/forms/PhotoPicker';
 import { useAppSelector } from '@/store';
 import MediaThumb from '@apps/helm/components/media/MediaThumb';
 import MediaViewer from '@apps/helm/components/media/MediaViewer';
 import { HELM_COPY, PHOTOS_PER_RECORD } from '@apps/helm/constants';
-import { useMediaUpload } from '@apps/helm/hooks/useMediaUpload';
 import type { PhotoOwner } from '@apps/helm/store/actions/mediaActions';
 
 interface PhotosSectionProps {
@@ -20,14 +18,10 @@ interface PhotosSectionProps {
   mainId: string | null;
 }
 
-/** A who's or place's photos: the main one first and large, the rest in a row under it, each opening in its sheet, and a way to add another (the camera too, since the thing is often in front of the person). */
+/** A who's or place's photos: the main one first and large, the rest in a row under it, each opening in its sheet. Adding one is the header picture's menu. */
 function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
   const media = useAppSelector((state) => state.helm.media.items);
   const [viewedId, setViewedId] = useState<string | null>(null);
-  const { add, isUploading, error } = useMediaUpload(
-    owner,
-    owner.kind === 'who' && mainId === null,
-  );
 
   const shown = useMemo(
     () =>
@@ -43,7 +37,6 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
     [media, photoIds, mainId],
   );
   const viewed = shown.find((entry) => entry.id === viewedId) ?? null;
-  const isFull = photoIds.length >= PHOTOS_PER_RECORD;
 
   const tile = (entry: (typeof shown)[number], index: number) => (
     <Button
@@ -75,6 +68,8 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
     </Button>
   );
 
+  if (shown.length === 0) return null;
+
   return (
     <section className='space-y-3'>
       {shown.length > 0 && (
@@ -95,21 +90,6 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
             </li>
           ))}
         </ul>
-      )}
-      {isFull ? (
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.photoFull}
-        </p>
-      ) : (
-        <PhotoPicker
-          photoUrl={null}
-          showPreview={false}
-          canTakePhoto
-          loading={isUploading}
-          error={error}
-          uploadLabel={HELM_COPY.photoAdd}
-          onSelect={(file) => void add(file)}
-        />
       )}
       {viewed && (
         <MediaViewer

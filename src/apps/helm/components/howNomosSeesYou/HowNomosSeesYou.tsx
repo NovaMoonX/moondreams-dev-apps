@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Drama } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import PersonalityScreen from '@apps/helm/components/personality/PersonalityScreen';
+import SeenAsGroups from '@apps/helm/components/howNomosSeesYou/SeenAsGroups';
 import FactKindGroup from '@apps/helm/components/howNomosSeesYou/FactKindGroup';
+import WhatIveNoticed from '@apps/helm/components/noticed/WhatIveNoticed';
+import WhereCard from '@apps/helm/components/where/WhereCard';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
 import StyleNotes from '@apps/helm/components/howNomosSeesYou/StyleNotes';
@@ -12,7 +18,9 @@ import SelfFactAddSheet from '@apps/helm/components/howNomosSeesYou/SelfFactAddS
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import FactSheet from '@apps/helm/components/who/FactSheet';
 import { HELM_COPY } from '@apps/helm/constants';
+import { describeTraits } from '@apps/helm/engine/personality';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useAssistantPersonality } from '@apps/helm/hooks/useAssistantPersonality';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { selectSelfFacts } from '@apps/helm/store/selectors/factSelectors';
 import type { OpenFact } from '@apps/helm/types';
@@ -39,6 +47,7 @@ function HowNomosSeesYou({
   onHome,
 }: HowNomosSeesYouProps) {
   const assistant = useAssistantName();
+  const traits = describeTraits(useAssistantPersonality().traits);
   const now = useNow(60_000);
   const facts = useAppSelector(selectSelfFacts);
   const selfWhoId = useAppSelector((state) => state.helm.profile?.selfWhoId);
@@ -48,6 +57,7 @@ function HowNomosSeesYou({
   );
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isPersonalityOpen, setIsPersonalityOpen] = useState(false);
   const topicsByKind = useMemo(
     () => ({
       identity: topicsOf(facts, 'identity'),
@@ -93,6 +103,15 @@ function HowNomosSeesYou({
             {HELM_COPY.seesYouEmpty(assistant)}
           </p>
         )}
+        <SeenAsGroups />
+        <ActionRow
+          icon={<Drama className='size-4' aria-hidden='true' />}
+          label={HELM_COPY.personalityRow(assistant)}
+          subtitle={traits}
+          onClick={() => setIsPersonalityOpen(true)}
+          hasChevron
+        />
+        <WhatIveNoticed />
         <FactKindGroup
           label={HELM_COPY.seesYouIdentity}
           facts={ofKind('identity')}
@@ -101,6 +120,7 @@ function HowNomosSeesYou({
           now={now}
           onOpen={setOpenId}
         />
+        {selfWho && <WhereCard who={selfWho} />}
         {selfWho && <KeyDatesList who={selfWho} />}
         {selfWho && <MomentsPreview who={selfWho} />}
         <FactKindGroup
@@ -121,6 +141,9 @@ function HowNomosSeesYou({
         />
         <StyleNotes />
       </main>
+      {isPersonalityOpen && (
+        <PersonalityScreen onClose={() => setIsPersonalityOpen(false)} />
+      )}
       <FactSheet
         key={openId ?? 'none'}
         factId={openId}

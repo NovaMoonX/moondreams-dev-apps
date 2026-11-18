@@ -25,6 +25,7 @@ import {
   ImagePlus,
   Mic,
   Paperclip,
+  Square,
 } from 'lucide-react';
 
 import EllipsisDropdown from '@/components/EllipsisDropdown';
@@ -126,6 +127,8 @@ interface ComposerProps {
   /** Sits at the card's top-left, above the field. */
   topSlot?: ReactNode;
   showsVoiceNotice?: boolean;
+  /** Draws a Talk button (mic and the word) beside Send, for a wide screen with no dock. */
+  hasTalkButton?: boolean;
 }
 
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter starts a new line and Shift+Enter sends. */
@@ -143,6 +146,7 @@ function Composer({
   draftKey = HOME_DRAFT_KEY,
   topSlot,
   showsVoiceNotice = true,
+  hasTalkButton = false,
 }: ComposerProps) {
   const name = useAssistantName();
   const voice = useHelmVoiceContext();
@@ -194,6 +198,17 @@ function Composer({
     );
     setTypedAt(Date.now());
   };
+  const { registerField } = voice;
+  useEffect(
+    () =>
+      registerField((words) => {
+        setText((current) =>
+          current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
+        );
+        setTypedAt(Date.now());
+      }),
+    [registerField],
+  );
   const attachments = useTurnAttachments({
     timeZone,
     onTranscript: (words) => appendWords(words),
@@ -310,6 +325,13 @@ function Composer({
     const createdAt = Date.now();
     setIsSending(true);
     try {
+      if (attachments.items.length === 0 && (await voice.handleCheckIn(sent))) {
+        changeText('');
+        setDismissed([]);
+        setFixedDays({});
+        setLastDrop(null);
+        return;
+      }
       await saveToOutbox(user.uid, {
         text: sent,
         reading: applyReadingEdits(
@@ -336,6 +358,24 @@ function Composer({
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
+    if (attachments.items.length === 0 && !hasPhotos) {
+      setIsSending(true);
+      const took = await voice
+        .handleTyped(sent, screen)
+        .finally(() => setIsSending(false));
+      if (took === 'kept') return;
+      if (took) {
+        // What the device did is said in the dock, which a focused field hides.
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        changeText('');
+        setDismissed([]);
+        setFixedDays({});
+        setLastDrop(null);
+        return;
+      }
+    }
     const attachmentIds = attachments.mediaIds;
     const sentChips = attachments.items;
     const sentVoice = attachments.hasWrittenVoiceNote;
@@ -473,6 +513,12 @@ function Composer({
   };
 
   const canType = isReady || isOutbox;
+  const talkWord =
+    voice.state === 'thinking'
+      ? HELM_COPY.talkStop
+      : voice.state === 'listening'
+        ? HELM_COPY.talkListening
+        : HELM_COPY.talk;
   useGrowingTextarea(fieldRef, text, maxLines);
   const ownId = useId();
   const dictationOwner = dictationId ?? ownId;
@@ -484,7 +530,7 @@ function Composer({
     <div
       ref={root}
       data-composer
-      className='helm-composer border-border flex flex-col gap-1 rounded-[20px] border px-2 py-2'
+      className='helm-composer border-border flex flex-col gap-1 rounded-[20px] border px-2 py-2 lg:rounded-3xl lg:px-3 lg:py-3'
       // A press on any control here keeps the field focused: a blur would drop the shorthand row and move what was pressed before the tap lands.
       onPointerDown={(event) => {
         const target = event.target;
@@ -618,7 +664,7 @@ function Composer({
               placeholder={
                 waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
               }
-              className='min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none'
+              className='min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none lg:min-h-12 lg:text-[17px] lg:leading-6'
               disabled={!canType}
               value={text}
               onChange={(event) => {
@@ -678,6 +724,25 @@ function Composer({
               className='mr-1 ml-auto'
             />
           )}
+        {showsActions && canType && !isRecording && hasTalkButton && (
+          <Button
+            type='button'
+            variant='secondary'
+            rounded='full'
+            aria-label={
+              voice.state === 'listening' ? HELM_COPY.talkSendLabel : talkWord
+            }
+            className='h-10 shrink-0 gap-2 px-4'
+            onClick={() => voice.talk(screen)}
+          >
+            {voice.state === 'thinking' ? (
+              <Square className='size-4 fill-current' aria-hidden='true' />
+            ) : (
+              <Mic className='size-4' aria-hidden='true' />
+            )}
+            <span>{talkWord}</span>
+          </Button>
+        )}
         {showsActions &&
           (isHeldBackByPhotos ? (
             <LockedButton

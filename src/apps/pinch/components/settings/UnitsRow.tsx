@@ -18,6 +18,7 @@ const WEIGHT_CHOICES: { value: WeightUnits; label: string }[] = [
   { value: 'AS_WRITTEN', label: 'As written' },
   { value: 'METRIC', label: 'Grams' },
   { value: 'US', label: 'Ounces' },
+  { value: 'LB_OZ', label: 'Pounds and ounces' },
 ];
 
 const VOLUME_CHOICES: { value: VolumeUnits; label: string }[] = [
@@ -32,14 +33,15 @@ const labelOf = <T extends string>(
   value: T,
 ) => choices.find((choice) => choice.value === value)?.label ?? '';
 
-/** "Ounces and cups", "Grams, volumes as written" or "As written". */
+/** "Ounces and cups", "Pounds and ounces, cups", "Grams, volumes as written" or "As written". */
 const getUnitsSummary = ({ weight, volume }: PinchUnitSettings) => {
   const weightWord = labelOf(WEIGHT_CHOICES, weight);
   const volumeWord = labelOf(VOLUME_CHOICES, volume);
   if (weight === 'AS_WRITTEN' && volume === 'AS_WRITTEN') return 'As written';
   if (weight === 'AS_WRITTEN') return `${volumeWord}, weights as written`;
   if (volume === 'AS_WRITTEN') return `${weightWord}, volumes as written`;
-  return `${weightWord} and ${volumeWord.toLowerCase()}`;
+  const joiner = weight === 'LB_OZ' ? ',' : ' and';
+  return `${weightWord}${joiner} ${volumeWord.toLowerCase()}`;
 };
 
 /** The units recipes are adapted to. Saved with the account, so every device reads and cooks the same way. */
@@ -57,6 +59,7 @@ function UnitsRow({ uid, position }: UnitsRowProps) {
         groupPosition={position}
         icon='⚖️'
         summary={getUnitsSummary(units)}
+        lines={2}
         placeholder=''
         shouldFocus={false}
       >

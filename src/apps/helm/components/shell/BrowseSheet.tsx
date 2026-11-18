@@ -2,19 +2,12 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Search } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
-import { useAppSelector } from '@/store';
-import {
-  selectHeldItems,
-  selectNewSinceLooked,
-} from '@apps/helm/store/selectors/captureSelectors';
-import { BROWSE_FOOT, BROWSE_TILES } from '@apps/helm/screen/views';
-import { selectHasKeyDates } from '@apps/helm/store/selectors/keyDateSelectors';
-import { selectHasProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { BROWSE_FOOT } from '@apps/helm/screen/views';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { HelmView } from '@apps/helm/types';
 
 import BrowseTile from '@apps/helm/components/shell/BrowseTile';
-import { useTodayTileLine } from '@apps/helm/components/shell/useTodayTileLine';
+import { useBrowseTiles } from '@apps/helm/components/shell/useBrowseTiles';
 
 interface BrowseSheetProps {
   isOpen: boolean;
@@ -24,16 +17,7 @@ interface BrowseSheetProps {
 
 /** Every view as a bento of tiles by importance: the lead is wide, and a last small tile that would sit alone fills its row, so the grid has no holes. */
 function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
-  const unseenCount = useAppSelector(selectNewSinceLooked).length;
-  const needsYouCount = useAppSelector(selectHeldItems).needsYou.length;
-  const hasKeyDates = useAppSelector(selectHasKeyDates);
-  const hasProjects = useAppSelector(selectHasProjects);
-  const todayLine = useTodayTileLine();
-  const tiles = BROWSE_TILES.filter(
-    (tile) =>
-      (tile.view !== 'comingUp' || hasKeyDates) &&
-      (tile.view !== 'projects' || hasProjects),
-  );
+  const { tiles, unseenCount, needsYouCount, todayLine } = useBrowseTiles();
   const singles = tiles.filter((tile) => tile.importance !== 'lead');
   const lastSingleView = singles.length % 2 === 1 ? singles.at(-1)?.view : null;
 

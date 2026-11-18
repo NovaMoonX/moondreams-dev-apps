@@ -935,7 +935,7 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
-    'a site app copy carries its place, counts and phone to the view; a Google copy never carries a place',
+    'a site app copy carries its place, counts and phone to the view; a Google event carries its place and format but never a detail or note',
     () => {
       const key: HelmKey = {
         keyId: 'k',
@@ -978,11 +978,19 @@ const tests: [string, () => void | Promise<void>][] = [
         placeLabel: 'Dentist, 2 Elm St',
         detail: 'Bring forms',
         subtitle: 'Work',
-        extra: { calendarId: 'c', isTentative: false },
+        extra: { calendarId: 'c', isTentative: false, format: 'video' },
       });
-      assert.equal('place' in google, false);
+      assert.equal(google.place, 'Dentist, 2 Elm St');
+      assert.deepEqual(google.details, { format: 'video' });
       assert.equal('detail' in google, false);
-      assert.equal('details' in google, false);
+      assert.equal(
+        'details' in
+          open('google:calendar', 'event', {
+            placeLabel: null,
+            extra: { calendarId: 'c', format: null },
+          }),
+        false,
+      );
       assert.equal('subtitle' in google, false);
     },
   ],
@@ -1909,6 +1917,7 @@ const tests: [string, () => void | Promise<void>][] = [
             category: null,
             from: '2026-10-01',
             to: '2026-10-31',
+            timeZone: 'UTC',
           },
         },
       ]);
@@ -1959,6 +1968,7 @@ const tests: [string, () => void | Promise<void>][] = [
           category: 'Groceries',
           from: '2026-10-01',
           to: '2026-10-31',
+          timeZone: 'UTC',
         },
         "a spending category is sent as the read's category filter",
       );

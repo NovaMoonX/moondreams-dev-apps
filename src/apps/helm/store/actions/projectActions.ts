@@ -24,23 +24,32 @@ import {
   PROJECT_OBJECTIVE_MAX,
   PROJECT_ROLE_NOTE_MAX,
 } from '@apps/helm/constants';
+import { rewriteOfferDays } from '@apps/helm/engine/researchAhead';
 import { readWhoTier } from '@apps/helm/engine/whoTier';
 import { openJson, sealJson } from '@apps/helm/security';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
+import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
   Project,
+  ProjectKind,
   ProjectRole,
   ProjectSealed,
   Sealed,
   Who,
   WhoSealed,
 } from '@apps/helm/types';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
+import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 
 const CHUNK = 200;
 
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 const projectsOf = (uid: string) => collection(userOf(uid), 'projects');
 const tasksOf = (uid: string) => collection(userOf(uid), 'tasks');
+
+const readOffers = (value: Project['researchOffers'] | undefined) =>
+  Array.isArray(value) ? value : [];
 
 const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
@@ -68,22 +77,27 @@ const toWords = (words: ProjectWords): ProjectWords => ({
 export async function createProject(
   uid: string,
   encryption: HelmEncryption,
-  input: ProjectWords,
+  input: ProjectWords & { kind?: ProjectKind; why?: GoalWhy | null },
 ) {
   const words = toWords(input);
   if (!words.name) throw new Error('A project needs a name.');
   const id = generateUuid();
   const project: Project = {
+    kind: input.kind ?? 'project',
     targetDate: words.targetDate,
     status: 'active',
+    pausedAt: null,
+    pausedUntil: null,
     milestoneState: {},
     whoRoles: {},
     mediaIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     finishedAt: null,
+    researchOffers: [],
     sealed: await sealJson<ProjectSealed>(
       {
         name: words.name,
@@ -91,11 +105,20 @@ export async function createProject(
         objective: words.objective,
         milestones: {},
         roleNotes: {},
+        why: input.why ?? null,
+        importance: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+        aheadAsks: null,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
       encryption,
     ),
   };
   const ref = doc(projectsOf(uid), id);
+  markCreatedHere(id);
   return {
     id,
     written: setDoc(ref, project),
@@ -103,12 +126,14 @@ export async function createProject(
   };
 }
 
-/** Changes a project's name, emoji, objective and date in one transaction that re-reads it, so the people's notes and anything changed on another device meanwhile are kept. Needs a connection. */
+/** Changes a project's name, emoji, objective and date, and a goal's why when `why` is given, in one transaction that re-reads it, so the people's notes and anything changed on another device meanwhile are kept. Needs a connection. */
 export async function updateProject(
   uid: string,
   encryption: HelmEncryption,
   projectId: string,
-  edit: ProjectWords,
+  edit: ProjectWords & {
+    why?: (previous: GoalWhy | null) => GoalWhy | null;
+  },
 ): Promise<ProjectEditResult> {
   if (!navigator.onLine) return 'offline';
   const words = toWords(edit);
@@ -119,8 +144,9 @@ export async function updateProject(
       async (transaction): Promise<ProjectEditResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
+        const current = snapshot.data() as Project;
         const opened = await openJson<ProjectSealed>(
-          (snapshot.data() as Project).sealed as Sealed,
+          current.sealed as Sealed,
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
@@ -130,12 +156,21 @@ export async function updateProject(
             name: words.name,
             emoji: words.emoji,
             objective: words.objective,
+            ...(edit.why ? { why: edit.why(opened.why ?? null) } : {}),
           },
           encryption,
         );
         transaction.update(ref, {
           sealed,
           targetDate: words.targetDate,
+          ...((current.targetDate ?? null) === words.targetDate
+            ? {}
+            : {
+                researchOffers: rewriteOfferDays(
+                  readOffers(current.researchOffers),
+                  words.targetDate,
+                ),
+              }),
           lastEditedAt: Date.now(),
         });
         return 'saved';
@@ -147,16 +182,25 @@ export async function updateProject(
   }
 }
 
-/** Finishes or reopens a project; the earlier state is handed back so Undo can write it. */
+/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone. */
 export function setProjectStatus(
   uid: string,
-  project: { id: string; status: Project['status']; finishedAt: number | null },
+  project: {
+    id: string;
+    status: Project['status'];
+    finishedAt: number | null;
+    pausedAt: number | null;
+    pausedUntil: number | null;
+  },
   status: Project['status'],
+  pausedUntil: number | null = null,
 ) {
   const now = Date.now();
   const written = updateDoc(doc(projectsOf(uid), project.id), {
     status,
     finishedAt: status === 'finished' ? now : null,
+    pausedAt: status === 'paused' ? now : null,
+    pausedUntil: status === 'paused' ? pausedUntil : null,
     lastEditedAt: now,
   });
   return {
@@ -165,6 +209,8 @@ export function setProjectStatus(
       updateDoc(doc(projectsOf(uid), project.id), {
         status: project.status,
         finishedAt: project.finishedAt,
+        pausedAt: project.pausedAt,
+        pausedUntil: project.pausedUntil,
         lastEditedAt: Date.now(),
       }),
   };
@@ -307,18 +353,30 @@ async function raiseWho(
       momentCount: 0,
       createdBy: 'person',
       executionId: null,
+      privacy: 'ordinary',
       createdAt: now,
       lastEditedAt: null,
       sealed: await sealJson<WhoSealed>(
         {
           name: name.trim(),
           aliases: [],
+          kin: null,
+          soundsLike: null,
+          refusedAliases: null,
           relation: null,
+          phones: [],
+          emails: [],
           phone: null,
           email: null,
           notes: null,
           species: null,
           organizationKind: null,
+          privateMark: null,
+          isPrivacyCleared: false,
+          home: null,
+          homeSource: null,
+          away: null,
+          nearNow: null,
         },
         encryption,
       ),
@@ -442,6 +500,7 @@ const relink = (uid: string, projectId: string, ids: string[]) =>
 
 /** Deletes a project and sets its tasks' project to none, in transaction-sized chunks. Each chunk re-reads its tasks, so one edited meanwhile keeps its other changes; Undo puts the project back and links the same tasks again if they still have none. Needs a connection. */
 export async function deleteProject(uid: string, projectId: string) {
+  await keepInheritedPrivate(uid, 'project', projectId);
   const ref = doc(projectsOf(uid), projectId);
   const found = await getDocs(
     query(tasksOf(uid), where('projectId', '==', projectId)),
@@ -483,6 +542,10 @@ export async function deleteProject(uid: string, projectId: string) {
     return snapshot.data() as DocumentData;
   }).catch(abandon);
   if (!raw) throw new Error('This is already gone.');
+  dropFromGroupings(uid, `projects/${projectId}`, {
+    kind: 'project',
+    id: projectId,
+  });
   return {
     taskCount: cut.length,
     restore: async (): Promise<'restored' | 'exists'> => {

@@ -16,6 +16,8 @@ import {
   roundMeasure,
 } from '../../src/utils/measureUtils.ts';
 import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
+import { getSpokenServings } from '../../src/apps/pinch/utils/cooks.ts';
+import { readHeardCount } from '../../src/lib/speech/heardCount.ts';
 
 import {
   describeAmounts,
@@ -41,6 +43,14 @@ import {
   type CookVoiceContext,
 } from '../../src/apps/pinch/utils/cookVoice.ts';
 import type { MeasureUnit } from '../../src/utils/measureUtils.ts';
+import {
+  describeGatherLeft,
+  describeGatherTools,
+  planGatherTick,
+  type GatherDish,
+  type GatherItem,
+} from '../../src/apps/pinch/utils/cookGather.ts';
+import { getGatherTools } from '../../src/apps/pinch/utils/cookGather.ts';
 
 const plate: CookVoiceContext = {
   recipes: [
@@ -526,7 +536,7 @@ assert.deepEqual(
   ],
   [
     { kind: 'CONVERT', query: 'cilantro', lineIds: [], unit: 'CUP' },
-    { kind: 'AMOUNT', query: 'people', lineIds: [] },
+    { kind: 'TELL_SERVINGS' },
     { kind: 'AMOUNT', query: 'minutes', lineIds: [] },
   ],
   'a question with nothing found keeps the words searched, so the answer can name them',
@@ -785,6 +795,20 @@ assert.ok(
     getConversionLine({ amount: 2, unit: 'CUP', gramsPerMl: 0.91 }) ?? '',
   ),
   'a weight is given in oz or lb, not both',
+);
+assert.equal(
+  getConversionLine({ amount: 1.5, unit: 'KG', gramsPerMl: null }),
+  '= 3¼\u00A0lb',
+  'an amount stepped up to kg never repeats itself in grams',
+);
+assert.deepEqual(
+  [
+    toSpokenAmount('2 lb 8 oz'),
+    toSpokenAmount('1 lb 1 oz'),
+    toSpokenAmount('about 1 lb 2 oz'),
+  ],
+  ['2 pounds 8 ounces', '1 pound 1 ounce', 'about 1 pound 2 ounces'],
+  'pounds and ounces are said as both',
 );
 assert.equal(
   getConversionLine({ amount: 2, unit: 'EACH', gramsPerMl: null }),
@@ -2082,6 +2106,716 @@ assert.equal(
   readSpokenAnswer(several, '   '),
   null,
   'silence is not an answer',
+);
+
+// Servings by voice, including the numbers a recognizer mishears.
+const servingsTo = (servings: number): CookCommand => ({
+  kind: 'SET_SERVINGS',
+  change: { kind: 'TO', servings },
+});
+const servingsBy = (delta: number): CookCommand => ({
+  kind: 'SET_SERVINGS',
+  change: { kind: 'BY', delta },
+});
+const servingsTimes = (factor: number): CookCommand => ({
+  kind: 'SET_SERVINGS',
+  change: { kind: 'TIMES', factor },
+});
+expectKind(
+  [
+    'make six servings',
+    'make 6 servings',
+    'make sick servings',
+    'sick servings',
+    'sex servings',
+    'six portions',
+    'set servings to 6',
+    'set the servings to sick',
+    'change the serving size to six',
+    'servings 6',
+    'serves six',
+    'make it for six',
+    'make it for sick',
+    'make it for 6 people',
+    'scale to 6',
+    'scale it up to six',
+    'make it for six people',
+    'enough for six people',
+    'make enough for six',
+    'i need six servings',
+    'id like 6 servings',
+    'make it serve six',
+    'it should feed six people',
+    'okay pepper make six servings please',
+  ],
+  servingsTo(6),
+  'six servings',
+);
+expectKind(
+  [
+    'make four servings',
+    'change servings to for',
+    'make for servings',
+    'make it for four',
+  ],
+  servingsTo(4),
+  'four servings, heard as "for"',
+);
+expectKind(
+  ['servings ate', 'make eight servings'],
+  servingsTo(8),
+  'eight servings, heard as "ate"',
+);
+expectKind(
+  ['make to servings', 'a couple of servings', 'two servings'],
+  servingsTo(2),
+  'two servings',
+);
+expectKind(
+  ['make two and a half servings', 'make it for two and a half'],
+  servingsTo(2.5),
+  'a half on a count',
+);
+expectKind(
+  ['make twenty four servings', 'make 24 servings'],
+  servingsTo(24),
+  'tens and ones',
+);
+expectKind(
+  [
+    'one serving',
+    'make one serving',
+    'make a serving',
+    'i need one serving',
+    'give me a serving',
+  ],
+  servingsTo(1),
+  'one serving is a number, not one more',
+);
+expectKind(
+  [
+    'add a serving',
+    'one more serving',
+    'another serving',
+    'an extra serving',
+    'more servings',
+    'increase the servings',
+  ],
+  servingsBy(1),
+  'one more serving',
+);
+expectKind(
+  [
+    'two more servings',
+    'to more servings',
+    'add 2 servings',
+    'increase servings by two',
+    'two extra servings',
+  ],
+  servingsBy(2),
+  'two more servings',
+);
+expectKind(
+  [
+    'one less serving',
+    'fewer servings',
+    'remove a serving',
+    'take one serving off',
+    'reduce the servings',
+  ],
+  servingsBy(-1),
+  'one less serving',
+);
+expectKind(
+  ['take away two servings', 'two fewer servings', 'reduce servings by 2'],
+  servingsBy(-2),
+  'two fewer servings',
+);
+expectKind(
+  [
+    'double the recipe',
+    'make a double batch',
+    'make it double',
+    'make twice as much',
+  ],
+  servingsTimes(2),
+  'double',
+);
+expectKind(
+  [
+    'halve the recipe',
+    'half the recipe',
+    'make it half',
+    'cut the recipe in half',
+  ],
+  servingsTimes(0.5),
+  'halve',
+);
+expectKind(['triple the recipe'], servingsTimes(3), 'triple');
+expectKind(
+  [
+    'how many servings',
+    'how many servings is this',
+    'how many people does this serve',
+    'how many is this for',
+    'how many people is this for',
+    'how much does it make',
+    'servings',
+  ],
+  { kind: 'TELL_SERVINGS' },
+  'asking the servings',
+);
+[
+  'six',
+  'sick',
+  'cook for ten',
+  'cook for 10 minutes',
+  'make it for',
+  'make dinner for my family',
+  'serve it hot',
+  'double check the oven',
+  'a serving',
+  'a plate',
+  'another plate',
+  'remove a plate',
+  'four people',
+  'for people',
+  'to people',
+  'make it for free',
+  'make it for then',
+  'make it to a',
+  'servings for',
+  'cook for six people',
+  'double it',
+  'halve it',
+  'cut it in half',
+  'go to servings',
+  'add to servings',
+  'add 0.5 servings',
+].forEach((phrase) =>
+  assert.equal(parse(phrase), null, `not a servings command: "${phrase}"`),
+);
+assert.deepEqual(
+  parse('how much garlic'),
+  { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+  'an amount stays an amount',
+);
+
+assert.equal(readHeardCount('sick'), 6, 'sick is six');
+assert.equal(
+  readHeardCount('for', 'all'),
+  4,
+  'for is four where only a number fits',
+);
+assert.equal(
+  readHeardCount('for'),
+  null,
+  'an everyday word is no number by default',
+);
+assert.equal(readHeardCount('sick', 'none'), null, 'no sound-alikes asked');
+assert.equal(readHeardCount('ate'), 8, 'ate is eight');
+assert.equal(readHeardCount('twenty four'), 24, 'twenty four');
+assert.equal(
+  readHeardCount('twenty for'),
+  null,
+  'a sound-alike is a whole slot only',
+);
+assert.equal(readHeardCount('2.5'), 2.5, 'a decimal');
+assert.equal(readHeardCount('chicken'), null, 'a word that is no number');
+
+assert.equal(getSpokenServings(4, { kind: 'TO', servings: 6 }), 6, 'set to 6');
+assert.equal(
+  getSpokenServings(4, { kind: 'TO', servings: 2.4 }),
+  2.5,
+  'a number rounds to a half',
+);
+assert.equal(getSpokenServings(4, { kind: 'BY', delta: 2 }), 6, 'two more');
+assert.equal(
+  getSpokenServings(2, { kind: 'BY', delta: -3 }),
+  -1,
+  'three fewer than two is past the end, so it is refused, not clamped',
+);
+assert.equal(
+  getSpokenServings(1, { kind: 'BY', delta: -1 }),
+  0.5,
+  'one less from one is a half, as the stepper does',
+);
+assert.equal(
+  getSpokenServings(0.5, { kind: 'BY', delta: 1 }),
+  1,
+  'one more from a half is one',
+);
+assert.equal(
+  getSpokenServings(2.5, { kind: 'BY', delta: 1 }),
+  3,
+  'a whole serving a step',
+);
+assert.equal(
+  getSpokenServings(3, { kind: 'TIMES', factor: 0.5 }),
+  1.5,
+  'halve three',
+);
+assert.equal(
+  getSpokenServings(4, { kind: 'TIMES', factor: 2 }),
+  8,
+  'double four',
+);
+
+const gather: CookVoiceContext = {
+  ...plate,
+  isGathering: true,
+  lines: [
+    { id: 'butter', names: ['Butter', 'unsalted butter'], isInStep: false },
+    { id: 'peanut', names: ['Peanut butter'], isInStep: false },
+    { id: 'flour', names: ['Flour'], isInStep: false },
+    { id: 'garlic', names: ['Garlic'], isInStep: false },
+  ],
+};
+const parseG = (text: string | string[], context = gather) =>
+  parseCookCommand(text, context);
+const got = (query: string | string[], isOut = true): CookCommand => ({
+  kind: 'GOT_INGREDIENT',
+  queries: Array.isArray(query) ? query : [query],
+  isOut,
+});
+[
+  ['got the butter', 'butter'],
+  ["I've got the butter", 'butter'],
+  ['I have the flour', 'flour'],
+  ['got butter', 'butter'],
+  ['tick butter', 'butter'],
+  ['tick off the garlic', 'garlic'],
+  ['check off garlic', 'garlic'],
+  ["butter's out", 'butters'],
+  ['the butter is out', 'butter'],
+  ['I got the garlic', 'garlic'],
+  ['we got the flour', 'flour'],
+].forEach(([phrase, query]) =>
+  assert.deepEqual(parseG(phrase), got(query), `tick: "${phrase}"`),
+);
+[
+  ['untick the butter', 'butter'],
+  ["I don't have the butter", 'butter'],
+  ['no butter yet', 'butter'],
+  ['put the butter back', 'butter'],
+].forEach(([phrase, query]) =>
+  assert.deepEqual(parseG(phrase), got(query, false), `untick: "${phrase}"`),
+);
+[
+  'butter',
+  'add butter',
+  'the butter is melting',
+  'melt the butter',
+  'got',
+  'the oven is out',
+  'butter is out of date',
+].forEach((phrase) =>
+  assert.equal(
+    parseG(phrase)?.kind === 'GOT_INGREDIENT',
+    false,
+    `not a tick: "${phrase}"`,
+  ),
+);
+assert.equal(
+  parse('got the butter'),
+  null,
+  'ticking is heard only while gathering',
+);
+assert.equal(
+  parse('whats left'),
+  null,
+  'what is left is heard only while gathering',
+);
+assert.equal(
+  parseG('got the butter', { ...gather, choice: { kind: 'LENGTH' } })?.kind ===
+    'GOT_INGREDIENT',
+  false,
+  'no tick while a question waits',
+);
+['got everything', 'I have everything', 'tick all', 'tick everything'].forEach(
+  (phrase) =>
+    assert.deepEqual(
+      parseG(phrase),
+      { kind: 'TICK_ALL' },
+      `tick all: "${phrase}"`,
+    ),
+);
+[
+  "what's left",
+  'what do I still need',
+  'what else do I need',
+  'read the ingredients',
+  "read what's left",
+].forEach((phrase) =>
+  assert.deepEqual(parseG(phrase), { kind: 'READ_LEFT' }, `left: "${phrase}"`),
+);
+assert.deepEqual(
+  parseG('ingredients'),
+  { kind: 'SHOW_INGREDIENTS' },
+  'ingredients stays a command',
+);
+[
+  'what do I measure with',
+  'what tools do I need',
+  'which measuring cups',
+  'which spoons do I need',
+  'read the tools',
+  'measuring tools',
+].forEach((phrase) =>
+  assert.deepEqual(parse(phrase), { kind: 'READ_TOOLS' }, `tools: "${phrase}"`),
+);
+['start cooking', "let's cook", "let's start cooking"].forEach((phrase) =>
+  assert.deepEqual(
+    parse(phrase),
+    { kind: 'START_COOKING' },
+    `start anywhere: "${phrase}"`,
+  ),
+);
+["let's start", "let's begin", "I'm ready", 'ready to cook'].forEach(
+  (phrase) => {
+    assert.deepEqual(
+      parseG(phrase),
+      { kind: 'START_COOKING' },
+      `start while gathering: "${phrase}"`,
+    );
+    assert.equal(parse(phrase), null, `not a start off gather: "${phrase}"`);
+  },
+);
+assert.equal(
+  parse("let's cook the rice"),
+  null,
+  'cook the rice never starts cooking',
+);
+assert.equal(
+  parse(['start cooking', 'start'])?.kind,
+  'START_COOKING',
+  'top guess wins',
+);
+assert.equal(
+  parse(['black', "let's start cooking"]),
+  null,
+  'a lower guess is no move',
+);
+['all together', 'show them all together', 'combine them'].forEach((phrase) =>
+  assert.deepEqual(
+    parseG(phrase),
+    { kind: 'SET_GATHER_LAYOUT', layout: 'ALL' },
+    `layout all: "${phrase}"`,
+  ),
+);
+['by part', 'by dish', 'separately', 'split them up'].forEach((phrase) =>
+  assert.deepEqual(
+    parseG(phrase),
+    { kind: 'SET_GATHER_LAYOUT', layout: 'PARTS' },
+    `layout parts: "${phrase}"`,
+  ),
+);
+
+[
+  ['got garlic and butter', ['garlic', 'butter']],
+  ['tick the flour, garlic and butter', ['flour', 'garlic', 'butter']],
+  ['got garlic and saffron', ['garlic', 'saffron']],
+  ['untick garlic and flour', ['garlic', 'flour']],
+].forEach(([phrase, queries]) =>
+  assert.deepEqual(
+    parseG(phrase as string),
+    got(queries as string[], !(phrase as string).startsWith('untick')),
+    `list: "${phrase}"`,
+  ),
+);
+[
+  'got a minute',
+  'got my phone',
+  'got ready',
+  'got steps',
+  'got timers',
+  'i have a lot',
+  'got two',
+  'got the almond flour',
+  'got saffron',
+  'tick the saffron and thyme',
+].forEach((phrase) =>
+  assert.equal(parseG(phrase), null, `silent: "${phrase}"`),
+);
+[
+  'untick everything',
+  'untick all',
+  'uncheck everything',
+  'start over',
+  'clear the ticks',
+  'reset the list',
+  'reset',
+].forEach((phrase) => {
+  assert.deepEqual(
+    parseG(phrase),
+    { kind: 'UNTICK_ALL' },
+    `untick all: "${phrase}"`,
+  );
+  assert.equal(
+    parse(phrase),
+    null,
+    `untick all only while gathering: "${phrase}"`,
+  );
+});
+assert.deepEqual(
+  parseG("let's cook"),
+  { kind: 'START_COOKING' },
+  "let's cook anywhere",
+);
+assert.deepEqual(
+  parse('how many servings'),
+  { kind: 'TELL_SERVINGS' },
+  'servings question unchanged',
+);
+
+const gatherPlate: CookVoiceContext = {
+  ...gather,
+  recipes: [
+    { id: 'adobo', title: 'Adobo chicken' },
+    { id: 'rice', title: 'Rice' },
+  ],
+};
+assert.deepEqual(
+  parseG('make the rice six servings', gatherPlate),
+  {
+    kind: 'SET_SERVINGS',
+    change: { kind: 'TO', servings: 6 },
+    recipeId: 'rice',
+  },
+  'a dish named with the count',
+);
+assert.deepEqual(
+  parseG('make six servings', gatherPlate),
+  servingsTo(6),
+  'no dish named',
+);
+const askedDish: CookVoiceContext = {
+  ...gatherPlate,
+  choice: {
+    kind: 'DISH',
+    dishes: [
+      { id: 'adobo', title: 'Adobo chicken' },
+      { id: 'rice', title: 'Rice' },
+    ],
+  },
+};
+assert.deepEqual(
+  parseG('the rice', askedDish),
+  { kind: 'DISH_ANSWER', recipeId: 'rice' },
+  'dish by name',
+);
+assert.deepEqual(
+  parseG('the first one', askedDish),
+  { kind: 'DISH_ANSWER', recipeId: 'adobo' },
+  'dish by place',
+);
+assert.deepEqual(
+  parseG('never mind', askedDish),
+  { kind: 'TIMER_ANSWER', answer: { kind: 'NEVER_MIND' } },
+  'dish question can be dropped',
+);
+
+const item = (
+  key: string,
+  name: string,
+  isOut: boolean,
+  names: string[] = [name],
+): GatherItem => ({
+  key,
+  name,
+  names,
+  isOut,
+  isAnyOut: isOut,
+  sources: [{ recipeId: 'r', lineId: key }],
+});
+const items = [
+  item('butter', 'Butter', false),
+  item('flour', 'Flour', false),
+  item('garlic', 'Garlic', true),
+];
+const tick = planGatherTick(['butter'], items, true, false);
+assert.deepEqual(
+  [tick.ok, tick.speak],
+  [true, 'Got butter. 1 left.'],
+  'tick says what is left',
+);
+assert.deepEqual(
+  tick.sources,
+  [{ recipeId: 'r', lineId: 'butter' }],
+  'tick reaches its lines',
+);
+assert.equal(
+  planGatherTick(['flour'], [items[1], items[2]], true, false).speak,
+  "That's everything. Say start cooking when you're ready.",
+  'the last tick says so',
+);
+assert.equal(
+  planGatherTick(['garlic'], items, true, false).speak,
+  'Garlic is already ticked.',
+  'already ticked',
+);
+assert.equal(
+  planGatherTick(['garlic'], items, false, false).speak,
+  'Unticked garlic.',
+  'untick',
+);
+assert.equal(
+  planGatherTick(['milk'], items, true, false).speak,
+  'No milk in this recipe.',
+  'no match',
+);
+assert.equal(
+  planGatherTick(['milk'], items, true, true).speak,
+  'No milk on this plate.',
+  'no match on a plate',
+);
+assert.equal(
+  planGatherTick(['butter', 'flour'], items, true, false).speak,
+  "That's everything. Say start cooking when you're ready.",
+  'a list ticks each',
+);
+assert.equal(
+  planGatherTick(
+    ['butter', 'saffron'],
+    [...items, item('o', 'Oil', false)],
+    true,
+    false,
+  ).speak,
+  'Got butter. 2 left. No saffron in this recipe.',
+  'a list names only what is missing',
+);
+assert.equal(
+  planGatherTick(['saffron', 'thyme'], items, true, false).ok,
+  false,
+  'a list of none is refused',
+);
+assert.equal(
+  planGatherTick(
+    ['butters'],
+    [item('b', 'Butter', false, ['Butter'])],
+    true,
+    false,
+  ).speak,
+  "That's everything. Say start cooking when you're ready.",
+  'a plural is the same ingredient',
+);
+assert.equal(
+  planGatherTick(['buttr'], [item('b', 'Butter', false)], true, false).speak,
+  'No buttr in this recipe. Did you mean butter?',
+  'a near miss is offered',
+);
+const partly = { ...item('p', 'Sugar', false), isAnyOut: true };
+assert.equal(
+  planGatherTick(['sugar'], [partly], false, false).speak,
+  'Unticked sugar.',
+  'a partly ticked item unticks',
+);
+const two = [
+  item('u', 'Unsalted butter', false),
+  item('p', 'Peanut butter', false),
+];
+const which = planGatherTick(['butter'], two, true, false);
+assert.deepEqual(
+  [which.ok, which.speak],
+  [false, 'Which one: unsalted butter or peanut butter?'],
+  'several ingredients match',
+);
+assert.equal(
+  planGatherTick(['butter'], [...two, item('b', 'Butter', false)], true, false)
+    .ok,
+  true,
+  'an exact name wins',
+);
+
+const row = (
+  id: string,
+  name: string,
+  amountText: string,
+  group: string | null = null,
+) => ({
+  id,
+  name,
+  note: null,
+  amountText,
+  isMeasured: amountText !== '',
+  group,
+  measure: null,
+  ingredientKey: name,
+  isLiquid: false,
+});
+const sauceDish: GatherDish = {
+  recipe: { id: 'r', title: 'Stir fry' },
+  rows: [
+    row('a', 'Soy sauce', '2 tbsp', 'Sauce'),
+    row('b', 'Garlic', '3 cloves'),
+    row('c', 'Salt', '½ tsp'),
+  ],
+  gotOut: { c: true },
+};
+assert.equal(
+  describeGatherLeft([sauceDish], 'PARTS', null).speak,
+  'Still to get: For sauce: Soy sauce, 2 tablespoons. Garlic, 3 cloves.',
+  'by part names the part when there are several',
+);
+assert.equal(
+  describeGatherLeft(
+    [{ ...sauceDish, rows: [sauceDish.rows[1]] }],
+    'PARTS',
+    null,
+  ).speak,
+  'Still to get: Garlic, 3 cloves.',
+  'one part is not named',
+);
+assert.equal(
+  describeGatherLeft([sauceDish], 'ALL', null).speak,
+  'Still to get: Soy sauce, 2 tablespoons. Garlic, 3 cloves.',
+  'all together lists each ingredient once',
+);
+assert.equal(
+  describeGatherLeft(
+    [{ ...sauceDish, gotOut: { a: true, b: true, c: true } }],
+    'ALL',
+    null,
+  ).speak,
+  "You've got everything out.",
+  'all ticked',
+);
+const many: GatherDish = {
+  recipe: { id: 'r', title: 'Big' },
+  rows: Array.from({ length: 11 }, (_, i) =>
+    row(`x${i}`, `Thing ${i}`, '1 cup'),
+  ),
+  gotOut: {},
+};
+assert.match(
+  describeGatherLeft([many], 'ALL', null).speak,
+  /And 3 more\.$/,
+  'long lists are cut',
+);
+assert.equal(
+  describeGatherTools([]).speak,
+  "Nothing to measure with: it's all counted.",
+  'no tools',
+);
+const spoons = describeGatherTools(
+  getGatherTools(
+    [
+      {
+        ...row('s', 'Salt', '½ tsp'),
+        measure: { amount: 0.5, unit: 'TSP', gramsPerMl: null },
+      },
+      {
+        ...row('o', 'Oil', '1 tbsp'),
+        measure: { amount: 1, unit: 'TBSP', gramsPerMl: null },
+      },
+    ],
+    null,
+  ),
+);
+assert.match(
+  spoons.speak,
+  /Measuring spoons: 1 tablespoon and half a teaspoon\./,
+  'spoons read in words',
 );
 
 console.log('pinchVoice: all checks passed');

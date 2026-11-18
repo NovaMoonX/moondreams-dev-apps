@@ -15,21 +15,30 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import ConnectionsSection from '@apps/helm/components/who/ConnectionsSection';
+import ContactRowsSection from '@apps/helm/components/who/ContactRowsSection';
 import FactsSection from '@apps/helm/components/who/FactsSection';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
+import WhereCard from '@apps/helm/components/where/WhereCard';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
+import WhoNamesCard from '@apps/helm/components/who/WhoNamesCard';
+import PhotoHeader from '@apps/helm/components/media/PhotoHeader';
 import PhotosSection from '@apps/helm/components/media/PhotosSection';
-import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
-import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
+import {
+  HELM_COPY,
+  MENTIONS_SHOWN,
+  PROJECTS_SHOWN,
+} from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
-import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { selectOpenProjects } from '@apps/helm/store/selectors/projectSelectors';
 import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
+  countConnectionsOf,
   countLinkedTasks,
   countOnlyFacts,
   ForgetPartialError,
@@ -38,6 +47,7 @@ import {
 import { useImportContacts } from '@apps/helm/queries/contactsQueries';
 import { selectEveryCapture } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
 
@@ -58,11 +68,15 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { reportDone, toFailureLine } = useContactsReport();
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
+  const connections = useAppSelector((state) => state.helm.connections.items);
   const captures = useAppSelector(selectEveryCapture);
-  const activeProjects = useAppSelector(selectActiveProjects);
+  const activeProjects = useAppSelector(selectOpenProjects);
   const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);
-  const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
+  const [isAllProjects, setIsAllProjects] = useState(false);
+  const [sheet, setSheet] = useState<'edit' | 'tier' | 'names' | 'kin' | null>(
+    null,
+  );
   const who = items.find((entry) => entry.id === whoId) ?? null;
   const name = who && !who.isUnreadable ? who.name : '';
   const importedAccountId = who?.importedFrom?.accountId ?? null;
@@ -81,17 +95,23 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
     },
   });
 
-  const projectLines = activeProjects.flatMap((project) => {
-    const role = whoId === null ? undefined : project.whoRoles[whoId];
-    return role === 'key' || role === 'involved'
-      ? [
-          {
-            id: project.id,
-            text: HELM_COPY.whoProjectLine(project.emoji, project.name, role),
-          },
-        ]
-      : [];
-  });
+  const projectLines = activeProjects
+    .flatMap((project) => {
+      const role = whoId === null ? undefined : project.whoRoles[whoId];
+      return role === 'key' || role === 'involved'
+        ? [
+            {
+              id: project.id,
+              text: `${project.emoji ? `${project.emoji} ` : ''}${project.name}`,
+              role,
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => Number(b.role === 'key') - Number(a.role === 'key'));
+  const shownProjects = isAllProjects
+    ? projectLines
+    : projectLines.slice(0, PROJECTS_SHOWN);
 
   const tasks = useMemo(
     () =>
@@ -140,7 +160,21 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
         return null;
       },
     );
-    if (linkedCount === null || factCount === null) {
+    const connectionCount = await countConnectionsOf(
+      user.uid,
+      who.id,
+      new Set(
+        connections.flatMap((entry) => (entry.isUnreadable ? [entry.id] : [])),
+      ),
+    ).catch((error: unknown) => {
+      console.error('Helm connections were not counted', error);
+      return null;
+    });
+    if (
+      linkedCount === null ||
+      factCount === null ||
+      connectionCount === null
+    ) {
       addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
       return;
     }
@@ -153,6 +187,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
         factCount,
         who.yearlyDateCount,
         who.momentCount,
+        connectionCount,
       ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
@@ -207,6 +242,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
       ? {
           items: [
             option({ label: HELM_COPY.whoEditMenu, value: 'edit' }),
+            option({ label: HELM_COPY.whoNamesMenu, value: 'names' }),
             ...(who.isSelf
               ? []
               : [
@@ -219,7 +255,8 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
           ],
           onItemSelect: (value: string) => {
             if (value === 'forget') void forget();
-            else if (value === 'edit' || value === 'tier') setSheet(value);
+            else if (value === 'edit' || value === 'tier' || value === 'names')
+              setSheet(value);
           },
         }
       : undefined;
@@ -253,46 +290,71 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
         )}
         {who && !who.isUnreadable && (
           <>
-            <div className='flex items-start gap-4'>
-              <WhoPhoto
-                kind={who.kind}
-                name={who.name}
-                mediaId={who.photoMediaId}
-                isLarge
-              />
-              <div className='min-w-0'>
-                <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
-                  {who.name}
-                </h1>
-                {line && (
-                  <p className='text-muted-foreground text-[15px] break-words'>
-                    {line}
-                  </p>
-                )}
-              </div>
-            </div>
+            <PhotoHeader
+              owner={{ kind: 'who', id: who.id }}
+              kind={who.kind}
+              name={who.name}
+              mainId={who.photoMediaId}
+              photoCount={who.mediaIds.length}
+            >
+              <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
+                {who.name}
+              </h1>
+              {line && (
+                <p className='text-muted-foreground text-[15px] break-words'>
+                  {line}
+                </p>
+              )}
+            </PhotoHeader>
+            <WhoNamesCard
+              who={who}
+              openSheet={sheet === 'names' || sheet === 'kin' ? sheet : null}
+              onOpen={setSheet}
+            />
+            {(who.kind !== 'pet' ||
+              who.phones.length + who.emails.length > 0) && (
+              <ContactRowsSection who={who} />
+            )}
+            {who.kind === 'person' && <ConnectionsSection who={who} />}
             {projectLines.length > 0 && (
-              <ul className='space-y-1'>
-                {projectLines.map((line) => (
-                  <li key={line.id}>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      className="bg-muted text-foreground relative h-auto min-h-7 max-w-full justify-between gap-2 rounded-full border-0 px-3 py-1 text-[15px] font-normal after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
-                      onClick={() => void showView('project', line.id)}
-                    >
-                      <span className='min-w-0 text-left break-words'>
-                        {line.text}
-                      </span>
-                      <ChevronRight
-                        className='text-muted-foreground size-4 shrink-0'
-                        aria-hidden='true'
-                      />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <section className='space-y-3'>
+                <SectionDivider label={HELM_COPY.whoProjectsTitle} />
+                <ul className='helm-card divide-border divide-y overflow-hidden'>
+                  {shownProjects.map((line) => (
+                    <li key={line.id}>
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        className='text-foreground flex h-auto min-h-14 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
+                        onClick={() => void showView('project', line.id)}
+                      >
+                        <span className='min-w-0 flex-1'>
+                          <span className='text-foreground block text-[15px] break-words'>
+                            {line.text}
+                          </span>
+                          <span className='text-muted-foreground block text-[13px]'>
+                            {HELM_COPY.whoProjectPart(line.role)}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          className='text-muted-foreground size-4 shrink-0'
+                          aria-hidden='true'
+                        />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                {projectLines.length > PROJECTS_SHOWN && (
+                  <ShowMoreButton
+                    isOpen={isAllProjects}
+                    onClick={() => setIsAllProjects((isOpen) => !isOpen)}
+                  >
+                    {isAllProjects
+                      ? HELM_COPY.showFewerProjects
+                      : HELM_COPY.showAllProjects(projectLines.length)}
+                  </ShowMoreButton>
+                )}
+              </section>
             )}
             {who.importedFrom && (
               <section className='helm-card space-y-2 p-4'>
@@ -327,6 +389,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               photoIds={who.mediaIds}
               mainId={who.photoMediaId}
             />
+            <WhereCard who={who} />
             <KeyDatesList who={who} />
             <MomentsPreview who={who} />
             <FactsSection
@@ -373,6 +436,9 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               </section>
             )}
           </>
+        )}
+        {who && !who.isUnreadable && (
+          <PrivateRow kind='who' record={who} title={who.name} />
         )}
       </main>
       {who && !who.isUnreadable && (

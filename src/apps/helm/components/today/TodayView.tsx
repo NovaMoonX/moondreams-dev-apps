@@ -14,6 +14,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import {
+  dismissRemindersBack,
+  useRemindersBack,
+} from '@apps/helm/utils/remindersBackNotice';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import ConnectCalendarRow from '@apps/helm/components/today/ConnectCalendarRow';
@@ -21,10 +25,37 @@ import DayPlan from '@apps/helm/components/today/DayPlan';
 import DayStrip from '@apps/helm/components/today/DayStrip';
 import KeyDatesLine from '@apps/helm/components/today/KeyDatesLine';
 import PastDay from '@apps/helm/components/today/PastDay';
+import AheadOfferCard, {
+  type AheadSheetTarget,
+} from '@apps/helm/components/projects/AheadOfferCard';
+import AheadSheet from '@apps/helm/components/projects/AheadSheet';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
+import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import {
+  isAheadOfferForToday,
+  pickAheadOffer,
+} from '@apps/helm/engine/researchAhead';
+import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { dayKeyToMs } from '@/utils/cadenceUtils';
+import { patternFamily } from '@apps/helm/engine/patterns';
+import LearnItemSheet from '@apps/helm/components/research/LearnItemSheet';
+import {
+  pickLearnOffers,
+  selectLearnLater,
+} from '@apps/helm/store/selectors/researchSelectors';
+import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
+import { resolveMeeting } from '@apps/helm/utils/meetingWords';
+import QuestionsReadyCard from '@apps/helm/components/today/QuestionsReadyCard';
+import {
+  countQuestions,
+  isReadyCheckDue,
+} from '@apps/helm/engine/questionsTask';
 import SuggestionSheet, {
   type SuggestionTarget,
 } from '@apps/helm/components/today/SuggestionSheet';
+import ScheduledRunLines from '@apps/helm/components/scheduled/ScheduledRunLines';
 import SyncedToday from '@apps/helm/components/today/SyncedToday';
+import HabitQuestionFlow from '@apps/helm/components/habits/HabitQuestionFlow';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
 import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
@@ -49,6 +80,7 @@ import {
 
 const { option } = DropdownMenuFactories;
 const NEW_TASK = 'new-task';
+const NEW_HABIT = 'new-habit';
 
 interface TodayViewProps {
   onBack: () => void;
@@ -56,6 +88,9 @@ interface TodayViewProps {
   onOpenTasks: () => void;
   onOpenComingUp: () => void;
   onOpenWho: (whoId: string) => void;
+  onOpenHabit: (habitId: string) => void;
+  onOpenConnectedApps: () => void;
+  onOpenActivity: () => void;
 }
 
 /** Today: a strip of days with each day's events and plan (what was kept and what is suggested), and on today the open tasks that are awake and overdue or due in the next week, soonest first, with a door to all of them; its first-run line until there is a task. */
@@ -65,6 +100,9 @@ function TodayView({
   onOpenTasks,
   onOpenComingUp,
   onOpenWho,
+  onOpenConnectedApps,
+  onOpenActivity,
+  onOpenHabit,
 }: TodayViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -82,12 +120,14 @@ function TodayView({
     byId: activityById,
   } = useAppSelector((state) => selectTaskActivity(state, nowMinute));
   const tasksById = useAppSelector(selectOpenTasksById);
+  const isRemindersBack = useRemindersBack();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const { held, tick, undoTick, forget } = useTaskTicks(user?.uid ?? null);
   const { pending, showUndo, undo } = useUndoRemoval();
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [isNewHabitOpen, setIsNewHabitOpen] = useState(false);
   const [isDeletedNoteShown, setIsDeletedNoteShown] = useState(readDeletedNote);
   const hasTasks = tasks.length > 0;
   useEffect(() => {
@@ -95,6 +135,10 @@ function TodayView({
   }, [hasTasks]);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
+  const patternOffer = useAppSelector(selectTodayOffer);
+  const synced = useAppSelector((state) => state.helm.synced.items);
+  const learnItems = useAppSelector(selectLearnLater);
+  const [openLearnId, setOpenLearnId] = useState<string | null>(null);
   const sources = usePlanSources(nowMinute);
   const todayKey = toDayKey(nowMinute, timeZone);
   const selectedKey = pickedKey ?? todayKey;
@@ -131,6 +175,73 @@ function TodayView({
     : null;
   const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
 
+  const projects = useAppSelector(selectActiveProjects);
+  const readyTask = useMemo(
+    () =>
+      !isToday
+        ? null
+        : (tasks
+            .filter((task) => {
+              const meeting = resolveMeeting(task, synced);
+              return (
+                !task.isUnreadable &&
+                task.meeting !== null &&
+                meeting !== null &&
+                isReadyCheckDue(
+                  {
+                    status: task.status,
+                    meeting: { ...task.meeting, startAt: meeting.startAt },
+                    readyAnswer: task.readyAnswer,
+                    count: countQuestions(task.stepState),
+                  },
+                  now,
+                )
+              );
+            })
+            .sort(
+              (a, b) =>
+                (resolveMeeting(a, synced)?.startAt ?? 0) -
+                (resolveMeeting(b, synced)?.startAt ?? 0),
+            )
+            .at(0) ?? null),
+    [isToday, tasks, synced, now],
+  );
+  const offer = readyTask ? null : patternOffer;
+
+  const aheadToday = useMemo(() => {
+    if (!isToday || offer !== null || readyTask !== null) return null;
+    const today = dayKeyToMs(todayKey);
+    return (
+      projects.flatMap((project) => {
+        const ahead = pickAheadOffer(
+          project.researchOffers,
+          project.targetDate,
+          today,
+        );
+        return ahead &&
+          project.aheadAsks?.[ahead.id] &&
+          isAheadOfferForToday(ahead, todayKey)
+          ? [{ project, offer: ahead, today }]
+          : [];
+      })[0] ?? null
+    );
+  }, [isToday, offer, readyTask, projects, todayKey]);
+
+  const [aheadTarget, setAheadTarget] = useState<AheadSheetTarget | null>(null);
+  const [isAheadOpen, setIsAheadOpen] = useState(false);
+  const openAhead = (target: AheadSheetTarget) => {
+    setAheadTarget(target);
+    setIsAheadOpen(true);
+  };
+
+  const learns = useMemo(
+    () =>
+      isToday && offer === null && aheadToday === null && readyTask === null
+        ? pickLearnOffers(learnItems, todayKey, timeZone)
+        : [],
+    [isToday, offer, aheadToday, readyTask, learnItems, todayKey, timeZone],
+  );
+
   const handleDeleted = (
     taskId: string,
     title: string,
@@ -158,9 +269,13 @@ function TodayView({
         onBack={onBack}
         onHome={onHome}
         menu={{
-          items: [option({ label: HELM_COPY.newTask, value: NEW_TASK })],
+          items: [
+            option({ label: HELM_COPY.newTask, value: NEW_TASK }),
+            option({ label: HELM_COPY.newHabit, value: NEW_HABIT }),
+          ],
           onItemSelect: (value) => {
             if (value === NEW_TASK) setIsNewOpen(true);
+            else if (value === NEW_HABIT) setIsNewHabitOpen(true);
           },
         }}
       />
@@ -182,6 +297,15 @@ function TodayView({
             {HELM_COPY.deleteAllDone}
           </InlineNotice>
         )}
+        {isToday && isRemindersBack && (
+          <InlineNotice
+            tone='success'
+            onDismiss={dismissRemindersBack}
+            dismissLabel={HELM_COPY.habitRemindersBackDismiss}
+          >
+            {HELM_COPY.habitRemindersBackOn}
+          </InlineNotice>
+        )}
         {selectedKey >= todayKey &&
           isLoaded &&
           tasks.length === 0 &&
@@ -201,6 +325,13 @@ function TodayView({
             onSelect={(key) => setPickedKey(key === todayKey ? null : key)}
           />
         )}
+        {isToday && (
+          <ScheduledRunLines
+            scope='today'
+            onOpenConnectedApps={onOpenConnectedApps}
+            onOpenActivity={onOpenActivity}
+          />
+        )}
         {isToday && <ConnectCalendarRow />}
         {sources &&
           (selectedKey < todayKey ? (
@@ -218,8 +349,59 @@ function TodayView({
               onTick={tick}
               onUndoTick={(taskId) => void undoTick(taskId)}
               onSelectDay={setPickedKey}
+              onOpenHabit={onOpenHabit}
+              learns={learns}
+              onOpenLearn={setOpenLearnId}
             />
           ))}
+        {isToday &&
+          offer &&
+          (patternFamily(offer.kind) === 'guardrail' ? (
+            <GuardrailLine
+              pattern={offer}
+              onFindLater={
+                offer.subject.collection === 'tasks' && offer.subject.id
+                  ? () => setOpenId(offer.subject.id)
+                  : undefined
+              }
+            />
+          ) : (
+            <PatternOfferCard
+              pattern={offer}
+              onChange={
+                offer.subject.collection === 'habits' && offer.subject.id
+                  ? () => onOpenHabit(offer.subject.id ?? '')
+                  : undefined
+              }
+            />
+          ))}
+        {aheadToday && (
+          <AheadOfferCard
+            key={aheadToday.offer.id}
+            project={aheadToday.project}
+            offer={aheadToday.offer}
+            today={aheadToday.today}
+            dayKey={todayKey}
+            onOpen={openAhead}
+          />
+        )}
+        {aheadTarget && (
+          <AheadSheet
+            isOpen={isAheadOpen}
+            onClose={() => setIsAheadOpen(false)}
+            {...aheadTarget}
+          />
+        )}
+        {readyTask && (
+          <QuestionsReadyCard
+            key={readyTask.id}
+            task={readyTask}
+            sources={sources}
+            now={now}
+            timeZone={timeZone}
+            onOpen={setOpenId}
+          />
+        )}
         {isToday && <SyncedToday now={now} />}
         {isToday && isLoaded && (tasks.length > 0 || held.size > 0) && (
           <section className='space-y-3'>
@@ -270,6 +452,11 @@ function TodayView({
           </section>
         )}
       </main>
+      <HabitQuestionFlow
+        isOpen={isNewHabitOpen}
+        onClose={() => setIsNewHabitOpen(false)}
+        onOpenHabit={onOpenHabit}
+      />
       <NewTaskSheet
         isOpen={isNewOpen}
         onClose={() => setIsNewOpen(false)}
@@ -284,6 +471,10 @@ function TodayView({
         onTick={tick}
         onUndoTick={(taskId) => void undoTick(taskId)}
         onDeleted={handleDeleted}
+      />
+      <LearnItemSheet
+        itemId={openLearnId}
+        onClose={() => setOpenLearnId(null)}
       />
       <SuggestionSheet
         target={suggestion}

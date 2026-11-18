@@ -26,6 +26,11 @@ import {
 import { formatCareDays, getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { formatMinutes } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
+import {
+  cleanStepSection,
+  getStepSectionKey,
+  toStoredStepSections,
+} from '@apps/pinch/utils/stepSections';
 
 /** What a tweak looks at: everything a recipe's form edits except the cover picture and the collections, which `ChangeExtras` carries. */
 export type RecipeContent = RecipeSnapshot;
@@ -42,6 +47,7 @@ export const getRecipeSnapshot = (recipe: RecipeContent): RecipeSnapshot => ({
     freeText: line.freeText ?? null,
   })),
   steps: recipe.steps,
+  stepSections: toStoredStepSections(recipe.steps, recipe.stepSections),
   nutritionOverride: recipe.nutritionOverride ?? null,
   sourceId: recipe.sourceId ?? null,
   categories: getCategories(recipe),
@@ -94,6 +100,14 @@ const normalizeLine = (line: RecipeIngredient): ComparedLine => ({
   note: (line.note ?? '').trim() || null,
 });
 
+const keptSteps = (content: RecipeContent) =>
+  content.steps
+    .map((step, at) => ({
+      step: step.trim(),
+      section: cleanStepSection(content.stepSections?.[at] ?? null),
+    }))
+    .filter(({ step }) => step !== '');
+
 const normalize = (content: RecipeContent) => ({
   title: content.title.trim(),
   description: (content.description ?? '').trim() || null,
@@ -104,7 +118,8 @@ const normalize = (content: RecipeContent) => ({
   ingredients: content.ingredients
     .map(normalizeLine)
     .sort((a, b) => a.id.localeCompare(b.id)),
-  steps: content.steps.map((step) => step.trim()).filter(Boolean),
+  steps: keptSteps(content).map(({ step }) => step),
+  stepSections: keptSteps(content).map(({ section }) => section),
   nutrition: Object.fromEntries(
     METRIC_KEYS.map((key) => [key, content.nutritionOverride?.[key] ?? null]),
   ) as unknown as NutritionValues,
@@ -389,6 +404,107 @@ const getStepChanges = (before: string[], after: string[]) => {
   return [...changed, ...added, ...removed];
 };
 
+const MAX_SECTION_LINES = 3;
+
+// Steps are matched by text, the same place first, so a step reworded in the same edit has only its own line.
+const getStepSectionChanges = (before: Normalized, after: Normalized) => {
+  const taken = new Set<number>();
+  const pairs = before.steps.flatMap((text, beforeAt) => {
+    const afterAt =
+      after.steps[beforeAt] === text && !taken.has(beforeAt)
+        ? beforeAt
+        : after.steps.findIndex(
+            (other, at) => other === text && !taken.has(at),
+          );
+    if (afterAt === -1) return [];
+    taken.add(afterAt);
+    return [
+      {
+        at: afterAt,
+        was: before.stepSections[beforeAt],
+        now: after.stepSections[afterAt],
+      },
+    ];
+  });
+  const keyOf = (name: string | null) => getStepSectionKey(name);
+  const beforeKeys = new Set(before.stepSections.map(keyOf));
+  const afterKeys = new Set(after.stepSections.map(keyOf));
+  const caseRenames = [
+    ...new Map(
+      pairs.flatMap(({ was, now }) =>
+        was !== null && now !== null && was !== now && keyOf(was) === keyOf(now)
+          ? [[`${was}\u0000${now}`, [was, now] as const] as const]
+          : [],
+      ),
+    ).values(),
+  ];
+  const buckets = pairs
+    .filter(({ was, now }) => keyOf(was) !== keyOf(now))
+    .reduce((acc, pair) => {
+      const key = `${keyOf(pair.was)}\u0000${keyOf(pair.now)}`;
+      return acc.set(key, [...(acc.get(key) ?? []), pair]);
+    }, new Map<string, typeof pairs>());
+
+  const entries = [...buckets.entries()].map(([key, moved]) => {
+    const [from, to] = key.split('\u0000');
+    const fromName = moved[0].was;
+    const toName = moved[0].now;
+    const isWholeSection =
+      from !== '' &&
+      before.stepSections.filter((name) => keyOf(name) === from).length ===
+        moved.length;
+    if (isWholeSection && to === '' && !afterKeys.has(from)) {
+      return {
+        isInto: false,
+        line: `Removed the section ${quoteGroup(fromName ?? '')}`,
+      };
+    }
+    if (
+      isWholeSection &&
+      to !== '' &&
+      !afterKeys.has(from) &&
+      !beforeKeys.has(to)
+    ) {
+      return {
+        isInto: true,
+        line: `Renamed the section ${quoteGroup(fromName ?? '')} to ${quoteGroup(toName ?? '')}`,
+      };
+    }
+    if (to === '') {
+      return {
+        isInto: false,
+        line:
+          moved.length === 1
+            ? `Took step ${moved[0].at + 1} out of its section`
+            : `Took ${moved.length} steps out of their sections`,
+      };
+    }
+    return {
+      isInto: true,
+      line:
+        moved.length === 1
+          ? `Moved step ${moved[0].at + 1} to ${quoteGroup(toName ?? '')}`
+          : `Moved ${moved.length} steps to ${quoteGroup(toName ?? '')}`,
+    };
+  });
+  const lines =
+    entries.length > MAX_SECTION_LINES
+      ? [
+          entries.some((entry) => entry.isInto)
+            ? 'Steps sorted into sections'
+            : 'Steps taken out of their sections',
+        ]
+      : entries.map((entry) => entry.line);
+
+  return [
+    ...caseRenames.map(
+      ([was, now]) =>
+        `Renamed the section ${quoteGroup(was)} to ${quoteGroup(now)}`,
+    ),
+    ...lines,
+  ];
+};
+
 const getNutritionChanges = (before: NutritionValues, after: NutritionValues) =>
   NUTRITION_CELLS.flatMap(({ key, label, unit }) => {
     const was = before[key];
@@ -511,13 +627,18 @@ export interface ChangeExtras {
   photo: 'ADDED' | 'CHANGED' | 'REMOVED' | null;
   addedCollections: (string | null)[];
   removedCollections: (string | null)[];
+  /** The steps were split into sections by the reader in this edit; step lines then compare against its result. */
+  isStepsSplit: boolean;
 }
 
 export const NO_EXTRAS: ChangeExtras = {
   photo: null,
   addedCollections: [],
   removedCollections: [],
+  isStepsSplit: false,
 };
+
+export const STEPS_SPLIT_LINE = 'Steps split into sections';
 
 const getPhotoChanges = (photo: ChangeExtras['photo']) => {
   if (photo === 'ADDED') return ['Photo added'];
@@ -644,7 +765,9 @@ export const getRecipeChanges = (
     ...getSourceLine(),
     ...getIngredientChanges(before.ingredients, after.ingredients, getName),
     ...getGroupChanges(before.ingredients, after.ingredients, getName),
+    ...(extras.isStepsSplit ? [STEPS_SPLIT_LINE] : []),
     ...getStepChanges(was.steps, now.steps),
+    ...getStepSectionChanges(was, now),
     ...getCareChanges(was, now),
     ...getNutritionChanges(was.nutrition, now.nutrition),
     ...getCollectionChanges(extras),
@@ -694,6 +817,7 @@ type DraftContent = RecipeContent & {
   removeCover?: boolean;
   collectionChange?: CollectionChange | null;
   newCollections?: { id: string; label: string }[];
+  splitSteps?: Pick<Recipe, 'steps' | 'stepSections'> | null;
 };
 
 const getPhotoExtra = (
@@ -737,20 +861,28 @@ export const getDraftChanges = (
   ]);
   const labelsOf = (ids: string[] | undefined) =>
     (ids ?? []).map((id) => collectionLabels.get(id)?.label ?? null);
+  const stepsOf = (content: RecipeContent) => {
+    const kept = normalize(content);
+    return JSON.stringify([kept.steps, kept.stepSections]);
+  };
+  const isSplitKept =
+    draft.splitSteps != null && stepsOf(draft) !== stepsOf(existing);
   const extras: ChangeExtras = {
     photo: getPhotoExtra(existing, draft),
     addedCollections: labelsOf(draft.collectionChange?.add),
     removedCollections: labelsOf(draft.collectionChange?.remove),
+    isStepsSplit: isSplitKept,
   };
+  const base = isSplitKept ? { ...existing, ...draft.splitSteps } : existing;
   const result = {
     changes: getRecipeChanges(
-      existing,
+      base,
       draft,
       ingredientNames,
       sourceLabels,
       extras,
     ),
-    topics: getChangeTopics(existing, draft),
+    topics: getChangeTopics(base, draft),
   };
 
   return result;

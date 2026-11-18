@@ -108,6 +108,7 @@ const toUpdate = (
   alias: string,
   dueSpanId: string | null,
   isUrgent: true | null,
+  meetsHow: 'inPerson' | 'video' | 'phone' | null = null,
 ) => ({
   kind: 'updateTask',
   ref: null,
@@ -115,7 +116,39 @@ const toUpdate = (
   title: null,
   dueSpanId,
   isUrgent,
+  meetsHow,
 });
+
+const HOW_WORDS: [RegExp, 'inPerson' | 'video' | 'phone'][] = [
+  [/^(on )?(video|zoom|a video call)$/i, 'video'],
+  [/^(on )?(the )?(phone|a phone call)$/i, 'phone'],
+  [/^in person$/i, 'inPerson'],
+];
+
+/** "Monday's call is on video": the task of that name gets the format; an event of that name is a copy and is left alone. */
+function readMeetsFollowUp(text: string, message: string) {
+  const said = text
+    .trim()
+    .match(
+      /^(.+?) is (on video|on zoom|on the phone|in person|a video call|a phone call)\b/i,
+    );
+  const how = said ? HOW_WORDS.find(([word]) => word.test(said[2]))?.[1] : null;
+  if (!said || !how) return null;
+  const name = said[1].toLowerCase();
+  const isNamed = (title: string) => {
+    const words = title.toLowerCase();
+    return words.includes(name) || name.includes(words);
+  };
+  const task = (readBlock<ListedRecord[]>(message, 'open_tasks') ?? []).find(
+    (entry) => isNamed(entry.title),
+  );
+  if (task) return [toUpdate(task.alias, null, null, how)];
+  return (readBlock<ListedRecord[]>(message, 'synced_records') ?? []).some(
+    (entry) => isNamed(entry.title),
+  )
+    ? []
+    : null;
+}
 
 /** The follow-ups a page makes possible, read from the context blocks: "move this to Saturday", "make it urgent", "the second one is done", "this is done". Null when the words are none of them or what they point at is missing. */
 function readFollowUp(text: string, reading: CaptureReading, message: string) {
@@ -130,6 +163,8 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
   if (/\bmove (this|it|that) to\b/i.test(text)) {
     return focus && span ? [toUpdate(focus, span.id, null)] : [];
   }
+  const meets = readMeetsFollowUp(text, message);
+  if (meets) return meets;
   const urgentTarget = focus ?? lastMade;
   if (/\bmake (this|it|that) urgent\b/i.test(text)) {
     return urgentTarget ? [toUpdate(urgentTarget, null, true)] : [];
@@ -269,6 +304,75 @@ const packingOption = (label: string) => ({
   detail: null,
   recordAlias: null,
 });
+
+/** The emulator's web look-up for "Look into …" / "Research …": "properly" or "thorough" asks for a thorough look, "quick" a light one, "should I" makes it feed a decision. */
+const readResearchAsk = (text: string) => {
+  const match = text.match(
+    /^\s*(?:please\s+)?(?:look into|research)\s+(.+?)[.?!]*\s*$/i,
+  );
+  if (!match) return null;
+  const subject = match[1]
+    .replace(/\b(properly|thoroughly|for me|quickly|a quick look)\b/gi, '')
+    .split(',')[0]
+    .replace(/\s+(?:and\s+)?(?:tell me\s+)?(?:which|what|who)\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    kind: 'research',
+    researchQuestion: `What should I know about ${subject}?`,
+    researchSubject: subject,
+    researchDepth: /\b(properly|thorough)/i.test(text)
+      ? 'thorough'
+      : /\bquick/i.test(text)
+        ? 'light'
+        : null,
+    researchIsDecision: /\b(should i|which|vs|or)\b/i.test(text),
+  };
+};
+
+/** The emulator's learn-later reading: "one day I want to learn …" is saved, "learn piano" is offered as a goal, and "learn to fix my car's engine" is a wish it can't place, which code asks about. */
+const readLearnAsk = (text: string) => {
+  const skill = text.match(
+    /^\s*(?:i want to |i'd like to )?learn (?:to )?(piano|guitar|violin|chess)\b/i,
+  );
+  if (skill) {
+    return [
+      {
+        kind: 'offerLearnGoal',
+        learnGoalName: `Learn ${skill[1].toLowerCase()}`,
+        learnQuote: skill[0].trim(),
+      },
+    ];
+  }
+  const engine = text.match(/learn to fix my car'?s engine/i);
+  if (engine) {
+    return [
+      {
+        kind: 'saveForLater',
+        learnQuestion: "How do I fix my car's engine?",
+        learnSubject: "fixing my car's engine",
+        learnNeedsLiveFacts: false,
+        learnPractise: 'unclear',
+        learnQuote: engine[0],
+      },
+    ];
+  }
+  const wish = text.match(
+    /^\s*(?:someday|one day)[, ]*i want to learn\s+(.+?)[.?!]*\s*$/i,
+  );
+  return wish
+    ? [
+        {
+          kind: 'saveForLater',
+          learnQuestion: `What should I know about ${wish[1]}?`,
+          learnSubject: wish[1],
+          learnNeedsLiveFacts: false,
+          learnPractise: 'read',
+          learnQuote: wish[0].trim(),
+        },
+      ]
+    : null;
+};
 
 /** The emulator's two questions for "Help me pack for the Tahoe trip": what goes on the list, and how many nights. */
 const readPackingAsks = (text: string) =>
@@ -431,7 +535,7 @@ const toSpendRange = (question: string, now: number, timeZone: string) => {
 };
 
 interface SpendResult {
-  records?: { alias?: string; payee: string; amount: string }[];
+  records?: { alias?: string; title: string; amount: string }[];
   matchedCount?: number;
   total?: string;
   from?: string | null;
@@ -700,6 +804,50 @@ function readQuestion(text: string, message: string) {
     ...(readBlock<ListedRecord[]>(message, 'open_tasks') ?? []),
     ...(readBlock<ListedRecord[]>(message, 'synced_records') ?? []),
   ];
+  const fit = readBlock<{
+    needsDays?: boolean;
+    mustDoFirst: { task: string }[];
+    mustDoCount: number;
+    wouldMove: string[];
+    wontFit: boolean;
+    noCalendar: boolean;
+  }>(message, 'fit');
+  if (fit?.needsDays) {
+    return toAsk({
+      shape: 'dateTime',
+      prompt: 'When are you leaving?',
+      dateMode: 'dateTime',
+    });
+  }
+  if (fit) {
+    const titleOf = (alias: string) =>
+      records.find((record) => record.alias === alias)?.title ?? alias;
+    const first = fit.mustDoFirst.map((entry) => titleOf(entry.task));
+    const moved = fit.wouldMove.map(titleOf);
+    const rest = fit.mustDoCount - 2;
+    const firstTwo = first.slice(0, 2).join(' and ');
+    const said = [
+      fit.wontFit
+        ? 'It will not all fit, so maybe leave later.'
+        : 'Yes, you can go.',
+      ...(fit.noCalendar
+        ? ['Your free time is a guess because no calendar is connected.']
+        : []),
+      first.length > 0
+        ? `${first.length === 1 ? 'One thing' : `${fit.mustDoCount} things`} first: ${firstTwo}${rest > 0 ? ` and ${rest} more` : ''}.`
+        : 'Nothing has to be done first.',
+      ...(moved.length > 0 ? [`${moved.join(' and ')} would move.`] : []),
+    ].join(' ');
+    return toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText: said,
+      sourceAliases: [
+        ...fit.mustDoFirst.map((entry) => entry.task),
+        ...fit.wouldMove,
+      ],
+    });
+  }
   const words = lower
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
@@ -763,6 +911,84 @@ const readAtHome = (text: string) =>
   AT_HOME_RE.test(text)
     ? [toAnswer({ kind: 'setCurrentPlace', place: 'home', isHealth: null })]
     : null;
+
+const AWAY_RE =
+  /^\s*i['’]?m\s+in\s+([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)*)\b/u;
+const BACK_RE = /^\s*i['’]?m\s+back(?:\s+home)?\s*[.!]?\s*$/i;
+const LIVE_RE =
+  /^\s*([A-Z][\p{L}'’.-]*(?:(?:\s*,\s*|\s+and\s+)[A-Z][\p{L}'’.-]*)*)\s+(?:live|lives)\s+in\s+([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)*)\s*[.!]?\s*$/u;
+
+interface ListedPerson {
+  alias: string;
+  name: string;
+}
+
+const toWhereabouts = (fields: Record<string, unknown>) =>
+  toAnswer({
+    kind: 'setWhereabouts',
+    isHealth: null,
+    change: null,
+    cityName: null,
+    fromSpanId: null,
+    toSpanId: null,
+    labelSpanId: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for "I'm in Lisbon Dec 2 to Dec 9", "I'm back" and "Priya and Sam live in Leavenworth": a where change for the person themself or for each named person already in the records. Null for any other words. */
+const readWhereabouts = (
+  text: string,
+  reading: CaptureReading,
+  message: string,
+) => {
+  const quote = text.trim().replace(/[.!]$/, '');
+  const wrap = (commands: ReturnType<typeof toWhereabouts>[]) =>
+    commands.length > 0 ? { commands, mentions: [], places: [] } : null;
+  if (BACK_RE.test(text)) {
+    return wrap([toWhereabouts({ whoAlias: 'me', change: 'back', quote })]);
+  }
+  const live = LIVE_RE.exec(text);
+  if (live) {
+    const listed = readBlock<ListedPerson[]>(message, 'people') ?? [];
+    return wrap(
+      live[1].split(/\s*,\s*|\s+and\s+/).flatMap((name) => {
+        const found = listed.find((entry) => entry.name === name);
+        return found
+          ? [
+              toWhereabouts({
+                whoAlias: found.alias,
+                change: 'home',
+                cityName: live[2],
+                quote,
+              }),
+            ]
+          : [];
+      }),
+    );
+  }
+  const away = AWAY_RE.exec(text);
+  const [from, second] = reading.dates;
+  if (!away || !from) return null;
+  const to =
+    second &&
+    second.start >= from.end &&
+    second.due.kind === 'day' &&
+    from.due.kind === 'day' &&
+    new Date(second.due.date).getUTCMonth() ===
+      new Date(from.due.date).getUTCMonth()
+      ? second
+      : null;
+  return wrap([
+    toWhereabouts({
+      whoAlias: 'me',
+      change: 'away',
+      cityName: away[1],
+      fromSpanId: from.id,
+      toSpanId: to?.id ?? null,
+      quote,
+    }),
+  ]);
+};
 
 const LEAD_RE = /^\s*(?:please\s+)?(?:remember\s+that|note\s*(?:that|:))\s+/i;
 
@@ -1568,6 +1794,124 @@ const readRunWork = (text: string, message: string) => {
   return null;
 };
 
+const toHabitCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    habitAlias: null,
+    cadence: null,
+    windows: null,
+    timesPerDay: null,
+    isCare: null,
+    habitChange: null,
+    windowKey: null,
+    candidateAliases: null,
+    checkDay: null,
+    checkStatus: null,
+    requestQuote: null,
+    isPrivate: null,
+    projectEmoji: null,
+    whoAlias: null,
+    ...fields,
+  });
+
+interface HabitBlockEntry {
+  habit: string;
+  name: string;
+  isDueToday: boolean;
+  windows: { label: string; isDone: boolean }[];
+}
+
+/** The emulator's stand-in for habits: "Start a habit of vitamins every morning", "Start a habit of pills in the morning and at bedtime" (two windows), "I took my pills" and "I took my vitamins, felt dizzy" (a check-in naming every habit with that word, so two pill habits ask which), "I skipped my vitamins today", "Pause my vitamins", "Bring back my vitamins" and "Those pills are my medicine". Null for any other words, or when the habit is not in the context. */
+const readHabitWork = (text: string, message: string) => {
+  const habits = readBlock<HabitBlockEntry[]>(message, 'habits') ?? [];
+  const quote = text.trim().replace(/[.!]+$/, '');
+  const wrap = (command: ReturnType<typeof toHabitCommand>) => ({
+    commands: [command],
+    mentions: [],
+    places: [],
+  });
+  const named = (word: string) =>
+    habits.filter((habit) => new RegExp(`\\b${word}\\b`, 'i').test(habit.name));
+  const start = text.match(/\bstart a habit of (\w+)(?: every (morning))?/i);
+  if (start && /\bmorning and at bedtime\b/i.test(text)) {
+    return wrap(
+      toHabitCommand({
+        kind: 'createHabit',
+        title: upperFirst(start[1]),
+        windows: [
+          { part: 'morning', startSpanId: null, endSpanId: null, label: null },
+          { part: 'bedtime', startSpanId: null, endSpanId: null, label: null },
+        ],
+      }),
+    );
+  }
+  if (start)
+    return wrap(
+      toHabitCommand({
+        kind: 'createHabit',
+        title: upperFirst(start[1]),
+        windows: start[2]
+          ? [
+              {
+                part: 'morning',
+                startSpanId: null,
+                endSpanId: null,
+                label: null,
+              },
+            ]
+          : [],
+      }),
+    );
+  const word = text.match(/\b(pills|vitamins|walk)\b/i)?.[1]?.toLowerCase();
+  if (!word) return null;
+  const found = named(word);
+  if (found.length === 0) return null;
+  const aliases = found.map((habit) => habit.habit);
+  const base = {
+    habitAlias: aliases.length === 1 ? aliases[0] : null,
+    candidateAliases: aliases.length > 1 ? aliases : null,
+  };
+  if (/\bi took\b|\bi had\b|\bi skipped\b/i.test(text)) {
+    const note = text.match(/,\s*(felt [^.!]+)/i)?.[1] ?? null;
+    return wrap(
+      toHabitCommand({
+        kind: 'checkIn',
+        ...base,
+        quote: note,
+        checkStatus: /\bskipped\b/i.test(text) ? 'skipped' : null,
+      }),
+    );
+  }
+  if (/\bpause\b/i.test(text))
+    return wrap(
+      toHabitCommand({
+        kind: 'updateHabit',
+        habitAlias: aliases[0],
+        habitChange: 'pause',
+        requestQuote: quote,
+      }),
+    );
+  if (/\bbring back\b/i.test(text))
+    return wrap(
+      toHabitCommand({
+        kind: 'updateHabit',
+        habitAlias: aliases[0],
+        habitChange: 'bringBack',
+        requestQuote: quote,
+      }),
+    );
+  if (/\bare my medicine\b/i.test(text))
+    return wrap(
+      toHabitCommand({
+        kind: 'setCare',
+        habitAlias: aliases[0],
+        isCare: true,
+        requestQuote: quote,
+      }),
+    );
+  return null;
+};
+
 /** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
 const readProcedureWork = (text: string, message: string) => {
   const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
@@ -1719,6 +2063,28 @@ function createTextFixtureProvider(
           toolCalls: [],
         };
       }
+      const learning = readLearnAsk(text);
+      if (learning) {
+        return {
+          terminalInput: { commands: learning },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const research = readResearchAsk(text);
+      if (research) {
+        return {
+          terminalInput: { commands: [research] },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
       const followUp = readFollowUp(
         text,
         reading,
@@ -1737,11 +2103,27 @@ function createTextFixtureProvider(
       const grown =
         readUndoWork(text, messageText(messages[0]?.content ?? '')) ??
         readRunWork(text, messageText(messages[0]?.content ?? '')) ??
+        readHabitWork(text, messageText(messages[0]?.content ?? '')) ??
         readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
         readTopicWork(text, messageText(messages[0]?.content ?? ''));
       if (grown) {
         return {
           terminalInput: grown,
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const whereabouts = readWhereabouts(
+        text,
+        reading,
+        messageText(messages[0]?.content ?? ''),
+      );
+      if (whereabouts) {
+        return {
+          terminalInput: whereabouts,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,
