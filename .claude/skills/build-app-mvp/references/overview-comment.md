@@ -1,7 +1,9 @@
 # Overview comment (posted on the polish PR)
 
-This is the user's single "before merging" document. Be explicit:
-- paste the exact commands, one code block per command, run from the repo root unless stated otherwise;
+This is the owner's single "before merging" document, and it must be as easy to act on as possible (owner: "I just want the setup for our MVPs and everything to be as easy as possible"). The owner always works from the polish PR, which holds every change, so the comment speaks only of that PR. Be explicit:
+- **one command does the whole setup** wherever a script can: the build adds an `<app>:setup` script that runs every setup step in order, skips what is already done (checked without printing a secret), asks before optional steps, prints the few browser clicks no command can do and waits, and is safe to re-run (Helm's `scripts/helm/setup.sh` is the reference). The comment then shows that one command, plus only the clicks and the after-deploy command if any; never the per-PR breakdown;
+- any other command is pasted exactly, one code block per command, run from the repo root unless stated otherwise;
+- **nothing about how the stack merges**: the owner never decides or reads about merge strategy (owner: "I don't want to see anything about how we merge"). The session merges once the owner says the setup is done (Phase 3 step 10 of the skill);
 - check each fact against the stack's actual diff;
 - update the comment in place (`gh api -X PATCH repos/{o}/{r}/issues/comments/<id>`) whenever something changes, rather than posting a new one.
 
@@ -23,33 +25,29 @@ State plainly:
 
 Include the local post-pull commands. `npm run emulators` rebuilds the functions through the `preemulators*` hooks.
 
-### 1. Blocking production setup
-For example, Functions secrets. These must exist **before** the PR that adds the function reaches `main`, because CI deploys every function on merge and a missing secret fails the whole deploy:
-- the `firebase functions:secrets:set <NAME> --project moondreams-dev-apps` command;
-- how to confirm it's stored;
-- the IAM fix in case CI's service account can't attach it.
+### 1. Setup before the merge
+Everything that must exist before the merge (Functions secrets: CI deploys every function on merge and a missing secret fails the whole deploy; APIs to turn on; console settings), as the one `<app>:setup` command above, then:
+- the clicks no command can do, each spelled out, only if the script doesn't already print them;
+- a last line: "Then tell me it's done and I'll merge it."
+- the IAM fix in case CI's service account can't attach a secret, in a collapsed `<details>`.
 
-### 2. Optional local verification of anything mocked
-- the real key in `functions/.secret.local` (git-ignored; an empty value means fixtures);
-- restart the emulators after editing it;
-- what to try in the UI.
+### 2. Try it locally, real or fixtures
+Every outside service the app calls works locally both ways, with the seeded data: real when its key can be read (signed in to `gcloud`, or `functions/.secret.local`), fixtures otherwise. Give, each in its own block:
+- `npm run local:services` to see which way each service goes (the app's services must be rows in it, `cloud-functions.md`);
+- `npm run local:services -- fixtures <service|all>` and `-- real <service|all>`, then the emulator restart;
+- anything a real connection needs locally (an OAuth redirect URI, a sandbox account);
+- what to try in the UI, as which seeded person.
 
-### 3. Merge strategy (a key decision)
-Every merge to `main` is a production deploy, and the app is visible from its first PR. Offer:
-- **A:** retarget the top PR to `main` and merge it once, then close the rest. Give the commands.
-- **B:** merge in order with `--merge --delete-branch`, never `--squash`. Give the loop.
-- **Warn:** merge **bottom-up** only. Merging from the top down folds every PR into the branch below it, so nothing reaches `main` until the bottom PRs merge, and the history collapses into one branch.
-
-### 4. After the first deploy
+### 3. After the first deploy
 Nothing to run for a new callable: the deploy opens it to the browser (README's "New Cloud Functions & Cloud Run invoker access"). Only if the browser still shows a CORS error, `npm run fb:invoker -- <function>`.
 
-### 5. Project board
+### 4. Project board
 Nothing to run: the `create-issues` label put the issues on board 3. Only if that workflow failed, say why and what fixes it.
 
-### 6. Brand assets
+### 5. Brand assets
 Include the light and dark icon SVG sources inline in fenced `svg` blocks. Say that the logo and banner in the repo are placeholders built from them, and that the user creates the final assets.
 
-### 7. Not verified here
+### 6. Not verified here
 For example, the live third-party API and paraphrased brand copy, each with exactly what to check.
 
 ### Key decisions worth knowing
@@ -63,4 +61,6 @@ For example, the live third-party API and paraphrased brand copy, each with exac
 - each PR's review size and who reviewed it;
 - tiers that aren't built yet.
 
-End with the PR attribution line, then a blank line, `---`, and `_Generated by [Claude Code](https://claude.ai/code)_`.
+**Questions in the comment** follow `CLAUDE.md` "Every work round ends with the same card": each one says what each answer would mean for the person and why the recommendation; a choice that is cheap to change later (a cap, a line of copy) is made by the session and listed under "Decisions I made for you", never asked. A privacy or terms claim is checked by the session against the vendor's own pages before it ships, never handed to the owner to verify.
+
+End with `---` and `_Generated by [Claude Code](https://claude.ai/code)_`.

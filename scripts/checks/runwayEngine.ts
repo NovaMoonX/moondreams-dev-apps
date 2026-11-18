@@ -2,16 +2,14 @@
 import assert from 'node:assert/strict';
 import { START_DAY_KEY } from '../../src/apps/runway/constants.ts';
 
+import { createSealedReader } from '../../src/lib/security/sealedReader.ts';
+import { openJson, sealJson } from '../../src/apps/runway/security.ts';
 import {
   listChangesBetweenIncomeDays,
   listPlanChangeDays,
 } from '../../src/apps/runway/engine/planChanges.ts';
 import { parseAmountDraft } from '../../src/apps/runway/utils/rangeInput.ts';
 import { cleanBankName } from '../../src/apps/runway/utils/accountText.ts';
-import {
-  createSealedReader,
-  sealJson,
-} from '../../src/apps/runway/security.ts';
 import {
   addLink,
   canCancelChange,
@@ -7841,7 +7839,7 @@ const version = (
   };
   const first = await sealJson({ name: 'Rent' }, encryption);
   const second = await sealJson({ name: 'Rent' }, encryption);
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const [again, once, other] = await Promise.all([
     read<{ name: string }>(first),
     read<{ name: string }>(first),

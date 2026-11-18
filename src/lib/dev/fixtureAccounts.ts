@@ -21,14 +21,14 @@ export const FIXTURE_USERS = {
     email: 'alex@example.test',
     displayName: 'Alex Rivera',
     label: 'Alex',
-    apps: ['Worth the Wait', 'Waypoint', 'A-List Tracker', 'Runway'],
+    apps: ['Worth the Wait', 'Waypoint', 'A-List Tracker', 'Runway', 'Helm'],
   },
   partnerTwo: {
     uid: 'seed-worth-the-wait-two',
     email: 'jamie@example.test',
     displayName: 'Jamie Chen',
     label: 'Jamie',
-    apps: ['Worth the Wait', 'Nine Lives', 'Runway'],
+    apps: ['Worth the Wait', 'Nine Lives', 'Runway', 'Helm'],
   },
   nineLivesCaretaker: {
     uid: 'seed-nine-lives-caretaker',
@@ -56,6 +56,6 @@ export const FIXTURE_USERS = {
     email: 'morgan@example.test',
     displayName: 'Morgan Ellis',
     label: 'Morgan',
-    apps: ['Runway'],
+    apps: ['Runway', 'Helm'],
   },
 } satisfies Record<string, FixtureAccount>;

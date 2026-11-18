@@ -102,7 +102,7 @@ const types: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
 };
 let served = before;
-// Like Hosting's rewrite of every path to the page: a removed file comes back as HTML.
+// Like Hosting and the worker: a removed build file is a 404, any other path is the page.
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://local').pathname;
   readFile(path.join(served, pathname))
@@ -113,12 +113,17 @@ const server = createServer((request, response) => {
       });
       response.end(body);
     })
-    .catch(() =>
-      readFile(path.join(served, 'index.html')).then((body) => {
+    .catch(() => {
+      if (pathname.startsWith('/assets/')) {
+        response.writeHead(404, { 'content-type': 'text/plain' });
+        response.end('Not found');
+        return undefined;
+      }
+      return readFile(path.join(served, 'index.html')).then((body) => {
         response.writeHead(200, { 'content-type': 'text/html' });
         response.end(body);
-      }),
-    );
+      });
+    });
 });
 await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 const address = server.address();
@@ -185,7 +190,7 @@ const openAfterDeploy = async (isRetry: boolean) => {
       document
         .querySelector<HTMLScriptElement>('script[type=module]')
         ?.src.endsWith(script) === true ||
-      document.body.innerText.includes('something went wrong'),
+      /something went wrong/i.test(document.body.innerText),
     newScript,
     { timeout: 20000 },
   );
@@ -234,7 +239,7 @@ report(
     fresh.pathname === '/runway' &&
     !fresh.isOldPage &&
     fresh.script.endsWith(newScript) &&
-    !fresh.text.includes('something went wrong') &&
+    !/something went wrong/i.test(fresh.text) &&
     fresh.stamp !== null,
   fresh,
 );
@@ -242,7 +247,7 @@ report(
   'a second miss within half a minute: the error screen with Restart, no reload',
   retry.isRunwayMissed &&
     retry.isOldPage &&
-    retry.text.includes('something went wrong') &&
+    /something went wrong/i.test(retry.text) &&
     retry.text.includes('Restart') &&
     retry.stamp === retry.presetStamp,
   retry,

@@ -4828,10 +4828,15 @@ export const CARD_WORDS = {
   minimumNone: 'Nothing to pay on this statement',
   minimumNotShared: (bank: string) =>
     `${bank} doesn\u2019t share this card\u2019s minimum`,
+  minimumNotSharedLink: (bank: string) =>
+    `${bank} doesn\u2019t share this card\u2019s minimum, so Runway can\u2019t warn you before it\u2019s due`,
+  minimumAskShort: 'Minimum not shared',
   offerBadge: 'New',
   offerTitle: 'See your minimum payment',
   offerBody: (bank: string) =>
     `${bank} shares it once you agree. Not every card has one.`,
+  offerBodyLink: (bank: string) =>
+    `Runway warns you before a due date only when a minimum is unpaid, so it needs ${bank} to share it. Not every card has one.`,
   offerCovers: (names: string) => `Covers ${names} too`,
   offerSeparate: (bank: string) =>
     `This card is on its own ${bank} sign-in, so it asks separately`,
@@ -4959,6 +4964,37 @@ export const RELEASED_WORDS = {
     `The bank dropped ${count} pending ${hasRefund ? 'items' : 'charges'}`,
   manySub: 'They no longer count. History says where each one was.',
 };
+
+/** Words for a card payment the person started at their bank, at Link. */
+export const STARTED_PAYMENT_WORDS = {
+  action: 'I started a payment',
+  amount: (name: string) => `Sent to ${name}`,
+  day: 'Started',
+  statementQuick: (amount: string) => `Statement balance ${amount}`,
+  balanceQuick: (amount: string) => `Balance now ${amount}`,
+  note: (bank: string) => `Runway waits for ${bank} to show it.`,
+  save: 'Save the payment',
+  needsAmount: 'Enter how much you sent.',
+  needsDay: 'Pick today or a day in the last 2 weeks.',
+  savedToast: (amount: string, name: string) =>
+    `${amount} on its way to ${name}`,
+  savedDetail: (bank: string) => `It comes off once ${bank} shows it.`,
+  failed: 'The payment was not saved',
+  undone: 'Payment removed',
+  undoFailed: 'The payment was not removed',
+  onItsWay: (amount: string) => `${amount}\u00a0on its way`,
+  rowTitle: (amount: string) => `${amount}\u00a0on its way`,
+  rowStarted: (day: string) => `Started ${day}`,
+  rowLeft: (day: string) => `Started ${day} · left your account`,
+  rowLate: (day: string, until: string) =>
+    `Started ${day} · not showing yet, Runway waits until ${until}`,
+  removeTitle: 'Remove this payment?',
+  removeText: (amount: string, bank: string) =>
+    `If you didn\u2019t send the ${amount} after all, remove it. Once ${bank} shows a payment, the card follows the bank anyway.`,
+  removeConfirm: 'Remove it',
+  removed: 'Payment removed',
+  removeFailed: 'The payment was not removed',
+} as const;
 
 /** Words for a card's annual fee and the bill and group Runway keeps in step with it. */
 export const CARD_FEE_WORDS = {

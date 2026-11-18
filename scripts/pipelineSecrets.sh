@@ -38,7 +38,7 @@ set_firebase_secret() {
 }
 
 signed_in() {
-  firebase login:list 2>/dev/null | grep -q '@' || { echo "✗ The firebase CLI isn't signed in. Run: firebase login" >&2; exit 1; }
+  source "$(dirname "$0")/lib/firebaseLogin.sh"; require_firebase_login
   if [[ "${1:-}" == "gh" ]]; then
     gh auth status >/dev/null 2>&1 || { echo "✗ The gh CLI isn't signed in. Run: gh auth login" >&2; exit 1; }
   fi

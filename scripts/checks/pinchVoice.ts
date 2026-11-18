@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 
 import {
+  readSpokenAnswer,
+  type SpokenQuestion,
+} from '../../src/lib/speech/readSpokenAnswer.ts';
+
+import {
+  describeIngredientConversion,
+  describeMeasureConversion,
+  getConversionLine,
+} from '../../src/apps/pinch/utils/cookConversions.ts';
+import {
+  convertMeasure,
+  readMeasureUnitWord,
+  roundMeasure,
+} from '../../src/utils/measureUtils.ts';
+import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
+
+import {
   describeAmounts,
   describeTimersLeft,
   formatSpokenTime,
@@ -23,6 +40,7 @@ import {
   type CookVoiceChoice,
   type CookVoiceContext,
 } from '../../src/apps/pinch/utils/cookVoice.ts';
+import type { MeasureUnit } from '../../src/utils/measureUtils.ts';
 
 const plate: CookVoiceContext = {
   recipes: [
@@ -486,18 +504,19 @@ assert.deepEqual(
     parse('how many cups of tomatoes'),
   ],
   [
-    { kind: 'AMOUNT', query: 'cups of rice', lineIds: ['rice-line'] },
-    { kind: 'AMOUNT', query: 'tablespoons of vinegar', lineIds: ['vinegar'] },
+    { kind: 'CONVERT', query: 'rice', lineIds: ['rice-line'], unit: 'CUP' },
+    { kind: 'CONVERT', query: 'vinegar', lineIds: ['vinegar'], unit: 'TBSP' },
     { kind: 'AMOUNT', query: 'cloves of garlic', lineIds: ['garlic'] },
     {
-      kind: 'AMOUNT',
-      query: 'fluid ounces of coconut milk',
+      kind: 'CONVERT',
+      query: 'coconut milk',
       lineIds: ['coconut'],
+      unit: 'FL_OZ',
     },
     { kind: 'AMOUNT', query: 'cream of tartar', lineIds: ['tartar'] },
-    { kind: 'AMOUNT', query: 'cups of tomatoes', lineIds: ['tomato'] },
+    { kind: 'CONVERT', query: 'tomatoes', lineIds: ['tomato'], unit: 'CUP' },
   ],
-  'a quantity before the ingredient ("cups of", "cloves of") is looked past, a plural still matches, and a name with "of" in it is kept whole',
+  'a unit before the ingredient asks for it in that unit, a count like "cloves of" is looked past, a plural still matches, and a name with "of" in it is kept whole',
 );
 assert.deepEqual(
   [
@@ -506,11 +525,271 @@ assert.deepEqual(
     parse('how many minutes'),
   ],
   [
-    { kind: 'AMOUNT', query: 'cups of cilantro', lineIds: [] },
+    { kind: 'CONVERT', query: 'cilantro', lineIds: [], unit: 'CUP' },
     { kind: 'AMOUNT', query: 'people', lineIds: [] },
     { kind: 'AMOUNT', query: 'minutes', lineIds: [] },
   ],
   'a question with nothing found keeps the words searched, so the answer can name them',
+);
+
+const bakeContext: CookVoiceContext = {
+  ...single,
+  lines: [
+    { id: 'butter', names: ['Butter'], isInStep: false },
+    { id: 'flour', names: ['All-purpose flour', 'flour'], isInStep: false },
+    { id: 'salt', names: ['Salt'], isInStep: false },
+    { id: 'egg', names: ['Egg'], isInStep: false },
+  ],
+};
+const butterIn = (unit: MeasureUnit): CookCommand => ({
+  kind: 'CONVERT',
+  query: 'butter',
+  lineIds: ['butter'],
+  unit,
+});
+[
+  ['how much butter in grams', butterIn('G')],
+  ['how much butter do I need in grams', butterIn('G')],
+  ['how much butter in grams do I need', butterIn('G')],
+  ['how many grams of butter', butterIn('G')],
+  ['how many ounces of butter do I need', butterIn('OZ')],
+  ['how many cups is the butter', butterIn('CUP')],
+  ['convert the butter to tablespoons', butterIn('TBSP')],
+  ['butter in grams', butterIn('G')],
+  ['how much butter in tbsp', butterIn('TBSP')],
+  [
+    'how many cups is the flour',
+    { kind: 'CONVERT', query: 'flour', lineIds: ['flour'], unit: 'CUP' },
+  ],
+  [
+    'flour in cups',
+    { kind: 'CONVERT', query: 'flour', lineIds: ['flour'], unit: 'CUP' },
+  ],
+  [
+    'how much chicken in grams',
+    { kind: 'CONVERT', query: 'chicken', lineIds: [], unit: 'G' },
+  ],
+  [
+    "what's 200 ml in ounces",
+    { kind: 'CONVERT_AMOUNT', amount: 200, from: 'ML', to: 'FL_OZ' },
+  ],
+  [
+    'how many cups is 200 ml',
+    { kind: 'CONVERT_AMOUNT', amount: 200, from: 'ML', to: 'CUP' },
+  ],
+  [
+    'convert 8 ounces to grams',
+    { kind: 'CONVERT_AMOUNT', amount: 8, from: 'OZ', to: 'G' },
+  ],
+  [
+    'what is two cups in milliliters',
+    { kind: 'CONVERT_AMOUNT', amount: 2, from: 'CUP', to: 'ML' },
+  ],
+].forEach(([phrase, expected]) =>
+  assert.deepEqual(
+    parse(phrase as string, bakeContext),
+    expected,
+    `a clear conversion question converts: "${phrase}"`,
+  ),
+);
+[
+  'add the butter',
+  'butter in the pan',
+  'stir in grams',
+  'chicken in grams',
+  'how much time is left on the pasta',
+  'how much longer',
+  'how much butter',
+  'how many grams',
+  'how much does the butter cost',
+  'convert it',
+  'put the butter in the bowl',
+  'butter in l',
+  'butter in g',
+].forEach((phrase) =>
+  assert.notEqual(
+    parse(phrase, bakeContext)?.kind,
+    'CONVERT',
+    `not a conversion: "${phrase}"`,
+  ),
+);
+assert.equal(
+  parse(['butter in the bowl', 'butter in l'], bakeContext)?.kind,
+  undefined,
+  'a short unit word alone is never a conversion, even from an alternate',
+);
+assert.equal(
+  parse(['butter in the bowl', 'butter in grams'], bakeContext),
+  null,
+  'a bare conversion from a lower-ranked guess is not trusted',
+);
+assert.deepEqual(
+  parse(['how much butter in g', 'how much butter in l'], bakeContext),
+  butterIn('G'),
+  'with "how much" a short unit word converts',
+);
+assert.deepEqual(
+  [
+    parse('convert half a cup to ml', bakeContext),
+    parse('what is a quarter cup in tablespoons', bakeContext),
+    parse('convert one and a half cups to ml', bakeContext),
+    parse('what is three quarters of a cup in ml', bakeContext),
+  ],
+  [
+    { kind: 'CONVERT_AMOUNT', amount: 0.5, from: 'CUP', to: 'ML' },
+    { kind: 'CONVERT_AMOUNT', amount: 0.25, from: 'CUP', to: 'TBSP' },
+    { kind: 'CONVERT_AMOUNT', amount: 1.5, from: 'CUP', to: 'ML' },
+    { kind: 'CONVERT_AMOUNT', amount: 0.75, from: 'CUP', to: 'ML' },
+  ],
+  'fractions said in words convert',
+);
+assert.deepEqual(
+  ['0.5 kg', '1 kg', '1½ cups', '½ cup', '2 g'].map(toSpokenAmount),
+  ['0.5 kilograms', '1 kilogram', '1 and a half cups', 'a half cup', '2 grams'],
+  'a unit is singular only for exactly one, or a lone fraction',
+);
+assert.equal(
+  describeIngredientConversion(
+    {
+      name: 'Milk',
+      amountText: '1 cup',
+      measure: { amount: 1, unit: 'CUP', gramsPerMl: null },
+    },
+    'OZ',
+    toSpokenAmount,
+  ).ok,
+  true,
+  'ounces of a volume with no density are fluid ounces',
+);
+{
+  const shown = roundMeasure(convertMeasure(0.5, 'CUP', 'ML') ?? 0, 'ML');
+  const text = formatKitchenAmount(shown, 'ML');
+  const answer = describeIngredientConversion(
+    {
+      name: 'Butter',
+      amountText: text,
+      measure: { amount: shown, unit: 'ML', gramsPerMl: 0.91 },
+    },
+    'ML',
+    toSpokenAmount,
+  );
+  assert.equal(
+    answer.show,
+    `The butter is ${text}.`,
+    'the amount a row shows is the amount the voice answers',
+  );
+  assert.ok(
+    !getConversionLine({
+      amount: shown,
+      unit: 'ML',
+      gramsPerMl: 0.91,
+    })?.includes('118'),
+    'the conversion line starts from the shown amount',
+  );
+}
+assert.deepEqual(
+  parse('how much time is left on the pasta', {
+    ...bakeContext,
+    timers: [{ id: 't1', names: ['pasta'], label: '10 min' }],
+  }),
+  { kind: 'TIME_LEFT', target: { seconds: null, name: 'pasta', isAll: false } },
+  'a time question stays the timer command',
+);
+assert.deepEqual(
+  [
+    ['grams', 'g', 'Kilos', 'ounces', 'oz.', 'lbs', 'milliliters', 'mls'],
+    ['litres', 'tsp', 'tablespoons', 'cups', 'fl oz', 'fluid ounces', 'big'],
+  ].map((words) => words.map((word) => readMeasureUnitWord(word))),
+  [
+    ['G', 'G', 'KG', 'OZ', 'OZ', 'LB', 'ML', 'ML'],
+    ['L', 'TSP', 'TBSP', 'CUP', 'FL_OZ', 'FL_OZ', null],
+  ],
+  'unit words, plural, singular and as a recognizer writes them',
+);
+
+const butterRow = (
+  amount: number,
+  unit: 'CUP' | 'G' | 'EACH',
+  amountText: string,
+) => ({
+  name: 'Butter',
+  amountText,
+  measure: { amount, unit, gramsPerMl: 0.91 },
+});
+assert.equal(
+  describeIngredientConversion(
+    butterRow(0.5, 'CUP', '½ cup'),
+    'OZ',
+    toSpokenAmount,
+  ).speak,
+  'The butter is about 4 ounces, or a half cup.',
+  'with a unit, the amount in that unit and then as shown',
+);
+assert.equal(
+  describeIngredientConversion(
+    butterRow(0.5, 'CUP', '½ cup'),
+    'CUP',
+    toSpokenAmount,
+  ).show,
+  'The butter is ½ cup.',
+  'the shown text is not repeated when it is the same',
+);
+assert.equal(
+  describeIngredientConversion(
+    {
+      name: 'Flour',
+      amountText: '2 cups',
+      measure: { amount: 2, unit: 'CUP', gramsPerMl: null },
+    },
+    'G',
+    toSpokenAmount,
+  ).show,
+  "I can't weigh flour without knowing how heavy it is. The recipe says 2 cups.",
+  'a weight from a volume needs a density',
+);
+assert.equal(
+  describeIngredientConversion(
+    { name: 'Salt', amountText: 'to taste', measure: null },
+    'G',
+    toSpokenAmount,
+  ).show,
+  'The salt is to taste.',
+  'a line with no amount says so',
+);
+assert.equal(
+  describeMeasureConversion(200, 'ML', 'FL_OZ', toSpokenAmount).show,
+  '200 ml is 7 fl oz.',
+  'a plain conversion within a kind',
+);
+assert.equal(
+  describeMeasureConversion(200, 'ML', 'G', toSpokenAmount).ok,
+  false,
+  'a plain conversion never crosses weight and volume',
+);
+const cupLine = getConversionLine({
+  amount: 0.5,
+  unit: 'CUP',
+  gramsPerMl: 0.91,
+});
+assert.equal(
+  cupLine?.replaceAll('\u00A0', ' '),
+  '= 8 tbsp · 4 fl oz · 118 ml · 108 g by weight · about 4 oz by weight',
+  'the other units of an amount, the other kind marked',
+);
+assert.ok(
+  cupLine?.includes('4\u00A0fl\u00A0oz'),
+  'a unit never splits from its number',
+);
+assert.ok(
+  !/\boz\b.*\blb\b|\blb\b.*\boz\b/.test(
+    getConversionLine({ amount: 2, unit: 'CUP', gramsPerMl: 0.91 }) ?? '',
+  ),
+  'a weight is given in oz or lb, not both',
+);
+assert.equal(
+  getConversionLine({ amount: 2, unit: 'EACH', gramsPerMl: null }),
+  null,
+  'a count has nothing to convert',
 );
 
 assert.deepEqual(
@@ -1245,17 +1524,34 @@ expectKind(
   'tips are read when asked for, in the words people use to repeat a thing',
 );
 expectKind(
-  ['read the notes', 'read my notes', 'repeat my note', 'what did I note', 'any notes'],
+  [
+    'read the notes',
+    'read my notes',
+    'repeat my note',
+    'what did I note',
+    'any notes',
+  ],
   { kind: 'READ_NOTES' },
   'notes are read when asked for',
 );
 expectKind(
-  ['read the changes', 'repeat the changes', 'repeat my changes', 'repeat the planned changes', 'any changes'],
+  [
+    'read the changes',
+    'repeat the changes',
+    'repeat my changes',
+    'repeat the planned changes',
+    'any changes',
+  ],
   { kind: 'READ_CHANGES' },
   'planned changes are read on their own, apart from the notes',
 );
 expectKind(
-  ['repeat the instructions', 'read the instructions', 'repeat instructions', 'say the instructions again'],
+  [
+    'repeat the instructions',
+    'read the instructions',
+    'repeat instructions',
+    'say the instructions again',
+  ],
   { kind: 'REPEAT' },
   'the step itself is asked for again as its instructions',
 );
@@ -1270,9 +1566,15 @@ assert.deepEqual(
   'plain repeat still reads the step',
 );
 assert.deepEqual(
-  ['add a tip', 'new tip', 'I have a tip', 'Add a note', 'make a note', 'add a change', 'suggest a change'].map(
-    (phrase) => parse(phrase),
-  ),
+  [
+    'add a tip',
+    'new tip',
+    'I have a tip',
+    'Add a note',
+    'make a note',
+    'add a change',
+    'suggest a change',
+  ].map((phrase) => parse(phrase)),
   [
     { kind: 'ADD_ENTRY', entryKind: 'TIP' },
     { kind: 'ADD_ENTRY', entryKind: 'TIP' },
@@ -1319,17 +1621,34 @@ expectKind(
   'what a step uses is shown by asking for the ingredients for this step, apart from the whole list',
 );
 expectKind(
-  ['note from last time', 'show the note from last time', 'what did I note last time'],
+  [
+    'note from last time',
+    'show the note from last time',
+    'what did I note last time',
+  ],
   { kind: 'SHOW_LAST_NOTE' },
   'the note the first step leads with is shown by asking for last time',
 );
 expectKind(
-  ['close the note', 'close the tips', 'close my notes', 'hide the changes', 'close that', 'close it', 'hide that'],
+  [
+    'close the note',
+    'close the tips',
+    'close my notes',
+    'hide the changes',
+    'close that',
+    'close it',
+    'hide that',
+  ],
   { kind: 'CLOSE_ENTRIES' },
   'what is open above the step is closed by saying so',
 );
 assert.deepEqual(
-  [parse('close'), parse('show'), parse('show me the tip of the iceberg'), parse('close the oven')],
+  [
+    parse('close'),
+    parse('show'),
+    parse('show me the tip of the iceberg'),
+    parse('close the oven'),
+  ],
   [null, null, null, null],
   'a bare close or show, or a sentence that only starts like one, is not a command',
 );
@@ -1340,7 +1659,9 @@ expectKind(
 );
 
 assert.deepEqual(
-  ['constructor', 'toString', 'hasOwnProperty', '__proto__'].map((word) => parse(word)),
+  ['constructor', 'toString', 'hasOwnProperty', '__proto__'].map((word) =>
+    parse(word),
+  ),
   [null, null, null, null],
   'a word that names an object property is not a command',
 );
@@ -1365,7 +1686,9 @@ assert.deepEqual(
   'and even a command word is the words, so a tip never moves the step',
 );
 assert.deepEqual(
-  ['never mind', 'cancel', 'forget it'].map((phrase) => parse(phrase, dictating)),
+  ['never mind', 'cancel', 'forget it'].map((phrase) =>
+    parse(phrase, dictating),
+  ),
   Array.from({ length: 3 }, () => ({
     kind: 'TIMER_ANSWER',
     answer: { kind: 'NEVER_MIND' },
@@ -1382,7 +1705,9 @@ assert.equal(parse('   ', dictating), null, 'silence is not a tip');
   const long = parse(`${'tender '.repeat(120)}end`, dictating);
   assert.equal(long?.kind, 'DICTATION', 'a long tip is kept, not dropped');
   assert.equal(
-    long?.kind === 'DICTATION' && long.text.length <= 400 && !long.text.endsWith(' '),
+    long?.kind === 'DICTATION' &&
+      long.text.length <= 400 &&
+      !long.text.endsWith(' '),
     true,
     'but cut to the cap at a word',
   );
@@ -1405,31 +1730,42 @@ const queue: CookReadingQueue = {
 const on = { stepKey: 'adobo:0', isOn: true, openView: null } as const;
 const first = stepCookReading(queue, on);
 assert.deepEqual(
-  first.kind === 'SAY' && [first.segment.view, first.isFirst, first.queue.opened, first.queue.next],
+  first.kind === 'SAY' && [
+    first.segment.view,
+    first.isFirst,
+    first.queue.opened,
+    first.queue.next,
+  ],
   ['TIP', true, 'TIP', 1],
   'the reading after a step starts with the first view and says it opened it',
 );
 const second =
-  first.kind === 'SAY' ? stepCookReading(first.queue, { ...on, openView: 'TIP' }) : first;
+  first.kind === 'SAY'
+    ? stepCookReading(first.queue, { ...on, openView: 'TIP' })
+    : first;
 assert.deepEqual(
   second.kind === 'SAY' && [second.segment.view, second.isFirst],
   ['CHANGE', false],
   'then the next view, without the lead-in',
 );
 const last =
-  second.kind === 'SAY' ? stepCookReading(second.queue, { ...on, openView: 'CHANGE' }) : second;
+  second.kind === 'SAY'
+    ? stepCookReading(second.queue, { ...on, openView: 'CHANGE' })
+    : second;
 assert.deepEqual(
   last,
   { kind: 'FINISH', close: 'CHANGE' },
   'the end takes down the view the reading opened',
 );
 assert.deepEqual(
-  second.kind === 'SAY' && stepCookReading(second.queue, { ...on, openView: 'AMOUNTS' as never }),
+  second.kind === 'SAY' &&
+    stepCookReading(second.queue, { ...on, openView: 'AMOUNTS' as never }),
   { kind: 'STOP' },
   'a view the person opened in the meantime stops the reading and is left alone',
 );
 assert.deepEqual(
-  first.kind === 'SAY' && stepCookReading(first.queue, { ...on, openView: null }),
+  first.kind === 'SAY' &&
+    stepCookReading(first.queue, { ...on, openView: null }),
   { kind: 'STOP' },
   'closing the view stops the reading, so the next one never reopens',
 );
@@ -1445,6 +1781,307 @@ assert.deepEqual(
   stepCookReading({ ...queue, segments: [] }, on),
   { kind: 'FINISH', close: null },
   'a step with nothing written ends without taking anything down',
+);
+
+const asking = (extra: Partial<SpokenQuestion>): SpokenQuestion => ({
+  shape: 'pickOne',
+  options: [],
+  noneOptionId: null,
+  allowsSomethingElse: false,
+  number: null,
+  dateMode: null,
+  ...extra,
+});
+const gear = [
+  { id: 'o1', label: 'Snow chains', detail: null },
+  { id: 'o2', label: 'Sunscreen', detail: null },
+  { id: 'o3', label: 'Board games', detail: null },
+  { id: 'none', label: 'None of these', detail: null, isClosing: true },
+];
+const several = asking({
+  shape: 'pickSeveral',
+  options: gear,
+  noneOptionId: 'none',
+});
+const readIds = (question: SpokenQuestion, text: string) => {
+  const read = readSpokenAnswer(question, text);
+  return read?.kind === 'answer' && read.value.shape === 'pickSeveral'
+    ? read.value.optionIds
+    : read;
+};
+const readNumberOf = (question: SpokenQuestion, text: string) => {
+  const read = readSpokenAnswer(question, text);
+  return read?.kind === 'answer' && read.value.shape === 'number'
+    ? read.value.value
+    : read;
+};
+
+assert.deepEqual(readSpokenAnswer(several, 'skip'), { kind: 'skip' }, 'skip');
+assert.deepEqual(
+  readSpokenAnswer(asking({ shape: 'number' }), 'Skip it.'),
+  { kind: 'skip' },
+  'skip works for every shape',
+);
+(
+  [
+    ['yes', 'yes'],
+    ['Yeah', 'yes'],
+    ['sure', 'yes'],
+    ['no', 'no'],
+    ['Nope.', 'no'],
+  ] as const
+).forEach(([said, optionId]) =>
+  assert.deepEqual(
+    readSpokenAnswer(asking({ shape: 'yesNo' }), said),
+    {
+      kind: 'answer',
+      value: { shape: 'yesNo', optionId, otherText: null },
+    },
+    `"${said}" is ${optionId}`,
+  ),
+);
+assert.equal(
+  readSpokenAnswer(asking({ shape: 'yesNo' }), 'maybe tomorrow'),
+  null,
+  'a yes or no question does not guess',
+);
+assert.deepEqual(
+  readIds(several, 'the first two'),
+  ['o1', 'o2'],
+  'the first two',
+);
+assert.deepEqual(
+  readIds(several, 'the last two'),
+  ['o2', 'o3'],
+  'the last two',
+);
+assert.deepEqual(
+  readIds(several, 'all of them'),
+  ['o1', 'o2', 'o3'],
+  'all of them',
+);
+assert.deepEqual(
+  readIds(several, 'the first and the third'),
+  ['o1', 'o3'],
+  'two ordinals',
+);
+assert.deepEqual(
+  readIds(several, 'snow chains and sunscreen'),
+  ['o1', 'o2'],
+  'two labels joined by and',
+);
+assert.deepEqual(
+  readIds(several, 'sunscreen, board games'),
+  ['o2', 'o3'],
+  'labels joined by a comma',
+);
+assert.deepEqual(readIds(several, 'none of these'), ['none'], 'none of these');
+assert.deepEqual(readIds(several, 'none'), ['none'], 'none');
+assert.equal(
+  readIds(several, 'the fifth one'),
+  null,
+  'an ordinal past the list is not placed',
+);
+assert.equal(
+  readIds(several, 'hot cocoa'),
+  null,
+  'a label that is not an option is not placed',
+);
+const pair = asking({
+  shape: 'pickSeveral',
+  options: gear.slice(0, 2).concat(gear[3]),
+  noneOptionId: 'none',
+});
+assert.deepEqual(readIds(pair, 'both'), ['o1', 'o2'], 'both of two');
+assert.equal(readIds(several, 'both'), null, 'both of three is not placed');
+
+const one = asking({ options: gear, noneOptionId: 'none' });
+const readOne = (question: SpokenQuestion, text: string) => {
+  const read = readSpokenAnswer(question, text);
+  return read?.kind === 'answer' && read.value.shape === 'pickOne'
+    ? [read.value.optionId, read.value.otherText]
+    : read;
+};
+assert.deepEqual(
+  readOne(one, 'the second one'),
+  ['o2', null],
+  'the second one',
+);
+assert.deepEqual(readOne(one, 'the last one'), ['o3', null], 'the last one');
+assert.deepEqual(
+  readOne(one, 'Board games please'),
+  ['o3', null],
+  'a label with please',
+);
+assert.deepEqual(
+  readOne(one, 'snow'),
+  ['o1', null],
+  'a word only one label has',
+);
+assert.deepEqual(
+  readOne(one, 'none of these'),
+  ['none', null],
+  'none picks the none option',
+);
+assert.equal(
+  readOne(one, 'the first two'),
+  null,
+  'two picks are not one answer',
+);
+assert.equal(
+  readOne(one, 'something else: a tent'),
+  null,
+  'something else is only heard where the question allows it',
+);
+assert.deepEqual(
+  readOne({ ...one, allowsSomethingElse: true }, 'Something else: a tent'),
+  ['other', 'a tent'],
+  'something else carries the words after it',
+);
+const people = asking({
+  shape: 'pickRecord',
+  options: [
+    { id: 'w1', label: 'Sam Rivera', detail: 'Work friend' },
+    { id: 'w2', label: 'Sam Patel', detail: 'Neighbor' },
+    { id: 'new', label: 'Someone new', detail: null, isClosing: true },
+  ],
+});
+assert.deepEqual(
+  readSpokenAnswer(people, 'Patel'),
+  { kind: 'answer', value: { shape: 'pickRecord', optionId: 'w2' } },
+  'a record by what only it has',
+);
+assert.equal(
+  readSpokenAnswer(people, 'Sam'),
+  null,
+  'a name two share is not placed',
+);
+assert.deepEqual(
+  readSpokenAnswer(people, 'the first one'),
+  { kind: 'answer', value: { shape: 'pickRecord', optionId: 'w1' } },
+  'a record by place, not counting the closing option',
+);
+
+const count = asking({
+  shape: 'number',
+  number: { min: 1, max: 30, isMoney: false },
+});
+assert.equal(readNumberOf(count, 'four'), 4, 'a number word');
+assert.equal(readNumberOf(count, 'twenty five'), 25, 'two number words');
+assert.equal(
+  readNumberOf(count, 'twenty-five nights'),
+  25,
+  'a hyphen and a unit',
+);
+assert.equal(readNumberOf(count, 'two and a half'), 2.5, 'and a half');
+assert.equal(readNumberOf(count, 'three point five'), 3.5, 'point five');
+assert.equal(readNumberOf(count, '7 nights'), 7, 'digits with a unit');
+assert.equal(readNumberOf(count, 'forty'), null, 'out of range is not placed');
+assert.equal(
+  readNumberOf(count, 'zero'),
+  null,
+  'below the range is not placed',
+);
+assert.equal(readNumberOf(count, 'a few'), null, 'no number is not placed');
+assert.equal(readNumberOf(count, '4'), 4, 'bare digits');
+assert.equal(readNumberOf(count, 'four nights'), 4, 'a number word and a unit');
+assert.equal(
+  readNumberOf(count, 'I think we need 4 of them'),
+  null,
+  'a number inside a sentence is not an answer',
+);
+assert.equal(
+  readNumberOf(count, 'remind me at 5 to call Dana'),
+  null,
+  'a number in another request is not placed',
+);
+assert.equal(
+  readNumberOf(count, 'two fifty'),
+  null,
+  'spoken hundreds are refused, not misread as 52',
+);
+const money = asking({
+  shape: 'number',
+  number: { min: 0, max: 1_000_000, isMoney: true },
+});
+assert.equal(
+  readNumberOf(money, 'forty dollars'),
+  4000,
+  'dollars in words are cents',
+);
+assert.equal(
+  readNumberOf(money, 'forty dollars and fifty cents'),
+  4050,
+  'dollars and cents',
+);
+assert.equal(readNumberOf(money, '$12.50'), 1250, 'a typed amount');
+assert.equal(readNumberOf(money, '$20'), 2000, 'a dollar sign');
+assert.equal(readNumberOf(money, 'twenty dollars'), 2000, 'twenty dollars');
+assert.equal(
+  readNumberOf(money, 'I paid about 20 dollars for the taxi'),
+  null,
+  'an amount inside a sentence is not placed',
+);
+assert.equal(
+  readNumberOf(money, 'a hundred dollars'),
+  10000,
+  'a hundred dollars',
+);
+
+const day = asking({ shape: 'dateTime', dateMode: 'dateTime' });
+const readDate = (text: string) =>
+  text === 'friday at three'
+    ? { date: Date.UTC(2026, 10, 13), time: '15:00' }
+    : text === 'friday'
+      ? { date: Date.UTC(2026, 10, 13), time: null }
+      : null;
+assert.deepEqual(
+  readSpokenAnswer(day, 'friday at three', { readDate }),
+  {
+    kind: 'answer',
+    value: { shape: 'dateTime', date: Date.UTC(2026, 10, 13), time: '15:00' },
+  },
+  "a day and a time through the caller's reader",
+);
+assert.equal(
+  readSpokenAnswer(day, 'friday', { readDate }),
+  null,
+  'a day with no time is not enough where both are asked',
+);
+assert.deepEqual(
+  readSpokenAnswer(asking({ shape: 'dateTime', dateMode: 'date' }), 'friday', {
+    readDate,
+  }),
+  {
+    kind: 'answer',
+    value: { shape: 'dateTime', date: Date.UTC(2026, 10, 13), time: null },
+  },
+  'a day alone where only a day is asked',
+);
+assert.equal(
+  readSpokenAnswer(day, 'friday at three'),
+  null,
+  'no date reader places nothing',
+);
+
+assert.deepEqual(
+  readSpokenAnswer(asking({ shape: 'freeText' }), '  Bring the red tent  '),
+  { kind: 'answer', value: { shape: 'freeText', text: 'Bring the red tent' } },
+  'a few words are taken as said',
+);
+assert.equal(
+  (
+    readSpokenAnswer(asking({ shape: 'freeText' }), 'x'.repeat(600)) as {
+      value: { text: string };
+    }
+  ).value.text.length,
+  500,
+  'a few words stop at 500 characters',
+);
+assert.equal(
+  readSpokenAnswer(several, '   '),
+  null,
+  'silence is not an answer',
 );
 
 console.log('pinchVoice: all checks passed');

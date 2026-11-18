@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice benchmark</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fafafa;
+        --card: #fff;
+        --ink: #1a1a1a;
+        --muted: #666;
+        --line: #ddd;
+        --accent: #3b5bdb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #141414;
+          --card: #1e1e1e;
+          --ink: #eee;
+          --muted: #aaa;
+          --line: #333;
+          --accent: #8da2fb;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: system-ui, sans-serif;
+        line-height: 1.4;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 2px;
+      }
+      p {
+        margin: 4px 0;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        margin: 12px 0;
+      }
+      .row {
+        border-top: 1px solid var(--line);
+        padding: 8px 0;
+      }
+      .row:first-of-type {
+        border-top: 0;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        min-width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 4px 8px 4px 0;
+        white-space: nowrap;
+        vertical-align: top;
+      }
+      th,
+      td:first-child {
+        white-space: normal;
+      }
+      audio {
+        width: 100%;
+        margin: 4px 0;
+      }
+      button {
+        font: inherit;
+        padding: 8px 12px;
+        margin-right: 8px;
+        border-radius: 8px;
+        border: 1px solid var(--accent);
+        background: transparent;
+        color: var(--accent);
+        min-height: 40px;
+      }
+      .error {
+        color: #c92a2a;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script type="module" src="/scripts/voice/benchmarkPage.ts"></script>
+  </body>
+</html>

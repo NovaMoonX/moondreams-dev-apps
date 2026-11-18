@@ -1,9 +1,9 @@
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
 import {
   collection,
   doc,
   getDoc,
   getDocs,
-  runTransaction,
   type Transaction,
 } from 'firebase/firestore';
 
@@ -25,7 +25,8 @@ import {
   isInTrackingPeriods,
   sumLines,
 } from '@apps/runway/engine/purchases';
-import { createSealedReader, sealJson } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson, sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import { getMoveLineId } from '@apps/runway/store/selectors/moveSelectors';
@@ -137,7 +138,7 @@ async function readLiveCostMark(
 ): Promise<WrittenCostPaid | null> {
   const ref = previous.costRef ?? null;
   if (ref === null) return null;
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const lookup = async (index: number): Promise<WrittenCostPaid | null> => {
     if (index >= MAX_MARK_LOOKUPS) return null;
     const moveId = getCostPaidMoveId(ref.itemId, ref.costId, ref.dueOn, index);
@@ -258,7 +259,7 @@ export async function addPurchase(
   const markSealed =
     markPayload === null ? null : await sealJson(markPayload, encryption);
 
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const plan = await checkDayAndEnvelopes(
       transaction,
       uid,
@@ -522,7 +523,7 @@ export async function editPurchase(
 
   const now = Math.max(Date.now(), previous.updatedAt + 1);
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await checkDayAndEnvelopes(
       transaction,
@@ -576,7 +577,7 @@ export async function readPurchaseNow(
   return snapshot.exists()
     ? openPurchase(
         { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
-        createSealedReader(encryption),
+        createSealedReader(encryption, openJson),
       )
     : null;
 }
@@ -638,7 +639,7 @@ export async function assignPurchase(
   const changeId = generateUuid();
   const now = Math.max(Date.now(), previous.updatedAt + 1);
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await checkDayAndEnvelopes(
       transaction,
@@ -793,7 +794,7 @@ async function setDepositDay(
   const changeId = generateUuid();
   const now = Math.max(Date.now(), previous.updatedAt + 1);
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [stored, day, plan] = await Promise.all([
       transaction.get(purchaseRef(uid, previous.id)),
       next.incomeDayId === null
@@ -907,7 +908,7 @@ async function readPairExit(
   if (reversal.exists()) return () => undefined;
   const taken = await openMove(
     { ...(payment.data() as MoveDoc), id: payment.id },
-    createSealedReader(encryption),
+    createSealedReader(encryption, openJson),
   );
   if (taken.kind !== 'cardPayment') return () => undefined;
   const sealed = await sealJson(
@@ -960,7 +961,7 @@ export async function recordPairTick(
     encryption,
   );
   const now = Math.max(Date.now(), into.updatedAt + 1);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, into);
     transaction.update(purchaseRef(uid, into.id), { updatedAt: now, sealed });
   });
@@ -1028,7 +1029,7 @@ export async function pairAccountPurchases(
   const changeId = generateUuid();
   const now = Math.max(Date.now(), out.updatedAt + 1, into.updatedAt + 1);
 
-  const moveId = await runTransaction(db, async (transaction) => {
+  const moveId = await runHeldTransaction(uid, async (transaction) => {
     const [plan] = await Promise.all([
       transaction.get(planRef(uid)),
       readPairUnchanged(transaction, uid, out, into),
@@ -1193,7 +1194,7 @@ export async function unpairAccountPurchases(
   const changeId = generateUuid();
   const now = Math.max(Date.now(), out.updatedAt + 1, into.updatedAt + 1);
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [plan, leavePair] = await Promise.all([
       transaction.get(planRef(uid)),
       readPairExit(transaction, uid, encryption, into, now),
@@ -1385,7 +1386,7 @@ export async function mergeBankPurchase(
   const changeId = generateUuid();
   const now = Math.max(Date.now(), bank.updatedAt + 1);
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, bank);
     await readUnchanged(transaction, uid, typed);
     const plan = await checkDayAndEnvelopes(
@@ -1443,7 +1444,7 @@ export async function splitBankPurchase(
   ]);
   const changeId = generateUuid();
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [stored, typedStored, plan] = await Promise.all([
       transaction.get(purchaseRef(uid, bank.id)),
       transaction.get(purchaseRef(uid, typed.id)),
@@ -1510,7 +1511,7 @@ export async function markNotSamePurchase(
     } satisfies PurchaseSealed,
     encryption,
   );
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, typed);
     transaction.update(purchaseRef(uid, typed.id), {
       updatedAt: Math.max(Date.now(), typed.updatedAt + 1),
@@ -1554,7 +1555,7 @@ export async function deletePurchase(
             : Promise.resolve(null),
         ]);
   const changeId = generateUuid();
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
     const [isUnmarked, isReopenGone] =
@@ -1611,7 +1612,7 @@ export async function clearReleasedCharge(
     charge.id,
   );
   const changeId = generateUuid();
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const note = await transaction.get(noteRef);
     if (!note.exists()) return false;
     transaction.delete(noteRef);
@@ -1647,7 +1648,7 @@ export async function removePurchaseOfCost(
   }
   const previous = await openPurchase(
     { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
-    createSealedReader(encryption),
+    createSealedReader(encryption, openJson),
   );
   await deletePurchase(
     uid,

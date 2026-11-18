@@ -6,9 +6,11 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   getRegistryAppForPath,
   rememberAppLocation,
+  stampAppOpened,
   SITE_VERSION,
 } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
+import FallbackNotices from '@components/FallbackNotices';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
 import { useHideOnScroll } from '@hooks/useHideOnScroll';
@@ -77,6 +79,12 @@ function LocationSync() {
     }
   }, [user, location.pathname, location.search]);
 
+  const uid = user?.uid ?? null;
+  const openAppId = getRegistryAppForPath(location.pathname)?.id ?? null;
+  useEffect(() => {
+    if (uid && openAppId) stampAppOpened(uid, openAppId);
+  }, [uid, openAppId]);
+
   // The hub's manifest (index.html) is the only one, so the site installs as a single app; each app only gets its own tab icon and title.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
@@ -141,6 +149,7 @@ function Layout() {
 
       <OfflineBanner />
       <EmulatorStatus />
+      <FallbackNotices />
 
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       {!isPublicShare && (

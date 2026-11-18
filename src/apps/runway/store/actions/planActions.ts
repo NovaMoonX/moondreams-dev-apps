@@ -1,7 +1,7 @@
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
 import {
   doc,
   getDocFromCache,
-  runTransaction,
   updateDoc,
 } from 'firebase/firestore';
 
@@ -72,7 +72,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
     encryption,
   );
 
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(planRef);
     if (snapshot.exists()) return;
 
@@ -89,6 +89,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       sorting: null,
       keyId: encryption.keyId,
       sealed,
+      shareSummary: null,
     };
     transaction.set(planRef, plan);
   });
@@ -123,7 +124,7 @@ export async function setNotify(
   patch: NotifyPatch,
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const plan = snapshot.data() as PlanDoc;
@@ -168,7 +169,7 @@ async function patchSealedFields(
   patch: SealedPatch | ((current: Partial<PlanSealedFields>) => SealedPatch),
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const plan = snapshot.data() as PlanDoc;
@@ -225,7 +226,7 @@ export async function dismissHorizonNudge(
   targetDate: DateOnly,
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const plan = snapshot.data() as PlanDoc;
@@ -345,7 +346,7 @@ export async function moveToTrack(
     ),
   );
   const ref = planPath(uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const plan = snapshot.data() as PlanDoc;
@@ -414,7 +415,7 @@ export async function moveToPlan(
     stopDate,
   );
   const ref = planPath(uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];
@@ -458,7 +459,7 @@ export async function moveToLink(
     encryption,
   );
   const ref = planPath(uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];
@@ -494,7 +495,7 @@ export async function recordUnlink(
     encryption,
   );
   const ref = planPath(uid);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];

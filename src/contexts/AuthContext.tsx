@@ -23,6 +23,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { clearUserInfoStore } from '@/hooks/useUserInfo';
@@ -42,6 +43,11 @@ import {
   keepAccountSession,
   loadAccountSessions,
 } from '@/lib/auth/accountSessions';
+import {
+  clearPendingDeviceWork,
+  getSignOutQuestions,
+} from '@/lib/auth/signOutChecks';
+import { keepSignOutNote } from '@/lib/auth/signOutNote';
 import { forgetDeviceSecretsFor } from '@/lib/security';
 import { forgetThisBrowserFor } from '@/lib/security/trustedBrowsers';
 import {
@@ -56,6 +62,7 @@ import { detachDevicePush, releaseDevicePush } from '@/lib/notifications/deviceP
 import { enablePushNotifications } from '@/lib/notifications/enablePushNotifications';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { clearFormDrafts } from '@lib/app/formDrafts';
+import { clearRememberedDebugAnswer } from '@lib/debugProfiles/debugProfiles';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
@@ -97,6 +104,7 @@ const cacheRememberedPhotos = async (uids: string[]) => {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDisplayNameUpdating, setIsDisplayNameUpdating] = useState(false);
@@ -148,6 +156,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (previousUserId) {
           clearViewerSessions(previousUserId);
           clearFormDrafts(previousUserId);
+          clearRememberedDebugAnswer(previousUserId);
         }
         clearAppResume();
       }
@@ -155,6 +164,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       previousUserIdRef.current = nextUserId;
       // Signed out from anywhere (another tab, an expired session) starts again from Home, not the app's page.
       if (previousUserId && !nextUserId) {
+        clearPendingDeviceWork(previousUserId);
         void forgetDeviceSecretsFor(previousUserId).catch(() => undefined);
       }
       if (previousUserId && !nextUserId && isLeavingPage) {
@@ -404,12 +414,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const forgetAccount = useCallback((uid: string) => {
+    clearPendingDeviceWork(uid);
     void dropAccountSession(uid);
     setRememberedAccounts(forgetSavedAccount(uid));
   }, []);
 
-  const logOut = useCallback(async () => {
+  const logOut = useCallback(async (options?: { hasAskedFirst?: boolean; landingNote?: string }) => {
     const uid = auth.currentUser?.uid;
+    if (uid) {
+      const isConfirmed =
+        options?.hasAskedFirst === true ||
+        (await getSignOutQuestions(uid).reduce(
+          async (previous, question) =>
+            (await previous) && confirm({ ...question, destructive: true }),
+          Promise.resolve(true),
+        ));
+      if (!isConfirmed) return;
+      clearPendingDeviceWork(uid);
+    }
     if (uid) {
       const userStatusRef = ref(realtimeDb, `status/${uid}`);
       await Promise.race([
@@ -446,8 +468,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
     if (uid) await dropAccountSession(uid);
     await signOut(auth).catch((error) => console.error('Sign-out error:', error));
+    if (options?.landingNote) keepSignOutNote(options.landingNote);
     window.location.href = '/';
-  }, []);
+  }, [confirm]);
 
   const updateDisplayName = useCallback(async (displayName: string) => {
     setIsDisplayNameUpdating(true);

@@ -8,7 +8,8 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader, type SealedReader } from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import { openRecord } from '@apps/runway/store/listeners/openLedger';
 import type {
   DayOverrideSealed,
@@ -22,7 +23,7 @@ import type {
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
-async function openDay(
+export async function openDay(
   entry: IncomeDayDoc,
   read: SealedReader,
 ): Promise<OpenDay> {
@@ -58,7 +59,7 @@ export function startDaysListener(
   to: number | null = null,
 ): Unsubscribe {
   const sequence = { latest: 0 };
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
 
   const stop = onSnapshot(
     query(

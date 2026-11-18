@@ -86,6 +86,16 @@ export function startProductsListener(
   );
 }
 
+/** Lines saved before a field existed read it as null, as every reader expects. */
+export const readRecipe = (recipe: Recipe): Recipe => ({
+  ...recipe,
+  ingredients: recipe.ingredients.map((line) => ({
+    ...line,
+    adaptedFrom: line.adaptedFrom ?? null,
+    freeText: line.freeText ?? null,
+  })),
+});
+
 export function startRecipesListener(
   uid: string,
   onChange: (recipes: Recipe[]) => void,
@@ -94,7 +104,9 @@ export function startRecipesListener(
   return onSnapshot(
     kitchenCollection(uid, 'recipes'),
     (snapshot) =>
-      onChange(snapshot.docs.map((document) => document.data() as Recipe)),
+      onChange(
+        snapshot.docs.map((document) => readRecipe(document.data() as Recipe)),
+      ),
     onError,
   );
 }

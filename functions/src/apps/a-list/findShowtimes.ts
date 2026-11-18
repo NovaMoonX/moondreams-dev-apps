@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-import { AMC_API_KEY, fetchShowtimeDay, pickMovieShowtimes, type DayShowtime } from './amc.js';
+import { AMC_API_KEY, readAmcKey, fetchShowtimeDay, pickMovieShowtimes, type DayShowtime } from './amc.js';
 import { reserveLookup, SHOWTIME_BUDGET } from './lookupBudget.js';
 import { isFresh, readCache, toCacheId, writeCache } from './movieCache.js';
 import type { ShowtimeOption } from './types.js';
@@ -13,7 +13,7 @@ if (getApps().length === 0) {
 // Prices and sold-out flags move through the day, so a day's showings are only kept briefly.
 const SHOWTIMES_CACHE_MS = 15 * 60_000;
 // Bump when the shape of results changes, so older cached lookups are not served.
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 7;
 const MAX_TITLE_LENGTH = 200;
 
 export const findShowtimes = onCall(
@@ -46,7 +46,7 @@ export const findShowtimes = onCall(
     }
 
     await reserveLookup(uid, SHOWTIME_BUDGET);
-    const day = await fetchShowtimeDay(AMC_API_KEY.value(), theatreId, date);
+    const day = await fetchShowtimeDay(readAmcKey(), theatreId, date);
     await writeCache('theatreCache', cacheId, day);
     return { showtimes: pickMovieShowtimes(day, title) };
   },

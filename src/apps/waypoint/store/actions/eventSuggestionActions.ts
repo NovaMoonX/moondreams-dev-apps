@@ -5,7 +5,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
@@ -13,6 +12,7 @@ import {
 import { db } from '@/lib/firebase/config';
 import { getDayIndex } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 import { isTripAdmin, isTripMember } from '@apps/waypoint/utils/roleGuards';
@@ -174,7 +174,7 @@ export const updateEventSuggestion = createAsyncThunk<
     try {
       // Reads the live document first: an Admin may have approved or declined this
       // suggestion while the edit modal was open, and the edit must not resurrect it.
-      const currentSuggestion = await runTransaction(db, async (transaction) => {
+      const currentSuggestion = await runHeldTransaction(trip.id, async (transaction) => {
         const snapshot = await transaction.get(suggestionRef);
         if (!snapshot.exists()) {
           throw new Error('This suggestion was already approved or removed.');
@@ -312,7 +312,7 @@ export const approveEventSuggestion = createAsyncThunk<
       // Everything is re-read inside the transaction: another Admin may have approved or
       // declined this suggestion, archived the event, or the owner may have edited the
       // suggestion since this card was rendered.
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(trip.id, async (transaction) => {
         const [sourceSnapshot, suggestionSnapshot] = await Promise.all([
           transaction.get(sourceEventRef),
           transaction.get(suggestionRef),

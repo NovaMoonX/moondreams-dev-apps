@@ -365,6 +365,17 @@ const hostile = normalizeExtractedRecipe({
   fridgeDays: 800,
   tip: 7,
   unread: ['the last line is cut off', 42],
+  guided: [
+    '  swapped the chicken for tofu  ',
+    '',
+    7,
+    'x'.repeat(200),
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+  ],
 });
 assert.equal(hostile.title, 'Soup');
 assert.equal(hostile.servings, null, 'a negative serving count is not read');
@@ -379,7 +390,9 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'care',
   'cookMinutes',
   'description',
+  'guided',
   'ingredients',
+  'photoSearch',
   'prepMinutes',
   'servings',
   'steps',
@@ -395,6 +408,38 @@ assert.deepEqual(
 );
 assert.deepEqual(hostile.steps, ['Chop.', 'Simmer.']);
 assert.deepEqual(hostile.unread, ['the last line is cut off']);
+assert.deepEqual(hostile.guided, [
+  'swapped the chicken for tofu',
+  'x'.repeat(80),
+  'a',
+  'b',
+  'c',
+]);
+assert.deepEqual(
+  normalizeExtractedRecipe({ ingredients: [], steps: [] }).guided,
+  [],
+  'a reading with no guided key is an empty list',
+);
+assert.equal(
+  normalizeExtractedRecipe({
+    photoSearch: '  creamy   cajun\n chicken linguine ',
+  }).photoSearch,
+  'creamy cajun chicken linguine',
+  'photo search words are trimmed and single-spaced',
+);
+assert.equal(
+  normalizeExtractedRecipe({ photoSearch: '   ' }).photoSearch,
+  null,
+);
+assert.equal(normalizeExtractedRecipe({ photoSearch: 7 }).photoSearch, null);
+assert.equal(
+  (
+    normalizeExtractedRecipe({ photoSearch: 'word '.repeat(40) }).photoSearch ??
+    ''
+  ).length <= 80,
+  true,
+  'photo search words are capped at 80 characters',
+);
 assert.equal(normalizeExtractedRecipe('nonsense').ingredients.length, 0);
 assert.equal(normalizeExtractedRecipe(null).title, null);
 assert.equal(
