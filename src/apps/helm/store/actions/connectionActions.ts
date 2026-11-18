@@ -1,11 +1,7 @@
-import {
-  collection,
-  doc,
-  type DocumentData,
-  runTransaction,
-} from 'firebase/firestore';
+import { collection, doc, type DocumentData } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import {
   buildConnection,
@@ -92,7 +88,7 @@ export async function addConnection(
     sealed,
   };
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       const [existing, ...whos] = await Promise.all([
         transaction.get(ref),
         ...whoRefs.map((whoRef) => transaction.get(whoRef)),
@@ -128,7 +124,7 @@ export async function updateConnection(
   if (!navigator.onLine) return { result: 'offline', before: null };
   const ref = doc(connectionsOf(uid), id);
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists())
         return { result: 'missing' as const, before: null };
@@ -196,7 +192,7 @@ export async function setConnectionWords(
   if (!navigator.onLine) return 'offline';
   const ref = doc(connectionsOf(uid), id);
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       if (!(await transaction.get(ref)).exists()) return 'missing';
       transaction.update(ref, {
         sealed: await sealJson<ConnectionSealed>(words, encryption),
@@ -221,7 +217,7 @@ export async function removeConnection(
   id: string,
 ): Promise<RemovedConnection | null> {
   const ref = doc(connectionsOf(uid), id);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return null;
     transaction.delete(ref);
@@ -235,7 +231,7 @@ export async function restoreConnection(
   removed: RemovedConnection,
 ): Promise<'restored' | 'exists'> {
   const ref = doc(connectionsOf(uid), removed.id);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     if ((await transaction.get(ref)).exists()) return 'exists';
     transaction.set(ref, { ...removed.data, lastEditedAt: Date.now() });
     return 'restored';
