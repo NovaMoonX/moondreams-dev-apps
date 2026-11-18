@@ -73,25 +73,27 @@ function SayWhenField({
       <label htmlFor={id} className='text-sm font-medium'>
         {label}
       </label>
-      <Input
-        id={id}
-        variant='outline'
-        className={className}
-        value={text}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        onChange={(event) => change(event.target.value)}
-      />
-      <p
-        aria-live='polite'
-        className={
-          shown?.isRead
-            ? 'min-h-5 text-[13px] text-pretty'
-            : 'text-muted-foreground min-h-5 text-[13px] text-pretty'
-        }
-      >
-        {shown?.words}
-      </p>
+      <div>
+        <Input
+          id={id}
+          variant='outline'
+          className={className}
+          value={text}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          onChange={(event) => change(event.target.value)}
+        />
+        <p
+          aria-live='polite'
+          className={
+            shown?.isRead
+              ? 'mt-1.5 text-[13px] text-pretty empty:mt-0'
+              : 'text-muted-foreground mt-1.5 text-[13px] text-pretty empty:mt-0'
+          }
+        >
+          {shown?.words}
+        </p>
+      </div>
     </div>
   );
 }
