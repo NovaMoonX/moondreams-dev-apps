@@ -701,6 +701,8 @@ export interface CookingResume {
   timers: ResumeTimer[];
   /** The journal entries written on this screen, for the review at the end. A session saved before them lacks the key, which reads as none. */
   captured?: string[];
+  /** When this cook began, for the stopwatch. A session saved before it lacks the key and counts from when it was picked up. */
+  startedAt?: number;
 }
 
 export type ShareKind = 'RECIPE' | 'MEAL';
