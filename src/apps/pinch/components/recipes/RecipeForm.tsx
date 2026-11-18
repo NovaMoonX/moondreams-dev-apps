@@ -360,6 +360,7 @@ function RecipeForm({
   const [formData, setFormData] = useState<RecipeFormData>(formStart);
   const sectionsRef = useRef(formStart.stepSections);
   const [isSplitOpen, setIsSplitOpen] = useState(false);
+  const splitRef = useRef<Pick<Recipe, 'steps' | 'stepSections'> | null>(null);
   const [formKey, setFormKey] = useState(0);
   const isDraftDirty = useMemo(
     () =>
@@ -391,6 +392,7 @@ function RecipeForm({
     setFormStart(initialData);
     setFormData(initialData);
     sectionsRef.current = initialData.stepSections;
+    splitRef.current = null;
     setFormKey((current) => current + 1);
     onTitleChange(initialData.title);
     isDirtyRef.current = false;
@@ -822,6 +824,7 @@ function RecipeForm({
                 steps={(props.value as string[]).filter((step) => step.trim())}
                 title={formData.title}
                 onApply={(steps, stepSections) => {
+                  splitRef.current = { steps, stepSections };
                   sectionsRef.current = stepSections;
                   props.onValueChange(steps);
                   setIsSplitOpen(false);
@@ -1029,6 +1032,7 @@ function RecipeForm({
       links: toRecipeLinks(data.links),
       steps: kept.map(({ step }) => step),
       stepSections: kept.map(({ section }) => section),
+      splitSteps: splitRef.current,
       coverFile,
       coverUrl: coverFile ? null : (webCover?.imageUrl ?? null),
       removeCover: isCoverRemoved,

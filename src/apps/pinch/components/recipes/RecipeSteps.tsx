@@ -363,7 +363,7 @@ function StepDrawer({
           }
         />
         <SectionField
-          key={index}
+          key={`section-${index}`}
           section={sections[index] ?? null}
           names={getSectionNames(sections)}
           onChange={(section) =>

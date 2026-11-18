@@ -167,6 +167,7 @@ import {
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
   getChangeTopics,
+  getDraftChanges,
   getRecipeChanges,
   type RecipeContent,
 } from '../../src/apps/pinch/utils/recipeChanges.ts';
@@ -10322,6 +10323,46 @@ assert.equal(
     getChangeTopics(sectioned([]), sectioned(['A', 'A', null, null])),
     { hasIngredients: false, hasSteps: false },
     'an edit that only puts steps in sections asks nothing',
+  );
+  const splitDraft = (steps: string[]) => ({
+    ...sectioned([]),
+    steps,
+    stepSections: steps.map((_, at) => (at < 2 ? 'Marinate' : 'Finish')),
+    newIngredients: [],
+    newSource: null,
+    splitSteps: {
+      steps: ['Marinate.', 'Wait.', 'Simmer.', 'Reduce.', 'Plate.'],
+      stepSections: ['Marinate', 'Marinate', 'Finish', 'Finish', 'Finish'],
+    },
+  });
+  const usedSplit = getDraftChanges(
+    sectioned([]),
+    splitDraft(['Marinate.', 'Wait.', 'Simmer.', 'Reduce.', 'Plate.']),
+    new Map(),
+    new Map(),
+  );
+  const editedSplit = getDraftChanges(
+    sectioned([]),
+    splitDraft(['Marinate.', 'Wait.', 'Simmer gently.', 'Reduce.', 'Plate.']),
+    new Map(),
+    new Map(),
+  );
+  assert.deepEqual(
+    [usedSplit, editedSplit],
+    [
+      {
+        changes: ['Steps split into sections'],
+        topics: { hasIngredients: false, hasSteps: false },
+      },
+      {
+        changes: [
+          'Steps split into sections',
+          'Step 3 now reads: “Simmer gently.”',
+        ],
+        topics: { hasIngredients: false, hasSteps: true },
+      },
+    ],
+    'a split the person used is one line and asks nothing; an edit on top of it is recorded against the split',
   );
 
   const read = getDataFromExtracted(

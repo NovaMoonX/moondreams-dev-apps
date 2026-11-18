@@ -126,6 +126,8 @@ function StepSectionsReview({
             {getAiReadFailureMessage(error, {
               subject: 'recipe',
               fallback: 'keep your steps as they are',
+              unreadable:
+                "We couldn't split these steps right now. Try again, or keep your steps as they are.",
             })}
           </p>
           <DebugDetails

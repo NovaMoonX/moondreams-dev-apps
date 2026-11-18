@@ -491,7 +491,7 @@ const getStepSectionChanges = (before: Normalized, after: Normalized) => {
     entries.length > MAX_SECTION_LINES
       ? [
           entries.some((entry) => entry.isInto)
-            ? 'Steps split into sections'
+            ? STEPS_SPLIT_LINE
             : 'Steps taken out of their sections',
         ]
       : entries.map((entry) => entry.line);
@@ -627,13 +627,18 @@ export interface ChangeExtras {
   photo: 'ADDED' | 'CHANGED' | 'REMOVED' | null;
   addedCollections: (string | null)[];
   removedCollections: (string | null)[];
+  /** The steps were split into sections by the reader in this edit; step lines then compare against its result. */
+  isStepsSplit: boolean;
 }
 
 export const NO_EXTRAS: ChangeExtras = {
   photo: null,
   addedCollections: [],
   removedCollections: [],
+  isStepsSplit: false,
 };
+
+export const STEPS_SPLIT_LINE = 'Steps split into sections';
 
 const getPhotoChanges = (photo: ChangeExtras['photo']) => {
   if (photo === 'ADDED') return ['Photo added'];
@@ -760,6 +765,7 @@ export const getRecipeChanges = (
     ...getSourceLine(),
     ...getIngredientChanges(before.ingredients, after.ingredients, getName),
     ...getGroupChanges(before.ingredients, after.ingredients, getName),
+    ...(extras.isStepsSplit ? [STEPS_SPLIT_LINE] : []),
     ...getStepChanges(was.steps, now.steps),
     ...getStepSectionChanges(was, now),
     ...getCareChanges(was, now),
@@ -811,6 +817,7 @@ type DraftContent = RecipeContent & {
   removeCover?: boolean;
   collectionChange?: CollectionChange | null;
   newCollections?: { id: string; label: string }[];
+  splitSteps?: Pick<Recipe, 'steps' | 'stepSections'> | null;
 };
 
 const getPhotoExtra = (
@@ -858,16 +865,20 @@ export const getDraftChanges = (
     photo: getPhotoExtra(existing, draft),
     addedCollections: labelsOf(draft.collectionChange?.add),
     removedCollections: labelsOf(draft.collectionChange?.remove),
+    isStepsSplit: draft.splitSteps != null,
   };
+  const base = draft.splitSteps
+    ? { ...existing, ...draft.splitSteps }
+    : existing;
   const result = {
     changes: getRecipeChanges(
-      existing,
+      base,
       draft,
       ingredientNames,
       sourceLabels,
       extras,
     ),
-    topics: getChangeTopics(existing, draft),
+    topics: getChangeTopics(base, draft),
   };
 
   return result;
