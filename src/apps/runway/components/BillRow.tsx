@@ -17,6 +17,7 @@ import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemSheet, {
   type ItemSheetProps,
 } from '@apps/runway/components/ItemSheet';
+import BillChargedToNotice from '@apps/runway/components/BillChargedToNotice';
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   AUTO_PAY_WORDS,
@@ -369,6 +370,9 @@ export function BillSheet({
             today={today}
             onPickAnother={() => setPickedStep('funding')}
           />
+          {!isFeeBill && (
+            <BillChargedToNotice billId={billId} bill={bill} today={today} />
+          )}
         </>
       }
       payment={payment}
