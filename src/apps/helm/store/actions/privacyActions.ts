@@ -3,12 +3,12 @@ import {
   doc,
   getDocs,
   query,
-  runTransaction,
   where,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 import { store } from '@/store';
 
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -193,7 +193,7 @@ export async function writePrivacy(
 ): Promise<PrivacyWrite> {
   if (!navigator.onLine) return { kind: 'offline' };
   const ref = doc(collectionOf(uid, kind), id);
-  return runTransaction(db, async (transaction): Promise<PrivacyWrite> => {
+  return runHeldTransaction(uid, async (transaction): Promise<PrivacyWrite> => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return { kind: 'missing' };
     const opened = await openJson<Record<string, unknown>>(
