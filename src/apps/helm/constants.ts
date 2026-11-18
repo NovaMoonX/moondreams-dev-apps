@@ -1036,6 +1036,10 @@ export const HELM_COPY = {
       .join(' '),
   undoReportFactsToo: (count: number) =>
     `${count === 1 ? '1 fact' : `${count} facts`} too.`,
+  tookBackDetails: (names: string[]) =>
+    `Put back the details of ${joinTitles(names)}`,
+  undoReportDetails: (names: string[]) =>
+    `Put back the details of ${joinTitles(names)}.`,
   tookBackPeople: (count: number) =>
     `Took back ${count} ${count === 1 ? 'person' : 'people'}`,
   tookBackPeopleKept: (count: number, other: number) =>

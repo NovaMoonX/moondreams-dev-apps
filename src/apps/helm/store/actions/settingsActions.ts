@@ -20,6 +20,7 @@ import {
   clearHelmKey,
   helmTrustStore,
 } from '@apps/helm/queries/helmKeyQueries';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 import { remindersStamp } from '@apps/helm/store/actions/markRemindersChanged';
 import { forgetOutboxSecrets } from '@apps/helm/store/actions/outboxActions';
 import { clearHelm } from '@apps/helm/store/helmSlice';
@@ -342,7 +343,7 @@ export const declineAbilityOffer = (
 
 /** Adds the chosen away span's clock, dropping ended spans and keeping the newest 10. */
 export const addZoneSpan = (uid: string, span: ZoneSpan, todayKey: string) =>
-  runTransaction(db, async (transaction) => {
+  runHeldTransaction(uid, async (transaction) => {
     const ref = doc(db, 'apps', 'helm', 'users', uid);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return;
@@ -360,7 +361,7 @@ export const addZoneSpan = (uid: string, span: ZoneSpan, todayKey: string) =>
   });
 
 export const removeZoneSpan = (uid: string, awayId: string) =>
-  runTransaction(db, async (transaction) => {
+  runHeldTransaction(uid, async (transaction) => {
     const ref = doc(db, 'apps', 'helm', 'users', uid);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return;

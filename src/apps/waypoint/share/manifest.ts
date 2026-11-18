@@ -180,7 +180,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'task',
           label: 'The whole trip checklist',
           meaning:
-            "Every Before the Road item on the person's trips, whoever it is for or whether anyone has taken it, with its category, its due day, whether it is done and the first names of the travelers it is assigned to.",
+            'Your trip checklist read live, and every item rather than only yours: whoever it is for or whether anyone has taken it, with its category, due day, whether it is done and the first names of the travelers it is assigned to.',
           detail:
             'Every item, its category, due day, status and who it is assigned to',
           mode: 'live',
@@ -205,7 +205,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'artifact',
           label: 'Trip ideas',
           meaning:
-            "Ideas the travelers on the person's trips have added to try, each with its title, a short note and the site a link goes to. Never the link itself.",
+            'Your trip checklist read live, and every item rather than only yours: whoever it is for or whether anyone has taken it, with its category, due day, whether it is done and the first names of the travelers it is assigned to.',
           detail: 'Each idea, a short note and the site its link goes to',
           mode: 'live',
           isOnAtConnect: false,

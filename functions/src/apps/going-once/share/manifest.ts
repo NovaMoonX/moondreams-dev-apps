@@ -114,7 +114,7 @@ export const GOING_ONCE_SHARES: SourceShares = {
           detail:
             'Every thing, drafts included, with its state, prices, condition and notes',
           meaning:
-            "Every belonging in the person's sales, drafts and ones not ready for buyers included, each with its state, asking and lowest price, condition, private notes and when its status last changed. Never where it was bought or who the buyer is.",
+            "Your things read live, with what that one leaves out: drafts and ones not ready for buyers, and each one's state, lowest price, condition, private notes and last status change. Never where it was bought or who the buyer is.",
           mode: 'live',
           isOnAtConnect: false,
           addedInVersion: 4,
@@ -150,7 +150,7 @@ export const GOING_ONCE_SHARES: SourceShares = {
           detail:
             "The thing, the buyer's first name, their message and whether it is handled",
           meaning:
-            "Messages buyers sent about a thing, each with the thing, the buyer's first name, what they wrote, whether it is new or handled and when it came in. Never a buyer's email, phone or full name.",
+            "Your things read live, with what that one leaves out: drafts and ones not ready for buyers, and each one's state, lowest price, condition, private notes and when its status last changed. Never where it was bought or who the buyer is.",
           mode: 'live',
           isOnAtConnect: false,
           addedInVersion: 4,
