@@ -1,11 +1,12 @@
 import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import type { WithId } from '@apps/a-list/store/heldLists';
 import type { WatchlistItem } from '@apps/a-list/types';
 
 export function startWatchlistListener(
   uid: string,
-  onChange: (items: WatchlistItem[]) => void,
+  onChange: (items: WithId<WatchlistItem>[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const watchlistRef = collection(
@@ -21,7 +22,11 @@ export function startWatchlistListener(
     watchlistRef,
     (snapshot) => {
       const items = snapshot.docs.map(
-        (itemSnapshot) => itemSnapshot.data() as WatchlistItem,
+        (itemSnapshot) =>
+          ({
+            ...itemSnapshot.data(),
+            id: itemSnapshot.id,
+          }) as WithId<WatchlistItem>,
       );
       onChange(items);
     },

@@ -5,7 +5,6 @@ import {
   getDocs,
   increment,
   query,
-  runTransaction,
   where,
   type DocumentData,
   type DocumentSnapshot,
@@ -13,6 +12,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { HELM_CAPS, WHO_LIMIT } from '@apps/helm/constants';
 import { markMomentsStale } from '@apps/helm/queries/momentQueries';
@@ -208,8 +208,8 @@ export const addKeyDate = (
     const whoRef = doc(userOf(uid), 'who', whoId);
     const now = Date.now();
     const parts = toSealed(input, null);
-    const outcome = await runTransaction(
-      db,
+    const outcome = await runHeldTransaction(
+      uid,
       async (
         transaction,
       ): Promise<{ refused: KeyDateChange } | { isRaised: boolean }> => {
@@ -303,7 +303,7 @@ async function takeBack(
 ) {
   const ref = doc(datesOf(uid), id);
   const whoRef = doc(userOf(uid), 'who', whoId);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const [snapshot, who] = await Promise.all([
       transaction.get(ref),
       transaction.get(whoRef),
@@ -345,7 +345,7 @@ export const editKeyDate = (
   guard(async (): Promise<KeyDateChange> => {
     const ref = doc(datesOf(uid), id);
     const now = Date.now();
-    const outcome = await runTransaction(db, async (transaction) => {
+    const outcome = await runHeldTransaction(uid, async (transaction) => {
       const snapshot = await transaction.get(ref);
       const data = snapshot.data() as Partial<KeyDate> | undefined;
       if (
@@ -393,7 +393,7 @@ export const editKeyDate = (
       kind: 'done',
       id,
       undo: () =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshot = await transaction.get(ref);
           const data = snapshot.data() as Partial<KeyDate> | undefined;
           if (!data || data.lastEditedAt !== now || !before) return false;
@@ -432,7 +432,7 @@ export const removeKeyDate = (
 ) =>
   guard(async (): Promise<KeyDateChange> => {
     const ref = doc(datesOf(uid), id);
-    const taken = await runTransaction(db, async (transaction) => {
+    const taken = await runHeldTransaction(uid, async (transaction) => {
       const snapshot = await transaction.get(ref);
       const data = snapshot.data() as DocumentData | undefined;
       if (!data || typeof data.whoId !== 'string') return null;
@@ -460,7 +460,7 @@ export const removeKeyDate = (
       kind: 'done',
       id,
       undo: () =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const [snapshot, who] = await Promise.all([
             transaction.get(ref),
             transaction.get(doc(userOf(uid), 'who', whoId)),
@@ -569,7 +569,7 @@ export const restoreWhoDates = (
 ) =>
   taken.docs.length === 0 && taken.entries.length === 0
     ? Promise.resolve()
-    : runTransaction(db, async (transaction) => {
+    : runHeldTransaction(uid, async (transaction) => {
         const here = await Promise.all(
           taken.docs.map((entry) =>
             transaction.get(doc(datesOf(uid), entry.id)),
@@ -631,7 +631,7 @@ export async function rebuildKeyDateIndex(
     .map(([whoId]) => whoId);
   const readIds = [...new Set([...Object.keys(found), ...wrongIds])];
   const now = Date.now();
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [index, owners] = await Promise.all([
       readIndexIn(transaction, uid, encryption),
       Promise.all(

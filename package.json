@@ -79,6 +79,10 @@
     "check:serving": "tsx scripts/checks/serving.ts",
     "check:stale-chunk": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/staleChunk.ts",
     "check:sunset-times": "TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/sunsetTimes.ts",
+    "check:helm-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHeldLists.ts",
+    "check:held-writes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/heldWrites.ts",
+    "check:project-writes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/projectWrites.ts",
+    "check:runway-purchase-holds": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayPurchaseHolds.ts",
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
     "check:runway-engine": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayEngine.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayFundingPay.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayEngineTimeline.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayStartCorrection.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayGoalSeries.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayMoneyHistory.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayPriorityParts.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayBudgetReading.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwaySync.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayAutoPay.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayBillCover.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayCardFees.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayCardStatements.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayCardBank.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/sealedBytes.ts",
     "check:runway-notify-text": "tsx scripts/checks/runwayNotifyText.ts",
@@ -169,7 +173,10 @@
     "connections:keyring": "bash scripts/connections/keyring.sh",
     "connections:alerts": "bash scripts/connections/alerts.sh",
     "connections:google-secrets": "bash scripts/connections/googleSecrets.sh",
-    "connections:google-setup": "bash scripts/connections/googleSetup.sh"
+    "connections:google-setup": "bash scripts/connections/googleSetup.sh",
+    "check:waypoint-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointHeldLists.ts",
+    "check:pinch-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchHeldLists.ts",
+    "check:a-list-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/aListHeldLists.ts"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",
