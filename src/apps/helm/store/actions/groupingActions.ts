@@ -7,13 +7,13 @@ import {
   getDoc,
   getDocs,
   query,
-  runTransaction,
   where,
   writeBatch,
   type DocumentReference,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import { HELM_COPY, NOTE_TOPICS_MAX } from '@apps/helm/constants';
@@ -470,8 +470,8 @@ export async function undoGroupingExecution(
             firstGrouping.linkedKeys,
           )
         : false;
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<UndoResult> => {
         const snapshot = await transaction.get(executionRef);
         const original = snapshot.exists()
