@@ -16,7 +16,7 @@ import { shortenFileName } from '@apps/helm/utils/fileNames';
 
 interface KeptMediaSectionProps {
   record: MediaAttachment;
-  /** Draws only the photo strip or only the file rows, for a sheet that places them apart. */
+  /** Draws only the photo grid or only the file rows, for a sheet that places them apart. */
   part?: 'photos' | 'files' | 'all';
 }
 
@@ -47,8 +47,13 @@ function KeptMediaSection({ record, part = 'all' }: KeptMediaSectionProps) {
   const viewed = shown.find((entry) => entry.id === viewedId) ?? null;
   if (photos.length + files.length === 0) return null;
 
-  const renderTile = (item: { id: string }) => {
-    const media = photos.find((entry) => entry.id === item.id);
+  const tiles = photos.map((media, index) => ({
+    id: media.id,
+    label: HELM_COPY.mediaViewOnRecord(index + 1, photos.length),
+  }));
+
+  const renderTile = (_item: { id: string }, index: number) => {
+    const media = photos[index];
     return media ? (
       <MediaThumb
         media={media}
@@ -67,10 +72,7 @@ function KeptMediaSection({ record, part = 'all' }: KeptMediaSectionProps) {
     <div>
       {photos.length > 0 && (
         <PhotoGrid
-          items={photos.map((media, index) => ({
-            id: media.id,
-            label: HELM_COPY.mediaViewOnRecord(index + 1, photos.length),
-          }))}
+          items={tiles}
           renderTile={renderTile}
           onOpen={setViewedId}
           onShowAll={() => setIsAllOpen(true)}
@@ -85,10 +87,7 @@ function KeptMediaSection({ record, part = 'all' }: KeptMediaSectionProps) {
         >
           <div>
             <PhotoGrid
-              items={photos.map((media, index) => ({
-                id: media.id,
-                label: HELM_COPY.mediaViewOnRecord(index + 1, photos.length),
-              }))}
+              items={tiles}
               renderTile={renderTile}
               onOpen={setViewedId}
               onShowAll={() => undefined}

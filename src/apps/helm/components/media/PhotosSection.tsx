@@ -44,8 +44,8 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
     label: HELM_COPY.photoLabel(name, index + 1),
   }));
 
-  const renderTile = (item: { id: string }) => {
-    const entry = shown.find((candidate) => candidate.id === item.id);
+  const renderTile = (_item: { id: string }, index: number) => {
+    const entry = shown[index];
     if (!entry) return null;
     return (
       <>
