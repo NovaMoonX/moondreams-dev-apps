@@ -13,6 +13,7 @@ import {
   type ListeningPhase,
   type ListeningState,
 } from '../../src/lib/speech/listeningMode.ts';
+import { wakeAudioOutput } from '../../src/lib/speech/audioContext.ts';
 import {
   getNaturalVoiceHost,
   isNaturalVoiceLang,
@@ -2343,6 +2344,68 @@ console.log('speechShared: voice router and playback queue checks passed');
     Math.abs(fake.starts[1]!.at - (fake.starts[0]!.at + 1 / 24000)) < 1e-9,
     'each chunk starts where the one before ends',
   );
+
+  const waking = makeContext();
+  let wakingStarts = 0;
+  const wakingSink = createPcmSink({
+    context: waking.context,
+    sampleRate: 24000,
+    prebufferSeconds: 0,
+    firstStartAt: 2.5,
+    onStart: () => {
+      wakingStarts += 1;
+    },
+  });
+  wakingSink.push(new Uint8Array([1, 0]));
+  assert.equal(
+    waking.starts[0]!.at,
+    2.5,
+    'the first sound waits for speakers that are still waking',
+  );
+  assert.equal(
+    wakingStarts,
+    0,
+    'speaking is not reported while the speakers are still waking',
+  );
+  wakingSink.stop();
+
+  const awake = makeContext();
+  const awakeSink = createPcmSink({
+    context: awake.context,
+    sampleRate: 24000,
+    prebufferSeconds: 0,
+    firstStartAt: 0.2,
+    onStart: () => undefined,
+  });
+  awakeSink.push(new Uint8Array([1, 0]));
+  assert.ok(
+    Math.abs(awake.starts[0]!.at - 1.05) < 1e-9,
+    'a wake time already past changes nothing',
+  );
+
+  const hissed: number[] = [];
+  const speakerContext = {
+    currentTime: 10,
+    sampleRate: 100,
+    destination: {},
+    createBuffer: () => ({ copyToChannel: () => undefined }),
+    createBufferSource: () => ({
+      connect: () => undefined,
+      start: () => hissed.push(1),
+    }),
+  } as unknown as AudioContext;
+  const firstLine = wakeAudioOutput(speakerContext);
+  assert.equal(firstLine.readyAt, 11.5, 'quiet speakers are woken first');
+  const secondLine = wakeAudioOutput(speakerContext);
+  assert.equal(
+    hissed.length,
+    1,
+    'a line while another holds them does not hiss again',
+  );
+  assert.ok(secondLine.readyAt <= 11.5, 'nor waits any longer');
+  firstLine.release();
+  firstLine.release();
+  secondLine.release();
   fake.clock.now = 5;
   sink.push(new Uint8Array([1, 0]));
   assert.ok(
