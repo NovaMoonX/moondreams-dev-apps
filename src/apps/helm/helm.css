@@ -417,3 +417,24 @@ html.helm-theme .helm-live-ripple {
     display: none;
   }
 }
+
+html.helm-theme .helm-listen-drain {
+  animation-name: helm-listen-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes helm-listen-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.helm-theme .helm-listen-track {
+    display: none;
+  }
+}

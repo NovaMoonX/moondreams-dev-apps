@@ -2,7 +2,9 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { HELM_COPY, KIN_KINDS } from '@apps/helm/constants';
 import {
   CONNECTION_STATUSES,
+  reverseRelation,
   type ConnectionSide,
+  type InferredLink,
 } from '@apps/helm/engine/connections';
 import type { ConnectionKind, ConnectionRelation } from '@apps/helm/types';
 
@@ -67,3 +69,65 @@ export const STATUS_OPTIONS = CONNECTION_STATUSES.map((status) => ({
   value: status,
   label: HELM_COPY.connectionStatuses[status],
 }));
+
+/** What the other person is to `whoId` in a figured-out link. */
+export const toFiguredSide = (
+  link: InferredLink,
+  whoId: string,
+): ConnectionSide => {
+  const isFirst = link.firstId === whoId;
+  const relation = isFirst
+    ? link.relationOfFirstToSecond === null
+      ? null
+      : reverseRelation(link.relationOfFirstToSecond, link.genders.second)
+    : link.relationOfFirstToSecond;
+  return {
+    otherId: isFirst ? link.secondId : link.firstId,
+    relation,
+    status: null,
+    since: null,
+    isPast: false,
+  };
+};
+
+export const toBecauseLine = (
+  link: InferredLink,
+  selfId: string | null,
+  nameOf: (id: string) => string,
+) => {
+  const display = (id: string) => (id === selfId ? null : nameOf(id));
+  const [first, second] = link.chain;
+  const parent = [first.fromId, first.toId].find(
+    (id) => id === second?.fromId || id === second?.toId,
+  );
+  if (link.because === 'siblings')
+    return HELM_COPY.figuredBecause.siblings(
+      display(link.firstId),
+      display(link.secondId),
+    );
+  if (link.because === 'sameParent' && parent)
+    return HELM_COPY.figuredBecause.sameParent(
+      display(parent),
+      display(link.firstId),
+      display(link.secondId),
+    );
+  return HELM_COPY.figuredBecause.steps(
+    link.chain.map((step) =>
+      HELM_COPY.figuredBecause.step(
+        display(step.fromId),
+        step.toId === selfId ? null : nameOf(step.toId),
+        toRelationWord(step.relation),
+      ),
+    ),
+  );
+};
+
+export const NOT_SURE = 'none';
+
+export const FAMILY_OPTIONS = [
+  { value: NOT_SURE, text: HELM_COPY.connectionFamilyNotSure },
+  ...KIN_KINDS.map((entry) => ({
+    value: entry.kind,
+    text: entry.written.charAt(0).toUpperCase() + entry.written.slice(1),
+  })),
+];

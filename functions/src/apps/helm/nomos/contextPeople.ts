@@ -15,11 +15,15 @@ import type { ByWho } from '../keyDateIndex.js';
 import { normalizeKin, type KinBirthday } from './kin.js';
 import { KIN_KINDS, type WhoKin } from './kinKinds.js';
 import {
+  inferFamilyLinks,
   isShownConnection,
+  reverseRelation,
   type ConnectionKind,
   type ConnectionRelation,
   type ConnectionSource,
   type CoupleStatus,
+  type ImpliedConnectionState,
+  type InferredLink,
 } from './connections.js';
 
 export interface PersonRecord {
@@ -105,12 +109,17 @@ const toContextContacts = (points: ContactPoint[]) =>
 const toConnectionWords = (
   whoId: string,
   connections: ContextConnection[],
+  figuredOut: InferredLink[],
   names: Map<string, string>,
 ) => {
-  const lines = connections
-    .filter((connection) => connection.whoIds.includes(whoId))
-    .flatMap((connection) => toConnectionText(connection, whoId, names))
-    .slice(0, MAX_CONTEXT_CONNECTIONS);
+  const lines = [
+    ...connections
+      .filter((connection) => connection.whoIds.includes(whoId))
+      .flatMap((connection) => toConnectionText(connection, whoId, names)),
+    ...figuredOut
+      .filter((link) => [link.firstId, link.secondId].includes(whoId))
+      .flatMap((link) => toFiguredText(link, whoId, names)),
+  ].slice(0, MAX_CONTEXT_CONNECTIONS);
   return lines.length > 0 ? { connections: lines } : {};
 };
 
@@ -181,10 +190,35 @@ const toConnectionText = (
   return [word ? `${other} is their ${word}` : `${other} is family`];
 };
 
+const toFiguredText = (
+  link: InferredLink,
+  whoId: string,
+  names: Map<string, string>,
+) => {
+  const isFirst = link.firstId === whoId;
+  const otherId = isFirst ? link.secondId : link.firstId;
+  const other = names.get(otherId);
+  if (!other) return [];
+  const relation = isFirst
+    ? link.relationOfFirstToSecond === null
+      ? null
+      : reverseRelation(link.relationOfFirstToSecond, link.genders.second)
+    : link.relationOfFirstToSecond;
+  const word = toRelationText(relation);
+  return [
+    `${word ? `${other === 'you' ? 'you are' : `${other} is`} their ${word}` : `${other === 'you' ? 'you are' : `${other} is`} family`} (figured out)`,
+  ];
+};
+
 /** The people the model is shown to link a name to: never the self, and on an unattended turn never a private one; those with another name or a family word first, then the most recently named. */
 export function toContextPeople(
   records: PersonRecord[],
-  options: { isUnattended: boolean; connections?: ContextConnection[] },
+  options: {
+    isUnattended: boolean;
+    connections?: ContextConnection[];
+    unreadableConnections?: ImpliedConnectionState[];
+    selfWhoId?: string | null;
+  },
 ): ContextPerson[] {
   const linkable = new Map(
     records
@@ -201,6 +235,31 @@ export function toContextPeople(
       isShownConnection(connection) &&
       connection.whoIds.every((id) => linkable.has(id)),
   );
+  const kinById = new Map(
+    records.map((record) => [record.id, normalizeKin(record.words.kin)]),
+  );
+  const figuredOut = inferFamilyLinks({
+    selfId:
+      records.find((record) => record.isSelf)?.id ?? options.selfWhoId ?? null,
+    people: records.map((record) => ({
+      id: record.id,
+      kin: kinById.get(record.id) ?? null,
+      isPrivate: record.isPrivate,
+      isPerson: record.kind === 'person',
+    })),
+    connections: [
+      ...(options.connections ?? []).map((connection) => ({
+        ...connection,
+        isUnreadable: false,
+      })),
+      ...(options.unreadableConnections ?? []).map((connection) => ({
+        ...connection,
+        fromFirst: null,
+        fromSecond: null,
+        isUnreadable: true,
+      })),
+    ],
+  });
   return records
     .filter(
       (record) =>
@@ -226,7 +285,7 @@ export function toContextPeople(
       relation: record.words.relation,
       kin: kin ? toKinText(kin) : null,
       ...toContactWords(record),
-      ...toConnectionWords(record.id, shownConnections, linkable),
+      ...toConnectionWords(record.id, shownConnections, figuredOut, linkable),
     }));
 }
 

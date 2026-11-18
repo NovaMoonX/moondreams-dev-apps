@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  selectGoalEvidence,
+  type GoalStep,
+} from '@apps/helm/engine/goalEvidence';
+import { readPausedLine } from '@apps/helm/store/selectors/habitSelectors';
 import { selectProjectEvidence } from '@apps/helm/engine/projectEvidence';
 
 const tests: [string, () => void][] = [];
@@ -294,6 +299,124 @@ test('the line never carries a percentage or a bar', () => {
     texts([]),
   ].flat();
   lines.forEach((line) => assert.doesNotMatch(line, /%|█|▓|\/\d/));
+});
+
+const TODAY_KEY = '2026-11-10';
+const dayKeyOf = (offset: number) =>
+  new Date(day(offset)).toISOString().slice(0, 10);
+const step: GoalStep = {
+  id: 'h1',
+  status: 'active',
+  cadence: { kind: 'timesPerWeek', count: 3 },
+  windowState: {},
+  timesPerDay: null,
+  startsOn: day(-200),
+  endsOn: null,
+  createdAt: ago(200),
+};
+const ticked = (offsets: number[]) =>
+  Object.fromEntries(
+    offsets.map((offset) => [
+      dayKeyOf(offset),
+      { entries: { h1: { checks: { day: { status: 'done' } }, count: 0 } } },
+    ]),
+  );
+const goalLine = (
+  days: ReturnType<typeof ticked>,
+  habits: GoalStep[] = [step],
+  extra: Partial<Parameters<typeof selectGoalEvidence>[0]> = {},
+) =>
+  selectGoalEvidence({
+    habits,
+    days,
+    milestoneState: {},
+    milestones: {},
+    todayKey: TODAY_KEY,
+    timeZone: TIME_ZONE,
+    ...extra,
+  });
+
+test('a goal with no regular step says so', () => {
+  assert.deepEqual(goalLine({}, []), ['No regular step yet']);
+});
+
+test("a goal's week reads against the step's cadence", () => {
+  assert.deepEqual(goalLine(ticked([-1])), ['1 of 2 this week']);
+  assert.deepEqual(goalLine(ticked([-1, 0])), ['2 of 2 this week']);
+});
+
+test('weeks of the last twelve with the cadence met are counted', () => {
+  const metWeeks = Array.from({ length: 12 }, (_, index) => index)
+    .filter((index) => index % 4 !== 3)
+    .flatMap((index) => [-8 - 7 * index, -7 - 7 * index, -6 - 7 * index]);
+  assert.deepEqual(goalLine(ticked(metWeeks)), [
+    '0 of 2 this week',
+    'Showed up 9 of the last 12 weeks',
+  ]);
+});
+
+test('a missed last day of a finished week counts against it', () => {
+  const everyDay: GoalStep = {
+    ...step,
+    cadence: { kind: 'everyDay' },
+  };
+  const week = (monday: number, count: number) =>
+    Array.from({ length: count }, (_, index) => monday + index);
+  const days = ticked(
+    Array.from({ length: 12 }, (_, index) => -8 - 7 * index).flatMap(
+      (monday, index) => week(monday, index < 4 ? 7 : 6),
+    ),
+  );
+  assert.deepEqual(goalLine(days, [everyDay]).slice(1), [
+    'Showed up 4 of the last 12 weeks',
+  ]);
+});
+
+test('a goal shows its last reached milestone with its day, else the next dated one', () => {
+  const reached = milestone('m1', 'Restring it', day(-20), day(-18));
+  assert.deepEqual(goalLine({}, [], reached), [
+    'No regular step yet',
+    'Reached Restring it on Oct 23',
+  ]);
+  const upcoming = milestone('m2', 'Play for Sam', day(30));
+  assert.deepEqual(goalLine({}, [], upcoming), [
+    'No regular step yet',
+    'Play for Sam in\u00a030\u00a0days',
+  ]);
+});
+
+test('a goal line never carries a percentage or a bar', () => {
+  [goalLine(ticked([-1, -8, -9])), goalLine({}, [])]
+    .flat()
+    .forEach((line) => assert.doesNotMatch(line, /%|█|▓/));
+});
+
+test('a goal habit set aside with no end date reads Paused, even when it starts today', () => {
+  const made = { status: 'paused' as const, pausedUntil: null };
+  assert.equal(readPausedLine(made, TODAY_KEY), HELM_COPY.habitsPausedOpen);
+  assert.equal(
+    readPausedLine({ status: 'active', pausedUntil: null }, TODAY_KEY),
+    null,
+  );
+  assert.equal(
+    readPausedLine({ status: 'paused', pausedUntil: day(-1) }, TODAY_KEY),
+    null,
+  );
+  assert.match(
+    readPausedLine({ status: 'paused', pausedUntil: day(3) }, TODAY_KEY) ?? '',
+    /^Paused until /,
+  );
+});
+
+test('the kept-habits toast names one habit and counts several', () => {
+  assert.equal(
+    HELM_COPY.goalHabitsKeptToast(1, 'Morning run'),
+    'Morning run is now a habit on its own',
+  );
+  assert.equal(
+    HELM_COPY.goalHabitsKeptToast(3, 'Morning run'),
+    '3 habits are now on their own',
+  );
 });
 
 const failures: string[] = [];

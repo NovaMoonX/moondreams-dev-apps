@@ -1,9 +1,14 @@
 import {
   arrayRemove,
   arrayUnion,
+  collection,
   doc,
+  getDocs,
+  query,
   runTransaction,
   updateDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { reauthenticateWithPopup } from 'firebase/auth';
@@ -15,6 +20,7 @@ import {
   clearHelmKey,
   helmTrustStore,
 } from '@apps/helm/queries/helmKeyQueries';
+import { remindersStamp } from '@apps/helm/store/actions/markRemindersChanged';
 import { forgetOutboxSecrets } from '@apps/helm/store/actions/outboxActions';
 import { clearHelm } from '@apps/helm/store/helmSlice';
 import { keepDeletedNote } from '@apps/helm/utils/deletedNote';
@@ -48,14 +54,22 @@ export async function ensureHelmProfile(uid: string) {
       assistantName: null,
       assistantNameVariants: null,
       assistantTone: null,
+      personality: null,
+      personalitySetAt: null,
+      personalityPreview: null,
       theme: null,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,
       planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
+      dayAimsChangedAt: null,
       shiftCalendarIds: [],
       busyAllDayEventRefs: [],
       calendarOfferFoldedAt: null,
+      quietHours: null,
+      remindersPausedAt: null,
+      habitRemindersChangedAt: null,
+      habitRemindersIdleAt: null,
       hasSeenAiNotice: false,
       voiceMode: 'cloudWhenOnline',
       voiceId: null,
@@ -72,7 +86,17 @@ export async function ensureHelmProfile(uid: string) {
       abilityOffers: [],
       conversationFreshAt: null,
       isDailyFreshOn: false,
+      isLearningOn: true,
+      patternsCheckedOn: null,
+      reflectDueAt: null,
+      relateDueAt: null,
+      scheduledActionsChangedAt: null,
+      forgottenAt: null,
+      prunedOn: null,
       outsideSeenAt: null,
+      researchDepth: null,
+      researchAllowance: null,
+      calendarSync: null,
       createdAt: Date.now(),
       lastEditedAt: null,
     };
@@ -122,6 +146,39 @@ export const setDailyFreshOn = (uid: string, isDailyFreshOn: boolean) =>
     lastEditedAt: Date.now(),
   });
 
+/** "Notice what works for me". Turning it off puts what was asked but not answered back to waiting, so nothing stays on offer that Helm has stopped watching for; what the person accepted or answered stays. */
+export async function setLearningOn(uid: string, isLearningOn: boolean) {
+  const userRef = doc(db, 'apps', 'helm', 'users', uid);
+  await updateDoc(userRef, {
+    isLearningOn,
+    ...(isLearningOn ? {} : { relateDueAt: null }),
+    lastEditedAt: Date.now(),
+  });
+  if (isLearningOn) return;
+  const asked = await getDocs(
+    query(
+      collection(userRef, 'patterns'),
+      where('isLive', '==', true),
+      where('state', '==', 'suggested'),
+    ),
+  );
+  if (asked.empty) return;
+  const now = Date.now();
+  const batch = writeBatch(db);
+  asked.docs.forEach((entry) =>
+    batch.update(entry.ref, {
+      state: 'candidate',
+      stateAt: now,
+      lastEditedAt: now,
+      history: [
+        ...((entry.data().history as unknown[] | undefined) ?? []),
+        { to: 'candidate', at: now, by: 'person' },
+      ].slice(-20),
+    }),
+  );
+  await batch.commit();
+}
+
 /** Starts a new conversation from now, or puts back the moment it last started fresh (`null` for never) to take that back. */
 export const setConversationFreshAt = (
   uid: string,
@@ -170,6 +227,26 @@ export const setDayWindow = (
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     dayStartTime,
     dayEndTime,
+    ...remindersStamp(Date.now()),
+    lastEditedAt: Date.now(),
+  });
+
+/** Quiet hours for habit reminders ("HH:mm" in the person's zone); null means outside Your day. */
+export const setQuietHours = (
+  uid: string,
+  quietHours: { start: string; end: string } | null,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    quietHours,
+    ...remindersStamp(Date.now()),
+    lastEditedAt: Date.now(),
+  });
+
+/** "Pause all habit reminders": stamped when paused, null when they are turned back on. */
+export const setRemindersPaused = (uid: string, isPaused: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    remindersPausedAt: isPaused ? Date.now() : null,
+    ...remindersStamp(Date.now()),
     lastEditedAt: Date.now(),
   });
 
@@ -269,6 +346,7 @@ export const addZoneSpan = (uid: string, span: ZoneSpan, todayKey: string) =>
         ),
         span,
       ].slice(-MAX_ZONE_SPANS),
+      ...remindersStamp(Date.now()),
       lastEditedAt: Date.now(),
     });
   });
@@ -281,6 +359,7 @@ export const removeZoneSpan = (uid: string, awayId: string) =>
     const current = (snapshot.data() as HelmProfile).zoneSpans ?? [];
     transaction.update(ref, {
       zoneSpans: current.filter((entry) => entry.awayId !== awayId),
+      ...remindersStamp(Date.now()),
       lastEditedAt: Date.now(),
     });
   });
@@ -347,3 +426,13 @@ export async function deleteAllHelmData(uid: string) {
   }
   await forgetHelmOnDevice(uid);
 }
+
+/** The depth research runs at when a request doesn't say; null asks when it feeds a decision. */
+export const setResearchDepth = (
+  uid: string,
+  researchDepth: 'light' | 'thorough' | null,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    researchDepth,
+    lastEditedAt: Date.now(),
+  });

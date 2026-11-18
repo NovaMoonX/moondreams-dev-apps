@@ -43,6 +43,8 @@ export interface PrivacyRecord extends Partial<PrivacyFacts> {
   whoIds?: string[];
   placeIds?: string[];
   subjectIds?: string[];
+  lockScreenName?: string | null;
+  history?: unknown[];
 }
 
 export type ParentIndex = Record<ParentKind, Map<string, PrivateParent>>;

@@ -204,13 +204,353 @@ export const readFromSide = (
 export const isShownConnection = (connection: { source: ConnectionSource }) =>
   connection.source !== 'refused';
 
-/** A private one, a pet or an organization is never part of a proposal. */
-export interface ImpliedPerson {
+export interface InferPerson {
   id: string;
-  kin: { kind: KinKind } | null;
+  kin: { kind: KinKind; order?: unknown } | null;
   isPrivate: boolean;
   isPerson: boolean;
 }
+
+export interface InferConnectionState {
+  whoIds: [string, string];
+  kind: ConnectionKind;
+  source: ConnectionSource;
+  fromFirst: ConnectionRelation | null;
+  fromSecond: ConnectionRelation | null;
+  status: CoupleStatus | null;
+  isUnreadable: boolean;
+}
+
+export interface ChainStep {
+  fromId: string;
+  toId: string;
+  relation: KinKind;
+}
+
+export type InferredBecause =
+  | 'siblings'
+  | 'sameParent'
+  | 'auntUncle'
+  | 'cousin'
+  | 'grandparent'
+  | 'siblingsPartner'
+  | 'parentsPartner';
+
+export interface InferredLink {
+  firstId: string;
+  secondId: string;
+  genders: { first: Gender; second: Gender };
+  /** Null when the list has no word for it (an aunt or uncle of unknown gender), shown as "family". */
+  relationOfFirstToSecond: KinKind | null;
+  chain: ChainStep[];
+  because: InferredBecause;
+}
+
+type WorkedLink = Omit<InferredLink, 'genders'>;
+
+const MAX_SIBLING_GROUP = 30;
+
+type Role = 'parent' | 'child' | 'sibling' | 'auntUncle' | 'nibling' | 'spouse';
+
+const ROLE_OF = new Map<KinKind, Role>([
+  ...(['mother', 'father', 'parent'] as const).map(
+    (kind) => [kind, 'parent'] as const,
+  ),
+  ...(['son', 'daughter', 'child'] as const).map(
+    (kind) => [kind, 'child'] as const,
+  ),
+  ...(['sister', 'brother', 'sibling'] as const).map(
+    (kind) => [kind, 'sibling'] as const,
+  ),
+  ['aunt', 'auntUncle'],
+  ['uncle', 'auntUncle'],
+  ['niece', 'nibling'],
+  ['nephew', 'nibling'],
+  ['spouse', 'spouse'],
+  ['partner', 'spouse'],
+]);
+
+type Index = Map<string, Map<string, ChainStep>>;
+
+const toIndex = (entries: [string, string, ChainStep][]): Index =>
+  entries.reduce(
+    (index, [key, other, step]) =>
+      index.get(key)?.has(other)
+        ? index
+        : index.set(key, (index.get(key) ?? new Map()).set(other, step)),
+    new Map<string, Map<string, ChainStep>>(),
+  );
+
+const pairKey = (a: string, b: string) => [a, b].sort().join('_');
+
+const isKinRelation = (
+  relation: ConnectionRelation | null,
+): relation is KinKind =>
+  relation !== null && relation !== 'friend' && relation !== 'coworker';
+
+const isSettledCouple = (connection: InferConnectionState) =>
+  connection.kind === 'couple' &&
+  connection.source !== 'refused' &&
+  !connection.isUnreadable &&
+  (connection.status === 'married' || connection.status === null);
+
+const toStoredFacts = (connection: InferConnectionState): ChainStep[] => {
+  const [first, second] = connection.whoIds;
+  if (connection.source === 'refused' || connection.isUnreadable) return [];
+  if (connection.kind === 'family')
+    return [
+      { fromId: first, toId: second, relation: connection.fromFirst },
+      { fromId: second, toId: first, relation: connection.fromSecond },
+    ].flatMap((step) =>
+      isKinRelation(step.relation)
+        ? [{ ...step, relation: step.relation }]
+        : [],
+    );
+  if (!isSettledCouple(connection)) return [];
+  const relation: KinKind = connection.status === null ? 'partner' : 'spouse';
+  return [
+    { fromId: first, toId: second, relation },
+    { fromId: second, toId: first, relation },
+  ];
+};
+
+/** Family links the stored ones make likely, each with the facts it came from; never for a decided or refused pair, a private person, a pet or an organization. */
+export const inferFamilyLinks = (input: {
+  selfId: string | null;
+  people: InferPerson[];
+  connections: InferConnectionState[];
+}): InferredLink[] => {
+  const { selfId } = input;
+  const person = new Map(
+    [
+      ...input.people,
+      ...(selfId !== null && !input.people.some((entry) => entry.id === selfId)
+        ? [{ id: selfId, kin: null, isPrivate: false, isPerson: true }]
+        : []),
+    ].map((entry) => [entry.id, entry]),
+  );
+  const isOpen = (id: string) =>
+    person.get(id)?.isPerson === true && person.get(id)?.isPrivate === false;
+  const facts = [
+    ...input.people.flatMap((entry): ChainStep[] =>
+      selfId !== null && entry.kin && entry.id !== selfId
+        ? [{ fromId: entry.id, toId: selfId, relation: entry.kin.kind }]
+        : [],
+    ),
+    ...input.connections.flatMap(toStoredFacts),
+  ].filter((step) => isOpen(step.fromId) && isOpen(step.toId));
+  const statedGender = new Map(
+    [...facts].reverse().flatMap((step): [string, Gender][] => {
+      const gender = genderOf({ kin: { kind: step.relation } });
+      return gender ? [[step.fromId, gender]] : [];
+    }),
+  );
+  const genderFor = (id: string): Gender =>
+    genderOf({ kin: person.get(id)?.kin ?? null }) ??
+    statedGender.get(id) ??
+    null;
+  const formFor = (forms: Forms, id: string) =>
+    forms[genderFor(id) ?? 'neutral'];
+  const withRole = (roles: Role[]) =>
+    facts.flatMap((step) => {
+      const role = ROLE_OF.get(step.relation);
+      return role && roles.includes(role) ? [{ step, role }] : [];
+    });
+  const parentsOf = toIndex(
+    withRole(['parent', 'child']).map(({ step, role }) =>
+      role === 'parent'
+        ? [step.toId, step.fromId, step]
+        : [step.fromId, step.toId, step],
+    ),
+  );
+  const childrenOf = toIndex(
+    withRole(['parent', 'child']).map(({ step, role }) =>
+      role === 'parent'
+        ? [step.fromId, step.toId, step]
+        : [step.toId, step.fromId, step],
+    ),
+  );
+  const siblingsOf = toIndex(
+    withRole(['sibling']).map(({ step }) => [step.toId, step.fromId, step]),
+  );
+  const auntsOf = toIndex(
+    withRole(['auntUncle', 'nibling']).map(({ step, role }) =>
+      role === 'auntUncle'
+        ? [step.toId, step.fromId, step]
+        : [step.fromId, step.toId, step],
+    ),
+  );
+  const spousesOf = toIndex(
+    withRole(['spouse']).map(({ step }) => [step.toId, step.fromId, step]),
+  );
+  const decided = new Set(
+    input.connections
+      .filter(
+        (connection) =>
+          connection.kind === 'family' || connection.kind === 'couple',
+      )
+      .map((connection) => pairKey(...connection.whoIds)),
+  );
+  const isAllowed = (link: WorkedLink) =>
+    link.firstId !== link.secondId &&
+    isOpen(link.firstId) &&
+    isOpen(link.secondId) &&
+    !decided.has(pairKey(link.firstId, link.secondId)) &&
+    !(
+      selfId !== null &&
+      [link.firstId, link.secondId].includes(selfId) &&
+      person.get(link.firstId === selfId ? link.secondId : link.firstId)?.kin
+    );
+  const dedupe = (links: WorkedLink[]) => [
+    ...links
+      .filter(isAllowed)
+      .reduce(
+        (byPair, link) =>
+          byPair.has(pairKey(link.firstId, link.secondId))
+            ? byPair
+            : byPair.set(pairKey(link.firstId, link.secondId), link),
+        new Map<string, WorkedLink>(),
+      )
+      .values(),
+  ];
+  const entriesOf = (index: Index, id: string) => [
+    ...(index.get(id) ?? new Map<string, ChainStep>()),
+  ];
+  const pairsOf = <T>(items: T[]) =>
+    items.flatMap((first, at) =>
+      items.slice(at + 1).map((second): [T, T] => [first, second]),
+    );
+  const siblings = pairsOf(
+    selfId === null ? [] : entriesOf(siblingsOf, selfId),
+  ).map(([[a, aStep], [b, bStep]]): WorkedLink => ({
+    firstId: a,
+    secondId: b,
+    relationOfFirstToSecond: formFor(SIBLING, a),
+    chain: [aStep, bStep],
+    because: 'siblings',
+  }));
+  const sameParent = [...childrenOf.keys()].flatMap((parent) =>
+    (childrenOf.get(parent)?.size ?? 0) > MAX_SIBLING_GROUP
+      ? []
+      : pairsOf(entriesOf(childrenOf, parent)).map(
+          ([[a, aStep], [b, bStep]]): WorkedLink => ({
+            firstId: a,
+            secondId: b,
+            relationOfFirstToSecond: formFor(SIBLING, a),
+            chain: [aStep, bStep],
+            because: 'sameParent',
+          }),
+        ),
+  );
+  const auntsAndUncles = dedupe([
+    ...siblings,
+    ...sameParent,
+    ...[...childrenOf.keys()].flatMap((parent) =>
+      entriesOf(childrenOf, parent).flatMap(([child, childStep]) =>
+        entriesOf(siblingsOf, parent)
+          .filter(
+            ([relative]) =>
+              relative !== child && !parentsOf.get(child)?.has(relative),
+          )
+          .map(([relative, relativeStep]): WorkedLink => ({
+            firstId: relative,
+            secondId: child,
+            relationOfFirstToSecond: formFor(AUNT_UNCLE, relative),
+            chain: [childStep, relativeStep],
+            because: 'auntUncle',
+          })),
+      ),
+    ),
+  ]);
+  const knownAunts = [
+    ...[...auntsOf.keys()].flatMap((nibling) =>
+      entriesOf(auntsOf, nibling).map(([aunt, step]) => ({
+        aunt,
+        nibling,
+        chain: [step],
+      })),
+    ),
+    ...auntsAndUncles
+      .filter((link) => link.because === 'auntUncle')
+      .map((link) => ({
+        aunt: link.firstId,
+        nibling: link.secondId,
+        chain: link.chain,
+      })),
+  ];
+  const cousins = knownAunts.flatMap(({ aunt, nibling, chain }) =>
+    entriesOf(childrenOf, aunt)
+      .filter(([kid]) => kid !== nibling && !siblingsOf.get(nibling)?.has(kid))
+      .map(([kid, kidStep]): WorkedLink => ({
+        firstId: kid,
+        secondId: nibling,
+        relationOfFirstToSecond: 'cousin',
+        chain: [...chain, kidStep],
+        because: 'cousin',
+      })),
+  );
+  const grandparents = [...parentsOf.keys()].flatMap((child) =>
+    entriesOf(parentsOf, child).flatMap(([parent, parentStep]) =>
+      entriesOf(parentsOf, parent).map(
+        ([grandparent, grandStep]): WorkedLink => ({
+          firstId: grandparent,
+          secondId: child,
+          relationOfFirstToSecond: formFor(GRANDPARENT, grandparent),
+          chain: [parentStep, grandStep],
+          because: 'grandparent',
+        }),
+      ),
+    ),
+  );
+  const inLaws = [...siblingsOf.keys()].flatMap((owner) =>
+    entriesOf(siblingsOf, owner).flatMap(([sibling, siblingStep]) =>
+      entriesOf(spousesOf, sibling)
+        .filter(
+          ([spouse]) => spouse !== owner && !siblingsOf.get(owner)?.has(spouse),
+        )
+        .map(([spouse, spouseStep]): WorkedLink => ({
+          firstId: spouse,
+          secondId: owner,
+          relationOfFirstToSecond: formFor(SIBLING_IN_LAW, spouse),
+          chain: [siblingStep, spouseStep],
+          because: 'siblingsPartner',
+        })),
+    ),
+  );
+  const stepparents = [...parentsOf.keys()].flatMap((child) =>
+    entriesOf(parentsOf, child).flatMap(([parent, parentStep]) =>
+      entriesOf(spousesOf, parent)
+        .filter(
+          ([spouse]) =>
+            spouse !== child &&
+            !parentsOf.get(child)?.has(spouse) &&
+            !siblingsOf.get(child)?.has(spouse),
+        )
+        .map(([spouse, spouseStep]): WorkedLink => ({
+          firstId: spouse,
+          secondId: child,
+          relationOfFirstToSecond: formFor(STEPPARENT, spouse),
+          chain: [parentStep, spouseStep],
+          because: 'parentsPartner',
+        })),
+    ),
+  );
+  return dedupe([
+    ...auntsAndUncles,
+    ...cousins,
+    ...grandparents,
+    ...inLaws,
+    ...stepparents,
+  ]).map((link): InferredLink => ({
+    ...link,
+    genders: {
+      first: genderFor(link.firstId),
+      second: genderFor(link.secondId),
+    },
+  }));
+};
+
+export type ImpliedPerson = InferPerson;
 
 export interface ImpliedLink {
   firstId: string;
@@ -220,123 +560,54 @@ export interface ImpliedLink {
   because: 'siblings' | 'parentsPartner' | 'siblingsPartner';
 }
 
-const PARENT_KINDS: KinKind[] = ['mother', 'father', 'parent'];
-const SIBLING_KINDS: KinKind[] = ['sister', 'brother', 'sibling'];
-
-const isPartnerLink = (connection: ImpliedConnectionState) =>
-  connection.kind === 'couple' && connection.source !== 'refused';
-
-/** A refusal is kept so it is never asked again. */
 export interface ImpliedConnectionState {
   whoIds: [string, string];
   kind: ConnectionKind;
   source: ConnectionSource;
   status: CoupleStatus | null;
-  /** Its sealed words could not be opened. */
   isUnreadable: boolean;
 }
 
-/**
- * The family links a turn makes likely: the owner's siblings are siblings of each other, a parent's partner who is not a parent is a stepparent, a sibling's partner a sibling-in-law.
- * Only for `touchedIds`, only between people who are not private, never a pair and kind already decided or refused; a past or unreadable couple implies nothing.
- */
+const ASKED_BECAUSE: InferredBecause[] = [
+  'siblings',
+  'parentsPartner',
+  'siblingsPartner',
+];
+
+// Stands in for an owner who is not known, so siblings still imply each other; never returned.
+const NO_OWNER_ID = '\u0000owner';
+
 export const impliedConnections = (input: {
   selfId: string | null;
   people: ImpliedPerson[];
   connections: ImpliedConnectionState[];
   touchedIds: string[];
 }): ImpliedLink[] => {
-  const { selfId, connections } = input;
   const touched = new Set(input.touchedIds);
-  const person = new Map(input.people.map((entry) => [entry.id, entry]));
-  const kinOf = (id: string) => person.get(id)?.kin?.kind ?? null;
-  const isOpen = (id: string) =>
-    person.get(id)?.isPerson === true && person.get(id)?.isPrivate === false;
-  const genderById = (id: string) =>
-    genderOf({ kin: person.get(id)?.kin ?? null });
-  const isDecided = (a: string, b: string, kind: ConnectionKind) =>
-    connections.some(
-      (connection) =>
-        connection.whoIds.includes(a) &&
-        connection.whoIds.includes(b) &&
-        connection.kind === kind,
-    );
-  const partnersOf = (id: string) =>
-    connections.flatMap((connection) =>
-      isPartnerLink(connection) &&
-      !connection.isUnreadable &&
-      !isPastStatus(connection.status) &&
-      connection.whoIds.includes(id)
-        ? [
-            connection.whoIds[0] === id
-              ? connection.whoIds[1]
-              : connection.whoIds[0],
-          ]
-        : [],
-    );
-  const siblings = input.people.filter(
-    (entry) => entry.kin && SIBLING_KINDS.includes(entry.kin.kind),
-  );
-  const siblingPairs = siblings.flatMap((first, index) =>
-    siblings.slice(index + 1).map((second): ImpliedLink => ({
-      firstId: first.id,
-      secondId: second.id,
-      kind: 'family',
-      relationOfFirstToSecond:
-        SIBLING[genderById(first.id) ?? 'neutral'] ?? 'sibling',
-      because: 'siblings',
+  const selfId = input.selfId ?? NO_OWNER_ID;
+  return inferFamilyLinks({
+    selfId,
+    people: input.people,
+    connections: input.connections.map((connection) => ({
+      ...connection,
+      fromFirst: null,
+      fromSecond: null,
     })),
+  }).flatMap((link): ImpliedLink[] =>
+    link.relationOfFirstToSecond !== null &&
+    link.firstId !== NO_OWNER_ID &&
+    link.secondId !== NO_OWNER_ID &&
+    (ASKED_BECAUSE as string[]).includes(link.because) &&
+    (touched.has(link.firstId) || touched.has(link.secondId))
+      ? [
+          {
+            firstId: link.firstId,
+            secondId: link.secondId,
+            kind: 'family',
+            relationOfFirstToSecond: link.relationOfFirstToSecond,
+            because: link.because as ImpliedLink['because'],
+          },
+        ]
+      : [],
   );
-  const partnerLinks = (
-    kinds: KinKind[],
-    forms: Forms,
-    because: ImpliedLink['because'],
-  ): ImpliedLink[] =>
-    selfId === null
-      ? []
-      : input.people
-          .filter((entry) => entry.kin && kinds.includes(entry.kin.kind))
-          .flatMap((relative) =>
-            partnersOf(relative.id).flatMap((partnerId): ImpliedLink[] => {
-              const partnerKin = kinOf(partnerId);
-              const isAlready =
-                partnerId === selfId ||
-                (partnerKin !== null &&
-                  [...PARENT_KINDS, ...SIBLING_KINDS].includes(partnerKin));
-              return isAlready
-                ? []
-                : [
-                    {
-                      firstId: partnerId,
-                      secondId: selfId,
-                      kind: 'family',
-                      relationOfFirstToSecond:
-                        forms[genderById(partnerId) ?? 'neutral'] ??
-                        forms.neutral ??
-                        'sibling',
-                      because,
-                    },
-                  ];
-            }),
-          );
-  const candidates = [
-    ...siblingPairs,
-    ...partnerLinks(PARENT_KINDS, STEPPARENT, 'parentsPartner'),
-    ...partnerLinks(SIBLING_KINDS, SIBLING_IN_LAW, 'siblingsPartner'),
-  ];
-  const links = candidates.filter(
-    (link) =>
-      isOpen(link.firstId) &&
-      isOpen(link.secondId) &&
-      (touched.has(link.firstId) || touched.has(link.secondId)) &&
-      !isDecided(link.firstId, link.secondId, link.kind),
-  );
-  return [
-    ...new Map(
-      links.map((link) => [
-        toConnectionId(link.firstId, link.secondId, link.kind),
-        link,
-      ]),
-    ).values(),
-  ];
 };
