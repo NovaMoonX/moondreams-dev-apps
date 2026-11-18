@@ -2995,6 +2995,7 @@ export const HELM_COPY = {
   photosTitleCounted: (count: number) =>
     `Photos · ${count} of ${PHOTOS_PER_RECORD}`,
   photoMainBadge: 'Main',
+  photosShowAll: (count: number) => `Show all ${count} photos`,
   photoSheetTitle: 'Photo',
   photoOpenFull: 'Open full screen',
   photoMakeMain: 'Make main photo',

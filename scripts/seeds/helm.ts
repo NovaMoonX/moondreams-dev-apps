@@ -6219,6 +6219,25 @@ async function buildPeople(input: {
     now,
     encryption,
   });
+  const morePhotos = await Promise.all(
+    [
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ['seed-place-home', n] as const),
+      ...[1, 2, 3, 4].map((n) => ['seed-place-milstead', n] as const),
+    ].map(([placeId, n]) =>
+      buildSeedPhoto({
+        uid,
+        id: `seed-media-${placeId}-${n}`,
+        attachedTo: { kind: 'place', id: placeId },
+        color: [(n * 47) % 256, (n * 89 + 60) % 256, (n * 131 + 30) % 256],
+        now,
+        encryption,
+      }),
+    ),
+  );
+  const extraIds = (placeId: string) =>
+    morePhotos
+      .filter((entry) => entry.id.startsWith(`seed-media-${placeId}-`))
+      .map((entry) => entry.id);
   const names = {
     self: displayName.includes('@') || !displayName ? 'Me' : displayName,
   };
@@ -7517,11 +7536,20 @@ async function buildPeople(input: {
     places: [
       {
         id: 'seed-place-home',
-        place: { ...home, photoMediaIds: [homePhoto.id] },
+        place: {
+          ...home,
+          photoMediaIds: [homePhoto.id, ...extraIds('seed-place-home')],
+        },
       },
-      { id: 'seed-place-milstead', place: milstead },
+      {
+        id: 'seed-place-milstead',
+        place: {
+          ...milstead,
+          photoMediaIds: extraIds('seed-place-milstead'),
+        },
+      },
     ],
-    media: [misoPhoto, homePhoto],
+    media: [misoPhoto, homePhoto, ...morePhotos],
     tasks,
     capture: { id: 'seed-turn-who', capture },
     factCapture: { id: 'seed-turn-fact-dana', capture: factCapture },
