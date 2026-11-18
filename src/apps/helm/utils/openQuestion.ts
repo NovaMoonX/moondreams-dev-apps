@@ -28,3 +28,14 @@ export function pickQuestionTurn<T extends QuestionTurn>(
     ? latest
     : null;
 }
+
+export type TurnRoute = 'spoken' | 'typed' | 'tap';
+
+/** Whether a turn is answered aloud: a spoken one is, a choice tapped while a spoken conversation is open is, a typed one never is, and Mute ends it. */
+export function isSpokenTurn(
+  route: TurnRoute,
+  conversation: { isOpen: boolean; isMuted: boolean },
+) {
+  if (conversation.isMuted || route === 'typed') return false;
+  return route === 'spoken' || conversation.isOpen;
+}

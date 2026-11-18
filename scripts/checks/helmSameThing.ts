@@ -33,6 +33,7 @@ const copy = (
   calendarKey: null,
   isBusy: true,
   sourceUpdatedAt: null,
+  helmRef: null,
   syncedAt: 0,
   transformVersion: 1,
   contentHash: null,

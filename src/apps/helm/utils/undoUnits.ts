@@ -19,7 +19,9 @@ export type UnitKind =
   | 'procedure'
   | 'run'
   | 'home'
-  | 'habit';
+  | 'habit'
+  | 'seenAs'
+  | 'personality';
 
 export type UnitChange =
   'added' | 'changed' | 'completed' | 'removed' | 'moved';
@@ -64,7 +66,10 @@ export function hasResultRow(
     isEntityRef(ref) ||
     ref.collection === 'media' ||
     ref.collection === 'connections' ||
-    ref.collection === 'scheduledActions'
+    ref.collection === 'scheduledActions' ||
+    ref.collection === 'dayAims' ||
+    ref.collection === 'groupings' ||
+    ref.collection === 'research'
   )
     return false;
   if (ref.collection === 'topics') {
@@ -113,7 +118,16 @@ const KINDS: Record<string, UnitKind> = {
   profile: 'home',
   habits: 'habit',
   habitDays: 'habit',
+  seenAs: 'seenAs',
 };
+
+const toKindOf = (
+  ref: UnitEffectRef,
+  effect: UnitEffect | undefined,
+): UnitKind =>
+  ref.collection === 'profile' && 'personality' in (effect?.written ?? {})
+    ? 'personality'
+    : (KINDS[ref.collection] ?? 'task');
 
 const toChange = (
   ref: UnitEffectRef,
@@ -202,7 +216,7 @@ export function buildUndoUnits(input: {
       key: keyOf(first),
       effectIndexes: sorted,
       docIds: unique(sorted.map((index) => effectRefs[index].docId)),
-      kind: KINDS[ref.collection] ?? 'task',
+      kind: toKindOf(ref, effectAt(first)),
       change: toChange(ref, effectAt(first)),
       title: toTitleOf(ref, effectAt(first)),
     };

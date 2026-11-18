@@ -100,12 +100,14 @@ const toCapture = async (
   const { turn } = input;
   return {
     inputMode: turn.inputMode,
+    isSpokenTurn: turn.inputMode === 'voice',
     sttProvider: turn.sttProvider,
     interruptedCaptureId: turn.interruptedCaptureId,
     answersQuestion: null,
     ttsProvider: null,
     arrivedVia: 'direct',
     scheduledActionId: null,
+    aheadOffer: null,
     disposition: null,
     medium: 'web',
     via: null,
@@ -131,6 +133,7 @@ const toCapture = async (
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt: turn.createdAt,
     sortedAt: turn.createdAt,
     screen: null,

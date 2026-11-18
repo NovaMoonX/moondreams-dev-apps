@@ -24,6 +24,7 @@ import ListeningStrip from '@apps/helm/components/voice/ListeningStrip';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import {
   answerUndoOffer,
@@ -89,6 +90,7 @@ function QuestionCard({
   const neitherText = neitherDraft?.text ?? ownText;
   const setNeitherText = neitherDraft?.onChange ?? setOwnText;
   const name = useAssistantName();
+  const voice = useHelmVoiceContext();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -126,8 +128,9 @@ function QuestionCard({
   ) => {
     if (!user) return;
     setIsWorking(true);
+    const tap = voice.followTap();
     try {
-      const { write } = await sendQuestionAnswer(user.uid, {
+      const { write, id: sentId } = await sendQuestionAnswer(user.uid, {
         captureId,
         questionId: id,
         question,
@@ -135,7 +138,9 @@ function QuestionCard({
         transcript: null,
         recordName,
         assistantName: name,
+        isSpokenTurn: tap.isSpokenTurn,
       });
+      tap.onSent({ id: sentId, write }, { captureId, questionId: id });
       setIsSent(true);
       write.catch(() => {
         setIsSent(false);
