@@ -42,6 +42,7 @@ import { useAppDispatch, type RootState } from '@/store';
 import EditTripMealsModal from '@apps/waypoint/components/EditTripMealsModal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
+import { waitUntil } from '@/utils/waitUntil';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getCityLabel } from '@/lib/cities/cityApi';
@@ -116,6 +117,8 @@ type EditingField = 'title' | 'dates' | 'city' | 'meals' | 'cover' | null;
 
 const DAY_SECTION_SELECTOR = '[data-day-section]';
 const DAY_SCROLL_OFFSET_PX = 96;
+
+const DAY_MS = 86_400_000;
 
 function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageProps) {
   const now = useNow();
@@ -203,6 +206,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
   const [editingField, setEditingField] = useState<EditingField>(null);
   const [isSubmittingTripEdit, setIsSubmittingTripEdit] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
   const [ideaFormType, setIdeaFormType] = useState<IdeaType | null>(null);
   const [isSubmittingIdea, setIsSubmittingIdea] = useState(false);
@@ -331,8 +335,24 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const handleEditTrip = async (values: EditTripValues) => {
     setIsSubmittingTripEdit(true);
+    const before = store.getState().waypoint;
+    const shiftDays = Math.round((values.startDate - trip.startDate) / DAY_MS);
+    const isShifting = values.keepOriginalDates && shiftDays !== 0;
     try {
       await dispatch(editTrip({ uid: currentUserId, trip, values })).unwrap();
+      if (isShifting)
+        await waitUntil(() => {
+          const { events: eventsState, stays: staysState } = store.getState().waypoint;
+          const isEventShifted = (event: { id: string; dayIndex: number | null }) => {
+            const was = before.events.items.find((item) => item.id === event.id)?.dayIndex;
+            return was == null || was - shiftDays === event.dayIndex;
+          };
+          const isStayShifted = (stay: { id: string; checkInDayIndex: number | null }) => {
+            const was = before.stays.items.find((item) => item.id === stay.id)?.checkInDayIndex;
+            return was == null || was - shiftDays === stay.checkInDayIndex;
+          };
+          return eventsState.items.every(isEventShifted) && staysState.items.every(isStayShifted);
+        });
       setEditingField(null);
     } catch (editError) {
       addToast({
@@ -393,6 +413,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const handleDeleteTrip = async () => {
     setIsMobileActionsOpen(false);
+    if (isDeleting) return;
     const confirmed = await confirm({
       title: 'Delete trip',
       message: `Delete "${trip.title}"? This removes it for everyone and cannot be undone.`,
@@ -402,10 +423,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       return;
     }
 
+    setIsDeleting(true);
     try {
       await dispatch(deleteTrip({ uid: currentUserId, trip })).unwrap();
       onBack();
     } catch (deleteError) {
+      setIsDeleting(false);
       addToast({
         title: 'Unable to delete this trip',
         description: getErrorMessage(deleteError, 'Please try again.'),
@@ -662,6 +685,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           <StickyAppBar title={trip.title} titleRef={titleRef} leading={backButton} trailing={phoneActions} className='mb-3' />
         ) : (
           <div className='flex items-center justify-between'>{backButton}</div>
+        )}
+        {isDeleting && (
+          <p role='status' className='text-muted-foreground text-sm'>
+            Deleting this trip…
+          </p>
         )}
         <div>
           {trip.coverImageUrl && showHeaderExtras && (

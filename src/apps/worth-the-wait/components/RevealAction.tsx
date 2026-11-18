@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMemo, useState } from 'react';
 
 import { usePresence } from '@/hooks/usePresence';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useAuth } from '@hooks/useAuth';
 
 import { useBoxContext } from '../context/boxContext';
@@ -27,6 +28,8 @@ function RevealAction() {
     userUid: user?.uid,
   });
   const [startActionError, setStartActionError] = useState<string | null>(null);
+  const [isWaiting, setIsWaiting] = useState(false);
+  const waitFor = useWaitUntilShown(activeAction);
 
   const partnerUid = useMemo(() => {
     if (!user || !space) {
@@ -69,7 +72,15 @@ function RevealAction() {
       return;
     }
 
-    await startAction(mutualMethod);
+    setIsWaiting(true);
+    try {
+      await startAction(mutualMethod);
+      await waitFor(
+        (current) => current !== null && current.status !== 'completed',
+      );
+    } finally {
+      setIsWaiting(false);
+    }
   };
 
   const getRevealStatusMessage = () => {
@@ -188,7 +199,7 @@ function RevealAction() {
               );
             });
           }}
-          loading={loading}
+          loading={loading || isWaiting}
         >
           <span
             className={
