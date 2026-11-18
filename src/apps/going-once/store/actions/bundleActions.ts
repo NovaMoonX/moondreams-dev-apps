@@ -1,9 +1,4 @@
-import {
-  doc,
-  runTransaction,
-  updateDoc,
-  type Transaction,
-} from 'firebase/firestore';
+import { doc, updateDoc, type Transaction } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { generateUuid } from '@/utils';
@@ -47,6 +42,7 @@ import {
   splitPaid,
 } from '@apps/going-once/utils/bundles';
 import { getItemName } from '@apps/going-once/utils/listing';
+import { runHeldTransaction } from '@apps/going-once/store/actions/heldTransaction';
 
 export type BundleDraft = {
   name: string;
@@ -161,43 +157,46 @@ export async function createBundle(
   if (problem !== null) return { ok: false, message: problem };
   const id = generateUuid();
   try {
-    return await runTransaction(db, async (transaction): Promise<Outcome> => {
-      const items = await readItems(transaction, saleId, draft.itemIds);
-      const refused = items
-        .map((item) => getJoinProblem(item, id))
-        .find((message) => message !== null);
-      if (refused !== undefined && refused !== null)
-        return { ok: false, message: refused };
-      const now = Date.now();
-      const bundle: Bundle = {
-        id,
-        saleId,
-        name: draft.name.trim(),
-        itemIds: draft.itemIds,
-        priceCents: draft.priceCents,
-        status: 'ACTIVE',
-        dealItemIds: null,
-        sale: null,
-        keptAtGoneCount: null,
-        history: [
-          toChange('CREATE', uid, now, { priceCents: draft.priceCents }),
-        ],
-        createdBy: uid,
-        createdAt: now,
-        lastEditedAt: null,
-        lastEditedBy: null,
-      };
-      transaction.set(bundleRef(saleId, id), bundle);
-      draft.itemIds.forEach((itemId) =>
-        transaction.update(itemRef(saleId, itemId), {
-          bundleId: id,
-          isBundleOnly: draft.bundleOnlyIds.includes(itemId),
-          lastEditedAt: now,
-          lastEditedBy: uid,
-        }),
-      );
-      return { ok: true, id, at: now };
-    });
+    return await runHeldTransaction(
+      saleId,
+      async (transaction): Promise<Outcome> => {
+        const items = await readItems(transaction, saleId, draft.itemIds);
+        const refused = items
+          .map((item) => getJoinProblem(item, id))
+          .find((message) => message !== null);
+        if (refused !== undefined && refused !== null)
+          return { ok: false, message: refused };
+        const now = Date.now();
+        const bundle: Bundle = {
+          id,
+          saleId,
+          name: draft.name.trim(),
+          itemIds: draft.itemIds,
+          priceCents: draft.priceCents,
+          status: 'ACTIVE',
+          dealItemIds: null,
+          sale: null,
+          keptAtGoneCount: null,
+          history: [
+            toChange('CREATE', uid, now, { priceCents: draft.priceCents }),
+          ],
+          createdBy: uid,
+          createdAt: now,
+          lastEditedAt: null,
+          lastEditedBy: null,
+        };
+        transaction.set(bundleRef(saleId, id), bundle);
+        draft.itemIds.forEach((itemId) =>
+          transaction.update(itemRef(saleId, itemId), {
+            bundleId: id,
+            isBundleOnly: draft.bundleOnlyIds.includes(itemId),
+            lastEditedAt: now,
+            lastEditedBy: uid,
+          }),
+        );
+        return { ok: true, id, at: now };
+      },
+    );
   } catch (error) {
     return toFailure(error);
   }
@@ -213,98 +212,103 @@ export async function editBundle(
   const problem = getDraftProblem(draft);
   if (problem !== null) return { ok: false, message: problem };
   try {
-    return await runTransaction(db, async (transaction): Promise<Outcome> => {
-      const snapshot = await transaction.get(bundleRef(saleId, bundleId));
-      if (!snapshot.exists())
-        return { ok: false, message: GONE_BUNDLE_MESSAGE };
-      const bundle = toBundle(bundleId, saleId, snapshot.data());
-      if (bundle.status !== 'ACTIVE')
-        return { ok: false, message: NOT_ACTIVE_MESSAGE };
-      const kept = bundle.itemIds.filter((id) => draft.itemIds.includes(id));
-      const added = draft.itemIds.filter((id) => !bundle.itemIds.includes(id));
-      const removed = bundle.itemIds.filter(
-        (id) => !draft.itemIds.includes(id),
-      );
-      const nextIds = [...kept, ...added];
-      if (nextIds.length < MIN_BUNDLE_THINGS)
-        return { ok: false, message: COUNT_MESSAGE };
-      const things = await readItems(transaction, saleId, [
-        ...nextIds,
-        ...removed,
-      ]);
-      const byId = Object.fromEntries(
-        [...nextIds, ...removed].map((id, index) => [id, things[index]]),
-      );
-      const refused = added
-        .map((id) => getJoinProblem(byId[id], bundleId))
-        .find((message) => message !== null);
-      if (refused !== undefined && refused !== null)
-        return { ok: false, message: refused };
-      const isOnly = (id: string) => draft.bundleOnlyIds.includes(id);
-      const onlyChanged = kept.some(
-        (id) => byId[id] !== null && byId[id].isBundleOnly !== isOnly(id),
-      );
-      const name = draft.name.trim();
-      const isRenamed = name !== bundle.name;
-      const isRepriced = draft.priceCents !== bundle.priceCents;
-      const now = Date.now();
-      const edits =
-        isRenamed || onlyChanged || added.length > 0 || removed.length > 0
-          ? [toChange('EDIT', uid, now)]
+    return await runHeldTransaction(
+      saleId,
+      async (transaction): Promise<Outcome> => {
+        const snapshot = await transaction.get(bundleRef(saleId, bundleId));
+        if (!snapshot.exists())
+          return { ok: false, message: GONE_BUNDLE_MESSAGE };
+        const bundle = toBundle(bundleId, saleId, snapshot.data());
+        if (bundle.status !== 'ACTIVE')
+          return { ok: false, message: NOT_ACTIVE_MESSAGE };
+        const kept = bundle.itemIds.filter((id) => draft.itemIds.includes(id));
+        const added = draft.itemIds.filter(
+          (id) => !bundle.itemIds.includes(id),
+        );
+        const removed = bundle.itemIds.filter(
+          (id) => !draft.itemIds.includes(id),
+        );
+        const nextIds = [...kept, ...added];
+        if (nextIds.length < MIN_BUNDLE_THINGS)
+          return { ok: false, message: COUNT_MESSAGE };
+        const things = await readItems(transaction, saleId, [
+          ...nextIds,
+          ...removed,
+        ]);
+        const byId = Object.fromEntries(
+          [...nextIds, ...removed].map((id, index) => [id, things[index]]),
+        );
+        const refused = added
+          .map((id) => getJoinProblem(byId[id], bundleId))
+          .find((message) => message !== null);
+        if (refused !== undefined && refused !== null)
+          return { ok: false, message: refused };
+        const isOnly = (id: string) => draft.bundleOnlyIds.includes(id);
+        const onlyChanged = kept.some(
+          (id) => byId[id] !== null && byId[id].isBundleOnly !== isOnly(id),
+        );
+        const name = draft.name.trim();
+        const isRenamed = name !== bundle.name;
+        const isRepriced = draft.priceCents !== bundle.priceCents;
+        const now = Date.now();
+        const edits =
+          isRenamed || onlyChanged || added.length > 0 || removed.length > 0
+            ? [toChange('EDIT', uid, now)]
+            : [];
+        const pricing = isRepriced
+          ? [
+              toChange('SET_PRICE', uid, now, {
+                priceCents: draft.priceCents,
+                fromPriceCents: bundle.priceCents,
+              }),
+            ]
           : [];
-      const pricing = isRepriced
-        ? [
-            toChange('SET_PRICE', uid, now, {
-              priceCents: draft.priceCents,
-              fromPriceCents: bundle.priceCents,
-            }),
-          ]
-        : [];
-      const changes = [...edits, ...pricing];
-      if (changes.length === 0) return { ok: true, id: bundleId, at: now };
-      transaction.update(bundleRef(saleId, bundleId), {
-        name,
-        itemIds: nextIds,
-        priceCents: draft.priceCents,
-        history: changes.reduce(
-          (history, change) =>
-            appendBundleChange(history, change, MAX_STATUS_HISTORY),
-          bundle.history,
-        ),
-        lastEditedAt: now,
-        lastEditedBy: uid,
-      });
-      added.forEach((id) =>
-        transaction.update(itemRef(saleId, id), {
-          bundleId,
-          isBundleOnly: isOnly(id),
+        const changes = [...edits, ...pricing];
+        if (changes.length === 0) return { ok: true, id: bundleId, at: now };
+        transaction.update(bundleRef(saleId, bundleId), {
+          name,
+          itemIds: nextIds,
+          priceCents: draft.priceCents,
+          history: changes.reduce(
+            (history, change) =>
+              appendBundleChange(history, change, MAX_STATUS_HISTORY),
+            bundle.history,
+          ),
           lastEditedAt: now,
           lastEditedBy: uid,
-        }),
-      );
-      kept
-        .filter(
-          (id) => byId[id] !== null && byId[id].isBundleOnly !== isOnly(id),
-        )
-        .forEach((id) =>
+        });
+        added.forEach((id) =>
           transaction.update(itemRef(saleId, id), {
+            bundleId,
             isBundleOnly: isOnly(id),
             lastEditedAt: now,
             lastEditedBy: uid,
           }),
         );
-      removed
-        .filter((id) => byId[id] !== null)
-        .forEach((id) =>
-          transaction.update(itemRef(saleId, id), {
-            bundleId: null,
-            isBundleOnly: false,
-            lastEditedAt: now,
-            lastEditedBy: uid,
-          }),
-        );
-      return { ok: true, id: bundleId, at: now };
-    });
+        kept
+          .filter(
+            (id) => byId[id] !== null && byId[id].isBundleOnly !== isOnly(id),
+          )
+          .forEach((id) =>
+            transaction.update(itemRef(saleId, id), {
+              isBundleOnly: isOnly(id),
+              lastEditedAt: now,
+              lastEditedBy: uid,
+            }),
+          );
+        removed
+          .filter((id) => byId[id] !== null)
+          .forEach((id) =>
+            transaction.update(itemRef(saleId, id), {
+              bundleId: null,
+              isBundleOnly: false,
+              lastEditedAt: now,
+              lastEditedBy: uid,
+            }),
+          );
+        return { ok: true, id: bundleId, at: now };
+      },
+    );
   } catch (error) {
     return toFailure(error);
   }
@@ -318,8 +322,8 @@ export async function unbundle(
   expectedStatus: BundleStatus,
 ): Promise<BundleResult> {
   try {
-    const outcome = await runTransaction(
-      db,
+    const outcome = await runHeldTransaction(
+      saleId,
       async (transaction): Promise<Outcome | { conflict: Bundle }> => {
         const snapshot = await transaction.get(bundleRef(saleId, bundleId));
         if (!snapshot.exists())
@@ -356,38 +360,41 @@ export async function lowerBundleToSeparate(
   uid: string,
 ): Promise<BundleResult> {
   try {
-    return await runTransaction(db, async (transaction): Promise<Outcome> => {
-      const snapshot = await transaction.get(bundleRef(saleId, bundleId));
-      if (!snapshot.exists())
-        return { ok: false, message: GONE_BUNDLE_MESSAGE };
-      const bundle = toBundle(bundleId, saleId, snapshot.data());
-      if (bundle.status !== 'ACTIVE')
-        return { ok: false, message: NOT_ACTIVE_MESSAGE };
-      const things = await readItems(transaction, saleId, bundle.itemIds);
-      const separateCents = things.reduce(
-        (total, item) =>
-          item?.status === 'AVAILABLE'
-            ? total + (item.askingPriceCents ?? 0)
-            : total,
-        0,
-      );
-      const now = Date.now();
-      if (bundle.priceCents > separateCents)
-        transaction.update(bundleRef(saleId, bundleId), {
-          priceCents: separateCents,
-          history: appendBundleChange(
-            bundle.history,
-            toChange('SET_PRICE', uid, now, {
-              priceCents: separateCents,
-              fromPriceCents: bundle.priceCents,
-            }),
-            MAX_STATUS_HISTORY,
-          ),
-          lastEditedAt: now,
-          lastEditedBy: uid,
-        });
-      return { ok: true, id: bundleId, at: now };
-    });
+    return await runHeldTransaction(
+      saleId,
+      async (transaction): Promise<Outcome> => {
+        const snapshot = await transaction.get(bundleRef(saleId, bundleId));
+        if (!snapshot.exists())
+          return { ok: false, message: GONE_BUNDLE_MESSAGE };
+        const bundle = toBundle(bundleId, saleId, snapshot.data());
+        if (bundle.status !== 'ACTIVE')
+          return { ok: false, message: NOT_ACTIVE_MESSAGE };
+        const things = await readItems(transaction, saleId, bundle.itemIds);
+        const separateCents = things.reduce(
+          (total, item) =>
+            item?.status === 'AVAILABLE'
+              ? total + (item.askingPriceCents ?? 0)
+              : total,
+          0,
+        );
+        const now = Date.now();
+        if (bundle.priceCents > separateCents)
+          transaction.update(bundleRef(saleId, bundleId), {
+            priceCents: separateCents,
+            history: appendBundleChange(
+              bundle.history,
+              toChange('SET_PRICE', uid, now, {
+                priceCents: separateCents,
+                fromPriceCents: bundle.priceCents,
+              }),
+              MAX_STATUS_HISTORY,
+            ),
+            lastEditedAt: now,
+            lastEditedBy: uid,
+          });
+        return { ok: true, id: bundleId, at: now };
+      },
+    );
   } catch (error) {
     return toFailure(error);
   }
@@ -545,7 +552,7 @@ export async function changeBundleStatus(
   if (!isValid(transition))
     return { ok: false, message: "That amount or day doesn't look right." };
   try {
-    const outcome = await runTransaction(db, async (transaction) => {
+    const outcome = await runHeldTransaction(saleId, async (transaction) => {
       const bundleSnapshot = await transaction.get(bundleRef(saleId, bundleId));
       if (!bundleSnapshot.exists())
         return { kind: 'REFUSED', message: GONE_BUNDLE_MESSAGE } as const;

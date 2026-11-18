@@ -1,9 +1,4 @@
-import {
-  doc,
-  getDoc,
-  runTransaction,
-  type DocumentData,
-} from 'firebase/firestore';
+import { doc, getDoc, type DocumentData } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { formatCentsShort } from '@/utils/moneyUtils';
@@ -28,6 +23,7 @@ import {
   appendBundleChange,
   isSoloLocked,
 } from '@apps/going-once/utils/bundles';
+import { runHeldTransaction } from '@apps/going-once/store/actions/heldTransaction';
 import { withoutBuyerName } from '@apps/going-once/utils/finish';
 import { toFirstName } from '@apps/going-once/utils/personName';
 
@@ -425,7 +421,7 @@ export async function changeStatus(
   if (!isValid(transition)) return { ok: false, message: INVALID_MESSAGE };
   const ref = doc(db, 'apps', 'going-once', 'sales', saleId, 'items', itemId);
   try {
-    const outcome = await runTransaction(db, async (transaction) => {
+    const outcome = await runHeldTransaction(saleId, async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists()) return { kind: 'GONE' } as const;
       const saleData = (
