@@ -37,7 +37,11 @@ import {
   getItemTitle,
   getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import {
+  formatKitchenAmount,
+  formatReadableAmount,
+  stepUpAmount,
+} from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
@@ -206,17 +210,21 @@ export function getShopAmount(
 const SPOON_UNITS: Unit[] = ['CUP', 'TBSP', 'TSP'];
 const TWO_FIGURE_UNITS: Unit[] = ['G', 'KG', 'OZ', 'LB', 'ML', 'L', 'FL_OZ'];
 
-/** An amount on the list the way a person shops and measures: cups and spoons as in a recipe ("¼ cup", "6 tbsp"), weights and volumes to two figures ("2100 g", not "2056.35 g"). Display only: the item keeps its exact amount, which its own sheet edits. */
+/** An amount on the list the way a person shops and measures: cups and spoons as in a recipe ("¼ cup", "6 tbsp"), a unit it has outgrown stepped up ("2 lb 8 oz", "2.1 kg"), weights and volumes to two figures ("2.1 kg", not "2056.35 g"). Display only: the item keeps its exact amount, which its own sheet edits. */
 export const formatShopAmount = (amount: ShopAmount | null) => {
   if (!amount) return null;
-  if (SPOON_UNITS.includes(amount.unit)) {
-    return formatKitchenAmount(amount.amount, amount.unit);
+  if (amount.unit === 'OZ' && amount.amount >= 16) {
+    return formatReadableAmount(amount.amount, amount.unit);
+  }
+  const shown = stepUpAmount(amount.amount, amount.unit);
+  if (SPOON_UNITS.includes(shown.unit)) {
+    return formatKitchenAmount(shown.amount, shown.unit);
   }
   return formatSize(
-    TWO_FIGURE_UNITS.includes(amount.unit)
-      ? Number(amount.amount.toPrecision(2))
-      : amount.amount,
-    amount.unit,
+    TWO_FIGURE_UNITS.includes(shown.unit)
+      ? Number(shown.amount.toPrecision(2))
+      : shown.amount,
+    shown.unit,
   );
 };
 

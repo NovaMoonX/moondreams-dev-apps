@@ -162,7 +162,7 @@ import {
   getConversionLine,
 } from '@apps/pinch/utils/cookConversions';
 import { getLineKey, getLineName } from '@apps/pinch/utils/freeLines';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
@@ -597,7 +597,7 @@ function CookingSession({
           amountText:
             shown === null
               ? (line.note ?? '')
-              : formatKitchenAmount(shown.amount, shown.unit),
+              : formatReadableAmount(shown.amount, shown.unit, units),
           isMeasured: line.amount !== null,
           measure,
           conversion:

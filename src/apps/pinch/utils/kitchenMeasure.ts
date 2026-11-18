@@ -1,5 +1,5 @@
 import { UNIT_LABELS } from '@apps/pinch/constants';
-import type { Unit } from '@apps/pinch/types';
+import type { PinchUnitSettings, Unit } from '@apps/pinch/types';
 
 const CLOSE_ENOUGH = 0.05;
 const EPSILON = 1e-6;
@@ -129,4 +129,60 @@ export function formatKitchenAmount(amount: number, unit: Unit) {
     case 'EACH':
       return readCount(amount, '');
   }
+}
+
+const OUNCES_PER_POUND = 16;
+
+const readPoundsAndOunces = (ounces: number) => {
+  const whole = Math.round(ounces);
+  const pounds = Math.floor(whole / OUNCES_PER_POUND);
+  const rest = whole % OUNCES_PER_POUND;
+  const about = isClose(ounces, whole) ? '' : 'about ';
+  return `${about}${pounds} ${UNIT_LABELS.LB}${rest === 0 ? '' : ` ${rest} ${UNIT_LABELS.OZ}`}`;
+};
+
+const landsOn = (value: number, fractions: number[]) =>
+  isClose(value, nearestOnGrid(value, fractions));
+
+const allowsCups = (units: PinchUnitSettings | null) =>
+  units === null || units.volume === 'AS_WRITTEN' || units.volume === 'CUPS';
+
+/** The amount in the next unit up when it has outgrown its own and reads cleanly there (6 tsp is 2 tbsp, 16 tbsp is 1 cup, 1500 g is 1.5 kg); cups only for someone who measures in cups. */
+export function stepUpAmount(
+  amount: number,
+  unit: Unit,
+  units: PinchUnitSettings | null = null,
+): { amount: number; unit: Unit } {
+  if (!Number.isFinite(amount) || amount <= 0) return { amount, unit };
+  if (unit === 'TSP' && amount >= 3 - EPSILON && landsOn(amount / 3, HALVES)) {
+    return stepUpAmount(amount / 3, 'TBSP', units);
+  }
+  if (
+    unit === 'TBSP' &&
+    amount >= 4 - EPSILON &&
+    allowsCups(units) &&
+    landsOn(amount / 16, CUP_FRACTIONS)
+  ) {
+    return { amount: amount / 16, unit: 'CUP' };
+  }
+  if (unit === 'G' && amount >= 1000 - EPSILON) {
+    return { amount: amount / 1000, unit: 'KG' };
+  }
+  if (unit === 'ML' && amount >= 1000 - EPSILON) {
+    return { amount: amount / 1000, unit: 'L' };
+  }
+  return { amount, unit };
+}
+
+/** An amount to read on a recipe, in cooking or on a list: `formatKitchenAmount` after stepping up to the larger unit it has outgrown ("2 lb 8 oz", not "40 oz"). Never for an answer in a unit the person asked for. */
+export function formatReadableAmount(
+  amount: number,
+  unit: Unit,
+  units: PinchUnitSettings | null = null,
+) {
+  if (unit === 'OZ' && amount >= OUNCES_PER_POUND - EPSILON) {
+    return readPoundsAndOunces(amount);
+  }
+  const shown = stepUpAmount(amount, unit, units);
+  return formatKitchenAmount(shown.amount, shown.unit);
 }

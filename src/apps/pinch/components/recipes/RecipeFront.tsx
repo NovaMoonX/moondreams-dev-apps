@@ -22,13 +22,14 @@ import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
 import {
   selectCollectionCounts,
   selectCollections,
   selectHasPackages,
   selectIngredientsById,
   selectPackagesByIngredient,
+  selectPinchSettings,
   selectRecipeCosts,
   selectRecipeNutrition,
   selectShowNutrition,
@@ -112,6 +113,7 @@ function RecipeFront({
   const show = useAppSelector(selectShowNutrition);
   const hasPantry = useAppSelector(selectHasPackages);
   const packagesByIngredient = useAppSelector(selectPackagesByIngredient);
+  const { units } = useAppSelector(selectPinchSettings);
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const { isBelow } = useMediaQuery();
   const isLandscape = isShort && !isBelow('sm');
@@ -436,7 +438,7 @@ function RecipeFront({
                         )
                       ) : (
                         <span className='text-muted-foreground text-sm whitespace-nowrap'>
-                          {formatKitchenAmount(line.amount, line.unit)}
+                          {formatReadableAmount(line.amount, line.unit, units)}
                         </span>
                       )}
                       {pantry !== null && pantryText !== null && (

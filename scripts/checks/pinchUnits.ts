@@ -178,4 +178,62 @@ near(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: 0.53 }), 125.39, 1);
 assert.equal(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: null }), null);
 near(convertForIngredient(1, 'CUP', 'ML', { gramsPerMl: null }), 236.588);
 
+// An amount that has outgrown its unit reads in the next one up, on screen only
+const { formatReadableAmount } = await import(
+  '../../src/apps/pinch/utils/kitchenMeasure.ts'
+);
+const { formatShopAmount } = await import(
+  '../../src/apps/pinch/utils/shopping.ts'
+);
+const metricSpoons: PinchUnitSettings = {
+  weight: 'METRIC',
+  volume: 'METRIC',
+  keepSpoons: true,
+};
+assert.deepEqual(
+  [
+    formatReadableAmount(40, 'OZ'),
+    formatReadableAmount(32, 'OZ'),
+    formatReadableAmount(15.5, 'OZ'),
+    formatReadableAmount(17.6, 'OZ'),
+    formatReadableAmount(6, 'TSP'),
+    formatReadableAmount(48, 'TSP'),
+    formatReadableAmount(7, 'TSP'),
+    formatReadableAmount(12, 'TBSP'),
+    formatReadableAmount(6, 'TBSP'),
+    formatReadableAmount(16, 'TBSP', metricSpoons),
+    formatReadableAmount(1500, 'G'),
+    formatReadableAmount(2500, 'ML'),
+    formatReadableAmount(2.5, 'LB'),
+    formatReadableAmount(16, 'FL_OZ'),
+  ],
+  [
+    '2 lb 8 oz',
+    '2 lb',
+    '15½ oz',
+    '1 lb 2 oz',
+    '2 tbsp',
+    '1 cup',
+    '7 tsp',
+    '¾ cup',
+    '6 tbsp',
+    '16 tbsp',
+    '1.5 kg',
+    '2.5 l',
+    '2½ lb',
+    '16 fl oz',
+  ],
+  'an amount steps up only when it reads cleanly there, and cups only for someone who measures in cups',
+);
+assert.deepEqual(
+  [
+    formatShopAmount({ amount: 40, unit: 'OZ' }),
+    formatShopAmount({ amount: 2056, unit: 'G' }),
+    formatShopAmount({ amount: 16, unit: 'TBSP' }),
+    formatShopAmount({ amount: 900, unit: 'G' }),
+  ],
+  ['2 lb 8 oz', '2.1 kg', '1 cup', '900 g'],
+  'the shopping list steps a summed amount up too',
+);
+
 console.log('pinch units: ok');

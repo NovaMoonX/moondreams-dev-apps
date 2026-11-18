@@ -35,7 +35,7 @@ import {
   getLocalTodayDate,
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
 import { getShopSection, isUsuallyAtHome } from '@apps/pinch/utils/shopping';
@@ -294,7 +294,7 @@ export const formatKitchenTotal = (
   total: Pick<AmountTotal, 'amount' | 'unit'>,
   isConverted = false,
 ) => {
-  const text = formatKitchenAmount(total.amount, total.unit);
+  const text = formatReadableAmount(total.amount, total.unit);
   const bare = text.replace(/^about /, '');
   const isAbout = isConverted || bare !== text;
   return `${isAbout ? 'about ' : ''}${total.unit === 'EACH' ? `${bare} each` : bare}`;
