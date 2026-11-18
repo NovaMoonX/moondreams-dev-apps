@@ -452,10 +452,16 @@ const readPicks = (text: string, question: SpokenQuestion): string[] | null => {
     }
     return null;
   };
-  const resolveWhole = (raw: string) =>
-    matchLabel(raw) ??
-    readPosition(stripFiller(toWords(raw))) ??
-    matchLabel(stripFiller(toWords(raw)));
+  const resolveWhole = (raw: string) => {
+    const words = stripFiller(toWords(raw));
+    const pointed = words.replace(/ (?:one|ones)$/, '');
+    return (
+      matchLabel(raw) ??
+      readPosition(words) ??
+      matchLabel(words) ??
+      (pointed !== words && pointed !== '' ? matchLabel(pointed) : null)
+    );
+  };
   const whole = resolveWhole(text);
   if (whole) return whole;
   if (question.shape === 'pickOne') return null;

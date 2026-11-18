@@ -5,6 +5,7 @@ import { readRestDay } from '@apps/helm/engine/restDay';
 import {
   findOpenings,
   type BusyBlock,
+  type FinishedTask,
   type PlannerInput,
   type PlannerTask,
 } from '@apps/helm/engine/planner';
@@ -41,6 +42,12 @@ export interface PlanSources {
   planDays: Record<string, PlanDay>;
   /** Each placed project's place number in what matters most. */
   projectPlaces: Record<string, number>;
+  /** The weekday day-parts the person accepted leaving empty. */
+  avoidBuckets?: PlannerInput['avoidBuckets'];
+  /** Each day's aim task ids still wanted, in the person's order; planned first. */
+  aimTaskIds?: Record<string, string[]>;
+  /** Finished tasks a length is guessed from. */
+  finishedTasks?: FinishedTask[];
 }
 
 export const isLiveCalendar = (grant: ConnectionGrantWithId) =>
@@ -73,6 +80,7 @@ export const toPlannerTask = (
   projectPlaces: Record<string, number> = {},
 ): PlannerTask => ({
   id: task.id,
+  isCare: task.privateMark === 'care',
   projectPlace: task.projectId ? (projectPlaces[task.projectId] ?? null) : null,
   title: task.title,
   due: task.due,
@@ -81,6 +89,9 @@ export const toPlannerTask = (
   durationMinutes: task.durationMinutes,
   energy: task.energy,
   placeIds: task.placeIds,
+  projectId: task.projectId,
+  context: task.context,
+  effort: task.effort,
 });
 
 // A stay or rental runs for days and says where the person is, not time it takes.
@@ -150,6 +161,10 @@ export function buildPlanInput(
   sources: PlanSources,
   dayKey: string,
   slots: Record<string, PlanSlot> = sources.planDays[dayKey]?.slots ?? {},
+  aims: { taskIds: string[]; finishedTasks: FinishedTask[] } = {
+    taskIds: sources.aimTaskIds?.[dayKey] ?? [],
+    finishedTasks: sources.finishedTasks ?? [],
+  },
 ) {
   const { profile, timeZone, now, todayKey, grants, tasks, planDays, places } =
     sources;
@@ -208,6 +223,9 @@ export function buildPlanInput(
         : null,
     busy,
     slots,
+    avoidBuckets: sources.avoidBuckets ?? [],
+    aimTaskIds: aims.taskIds,
+    finishedTasks: aims.finishedTasks,
     tasks: tasks
       .filter((task) => !task.isUnreadable && !taken.has(task.id))
       .map((task) => toPlannerTask(task, sources.projectPlaces)),

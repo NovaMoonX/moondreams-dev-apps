@@ -5,12 +5,15 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Bell,
   Bot,
+  Drama,
   Eye,
   History,
+  Lightbulb,
   Link2,
   MapPin,
   MessagesSquare,
   Mic,
+  Search,
   Sparkles,
   Sun,
   Sunrise,
@@ -32,6 +35,7 @@ import GatesClosedNote from '@/components/GatesClosedNote';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import NewBadge from '@/components/NewBadge';
 import SettingsRow from '@/components/SettingsRow';
+import PersonalityScreen from '@apps/helm/components/personality/PersonalityScreen';
 import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
@@ -40,6 +44,8 @@ import KeptQuietScreen from '@apps/helm/components/privacy/KeptQuietScreen';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import PhoneLocationSheet from '@apps/helm/components/settings/PhoneLocationSheet';
 import HabitRemindersList from '@apps/helm/components/settings/HabitRemindersList';
+import ResearchDepthSheet from '@apps/helm/components/settings/ResearchDepthSheet';
+import LearningSheet from '@apps/helm/components/settings/LearningSheet';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
@@ -50,10 +56,11 @@ import { useNow } from '@/hooks/useNow';
 import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
 import { selectHasOutsideSource } from '@apps/helm/store/selectors/captureSelectors';
-import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
+import { useAssistantPersonality } from '@apps/helm/hooks/useAssistantPersonality';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { describeTraits } from '@apps/helm/engine/personality';
 import { formatClockTime } from '@/utils/formatUtils';
 import { setDailyFreshOn } from '@apps/helm/store/actions/settingsActions';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
@@ -115,13 +122,16 @@ function SettingsScreen({
 }: SettingsScreenProps) {
   const { user, logOut } = useAuth();
   const assistant = useAssistantName();
-  const tone = useAssistantTone();
+  const traits = describeTraits(useAssistantPersonality().traits);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [isPersonalityOpen, setIsPersonalityOpen] = useState(false);
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isQuietOpen, setIsQuietOpen] = useState(false);
   const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
   const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
+  const [isLearningOpen, setIsLearningOpen] = useState(false);
+  const [isResearchOpen, setIsResearchOpen] = useState(false);
   const [isRemindersOpen, setIsRemindersOpen] = useState(false);
   const remindingCount = useAppSelector((state) =>
     countHabitsReminding(state.helm.habits.items),
@@ -165,12 +175,15 @@ function SettingsScreen({
           <SettingsRow
             icon={<Sparkles className='size-5' aria-hidden='true' />}
             title={HELM_COPY.assistantRow}
-            description={HELM_COPY.assistantLine(
-              assistant,
-              ASSISTANT_TONES.find((option) => option.value === tone)?.label ??
-                '',
-            )}
+            description={assistant}
             onClick={() => setIsAssistantOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<Drama className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.personalityRow(assistant)}
+            description={traits}
+            onClick={() => setIsPersonalityOpen(true)}
             hasChevron
           />
           <SettingsRow
@@ -207,6 +220,30 @@ function SettingsScreen({
             title={HELM_COPY.habitRemindersTitle}
             description={HELM_COPY.habitRemindersOnFor(remindingCount)}
             onClick={() => setIsRemindersOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<Lightbulb className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.learningTitle}
+            description={
+              profile?.isLearningOn === false
+                ? HELM_COPY.learningRowOff
+                : HELM_COPY.learningRowOn
+            }
+            onClick={() => setIsLearningOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<Search className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.researchSettingsTitle}
+            description={
+              profile?.researchDepth === 'light'
+                ? HELM_COPY.researchDepthAlwaysQuick
+                : profile?.researchDepth === 'thorough'
+                  ? HELM_COPY.researchDepthAlwaysThorough
+                  : HELM_COPY.researchSettingsAsk
+            }
+            onClick={() => setIsResearchOpen(true)}
             hasChevron
           />
         </SettingsSection>
@@ -331,6 +368,9 @@ function SettingsScreen({
         isOpen={isAssistantOpen}
         onClose={() => setIsAssistantOpen(false)}
       />
+      {isPersonalityOpen && (
+        <PersonalityScreen onClose={() => setIsPersonalityOpen(false)} />
+      )}
       <PhoneLocationSheet
         isOpen={isLocationOpen}
         onClose={() => setIsLocationOpen(false)}
@@ -341,6 +381,14 @@ function SettingsScreen({
         onOpenHabit={onOpenHabit}
       />
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
+      <LearningSheet
+        isOpen={isLearningOpen}
+        onClose={() => setIsLearningOpen(false)}
+      />
+      <ResearchDepthSheet
+        isOpen={isResearchOpen}
+        onClose={() => setIsResearchOpen(false)}
+      />
       <VoiceSettings
         isOpen={isVoiceOpen}
         onClose={() => {

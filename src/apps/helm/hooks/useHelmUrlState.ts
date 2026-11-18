@@ -35,6 +35,7 @@ const URL_VIEWS = [
   'run',
   'howNomosSeesYou',
   'importance',
+  'scheduled',
   'search',
 ] as const satisfies readonly HelmView[];
 

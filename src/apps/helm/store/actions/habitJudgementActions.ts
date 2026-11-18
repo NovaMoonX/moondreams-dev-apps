@@ -59,7 +59,7 @@ export const readJudgementWork = (habits: OpenHabit[], todayKey: string) => {
   };
 };
 
-const toLifeDay = (data: Record<string, unknown>): LifeDay => {
+export const toLifeDay = (data: Record<string, unknown>): LifeDay => {
   const entries = (data.entries ?? {}) as Record<
     string,
     Record<string, unknown>

@@ -13,12 +13,30 @@ import {
 } from './contactPoints.js';
 import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
 import { KIN_KINDS } from './kinKinds.js';
+import {
+  readObservations,
+  readTurnIntent,
+  withoutWatchingPhrases,
+  type ObservationRead,
+  type TurnIntent,
+} from './actNow.js';
 import { ASK_WORDS } from './summaries.js';
 import { readHabitCommands, type HabitDrop } from './readHabitCommands.js';
+import {
+  readScheduledCommands,
+  type ScheduleCommand,
+  type ScheduleDrop,
+} from './readScheduledCommands.js';
 import {
   readImportanceCommands,
   type ImportanceDrop,
 } from './readImportanceCommands.js';
+import { readSeenAsCommands, type SeenAsDrop } from './readSeenAsCommands.js';
+import {
+  readPersonalityCommands,
+  type PersonalityDrop,
+} from './readPersonalityCommands.js';
+import type { Personality } from './personality.js';
 import {
   hasProcedureCue,
   hasProcedureReviseCue,
@@ -76,6 +94,9 @@ import {
   UNDO_QUOTE_CAP,
   UNDO_REASONS,
   type UndoOffer,
+  type LearnAsk,
+  type LearnCommand,
+  type ResearchCommand,
   type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
@@ -125,7 +146,13 @@ import {
   type SetQuietCommand,
   MAX_QUIET_COMMANDS,
   type TaskDue,
+  type MeetsHow,
+  MEETS_HOWS,
+  MAX_TASK_MINUTES,
+  TASK_EFFORTS,
   type HabitCommand,
+  type SeenAsCommand,
+  type SetPersonalityCommand,
   type SetImportanceCommand,
   type ConnectionCommand,
 } from './commands.js';
@@ -137,6 +164,14 @@ import {
   isWorthTidying,
 } from '../goalWhy.js';
 import { readConnectionCommands } from './readConnectionCommands.js';
+import { readResearchCommands } from './readResearchCommands.js';
+import { readOfferResearch } from './readOfferResearch.js';
+import { readLearnCommands, refuseDoubledGoals } from './readLearnCommands.js';
+import {
+  readOfferQuestions,
+  readQuestionList,
+  readQuestionsMeeting,
+} from './readQuestionTask.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
 
@@ -189,6 +224,10 @@ const KNOWN_KEYS = new Set([
   'keyDateKind',
   'keyDateLabel',
   'dateSpanId',
+  'startsSpanId',
+  'timeSpanId',
+  'fromSpanId',
+  'toSpanId',
   'comesBack',
   'projectRef',
   'projectEmoji',
@@ -777,6 +816,7 @@ const readProjects = (
     ...read
       .filter((command) => command.kind === 'addMilestone')
       .slice(0, MAX_MILESTONES_PER_TURN),
+    ...readOfferResearch(items),
   ];
 };
 
@@ -1190,6 +1230,21 @@ const isQuotedPrivateChange = (
   );
 };
 
+/** A format the model named; undefined when it named none, so an update leaves the field as it is. */
+const readMeetsHow = (value: unknown): MeetsHow | undefined =>
+  MEETS_HOWS.find((known) => known === value);
+
+const readEffort = (value: unknown) =>
+  TASK_EFFORTS.find((known) => known === value) ?? null;
+
+const readMinutes = (value: unknown) =>
+  typeof value === 'number' &&
+  Number.isInteger(value) &&
+  value > 0 &&
+  value <= MAX_TASK_MINUTES
+    ? value
+    : null;
+
 export type QuietDrop =
   | 'quiet-guess-release'
   | 'quiet-unquoted'
@@ -1295,6 +1350,8 @@ const readCommand = (
   aliases: AliasBook,
   entities: Entities,
   captureText: string,
+  synced: SyncedBook | undefined,
+  now: number,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (
@@ -1309,6 +1366,7 @@ const readCommand = (
     kind === 'createProject' ||
     kind === 'setProjectRole' ||
     kind === 'addMilestone' ||
+    kind === 'offerResearch' ||
     kind === 'createNote' ||
     kind === 'setQuiet'
   ) {
@@ -1342,6 +1400,14 @@ const readCommand = (
       isUrgent: isUrgent ?? reading.isUrgent,
       ...readLinks(item, title, reading, entities),
       projectRef: toText(item.projectRef, PROJECT_NAME_CAP),
+      questions: readQuestionList(item.questions),
+      meeting: readQuestionsMeeting(item.aboutAlias, synced, now),
+      ...(readMeetsHow(item.meetsHow) && {
+        meetsHow: readMeetsHow(item.meetsHow),
+      }),
+      effort: readEffort(item.effort),
+      durationMinutes: readMinutes(item.durationMinutes),
+      ...(item.isAim === true && { isAim: true }),
     };
   }
 
@@ -1352,8 +1418,28 @@ const readCommand = (
   const hasDue = item.dueSpanId !== null && item.dueSpanId !== undefined;
   const links = readLinks(item, title, reading, entities);
   const hasLinks = links.whoRefs.length > 0 || links.placeRefs.length > 0;
-  if (!title && !hasDue && isUrgent === null && !hasLinks) return null;
-  return { kind, taskId, title, due, hasDue, isUrgent, ...links };
+  const meetsHow = readMeetsHow(item.meetsHow);
+  const isAim = item.isAim === true;
+  if (
+    !title &&
+    !hasDue &&
+    isUrgent === null &&
+    !hasLinks &&
+    meetsHow === undefined &&
+    !isAim
+  )
+    return null;
+  return {
+    kind,
+    taskId,
+    title,
+    due,
+    hasDue,
+    isUrgent,
+    ...links,
+    ...(meetsHow !== undefined && { meetsHow }),
+    ...(isAim && { isAim }),
+  };
 };
 
 export type TopicDrop =
@@ -2318,8 +2404,12 @@ export function normalizeNomosReply(
     runSteps?: AliasBook;
     /** The person's habits, by alias (h1, h2, …). */
     habits?: AliasBook;
+    /** The person's scheduled actions, by alias (sa1, sa2, …). */
+    scheduledActions?: AliasBook;
     /** The person's projects and goals, by alias (p1, p2, …). */
     projects?: AliasBook;
+    /** The saved learn-later questions, by alias (r1, r2, …). */
+    learnLater?: AliasBook;
     /** Each habit's real name by id, for the check that words in the turn name it. */
     habitNames?: Map<string, string>;
     /** The earlier turns the model may offer to take back, by handle, and how many lines each has. */
@@ -2329,6 +2419,11 @@ export function normalizeNomosReply(
     captureText?: string;
     /** What names each date in the context (who, label, kind), for the check that a removal is still asked once closing phrases are taken out. */
     keyDateNames?: Map<string, string[]>;
+    /** The lines of how the assistant sees the person, by alias (sy1, sy2, …), and the words of each by id. */
+    seenAs?: AliasBook;
+    seenAsWords?: Map<string, string>;
+    /** The personality the person has now, for the cap on traits. */
+    personality?: Personality;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -2337,8 +2432,12 @@ export function normalizeNomosReply(
     /** The photos and files the turn sent, by alias. */
     attachments?: { alias: string; kind: string }[];
     previousTurn?: { text: string; heard: string[] };
+    /** Missing means on. */
+    isLearningOn?: boolean;
   },
 ): {
+  intent: TurnIntent;
+  observations: ObservationRead[];
   media: MediaDecision[];
   mediaDropped: MediaDrop[];
   commands: NomosCommand[];
@@ -2362,8 +2461,17 @@ export function normalizeNomosReply(
   runDropped: RunDrop[];
   habitCommands: HabitCommand[];
   habitDropped: HabitDrop[];
+  scheduleCommands: ScheduleCommand[];
+  scheduleDropped: ScheduleDrop[];
+  researchCommands: ResearchCommand[];
+  learnCommands: LearnCommand[];
+  learnAsks: LearnAsk[];
   importanceCommands: SetImportanceCommand[];
   importanceDropped: ImportanceDrop[];
+  seenAsCommands: SeenAsCommand[];
+  seenAsDropped: SeenAsDrop[];
+  personalityCommands: SetPersonalityCommand[];
+  personalityDropped: PersonalityDrop[];
   soundsLike: NoteSoundsLikeCommand[];
   contactPoints: AddContactPointCommand[];
   connectionCommands: ConnectionCommand[];
@@ -2386,7 +2494,10 @@ export function normalizeNomosReply(
   const made = new Set((context.alreadyMade ?? []).map(toKey));
   const items = raw.commands.filter(isRecord);
   items.forEach(assertNoDateKeys);
-  const answer =
+  const isLearningOn = context.isLearningOn !== false;
+  const readAnswerText = (text: string | null) =>
+    isLearningOn ? text : withoutWatchingPhrases(text);
+  const answerRead =
     items
       .filter((item) => item.kind === 'answer')
       .flatMap((item) => {
@@ -2402,6 +2513,13 @@ export function normalizeNomosReply(
         );
         return read ? [read] : [];
       })[0] ?? null;
+  const answer = answerRead
+    ? {
+        ...answerRead,
+        generalText: readAnswerText(answerRead.generalText),
+        generalSpoken: readAnswerText(answerRead.generalSpoken),
+      }
+    : null;
   const remember = items
     .filter((item) => item.kind === 'remember')
     .map((item) => readRemember(item, context.synced, context.quotes));
@@ -2488,12 +2606,31 @@ export function normalizeNomosReply(
       now: context.now,
     },
   );
+  const { commands: scheduleCommands, dropped: scheduleDropped } =
+    readScheduledCommands(items, {
+      actions: context.scheduledActions,
+      reading: context.reading,
+      captureText: context.captureText,
+      timeZone: context.timeZone,
+    });
+  const researchCommands = readResearchCommands(items);
   const { commands: importanceCommands, dropped: importanceDropped } =
     readImportanceCommands(items, {
       projects: context.projects,
       habits: context.habits,
       reading: context.reading,
       captureText: context.captureText,
+    });
+  const { commands: seenAsCommands, dropped: seenAsDropped } =
+    readSeenAsCommands(items, {
+      lines: context.seenAs,
+      lineWords: context.seenAsWords,
+      captureText: context.captureText,
+    });
+  const { commands: personalityCommands, dropped: personalityDropped } =
+    readPersonalityCommands(items, {
+      captureText: context.captureText,
+      current: context.personality,
     });
   const soundsLike = readSoundsLike(
     items,
@@ -2522,12 +2659,33 @@ export function normalizeNomosReply(
     context.undoUnitCounts ?? new Map(),
     context.captureText ?? '',
   );
-  const projects = readProjects(
+  const learnFound = readLearnCommands(
     items,
-    entities,
-    context.reading,
-    context.timeZone ?? 'UTC',
+    context.learnLater ?? { add: () => '', idOf: () => null },
     context.captureText ?? '',
+  );
+  const learnRead = {
+    ...learnFound,
+    commands: [
+      ...learnFound.commands,
+      ...readOfferQuestions(items, {
+        quotes: context.quotes,
+        synced: context.synced,
+        mentions: entities.mentions,
+        whoRefs: entities.whoRefs,
+        now: context.now ?? Date.now(),
+      }),
+    ],
+  };
+  const { learn, projects } = refuseDoubledGoals(
+    learnRead,
+    readProjects(
+      items,
+      entities,
+      context.reading,
+      context.timeZone ?? 'UTC',
+      context.captureText ?? '',
+    ),
   );
   const { asks, dropped: askDropped } = readAsks(
     items,
@@ -2551,6 +2709,8 @@ export function normalizeNomosReply(
       context.aliases,
       entities,
       context.captureText ?? '',
+      context.synced,
+      context.now ?? Date.now(),
     );
     return command ? [command] : [];
   });
@@ -2600,11 +2760,26 @@ export function normalizeNomosReply(
     ),
   });
   return {
+    intent: readTurnIntent(raw.intent, answer !== null),
+    observations: readObservations(raw.observations, {
+      isLearningOn,
+      turnText: context.captureText ?? '',
+      resolve: (alias) => {
+        const habitId = context.habits?.idOf(alias);
+        if (habitId) return { collection: 'habits', id: habitId };
+        const projectId = context.projects?.idOf(alias);
+        if (projectId) return { collection: 'projects', id: projectId };
+        const taskId = context.aliases.idOf(alias);
+        return taskId ? { collection: 'tasks', id: taskId } : null;
+      },
+    }),
     media,
     mediaDropped,
     commands: kept,
     hasMore: fresh.length > MAX_COMMANDS,
-    replyLine: readReplyLine(raw.replyLine, context.captureText ?? ''),
+    replyLine: readAnswerText(
+      readReplyLine(raw.replyLine, context.captureText ?? ''),
+    ),
     answer,
     remember,
     noteFacts,
@@ -2623,8 +2798,17 @@ export function normalizeNomosReply(
     runDropped,
     habitCommands,
     habitDropped,
+    scheduleCommands,
+    scheduleDropped,
+    researchCommands,
+    learnCommands: learn.commands,
+    learnAsks: learn.asks,
     importanceCommands,
     importanceDropped,
+    seenAsCommands,
+    seenAsDropped,
+    personalityCommands,
+    personalityDropped,
     soundsLike,
     contactPoints,
     connectionCommands,

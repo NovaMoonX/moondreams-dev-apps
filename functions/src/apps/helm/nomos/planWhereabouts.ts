@@ -83,6 +83,8 @@ const toAwaySpan = (value: unknown): AwaySpanLike | null => {
     label: typeof value.label === 'string' ? value.label : null,
     source: value.source === 'page' ? 'page' : 'said',
     zoneOffered: value.zoneOffered === true,
+    pausesScheduled:
+      typeof value.pausesScheduled === 'boolean' ? value.pausesScheduled : null,
   };
 };
 
@@ -317,6 +319,7 @@ export function planWhereabouts(input: {
       label: command.label,
       source: 'said',
       zoneOffered: false,
+      pausesScheduled: null,
     };
     const offer =
       command.whoId === null

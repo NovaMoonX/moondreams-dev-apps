@@ -14,6 +14,7 @@ import { endReaderGrants } from '../../connections/endReaderGrants.js';
 import { READER_SINKS } from '../../connections/registry.js';
 import { GOOGLE_SECRETS } from '../../connections/tokens.js';
 import { dropBoxKeyPath, wrappedKeyPath } from './helmKey.js';
+import { removeFromOpenRuns } from './reflection/reflectionRuns.js';
 import { deleteReminderQueue } from './reminders/reminderQueue.js';
 
 if (getApps().length === 0) {
@@ -111,6 +112,10 @@ export const deleteHelmData = onCall(
       const grants = await endReaderGrants({ uid, readerAppId: 'helm' });
       // The queue lies outside the person's tree, so it goes first, with the reminders it still holds.
       await deleteReminderQueue(firestore, uid);
+      await firestore.doc(`apps/helm/actionQueue/${uid}`).delete();
+      await firestore.doc(`apps/helm/dayQueue/${uid}`).delete();
+      // A nightly request already sent holds the person's words until its answer is read, so its entry goes first and the answer finds nothing to land on.
+      await removeFromOpenRuns(firestore, uid);
       const collections = await deleteUserCollections(firestore, uid);
       const files = await deleteMedia(uid);
       const usage = await deleteTree(

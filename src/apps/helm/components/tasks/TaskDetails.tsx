@@ -201,8 +201,14 @@ interface WhenRowProps {
 }
 
 export function WhenRow({ editing, now }: WhenRowProps) {
-  const { task, timeZone, saveFields } = editing;
+  const { task, timeZone, saveFields: saveAny } = editing;
   const { due } = task;
+  const saveFields = (fields: { due: OpenTask['due'] }) =>
+    saveAny(
+      fields.due?.kind === 'moment' || task.meets === null
+        ? fields
+        : { ...fields, meets: null },
+    );
   const date = due ? toDateInputValue(getDueDay(due, timeZone)) : '';
   const time = due?.kind === 'moment' ? toZonedTime(due.at, timeZone) : '';
 
