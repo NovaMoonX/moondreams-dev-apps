@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 
 import { Button, Label } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 export interface AddFieldChip {
   key: string;
   label: string;
   icon: ReactNode;
+  /** Takes a whole row, for a chip whose label would wrap at half width on a narrow phone. */
+  isWide?: boolean;
 }
 
 interface AddFieldChipsProps {
@@ -36,7 +39,10 @@ function AddFieldChips({
             type='button'
             variant='tertiary'
             size='sm'
-            className="border-border relative h-auto min-h-9 justify-start gap-2 rounded-full border px-3 py-1.5 text-sm font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
+            className={join(
+              "border-border relative h-auto min-h-9 justify-start gap-2 rounded-full border px-3 py-1.5 text-sm font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']",
+              chip.isWide && 'col-span-2',
+            )}
             onClick={() => onAdd(chip.key)}
           >
             <span className='text-muted-foreground'>{chip.icon}</span>
