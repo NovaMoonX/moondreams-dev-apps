@@ -1,3 +1,7 @@
+import {
+  getStepSections,
+  toStoredStepSections,
+} from '@apps/pinch/utils/stepSections';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import {
   MAX_SHARED_MEAL_LINES,
@@ -168,6 +172,7 @@ export function buildSharedRecipe(
       toSharedLine(line, ingredientsById),
     ),
     steps: [...recipe.steps],
+    stepSections: toStoredStepSections(recipe.steps, getStepSections(recipe)),
     care: getRecipeCare(recipe),
     links: toSharedLinks(recipe.links),
     tips: includes.tips
