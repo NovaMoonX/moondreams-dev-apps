@@ -6,6 +6,7 @@ import DateInput from '@/components/DateInput';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RepeatPicker from '@/components/RepeatPicker';
+import SayWhenField from '@/components/SayWhenField';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
@@ -29,6 +30,7 @@ import {
   toActionState,
 } from '@apps/helm/store/actions/scheduledActionWrites';
 import type { OpenScheduledAction } from '@apps/helm/types';
+import { readScheduleWords } from '@apps/helm/utils/sayWhen';
 import {
   formatClockWords,
   formatRunDay,
@@ -290,8 +292,40 @@ function ScheduledForm({
     },
   ];
 
+  const appliesDay = isCreate || isOne;
+  const appliesRule = !isOne;
+  const sayWhenKey = (
+    nextTime: string,
+    nextDay: string,
+    nextRule: typeof rule,
+  ) => JSON.stringify([nextTime, nextDay, nextRule]);
+  const sayWhen = (text: string) => {
+    const read = readScheduleWords(
+      text,
+      { now: Date.now(), zone },
+      { appliesDay, appliesRule },
+    );
+    if (!read) return null;
+    const { schedule, words } = read;
+    const nextTime = schedule.time ?? time;
+    const nextDay = appliesDay && schedule.startsOn ? schedule.startsOn : day;
+    const nextRule = appliesRule && schedule.rule ? schedule.rule : rule;
+    setTime(nextTime);
+    setDay(nextDay);
+    setRule(nextRule);
+    return { words, key: sayWhenKey(nextTime, nextDay, nextRule) };
+  };
+
   const form = (
     <div className='space-y-4'>
+      <SayWhenField
+        label={HELM_COPY.sayWhenLabel}
+        placeholder={HELM_COPY.sayWhenScheduledPlaceholder}
+        unreadLine={HELM_COPY.sayWhenUnread}
+        className='helm-field'
+        onRead={sayWhen}
+        currentKey={sayWhenKey(time, day, rule)}
+      />
       {runKey !== null && (
         <RadioRows rows={rows} value={scope} onChange={setScope} />
       )}
