@@ -57,6 +57,15 @@ const refuse = (status: number, error: string): SpeechRequest => ({
   error,
 });
 
+export const isServedOrigin = (
+  origin: string | undefined,
+  allowedOrigins: readonly (string | RegExp)[],
+) =>
+  origin !== undefined &&
+  allowedOrigins.some((entry) =>
+    typeof entry === 'string' ? entry === origin : entry.test(origin),
+  );
+
 /** The method, origin and body checks; the person's tokens are checked by the handler. */
 export function readSpeechRequest({
   method,
@@ -70,12 +79,7 @@ export function readSpeechRequest({
   allowedOrigins: readonly (string | RegExp)[];
 }): SpeechRequest {
   if (method !== 'POST') return refuse(405, 'method');
-  const isAllowed =
-    origin !== undefined &&
-    allowedOrigins.some((entry) =>
-      typeof entry === 'string' ? entry === origin : entry.test(origin),
-    );
-  if (!isAllowed) return refuse(403, 'origin');
+  if (!isServedOrigin(origin, allowedOrigins)) return refuse(403, 'origin');
 
   const { appId, text, priority, timeZone, voiceId, speed, delivery } = (body ??
     {}) as Record<string, unknown>;
@@ -208,6 +212,9 @@ export const streamSpeech = onRequest(
       return fail(request.status, request.error);
     }
     if (isWarm && req.method !== 'POST') return fail(405, 'method');
+    if (isWarm && !isServedOrigin(req.headers.origin, SERVED_ORIGINS)) {
+      return fail(403, 'origin');
+    }
 
     const idToken = bearerOf(req.headers.authorization);
     const uid = await (idToken === null

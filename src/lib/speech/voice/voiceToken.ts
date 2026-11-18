@@ -138,6 +138,8 @@ export const createVoiceTokenSource = ({
         closed: [],
         warm: true,
       }).catch((error: unknown) => {
+        const { code } = (error ?? {}) as { code?: unknown };
+        if (code === 'functions/unauthenticated') return;
         recordSpeechEvent(
           `Listening warm-up failed: ${toRequestFailure(error).detail}`,
         );

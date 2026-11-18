@@ -108,6 +108,15 @@ const stopHissLater = () => {
 export const wakeAudioOutput = (context: AudioContext) => {
   const now = Date.now();
   dropLapsedHolds(now);
+  // A suspended or interrupted context (a call, a route change) lets the speakers sleep under a hiss that isn't playing.
+  if (output.hiss !== null && context.state !== 'running') {
+    try {
+      output.hiss.stop();
+    } catch {
+      // Already stopped.
+    }
+    output.hiss = null;
+  }
   if (output.hiss === null) {
     try {
       output.hiss = startHiss(context);

@@ -382,6 +382,10 @@ export const createCloudTts = ({
             },
           );
         });
+      // Sound can be scheduled and still be waiting on waking speakers, so "has sound" never waits for it to be heard.
+      const hasSound = () =>
+        state.isPlaying ||
+        sinks.some((sink) => sink.getTiming().scheduledMs > 0);
       const markSounding = () => {
         state.isPlaying = true;
         live.isSounding = true;
@@ -430,7 +434,7 @@ export const createCloudTts = ({
         try {
           await pump();
         } catch (error) {
-          const wasPlaying = state.isPlaying;
+          const wasPlaying = hasSound();
           sink.end();
           if (!wasPlaying) throw error;
           if (!signal.aborted) {
@@ -444,7 +448,7 @@ export const createCloudTts = ({
           }
         }
         sink.end();
-        if (!state.isPlaying && !signal.aborted) {
+        if (!hasSound() && !signal.aborted) {
           throw new Error('The cloud voice sent no audio');
         }
         // A suspended context freezes its clock: wait while the audio still advances, give up once it stalls.
@@ -528,7 +532,7 @@ export const createCloudTts = ({
         const pcm = parsePcmFormat(answer.contentType);
         if (pcm !== null && !first.done) {
           await streamPcm(pcm, reader, first.value);
-          if (!state.isPlaying) return 'aborted';
+          if (!hasSound()) return 'aborted';
           return state.isCut ? 'cut' : 'played';
         }
         const bodyLimitMs =
@@ -555,7 +559,7 @@ export const createCloudTts = ({
         return 'played';
       } catch (error) {
         if (signal.aborted) return 'aborted';
-        if (state.isPlaying) {
+        if (hasSound()) {
           fail(
             'the voice stopped partway',
             'audio playback',

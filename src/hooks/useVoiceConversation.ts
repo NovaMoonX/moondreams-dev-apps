@@ -208,6 +208,7 @@ const END_PHRASE_HOLD_MS = 900;
 const BARGE_CONFIRM_MS = 1500;
 // A server left idle about 15 minutes starts cold (2 to 6 s), so it is woken on arrival and kept warm while the screen shows.
 const WARM_EVERY_MS = 10 * 60_000;
+const WARM_SLACK_MS = 5000;
 const TAP_CONFIG = { lockMs: 0 };
 const BLOCKED: SttErrorCode[] = ['denied', 'service', 'no-microphone'];
 
@@ -398,7 +399,7 @@ export function useVoiceConversation({
     if (warmSpeech === null && warmToken === null) return;
     const warmed = { at: 0 };
     const warm = () => {
-      const isDue = Date.now() - warmed.at >= WARM_EVERY_MS;
+      const isDue = Date.now() - warmed.at >= WARM_EVERY_MS - WARM_SLACK_MS;
       if (
         !isDue ||
         document.visibilityState !== 'visible' ||
