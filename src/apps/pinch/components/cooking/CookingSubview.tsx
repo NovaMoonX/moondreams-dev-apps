@@ -63,7 +63,9 @@ import {
 import {
   COOK_CHOICE_MS,
   KITCHEN_TIMER_NAME,
+  MAX_COOK_SERVINGS,
   MAX_COOK_TIMERS,
+  MIN_COOK_SERVINGS,
 } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookCapture } from '@apps/pinch/hooks/useCookCapture';
@@ -128,6 +130,7 @@ import {
   getPlateNext,
   getPlateStart,
   getReadyStepTimers,
+  getSpokenServings,
   getStepName,
   getTimerNext,
   getTimerRows,
@@ -166,6 +169,7 @@ import { getLineKey, getLineName } from '@apps/pinch/utils/freeLines';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
+import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeLines } from '@apps/pinch/utils/shopping';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
@@ -1670,6 +1674,15 @@ function CookingSession({
       "Finish is on the last step. Tap it yourself when you're done.",
     );
   };
+  const getVoiceServings = (recipeId: string) => {
+    const entry = entries.find((candidate) => candidate.recipe.id === recipeId);
+    return (
+      plate[recipeId]?.servings ??
+      (entry
+        ? getCookStartServings(entry.recipe.servings, entry.plannedServings)
+        : voiceStep.recipe.servings)
+    );
+  };
   const getVoiceRows = () =>
     voiceStep.recipe.id === recipe.id
       ? rows
@@ -2367,6 +2380,52 @@ function CookingSession({
         entries[(at + direction + entries.length) % entries.length].recipe;
       showDish(target.id);
       return done(`Showing ${target.title}`, '');
+    },
+    setServings: (change) => {
+      if (isFinishShown) {
+        return refuse(
+          'Set Servings made on screen.',
+          'Cooking is finished. Set the servings made on the screen.',
+        );
+      }
+      const target = voiceStep.recipe;
+      const current = getVoiceServings(target.id);
+      const next = getSpokenServings(current, change);
+      if (next < MIN_COOK_SERVINGS) {
+        return refuse(
+          'Half a serving is the least.',
+          'Half a serving is the least I can make it.',
+        );
+      }
+      if (next > MAX_COOK_SERVINGS) {
+        return refuse(`${MAX_COOK_SERVINGS} servings is the most.`);
+      }
+      const lead = isPlate ? `${target.title}: ` : '';
+      if (next === current) {
+        return done(
+          `${lead}Already ${formatServings(next)}`,
+          `${lead}It's already ${formatServings(next)}.`,
+        );
+      }
+      updateRecipe(target.id, { servings: next });
+      const was = `${next > current ? 'up' : 'down'} from ${Math.round(current * 100) / 100}`;
+      return done(
+        `${lead}Now ${formatServings(next)}, ${was}`,
+        `${lead}Okay, ${formatServings(next)}, ${was}. The amounts are updated.`,
+      );
+    },
+    tellServings: () => {
+      const target = voiceStep.recipe;
+      const current = getVoiceServings(target.id);
+      const lead = isPlate ? `${target.title}: ` : '';
+      const written =
+        target.servings > 0 && target.servings !== current
+          ? ` · the recipe makes ${target.servings}`
+          : '';
+      return done(
+        `${lead}Making ${formatServings(current)}${written}`,
+        `${lead}You're making ${formatServings(current)}.${written === '' ? '' : ` The recipe makes ${target.servings}.`}`,
+      );
     },
   });
   const voiceStepMatch =
