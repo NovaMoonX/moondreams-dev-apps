@@ -666,10 +666,16 @@ const syncPeople = async (
   const profiles =
     sellerIds.length === 0
       ? []
-      : await firestore.getAll(
-          ...sellerIds.map((id) => firestore.doc(`users/${id}`)),
-          { fieldMask: ['displayName'] },
-        );
+      : await firestore
+          .getAll(...sellerIds.map((id) => firestore.doc(`users/${id}`)), {
+            fieldMask: ['displayName'],
+          })
+          .catch(() => null);
+  if (profiles === null)
+    return {
+      records: buyers.slice(0, MAX_RECORDS_PER_CATEGORY),
+      isFull: false,
+    };
   const firstNames = new Map(
     profiles.map((profile) => [
       profile.id,
@@ -693,9 +699,13 @@ const syncPeople = async (
           }),
         ];
   });
+  const records = [...sellers, ...buyers];
   return {
-    records: [...sellers, ...buyers].slice(0, MAX_RECORDS_PER_CATEGORY),
-    isFull: snapshot.size < SALE_LIMIT,
+    records: records.slice(0, MAX_RECORDS_PER_CATEGORY),
+    isFull:
+      snapshot.size < SALE_LIMIT &&
+      records.length <= MAX_RECORDS_PER_CATEGORY &&
+      buyerReads.every((read) => read.size < ITEM_LIMIT),
   };
 };
 

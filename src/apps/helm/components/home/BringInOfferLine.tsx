@@ -13,8 +13,9 @@ import {
 } from '@apps/helm/hooks/useBringInOffers';
 import { markBringInTold } from '@apps/helm/store/actions/settingsActions';
 
-/** Apps whose offer this session has already shown, so the line stays until the person leaves even after it is marked told. */
+/** `uid|appId` of each offer this session has already shown, so the line stays until the person leaves even after it is marked told. */
 const shownThisSession = new Set<string>();
+const toSessionKey = (uid: string, appId: string) => `${uid}|${appId}`;
 
 function OfferLine({ offer }: { offer: BringInOffer }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -61,7 +62,7 @@ function BringInOfferLine() {
   const shown = offers.filter(
     (offer) =>
       isProfileLoaded &&
-      (shownThisSession.has(offer.appId) ||
+      (shownThisSession.has(toSessionKey(user?.uid ?? '', offer.appId)) ||
         toldAt?.[offer.appId] === undefined),
   );
 
@@ -72,8 +73,9 @@ function BringInOfferLine() {
       .split('|')
       .filter(Boolean)
       .forEach((appId) => {
-        if (shownThisSession.has(appId)) return;
-        shownThisSession.add(appId);
+        const key = toSessionKey(user.uid, appId);
+        if (shownThisSession.has(key)) return;
+        shownThisSession.add(key);
         markBringInTold(user.uid, appId, Date.now()).catch((error: unknown) =>
           console.error('Helm bring-in offer was not marked told', error),
         );

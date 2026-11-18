@@ -98,12 +98,15 @@ function BringInForm({ onClose, offer }: Omit<BringInSheetProps, 'isOpen'>) {
     );
     setIsWorking(false);
     if (result.kind === 'offline') return setFailure(HELM_COPY.bringInOffline);
+    if (result.kind === 'nothing')
+      return setFailure(HELM_COPY.bringInNothingDone);
     if (result.kind === 'failed' || result.executionId === null)
       return setFailure(HELM_COPY.bringInFailed);
     setDone({
       executionId: result.executionId,
       summary: HELM_COPY.bringInDone(
         HELM_COPY.bringInSummary(result.brought, result.merged),
+        result.skipped,
       ),
       isUndone: false,
     });

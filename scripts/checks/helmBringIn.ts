@@ -148,22 +148,70 @@ assert.equal(
   ).kind,
   'same',
 );
+const PHONE = {
+  id: 'p',
+  value: '555-010-2000',
+  label: 'Work',
+  isPrimary: true,
+};
+
+// A shared phone alone is only a maybe: a clinic's number is every vet's at it.
 const byPhone = only(
   planBringIn(
-    [candidate('clinics', 'Harbor Animal Care', { phone: '(555) 010-2000' })],
-    [
-      who('w1', 'organization', 'The Vet', {
-        phones: [
-          { id: 'p', value: '555-010-2000', label: 'Work', isPrimary: true },
-        ],
-      }),
-    ],
+    [candidate('vets', 'Dr. Patel', { phone: '(555) 010-2000' })],
+    [who('w1', 'person', 'Dr. Lee', { phones: [PHONE] })],
   ),
 );
-assert.equal(byPhone.kind, 'same');
-assert.deepEqual(byPhone.kind === 'same' ? byPhone.adds : [], [
-  'Also called Harbor Animal Care',
-]);
+assert.equal(byPhone.kind, 'maybe');
+// ...and sure only once the names relate too.
+assert.equal(
+  only(
+    planBringIn(
+      [candidate('vets', 'Sam', { phone: '(555) 010-2000' })],
+      [who('w1', 'person', 'Sam Lee', { phones: [PHONE] })],
+    ),
+  ).kind,
+  'same',
+);
+
+// A who is surely matched by one candidate per batch; the next is asked as a maybe, never made again.
+const twoVets = planBringIn(
+  [candidate('vets', 'Dr. Patel'), candidate('vets', 'Dr Patel Jr')],
+  [who('w1', 'person', 'Patel'), who('w2', 'person', 'Patel Jr')],
+);
+assert.equal(
+  twoVets.filter((plan) => plan.kind === 'same').length,
+  new Set(
+    twoVets.flatMap((plan) => (plan.kind === 'same' ? [plan.who.id] : [])),
+  ).size,
+);
+const sharing = planBringIn(
+  [
+    candidate('vets', 'Sam Lee'),
+    candidate('vets', 'Sam', { sourceRefs: ['z'] }),
+  ],
+  [who('w1', 'person', 'Sam Lee')],
+);
+assert.deepEqual(
+  sharing.map((plan) => [plan.kind, plan.kind === 'new' ? null : plan.who.id]),
+  [
+    ['same', 'w1'],
+    ['maybe', 'w1'],
+  ],
+);
+
+// A private who is never named while the page is masked: its candidate is held out.
+const secret = who('w1', 'person', 'Sam Lee', {
+  privacy: 'private',
+} as Partial<OpenWho>);
+assert.deepEqual(
+  planBringIn([candidate('people', 'Sam')], [secret], { isMasked: true }),
+  [],
+);
+assert.equal(
+  only(planBringIn([candidate('people', 'Sam')], [secret])).kind,
+  'maybe',
+);
 
 // What a who already took from a source ref is not offered again.
 assert.deepEqual(

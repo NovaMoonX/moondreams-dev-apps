@@ -8,7 +8,7 @@ Pickups, open sales, your things (On); all things, buyer questions (Off, read wh
 
 ## Bringing them into the circle
 
-Buyers and co-sellers can be brought in as people. A first name beside one fuller name in the circle ("Sam" and "Sam Lee") is asked, never merged unasked; a co-seller who is already there keeps their record and gains the line that they sell with you. See `.claude/rules/helm.md` "Bring in what an app holds".
+Buyers and co-sellers can be brought in as people. Buyers are kept by first name only, so two buyers sharing a first name in one sale are one record (the tradeoff for never sending a surname). A first name beside one fuller name in the circle ("Sam" and "Sam Lee") is asked, never merged unasked; a co-seller who is already there keeps their record and gains the line that they sell with you. See `.claude/rules/helm.md` "Bring in what an app holds".
 
 ## Not shared
 

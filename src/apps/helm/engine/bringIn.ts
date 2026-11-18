@@ -1,4 +1,5 @@
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
+import { isPrivateRead } from '@apps/helm/utils/privacy';
 import { toContactKey } from '@apps/helm/engine/contactPoints';
 import type { OpenWho, SyncedRecord, WhoKind } from '@apps/helm/types';
 
@@ -223,20 +224,27 @@ const planOne = (
       !isRefused(candidate, who),
   );
   const matchers = matchersFor(candidate.source.circleKind);
-  const surely =
-    matchers.sure.match(candidate.name, sameKind) ??
-    sameKind.find((who) => hasPhone(who, candidate.phone)) ??
-    null;
-  if (surely)
+  const named = matchers.sure.match(candidate.name, sameKind);
+  if (named)
     return {
       kind: 'same',
       candidate,
-      who: surely,
-      adds: toMergeAdds(candidate, surely),
+      who: named,
+      adds: toMergeAdds(candidate, named),
     };
   const near = matchers.loose.match(candidate.name, sameKind);
   const parts = sameKind.filter((who) => isPartOf(candidate, who));
-  const maybe = near ?? (parts.length === 1 ? (parts[0] ?? null) : null);
+  const related = near ?? (parts.length === 1 ? (parts[0] ?? null) : null);
+  // A shared phone makes related names sure, but never decides alone: a clinic's number is every vet's at it.
+  if (related && hasPhone(related, candidate.phone))
+    return {
+      kind: 'same',
+      candidate,
+      who: related,
+      adds: toMergeAdds(candidate, related),
+    };
+  const maybe =
+    related ?? sameKind.find((who) => hasPhone(who, candidate.phone)) ?? null;
   return maybe
     ? {
         kind: 'maybe',
@@ -269,10 +277,11 @@ const joinSameNames = (candidates: BringInCandidate[]) =>
       : [...kept, candidate];
   }, []);
 
-/** Sorts what a connection returns against the circle: new, the same as someone (said), or maybe someone (asked). What a who already took from the same source ref is left out. */
+/** Sorts what a connection returns against the circle: new, the same as someone (said), or maybe someone (asked). What a who already took from the same source ref is left out, a who is surely matched by at most one candidate per batch (the next is asked as a maybe, and the merge folds them together), and while the page is masked a candidate that matches a private who is held out, so no private name is shown or counted. */
 export const planBringIn = (
   candidates: BringInCandidate[],
   circle: OpenWho[],
+  options: { isMasked?: boolean } = {},
 ): BringInPlan[] => {
   const brought = new Set(
     circle.flatMap((who) => Array.from(toSourceRefs(who))),
@@ -283,7 +292,15 @@ export const planBringIn = (
     );
     return refs.length === 0 ? [] : [{ ...candidate, sourceRefs: refs }];
   });
-  return joinSameNames(fresh).map((candidate) => planOne(candidate, circle));
+  const taken = new Set<string>();
+  return joinSameNames(fresh).flatMap((candidate): BringInPlan[] => {
+    const plan = planOne(candidate, circle);
+    if (plan.kind === 'new') return [plan];
+    if (options.isMasked && isPrivateRead(plan.who)) return [];
+    if (taken.has(plan.who.id)) return [{ ...plan, kind: 'maybe' }];
+    taken.add(plan.who.id);
+    return [plan];
+  });
 };
 
 const readText = (value: unknown) =>

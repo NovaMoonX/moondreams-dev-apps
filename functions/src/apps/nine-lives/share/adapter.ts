@@ -322,19 +322,21 @@ const syncVets = (firestore: Firestore, uid: string) =>
       clinicRead.clinics.map((clinic) => [clinic.id, clinic.name]),
     );
     return {
-      records: doctorRead.doctors.map((doctor) => {
-        const clinic =
-          doctor.clinicId === null
-            ? undefined
-            : clinicNames.get(doctor.clinicId);
-        return toRecord({
-          sourceRef: `households/${household.id}/doctors/${doctor.id}`,
-          kind: 'person',
-          title: doctor.name,
-          detail: clinic === undefined ? 'Veterinarian' : `Vet at ${clinic}`,
-          placeLabel: clinic ?? null,
-        });
-      }),
+      records: doctorRead.doctors
+        .filter((doctor) => !doctor.name.includes('@'))
+        .map((doctor) => {
+          const clinic =
+            doctor.clinicId === null
+              ? undefined
+              : clinicNames.get(doctor.clinicId);
+          return toRecord({
+            sourceRef: `households/${household.id}/doctors/${doctor.id}`,
+            kind: 'person',
+            title: doctor.name,
+            detail: clinic === undefined ? 'Veterinarian' : `Vet at ${clinic}`,
+            placeLabel: clinic ?? null,
+          });
+        }),
       isFull: clinicRead.isFull && doctorRead.isFull,
     };
   });

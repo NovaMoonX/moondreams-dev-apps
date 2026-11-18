@@ -23,6 +23,7 @@ import type {
   Who,
   WhoSealed,
 } from '@apps/helm/types';
+import { isPrivateRead } from '@apps/helm/utils/privacy';
 
 const MAX_APP_SOURCES = 100;
 
@@ -33,13 +34,23 @@ export interface BringInChoice {
 }
 
 export interface BringInResult {
-  kind: 'done' | 'offline' | 'failed';
+  kind: 'done' | 'offline' | 'failed' | 'nothing';
   executionId: string | null;
   brought: number;
   merged: number;
+  /** Choices left out because the who they merge into was removed or no longer opens. */
+  skipped: number;
 }
 
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
+
+const none = (kind: BringInResult['kind'], skipped = 0): BringInResult => ({
+  kind,
+  executionId: null,
+  brought: 0,
+  merged: 0,
+  skipped,
+});
 
 const toSources = (candidate: BringInCandidate, now: number): AppSource[] =>
   candidate.sourceRefs.map((sourceRef) => ({
@@ -93,40 +104,108 @@ const toNotes = (notes: string | null, line: string | null) =>
       ? line
       : `${notes}\n${line}`;
 
-/** Brings the ticked records in one transaction that re-reads every who it merges into: a new one is made, a match keeps both records' facts (a name that differs becomes an alias, a phone and a line of notes are added, nothing is replaced), and each remembers the app records it came from. One Execution records them all, so Undo takes it back whole or in part. Needs a connection. */
+interface Target {
+  who: Who;
+  words: WhoSealed;
+}
+
+/** Everything the candidates merging into one who add, folded over the same words so no one's addition is lost: a name that differs becomes an alias, a phone and a line of notes are added, nothing is replaced. */
+const foldMerge = (
+  target: Target,
+  candidates: BringInCandidate[],
+  now: number,
+) => {
+  const { who, words } = target;
+  const start = {
+    aliases: words.aliases,
+    phones: readContactPoints('phone', words),
+    notes: words.notes,
+    relation: words.relation,
+    appSources: who.appSources,
+  };
+  const folded = candidates.reduce((state, candidate) => {
+    const known = [words.name, ...state.aliases].map((name) =>
+      toComparable(name),
+    );
+    const key =
+      candidate.phone === null ? null : toContactKey('phone', candidate.phone);
+    const hasPhone =
+      key === null ||
+      state.phones.some((point) => toContactKey('phone', point.value) === key);
+    const seen = new Set(
+      state.appSources.map((one) =>
+        toSourceKey(one.connectorId, one.sourceRef),
+      ),
+    );
+    return {
+      aliases:
+        known.includes(toComparable(candidate.name)) ||
+        state.aliases.length >= MAX_ALIASES
+          ? state.aliases
+          : [...state.aliases, candidate.name],
+      phones:
+        hasPhone || state.phones.length >= MAX_CONTACT_POINTS
+          ? state.phones
+          : [...state.phones, ...toPhone(candidate, state.phones.length === 0)],
+      notes: toNotes(state.notes, candidate.detail),
+      relation:
+        state.relation ??
+        (who.kind === 'person' ? toRelation(candidate) : null),
+      appSources: [
+        ...state.appSources,
+        ...toSources(candidate, now).filter(
+          (one) => !seen.has(toSourceKey(one.connectorId, one.sourceRef)),
+        ),
+      ].slice(-MAX_APP_SOURCES),
+    };
+  }, start);
+  const changed: [string, unknown, unknown][] = [
+    ['sealed.aliases', folded.aliases, start.aliases],
+    ['sealed.phones', folded.phones, start.phones],
+    ['sealed.notes', folded.notes, start.notes],
+    ['sealed.relation', folded.relation, start.relation],
+  ];
+  return {
+    folded,
+    changed: changed.filter(
+      ([, after, before]) => JSON.stringify(after) !== JSON.stringify(before),
+    ),
+  };
+};
+
+/** Brings the ticked records in one transaction that re-reads every who it merges into: a new one is made, matches into one who are folded into a single update that keeps both records' facts, and each remembers the app records it came from. A choice whose who is gone or won't open is skipped, never made again as a duplicate. One Execution records them all, so Undo takes it back whole or in part, and it is private when any who merged into is. Needs a connection. */
 export async function bringIntoCircle(
   uid: string,
   encryption: HelmEncryption,
   choices: BringInChoice[],
   appName: string,
 ): Promise<BringInResult> {
-  if (!navigator.onLine)
-    return { kind: 'offline', executionId: null, brought: 0, merged: 0 };
+  if (!navigator.onLine) return none('offline');
   const now = Date.now();
   const executionRef = doc(collection(userOf(uid), 'executions'));
+  const mergeIds = Array.from(
+    new Set(choices.flatMap((choice) => choice.intoWhoId ?? [])),
+  );
   try {
     return await runHeldTransaction(uid, async (transaction) => {
-      const reads = await Promise.all(
-        choices.map(async (choice) => {
-          if (choice.intoWhoId === null) return null;
-          const snapshot = await transaction.get(
-            doc(userOf(uid), 'who', choice.intoWhoId),
-          );
-          if (!snapshot.exists()) return null;
-          const who = snapshot.data() as Who;
-          const words = await openJson<WhoSealed>(
-            who.sealed as Sealed,
-            encryption,
-          ).catch(() => null);
-          return words ? { who, words } : null;
-        }),
+      const targets = new Map(
+        await Promise.all(
+          mergeIds.map(async (id): Promise<[string, Target | null]> => {
+            const snapshot = await transaction.get(doc(userOf(uid), 'who', id));
+            if (!snapshot.exists()) return [id, null];
+            const who = snapshot.data() as Who;
+            const words = await openJson<WhoSealed>(
+              who.sealed as Sealed,
+              encryption,
+            ).catch(() => null);
+            return [id, words ? { who, words } : null];
+          }),
+        ),
       );
-      const writes = await Promise.all(
-        choices.map(async (choice, index) => {
-          const { candidate } = choice;
-          const target = reads[index] ?? null;
-          const sources = toSources(candidate, now);
-          if (!target) {
+      const creates = await Promise.all(
+        choices
+          .filter((choice) => choice.intoWhoId === null)
+          .map(async ({ candidate }) => {
             const id = doc(collection(userOf(uid), 'who')).id;
             const words: WhoSealed = {
               ...emptyWords(),
@@ -150,7 +229,7 @@ export async function bringIntoCircle(
               mediaIds: [],
               importedFrom: null,
               importedFields: {},
-              appSources: sources,
+              appSources: toSources(candidate, now),
               lastMentionedAt: null,
               yearlyDateCount: 0,
               momentCount: 0,
@@ -162,9 +241,9 @@ export async function bringIntoCircle(
               sealed: await sealJson<WhoSealed>(words, encryption),
             };
             return {
-              ref: { op: 'create', collection: 'who', docId: id } as EffectRef,
-              kind: 'create' as const,
+              id,
               data,
+              ref: { op: 'create', collection: 'who', docId: id } as EffectRef,
               effect: {
                 written: {
                   'sealed.name': candidate.name,
@@ -174,97 +253,81 @@ export async function bringIntoCircle(
                 previous: null,
               } as ExecutionEffect,
             };
-          }
-          const { who, words } = target;
-          const id = choice.intoWhoId ?? '';
-          const known = [words.name, ...words.aliases].map((name) =>
-            toComparable(name),
-          );
-          const aliases =
-            known.includes(toComparable(candidate.name)) ||
-            words.aliases.length >= MAX_ALIASES
-              ? words.aliases
-              : [...words.aliases, candidate.name];
-          const phones = readContactPoints('phone', words);
-          const key =
-            candidate.phone === null
-              ? null
-              : toContactKey('phone', candidate.phone);
-          const hasPhone =
-            key === null ||
-            phones.some((point) => toContactKey('phone', point.value) === key);
-          const nextPhones =
-            hasPhone || phones.length >= MAX_CONTACT_POINTS
-              ? phones
-              : [...phones, ...toPhone(candidate, phones.length === 0)];
-          const notes = toNotes(words.notes, candidate.detail);
-          const relation =
-            words.relation ??
-            (who.kind === 'person' ? toRelation(candidate) : null);
-          const known_ = new Set(
-            who.appSources.map((one) =>
-              toSourceKey(one.connectorId, one.sourceRef),
-            ),
-          );
-          const appSources = [
-            ...who.appSources,
-            ...sources.filter(
-              (one) => !known_.has(toSourceKey(one.connectorId, one.sourceRef)),
-            ),
-          ].slice(-MAX_APP_SOURCES);
+          }),
+      );
+      const groups = mergeIds.flatMap((id) => {
+        const target = targets.get(id) ?? null;
+        return target
+          ? [
+              {
+                id,
+                target,
+                group: choices
+                  .filter((choice) => choice.intoWhoId === id)
+                  .map((choice) => choice.candidate),
+              },
+            ]
+          : [];
+      });
+      const merges = await Promise.all(
+        groups.map(async ({ id, target, group }) => {
+          const { folded, changed } = foldMerge(target, group, now);
           const next: WhoSealed = {
-            ...words,
-            aliases,
-            phones: nextPhones,
+            ...target.words,
+            aliases: folded.aliases,
+            phones: folded.phones,
             phone: null,
-            notes,
-            relation,
+            notes: folded.notes,
+            relation: folded.relation,
           };
-          const changed = {
-            'sealed.aliases': [aliases, words.aliases],
-            'sealed.phones': [nextPhones, phones],
-            'sealed.notes': [notes, words.notes],
-            'sealed.relation': [relation, words.relation],
-          } as const;
-          const entries = Object.entries(changed).filter(
-            ([, [after, before]]) =>
-              JSON.stringify(after) !== JSON.stringify(before),
-          );
           return {
-            ref: { op: 'update', collection: 'who', docId: id } as EffectRef,
-            kind: 'update' as const,
+            id,
+            count: group.length,
+            isPrivate: isPrivateRead(target.who),
+            ref: {
+              op: 'update',
+              collection: 'who',
+              docId: id,
+            } as EffectRef,
             data: {
               sealed: await sealJson<WhoSealed>(next, encryption),
-              appSources,
+              appSources: folded.appSources,
               lastEditedAt: now,
             },
             effect: {
               written: {
-                'sealed.name': words.name,
+                'sealed.name': target.words.name,
                 ...Object.fromEntries(
-                  entries.map(([path, [after]]) => [path, after]),
+                  changed.map(([path, after]) => [path, after]),
                 ),
-                appSources,
+                appSources: folded.appSources,
               },
               previous: {
-                'sealed.name': words.name,
+                'sealed.name': target.words.name,
                 ...Object.fromEntries(
-                  entries.map(([path, [, before]]) => [path, before]),
+                  changed.map(([path, , before]) => [path, before]),
                 ),
-                appSources: who.appSources,
+                appSources: target.who.appSources,
               },
             } as ExecutionEffect,
-            id,
           };
         }),
       );
-      writes.forEach((write) => {
-        if (write.kind === 'create')
-          transaction.set(doc(userOf(uid), 'who', write.ref.docId), write.data);
-        else transaction.update(doc(userOf(uid), 'who', write.id), write.data);
-      });
-      const brought = writes.filter((write) => write.kind === 'create').length;
-      const merged = writes.length - brought;
+      const skipped = choices.filter(
+        (choice) =>
+          choice.intoWhoId !== null &&
+          !merges.some((merge) => merge.id === choice.intoWhoId),
+      ).length;
+      if (creates.length + merges.length === 0) return none('nothing', skipped);
+      creates.forEach((write) =>
+        transaction.set(doc(userOf(uid), 'who', write.id), write.data),
+      );
+      merges.forEach((write) =>
+        transaction.update(doc(userOf(uid), 'who', write.id), write.data),
+      );
+      const written = [...creates, ...merges];
+      const brought = creates.length;
+      const merged = merges.reduce((sum, merge) => sum + merge.count, 0);
       const execution: Execution = {
         captureId: null,
         actor: 'person',
@@ -272,8 +335,8 @@ export async function bringIntoCircle(
         category: 'import',
         autonomyLevel: 1,
         state: 'succeeded',
-        effectRefs: writes.map((write) => write.ref),
-        linkedWhoIds: writes.map((write) => write.ref.docId),
+        effectRefs: written.map((write) => write.ref),
+        linkedWhoIds: written.map((write) => write.ref.docId),
         linkedPlaceIds: [],
         undoesExecutionId: null,
         undoneByExecutionId: null,
@@ -281,7 +344,9 @@ export async function bringIntoCircle(
         partUndoIds: null,
         questionRef: null,
         errorCode: null,
-        privacy: 'ordinary',
+        privacy: merges.some((merge) => merge.isPrivate)
+          ? 'private'
+          : 'ordinary',
         createdAt: now,
         decidedAt: now,
         finishedAt: now,
@@ -290,7 +355,7 @@ export async function bringIntoCircle(
             summary: `${HELM_COPY.bringInSummary(brought, merged)} from ${appName}`,
             said: null,
             commands: [],
-            effects: writes.map((write) => write.effect),
+            effects: written.map((write) => write.effect),
             undoReport: null,
             spoken: null,
             heldSpoken: null,
@@ -309,9 +374,10 @@ export async function bringIntoCircle(
         executionId: executionRef.id,
         brought,
         merged,
+        skipped,
       };
     });
   } catch {
-    return { kind: 'failed', executionId: null, brought: 0, merged: 0 };
+    return none('failed');
   }
 }

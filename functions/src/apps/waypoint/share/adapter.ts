@@ -148,16 +148,20 @@ const syncTravelers = async (
   });
   const ids = Array.from(tripsByPerson.keys());
   if (ids.length === 0) return { records: [], isFull: read.isFull };
-  const snapshots = await firestore.getAll(
-    ...ids.map((id) => firestore.doc(`users/${id}`)),
-    { fieldMask: ['displayName'] },
-  );
+  const snapshots = await firestore
+    .getAll(...ids.map((id) => firestore.doc(`users/${id}`)), {
+      fieldMask: ['displayName'],
+    })
+    .catch(() => null);
+  if (snapshots === null) return { records: [], isFull: false };
   return {
     records: snapshots.flatMap((snapshot) => {
       const name = toTravelerName(snapshot.get('displayName'));
       if (name === null) return [];
       const titles = tripsByPerson.get(snapshot.id) ?? [];
-      const shown = titles.slice(0, TRAVELER_TRIP_LIMIT);
+      const shown = titles
+        .slice(0, TRAVELER_TRIP_LIMIT)
+        .map((title) => clip(title, 30));
       const more = titles.length - shown.length;
       return [
         toRecord({

@@ -3836,6 +3836,68 @@ test('a person merged from an app goes back to what they had, and is kept once t
   assert.equal(kept.kind === 'write' ? kept.updates.length : 0, 0);
 });
 
+test('two candidates merged into one person are one effect, and Undo restores every alias and source at once', () => {
+  const both = [
+    { connectorId: 'app:nine-lives', sourceRef: 'd1' },
+    { connectorId: 'app:nine-lives', sourceRef: 'd2' },
+  ];
+  const merge = execution(
+    [
+      {
+        ref: { op: 'update', collection: 'who', docId: 'w1' } as EffectRef,
+        effect: {
+          written: {
+            'sealed.name': 'Patel',
+            'sealed.aliases': ['Dr. P', 'Doc Patel'],
+            appSources: both,
+          },
+          previous: {
+            'sealed.name': 'Patel',
+            'sealed.aliases': [],
+            appSources: [],
+          },
+        },
+      },
+    ],
+    { category: 'import', actor: 'person' },
+  );
+  const restored = asWrite(
+    plan(merge, [
+      [
+        'w1',
+        {
+          docId: 'w1',
+          data: { lastEditedAt: null, appSources: both },
+          opened: { name: 'Patel', aliases: ['Dr. P', 'Doc Patel'] },
+        } as unknown as UndoTarget,
+      ],
+    ]),
+  );
+  assert.equal(restored.updates.length, 1);
+  assert.deepEqual(
+    { ...restored.updates[0].reseal },
+    { name: 'Patel', aliases: [] },
+  );
+});
+
+test('a person brought in from an app is deleted by Undo while untouched, and kept once in use', () => {
+  const made = execution([madeWho('w1', 'Mittens'), madeWho('w2', 'Biscuit')], {
+    category: 'import',
+    actor: 'person',
+  });
+  const result = asWrite(
+    plan(made, [
+      target('w1', { lastEditedAt: null, lastMentionedAt: null }, null),
+      target('w2', { lastEditedAt: null, lastMentionedAt: NOW }, null),
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['w1'],
+  );
+  assert.deepEqual(result.kept, ['Biscuit']);
+});
+
 const failures: string[] = [];
 for (const [name, run] of tests) {
   try {
