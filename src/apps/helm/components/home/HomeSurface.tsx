@@ -294,6 +294,7 @@ function HomeSurface({
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const isKeyRetrying = useAppSelector((state) => state.helm.isKeyRetrying);
   const keyRefusals = useAppSelector((state) => state.helm.keyRefusals);
+  const keyFailure = useAppSelector((state) => state.helm.keyFailure);
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const canSaveOffline =
@@ -499,6 +500,7 @@ function HomeSurface({
             <CannotOpenState
               isRetrying={isKeyRetrying}
               hasRetryFailed={keyRefusals > 1}
+              failure={keyFailure}
               onRetry={() => dispatch(retryKey())}
             />
           )}
