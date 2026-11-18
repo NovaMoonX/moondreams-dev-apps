@@ -1,14 +1,16 @@
 import { useState, type ReactNode } from 'react';
+import { useStore } from 'react-redux';
 import { CalendarClock, Landmark, Receipt } from 'lucide-react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FeatureOffer from '@/components/FeatureOffer';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { useAppSelector } from '@/store';
+import { useAppSelector, type RootState } from '@/store';
 import { formatList } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { waitUntil } from '@/utils/waitUntil';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS, LINK_WORDS } from '@apps/runway/constants';
@@ -112,6 +114,7 @@ function CardStatementSection({
 }: CardStatementSectionProps) {
   const { addToast } = useToast();
   const canLink = useCanLinkBank();
+  const store = useStore<RootState>();
   const cards = useAppSelector(selectAllCards);
   const links = useAppSelector((state) => state.runway.links);
   // At Link a card warns about its due date only from the bank's minimum, so the offer to share it is never put off.
@@ -131,8 +134,21 @@ function CardStatementSection({
       if (isBusy) return;
       setIsBusy(true);
       try {
+        const syncedBefore = link.lastSyncAt;
         const result = await agreeToCardDetails(link.id);
         if (result === null) return;
+        if (result.state === 'ok') {
+          await waitUntil(() => {
+            const shown = store
+              .getState()
+              .runway.links.find((entry) => entry.id === link.id);
+            return (
+              shown === undefined ||
+              shown.cardDetails !== 'needsConsent' ||
+              shown.lastSyncAt !== syncedBefore
+            );
+          });
+        }
         addToast({
           title:
             result.state === 'ok'

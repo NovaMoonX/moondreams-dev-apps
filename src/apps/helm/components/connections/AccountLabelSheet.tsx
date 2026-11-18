@@ -7,7 +7,11 @@ import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { updateConnection } from '@/lib/connections/connectionCalls';
 import { MAX_ACCOUNT_LABEL_LENGTH } from '@/lib/connections/contract';
+import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
+import { useConnections } from '@/lib/connections/useConnections';
+import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { HELM_COPY } from '@apps/helm/constants';
 
 interface AccountLabelSheetProps {
@@ -27,16 +31,28 @@ function LabelForm({
   const [value, setValue] = useState(label ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { grants } = useConnections({ readerAppId: 'helm' });
+  const { accounts, isLoading } = useConnectionAccounts(user?.uid ?? null);
+  const accountId =
+    grants.find((grant) => grant.id === grantId)?.accountId ?? null;
+  const waitFor = useWaitUntilShown({ accounts, isLoading });
 
   const save = async () => {
     if (isSaving) return;
     setIsSaving(true);
     setFailure(null);
     try {
-      await updateConnection({
-        grantId,
-        accountLabel: value.trim() === '' ? null : value.trim(),
-      });
+      const nextLabel = value.trim() === '' ? null : value.trim();
+      await updateConnection({ grantId, accountLabel: nextLabel });
+      if (accountId !== null) {
+        await waitFor(
+          (current) =>
+            !current.isLoading &&
+            (current.accounts.find((account) => account.id === accountId)
+              ?.label ?? null) === nextLabel,
+        );
+      }
       onClose();
     } catch (error) {
       console.error('Helm account label was not saved', error);
