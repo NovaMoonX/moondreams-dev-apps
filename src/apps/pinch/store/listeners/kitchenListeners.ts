@@ -87,7 +87,7 @@ export function startProductsListener(
 }
 
 /** Lines saved before a field existed read it as null, as every reader expects. */
-const readRecipe = (recipe: Recipe): Recipe => ({
+export const readRecipe = (recipe: Recipe): Recipe => ({
   ...recipe,
   ingredients: recipe.ingredients.map((line) => ({
     ...line,

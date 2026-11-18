@@ -90,9 +90,9 @@ function SetHeldView({
   itemId,
   kind,
   name,
-  heldCents,
+  heldCents: liveHeldCents,
   coverNote = null,
-  account,
+  account: liveAccount,
   today,
   onBack,
 }: SetHeldViewProps) {
@@ -100,7 +100,16 @@ function SetHeldView({
   const { addToast } = useToast();
   const { isHidden, toggle: showAmounts } = useValuesHidden();
   const undoMove = useUndoTransfer();
-  const inputs = useAppSelector(selectBalanceInputs);
+  const liveInputs = useAppSelector(selectBalanceInputs);
+  // The save shows its result in the store at once; the form keeps the figures it asked about until the save ends.
+  const [frozen, setFrozen] = useState<{
+    heldCents: Cents;
+    account: typeof liveAccount;
+    inputs: typeof liveInputs;
+  } | null>(null);
+  const heldCents = frozen?.heldCents ?? liveHeldCents;
+  const account = frozen === null ? liveAccount : frozen.account;
+  const inputs = frozen?.inputs ?? liveInputs;
   const [moveId] = useState(newTransferMoveId);
   const isBill = kind === 'bill';
   const [amount, setAmount] = useState(() =>
@@ -293,6 +302,7 @@ function SetHeldView({
     isSavingRef.current = true;
     setError(null);
     setIsSaving(true);
+    setFrozen({ heldCents, account, inputs });
     try {
       const encryption = await getRunwayEncryption(user.uid);
       const date = await moveLeftover(user.uid, encryption, {
@@ -338,6 +348,7 @@ function SetHeldView({
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
+      setFrozen(null);
     }
   };
 
