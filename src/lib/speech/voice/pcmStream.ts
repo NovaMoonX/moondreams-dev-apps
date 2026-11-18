@@ -121,7 +121,13 @@ export const createPcmSink = ({
     node.start(startAt);
     if (!state.isStarted) {
       state.isStarted = true;
-      onStart();
+      const waitMs = (startAt - context.currentTime - leadSeconds) * 1000;
+      if (waitMs < 1) onStart();
+      else {
+        setTimeout(() => {
+          if (!state.isStopped) onStart();
+        }, waitMs);
+      }
     }
   };
 

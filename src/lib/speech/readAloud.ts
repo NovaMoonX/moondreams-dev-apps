@@ -73,6 +73,7 @@ interface Run {
   restFrom: number;
   sources: Set<AudioBufferSourceNode>;
   startId: number;
+  soundId: number;
   progressId: number;
   heard: { startAt: number; endAt: number; chars: number }[];
   stopFallback: (() => void) | null;
@@ -94,6 +95,7 @@ const readNatural = (
     restFrom: 0,
     sources: new Set(),
     startId: 0,
+    soundId: 0,
     progressId: 0,
     heard: [],
     stopFallback: null,
@@ -105,6 +107,7 @@ const readNatural = (
     run.isEnded = true;
     wake.release();
     window.clearTimeout(run.startId);
+    window.clearTimeout(run.soundId);
     window.clearInterval(run.progressId);
     options.onEnd?.();
   };
@@ -178,10 +181,16 @@ const readNatural = (
     window.clearTimeout(run.startId);
     recordFastNaturalReading();
     options.onVoice?.('natural');
-    options.onStart?.();
-    if (options.onProgress) {
-      run.progressId = window.setInterval(reportProgress, PROGRESS_MS);
-    }
+    run.soundId = window.setTimeout(
+      () => {
+        if (run.isEnded) return;
+        options.onStart?.();
+        if (options.onProgress) {
+          run.progressId = window.setInterval(reportProgress, PROGRESS_MS);
+        }
+      },
+      Math.max(0, (startAt - context.currentTime) * 1000),
+    );
   };
 
   const giveUpOn = (from: number) => {

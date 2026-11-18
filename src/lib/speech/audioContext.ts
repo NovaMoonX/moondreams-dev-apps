@@ -56,13 +56,15 @@ const WAKE_SECONDS = 1.5;
 const HISS_SECONDS = 4;
 const HISS_LEVEL = 0.0003;
 
+// A hold that is never released (a suspended page whose sound never ends) lapses, so the wake keeps working.
+const HOLD_MAX_MS = 120_000;
+
 const output = {
-  holds: 0,
+  holds: new Map<object, number>(),
   releasedAt: 0,
   wokenAt: 0,
   hissUntil: 0,
 };
-
 const playHiss = (context: AudioContext) => {
   const length = Math.round(context.sampleRate * HISS_SECONDS);
   const buffer = context.createBuffer(1, length, context.sampleRate);
@@ -77,14 +79,15 @@ const playHiss = (context: AudioContext) => {
   output.hissUntil = context.currentTime + HISS_SECONDS;
 };
 
-/**
- * Keeps the speakers awake for one line: call it when the line is asked for, schedule its first sound no earlier than
- * `readyAt` (a context time) and call `release` when it ends. After a quiet spell it plays an inaudible hiss first.
- */
+/** Keeps the speakers awake for one spoken line: its first sound starts no earlier than `readyAt`, and `release` ends the hold. */
 export const wakeAudioOutput = (context: AudioContext) => {
+  const now = Date.now();
+  output.holds.forEach((until, hold) => {
+    if (until <= now) output.holds.delete(hold);
+  });
   const isIdle =
-    output.holds === 0 &&
-    Date.now() - output.releasedAt > IDLE_MS &&
+    output.holds.size === 0 &&
+    now - output.releasedAt > IDLE_MS &&
     context.currentTime >= output.hissUntil;
   if (isIdle) {
     try {
@@ -97,14 +100,12 @@ export const wakeAudioOutput = (context: AudioContext) => {
       );
     }
   }
-  output.holds += 1;
-  const state = { isReleased: false };
+  const hold = {};
+  output.holds.set(hold, now + HOLD_MAX_MS);
   return {
     readyAt: output.wokenAt + WAKE_SECONDS,
     release: () => {
-      if (state.isReleased) return;
-      state.isReleased = true;
-      output.holds -= 1;
+      if (!output.holds.delete(hold)) return;
       output.releasedAt = Date.now();
     },
   };
