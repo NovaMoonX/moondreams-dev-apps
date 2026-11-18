@@ -18,10 +18,13 @@ import NumberAnswer from '@apps/helm/components/home/NumberAnswer';
 import PickOneAnswer from '@apps/helm/components/home/PickOneAnswer';
 import PickRecordAnswer from '@apps/helm/components/home/PickRecordAnswer';
 import PickSeveralAnswer from '@apps/helm/components/home/PickSeveralAnswer';
+import WhichComesFirstAnswer from '@apps/helm/components/home/WhichComesFirstAnswer';
 import YesNoAnswer from '@apps/helm/components/home/YesNoAnswer';
+import ListeningStrip from '@apps/helm/components/voice/ListeningStrip';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import {
   answerUndoOffer,
@@ -87,6 +90,7 @@ function QuestionCard({
   const neitherText = neitherDraft?.text ?? ownText;
   const setNeitherText = neitherDraft?.onChange ?? setOwnText;
   const name = useAssistantName();
+  const voice = useHelmVoiceContext();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -109,7 +113,14 @@ function QuestionCard({
   );
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
-  const Part = PARTS[question.shape];
+  const Part =
+    question.kind === 'whichComesFirst'
+      ? WhichComesFirstAnswer
+      : PARTS[question.shape];
+  const skippedLine =
+    question.kind === 'whichComesFirst'
+      ? HELM_COPY.importanceWhichSkipped
+      : HELM_COPY.questionSkipped;
 
   const answerAsTurn = async (
     value: QuestionAnswerValue,
@@ -117,8 +128,9 @@ function QuestionCard({
   ) => {
     if (!user) return;
     setIsWorking(true);
+    const tap = voice.followTap();
     try {
-      const { write } = await sendQuestionAnswer(user.uid, {
+      const { write, id: sentId } = await sendQuestionAnswer(user.uid, {
         captureId,
         questionId: id,
         question,
@@ -126,7 +138,9 @@ function QuestionCard({
         transcript: null,
         recordName,
         assistantName: name,
+        isSpokenTurn: tap.isSpokenTurn,
       });
+      tap.onSent({ id: sentId, write }, { captureId, questionId: id });
       setIsSent(true);
       write.catch(() => {
         setIsSent(false);
@@ -347,7 +361,7 @@ function QuestionCard({
     return (
       <div className='flex flex-wrap items-center gap-x-3 gap-y-1 self-start pl-[30px]'>
         <p className='text-muted-foreground text-left text-[13px] text-pretty'>
-          {HELM_COPY.questionSkipped}
+          {skippedLine}
         </p>
         {canDismiss && dismissButton}
         {note && (
@@ -387,7 +401,7 @@ function QuestionCard({
       >
         {isSkipped && isInSheet && (
           <p className='text-muted-foreground text-left text-[13px] text-pretty'>
-            {HELM_COPY.questionSkipped}
+            {skippedLine}
           </p>
         )}
         {isSent || isAnswerInFlight(captureId, id) ? (
@@ -430,6 +444,13 @@ function QuestionCard({
               </div>
             )}
           </>
+        )}
+        {!isInSheet && !isSent && (
+          <ListeningStrip
+            captureId={captureId}
+            questionId={id}
+            question={question}
+          />
         )}
         {isDateOpen && dateId !== null && dateWho && !dateWho.isUnreadable && (
           <KeyDateSheet

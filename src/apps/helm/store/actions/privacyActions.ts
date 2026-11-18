@@ -13,6 +13,7 @@ import { store } from '@/store';
 
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson, sealJson } from '@apps/helm/security';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import type { HelmEncryption, Sealed } from '@apps/helm/types';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { toDayKey } from '@apps/helm/utils/planDays';
@@ -79,7 +80,7 @@ const readRecords = (kind: PrivateKind): PrivacyRecord[] => {
   return helm.procedures.items;
 };
 
-const CHILD_KINDS: PrivateKind[] = ['task', 'fact', 'note', 'topic'];
+const CHILD_KINDS: PrivateKind[] = ['task', 'fact', 'note', 'topic', 'habit'];
 
 const readChildren = (): Child[] =>
   CHILD_KINDS.flatMap((kind) =>
@@ -161,6 +162,15 @@ async function readLinkedChildren(
                         typeof data.projectId === 'string'
                           ? data.projectId
                           : null,
+                      forWhoId:
+                        typeof data.forWhoId === 'string'
+                          ? data.forWhoId
+                          : null,
+                      lockScreenName:
+                        typeof data.lockScreenName === 'string'
+                          ? data.lockScreenName
+                          : null,
+                      history: Array.isArray(data.history) ? data.history : [],
                       projectIds: asIds(data.projectIds),
                       whoIds: asIds(data.whoIds),
                       placeIds: asIds(data.placeIds),
@@ -208,7 +218,32 @@ export async function writePrivacy(
     if (!opened) return { kind: 'unreadable' };
     const previous = readPrivacyFacts(opened as Partial<PrivacyFacts>);
     const next = change(previous);
+    const privacy = readEffectivePrivacy(next, parentFacts);
+    const data = snapshot.data() as {
+      lockScreenName?: string | null;
+      history?: unknown[];
+    };
+    const isNameHidden =
+      kind === 'habit' &&
+      privacy === 'private' &&
+      typeof data.lockScreenName === 'string';
+    const now = Date.now();
     transaction.update(ref, {
+      ...(isNameHidden
+        ? {
+            lockScreenName: null,
+            history: [
+              ...(data.history ?? []),
+              {
+                kind: 'nameHidden',
+                at: now,
+                by: 'person',
+                pace: null,
+                stage: null,
+              },
+            ].slice(-30),
+          }
+        : {}),
       sealed: await sealJson(
         {
           ...opened,
@@ -220,8 +255,9 @@ export async function writePrivacy(
         },
         encryption,
       ),
-      privacy: readEffectivePrivacy(next, parentFacts),
+      privacy,
     });
+    if (isNameHidden) markRemindersChanged(transaction, uid, now);
     return { kind: 'saved', previous, next };
   });
 }
@@ -250,14 +286,42 @@ export async function rewriteChildren(uid: string, parent: CascadeParent) {
     { length: Math.ceil(updates.length / BATCH_SIZE) },
     (_, index) => updates.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
   );
+  const now = Date.now();
   const outcomes = await Promise.allSettled(
     chunks.map((chunk) => {
       const batch = writeBatch(db);
-      chunk.forEach((update) =>
+      const hidden = chunk.flatMap((update) => {
+        const record = children.find(
+          (child) => child.record.id === update.id,
+        )?.record;
+        return update.kind === 'habit' &&
+          update.privacy === 'private' &&
+          typeof record?.lockScreenName === 'string'
+          ? [{ id: update.id, history: record.history ?? [] }]
+          : [];
+      });
+      chunk.forEach((update) => {
+        const habit = hidden.find((one) => one.id === update.id);
         batch.update(doc(collectionOf(uid, update.kind), update.id), {
           privacy: update.privacy,
-        }),
-      );
+          ...(habit
+            ? {
+                lockScreenName: null,
+                history: [
+                  ...habit.history,
+                  {
+                    kind: 'nameHidden',
+                    at: now,
+                    by: 'person',
+                    pace: null,
+                    stage: null,
+                  },
+                ].slice(-30),
+              }
+            : {}),
+        });
+      });
+      if (hidden.length > 0) markRemindersChanged(batch, uid, now);
       return batch.commit();
     }),
   );

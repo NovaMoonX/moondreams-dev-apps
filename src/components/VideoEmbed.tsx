@@ -5,7 +5,6 @@ import type { PlayerEntry } from 'react-player/players';
 import { createReactPlayer } from 'react-player/ReactPlayer';
 
 import FallbackImage from '@/components/FallbackImage';
-import type { InlineVideo } from '@apps/pinch/utils/recipeLinks';
 
 const PLAYERS: PlayerEntry[] = [
   {
@@ -36,13 +35,18 @@ const PLAY_ICON = (
   </span>
 );
 
-interface HowToVideoProps {
-  video: InlineVideo;
+export interface EmbedVideo {
+  src: string;
+  thumbnailUrl: string | null;
+}
+
+interface VideoEmbedProps {
+  video: EmbedVideo;
   ariaLabel: string;
 }
 
 /** The thumbnail with a play button; the host's player (and its scripts) load only after the tap. `playing` follows the player's own play and pause, so a re-render never restarts a video the person paused. */
-function HowToVideo({ video, ariaLabel }: HowToVideoProps) {
+function VideoEmbed({ video, ariaLabel }: VideoEmbedProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const poster = useMemo(
     () =>
@@ -81,4 +85,4 @@ function HowToVideo({ video, ariaLabel }: HowToVideoProps) {
   );
 }
 
-export default HowToVideo;
+export default VideoEmbed;

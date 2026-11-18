@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
+import { readPartOf } from '../../src/apps/helm/engine/patterns.ts';
 import {
+  PART_CLOCKS,
+  describeFit,
   findFreeGaps,
   findOpenings,
   planDay,
@@ -9,7 +12,11 @@ import {
   type PlannerInput,
   type PlannerTask,
 } from '../../src/apps/helm/engine/planner.ts';
-import type { PlanSlot } from '../../src/apps/helm/types.ts';
+import {
+  CAN_WAIT_PLACE,
+  NOT_SAID_PLACE,
+} from '../../src/apps/helm/engine/importance.ts';
+import type { PlanSlot, Weekday } from '../../src/apps/helm/types.ts';
 
 const ZONE = 'America/Los_Angeles';
 const DAY = '2026-11-10';
@@ -47,6 +54,7 @@ const slot = (taskId: string, status: PlanSlot['status'], from: string) => ({
   status,
   source: 'nomos' as const,
   decidedAt: null,
+  overlapsEventRef: null,
 });
 
 const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
@@ -62,6 +70,8 @@ const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
   busy: [],
   slots: {},
   tasks: [],
+  aimTaskIds: [],
+  finishedTasks: [],
   ...extra,
 });
 
@@ -125,6 +135,9 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     slots: {},
     reasons: {},
     outcome: 'late',
+    unplaced: [],
+    blockers: {},
+    guessedTaskIds: [],
   });
   assert.equal(
     run(base({ now: at('22:30'), tasks: [task('a')] })).outcome,
@@ -242,7 +255,7 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   assert.ok(startOf('plain')! < startOf('low')!);
   assert.equal(startOf('high'), at('09:15'));
   assert.equal(startOf('plain'), at('13:15'));
-  assert.equal(startOf('low'), at('13:45'));
+  assert.equal(startOf('low'), at('14:00'));
 }
 
 {
@@ -447,7 +460,123 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   assert.equal(
     Object.values(timed.slots).find((entry) => entry.taskId === 'home')
       ?.startAt,
-    at('08:30'),
+    at('08:45'),
+  );
+}
+
+{
+  const order = (tasks: PlannerTask[]) =>
+    Object.values(run(base({ hasCalendar: false, tasks })).slots).map(
+      (entry) => entry.taskId,
+    );
+  assert.deepEqual(
+    order([
+      task('none'),
+      task('second', { projectPlace: 2 }),
+      task('first', { projectPlace: 1 }),
+    ]),
+    ['first', 'second', 'none'],
+    'placed first, then those not said or with no project',
+  );
+  assert.deepEqual(
+    order([
+      task('waitsLater', { projectPlace: CAN_WAIT_PLACE + 1 }),
+      task('waits', { projectPlace: CAN_WAIT_PLACE }),
+      task('notSaid', { projectPlace: NOT_SAID_PLACE }),
+    ]),
+    ['notSaid', 'waits', 'waitsLater'],
+    'Can wait follows every not said one, in its own order',
+  );
+}
+
+{
+  const weekday = new Date(`${DAY}T00:00:00Z`).getUTCDay() as Weekday;
+  const avoidEvening = [
+    { kind: 'weekdayPart' as const, weekday, part: 'evening' as const },
+  ];
+  const evening = { from: at('18:00'), to: at('21:00') };
+  const inEvening = (result: ReturnType<typeof planDay>) =>
+    Object.values(result.slots).filter(
+      (entry) =>
+        (entry.startAt ?? 0) < evening.to && (entry.endAt ?? 0) > evening.from,
+    );
+  const many = Array.from({ length: 3 }, (_, at) =>
+    task(`t${at}`, { durationMinutes: 60 }),
+  );
+  assert.equal(
+    inEvening(
+      run(
+        base({
+          hasCalendar: true,
+          busy: [busy('08:00', '18:00')],
+          tasks: many,
+          avoidBuckets: avoidEvening,
+        }),
+      ),
+    ).length,
+    0,
+    'an avoided part is left empty',
+  );
+  assert.ok(
+    inEvening(
+      run(
+        base({
+          hasCalendar: true,
+          busy: [busy('08:00', '18:00')],
+          tasks: many,
+        }),
+      ),
+    ).length > 0,
+    'without the pattern the part is used',
+  );
+  const kept = run(
+    base({
+      hasCalendar: true,
+      avoidBuckets: avoidEvening,
+      tasks: [task('keep')],
+      slots: { s1: slot('keep', 'kept', '19:00') },
+    }),
+  );
+  assert.equal(
+    Object.values(kept.slots).find((entry) => entry.taskId === 'keep')?.startAt,
+    at('19:00'),
+    'a slot the person kept is never moved',
+  );
+  const care = run(
+    base({
+      hasCalendar: true,
+      avoidBuckets: avoidEvening,
+      dayStartTime: '18:00',
+      tasks: [task('pill', { isCare: true }), task('other')],
+    }),
+  );
+  assert.deepEqual(
+    taskIdsOf(care),
+    ['pill'],
+    'a care task is still placed in an avoided part, the rest stay out',
+  );
+  const minutes = (clock: string) =>
+    Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
+  Object.entries(PART_CLOCKS).forEach(([part, [from]]) => {
+    assert.equal(readPartOf(minutes(from)), part, `${part} starts at ${from}`);
+    assert.notEqual(
+      readPartOf(minutes(from) - 1),
+      part === 'morning' ? 'x' : part,
+      `${part} does not start before ${from}`,
+    );
+  });
+}
+
+{
+  const titles = { a: 'A', b: 'B', c: 'C' };
+  const blocker = { kind: 'event', title: 'Dentist' } as const;
+  assert.equal(
+    describeFit(titles, ['a'], { a: blocker }),
+    "“A” doesn't fit today unless you move “Dentist”. The rest fit.",
+  );
+  assert.equal(
+    describeFit(titles, ['a', 'b'], { a: blocker, b: null }),
+    "“A” and 1 more don't fit today. The rest fit.",
   );
 }
 
