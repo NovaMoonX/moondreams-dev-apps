@@ -83,6 +83,7 @@ jobs:
       - run: npm run check:helm-held-lists
       - run: npm run check:pinch-held-lists
       - run: npm run check:waypoint-held-lists
+      - run: npm run check:a-list-held-lists
       - run: npm run check:runway-notify-text
       - run: npm run check:waypoint-pushes
       - run: npm run check:waypoint-balances
