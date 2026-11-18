@@ -42,6 +42,8 @@ interface ResultLinesProps {
   canReplay: boolean;
   /** The turn kept a quiet thing off the speaker, so a replay says only the screen line. */
   isQuietTurn: boolean;
+  /** The person has sent a later turn, so the offers under this reply are gone (they stay in Settings). */
+  isSettled?: boolean;
 }
 
 const toSentence = (summary: string) =>
@@ -106,6 +108,7 @@ function ResultLines({
   showsNotice,
   canReplay,
   isQuietTurn,
+  isSettled = false,
 }: ResultLinesProps) {
   const { user } = useAuth();
   const card = useRef<HTMLDivElement>(null);
@@ -202,13 +205,13 @@ function ResultLines({
           />
           <ResearchRows captureId={captureId} execution={execution} />
           <LearnRows execution={execution} />
-          {execution.awayZoneOffer && (
+          {!isSettled && execution.awayZoneOffer && (
             <AwayZoneOfferRow offer={execution.awayZoneOffer} />
           )}
-          {execution.awayZoneOffer && (
+          {!isSettled && execution.awayZoneOffer && (
             <AwayPauseOfferRow offer={execution.awayZoneOffer} />
           )}
-          {execution.abilityOffer && (
+          {!isSettled && execution.abilityOffer && (
             <AbilityOfferRow offer={execution.abilityOffer} />
           )}
           {isOnHome && showsNotice && <AiNotice />}

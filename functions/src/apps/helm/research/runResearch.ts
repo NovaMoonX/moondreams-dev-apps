@@ -561,6 +561,7 @@ export async function settleResearch(
           answeredAt: null,
           skippedAt: null,
           dismissedAt: null,
+          reaskedAt: null,
         };
         transaction.update(captureSnap.ref, {
           questionState: { ...(capture.questionState ?? {}), [id]: state },

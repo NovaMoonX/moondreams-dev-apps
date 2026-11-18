@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -30,6 +31,7 @@ import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import DayCard from '@apps/helm/components/dayCard/DayCard';
 import GroupingCard from '@apps/helm/components/home/GroupingCard';
 import GroupingFiledLine from '@apps/helm/components/home/GroupingFiledLine';
+import MorningQuestionTurn from '@apps/helm/components/home/MorningQuestionTurn';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
@@ -61,6 +63,9 @@ import {
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { pickHomeCards } from '@apps/helm/utils/groupingOffer';
+import { isPastTurn, readNewestTurnAt } from '@apps/helm/utils/linearThread';
+import { setLiveAimsDay } from '@apps/helm/utils/morningAsk';
+import { groupTurns } from '@apps/helm/utils/sessions';
 import { readOutsideAdditions } from '@apps/helm/utils/outsideTurns';
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
@@ -331,8 +336,32 @@ function HomeSurface({
     hasOffer: keyStatus === 'ready' && grouping.offer !== null,
     hasFiled: keyStatus === 'ready' && grouping.filed !== null,
   });
-  const isDayCardAsking =
-    dayCard.model?.mode === 'ask' || dayCard.model?.mode === 'windDown';
+  const isDayCardAsking = dayCard.model?.mode === 'windDown';
+  // The morning question is the assistant's turn at the bottom of the thread until the person sends a turn that isn't its answer; after that it waits at the top as the day card's line, and Answer asks it again here.
+  const [morningReaskedAt, setMorningReaskedAt] = useState<number | null>(null);
+  const newestTurnAt = readNewestTurnAt(
+    sessions.flatMap((session) =>
+      groupTurns(session.turns).map((turn) => turn.lead),
+    ),
+  );
+  const isMorningLive =
+    keyStatus === 'ready' &&
+    dayCard.model?.mode === 'ask' &&
+    !isPastTurn(
+      Math.max(dayCard.model.dayStart, morningReaskedAt ?? 0),
+      newestTurnAt,
+    );
+  const liveAimsDay = isMorningLive ? (dayCard.model?.todayKey ?? null) : null;
+  useEffect(() => {
+    setLiveAimsDay(liveAimsDay);
+    return () => setLiveAimsDay(null);
+  }, [liveAimsDay]);
+  const morningBox = useRef<HTMLDivElement>(null);
+  const morningTurn = isMorningLive ? (
+    <div ref={morningBox}>
+      <MorningQuestionTurn card={dayCard} />
+    </div>
+  ) : null;
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const todayStart = zonedDateTimeToEpoch(
@@ -414,8 +443,12 @@ function HomeSurface({
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
         {cards.includes('day') && (
-          <div ref={dayCardBox}>
-            <DayCard card={dayCard} />
+          <div ref={dayCardBox} className='empty:hidden'>
+            <DayCard
+              card={dayCard}
+              isMorningLive={isMorningLive}
+              onAsk={() => setMorningReaskedAt(Date.now())}
+            />
           </div>
         )}
         {cards.includes('grouping') && grouping.offer && (
@@ -450,6 +483,7 @@ function HomeSurface({
             {HELM_COPY.firstOpen(name)}
           </p>
         )}
+        {!hasTurns && morningTurn}
         {hasTurns && (
           <ConversationThread
             key={freshFrom}
@@ -460,11 +494,16 @@ function HomeSurface({
             foldsBefore={todayStart}
             freshFrom={homeFrom}
             holdsOn={
-              keyStatus === 'ready' && isDayCardAsking ? dayCardBox : null
+              isMorningLive
+                ? morningBox
+                : keyStatus === 'ready' && isDayCardAsking
+                  ? dayCardBox
+                  : null
             }
+            tail={morningTurn}
           />
         )}
-        {!hasFreshTurns && !isOpening && !isWaitingOnKey && (
+        {!hasFreshTurns && !isOpening && !isWaitingOnKey && !isMorningLive && (
           <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}
           </p>
