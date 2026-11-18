@@ -13,6 +13,7 @@ import type { SealedReader } from '@lib/security';
 import { dayKeyToMs, type Cadence } from '@/utils/cadenceUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { habitDayKey } from '@apps/helm/engine/habitDay';
+import { readPlace } from '@apps/helm/engine/importance';
 import { HABITS_LIMIT } from '@apps/helm/constants';
 import type {
   Habit,
@@ -124,6 +125,8 @@ async function openHabit(
     medicineAskedAt: data.medicineAskedAt ?? null,
     untoldSince: data.untoldSince ?? null,
     formedAt: data.formedAt ?? null,
+    formedKeptAt: data.formedKeptAt ?? null,
+    formedKeptCount: data.formedKeptCount ?? 0,
     formedSummary: data.formedSummary ?? null,
     history: data.history ?? [],
     createdBy: data.createdBy ?? 'nomos',
@@ -151,7 +154,7 @@ async function openHabit(
           }
         : null,
       windows: payload.windows ?? {},
-      importance: payload.importance ?? null,
+      importance: readPlace(payload.importance),
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,

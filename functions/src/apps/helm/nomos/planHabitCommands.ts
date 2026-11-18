@@ -211,7 +211,7 @@ const sealedWords = (
     ...over,
   });
 
-const baseQuestion = {
+export const baseQuestion = {
   builtBy: 'code' as const,
   allowsSomethingElse: false,
   noneOption: false,
@@ -1227,12 +1227,16 @@ export function planHabitAnswer(input: HabitAnswerInput): HabitPlan | null {
 
 /** The Execution an answered habit question makes. */
 export function buildHabitAnswerExecution(
-  plan: HabitPlan,
+  plan: Pick<
+    HabitPlan,
+    'isPrivate' | 'effectRefs' | 'effects' | 'lines' | 'notKept'
+  >,
   input: {
     captureId: string;
     questionId: string;
     now: number;
     seal: HabitPlanInput['seal'];
+    linkedWhoIds?: string[];
   },
 ): Record<string, unknown> {
   return {
@@ -1243,7 +1247,7 @@ export function buildHabitAnswerExecution(
     autonomyLevel: AUTOMATIC_LEVEL,
     state: 'succeeded',
     effectRefs: plan.effectRefs,
-    linkedWhoIds: [],
+    linkedWhoIds: input.linkedWhoIds ?? [],
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,

@@ -1,6 +1,10 @@
 // Private things: each source of the class, what code may and may not change, the copy filter and the unattended turn.
 import assert from 'node:assert/strict';
 
+import {
+  buildDesired,
+  toEventBody,
+} from '../../functions/src/apps/helm/calendarSync/plan.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -8,6 +12,11 @@ import {
   type HelmKey,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import {
+  selectShownObservations,
+  selectShownPatterns,
+  selectShownReflections,
+} from '../../src/apps/helm/store/selectors/patternSelectors.ts';
 import { checkInLine } from '../../src/apps/helm/engine/checkInMatch.ts';
 import {
   buildExecution,
@@ -34,6 +43,12 @@ import {
   type MaskedName,
 } from '../../functions/src/apps/helm/nomos/unattended.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  answerShowName,
+  planNameRequest,
+  readNameRequest,
+  toNameLine,
+} from '../../src/apps/helm/utils/lockScreenName.ts';
 import { buildQuietLine } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import {
   buildQuietIndex,
@@ -608,6 +623,7 @@ test('the Undo of that turn restores the class and the mark through the same Und
             title: 'Dentist',
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: 'person',
             isPrivacyCleared: false,
             quietMark: null,
@@ -651,6 +667,8 @@ test('a task made with a health word is private and carries the reason, one with
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$new1',
           title,
           due: null,
@@ -677,6 +695,7 @@ test('a task made with a health word is private and carries the reason, one with
 
 test('a task made under a private project is stored private from the start, one under an ordinary project is not', () => {
   const project = (id: string, name: string, mark: 'health' | null) => ({
+    kind: 'project' as const,
     id,
     name,
     emoji: null,
@@ -684,6 +703,8 @@ test('a task made under a private project is stored private from the start, one 
     roleNotes: {},
     milestoneState: {},
     milestoneTitles: {},
+    targetDate: null,
+    researchOffers: [],
     sealed: { name, privateMark: mark, isPrivacyCleared: false },
   });
   const made = (projectRef: string) =>
@@ -691,6 +712,8 @@ test('a task made under a private project is stored private from the start, one 
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$new1',
           title: 'Book the visit',
           due: null,
@@ -1070,6 +1093,8 @@ test('make this and keep it private starts the new task private', () => {
   const plan = planOf([
     {
       kind: 'createTask',
+      questions: [],
+      meeting: null,
       ref: '$new1',
       title: 'Plan the surprise',
       due: null,
@@ -1802,6 +1827,170 @@ test('a crowd is packed into rings within capacity with the owner alone on top',
   );
 });
 
+const NAME_CONTEXT = { now: Date.UTC(2026, 10, 9, 12), timeZone: 'UTC' };
+const NAMED_HABIT = { name: 'Pills', lockScreenName: null };
+
+test('asking to show a habit name on the lock screen speaks the warning and writes nothing', () => {
+  const turn = planNameRequest(NAMED_HABIT, true);
+  assert.equal(turn.kind, 'ask');
+  assert.ok(turn.line.includes("isn't sealed"));
+  assert.ok(turn.line.includes('Google'));
+  assert.ok(turn.line.endsWith('Show it?'));
+});
+
+test('only a clear yes writes the name; a no, Skip or anything else does not', () => {
+  const read = (words: string) =>
+    answerShowName(NAMED_HABIT, words, NAME_CONTEXT);
+  ['yes', 'yes please', 'yeah'].forEach((words) => {
+    const turn = read(words);
+    assert.equal(turn.kind, 'write', words);
+    if (turn.kind === 'write') assert.equal(turn.lockScreenName, 'Pills');
+  });
+  ['no', 'no thanks', 'skip'].forEach((words) =>
+    assert.equal(read(words).kind, 'kept', words),
+  );
+  assert.equal(read('what is the weather like').kind, 'again');
+});
+
+test('a name longer than the cap is cut when it is written', () => {
+  const turn = answerShowName(
+    { name: 'x'.repeat(80), lockScreenName: null },
+    'yes',
+    NAME_CONTEXT,
+  );
+  assert.equal(turn.kind, 'write');
+  if (turn.kind === 'write') assert.equal(turn.lockScreenName?.length, 60);
+});
+
+test('hiding a shown name by voice is one step and writes null', () => {
+  const turn = planNameRequest(
+    { name: 'Pills', lockScreenName: 'Pills' },
+    false,
+  );
+  assert.equal(turn.kind, 'write');
+  if (turn.kind === 'write') assert.equal(turn.lockScreenName, null);
+  assert.equal(planNameRequest(NAMED_HABIT, false).kind, 'kept');
+});
+
+const NAME_HABITS = [
+  { id: 'a', name: 'Pills', lockScreenName: null, isPrivate: true },
+  { id: 'b', name: 'Stretch', lockScreenName: 'Stretch', isPrivate: false },
+];
+
+test('what Forget hid is left out of every read of the noticed docs, and an unreadable pattern is never shown', () => {
+  const state = (forgottenAt: number | null) =>
+    ({
+      helm: {
+        profile: { forgottenAt },
+        patterns: {
+          items: [
+            { id: 'old', createdAt: 100 },
+            { id: 'new', createdAt: 300 },
+            { id: 'bad', createdAt: 300, isUnreadable: true },
+          ],
+        },
+        observations: {
+          items: [
+            { id: 'o1', createdAt: 100 },
+            { id: 'o2', createdAt: 300 },
+          ],
+        },
+        unseenReflections: {
+          items: [
+            { id: 'r1', createdAt: 100 },
+            { id: 'r2', createdAt: 300 },
+          ],
+        },
+      },
+    }) as never;
+  const ids = (list: { id: string }[]) => list.map((one) => one.id);
+  assert.deepEqual(ids(selectShownPatterns(state(200))), ['new']);
+  assert.deepEqual(ids(selectShownObservations(state(200))), ['o2']);
+  assert.deepEqual(ids(selectShownReflections(state(300))), []);
+  assert.deepEqual(ids(selectShownPatterns(state(null))), ['old', 'new']);
+});
+
+test('a spoken or typed lock screen name request is read as one habit and a direction', () => {
+  const show = readNameRequest(
+    "show Stretch's name on the lock screen",
+    NAME_HABITS,
+  );
+  assert.equal(show?.habit.id, 'b');
+  assert.equal(show?.isShown, true);
+  const hide = readNameRequest(
+    'hide pills name on the lockscreen',
+    NAME_HABITS,
+  );
+  assert.equal(hide?.habit.id, 'a');
+  assert.equal(hide?.isShown, false);
+  assert.equal(
+    readNameRequest('show my name on the lock screen', NAME_HABITS),
+    null,
+  );
+  assert.equal(readNameRequest('took my pills', NAME_HABITS), null);
+  assert.equal(
+    readNameRequest(
+      'show pills and stretch name on the lock screen',
+      NAME_HABITS,
+    ),
+    null,
+  );
+});
+
+test('a private habit name is never in the line said while unattended, and showing it writes nothing until a yes', () => {
+  const [pills] = NAME_HABITS;
+  const asked = planNameRequest(pills!, true);
+  assert.equal(asked.kind, 'ask');
+  assert.ok(toNameLine(asked, pills!, false).includes('Pills'));
+  const quietAsk = toNameLine(asked, pills!, true);
+  assert.ok(!quietAsk.includes('Pills'));
+  assert.ok(quietAsk.includes('Private habit'));
+  const yes = answerShowName(pills!, 'yes', NAME_CONTEXT);
+  assert.equal(yes.kind, 'write');
+  assert.ok(!toNameLine(yes, pills!, true).includes('Pills'));
+  const hide = planNameRequest({ ...pills!, lockScreenName: 'Pills' }, false);
+  assert.ok(!toNameLine(hide, pills!, true).includes('Pills'));
+});
+
+test('a private thing is a bare Busy block in the calendar the plan is kept in', () => {
+  const START = Date.parse('2026-11-17T22:00:00Z');
+  const [event] = buildDesired({
+    now: Date.parse('2026-11-17T17:00:00Z'),
+    timeZone: 'America/Los_Angeles',
+    slots: [
+      {
+        dayKey: '2026-11-17',
+        slotId: 's1',
+        taskId: 't1',
+        startAt: START,
+        endAt: START + 1_800_000,
+        status: 'kept',
+        decidedAt: null,
+        isAim: false,
+        isLetGo: false,
+      },
+    ],
+    tasks: [
+      {
+        id: 't1',
+        title: 'Refill the inhaler',
+        isPrivate: true,
+        status: 'open',
+        dueAt: null,
+        durationMinutes: null,
+        hasMeets: false,
+        lastEditedAt: null,
+      },
+    ],
+    habits: [],
+  });
+  const body = toEventBody(event, 'Aria');
+  assert.equal(body.summary, 'Busy');
+  assert.equal(body.visibility, 'private');
+  assert.ok(!JSON.stringify(body).includes('inhaler'));
+  assert.ok(!('description' in body));
+});
+
 const DAY = '2026-11-16';
 const quiet = (
   facts: PrivacyFacts,
@@ -1981,6 +2170,8 @@ const quietProject = (name: string) => ({
   emoji: null,
   objective: null,
   targetDate: null,
+  projectKind: 'project' as const,
+  why: null,
 });
 
 const quietCommand = (over: Record<string, unknown>) => ({
@@ -2007,6 +2198,8 @@ test('a project made quiet in the same reply is stored quiet and private, with i
         whoRefs: [],
         placeRefs: [],
         projectRef: 'Anniversary trip',
+        questions: [],
+        meeting: null,
       },
     ],
     projectCommands: [quietProject('Anniversary trip')],
@@ -2069,6 +2262,9 @@ test('a project with more things than fit says how many are not private yet', ()
       {
         id: 'project-1',
         name: 'Anniversary trip',
+        kind: 'project' as const,
+        targetDate: null,
+        researchOffers: [],
         emoji: null,
         whoRoles: {},
         roleNotes: {},
@@ -2123,6 +2319,9 @@ test('keeping a stored project quiet writes an Undo effect and makes its open ta
       {
         id: 'project-1',
         name: 'Anniversary trip',
+        kind: 'project' as const,
+        targetDate: null,
+        researchOffers: [],
         emoji: null,
         whoRoles: {},
         roleNotes: {},
@@ -2179,6 +2378,8 @@ test('a quiet turn swaps its spoken line for the screen line and keeps the real 
         whoRefs: [],
         placeRefs: [],
         projectRef: null,
+        questions: [],
+        meeting: null,
       },
     ],
     quietCommands: [
@@ -2387,6 +2588,9 @@ const quietPlan = (
       {
         id: 'project-1',
         name: 'Anniversary',
+        kind: 'project' as const,
+        targetDate: null,
+        researchOffers: [],
         emoji: null,
         whoRoles: {},
         roleNotes: {},
@@ -2438,6 +2642,9 @@ test('two quiet projects share one write budget for their children, and the seco
   const project = (id: string, name: string) => ({
     id,
     name,
+    kind: 'project' as const,
+    targetDate: null,
+    researchOffers: [],
     emoji: null,
     whoRoles: {},
     roleNotes: {},
@@ -2537,6 +2744,9 @@ test('a note kept quiet directly and through its project in one turn gets one Un
       {
         id: 'project-1',
         name: 'Anniversary',
+        kind: 'project' as const,
+        targetDate: null,
+        researchOffers: [],
         emoji: null,
         whoRoles: {},
         roleNotes: {},
@@ -2604,6 +2814,8 @@ test('a new task kept quiet keeps the health mark code gave it', () => {
         whoRefs: [],
         placeRefs: [],
         projectRef: null,
+        questions: [],
+        meeting: null,
       },
     ] as never,
     quietCommands: [

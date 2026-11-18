@@ -15,6 +15,7 @@ import {
   readHabitStatusOn,
   type ClockWindow,
 } from './nomos/habitDay.js';
+import { readPlace, type ImportancePlace } from './nomos/importanceOrder.js';
 import { readPrivacy, type PrivacyClass, type PrivateMark } from './privacy.js';
 
 const HABITS_READ = 200;
@@ -32,7 +33,7 @@ export interface HabitWords {
   notes: string | null;
   medicine: { name: string; dose: string | null } | null;
   windows: Record<string, { label: string }>;
-  importance: unknown;
+  importance: ImportancePlace | null;
   privateMark: PrivateMark | null;
   isPrivacyCleared: boolean;
 }
@@ -183,7 +184,7 @@ export const openLiveHabit = (
           ? { name: medicine.name, dose: toText(medicine.dose) }
           : null,
       windows: toWindowLabels(words.windows),
-      importance: words.importance ?? null,
+      importance: readPlace(words.importance),
       privateMark: toMark(words.privateMark),
       isPrivacyCleared: words.isPrivacyCleared === true,
       status,
