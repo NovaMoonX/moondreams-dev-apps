@@ -47,6 +47,9 @@ import type {
   CardStatementSealed,
   StartedPaymentDoc,
   StartedPaymentSealed,
+  RecurringChargesDoc,
+  RecurringChargesSealed,
+  RecurringStream,
   ExpenseDoc,
   ExpenseSealed,
   RuleDoc,
@@ -492,6 +495,32 @@ const STARTED_PAYMENT_SEALED_FIELDS = {
   amountCents: 'never',
 } satisfies Record<keyof StartedPaymentSealed, ShareDecision>;
 
+const RECURRING_CHARGES_DOC_FIELDS = {
+  id: 'notUseful',
+  asOf: 'notUseful',
+  sealed: 'never',
+} satisfies Record<keyof RecurringChargesDoc, ShareDecision>;
+
+const RECURRING_CHARGES_SEALED_FIELDS = {
+  streams: 'never',
+} satisfies Record<keyof RecurringChargesSealed, ShareDecision>;
+
+const RECURRING_STREAM_FIELDS = {
+  streamId: 'notUseful',
+  providerAccountId: 'never',
+  description: 'never',
+  merchantName: 'never',
+  frequency: 'never',
+  averageCents: 'never',
+  lastCents: 'never',
+  firstOn: 'never',
+  lastOn: 'never',
+  nextOn: 'never',
+  status: 'notUseful',
+  isActive: 'notUseful',
+  category: 'never',
+} satisfies Record<keyof RecurringStream, ShareDecision>;
+
 const EXPENSE_DOC_FIELDS = {
   id: 'notUseful',
   createdAt: 'notUseful',
@@ -794,6 +823,9 @@ export const SHARE_FIELDS = {
   CardStatementSealed: CARD_STATEMENT_SEALED_FIELDS,
   StartedPaymentDoc: STARTED_PAYMENT_DOC_FIELDS,
   StartedPaymentSealed: STARTED_PAYMENT_SEALED_FIELDS,
+  RecurringChargesDoc: RECURRING_CHARGES_DOC_FIELDS,
+  RecurringChargesSealed: RECURRING_CHARGES_SEALED_FIELDS,
+  RecurringStream: RECURRING_STREAM_FIELDS,
   ExpenseDoc: EXPENSE_DOC_FIELDS,
   ExpenseSealed: EXPENSE_SEALED_FIELDS,
   RuleDoc: RULE_DOC_FIELDS,
@@ -835,6 +867,7 @@ export const NOT_STORED: Record<string, string> = {
   OpenAccountBalance: 'decrypted view of AccountBalanceDoc',
   OpenCardStatement: 'decrypted view of CardStatementDoc',
   OpenStartedPayment: 'decrypted view of StartedPaymentDoc',
+  OpenRecurringCharges: 'decrypted view of RecurringChargesDoc',
   OpenExpense: 'decrypted view of ExpenseDoc',
   OpenRule: 'decrypted view of RuleDoc',
   OpenReceiptImage: 'decrypted view of ReceiptImageDoc',
