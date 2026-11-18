@@ -6,7 +6,6 @@ import {
   getDocs,
   limit,
   query,
-  runTransaction,
   updateDoc,
   where,
   writeBatch,
@@ -14,6 +13,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 import { createSealedReader } from '@lib/security';
 
 import { store } from '@/store';
@@ -106,8 +106,8 @@ async function changePattern(
   if (!navigator.onLine) return 'offline';
   const ref = doc(patternsOf(uid), id);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<PatternChangeResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
@@ -421,7 +421,7 @@ async function writeFinding(
   const ref = doc(patternsOf(uid), id);
   const lines = buildPatternLines({ finding, name: readSubjectName(finding) });
   const privacy = readPrivacyOf(finding, observations);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? (snapshot.data() as Pattern) : null;
     const now = Date.now();
@@ -763,7 +763,7 @@ export async function forgetWords(
   patternId: string,
   observationIds: string[],
 ) {
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const ref = doc(patternsOf(uid), patternId);
     const snapshot = await transaction.get(ref);
     observationIds.forEach((id) =>
@@ -799,7 +799,7 @@ export async function forgetTurnObservations(
         pattern.evidence.kind === 'said' &&
         pattern.evidence.observationIds.some((id) => ids.has(id)),
     );
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const reads = await Promise.all(
       citing.map((pattern) =>
         transaction.get(doc(patternsOf(uid), pattern.id)),
@@ -917,8 +917,8 @@ export async function undoPatternExecution(
     store.getState().helm.profile?.timeZone ?? 'UTC',
   );
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<UndoResult> => {
         const snapshot = await transaction.get(executionRef);
         const original = snapshot.exists()
