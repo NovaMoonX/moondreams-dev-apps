@@ -8,7 +8,7 @@ import { HORIZON_NEXT_WORDS } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   listCarriedCosts,
-  shiftNextDate,
+  shiftNextAnchor,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
 import type { HorizonSealed } from '@apps/runway/types';
@@ -87,10 +87,10 @@ function HorizonNextFields({
                     {isNewDayUsable && cost.schedule.anchor !== null && (
                       <p className='text-muted-foreground shrink-0 text-sm'>
                         {formatDateOrdinalUTC(
-                          shiftNextDate(
+                          shiftNextAnchor(
                             horizon.happensOn,
                             { happensOn: newDay, startsOn: null, today },
-                            cost.schedule.anchor,
+                            { ...cost.schedule, anchor: cost.schedule.anchor },
                           ),
                         )}
                       </p>

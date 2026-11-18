@@ -835,8 +835,8 @@ export interface NextArchive {
 /**
  * Writes an event's next state (finished, called off, open again, or its money released) as one transaction:
  * a whole-payload version from `on`, one `planChange` and, when money moves, the `transfer`. The version's id
- * is the caller's, so a second tap or another device finds it written and resolves false. The header is
- * untouched: `endedAt` and `archivedAt` are write-once, and an event can come back.
+ * is the caller's, so a second tap or another device finds it written and resolves false. The event's own
+ * header is untouched (an event can come back); only an Undo of Bring back clears the next event's `archivedAt`.
  */
 export async function setHorizonStateWith(
   uid: string,
@@ -971,7 +971,12 @@ export async function setHorizonStateWith(
       kind: 'planChange',
       createdAt: now,
       effectiveFrom: input.on,
-      itemIds: [input.itemId, ...placeIds, ...(input.alsoItemIds ?? [])],
+      itemIds: [
+        input.itemId,
+        ...placeIds,
+        ...(input.alsoItemIds ?? []),
+        ...(unarchives ? [unarchives] : []),
+      ],
       sealed: changeSealed,
     } satisfies ChangeDoc);
     writes.forEach((write) => write?.());
@@ -1370,6 +1375,11 @@ export async function undoHorizonState(
   });
 }
 
+export type PlanNextOutcome =
+  | { kind: 'planned'; itemId: string; versionId: string }
+  | { kind: 'exists' }
+  | { kind: 'changed' };
+
 export interface PlanNextInput {
   /** The finished or called-off event the next one is planned from. */
   fromId: string;
@@ -1382,12 +1392,12 @@ export interface PlanNextInput {
   today: DateOnly;
 }
 
-/** Plans the next event from a done one: a header, a first version and one "Lined up" entry listed on both, in one transaction. Resolves null when it was already planned or the earlier event is gone. */
+/** Plans the next event from a done one: a header, a first version and one "Lined up" entry listed on both, in one transaction. Resolves `exists` when the next event is already there and `changed` when the earlier event moved on since the caller read it. */
 export async function planNextHorizon(
   uid: string,
   encryption: RunwayEncryption,
   { fromId, nextId, horizon, from, baseVersionId, today }: PlanNextInput,
-): Promise<{ itemId: string; versionId: string } | null> {
+): Promise<PlanNextOutcome> {
   const now = Date.now();
   const versionId = generateUuid();
   const fromVersionId = getNextVersionId(baseVersionId);
@@ -1405,15 +1415,15 @@ export async function planNextHorizon(
       encryption,
     ),
   ]);
-  const isWritten = await runHeldTransaction(uid, async (transaction) => {
+  return runHeldTransaction<PlanNextOutcome>(uid, async (transaction) => {
     const [existing, fromItem, fromNext] = await Promise.all([
       transaction.get(planDoc(uid, 'items', nextId)),
       transaction.get(planDoc(uid, 'items', fromId)),
       transaction.get(planDoc(uid, 'versions', fromVersionId)),
     ]);
-    if (existing.exists()) return false;
+    if (existing.exists()) return { kind: 'exists' };
     if (!fromItem.exists()) throw new Error(HORIZON_NEXT_WORDS.gone);
-    if (fromNext.exists()) return false;
+    if (fromNext.exists()) return { kind: 'changed' };
     transaction.set(planDoc(uid, 'versions', fromVersionId), {
       id: fromVersionId,
       itemId: fromId,
@@ -1455,9 +1465,8 @@ export async function planNextHorizon(
       ],
       sealed: changeSealed,
     } satisfies ChangeDoc);
-    return true;
+    return { kind: 'planned', itemId: nextId, versionId };
   });
-  return isWritten ? { itemId: nextId, versionId } : null;
 }
 
 export interface UndoPlanNextInput {
