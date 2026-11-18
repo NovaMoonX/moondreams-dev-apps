@@ -8,6 +8,7 @@ import AppToggle from '@/components/AppToggle';
 import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import {
   FINISHED_SALE_STATUS,
   SALE_PAGE_PATH,
@@ -25,6 +26,7 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
   const { confirm } = useActionModal();
   const [pending, setPending] = useState<SaleLinkAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const waitFor = useWaitUntilShown(sale);
   const linkId = sale.publicLinkId;
   const isFinished = sale.status === FINISHED_SALE_STATUS;
   const isOn = pending === null ? linkId !== null : pending !== 'stop';
@@ -34,8 +36,9 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
     setPending(action);
     setError(null);
     const result = await changeSaleLink(sale.id, action);
-    setPending(null);
     if (result.outcome === 'failed') setError(result.reason);
+    else await waitFor((current) => current.publicLinkId === result.linkId);
+    setPending(null);
   };
 
   const handleToggle = async (isChecked: boolean) => {

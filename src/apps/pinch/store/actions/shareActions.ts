@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
+import { waitUntil } from '@/utils/waitUntil';
 import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
 import {
   selectIngredientsById,
@@ -80,20 +81,6 @@ const sendShareChange = async (
   }
 };
 
-const SETTLE_POLLS = 40;
-const SETTLE_POLL_MS = 100;
-
-/** The record reaches the store a moment after the callable answers; waiting keeps the screen from showing the old link in between. Gives up quietly, since the change is already made. */
-const waitForListener = async (isArrived: () => boolean): Promise<void> => {
-  const poll = async (left: number): Promise<void> => {
-    if (left === 0 || isArrived()) return;
-    await new Promise((resolve) => window.setTimeout(resolve, SETTLE_POLL_MS));
-    return poll(left - 1);
-  };
-
-  return poll(SETTLE_POLLS);
-};
-
 interface SaveShareInput {
   kind: ShareKind;
   sourceId: string;
@@ -141,7 +128,7 @@ export const saveShare = createAsyncThunk<
     if ('error' in result) return rejectWithValue(result.error);
     if (result.shareId === null) return rejectWithValue(TRY_AGAIN[action]);
 
-    await waitForListener(() => {
+    await waitUntil(() => {
       const arrived = selectShareBySource(kind, sourceId)(getState());
       return arrived !== null && arrived.updatedAt !== existing?.updatedAt;
     });
@@ -160,7 +147,7 @@ export const renewShareLink = createAsyncThunk<
   const renewedId = result.shareId;
   if (renewedId === null) return rejectWithValue(TRY_AGAIN.renew);
 
-  await waitForListener(() =>
+  await waitUntil(() =>
     getState().pinch.shares.items.some((share) => share.id === renewedId),
   );
 
@@ -176,7 +163,7 @@ export const stopSharing = createAsyncThunk<
   const result = await sendShareChange({ action: 'delete', shareId }, 'delete');
   if ('error' in result) return rejectWithValue(result.error);
 
-  await waitForListener(
+  await waitUntil(
     () => !getState().pinch.shares.items.some((share) => share.id === shareId),
   );
 });
