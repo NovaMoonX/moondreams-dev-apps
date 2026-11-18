@@ -98,8 +98,13 @@ function HorizonPlanNextView({
         baseVersionId: found.id,
         today: todayAsUtcDate(),
       });
-      if (written === null) {
+      if (written.kind === 'changed') {
         setError(HORIZON_NEXT_WORDS.changedFirst);
+        return;
+      }
+      if (written.kind === 'exists') {
+        addToast({ title: HORIZON_NEXT_WORDS.alreadyPlanned, type: 'info' });
+        onClose();
         return;
       }
       addToast({

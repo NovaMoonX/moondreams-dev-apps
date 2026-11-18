@@ -476,7 +476,9 @@ function HorizonEndView({
     : HORIZON_END_WORDS.finishTitle(horizon.name);
   const primary = isCallOff
     ? HORIZON_END_WORDS.callOffConfirm
-    : HORIZON_END_WORDS.finishConfirm;
+    : makesNext
+      ? HORIZON_NEXT_WORDS.finishAndPlan
+      : HORIZON_END_WORDS.finishConfirm;
 
   if (isPickerOpen) {
     return (
@@ -598,9 +600,7 @@ function HorizonEndView({
             disabled={nextRead?.blocker != null}
             onClick={() => setEditing(null)}
           >
-            {isCallOff
-              ? HORIZON_NEXT_WORDS.callOffAndPlan
-              : HORIZON_NEXT_WORDS.finishAndPlan}
+            {HORIZON_NEXT_WORDS.nextStep}
           </Button>
         ) : null
       }
@@ -696,7 +696,7 @@ function HorizonEndView({
             {HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents))}
           </MaskedText>
         </ActionTitle>
-        {isChained && (
+        {isChained && !isCallOff && (
           <div
             className={join(
               'bg-primary/10 overflow-hidden rounded-2xl shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-primary)_35%,transparent)]',
@@ -742,7 +742,7 @@ function HorizonEndView({
               onClick={() => choose('place')}
             />
           </div>
-          {!isChained && (
+          {!isChained && !isCallOff && (
             <div className={rowClass('next')} aria-current={pick === 'next'}>
               <ActionRow
                 isGrouped

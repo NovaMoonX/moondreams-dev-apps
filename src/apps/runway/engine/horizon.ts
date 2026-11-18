@@ -759,6 +759,30 @@ export const shiftNextDate = (
   return plan.today === undefined ? shifted : Math.max(shifted, plan.today);
 };
 
+/** Where a cost's first date lands in the next event: a repeating schedule moves on to its first date on or after `plan.today`, keeping its repeat day; a one-time date takes the plain clamp. */
+export const shiftNextAnchor = (
+  fromHappensOn: DateOnly,
+  plan: NextHorizonPlan,
+  schedule: Schedule & { anchor: DateOnly },
+): DateOnly => {
+  const shifted = shiftNextDate(
+    fromHappensOn,
+    { ...plan, today: undefined },
+    schedule.anchor,
+  );
+  if (plan.today === undefined || shifted >= plan.today) return shifted;
+  if (schedule.kind === 'once' || schedule.kind === 'irregular')
+    return plan.today;
+  return (
+    occurrences(
+      { ...schedule, anchor: shifted },
+      { onDate: null, afterCount: null },
+      plan.today,
+      addUtcDays(plan.today, 3650),
+    )[0] ?? plan.today
+  );
+};
+
 /** The costs an event's next one copies, each with the amount it starts at: costs that became bills or were removed are left out, and a one-time cost that was paid starts at exactly what it came to. */
 export function listCarriedCosts(
   horizon: HorizonSealed,
@@ -807,7 +831,12 @@ export function getNextHorizon(
         schedule: {
           ...cost.schedule,
           anchor:
-            cost.schedule.anchor === null ? null : shift(cost.schedule.anchor),
+            cost.schedule.anchor === null
+              ? null
+              : shiftNextAnchor(horizon.happensOn, plan, {
+                  ...cost.schedule,
+                  anchor: cost.schedule.anchor,
+                }),
         },
         ending: {
           ...cost.ending,

@@ -196,8 +196,8 @@ assert.equal(
 );
 assert.equal(
   clamped.costs[3].schedule.anchor,
-  day('2026-11-19'),
-  'a long past start lands on today too',
+  day('2026-12-05'),
+  'a monthly cost whose shifted start is past lands on its next repeat day on or after today',
 );
 assert.equal(
   clamped.happensUntil,
