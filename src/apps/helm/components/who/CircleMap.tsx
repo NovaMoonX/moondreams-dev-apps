@@ -270,7 +270,11 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
         : toCircleSummary({
             ...base,
             id: selectedId,
-            tasks: openTasks,
+            tasks: openTasks.map((task) => ({
+              ...task,
+              isPrivate:
+                readRecordPrivacy('task', task, parentIndex) === 'private',
+            })),
             keyDates: keyDatesByWho[selectedId] ?? [],
             todayKey,
             lastMentionedAt:
@@ -282,6 +286,7 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
       selectedId,
       isSelectedShown,
       openTasks,
+      parentIndex,
       keyDatesByWho,
       todayKey,
       people,
@@ -432,6 +437,7 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
     return () => {
       observer?.disconnect();
       cy.removeAllListeners();
+      setHover(null);
     };
   }, [cy, uid, filter]);
 

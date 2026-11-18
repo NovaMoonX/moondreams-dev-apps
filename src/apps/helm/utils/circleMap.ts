@@ -86,8 +86,14 @@ type MapWho = Pick<
 
 type MapConnection = Pick<
   OpenConnection,
-  'whoIds' | 'kind' | 'status' | 'fromFirst' | 'fromSecond' | 'since'
-> & { lastEditedAt?: number | null };
+  | 'whoIds'
+  | 'kind'
+  | 'status'
+  | 'fromFirst'
+  | 'fromSecond'
+  | 'since'
+  | 'lastEditedAt'
+>;
 
 interface MapInput {
   people: readonly MapWho[];
@@ -437,10 +443,11 @@ const KEY_DATE_NEAR_DAYS = 30;
 export const toCircleSummary = (
   input: MapInput & {
     id: string;
-    tasks: readonly Pick<
+    /** `isPrivate` is the task's own class in effect, so a private task's title stays off the card while nobody is looking. */
+    tasks: readonly (Pick<
       OpenTask,
       'title' | 'whoIds' | 'due' | 'status' | 'isUnreadable'
-    >[];
+    > & { isPrivate: boolean })[];
     keyDates: readonly IndexEntry[];
     todayKey: string;
     lastMentionedAt: number | null;
@@ -477,6 +484,7 @@ export const toCircleSummary = (
     .flatMap((task) =>
       task.status === 'open' &&
       !task.isUnreadable &&
+      !(input.isMasked && task.isPrivate) &&
       task.due !== null &&
       task.whoIds.includes(input.id)
         ? [{ title: task.title, due: task.due }]

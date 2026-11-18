@@ -1767,6 +1767,7 @@ test("a map line says what it means, its date and when it is a guess, and the pe
         fromSecond: 'friend' as const,
         status: null,
         since: null,
+        lastEditedAt: null,
       },
     ],
     figuredOut: new Map(),
@@ -1794,6 +1795,7 @@ test("a map line says what it means, its date and when it is a guess, and the pe
         due: { kind: 'day', date: Date.parse('2026-11-20') },
         status: 'open',
         isUnreadable: false,
+        isPrivate: false,
       },
     ],
     keyDates: [['k1', 'birthday', 11, 25, 1990, null]],
@@ -1814,6 +1816,32 @@ test("a map line says what it means, its date and when it is a guess, and the pe
     }),
     [],
   );
+  const masked = {
+    ...base,
+    isMasked: true,
+    privateIds: new Set(['sam']),
+  };
+  const maskedSummary = toCircleSummary({
+    ...masked,
+    id: 'dana',
+    tasks: [
+      {
+        title: 'Book the consult',
+        whoIds: ['dana'],
+        due: { kind: 'day', date: Date.parse('2026-11-19') },
+        status: 'open',
+        isUnreadable: false,
+        isPrivate: true,
+      },
+    ],
+    keyDates: [],
+    todayKey,
+    lastMentionedAt: null,
+  });
+  assert.ok(!maskedSummary.some((line) => line.includes('Book the consult')));
+  assert.ok(!maskedSummary.some((line) => line.includes('Sam')));
+  const maskedLine = toCircleLine({ ...masked, id: 'dana_sam_couple' });
+  assert.ok(maskedLine && !maskedLine.sentence.includes('Sam'));
 });
 
 test('passing people never reach the map, and a pet appears only when linked', () => {
