@@ -5,7 +5,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
@@ -13,8 +12,16 @@ import {
 import { db } from '@/lib/firebase/config';
 import { getDayIndex } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import type { EventSuggestion, TimelineEvent, TripSpace } from '@apps/waypoint/types';
-import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
+import type {
+  EventSuggestion,
+  TimelineEvent,
+  TripSpace,
+} from '@apps/waypoint/types';
+import {
+  cancelEventReminder,
+  scheduleEventReminder,
+} from '@apps/waypoint/utils/reminders';
 import { isTripAdmin, isTripMember } from '@apps/waypoint/utils/roleGuards';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
@@ -33,16 +40,22 @@ function validateSuggestedTime(trip: TripSpace, fields: SuggestedTimeFields) {
       return 'Choose a valid start time.';
     }
     const isEndBeforeStart =
-      fields.suggestedEndAt !== null && fields.suggestedEndAt <= fields.suggestedStartAt;
-    return isEndBeforeStart ? 'The suggested end time must be after the start time.' : null;
+      fields.suggestedEndAt !== null &&
+      fields.suggestedEndAt <= fields.suggestedStartAt;
+    return isEndBeforeStart
+      ? 'The suggested end time must be after the start time.'
+      : null;
   }
 
   if (fields.suggestedDayIndex === null || fields.suggestedStartTime === null) {
     return 'Choose a valid day and start time.';
   }
   const isEndBeforeStart =
-    fields.suggestedEndTime !== null && fields.suggestedEndTime <= fields.suggestedStartTime;
-  return isEndBeforeStart ? 'The suggested end time must be after the start time.' : null;
+    fields.suggestedEndTime !== null &&
+    fields.suggestedEndTime <= fields.suggestedStartTime;
+  return isEndBeforeStart
+    ? 'The suggested end time must be after the start time.'
+    : null;
 }
 
 interface CreateEventSuggestionInput {
@@ -71,7 +84,9 @@ export const createEventSuggestion = createAsyncThunk<
   'waypoint/eventSuggestions/create',
   async ({ uid, trip, ...fields }, { rejectWithValue }) => {
     if (!isTripMember(trip, uid)) {
-      return rejectWithValue('You do not have permission to suggest changes to this trip.');
+      return rejectWithValue(
+        'You do not have permission to suggest changes to this trip.',
+      );
     }
     if (!fields.suggestedTitle.trim()) {
       return rejectWithValue('Enter a title for the suggested change.');
@@ -174,18 +189,23 @@ export const updateEventSuggestion = createAsyncThunk<
     try {
       // Reads the live document first: an Admin may have approved or declined this
       // suggestion while the edit modal was open, and the edit must not resurrect it.
-      const currentSuggestion = await runTransaction(db, async (transaction) => {
-        const snapshot = await transaction.get(suggestionRef);
-        if (!snapshot.exists()) {
-          throw new Error('This suggestion was already approved or removed.');
-        }
+      const currentSuggestion = await runHeldTransaction(
+        trip.id,
+        async (transaction) => {
+          const snapshot = await transaction.get(suggestionRef);
+          if (!snapshot.exists()) {
+            throw new Error('This suggestion was already approved or removed.');
+          }
 
-        transaction.update(suggestionRef, changes);
-        return snapshot.data() as EventSuggestion;
-      });
+          transaction.update(suggestionRef, changes);
+          return snapshot.data() as EventSuggestion;
+        },
+      );
       return { ...currentSuggestion, ...changes };
     } catch (error) {
-      return rejectWithValue(getErrorMessage(error, 'Unable to save this suggestion.'));
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this suggestion.'),
+      );
     }
   },
 );
@@ -205,7 +225,9 @@ export const toggleSuggestionUpvote = createAsyncThunk<
   'waypoint/eventSuggestions/toggleUpvote',
   async ({ uid, trip, suggestionId, isUpvoted }, { rejectWithValue }) => {
     if (!isTripMember(trip, uid)) {
-      return rejectWithValue('You do not have permission to vote on this suggestion.');
+      return rejectWithValue(
+        'You do not have permission to vote on this suggestion.',
+      );
     }
 
     const suggestionRef = doc(
@@ -224,7 +246,10 @@ export const toggleSuggestionUpvote = createAsyncThunk<
 );
 
 /** The event's time fields once a suggestion is accepted; its zone stays whatever the source event had. */
-function getApprovedEventTimeFields(trip: TripSpace, suggestion: EventSuggestion) {
+function getApprovedEventTimeFields(
+  trip: TripSpace,
+  suggestion: EventSuggestion,
+) {
   if (isRelativeTrip(trip)) {
     return {
       dayIndex: suggestion.suggestedDayIndex,
@@ -237,7 +262,8 @@ function getApprovedEventTimeFields(trip: TripSpace, suggestion: EventSuggestion
   }
 
   const startAt = suggestion.suggestedStartAt;
-  const dayIndex = startAt === null ? null : getDayIndex(trip.startDate, startAt);
+  const dayIndex =
+    startAt === null ? null : getDayIndex(trip.startDate, startAt);
   const endDayIndex =
     suggestion.suggestedEndAt === null
       ? dayIndex
@@ -262,7 +288,10 @@ interface ApproveEventSuggestionInput {
 // A moved start can land at or before the old arrival, which then no longer means anything.
 function getKeptArriveBy(source: TimelineEvent, newStartTime: string | null) {
   const arriveByTime = source.arriveByTime ?? null;
-  const isStillEarlier = arriveByTime !== null && newStartTime !== null && arriveByTime < newStartTime;
+  const isStillEarlier =
+    arriveByTime !== null &&
+    newStartTime !== null &&
+    arriveByTime < newStartTime;
   return isStillEarlier
     ? { arriveByTime, arriveByNote: source.arriveByNote ?? null }
     : { arriveByTime: null, arriveByNote: null };
@@ -279,8 +308,18 @@ export const approveEventSuggestion = createAsyncThunk<
       return rejectWithValue('Only trip admins can approve suggested changes.');
     }
 
-    const newEventRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'));
-    const sourceEventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', sourceEvent.id);
+    const newEventRef = doc(
+      collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'),
+    );
+    const sourceEventRef = doc(
+      db,
+      'apps',
+      'waypoint',
+      'trips',
+      trip.id,
+      'events',
+      sourceEvent.id,
+    );
     const suggestionRef = doc(
       db,
       'apps',
@@ -300,7 +339,8 @@ export const approveEventSuggestion = createAsyncThunk<
         id: newEventRef.id,
         title: suggestion.suggestedTitle,
         ...timeFields,
-        arriveByTime: getKeptArriveBy(sourceEvent, timeFields.startTime).arriveByTime,
+        arriveByTime: getKeptArriveBy(sourceEvent, timeFields.startTime)
+          .arriveByTime,
         timezone: sourceEvent.timezone ?? null,
         reminderMinutesBefore: sourceEvent.reminderMinutesBefore,
         reminderEnabled: sourceEvent.reminderEnabled,
@@ -312,7 +352,7 @@ export const approveEventSuggestion = createAsyncThunk<
       // Everything is re-read inside the transaction: another Admin may have approved or
       // declined this suggestion, archived the event, or the owner may have edited the
       // suggestion since this card was rendered.
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(trip.id, async (transaction) => {
         const [sourceSnapshot, suggestionSnapshot] = await Promise.all([
           transaction.get(sourceEventRef),
           transaction.get(suggestionRef),
@@ -320,7 +360,10 @@ export const approveEventSuggestion = createAsyncThunk<
         if (!suggestionSnapshot.exists()) {
           throw new Error('This suggestion was already approved or declined.');
         }
-        if (!sourceSnapshot.exists() || sourceSnapshot.data().isArchived === true) {
+        if (
+          !sourceSnapshot.exists() ||
+          sourceSnapshot.data().isArchived === true
+        ) {
           throw new Error('This event was already replaced or archived.');
         }
         const currentSuggestion = suggestionSnapshot.data() as EventSuggestion;
@@ -334,9 +377,15 @@ export const approveEventSuggestion = createAsyncThunk<
               'suggestedStartTime',
               'suggestedEndTime',
             ] as const
-          ).some((field) => (currentSuggestion[field] ?? null) !== (suggestion[field] ?? null))
+          ).some(
+            (field) =>
+              (currentSuggestion[field] ?? null) !==
+              (suggestion[field] ?? null),
+          )
         ) {
-          throw new Error('This suggestion was just edited. Take another look before approving.');
+          throw new Error(
+            'This suggestion was just edited. Take another look before approving.',
+          );
         }
 
         const newEvent: TimelineEvent = {
@@ -350,7 +399,10 @@ export const approveEventSuggestion = createAsyncThunk<
           latitude: currentSuggestion.suggestedLatitude,
           longitude: currentSuggestion.suggestedLongitude,
           place: currentSuggestion.suggestedPlace,
-          ...getKeptArriveBy(sourceSnapshot.data() as TimelineEvent, timeFields.startTime),
+          ...getKeptArriveBy(
+            sourceSnapshot.data() as TimelineEvent,
+            timeFields.startTime,
+          ),
           reminderId,
           isArchived: false,
           archivedBy: null,
@@ -372,7 +424,9 @@ export const approveEventSuggestion = createAsyncThunk<
       });
     } catch (error) {
       await cancelEventReminder(reminderId);
-      return rejectWithValue(getErrorMessage(error, 'Unable to approve this suggestion.'));
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to approve this suggestion.'),
+      );
     }
 
     await cancelEventReminder(sourceEvent.reminderId);
@@ -396,6 +450,16 @@ export const declineEventSuggestion = createAsyncThunk<
       return rejectWithValue('Only trip admins can decline suggested changes.');
     }
 
-    await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'eventSuggestions', suggestionId));
+    await deleteDoc(
+      doc(
+        db,
+        'apps',
+        'waypoint',
+        'trips',
+        trip.id,
+        'eventSuggestions',
+        suggestionId,
+      ),
+    );
   },
 );

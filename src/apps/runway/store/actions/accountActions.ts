@@ -1,4 +1,5 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -92,7 +93,7 @@ export async function createAccount(
     sealJson(toSealed(input), encryption),
     getChangeDoc(encryption, ACCOUNT_WORDS.changeAdded(input.name)),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     transaction.set(accountRef(uid, id), {
       id,
       createdAt: now,
@@ -115,7 +116,7 @@ export async function updateAccount(
   summary: string,
 ): Promise<void> {
   const change = await getChangeDoc(encryption, summary);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(accountRef(uid, accountId));
     if (!snapshot.exists()) throw new Error('The account is gone.');
     const current = await openSealed(snapshot.data() as AccountDoc, encryption);
@@ -144,7 +145,7 @@ export async function archiveAccount(
   summary: string,
 ): Promise<void> {
   const now = Date.now();
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(accountRef(uid, accountId));
     if (!snapshot.exists()) throw new Error('The account is gone.');
     const current = await openSealed(snapshot.data() as AccountDoc, encryption);
@@ -182,7 +183,7 @@ export async function setAccountHolds(
   nameOf: (itemId: string) => string,
 ): Promise<WrittenHolds[]> {
   const others = openAccounts.filter((account) => account.id !== accountId);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const [targetSnapshot, ...otherSnapshots] = await Promise.all(
       [accountId, ...others.map((account) => account.id)].map((id) =>
         transaction.get(accountRef(uid, id)),
@@ -285,7 +286,7 @@ export async function undoAccountHolds(
       entry.before.filter((id) => !entry.after.includes(id)),
     ),
   );
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const [snapshots, otherSnapshots] = await Promise.all([
       Promise.all(
         written.map((entry) =>
@@ -362,7 +363,7 @@ export async function setAccountBalance(
   balanceCents: Cents,
   balanceOn: DateOnly,
 ): Promise<void> {
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(accountRef(uid, accountId));
     if (!snapshot.exists()) throw new Error('The account is gone.');
     const current = await openSealed(snapshot.data() as AccountDoc, encryption);
