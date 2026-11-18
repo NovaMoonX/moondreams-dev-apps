@@ -2117,8 +2117,13 @@ expectKind(
     'make it for 6 people',
     'scale to 6',
     'scale it up to six',
-    'cook for six people',
+    'make it for six people',
     'enough for six people',
+    'make enough for six',
+    'i need six servings',
+    'id like 6 servings',
+    'make it serve six',
+    'it should feed six people',
     'okay pepper make six servings please',
   ],
   servingsTo(6),
@@ -2143,6 +2148,11 @@ expectKind(
   ['make to servings', 'a couple of servings', 'two servings'],
   servingsTo(2),
   'two servings',
+);
+expectKind(
+  ['make two and a half servings', 'make it for two and a half'],
+  servingsTo(2.5),
+  'a half on a count',
 );
 expectKind(
   ['make twenty four servings', 'make 24 servings'],
@@ -2172,6 +2182,7 @@ expectKind(
     'to more servings',
     'add 2 servings',
     'increase servings by two',
+    'two extra servings',
   ],
   servingsBy(2),
   'two more servings',
@@ -2181,6 +2192,7 @@ expectKind(
     'one less serving',
     'fewer servings',
     'remove a serving',
+    'take one serving off',
     'reduce the servings',
   ],
   servingsBy(-1),
@@ -2192,22 +2204,34 @@ expectKind(
   'two fewer servings',
 );
 expectKind(
-  ['double it', 'double the recipe', 'make a double batch', 'make it double'],
+  [
+    'double the recipe',
+    'make a double batch',
+    'make it double',
+    'make twice as much',
+  ],
   servingsTimes(2),
   'double',
 );
 expectKind(
-  ['halve it', 'half the recipe', 'cut it in half'],
+  [
+    'halve the recipe',
+    'half the recipe',
+    'make it half',
+    'cut the recipe in half',
+  ],
   servingsTimes(0.5),
   'halve',
 );
-expectKind(['triple it'], servingsTimes(3), 'triple');
+expectKind(['triple the recipe'], servingsTimes(3), 'triple');
 expectKind(
   [
     'how many servings',
     'how many servings is this',
     'how many people does this serve',
     'how many is this for',
+    'how many people is this for',
+    'how much does it make',
     'servings',
   ],
   { kind: 'TELL_SERVINGS' },
@@ -2233,6 +2257,13 @@ expectKind(
   'make it for then',
   'make it to a',
   'servings for',
+  'cook for six people',
+  'double it',
+  'halve it',
+  'cut it in half',
+  'go to servings',
+  'add to servings',
+  'add 0.5 servings',
 ].forEach((phrase) =>
   assert.equal(parse(phrase), null, `not a servings command: "${phrase}"`),
 );
@@ -2271,6 +2302,11 @@ assert.equal(
   'a number rounds to a half',
 );
 assert.equal(getSpokenServings(4, { kind: 'BY', delta: 2 }), 6, 'two more');
+assert.equal(
+  getSpokenServings(2, { kind: 'BY', delta: -3 }),
+  -1,
+  'three fewer than two is past the end, so it is refused, not clamped',
+);
 assert.equal(
   getSpokenServings(1, { kind: 'BY', delta: -1 }),
   0.5,

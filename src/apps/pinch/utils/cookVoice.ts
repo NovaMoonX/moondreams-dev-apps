@@ -1318,10 +1318,10 @@ const LOOSE_NOUN = '(?:people|persons?|plates?)';
 const ANY_NOUN = `(?:${STRICT_NOUN}|${LOOSE_NOUN})`;
 const ONE_SERVING = '(?:a|an|one|1)';
 const EXTRA_SERVING = '(?:another|an extra|one more|1 more)';
-/** Up to three words where a count stands; `readHeardCount` decides whether they are one. */
-const COUNT_SLOT = String.raw`(?<n>[a-z0-9.]+(?: [a-z0-9.]+){0,2})`;
+/** Up to five words where a count stands ("twenty four and a half"); `readHeardCount` decides whether they are one. */
+const COUNT_SLOT = String.raw`(?<n>[a-z0-9.]+(?: [a-z0-9.]+){0,4}?)`;
 const SERVINGS_VERB =
-  '(?:make|cook|do|set|change|scale|adjust|switch|update|put|bump|increase|decrease|reduce|lower|raise|go)';
+  '(?:make|cook|do|set|change|scale|adjust|update|bump|increase|decrease|reduce|lower|raise)';
 const SERVINGS_OBJECT =
   '(?: it| this| that| the recipe| recipe| the servings| servings| the serving size| serving size| the portions| portions)?';
 
@@ -1342,7 +1342,7 @@ const readMatchedCount = (
 const SET_SERVINGS_PATTERNS: CountPattern[] = [
   {
     pattern: new RegExp(
-      String.raw`^(?:(?<verb>${SERVINGS_VERB})${SERVINGS_OBJECT}(?: up| down)?(?: to| for| at)? )?(?:enough for )?${COUNT_SLOT} ${STRICT_NOUN}(?: instead)?$`,
+      String.raw`^(?:(?<verb>${SERVINGS_VERB}|i need|we need|i want|we want|id like|i would like|give me)${SERVINGS_OBJECT}(?: up| down)?(?: to| for| at)? )?(?:enough for )?${COUNT_SLOT} ${STRICT_NOUN}(?: instead)?$`,
     ),
     soundAlikes: 'all',
   },
@@ -1370,7 +1370,13 @@ const SET_SERVINGS_PATTERNS: CountPattern[] = [
   },
   {
     pattern: new RegExp(
-      String.raw`^(?:(?:make|cook|scale) (?:it |this )?|enough )for ${COUNT_SLOT} ${LOOSE_NOUN}$`,
+      String.raw`^(?:(?:make|scale) (?:it |this )?|(?:make )?enough )for ${COUNT_SLOT}(?: ${LOOSE_NOUN})?$`,
+    ),
+    soundAlikes: 'distinct',
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:make (?:it|this) |(?:it|this) should |so it )(?:serve|feed) ${COUNT_SLOT}(?: ${LOOSE_NOUN})?$`,
     ),
     soundAlikes: 'distinct',
   },
@@ -1386,14 +1392,16 @@ const ADD_SERVINGS_PATTERNS: (CountPattern & { sign: 1 | -1 })[] = [
   },
   {
     pattern: new RegExp(
-      String.raw`^(?:add|plus) ${COUNT_SLOT}(?: more)? ${STRICT_NOUN}$`,
+      String.raw`^(?:(?:add|plus|make) )?${COUNT_SLOT} (?:more|extra) ${STRICT_NOUN}$`,
     ),
     soundAlikes: 'all',
     sign: 1,
   },
   {
-    pattern: new RegExp(String.raw`^${COUNT_SLOT} more ${STRICT_NOUN}$`),
-    soundAlikes: 'all',
+    pattern: new RegExp(
+      String.raw`^(?:add|plus) ${COUNT_SLOT} ${STRICT_NOUN}(?: more)?$`,
+    ),
+    soundAlikes: 'distinct',
     sign: 1,
   },
   {
@@ -1419,7 +1427,7 @@ const ADD_SERVINGS_PATTERNS: (CountPattern & { sign: 1 | -1 })[] = [
   },
   {
     pattern: new RegExp(
-      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) ${ONE_SERVING} ${STRICT_NOUN}$`,
+      String.raw`^(?:(?:take away|take off|remove|drop|minus|subtract|cut|lose) ${ONE_SERVING} ${STRICT_NOUN}|take ${ONE_SERVING} ${STRICT_NOUN} (?:off|away))$`,
     ),
     soundAlikes: 'all',
     sign: -1,
@@ -1464,17 +1472,20 @@ const FACTOR_WORDS: Record<string, number> = {
   halve: 0.5,
   half: 0.5,
 };
+/** A multiple names the recipe or follows "make it", so "double it" or "cut it in half" said about an onion never rescales anything. */
 const TIMES_PATTERNS = [
-  /^(?:make )?(?<factor>double|triple|quadruple|halve|half) (?:it|this|that|the recipe|recipe|the servings|servings|the batch|the amounts|everything)$/,
-  /^(?:make )?(?:a )?(?<factor>double|triple|quadruple|half) (?:batch|recipe|portion|the recipe)$/,
-  /^make (?:it|this) (?<factor>double|triple)$/,
-  /^(?<factor>double|triple|halve) it up$/,
+  /^(?:make )?(?<factor>double|triple|quadruple|halve|half) (?:the recipe|recipe|the servings|servings|the batch|the amounts)$/,
+  /^(?:make )?(?:a )?(?<factor>double|triple|quadruple|half) (?:batch|recipe|the recipe)$/,
+  /^make (?:it|this) (?<factor>double|triple|half)$/,
+  /^make half (?:a batch|the recipe|as much)$/,
 ];
+const TWICE_PATTERN =
+  /^make (?:it |this )?(?:twice as (?:much|big)|double the amount)$/;
 const HALF_PATTERN =
-  /^cut (?:it|this|the recipe|the servings|everything) in half$/;
+  /^(?:cut|make) (?:the recipe|the servings|the batch) in half$/;
 
 const TELL_SERVINGS_PATTERN = new RegExp(
-  String.raw`^(?:how many (?:${ANY_NOUN}|is this for|does (?:it|this) (?:make|serve|feed)|people does (?:it|this) (?:serve|feed|make)|am i making|are we making)(?: (?:is (?:it|this|that)|am i making|are we making|does (?:it|this) make|is it set to|are there|right now|now))?|whats the serving size|what are the servings|what is the serving size|servings)$`,
+  String.raw`^(?:how many (?:${ANY_NOUN}|(?:${ANY_NOUN} )?(?:is|are) (?:this|it|that) for|does (?:it|this) (?:make|serve|feed)|people does (?:it|this) (?:serve|feed|make)|am i making|are we making)(?: (?:is (?:it|this|that)|am i making|are we making|does (?:it|this) make|is it set to|are there|right now|now))?|how much does (?:it|this|the recipe) make|whats the yield|whats the serving size|what are the servings|what is the serving size|servings)$`,
 );
 
 /** Servings set, added, taken away, multiplied or asked about. A count only counts beside a servings word or after "make it for", so a bare "six", "four people" or "cook for ten" is never one, and an everyday word heard as a number ("for", "free") only right before a servings word. */
@@ -1495,6 +1506,9 @@ const parseServings = (text: string): CookCommand | null => {
       change: { kind: 'TIMES', factor: FACTOR_WORDS[factor] },
     };
   }
+  if (TWICE_PATTERN.test(text)) {
+    return { kind: 'SET_SERVINGS', change: { kind: 'TIMES', factor: 2 } };
+  }
   if (HALF_PATTERN.test(text)) {
     return { kind: 'SET_SERVINGS', change: { kind: 'TIMES', factor: 0.5 } };
   }
@@ -1502,7 +1516,7 @@ const parseServings = (text: string): CookCommand | null => {
     const groups = text.match(pattern)?.groups;
     if (groups === undefined) return text.match(pattern) ? sign : null;
     const count = readMatchedCount({ ...groups, verb: '' }, soundAlikes);
-    return count === null ? null : sign * count;
+    return count === null || !Number.isInteger(count) ? null : sign * count;
   }).find((delta) => delta !== null);
   if (typeof added === 'number') {
     return { kind: 'SET_SERVINGS', change: { kind: 'BY', delta: added } };

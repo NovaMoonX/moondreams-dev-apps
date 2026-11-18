@@ -87,12 +87,17 @@ const readWord = (word: string, soundAlikes: HeardCountSoundAlikes) =>
 /**
  * A count heard where the caller expects one: digits ("6", "2.5"), words ("twenty four", "a dozen") and, as a single
  * word and only as loosely as `soundAlikes` allows, what a recognizer writes for a small number ("sick" is 6, "for" is
- * 4). Null for anything else.
+ * 4), with "and a half" after any of them. Null for anything else.
  */
 export const readHeardCount = (
   text: string,
   soundAlikes: HeardCountSoundAlikes = 'distinct',
 ): number | null => {
+  const halved = text.trim().match(/^(?<whole>.+) and (?:a )?half$/)?.groups;
+  if (halved) {
+    const whole = readHeardCount(halved.whole, soundAlikes);
+    return whole === null ? null : whole + 0.5;
+  }
   const words = text
     .trim()
     .toLowerCase()

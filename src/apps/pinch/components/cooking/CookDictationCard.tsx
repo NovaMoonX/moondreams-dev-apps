@@ -67,7 +67,7 @@ function CookDictationCard({
         </p>
         <p
           className={join(
-            'mt-0.5 line-clamp-3 text-sm wrap-break-word sm:[@media(min-height:701px)]:text-base [@media(max-height:700px)]:line-clamp-2',
+            'mt-0.5 line-clamp-3 text-sm wrap-break-word [@media(max-height:700px)]:line-clamp-2 sm:[@media(min-height:701px)]:text-base',
             heard === '' && isWaiting
               ? 'text-muted-foreground'
               : 'text-foreground',

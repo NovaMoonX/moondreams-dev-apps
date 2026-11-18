@@ -2391,9 +2391,10 @@ function CookingSession({
         );
       }
       updateRecipe(target.id, { servings: next });
+      const was = `${next > current ? 'up' : 'down'} from ${current}`;
       return done(
-        `${lead}Now ${formatServings(next)}`,
-        `${lead}Okay, ${formatServings(next)}. The amounts are updated.`,
+        `${lead}Now ${formatServings(next)}, ${was}`,
+        `${lead}Okay, ${formatServings(next)}, ${was}. The amounts are updated.`,
       );
     },
     tellServings: () => {

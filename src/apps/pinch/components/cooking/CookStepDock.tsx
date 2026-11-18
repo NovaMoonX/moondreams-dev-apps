@@ -11,9 +11,7 @@ import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView
 import { CookAmountRows } from '@apps/pinch/components/cooking/CookStepAmounts';
 import { NOTE_KIND_EMOJIS } from '@apps/pinch/constants';
 import { useLastTimeNote } from '@apps/pinch/hooks/useLastTimeNote';
-import {
-  selectNoteSummaries,
-} from '@apps/pinch/store/selectors';
+import { selectNoteSummaries } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
 import { getAmountsSummary } from '@apps/pinch/utils/cooks';
 import { getNoteSummary, leadWithAdvice } from '@apps/pinch/utils/notes';
@@ -76,7 +74,11 @@ function Bubble({
         isInline
           ? 'size-8 min-w-8 sm:[@media(min-height:701px)]:size-10 sm:[@media(min-height:701px)]:min-w-10'
           : 'size-9 min-w-9 sm:[@media(min-height:701px)]:size-12 sm:[@media(min-height:701px)]:min-w-12',
-        isBordered ? 'before:-inset-[3px]' : isInline ? 'before:-inset-1' : 'before:-inset-0.5',
+        isBordered
+          ? 'before:-inset-[3px]'
+          : isInline
+            ? 'before:-inset-1'
+            : 'before:-inset-0.5',
         isOn && 'bg-accent! border-primary! border',
         isNudged && !isOn && 'bg-accent!',
         isDashed && 'border-muted-foreground/80 border border-dashed',
@@ -237,7 +239,7 @@ function CookStepDock({
       <ul
         data-no-swipe=''
         aria-label={`Your ${KIND_WORDS[openKind].many} for this step`}
-        className='flex snap-x snap-mandatory items-start gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        className='flex snap-x snap-mandatory [scrollbar-width:none] items-start gap-2 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden'
       >
         {openEntries.map((entry) => {
           const isChange = entry.kind === 'CHANGE';
@@ -263,7 +265,9 @@ function CookStepDock({
                 onClick={() => onEdit(entry.id)}
               >
                 <span className='line-clamp-3 w-full text-sm wrap-break-word sm:[@media(min-height:701px)]:text-base'>
-                  <span aria-hidden='true'>{NOTE_KIND_EMOJIS[entry.kind]} </span>
+                  <span aria-hidden='true'>
+                    {NOTE_KIND_EMOJIS[entry.kind]}{' '}
+                  </span>
                   {entry.text}
                 </span>
                 {isChange && (entry.reason ?? '') !== '' && (
@@ -297,7 +301,7 @@ function CookStepDock({
           id={panelId}
           aria-label={getTitle()}
           data-no-swipe=''
-          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 lg:[@media(min-height:701px)]:static space-y-1 rounded-2xl border p-2 shadow-lg sm:[@media(min-height:701px)]:space-y-2 sm:[@media(min-height:701px)]:p-3 [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0'
+          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 space-y-1 rounded-2xl border p-2 shadow-lg [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0 sm:[@media(min-height:701px)]:space-y-2 sm:[@media(min-height:701px)]:p-3 lg:[@media(min-height:701px)]:static'
         >
           <div className='flex min-h-8 items-center justify-between gap-2 px-1 sm:[@media(min-height:701px)]:min-h-10'>
             <p className='text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium sm:[@media(min-height:701px)]:text-base'>
@@ -315,25 +319,28 @@ function CookStepDock({
                     close();
                   }}
                 >
-                  <Check className='h-3.5 w-3.5 sm:[@media(min-height:701px)]:h-4 sm:[@media(min-height:701px)]:w-4' aria-hidden='true' />
+                  <Check
+                    className='h-3.5 w-3.5 sm:[@media(min-height:701px)]:h-4 sm:[@media(min-height:701px)]:w-4'
+                    aria-hidden='true'
+                  />
                   Got it
                 </Button>
               )}
               {openKind !== null && onRead && (
-                  <Bubble
-                    isInline
-                    label={`Read the ${KIND_WORDS[openKind].many.split(' ')[0]} aloud`}
-                    onClick={() => onRead(openKind)}
-                  >
-                    <Volume2 className={ICON_CLASS} aria-hidden='true' />
-                  </Bubble>
-                )}
+                <Bubble
+                  isInline
+                  label={`Read the ${KIND_WORDS[openKind].many.split(' ')[0]} aloud`}
+                  onClick={() => onRead(openKind)}
+                >
+                  <Volume2 className={ICON_CLASS} aria-hidden='true' />
+                </Bubble>
+              )}
               <Bubble isInline label='Close' onClick={close}>
                 <X className={ICON_CLASS} aria-hidden='true' />
               </Bubble>
             </div>
           </div>
-          <div className='max-h-44 overflow-y-auto sm:[@media(min-height:701px)]:max-h-56 lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'>
+          <div className='max-h-44 overflow-y-auto [@media(max-height:700px)]:max-h-32 sm:[@media(min-height:701px)]:max-h-56 lg:[@media(min-height:701px)]:max-h-72'>
             {getBody()}
           </div>
         </section>

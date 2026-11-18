@@ -436,9 +436,9 @@ function CookVoiceSheet({
     {
       label: 'Servings',
       rows: [
-        ['make six servings', 'Scales the amounts to that many'],
+        ['make six servings', 'Scales the amounts, or say “make it for six”'],
         ['one more serving', 'Adds one, or say “one less serving”'],
-        ['double it', 'Doubles the amounts, or say “halve it”'],
+        ['double the recipe', 'Doubles the amounts, or say “halve the recipe”'],
         ['how many servings', 'Says how many you are making'],
       ],
     },

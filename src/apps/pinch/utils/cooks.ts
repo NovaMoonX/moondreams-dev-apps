@@ -623,9 +623,11 @@ export const getSpokenServings = (
       Math.round(current * change.factor * 2) / 2,
     );
   }
-  if (Math.abs(change.delta) > MAX_COOKED_SERVINGS) {
-    return current + change.delta;
-  }
+  const reached = current + change.delta;
+  const isPastEnd =
+    reached > MAX_COOKED_SERVINGS ||
+    (reached < MIN_COOK_SERVINGS && Math.abs(change.delta) > 1);
+  if (isPastEnd) return reached;
   const direction = change.delta > 0 ? 1 : -1;
   return Array.from({ length: Math.abs(change.delta) }).reduce<number>(
     (servings) => stepCookServings(servings, direction),
