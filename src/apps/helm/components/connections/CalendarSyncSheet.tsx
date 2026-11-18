@@ -15,6 +15,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { readConnectorOptions } from '@/lib/connections/connectionCalls';
 import type { ConnectorOption } from '@/lib/connections/contract';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -51,6 +52,7 @@ function SyncForm({
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const sync = useAppSelector((state) => state.helm.profile?.calendarSync);
+  const waitFor = useWaitUntilShown(sync ?? null);
   const isOnHere = !!sync && sync.accountId === accountId;
   const isGone = isOnHere && sync.lastError === 'calendarGone';
   const needsReconnect = isOnHere && sync.lastError === 'reconnect';
@@ -114,6 +116,14 @@ function SyncForm({
           type: 'success',
         });
       }
+      await waitFor((current) =>
+        request.action === 'stop'
+          ? current === null
+          : current !== null &&
+            current.accountId === accountId &&
+            (current.startedAt !== sync?.startedAt ||
+              current.calendarId !== sync?.calendarId),
+      );
       onClose();
     } catch (error) {
       console.error('Helm calendar sync did not change', error);
