@@ -13,6 +13,7 @@ import {
 } from '@/components/BrandMarks';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
+import WorkingRing from '@/components/WorkingRing';
 import { grantConnection } from '@/lib/connections/connectionCalls';
 import { hasUnseenNews, markNewsSeen } from '@/lib/connections/connectionNews';
 import type { ConnectorManifest } from '@/lib/connections/contract';
@@ -33,6 +34,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import KeptCopiesSheet from '@apps/helm/components/connections/KeptCopiesSheet';
 import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -143,6 +145,7 @@ function ConnectedAppsScreen({
     includeEnded: true,
   });
   const grants = everyGrant.filter((grant) => grant.status !== 'ended');
+  const waitFor = useWaitUntilShown(everyGrant);
   const { nameOf: sourceNameOf } = useSourceAppName();
   const kept = everyGrant.flatMap((grant) => {
     const account = accounts.find((entry) => entry.id === grant.accountId);
@@ -301,6 +304,13 @@ function ConnectedAppsScreen({
         categoryIds: [service.categoryId],
         options: null,
       });
+      await waitFor((current) =>
+        current.some(
+          (grant) =>
+            grant.connectorId === service.connectorId &&
+            grant.status !== 'ended',
+        ),
+      );
       addToast({
         title: HELM_COPY.googleServiceConnected(
           GOOGLE_SERVICES[service.connectorId]?.name ?? '',
@@ -409,9 +419,17 @@ function ConnectedAppsScreen({
                   },
                   ...mailAndDriveRows.map((service) => ({
                     id: service.id,
-                    logo: GOOGLE_SERVICES[service.connectorId]?.logo,
+                    logo: (
+                      <WorkingRing
+                        isWorking={busyServices.includes(service.id)}
+                      >
+                        {GOOGLE_SERVICES[service.connectorId]?.logo}
+                      </WorkingRing>
+                    ),
                     title: GOOGLE_SERVICES[service.connectorId]?.name ?? '',
-                    meta: service.hint(name),
+                    meta: busyServices.includes(service.id)
+                      ? HELM_COPY.googleServiceConnecting
+                      : service.hint(name),
                     isTrouble: false,
                   })),
                   ...available.map((app) => ({

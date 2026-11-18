@@ -79,6 +79,7 @@ export const buildCookingSnapshot = (input: {
   timers: ResumeTimer[];
   /** The journal entries written on this screen. */
   captured?: string[];
+  startedAt?: number;
 }): CookingSnapshot => ({
   version: COOKING_SESSION_VERSION,
   uid: input.uid,
@@ -107,6 +108,7 @@ export const buildCookingSnapshot = (input: {
     ),
     timers: input.timers.map(toResumeTimer),
     captured: (input.captured ?? []).slice(0, MAX_SAVED_CAPTURED),
+    ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt }),
   },
 });
 
@@ -285,6 +287,7 @@ export const parseCookingSnapshot = (
     const currentId = resume?.currentId;
     const positions = resume ? parsePositions(resume.positions) : null;
     const timers = resume ? parseTimers(resume.timers) : null;
+    const startedAt: unknown = resume?.startedAt;
     if (
       open === null ||
       !isText(currentId) ||
@@ -304,6 +307,9 @@ export const parseCookingSnapshot = (
         positions,
         timers,
         captured: parseCaptured(resume?.captured),
+        ...(isTime(startedAt) && startedAt <= now + CLOCK_SLACK_MS
+          ? { startedAt }
+          : {}),
       },
     };
   } catch {
@@ -426,6 +432,9 @@ export const resolveCookingResume = (
       positions,
       timers,
       captured: snapshot.resume.captured ?? [],
+      ...(snapshot.resume.startedAt === undefined
+        ? {}
+        : { startedAt: snapshot.resume.startedAt }),
     },
     title,
     dishTitle: isPlate ? (current?.title ?? null) : null,
