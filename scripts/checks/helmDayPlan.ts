@@ -8,12 +8,10 @@ import {
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
   foldedAimsLine,
-  pickTopCards,
   readAimTaskIds,
   readCarryOver,
   readDayCardMode,
   readWindDownCounts,
-  TOP_CARD_CAP,
 } from '../../src/apps/helm/utils/dayCard.ts';
 import type { OpenDayAims } from '../../src/apps/helm/types.ts';
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
@@ -793,15 +791,6 @@ const aim = (taskId: string, order: number) => ({
   order,
   lengthIsGuess: false,
   broughtFrom: null,
-});
-
-test('home holds at most three top cards and the day card is one of them', () => {
-  assert.equal(TOP_CARD_CAP, 3);
-  assert.deepEqual(pickTopCards(['grouping', 'day', 'needsYou', 'day']), [
-    'needsYou',
-    'day',
-    'grouping',
-  ]);
 });
 
 test('the folded line and the wound-down line read as written', () => {

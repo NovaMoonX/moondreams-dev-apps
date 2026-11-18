@@ -193,7 +193,7 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'artifact',
           label: 'Recipe ingredients',
           meaning:
-            "What each of the person's recipes is made of: its ingredients with amounts, how long it takes and the collections it is in. Never the steps, notes or links.",
+            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts and the collections it is in, plus how long it takes (not servings or kind of dish). Never the steps, notes or links.",
           detail:
             'Each recipe, its ingredients and amounts, time and collections',
           mode: 'live',
