@@ -36,6 +36,9 @@ const onePerSizePair = (conversions: { amount: number; unit: Unit }[]) =>
     }),
   );
 
+const isSizeSibling = (unit: Unit, other: Unit) =>
+  SIZE_PAIRS.some((pair) => pair.includes(unit) && pair.includes(other));
+
 /** The one muted line under an opened amount ("= 8 tbsp · 4 fl oz · about 2¼ oz by weight"), or null when there is nothing else to say. */
 export function getConversionLine({
   amount,
@@ -44,7 +47,9 @@ export function getConversionLine({
 }: CookMeasure): string | null {
   if (!isMeasureUnit(unit)) return null;
   const others = onePerSizePair(
-    getConversions(amount, unit, { gramsPerMl }).slice(1),
+    getConversions(amount, unit, { gramsPerMl })
+      .slice(1)
+      .filter((other) => !isSizeSibling(unit, other.unit)),
   );
   if (others.length === 0) return null;
   const parts = others.map((other) => {
