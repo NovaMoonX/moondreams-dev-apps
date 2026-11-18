@@ -47,3 +47,66 @@ export const unlockAudioOnNextTap = () => {
     document.addEventListener(name, unlock, true),
   );
 };
+
+// Phone speakers and Bluetooth headphones sleep after a few seconds of silence and drop the first second or two of
+// the sound that wakes them; a hiss too quiet to hear (about -70 dB, not digital zero, which some headphones ignore)
+// wakes them, and the first word waits until it has played long enough.
+const IDLE_MS = 3000;
+const WAKE_SECONDS = 1.5;
+const HISS_SECONDS = 4;
+const HISS_LEVEL = 0.0003;
+
+// A hold that is never released (a suspended page whose sound never ends) lapses, so the wake keeps working.
+const HOLD_MAX_MS = 120_000;
+
+const output = {
+  holds: new Map<object, number>(),
+  releasedAt: 0,
+  wokenAt: 0,
+  hissUntil: 0,
+};
+const playHiss = (context: AudioContext) => {
+  const length = Math.round(context.sampleRate * HISS_SECONDS);
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  buffer.copyToChannel(
+    Float32Array.from({ length }, () => (Math.random() * 2 - 1) * HISS_LEVEL),
+    0,
+  );
+  const node = context.createBufferSource();
+  node.buffer = buffer;
+  node.connect(context.destination);
+  node.start();
+  output.hissUntil = context.currentTime + HISS_SECONDS;
+};
+
+/** Keeps the speakers awake for one spoken line: its first sound starts no earlier than `readyAt`, and `release` ends the hold. */
+export const wakeAudioOutput = (context: AudioContext) => {
+  const now = Date.now();
+  output.holds.forEach((until, hold) => {
+    if (until <= now) output.holds.delete(hold);
+  });
+  const isIdle =
+    output.holds.size === 0 &&
+    now - output.releasedAt > IDLE_MS &&
+    context.currentTime >= output.hissUntil;
+  if (isIdle) {
+    try {
+      playHiss(context);
+      output.wokenAt = context.currentTime;
+      recordSpeechEvent('Speakers were quiet; woke them before speaking');
+    } catch (error) {
+      recordSpeechEvent(
+        `Speakers could not be woken: ${describeThrown(error)}`,
+      );
+    }
+  }
+  const hold = {};
+  output.holds.set(hold, now + HOLD_MAX_MS);
+  return {
+    readyAt: output.wokenAt + WAKE_SECONDS,
+    release: () => {
+      if (!output.holds.delete(hold)) return;
+      output.releasedAt = Date.now();
+    },
+  };
+};
