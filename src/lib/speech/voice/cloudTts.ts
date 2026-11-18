@@ -14,7 +14,10 @@ import {
   type PcmFormat,
   type PcmSink,
 } from '@/lib/speech/voice/pcmStream';
-import { SPOKEN_CHARS_PER_SECOND } from '@/lib/speech/voice/playbackQueue';
+import {
+  SPOKEN_CHARS_PER_SECOND,
+  WHISPER_FALLBACK_KEY,
+} from '@/lib/speech/voice/playbackQueue';
 import type {
   SpeechFetch,
   SpeechSource,
@@ -249,23 +252,38 @@ export const createCloudTts = ({
     };
     const reportFailure = (index: number, isCut: boolean) =>
       reportsFallback &&
-      delivery === undefined &&
-      reportFallback({
-        key: CLOUD_VOICE_FALLBACK_KEY,
-        feature: 'Speaking',
-        wanted: isCut
-          ? 'the whole line in your chosen voice'
-          : 'your chosen voice',
-        used: isCut ? 'the part that played' : "this device's voice",
-        reason: run.failure.reason,
-        cause: run.failure.cause,
-        facts: [
-          `Failed part: ${index + 1} of ${pieces.length}`,
-          `Line: ${totalChars} characters, ${priority}`,
-          `Stood in: ${fallback.id}`,
-          `First-byte limit: ${firstByteMs} ms`,
-        ],
-      });
+      (delivery !== undefined
+        ? reportFallback({
+            key: WHISPER_FALLBACK_KEY,
+            feature: 'Speaking',
+            wanted: 'a whispered line',
+            used: isCut
+              ? 'the part that played'
+              : 'nothing: a whispered line is never said in the device voice',
+            reason: run.failure.reason,
+            cause: run.failure.cause,
+            facts: [
+              `Failed part: ${index + 1} of ${pieces.length}`,
+              `Line: ${totalChars} characters, ${priority}`,
+              `First-byte limit: ${firstByteMs} ms`,
+            ],
+          })
+        : reportFallback({
+            key: CLOUD_VOICE_FALLBACK_KEY,
+            feature: 'Speaking',
+            wanted: isCut
+              ? 'the whole line in your chosen voice'
+              : 'your chosen voice',
+            used: isCut ? 'the part that played' : "this device's voice",
+            reason: run.failure.reason,
+            cause: run.failure.cause,
+            facts: [
+              `Failed part: ${index + 1} of ${pieces.length}`,
+              `Line: ${totalChars} characters, ${priority}`,
+              `Stood in: ${fallback.id}`,
+              `First-byte limit: ${firstByteMs} ms`,
+            ],
+          }));
     const prefetch = {
       index: -1,
       isTaken: false,
@@ -563,7 +581,13 @@ export const createCloudTts = ({
     const speakFrom = async (index: number): Promise<string | undefined> => {
       if (index >= pieces.length) {
         if (!run.isCut) {
-          if (reportsFallback) clearFallback(CLOUD_VOICE_FALLBACK_KEY);
+          if (reportsFallback) {
+            clearFallback(
+              delivery === undefined
+                ? CLOUD_VOICE_FALLBACK_KEY
+                : WHISPER_FALLBACK_KEY,
+            );
+          }
           onPlayed?.();
         }
         return run.playedBy;

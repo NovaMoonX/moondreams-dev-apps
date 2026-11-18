@@ -411,13 +411,9 @@ const helmSlice = createSlice({
       state.outsideCaptures.isFailed = true;
     },
     setPatterns: (state, action: PayloadAction<OpenPattern[]>) => {
-      state.patterns = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'patterns', action.payload);
       state.answeringPatternIds = state.answeringPatternIds.filter((id) =>
-        action.payload.some(
+        state.patterns.items.some(
           (one) =>
             one.id === id &&
             (one.state === 'suggested' || one.state === 'candidate'),
@@ -435,19 +431,11 @@ const helmSlice = createSlice({
         (id) => id !== action.payload,
       );
     },
-    setPatternsFailed: (state) => {
-      state.patterns.isFailed = true;
-    },
+    setPatternsFailed: (state) => fail(state, 'patterns'),
     setGroupings: (state, action: PayloadAction<OpenGrouping[]>) => {
-      state.groupings = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'groupings', action.payload);
     },
-    setGroupingsFailed: (state) => {
-      state.groupings.isFailed = true;
-    },
+    setGroupingsFailed: (state) => fail(state, 'groupings'),
     setObservations: (state, action: PayloadAction<OpenObservation[]>) => {
       state.observations = {
         items: action.payload,
@@ -510,11 +498,9 @@ const helmSlice = createSlice({
     },
     setFactsFailed: (state) => fail(state, 'facts'),
     setSeenAs: (state, action: PayloadAction<OpenSeenAs[]>) => {
-      state.seenAs = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'seenAs', action.payload);
     },
-    setSeenAsFailed: (state) => {
-      state.seenAs.isFailed = true;
-    },
+    setSeenAsFailed: (state) => fail(state, 'seenAs'),
     setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
       deliver(state, 'style', action.payload);
     },
@@ -534,15 +520,9 @@ const helmSlice = createSlice({
     },
     setWhoFailed: (state) => fail(state, 'who'),
     setConnections: (state, action: PayloadAction<OpenConnection[]>) => {
-      state.connections = {
-        items: action.payload,
-        isLoaded: true,
-        isFailed: false,
-      };
+      deliver(state, 'connections', action.payload);
     },
-    setConnectionsFailed: (state) => {
-      state.connections.isFailed = true;
-    },
+    setConnectionsFailed: (state) => fail(state, 'connections'),
     setScheduledActions: (
       state,
       action: PayloadAction<OpenScheduledAction[]>,
@@ -577,11 +557,9 @@ const helmSlice = createSlice({
       state.learnLater.isFailed = true;
     },
     setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
-      state.habits = { items: action.payload, isLoaded: true, isFailed: false };
+      deliver(state, 'habits', action.payload);
     },
-    setHabitsFailed: (state) => {
-      state.habits.isFailed = true;
-    },
+    setHabitsFailed: (state) => fail(state, 'habits'),
     setHabitDays: (state, action: PayloadAction<OpenHabitDay[]>) => {
       state.habitDays = {
         byId: Object.fromEntries(
