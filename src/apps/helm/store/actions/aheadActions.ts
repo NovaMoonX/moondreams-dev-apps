@@ -1,6 +1,7 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
@@ -52,7 +53,7 @@ const changeOffer = (
   const offers = liveProject(projectId)?.researchOffers ?? [];
   if (!offers.some((offer) => offer.id === offerId)) return null;
   const ref = projectRef(uid, projectId);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return;
     const data = snapshot.data() as Project;
@@ -165,7 +166,7 @@ export async function sendAheadOffer(uid: string, input: AheadSend) {
         when: input.isNow ? 'now' : 'later',
       },
       commit: (captureRef, capture) =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshot = await transaction.get(ref);
           if (!snapshot.exists()) throw new Error('This project is gone.');
           const data = snapshot.data() as Project;
