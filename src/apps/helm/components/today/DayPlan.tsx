@@ -11,6 +11,7 @@ import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import ActedLines from '@apps/helm/components/noticed/ActedLines';
+import LearnCard from '@apps/helm/components/today/LearnCard';
 import HabitLine from '@apps/helm/components/today/HabitLine';
 import CalendarFailedLine from '@apps/helm/components/today/CalendarFailedLine';
 import FeedGroup from '@apps/helm/components/today/FeedGroup';
@@ -32,13 +33,19 @@ import {
   getCurrentPlaceEndsAt,
   readCurrentPlace,
 } from '@apps/helm/engine/currentPlace';
-import { findFreeGaps } from '@apps/helm/engine/planner';
+import {
+  findLearnSlot,
+  type LearnOfferReading,
+} from '@apps/helm/engine/learnLater';
+import { findFreeGaps, readBusyShare } from '@apps/helm/engine/planner';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { setCurrentPlace } from '@apps/helm/store/actions/planActions';
+import { keepOverlappingSlot } from '@apps/helm/store/actions/dayAimsActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
+import type { LearnSlot } from '@apps/helm/engine/learnLater';
 import type { OpenTask, PlanSlot, SyncedRecord } from '@apps/helm/types';
 import {
   formatClock,
@@ -77,15 +84,19 @@ interface DayPlanProps {
   onUndoTick: (taskId: string) => void;
   onSelectDay: (dayKey: string) => void;
   onOpenHabit: (habitId: string) => void;
+  /** The saved question Today may offer, when no pattern offer is showing; the card appears at the day's first free half hour. */
+  learns: LearnOfferReading[];
+  onOpenLearn: (itemId: string) => void;
 }
 
 type Entry =
   | { kind: 'event'; at: number; record: SyncedRecord }
   | { kind: 'slot'; at: number; id: string; slot: PlanSlot; task: OpenTask }
   | { kind: 'gap'; at: number; startAt: number; endAt: number }
-  | { kind: 'habit'; at: number; line: HabitLineModel };
+  | { kind: 'habit'; at: number; line: HabitLineModel }
+  | { kind: 'learn'; at: number; slot: LearnSlot; reading: LearnOfferReading };
 
-const ORDER = { event: 0, habit: 1, slot: 2, gap: 3 } as const;
+const ORDER = { event: 0, habit: 1, slot: 2, gap: 3, learn: 4 } as const;
 
 const getSummary = (
   events: number,
@@ -114,6 +125,8 @@ function DayPlan({
   onUndoTick,
   onSelectDay,
   onOpenHabit,
+  learns,
+  onOpenLearn,
 }: DayPlanProps) {
   const assistantName = useAssistantName();
   const { nameOf, categoryLabelOf } = useSourceAppName();
@@ -202,6 +215,26 @@ function DayPlan({
   const gaps = input.hasCalendar
     ? findFreeGaps(gapInput, FREE_GAP_MINUTES)
     : [];
+  const learnBusyShare = readBusyShare(input);
+  const { learn, learnSlot } =
+    isToday && !isHeld
+      ? learns.reduce<{
+          learn: LearnOfferReading | null;
+          learnSlot: LearnSlot | null;
+        }>(
+          (found, candidate) => {
+            if (found.learn) return found;
+            const slot = findLearnSlot({
+              plan: gapInput,
+              busyShare: learnBusyShare,
+              offers: candidate.item.offers,
+              isToday,
+            });
+            return slot ? { learn: candidate, learnSlot: slot } : found;
+          },
+          { learn: null, learnSlot: null },
+        )
+      : { learn: null, learnSlot: null };
   const hasRoom =
     !input.hasCalendar || findFreeGaps(gapInput, FULL_GAP_MINUTES).length > 0;
   const isLate =
@@ -225,6 +258,16 @@ function DayPlan({
       at: readHabitLineAt(line),
       line,
     })),
+    ...(learn && learnSlot
+      ? [
+          {
+            kind: 'learn' as const,
+            at: learnSlot.startAt,
+            slot: learnSlot,
+            reading: learn,
+          },
+        ]
+      : []),
   ].sort((a, b) => a.at - b.at || ORDER[a.kind] - ORDER[b.kind]);
   const untimedKept = kept.filter(({ slot }) => slot.startAt === null);
   const untimedSuggested = suggested.filter(
@@ -249,18 +292,32 @@ function DayPlan({
   const openRecord =
     records.find((record) => record.id === openRecordId) ?? null;
 
+  const aimIds = new Set(sources.aimTaskIds?.[dayKey] ?? []);
   const renderSlot = (id: string, slot: PlanSlot, task: OpenTask) =>
     slot.status === 'kept' ? (
       <PlannedCard
         key={id}
         task={task}
         timeLine={
-          slot.startAt !== null && slot.endAt !== null
-            ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
-            : null
+          [
+            aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
+            slot.startAt !== null && slot.endAt !== null
+              ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
+              : null,
+          ]
+            .filter((part): part is string => part !== null)
+            .join(' · ') || null
         }
         isDone={heldIds.has(task.id)}
-        overlapTitle={overlaps[id] ?? null}
+        overlapTitle={overlaps[id] ?? flaggedTitle(slot)}
+        isNewOverlap={
+          overlaps[id] === undefined && slot.overlapsEventRef !== null
+        }
+        onKeepOverlap={
+          slot.overlapsEventRef !== null
+            ? () => keepFlagged(id, slot.overlapsEventRef ?? '')
+            : undefined
+        }
         onAnotherTime={() =>
           onOpenSuggestion({ dayKey, slotId: id, isMove: true })
         }
@@ -273,6 +330,7 @@ function DayPlan({
         key={id}
         title={task.isUnreadable ? HELM_COPY.unreadable : task.title}
         detail={[
+          aimIds.has(task.id) ? HELM_COPY.todayAimMark : null,
           slot.startAt !== null && slot.endAt !== null
             ? formatSlotRange(slot.startAt, slot.endAt, timeZone)
             : null,
@@ -284,6 +342,31 @@ function DayPlan({
         onOpen={() => onOpenSuggestion({ dayKey, slotId: id, isMove: false })}
       />
     );
+
+  const flaggedTitle = (slot: PlanSlot) =>
+    slot.overlapsEventRef === null
+      ? null
+      : (day?.calendarSnapshot.find(
+          (event) => event.eventRef === slot.overlapsEventRef,
+        )?.title ?? null);
+  const keepFlagged = (slotId: string, eventRef: string) => {
+    if (!user) return;
+    keepOverlappingSlot(user.uid, dayKey, slotId, eventRef)
+      .then((change) =>
+        addToast({
+          title: HELM_COPY.planKeptOverlap,
+          type: 'info',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () => void change.undo(),
+          },
+        }),
+      )
+      .catch((error: unknown) => {
+        console.error('Helm overlap was not kept', error);
+        addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
+      });
+  };
 
   const isPlanned = !needsPlan(day);
   const outcome =
@@ -462,6 +545,18 @@ function DayPlan({
                   onTally={habitChecks.tally}
                   onUndoTally={habitChecks.undoTally}
                   onOpen={onOpenHabit}
+                />
+              );
+            }
+            if (entry.kind === 'learn') {
+              return (
+                <LearnCard
+                  key={entry.reading.item.id}
+                  item={entry.reading.item}
+                  ask={entry.reading.ask}
+                  slot={entry.slot}
+                  dayKey={dayKey}
+                  onOpen={onOpenLearn}
                 />
               );
             }

@@ -108,6 +108,7 @@ const toUpdate = (
   alias: string,
   dueSpanId: string | null,
   isUrgent: true | null,
+  meetsHow: 'inPerson' | 'video' | 'phone' | null = null,
 ) => ({
   kind: 'updateTask',
   ref: null,
@@ -115,7 +116,39 @@ const toUpdate = (
   title: null,
   dueSpanId,
   isUrgent,
+  meetsHow,
 });
+
+const HOW_WORDS: [RegExp, 'inPerson' | 'video' | 'phone'][] = [
+  [/^(on )?(video|zoom|a video call)$/i, 'video'],
+  [/^(on )?(the )?(phone|a phone call)$/i, 'phone'],
+  [/^in person$/i, 'inPerson'],
+];
+
+/** "Monday's call is on video": the task of that name gets the format; an event of that name is a copy and is left alone. */
+function readMeetsFollowUp(text: string, message: string) {
+  const said = text
+    .trim()
+    .match(
+      /^(.+?) is (on video|on zoom|on the phone|in person|a video call|a phone call)\b/i,
+    );
+  const how = said ? HOW_WORDS.find(([word]) => word.test(said[2]))?.[1] : null;
+  if (!said || !how) return null;
+  const name = said[1].toLowerCase();
+  const isNamed = (title: string) => {
+    const words = title.toLowerCase();
+    return words.includes(name) || name.includes(words);
+  };
+  const task = (readBlock<ListedRecord[]>(message, 'open_tasks') ?? []).find(
+    (entry) => isNamed(entry.title),
+  );
+  if (task) return [toUpdate(task.alias, null, null, how)];
+  return (readBlock<ListedRecord[]>(message, 'synced_records') ?? []).some(
+    (entry) => isNamed(entry.title),
+  )
+    ? []
+    : null;
+}
 
 /** The follow-ups a page makes possible, read from the context blocks: "move this to Saturday", "make it urgent", "the second one is done", "this is done". Null when the words are none of them or what they point at is missing. */
 function readFollowUp(text: string, reading: CaptureReading, message: string) {
@@ -130,6 +163,8 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
   if (/\bmove (this|it|that) to\b/i.test(text)) {
     return focus && span ? [toUpdate(focus, span.id, null)] : [];
   }
+  const meets = readMeetsFollowUp(text, message);
+  if (meets) return meets;
   const urgentTarget = focus ?? lastMade;
   if (/\bmake (this|it|that) urgent\b/i.test(text)) {
     return urgentTarget ? [toUpdate(urgentTarget, null, true)] : [];
@@ -269,6 +304,75 @@ const packingOption = (label: string) => ({
   detail: null,
   recordAlias: null,
 });
+
+/** The emulator's web look-up for "Look into …" / "Research …": "properly" or "thorough" asks for a thorough look, "quick" a light one, "should I" makes it feed a decision. */
+const readResearchAsk = (text: string) => {
+  const match = text.match(
+    /^\s*(?:please\s+)?(?:look into|research)\s+(.+?)[.?!]*\s*$/i,
+  );
+  if (!match) return null;
+  const subject = match[1]
+    .replace(/\b(properly|thoroughly|for me|quickly|a quick look)\b/gi, '')
+    .split(',')[0]
+    .replace(/\s+(?:and\s+)?(?:tell me\s+)?(?:which|what|who)\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    kind: 'research',
+    researchQuestion: `What should I know about ${subject}?`,
+    researchSubject: subject,
+    researchDepth: /\b(properly|thorough)/i.test(text)
+      ? 'thorough'
+      : /\bquick/i.test(text)
+        ? 'light'
+        : null,
+    researchIsDecision: /\b(should i|which|vs|or)\b/i.test(text),
+  };
+};
+
+/** The emulator's learn-later reading: "one day I want to learn …" is saved, "learn piano" is offered as a goal, and "learn to fix my car's engine" is a wish it can't place, which code asks about. */
+const readLearnAsk = (text: string) => {
+  const skill = text.match(
+    /^\s*(?:i want to |i'd like to )?learn (?:to )?(piano|guitar|violin|chess)\b/i,
+  );
+  if (skill) {
+    return [
+      {
+        kind: 'offerLearnGoal',
+        learnGoalName: `Learn ${skill[1].toLowerCase()}`,
+        learnQuote: skill[0].trim(),
+      },
+    ];
+  }
+  const engine = text.match(/learn to fix my car'?s engine/i);
+  if (engine) {
+    return [
+      {
+        kind: 'saveForLater',
+        learnQuestion: "How do I fix my car's engine?",
+        learnSubject: "fixing my car's engine",
+        learnNeedsLiveFacts: false,
+        learnPractise: 'unclear',
+        learnQuote: engine[0],
+      },
+    ];
+  }
+  const wish = text.match(
+    /^\s*(?:someday|one day)[, ]*i want to learn\s+(.+?)[.?!]*\s*$/i,
+  );
+  return wish
+    ? [
+        {
+          kind: 'saveForLater',
+          learnQuestion: `What should I know about ${wish[1]}?`,
+          learnSubject: wish[1],
+          learnNeedsLiveFacts: false,
+          learnPractise: 'read',
+          learnQuote: wish[0].trim(),
+        },
+      ]
+    : null;
+};
 
 /** The emulator's two questions for "Help me pack for the Tahoe trip": what goes on the list, and how many nights. */
 const readPackingAsks = (text: string) =>
@@ -431,7 +535,7 @@ const toSpendRange = (question: string, now: number, timeZone: string) => {
 };
 
 interface SpendResult {
-  records?: { alias?: string; payee: string; amount: string }[];
+  records?: { alias?: string; title: string; amount: string }[];
   matchedCount?: number;
   total?: string;
   from?: string | null;
@@ -700,6 +804,50 @@ function readQuestion(text: string, message: string) {
     ...(readBlock<ListedRecord[]>(message, 'open_tasks') ?? []),
     ...(readBlock<ListedRecord[]>(message, 'synced_records') ?? []),
   ];
+  const fit = readBlock<{
+    needsDays?: boolean;
+    mustDoFirst: { task: string }[];
+    mustDoCount: number;
+    wouldMove: string[];
+    wontFit: boolean;
+    noCalendar: boolean;
+  }>(message, 'fit');
+  if (fit?.needsDays) {
+    return toAsk({
+      shape: 'dateTime',
+      prompt: 'When are you leaving?',
+      dateMode: 'dateTime',
+    });
+  }
+  if (fit) {
+    const titleOf = (alias: string) =>
+      records.find((record) => record.alias === alias)?.title ?? alias;
+    const first = fit.mustDoFirst.map((entry) => titleOf(entry.task));
+    const moved = fit.wouldMove.map(titleOf);
+    const rest = fit.mustDoCount - 2;
+    const firstTwo = first.slice(0, 2).join(' and ');
+    const said = [
+      fit.wontFit
+        ? 'It will not all fit, so maybe leave later.'
+        : 'Yes, you can go.',
+      ...(fit.noCalendar
+        ? ['Your free time is a guess because no calendar is connected.']
+        : []),
+      first.length > 0
+        ? `${first.length === 1 ? 'One thing' : `${fit.mustDoCount} things`} first: ${firstTwo}${rest > 0 ? ` and ${rest} more` : ''}.`
+        : 'Nothing has to be done first.',
+      ...(moved.length > 0 ? [`${moved.join(' and ')} would move.`] : []),
+    ].join(' ');
+    return toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText: said,
+      sourceAliases: [
+        ...fit.mustDoFirst.map((entry) => entry.task),
+        ...fit.wouldMove,
+      ],
+    });
+  }
   const words = lower
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
@@ -1908,6 +2056,28 @@ function createTextFixtureProvider(
       if (packed !== null || packingAsks) {
         return {
           terminalInput: { commands: packed ?? packingAsks ?? [] },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const learning = readLearnAsk(text);
+      if (learning) {
+        return {
+          terminalInput: { commands: learning },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const research = readResearchAsk(text);
+      if (research) {
+        return {
+          terminalInput: { commands: [research] },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

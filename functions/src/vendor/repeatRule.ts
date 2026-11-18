@@ -478,8 +478,16 @@ export function sameRepeatRule(
   a: RepeatRule | null,
   b: RepeatRule | null,
 ): boolean {
-  return (a && formatRepeatRule(a)) === (b && formatRepeatRule(b));
+  return (a && formatComparable(a)) === (b && formatComparable(b));
 }
+
+/** The week's first day changes the runs only when a weekly rule skips weeks, so elsewhere it is left out of the comparison. */
+const formatComparable = (rule: RepeatRule) =>
+  formatRepeatRule(
+    rule.freq === 'weekly' && rule.interval > 1
+      ? rule
+      : { ...rule, weekStart: 'MO' },
+  );
 
 /** The first run on or after `fromDay`, or `null` when none is left. */
 export function nextOccurrence(

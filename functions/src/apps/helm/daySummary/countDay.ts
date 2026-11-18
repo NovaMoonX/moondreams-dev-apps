@@ -397,7 +397,8 @@ export const toEffectTitles = (
     const isMade =
       ref?.op === 'create' &&
       ref.collection !== 'habits' &&
-      ref.collection !== 'connections';
+      ref.collection !== 'connections' &&
+      ref.collection !== 'scheduledActions';
     const isDone =
       ref?.collection === 'tasks' &&
       ref.op === 'update' &&

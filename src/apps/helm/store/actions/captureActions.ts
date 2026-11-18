@@ -127,15 +127,23 @@ export async function sendCapture(
     /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
     answersQuestion: Capture['answersQuestion'];
     questionAnswer: QuestionAnswerValue | null;
+    /** The day whose aims this turn files (the answer to the morning card); left out on every other turn. */
+    aimsDayKey?: string;
     /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
     noteIds?: string[];
     /** The photos sent with the turn, uploaded already, in pick order; a turn with photos never joins a running one. */
     attachmentIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
+    isSpokenTurn?: boolean;
     /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
     presence?: Capture['presence'];
     heardNames?: HeardName[];
+    /** A turn that starts research ahead of a project: its offer, and the transaction that writes the turn together with the project's own change so neither lands without the other. Needs a connection. */
+    ahead?: {
+      offer: NonNullable<Capture['aheadOffer']>;
+      commit: (reference: DocumentReference, capture: Capture) => Promise<void>;
+    };
     /** Called with the turn's id when the server found the words only asked to hear the last reply again; the turn is then gone and leaves nothing in the history. */
     onRepeat?: (captureId: string) => void;
   },
@@ -168,11 +176,14 @@ export async function sendCapture(
   // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {
     inputMode: turn.voice ? 'voice' : text ? 'typed' : 'attachment',
+    isSpokenTurn: turn.isSpokenTurn ?? turn.voice !== undefined,
     sttProvider: turn.voice?.sttProvider ?? null,
     interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
     answersQuestion: turn.answersQuestion,
     ttsProvider: null,
-    arrivedVia: 'direct',
+    arrivedVia: turn.ahead ? 'researchAhead' : 'direct',
+    scheduledActionId: null,
+    aheadOffer: turn.ahead?.offer ?? null,
     disposition: null,
     medium: 'web',
     via: null,
@@ -198,6 +209,7 @@ export async function sendCapture(
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: turn.aimsDayKey ?? null,
     createdAt,
     sortedAt: null,
     screen: turn.screen,
@@ -216,11 +228,13 @@ export async function sendCapture(
   const reference = doc(capturesOf(uid));
   markCreatedHere(reference.id);
   // A message joining a turn is written with its lead's list in one batch, so neither lands without the other.
-  const write = leadId
-    ? writeJoined(uid, leadId, reference, capture)
-    : attachmentIds.length > 0
-      ? writeWithPhotos(uid, reference, capture)
-      : setDoc(reference, capture);
+  const write = turn.ahead
+    ? turn.ahead.commit(reference, capture)
+    : leadId
+      ? writeJoined(uid, leadId, reference, capture)
+      : attachmentIds.length > 0
+        ? writeWithPhotos(uid, reference, capture)
+        : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
     async () => {
@@ -592,6 +606,7 @@ export async function makeTaskAsWritten(
     isUrgent: false,
     due: null,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,
@@ -602,6 +617,9 @@ export async function makeTaskAsWritten(
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: current.id,
@@ -616,6 +634,7 @@ export async function makeTaskAsWritten(
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
         quietMark: null,

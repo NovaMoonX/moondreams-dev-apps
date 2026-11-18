@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
   readContextHabits,
@@ -22,7 +23,9 @@ import type { PlannedQuestion } from './nomos/executeCommands.js';
 import {
   MAX_EFFECTS,
   type HabitCommand,
+  type SeenAsCommand,
   type SetImportanceCommand,
+  type SetPersonalityCommand,
 } from './nomos/commands.js';
 import {
   importanceToday,
@@ -31,6 +34,10 @@ import {
   toContextImportance,
 } from './importanceStore.js';
 import { planImportance } from './nomos/planImportance.js';
+import { planSeenAs } from './nomos/planSeenAs.js';
+import { planPersonality } from './nomos/planPersonality.js';
+import { readPersonality } from './nomos/personality.js';
+import { readSeenAsForContext, readSeenAsRecordsIn } from './seenAsStore.js';
 import { decideHabit } from './nomos/policy.js';
 import {
   FieldValue,
@@ -100,9 +107,11 @@ import {
   MAX_MOMENTS_PER_WHO,
 } from './nomos/commands.js';
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
+import { readContextFit } from './nomos/fitContext.js';
 import {
   readActiveProjectsIn,
   readActiveProjects,
+  readProjectOffers,
   readQuietProjects,
   toContextProjects,
   type ActiveProjectsRead,
@@ -170,7 +179,9 @@ import {
   type CaptureDisposition,
   type ObservationRead,
 } from './nomos/actNow.js';
+import { readContextRelatedThings } from './nomos/relatedThings.js';
 import {
+  nextReflectionAt,
   planObservations,
   readTurnSubjects,
 } from './nomos/planObservations.js';
@@ -199,6 +210,9 @@ import {
   type ProcedureCommand,
   type NoteSoundsLikeCommand,
   type AddContactPointCommand,
+  type LearnAsk,
+  type LearnCommand,
+  type ResearchCommand,
   type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -208,6 +222,7 @@ import {
   type SetQuietCommand,
   type TaskDue,
   DEFAULT_ASSISTANT_NAME,
+  readMeets,
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
 import {
@@ -319,6 +334,52 @@ import {
 } from './connectionStore.js';
 import { planSoundsLike, type EarlierTask } from './nomos/planSoundsLike.js';
 import {
+  SCHEDULE_DROP_LINES,
+  planScheduledActions,
+} from './nomos/planScheduledActions.js';
+import { planDayAims } from './nomos/planDayAims.js';
+import { openAimsView } from './dayPlan/dayAimsStore.js';
+import { toDayKeyIn } from './dayPlan/dayJob.js';
+import {
+  planResearch,
+  readUsageDoc,
+  toAllowanceMirror,
+} from './nomos/planResearch.js';
+import {
+  nextNight,
+  planLearnLater,
+  readOfferedDocuments,
+} from './nomos/planLearnLater.js';
+import {
+  planAheadStart,
+  readAheadAsk,
+  readAheadStart,
+  type AheadStart,
+} from './nomos/planResearchAhead.js';
+import {
+  readContextLearnLater,
+  readLearnItemsIn,
+} from './research/learnStore.js';
+import {
+  readIsRerunBookedIn,
+  readUsageIn,
+  usageRef,
+} from './research/researchStore.js';
+import type {
+  ScheduleCommand,
+  ScheduleDrop,
+} from './nomos/readScheduledCommands.js';
+import {
+  readContextScheduled,
+  readScheduledState,
+} from './scheduledActions/actionStore.js';
+import {
+  isScheduledCapture,
+  narrowReply,
+  readAheadLoop,
+  readHeldLoop,
+} from './scheduledActions/scheduledTurn.js';
+import {
   decideAbilityOffer,
   describeWhereabouts,
   isNamedText,
@@ -353,6 +414,7 @@ import {
   hasReviseCue,
   isHabitTurn,
   hasImportanceCue,
+  hasScheduleCue,
   hasProcedureCue,
   hasProcedureReviseCue,
   isQuestion,
@@ -382,6 +444,8 @@ import {
   PROCEDURE_PROMPT,
   HABIT_PROMPT,
   IMPORTANCE_PROMPT,
+  PERSONALITY_PROMPT,
+  SEEN_AS_PROMPT,
 } from './nomos/prompt.js';
 import { renderWhereBlock } from './nomos/whereThingsLive.js';
 
@@ -511,8 +575,15 @@ export interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  isSpokenTurn?: boolean | null;
   medium?: 'web' | 'mcp';
   via?: string | null;
+  arrivedVia: string | null;
+  /** A yes on a research offer: where the offer is and how it starts; read by code, never from the words. */
+  aheadOffer?: unknown;
+  scheduledActionId: string | null;
+  heldCommands: unknown;
+  allowedKinds: unknown;
   outsideReadScopes?: unknown;
   attachmentIds?: string[];
   route?: Route | null;
@@ -522,6 +593,8 @@ export interface CaptureDoc {
     isUntouched?: boolean;
   } | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
+  /** The day whose aims this turn files, set by the device when the morning card is answered. */
+  aimsDayKey?: string | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
   abilities?: unknown;
@@ -530,7 +603,19 @@ export interface CaptureDoc {
   sealed: SealedPayload;
 }
 
+const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const readAimsDayKey = (capture: Pick<CaptureDoc, 'aimsDayKey'>) =>
+  typeof capture.aimsDayKey === 'string' && DAY_KEY_RE.test(capture.aimsDayKey)
+    ? capture.aimsDayKey
+    : null;
+
+/** A spoken turn, or a choice tapped while a spoken conversation was open; a turn from before the flag reads its input mode. */
+const isSpokenDoc = (capture: Pick<CaptureDoc, 'inputMode' | 'isSpokenTurn'>) =>
+  capture.isSpokenTurn ?? capture.inputMode === 'voice';
+
 interface TaskDoc {
+  durationMinutes?: number | null;
   status: 'open' | 'done';
   due: TaskDue | null;
   isUrgent: boolean;
@@ -538,6 +623,9 @@ interface TaskDoc {
   placeIds?: string[];
   projectId?: string | null;
   privacy?: string | null;
+  stepState?: Record<string, { doneAt: number | null }>;
+  meeting?: { startAt: number } | null;
+  meets?: unknown;
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -2255,6 +2343,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runCommands: [],
       habitCommands: [],
       importanceCommands: [],
+      seenAsCommands: [],
+      personalityCommands: [],
+      scheduleCommands: [],
+      scheduleDropped: [],
+      researchCommands: [],
+      aheadStart: null,
+      learnCommands: [],
+      learnAsks: [],
+      isMidTask: false,
       soundsLike: [],
       contactPoints: [],
       connectionCommands: [],
@@ -2286,7 +2383,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       messageCount: 1,
       route: 'quick',
       timeZone: 'UTC',
-      isSpoken: capture.inputMode === 'voice',
+      isSpoken: isSpokenDoc(capture),
       media: null,
     });
   }
@@ -2427,6 +2524,19 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           isMasked: earlyMask.isOn,
         })
       : [];
+  const seenAsLines =
+    isLearningOn && mode !== 'rest'
+      ? await readSeenAsForContext(firestore, base, key, {
+          forgottenAt:
+            (profile.get('forgottenAt') as number | null | undefined) ?? null,
+          isMasked: earlyMask.isOn,
+        }).catch((error): never[] => {
+          logger.warn('helm.seenAs.read', {
+            cause: error instanceof Error ? error.name : 'error',
+          });
+          return [];
+        })
+      : [];
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
     if (!words?.title) {
@@ -2515,10 +2625,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       via: typeof lead?.via === 'string' ? lead.via : '',
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
-        lead?.inputMode === 'voice' ||
-        joined.some(
-          (snapshot) => (snapshot.data() as CaptureDoc).inputMode === 'voice',
-        ),
+        (lead !== undefined && isSpokenDoc(lead)) ||
+        joined.some((snapshot) => isSpokenDoc(snapshot.data() as CaptureDoc)),
     };
   };
 
@@ -2721,6 +2829,36 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
           });
+    const contextFit =
+      mode === 'rest'
+        ? null
+        : await readContextFit({
+            firestore,
+            uid,
+            base,
+            key,
+            profile: profile.data(),
+            taskDocs: openTasks.docs,
+            selfWhoId,
+            trips: tripsFromCopies(
+              [...synced, ...placeTrips].filter(
+                (copy) => copy.kind === 'trip' || copy.category === 'trips',
+              ),
+            ),
+            text: combined.text,
+            answeredQuestion,
+            dates: combined.reading.dates,
+            isQuestion:
+              isQuestion(combined.text.trim()) || answeredQuestion !== null,
+            isAppsHeld: isAppsHeldBack,
+            now: capture.createdAt,
+            timeZone,
+          }).catch((error): null => {
+            logger.warn('helm.sort.fitUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return null;
+          });
     const contextHabits =
       mode === 'rest'
         ? []
@@ -2736,6 +2874,44 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
+    const isScheduleInPlay =
+      mode !== 'rest' &&
+      !isScheduledCapture(capture) &&
+      !unattendedMask.isOn &&
+      hasScheduleCue(
+        combined.text,
+        sanitizeScreen(capture.screen)?.view ?? null,
+      );
+    const contextScheduled = isScheduleInPlay
+      ? await readContextScheduled(
+          firestore,
+          base,
+          key,
+          capture.createdAt,
+          String(profile.data()?.timeZone ?? timeZone),
+        ).catch((error): Awaited<ReturnType<typeof readContextScheduled>> => {
+          logger.warn('helm.sort.scheduledUnreadable', {
+            cause: error instanceof Error ? error.name : 'error',
+          });
+          return [];
+        })
+      : [];
+    const contextLearn =
+      mode === 'rest' || unattendedMask.isOn || isScheduledCapture(capture)
+        ? []
+        : await readContextLearnLater(
+            firestore,
+            base,
+            key,
+            String(profile.data()?.timeZone ?? timeZone),
+          ).catch(
+            (error): Awaited<ReturnType<typeof readContextLearnLater>> => {
+              logger.warn('helm.sort.learnLaterUnreadable', {
+                cause: error instanceof Error ? error.name : 'error',
+              });
+              return [];
+            },
+          );
     const isHabitsInPlay =
       mode !== 'rest' &&
       isHabitTurn(
@@ -2770,9 +2946,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             return undefined;
           })
       : undefined;
+    const fitEvents =
+      contextFit && 'events' in contextFit
+        ? contextFit.events.filter(
+            (copy) =>
+              contextFit.fit.wouldMove.includes(copy.id) &&
+              !allSynced.some((known) => known.id === copy.id),
+          )
+        : [];
     const contextSynced = read.isOutside
-      ? filterSourcesForOutside(read.outsideReadScopes, allSynced)
-      : allSynced;
+      ? filterSourcesForOutside(read.outsideReadScopes, [
+          ...allSynced,
+          ...fitEvents,
+        ])
+      : [...allSynced, ...fitEvents];
     const heldBackNames = [
       ...new Set(
         [
@@ -2876,6 +3063,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       importance: contextImportance,
       synced: contextSynced,
     });
+    const relatedThings =
+      mode === 'rest'
+        ? []
+        : await readContextRelatedThings(
+            firestore,
+            base,
+            key,
+            combined.text,
+            unattendedMask.isOn,
+          ).catch((error): never[] => {
+            logger.warn('helm.related.read', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          });
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -2894,6 +3096,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : screen,
       earlierTurns,
       answeredQuestion,
+      aimsDayKey: readAimsDayKey(capture),
       facts: masked.facts,
       people: contextPeople,
       heardNames: toContextHeard(
@@ -2908,7 +3111,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topics: masked.topics,
       style,
       noticed,
+      relatedThings,
+      seenAs: seenAsLines,
       whereabouts: contextWhereabouts,
+      fit: contextFit,
       abilities: readCaptureAbilities(capture.abilities),
       notes: masked.notes,
       focusedTopic: masked.focusedTopic,
@@ -2917,6 +3123,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       focusedProcedure: masked.focusedProcedure,
       runs: masked.runs,
       habits: masked.habits,
+      scheduledActions: contextScheduled,
+      learnLater: contextLearn,
       importance: masked.importance,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
@@ -2968,7 +3176,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const provider = pickProvider(combined.text, combined.reading);
     // An outside assistant's answer leaves Helm, and the person granted mail, documents and app records to Helm alone.
     const isLiveReadOffered =
-      mode !== 'rest' && !read.isOutside && isQuestion(combined.text.trim());
+      mode !== 'rest' &&
+      !read.isOutside &&
+      !isScheduledCapture(capture) &&
+      isQuestion(combined.text.trim());
     const [liveGrants, siteGrants, offCategories] = isLiveReadOffered
       ? await Promise.all([
           readLiveGrants(firestore, uid),
@@ -3007,6 +3218,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : null,
       isHabitsInPlay ? HABIT_PROMPT : null,
       isLearningOn && mode !== 'rest' ? LEARNING_PROMPT : null,
+      seenAsLines.length > 0 ? SEEN_AS_PROMPT : null,
+      mode !== 'rest' ? PERSONALITY_PROMPT : null,
       contextImportance ? IMPORTANCE_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
@@ -3018,7 +3231,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       read.isOutside
         ? toHeldBackPrompt(read.via, read.outsideReadScopes, heldBackNames)
         : null,
-      toPersonaPrompt(assistantName, profile.data()?.assistantTone),
+      toPersonaPrompt(
+        assistantName,
+        profile.data()?.personality,
+        profile.data()?.assistantTone,
+      ),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
@@ -3115,26 +3332,30 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       });
       return { handedOver, value: loop };
     };
-    const routed = await runRouted({
-      route:
-        isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS
-          ? 'full'
-          : pickRoute({
-              text: combined.text,
-              mode,
-              isAnswer: answerTurn !== null,
-              hasTopicFocus: focusedTopic !== null,
-              hasProcedureFocus: focusedLive !== null,
-              hasMedia:
-                attached.media.length +
-                  attached.voiceIds.length +
-                  attached.unreadable.length >
-                0,
-            }),
-      runOn,
-      reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
-      isAborted: () => signal.aborted,
-    });
+    const heldLoop = readHeldLoop(capture) ?? readAheadLoop(capture);
+    const routed = heldLoop
+      ? { value: heldLoop, route: 'quick' as const, aborted: false }
+      : await runRouted({
+          route:
+            isScheduledCapture(capture) ||
+            (isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS)
+              ? 'full'
+              : pickRoute({
+                  text: combined.text,
+                  mode,
+                  isAnswer: answerTurn !== null,
+                  hasTopicFocus: focusedTopic !== null,
+                  hasProcedureFocus: focusedLive !== null,
+                  hasMedia:
+                    attached.media.length +
+                      attached.voiceIds.length +
+                      attached.unreadable.length >
+                    0,
+                }),
+          runOn,
+          reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
+          isAborted: () => signal.aborted,
+        });
     if ('held' in routed) {
       await failClaim(
         firestore,
@@ -3169,6 +3390,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureTitleByTask,
       focusedProcedureId: focusedLive?.id ?? null,
       focusedTaskId: screen?.focus?.id ?? null,
+      isMidTask: openRunRecords.length > 0,
       knownNames: contextPeople.map((person) => ({
         id: person.id,
         names: [person.name, ...person.alsoCalled],
@@ -3224,6 +3446,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedTaskId,
     keyDateNames,
     knownNames,
+    isMidTask: isRunOpen,
   } = result;
   if (loop.endedBy === 'terminal' && loop.terminalName === REPEAT_TOOL.name) {
     if (read.messages.length === 1 && read.joinedCount === 0) {
@@ -3248,7 +3471,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   }
 
   const isRefusedClose = loop.terminalName === CLOSE_CONVERSATION_TOOL.name;
-  const reply = normalizeNomosReply(
+  const reply0 = normalizeNomosReply(
     isRefusedClose ? { commands: [] } : loop.terminalInput,
     {
       reading: combined.reading,
@@ -3280,12 +3503,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureVersions,
       runSteps: context.runSteps,
       habits: context.habits,
+      scheduledActions: context.scheduledActions,
+      learnLater: context.learnLater,
       projects: context.projects,
       habitNames: context.habitNames,
       undoTurns: context.undoTurns,
       undoUnitCounts: context.undoUnitCounts,
       captureText: combined.text,
       keyDateNames,
+      seenAs: context.seenAs,
+      seenAsWords: context.seenAsWords,
+      personality: readPersonality(
+        profile.data()?.personality,
+        profile.data()?.assistantTone,
+      ),
       quotes,
       alreadyMade,
       timeZone,
@@ -3302,6 +3533,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       isLearningOn,
     },
   );
+  const reply = narrowReply(reply0, claimed.capture);
   reply.mediaDropped.forEach((code) =>
     logger.info('helm.media.dropped', { code }),
   );
@@ -3327,6 +3559,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   reply.habitDropped.forEach((code) =>
     logger.info('helm.habit.dropped', { code }),
+  );
+  reply.scheduleDropped.forEach((code) =>
+    logger.info('helm.schedule.dropped', { code }),
   );
   reply.undoOfferDropped.forEach((code) =>
     logger.info('helm.undoOffer.dropped', { code }),
@@ -3362,10 +3597,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.procedureCommands.length +
     reply.runCommands.length +
     reply.importanceCommands.length +
+    reply.seenAsCommands.length +
+    reply.personalityCommands.length +
     reply.soundsLike.length +
     reply.contactPoints.length +
     reply.connectionCommands.length +
     reply.whereabouts.length +
+    reply.scheduleCommands.length +
+    reply.researchCommands.length +
+    reply.learnCommands.length +
+    reply.learnAsks.length +
     (reply.planDay ? 1 : 0) +
     (reply.setCurrentPlace ? 1 : 0);
   const outcome =
@@ -3441,6 +3682,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         )
       : [],
     importanceCommands: keeps ? reply.importanceCommands : [],
+    seenAsCommands: keeps ? reply.seenAsCommands : [],
+    personalityCommands: keeps ? reply.personalityCommands : [],
+    scheduleCommands: keeps ? reply.scheduleCommands : [],
+    scheduleDropped: keeps ? reply.scheduleDropped : [],
+    researchCommands: keeps ? reply.researchCommands : [],
+    aheadStart: readAheadStart(claimed.capture),
+    learnCommands: keeps ? reply.learnCommands : [],
+    learnAsks: keeps ? reply.learnAsks : [],
+    isMidTask: isRunOpen || answerTurn !== null,
     soundsLike: keeps ? reply.soundsLike : [],
     contactPoints: keeps ? reply.contactPoints : [],
     connectionCommands: keeps ? reply.connectionCommands : [],
@@ -3490,7 +3740,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             reply.procedureDropped,
             reply.runDropped,
             reply.habitDropped,
+            reply.scheduleDropped,
             reply.importanceDropped,
+            reply.seenAsDropped,
+            reply.personalityDropped,
             commands.length < reply.commands.length,
           )
         ? hide(reply.replyLine)
@@ -3659,7 +3912,17 @@ async function writeResult(
     procedureCommands: ProcedureCommand[];
     runCommands: RunCommand[];
     habitCommands: HabitCommand[];
+    scheduleCommands: ScheduleCommand[];
+    scheduleDropped: ScheduleDrop[];
+    researchCommands: ResearchCommand[];
+    aheadStart: AheadStart | null;
+    learnCommands: LearnCommand[];
+    learnAsks: LearnAsk[];
+    /** A run is open or the turn answers a question, so a question about two saved items would interrupt. */
+    isMidTask: boolean;
     importanceCommands: SetImportanceCommand[];
+    seenAsCommands: SeenAsCommand[];
+    personalityCommands: SetPersonalityCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
     connectionCommands: ConnectionCommand[];
@@ -3720,6 +3983,15 @@ async function writeResult(
     runCommands,
     habitCommands,
     importanceCommands,
+    seenAsCommands,
+    personalityCommands,
+    scheduleCommands,
+    scheduleDropped,
+    researchCommands,
+    aheadStart,
+    learnCommands,
+    learnAsks,
+    isMidTask,
     soundsLike,
     contactPoints,
     connectionCommands,
@@ -3937,6 +4209,10 @@ async function writeResult(
       keyDates.length > 0 ||
       connectionCommands.length > 0 ||
       whereabouts.length > 0 ||
+      scheduleCommands.length > 0 ||
+      researchCommands.length > 0 ||
+      aheadStart !== null ||
+      learnCommands.length > 0 ||
       observations.length > 0 ||
       offerAbility !== null
         ? transaction.get(firestore.doc(base))
@@ -3983,7 +4259,10 @@ async function writeResult(
     ]);
     const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
-    const copyHash: unknown = copySnap?.get('contentHash');
+    const copyHash: unknown =
+      copySnap?.get('helmRef') == null
+        ? copySnap?.get('contentHash')
+        : undefined;
     const noted = settleRemember({
       remember,
       built,
@@ -4405,6 +4684,8 @@ async function writeResult(
               title: words.title,
               whoIds: task.whoIds ?? [],
               placeIds: task.placeIds ?? [],
+              meets: readMeets(task.meets),
+              durationMinutes: task.durationMinutes ?? null,
               sealed: words.sealed,
               privacyFacts: readQuietFacts(words.sealed),
               privateParents: readParents(task),
@@ -4864,6 +5145,258 @@ async function writeResult(
           habitPlan.effects.length,
       ),
     });
+    const aimsDayKey = isStale ? null : readAimsDayKey(capture);
+    const aimsRef = aimsDayKey
+      ? firestore.doc(`${base}/dayAims/${aimsDayKey}`)
+      : null;
+    const reopenRef =
+      !isStale && planDayKey === toDayKeyIn(now, timeZone)
+        ? firestore.doc(`${base}/dayAims/${planDayKey}`)
+        : null;
+    const [aimsSnap, reopenSnap] = await Promise.all([
+      aimsRef ? transaction.get(aimsRef) : null,
+      reopenRef && reopenRef.path !== aimsRef?.path
+        ? transaction.get(reopenRef)
+        : null,
+    ]);
+    const dayAimsPlan =
+      aimsDayKey && aimsRef
+        ? planDayAims({
+            dayKey: aimsDayKey,
+            commands,
+            taskIdByRef: written.taskIdByRef,
+            existing,
+            current: aimsSnap?.exists
+              ? {
+                  view: openAimsView(key, aimsSnap.data()),
+                  sealed: aimsSnap.get('sealed') as SealedPayload,
+                  state: String(aimsSnap.get('state') ?? 'open'),
+                }
+              : null,
+            newAimId: () => crypto.randomUUID(),
+            seal,
+          })
+        : null;
+    const keptSchedule = isStale ? [] : scheduleCommands;
+    const scheduledStored =
+      keptSchedule.length > 0
+        ? await readScheduledState(transaction, firestore, base, key)
+        : new Map();
+    const hasNewSchedule = keptSchedule.some(
+      (command) => command.kind === 'scheduleAction',
+    );
+    const selfWhoSnap =
+      hasNewSchedule && selfWhoId
+        ? await transaction.get(firestore.doc(`${base}/who/${selfWhoId}`))
+        : null;
+    const researchTimeZone = String(profileSnap?.get('timeZone') ?? timeZone);
+    const keptAhead = isStale ? null : aheadStart;
+    const researchUsage =
+      (researchCommands.length > 0 || keptAhead !== null) && !isStale
+        ? await readUsageIn(
+            transaction,
+            firestore,
+            input.uid,
+            now,
+            researchTimeZone,
+          )
+        : readUsageDoc(undefined, now, researchTimeZone);
+    const isResearchRerunBooked =
+      researchCommands.length > 0 && !isStale
+        ? await readIsRerunBookedIn(transaction, firestore, input.uid, null)
+        : false;
+    const schedulePlan = planScheduledActions({
+      commands: keptSchedule,
+      stored: scheduledStored,
+      pauseSpans: selfWhoSnap?.exists
+        ? readWhoWhere(openSealed(key, selfWhoSnap.get('sealed'))).away.filter(
+            (span) => span.pausesScheduled === true,
+          )
+        : [],
+      homeZone: String(profileSnap?.get('timeZone') ?? timeZone),
+      now,
+      captureId: captureRef.id,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length,
+      ),
+    });
+    const keptResearch = isStale ? [] : researchCommands;
+    const askedResearch = planResearch({
+      commands: keptResearch,
+      profileDepth:
+        profileSnap?.get('researchDepth') === 'thorough' ||
+        profileSnap?.get('researchDepth') === 'light'
+          ? profileSnap.get('researchDepth')
+          : null,
+      usage: researchUsage,
+      isRerunBooked: isResearchRerunBooked,
+      timeZone: researchTimeZone,
+      now,
+      captureId: captureRef.id,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length,
+      ),
+    });
+    const aheadProjectSnap = keptAhead
+      ? await transaction.get(
+          firestore.doc(`${base}/projects/${keptAhead.projectId}`),
+        )
+      : null;
+    const aheadWords = aheadProjectSnap?.exists
+      ? openSealed(key, aheadProjectSnap.get('sealed'))
+      : null;
+    const aheadPlan = keptAhead
+      ? planAheadStart({
+          start: keptAhead,
+          project: aheadWords
+            ? {
+                offers: readProjectOffers(
+                  aheadProjectSnap?.get('researchOffers'),
+                ),
+                ask: readAheadAsk(
+                  aheadWords,
+                  keptAhead.offerId,
+                  keptAhead.depth,
+                ),
+              }
+            : null,
+          usage: askedResearch.usage ?? researchUsage,
+          timeZone: researchTimeZone,
+          now,
+          nextNight: nextNight(now, researchTimeZone),
+          captureId: captureRef.id,
+          newId: () => crypto.randomUUID(),
+          seal,
+        })
+      : null;
+    const researchPlan = {
+      ...askedResearch,
+      creates: [
+        ...askedResearch.creates,
+        ...(aheadPlan?.create ? [aheadPlan.create] : []),
+      ],
+      lines: [...askedResearch.lines, ...(aheadPlan ? [aheadPlan.line] : [])],
+      usage: aheadPlan?.usage ?? askedResearch.usage,
+    };
+    const keptLearn = isStale ? [] : learnCommands;
+    const learnItems =
+      keptLearn.length > 0
+        ? await readLearnItemsIn(transaction, firestore, base, key)
+        : [];
+    const learnPlan = planLearnLater({
+      commands: keptLearn,
+      asks: isStale ? [] : learnAsks,
+      items: learnItems,
+      isSpoken,
+      isMidTask,
+      timeZone: researchTimeZone,
+      now,
+      captureId: captureRef.id,
+      newId: () => randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length -
+          researchPlan.effects.length,
+      ),
+      offeredDocuments: readOfferedDocuments(
+        profileSnap?.get('questionDocsOffered'),
+      ),
+      knownPeople: knownNames,
+    });
+    const keptSeenAs = isStale ? [] : seenAsCommands;
+    const seenAsPlan = planSeenAs({
+      commands: keptSeenAs,
+      records: await readSeenAsRecordsIn(
+        transaction,
+        firestore,
+        base,
+        key,
+        keptSeenAs.map((command) => command.lineId),
+      ),
+      now,
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length -
+          researchPlan.effects.length -
+          learnPlan.effects.length,
+      ),
+    });
+    const personalityPlan = planPersonality({
+      command: isStale ? null : (personalityCommands[0] ?? null),
+      stored: profileSnap?.get('personality') ?? null,
+      legacyTone: profileSnap?.get('assistantTone'),
+      storedSetAt:
+        typeof profileSnap?.get('personalitySetAt') === 'number'
+          ? (profileSnap.get('personalitySetAt') as number)
+          : null,
+      profileId: firestore.doc(base).id,
+      assistantName: assistantName ?? DEFAULT_ASSISTANT_NAME,
+      now,
+      isUnattended: input.isUnattended === true,
+      newId: () => crypto.randomUUID(),
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length -
+          researchPlan.effects.length -
+          learnPlan.effects.length -
+          seenAsPlan.effects.length,
+      ),
+      isProfileTaken: home !== null,
+      hasProfile: profileSnap?.exists === true,
+    });
+    const scheduleNotKept = [
+      ...schedulePlan.notKept,
+      ...(isStale ? [] : scheduleDropped).flatMap(
+        (code) => SCHEDULE_DROP_LINES[code] ?? [],
+      ),
+    ];
     const abilityOffer = isStale
       ? null
       : decideAbilityOffer({
@@ -4883,6 +5416,12 @@ async function writeResult(
         ...connectionPlan.effectRefs,
         ...habitPlan.effectRefs,
         ...importancePlan.effectRefs,
+        ...schedulePlan.effectRefs,
+        ...researchPlan.effectRefs,
+        ...learnPlan.effectRefs,
+        ...seenAsPlan.effectRefs,
+        ...personalityPlan.effectRefs,
+        ...(dayAimsPlan?.effectRefs ?? []),
       ],
       effects: [
         ...written.effects,
@@ -4893,6 +5432,12 @@ async function writeResult(
         ...connectionPlan.effects,
         ...habitPlan.effects,
         ...importancePlan.effects,
+        ...schedulePlan.effects,
+        ...researchPlan.effects,
+        ...learnPlan.effects,
+        ...seenAsPlan.effects,
+        ...personalityPlan.effects,
+        ...(dayAimsPlan?.effects ?? []),
       ],
       notKept: [
         ...written.notKept,
@@ -4901,6 +5446,11 @@ async function writeResult(
         ...connectionPlan.notKept,
         ...habitPlan.notKept,
         ...importancePlan.notKept,
+        ...scheduleNotKept,
+        ...researchPlan.notKept,
+        ...learnPlan.notKept,
+        ...seenAsPlan.notKept,
+        ...personalityPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -4919,7 +5469,9 @@ async function writeResult(
         contactPlan.isPrivate ||
         connectionPlan.isPrivate ||
         habitPlan.isPrivate ||
-        importancePlan.isPrivate,
+        importancePlan.isPrivate ||
+        seenAsPlan.isPrivate ||
+        schedulePlan.isPrivate,
     };
     const plan = sentMedia
       ? {
@@ -4935,7 +5487,8 @@ async function writeResult(
           ],
         }
       : withHome;
-    const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
+    const isFiling =
+      plan.effects.length > 0 || plan.lines.length > 0 || aheadPlan !== null;
     if (
       !isFiling &&
       commands.length > 0 &&
@@ -5022,6 +5575,10 @@ async function writeResult(
       ...(undoPlan.question ? [undoPlan.question] : []),
       ...habitPlan.questions,
       ...importancePlan.questions,
+      ...personalityPlan.questions,
+      ...schedulePlan.questions,
+      ...researchPlan.questions,
+      ...learnPlan.questions,
       ...impliedQuestions,
     ];
     const followUp =
@@ -5246,6 +5803,64 @@ async function writeResult(
       importancePlan.updates.forEach(({ collection, id, data }) =>
         transaction.update(firestore.doc(`${base}/${collection}/${id}`), data),
       );
+      seenAsPlan.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/seenAs/${id}`), data),
+      );
+      if (aimsRef && dayAimsPlan?.write) {
+        if (dayAimsPlan.write.op === 'create')
+          transaction.create(aimsRef, dayAimsPlan.write.data);
+        else transaction.update(aimsRef, dayAimsPlan.write.data);
+      }
+      if (reopenSnap?.exists && reopenSnap.get('state') === 'dismissed')
+        transaction.update(reopenSnap.ref, { state: 'open' });
+      schedulePlan.creates.forEach(({ id, doc }) =>
+        transaction.create(
+          firestore.doc(`${base}/scheduledActions/${id}`),
+          doc,
+        ),
+      );
+      schedulePlan.updates.forEach(({ id, data }) =>
+        transaction.update(
+          firestore.doc(`${base}/scheduledActions/${id}`),
+          data,
+        ),
+      );
+      researchPlan.creates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/research/${id}`), doc),
+      );
+      if (keptAhead && aheadPlan?.offers)
+        transaction.update(
+          firestore.doc(`${base}/projects/${keptAhead.projectId}`),
+          { researchOffers: aheadPlan.offers },
+        );
+      learnPlan.creates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/research/${id}`), doc),
+      );
+      learnPlan.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/research/${id}`), data),
+      );
+      if (profileSnap?.exists && learnPlan.offeredDocuments)
+        transaction.update(firestore.doc(base), {
+          questionDocsOffered: learnPlan.offeredDocuments,
+        });
+      if (researchPlan.usage) {
+        transaction.set(usageRef(firestore, input.uid), researchPlan.usage);
+        if (profileSnap?.exists)
+          transaction.update(firestore.doc(base), {
+            researchAllowance: toAllowanceMirror(
+              researchPlan.usage,
+              now,
+              researchTimeZone,
+            ),
+          });
+      }
+      if (
+        profileSnap?.exists &&
+        schedulePlan.creates.length + schedulePlan.updates.length > 0
+      )
+        transaction.update(firestore.doc(base), {
+          scheduledActionsChangedAt: now,
+        });
       if (
         profileSnap?.exists &&
         habitPlan.creates.length + habitPlan.updates.length > 0
@@ -5302,18 +5917,26 @@ async function writeResult(
         });
       }
       if (home) transaction.update(firestore.doc(base), home.data);
+      if (profileSnap?.exists && personalityPlan.data)
+        transaction.update(firestore.doc(base), personalityPlan.data);
       transaction.create(executionRef, {
         via: capture.via ?? null,
         ...buildExecution(
           { ...plan, questions },
           {
             extraLines: [
+              ...plan.offerLines,
               ...soundsPlan.lines,
               ...wherePlan.lines,
               ...contactPlan.lines,
               ...connectionPlan.lines,
               ...habitPlan.lines,
               ...importancePlan.lines,
+              ...schedulePlan.lines,
+              ...researchPlan.lines,
+              ...learnPlan.lines,
+              ...seenAsPlan.lines,
+              ...personalityPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -5321,8 +5944,21 @@ async function writeResult(
               plan.questions,
               questions,
               plan.lines,
+              plan.offerLines,
               habitPlan.lines,
               importancePlan.lines,
+              seenAsPlan.lines,
+              seenAsPlan.notKept,
+              personalityPlan.notKept,
+              personalityPlan.questions,
+              schedulePlan.lines,
+              scheduleNotKept,
+              researchPlan.lines,
+              researchPlan.notKept,
+              researchPlan.questions,
+              learnPlan.lines,
+              learnPlan.notKept,
+              learnPlan.questions,
               noted.refused,
               liveRefused,
               askPlan.isDeferred,
@@ -5340,6 +5976,7 @@ async function writeResult(
             inputMode: isSpoken ? 'voice' : capture.inputMode,
             timeZone,
             offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
+            aims: dayAimsPlan,
             isQuiet,
           },
         ),
@@ -5351,9 +5988,30 @@ async function writeResult(
     learning.writes.forEach(({ id, data }) =>
       transaction.create(firestore.doc(`${base}/observations/${id}`), data),
     );
-    if (learning.reflectDueAt !== null)
+    const hasRelatable =
+      isFiling &&
+      [
+        plan.creates,
+        plan.updates,
+        soundsPlan.taskUpdates,
+        plan.projectCreates,
+        plan.projectUpdates,
+        plan.noteCreates,
+        plan.topicVersions,
+      ].some((writes) => writes.length > 0);
+    const relateDueAt =
+      hasRelatable &&
+      profileSnap?.get('isLearningOn') !== false &&
+      ((profileSnap?.get('relateDueAt') as number | null | undefined) ??
+        null) === null
+        ? nextReflectionAt(now, timeZone)
+        : null;
+    if (learning.reflectDueAt !== null || relateDueAt !== null)
       transaction.update(firestore.doc(base), {
-        reflectDueAt: learning.reflectDueAt,
+        ...(learning.reflectDueAt !== null
+          ? { reflectDueAt: learning.reflectDueAt }
+          : {}),
+        ...(relateDueAt !== null ? { relateDueAt } : {}),
       });
     const spokenAnswer = reply && isSpoken ? reply.spoken : null;
     const spokenLine =
@@ -5428,6 +6086,20 @@ async function writeResult(
           habitPlan.notKept.length +
           importancePlan.lines.length +
           importancePlan.notKept.length +
+          seenAsPlan.lines.length +
+          seenAsPlan.notKept.length +
+          personalityPlan.lines.length +
+          personalityPlan.notKept.length +
+          personalityPlan.questions.length +
+          schedulePlan.lines.length +
+          scheduleNotKept.length +
+          schedulePlan.questions.length +
+          researchPlan.lines.length +
+          researchPlan.notKept.length +
+          researchPlan.questions.length +
+          learnPlan.lines.length +
+          learnPlan.notKept.length +
+          learnPlan.questions.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
           contactPlan.lines.length +
