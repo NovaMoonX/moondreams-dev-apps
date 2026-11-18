@@ -18,6 +18,7 @@ const ROUND =
   "relative size-16 min-w-16 rounded-full! p-0 before:absolute before:-inset-1 before:content-['']";
 
 const HEARD_MAX_PX = 30;
+const HEARD_MAX_WIDE_PX = 40;
 const HEARD_MIN_PX = 19;
 
 const fitHeard = (box: HTMLElement, line: HTMLElement) => {
@@ -26,7 +27,10 @@ const fitHeard = (box: HTMLElement, line: HTMLElement) => {
     box.clientHeight -
     parseFloat(style.paddingTop) -
     parseFloat(style.paddingBottom);
-  const current = parseFloat(line.style.fontSize) || HEARD_MAX_PX;
+  const max = window.matchMedia('(min-width: 1024px)').matches
+    ? HEARD_MAX_WIDE_PX
+    : HEARD_MAX_PX;
+  const current = parseFloat(line.style.fontSize) || max;
   const sizes = Array.from(
     { length: current - HEARD_MIN_PX + 1 },
     (_, index) => current - index,
@@ -144,14 +148,14 @@ function LiveConversation() {
     >
       <div
         aria-hidden='true'
-        className='pointer-events-none absolute inset-0'
+        className='pointer-events-none absolute inset-0 lg:inset-x-[max(0px,calc(50%-31rem))]'
         data-glow={glow}
       >
         <span className='helm-live-halo' />
         <span className='helm-live-glow' />
         {isHearing && <span key={wordCount} className='helm-live-ripple' />}
       </div>
-      <div className='relative mx-auto flex min-h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
+      <div className='relative mx-auto flex min-h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))] lg:max-w-3xl'>
         <div className='min-w-0 flex-1'>
           <p
             aria-live='polite'
@@ -171,7 +175,7 @@ function LiveConversation() {
       {/* A centred column that can overflow centres an inner block with my-auto, so a long line starts at the top and every word stays reachable. */}
       <div
         ref={scroller}
-        className='helm-live-scroll relative mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-y-auto px-6 py-5'
+        className='helm-live-scroll relative mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-y-auto px-6 py-5 lg:max-w-3xl'
       >
         {isOpening ? (
           <div className='my-auto flex flex-col items-center gap-5 pb-10 text-center'>
@@ -195,7 +199,9 @@ function LiveConversation() {
                 ref={personBlock}
                 className={join(
                   'space-y-3 leading-snug font-medium text-pretty',
-                  isHearing ? 'text-[30px]' : 'text-muted-foreground text-xl',
+                  isHearing
+                    ? 'text-[30px] lg:text-[40px]'
+                    : 'text-muted-foreground text-xl lg:text-2xl',
                 )}
               >
                 {splitIntoParagraphs(personLine).map((part, index) => (
@@ -216,7 +222,7 @@ function LiveConversation() {
             {helmLine !== '' && (
               <div
                 ref={helmBlock}
-                className='space-y-4 text-[26px] leading-snug text-pretty'
+                className='space-y-4 text-[26px] leading-snug text-pretty lg:text-[32px]'
               >
                 {splitIntoParagraphs(helmLine).map((part, index) => (
                   <p key={index}>{part}</p>

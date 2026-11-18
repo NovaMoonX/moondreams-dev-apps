@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
+import DesktopSidebar from '@apps/helm/components/shell/DesktopSidebar';
 import { useNearNow } from '@apps/helm/hooks/useNearNow';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
 
@@ -15,22 +17,25 @@ interface HelmShellProps {
   isAskAvailable: boolean;
 }
 
-/** The page every view sits in: one column, with the dock fixed at the foot of home and the ask bar at the foot of a content page. */
+/** The page every view sits in: one column (from lg, beside a left sidebar), with the dock fixed at the foot of home and the ask bar at the foot of a content page. */
 function HelmShell({ children, dock, isAskAvailable }: HelmShellProps) {
   const entry = useAppSelector(selectTopScreen);
   useNearNow(isAskAvailable);
   const hasAskBar = isAskAvailable && entry !== null;
+  const hasSidebar = useMediaQuery().isAtLeast('lg') && isAskAvailable;
 
   return (
     <div
       className={join(
         'page flex min-h-dvh flex-col',
+        hasSidebar && 'pl-65',
         hasAskBar ? 'pb-28' : 'pb-40',
       )}
     >
-      <div className='mx-auto flex w-full max-w-xl flex-1 flex-col pt-4'>
+      <div className='mx-auto flex w-full max-w-xl flex-1 flex-col pt-4 lg:max-w-3xl'>
         {children}
       </div>
+      {hasSidebar && <DesktopSidebar />}
       {dock}
       {isAskAvailable && <AskAboutThisControl placement='page' />}
     </div>
