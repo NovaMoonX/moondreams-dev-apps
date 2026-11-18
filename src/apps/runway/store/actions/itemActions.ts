@@ -1,9 +1,5 @@
-import {
-  doc,
-  runTransaction,
-  writeBatch,
-  type Transaction,
-} from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc, writeBatch, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import {
@@ -84,7 +80,7 @@ async function commitPlanWrites(
     await batch.commit();
     return;
   }
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const eventTaken = await transaction.get(
       itemPath(uid, 'versions', linked.version.id),
     );
@@ -827,7 +823,7 @@ export async function changeItem(
       })
     : null;
   if (base !== undefined || linked !== null) {
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(uid, async (transaction) => {
       const [taken, eventTaken] = await Promise.all([
         base === undefined
           ? Promise.resolve(null)
@@ -961,7 +957,7 @@ export async function reorderItems(
     await batch.commit();
     return;
   }
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const taken = await Promise.all(
       guarded.map(({ id }) => transaction.get(itemPath(uid, 'versions', id))),
     );
@@ -1096,7 +1092,7 @@ export async function endItem(
       })
     : null;
   const headerRef = itemPath(uid, 'items', input.itemId);
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const [snapshot, entryTaken, eventTaken] = await Promise.all([
       transaction.get(headerRef),
       transaction.get(itemPath(uid, 'changes', changeId)),
@@ -1298,7 +1294,7 @@ export async function cancelChange(
   input: CancelChangeInput,
 ): Promise<boolean> {
   const prepared = await prepareCancel(encryption, input);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const write = await readCancel(transaction, uid, prepared);
     if (write === null) return false;
     write();
@@ -1331,7 +1327,7 @@ export async function archiveItem(
     encryption,
   );
   const headerRef = itemPath(uid, 'items', input.itemId);
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(headerRef);
     if (!snapshot.exists()) throw new Error('This item no longer exists.');
     const header = snapshot.data() as Partial<PlanItemDoc>;
@@ -1369,7 +1365,7 @@ export async function releaseHeld(
   releasedOn: DateOnly,
 ): Promise<boolean> {
   const headerRef = itemPath(uid, 'items', itemId);
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(headerRef);
     if (!snapshot.exists()) throw new Error('This item no longer exists.');
     const header = snapshot.data() as Partial<PlanItemDoc>;
@@ -1389,7 +1385,7 @@ export async function undoReleaseHeld(
   releasedOn: DateOnly,
 ): Promise<boolean> {
   const headerRef = itemPath(uid, 'items', itemId);
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(headerRef);
     if (!snapshot.exists()) return false;
     const header = snapshot.data() as Partial<PlanItemDoc>;
