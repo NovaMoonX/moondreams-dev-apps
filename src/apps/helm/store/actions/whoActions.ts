@@ -110,8 +110,8 @@ async function rewriteWhoWords<Refusal extends string = never>(
   if (!navigator.onLine) return 'offline';
   const ref = doc(userOf(uid), 'who', whoId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<EditResult | Refusal> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
