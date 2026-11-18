@@ -5,13 +5,13 @@ import {
   collection,
   deleteDoc,
   doc,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { isValidHttpUrl } from '@/utils/urlUtils';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import { validateEventTime, type EventFields } from '@apps/waypoint/store/actions/eventActions';
 import type { IdeaDetails, IdeaType, TimelineEvent, TripIdea, TripSpace } from '@apps/waypoint/types';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
@@ -191,7 +191,7 @@ export const convertIdeaToEvent = createAsyncThunk<
   };
 
   try {
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(trip.id, async (transaction) => {
       const ideaSnapshot = await transaction.get(ideaRef);
       if (!ideaSnapshot.exists()) {
         throw new Error('This idea was removed, so it can no longer be added to the itinerary.');

@@ -20,9 +20,10 @@ export function startViewingsListener(
   return onSnapshot(
     viewingsRef,
     (snapshot) => {
-      const viewings = snapshot.docs.map(
-        (viewingSnapshot) => viewingSnapshot.data() as Viewing,
-      );
+      const viewings = snapshot.docs.map((viewingSnapshot) => ({
+        ...(viewingSnapshot.data() as Viewing),
+        id: viewingSnapshot.id,
+      }));
       onChange(viewings);
     },
     onError,

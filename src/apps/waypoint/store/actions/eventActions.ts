@@ -6,7 +6,6 @@ import {
   doc,
   getDocs,
   query,
-  runTransaction,
   setDoc,
   updateDoc,
   where,
@@ -23,6 +22,7 @@ import type {
   TimelineEvent,
   TripSpace,
 } from '@apps/waypoint/types';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import { ARRIVE_BY_EVENT_TYPES, DEFAULT_REMINDER_MINUTES_BEFORE } from '@apps/waypoint/constants';
 import {
   cancelEventReminder,
@@ -484,7 +484,7 @@ export const markEventSeen = createAsyncThunk<void, MarkEventSeenInput, { reject
   'waypoint/events/markSeen',
   async ({ uid, trip, eventId }) => {
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(trip.id, async (transaction) => {
       const snapshot = await transaction.get(eventRef);
       if (!snapshot.exists()) {
         return;

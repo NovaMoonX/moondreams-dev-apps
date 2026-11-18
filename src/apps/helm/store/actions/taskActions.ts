@@ -5,12 +5,12 @@ import {
   doc,
   getDoc,
   getDocFromCache,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { TASK_TITLE_CAP } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
@@ -99,8 +99,8 @@ export async function updateTaskWords(
   if (!navigator.onLine) return 'offline';
   const ref = doc(tasksOf(uid), taskId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<WordsResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
