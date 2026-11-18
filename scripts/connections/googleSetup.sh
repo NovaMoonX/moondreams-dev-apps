@@ -22,6 +22,8 @@ SCOPES=(
   https://www.googleapis.com/auth/gmail.readonly
   https://www.googleapis.com/auth/drive.readonly
   https://www.googleapis.com/auth/contacts.readonly
+  https://www.googleapis.com/auth/calendar.events
+  https://www.googleapis.com/auth/calendar.app.created
 )
 ORIGINS=(https://apps.moondreams.dev)
 REDIRECTS=(https://apps.moondreams.dev/helm)
@@ -121,25 +123,50 @@ CURRENT_STEP=3
 CURRENT="the consent screen's scopes"
 echo
 new_scopes=(); while IFS= read -r line; do new_scopes+=("$line"); done < <(missing_from scopes "${SCOPES[@]}")
-if (( ${#new_scopes[@]} == 0 )); then
-  echo "3. ✓ Every scope is already on the consent screen."
-else
+scope_label() {
+  case "$1" in
+    openid) echo "sign-in" ;;
+    email) echo "the person's email address" ;;
+    */calendar.readonly) echo "read Calendar" ;;
+    */gmail.readonly) echo "read Gmail" ;;
+    */drive.readonly) echo "read Drive" ;;
+    */contacts.readonly) echo "read Contacts" ;;
+    */calendar.events) echo "write events to a calendar" ;;
+    */calendar.app.created) echo "make a calendar for the plan" ;;
+    *) echo "$1" ;;
+  esac
+}
+if (( ${#new_scopes[@]} )) && ! has_record scopes && [[ -z "$from" ]]; then
+  # No earlier run recorded which scopes were added, so ask one by one: a person who added some by hand pastes only the rest.
+  echo "3. The consent screen needs ${#new_scopes[@]} scopes. Say y for each one already in its Data access table ($CONSENT_PAGE):"
+  still=()
+  for scope in "${new_scopes[@]}"; do
+    if ask_yes "     $(scope_label "$scope") ($scope) already added?"; then record scopes "$scope"; else still+=("$scope"); fi
+  done
+  new_scopes=(${still[@]+"${still[@]}"})
+  (( ${#new_scopes[@]} )) || echo "   ✓ Noted; only scopes added later will be asked for."
+elif (( ${#new_scopes[@]} )); then
   if has_record scopes; then
-    echo "3. ${#new_scopes[@]} scope(s) added since your last run need adding on the consent screen."
+    echo "3. ${#new_scopes[@]} scope(s) added since your last run need adding on the consent screen:"
   else
-    echo "3. The consent screen needs these scopes (Google identifies each permission by its URL; all are read-only):"
-    printf '     %s\n' "${new_scopes[@]}"
+    echo "3. The consent screen needs these scopes (Google identifies each permission by its URL):"
   fi
-  if ! has_record scopes && [[ -z "$from" ]] && ask_yes "   Are all of these already in the consent screen's Data access table?"; then
-    echo "   ✓ Noted; only scopes added later will be asked for."
-  else
-    echo "   Open $CONSENT_PAGE, then Data access, \"Add or remove scopes\", paste into \"Manually add scopes\","
-    echo "   then Add to table, Update and Save (one already in the table is simply kept)."
-    copy_each "Scopes to add (one per line)" "$(printf '%s\n' "${new_scopes[@]}")"
+  for scope in "${new_scopes[@]}"; do echo "     $(scope_label "$scope"): $scope"; done
+else
+  echo "3. ✓ Every scope is already on the consent screen."
+fi
+if (( ${#new_scopes[@]} )); then
+  if printf '%s\n' "${new_scopes[@]}" | grep -q 'calendar\.\(events\|app\.created\)$'; then
+    echo "   The calendar.events and calendar.app.created scopes let a person's plan be written to one calendar they choose; every other scope is read-only."
   fi
+  echo "   Open $CONSENT_PAGE, then Data access, \"Add or remove scopes\", paste into \"Manually add scopes\","
+  echo "   then Add to table, Update and Save (one already in the table is simply kept)."
+  copy_each "Scopes to add (one per line)" "$(printf '%s\n' "${new_scopes[@]}")"
   record scopes "${new_scopes[@]}"
-  echo "   Google marks Gmail's and Drive's as restricted: until it reviews the app, anyone connecting them sees a \"hasn't verified"
-  echo "   this app\" screen (Advanced, then Continue) and the app is capped at 100 people."
+  if printf '%s\n' "${new_scopes[@]}" | grep -q '\(gmail\|drive\)\.readonly$'; then
+    echo "   Google marks Gmail's and Drive's as restricted: until it reviews the app, anyone connecting them sees a \"hasn't verified"
+    echo "   this app\" screen (Advanced, then Continue) and the app is capped at 100 people."
+  fi
 fi
 remember_step 3
 

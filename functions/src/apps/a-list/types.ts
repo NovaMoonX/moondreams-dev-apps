@@ -41,7 +41,8 @@ export interface TheatreResult {
   distanceMiles: number | null;
 }
 
-export type AmcFormat = 'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
+export type AmcFormat =
+  'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 
 export type TicketPriceKind = 'ADULT' | 'SENIOR' | 'CHILD';
 

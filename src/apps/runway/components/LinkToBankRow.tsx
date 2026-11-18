@@ -87,6 +87,7 @@ function LinkToBankRow({ linkId, onOpen }: LinkToBankRowProps) {
       icon={<RefreshCw />}
       label={isRefreshing ? LINK_WORDS.refreshing : LINK_WORDS.refresh}
       subtitle={LINK_WORDS.refreshHelp}
+      isDisabled={isRefreshing}
       onClick={() => void refresh()}
     />
   );

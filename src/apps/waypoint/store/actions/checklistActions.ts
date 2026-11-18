@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -16,7 +22,12 @@ import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 const CHECKLIST_COLLECTION = (tripId: string) =>
   collection(db, 'apps', 'waypoint', 'trips', tripId, 'checklist');
 
-const getItemRef = (tripId: string, uid: string, itemId: string, isPrivate: boolean) =>
+const getItemRef = (
+  tripId: string,
+  uid: string,
+  itemId: string,
+  isPrivate: boolean,
+) =>
   isPrivate
     ? doc(db, 'apps', 'waypoint', 'personalChecklist', uid, 'items', itemId)
     : doc(db, 'apps', 'waypoint', 'trips', tripId, 'checklist', itemId);
@@ -69,7 +80,9 @@ export const createChecklistItem = createAsyncThunk<
 
     const now = Date.now();
     const itemRef = isPrivate
-      ? doc(collection(db, 'apps', 'waypoint', 'personalChecklist', uid, 'items'))
+      ? doc(
+          collection(db, 'apps', 'waypoint', 'personalChecklist', uid, 'items'),
+        )
       : doc(CHECKLIST_COLLECTION(tripId));
     const item: ChecklistItem = {
       id: itemRef.id,
@@ -137,7 +150,9 @@ export const updateChecklistItem = createAsyncThunk<
     { rejectWithValue },
   ) => {
     if (!isPrivate && !canEditExistingItem(trip, uid)) {
-      return rejectWithValue('You do not have permission to edit checklist items.');
+      return rejectWithValue(
+        'You do not have permission to edit checklist items.',
+      );
     }
     const trimmedTitle = title.trim();
     const trimmedCustomLabel = customCategoryLabel?.trim() || null;
@@ -149,18 +164,15 @@ export const updateChecklistItem = createAsyncThunk<
       return rejectWithValue('Enter a label for the custom category.');
     }
 
-    await updateDoc(
-      getItemRef(trip.id, uid, itemId, isPrivate),
-      {
-        title: trimmedTitle,
-        category,
-        customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
-        note: note?.trim() || null,
-        completeByDayIndex,
-        assignedToUids: isPrivate ? [] : [...new Set(assignedToUids)],
-        lastEditedAt: Date.now(),
-      },
-    );
+    await updateDoc(getItemRef(trip.id, uid, itemId, isPrivate), {
+      title: trimmedTitle,
+      category,
+      customCategoryLabel: category === 'OTHER' ? trimmedCustomLabel : null,
+      note: note?.trim() || null,
+      completeByDayIndex,
+      assignedToUids: isPrivate ? [] : [...new Set(assignedToUids)],
+      lastEditedAt: Date.now(),
+    });
   },
 );
 
@@ -179,7 +191,9 @@ export const deleteChecklistItem = createAsyncThunk<
   'waypoint/checklist/delete',
   async ({ trip, uid, itemId, isPrivate }, { rejectWithValue }) => {
     if (!isPrivate && !canEditExistingItem(trip, uid)) {
-      return rejectWithValue('You do not have permission to delete checklist items.');
+      return rejectWithValue(
+        'You do not have permission to delete checklist items.',
+      );
     }
     await deleteDoc(getItemRef(trip.id, uid, itemId, isPrivate));
   },
@@ -192,15 +206,12 @@ export const toggleChecklistItem = createAsyncThunk<
 >(
   'waypoint/checklist/toggle',
   async ({ tripId, itemId, uid, isCompleted, isPrivate }) => {
-    await updateDoc(
-      getItemRef(tripId, uid, itemId, isPrivate),
-      {
-        isCompleted,
-        markedCompletedByUid: isCompleted ? uid : null,
-        markedCompletedAt: isCompleted ? Date.now() : null,
-        lastEditedAt: Date.now(),
-      },
-    );
+    await updateDoc(getItemRef(tripId, uid, itemId, isPrivate), {
+      isCompleted,
+      markedCompletedByUid: isCompleted ? uid : null,
+      markedCompletedAt: isCompleted ? Date.now() : null,
+      lastEditedAt: Date.now(),
+    });
   },
 );
 
@@ -211,13 +222,21 @@ interface LinkChecklistItemsInput {
 }
 
 /** Links shared items to a plan, aborting if someone linked one elsewhere meanwhile; a link to a deleted plan counts as free. */
-export const linkChecklistItems = createAsyncThunk<void, LinkChecklistItemsInput, { rejectValue: string }>(
+export const linkChecklistItems = createAsyncThunk<
+  void,
+  LinkChecklistItemsInput,
+  { rejectValue: string }
+>(
   'waypoint/checklist/link',
   async ({ tripId, itemIds, link }, { rejectWithValue }) => {
     try {
       await runHeldTransaction(tripId, async (transaction) => {
-        const itemRefs = itemIds.map((itemId) => doc(CHECKLIST_COLLECTION(tripId), itemId));
-        const snapshots = await Promise.all(itemRefs.map((itemRef) => transaction.get(itemRef)));
+        const itemRefs = itemIds.map((itemId) =>
+          doc(CHECKLIST_COLLECTION(tripId), itemId),
+        );
+        const snapshots = await Promise.all(
+          itemRefs.map((itemRef) => transaction.get(itemRef)),
+        );
         const currentLinks = snapshots.map((snapshot) => {
           if (!snapshot.exists()) {
             throw new Error('One of those to-dos was removed.');
@@ -227,15 +246,29 @@ export const linkChecklistItems = createAsyncThunk<void, LinkChecklistItemsInput
         const targets = await Promise.all(
           currentLinks.map((current) =>
             current && (current.kind !== link.kind || current.id !== link.id)
-              ? transaction.get(doc(db, 'apps', 'waypoint', 'trips', tripId, PLAN_COLLECTIONS[current.kind], current.id))
+              ? transaction.get(
+                  doc(
+                    db,
+                    'apps',
+                    'waypoint',
+                    'trips',
+                    tripId,
+                    PLAN_COLLECTIONS[current.kind],
+                    current.id,
+                  ),
+                )
               : null,
           ),
         );
         if (targets.some((target) => target?.exists())) {
-          throw new Error('One of those to-dos was just linked to something else.');
+          throw new Error(
+            'One of those to-dos was just linked to something else.',
+          );
         }
         const lastEditedAt = Date.now();
-        itemRefs.forEach((itemRef) => transaction.update(itemRef, { linkedTo: link, lastEditedAt }));
+        itemRefs.forEach((itemRef) =>
+          transaction.update(itemRef, { linkedTo: link, lastEditedAt }),
+        );
       });
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, 'Please try again.'));
@@ -253,13 +286,22 @@ export const unlinkChecklistItems = createAsyncThunk<
   async ({ tripId, itemIds, link }, { rejectWithValue }) => {
     try {
       await runHeldTransaction(tripId, async (transaction) => {
-        const itemRefs = itemIds.map((itemId) => doc(CHECKLIST_COLLECTION(tripId), itemId));
-        const snapshots = await Promise.all(itemRefs.map((itemRef) => transaction.get(itemRef)));
+        const itemRefs = itemIds.map((itemId) =>
+          doc(CHECKLIST_COLLECTION(tripId), itemId),
+        );
+        const snapshots = await Promise.all(
+          itemRefs.map((itemRef) => transaction.get(itemRef)),
+        );
         const lastEditedAt = Date.now();
         snapshots.forEach((snapshot, index) => {
-          const current = snapshot.exists() ? ((snapshot.data() as Partial<ChecklistItem>).linkedTo ?? null) : null;
+          const current = snapshot.exists()
+            ? ((snapshot.data() as Partial<ChecklistItem>).linkedTo ?? null)
+            : null;
           if (current && current.kind === link.kind && current.id === link.id) {
-            transaction.update(itemRefs[index], { linkedTo: null, lastEditedAt });
+            transaction.update(itemRefs[index], {
+              linkedTo: null,
+              lastEditedAt,
+            });
           }
         });
       });
@@ -279,13 +321,19 @@ interface SyncEventBookingsInput {
 }
 
 /** Makes an event's linked to-dos the picked ones. Link and unlink are tried separately; `message` is set when either failed. */
-export const syncEventBookings = createAsyncThunk<{ linked: boolean; message: string | null }, SyncEventBookingsInput>(
+export const syncEventBookings = createAsyncThunk<
+  { linked: boolean; message: string | null },
+  SyncEventBookingsInput
+>(
   'waypoint/checklist/syncBookings',
   async ({ tripId, eventId, picked, initial }, { dispatch }) => {
     const link: ExpenseLink = { kind: 'EVENT', id: eventId };
     const toLink = picked.filter((itemId) => !initial.includes(itemId));
     const toUnlink = initial.filter((itemId) => !picked.includes(itemId));
-    const attempt = async (action: () => Promise<unknown>, shouldRun: boolean) => {
+    const attempt = async (
+      action: () => Promise<unknown>,
+      shouldRun: boolean,
+    ) => {
       if (!shouldRun) {
         return null;
       }
@@ -297,13 +345,22 @@ export const syncEventBookings = createAsyncThunk<{ linked: boolean; message: st
       }
     };
     const linkMessage = await attempt(
-      () => dispatch(linkChecklistItems({ tripId, itemIds: toLink, link })).unwrap(),
+      () =>
+        dispatch(
+          linkChecklistItems({ tripId, itemIds: toLink, link }),
+        ).unwrap(),
       toLink.length > 0,
     );
     const unlinkMessage = await attempt(
-      () => dispatch(unlinkChecklistItems({ tripId, itemIds: toUnlink, link })).unwrap(),
+      () =>
+        dispatch(
+          unlinkChecklistItems({ tripId, itemIds: toUnlink, link }),
+        ).unwrap(),
       toUnlink.length > 0,
     );
-    return { linked: picked.length > 0 && linkMessage === null, message: linkMessage ?? unlinkMessage };
+    return {
+      linked: picked.length > 0 && linkMessage === null,
+      message: linkMessage ?? unlinkMessage,
+    };
   },
 );

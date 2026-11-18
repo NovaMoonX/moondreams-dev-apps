@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { waitUntil } from '@/utils/waitUntil';
 import { store, useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
@@ -17,10 +18,13 @@ import NumberAnswer from '@apps/helm/components/home/NumberAnswer';
 import PickOneAnswer from '@apps/helm/components/home/PickOneAnswer';
 import PickRecordAnswer from '@apps/helm/components/home/PickRecordAnswer';
 import PickSeveralAnswer from '@apps/helm/components/home/PickSeveralAnswer';
+import WhichComesFirstAnswer from '@apps/helm/components/home/WhichComesFirstAnswer';
 import YesNoAnswer from '@apps/helm/components/home/YesNoAnswer';
+import ListeningStrip from '@apps/helm/components/voice/ListeningStrip';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import {
   answerUndoOffer,
@@ -36,6 +40,7 @@ import {
 } from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
   getOpenQuestions,
   isDismissable,
@@ -86,6 +91,7 @@ function QuestionCard({
   const neitherText = neitherDraft?.text ?? ownText;
   const setNeitherText = neitherDraft?.onChange ?? setOwnText;
   const name = useAssistantName();
+  const voice = useHelmVoiceContext();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -108,7 +114,14 @@ function QuestionCard({
   );
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
-  const Part = PARTS[question.shape];
+  const Part =
+    question.kind === 'whichComesFirst'
+      ? WhichComesFirstAnswer
+      : PARTS[question.shape];
+  const skippedLine =
+    question.kind === 'whichComesFirst'
+      ? HELM_COPY.importanceWhichSkipped
+      : HELM_COPY.questionSkipped;
 
   const answerAsTurn = async (
     value: QuestionAnswerValue,
@@ -116,8 +129,9 @@ function QuestionCard({
   ) => {
     if (!user) return;
     setIsWorking(true);
+    const tap = voice.followTap();
     try {
-      const { write } = await sendQuestionAnswer(user.uid, {
+      const { write, id: sentId } = await sendQuestionAnswer(user.uid, {
         captureId,
         questionId: id,
         question,
@@ -125,7 +139,9 @@ function QuestionCard({
         transcript: null,
         recordName,
         assistantName: name,
+        isSpokenTurn: tap.isSpokenTurn,
       });
+      tap.onSent({ id: sentId, write }, { captureId, questionId: id });
       setIsSent(true);
       write.catch(() => {
         setIsSent(false);
@@ -140,10 +156,13 @@ function QuestionCard({
   };
 
   const answerOnServer = async (value: QuestionAnswerValue, text?: string) => {
+    const kinChoice =
+      value.shape === 'pickRecord' ? toQuestionChoice(question, value) : null;
     if (
       (value.shape !== 'pickOne' &&
         value.shape !== 'pickSeveral' &&
-        value.shape !== 'yesNo') ||
+        value.shape !== 'yesNo' &&
+        kinChoice === null) ||
       isOffline
     )
       return;
@@ -151,19 +170,38 @@ function QuestionCard({
     const result = await resolveQuestion(
       captureId,
       id,
-      value.shape === 'pickSeveral'
-        ? { by: 'tap', optionIds: value.optionIds }
-        : {
-            by: 'tap',
-            optionId: value.optionId,
-            ...(text !== undefined && { text }),
-          },
+      kinChoice
+        ? { by: 'tap', ...kinChoice }
+        : value.shape === 'pickSeveral'
+          ? { by: 'tap', optionIds: value.optionIds }
+          : {
+              by: 'tap',
+              optionId:
+                value.shape === 'pickOne' || value.shape === 'yesNo'
+                  ? value.optionId
+                  : '',
+              ...(text !== undefined && { text }),
+            },
     );
+    if (result.kind === 'done' || result.kind === 'stale') {
+      await waitUntil(() => {
+        const capture = selectAllCaptures(store.getState()).find(
+          (entry) => entry.id === captureId,
+        );
+        return (
+          capture === undefined ||
+          getOpenQuestions(capture).every((entry) => entry.id !== id)
+        );
+      });
+    }
     setIsWorking(false);
     if (result.kind === 'done' && result.executionId && isInSheet && user) {
       const { uid } = user;
       const { executionId } = result;
-      const optionId = value.shape === 'pickSeveral' ? null : value.optionId;
+      const optionId =
+        value.shape === 'pickOne' || value.shape === 'yesNo'
+          ? value.optionId
+          : null;
       const kept = question.options.find((option) => option.id === optionId);
       const title =
         question.kind !== 'whichIsTrue'
@@ -325,7 +363,7 @@ function QuestionCard({
     return (
       <div className='flex flex-wrap items-center gap-x-3 gap-y-1 self-start pl-[30px]'>
         <p className='text-muted-foreground text-left text-[13px] text-pretty'>
-          {HELM_COPY.questionSkipped}
+          {skippedLine}
         </p>
         {canDismiss && dismissButton}
         {note && (
@@ -365,7 +403,7 @@ function QuestionCard({
       >
         {isSkipped && isInSheet && (
           <p className='text-muted-foreground text-left text-[13px] text-pretty'>
-            {HELM_COPY.questionSkipped}
+            {skippedLine}
           </p>
         )}
         {isSent || isAnswerInFlight(captureId, id) ? (
@@ -408,6 +446,13 @@ function QuestionCard({
               </div>
             )}
           </>
+        )}
+        {!isInSheet && !isSent && (
+          <ListeningStrip
+            captureId={captureId}
+            questionId={id}
+            question={question}
+          />
         )}
         {isDateOpen && dateId !== null && dateWho && !dateWho.isUnreadable && (
           <KeyDateSheet

@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { HELM_COPY } from '@apps/helm/constants';
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import type { OpenNote } from '@apps/helm/types';
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
 interface NoteRowProps {
   note: OpenNote;
@@ -27,9 +28,14 @@ function NoteRow({ note, onOpen, topicLine }: NoteRowProps) {
       onClick={() => onOpen(note.id)}
     >
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground line-clamp-1 text-[15px] leading-[21px] break-words'>
+        <PrivateTitle
+          kind='note'
+          record={note}
+          lines={1}
+          className='text-foreground text-[15px] leading-[21px]'
+        >
           {note.title || HELM_COPY.noteUntitled}
-        </span>
+        </PrivateTitle>
         {via && (
           <span className='text-muted-foreground flex min-w-0 items-center gap-1.5 text-[13px]'>
             <OutsideMark via={via} isSmall />

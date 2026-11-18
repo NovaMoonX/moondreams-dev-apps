@@ -10,8 +10,8 @@ import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import FactsSection from '@apps/helm/components/who/FactsSection';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import PlaceEditSheet from '@apps/helm/components/who/PlaceEditSheet';
+import PhotoHeader from '@apps/helm/components/media/PhotoHeader';
 import PhotosSection from '@apps/helm/components/media/PhotosSection';
-import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { forgetPlace } from '@apps/helm/store/actions/placeActions';
@@ -21,6 +21,7 @@ import {
   ForgetPartialError,
 } from '@apps/helm/store/actions/whoActions';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
 
@@ -179,24 +180,22 @@ function PlaceDetail({
         )}
         {place && !place.isUnreadable && (
           <>
-            <div className='flex items-start gap-4'>
-              <WhoPhoto
-                kind='place'
-                name={place.name}
-                mediaId={place.photoMediaIds[0] ?? null}
-                isLarge
-              />
-              <div className='min-w-0'>
-                <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
-                  {place.name}
-                </h1>
-                {(place.isHome || place.address) && (
-                  <p className='text-muted-foreground text-[15px] break-words'>
-                    {place.isHome ? HELM_COPY.placeHomeLine : place.address}
-                  </p>
-                )}
-              </div>
-            </div>
+            <PhotoHeader
+              owner={{ kind: 'place', id: place.id }}
+              kind='place'
+              name={place.name}
+              mainId={place.photoMediaIds[0] ?? null}
+              photoCount={place.photoMediaIds.length}
+            >
+              <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
+                {place.name}
+              </h1>
+              {(place.isHome || place.address) && (
+                <p className='text-muted-foreground text-[15px] break-words'>
+                  {place.isHome ? HELM_COPY.placeHomeLine : place.address}
+                </p>
+              )}
+            </PhotoHeader>
             {place.isHome && place.address && (
               <p className='text-muted-foreground text-[15px] break-words'>
                 {place.address}
@@ -222,6 +221,9 @@ function PlaceDetail({
               />
             </section>
           </>
+        )}
+        {place && !place.isUnreadable && (
+          <PrivateRow kind='place' record={place} title={place.name} />
         )}
       </main>
       {place && !place.isUnreadable && (

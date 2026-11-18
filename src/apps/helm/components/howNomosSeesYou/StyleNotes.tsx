@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -13,7 +13,9 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useConnections } from '@/lib/connections/useConnections';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useAppSelector } from '@/store';
+import AddRow from '@apps/helm/components/who/AddRow';
 import {
   HELM_COPY,
   STYLE_AVOID_LIMIT,
@@ -365,6 +367,7 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
   const { showView } = useHelmUrlState();
   const isGateOpen = useIsGateOpen('helm', 'google-mail-and-drive');
   const { grants } = useConnections({ readerAppId: 'helm' });
+  const waitFor = useWaitUntilShown(isOn);
   const [isWorking, setIsWorking] = useState(false);
   const [failure, setFailure] = useState<MailFailure | null>(null);
   const isConnected = grants.some(
@@ -385,6 +388,7 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
       const result = await learnMailStyle();
       if (result.status !== 'learned') setFailure(result.status);
       else if (result.groups === 0) setFailure('nothingLearned');
+      else await waitFor((shown) => shown);
     } catch (error) {
       console.error('Sent mail was not read', error);
       setFailure(toMailFailure(error));
@@ -515,19 +519,6 @@ function StyleNotes() {
             <HelpTip title={HELM_COPY.styleTitle} placement='top'>
               <p>{HELM_COPY.styleHelpTip}</p>
             </HelpTip>
-            {!isUnreadable && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                aria-label={HELM_COPY.styleAddLabel}
-                className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
-                onClick={() => setTarget({ kind: 'add' })}
-              >
-                <Plus className='size-4' aria-hidden='true' />
-                {HELM_COPY.styleAdd}
-              </Button>
-            )}
           </>
         }
       />
@@ -541,6 +532,12 @@ function StyleNotes() {
         </p>
       ) : (
         <NoteList style={style} onOpen={setTarget} />
+      )}
+      {!isUnreadable && (
+        <AddRow
+          label={HELM_COPY.styleAddLabel}
+          onClick={() => setTarget({ kind: 'add' })}
+        />
       )}
       <MailSwitch isOn={isMailOn} />
       {mailGroups.length > 0 && (

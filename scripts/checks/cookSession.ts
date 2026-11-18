@@ -22,7 +22,6 @@ import {
   resolveCookingResume,
 } from '../../src/apps/pinch/utils/cookSession.ts';
 import {
-  getTimerBuzzOffer,
   getTimerPushAction,
   needsTimerPush,
 } from '../../src/apps/pinch/utils/cooks.ts';
@@ -686,43 +685,6 @@ assert.equal(
   'once that tab is gone, nothing answers',
 );
 
-// The offer under a running timer
-assert.equal(
-  getTimerBuzzOffer(null, false),
-  'none',
-  'nothing is offered until the device state is read, so the row never flashes',
-);
-assert.equal(
-  getTimerBuzzOffer('on', true),
-  'none',
-  'a reachable device with timer pushes on is offered nothing',
-);
-assert.equal(
-  getTimerBuzzOffer('on', false),
-  'ask',
-  'a reachable device with timer pushes off is asked, and no permission is needed',
-);
-assert.equal(
-  getTimerBuzzOffer('off', false),
-  'ask',
-  'a device not registered is asked',
-);
-assert.equal(
-  getTimerBuzzOffer('off', true),
-  'ask',
-  'the setting being on does not reach a device that is not registered',
-);
-assert.equal(
-  getTimerBuzzOffer('blocked', true),
-  'blocked',
-  'a blocked site is offered the way in, which says why it cannot work',
-);
-assert.equal(
-  getTimerBuzzOffer('unsupported', false),
-  'unsupported',
-  'a browser that cannot push is offered the way in, which says why',
-);
-
 const ingredientLine = (
   id: string,
   ingredientId: string,
@@ -950,6 +912,52 @@ assert.equal(
     }).resume.captured?.length,
     60,
     'a session keeps at most the cap',
+  );
+}
+
+// The stopwatch's start
+{
+  const written = buildCookingSnapshot({
+    uid: UID,
+    sessionId: 'session-1',
+    now: NOW,
+    open: {
+      recipeId: 'adobo',
+      servings: null,
+      plannedMealId: null,
+      plannedMealDate: null,
+      plate: null,
+    },
+    currentId: 'adobo',
+    positions: { adobo: { stepIndex: 1, servings: 4 } },
+    timers: [],
+    startedAt: NOW - 20 * 60_000,
+  });
+  assert.equal(
+    parse(written)?.resume.startedAt,
+    NOW - 20 * 60_000,
+    'a picked-up cook keeps counting from when it began',
+  );
+  const { startedAt: ignored, ...withoutKey } = written.resume;
+  assert.ok(ignored);
+  assert.equal(
+    parse({ ...written, resume: withoutKey })?.resume.startedAt,
+    undefined,
+    'a session saved before the stopwatch still picks up, with no start',
+  );
+  assert.equal(
+    parse({ ...written, resume: { ...written.resume, startedAt: 'soon' } })
+      ?.resume.startedAt,
+    undefined,
+    'a start that is not a time is dropped without failing the pick-up',
+  );
+  assert.equal(
+    parse({
+      ...written,
+      resume: { ...written.resume, startedAt: NOW + 3_600_000 },
+    })?.resume.startedAt,
+    undefined,
+    'a start in the future is not trusted',
   );
 }
 

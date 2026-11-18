@@ -40,7 +40,8 @@ jobs:
             echo "::error::PROJECT_TOKEN is not set. Add a classic token with the project scope as a repository secret."
             exit 1
           fi
-          apps=$(gh pr diff "$PR" --name-only | sed -nE 's#^src/apps/([^/]+)/ISSUES\.md$#\1#p' | sort -u)
+          # The files API pages through up to 3,000 files; `gh pr diff` refuses a diff over GitHub's size limit.
+          apps=$(gh api "repos/{owner}/{repo}/pulls/$PR/files" --paginate --jq '.[].filename' | sed -nE 's#^src/apps/([^/]+)/ISSUES\.md$#\1#p' | sort -u)
           if [ -z "$apps" ]; then
             echo "This PR changes no src/apps/<id>/ISSUES.md; nothing to create."
             exit 0

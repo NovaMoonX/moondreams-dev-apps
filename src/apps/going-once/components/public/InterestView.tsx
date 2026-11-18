@@ -191,6 +191,7 @@ function InterestView({
                 size='lg'
                 rounded='full'
                 className='w-full'
+                loading={isWorking}
                 disabled={isWorking || !isReady}
                 onClick={() => void send()}
               >

@@ -51,6 +51,7 @@ const firestore = getFirestore();
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 10, 10, 15);
 const TODAY = Date.UTC(2026, 10, 10);
+const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 const WINDOW_START = TODAY - 30 * DAY;
 
 const OWNER = 'owner-uid';
@@ -80,9 +81,57 @@ const seedOwner = () =>
       categories: ['MAIN', 'SIDE', 'BOGUS'],
       isFavorite: true,
       isArchived: false,
-      ingredients: [{ note: SECRET_NOTE }],
+      ingredients: [
+        {
+          id: 'l1',
+          ingredientId: 'cat-salmon',
+          amount: 2,
+          unit: 'CUP',
+          note: SECRET_NOTE,
+        },
+        { id: 'l2', ingredientId: 'custom1', amount: 1, unit: 'EACH' },
+        { id: 'l3', ingredientId: 'cat-bacon', amount: null, unit: 'EACH' },
+        { id: 'l4', ingredientId: 'gone-ingredient', amount: 3, unit: 'EACH' },
+        { id: 'l5', note: SECRET_NOTE },
+      ],
+      collectionIds: ['col1', 'col-gone'],
       updatedAt: NOW - 3,
       ...priced,
+    }),
+    kitchen(OWNER, 'collections/col1').set({ label: 'Weeknight dinners' }),
+    kitchen(OWNER, 'cooks/c1').set({
+      recipeId: 'r1',
+      plannedMealId: null,
+      servings: 4,
+      cookedAt: NOW - 2 * DAY,
+      rating: 5,
+      photoPath: 'SECRET photo path',
+    }),
+    kitchen(OWNER, 'cooks/c2').set({
+      recipeId: 'r-old',
+      servings: 1,
+      cookedAt: NOW - 20 * DAY,
+    }),
+    kitchen(OWNER, 'cooks/c-gone').set({
+      recipeId: 'r-deleted',
+      servings: 1,
+      cookedAt: NOW - DAY,
+    }),
+    kitchen('long-uid', 'ingredients/cat-bacon').set({
+      name: 'Smoky bacon',
+      catalogId: 'cat-bacon',
+    }),
+    kitchen('long-uid', 'recipes/r-big').set({
+      title: 'Big Pot',
+      ingredients: Array.from({ length: 25 }, (_, index) => ({
+        id: `b${index}`,
+        ingredientId: 'cat-bacon',
+        amount: index + 1,
+        unit: 'CUP',
+      })),
+      prepMinutes: 5,
+      cookMinutes: 5,
+      updatedAt: NOW,
     }),
     kitchen(OWNER, 'recipes/r-old').set({
       title: 'Plain Toast',
@@ -351,6 +400,11 @@ const seedOther = () =>
     kitchen(OTHER, 'recipes/o-recipe').set({
       title: 'OTHER recipe',
       updatedAt: NOW,
+    }),
+    kitchen(OTHER, 'cooks/o-cook').set({
+      recipeId: 'o-recipe',
+      servings: 2,
+      cookedAt: NOW,
     }),
     kitchen(OTHER, 'meals/o-meal').set({
       name: 'OTHER saved',
@@ -679,6 +733,118 @@ assert.equal(
 );
 assert.equal(adapter.deepLink('???', ctxFor(OWNER)), '/pinch');
 
+const queryPinch = (uid: string, category: string, args: unknown) =>
+  adapter.query!(ctxFor(uid), { category, args });
+const ingredientsOf = await queryPinch(OWNER, 'recipeIngredients', {});
+assertShape(ingredientsOf.records);
+assert.deepEqual(refs(ingredientsOf.records), ['recipes/r-old', 'recipes/r1']);
+assert.equal(ingredientsOf.matchedCount, 2);
+assert.equal(ingredientsOf.totalCents, null);
+assert.equal(ingredientsOf.currency, null);
+assert.equal(ingredientsOf.isPartial, false);
+assert.deepEqual([ingredientsOf.from, ingredientsOf.to], [null, null]);
+assert.equal(
+  ingredientsOf.records.find((entry) => entry.sourceRef === 'recipes/r1')
+    ?.detail,
+  '30 min · in Weeknight dinners · With 2 cup Salmon, 1 Saffron, Smoky bacon',
+  'a line with no name and a deleted collection are left out',
+);
+assert.equal(
+  ingredientsOf.records.find((entry) => entry.sourceRef === 'recipes/r-old')
+    ?.detail,
+  null,
+);
+const textIds = async (text: string) =>
+  refs((await queryPinch(OWNER, 'recipeIngredients', { text })).records);
+assert.deepEqual(await textIds('SALMON'), ['recipes/r1'], 'by ingredient');
+assert.deepEqual(await textIds('weeknight'), ['recipes/r1'], 'by collection');
+assert.deepEqual(await textIds('toast'), ['recipes/r-old'], 'by title');
+assert.deepEqual(await textIds('zzz'), []);
+assert.equal(
+  (await queryPinch(OWNER, 'recipeIngredients', 'garbage')).matchedCount,
+  2,
+);
+const bigPot = (await queryPinch('long-uid', 'recipeIngredients', {}))
+  .records[0];
+assert.ok((bigPot.detail ?? '').length <= 120);
+assert.match(
+  bigPot.detail ?? '',
+  /^10 min · With 1 cup Smoky bacon, .* and \d+ more$/,
+);
+assert.equal(
+  (bigPot.detail ?? '').split(', ').length +
+    Number(/and (\d+) more$/.exec(bigPot.detail ?? '')?.[1]),
+  25,
+  'the tail counts what the list left out',
+);
+const cookedOf = await queryPinch(OWNER, 'cooked', {});
+assertShape(cookedOf.records);
+assert.deepEqual(
+  cookedOf.records.map((entry) => [entry.title, entry.detail, entry.startAt]),
+  [
+    ['Lemon Pasta', 'Cooked Nov 8, 2026', NOW - 2 * DAY],
+    ['Plain Toast', 'Cooked Oct 21, 2026', NOW - 20 * DAY],
+  ],
+  'newest first; a cook of a deleted recipe is ignored',
+);
+assert.equal(cookedOf.matchedCount, 2);
+assert.equal(cookedOf.isPartial, false);
+assert.deepEqual(
+  (
+    await queryPinch(OWNER, 'cooked', { from: '2026-11-08', to: '2026-11-08' })
+  ).records.map((entry) => entry.title),
+  ['Lemon Pasta'],
+);
+const cookRange = await queryPinch(OWNER, 'cooked', {
+  from: '2026-11-09',
+  to: '2026-11-10',
+});
+assert.deepEqual(cookRange.records, []);
+assert.deepEqual([cookRange.from, cookRange.to], ['2026-11-09', '2026-11-10']);
+assert.deepEqual(
+  (await queryPinch(OWNER, 'cooked', { text: 'toast' })).records.map(
+    (entry) => entry.title,
+  ),
+  ['Plain Toast'],
+);
+assert.equal((await queryPinch(OWNER, 'cooked', 'garbage')).matchedCount, 2);
+[...ingredientsOf.records, ...cookedOf.records, bigPot].forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    !values.includes(SECRET_PRICE) &&
+      !values.includes(777) &&
+      !values.includes(999) &&
+      !values.includes(5),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) => typeof value === 'string' && /SECRET|secret|gone/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+assert.deepEqual(
+  (await queryPinch(OTHER, 'recipeIngredients', {})).records.map(
+    (entry) => entry.title,
+  ),
+  ['OTHER recipe'],
+);
+assert.deepEqual(
+  (await queryPinch(OTHER, 'cooked', {})).records.map((entry) => entry.title),
+  ['OTHER recipe'],
+);
+assert.deepEqual((await queryPinch('empty-uid', 'cooked', {})).records, []);
+assert.deepEqual(
+  (await queryPinch('empty-uid', 'recipeIngredients', {})).records,
+  [],
+);
+await assert.rejects(
+  () => queryPinch(OWNER, 'recipes', {}),
+  /Unknown category/,
+);
+assert.equal(adapter.deepLink('cooks/c1', ctxFor(OWNER)), '/pinch?tab=recipes');
+
 const grant = ctxFor(OWNER).grant;
 assert.deepEqual(
   Object.fromEntries(
@@ -692,6 +858,8 @@ assert.deepEqual(
     recipes: true,
     savedMeals: true,
     ideas: true,
+    recipeIngredients: false,
+    cooked: false,
   },
 );
 const staged = buildNewGrant(
@@ -706,15 +874,19 @@ const staged = buildNewGrant(
   NOW,
 );
 assert.deepEqual(Object.keys(staged.categories).sort(), [
+  'cooked',
   'ideas',
   'pantryStock',
   'plannedMeals',
+  'recipeIngredients',
   'recipes',
   'savedMeals',
   'shoppingList',
   'useSoon',
 ]);
 assert.equal(staged.categories.plannedMeals.isOn, false);
+assert.equal(staged.categories.recipeIngredients.isOn, false);
+assert.equal(staged.categories.cooked.isOn, false);
 assert.equal(staged.status, 'live');
 assert.throws(
   () =>
@@ -833,8 +1005,33 @@ await Promise.all([
     weeklyGoal: 2,
     monthlyGoal: 5,
     monthlyCostCents: SECRET_PRICE,
+    monthlyTotalCents: 150,
+    startDate: Date.UTC(2025, 10, 15),
     lastEditedAt: NOW - 2,
   }),
+  membership(OWNER, 'viewings/v-seen-last-year').set(
+    showing('SEEN', 'Old Favorite', Date.UTC(2025, 11, 20), {
+      ticket: {
+        entryMode: 'ITEMIZED',
+        priceCents: SECRET_PRICE,
+        totalCents: 1000,
+        feeAvoidedCents: 999,
+      },
+    }),
+  ),
+  membership(OWNER, 'viewings/v-seen-no-ticket').set(
+    showing('SEEN', 'No Ticket Yet', NOW - 21 * DAY, { ticket: null }),
+  ),
+  membership('bystander-uid').set({
+    monthlyTotalCents: 9900,
+    startDate: Date.UTC(2026, 0, 1),
+    lastEditedAt: NOW - 2,
+  }),
+  membership('bystander-uid', 'viewings/o-seen').set(
+    showing('SEEN', 'Other Movie', NOW - DAY, {
+      ticket: { entryMode: 'ITEMIZED', priceCents: 1, totalCents: 31337 },
+    }),
+  ),
   membership(OWNER, 'theatres/2078').set({
     theatreId: '2078',
     name: 'AMC Town Center 20',
@@ -936,6 +1133,8 @@ const seen = await runAList(OWNER, 'seenMovies');
 assert.deepEqual(refs(seen).sort(), [
   'goals',
   'viewings/v-seen',
+  'viewings/v-seen-last-year',
+  'viewings/v-seen-no-ticket',
   'viewings/v-seen-unrated',
 ]);
 assert.ok(seen.every((entry) => entry.kind === 'knowledge'));
@@ -1012,10 +1211,95 @@ assert.equal(
 );
 assert.equal(aListAdapter.deepLink('???', aListCtx(OWNER)), '/a-list');
 
+const savingsOf = (uid: string, args: unknown = {}) =>
+  aListAdapter.query!(aListCtx(uid), { category: 'savings', args });
+const savings = await savingsOf(OWNER);
+assertShape(savings.records);
+assert.deepEqual(refs(savings.records), ['savings/all', 'savings/year']);
+assert.ok(savings.records.every((record) => record.kind === 'moneySummary'));
+assert.ok(savings.records.every((record) => record.currency === 'USD'));
+const savingsYear = savings.records.find(
+  (record) => record.sourceRef === 'savings/year',
+);
+const savingsAll = savings.records.find(
+  (record) => record.sourceRef === 'savings/all',
+);
+assert.equal(savingsYear?.title, 'Membership savings in 2026');
+assert.equal(
+  savingsYear?.detail,
+  'Tickets saved $15.54 · membership cost $15.00 · net $0.54',
+  'two 2026 tickets of 7.77 against ten 2026 billing dates of 1.50',
+);
+assert.equal(savingsYear?.amountCents, 54);
+assert.equal(savingsAll?.title, 'Membership savings since joining');
+assert.equal(
+  savingsAll?.detail,
+  'Since Nov 15, 2025: Tickets saved $25.54 · membership cost $18.00 · net $7.54',
+  'twelve billing dates since the start, the 2025 ticket counted',
+);
+assert.equal(savingsAll?.amountCents, 754);
+assert.equal(savings.totalCents, 54);
+assert.equal(savings.currency, 'USD');
+assert.equal(savings.matchedCount, 2);
+assert.equal(savings.isPartial, false);
+assert.deepEqual(
+  (await savingsOf(OWNER, { text: 'anything', from: '2026-01-01' })).records,
+  savings.records,
+  'a single figure ignores words and dates',
+);
+assert.deepEqual((await savingsOf(OWNER, 'garbage')).records, savings.records);
+savings.records.forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    ![SECRET_PRICE, 777, 999, 31337, 3133700].some((secret) =>
+      values.includes(secret),
+    ),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|secret|1234|https:|31,337|42\.42/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+const lateAList = createAListAdapter({
+  firestore: () => firestore,
+  now: () => Date.parse('2026-12-31T23:30:00-08:00'),
+  canOpen: async (uid) => uid === OWNER,
+});
+const lateSavings = await lateAList.query!(aListCtx(OWNER), {
+  category: 'savings',
+  args: { timeZone: 'America/Los_Angeles' },
+});
+assert.equal(
+  lateSavings.records.find((record) => record.sourceRef === 'savings/year')
+    ?.title,
+  'Membership savings in 2026',
+  'still December 31 in Los Angeles',
+);
+assert.deepEqual((await savingsOf(OTHER)).records, []);
+assert.equal((await savingsOf(OTHER)).totalCents, null);
+assert.deepEqual((await savingsOf('empty-uid')).records, []);
+assert.match(
+  (await savingsOf('bystander-uid')).records[0]?.detail ?? '',
+  /313\.37/,
+  "the bystander's own figure is theirs alone",
+);
+await assert.rejects(
+  () =>
+    aListAdapter.query!(aListCtx(OWNER), { category: 'watchlist', args: {} }),
+  /Unknown category/,
+);
+assert.equal(aListAdapter.deepLink('savings/year', aListCtx(OWNER)), '/a-list');
+
 const CO_SELLER = 'co-seller-uid';
 const BUYER_NAME = 'SECRET BUYER NAME';
 const BUYER_CONTACT = 'secret-buyer@example.test';
-const BUYER_MESSAGE = 'SECRET BUYER MESSAGE';
+const BUYER_FIRST = 'Pat';
+const BUYER_PHONE = '206-555-0142';
 const FLOOR_PRICE = 3131;
 const SALE_PRICE = 5252;
 const ORIGINAL_PRICE = 7373;
@@ -1090,7 +1374,14 @@ await Promise.all([
     .collection('items')
     .doc('desk')
     .set(
-      saleItem('Oak desk', 'PENDING', { pending: pendingFor(TODAY + 2 * DAY) }),
+      saleItem('Oak desk', 'PENDING', {
+        pending: pendingFor(TODAY + 2 * DAY),
+        condition: 'GOOD',
+        statusHistory: [
+          { at: TODAY - 6 * DAY, kind: 'STATUS', byUid: OWNER },
+          { at: TODAY - 3 * DAY, kind: 'STATUS', byUid: OWNER },
+        ],
+      }),
     ),
   fallSale
     .collection('items')
@@ -1113,17 +1404,34 @@ await Promise.all([
         sale: { priceCents: SALE_PRICE, buyerName: BUYER_NAME },
       }),
     ),
-  fallSale.collection('inquiries').doc('q1').set({
-    status: 'NEW',
-    buyerName: BUYER_NAME,
-    contact: BUYER_CONTACT,
-    message: BUYER_MESSAGE,
-  }),
+  fallSale
+    .collection('inquiries')
+    .doc('q1')
+    .set({
+      status: 'NEW',
+      itemTitleAtSend: 'Oak desk',
+      name: `${BUYER_FIRST} Q. Surname`,
+      email: BUYER_CONTACT,
+      phone: BUYER_PHONE,
+      message: 'Is it still free this weekend?',
+      createdAt: TODAY - 2 * DAY,
+    }),
+  fallSale
+    .collection('inquiries')
+    .doc('q4')
+    .set({
+      status: 'HANDLED',
+      itemTitleAtSend: 'Gray sofa',
+      name: 'buyer@example.test',
+      email: BUYER_CONTACT,
+      phone: BUYER_PHONE,
+      message: `Call me on ${BUYER_PHONE} please`,
+      createdAt: TODAY - 9 * DAY,
+    }),
   fallSale.collection('inquiries').doc('q2').set({
     status: 'HANDLED',
     buyerName: BUYER_NAME,
     contact: BUYER_CONTACT,
-    message: BUYER_MESSAGE,
   }),
   goingOnceSales
     .doc('spring')
@@ -1153,7 +1461,7 @@ const goingOnceCtx = (uid: string) => ({
       readerAppId: 'helm',
       connectorId: 'app:going-once',
       accountId: 'site',
-      categoryIds: ['pickups', 'sales', 'things'],
+      categoryIds: ['pickups', 'sales', 'things', 'allThings', 'questions'],
       options: null,
     },
     goingOnceAdapter.manifest,
@@ -1246,6 +1554,180 @@ goingOnceAll.forEach((record) => {
   );
 });
 await assert.rejects(() => runGoingOnce(OWNER, 'nothing'), /Unknown category/);
+
+const goingOnceDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+const queryGoingOnce = (uid: string, category: string, args: unknown) =>
+  goingOnceAdapter.query!(goingOnceCtx(uid), { category, args });
+const allThings = await queryGoingOnce(OWNER, 'allThings', {});
+assertShape(allThings.records);
+assert.deepEqual(
+  refs(allThings.records).sort(),
+  [
+    'bench',
+    'bike',
+    'desk',
+    'draft',
+    'gone',
+    'lamp',
+    'nodate',
+    'pan',
+    'sofa',
+    'unpriced',
+  ]
+    .flatMap((id) =>
+      id === 'bench'
+        ? ['sales/spring/items/bench']
+        : [`sales/fall/items/${id}`],
+    )
+    .sort(),
+  'drafts, taken-off things and finished sales are included',
+);
+const stateOf = (title: string) =>
+  allThings.records.find((record) => record.title === title)?.extra.state;
+assert.equal(stateOf('Draft thing'), 'draft');
+assert.equal(stateOf('Withdrawn thing'), 'withdrawn');
+assert.equal(stateOf('No price yet'), 'notReady');
+assert.equal(stateOf('Gray sofa'), 'available');
+assert.equal(stateOf('Cast iron pan'), 'sold');
+const desk = allThings.records.find((record) => record.title === 'Oak desk')!;
+assert.equal(desk.startAt, TODAY - 3 * DAY, 'the newest status change');
+assert.equal(desk.amountCents, 4000);
+assert.equal(desk.currency, 'USD');
+assert.deepEqual(desk.extra, {
+  state: 'pending',
+  condition: 'Good',
+  floorPriceCents: FLOOR_PRICE,
+});
+assert.equal(desk.detail, `Good · ${ITEM_NOTE}`);
+assert.equal(desk.subtitle, 'Fall clear-out');
+assert.equal(allThings.totalCents, null);
+assert.equal(allThings.isPartial, false);
+assert.equal(
+  (await queryGoingOnce(OWNER, 'allThings', { text: 'FALL' })).records.length,
+  9,
+  'text also matches the sale name',
+);
+assert.deepEqual(
+  (await queryGoingOnce(OWNER, 'allThings', { text: 'lamp' })).records.map(
+    (record) => record.title,
+  ),
+  ['Floor lamp'],
+);
+assert.deepEqual(
+  (
+    await queryGoingOnce(OWNER, 'allThings', {
+      from: goingOnceDay(TODAY - 4 * DAY),
+      to: goingOnceDay(TODAY - DAY),
+    })
+  ).records.map((record) => record.title),
+  ['Oak desk'],
+);
+assert.equal(
+  (
+    await queryGoingOnce(OWNER, 'allThings', {
+      from: goingOnceDay(TODAY),
+      to: goingOnceDay(TODAY),
+    })
+  ).records.some((record) => record.title === 'Floor lamp'),
+  true,
+  'an item with no status history is placed by its last edit',
+);
+assert.equal(
+  (await queryGoingOnce(OWNER, 'allThings', { from: 'nope', to: 5 })).records
+    .length,
+  10,
+  'unreadable days are ignored',
+);
+assert.equal(
+  (await queryGoingOnce(CO_SELLER, 'allThings', {})).records.length,
+  9,
+  'a co-seller reads the sale they are in',
+);
+assert.deepEqual((await queryGoingOnce(OTHER, 'allThings', {})).records, []);
+
+const questions = await queryGoingOnce(OWNER, 'questions', {});
+assertShape(questions.records);
+assert.deepEqual(
+  questions.records.map((record) => [
+    record.title,
+    record.detail,
+    record.extra,
+    record.startAt,
+  ]),
+  [
+    [
+      'Oak desk',
+      'Is it still free this weekend?',
+      { buyerFirstName: BUYER_FIRST, status: 'new' },
+      TODAY - 2 * DAY,
+    ],
+    [
+      'Gray sofa',
+      null,
+      { buyerFirstName: null, status: 'handled' },
+      TODAY - 9 * DAY,
+    ],
+    ['A thing', null, { buyerFirstName: null, status: 'handled' }, null],
+  ],
+  'newest first; a message with a phone number and a name that is an email are left out',
+);
+assert.equal(
+  (await queryGoingOnce(OWNER, 'questions', { text: 'sofa' })).records.length,
+  1,
+);
+assert.equal(
+  (
+    await queryGoingOnce(OWNER, 'questions', {
+      from: goingOnceDay(TODAY - 3 * DAY),
+    })
+  ).records.length,
+  1,
+);
+assert.equal(
+  (await queryGoingOnce(CO_SELLER, 'questions', {})).records.length,
+  3,
+);
+assert.deepEqual((await queryGoingOnce(OTHER, 'questions', {})).records, []);
+await goingOnceSales
+  .doc('digits')
+  .set(sale(['digits-uid'], 'Digits', 'OPEN', NOW));
+await goingOnceSales.doc('digits').collection('inquiries').doc('q').set({
+  status: 'NEW',
+  itemTitleAtSend: 'Lamp',
+  name: 'Sam',
+  message: 'Order 1234567 please',
+  createdAt: NOW,
+});
+assert.deepEqual(
+  (await queryGoingOnce('digits-uid', 'questions', {})).records.map(
+    (record) => [record.title, record.detail],
+  ),
+  [['Lamp', null]],
+  'a message with seven digits is dropped whole',
+);
+[allThings, questions].forEach(({ records }) =>
+  records.forEach((record) => {
+    const values = flatten(record);
+    assert.ok(
+      ![ORIGINAL_PRICE].some((secret) => values.includes(secret)),
+      record.sourceRef,
+    );
+    assert.ok(
+      !values.some(
+        (value) =>
+          typeof value === 'string' &&
+          [BUYER_NAME, BUYER_CONTACT, BUYER_PHONE, 'Surname', 'buyer@'].some(
+            (secret) => value.includes(secret),
+          ),
+      ),
+      record.sourceRef,
+    );
+  }),
+);
+await assert.rejects(
+  () => queryGoingOnce(OWNER, 'sales', {}),
+  /Unknown category/,
+);
 assert.equal(await goingOnceAdapter.status(goingOnceCtx(OWNER)), 'ok');
 assert.equal(await goingOnceAdapter.status(goingOnceCtx(OTHER)), 'noAccess');
 assert.equal(
@@ -1257,6 +1739,7 @@ const HOUSEMATE = 'housemate-uid';
 const CARE_SECRET = 'SECRET CARE';
 const EXPENSE_AMOUNT = 6363;
 const WEIGHT_VALUE = 11.77;
+const VISIT_NOTES = 'Ate well and stayed calm.';
 
 const careHousehold = firestore.doc('apps/nine-lives/households/home');
 const careDocs = (collection: string, id: string) =>
@@ -1271,7 +1754,8 @@ const vetVisit = (catIds: string[], extra: Record<string, unknown> = {}) => ({
   customReasonLabel: null,
   title: CARE_SECRET,
   scheduledAt: TODAY + 3 * DAY + 9 * 3_600_000,
-  summary: CARE_SECRET,
+  summary: VISIT_NOTES,
+  followUpNote: CARE_SECRET,
   lastEditedAt: NOW - 11,
   ...extra,
 });
@@ -1341,6 +1825,115 @@ await Promise.all([
       costCents: EXPENSE_AMOUNT,
     }),
   ),
+  careDocs('visits', 'notes-old').set(
+    vetVisit(['mochi', 'juniper'], {
+      status: 'completed',
+      scheduledAt: TODAY - 500 * DAY,
+      summary: 'Bloodwork normal.\n  Weight steady.',
+    }),
+  ),
+  careDocs('visits', 'long-notes').set(
+    vetVisit(['mochi'], {
+      status: 'completed',
+      scheduledAt: TODAY - 600 * DAY,
+      reason: 'illness',
+      summary: 'n'.repeat(300),
+    }),
+  ),
+  careDocs('vaccinations', 'felv').set({
+    catId: 'juniper',
+    name: 'FeLV',
+    history: [
+      {
+        id: 'd2',
+        administeredAt: Date.UTC(2025, 2, 1),
+        lotNumber: CARE_SECRET,
+      },
+      {
+        id: 'd1',
+        administeredAt: Date.UTC(2024, 2, 1, 14, 30),
+        lotNumber: CARE_SECRET,
+      },
+    ],
+    lastAdministeredAt: Date.UTC(2025, 2, 1),
+    expiresAt: TODAY - 300 * DAY,
+  }),
+  careDocs('preventives', 'worm').set({
+    catIds: ['mochi', 'gone-cat'],
+    name: 'Dewormer',
+    history: [
+      {
+        administeredAt: TODAY - 400 * DAY,
+        dosage: '1 tablet',
+        lotNumber: CARE_SECRET,
+      },
+    ],
+    lastAdministeredAt: TODAY - 400 * DAY,
+    expiresAt: TODAY - 380 * DAY,
+  }),
+  careDocs('weightEntries', 'w2').set({
+    catId: 'mochi',
+    weight: 12.456,
+    unit: 'lb',
+    measuredAt: TODAY - 10 * DAY,
+    linkedVisitId: CARE_SECRET,
+  }),
+  careDocs('weightEntries', 'w3').set({
+    catId: 'juniper',
+    weight: 4.1,
+    unit: 'kg',
+    measuredAt: TODAY - 100 * DAY + 3_600_000,
+  }),
+  careDocs('weightEntries', 'w-orphan').set({
+    catId: 'gone-cat',
+    weight: 9,
+    unit: 'lb',
+    measuredAt: TODAY - DAY,
+  }),
+  careDocs('expenses', 'vet-split').set({
+    catIds: ['mochi', 'juniper'],
+    items: [{ id: 'i', category: 'vet', label: CARE_SECRET, amount: 100.01 }],
+    amount: 100.01,
+    label: CARE_SECRET,
+    notes: CARE_SECRET,
+    incurredAt: Date.UTC(2026, 10, 3),
+  }),
+  careDocs('expenses', 'food-nov').set({
+    catIds: ['mochi'],
+    items: [],
+    amount: 20,
+    incurredAt: Date.UTC(2026, 10, 20),
+  }),
+  careDocs('expenses', 'food-oct').set({
+    catIds: ['mochi'],
+    items: [],
+    amount: 5.5,
+    incurredAt: Date.UTC(2026, 9, 15),
+  }),
+  careDocs('expenses', 'orphan').set({
+    catIds: ['gone-cat'],
+    items: [],
+    amount: 77,
+    incurredAt: Date.UTC(2026, 10, 4),
+  }),
+  leftHousehold
+    .collection('weightEntries')
+    .doc('gw')
+    .set({
+      catId: 'ghost',
+      weight: 8,
+      unit: 'lb',
+      measuredAt: TODAY - DAY,
+    }),
+  leftHousehold
+    .collection('expenses')
+    .doc('ge')
+    .set({
+      catIds: ['ghost'],
+      items: [],
+      amount: 55,
+      incurredAt: Date.UTC(2026, 10, 4),
+    }),
   careDocs('visits', 'ancient').set(
     vetVisit(['mochi'], {
       status: 'completed',
@@ -1703,6 +2296,207 @@ assert.equal(
   '/nine-lives',
 );
 
+const queryCare = (uid: string, category: string, args: unknown) =>
+  nineLivesAdapter.query!(nineLivesCtx(uid), { category, args });
+const careLiveCategories = [
+  'visitNotes',
+  'doseHistory',
+  'weights',
+  'catExpenses',
+];
+assert.deepEqual(
+  nineLivesAdapter.manifest.categories
+    .filter((category) => careLiveCategories.includes(category.id))
+    .map((category) => [category.mode, category.isOnAtConnect]),
+  careLiveCategories.map(() => ['live', false]),
+);
+
+const noteRead = await queryCare(OWNER, 'visitNotes', {});
+assertShape(noteRead.records);
+assert.deepEqual(
+  noteRead.records.map((record) => [record.title, record.subtitle]),
+  [
+    ['Mochi: Checkup', 'Past visit'],
+    ['Mochi: Checkup', 'Past visit'],
+    ['Mochi and Juniper: Checkup', 'Past visit'],
+    ['Mochi: Illness', 'Past visit'],
+  ],
+  'only completed visits, newest first; upcoming and called-off ones are left out',
+);
+assert.deepEqual(
+  noteRead.records.slice(0, 3).map((record) => record.detail),
+  [VISIT_NOTES, VISIT_NOTES, 'Bloodwork normal. Weight steady.'],
+);
+assert.equal(noteRead.records[3]?.detail?.length, 120);
+assert.ok(noteRead.records[3]?.detail?.endsWith('…'));
+assert.equal(noteRead.records[2]?.placeLabel, 'Blue Bark Vet');
+assert.equal(noteRead.matchedCount, 4);
+assert.equal(noteRead.totalCents, null);
+assert.equal(noteRead.currency, null);
+assert.equal(noteRead.isPartial, false);
+assert.deepEqual([noteRead.from, noteRead.to], [null, null]);
+assert.deepEqual(
+  (await queryCare(OWNER, 'visitNotes', { text: ' JUNIPER ' })).records.map(
+    (record) => record.title,
+  ),
+  ['Mochi and Juniper: Checkup'],
+  'text matches the cats and the reason in the title',
+);
+const noteWindow = await queryCare(OWNER, 'visitNotes', {
+  from: dayText(TODAY - 420 * DAY),
+  to: dayText(TODAY - 380 * DAY),
+});
+assert.equal(noteWindow.matchedCount, 1);
+assert.equal(noteWindow.from, dayText(TODAY - 420 * DAY));
+assert.equal(noteWindow.to, dayText(TODAY - 380 * DAY));
+assert.equal(
+  (await queryCare(OWNER, 'visitNotes', { text: 'bloodwork' })).matchedCount,
+  0,
+  'the notes themselves are not searched',
+);
+assert.equal(
+  (await queryCare(OWNER, 'visitNotes', 'garbage')).matchedCount,
+  4,
+  'malformed arguments are as if none were given',
+);
+
+const doseRead = await queryCare(OWNER, 'doseHistory', {});
+assertShape(doseRead.records);
+assert.deepEqual(
+  doseRead.records.map((record) => [record.title, record.subtitle]),
+  [
+    ['Mochi: Rabies', 'Vaccine given'],
+    ['Mochi: Dewormer', 'Preventive given'],
+    ['Juniper: FeLV', 'Vaccine given'],
+    ['Juniper: FeLV', 'Vaccine given'],
+  ],
+  'every logged dose, newest first; a record with no dose log reads as its last dose, and one with no day gives none',
+);
+assert.deepEqual(
+  doseRead.records.map((record) => record.detail),
+  [
+    'Given Nov 3, 2025',
+    'Given Oct 6, 2025 · Dosage: 1 tablet',
+    'Given Mar 1, 2025',
+    'Given around Mar 1, 2024',
+  ],
+);
+assert.equal(
+  doseRead.records.filter((record) => record.title.includes('gone-cat')).length,
+  0,
+);
+assert.equal(
+  new Set(refs(doseRead.records)).size,
+  doseRead.records.length,
+  'each dose has its own ref',
+);
+assert.equal(
+  (await queryCare(OWNER, 'doseHistory', { text: 'felv' })).matchedCount,
+  2,
+);
+assert.equal(
+  (
+    await queryCare(OWNER, 'doseHistory', {
+      from: '2025-01-01',
+      to: '2025-03-01',
+    })
+  ).matchedCount,
+  1,
+  'the last day asked covers its whole day',
+);
+
+const weightRead = await queryCare(OWNER, 'weights', {});
+assertShape(weightRead.records);
+assert.deepEqual(
+  weightRead.records.map((record) => record.title),
+  ['Mochi: 12.46 lb', 'Juniper: 4.1 kg'],
+  'a weigh-in without a day or for a cat that is gone is left out',
+);
+assert.equal(
+  (await queryCare(OWNER, 'weights', { text: 'moch' })).matchedCount,
+  1,
+);
+assert.equal(weightRead.currency, null);
+assert.equal(weightRead.totalCents, null);
+
+const expenseRead = await queryCare(OWNER, 'catExpenses', {});
+assertShape(expenseRead.records);
+assert.deepEqual(
+  expenseRead.records.map((record) => [
+    record.title,
+    record.amountCents,
+    record.detail,
+  ]),
+  [
+    ['Juniper: November 2026', 5_000, '1 expense'],
+    ['Mochi: November 2026', 7_001, '2 expenses'],
+    ['Mochi: October 2026', 550, '1 expense'],
+  ],
+  'a total per cat per month; a shared expense splits to the cent and a cat that is gone is left out',
+);
+expenseRead.records.forEach((record) => {
+  assert.equal(record.currency, 'USD');
+  assert.equal(record.kind, 'artifact');
+});
+assert.equal(expenseRead.totalCents, 12_551);
+assert.equal(expenseRead.currency, 'USD');
+assert.equal(
+  (
+    await queryCare(OWNER, 'catExpenses', {
+      from: '2026-11-01',
+      to: '2026-11-30',
+      text: 'mochi',
+    })
+  ).totalCents,
+  7_001,
+);
+
+const zonedDay = await queryCare(OWNER, 'catExpenses', {
+  from: '2026-11-19',
+  to: '2026-11-19',
+  timeZone: 'America/Los_Angeles',
+});
+assert.equal(
+  zonedDay.totalCents,
+  0,
+  'a picked date on the next day stays out when the range is read in a zone',
+);
+const zonedVisits = await queryCare(OWNER, 'visitNotes', {
+  from: dayText(TODAY - 420 * DAY),
+  to: dayText(TODAY - 401 * DAY),
+  timeZone: 'America/Los_Angeles',
+});
+assert.equal(zonedVisits.matchedCount, 0, 'a visit past the range is left out');
+
+const careLiveOutput = JSON.stringify(
+  await Promise.all(careLiveCategories.map((id) => queryCare(OWNER, id, {}))),
+);
+assert.ok(
+  !/SECRET|secret|example\.test|555-0100|Cat Lane/.test(careLiveOutput),
+  'no notes, lot number, clinic phone or address',
+);
+assert.ok(!careLiveOutput.includes('left'), 'nothing from a household left');
+assert.ok(!careLiveOutput.includes('Ghost'));
+await Promise.all(
+  careLiveCategories.map(async (category) =>
+    assert.deepEqual(
+      (await queryCare(OTHER, category, {})).records,
+      [],
+      `${category} gives a stranger nothing`,
+    ),
+  ),
+);
+const housemateWeights = await queryCare(HOUSEMATE, 'weights', {});
+assert.ok(
+  housemateWeights.records.some((record) => record.title === 'Ghost: 8 lb'),
+  'a member reads their own households',
+);
+assert.ok(
+  !careAll.some((record) => JSON.stringify(record).includes(VISIT_NOTES)),
+  'a synced visit carries no notes',
+);
+await assert.rejects(() => queryCare(OWNER, 'cats', {}), /Unknown category/);
+
 const TRIP_SECRET = 'SECRET TRIP';
 const TRIP_EXPENSE_AMOUNT = 9000;
 const utc = (...parts: [number, number, number, number?, number?]) =>
@@ -2023,7 +2817,105 @@ await Promise.all([
         isCompleted: true,
       }),
     ),
-  nyc.collection('ideas').doc('idea').set({ title: TRIP_SECRET }),
+  firestore.doc(`users/${OWNER}`).set({ displayName: 'Alex Kim' }),
+  firestore.doc(`users/${HOUSEMATE}`).set({ displayName: 'maya@example.test' }),
+  nyc
+    .collection('checklist')
+    .doc('open')
+    .set(task({ title: 'Buy adapter', assignedToUids: [] })),
+  nyc
+    .collection('ideas')
+    .doc('idea')
+    .set({
+      title: 'Rooftop bar',
+      notes: 'Ask about the sunset table',
+      linkUrl: 'https://www.rooftop.test/menu?token=SECRETLINK',
+      createdAt: NOW - 2 * DAY,
+      addedByUid: OWNER,
+      voterUids: [TRIP_SECRET],
+      ideaDetails: { cuisines: [TRIP_SECRET] },
+    }),
+  nyc
+    .collection('ideas')
+    .doc('pizza')
+    .set({
+      title: 'Pizza crawl',
+      notes: 'Try the slice near the hotel',
+      linkUrl: null,
+      createdAt: NOW - 5 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('museum')
+    .set({
+      title: 'Museum',
+      notes: 'Tickets at https://museum.test/buy',
+      linkUrl: 'https://museum.test/tickets?id=SECRET9',
+      createdAt: NOW - 7 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('guide')
+    .set({
+      title: 'Tour guide',
+      notes: 'Email guide@tours.test for a price',
+      createdAt: NOW - 8 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('cab')
+    .set({
+      title: 'Cab',
+      notes: 'Call 555-123-4567',
+      linkUrl: 'javascript:alert(1)',
+      createdAt: NOW - 9 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('long')
+    .set({
+      title: 'Long one',
+      notes: 'word '.repeat(40),
+      createdAt: NOW - 10 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('lobby')
+    .set({
+      title: 'Meet at the lobby',
+      body: 'Be there at 8am sharp.',
+      createdAt: NOW - DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('late')
+    .set({
+      title: 'Running late?',
+      body: 'Call 555-123-4567 if late',
+      createdAt: NOW - 2 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('zoom')
+    .set({
+      title: 'Join zoom call',
+      body: 'https://zoom.us/j/1',
+      createdAt: NOW - 3 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('plain')
+    .set({
+      body: 'Pack light layers',
+      createdAt: NOW - 4 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('digits')
+    .set({
+      title: 'Door code 1234567890',
+      createdAt: NOW - 5 * DAY,
+    }),
   nyc.collection('eventSuggestions').doc('s').set({ title: TRIP_SECRET }),
   nyc.collection('announcements').doc('a').set({ message: TRIP_SECRET }),
   nyc.collection('contacts').doc('c').set({
@@ -2502,6 +3394,158 @@ waypointAll.forEach((record) => {
     record.sourceRef,
   );
 });
+const waypointQuery = (uid: string, category: string, args: unknown = {}) =>
+  waypointAdapter.query!(waypointCtx(uid), { category, args });
+const fullList = await waypointQuery(OWNER, 'fullChecklist');
+assertShape(fullList.records);
+assert.ok(fullList.records.every((record) => record.kind === 'task'));
+assert.deepEqual(
+  fullList.records.map((record) => [record.title, record.detail]),
+  [
+    ['Passports', 'Documents · For Alex · To do'],
+    ['Housemate only', 'Packing · For someone · To do'],
+    ['Buy adapter', 'Other · Not assigned yet · To do'],
+    ['Book dinner', 'Bookings · For Alex, someone · To do'],
+    ['Packed shoes', 'Packing · For Alex · Done'],
+  ],
+  'to-dos first by due day, the unassigned and the others included, an email name read as someone',
+);
+assert.equal(fullList.matchedCount, 5);
+assert.equal(fullList.isPartial, false);
+assert.equal(fullList.totalCents, null);
+assert.equal(fullList.records[0].subtitle, 'New York');
+assert.equal(fullList.records[0].dueAt, utc(2026, 9, 30));
+assert.equal(fullList.records[0].isAllDay, true);
+assert.equal(fullList.records[1].dueAt, null);
+assert.deepEqual(
+  refs(fullList.records).sort(),
+  [
+    'trips/nyc/checklist/done',
+    'trips/nyc/checklist/hers',
+    'trips/nyc/checklist/open',
+    'trips/nyc/checklist/passports',
+    'trips/nyc/checklist/shared',
+  ],
+  'only the shared checklist: no private to-do, no trip the person left',
+);
+const listTitles = async (args: unknown) =>
+  (await waypointQuery(OWNER, 'fullChecklist', args)).records.map(
+    (record) => record.title,
+  );
+assert.deepEqual(await listTitles({ text: 'dinner' }), ['Book dinner']);
+assert.deepEqual(await listTitles({ text: 'ALEX' }), [
+  'Passports',
+  'Book dinner',
+  'Packed shoes',
+]);
+assert.deepEqual(await listTitles({ text: 'documents' }), ['Passports']);
+assert.equal((await listTitles({ text: 'new york' })).length, 5);
+const dueRange = await waypointQuery(OWNER, 'fullChecklist', {
+  from: '2026-10-30',
+  to: '2026-10-30',
+});
+assert.deepEqual(
+  dueRange.records.map((record) => record.title),
+  ['Passports'],
+  'a range keeps only the to-dos due in it',
+);
+assert.deepEqual([dueRange.from, dueRange.to], ['2026-10-30', '2026-10-30']);
+assert.equal((await listTitles('garbage')).length, 5);
+const mateList = await waypointQuery(HOUSEMATE, 'fullChecklist');
+assert.ok(mateList.records.some((record) => record.title === 'Left task'));
+assert.ok(mateList.records.some((record) => record.title === 'Passports'));
+assert.ok(
+  mateList.records.every(
+    (record) => !record.title.includes('HOUSEMATE PRIVATE'),
+  ),
+);
+
+const ideaList = await waypointQuery(OWNER, 'tripIdeas');
+assertShape(ideaList.records);
+assert.deepEqual(
+  ideaList.records.map((record) => [record.title, record.detail]),
+  [
+    [
+      'Rooftop bar',
+      'Added Nov 8, 2026 · Ask about the sunset table · Link on rooftop.test',
+    ],
+    ['Pizza crawl', 'Added Nov 5, 2026 · Try the slice near the hotel'],
+    ['Museum', 'Added Nov 3, 2026 · Link on museum.test'],
+    ['Tour guide', 'Added Nov 2, 2026'],
+    ['Cab', 'Added Nov 1, 2026'],
+    ['Long one', `Added Oct 31, 2026 · ${'word '.repeat(12).trim()}…`],
+  ],
+  'newest first; a note with a link, email or number is dropped, a link shows its host only',
+);
+assert.equal(ideaList.records[0].subtitle, 'New York');
+assert.equal(ideaList.records[0].startAt, NOW - 2 * DAY);
+assert.equal(ideaList.matchedCount, 6);
+assert.deepEqual(
+  (await waypointQuery(OWNER, 'tripIdeas', { text: 'sunset' })).records.map(
+    (record) => record.title,
+  ),
+  ['Rooftop bar'],
+);
+assert.deepEqual(
+  (
+    await waypointQuery(OWNER, 'tripIdeas', {
+      from: '2026-11-05',
+      to: '2026-11-08',
+    })
+  ).records.map((record) => record.title),
+  ['Rooftop bar', 'Pizza crawl'],
+);
+
+const noticeList = await waypointQuery(OWNER, 'announcements');
+assertShape(noticeList.records);
+assert.deepEqual(
+  noticeList.records.map((record) => [record.title, record.detail]),
+  [
+    ['Meet at the lobby', 'Posted Nov 9, 2026 · Be there at 8am sharp.'],
+    ['Running late?', 'Posted Nov 8, 2026'],
+    ['Announcement', 'Posted Nov 6, 2026 · Pack light layers'],
+  ],
+  'a text with a number to dial is dropped, one with only a meeting or a link is skipped, one with no words stays out',
+);
+assert.equal(noticeList.records[0].subtitle, 'New York');
+assert.deepEqual(
+  (
+    await waypointQuery(OWNER, 'announcements', {
+      from: '2026-11-09',
+      to: '2026-11-09',
+    })
+  ).records.map((record) => record.title),
+  ['Meet at the lobby'],
+);
+assert.deepEqual(
+  (await waypointQuery(OWNER, 'announcements', { text: 'layers' })).records.map(
+    (record) => record.title,
+  ),
+  ['Announcement'],
+);
+
+[...fullList.records, ...ideaList.records, ...noticeList.records].forEach(
+  (record) => {
+    const values = flatten(record);
+    assert.ok(!values.includes(TRIP_EXPENSE_AMOUNT), record.sourceRef);
+    assert.ok(
+      !values.some(
+        (value) =>
+          typeof value === 'string' &&
+          /SECRET|secret|HOUSEMATE|example\.test|Kim|maya|@|zoom|555|https?:/.test(
+            value,
+          ),
+      ),
+      record.sourceRef,
+    );
+  },
+);
+for (const category of ['fullChecklist', 'tripIdeas', 'announcements']) {
+  assert.deepEqual((await waypointQuery(OTHER, category)).records, []);
+  assert.deepEqual((await waypointQuery('empty-uid', category)).records, []);
+}
+await assert.rejects(() => waypointQuery(OWNER, 'myTasks'), /Unknown category/);
+
 await assert.rejects(() => runWaypoint(OWNER, 'nothing'), /Unknown category/);
 assert.equal(await waypointAdapter.status(waypointCtx(OWNER)), 'ok');
 assert.equal(await waypointAdapter.status(waypointCtx(OTHER)), 'noAccess');
@@ -2645,7 +3689,10 @@ assert.deepEqual(
     category.id,
     category.isOnAtConnect,
   ]),
-  [['boxCounts', false]],
+  [
+    ['boxCounts', false],
+    ['revealedItems', false],
+  ],
 );
 const waitCtx = (uid: string) => ({
   uid,
@@ -2745,6 +3792,75 @@ await firestore
   .get();
 assert.equal(itemReads.length, 1, 'the spy sees an item query');
 unwatch.forEach((restore) => restore());
+
+const queryWait = (uid: string, args: unknown) =>
+  waitAdapter.query!(waitCtx(uid), { category: 'revealedItems', args });
+await waitSpaces.doc('wtw-tz').set(waitSpace(['tz-uid'], SPACE_KEY));
+await waitBox('wtw-tz', 'late', 'Late box', '🌙', [true]);
+await waitSpaces
+  .doc('wtw-tz')
+  .collection('boxes')
+  .doc('late')
+  .collection('items')
+  .doc('i0')
+  .update({ revealedAt: Date.parse('2026-11-11T04:00:00Z') });
+const laDay = { from: '2026-11-10', to: '2026-11-10' };
+assert.equal(
+  (await queryWait('tz-uid', { ...laDay, timeZone: 'America/Los_Angeles' }))
+    .records.length,
+  1,
+  'a reveal at 8pm in Los Angeles is that evening, not the next UTC day',
+);
+assert.equal((await queryWait('tz-uid', laDay)).records.length, 0);
+const revealed = await queryWait(OWNER, {});
+assertShape(revealed.records);
+assert.deepEqual(
+  revealed.records.map((record) => [record.title, record.subtitle]).sort(),
+  [
+    [ITEM_SECRET, 'Date ideas'],
+    [ITEM_SECRET, 'Date ideas'],
+  ],
+  "only revealed items of readable boxes of the owner's own spaces; hidden items, the garbled box and a stranger's box give nothing",
+);
+assert.equal(revealed.matchedCount, 2);
+assert.equal(revealed.totalCents, null);
+assert.equal(revealed.currency, null);
+assert.equal(revealed.isPartial, false);
+revealed.records.forEach((record) => {
+  assert.equal(record.kind, 'knowledge');
+  assert.equal(record.startAt, NOW);
+  assert.match(record.detail ?? '', /^Date ideas · revealed Nov 10, 2026$/);
+  assert.match(
+    record.sourceRef,
+    /^spaces\/wtw-home\/boxes\/dates\/items\/i[01]$/,
+  );
+  assert.ok(
+    !flatten(record).some(
+      (value) => typeof value === 'string' && /INVITE|invite/i.test(value),
+    ),
+  );
+  assert.ok(!flatten(record).includes(OWNER), 'no author');
+});
+assert.equal((await queryWait(OWNER, { text: 'date IDEAS' })).matchedCount, 2);
+assert.equal((await queryWait(OWNER, { text: 'trips' })).matchedCount, 0);
+assert.equal(
+  (await queryWait(OWNER, { from: '2026-11-11', to: null })).matchedCount,
+  0,
+);
+assert.equal(
+  (await queryWait(OWNER, { from: '2026-11-10', to: '2026-11-10' }))
+    .matchedCount,
+  2,
+);
+assert.deepEqual((await queryWait(OTHER, {})).records, []);
+assert.deepEqual(
+  (await queryWait(STRANGER, {})).records.map((record) => record.sourceRef),
+  ['spaces/wtw-stranger/boxes/hidden/items/i0'],
+);
+await assert.rejects(
+  () => waitAdapter.query!(waitCtx(OWNER), { category: 'boxCounts', args: {} }),
+  /Unknown category/,
+);
 
 // One sealed summary opened under the plan's key; only totals and names leave.
 const RUNWAY_FORBIDDEN = [
@@ -2900,6 +4016,9 @@ assert.deepEqual(
     ['horizon', false],
     ['envelopes', false],
     ['transactions', false],
+    ['envelopeBalances', false],
+    ['accountBalances', false],
+    ['cardsDue', false],
   ],
 );
 assert.equal(
@@ -3051,7 +4170,6 @@ assert.equal(
   '/runway',
 );
 
-const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 const TX_SECRETS = [
   'TX NOTE SECRET',
   'TX RECEIPT SECRET',
@@ -3594,6 +4712,342 @@ assert.equal(
   'a purchase that cannot be opened is said',
 );
 await assert.rejects(() => queryTx(OTHER, {}));
+
+const BAL = 'runway-bal';
+const BAL_SECRETS = [
+  'BAL INSTITUTION SECRET',
+  '4242',
+  '9876',
+  '1111',
+  '790000',
+  '987654',
+];
+const balDoc = (
+  collection: string,
+  id: string,
+  fields: Record<string, unknown>,
+  top: Record<string, unknown> = {},
+) =>
+  runwayPlans
+    .doc(BAL)
+    .collection(collection)
+    .doc(id)
+    .set({ archivedAt: null, linkId: null, ...top, sealed: sealTx(fields) });
+await runwayPlanWith(BAL, sealRunway(runwaySummary));
+await Promise.all([
+  envItem(BAL, 'e-groc'),
+  envItem(BAL, 'e-fun'),
+  envItem(BAL, 'e-old', { archivedAt: NOW }),
+  envItem(BAL, 'e-ended', { endedAt: dayText(TODAY - DAY) }),
+  envVersion(BAL, 'v-ended', 'e-ended', 1, 'Ended'),
+  txDoc(BAL, 'p7', 2, {
+    amountCents: 2_000,
+    lines: [txLine('e-ended', 2_000)],
+  }),
+  envVersion(BAL, 'v-groc', 'e-groc', 1, 'Groceries'),
+  envVersion(BAL, 'v-fun', 'e-fun', 1, 'Fun'),
+  envVersion(BAL, 'v-old', 'e-old', 1, 'Old Fund'),
+  txDoc(BAL, 'p1', 2, {
+    amountCents: 4_000,
+    lines: [txLine('e-groc', 4_000)],
+  }),
+  txDoc(BAL, 'p2', 3, {
+    amountCents: 4_000,
+    lines: [txLine('e-groc', 3_000), txLine('e-fun', 1_000)],
+  }),
+  txDoc(BAL, 'p3', 1, {
+    amountCents: -500,
+    lines: [txLine('e-groc', -500)],
+  }),
+  txDoc(
+    BAL,
+    'p4',
+    1,
+    { amountCents: -1_100, lines: [txLine('e-fun', -1_100)] },
+    { needsHome: true },
+  ),
+  txDoc(BAL, 'p5', 15, {
+    amountCents: 9_900,
+    lines: [txLine('e-groc', 9_900)],
+  }),
+  txDoc(BAL, 'p6', 2, {
+    amountCents: -80_000,
+    incomeDayId: 'day-1',
+    lines: [txLine('e-fun', -80_000)],
+  }),
+  balDoc('accounts', 'acc-check', {
+    name: 'Checking A',
+    institution: BAL_SECRETS[0],
+    kind: 'checking',
+    countedTowardTotal: true,
+    lastFour: BAL_SECRETS[1],
+    balanceCents: 250_000,
+    balanceOn: TODAY - 2 * DAY,
+  }),
+  balDoc(
+    'accounts',
+    'acc-linked',
+    {
+      name: 'Savings B',
+      institution: BAL_SECRETS[0],
+      kind: 'savings',
+      countedTowardTotal: true,
+      lastFour: BAL_SECRETS[2],
+      balanceCents: 100,
+      balanceOn: TODAY - 30 * DAY,
+    },
+    { linkId: 'link-1' },
+  ),
+  balDoc('accounts', 'acc-invest', {
+    name: 'Brokerage',
+    kind: 'brokerage',
+    countedTowardTotal: false,
+    balanceCents: 5_000_000,
+    balanceOn: TODAY - DAY,
+  }),
+  balDoc('accounts', 'acc-cash', {
+    name: 'Cash',
+    kind: 'cash',
+    countedTowardTotal: true,
+    balanceCents: null,
+    balanceOn: null,
+  }),
+  balDoc(
+    'accounts',
+    'acc-closed',
+    { name: 'Closed', kind: 'checking', balanceCents: 1 },
+    { archivedAt: NOW },
+  ),
+  runwayPlans
+    .doc(BAL)
+    .collection('accountBalances')
+    .doc('acc-linked')
+    .set({
+      id: 'acc-linked',
+      asOf: NOW - 3_600_000,
+      sealed: sealTx({ cents: 800_000, availableCents: 790_000 }),
+    }),
+  runwayPlans
+    .doc(BAL)
+    .collection('links')
+    .doc('link-1')
+    .set({ status: 'active' }),
+  runwayPlans
+    .doc(BAL)
+    .collection('links')
+    .doc('link-dead')
+    .set({ status: 'broken' }),
+  balDoc('cards', 'card-venture', {
+    issuer: 'Capital One',
+    name: 'Venture X',
+    dueDay: 25,
+    lastFour: BAL_SECRETS[3],
+  }),
+  balDoc(
+    'cards',
+    'card-chase',
+    { issuer: 'Chase', name: null, dueDay: 5, lastFour: BAL_SECRETS[3] },
+    { linkId: 'link-1' },
+  ),
+  balDoc(
+    'cards',
+    'card-amex',
+    { issuer: 'Amex', name: 'Gold', dueDay: 31 },
+    { linkId: 'link-dead' },
+  ),
+  balDoc('cards', 'card-none', {
+    issuer: 'Discover',
+    name: null,
+    dueDay: null,
+  }),
+  balDoc(
+    'cards',
+    'card-citi',
+    { issuer: 'Citi', name: null, dueDay: null },
+    { linkId: 'link-1' },
+  ),
+  balDoc(
+    'cards',
+    'card-old',
+    { issuer: 'Retired', name: null, dueDay: 3 },
+    { archivedAt: NOW },
+  ),
+  balDoc('cardStatements', 'card-chase', {
+    dueOn: TODAY + 4 * DAY,
+    statementCents: 123_456,
+    minimumCents: 3_500,
+  }),
+  balDoc('cardStatements', 'card-amex', {
+    dueOn: TODAY + 6 * DAY,
+    statementCents: 987_654,
+    minimumCents: 987_654,
+  }),
+  balDoc('cardStatements', 'card-citi', {
+    dueOn: TODAY - 2 * DAY,
+    statementCents: null,
+    minimumCents: 2_500,
+  }),
+]);
+const queryBal = (category: string, args: unknown, uid = BAL) =>
+  runwayAdapter.query!(runwayCtx(uid), { category, args });
+
+const spending = await queryBal('envelopeBalances', {});
+assertShape(spending.records);
+assert.deepEqual(
+  spending.records.map((record) => [
+    record.title,
+    record.amountCents,
+    record.currency,
+  ]),
+  [
+    ['Groceries', 6_500, 'USD'],
+    ['Envelopes since ended', 2_000, 'USD'],
+    ['Fun', 1_000, 'USD'],
+  ],
+  'this month so far: a split counts its share, a refund subtracts, a waiting credit, an income deposit and an archived envelope are left out',
+);
+assert.equal(spending.records[0]?.detail, 'Spent Nov 1, 2026 to Nov 10, 2026');
+assert.deepEqual([spending.from, spending.to], ['2026-11-01', '2026-11-10']);
+assert.equal(
+  spending.totalCents,
+  9_500,
+  'spend on ended envelopes is totalled',
+);
+assert.equal(spending.currency, 'USD');
+assert.equal(spending.matchedCount, 3);
+assert.equal(spending.isPartial, false);
+const spendingBack = await queryBal('envelopeBalances', {
+  from: '2026-10-01',
+  text: 'GROC',
+});
+assert.deepEqual(
+  spendingBack.records.map((record) => [record.title, record.amountCents]),
+  [['Groceries', 16_400]],
+);
+assert.equal(
+  spendingBack.isPartial,
+  true,
+  'a text filter leaves ended-envelope spend unlisted, so the figure is partial',
+);
+assert.equal(spendingBack.from, '2026-10-01');
+assert.equal(spendingBack.to, '2026-11-10');
+assert.deepEqual(
+  (await queryBal('envelopeBalances', { from: '2026-11-09', to: '2026-11-01' }))
+    .records,
+  [],
+  'a backwards range is empty',
+);
+const noPlanSpending = await queryBal('envelopeBalances', {}, 'runway-many');
+assert.deepEqual(noPlanSpending.records, []);
+assert.equal(noPlanSpending.totalCents, null, 'no currency, no total');
+
+const accountRead = await queryBal('accountBalances', {});
+assertShape(accountRead.records);
+assert.deepEqual(
+  accountRead.records.map((record) => [
+    record.title,
+    record.subtitle,
+    record.amountCents,
+    record.detail,
+  ]),
+  [
+    ['Brokerage', 'Brokerage', 5_000_000, 'Balance as of Nov 9, 2026'],
+    ['Cash', 'Cash', null, null],
+    ['Checking A', 'Checking', 250_000, 'Balance as of Nov 8, 2026'],
+    ['Savings B', 'Savings', 800_000, 'Balance as of Nov 10, 2026'],
+  ],
+  "a linked account takes the bank's figure; an archived one is left out",
+);
+accountRead.records.forEach((record) =>
+  assert.equal(record.currency, record.amountCents === null ? null : 'USD'),
+);
+assert.equal(
+  accountRead.totalCents,
+  1_050_000,
+  'the total counts only accounts the person counts toward theirs',
+);
+assert.equal(accountRead.currency, 'USD');
+assert.deepEqual([accountRead.from, accountRead.to], [null, null]);
+assert.equal(
+  (await queryBal('accountBalances', { text: 'check' })).matchedCount,
+  1,
+);
+
+const cardRead = await queryBal('cardsDue', {});
+assertShape(cardRead.records);
+assert.deepEqual(
+  cardRead.records.map((record) => [
+    record.title,
+    record.dueAt,
+    record.amountCents,
+    record.subtitle,
+  ]),
+  [
+    ['Chase', TODAY + 4 * DAY, 123_456, 'Statement balance'],
+    ['Capital One Venture X', Date.UTC(2026, 10, 25), null, null],
+    ['Amex Gold', Date.UTC(2026, 10, 30), null, null],
+    ['Citi', Date.UTC(2026, 11, 8), null, null],
+    ['Discover', null, null, null],
+  ],
+  "the bank's due day and statement count only while the card's sign-in works and the statement is ahead; an archived card is left out",
+);
+assert.equal(cardRead.records[4]?.detail, 'No due day is set');
+assert.equal(cardRead.records[0]?.detail, 'Due Nov 14, 2026');
+assert.equal(cardRead.totalCents, 123_456);
+assert.equal(cardRead.currency, 'USD');
+assert.deepEqual(
+  (
+    await queryBal('cardsDue', { from: '2026-11-20', to: '2026-11-30' })
+  ).records.map((record) => record.title),
+  ['Capital One Venture X', 'Amex Gold'],
+);
+assert.deepEqual(
+  (await queryBal('cardsDue', { text: 'CHASE' })).records.map(
+    (record) => record.title,
+  ),
+  ['Chase'],
+);
+
+const balOutput = JSON.stringify([
+  spending,
+  spendingBack,
+  accountRead,
+  cardRead,
+]);
+[...BAL_SECRETS, ...ENVELOPE_SECRETS, 'Old Fund', 'Closed', 'Retired'].forEach(
+  (secret) => assert.ok(!balOutput.includes(secret), `Balances have ${secret}`),
+);
+await Promise.all(
+  ['envelopeBalances', 'accountBalances', 'cardsDue'].map((category) =>
+    assert.rejects(() => queryBal(category, {}, OTHER), category),
+  ),
+);
+await runwayPlanWith('runway-bal-bad', sealRunway(runwaySummary));
+await Promise.all([
+  runwayPlans
+    .doc('runway-bal-bad')
+    .collection('accounts')
+    .doc('x')
+    .set({
+      archivedAt: null,
+      linkId: null,
+      sealed: { value: 'x', nonce: 'y' },
+    }),
+  runwayPlans
+    .doc('runway-bal-bad')
+    .collection('cards')
+    .doc('y')
+    .set({
+      archivedAt: null,
+      linkId: null,
+      sealed: { value: 'x', nonce: 'y' },
+    }),
+]);
+assert.equal(
+  (await queryBal('accountBalances', {}, 'runway-bal-bad')).isPartial,
+  true,
+  'an account that would not open is said',
+);
 
 const txGrant = (isOn: boolean, status: string) =>
   firestore.doc('connections/tx-owner/grants/helm__app:runway__site').set({

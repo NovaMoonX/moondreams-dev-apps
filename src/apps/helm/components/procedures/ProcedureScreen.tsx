@@ -29,6 +29,8 @@ import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelecto
 import { toProcedureMarkdown } from '@apps/helm/utils/procedureMarkdown';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
+import { filterPrivateOwnPage } from '@apps/helm/utils/privacy';
 
 const { option, separator } = DropdownMenuFactories;
 
@@ -98,7 +100,11 @@ function ProcedureScreen({
 
   const copy = async () => {
     if (!procedure) return;
-    const isCopied = await copyToClipboard(toProcedureMarkdown(procedure));
+    const isCopied = await copyToClipboard(
+      toProcedureMarkdown(
+        filterPrivateOwnPage(procedure, (entry) => entry.privacy === 'private'),
+      ),
+    );
     addToast(
       isCopied
         ? { title: HELM_COPY.procedureCopied(stepCount), type: 'success' }
@@ -324,6 +330,13 @@ function ProcedureScreen({
               );
             })}
           </>
+        )}
+        {procedure && (
+          <PrivateRow
+            kind='procedure'
+            record={procedure}
+            title={procedure.title}
+          />
         )}
       </main>
       {procedure && (

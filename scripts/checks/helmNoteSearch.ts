@@ -414,12 +414,21 @@ test('a question sends the hinted notes with their bodies, anything else sends t
       body: 'Keeps 3 days',
       isUnchecked: true,
       topicIds: ['baking'],
+      projectIds: [],
+      quietFacts: { privateMark: null, isPrivacyCleared: false },
     },
   ];
   assert.deepEqual(toContextNotes(hinted, 'How long do cakes keep?'), hinted);
   assert.deepEqual(toContextNotes(hinted, 'Remember the cake tin is blue'), [
     { id: 'cake', title: 'Cake' },
   ]);
+  assert.deepEqual(
+    toContextNotes(
+      [{ ...hinted[0], isPrivate: true }],
+      'Remember the cake tin is blue',
+    ),
+    [{ id: 'cake', title: 'Cake', isPrivate: true }],
+  );
 });
 
 const failures: string[] = [];

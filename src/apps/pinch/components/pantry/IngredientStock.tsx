@@ -9,6 +9,7 @@ import {
   selectHasPackages,
   selectLeadDays,
   selectPackagesByIngredient,
+  selectUnitSettings,
 } from '@apps/pinch/store/selectors';
 import { getStockSummaryParts, getStockView } from '@apps/pinch/utils/packages';
 
@@ -36,6 +37,7 @@ function IngredientStock({
     useAppSelector(selectPackagesByIngredient).get(ingredientId) ?? [];
   const hasPantry = useAppSelector(selectHasPackages);
   const soonDays = useAppSelector(selectLeadDays);
+  const units = useAppSelector(selectUnitSettings);
   const [isOpen, setIsOpen] = useState(false);
 
   if (packages.length === 0 && !hasPantry && !isUsed) return null;
@@ -59,7 +61,7 @@ function IngredientStock({
         )}
         {packages.length > 1 && (
           <p className='text-muted-foreground text-sm'>
-            {getStockSummaryParts(view).join(' · ')}
+            {getStockSummaryParts(view, units).join(' · ')}
           </p>
         )}
       </div>

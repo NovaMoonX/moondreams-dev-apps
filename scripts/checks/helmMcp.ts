@@ -217,7 +217,14 @@ const sortSource = readFileSync(
   'utf8',
 );
 assert.match(sortSource, /isOutside: lead\?\.medium === 'mcp'/);
-assert.match(sortSource, /mode !== 'rest' && !read\.isOutside && isQuestion/);
+assert.match(
+  sortSource,
+  /mode !== 'rest' &&\s*!read\.isOutside &&\s*!isScheduledCapture\(capture\) &&\s*isQuestion/,
+);
+
+// An outside assistant is never there to see: its tools and its filed turns always mask a private record.
+assert.match(external, /mask: \{\s*isOn: true,/);
+assert.match(sortSource, /isOn:\s*capture\.medium === 'mcp' \|\|/);
 
 // An outside assistant hears the person's own name for their assistant, read through the shared reader, so "tell {Name}" routes here.
 assert.match(
@@ -532,11 +539,13 @@ const asExecution = (made: ReturnType<typeof saved>): OpenExecution => ({
   effectRefs: made.effectRefs as OpenExecution['effectRefs'],
   linkedWhoIds: [],
   linkedPlaceIds: [],
+  privacy: null,
   undoesExecutionId: null,
   undoneByExecutionId: null,
   undoneDocIds: [],
   partUndoIds: [],
   undoReason: null,
+  heldSpoken: null,
   questionRef: null,
   errorCode: null,
   createdAt: 1000,
@@ -549,6 +558,8 @@ const asExecution = (made: ReturnType<typeof saved>): OpenExecution => ({
   spoken: null,
   goneIds: null,
   lines: [],
+  abilityOffer: null,
+  awayZoneOffer: null,
   isUnreadable: false,
 });
 const undoOf = (made: ReturnType<typeof saved>, targets: UndoTarget[]) =>
@@ -567,6 +578,11 @@ const savedNote = (made: ReturnType<typeof saved>): UndoTarget => ({
     body: 'x',
     via: 'Gemini',
     links: [],
+    privateMark: null,
+    isPrivacyCleared: false,
+    quietMark: null,
+    quietUntil: null,
+    isQuietCleared: false,
   },
 });
 const undoFiled = undoOf(onTopic, [

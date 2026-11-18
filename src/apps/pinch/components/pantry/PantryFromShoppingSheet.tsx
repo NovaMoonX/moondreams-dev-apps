@@ -15,6 +15,7 @@ import { usePackageActions } from '@apps/pinch/hooks/usePackageActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectDefaultProducts,
+  selectPinchSettings,
   selectIngredientsById,
   selectLeadDays,
   selectPackagesByIngredient,
@@ -22,7 +23,6 @@ import {
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
   NO_DATE_ANSWER,
-  formatKitchenTotal,
   getAnswerDate,
   getDefaultPlace,
   getStockSummaryParts,
@@ -30,7 +30,7 @@ import {
   isValidPackageAmount,
   parseAmountText,
 } from '@apps/pinch/utils/packages';
-import { getShopSection } from '@apps/pinch/utils/shopping';
+import { formatShopAmount, getShopSection } from '@apps/pinch/utils/shopping';
 
 /** One thing from the ticked part of the shopping list: its ingredient, and what the list said of it. */
 export interface PutAwayRow {
@@ -60,6 +60,7 @@ function PantryFromShoppingSheet({
   const { openSubviewFromToast } = usePinchOverlay();
   const { add, isReady, loadError } = usePackageActions(uid);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const { units } = useAppSelector(selectPinchSettings);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const byIngredient = useAppSelector(selectPackagesByIngredient);
   const soonDays = useAppSelector(selectLeadDays);
@@ -163,9 +164,9 @@ function PantryFromShoppingSheet({
             {[
               row.amount === null
                 ? 'On your list'
-                : `On your list: ${formatKitchenTotal({ amount: row.amount, unit: row.unit })}`,
+                : `On your list: ${formatShopAmount({ amount: row.amount, unit: row.unit }, units)}`,
               stock.length > 0
-                ? `Already in your pantry: ${getStockSummaryParts(getStockView(row.ingredientId, stock, undefined, soonDays)).join(', ')}`
+                ? `Already in your pantry: ${getStockSummaryParts(getStockView(row.ingredientId, stock, undefined, soonDays), units).join(', ')}`
                 : null,
             ]
               .filter((part) => part !== null)

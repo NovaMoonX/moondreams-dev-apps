@@ -48,17 +48,17 @@ interface Opened {
 
 const payeeMatcher = createOptionMatcher<string>();
 
-const asObject = (value: unknown): Record<string, unknown> | null =>
+export const asObject = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 
-const readText = (value: unknown) =>
+export const readText = (value: unknown) =>
   typeof value === 'string' && value.trim() !== ''
     ? value.trim().slice(0, NAME_LIMIT)
     : null;
 
-const isSealed = (value: unknown): value is SealedPayload => {
+export const isSealed = (value: unknown): value is SealedPayload => {
   const sealed = asObject(value);
   return (
     sealed !== null &&
@@ -67,7 +67,7 @@ const isSealed = (value: unknown): value is SealedPayload => {
   );
 };
 
-const readDay = (value: unknown) => {
+export const readDay = (value: unknown) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return null;
   const at = Date.parse(`${value}T00:00:00Z`);
@@ -123,7 +123,10 @@ const isPayeeMatch = (rawTyped: string, rawNames: string[]) => {
   });
 };
 
-const isCounted = (sealed: Record<string, unknown>, needsHome: boolean) => {
+export const isCounted = (
+  sealed: Record<string, unknown>,
+  needsHome: boolean,
+) => {
   const amount = sealed.amountCents;
   if (typeof amount !== 'number' || !Number.isSafeInteger(amount)) return false;
   const isLinked =
@@ -132,7 +135,7 @@ const isCounted = (sealed: Record<string, unknown>, needsHome: boolean) => {
   return !isLinked && !(needsHome && amount < 0);
 };
 
-const readLines = (sealed: Record<string, unknown>) =>
+export const readLines = (sealed: Record<string, unknown>) =>
   (Array.isArray(sealed.lines) ? sealed.lines : []).flatMap((line) => {
     const one = asObject(line);
     return one === null
@@ -184,7 +187,7 @@ const envelopeNames = async (
   }, new Map<string, string>());
 };
 
-const readCurrency = async (
+export const readCurrency = async (
   firestore: Firestore,
   uid: string,
   planKey: Awaited<ReturnType<typeof unwrapPlanKey>>,

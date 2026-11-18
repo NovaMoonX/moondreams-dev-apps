@@ -34,7 +34,7 @@ function DeviceAccountList({
     const unsent = getPendingDeviceWorkCount(account.uid);
     const isConfirmed = await confirm({
       title: `Remove ${account.email ?? getName(account)}?`,
-      message: `It leaves this list, along with the drafts and view choices this device kept for it.${
+      message: `It leaves this list, along with the drafts, view choices and layouts this device kept for it.${
         unsent > 0
           ? ` ${unsent === 1 ? '1 unsent thing' : `${unsent} unsent things`} kept only on this device for it will be deleted too.`
           : ''
