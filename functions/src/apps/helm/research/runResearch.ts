@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
@@ -24,6 +26,7 @@ import {
   type HelmKey,
 } from '../helmKey.js';
 import { nextNight } from '../nomos/planLearnLater.js';
+import { buildResultTopic } from './buildResultTopic.js';
 import {
   buildRerunQuestion,
   toAllowanceMirror,
@@ -416,6 +419,46 @@ const toSettledFields = (input: {
   };
 };
 
+/** The topic a finished look ahead of a project is filed as, made only once (`resultTopicId` empty); a failure to build it leaves the look ready without one. */
+const toResultTopic = (input: {
+  key: HelmKey;
+  data: Record<string, unknown>;
+  opened: Record<string, unknown>;
+  settlement: ResearchSettlement;
+  now: number;
+  settledStatus: unknown;
+}) => {
+  const { data, settlement } = input;
+  if (
+    data.mode !== 'leadTime' ||
+    input.settledStatus !== 'ready' ||
+    settlement.result === null ||
+    typeof data.projectId !== 'string' ||
+    (data.resultTopicId ?? null) !== null
+  ) {
+    return null;
+  }
+  try {
+    const id = randomUUID();
+    return {
+      id,
+      ...buildResultTopic({
+        subject: String(input.opened.subject ?? ''),
+        overview: settlement.result.overview,
+        sources: settlement.result.sources,
+        projectId: data.projectId,
+        captureId: typeof data.captureId === 'string' ? data.captureId : null,
+        newId: () => randomUUID(),
+        now: input.now,
+        seal: (fields) => sealForHelm(input.key, fields),
+      }),
+    };
+  } catch {
+    logger.warn('helm.research.topicNotFiled');
+    return null;
+  }
+};
+
 /** Writes what a run found (or that it found nothing) and settles the month's usage in one transaction, dropping the answer unread when the item was cancelled meanwhile. */
 export async function settleResearch(
   firestore: Firestore,
@@ -461,19 +504,37 @@ export async function settleResearch(
         ])
       : [null, false];
     if (isWanted) {
+      const opened = openForHelm(key, data.sealed as SealedPayload);
+      const settled = toSettledFields({
+        key,
+        opened,
+        isLearn,
+        settlement,
+        now,
+        timeZone,
+        failures:
+          typeof data.prepareFailures === 'number' ? data.prepareFailures : 0,
+      });
+      const filed = toResultTopic({
+        key,
+        data,
+        opened,
+        settlement,
+        now,
+        settledStatus: settled.status,
+      });
       transaction.update(
         ref,
-        toSettledFields({
-          key,
-          opened: openForHelm(key, data.sealed as SealedPayload),
-          isLearn,
-          settlement,
-          now,
-          timeZone,
-          failures:
-            typeof data.prepareFailures === 'number' ? data.prepareFailures : 0,
-        }),
+        filed ? { ...settled, resultTopicId: filed.id } : settled,
       );
+      if (filed) {
+        const topicRef = firestore.doc(`${base}/topics/${filed.id}`);
+        transaction.create(topicRef, filed.topic);
+        transaction.create(
+          topicRef.collection('versions').doc('1'),
+          filed.version,
+        );
+      }
     }
     transaction.set(usageRef(firestore, uid), usage);
     if (profileSnap.exists) {

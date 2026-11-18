@@ -25,8 +25,18 @@ import DayPlan from '@apps/helm/components/today/DayPlan';
 import DayStrip from '@apps/helm/components/today/DayStrip';
 import KeyDatesLine from '@apps/helm/components/today/KeyDatesLine';
 import PastDay from '@apps/helm/components/today/PastDay';
+import AheadOfferCard, {
+  type AheadSheetTarget,
+} from '@apps/helm/components/projects/AheadOfferCard';
+import AheadSheet from '@apps/helm/components/projects/AheadSheet';
 import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import {
+  isAheadOfferForToday,
+  pickAheadOffer,
+} from '@apps/helm/engine/researchAhead';
+import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { dayKeyToMs } from '@/utils/cadenceUtils';
 import { patternFamily } from '@apps/helm/engine/patterns';
 import LearnItemSheet from '@apps/helm/components/research/LearnItemSheet';
 import {
@@ -34,6 +44,12 @@ import {
   selectLearnLater,
 } from '@apps/helm/store/selectors/researchSelectors';
 import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
+import { resolveMeeting } from '@apps/helm/utils/meetingWords';
+import QuestionsReadyCard from '@apps/helm/components/today/QuestionsReadyCard';
+import {
+  countQuestions,
+  isReadyCheckDue,
+} from '@apps/helm/engine/questionsTask';
 import SuggestionSheet, {
   type SuggestionTarget,
 } from '@apps/helm/components/today/SuggestionSheet';
@@ -119,7 +135,8 @@ function TodayView({
   }, [hasTasks]);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
-  const offer = useAppSelector(selectTodayOffer);
+  const patternOffer = useAppSelector(selectTodayOffer);
+  const synced = useAppSelector((state) => state.helm.synced.items);
   const learnItems = useAppSelector(selectLearnLater);
   const [openLearnId, setOpenLearnId] = useState<string | null>(null);
   const sources = usePlanSources(nowMinute);
@@ -158,12 +175,71 @@ function TodayView({
     : null;
   const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
 
+  const projects = useAppSelector(selectActiveProjects);
+  const readyTask = useMemo(
+    () =>
+      !isToday
+        ? null
+        : (tasks
+            .filter((task) => {
+              const meeting = resolveMeeting(task, synced);
+              return (
+                !task.isUnreadable &&
+                task.meeting !== null &&
+                meeting !== null &&
+                isReadyCheckDue(
+                  {
+                    status: task.status,
+                    meeting: { ...task.meeting, startAt: meeting.startAt },
+                    readyAnswer: task.readyAnswer,
+                    count: countQuestions(task.stepState),
+                  },
+                  now,
+                )
+              );
+            })
+            .sort(
+              (a, b) =>
+                (resolveMeeting(a, synced)?.startAt ?? 0) -
+                (resolveMeeting(b, synced)?.startAt ?? 0),
+            )
+            .at(0) ?? null),
+    [isToday, tasks, synced, now],
+  );
+  const offer = readyTask ? null : patternOffer;
+
+  const aheadToday = useMemo(() => {
+    if (!isToday || offer !== null || readyTask !== null) return null;
+    const today = dayKeyToMs(todayKey);
+    return (
+      projects.flatMap((project) => {
+        const ahead = pickAheadOffer(
+          project.researchOffers,
+          project.targetDate,
+          today,
+        );
+        return ahead &&
+          project.aheadAsks?.[ahead.id] &&
+          isAheadOfferForToday(ahead, todayKey)
+          ? [{ project, offer: ahead, today }]
+          : [];
+      })[0] ?? null
+    );
+  }, [isToday, offer, readyTask, projects, todayKey]);
+
+  const [aheadTarget, setAheadTarget] = useState<AheadSheetTarget | null>(null);
+  const [isAheadOpen, setIsAheadOpen] = useState(false);
+  const openAhead = (target: AheadSheetTarget) => {
+    setAheadTarget(target);
+    setIsAheadOpen(true);
+  };
+
   const learns = useMemo(
     () =>
-      isToday && offer === null
+      isToday && offer === null && aheadToday === null && readyTask === null
         ? pickLearnOffers(learnItems, todayKey, timeZone)
         : [],
-    [isToday, offer, learnItems, todayKey, timeZone],
+    [isToday, offer, aheadToday, readyTask, learnItems, todayKey, timeZone],
   );
 
   const handleDeleted = (
@@ -299,6 +375,33 @@ function TodayView({
               }
             />
           ))}
+        {aheadToday && (
+          <AheadOfferCard
+            key={aheadToday.offer.id}
+            project={aheadToday.project}
+            offer={aheadToday.offer}
+            today={aheadToday.today}
+            dayKey={todayKey}
+            onOpen={openAhead}
+          />
+        )}
+        {aheadTarget && (
+          <AheadSheet
+            isOpen={isAheadOpen}
+            onClose={() => setIsAheadOpen(false)}
+            {...aheadTarget}
+          />
+        )}
+        {readyTask && (
+          <QuestionsReadyCard
+            key={readyTask.id}
+            task={readyTask}
+            sources={sources}
+            now={now}
+            timeZone={timeZone}
+            onOpen={setOpenId}
+          />
+        )}
         {isToday && <SyncedToday now={now} />}
         {isToday && isLoaded && (tasks.length > 0 || held.size > 0) && (
           <section className='space-y-3'>

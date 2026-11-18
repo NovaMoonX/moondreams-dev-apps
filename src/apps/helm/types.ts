@@ -2,8 +2,18 @@ import type { City } from '@/lib/cities/types';
 import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { ImportancePlace } from '@apps/helm/engine/importance';
-import type { ObservationTag } from '@apps/helm/engine/said';
+import type { Personality } from '@apps/helm/engine/personality';
+import type { ObservationTag, STRUGGLING_TAGS } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
+import type {
+  TaskMeeting,
+  TaskReadyAnswer,
+} from '@apps/helm/engine/questionsTask';
+import type {
+  AheadOfferMeta,
+  LeadAnswer,
+  LeadQuestion,
+} from '@apps/helm/engine/researchAhead';
 import type { ContactPoint } from '@apps/helm/engine/contactPoints';
 import type {
   ConnectionKind,
@@ -12,6 +22,7 @@ import type {
   CoupleStatus,
 } from '@apps/helm/engine/connections';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
+import type { GroupingMeta } from '@apps/helm/engine/grouping';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 export type { GoalWhy } from '@apps/helm/utils/goalWhy';
 import type { GoalWhy } from '@apps/helm/utils/goalWhy';
@@ -22,6 +33,7 @@ import type {
   PrivateMark,
   QuietMark,
 } from '@apps/helm/utils/privacy';
+import type { SeenAsKind, SeenAsState } from '@apps/helm/engine/seenAs';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
@@ -74,6 +86,11 @@ export interface HelmProfile {
   assistantNameVariants: string[] | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
+  /** How the assistant talks; null reads from the old tone. Always read through the personality reader. */
+  personality: Personality | null;
+  personalitySetAt: number | null;
+  /** The sample replies made for the personality whose personality hashes to `hash`, so a device never asks again for one already made. */
+  personalityPreview: { hash: string; replies: string[]; at: number } | null;
   /** The colour theme; null reads as chestnut. */
   theme: HelmTheme | null;
   /** IANA zone, set from the device on first open. */
@@ -83,6 +100,8 @@ export interface HelmProfile {
   dayEndTime: string;
   /** Share of free time the planner may fill. */
   planFillPercent: number;
+  /** @deprecated Nothing reads it: a day's aims are noticed by the server's trigger on the day document. Written `null` going forward. */
+  dayAimsChangedAt: number | null;
   /** "{accountId}/{calendarId}" of each calendar marked as shifts. */
   shiftCalendarIds: string[];
   /** Synced ids of all-day events the person said block their day. */
@@ -133,6 +152,8 @@ export interface HelmProfile {
   patternsCheckedOn: string | null;
   /** The next night's reflection is due from this instant; null when nothing new waits. */
   reflectDueAt: number | null;
+  /** The next night's grouping of related things is due from this instant; null when nothing new waits. */
+  relateDueAt: number | null;
   /** Stamped with any change to a scheduled action, so the server looks at the person's actions within minutes; null on a profile from before. */
   scheduledActionsChangedAt: number | null;
   /** When the person last chose Forget what you've noticed; what was made at or before it is hidden. */
@@ -145,8 +166,21 @@ export interface HelmProfile {
   researchDepth: 'light' | 'thorough' | null;
   /** This month's research allowance as the server last settled it, shown as "About 4 thorough looks left"; the server's own usage decides, never this. */
   researchAllowance: { month: string; leftCents: number } | null;
+  calendarSync: HelmCalendarSync | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export interface HelmCalendarSync {
+  accountId: string;
+  calendarId: string;
+  calendarName: string;
+  isMadeByHelm: boolean;
+  /** Whether the calendar was already in the grant's read list before this was turned on, so stopping leaves it there. */
+  wasAlreadyRead: boolean;
+  startedAt: number;
+  lastWrittenAt: number | null;
+  lastError: string | null;
 }
 
 export type PhoneLocation = 'off' | 'city' | 'precise';
@@ -234,6 +268,7 @@ export type QuestionKind =
   | 'whichTopic'
   | 'groupTopics'
   | 'whichComesFirst'
+  | 'clashChoice'
   | 'asked'
   | (string & {});
 
@@ -320,6 +355,7 @@ export interface HelmQuestion {
     | 'whichTopic'
     | 'groupTopics'
     | 'whichComesFirst'
+    | 'clashChoice'
     | 'undoOffer'
     | 'researchDepth'
     | 'researchRerun'
@@ -327,6 +363,7 @@ export interface HelmQuestion {
     | 'learnGoal'
     | 'learnStill'
     | 'learnTogether'
+    | 'questionsTask'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
@@ -410,9 +447,16 @@ export interface Capture {
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
-  arrivedVia: 'direct' | 'dropBox' | 'scheduled';
+  arrivedVia: 'direct' | 'dropBox' | 'scheduled' | 'researchAhead';
   /** The scheduled action a run's turn was made for; null on any other turn. */
   scheduledActionId: string | null;
+  /** The offer ahead of a project this turn answers (its sealed text is the brief); the server turns it into the research. Null on any other turn and on one made before the field. */
+  aheadOffer: {
+    projectId: string;
+    offerId: string;
+    depth: 'light' | 'thorough';
+    when: 'now' | 'later';
+  } | null;
   /** Whether the turn acted, was only noted, or answered a question; null on a turn from before. */
   disposition: CaptureDisposition | null;
   /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
@@ -452,6 +496,8 @@ export interface Capture {
   sortedAt: number | null;
   /** Set when the assistant was asked to plan a day: "YYYY-MM-DD", which the device plans on sight. */
   planDayKey: string | null;
+  /** Set on the answer to the morning card: the day ("YYYY-MM-DD") whose aims it files; null on every other turn and on one made before the field. */
+  aimsDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
   /** The class of what the turn quotes; private when the turn filed or touched a private thing. */
@@ -614,7 +660,16 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
 export type TaskStatus = 'open' | 'done';
 export type Importance = 'must' | 'should' | 'could';
 export type Energy = 'low' | 'medium' | 'high';
+export type TaskEffort = 'light' | 'moderate' | 'heavy';
 export type TaskContext = 'atHome' | 'out' | 'atComputer' | 'onPhone';
+
+export type MeetingFormat = 'inPerson' | 'video' | 'phone';
+
+/** How a task with a moment due meets; the place is the task's own `placeIds`. */
+export interface TaskMeets {
+  how: MeetingFormat;
+  setBy: 'person' | 'calendar';
+}
 
 export interface Task {
   status: TaskStatus;
@@ -622,6 +677,8 @@ export interface Task {
   isUrgent: boolean;
   due: TaskDue | null;
   durationMinutes: number | null;
+  /** How heavy the task is, for the break after it; null reads as moderate. */
+  effort: TaskEffort | null;
   energy: Energy | null;
   context: TaskContext | null;
   projectId: string | null;
@@ -632,6 +689,12 @@ export interface Task {
   waitsOnTaskIds: string[];
   waitsOnWhoId: string | null;
   stepState: Record<string, { order: number; doneAt: number | null }>;
+  /** The meeting a task's questions are for; null for any other task and for one from before the field. */
+  meeting: TaskMeeting | null;
+  /** The answer to "Do they feel ready?" for that meeting. */
+  readyAnswer: TaskReadyAnswer | null;
+  /** How the meeting happens, readable; null when never said and on a task from before the field. */
+  meets: TaskMeets | null;
   mediaIds: string[];
   createdBy: 'person' | 'nomos';
   sourceCaptureId: string | null;
@@ -965,7 +1028,26 @@ export interface Project {
   finishedAt: number | null;
   /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
   privacy: PrivacyClass | null;
+  /** Research offered ahead of the date (at most 3); absent on a project from before the field, read as none. Their words are in `sealed.aheadAsks`. */
+  researchOffers: AheadOfferMeta[];
   sealed: Sealed;
+}
+
+/** The words of one research offer ahead of a project's date. */
+export interface AheadAsk {
+  /** "apartments", at most 60 characters. */
+  subject: string;
+  /** What to find out, at most 300 characters. */
+  question: string;
+  /** The model's reason it helps now ("Nothing in Move yet says what you're looking for."), at most 120 characters. */
+  whyNow: string | null;
+  /** Whether the answer feeds a decision with money or a date, so the sheet asks how deep. */
+  isDecision: boolean;
+  /** At most 5. */
+  questions: LeadQuestion[];
+  /** Set when the person sends it. */
+  answers: Record<string, LeadAnswer> | null;
+  brief: string | null;
 }
 
 export interface ProjectSealed {
@@ -983,6 +1065,8 @@ export interface ProjectSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** offer id to its words; absent in a payload sealed before the field. */
+  aheadAsks: Record<string, AheadAsk> | null;
   /** Kept quiet: shown on screen, never said aloud; null when not, absent in a payload sealed before the field. */
   quietMark: QuietMark | null;
   /** The last day it stays quiet (YYYY-MM-DD, the profile's zone); null keeps it quiet until released. */
@@ -1044,6 +1128,23 @@ export interface NoteSealed {
 }
 
 export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+/** `apps/helm/users/{uid}/groupings/{groupingId}`; the id hashes the sorted source keys. */
+export interface Grouping extends GroupingMeta {
+  sealed: Sealed;
+}
+
+export interface GroupingSealed {
+  proposedTitle: string | null;
+  emoji: string | null;
+  /** Source key to its title; none for a private source. */
+  titles: Record<string, string>;
+}
+
+export interface OpenGrouping extends Omit<Grouping, 'sealed'>, GroupingSealed {
   id: string;
   isUnreadable: boolean;
 }
@@ -1312,6 +1413,8 @@ export interface TaskSealed {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
+  /** The meeting's name, for a task whose questions are for one; absent in a payload sealed before the field. */
+  meetingLabel: string | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
@@ -1330,6 +1433,7 @@ export interface OpenTask extends Omit<Task, 'sealed'> {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
+  meetingLabel: string | null;
   privateMark: PrivateMark | null;
   isPrivacyCleared: boolean | null;
   quietMark: QuietMark | null;
@@ -1363,6 +1467,7 @@ export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
   collection:
+    | 'seenAs'
     | 'tasks'
     | 'facts'
     | 'who'
@@ -1380,7 +1485,9 @@ export interface EffectRef {
     | 'connections'
     | 'patterns'
     | 'scheduledActions'
-    | 'research';
+    | 'research'
+    | 'dayAims'
+    | 'groupings';
   docId: string;
 }
 
@@ -1494,6 +1601,7 @@ export type TaskPlainFields = Partial<
     | 'importance'
     | 'isUrgent'
     | 'due'
+    | 'meets'
     | 'durationMinutes'
     | 'energy'
     | 'context'
@@ -1532,6 +1640,8 @@ export interface SyncedRecord {
   calendarKey: string | null;
   isBusy: boolean | null;
   sourceUpdatedAt: number | null;
+  /** Set on an event the plan sync wrote to the calendar; null on every other copy and on one from before. */
+  helmRef: string | null;
   syncedAt: number;
   transformVersion: number;
   /** What the copy said when it was last written; null on a copy made before it was kept. */
@@ -1616,6 +1726,50 @@ export interface PlanSlot {
   status: PlanSlotStatus;
   source: 'nomos' | 'person';
   decidedAt: number | null;
+  /** The synced event a kept slot overlaps, when it does. */
+  overlapsEventRef: string | null;
+}
+
+export type StruggleSignal = (typeof STRUGGLING_TAGS)[number];
+
+/** The sealed part of a day's aims; `windDown` is keyed by taskId. */
+export interface DayAimsSealed {
+  aims: {
+    aimId: string;
+    taskId: string;
+    order: number;
+    lengthIsGuess: boolean;
+    broughtFrom: string | null;
+  }[];
+  windDown: Record<
+    string,
+    {
+      result: 'done' | 'tonight' | 'wontHappen';
+      choice: 'tomorrow' | 'later' | 'dropped' | null;
+      reason: StruggleSignal | null;
+      saidSpanId: string | null;
+    }
+  >;
+}
+
+/** One document per day, id = "YYYY-MM-DD" in the profile's zone. */
+export interface DayAims {
+  /** Date-only, UTC midnight. */
+  date: number;
+  state: 'open' | 'answered' | 'dismissed';
+  windDownState: 'waiting' | 'ready' | 'done' | 'dismissed';
+  lookAt: number | null;
+  rolledAt: number | null;
+  sealed: Sealed;
+}
+
+/** A day's aims after their sealed payload is opened; an unreadable one keeps its readable fields and no aims. */
+export interface OpenDayAims extends Omit<DayAims, 'sealed'> {
+  /** "YYYY-MM-DD" in the profile's zone. */
+  id: string;
+  aims: DayAimsSealed['aims'];
+  windDown: DayAimsSealed['windDown'];
+  isUnreadable: boolean;
 }
 
 export interface PlanCalendarEntry {
@@ -1935,6 +2089,35 @@ export interface PatternSealed {
   reasonLine: string | null;
 }
 
+/** `seenAs/{lineId}`, id `sa_` + the first 24 hex of sha256(`seenAsIdInput`): one line of how the assistant sees the person, derived and citing its sources; the person's correction or removal survives every rebuild. */
+export interface SeenAsLine {
+  kind: SeenAsKind;
+  state: SeenAsState;
+  /** Two to 20 of `'patterns/{id}'`, `'observations/{id}'`, `'habits/{id}'`, `'style/{scope}#{traitKey}'`. */
+  sourceKeys: string[];
+  /** The habits, goals or who it is about, as `'habits/{id}'`, `'projects/{id}'` or `'who/{id}'`. */
+  subjectRefs: string[];
+  writtenBy: 'reflection' | 'person';
+  /** On Remove, the line's sources: no new line of the same kind may cite one of them. */
+  dontDrawFrom: string[];
+  derivedAt: number;
+  correctedAt: number | null;
+  removedAt: number | null;
+  privacy: PrivacyClass | null;
+  createdAt: number;
+  /** Null on a removed line past the cap, which keeps only its id. */
+  sealed: Sealed | null;
+}
+
+export interface SeenAsSealed {
+  /** 140 at most; on a removed line, the normalised claim. */
+  line: string;
+  /** Code-built, 120 at most: "From 6 things you said and 2 patterns". */
+  basis: string;
+  /** The person's own words, 140 at most. */
+  corrected: string | null;
+}
+
 export type ObservationSource = 'turn' | 'checkInNote' | 'followUp';
 
 /** `observations/{obsId}`: something said about a habit, goal, task or the day; derived, never edited by hand. */
@@ -2144,6 +2327,10 @@ export interface Research {
   searchQuery: string | null;
   /** Where the wish came up, such as "while planning the Leavenworth drive"; at most 60 characters. */
   contextLine: string | null;
+  /** Ahead of a project: the offer on the project that started it. */
+  aheadOfferId: string | null;
+  /** Ahead of a project: the topic the finished look was filed as. */
+  resultTopicId: string | null;
 }
 
 export type LearnDeclineReason = 'timing' | 'lostInterest' | 'changedMind';

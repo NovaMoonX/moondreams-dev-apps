@@ -89,6 +89,15 @@
       ]
     },
     {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "due.kind", "order": "ASCENDING" },
+        { "fieldPath": "due.at", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "facts",
       "queryScope": "COLLECTION",
       "fields": [

@@ -20,6 +20,9 @@ import {
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
+import { nextReflectionAt } from '../nomos/planObservations.js';
+import { toKnownZone } from '../nomos/spoken.js';
+import { RELATE_SYNCED_CATEGORIES } from '../reflection/relate/relateRuns.js';
 import {
   openForHelm,
   sealForHelm,
@@ -28,7 +31,7 @@ import {
 } from '../helmKey.js';
 
 export const KEPT_COPY_DAYS = 90;
-export const TRANSFORM_VERSION = 1;
+export const TRANSFORM_VERSION = 2;
 export const MAX_COPIES_PER_CATEGORY = MAX_RECORDS_PER_CATEGORY;
 const DAY_MS = 86_400_000;
 const BATCH_SIZE = 400;
@@ -131,6 +134,7 @@ const toCategoryDocs = async (
 class HelmSinkSession implements SinkSession {
   private key: Promise<HelmKey> | null = null;
   private readonly seen = new Map<string, Set<string>>();
+  private readonly ownCounts = new Map<string, number>();
 
   constructor(
     private readonly firestore: Firestore,
@@ -151,6 +155,25 @@ class HelmSinkSession implements SinkSession {
     return created;
   }
 
+  private async markRelateDue(now: number) {
+    const ref = this.firestore.doc(`apps/helm/users/${this.uid}`);
+    await this.firestore.runTransaction(async (transaction) => {
+      const profile = await transaction.get(ref);
+      if (
+        !profile.exists ||
+        profile.get('isLearningOn') === false ||
+        (profile.get('relateDueAt') ?? null) !== null
+      )
+        return;
+      transaction.update(ref, {
+        relateDueAt: nextReflectionAt(
+          now,
+          toKnownZone(String(profile.get('timeZone') ?? 'UTC')),
+        ),
+      });
+    });
+  }
+
   async writePage(args: WritePageArgs) {
     const {
       grantId,
@@ -162,18 +185,25 @@ class HelmSinkSession implements SinkSession {
       now,
     } = args;
     const seen = this.seenIds(grantId, category);
-    const room = Math.max(0, MAX_COPIES_PER_CATEGORY - seen.size);
+    const countKey = `${grantId}|${category}`;
+    const isOwn = (record: SharedRecord) =>
+      typeof record.extra.siteRef === 'string';
+    const ownBefore = this.ownCounts.get(countKey) ?? 0;
+    const room = Math.max(0, MAX_COPIES_PER_CATEGORY - (seen.size - ownBefore));
     const inWindow = records.filter(
       (record) => !hasEndedBefore(record, windowStart),
     );
     const kept = [
-      ...inWindow
-        .filter((record) => record.kind === 'event')
-        .sort((a, b) => toAnchor(a) - toAnchor(b)),
-      ...inWindow
-        .filter((record) => record.kind !== 'event')
-        .sort((a, b) => toAnchor(b) - toAnchor(a)),
-    ].slice(0, room);
+      ...[
+        ...inWindow
+          .filter((record) => record.kind === 'event' && !isOwn(record))
+          .sort((a, b) => toAnchor(a) - toAnchor(b)),
+        ...inWindow
+          .filter((record) => record.kind !== 'event')
+          .sort((a, b) => toAnchor(b) - toAnchor(a)),
+      ].slice(0, room),
+      ...inWindow.filter((record) => record.kind === 'event' && isOwn(record)),
+    ];
     if (kept.length === 0) return;
 
     const key = await this.openKey();
@@ -187,6 +217,10 @@ class HelmSinkSession implements SinkSession {
         hash: toContentHash(subkey, record, deepLink),
       };
     });
+    const ownNew = entries.filter(
+      (entry) => isOwn(entry.record) && !seen.has(entry.id),
+    ).length;
+    this.ownCounts.set(countKey, ownBefore + ownNew);
     entries.forEach((entry) => seen.add(entry.id));
 
     const refs = entries.map((entry) =>
@@ -228,6 +262,10 @@ class HelmSinkSession implements SinkSession {
               ? record.extra.isFree !== true
               : null,
           sourceUpdatedAt: record.sourceUpdatedAt,
+          helmRef:
+            typeof record.extra.siteRef === 'string'
+              ? record.extra.siteRef
+              : null,
           contentHash: hash,
           syncedAt: now,
           transformVersion: TRANSFORM_VERSION,
@@ -247,6 +285,13 @@ class HelmSinkSession implements SinkSession {
       );
       await batch.commit();
     }, Promise.resolve());
+    if (
+      changed.length > 0 &&
+      RELATE_SYNCED_CATEGORIES.some(
+        (entry) => entry === `${connectorId}/${category}`,
+      )
+    )
+      await this.markRelateDue(now);
   }
 
   async finishCategory(args: {

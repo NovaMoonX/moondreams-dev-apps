@@ -180,6 +180,8 @@ async function openResearch(
     videosFetchedAt: numberOrNull(data.videosFetchedAt),
     prepareFailedAt: numberOrNull(data.prepareFailedAt),
     resultNoteId: stringOrNull(data.resultNoteId),
+    aheadOfferId: stringOrNull(data.aheadOfferId),
+    resultTopicId: stringOrNull(data.resultTopicId),
     removedAt: numberOrNull(data.removedAt),
     isUnreadable: false,
   };

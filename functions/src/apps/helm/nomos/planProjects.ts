@@ -7,8 +7,11 @@ import {
   MAX_MILESTONES_PER_PROJECT,
   type AddMilestoneCommand,
   type CreateProjectCommand,
+  type OfferResearchCommand,
   type SetProjectRoleCommand,
 } from './commands.js';
+import { planOfferResearch, type OfferTarget } from './planResearchAhead.js';
+import type { AheadOfferMeta } from './researchAhead.js';
 import { whyFingerprint } from '../goalWhy.js';
 import type { PrivacyFacts } from '../privacy.js';
 import {
@@ -44,6 +47,9 @@ export interface ExistingProject {
   milestoneTitles: Record<string, string>;
   isPrivate?: boolean;
   kind: 'project' | 'goal';
+  /** Date-only; null while the project has no date. */
+  targetDate: number | null;
+  researchOffers: AheadOfferMeta[];
   sealed: Record<string, unknown>;
 }
 
@@ -96,6 +102,17 @@ interface Request {
   note: string | null;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** The subjects a project already offers, from the words sealed on it, in every state. */
+const readAheadSubjects = (project: ExistingProject) =>
+  isRecord(project.sealed.aheadAsks)
+    ? Object.values(project.sealed.aheadAsks).flatMap((ask) =>
+        isRecord(ask) && typeof ask.subject === 'string' ? [ask.subject] : [],
+      )
+    : [];
+
 const toLabel = (emoji: string | null, name: string) =>
   [emoji, name].filter(Boolean).join(' ');
 
@@ -119,6 +136,7 @@ export function planProjectRoles(input: {
   pool: ProjectPoolEntry[];
   commands: SetProjectRoleCommand[];
   milestones: AddMilestoneCommand[];
+  offers: OfferResearchCommand[];
   newId: () => string;
   /** The who each task of the turn names, by the project it is filed in. */
   taskWho: { projectId: string | null; whoIds: string[] }[];
@@ -139,6 +157,7 @@ export function planProjectRoles(input: {
   roleWhoIds: Set<string>;
   rolesSet: number;
   milestonesAdded: number;
+  offerLines: string[];
   notKept: string[];
 } {
   const add = (
@@ -167,6 +186,40 @@ export function planProjectRoles(input: {
     command,
     projectId: matchProject(command.projectRef, input.pool),
   }));
+  const offerTargets: OfferTarget[] = [
+    ...input.existing.map((project) => ({
+      id: project.id,
+      name: project.name,
+      targetDate: project.targetDate,
+      offers: project.researchOffers,
+      subjects: readAheadSubjects(project),
+    })),
+    ...(input.created
+      ? [
+          {
+            id: input.created.id,
+            name: input.created.command.name,
+            targetDate: input.created.command.targetDate,
+            offers: [],
+            subjects: [],
+          },
+        ]
+      : []),
+  ];
+  const offered = planOfferResearch({
+    commands: input.offers,
+    targets: offerTargets,
+    resolve: (projectRef) => matchProject(projectRef, input.pool),
+    newId: input.newId,
+    now: input.now,
+  });
+  const offeredBy = (projectId: string) =>
+    offered.accepted.filter((entry) => entry.projectId === projectId);
+  const toAsks = (
+    projectId: string,
+    made: ReturnType<typeof offeredBy> = offeredBy(projectId),
+  ) =>
+    Object.fromEntries(made.map((entry) => [entry.meta.id, { ...entry.ask }]));
   const labelOf = (projectId: string) => {
     const project = input.existing.find((entry) => entry.id === projectId);
     const made = input.created?.id === projectId ? input.created.command : null;
@@ -233,6 +286,53 @@ export function planProjectRoles(input: {
       },
     };
   };
+  const offerEffects = (
+    projectId: string,
+    madeOffers: ReturnType<typeof offeredBy>,
+    held: { offers: unknown[]; asks: Record<string, unknown> | null } | null,
+  ) =>
+    madeOffers.map((entry, index) => {
+      const ref = {
+        op: 'update' as const,
+        collection: 'projects' as const,
+        docId: projectId,
+      };
+      if (!held) {
+        return {
+          ref,
+          effect: {
+            written: { 'sealed.title': entry.line },
+            previous: { 'sealed.title': entry.line },
+          },
+        };
+      }
+      const upTo = (count: number) => madeOffers.slice(0, count);
+      const asksUpTo = (count: number) =>
+        count === 0 && held.asks === null
+          ? null
+          : { ...held.asks, ...toAsks(projectId, upTo(count)) };
+      return {
+        ref,
+        effect: {
+          written: {
+            researchOffers: [
+              ...held.offers,
+              ...upTo(index + 1).map((made) => made.meta),
+            ],
+            'sealed.aheadAsks': asksUpTo(index + 1),
+            'sealed.title': entry.line,
+          },
+          previous: {
+            researchOffers: [
+              ...held.offers,
+              ...upTo(index).map((made) => made.meta),
+            ],
+            'sealed.aheadAsks': asksUpTo(index),
+            'sealed.title': entry.line,
+          },
+        },
+      };
+    });
   const said = matched.flatMap(({ command, projectId }) =>
     projectId
       ? [
@@ -303,11 +403,13 @@ export function planProjectRoles(input: {
       ),
     );
     const added = addedMilestones.get(id)?.added ?? [];
+    const madeOffers = offeredBy(id);
     return {
       id,
       data: {
         ...(input.createdFacts && { privacy: 'private' }),
         targetDate: command.targetDate,
+        researchOffers: madeOffers.map((entry) => entry.meta),
         kind: command.projectKind,
         status: 'active',
         pausedAt: null,
@@ -333,6 +435,7 @@ export function planProjectRoles(input: {
             added.map((entry) => [entry.id, { title: entry.title }]),
           ),
           roleNotes,
+          aheadAsks: madeOffers.length > 0 ? toAsks(id) : null,
           ...(input.createdFacts && {
             privateMark: input.createdFacts.privateMark,
             isPrivacyCleared: input.createdFacts.isPrivacyCleared,
@@ -342,7 +445,10 @@ export function planProjectRoles(input: {
           }),
         }),
       },
-      milestoneEffects: added.map((entry) => milestoneEffect(id, entry)),
+      milestoneEffects: [
+        ...added.map((entry) => milestoneEffect(id, entry)),
+        ...offerEffects(id, madeOffers, null),
+      ],
       effect: {
         ref: {
           op: 'create' as const,
@@ -380,7 +486,9 @@ export function planProjectRoles(input: {
         ? [{ whoId, role, note, isNew: role !== current }]
         : [];
     });
-    if (raised.length === 0 && added.length === 0) return [];
+    const madeOffers = offeredBy(project.id);
+    if (raised.length === 0 && added.length === 0 && madeOffers.length === 0)
+      return [];
     const whoRoles = {
       ...project.whoRoles,
       ...Object.fromEntries(raised.map((entry) => [entry.whoId, entry.role])),
@@ -412,7 +520,7 @@ export function planProjectRoles(input: {
       project.sealed.milestones !== null
         ? (project.sealed.milestones as Record<string, unknown>)
         : {};
-    const isResealed = hasNotes || added.length > 0;
+    const isResealed = hasNotes || added.length > 0 || madeOffers.length > 0;
     return [
       {
         id: project.id,
@@ -432,7 +540,21 @@ export function planProjectRoles(input: {
                   ),
                 },
               }),
+              ...(madeOffers.length > 0 && {
+                aheadAsks: {
+                  ...(isRecord(project.sealed.aheadAsks)
+                    ? project.sealed.aheadAsks
+                    : {}),
+                  ...toAsks(project.id),
+                },
+              }),
             }),
+          }),
+          ...(madeOffers.length > 0 && {
+            researchOffers: [
+              ...project.researchOffers,
+              ...madeOffers.map((entry) => entry.meta),
+            ],
           }),
           ...Object.fromEntries(
             added.map((entry) => [
@@ -469,6 +591,12 @@ export function planProjectRoles(input: {
               ]
             : []),
           ...added.map((entry) => milestoneEffect(project.id, entry)),
+          ...offerEffects(project.id, madeOffers, {
+            offers: project.researchOffers,
+            asks: isRecord(project.sealed.aheadAsks)
+              ? project.sealed.aheadAsks
+              : null,
+          }),
         ],
       },
     ];
@@ -488,6 +616,7 @@ export function planProjectRoles(input: {
     roleWhoIds,
     notKept: [
       ...new Set([
+        ...offered.notKept,
         ...matched.flatMap(({ command, projectId }) =>
           projectId ? [] : [buildProjectNotFoundLine(command.projectRef)],
         ),
@@ -506,6 +635,7 @@ export function planProjectRoles(input: {
         ),
       ]),
     ],
+    offerLines: offered.accepted.map((entry) => entry.line),
     rolesSet: changes.reduce((total, change) => total + change.count, 0),
     milestonesAdded:
       changes.reduce((total, change) => total + change.added, 0) +
@@ -544,6 +674,7 @@ export function buildGoalCreate(input: {
     pool: [],
     commands: [],
     milestones: [],
+    offers: [],
     newId: input.newId,
     taskWho: [],
     namedWhoIds: [],

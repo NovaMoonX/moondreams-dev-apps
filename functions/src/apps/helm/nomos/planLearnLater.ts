@@ -21,6 +21,16 @@ import {
   buildHabitAnswerExecution,
   toPlannedQuestion,
 } from './planHabitCommands.js';
+import { buildQuestionsTaskQuestion } from './planQuestionsTask.js';
+
+/** How many offered documents the profile remembers, the newest kept. */
+export const OFFERED_DOCUMENTS_MAX = 50;
+
+/** The offered document keys the profile holds, whatever else is in the field. */
+export const readOfferedDocuments = (value: unknown): string[] =>
+  (Array.isArray(value) ? value : [])
+    .filter((entry): entry is string => typeof entry === 'string')
+    .slice(-OFFERED_DOCUMENTS_MAX);
 
 /** The words the server writes for learn later, kept beside the planner; the device's own copies are in `HELM_COPY`. */
 export const LEARN_WORDS = {
@@ -233,6 +243,10 @@ export interface LearnPlanInput {
   seal: (fields: Record<string, unknown>) => SealedPayload;
   /** How many effects the turn may still write. */
   room: number;
+  /** The keys of the documents whose questions were already offered as a task. */
+  offeredDocuments?: string[];
+  /** The people the person has, to settle an offer's names to ids. */
+  knownPeople?: { id: string; names: string[] }[];
 }
 
 interface Acc {
@@ -732,8 +746,36 @@ export function planLearnOps(input: LearnPlanInput, ops: LearnOp[]): LearnPlan {
 }
 
 /** Plans a turn's learn-later commands: each save, put-off, let-go, rewording and relation as a write, and the questions code asks (reading or practising, a skill as a goal, two items as one, still wanted). The reply's words are code's. */
-export function planLearnLater(input: LearnPlanInput): LearnPlan {
+export function planLearnLater(
+  input: LearnPlanInput,
+): LearnPlan & { offeredDocuments: string[] | null } {
   const plan = planLearnOps(input, input.commands);
+  const alreadyOffered = new Set(input.offeredDocuments ?? []);
+  const questionOffers = input.commands
+    .flatMap((command) =>
+      command.kind === 'offerQuestionTask' ? [command] : [],
+    )
+    .map((offer) => ({
+      ...offer,
+      whoIds: offer.who
+        .flatMap((name) => {
+          const known = (input.knownPeople ?? []).find((person) =>
+            person.names.some(
+              (called) => called.toLowerCase() === name.toLowerCase(),
+            ),
+          );
+          return known ? [known.id] : [];
+        })
+        .filter((id, at, all) => all.indexOf(id) === at),
+    }))
+    .filter((offer, index, all) => {
+      const isNew = !alreadyOffered.has(offer.documentKey);
+      return (
+        isNew &&
+        all.findIndex((other) => other.documentKey === offer.documentKey) ===
+          index
+      );
+    });
   const goalOffers = input.commands.flatMap((command) =>
     command.kind === 'offerLearnGoal' ? [command] : [],
   );
@@ -743,7 +785,24 @@ export function planLearnLater(input: LearnPlanInput): LearnPlan {
   ].map((question) =>
     toPlannedQuestion(question, { id: input.newId(), now: input.now }),
   );
-  return { ...plan, questions: [...plan.questions, ...asked] };
+  const offered = questionOffers.map((offer) =>
+    buildQuestionsTaskQuestion(offer, {
+      id: input.newId(),
+      now: input.now,
+      timeZone: input.timeZone,
+    }),
+  );
+  return {
+    ...plan,
+    questions: [...plan.questions, ...asked, ...offered],
+    offeredDocuments:
+      questionOffers.length === 0
+        ? null
+        : [
+            ...(input.offeredDocuments ?? []),
+            ...questionOffers.map((offer) => offer.documentKey),
+          ].slice(-OFFERED_DOCUMENTS_MAX),
+  };
 }
 
 export interface LearnResolveInput {
