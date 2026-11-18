@@ -580,7 +580,12 @@ function HabitScreen({
             </section>
             {habit.isCare && <HabitMedicineCard habit={habit} />}
             {!habit.isCare && (
-              <PrivateRow kind='habit' record={habit} title={habit.name} />
+              <PrivateRow
+                kind='habit'
+                record={habit}
+                title={habit.name}
+                isCard
+              />
             )}
           </>
         )}
