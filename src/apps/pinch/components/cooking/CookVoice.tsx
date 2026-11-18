@@ -433,6 +433,15 @@ function CookVoiceSheet({
         ['what’s 200 ml in ounces', 'Changes a measure, no ingredient needed'],
       ],
     },
+    {
+      label: 'Servings',
+      rows: [
+        ['make six servings', 'Scales the amounts, or say “make it for six”'],
+        ['one more serving', 'Adds one, or say “one less serving”'],
+        ['double the recipe', 'Doubles the amounts, or say “halve the recipe”'],
+        ['how many servings', 'Says how many you are making'],
+      ],
+    },
     ...(dishExample === null
       ? []
       : [
