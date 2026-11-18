@@ -167,6 +167,7 @@ function HabitFlowForm({
             placeholder={HELM_COPY.sayWhenHabitPlaceholder}
             unreadLine={HELM_COPY.sayWhenHabitUnread}
             className='helm-field'
+            currentKey={JSON.stringify(answers.when)}
             onRead={(text) => {
               const read = readHabitWords(text, answers.when, {
                 now: Date.now(),
@@ -175,7 +176,7 @@ function HabitFlowForm({
               });
               if (!read) return null;
               set({ when: read.draft });
-              return read.words;
+              return { words: read.words, key: JSON.stringify(read.draft) };
             }}
           />
           <OftenFields

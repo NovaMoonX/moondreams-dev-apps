@@ -65,7 +65,7 @@ function HabitWhenForm({
     if (!read) return null;
     setDraft(read.draft);
     onDirtyChange(true);
-    return read.words;
+    return { words: read.words, key: JSON.stringify(read.draft) };
   };
 
   const change = (next: WhenDraft) => {
@@ -115,6 +115,7 @@ function HabitWhenForm({
         unreadLine={HELM_COPY.sayWhenHabitUnread}
         className='helm-field'
         onRead={sayWhen}
+        currentKey={JSON.stringify(draft)}
       />
       <OftenFields draft={draft} onChange={change} showsLabels />
       <TimesFields

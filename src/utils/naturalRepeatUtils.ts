@@ -297,6 +297,14 @@ const weekdayOf = (dayKey: string) =>
 
 const dayOfMonth = (dayKey: string) => Number(dayKey.slice(8, 10));
 
+// Read in UTC, which has no skipped or repeated hour, so the clock is the one typed even when the zone has no such time that day.
+const typedClock = (text: string, now: number) => {
+  const moment = parseNaturalDate(text, { now, timeZone: 'UTC' }).find(
+    (hit) => hit.due.kind === 'moment',
+  )?.due;
+  return moment?.kind === 'moment' ? clockIn(moment.at, 'UTC') : null;
+};
+
 /** Reads one day, and the clock, out of what is left once the repeat is taken away. */
 function readWhen(text: string, now: number, timeZone: string) {
   const hits = parseNaturalDate(text, { now, timeZone });
@@ -305,21 +313,16 @@ function readWhen(text: string, now: number, timeZone: string) {
   );
   const bareClock = /(?:at|@)\s*\d{1,2}(?::\d{2})?\b/iu.exec(text)?.[0];
   // A bare "at 9" is only a time after a day, so it borrows today to be read.
-  const timeHit =
-    hits.find((hit) => hit.due.kind === 'moment') ??
-    (bareClock
-      ? parseNaturalDate(`today ${bareClock}`, { now, timeZone })[0]
-      : undefined);
+  const timeText =
+    hits.find((hit) => hit.due.kind === 'moment')?.text ??
+    (bareClock ? `today ${bareClock}` : null);
   return {
     day: !dayHit
       ? null
       : dayHit.due.kind === 'day'
         ? new Date(dayHit.due.date).toISOString().slice(0, 10)
         : dayKeyIn(dayHit.due.at, timeZone),
-    time:
-      timeHit && timeHit.due.kind === 'moment'
-        ? clockIn(timeHit.due.at, timeZone)
-        : null,
+    time: timeText ? typedClock(timeText, now) : null,
   };
 }
 

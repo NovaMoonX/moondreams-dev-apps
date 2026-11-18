@@ -10,10 +10,7 @@ import {
   toPartWindow,
   type WhenDraft,
 } from '@apps/helm/utils/habitDraft';
-import {
-  formatClockWords,
-  formatRunDay,
-} from '@apps/helm/utils/scheduledWords';
+import { formatClockWords, formatRunDay } from '@apps/helm/utils/runWords';
 
 interface SayWhenContext {
   now: number;
@@ -37,29 +34,47 @@ const readSchedule = (text: string, context: SayWhenContext) =>
     weekStart: localeWeekStart(),
   });
 
-/** What a typed schedule says, for the scheduled form: a repeat, a first day and a time, and the plain words that read it back; null when it says none of them. */
-export function readScheduleWords(text: string, context: SayWhenContext) {
+/** What a typed schedule says, for the scheduled form: a repeat, a first day and a time, and the plain words that read back only the parts the form takes (`appliesDay`, `appliesRule`); null when it says none of them. */
+export function readScheduleWords(
+  text: string,
+  context: SayWhenContext,
+  applies: { appliesDay: boolean; appliesRule: boolean },
+) {
   const schedule = readSchedule(text, context);
   if (!schedule || schedule.timesPerWeek !== null) return null;
   const time = schedule.time ? formatClockWords(schedule.time) : null;
-  const words = schedule.rule
-    ? HELM_COPY.sayWhenStarting(
-        describeRepeat(schedule.rule, schedule.startsOn ?? '', {
+  const day =
+    applies.appliesDay && schedule.startsOn
+      ? formatRunDay(schedule.startsOn)
+      : null;
+  const repeat =
+    applies.appliesRule && schedule.rule
+      ? describeRepeat(schedule.rule, schedule.startsOn ?? '', {
           time: schedule.time,
           timeFormat: formatClockWords,
-        }),
-        formatRunDay(schedule.startsOn ?? ''),
-      )
-    : schedule.startsOn
-      ? HELM_COPY.sayWhenOnce(formatRunDay(schedule.startsOn), time)
-      : HELM_COPY.sayWhenTimeOnly(time ?? '');
-  return { schedule, words };
+        })
+      : null;
+  const words = repeat
+    ? day
+      ? HELM_COPY.sayWhenStarting(repeat, day)
+      : repeat
+    : day
+      ? HELM_COPY.sayWhenOnce(day, time)
+      : time
+        ? HELM_COPY.sayWhenTimeOnly(time)
+        : null;
+  return words === null ? null : { schedule, words };
 }
 
-/** A typed day (and time) for something that happens once; a repeat in the words is not read. */
+/** A typed day for something that happens once and keeps no clock; a repeat in the words is not read. */
 export function readOnceWords(text: string, context: SayWhenContext) {
-  const read = readScheduleWords(text, context);
-  return read && !read.schedule.rule && read.schedule.startsOn ? read : null;
+  const schedule = readSchedule(text, context);
+  return schedule && !schedule.rule && schedule.startsOn
+    ? {
+        schedule,
+        words: HELM_COPY.sayWhenOnce(formatRunDay(schedule.startsOn), null),
+      }
+    : null;
 }
 
 const nextHour = (time: string) => {
@@ -128,17 +143,17 @@ export function readHabitWords(
             ],
           }
         : withDays;
-  if (withTimes === draft) return null;
+  const hasDays = week !== null || rule !== null;
+  if (!hasDays && parts.length === 0 && !time) return null;
   const timeWords =
     parts.length > 0
       ? parts.map((part) => HELM_COPY.habitPartLabels[part]).join(', ')
       : time
         ? formatClockWords(time)
         : null;
-  const cadenceWords =
-    withDays === draft
-      ? null
-      : formatCadence(fromWhenDraft(withDays, null, 0).cadence);
+  const cadenceWords = hasDays
+    ? formatCadence(fromWhenDraft(withDays, null, 0).cadence)
+    : null;
   return {
     draft: withTimes,
     words: [cadenceWords, timeWords].filter(Boolean).join(', '),

@@ -56,7 +56,7 @@ function NewTaskForm({
     const read = readOnceWords(text, { now: Date.now(), zone });
     if (!read?.schedule.startsOn) return null;
     change(title, read.schedule.startsOn);
-    return read.words;
+    return { words: read.words, key: read.schedule.startsOn };
   };
 
   const add = async () => {
@@ -106,6 +106,7 @@ function NewTaskForm({
         placeholder={HELM_COPY.sayWhenDatePlaceholder}
         unreadLine={HELM_COPY.sayWhenUnread}
         onRead={sayWhen}
+        currentKey={day}
       />
       <div className='space-y-1.5'>
         <label htmlFor={`${fieldId}-day`} className='text-sm font-medium'>

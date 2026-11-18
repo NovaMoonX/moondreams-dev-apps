@@ -292,14 +292,28 @@ function ScheduledForm({
     },
   ];
 
+  const appliesDay = isCreate || isOne;
+  const appliesRule = !isOne;
+  const sayWhenKey = (
+    nextTime: string,
+    nextDay: string,
+    nextRule: typeof rule,
+  ) => JSON.stringify([nextTime, nextDay, nextRule]);
   const sayWhen = (text: string) => {
-    const read = readScheduleWords(text, { now: Date.now(), zone });
+    const read = readScheduleWords(
+      text,
+      { now: Date.now(), zone },
+      { appliesDay, appliesRule },
+    );
     if (!read) return null;
     const { schedule, words } = read;
-    if (schedule.time) setTime(schedule.time);
-    if (schedule.startsOn && (isCreate || isOne)) setDay(schedule.startsOn);
-    if (!isOne && (isCreate || schedule.rule)) setRule(schedule.rule);
-    return words;
+    const nextTime = schedule.time ?? time;
+    const nextDay = appliesDay && schedule.startsOn ? schedule.startsOn : day;
+    const nextRule = appliesRule && schedule.rule ? schedule.rule : rule;
+    setTime(nextTime);
+    setDay(nextDay);
+    setRule(nextRule);
+    return { words, key: sayWhenKey(nextTime, nextDay, nextRule) };
   };
 
   const form = (
@@ -310,6 +324,7 @@ function ScheduledForm({
         unreadLine={HELM_COPY.sayWhenUnread}
         className='helm-field'
         onRead={sayWhen}
+        currentKey={sayWhenKey(time, day, rule)}
       />
       {runKey !== null && (
         <RadioRows rows={rows} value={scope} onChange={setScope} />

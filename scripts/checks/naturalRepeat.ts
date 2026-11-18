@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 
 import { readNaturalSchedule } from '../../src/utils/naturalRepeatUtils.ts';
+import { EMPTY_WHEN } from '../../src/apps/helm/utils/habitDraft.ts';
+import {
+  readHabitWords,
+  readOnceWords,
+  readScheduleWords,
+} from '../../src/apps/helm/utils/sayWhen.ts';
 import type { RepeatRule, Weekday } from '../../src/utils/repeatRule.ts';
 
 const LA = 'America/Los_Angeles';
@@ -152,5 +158,66 @@ assert.equal(read('on Monday')?.startsOn, '2026-11-16');
 assert.equal(read('every Monday at 3')?.time, '15:00');
 assert.equal(read('every Monday at 10')?.time, '10:00');
 assert.equal(read('Sunday')?.rule ?? null, null);
+
+// A clock typed into a skipped or repeated hour stays as typed.
+assert.equal(read('Mar 8 2026 at 2:30am')?.time, '02:30');
+assert.equal(read('every day at 2:30am')?.time, '02:30');
+assert.equal(read('Nov 1 2026 at 1:30am')?.time, '01:30');
+assert.equal(read('Nov 1 2026 at 1:30am')?.startsOn, '2026-11-01');
+
+const context = { now: WEDNESDAY_NOON, zone: LA };
+const all = { appliesDay: true, appliesRule: true };
+
+const oneOff = readScheduleWords('tomorrow at 3', context, all);
+assert.equal(oneOff?.schedule.rule, null, 'a one-off phrase carries no rule');
+assert.ok(oneOff?.words.includes('3'));
+const repeat = readScheduleWords('every other Tuesday at 9', context, all);
+assert.ok(
+  repeat?.words.includes('starting'),
+  'a start the form takes is named',
+);
+const edit = readScheduleWords('every other Tuesday at 9', context, {
+  appliesDay: false,
+  appliesRule: true,
+});
+assert.ok(
+  edit && !edit.words.includes('starting'),
+  'a start not applied is not named',
+);
+const runOnly = readScheduleWords('every Monday', context, {
+  appliesDay: true,
+  appliesRule: false,
+});
+assert.ok(
+  runOnly && !runOnly.words.includes('every'),
+  'a rule not applied is not named',
+);
+assert.equal(
+  readScheduleWords('tomorrow', context, {
+    appliesDay: false,
+    appliesRule: true,
+  }),
+  null,
+  'nothing applied reads as nothing',
+);
+assert.equal(
+  readOnceWords('tomorrow at 3pm', context)?.words.includes('3'),
+  false,
+  'a day-only read-back keeps no clock',
+);
+assert.equal(readOnceWords('every Monday', context), null);
+
+const profile = { dayStartTime: '08:00', dayEndTime: '22:00' };
+const habit = { ...context, profile };
+const everyDay = readHabitWords('every day', EMPTY_WHEN, habit);
+assert.ok(everyDay?.words);
+assert.equal(
+  everyDay?.words,
+  readHabitWords('every day', { ...EMPTY_WHEN, often: 'timesPerWeek' }, habit)
+    ?.words,
+  'a phrase the draft already says still reads back',
+);
+assert.equal(readHabitWords('soon', EMPTY_WHEN, habit), null);
+assert.ok(readHabitWords('weekdays', EMPTY_WHEN, habit));
 
 console.log(`Natural repeats: ${cases.length} cases and the extras passed.`);

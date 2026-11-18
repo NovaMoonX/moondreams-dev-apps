@@ -7,8 +7,10 @@ interface SayWhenFieldProps {
   placeholder: string;
   /** Said once the text can't be read. */
   unreadLine: string;
-  /** Fills the form from the words and returns the plain-words read-back, or null when it read nothing (and then changes nothing). */
-  onRead: (text: string) => string | null;
+  /** Fills the form from the words and returns the plain-words read-back with `key`, a signature of the fields it filled as they now stand; null when it read nothing (and then changes nothing). */
+  onRead: (text: string) => { words: string; key: string } | null;
+  /** The same signature of the filled fields as they stand now: the read-back hides once it differs. */
+  currentKey: string;
   className?: string;
   autoFocus?: boolean;
 }
@@ -21,14 +23,17 @@ function SayWhenField({
   placeholder,
   unreadLine,
   onRead,
+  currentKey,
   className,
   autoFocus,
 }: SayWhenFieldProps) {
   const id = useId();
   const [text, setText] = useState('');
-  const [line, setLine] = useState<{ words: string; isRead: boolean } | null>(
-    null,
-  );
+  const [line, setLine] = useState<{
+    words: string;
+    isRead: boolean;
+    key: string | null;
+  } | null>(null);
   const timer = useRef<number | null>(null);
   const read = useRef(onRead);
 
@@ -51,14 +56,17 @@ function SayWhenField({
       return;
     }
     timer.current = window.setTimeout(() => {
-      const words = read.current(next.trim());
+      const result = read.current(next.trim());
       setLine(
-        words === null
-          ? { words: unreadLine, isRead: false }
-          : { words, isRead: true },
+        result === null
+          ? { words: unreadLine, isRead: false, key: null }
+          : { ...result, isRead: true },
       );
     }, PAUSE_MS);
   };
+
+  const shown =
+    line && (line.key === null || line.key === currentKey) ? line : null;
 
   return (
     <div className='space-y-1.5'>
@@ -77,12 +85,12 @@ function SayWhenField({
       <p
         aria-live='polite'
         className={
-          line?.isRead
+          shown?.isRead
             ? 'min-h-5 text-[13px] text-pretty'
             : 'text-muted-foreground min-h-5 text-[13px] text-pretty'
         }
       >
-        {line?.words}
+        {shown?.words}
       </p>
     </div>
   );
