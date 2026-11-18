@@ -194,13 +194,20 @@ export const streamSpeech = onRequest(
       res.status(status).json({ error, ...extra });
     };
 
-    const request = readSpeechRequest({
-      method: req.method,
-      origin: req.headers.origin,
-      body: req.body,
-      allowedOrigins: SERVED_ORIGINS,
-    });
-    if (!request.ok) return fail(request.status, request.error);
+    // A warm-up starts the instance and checks the caller's tokens ahead of the first line; it speaks and counts nothing.
+    const isWarm = (req.body as { warm?: unknown } | undefined)?.warm === true;
+    const request = isWarm
+      ? null
+      : readSpeechRequest({
+          method: req.method,
+          origin: req.headers.origin,
+          body: req.body,
+          allowedOrigins: SERVED_ORIGINS,
+        });
+    if (request !== null && !request.ok) {
+      return fail(request.status, request.error);
+    }
+    if (isWarm && req.method !== 'POST') return fail(405, 'method');
 
     const idToken = bearerOf(req.headers.authorization);
     const uid = await (idToken === null
@@ -221,6 +228,11 @@ export const streamSpeech = onRequest(
           .then(() => true)
           .catch(() => false)));
     if (!isAppCheckOk) return fail(401, 'app-check');
+    if (request === null) {
+      await getProvider(VOICE_PROVIDER_DEFAULT);
+      res.status(204).end();
+      return;
+    }
 
     const { appId, text, timeZone, voiceName, speed, delivery } = request;
     const isWhisper = delivery === 'whisper';

@@ -2533,22 +2533,30 @@ console.log('speechShared: voice router and playback queue checks passed');
     destination: {},
     createBuffer: () => ({ copyToChannel: () => undefined }),
     createBufferSource: () => ({
+      loop: false,
       connect: () => undefined,
       start: () => hissed.push(1),
+      stop: () => undefined,
     }),
   } as unknown as AudioContext;
   const firstLine = wakeAudioOutput(speakerContext);
-  assert.equal(firstLine.readyAt, 11.5, 'quiet speakers are woken first');
+  assert.equal(firstLine.readyAt, 12.5, 'quiet speakers are woken first');
   const secondLine = wakeAudioOutput(speakerContext);
   assert.equal(
     hissed.length,
     1,
     'a line while another holds them does not hiss again',
   );
-  assert.ok(secondLine.readyAt <= 11.5, 'nor waits any longer');
+  assert.ok(secondLine.readyAt <= 12.5, 'nor waits any longer');
   firstLine.release();
   firstLine.release();
   secondLine.release();
+  wakeAudioOutput(speakerContext).release();
+  assert.equal(
+    hissed.length,
+    1,
+    'a line within a minute of the last finds the speakers still awake',
+  );
   fake.clock.now = 5;
   sink.push(new Uint8Array([1, 0]));
   assert.ok(

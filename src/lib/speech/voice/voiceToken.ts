@@ -1,5 +1,8 @@
 import type { FallbackCause } from '@/lib/fallbacks/fallbacks';
-import { describeThrown } from '@/lib/speech/speechDiagnostics';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import { CLOUD_LISTEN_STAGES } from '@/lib/speech/voice/cloudListenStages';
 import type { CloudHeldReason } from '@/lib/speech/voice/types';
 
@@ -14,6 +17,8 @@ export interface MintVoiceTokenRequest {
   appId: string;
   timeZone: string;
   closed: ClosedReport[];
+  /** Starts the server ahead of the first listen; nothing is minted or counted. */
+  warm?: true;
 }
 
 export type MintVoiceTokenResult =
@@ -31,7 +36,8 @@ export type MintVoiceTokenResult =
       reason: 'unavailable';
       /** A short non-secret code for why the server was unavailable (no key, the provider's status). */
       detail?: string;
-    };
+    }
+  | { status: 'warm' };
 
 export type VoiceTokenAnswer =
   | {
@@ -48,6 +54,8 @@ export interface VoiceTokenSource {
   getToken: () => Promise<VoiceTokenAnswer>;
   /** Tells the server how long a finished stream ran; sent with the next token request. */
   reportClosed: (mintId: string, ms: number) => void;
+  /** Starts the token server ahead of the first listen, so it isn't a cold start. */
+  warm: () => Promise<void>;
 }
 
 const AUTH_CODES = [
@@ -102,6 +110,16 @@ export const createVoiceTokenSource = ({
         if (result.status === 'held') {
           return { status: 'held', reason: result.reason };
         }
+        if (result.status === 'warm') {
+          return {
+            status: 'held',
+            reason: 'unavailable',
+            cause: {
+              stage: CLOUD_LISTEN_STAGES.tokenRefused,
+              detail: 'The server answered a warm-up instead of a token',
+            },
+          };
+        }
         const { token, expiresAt, model, mintId } = result;
         return { status: 'ready', token, expiresAt, model, mintId };
       } catch (error) {
@@ -112,6 +130,18 @@ export const createVoiceTokenSource = ({
           cause: toRequestFailure(error),
         };
       }
+    },
+    warm: async () => {
+      await mint({
+        appId,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        closed: [],
+        warm: true,
+      }).catch((error: unknown) => {
+        recordSpeechEvent(
+          `Listening warm-up failed: ${toRequestFailure(error).detail}`,
+        );
+      });
     },
     reportClosed: (mintId, ms) => {
       pending.closed = [...pending.closed, { mintId, ms }];

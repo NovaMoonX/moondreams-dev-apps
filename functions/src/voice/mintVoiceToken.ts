@@ -26,7 +26,8 @@ export type MintVoiceTokenResult =
       mintId: string;
     }
   | { status: 'held'; reason: 'listenLimit' | 'mintLimit' | 'budgetReached' }
-  | { status: 'held'; reason: 'unavailable'; detail: string };
+  | { status: 'held'; reason: 'unavailable'; detail: string }
+  | { status: 'warm' };
 
 const KEY_NAME = 'DEEPGRAM_API_KEY';
 const MAX_CLOSED = 10;
@@ -78,10 +79,20 @@ export const mintVoiceToken = onCall(
       throw new HttpsError('unauthenticated', 'Sign in to use voice.');
     }
     const data = (request.data ?? {}) as {
+      warm?: unknown;
       appId?: unknown;
       timeZone?: unknown;
       closed?: unknown;
     };
+    // A warm-up starts the instance and reads the key ahead of the first listen; it mints and counts nothing.
+    if (data.warm === true) {
+      if (!isForcedFixture('deepgram')) {
+        await secretReader(KEY_NAME, AbortSignal.timeout(4_000)).catch(
+          () => null,
+        );
+      }
+      return { status: 'warm' };
+    }
     const limits =
       typeof data.appId === 'string' && Object.hasOwn(VOICE_APPS, data.appId)
         ? VOICE_APPS[data.appId]

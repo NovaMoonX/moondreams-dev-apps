@@ -206,6 +206,8 @@ const WAKE_RETRY_MS = 3000;
 // An end phrase still closing the words this long after it was last heard counts; "that's all I need" keeps going.
 const END_PHRASE_HOLD_MS = 900;
 const BARGE_CONFIRM_MS = 1500;
+// A server left idle about 15 minutes starts cold (2 to 6 s), so it is woken on arrival and kept warm while the screen shows.
+const WARM_EVERY_MS = 10 * 60_000;
 const TAP_CONFIG = { lockMs: 0 };
 const BLOCKED: SttErrorCode[] = ['denied', 'service', 'no-microphone'];
 
@@ -389,6 +391,35 @@ export function useVoiceConversation({
   const [lineProgress] = useState(createLineProgress);
   const isCloudSpeakingAllowed = cloudSpeaking?.isAllowed === true;
   const isCloudListeningAllowed = cloudListening?.isAllowed === true;
+
+  const warmSpeech = isCloudSpeakingAllowed ? cloudSpeaking.source : null;
+  const warmToken = isCloudListeningAllowed ? cloudListening.tokenSource : null;
+  useEffect(() => {
+    if (warmSpeech === null && warmToken === null) return;
+    const warmed = { at: 0 };
+    const warm = () => {
+      const isDue = Date.now() - warmed.at >= WARM_EVERY_MS;
+      if (
+        !isDue ||
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine
+      ) {
+        return;
+      }
+      warmed.at = Date.now();
+      void warmSpeech?.warm?.();
+      void warmToken?.warm();
+    };
+    warm();
+    const id = window.setInterval(warm, WARM_EVERY_MS);
+    document.addEventListener('visibilitychange', warm);
+    window.addEventListener('online', warm);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', warm);
+      window.removeEventListener('online', warm);
+    };
+  }, [warmSpeech, warmToken]);
 
   useEffect(() => {
     if (isCloudSpeakingAllowed) return;
