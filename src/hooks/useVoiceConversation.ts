@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { createSpeechListener } from '@/hooks/useSpeechCommands';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+  type FallbackCause,
+} from '@/lib/fallbacks/fallbacks';
 import { unlockAudio } from '@/lib/speech/audioContext';
 import { playListeningSound } from '@/lib/speech/listeningSound';
 import {
@@ -18,6 +24,10 @@ import {
   wasMicrophoneGranted,
   watchMicrophonePermission,
 } from '@/lib/speech/microphonePermission';
+import {
+  readSpeechEvents,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import { readWakePhrase } from '@/lib/speech/speechText';
 import {
   hasSameWords,
@@ -29,16 +39,28 @@ import {
   createOnDeviceStt,
   listenOnDevice,
 } from '@/lib/speech/onDevice/onDeviceStt';
-import { BARGE_IN_GATE, openSpeechGate } from '@/lib/speech/voice/bargeIn';
+import {
+  BARGE_IN_GATE,
+  BARGE_SUPPRESS_MS,
+  isBargeSuppressed,
+  openSpeechGate,
+} from '@/lib/speech/voice/bargeIn';
 import {
   canUseBrowserStt,
   createBrowserStt,
   type BrowserSttAdoption,
 } from '@/lib/speech/voice/browserStt';
+import { CLOUD_LISTEN_STAGES } from '@/lib/speech/voice/cloudListenStages';
 import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
-import { createCloudTts } from '@/lib/speech/voice/cloudTts';
+import {
+  CLOUD_VOICE_FALLBACK_KEY,
+  createCloudTts,
+} from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
-import { createPlaybackQueue } from '@/lib/speech/voice/playbackQueue';
+import {
+  createPlaybackQueue,
+  toJoinKey,
+} from '@/lib/speech/voice/playbackQueue';
 import {
   createSpeechCache,
   isOtherVoice,
@@ -50,6 +72,7 @@ import {
 import type {
   CloudHeldReason,
   FrameSource,
+  SpeechDelivery,
   SpeechPriority,
   SttAdapter,
   SttErrorCode,
@@ -83,7 +106,6 @@ interface VoiceConversationOptions {
   readsClose?: boolean;
   /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
   onNothingHeard?: (isAsked: boolean) => void;
-  /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
   onDeviceListenFailed?: (isAsked: boolean) => void;
   /** A tapped listen ended on a lasting failure (the microphone refused, recognition off). */
   onUnavailable?: (reason: VoiceUnavailableReason) => void;
@@ -99,9 +121,9 @@ interface VoiceConversationOptions {
   onCloudHeld?: (reason: CloudHeldReason) => void;
   /** Listens in the cloud while `isAllowed`, online and not held for the day; the device takes over whenever it can't (the downloaded model, else the browser's recognition). Null listens on the device only. */
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
-  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`, online and not held for the day; the device voice takes over whenever it can't. An `ack` always stays on the device, and so does the rest of a conversation once a line falls back. Null speaks on the device only. */
   cloudSpeaking?: {
     source: SpeechSource;
+    /** The person chose the cloud voice. False means the device voice is the choice, so using it is never a fallback or shown as one; a held day or failures are tracked apart. */
     isAllowed: boolean;
     /** Read once at a conversation's first cloud line; that voice lasts until it ends. */
     readVoice?: () => SpeechVoice;
@@ -126,17 +148,48 @@ interface VoiceConversationOptions {
   } | null;
 }
 
+export interface VoiceLineProgress {
+  get: () => number;
+  subscribe: (listener: (fraction: number) => void) => () => void;
+}
+
+const createLineProgress = () => {
+  const state = { value: 0, listeners: new Set<(fraction: number) => void>() };
+  const reader: VoiceLineProgress = {
+    get: () => state.value,
+    subscribe: (listener) => {
+      state.listeners.add(listener);
+      return () => {
+        state.listeners.delete(listener);
+      };
+    },
+  };
+  return {
+    reader,
+    emit: (value: number) => {
+      state.value = value;
+      state.listeners.forEach((listener) => listener(value));
+    },
+  };
+};
+
 export type VoiceListeningRoute = 'cloud' | 'device';
+export type VoiceSpeaking = 'chosen' | 'device';
 /** `unavailable`: listening can't work until something changes, and `onUnavailable` has said why; `failed`: it kept failing for no lasting reason. */
 export type VoiceLiveEnd =
   'phrase' | 'quiet' | 'left' | 'unavailable' | 'failed';
 /** What a repeat did: played, or why it could not. */
-export type VoiceRepeat = 'played' | 'none' | 'muted' | 'busy';
+export type VoiceRepeat = 'played' | 'none' | 'muted';
 
 const LISTEN_SHOW_DELAY_MS = 400;
 const QUIET_MS = 8000;
 const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
-const FIRST_LINE_FIRST_BYTE_MS = 4000;
+// A conversation's first cloud line may meet a cold function on top of the usual sign-in and App Check waits.
+const FIRST_LINE_FIRST_BYTE_MS = 6000;
+// Two cloud lines in a row that fall back latch the device voice; one slow line never does.
+const CLOUD_FAILURES_MAX = 2;
+const LATCH_FALLBACK_KEY = 'speech:device-voice-latch';
+const CLOUD_LISTEN_FALLBACK_KEY = 'speech:cloud-listening';
 /** How long the short window after an answer listens. */
 export const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
@@ -155,6 +208,30 @@ const END_PHRASE_HOLD_MS = 900;
 const BARGE_CONFIRM_MS = 1500;
 const TAP_CONFIG = { lockMs: 0 };
 const BLOCKED: SttErrorCode[] = ['denied', 'service', 'no-microphone'];
+
+const toCloudListenReason = (
+  heldReason: CloudHeldReason | null,
+  stage: string,
+) => {
+  if (heldReason !== null)
+    return "today's cloud listening allowance is used up";
+  if (stage === CLOUD_LISTEN_STAGES.tokenRequest) {
+    return "the cloud listener couldn't get its token: the request failed";
+  }
+  if (stage === CLOUD_LISTEN_STAGES.tokenRefused) {
+    return "the cloud listener couldn't get its token: the server said it was unavailable";
+  }
+  if (stage === CLOUD_LISTEN_STAGES.tokenTimeout) {
+    return "the cloud listener couldn't get its token in time";
+  }
+  if (
+    stage === CLOUD_LISTEN_STAGES.microphoneOpen ||
+    stage === CLOUD_LISTEN_STAGES.microphoneCapture
+  ) {
+    return "the cloud listener couldn't use the microphone";
+  }
+  return `the cloud listener couldn't connect (${stage})`;
+};
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -217,6 +294,9 @@ export function useVoiceConversation({
   } | null>(null);
   const [listeningRoute, setListeningRoute] =
     useState<VoiceListeningRoute | null>(null);
+  const [speakingVoice, setSpeakingVoice] = useState<VoiceSpeaking | null>(
+    null,
+  );
   const [lastingReason, setReason] = useState<VoiceUnavailableReason | null>(
     () => (canUseBrowserStt() ? null : 'no-recognition'),
   );
@@ -269,6 +349,9 @@ export function useVoiceConversation({
     heldDay: null as string | null,
     speechHeldDay: null as string | null,
     isDeviceSticky: false,
+    cloudFailures: 0,
+    bargeSuppressedUntil: 0,
+    suppressId: 0,
     voice: null as SpeechVoice | null,
     hasSpokenCloud: false,
     lastLineAt: null as number | null,
@@ -287,7 +370,11 @@ export function useVoiceConversation({
     gate: null as { close: () => void } | null,
     heardWords: '',
     pending: null as { text: string; timerId: number } | null,
-    lastLine: null as { text: string; voice: SpeechVoice | null } | null,
+    lastLine: null as {
+      text: string;
+      voice: SpeechVoice | null;
+      delivery: SpeechDelivery | undefined;
+    } | null,
     turnKey: 0,
     isLive: false,
     isLiveMuted: false,
@@ -295,8 +382,23 @@ export function useVoiceConversation({
     isLiveClosing: false,
     hasLiveTurn: false,
     liveErrors: 0,
+    repeatId: 0,
+    isGone: false,
   });
   const speechCache = useRef(createSpeechCache());
+  const [lineProgress] = useState(createLineProgress);
+  const isCloudSpeakingAllowed = cloudSpeaking?.isAllowed === true;
+  const isCloudListeningAllowed = cloudListening?.isAllowed === true;
+
+  useEffect(() => {
+    if (isCloudSpeakingAllowed) return;
+    removeFallback(CLOUD_VOICE_FALLBACK_KEY);
+    removeFallback(LATCH_FALLBACK_KEY);
+  }, [isCloudSpeakingAllowed]);
+
+  useEffect(() => {
+    if (!isCloudListeningAllowed) removeFallback(CLOUD_LISTEN_FALLBACK_KEY);
+  }, [isCloudListeningAllowed]);
 
   useEffect(() => {
     latest.current = {
@@ -349,9 +451,6 @@ export function useVoiceConversation({
           isDeviceSticky: run.current.isDeviceSticky,
           hasCloud: cloud !== null,
         });
-        if (choice !== 'cloud' && cloud?.isAllowed && priority !== 'ack') {
-          run.current.isDeviceSticky = true;
-        }
         const device = createDeviceTts({
           isNatural:
             choice === 'natural' || (choice === 'cloud' && isNaturalReady),
@@ -373,11 +472,18 @@ export function useVoiceConversation({
           onHeld: () => {
             run.current.speechHeldDay = today;
           },
-          onFallback: () => {
-            run.current.isDeviceSticky = true;
+          onFallback: countCloudFailure,
+          onCut: countCloudFailure,
+          onPlayed: () => {
+            run.current.cloudFailures = 0;
           },
         });
       },
+      onRouteChange: () =>
+        queueMicrotask(() => {
+          syncBargeGate();
+          syncSpeakingVoice();
+        }),
       onActiveChange: (isActive) =>
         queueMicrotask(() => {
           setIsSpeaking(isActive);
@@ -408,11 +514,47 @@ export function useVoiceConversation({
     return getListeningEffect(before, run.current.mode);
   };
 
-  const endConversation = () => {
+  // A confirmation is always the device's, so only a reply or summary says which voice the person is hearing.
+  const syncSpeakingVoice = () => {
+    const playing = queueRef.current?.getPlayingVoice() ?? null;
+    if (playing === null || playing.priority === 'ack') return;
+    const isChosenCloud = latest.current.cloudSpeaking?.isAllowed === true;
+    setSpeakingVoice(
+      !isChosenCloud || playing.route === 'cloud' ? 'chosen' : 'device',
+    );
+  };
+
+  const countCloudFailure = (cause: FallbackCause) => {
+    run.current.cloudFailures += 1;
+    if (run.current.cloudFailures >= CLOUD_FAILURES_MAX) {
+      run.current.isDeviceSticky = true;
+      reportFallback({
+        key: LATCH_FALLBACK_KEY,
+        feature: 'Speaking',
+        wanted: 'your chosen voice',
+        used: "this device's voice for the rest of the conversation",
+        reason: 'two lines in a row fell back or were cut short',
+        cause: {
+          stage: 'cloud voice failed twice in a row',
+          detail: `The last one, ${cause.stage}: ${cause.detail}`,
+        },
+        facts: [`Failures in a row: ${run.current.cloudFailures}`],
+      });
+    }
+  };
+
+  const clearLatch = () => {
     run.current.isDeviceSticky = false;
+    run.current.cloudFailures = 0;
+    clearFallback(LATCH_FALLBACK_KEY);
+  };
+
+  const endConversation = () => {
+    clearLatch();
     run.current.voice = null;
     run.current.hasSpokenCloud = false;
     run.current.lastLineAt = null;
+    defer(() => setSpeakingVoice(null));
   };
 
   const finish = () => {
@@ -453,6 +595,21 @@ export function useVoiceConversation({
     window.clearTimeout(pending.timerId);
     run.current.isCancelled = true;
     run.current.cancelListening?.();
+  };
+
+  // A line's own echo can pass the gate, so after an unconfirmed listen over it the microphone stays shut a few seconds.
+  const suppressBarge = () => {
+    run.current.bargeSuppressedUntil = Date.now() + BARGE_SUPPRESS_MS;
+    window.clearTimeout(run.current.suppressId);
+    run.current.suppressId = window.setTimeout(
+      syncBargeGate,
+      BARGE_SUPPRESS_MS + 20,
+    );
+  };
+
+  const dropUnconfirmed = () => {
+    suppressBarge();
+    abortPending();
   };
 
   const toPlayedText = (pendingText: string) =>
@@ -505,6 +662,7 @@ export function useVoiceConversation({
       window.clearTimeout(run.current.pending.timerId);
       run.current.pending = null;
       run.current.isCancelled = true;
+      suppressBarge();
       queueRef.current?.unduck();
     }
     endListen();
@@ -593,7 +751,6 @@ export function useVoiceConversation({
     };
   });
 
-  // The microphone is open on the device only while a line that its echo cancellation can hear is playing, and nothing leaves it until the person speaks (and nothing at all when the model on the device listens).
   const syncBargeGate = () => {
     if (run.current.isFollowUp) return;
     const cloud = latest.current.cloudListening;
@@ -604,6 +761,7 @@ export function useVoiceConversation({
       !latest.current.isMuted &&
       !run.current.isLiveMuted &&
       run.current.mode.phase === 'OFF' &&
+      !isBargeSuppressed(run.current.bargeSuppressedUntil, Date.now()) &&
       (queueRef.current?.isPlayingThroughWebAudio() ?? false) &&
       pickListener({
         isOnline: navigator.onLine,
@@ -694,7 +852,7 @@ export function useVoiceConversation({
       getQueue().duck();
       run.current.pending = {
         text: pendingText,
-        timerId: window.setTimeout(abortPending, BARGE_CONFIRM_MS),
+        timerId: window.setTimeout(dropUnconfirmed, BARGE_CONFIRM_MS),
       };
     }
     send({ type: 'TAP_MIC' });
@@ -732,6 +890,9 @@ export function useVoiceConversation({
         if (!run.current.pending) setIsListening(true);
         isMicGranted.current = true;
         setReason(null);
+        if (run.current.heardBy === 'deepgram') {
+          clearFallback(CLOUD_LISTEN_FALLBACK_KEY);
+        }
       },
       onListening: () => {
         if (!isCurrent()) return;
@@ -750,6 +911,18 @@ export function useVoiceConversation({
       setListeningRoute(adapter.route === 'cloud' ? 'cloud' : 'device');
       adapter.start(callbacks).catch((error: unknown) => {
         console.error('Voice listening did not start', error);
+        const name = error instanceof Error ? error.name : 'Error';
+        recordSpeechEvent(`Listening did not start, ${adapter.id}: ${name}`);
+        if (adapter.route === 'cloud') {
+          reportFallback({
+            key: CLOUD_LISTEN_FALLBACK_KEY,
+            feature: 'Listening',
+            wanted: 'the cloud listener',
+            used: 'nothing, listening stopped',
+            reason: "the cloud listener couldn't start",
+            cause: { stage: CLOUD_LISTEN_STAGES.listenStart, detail: name },
+          });
+        }
         if (isCurrent()) handleError('unavailable');
       });
     };
@@ -813,7 +986,7 @@ export function useVoiceConversation({
           source: options.source ?? null,
           keyterms: nameHints,
           getToken: cloud.tokenSource.getToken,
-          onUnavailable: (heldReason) => {
+          onUnavailable: (heldReason, cause) => {
             if (
               !isCurrent() ||
               run.current.isCancelled ||
@@ -826,6 +999,23 @@ export function useVoiceConversation({
               setHeld({ day: today, reason: heldReason });
               latest.current.onCloudHeld?.(heldReason);
             }
+            const events = readSpeechEvents();
+            reportFallback({
+              key: CLOUD_LISTEN_FALLBACK_KEY,
+              feature: 'Listening',
+              wanted: 'the cloud listener',
+              used: latest.current.canHearOnDevice
+                ? 'the on-device speech model'
+                : "the browser's listening",
+              reason: toCloudListenReason(heldReason, cause.stage),
+              cause: { stage: cause.stage, detail: cause.detail },
+              facts: [
+                `Held: ${heldReason ?? 'no'}`,
+                `Online: ${navigator.onLine ? 'yes' : 'no'}`,
+                ...cause.facts,
+              ],
+              trace: events.length > 0 ? events.join('\n') : null,
+            });
             startDevice(null);
           },
           onClosed: cloud.tokenSource.reportClosed,
@@ -916,6 +1106,7 @@ export function useVoiceConversation({
   };
 
   const stop = () => {
+    run.current.repeatId += 1;
     if (run.current.pending) {
       abortPending();
       getQueue().clear();
@@ -946,6 +1137,10 @@ export function useVoiceConversation({
       turnKey: number;
       /** The person may answer once this line has been said: when it is the last one waiting, a short window opens in which speaking starts a listen without a tap. */
       canAnswer?: boolean;
+      /** A whispered line plays only in the cloud voice, never the device's. */
+      delivery?: SpeechDelivery;
+      /** Said after what plays or waits, and dropped if a newer turn has spoken since; the `turnKey` passed is the earlier turn's that this line answers. */
+      joinsLine?: boolean;
     },
   ): Promise<VoiceSpoken> => {
     endFollowUp(true);
@@ -962,7 +1157,25 @@ export function useVoiceConversation({
     ) {
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
-    run.current.turnKey = Math.max(run.current.turnKey, options.turnKey);
+    return sayLine(text, options);
+  };
+
+  const sayLine = (
+    text: string,
+    options: Parameters<typeof speak>[1],
+  ): Promise<VoiceSpoken> => {
+    const { joinsLine = false, canAnswer = false, ...line } = options;
+    const turnKey = joinsLine
+      ? toJoinKey({
+          turnKey: options.turnKey,
+          currentKey: run.current.turnKey,
+          isActive: queueRef.current?.isActive() ?? false,
+        })
+      : options.turnKey;
+    if (turnKey === null) {
+      return Promise.resolve({ status: 'cancelled', adapterId: null });
+    }
+    run.current.turnKey = Math.max(run.current.turnKey, turnKey);
     const { lastLineAt } = run.current;
     if (
       lastLineAt !== null &&
@@ -970,11 +1183,14 @@ export function useVoiceConversation({
     ) {
       endConversation();
     }
-    const { canAnswer = false, ...line } = options;
     const spoken = getQueue().enqueue(text, {
       ...line,
+      turnKey,
+      onProgress: lineProgress.emit,
       onStart: () => {
         run.current.liveAt = Date.now();
+        run.current.bargeSuppressedUntil = 0;
+        lineProgress.emit(0);
         setSaying(text);
         setIsSounding(true);
         setIsThinking(false);
@@ -984,7 +1200,11 @@ export function useVoiceConversation({
       run.current.liveAt = Date.now();
       if (result.status !== 'cancelled') defer(() => setIsThinking(false));
       if (result.status === 'spoken' && line.priority !== 'ack') {
-        run.current.lastLine = { text, voice: run.current.voice };
+        run.current.lastLine = {
+          text,
+          voice: run.current.voice,
+          delivery: line.delivery,
+        };
       }
     });
     if (canAnswer) {
@@ -995,18 +1215,56 @@ export function useVoiceConversation({
     return spoken;
   };
 
-  /** Says the last reply or summary again, or a line the person tapped (kept audio costs no request), at the current turn so a reply on its way still plays; says why when it can't. */
-  const repeat = (text?: string): VoiceRepeat => {
+  /** Says the last reply or summary again, or a line the person tapped (kept audio costs no request), at the current turn so a reply on its way still plays; says why when it can't. A listen in progress is dropped unsent and opens again once the line ends (a live conversation reopens its own). */
+  const repeat = (
+    text?: string,
+    options: {
+      delivery?: SpeechDelivery;
+      onResult?: (
+        result: VoiceSpoken,
+        delivery: SpeechDelivery | undefined,
+      ) => void;
+    } = {},
+  ): VoiceRepeat => {
     endFollowUp(true);
     const { lastLine } = run.current;
     const line = text ?? lastLine?.text ?? null;
     if (line === null) return 'none';
     if (latest.current.isMuted) return 'muted';
-    if (run.current.mode.phase !== 'OFF' && run.current.pending === null) {
-      return 'busy';
-    }
+    const wasListening =
+      run.current.mode.phase !== 'OFF' && run.current.pending === null;
+    if (wasListening) cancel();
     if (lastLine !== null) run.current.voice ??= lastLine.voice;
-    void speak(line, { priority: 'reply', turnKey: run.current.turnKey });
+    run.current.repeatId += 1;
+    const { repeatId, listenId, turnKey } = run.current;
+    // Saying the last line again keeps how it was said, so a whispered line is never repeated aloud.
+    const delivery =
+      options.delivery ?? (text === undefined ? lastLine?.delivery : undefined);
+    void sayLine(line, {
+      priority: 'reply',
+      turnKey,
+      delivery,
+    }).then((result) => {
+      options.onResult?.(result, delivery);
+      const { current } = run;
+      if (
+        !wasListening ||
+        current.isGone ||
+        current.isLive ||
+        current.repeatId !== repeatId ||
+        current.listenId !== listenId ||
+        current.turnKey !== turnKey ||
+        current.isFollowUp ||
+        current.pending !== null ||
+        current.mode.phase !== 'OFF' ||
+        latest.current.isMuted ||
+        document.visibilityState === 'hidden' ||
+        (queueRef.current?.isActive() ?? false)
+      ) {
+        return;
+      }
+      listen({ isUnasked: current.isUnasked });
+    });
     return 'played';
   };
 
@@ -1020,6 +1278,7 @@ export function useVoiceConversation({
 
   const beginLive = (start: () => boolean, isWoken = false) => {
     const wasLive = run.current.isLive;
+    if (!wasLive) endConversation();
     run.current.isLive = true;
     run.current.isLiveClosing = false;
     run.current.hasLiveTurn = !isWoken;
@@ -1046,6 +1305,7 @@ export function useVoiceConversation({
     run.current.isLive = false;
     run.current.isLiveClosing = false;
     run.current.isLiveMuted = false;
+    clearLatch();
     abortPending();
     endFollowUp(true);
     if (why !== 'phrase' && run.current.mode.phase !== 'OFF') cancel();
@@ -1110,13 +1370,20 @@ export function useVoiceConversation({
     return () => document.removeEventListener('visibilitychange', handleHidden);
   }, []);
 
+  // A strict-mode remount runs the cleanup once before the screen is really gone.
+  useEffect(() => {
+    run.current.isGone = false;
+  }, []);
+
   useEffect(
     () => () => {
+      run.current.isGone = true;
       run.current.isCancelled = true;
       window.clearTimeout(run.current.quietId);
       window.clearTimeout(run.current.holdId);
       window.clearTimeout(run.current.showId);
       window.clearTimeout(run.current.pending?.timerId);
+      window.clearTimeout(run.current.suppressId);
       run.current.cancelListening?.();
       pauseOnHide.current();
       queueRef.current?.clear();
@@ -1306,6 +1573,7 @@ export function useVoiceConversation({
     isLive,
     /** The live conversation's microphone is paused. */
     isLiveMuted,
+    lineProgress: lineProgress.reader,
     /** What the person last said in this live conversation, and the last line said back (still shown once it has played). */
     liveSaid,
     lastLine: isLive ? saying : '',
@@ -1330,5 +1598,6 @@ export function useVoiceConversation({
     cloudHeld: held?.reason ?? null,
     /** Where the words being heard are listened to; null when not listening. */
     listeningRoute,
+    speakingVoice,
   };
 }
