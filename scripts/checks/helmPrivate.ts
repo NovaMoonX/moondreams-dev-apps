@@ -1640,6 +1640,7 @@ test("a private person's name, initial and photo never reach the map's elements 
     fromSecond: null,
     status: null,
     since: null,
+    lastEditedAt: null,
   }));
   const base = {
     people,
@@ -1722,6 +1723,7 @@ test('two identical connections draw one line', () => {
     fromSecond: null,
     status: null,
     since: null,
+    lastEditedAt: null,
   };
   const edges = toCircleElements({
     people: [who('me'), who('a')],
@@ -1865,6 +1867,7 @@ test('passing people never reach the map, and a pet appears only when linked', (
     fromSecond: null,
     status: null,
     since: null,
+    lastEditedAt: null,
   });
   const ids = (connections: ReturnType<typeof link>[]) =>
     toCircleElements({
