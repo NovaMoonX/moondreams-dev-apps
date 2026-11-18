@@ -77,6 +77,11 @@ html {
   --subview-pad: 1rem;
 }
 
+/* A text field's height (its line, `py-1` and two 1px borders), so a box beside one matches it; a theme that pads its fields changes this with them. */
+html {
+  --emoji-field-size: calc(1.5rem + 0.5rem + 2px);
+}
+
 @media (min-width: 640px) {
   html {
     --subview-inset: 1rem;
