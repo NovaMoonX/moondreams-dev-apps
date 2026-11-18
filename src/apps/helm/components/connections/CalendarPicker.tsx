@@ -23,6 +23,7 @@ import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -74,6 +75,7 @@ function PickerForm({
         entry.accountId === accountId &&
         entry.status !== 'ended',
     ) ?? null;
+  const waitFor = useWaitUntilShown(grants);
   const [tickEdits, setTickEdits] = useState<Record<string, boolean>>({});
   const [shiftEdits, setShiftEdits] = useState<Record<string, boolean>>({});
   const [isTouched, setIsTouched] = useState(false);
@@ -176,6 +178,15 @@ function PickerForm({
       }
       syncConnections({ grantId }).catch((error: unknown) =>
         console.error('Helm calendar sync did not run', error),
+      );
+      await waitFor((current) =>
+        current.some(
+          (entry) =>
+            entry.id === grantId &&
+            entry.status !== 'ended' &&
+            calendarIds.length === (entry.options?.calendarIds.length ?? 0) &&
+            calendarIds.every((id) => entry.options?.calendarIds.includes(id)),
+        ),
       );
       onClose();
     } catch (error) {
