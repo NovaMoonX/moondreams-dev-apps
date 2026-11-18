@@ -4308,7 +4308,7 @@ export const HORIZON_NEXT_WORDS = {
   planConfirm: 'Plan it',
   nextStep: 'Next',
   costsDone: 'Done',
-  showToChange: 'Show amounts to change them',
+  showToChange: 'Show amounts',
   tooFar: 'Pick a day within 10 years.',
   finishAndPlan: 'Finish and plan it',
   planned: (name: string) => `Planned the next ${name}.`,

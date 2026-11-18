@@ -163,7 +163,7 @@ export function HorizonNextCosts({
         <Button
           type='button'
           variant='secondary'
-          className='text-foreground! relative h-auto min-h-11 w-full justify-between rounded-2xl px-3! py-2 font-normal'
+          className='text-foreground! relative h-auto min-h-11 w-full justify-center gap-2 rounded-2xl px-3! py-2 font-normal'
           onClick={showAmounts}
         >
           <span>{HORIZON_NEXT_WORDS.showToChange}</span>
