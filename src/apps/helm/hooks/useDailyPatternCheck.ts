@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -26,11 +27,15 @@ export function useDailyPatternCheck(uid: string | null) {
   const reflectionsLoaded = useAppSelector(
     (state) => state.helm.unseenReflections.isLoaded,
   );
+  const { grants, isLoading: isGrantsLoading } = useConnections({
+    readerAppId: 'helm',
+  });
   const clock = useHabitClock();
   const tried = useRef('');
   const key = `${uid}:${clock.dayKey}`;
   const isReady =
     keyStatus === 'ready' &&
+    !isGrantsLoading &&
     profile !== null &&
     habitsLoaded &&
     projectsLoaded &&
@@ -52,6 +57,7 @@ export function useDailyPatternCheck(uid: string | null) {
         await runDailyPatternCheck(uid, encryption, {
           todayKey: clock.dayKey,
           timeZone: clock.timeZone,
+          grants,
         }).catch((error: unknown) =>
           console.error('Helm patterns were not checked', error),
         );
@@ -68,6 +74,7 @@ export function useDailyPatternCheck(uid: string | null) {
     key,
     clock.dayKey,
     clock.timeZone,
+    grants,
     profile?.prunedOn,
   ]);
 }

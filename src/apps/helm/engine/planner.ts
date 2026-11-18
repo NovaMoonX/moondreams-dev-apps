@@ -1,5 +1,11 @@
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { PLANNER_COPY } from '@apps/helm/constants';
+import {
+  getDayWindow,
+  getGapMinutes,
+  getGaps,
+  type Span,
+} from '@apps/helm/engine/freeTime';
 import { NOT_SAID_PLACE } from '@apps/helm/engine/importance';
 import type { RestDayKind } from '@apps/helm/engine/restDay';
 import type {
@@ -7,7 +13,9 @@ import type {
   Importance,
   PatternBucket,
   PlanSlot,
+  TaskContext,
   TaskDue,
+  TaskEffort,
 } from '@apps/helm/types';
 import {
   DUE_SOON_DAYS,
@@ -30,7 +38,21 @@ export interface PlannerTask {
   placeIds: string[];
   /** A care task: a pattern never keeps Helm from placing it. */
   isCare?: boolean;
+  projectId?: string | null;
+  context?: TaskContext | null;
+  /** The break after it; unknown reads as moderate. */
+  effort?: TaskEffort | null;
 }
+
+export interface FinishedTask {
+  projectId: string | null;
+  context: TaskContext | null;
+  durationMinutes: number | null;
+  completedAt: number | null;
+}
+
+/** What stands in the way of an aim that doesn't fit: a calendar event by name, or a slot the person kept. */
+export type FitBlocker = { kind: 'event'; title: string } | { kind: 'kept' };
 
 export interface BusyBlock {
   startAt: number;
@@ -55,86 +77,99 @@ export interface PlannerInput {
   tasks: PlannerTask[];
   /** Weekday day-parts the person accepted leaving empty; other tasks are never suggested into them. */
   avoidBuckets?: Extract<PatternBucket, { kind: 'weekdayPart' }>[];
+  /** Tasks the person wants done today, in their order; they are placed before anything else. */
+  aimTaskIds: string[];
+  /** Finished tasks a length is guessed from. */
+  finishedTasks: FinishedTask[];
 }
 
 export interface PlannerResult {
   slots: Record<string, PlanSlot>;
   reasons: Record<string, string>;
   outcome: 'planned' | 'full' | 'late' | 'past' | 'nothing' | 'rest';
-}
-
-interface Span {
-  startAt: number;
-  endAt: number;
+  /** Aims that did not fit, in the person's order. */
+  unplaced: string[];
+  /** What would have to move for each unplaced aim to fit; null when nothing would help. */
+  blockers: Record<string, FitBlocker | null>;
+  /** Aims planned with a guessed length. */
+  guessedTaskIds: string[];
 }
 
 interface Chosen {
   task: PlannerTask;
   minutes: number;
+  breakMinutes: number;
 }
 
 const MINUTE_MS = 60_000;
 const BUFFER_MS = 15 * MINUTE_MS;
-const ROUND_MS = 5 * MINUTE_MS;
 const DEFAULT_MINUTES = 30;
 const MAX_SUGGESTIONS = 3;
 const MIN_USEFUL_MINUTES = 15;
+const BREAK_MINUTES: Record<TaskEffort, number> = {
+  light: 5,
+  moderate: 15,
+  heavy: 30,
+};
+const GUESS_SAMPLE = 5;
 
-const getDayKeyAt = (at: number, timeZone: string) =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(at));
-
-const getWindow = (
-  input: Pick<
-    PlannerInput,
-    'dayKey' | 'timeZone' | 'now' | 'dayStartTime' | 'dayEndTime'
-  >,
-): { state: 'open' | 'past' | 'late'; startAt: number; endAt: number } => {
-  const dayStart = zonedDateTimeToEpoch(
-    input.dayKey,
-    input.dayStartTime,
-    input.timeZone,
-  );
-  const endAt = zonedDateTimeToEpoch(
-    input.dayKey,
-    input.dayEndTime,
-    input.timeZone,
-  );
-  const todayKey = getDayKeyAt(input.now, input.timeZone);
-  if (input.dayKey < todayKey) return { state: 'past', startAt: endAt, endAt };
-  const startAt =
-    input.dayKey === todayKey
-      ? Math.max(dayStart, Math.ceil(input.now / ROUND_MS) * ROUND_MS)
-      : dayStart;
-  return { state: startAt >= endAt ? 'late' : 'open', startAt, endAt };
+const getMedian = (values: number[]) => {
+  const sorted = [...values].sort((first, second) => first - second);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 };
 
-const getGaps = (window: Span, blocks: Span[]): Span[] => {
-  const merged = blocks
-    .map((block) => ({
-      startAt: Math.max(block.startAt, window.startAt),
-      endAt: Math.min(block.endAt, window.endAt),
-    }))
-    .filter((block) => block.endAt > block.startAt)
-    .sort((first, second) => first.startAt - second.startAt);
-  const { gaps, cursor } = merged.reduce(
-    (state, block) => ({
-      gaps:
-        block.startAt > state.cursor
-          ? [...state.gaps, { startAt: state.cursor, endAt: block.startAt }]
-          : state.gaps,
-      cursor: Math.max(state.cursor, block.endAt),
-    }),
-    { gaps: [] as Span[], cursor: window.startAt },
+/** A length for a task with none: the middle of the last few finished tasks in its project, else its context, else 30 minutes. */
+export function guessDuration(
+  task: Pick<PlannerTask, 'projectId' | 'context'>,
+  finishedTasks: FinishedTask[],
+): number {
+  const recent = finishedTasks
+    .filter((done) => done.durationMinutes !== null)
+    .sort(
+      (first, second) => (second.completedAt ?? 0) - (first.completedAt ?? 0),
+    );
+  const middleOf = (matches: (done: FinishedTask) => boolean) => {
+    const sample = recent.filter(matches).slice(0, GUESS_SAMPLE);
+    return sample.length > 0
+      ? getMedian(sample.map((done) => done.durationMinutes as number))
+      : null;
+  };
+  return (
+    (task.projectId
+      ? middleOf((done) => done.projectId === task.projectId)
+      : null) ??
+    (task.context ? middleOf((done) => done.context === task.context) : null) ??
+    DEFAULT_MINUTES
   );
-  return cursor < window.endAt
-    ? [...gaps, { startAt: cursor, endAt: window.endAt }]
-    : gaps;
-};
+}
+
+/** The line over a day's aims, from the planner's result: which don't fit, and what would have to move; null when they all fit. */
+export function describeFit(
+  aimTitles: Record<string, string>,
+  unplacedIds: string[],
+  blockers: Record<string, FitBlocker | null> = {},
+): string | null {
+  const [firstId] = unplacedIds;
+  if (firstId === undefined) return null;
+  const name = aimTitles[firstId] ?? 'One';
+  const subject =
+    unplacedIds.length > 1
+      ? `“${name}” and ${unplacedIds.length - 1} more`
+      : `“${name}”`;
+  const blocker = unplacedIds.length === 1 ? (blockers[firstId] ?? null) : null;
+  const unless = !blocker
+    ? ''
+    : blocker.kind === 'event'
+      ? ` unless you move “${blocker.title}”`
+      : ' unless you move something you kept';
+  const verb = unplacedIds.length > 1 ? "don't fit today" : "doesn't fit today";
+  const rest =
+    unplacedIds.length < Object.keys(aimTitles).length ? ' The rest fit.' : '';
+  return `${subject} ${verb}${unless}.${rest}`;
+}
 
 const getObstacles = (
   input: PlannerInput,
@@ -155,9 +190,6 @@ const getObstacles = (
     startAt: (block.startAt as number) - BUFFER_MS,
     endAt: (block.endAt as number) + BUFFER_MS,
   }));
-
-const getMinutes = (gaps: Span[]) =>
-  gaps.reduce((sum, gap) => sum + (gap.endAt - gap.startAt) / MINUTE_MS, 0);
 
 const formatLength = (minutes: number) =>
   minutes < 60
@@ -238,7 +270,7 @@ const getDuePhrase = (task: PlannerTask, input: PlannerInput) => {
 const getTimedReason = (pick: Chosen, span: Span, input: PlannerInput) => {
   const length =
     pick.task.durationMinutes === null
-      ? PLANNER_COPY.estimate
+      ? PLANNER_COPY.estimateOf(formatLength(pick.minutes))
       : formatLength(pick.minutes);
   const next = input.busy
     .filter(
@@ -333,17 +365,25 @@ const placeAll = (gaps: Span[], picks: Chosen[]) =>
         return {
           placed: [...state.placed, { pick, span }],
           gaps: state.gaps.map((gap, at) =>
-            at === chosen.at ? { ...gap, startAt: span.endAt } : gap,
+            at === chosen.at
+              ? { ...gap, startAt: span.endAt + pick.breakMinutes * MINUTE_MS }
+              : gap,
           ),
         };
       },
       { placed: [] as { pick: Chosen; span: Span }[], gaps },
     ).placed;
 
-const toPick = (task: PlannerTask): Chosen => ({
-  task,
-  minutes: task.durationMinutes ?? DEFAULT_MINUTES,
-});
+const toPick = (task: PlannerTask, input: PlannerInput): Chosen => {
+  const isAim = input.aimTaskIds.includes(task.id);
+  return {
+    task,
+    minutes:
+      task.durationMinutes ??
+      (isAim ? guessDuration(task, input.finishedTasks) : DEFAULT_MINUTES),
+    breakMinutes: BREAK_MINUTES[task.effort ?? 'moderate'],
+  };
+};
 
 const getCandidates = (input: PlannerInput) => {
   const decided = new Set(
@@ -351,12 +391,59 @@ const getCandidates = (input: PlannerInput) => {
       .filter((slot) => slot.status !== 'suggested')
       .map((slot) => slot.taskId),
   );
-  return rankTasks(
-    input.tasks.filter((task) => !decided.has(task.id)),
-    input.timeZone,
-    input.now,
-    input.currentPlaceId,
-  );
+  const open = input.tasks.filter((task) => !decided.has(task.id));
+  const aims = input.aimTaskIds.flatMap((id) => {
+    const task = open.find((entry) => entry.id === id);
+    return task ? [task] : [];
+  });
+  const aimIds = new Set(aims.map((task) => task.id));
+  return {
+    aims,
+    others: rankTasks(
+      open.filter((task) => !aimIds.has(task.id)),
+      input.timeZone,
+      input.now,
+      input.currentPlaceId,
+    ),
+  };
+};
+
+const findBlocker = (
+  input: PlannerInput,
+  window: Span,
+  minutes: number,
+): FitBlocker | null => {
+  const wide = (block: { startAt: number; endAt: number }) => ({
+    startAt: block.startAt - BUFFER_MS,
+    endAt: block.endAt + BUFFER_MS,
+  });
+  const obstacles = [
+    ...input.busy.map((block) => ({
+      blocker: { kind: 'event', title: block.title } as FitBlocker,
+      span: wide(block),
+    })),
+    ...Object.values(input.slots)
+      .filter(
+        (slot) =>
+          slot.status === 'kept' &&
+          slot.startAt !== null &&
+          slot.endAt !== null,
+      )
+      .map((slot) => ({
+        blocker: { kind: 'kept' } as FitBlocker,
+        span: wide({
+          startAt: slot.startAt as number,
+          endAt: slot.endAt as number,
+        }),
+      })),
+  ];
+  const fitsWithout = (skip: number) =>
+    getGaps(
+      window,
+      obstacles.filter((_, at) => at !== skip).map(({ span }) => span),
+    ).some((gap) => gap.endAt - gap.startAt >= minutes * MINUTE_MS);
+  if (fitsWithout(-1)) return null;
+  return obstacles.find((_, at) => fitsWithout(at))?.blocker ?? null;
 };
 
 /** Suggests a few tasks for a day's gaps; kept and Not today slots come back untouched, and a rest day gets no suggestions. */
@@ -369,18 +456,27 @@ export function planDay(
       ([, slot]) => slot.status !== 'suggested',
     ),
   );
+  const { aims, others } = getCandidates(input);
+  const guessedOf = (ids: string[]) =>
+    aims
+      .filter((task) => ids.includes(task.id) && task.durationMinutes === null)
+      .map((task) => task.id);
   const unchanged = (outcome: PlannerResult['outcome']): PlannerResult => ({
     slots: decidedSlots,
     reasons: {},
     outcome,
+    unplaced: aims.map((task) => task.id),
+    blockers: {},
+    guessedTaskIds: guessedOf(aims.map((task) => task.id)),
   });
   if (input.restDay !== null) return unchanged('rest');
-  const window = getWindow(input);
+  const window = getDayWindow(input);
   if (window.state !== 'open') return unchanged(window.state);
-  const candidates = getCandidates(input);
+  const aimIds = new Set(aims.map((task) => task.id));
+  const candidates = [...aims, ...others];
 
   if (!input.hasCalendar) {
-    const picks = candidates.slice(0, MAX_SUGGESTIONS);
+    const picks = [...aims, ...others.slice(0, MAX_SUGGESTIONS)];
     const entries = picks.map((task) => [
       makeId(task.id),
       {
@@ -391,6 +487,7 @@ export function planDay(
           status: 'suggested',
           source: 'nomos',
           decidedAt: null,
+          overlapsEventRef: null,
         } satisfies PlanSlot,
         reason: getDuePhrase(task, input),
       },
@@ -404,30 +501,47 @@ export function planDay(
         entries.map(([id, { reason }]) => [id, reason]),
       ),
       outcome: entries.length > 0 ? 'planned' : 'nothing',
+      unplaced: [],
+      blockers: {},
+      guessedTaskIds: guessedOf(aims.map((task) => task.id)),
     };
   }
 
   const gaps = getGaps(window, getObstacles(input, null, false));
   const avoid = getAvoidSpans(input);
-  const freeMinutes = getMinutes(gaps);
+  const freeMinutes = getGapMinutes(gaps);
   if (freeMinutes < MIN_USEFUL_MINUTES) return unchanged('full');
   const budget = (freeMinutes * input.fillPercent) / 100;
-  const picks = candidates.reduce(
+  const chosen = candidates.reduce(
     (state, task) => {
-      if (state.picks.length >= MAX_SUGGESTIONS) {
-        return state;
-      }
-      const pick = toPick(task);
+      const isAim = aimIds.has(task.id);
+      if (!isAim && state.others >= MAX_SUGGESTIONS) return state;
+      const pick = toPick(task, input);
       const planned = state.minutes + pick.minutes;
-      if (planned > budget) return state;
       const next = [...state.picks, pick];
-      return placeAvoiding(gaps, avoid, next).length === next.length
-        ? { ...state, picks: next, minutes: planned }
+      const fits =
+        planned <= budget &&
+        placeAvoiding(gaps, avoid, next).length === next.length;
+      if (fits) {
+        return {
+          ...state,
+          picks: next,
+          minutes: planned,
+          others: state.others + (isAim ? 0 : 1),
+        };
+      }
+      return isAim
+        ? { ...state, unplaced: [...state.unplaced, task.id] }
         : state;
     },
-    { picks: [] as Chosen[], minutes: 0 },
-  ).picks;
-  const placed = placeAvoiding(gaps, avoid, picks).sort(
+    {
+      picks: [] as Chosen[],
+      minutes: 0,
+      others: 0,
+      unplaced: [] as string[],
+    },
+  );
+  const placed = placeAvoiding(gaps, avoid, chosen.picks).sort(
     (first, second) => first.span.startAt - second.span.startAt,
   );
   const entries = placed.map(({ pick, span }) => ({
@@ -439,6 +553,7 @@ export function planDay(
       status: 'suggested',
       source: 'nomos',
       decidedAt: null,
+      overlapsEventRef: null,
     } satisfies PlanSlot,
     reason: getTimedReason(pick, span, input),
   }));
@@ -449,6 +564,19 @@ export function planDay(
     },
     reasons: Object.fromEntries(entries.map(({ id, reason }) => [id, reason])),
     outcome: entries.length > 0 ? 'planned' : 'nothing',
+    unplaced: chosen.unplaced,
+    blockers: Object.fromEntries(
+      chosen.unplaced.map((id) => [
+        id,
+        findBlocker(
+          input,
+          window,
+          toPick(aims.find((task) => task.id === id) as PlannerTask, input)
+            .minutes,
+        ),
+      ]),
+    ),
+    guessedTaskIds: guessedOf(aims.map((task) => task.id)),
   };
 }
 
@@ -458,7 +586,7 @@ export function findOpenings(
   task: PlannerTask,
   limit: number,
 ): { startAt: number; endAt: number }[] {
-  const window = getWindow(input);
+  const window = getDayWindow(input);
   if (window.state !== 'open') return [];
   const length = (task.durationMinutes ?? DEFAULT_MINUTES) * MINUTE_MS;
   const step = Math.max(length, DEFAULT_MINUTES * MINUTE_MS);
@@ -488,9 +616,33 @@ export function findFreeGaps(
   >,
   minMinutes: number,
 ): { startAt: number; endAt: number }[] {
-  const window = getWindow(input);
+  const window = getDayWindow(input);
   if (window.state !== 'open') return [];
   return getGaps(window, input.busy).filter(
     (gap) => gap.endAt - gap.startAt >= minMinutes * MINUTE_MS,
   );
+}
+
+export { readFreeMinutes } from '@apps/helm/engine/freeTime';
+
+/** How much of Your day the calendar's busy blocks take, 0 to 1 (a rest day is 1). */
+export function readBusyShare(
+  input: Pick<
+    PlannerInput,
+    'dayKey' | 'timeZone' | 'dayStartTime' | 'dayEndTime' | 'busy' | 'restDay'
+  >,
+): number {
+  if (input.restDay !== null) return 1;
+  const window = {
+    startAt: zonedDateTimeToEpoch(
+      input.dayKey,
+      input.dayStartTime,
+      input.timeZone,
+    ),
+    endAt: zonedDateTimeToEpoch(input.dayKey, input.dayEndTime, input.timeZone),
+  };
+  const total = window.endAt - window.startAt;
+  return total <= 0
+    ? 0
+    : 1 - getGapMinutes(getGaps(window, input.busy)) * (MINUTE_MS / total);
 }

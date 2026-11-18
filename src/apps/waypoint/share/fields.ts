@@ -405,12 +405,12 @@ const ANNOUNCEMENT_FIELDS = {
   id: 'notUseful',
   tripId: 'notUseful',
   severity: 'notUseful',
-  title: 'notUseful',
-  body: 'notUseful',
+  title: 'shared',
+  body: 'shared',
   expiresAt: 'notUseful',
   dismissedBy: 'notUseful',
   createdBy: 'notUseful',
-  createdAt: 'notUseful',
+  createdAt: 'shared',
 } satisfies Record<keyof Announcement, ShareDecision>;
 
 const SINGLE_OCCASION_IDEA_DETAILS_FIELDS = {
@@ -434,14 +434,14 @@ const TRIP_IDEA_FIELDS = {
   id: 'notUseful',
   tripId: 'notUseful',
   ideaType: 'notUseful',
-  title: 'notUseful',
-  notes: 'never',
-  linkUrl: 'notUseful',
+  title: 'shared',
+  notes: 'shared',
+  linkUrl: 'shared',
   ideaDetails: 'notUseful',
   addedByUid: 'notUseful',
   voterUids: 'notUseful',
   convertedToEntityId: 'notUseful',
-  createdAt: 'notUseful',
+  createdAt: 'shared',
   lastEditedAt: 'notUseful',
 } satisfies Record<keyof TripIdea, ShareDecision>;
 
@@ -453,7 +453,7 @@ const CHECKLIST_ITEM_FIELDS = {
   customCategoryLabel: 'shared',
   note: 'never',
   completeByDayIndex: 'shared',
-  assignedToUids: 'filter',
+  assignedToUids: 'shared',
   isCompleted: 'shared',
   markedCompletedByUid: 'notUseful',
   markedCompletedAt: 'notUseful',

@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import { httpsCallable } from 'firebase/functions';
@@ -102,6 +103,11 @@ import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
+import {
+  isSpokenTurn,
+  OPEN_QUESTION_MS,
+  pickQuestionTurn,
+} from '@apps/helm/utils/openQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
 import { isUnattendedTurn } from '@apps/helm/utils/privacy';
@@ -148,6 +154,30 @@ const toVoiceIdentity = (label: string): VoiceIdentity => ({
   },
 });
 
+type AskedAloud = {
+  captureId: string;
+  questionId: string;
+  question: HelmQuestion;
+  wakeUntil: number;
+} | null;
+
+// Kept outside React state: it is set from a reply's playback, and a setter there makes the compiler treat every clock read on the answer path as render work.
+function createAskedStore() {
+  let value: AskedAloud = null;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next: AskedAloud) => {
+      value = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
 /** Helm's voice: talking writes a spoken turn like a typed one, the line the server sealed for it is said once the turn is sorted, and "undo that" takes the open session's latest turn back. One instance serves home and the conversation over a page. */
 
 export function useHelmVoice() {
@@ -172,7 +202,21 @@ export function useHelmVoice() {
   const fieldWriter = useRef<((text: string) => void) | null>(null);
   // Turns whose reply, once said, doesn't reopen listening: they ended with a finish phrase.
   const finishedIds = useRef(new Set<string>());
+  const [askedStore] = useState(createAskedStore);
+  const askedMark = useSyncExternalStore(askedStore.subscribe, askedStore.get);
   const captures = useAppSelector(selectAllCaptures);
+  const askedCapture = askedMark
+    ? captures.find((capture) => capture.id === askedMark.captureId)
+    : undefined;
+  // The mark is drawn only while its question is still open, so an answer or a skip from the card clears it at once.
+  const askedAloud =
+    askedMark &&
+    askedCapture?.status === 'needsYou' &&
+    getOpenQuestions(askedCapture).some(
+      (entry) => entry.id === askedMark.questionId && entry.skippedAt === null,
+    )
+      ? askedMark
+      : null;
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const screen = useRef<ScreenContext | null>(null);
@@ -184,6 +228,7 @@ export function useHelmVoice() {
   );
   const noteId = useRef(0);
   const waiting = useRef(new Set<string>());
+  const isTypedSince = useRef(false);
   // Code-built questions already asked again once, so a second miss goes on as a turn.
   const askedAgain = useRef(new Set<string>());
   // Answer turns by id, with the question each answered, so its reply is followed by the turn's next question.
@@ -441,6 +486,7 @@ export function useHelmVoice() {
       restoredRef.current,
     );
     clearRestored();
+    isTypedSince.current = false;
     await takeOnDevice(swapped.text, {
       isSpoken: true,
       sttProvider,
@@ -680,6 +726,7 @@ export function useHelmVoice() {
     } | null = null,
   ) {
     if (!uid) return false;
+    if (!isSpoken) isTypedSince.current = true;
     const turn = getNextTurn();
     const result = await takeDeviceCheckIn(uid, text, {
       sessionId: turn.sessionId,
@@ -807,13 +854,15 @@ export function useHelmVoice() {
   }
 
   /** Typed Send: true when the device took the words (a close, or an answer to the open question), so the field is cleared and nothing is sent. */
-  const handleTyped = (text: string, page: ScreenContext | null) =>
-    takeOnDevice(text, {
+  const handleTyped = (text: string, page: ScreenContext | null) => {
+    isTypedSince.current = true;
+    return takeOnDevice(text, {
       isSpoken: false,
       sttProvider: undefined,
       interrupted: null,
       hasPage: page !== null,
     });
+  };
 
   const registerField = useCallback((write: (text: string) => void) => {
     fieldWriter.current = write;
@@ -853,7 +902,7 @@ export function useHelmVoice() {
     );
   }
 
-  /** The first open, unskipped question (of a kind, when given) of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one; with that turn. */
+  /** The first open, unskipped question (of a kind, when given) of the turn an answer goes to (`pickQuestionTurn`), with that turn. */
   function findAskedQuestion(
     now: number,
     kind: string | null = null,
@@ -866,14 +915,13 @@ export function useHelmVoice() {
       now,
       getFreshFrom(state.helm.profile),
     );
-    const latest = all
-      .filter((capture) => capture.sessionId === sessionId)
-      .reverse()
-      .find((capture) => capture.answersQuestion === null);
+    const latest = pickQuestionTurn(
+      all.filter((capture) => capture.sessionId === sessionId),
+      !isSpoken ? 'typed' : isWakeStarted.current ? 'wake' : 'spoken',
+      now,
+    );
     const asked =
-      latest &&
-      (!isSpoken || latest.inputMode === 'voice') &&
-      latest.status === 'needsYou'
+      latest && latest.status === 'needsYou'
         ? getOpenQuestions(latest)
             .filter(
               (entry) =>
@@ -1073,6 +1121,35 @@ export function useHelmVoice() {
     return true;
   }
 
+  /** Whether a spoken conversation is open now: listening, thinking, speaking or live, and its answer window or an awaited reply until a typed Send ends it. */
+  function conversation() {
+    return {
+      isOpen:
+        voice.isLive ||
+        voice.state !== 'idle' ||
+        (!isTypedSince.current &&
+          (voice.isFollowUpOpen || waiting.current.size > 0)),
+      isMuted: voice.isMuted,
+    };
+  }
+
+  /** A choice tapped on a card: whether its turn is spoken, and once sent, its reply is said like a spoken answer's. */
+  function followTap() {
+    const isSpoken = isSpokenTurn('tap', conversation());
+    const stopsAtSend = stopCount.current;
+    return {
+      isSpokenTurn: isSpoken,
+      onSent: (
+        sent: { id: string; write: Promise<void> },
+        asked: { captureId: string; questionId: string },
+      ) => {
+        if (!uid || !isSpoken) return;
+        afterAnswer.current.set(sent.id, asked);
+        trackSent(uid, sent.id, sent.id, sent.write, stopsAtSend);
+      },
+    };
+  }
+
   /** Waits for the sorted reply of a sent turn so it is said once, and gives up the wait when the device is offline. */
   function trackSent(
     uid: string,
@@ -1148,6 +1225,7 @@ export function useHelmVoice() {
           sttProvider,
           interruptedCaptureId: interrupted,
         },
+        isSpokenTurn: isSpokenTurn('spoken', conversation()),
         presence: { startedByWake, ...readPresence() },
         onRepeat: (captureId) => {
           waiting.current.delete(captureId);
@@ -1236,7 +1314,7 @@ export function useHelmVoice() {
       priority: 'reply',
       turnKey: capture.createdAt,
       canAnswer:
-        capture.inputMode === 'voice' &&
+        capture.isSpokenTurn === true &&
         isHandsFreeOn &&
         isSurfaceShown.current &&
         !finishedIds.current.has(capture.id),
@@ -1386,9 +1464,33 @@ export function useHelmVoice() {
     });
   };
 
+  const isListeningForAnswer =
+    voice.isFollowUpOpen || (voice.isLive && voice.state === 'listening');
+
+  // Each time it listens for an answer, the question an answer would go to is marked on its card.
+  useEffect(() => {
+    if (!isListeningForAnswer) return;
+    const found = findAskedQuestion(Date.now());
+    askedStore.set(
+      found
+        ? {
+            captureId: found.asked.captureId,
+            questionId: found.asked.id,
+            question: found.asked.question,
+            wakeUntil:
+              (found.latest.sortedAt ?? found.latest.createdAt) +
+              OPEN_QUESTION_MS,
+          }
+        : null,
+    );
+  }, [isListeningForAnswer, askedStore]);
+
+  useEffect(() => () => askedStore.set(null), [uid, askedStore]);
+
   /** Starts listening from `page` (what the page publishes, null from home), as a live conversation when that setting is on and the listen isn't a one-off (dictation), or sends what is being said, or stops what is working or speaking. */
   const talk = (page: ScreenContext | null, isOneOff = false) => {
     const isLive = isHandsFreeOn && !isOneOff;
+    isWakeStarted.current = false;
     // An answer window or a line being said gives way to listening: the tap is the answer.
     if (
       voice.isAvailable &&
@@ -1511,6 +1613,12 @@ export function useHelmVoice() {
     handleTyped,
     handleCheckIn: (text: string) => takeCheckIn(text, false),
     registerField,
+    /** A tapped choice: whether its turn is spoken, and how to have its reply said. */
+    followTap,
+    /** The question a reply last said aloud, which its card marks as listened for. */
+    askedAloud,
+    /** The wake phrase is on here, so a question asked aloud can still be answered with it for a while. */
+    canWakeAnswer: isWakeWordOn && keyStatus === 'ready',
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line), Date.now()),
     /** Says the line a turn kept off the speaker, whispered by default; never in the usual voice when the whisper can't play. */

@@ -9,6 +9,14 @@ import {
   readHandling,
   type PatternFinding,
 } from '../../src/apps/helm/engine/patterns.ts';
+import {
+  buildSeenAsBasis,
+  normaliseClaim,
+  SEEN_AS_LIMITS,
+  seenAsIdInput,
+  type SeenAsKind,
+  type SeenAsState,
+} from '../../src/apps/helm/engine/seenAs.ts';
 import { sealJson } from '../../src/apps/helm/security.ts';
 import type { ObservationTag } from '../../src/apps/helm/engine/said.ts';
 import type {
@@ -21,7 +29,10 @@ import type {
   PatternSealed,
   Reflection,
   ReflectionSealed,
+  SeenAsLine,
+  SeenAsSealed,
 } from '../../src/apps/helm/types.ts';
+import { createHash } from 'node:crypto';
 
 const DAY_MS = 86_400_000;
 export const LEARNING_ZONE = 'America/Los_Angeles';
@@ -227,6 +238,56 @@ export const toSeedActExecution = async (
   ),
 });
 
+export interface SeedSeenAs {
+  id: string;
+  line: SeenAsLine;
+}
+
+/** One line of how the assistant sees the person, with its id and basis worked out the way the server does. */
+export const toSeedSeenAs = async (
+  input: {
+    kind: SeenAsKind;
+    claim: string;
+    state?: SeenAsState;
+    corrected?: string;
+    sourceKeys: string[];
+    subjectRefs?: string[];
+    derivedAt: number;
+    changedAt?: number;
+  },
+  encryption: HelmEncryption,
+): Promise<SeedSeenAs> => {
+  const state = input.state ?? 'shown';
+  const hash = createHash('sha256')
+    .update(seenAsIdInput(input.kind, input.claim))
+    .digest('hex')
+    .slice(0, 24);
+  return {
+    id: `sa_${hash}`,
+    line: {
+      kind: input.kind,
+      state,
+      sourceKeys: input.sourceKeys,
+      subjectRefs: input.subjectRefs ?? [],
+      writtenBy: 'reflection',
+      dontDrawFrom: state === 'removed' ? input.sourceKeys : [],
+      derivedAt: input.derivedAt,
+      correctedAt: state === 'corrected' ? (input.changedAt ?? null) : null,
+      removedAt: state === 'removed' ? (input.changedAt ?? null) : null,
+      privacy: null,
+      createdAt: input.derivedAt,
+      sealed: await sealJson<SeenAsSealed>(
+        {
+          line: state === 'removed' ? normaliseClaim(input.claim) : input.claim,
+          basis: buildSeenAsBasis(input.sourceKeys),
+          corrected: state === 'corrected' ? (input.corrected ?? null) : null,
+        },
+        encryption,
+      ),
+    },
+  };
+};
+
 const GUITAR = 'seed-habit-guitar';
 const STRETCH = 'seed-habit-stretch';
 const PILLS = 'seed-habit-pills';
@@ -346,6 +407,20 @@ export async function buildLearning(input: {
         kind: 'feeling',
         tags: ['tired'],
         quote: 'long day, no energy left',
+      },
+      encryption,
+    ),
+    toSeedObservation(
+      {
+        id: 'seed-obs-day-2',
+        subject: { collection: 'day', id: null },
+        dayKey: shiftKey(todayKey, 3),
+        time: '21:40',
+        source: 'turn',
+        sourceKey: 'captures/seed-obs-day-2',
+        kind: 'feeling',
+        tags: ['proud'],
+        quote: 'only three things today and I got all of them done',
       },
       encryption,
     ),
@@ -552,6 +627,183 @@ export async function buildLearning(input: {
       encryption,
     ),
   ];
+  const weddingDay = dayMs(shiftKey(todayKey, -3));
+  const busyFrom = dayMs(shiftKey(todayKey, -1));
+  const guardrailReasons = [
+    {
+      kind: 'deadlineWontFit' as const,
+      evidence: {
+        kind: 'load' as const,
+        measured: 540,
+        limit: 360,
+        unit: 'minutes' as const,
+        asOf: now,
+        refs: ['seed-project-wedding', String(weddingDay)],
+      },
+    },
+    {
+      kind: 'busyStretch' as const,
+      evidence: {
+        kind: 'load' as const,
+        measured: 3,
+        limit: 5,
+        unit: 'days' as const,
+        asOf: now,
+        refs: [String(busyFrom), String(weddingDay)],
+      },
+    },
+  ];
+  const guardrailLines = [
+    'Wedding: 3 tasks due by Thursday need about 9h, and your calendar leaves about 6h.',
+    '3 full days on your calendar through Thursday.',
+  ];
+  const guardrailSubject = {
+    collection: 'projects' as const,
+    id: 'seed-project-guitar-goal',
+    windowId: null,
+    otherId: null,
+  };
+  const guardrailFinding = toSeedFinding({
+    kind: 'deadlineWontFit',
+    subject: guardrailSubject,
+    bucket: { kind: 'none' },
+    evidence: guardrailReasons[0].evidence,
+    effect: {
+      kind: 'pause',
+      collection: 'projects',
+      id: guardrailSubject.id,
+      until: dayMs(shiftKey(todayKey, -4)),
+    },
+    lastEvidenceAt: now,
+  });
+  const guardrail = await toSeedPattern(
+    guardrailFinding,
+    {
+      name: 'Get back into guitar',
+      now: now - 1 * DAY_MS,
+      overrides: {
+        moment: 'daily',
+        reasons: guardrailReasons,
+        state: 'suggested',
+        stateAt: now - 60 * 60_000,
+        history: history('suggested', now - 60 * 60_000),
+      },
+    },
+    encryption,
+  );
+  guardrail.pattern.sealed = await sealJson<PatternSealed>(
+    {
+      statement: 'Pause Get back into guitar for a while?',
+      evidenceLine: guardrailLines[0],
+      reasonLine: guardrailLines.join('\n'),
+    },
+    encryption,
+  );
+  patterns.push(guardrail);
+  const holdSubject = {
+    collection: 'projects' as const,
+    id: 'seed-project-spare-room',
+    windowId: null,
+    otherId: 'seed-project-spare-room',
+  };
+  const goalsEvidence = {
+    kind: 'load' as const,
+    measured: 3,
+    limit: 3,
+    unit: 'goals' as const,
+    asOf: now,
+    refs: ['seed-project-guitar-goal'],
+  };
+  const holdLine = '3 goals already going, including Get back into guitar.';
+  const hold = await toSeedPattern(
+    toSeedFinding({
+      kind: 'tooManyGoals',
+      subject: holdSubject,
+      bucket: { kind: 'none' },
+      evidence: goalsEvidence,
+      effect: {
+        kind: 'pause',
+        collection: 'projects',
+        id: holdSubject.id,
+        until: null,
+      },
+      lastEvidenceAt: now,
+    }),
+    {
+      name: 'Paint the spare room',
+      now: now - 1 * DAY_MS,
+      overrides: {
+        moment: 'onStart',
+        reasons: [{ kind: 'tooManyGoals', evidence: goalsEvidence }],
+        state: 'suggested',
+        stateAt: now - 30 * 60_000,
+        history: history('suggested', now - 30 * 60_000),
+      },
+    },
+    encryption,
+  );
+  hold.pattern.sealed = await sealJson<PatternSealed>(
+    {
+      statement: 'Maybe hold Paint the spare room for a while?',
+      evidenceLine: holdLine,
+      reasonLine: holdLine,
+    },
+    encryption,
+  );
+  patterns.push(hold);
+  const calendarKey = new Date(now).toLocaleDateString('en-CA', {
+    timeZone: LEARNING_ZONE,
+  });
+  const taskDay = dayMs(shiftKey(calendarKey, -2));
+  const taskSubject = {
+    collection: 'tasks' as const,
+    id: 'seed-task-3-1',
+    windowId: null,
+    otherId: 'seed-task-3-1',
+  };
+  const taskEvidence = {
+    kind: 'load' as const,
+    measured: 420,
+    limit: 240,
+    unit: 'minutes' as const,
+    asOf: now,
+    refs: [taskSubject.id, String(taskDay)],
+  };
+  const taskLine = 'Due in two days: about 7h of work, 4h free before then.';
+  const taskGuardrail = await toSeedPattern(
+    toSeedFinding({
+      kind: 'deadlineWontFit',
+      subject: taskSubject,
+      bucket: { kind: 'none' },
+      evidence: taskEvidence,
+      effect: { kind: 'none' },
+      lastEvidenceAt: now,
+    }),
+    {
+      name: 'Task',
+      now: now - 1 * DAY_MS,
+      overrides: {
+        moment: 'onStart',
+        reasons: [{ kind: 'deadlineWontFit', evidence: taskEvidence }],
+        state: 'suggested',
+        stateAt: now - 20 * 60_000,
+        history: history('suggested', now - 20 * 60_000),
+      },
+    },
+    encryption,
+  );
+  taskGuardrail.pattern.sealed = await sealJson<PatternSealed>(
+    {
+      statement: `${new Date(taskDay).toLocaleDateString('en-US', {
+        weekday: 'long',
+        timeZone: 'UTC',
+      })} looks full for Call Grandpa about the wedding questions`,
+      evidenceLine: taskLine,
+      reasonLine: taskLine,
+    },
+    encryption,
+  );
+  patterns.push(taskGuardrail);
   const execution = await toSeedActExecution(
     {
       patternId: evening.id,
@@ -587,11 +839,104 @@ export async function buildLearning(input: {
     },
     encryption,
   );
+  const patternKey = (at: number) => `patterns/${patterns[at].id}`;
+  const obsKey = (id: string) => `observations/${id}`;
+  const seenAs = await Promise.all([
+    toSeedSeenAs(
+      {
+        kind: 'whatWorks',
+        claim: 'Stretching holds up when it stays a morning thing',
+        sourceKeys: [patternKey(2), `habits/${STRETCH}`],
+        subjectRefs: [`habits/${STRETCH}`],
+        derivedAt: now - 9 * DAY_MS,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'whatDoesnt',
+        claim: 'Guitar has felt hard on weeknights',
+        sourceKeys: guitarIds.map(obsKey),
+        subjectRefs: [`habits/${GUITAR}`],
+        derivedAt: now - 4 * DAY_MS,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'tendency',
+        claim:
+          'Evenings get crowded: things planned after 7 PM slip more often',
+        sourceKeys: [patternKey(0), patternKey(3)],
+        derivedAt: now - 6 * DAY_MS,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'howYouTalk',
+        claim: 'Short and warm; signs off “Cheers,”',
+        sourceKeys: [
+          'style/general#warm-but-brief',
+          'style/general#signs-off-cheers',
+        ],
+        derivedAt: now - 11 * DAY_MS,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'tendency',
+        claim: 'You keep going even when it feels like a chore',
+        sourceKeys: [obsKey('seed-obs-guitar-4'), obsKey('seed-obs-stretch-3')],
+        derivedAt: now - 3 * DAY_MS,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'rhythm',
+        claim: 'Mornings are your steadiest stretch of the day',
+        sourceKeys: [
+          obsKey('seed-obs-stretch-1'),
+          obsKey('seed-obs-stretch-2'),
+          patternKey(2),
+        ],
+        subjectRefs: [`habits/${STRETCH}`],
+        derivedAt: now - 5 * DAY_MS,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'whatWorks',
+        claim: 'A short list beats a long one',
+        state: 'corrected',
+        corrected: 'A short list of three beats a long one',
+        sourceKeys: [obsKey('seed-obs-day-2'), obsKey('seed-obs-day-1')],
+        derivedAt: now - 8 * DAY_MS,
+        changedAt: now - 24 * 60 * 60_000,
+      },
+      encryption,
+    ),
+    toSeedSeenAs(
+      {
+        kind: 'whatDoesnt',
+        claim: 'Mondays are slow',
+        state: 'removed',
+        sourceKeys: [obsKey('seed-obs-guitar-1'), obsKey('seed-obs-stretch-2')],
+        derivedAt: now - 10 * DAY_MS,
+        changedAt: now - 2 * DAY_MS,
+      },
+      encryption,
+    ),
+  ]);
   return {
     patterns,
     observations,
     reflections: [reflection],
     executions: [{ id: executionId, execution }],
+    seenAs,
   };
 }
 
@@ -620,7 +965,7 @@ const makeCounter = (seed: number) => {
   };
 };
 
-/** Morgan's lifetime of learning: 500 live patterns, 5,000 gone off (the stopped ones cut to their signature), about 2,500 observations over 26 weeks and 14 reflections, three of them unseen. */
+/** Morgan's lifetime of learning: 500 live patterns, 5,000 gone off (the stopped ones cut to their signature), about 2,500 observations over 26 weeks, 14 reflections, three of them unseen, and the 40 lines of how Helm sees them that a person keeps (30 shown, 4 corrected, 6 removed). */
 export async function buildLearningScale(input: {
   now: number;
   todayKey: string;
@@ -767,5 +1112,45 @@ export async function buildLearningScale(input: {
       );
     }),
   );
-  return { patterns, observations, reflections };
+  const scaleKinds = [
+    'whatWorks',
+    'whatDoesnt',
+    'rhythm',
+    'howYouTalk',
+    'tendency',
+  ] as const satisfies SeenAsKind[];
+  const scaleStems: Record<SeenAsKind, string> = {
+    whatWorks: 'A reminder at this hour works',
+    whatDoesnt: 'This part of the week gets in the way',
+    rhythm: 'This stretch of the day runs steady',
+    howYouTalk: 'This way of putting things comes up',
+    tendency: 'This kind of plan tends to slip',
+  };
+  const scaleHabits = habits.filter((habit) => !habit.isCare);
+  const seenAs = await Promise.all(
+    Array.from({ length: SEEN_AS_LIMITS.records }, (_, index) => {
+      const kind = scaleKinds[index % scaleKinds.length];
+      const habit = scaleHabits[index % scaleHabits.length];
+      const first = (index * 7) % SCALE_OBSERVATIONS;
+      const second = (first + habits.length) % SCALE_OBSERVATIONS;
+      const key = (at: number) =>
+        `observations/scale-obs-${String(at).padStart(4, '0')}`;
+      const state: SeenAsState =
+        index < 30 ? 'shown' : index < 34 ? 'corrected' : 'removed';
+      return toSeedSeenAs(
+        {
+          kind,
+          claim: `${scaleStems[kind]} (${index + 1})`,
+          state,
+          corrected: `${scaleStems[kind]}, in my words (${index + 1})`,
+          sourceKeys: [key(first), key(second)],
+          subjectRefs: [`habits/${habit.id}`],
+          derivedAt: now - (index + 1) * DAY_MS,
+          changedAt: now - (index + 1) * DAY_MS + 3_600_000,
+        },
+        encryption,
+      );
+    }),
+  );
+  return { patterns, observations, reflections, seenAs };
 }

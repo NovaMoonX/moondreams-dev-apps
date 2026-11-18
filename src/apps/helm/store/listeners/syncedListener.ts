@@ -51,6 +51,7 @@ async function openSynced(
         syncedAt: data.syncedAt ?? 0,
         transformVersion: data.transformVersion ?? 0,
         contentHash: text(data.contentHash),
+        helmRef: text(data.helmRef),
         connectionEndedAt: data.connectionEndedAt ?? null,
         deleteAfter: data.deleteAfter ?? null,
         sealed: {

@@ -4,15 +4,19 @@ import { logger } from 'firebase-functions';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  LiveQueryRequest,
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
 import {
+  MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import { isListable, toOpenPickupDays } from '../salePageView.js';
 import { GOING_ONCE_SHARES } from './manifest.js';
 
@@ -343,6 +347,265 @@ async function syncPickups(
   };
 }
 
+const CONDITION_LABELS: Record<string, string> = {
+  NEW: 'New',
+  LIKE_NEW: 'Like new',
+  GOOD: 'Good',
+  FAIR: 'Fair',
+  WELL_USED: 'Well used',
+};
+
+const DETAIL_LIMIT = 120;
+const NAME_LIMIT = 30;
+
+const clip = (text: string) => {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > DETAIL_LIMIT
+    ? `${flat.slice(0, DETAIL_LIMIT - 1).trimEnd()}…`
+    : flat;
+};
+
+const LINK_RE =
+  /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|co|app|me|ly|us)\b/i;
+const EMAIL_RE = /\S+@\S+|@\w{2,}/;
+const PHONE_RE = /\+\s?\d|\(\d{3}\)|\b\d{3}[\s.-]?\d{3}[\s.-]?\d{4}\b/;
+
+/** A buyer's own words, dropped whole when they carry a link, an email or a phone number. */
+const screenMessage = (message: string | null) =>
+  message === null ||
+  LINK_RE.test(message) ||
+  EMAIL_RE.test(message) ||
+  PHONE_RE.test(message) ||
+  (message.match(/\d/g)?.length ?? 0) >= 7
+    ? null
+    : clip(message);
+
+const readFirstName = (name: string | null) => {
+  const first = name?.split(/\s+/)[0] ?? '';
+  return first === '' || /[@\d]/.test(first)
+    ? null
+    : first.slice(0, NAME_LIMIT);
+};
+
+const readDay = (value: unknown) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return null;
+  const at = Date.parse(`${value}T00:00:00Z`);
+  return Number.isNaN(at) ? null : at;
+};
+
+const toDayText = (at: number | null) =>
+  at === null ? null : new Date(at).toISOString().slice(0, 10);
+
+/** The args every live category accepts; one this category has no use for is ignored. */
+const readQueryArgs = (args: unknown) => {
+  const asked =
+    typeof args === 'object' && args !== null
+      ? (args as Record<string, unknown>)
+      : {};
+  const from = readDay(asked.from);
+  const to = readDay(asked.to);
+  return {
+    text: readText(asked.text)?.toLowerCase() ?? null,
+    from,
+    to,
+    ...dayRangeMs(
+      toDayText(from),
+      toDayText(to),
+      typeof asked.timeZone === 'string' ? asked.timeZone : null,
+    ),
+  };
+};
+
+type QueryArgs = ReturnType<typeof readQueryArgs>;
+
+const isInRange = (at: number | null, { fromMs, toMsExclusive }: QueryArgs) =>
+  (fromMs === null && toMsExclusive === null) ||
+  (at !== null &&
+    (fromMs === null || at >= fromMs) &&
+    (toMsExclusive === null || at < toMsExclusive));
+
+const isTextMatch = (text: string | null, ...names: (string | null)[]) =>
+  text === null ||
+  names.some((name) => name?.toLowerCase().includes(text) === true);
+
+interface QueryRows {
+  matched: SharedRecord[];
+  isFull: boolean;
+}
+
+const toQueryResult = (rows: QueryRows, args: QueryArgs): LiveQueryResult => {
+  const sorted = [...rows.matched].sort(
+    (a, b) =>
+      (b.startAt ?? -Infinity) - (a.startAt ?? -Infinity) ||
+      a.title.localeCompare(b.title),
+  );
+  return {
+    records: sorted.slice(0, MAX_RECORDS_PER_CATEGORY),
+    matchedCount: sorted.length,
+    totalCents: null,
+    currency: null,
+    isPartial: !rows.isFull || sorted.length > MAX_RECORDS_PER_CATEGORY,
+    from: toDayText(args.from),
+    to: toDayText(args.to),
+  };
+};
+
+interface QuerySale {
+  id: string;
+  name: string;
+  currency: string | null;
+}
+
+/** Every sale the person sells in, finished ones included, each read for its own rows. */
+async function readSaleRows(
+  firestore: Firestore,
+  uid: string,
+  readRows: (
+    doc: FirebaseFirestore.QueryDocumentSnapshot,
+    sale: QuerySale,
+  ) => Promise<QueryRows>,
+): Promise<QueryRows> {
+  const snapshot = await firestore
+    .collection('apps/going-once/sales')
+    .where('members', 'array-contains', uid)
+    .limit(SALE_LIMIT)
+    .get();
+  const reads = await Promise.all(
+    snapshot.docs.flatMap((doc) => {
+      const name = readText(doc.get('name'));
+      return name === null
+        ? []
+        : [
+            readRows(doc, {
+              id: doc.id,
+              name,
+              currency: readText(doc.get('currency')),
+            }),
+          ];
+    }),
+  );
+  return {
+    matched: reads.flatMap((read) => read.matched),
+    isFull: snapshot.size < SALE_LIMIT && reads.every((read) => read.isFull),
+  };
+}
+
+const readLastStatusAt = (history: unknown) => {
+  const last = Array.isArray(history) ? history[history.length - 1] : null;
+  return typeof last === 'object' && last !== null
+    ? readTime((last as Record<string, unknown>).at)
+    : null;
+};
+
+const toThingState = (
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+  status: string | null,
+) => {
+  if (doc.get('isDraft') === true) return 'draft';
+  if (status === 'AVAILABLE' && !isListable(doc.data())) return 'notReady';
+  return (status ?? 'unknown').toLowerCase();
+};
+
+const queryAllThings = (firestore: Firestore, uid: string, args: QueryArgs) =>
+  readSaleRows(firestore, uid, async (doc, sale) => {
+    const items = await doc.ref
+      .collection('items')
+      .select(
+        'title',
+        'status',
+        'isDraft',
+        'condition',
+        'askingPriceCents',
+        'floorPriceCents',
+        'notes',
+        'statusHistory',
+        'photos',
+        'lastEditedAt',
+      )
+      .limit(ITEM_LIMIT)
+      .get();
+    return {
+      isFull: items.size < ITEM_LIMIT,
+      matched: items.docs.flatMap((item) => {
+        const title = readText(item.get('title'));
+        const changedAt =
+          readLastStatusAt(item.get('statusHistory')) ??
+          readTime(item.get('lastEditedAt'));
+        if (
+          !isTextMatch(args.text, title, sale.name) ||
+          !isInRange(changedAt, args)
+        )
+          return [];
+        const condition = readText(item.get('condition'));
+        const conditionLabel =
+          condition === null ? null : (CONDITION_LABELS[condition] ?? null);
+        const notes = readText(item.get('notes'));
+        const detail = [conditionLabel, notes]
+          .filter((part): part is string => part !== null)
+          .join(' · ');
+        const price = (field: string) =>
+          sale.currency === null ? null : readTime(item.get(field));
+        return [
+          toRecord({
+            sourceRef: `sales/${sale.id}/items/${item.id}`,
+            kind: 'artifact',
+            title: title ?? 'Untitled thing',
+            subtitle: sale.name,
+            detail: detail === '' ? null : clip(detail),
+            startAt: changedAt,
+            amountCents: price('askingPriceCents'),
+            currency: sale.currency,
+            sourceUpdatedAt: readTime(item.get('lastEditedAt')),
+            extra: {
+              state: toThingState(item, readText(item.get('status'))),
+              condition: conditionLabel,
+              floorPriceCents: price('floorPriceCents'),
+            },
+          }),
+        ];
+      }),
+    };
+  });
+
+const queryQuestions = (firestore: Firestore, uid: string, args: QueryArgs) =>
+  readSaleRows(firestore, uid, async (doc, sale) => {
+    const inquiries = await doc.ref
+      .collection('inquiries')
+      .select('itemTitleAtSend', 'name', 'message', 'status', 'createdAt')
+      .limit(ITEM_LIMIT)
+      .get();
+    return {
+      isFull: inquiries.size < ITEM_LIMIT,
+      matched: inquiries.docs.flatMap((inquiry) => {
+        const title = readText(inquiry.get('itemTitleAtSend'));
+        const status = readText(inquiry.get('status'));
+        const createdAt = readTime(inquiry.get('createdAt'));
+        if (
+          (status !== 'NEW' && status !== 'HANDLED') ||
+          !isTextMatch(args.text, title, sale.name) ||
+          !isInRange(createdAt, args)
+        )
+          return [];
+        return [
+          toRecord({
+            sourceRef: `sales/${sale.id}/inquiries/${inquiry.id}`,
+            kind: 'event',
+            title: title ?? 'A thing',
+            subtitle: sale.name,
+            detail: screenMessage(readText(inquiry.get('message'))),
+            startAt: createdAt,
+            sourceUpdatedAt: createdAt,
+            extra: {
+              buyerFirstName: readFirstName(readText(inquiry.get('name'))),
+              status: status === 'NEW' ? 'new' : 'handled',
+            },
+          }),
+        ];
+      }),
+    };
+  });
+
 export interface GoingOnceAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -391,6 +654,24 @@ export function createGoingOnceAdapter(
       isDone: true,
       resumeState: null,
     }),
+    query: async (ctx, req: LiveQueryRequest): Promise<LiveQueryResult> => {
+      const firestore = deps.firestore();
+      const args = readQueryArgs(req.args);
+      switch (req.category) {
+        case 'allThings':
+          return toQueryResult(
+            await queryAllThings(firestore, ctx.uid, args),
+            args,
+          );
+        case 'questions':
+          return toQueryResult(
+            await queryQuestions(firestore, ctx.uid, args),
+            args,
+          );
+        default:
+          throw new Error('Unknown category.');
+      }
+    },
     deepLink: () => '/going-once',
   };
 }

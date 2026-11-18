@@ -141,13 +141,17 @@ const connectGoogle = async ({
   connectorId,
   accountId,
   isAnotherAccount,
-}: Pick<Intro, 'connectorId' | 'accountId' | 'isAnotherAccount'>) => {
+  extraScopes = null,
+}: Pick<Intro, 'connectorId' | 'accountId' | 'isAnotherAccount'> & {
+  extraScopes?: string[] | null;
+}) => {
   const { authUrl, state } = await startGoogleConnection({
     readerAppId: 'helm',
     connectorId,
     redirectUri: `${window.location.origin}/helm`,
     accountId,
     isAnotherAccount,
+    extraScopes,
   });
   keepConnector(connectorId, accountId !== null);
   const result = await requestGoogleAuthCode({ authUrl, state });
@@ -314,6 +318,15 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
           failure: null,
         }),
       openCalendarPicker: (accountId) => setPicker({ accountId, mode: 'edit' }),
+      requestCalendarScopes: async (accountId, scopes) => {
+        const result = await connectGoogle({
+          connectorId: 'google:calendar',
+          accountId,
+          isAnotherAccount: false,
+          extraScopes: scopes,
+        });
+        return typeof result === 'string' ? result : 'granted';
+      },
       openContacts: () => {
         if (contactsAccountKey !== null) {
           setContactsAccountId(contactsAccountKey);

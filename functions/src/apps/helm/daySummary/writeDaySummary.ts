@@ -431,6 +431,7 @@ export async function prepareDaySummary(
         style ? STYLE_LINE : null,
         toPersonaPrompt(
           profile.data()?.assistantName,
+          profile.data()?.personality,
           profile.data()?.assistantTone,
         ),
       ]

@@ -21,6 +21,10 @@ import {
   formatSlotRange,
   toDayKey,
 } from '@apps/helm/utils/planDays';
+import {
+  findMeetingFormat,
+  formatMeetingWhere,
+} from '@apps/helm/utils/meetingWhere';
 import { isCalendarEvent, toFirstDay } from '@apps/helm/utils/synced';
 
 interface SyncedSheetProps {
@@ -130,7 +134,10 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
                 )
               : null,
             record.sealed.subtitle,
-            findPlace(record, alsoIn),
+            formatMeetingWhere(
+              findMeetingFormat(record, alsoIn),
+              findPlace(record, alsoIn),
+            ),
           ]
             .filter((line): line is string => !!line)
             .map((line) => (
@@ -138,6 +145,15 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
                 {line}
               </p>
             ))}
+          {isCalendar &&
+            formatMeetingWhere(
+              findMeetingFormat(record, alsoIn),
+              findPlace(record, alsoIn),
+            ) && (
+              <p className='text-muted-foreground -mt-2 text-[13px]'>
+                {HELM_COPY.meetsFrom(nameOf(record.connectorId))}
+              </p>
+            )}
           {record.sealed.detail && (
             <p className='text-muted-foreground text-[15px] text-pretty whitespace-pre-line'>
               {record.sealed.detail}

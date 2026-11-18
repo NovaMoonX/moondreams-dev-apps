@@ -29,8 +29,12 @@ import HabitEditSheet from '@apps/helm/components/habits/HabitEditSheet';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import HabitWeek from '@apps/helm/components/habits/HabitWeek';
 import HabitWhenSheet from '@apps/helm/components/habits/HabitWhenSheet';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
-import { selectHabitOffer } from '@apps/helm/store/selectors/patternSelectors';
+import {
+  selectHabitOffer,
+  selectSubjectGuardrail,
+} from '@apps/helm/store/selectors/patternSelectors';
 import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
@@ -120,6 +124,9 @@ function HabitScreen({
   const days = useAppSelector((state) => state.helm.habitDays.byId);
   const offer = useAppSelector((state) =>
     selectHabitOffer(state, habitId ?? ''),
+  );
+  const guardrail = useAppSelector((state) =>
+    selectSubjectGuardrail(state, habitId ?? ''),
   );
   const whoName = useHabitWhoName(habit ?? { forWhoId: null });
   const [isEditing, setIsEditing] = useState(false);
@@ -457,6 +464,7 @@ function HabitScreen({
               </section>
             )}
             <HabitWeek habit={habit} days={days} clock={clock} />
+            {guardrail && !offer && <GuardrailLine pattern={guardrail} />}
             {offer && (
               <PatternOfferCard
                 pattern={offer}

@@ -18,8 +18,12 @@ type Stored = Pick<
   'state' | 'offReason' | 'nextEligibleOn' | 'evidenceSince' | 'evidence'
 >;
 
-const isSameEvidence = (a: PatternEvidence, b: PatternEvidence) =>
-  JSON.stringify(a) === JSON.stringify(b);
+export const isSameEvidence = (a: PatternEvidence, b: PatternEvidence) =>
+  a.kind === 'load' && b.kind === 'load'
+    ? a.measured === b.measured &&
+      a.limit === b.limit &&
+      JSON.stringify(a.refs) === JSON.stringify(b.refs)
+    : JSON.stringify(a) === JSON.stringify(b);
 
 /** What the daily check does with one finding given what is stored for it: make it, refresh its evidence, bring an answered one back on fresh evidence at least as strong, or leave it. `today` is date-only. */
 export function readPatternMove(input: {
@@ -55,19 +59,24 @@ export const toSourceKeys = (evidence: PatternEvidence) =>
 /** A finding as the pattern document's readable fields; the sealed lines are made beside it. */
 export const toPatternFields = (
   finding: PatternFinding,
-  input: { now: number; privacy: PrivacyClass },
+  input: {
+    now: number;
+    privacy: PrivacyClass;
+    moment?: Pattern['moment'];
+    reasons?: Pattern['reasons'];
+  },
 ): Omit<Pattern, 'sealed'> => ({
   kind: finding.kind,
   subject: finding.subject,
   bucket: finding.bucket,
   signature: finding.signature,
-  moment: 'daily',
+  moment: input.moment ?? 'daily',
   state: 'candidate',
   handling: finding.handling,
   acceptedBy: null,
   effect: finding.effect,
   evidence: finding.evidence,
-  reasons: [],
+  reasons: input.reasons ?? [],
   evidenceSince: 0,
   sourceKeys: toSourceKeys(finding.evidence),
   declineCount: 0,

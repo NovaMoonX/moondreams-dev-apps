@@ -45,6 +45,15 @@ export interface SyncPageResult {
   resumeState: string | null;
 }
 
+/** What every live category accepts; an adapter ignores what its records do not carry. Days are YYYY-MM-DD. */
+export interface LiveQueryArgs {
+  text?: string | null;
+  from?: string | null;
+  to?: string | null;
+  /** The reader's IANA zone; instant fields are matched by their day there, date-only fields stay UTC. */
+  timeZone?: string | null;
+}
+
 export interface LiveQueryRequest {
   category: string;
   args: unknown;

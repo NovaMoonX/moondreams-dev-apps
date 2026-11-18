@@ -4,6 +4,7 @@ import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
 import { readPartOf } from '../../src/apps/helm/engine/patterns.ts';
 import {
   PART_CLOCKS,
+  describeFit,
   findFreeGaps,
   findOpenings,
   planDay,
@@ -53,6 +54,7 @@ const slot = (taskId: string, status: PlanSlot['status'], from: string) => ({
   status,
   source: 'nomos' as const,
   decidedAt: null,
+  overlapsEventRef: null,
 });
 
 const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
@@ -68,6 +70,8 @@ const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
   busy: [],
   slots: {},
   tasks: [],
+  aimTaskIds: [],
+  finishedTasks: [],
   ...extra,
 });
 
@@ -131,6 +135,9 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     slots: {},
     reasons: {},
     outcome: 'late',
+    unplaced: [],
+    blockers: {},
+    guessedTaskIds: [],
   });
   assert.equal(
     run(base({ now: at('22:30'), tasks: [task('a')] })).outcome,
@@ -248,7 +255,7 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   assert.ok(startOf('plain')! < startOf('low')!);
   assert.equal(startOf('high'), at('09:15'));
   assert.equal(startOf('plain'), at('13:15'));
-  assert.equal(startOf('low'), at('13:45'));
+  assert.equal(startOf('low'), at('14:00'));
 }
 
 {
@@ -453,7 +460,7 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   assert.equal(
     Object.values(timed.slots).find((entry) => entry.taskId === 'home')
       ?.startAt,
-    at('08:30'),
+    at('08:45'),
   );
 }
 
@@ -558,6 +565,19 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
       `${part} does not start before ${from}`,
     );
   });
+}
+
+{
+  const titles = { a: 'A', b: 'B', c: 'C' };
+  const blocker = { kind: 'event', title: 'Dentist' } as const;
+  assert.equal(
+    describeFit(titles, ['a'], { a: blocker }),
+    "“A” doesn't fit today unless you move “Dentist”. The rest fit.",
+  );
+  assert.equal(
+    describeFit(titles, ['a', 'b'], { a: blocker, b: null }),
+    "“A” and 1 more don't fit today. The rest fit.",
+  );
 }
 
 console.log('check:helm-planner: planner rules hold.');

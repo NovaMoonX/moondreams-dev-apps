@@ -91,13 +91,161 @@ const offerOrder = (a: OpenPattern, b: OpenPattern) =>
   b.stateAt - a.stateAt ||
   a.id.localeCompare(b.id);
 
-/** The one offer Today shows: a person-set thing's pattern Helm asked about, care first, then the newest. */
+const selectProjectItems = (state: RootState) => state.helm.projects.items;
+const selectHabitItems = (state: RootState) => state.helm.habits.items;
+const selectOpenTaskItems = (state: RootState) => state.helm.openTasks.items;
+const selectAnsweringIds = (state: RootState) => state.helm.answeringPatternIds;
+
+type SubjectLife = 'live' | 'paused' | 'gone';
+
+const readThingLife = (
+  collection: 'projects' | 'habits',
+  id: string,
+  projects: ReturnType<typeof selectProjectItems>,
+  habits: ReturnType<typeof selectHabitItems>,
+): SubjectLife => {
+  const item = (collection === 'habits' ? habits : projects).find(
+    (one) => one.id === id,
+  );
+  return !item || item.isUnreadable
+    ? 'gone'
+    : item.status === 'active'
+      ? 'live'
+      : item.status === 'paused'
+        ? 'paused'
+        : 'gone';
+};
+
+/** Whether what a guardrail asks about is still there to hold: gone when finished, ended or removed, paused when already set aside by another route. */
+const readSubjectLife = (
+  pattern: OpenPattern,
+  projects: ReturnType<typeof selectProjectItems>,
+  habits: ReturnType<typeof selectHabitItems>,
+  tasks: ReturnType<typeof selectOpenTaskItems>,
+): SubjectLife => {
+  const { subject } = pattern;
+  if (subject.id === null) return 'gone';
+  if (subject.collection === 'tasks')
+    return tasks.some((task) => task.id === subject.id && !task.isUnreadable)
+      ? 'live'
+      : 'gone';
+  const own = readThingLife(
+    subject.collection === 'habits' ? 'habits' : 'projects',
+    subject.id,
+    projects,
+    habits,
+  );
+  const started =
+    pattern.moment !== 'onStart' ||
+    subject.otherId === null ||
+    subject.otherId === subject.id
+      ? 'live'
+      : readThingLife(
+          habits.some((one) => one.id === subject.otherId)
+            ? 'habits'
+            : 'projects',
+          subject.otherId,
+          projects,
+          habits,
+        );
+  return own === 'gone' || started === 'gone' ? 'gone' : own;
+};
+
+/** The guardrails (advice to hold something off): accepted first, then asked, then not yet asked, then what was said no to. One still asking about something finished or removed is left out, and one whose subject was paused another way reads as no longer true, both worked out here and never written. */
+export const selectGuardrailRows = createSelector(
+  [
+    selectShownPatterns,
+    selectProjectItems,
+    selectHabitItems,
+    selectOpenTaskItems,
+    selectAnsweringIds,
+  ],
+  (patterns, projects, habits, tasks, answering): NoticedRow[] =>
+    patterns
+      .filter(
+        (pattern) =>
+          patternFamily(pattern.kind) === 'guardrail' &&
+          pattern.statement !== '',
+      )
+      .flatMap((pattern): OpenPattern[] => {
+        const isAsking =
+          pattern.state === 'suggested' &&
+          pattern.offReason === null &&
+          (pattern.confirmedAt ?? null) === null &&
+          !answering.includes(pattern.id);
+        const life = isAsking
+          ? readSubjectLife(pattern, projects, habits, tasks)
+          : 'live';
+        return life === 'live'
+          ? [pattern]
+          : life === 'gone'
+            ? []
+            : [{ ...pattern, state: 'retired' }];
+      })
+      .sort(
+        (a, b) =>
+          STATE_ORDER[a.state] - STATE_ORDER[b.state] ||
+          b.stateAt - a.stateAt ||
+          a.id.localeCompare(b.id),
+      )
+      .map((pattern) => ({
+        pattern,
+        isUsed: STATE_ORDER[pattern.state] <= STATE_ORDER.candidate,
+      })),
+);
+
+const selectOfferable = createSelector(
+  [selectNoticedRows, selectGuardrailRows, selectIsLearningOn],
+  (noticed, guardrails, isLearningOn): OpenPattern[] =>
+    [
+      ...noticed,
+      ...(isLearningOn
+        ? guardrails.filter((row) => row.pattern.moment !== 'onStart')
+        : []),
+    ].map((row) => row.pattern),
+);
+
+/** The one offer Today shows: care first, then the newest; a start-time guardrail never appears here. */
 export const selectTodayOffer = createSelector(
-  [selectNoticedRows],
-  (rows): OpenPattern | null =>
-    rows
+  [selectOfferable],
+  (patterns): OpenPattern | null =>
+    patterns.filter(isOffer).sort(offerOrder)[0] ?? null,
+);
+
+/** The guardrail asking on one project, goal or habit's page. */
+export const selectSubjectGuardrail = createSelector(
+  [
+    selectGuardrailRows,
+    selectIsLearningOn,
+    (_state: RootState, id: string) => id,
+  ],
+  (rows, isLearningOn, id): OpenPattern | null =>
+    (isLearningOn ? rows : [])
       .map((row) => row.pattern)
-      .filter(isOffer)
+      .filter(
+        (pattern) =>
+          isOffer(pattern) &&
+          pattern.subject.collection !== 'tasks' &&
+          (pattern.subject.id === id || pattern.subject.otherId === id),
+      )[0] ?? null,
+);
+
+/** The newest start-time guardrail about one of `ids`, the records a turn made (joined with a comma). */
+export const selectStartGuardrail = createSelector(
+  [
+    selectGuardrailRows,
+    selectIsLearningOn,
+    (_state: RootState, ids: string) => ids,
+  ],
+  (rows, isLearningOn, ids): OpenPattern | null =>
+    (isLearningOn ? rows : [])
+      .map((row) => row.pattern)
+      .filter(
+        (pattern) =>
+          isOffer(pattern) &&
+          pattern.moment === 'onStart' &&
+          ids.split(',').includes(pattern.subject.otherId ?? ''),
+      )
       .sort(offerOrder)[0] ?? null,
 );
 

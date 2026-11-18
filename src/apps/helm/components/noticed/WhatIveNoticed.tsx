@@ -4,13 +4,16 @@ import SectionDivider from '@/components/SectionDivider';
 import HelpTip from '@/components/HelpTip';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
+import { OpenTask } from '@apps/helm/components/home/MediaLine';
 import ForgetNoticedRow from '@apps/helm/components/noticed/ForgetNoticedRow';
+import GuardrailSheet from '@apps/helm/components/noticed/GuardrailSheet';
 import LearningSwitchRow from '@apps/helm/components/noticed/LearningSwitchRow';
 import PatternRow from '@apps/helm/components/noticed/PatternRow';
 import PatternSheet from '@apps/helm/components/noticed/PatternSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
+  selectGuardrailRows,
   selectNoticedRows,
   selectShownObservations,
   selectIsLearningOn,
@@ -22,16 +25,23 @@ const ROWS_SHOWN = 3;
 function WhatIveNoticed() {
   const assistant = useAssistantName();
   const rows = useAppSelector(selectNoticedRows);
+  const guardrails = useAppSelector(selectGuardrailRows);
   const hasObservations = useAppSelector(
     (state) => selectShownObservations(state).length > 0,
   );
   const isLearningOn = useAppSelector(selectIsLearningOn);
   const isLoaded = useAppSelector((state) => state.helm.patterns.isLoaded);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openGuardrailId, setOpenGuardrailId] = useState<string | null>(null);
+  const [laterTaskId, setLaterTaskId] = useState<string | null>(null);
   const [isAll, setIsAll] = useState(false);
   const [isUnusedOpen, setIsUnusedOpen] = useState(false);
   const used = rows.filter((row) => row.isUsed);
-  const unused = rows.filter((row) => !row.isUsed);
+  const usedGuardrails = guardrails.filter((row) => row.isUsed);
+  const guardrailIds = new Set(guardrails.map((row) => row.pattern.id));
+  const unused = [...rows, ...guardrails].filter((row) => !row.isUsed);
+  const openRow = (id: string) =>
+    guardrailIds.has(id) ? setOpenGuardrailId(id) : setOpenId(id);
   const shown = isAll ? used : used.slice(0, ROWS_SHOWN);
 
   const list = (items: typeof rows) => (
@@ -41,7 +51,7 @@ function WhatIveNoticed() {
           <PatternRow
             pattern={pattern}
             assistant={assistant}
-            onOpen={setOpenId}
+            onOpen={openRow}
           />
         </li>
       ))}
@@ -85,6 +95,22 @@ function WhatIveNoticed() {
           </ShowMoreButton>
         </div>
       )}
+      {usedGuardrails.length > 0 && (
+        <div className='space-y-3 pt-3'>
+          <SectionDivider label={HELM_COPY.guardrailGroupTitle} />
+          <ul className='helm-card divide-border divide-y overflow-hidden'>
+            {usedGuardrails.map(({ pattern }) => (
+              <li key={pattern.id}>
+                <PatternRow
+                  pattern={pattern}
+                  assistant={assistant}
+                  onOpen={setOpenGuardrailId}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {unused.length > 0 && (
         <div className='space-y-3 pt-3'>
           <SectionDivider
@@ -107,6 +133,23 @@ function WhatIveNoticed() {
         </div>
       )}
       <PatternSheet patternId={openId} onClose={() => setOpenId(null)} />
+      <GuardrailSheet
+        patternId={openGuardrailId}
+        onClose={() => setOpenGuardrailId(null)}
+        onFindLater={() =>
+          setLaterTaskId(
+            guardrails.find((row) => row.pattern.id === openGuardrailId)
+              ?.pattern.subject.id ?? null,
+          )
+        }
+      />
+      {laterTaskId && (
+        <OpenTask
+          taskId={laterTaskId}
+          isOpen
+          onClose={() => setLaterTaskId(null)}
+        />
+      )}
     </section>
   );
 }
