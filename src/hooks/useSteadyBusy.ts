@@ -11,13 +11,21 @@ export function useSteadyBusy(isBusy: boolean, minimumMs = DEFAULT_MINIMUM_MS) {
     if (!isBusy) return;
     run.current += 1;
     const thisRun = run.current;
-    const hold = setTimeout(() => setIsHeld(true), 0);
-    // Not cleared when the work ends: the hold outlives it until the moment is up.
+    // Neither timer is cleared when the work ends: the hold outlives it, even work that ends in the same tick.
+    setTimeout(() => {
+      if (run.current === thisRun) setIsHeld(true);
+    }, 0);
     setTimeout(() => {
       if (run.current === thisRun) setIsHeld(false);
     }, minimumMs);
-    return () => clearTimeout(hold);
   }, [isBusy, minimumMs]);
+
+  useEffect(
+    () => () => {
+      run.current += 1;
+    },
+    [],
+  );
 
   return isBusy || isHeld;
 }

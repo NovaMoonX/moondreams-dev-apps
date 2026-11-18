@@ -1,4 +1,5 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import { DEV_KEYRING } from '../../functions/src/appKeys/keyring.ts';
 import { APP_KEYS } from './apps.ts';
@@ -13,7 +14,9 @@ export function pinDevKeyrings() {
   const text = existsSync(SECRET_FILE) ? readFileSync(SECRET_FILE, 'utf8') : '';
   const names = Object.values(APP_KEYS)
     .map(({ secretName }) => secretName)
-    .filter((name) => !new RegExp(`^${name}=`, 'm').test(text));
+    .filter(
+      (name) => !new RegExp(`^\\s*(export\\s+)?${name}\\s*=`, 'm').test(text),
+    );
   if (names.length === 0) return names;
   const lines = names.flatMap((name) => [
     `# ${name}: the development keyring, so the emulator and the seed seal with the same keys (never a production key here)`,
@@ -25,7 +28,7 @@ export function pinDevKeyrings() {
   return names;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const names = pinDevKeyrings();
   if (names.length > 0)
     console.log(

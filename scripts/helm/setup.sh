@@ -318,12 +318,12 @@ optional_step() { # title, detect, run, default, question
     echo "→ would ask ($default): $question, then run: $title"; return 0
   fi
   local answers="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/helm-setup-answers" kept=""
-  kept="$(grep -F -- "$title=" "$answers" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+  kept="$(awk -F'\t' -v k="$title" '$1 == k { v = $2 } END { print v }' "$answers" 2>/dev/null || true)"
   if (( DEFAULTS )) && [[ -n "$kept" ]]; then
     echo "• $title: answering $kept, as last time (--defaults)"
   else
     if ask "$question" "$default"; then kept=y; else kept=n; fi
-    mkdir -p "$(dirname "$answers")"; { grep -vF -- "$title=" "$answers" 2>/dev/null || true; echo "$title=$kept"; } >"$answers.tmp"; mv "$answers.tmp" "$answers"
+    mkdir -p "$(dirname "$answers")"; { awk -F'\t' -v k="$title" '$1 != k' "$answers" 2>/dev/null || true; printf '%s\t%s\n' "$title" "$kept"; } >"$answers.tmp"; mv "$answers.tmp" "$answers"
   fi
   if [[ "$kept" == y ]]; then
     echo "→ ${title}…"; "$run"; add DONE_LIST "$title"
