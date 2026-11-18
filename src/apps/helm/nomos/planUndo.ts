@@ -1402,10 +1402,11 @@ export function planUndo(input: {
   const notesDone = [...notesDeleted, ...notesUnfiled];
   const factsDone = done.filter(({ docId }) => isFactDoc(docId));
   const datesDone = done.filter(({ docId }) => isKeyDateDoc(docId));
-  const records = done.filter(({ docId }) =>
+  const records = done.filter(({ docId, outcome }) =>
     isImport
       ? collectionOf.get(docId) === 'who'
-      : !isEntity(collectionOf.get(docId) ?? 'tasks') &&
+      : (!isEntity(collectionOf.get(docId) ?? 'tasks') ||
+          outcome.kind === 'restored') &&
         !isMediaDoc(docId) &&
         !isFactDoc(docId) &&
         !isKeyDateDoc(docId) &&
@@ -1515,8 +1516,21 @@ export function planUndo(input: {
   }
 
   const counted = records.filter(
-    ({ docId }) => collectionOf.get(docId) !== 'profile',
+    ({ docId }) =>
+      collectionOf.get(docId) !== 'profile' &&
+      (isImport || !isEntityDoc(docId)),
   );
+  const entityNames = isImport
+    ? []
+    : [
+        ...new Set(
+          records.flatMap(({ docId, outcome }) =>
+            isEntityDoc(docId) && outcome.kind === 'restored' && outcome.title
+              ? [outcome.title]
+              : [],
+          ),
+        ),
+      ];
   const homeEffect =
     done.find(
       ({ docId }) =>
@@ -1582,9 +1596,11 @@ export function planUndo(input: {
               .join(' ')
         : [
             counted.length === 0
-              ? isHomeRestored
-                ? HELM_COPY.undoReportHomeAgain
-                : HELM_COPY.undoReportHome
+              ? homeEffect === null && entityNames.length > 0
+                ? HELM_COPY.undoReportDetails(entityNames)
+                : isHomeRestored
+                  ? HELM_COPY.undoReportHomeAgain
+                  : HELM_COPY.undoReportHome
               : isImport
                 ? HELM_COPY.undoReportPeople(counted.length, kept.length, gone)
                 : HELM_COPY.undoReport(counted.length, kept.length, gone),
@@ -1729,9 +1745,11 @@ export function planUndo(input: {
           ? HELM_COPY.tookBackKeyDates(dateCount)
           : HELM_COPY.tookBackFacts(factCount)
       : counted.length === 0
-        ? wasLeaving
-          ? HELM_COPY.tookBackNotHome
-          : HELM_COPY.tookBackHome
+        ? homeEffect === null && entityNames.length > 0
+          ? HELM_COPY.tookBackDetails(entityNames)
+          : wasLeaving
+            ? HELM_COPY.tookBackNotHome
+            : HELM_COPY.tookBackHome
         : isImport
           ? kept.length > 0
             ? HELM_COPY.tookBackPeopleKept(counted.length, kept.length)

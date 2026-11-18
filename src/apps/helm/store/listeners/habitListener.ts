@@ -93,7 +93,7 @@ const readWindowState = (value: Habit['windowState'] | undefined) =>
   );
 
 /** A habit that won't open is kept, with no name, so the surface can say so instead of dropping it. */
-async function openHabit(
+export async function openHabit(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenHabit> {

@@ -2125,6 +2125,11 @@ test('keeping a thing quiet makes it private, and releasing it leaves it private
   if (kept.kind !== 'applied') return;
   assert.equal(kept.facts.privateMark, 'person');
   assert.equal(kept.facts.quietMark, 'person');
+  assert.equal(
+    readEffectivePrivacy(kept.facts, []),
+    'private',
+    'a quiet mark sets the privacy the outside tools mask by',
+  );
   const released = quiet(kept.facts, { isQuiet: false });
   assert.equal(released.kind, 'applied');
   if (released.kind !== 'applied') return;

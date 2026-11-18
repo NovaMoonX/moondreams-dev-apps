@@ -254,7 +254,7 @@ export function planConnections(input: {
     if (whoA.kind !== 'person' || whoB.kind !== 'person')
       return skip(
         acc,
-        'Connections are for people, so a pet or an organization can’t be linked',
+        'Connections are for people, so a pet or a business can’t be linked',
       );
     if (input.room - acc.effects.length < 1)
       return skip(acc, 'Not kept · too much to save in one go');
