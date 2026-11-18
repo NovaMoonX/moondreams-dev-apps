@@ -33,17 +33,13 @@ const labelOf = <T extends string>(
   value: T,
 ) => choices.find((choice) => choice.value === value)?.label ?? '';
 
-/** "Ounces and cups", "Pounds and ounces, cups", "Grams, volumes as written", "Pounds and ounces" (too long for a second clause on a phone) or "As written". */
+/** "Ounces and cups", "Pounds and ounces, cups", "Grams, volumes as written" or "As written". */
 const getUnitsSummary = ({ weight, volume }: PinchUnitSettings) => {
   const weightWord = labelOf(WEIGHT_CHOICES, weight);
   const volumeWord = labelOf(VOLUME_CHOICES, volume);
   if (weight === 'AS_WRITTEN' && volume === 'AS_WRITTEN') return 'As written';
   if (weight === 'AS_WRITTEN') return `${volumeWord}, weights as written`;
-  if (volume === 'AS_WRITTEN') {
-    return weight === 'LB_OZ'
-      ? weightWord
-      : `${weightWord}, volumes as written`;
-  }
+  if (volume === 'AS_WRITTEN') return `${weightWord}, volumes as written`;
   const joiner = weight === 'LB_OZ' ? ',' : ' and';
   return `${weightWord}${joiner} ${volumeWord.toLowerCase()}`;
 };
@@ -63,6 +59,7 @@ function UnitsRow({ uid, position }: UnitsRowProps) {
         groupPosition={position}
         icon='⚖️'
         summary={getUnitsSummary(units)}
+        lines={2}
         placeholder=''
         shouldFocus={false}
       >
