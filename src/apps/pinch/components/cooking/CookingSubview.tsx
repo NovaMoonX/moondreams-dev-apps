@@ -166,7 +166,10 @@ import {
   getConversionLine,
 } from '@apps/pinch/utils/cookConversions';
 import { getLineKey, getLineName } from '@apps/pinch/utils/freeLines';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import {
+  formatReadableAmount,
+  stepUpAmount,
+} from '@apps/pinch/utils/kitchenMeasure';
 import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -578,13 +581,17 @@ function CookingSession({
           line.amount === null
             ? null
             : scaleAmount(line.amount, targetServings, target.servings);
-        const shown =
+        const adapted =
           scaled === null
             ? null
             : (adaptAmount(scaled, line.unit, units) ?? {
                 amount: scaled,
                 unit: line.unit,
               });
+        const shown =
+          adapted === null
+            ? null
+            : stepUpAmount(adapted.amount, adapted.unit, units);
         const measure =
           shown === null
             ? null
@@ -604,7 +611,7 @@ function CookingSession({
           amountText:
             shown === null
               ? (line.note ?? '')
-              : formatKitchenAmount(shown.amount, shown.unit),
+              : formatReadableAmount(shown.amount, shown.unit, units),
           isMeasured: line.amount !== null,
           measure,
           conversion:
