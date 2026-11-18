@@ -46,6 +46,7 @@ import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
 import type { DockView } from '@apps/pinch/components/cooking/CookStepDock';
 import { useLastTimeNote } from '@apps/pinch/hooks/useLastTimeNote';
 import CookDictationCard from '@apps/pinch/components/cooking/CookDictationCard';
+import CookStopwatch from '@apps/pinch/components/cooking/CookStopwatch';
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
@@ -533,6 +534,8 @@ function CookingSession({
   const timers = useCookTimers(restored.timers, restored.reminderIds);
   const { getReminderId, pushRevision } = timers;
   const [sessionId] = useState(generateUuid);
+  const [startedAt] = useState(() => resume?.startedAt ?? Date.now());
+  const [cookedForMs, setCookedForMs] = useState<number | null>(null);
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -1042,6 +1045,7 @@ function CookingSession({
         currentId,
         positions: plate,
         captured: capture.captured,
+        startedAt,
         timers: timers.timers.map((timer): ResumeTimer => {
           const name = timer.recipeId === null ? timer.stepName : null;
           return timer.status === 'running'
@@ -1053,6 +1057,7 @@ function CookingSession({
   }, [
     uid,
     sessionId,
+    startedAt,
     isFinished,
     entries,
     openedRecipeId,
@@ -1075,14 +1080,25 @@ function CookingSession({
     return isConfirmed;
   };
 
-  const confirmLeave = async () => {
-    if (timers.liveCount === 0) return true;
+  /** Once a cook is recorded (or this is the finish tap) leaving asks only about live timers; a cook not yet recorded always asks, since leaving drops its place. */
+  const confirmLeave = async (isFinishing: boolean) => {
+    if (timers.liveCount === 0) {
+      if (isFinishing || isRecorded) return true;
+      return ask({
+        title: 'Leave cooking?',
+        message:
+          "Your place in the recipe won't be kept, and it won't be marked as cooked.",
+        confirmText: 'Leave',
+        cancelText: 'Keep cooking',
+        destructive: true,
+      });
+    }
 
     const isConfirmed = await ask({
       title: 'Stop timers and leave?',
       message: <LeaveMessage count={goingCount} />,
       confirmText: 'Leave',
-      cancelText: 'Stay',
+      cancelText: 'Keep cooking',
       destructive: true,
     });
     return isConfirmed;
@@ -1146,9 +1162,9 @@ function CookingSession({
     else replaceSubviewIf(isStillOpen, then);
   };
 
-  const leave = async () => {
+  const leave = async (isFinishing = false) => {
     if (!(await confirmDiscard())) return;
-    if (!(await confirmLeave())) return;
+    if (!(await confirmLeave(isFinishing))) return;
     leaveNow();
   };
 
@@ -1358,12 +1374,13 @@ function CookingSession({
       return;
     }
     if (!canMark) {
-      void leave();
+      void leave(true);
       return;
     }
     voice.stop();
     // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     finishedAt.current = Date.now();
+    setCookedForMs(finishedAt.current - startedAt);
     setIsFinished(true);
     scrollToTop();
     focusPrimary();
@@ -1379,7 +1396,7 @@ function CookingSession({
     // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     if (Date.now() - finishedAt.current < DONE_GUARD_MS) return;
     if (!(await confirmDiscard())) return;
-    if (!(await confirmLeave())) return;
+    if (!(await confirmLeave(true))) return;
     const target = await askToUpdate(changeTargets);
     leaveNow(
       target === null
@@ -2871,9 +2888,12 @@ function CookingSession({
         }
         title={isEditing ? editTitle : title}
         headerAction={
-          voice.isSupported && !isFinishShown && !isEditing ? (
-            <CookVoiceButton voice={voice} />
-          ) : null
+          isFinishShown || isEditing ? null : (
+            <div className='flex items-center gap-1'>
+              <CookStopwatch startedAt={startedAt} />
+              {voice.isSupported && <CookVoiceButton voice={voice} />}
+            </div>
+          )
         }
         onClose={closeSubview}
         onBack={() => {
@@ -2931,9 +2951,15 @@ function CookingSession({
             />
           ) : isFinishShown ? (
             <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6 [@media(max-height:600px)]:gap-3 [@media(max-height:600px)]:py-2'>
-              <p className='text-center text-2xl leading-snug font-medium'>
-                Nice work
-              </p>
+              <div className='text-center'>
+                <p className='text-2xl leading-snug font-medium'>Nice work</p>
+                {cookedForMs !== null && cookedForMs >= 60_000 && (
+                  <p className='text-muted-foreground mt-1 text-sm'>
+                    Cooked in{' '}
+                    {formatDuration(Math.floor(cookedForMs / 60_000) * 60)}
+                  </p>
+                )}
+              </div>
               {!capture.isOpen && !putAway.isOpen && (
                 <CookRecord
                   status={recordStatus}
