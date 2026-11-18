@@ -97,7 +97,7 @@ const toGroups = (value: unknown): Record<string, { name: string }> =>
     : {};
 
 /** A run that won't open is skipped, so a half-written one never shows as a blank row. */
-async function openRun(
+export async function openRun(
   entry: DocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenRun | null> {
