@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 
-import { getNextYearHorizon } from '../../src/apps/runway/engine/horizon.ts';
+import {
+  findNextOf,
+  getNextHorizon,
+  listEarlierEvents,
+} from '../../src/apps/runway/engine/horizon.ts';
 import { describeChange } from '../../src/apps/runway/utils/changeText.ts';
 import type {
   HorizonCost,
@@ -28,7 +32,7 @@ const cost = (id: string, over: Partial<HorizonCost> = {}): HorizonCost => ({
 const horizon: HorizonSealed = {
   name: 'Guys trip',
   emoji: '✈️',
-  happensOn: day('2024-02-29'),
+  happensOn: day('2026-11-16'),
   happensUntil: day('2026-11-18'),
   priority: 'should',
   orderIndex: 3,
@@ -50,7 +54,6 @@ const horizon: HorizonSealed = {
   stateMoney: { kind: 'free', toId: null, cents: 5_000, moveId: 'm1' },
   links: [{ changeId: 'c', itemId: 'i' }],
   goalId: 'goal-1',
-  isYearly: false,
   fromId: null,
 };
 
@@ -67,10 +70,12 @@ const entry = (costId: string, amountCents: number) => ({
   goalId: null,
 });
 
-const next = getNextYearHorizon(
+const plan = { happensOn: day('2027-11-12'), startsOn: day('2027-01-01') };
+const next = getNextHorizon(
   horizon,
   [entry('hotel', 12_345), entry('club', 3_000), entry('goal-goal-1', 41_000)],
   'this-id',
+  plan,
 );
 
 assert.deepEqual(
@@ -79,14 +84,17 @@ assert.deepEqual(
   'what the event is carries over',
 );
 assert.equal(next.goalId, 'goal-1', 'the linked goal carries over');
-assert.equal(next.isYearly, true, 'next year comes back too');
-assert.equal(next.fromId, 'this-id', 'it names the year before');
-assert.equal(next.happensOn, day('2025-02-28'), 'Feb 29 lands on Feb 28');
-assert.equal(next.happensUntil, day('2027-11-18'), 'the end moves a year');
+assert.equal(next.fromId, 'this-id', 'it names the event it came from');
+assert.equal(next.happensOn, day('2027-11-12'), 'it happens when asked');
+assert.equal(
+  next.happensUntil,
+  day('2027-11-14'),
+  'the end moves by the same days',
+);
 assert.deepEqual(
   next.rest,
   { kind: 'pays', startsOn: day('2027-01-01') },
-  'saving from moves a year',
+  'saving starts when asked',
 );
 assert.deepEqual(
   [next.state, next.stateOn, next.stateMoney, next.links],
@@ -126,8 +134,12 @@ assert.deepEqual(
   { lowCents: 10_000, highCents: 20_000 },
   'a repeating cost keeps its range even when payments were marked',
 );
-assert.equal(hotel.schedule.anchor, day('2027-11-10'), 'the anchor moves');
-assert.equal(club.ending.onDate, day('2027-12-05'), 'the end date moves');
+assert.equal(
+  hotel.schedule.anchor,
+  day('2027-11-06'),
+  'the anchor moves by the same gap',
+);
+assert.equal(club.ending.onDate, day('2027-12-01'), 'the end date moves too');
 assert.equal(hotel.pricedOn, null, 'pricing starts again');
 assert.equal(
   next.costs.every(
@@ -138,18 +150,33 @@ assert.equal(
 );
 
 assert.deepEqual(
-  getNextYearHorizon(
+  getNextHorizon(
     { ...horizon, rest: { kind: 'onePay', dayKey: 'x' } },
     [],
     't',
+    { happensOn: day('2027-11-12'), startsOn: null },
   ).rest,
   { kind: 'pays', startsOn: null },
   'a picked pay that will not exist becomes the pays',
 );
 assert.deepEqual(
-  getNextYearHorizon({ ...horizon, rest: { kind: 'later' } }, [], 't').rest,
+  getNextHorizon({ ...horizon, rest: { kind: 'later' } }, [], 't', plan).rest,
   { kind: 'later' },
   'other answers carry over',
+);
+const edited = getNextHorizon(horizon, [entry('hotel', 12_345)], 't', {
+  ...plan,
+  amounts: { hotel: { lowCents: 700, highCents: 900 } },
+});
+assert.deepEqual(
+  edited.costs[0].amount,
+  { lowCents: 700, highCents: 900 },
+  'an amount the person changed replaces the paid one',
+);
+assert.deepEqual(
+  edited.costs[1].amount,
+  { lowCents: 1, highCents: 99 },
+  'the others keep theirs',
 );
 assert.equal(
   horizon.costs[0].id,
@@ -167,4 +194,65 @@ assert.equal(
   'a change of only the saving start names the day it starts',
 );
 
-console.log('runway horizon next year: ok');
+const version = (
+  itemId: string,
+  fromId: string | null,
+  name: string,
+  happensOn: string,
+  createdAt = 1,
+) => ({
+  itemId,
+  id: `${itemId}-v${createdAt}`,
+  kind: 'horizon',
+  createdAt,
+  payload: { ...horizon, name, fromId, happensOn: day(happensOn) },
+});
+const versions = [
+  version('a', null, 'Trip 2025', '2025-11-12'),
+  version('b', 'a', 'Trip 2026', '2026-11-12'),
+  version('c', 'b', 'Trip 2027', '2027-11-12'),
+  version('c', 'b', 'Trip 2027 renamed', '2027-11-12', 2),
+];
+assert.deepEqual(
+  listEarlierEvents('c', versions).map(({ itemId }) => itemId),
+  ['b', 'a'],
+  'the chain reads back nearest first',
+);
+assert.deepEqual(
+  listEarlierEvents('a', versions),
+  [],
+  'a first event has none',
+);
+const live = [
+  { id: 'a', archivedAt: null, endedAt: null },
+  { id: 'b', archivedAt: null, endedAt: null },
+  { id: 'c', archivedAt: null, endedAt: null },
+];
+assert.equal(
+  findNextOf('b', null, live, versions, [])?.itemId,
+  'c',
+  'the next one is the event planned from it',
+);
+assert.equal(
+  findNextOf('b', null, live, versions, [])?.isUntouched,
+  false,
+  'a renamed next one is touched',
+);
+assert.equal(
+  findNextOf('c', null, live, versions, []),
+  null,
+  'the last one has no next',
+);
+assert.equal(
+  findNextOf(
+    'b',
+    null,
+    live.map((item) => ({ ...item, archivedAt: item.id === 'c' ? 1 : null })),
+    versions,
+    [],
+  ),
+  null,
+  'an archived next one is not one',
+);
+
+console.log('runway horizon next: ok');

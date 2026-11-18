@@ -526,9 +526,7 @@ export interface HorizonSealed {
   links: HorizonLink[];
   /** The goal this event draws its costs from while it keeps saving; null for none, and for a version sealed before goals could be linked. */
   goalId: string | null;
-  /** Comes back every year: finishing it, or calling off just this year, lines up next year's. */
-  isYearly: boolean;
-  /** The year before's event this one was lined up from; null for one added by hand. */
+  /** The earlier event this one was planned from; null for one added by hand. */
   fromId: string | null;
 }
 
@@ -542,10 +540,8 @@ export type HorizonStored = Omit<
   | 'stateMoney'
   | 'links'
   | 'goalId'
-  | 'isYearly'
   | 'fromId'
 > & {
-  isYearly?: boolean;
   fromId?: string | null;
   links?: HorizonLink[];
   goalId?: string | null;

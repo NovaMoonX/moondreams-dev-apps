@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRightLeft, Check } from 'lucide-react';
+import { ArrowRightLeft, CalendarPlus, Check, Wallet } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -25,13 +26,14 @@ import {
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
 import EffectPreview from '@apps/runway/components/EffectPreview';
+import HorizonNextFields from '@apps/runway/components/HorizonNextFields';
 import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_REASON_CHIPS,
   CHANGE_WORDS,
-  HELD_WORDS,
   HORIZON_END_WORDS,
+  HORIZON_NEXT_WORDS,
   LIFECYCLE_WORDS,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
@@ -39,7 +41,6 @@ import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   listCostPayments,
   listMadeBills,
-  getNextYearHorizon,
   listOpenCosts,
   setHorizonState,
 } from '@apps/runway/engine/horizon';
@@ -73,14 +74,18 @@ import {
   listCallOffChanges,
 } from '@apps/runway/utils/comingChangeText';
 import { describeCostWhen, describeCost } from '@apps/runway/utils/horizonText';
+import {
+  makeNextDraft,
+  readNextDraft,
+  type NextDraft,
+} from '@apps/runway/utils/horizonNextDraft';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 const MAX_STOPS_SHOWN = 3;
 
 type Choice = 'next' | 'free' | 'keep' | 'place' | null;
-type YearChoice = 'year' | 'every' | null;
 type ChangesChoice = 'cancel' | 'keep' | null;
-type Step = 'year' | 'changes' | 'money' | 'details' | 'review';
+type Step = 'next' | 'changes' | 'money' | 'details' | 'review';
 
 interface HorizonEndViewProps {
   itemId: string;
@@ -116,7 +121,7 @@ function HorizonEndView({
   const allCards = useAppSelector(selectAllCards);
   const [pick, setPick] = useState<Choice>(null);
   const [changesPick, setChangesPick] = useState<ChangesChoice>(null);
-  const [yearPick, setYearPick] = useState<YearChoice>(null);
+  const [nextDraft, setNextDraft] = useState<NextDraft | null>(null);
   const [nextId] = useState(generateUuid);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -133,12 +138,14 @@ function HorizonEndView({
   const isCallOff = mode === 'callOff';
   const leftCents = Math.max(0, balances.assignedByItem[itemId] ?? 0);
   const holdsMoney = leftCents > 0;
-  const asksYear = isCallOff && horizon.isYearly;
-  const makesNext = horizon.isYearly && (!isCallOff || yearPick === 'year');
-  const nextHorizon = makesNext
-    ? getNextYearHorizon(horizon, paid ?? [], itemId)
-    : null;
-  const nextTitle = HORIZON_END_WORDS.nextYearTitle(horizon.name);
+  const isChained = horizon.fromId !== null;
+  const makesNext =
+    !isCallOff && nextDraft !== null && (!holdsMoney || pick === 'next');
+  const nextRead =
+    makesNext && nextDraft
+      ? readNextDraft(nextDraft, horizon, paid ?? [], today)
+      : null;
+  const nextName = HORIZON_END_WORDS.nextName(horizon.name);
   const getDueOn = (cost: Parameters<typeof listCostPayments>[0]) =>
     listCostPayments(cost, today + 400 * DAY_MS, stance, paid).find(
       (payment) => payment.paid === null,
@@ -199,7 +206,7 @@ function HorizonEndView({
   };
   const where = getWhere();
   const getBlocker = () => {
-    if (asksYear && yearPick === null) return HORIZON_END_WORDS.needsYearChoice;
+    if (nextRead?.blocker) return nextRead.blocker;
     if (changeRows.length > 0 && changesPick === null)
       return HORIZON_END_WORDS.needsChangesChoice;
     if (where === null) {
@@ -218,7 +225,7 @@ function HorizonEndView({
       to.kind === 'place'
         ? HORIZON_END_WORDS.placeGets(to.name, money)
         : to.kind === 'next'
-          ? HORIZON_END_WORDS.placeGets(nextTitle, money)
+          ? HORIZON_END_WORDS.placeGets(nextName, money)
           : HORIZON_END_WORDS.heldStays(money, horizon.name)
     }`;
   };
@@ -285,7 +292,7 @@ function HorizonEndView({
           ))
     ) {
       addToast({
-        title: HORIZON_END_WORDS.nextYearChanged(horizon.name),
+        title: HORIZON_END_WORDS.nextChanged(horizon.name),
         type: 'error',
       });
       return;
@@ -308,7 +315,7 @@ function HorizonEndView({
             toId === null
               ? HORIZON_END_WORDS.freeTitle
               : toId === written.next?.itemId
-                ? nextTitle
+                ? nextName
                 : (place?.name ?? HORIZON_END_WORDS.anotherPlace),
         },
       );
@@ -378,7 +385,10 @@ function HorizonEndView({
         leftCents,
         where,
         note: why,
-        nextYear: makesNext ? { itemId: nextId, paid: paid ?? [] } : null,
+        next:
+          makesNext && nextRead?.plan
+            ? { itemId: nextId, paid: paid ?? [], plan: nextRead.plan }
+            : null,
         unlinks: fresh.map(({ link }) => link),
         cancels:
           changesPick === 'cancel'
@@ -401,7 +411,7 @@ function HorizonEndView({
         description:
           [
             holdsMoney && where.kind === 'next'
-              ? mask(HORIZON_END_WORDS.nextYearLinedUpWith(live.name, money))
+              ? mask(HORIZON_END_WORDS.nextLinedUpWith(live.name, money))
               : null,
             holdsMoney && where.kind !== 'next'
               ? mask(
@@ -413,7 +423,7 @@ function HorizonEndView({
                 )
               : null,
             makesNext && !(holdsMoney && where.kind === 'next')
-              ? HORIZON_END_WORDS.nextYearLinedUp(live.name)
+              ? HORIZON_END_WORDS.nextLinedUp(live.name)
               : null,
             changesPick === 'cancel' && fresh.length > 0
               ? HORIZON_END_WORDS.changesStayCancelled
@@ -531,23 +541,36 @@ function HorizonEndView({
   }
 
   const firstOpen = (): Step | null => {
-    if (asksYear && yearPick === null) return 'year';
     if (changeRows.length > 0 && changesPick === null) return 'changes';
     return holdsMoney && where === null ? 'money' : null;
   };
   const step: Step = editing ?? firstOpen() ?? 'review';
+  const choose = (choice: Exclude<Choice, null>) => {
+    if (choice === 'place') setPickBeforePicker(pick);
+    setPick(choice);
+    setIsPickerOpen(choice === 'place');
+    if (choice === 'next') {
+      setNextDraft(nextDraft ?? makeNextDraft(horizon, paid ?? [], today));
+      setEditing('next');
+    } else if (choice !== 'place') {
+      setEditing(null);
+    }
+    setError(null);
+  };
   const goBack = () => {
     if (step === 'review') return onBack();
     if (step === 'details' || (editing !== null && firstOpen() === null))
       return setEditing(null);
     if (step === 'money' && changeRows.length > 0) return setEditing('changes');
-    if (step === 'changes' && asksYear) return setEditing('year');
+    if (step === 'next') return setEditing(null);
     return onBack();
   };
 
   const footer = (
     <ModalFooterActions
-      note={step === 'review' ? error : null}
+      note={
+        step === 'review' ? error : step === 'next' ? nextRead?.blocker : null
+      }
       cancelAction={
         <Button
           type='button'
@@ -569,37 +592,43 @@ function HorizonEndView({
           >
             {primary}
           </Button>
+        ) : step === 'next' ? (
+          <Button
+            type='button'
+            disabled={nextRead?.blocker != null}
+            onClick={() => setEditing(null)}
+          >
+            {HORIZON_NEXT_WORDS.done}
+          </Button>
         ) : null
       }
     />
   );
 
-  if (step === 'year') {
+  if (step === 'next' && nextDraft) {
     return (
       <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
         <BackLink onBack={goBack} />
-        <ActionTitle>{HORIZON_END_WORDS.nextYearQuestion}</ActionTitle>
-        <ChoiceCards
-          options={[
-            {
-              value: 'year' as const,
-              title: HORIZON_END_WORDS.justThisYearTitle,
-              body: HORIZON_END_WORDS.justThisYearBody,
-            },
-            {
-              value: 'every' as const,
-              title: HORIZON_END_WORDS.everyYearTitle,
-              body: HORIZON_END_WORDS.everyYearBody,
-            },
-          ]}
-          value={yearPick}
-          onChange={(choice) => {
-            setYearPick(choice);
-            if (choice === 'every' && pick === 'next') setPick(null);
-            setEditing(null);
-            setError(null);
-          }}
+        <ActionTitle>{HORIZON_NEXT_WORDS.title}</ActionTitle>
+        <HorizonNextFields
+          horizon={horizon}
+          paid={paid ?? []}
+          draft={nextDraft}
+          onChange={setNextDraft}
+          today={today}
         />
+        {!holdsMoney && (
+          <div>
+            <RevealChip
+              onClick={() => {
+                setNextDraft(null);
+                setEditing(null);
+              }}
+            >
+              {HORIZON_END_WORDS.nextDontPlan}
+            </RevealChip>
+          </div>
+        )}
         {footer}
       </div>
     );
@@ -651,6 +680,12 @@ function HorizonEndView({
   }
 
   if (step === 'money') {
+    const nextSub = mask(HORIZON_END_WORDS.nextStarts(formatCents(leftCents)));
+    const rowClass = (value: Choice) =>
+      join(
+        pick === value &&
+          'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+      );
     return (
       <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
         <BackLink onBack={goBack} />
@@ -659,46 +694,70 @@ function HorizonEndView({
             {HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents))}
           </MaskedText>
         </ActionTitle>
-        <ChoiceCards
-          options={[
-            ...(makesNext
-              ? [
-                  {
-                    value: 'next' as const,
-                    title: nextTitle,
-                    body: HORIZON_END_WORDS.nextYearBody,
-                  },
-                ]
-              : []),
-            {
-              value: 'free' as const,
-              title: HORIZON_END_WORDS.freeTitle,
-              body: HORIZON_END_WORDS.freeBody,
-            },
-            {
-              value: 'keep' as const,
-              title: HELD_WORDS.keepTitle,
-              body: HELD_WORDS.keepBody,
-            },
-            {
-              value: 'place' as const,
-              title: HORIZON_END_WORDS.placeRow,
-              hasChevron: true,
-              body:
+        {isChained && (
+          <ChoiceCards
+            options={[
+              {
+                value: 'next' as const,
+                title: HORIZON_END_WORDS.nextTitle,
+                body: nextSub,
+              },
+            ]}
+            value={pick === 'next' ? 'next' : null}
+            onChange={() => choose('next')}
+          />
+        )}
+        <ActionGroup isRoomy>
+          <div className={rowClass('free')} aria-current={pick === 'free'}>
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<Wallet />}
+              label={HORIZON_END_WORDS.freeTitle}
+              subtitle={HORIZON_END_WORDS.freeBody}
+              onClick={() => choose('free')}
+            />
+          </div>
+          <div className={rowClass('place')} aria-current={pick === 'place'}>
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<ArrowRightLeft />}
+              label={HORIZON_END_WORDS.placeRow}
+              subtitle={
                 pick === 'place' && place
                   ? HORIZON_END_WORDS.placePicked(place.name)
-                  : HORIZON_END_WORDS.placeRowSub,
-            },
-          ]}
-          value={pick}
-          onChange={(choice) => {
-            if (choice === 'place') setPickBeforePicker(pick);
-            setPick(choice);
-            setIsPickerOpen(choice === 'place');
-            if (choice !== 'place') setEditing(null);
-            setError(null);
-          }}
-        />
+                  : HORIZON_END_WORDS.placeRowSub
+              }
+              onClick={() => choose('place')}
+            />
+          </div>
+          {!isChained && (
+            <div className={rowClass('next')} aria-current={pick === 'next'}>
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<CalendarPlus />}
+                label={HORIZON_END_WORDS.nextTitle}
+                subtitle={nextSub}
+                onClick={() => choose('next')}
+              />
+            </div>
+          )}
+        </ActionGroup>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='text-muted-foreground self-center'
+          aria-pressed={pick === 'keep'}
+          onClick={() => choose('keep')}
+        >
+          {pick === 'keep' && <Check className='size-4' />}
+          {HORIZON_END_WORDS.keepQuiet}
+        </Button>
         {footer}
       </div>
     );
@@ -764,7 +823,7 @@ function HorizonEndView({
 
   const getMoneyAnswer = (to: HorizonWhere) => {
     if (to.kind === 'free') return HORIZON_END_WORDS.moneyToFree;
-    if (to.kind === 'next') return HORIZON_END_WORDS.moneyToNext(horizon.name);
+    if (to.kind === 'next') return HORIZON_END_WORDS.moneyToNext;
     return to.kind === 'place'
       ? HORIZON_END_WORDS.moneyToPlace(to.name)
       : HORIZON_END_WORDS.moneyStaysHeld(horizon.name);
@@ -777,14 +836,6 @@ function HorizonEndView({
       <BackLink onBack={goBack} />
       <ActionTitle>{title}</ActionTitle>
       <div className='space-y-2'>
-        {asksYear && yearPick !== null && (
-          <SummaryRow
-            label={HORIZON_END_WORDS.yearRowLabel}
-            onClick={() => setEditing('year')}
-          >
-            {HORIZON_END_WORDS.yearAnswer(yearPick === 'every')}
-          </SummaryRow>
-        )}
         {changeRows.length > 0 && changesPick !== null && (
           <SummaryRow
             label={HORIZON_END_WORDS.changesRowLabel(changeRows.length)}
@@ -805,6 +856,14 @@ function HorizonEndView({
             {getMoneyAnswer(where)}
           </SummaryRow>
         )}
+        {nextRead?.plan && (
+          <SummaryRow
+            label={HORIZON_END_WORDS.nextRowLabel}
+            onClick={() => setEditing('next')}
+          >
+            {formatDateOrdinalUTC(nextRead.plan.happensOn)}
+          </SummaryRow>
+        )}
         {changeJson !== null && (
           <SummaryRow
             label={HORIZON_END_WORDS.detailsTitle}
@@ -816,19 +875,17 @@ function HorizonEndView({
           </SummaryRow>
         )}
       </div>
-      {nextHorizon && (
-        <p className='text-muted-foreground text-sm'>
-          {HORIZON_END_WORDS.nextYearLine(
-            horizon.name,
-            formatDateOrdinalUTC(nextHorizon.happensOn),
-          )}
-          {nextHorizon.rest.kind === 'pays' &&
-            ` ${HORIZON_END_WORDS.nextYearSaving(
-              nextHorizon.rest.startsOn === null
-                ? null
-                : formatDateOrdinalUTC(nextHorizon.rest.startsOn),
-            )}`}
-        </p>
+      {!isCallOff && !holdsMoney && nextDraft === null && (
+        <div>
+          <RevealChip
+            onClick={() => {
+              setNextDraft(makeNextDraft(horizon, paid ?? [], today));
+              setEditing('next');
+            }}
+          >
+            {HORIZON_END_WORDS.nextTitle}
+          </RevealChip>
+        </div>
       )}
       {isCallOff && isReasonOpen && (
         <>

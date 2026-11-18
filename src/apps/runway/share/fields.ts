@@ -353,7 +353,6 @@ const HORIZON_SEALED_FIELDS = {
   stateMoney: 'notUseful',
   links: 'notUseful',
   goalId: 'notUseful',
-  isYearly: 'notUseful',
   fromId: 'notUseful',
 } satisfies Record<keyof HorizonSealed, ShareDecision>;
 

@@ -471,13 +471,6 @@ export const HORIZON_WORDS = {
     `Put ${amount} toward ${name} from ${from}.`,
   putUndone: (amount: string, name: string, from: string) =>
     `Took ${amount} back out of ${name} to ${from}`,
-  yearlyTitle: 'Does it happen every year?',
-  yearly: 'How often',
-  yearlyOnce: 'Once',
-  yearlyEvery: 'Every year',
-  yearlySwitch: 'Comes back every year',
-  yearlySwitchMeaning: "Finishing it lines up next year's.",
-  everyYear: 'every year',
   restPaysFromSummary: (date: string) => `My pays from ${date}`,
   startingLabel: 'Saving starts',
   startingTitle: 'When do your pays start saving for it?',
@@ -791,7 +784,7 @@ export const HORIZON_END_WORDS = {
   finishLabel: (name: string) => `Finish ${name}`,
   finishTitle: (name: string) => `Finish ${name}?`,
   moneyQuestion: (amount: string) => `What happens to the ${amount} left?`,
-  freeBody: 'From today.',
+  freeBody: 'You can spend it right away.',
   placeRow: 'Move it to an envelope or goal',
   placeRowSub: 'Pick where it goes',
   placeSearch: 'Search',
@@ -924,37 +917,30 @@ export const HORIZON_END_WORDS = {
     'What it holds changed just now. Look again, then try once more.',
   endless: (cost: string) =>
     `${cost} repeats with no end. End it or make it a bill to finish.`,
-  nextYearTitle: (name: string) => `Next year's ${name}`,
-  nextYearBody: 'It starts with what is left.',
-  nextYearLine: (name: string, around: string) =>
-    `Next year's ${name}: around ${around}.`,
-  nextYearSaving: (startsOn: string | null) =>
-    startsOn === null
-      ? 'Your pays start saving for it right away.'
-      : `Your pays start saving for it on ${startsOn}.`,
-  moneyToNext: (name: string) => `Moves to next year's ${name}`,
-  nextYearLinedUp: (name: string) => `Next year's ${name} is lined up.`,
-  nextYearLinedUpWith: (name: string, money: string) =>
-    `Next year's ${name} is lined up and starts with the ${money}.`,
-  nextYearQuestion: 'Skip just this one, or stop it for good?',
-  justThisYearTitle: 'Skip this one',
-  justThisYearBody: "Next year's is lined up.",
-  everyYearTitle: 'Stop for good',
-  everyYearBody: 'No more after this one.',
-  needsYearChoice: 'Choose skip this one or stop for good.',
-  yearRowLabel: 'Which years',
-  yearAnswer: (isEveryYear: boolean) =>
-    isEveryYear ? 'Stop for good' : 'Skip this one',
+  nextTitle: 'Plan the next one',
+  keepQuiet: 'Keep it held for now',
+  nextName: (name: string) => `The next ${name}`,
+  nextStarts: (money: string) => `Starts with ${money}`,
+  nextRowSub: 'Pick a date and change what it costs',
+  moneyToNext: 'Moves to the next one',
+  nextLinedUp: (name: string) => `The next ${name} is planned.`,
+  nextLinedUpWith: (name: string, money: string) =>
+    `The next ${name} is planned and starts with the ${money}.`,
+  nextRowLabel: 'The next one',
+  nextFact: (date: string) => `Next one: ${date}`,
+  nextDontPlan: "Don't plan the next one",
+  earlierCaption: 'Earlier ones',
+  earlierRow: (date: string, spent: string | null) =>
+    spent === null ? date : `${date} \u00b7 ${spent}`,
   linedUpSummary: (name: string, year: number) =>
     `Lined up ${name} for ${year}.`,
   undoLinedUpSummary: (name: string, year: number) =>
     `Took back lining up ${name} for ${year}.`,
-  nextYearUnderway: (name: string) =>
-    `Next year's ${name} is already under way, so this one stays done.`,
-  nextYearHolds: (name: string) =>
-    `Next year's ${name} holds the money. Bring it back to reopen this one.`,
-  nextYearChanged: (name: string) =>
-    `Next year's ${name} has changed, so it stays.`,
+  nextUnderway: (name: string) =>
+    `The next ${name} is already under way, so this one stays done.`,
+  nextHolds: (name: string) =>
+    `The next ${name} holds the money. Bring it back to reopen this one.`,
+  nextChanged: (name: string) => `The next ${name} has changed, so it stays.`,
   freeUp: (amount: string) => `Free to Spend goes up by ${amount}.`,
   freeDown: (amount: string) => `Free to Spend goes down by ${amount}.`,
   nothingPaid: 'Nothing paid',
@@ -4309,11 +4295,32 @@ export const MADE_UP_WORDS = {
     'Part of this was written while amounts were made up. Retype the amounts in it and save again.',
 } as const;
 
+/** Planning the next event from a finished or called-off one. */
+export const HORIZON_NEXT_WORDS = {
+  title: 'When do you think it will be?',
+  dateLabel: 'When it will be',
+  costsCopied: (count: number) =>
+    count === 1 ? '1 cost copied' : `${count} costs copied`,
+  costsTitle: 'Costs',
+  amountOf: (name: string) => `${name} amount`,
+  lowOf: (name: string) => `${name}, lowest`,
+  highOf: (name: string) => `${name}, highest`,
+  needsAmount: 'Enter an amount for each cost.',
+  planConfirm: 'Plan it',
+  done: 'Done',
+  planned: (name: string) => `Planned the next ${name}.`,
+  undoPlanned: (name: string) => `Took back the next ${name}.`,
+  planFailed: 'That did not save. Try again.',
+  alreadyPlanned: 'The next one is already planned.',
+  changedSince: 'The next one changed since, so it stays.',
+  gone: 'This event is gone.',
+} as const;
+
 /** Round 7 package G9: archiving or ending an item that holds money asks what happens to it. */
 export const HELD_WORDS = {
   caption: (amount: string) => `The ${amount} it holds`,
   freeTitle: 'Make it Free\u00a0to\u00a0Spend',
-  freeArchive: 'From today.',
+  freeArchive: 'You can spend it right away.',
   freeEnd: (date: string) => `From ${date}.`,
   keepTitle: 'Keep it held',
   keepBody: 'Until you release it.',
@@ -4350,7 +4357,7 @@ export const START_HELD_WORDS = {
   keepBody: 'Until you release it from its Plan view.',
   blocker: 'Choose what happens to the money it holds.',
   startOverBlocker: 'Choose what happens to the money they hold.',
-  freeBody: 'From today.',
+  freeBody: 'You can spend it right away.',
 } as const;
 
 /** Round 7b package F2: a cover already taken, when the difference has since grown. */

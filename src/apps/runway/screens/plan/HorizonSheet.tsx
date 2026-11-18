@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Ban,
+  CalendarPlus,
+  ChevronRight,
   HandCoins,
   History,
   Pencil,
@@ -39,6 +41,7 @@ import CoversLine, {
 } from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
+import HorizonPlanNextView from '@apps/runway/components/HorizonPlanNextView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import {
@@ -73,8 +76,10 @@ import {
 } from '@apps/runway/constants';
 import {
   changeCost,
+  findNextOf,
   getCostPriority,
   getNextVersionId,
+  listEarlierEvents,
   listEndlessCosts,
   listOpenCosts,
   type CostChange,
@@ -173,6 +178,7 @@ function HorizonSheet({
   const { addToast } = useToast();
   const mask = useMaskedText();
   const [isReleasing, setIsReleasing] = useState(false);
+  const [isNextOpen, setIsNextOpen] = useState(false);
   const [view, setView] = useState<
     | 'main'
     | 'change'
@@ -180,6 +186,7 @@ function HorizonSheet({
     | 'finish'
     | 'callOff'
     | 'bringBack'
+    | 'planNext'
     | 'planChange'
   >('main');
   const [unlinkId, setUnlinkId] = useState<string | null>(null);
@@ -194,6 +201,7 @@ function HorizonSheet({
   const [openedChange, setOpenedChange] = useState<PlanChange | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const versions = useAppSelector((state) => state.runway.versions);
+  const moves = useAppSelector((state) => state.runway.moves);
   const stops = useAppSelector(selectItemStops);
   const ends = useAppSelector(selectItemEnds);
   const allCards = useAppSelector(selectAllCards);
@@ -228,6 +236,18 @@ function HorizonSheet({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const events = useAppSelector((state) => selectAllHorizonItems(state, today));
+  const allItems = useAppSelector((state) => state.runway.items);
+  const next = isDone
+    ? findNextOf(
+        itemId,
+        horizon.stateMoney?.moveId ?? null,
+        allItems,
+        versions,
+        moves,
+      )
+    : null;
+  const nextEvent = events.find(({ item }) => item.id === next?.itemId) ?? null;
+  const earlier = listEarlierEvents(itemId, versions);
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -768,6 +788,14 @@ function HorizonSheet({
           onBack={() => setView('main')}
           onClose={onClose}
         />
+      ) : view === 'planNext' ? (
+        <HorizonPlanNextView
+          itemId={itemId}
+          horizon={horizon}
+          today={today}
+          onBack={() => setView('main')}
+          onClose={onClose}
+        />
       ) : view === 'bringBack' ? (
         <HorizonBringBackView
           itemId={itemId}
@@ -807,6 +835,33 @@ function HorizonSheet({
               {ITEM_VIEW_WORDS.historyTitle}
             </p>
           </div>
+          {earlier.length > 0 && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-sm font-medium'>
+                {HORIZON_END_WORDS.earlierCaption}
+              </p>
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {earlier.map((event) => (
+                  <li
+                    key={event.itemId}
+                    className='flex items-baseline justify-between gap-3 px-3 py-2 text-sm'
+                  >
+                    <span className='min-w-0 break-words'>{event.name}</span>
+                    <span className='text-muted-foreground shrink-0 text-right'>
+                      <MaskedText>
+                        {HORIZON_END_WORDS.earlierRow(
+                          formatDateOrdinalUTC(event.happensOn),
+                          formatCents(
+                            balances.costPaidByItem[event.itemId] ?? 0,
+                          ),
+                        )}
+                      </MaskedText>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ItemHistoryView itemId={itemId} />
         </div>
       ) : openCost && costEdit !== null && costEdit !== 'form' ? (
@@ -899,6 +954,20 @@ function HorizonSheet({
                 </MaskedText>
               </p>
             )}
+            {next && nextEvent && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className='text-muted-foreground! -ml-2 h-auto gap-1 py-0.5 text-sm font-normal'
+                onClick={() => setIsNextOpen(true)}
+              >
+                {HORIZON_END_WORDS.nextFact(
+                  formatDateOrdinalUTC(next.happensOn),
+                )}
+                <ChevronRight className='size-4' aria-hidden='true' />
+              </Button>
+            )}
           </div>
           {goalBlock}
           {changesBlock}
@@ -938,6 +1007,17 @@ function HorizonSheet({
             </div>
           )}
           <ActionGroup isRoomy>
+            {!next && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<CalendarPlus />}
+                label={HORIZON_END_WORDS.nextTitle}
+                subtitle={HORIZON_END_WORDS.nextRowSub}
+                onClick={() => setView('planNext')}
+              />
+            )}
             <ActionRow
               isGrouped
               isRoomy
@@ -1228,6 +1308,15 @@ function HorizonSheet({
             />
           )}
         </div>
+      )}
+      {isNextOpen && nextEvent && (
+        <HorizonSheet
+          itemId={nextEvent.item.id}
+          horizon={nextEvent.version.payload}
+          today={today}
+          stance={stance}
+          onClose={() => setIsNextOpen(false)}
+        />
       )}
       {unlinking && (
         <FormSheet

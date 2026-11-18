@@ -6,7 +6,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import AppToggle from '@/components/AppToggle';
 import DateInput from '@/components/DateInput';
 import EmojiField from '@/components/EmojiField';
 import { PillGroup } from '@/components/PillGroup';
@@ -99,7 +98,6 @@ function HorizonChangeForm({
     horizon.rest.kind === 'pays' ? horizon.rest.startsOn : null,
   );
   const [priority, setPriority] = useState<Priority>(horizon.priority);
-  const [isYearly, setIsYearly] = useState(horizon.isYearly);
 
   const trimmed = name.trim();
   const happensOn = fromDateInputValue(date);
@@ -174,7 +172,6 @@ function HorizonChangeForm({
                   priority,
                 ),
           rest: getRest(),
-          isYearly,
         };
 
   const { isHidden } = useValuesHidden();
@@ -353,30 +350,6 @@ function HorizonChangeForm({
                 }}
               />
             ))}
-        </div>
-      ),
-    },
-    {
-      id: 'yearly',
-      title: HORIZON_WORDS.yearly,
-      summaryLabel: HORIZON_WORDS.yearly,
-      summaryValue: isYearly
-        ? HORIZON_WORDS.yearlyEvery
-        : HORIZON_WORDS.yearlyOnce,
-      isAnswered: true,
-      render: () => (
-        <div className='flex items-center justify-between gap-3'>
-          <div className='min-w-0 space-y-0.5'>
-            <p className='font-medium'>{HORIZON_WORDS.yearlySwitch}</p>
-            <p className='text-muted-foreground text-sm'>
-              {HORIZON_WORDS.yearlySwitchMeaning}
-            </p>
-          </div>
-          <AppToggle
-            aria-label={HORIZON_WORDS.yearlySwitch}
-            checked={isYearly}
-            onCheckedChange={setIsYearly}
-          />
         </div>
       ),
     },

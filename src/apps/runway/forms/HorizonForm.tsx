@@ -1,13 +1,5 @@
 import { useRef, useState } from 'react';
-import {
-  CalendarCheck,
-  CalendarRange,
-  Clock,
-  Pin,
-  Plus,
-  Repeat,
-  Wallet,
-} from 'lucide-react';
+import { CalendarRange, Clock, Pin, Plus, Wallet } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -99,8 +91,6 @@ interface HorizonFormData {
   putPlaceId: string | null;
   /** "Not now" was chosen: the question is answered with no money. */
   isNotNow: boolean;
-  /** Null until the person answers "Does it happen every year?". */
-  isYearly: boolean | null;
   /** Null until the person picks one. */
   rest: HorizonRest['kind'] | null;
   /** The day "My pays before each cost is due" starts saving; null starts today. */
@@ -121,7 +111,6 @@ const INITIAL_DATA: HorizonFormData = {
   putFrom: null,
   putPlaceId: null,
   isNotNow: false,
-  isYearly: null,
   rest: null,
   startsOn: null,
   restDayKey: null,
@@ -332,7 +321,6 @@ function HorizonForm({
     stateMoney: null,
     links: [],
     goalId: seed?.kind === 'goal' ? seed.goalId : null,
-    isYearly: formData.isYearly === true,
     fromId: null,
   });
   const startBlocker =
@@ -510,55 +498,6 @@ function HorizonForm({
             </div>
           )}
         </div>
-      ),
-    },
-    {
-      id: 'yearly',
-      title: HORIZON_WORDS.yearlyTitle,
-      summaryLabel: HORIZON_WORDS.yearly,
-      summaryValue:
-        formData.isYearly === null
-          ? ''
-          : formData.isYearly
-            ? HORIZON_WORDS.yearlyEvery
-            : HORIZON_WORDS.yearlyOnce,
-      isAnswered: formData.isYearly !== null,
-      render: ({ moveOn }) => (
-        <ActionGroup isRoomy>
-          {[
-            {
-              value: false,
-              label: HORIZON_WORDS.yearlyOnce,
-              meaning: undefined,
-            },
-            {
-              value: true,
-              label: HORIZON_WORDS.yearlyEvery,
-              meaning: HORIZON_WORDS.yearlySwitchMeaning,
-            },
-          ].map(({ value, label, meaning }) => (
-            <div
-              key={label}
-              className={join(
-                formData.isYearly === value &&
-                  'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
-              )}
-              aria-current={formData.isYearly === value ? 'true' : undefined}
-            >
-              <ActionRow
-                isGrouped
-                isRoomy
-                icon={value ? <Repeat /> : <CalendarCheck />}
-                label={label}
-                subtitle={meaning}
-                onClick={() => {
-                  set({ isYearly: value });
-                  moveOn();
-                }}
-              />
-            </div>
-          ))}
-        </ActionGroup>
       ),
     },
     {

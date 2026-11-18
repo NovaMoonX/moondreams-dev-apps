@@ -113,11 +113,7 @@ function HorizonRow({
       ? HORIZON_WORDS.due(next.name, formatDateOrdinalUTC(next.dueOn))
       : HORIZON_WORDS.nothingDue;
   };
-  const baseDetail = getDetail();
-  const detail =
-    horizon.isYearly && !isDone
-      ? `${baseDetail} · ${HORIZON_WORDS.everyYear}`
-      : baseDetail;
+  const detail = getDetail();
   const left = formatCentsShort(
     isDone ? figures.spentCents : figures.leftCents,
   );

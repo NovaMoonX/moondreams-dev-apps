@@ -19,7 +19,7 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import { HORIZON_END_WORDS } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
-  findNextYearOf,
+  findNextOf,
   getBringableCents,
   listCostPayments,
   listOpenCosts,
@@ -224,23 +224,23 @@ function HorizonBringBackView({
       return;
     }
     const { items, versions, moves } = store.getState().runway;
-    const nextYear = findNextYearOf(
+    const next = findNextOf(
       itemId,
       live.stateMoney?.moveId ?? null,
       items,
       versions,
       moves,
     );
-    if (nextYear && !nextYear.isUntouched) {
-      setError(HORIZON_END_WORDS.nextYearUnderway(live.name));
+    if (next && !next.isUntouched) {
+      setError(HORIZON_END_WORDS.nextUnderway(live.name));
       return;
     }
     if (
-      nextYear &&
-      (selectBalances(store.getState()).assignedByItem[nextYear.itemId] ?? 0) >
+      next &&
+      (selectBalances(store.getState()).assignedByItem[next.itemId] ?? 0) >
         bringCents
     ) {
-      setError(HORIZON_END_WORDS.nextYearHolds(live.name));
+      setError(HORIZON_END_WORDS.nextHolds(live.name));
       return;
     }
     isSavingRef.current = true;
@@ -258,15 +258,15 @@ function HorizonBringBackView({
           0,
           getAvailable(selectBalances(store.getState())),
         ),
-        archives: nextYear
+        archives: next
           ? {
-              itemId: nextYear.itemId,
-              versionId: nextYear.versionId,
+              itemId: next.itemId,
+              versionId: next.versionId,
               summary: HORIZON_END_WORDS.undoLinedUpSummary(
                 live.name,
-                new Date(nextYear.happensOn).getUTCFullYear(),
+                new Date(next.happensOn).getUTCFullYear(),
               ),
-              changedMessage: HORIZON_END_WORDS.nextYearUnderway(live.name),
+              changedMessage: HORIZON_END_WORDS.nextUnderway(live.name),
               alsoItemIds: live.goalId === null ? [] : [live.goalId],
             }
           : null,
