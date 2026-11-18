@@ -6,7 +6,6 @@ import {
   getCountFromServer,
   getDocs,
   query,
-  runTransaction,
   updateDoc,
   where,
   setDoc,
@@ -15,6 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { generateUuid } from '@/utils';
 import {
@@ -139,8 +139,8 @@ export async function updateProject(
   const words = toWords(edit);
   const ref = doc(projectsOf(uid), projectId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<ProjectEditResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
@@ -252,8 +252,8 @@ export async function changeProjectRole(
   const whoId = 'whoId' in target ? target.whoId : (newWhoId as string);
   const whoRef = doc(collection(userOf(uid), 'who'), whoId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<RoleResult> => {
         const [project, who] = await Promise.all([
           transaction.get(projectRef),
@@ -419,7 +419,7 @@ async function undoRole(input: {
     input;
   const projectRef = doc(projectsOf(uid), projectId);
   const whoRef = doc(collection(userOf(uid), 'who'), whoId);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [project, who] = await Promise.all([
       transaction.get(projectRef),
       input.raised.tierBefore !== null && !input.raised.madeWho
@@ -481,7 +481,7 @@ const relink = (uid: string, projectId: string, ids: string[]) =>
   toChunks(ids).reduce(
     (chain, chunk) =>
       chain.then(() =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(doc(tasksOf(uid), id))),
           );
@@ -508,7 +508,7 @@ export async function deleteProject(uid: string, projectId: string) {
   const chunks = toChunks(found.docs.map((entry) => entry.id));
   const outcomes = await Promise.allSettled(
     chunks.map((chunk) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map((id) => transaction.get(doc(tasksOf(uid), id))),
         );
@@ -535,7 +535,7 @@ export async function deleteProject(uid: string, projectId: string) {
     throw reason;
   };
   if (failed) await abandon(failed.reason);
-  const raw = await runTransaction(db, async (transaction) => {
+  const raw = await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return null;
     transaction.delete(ref);
@@ -549,7 +549,7 @@ export async function deleteProject(uid: string, projectId: string) {
   return {
     taskCount: cut.length,
     restore: async (): Promise<'restored' | 'exists'> => {
-      const isBack = await runTransaction(db, async (transaction) => {
+      const isBack = await runHeldTransaction(uid, async (transaction) => {
         if ((await transaction.get(ref)).exists()) return false;
         transaction.set(ref, { ...raw, lastEditedAt: Date.now() });
         return true;
@@ -602,8 +602,8 @@ async function changeMilestones(
   if (!navigator.onLine) return { kind: 'offline' };
   const ref = doc(projectsOf(uid), projectId);
   try {
-    return await runTransaction(
-      db,
+    return await runHeldTransaction(
+      uid,
       async (transaction): Promise<MilestoneResult> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return { kind: 'missing' };
@@ -647,7 +647,7 @@ const settleMilestone = (
     title: string | undefined,
   ) => boolean,
 ) =>
-  runTransaction(db, async (transaction) => {
+  runHeldTransaction(uid, async (transaction) => {
     const ref = doc(projectsOf(uid), projectId);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return false;
@@ -807,7 +807,7 @@ export function setMilestoneDone(
   return {
     written: updateDoc(ref, { [field]: doneAt }),
     undo: () =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshot = await transaction.get(ref);
         const current = snapshot.exists()
           ? (snapshot.data() as Project).milestoneState?.[id]
@@ -885,7 +885,7 @@ export async function clearDoneTasks(
   const cleared: string[] = [];
   const bringBack = (ids: string[]) =>
     inChunks(ids, (chunk) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map((id) => transaction.get(doc(tasksOf(uid), id))),
         );
@@ -899,7 +899,7 @@ export async function clearDoneTasks(
     ).then(() => undefined);
   try {
     await inChunks(candidateIds, async (chunk) => {
-      const made = await runTransaction(db, async (transaction) => {
+      const made = await runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map((id) => transaction.get(doc(tasksOf(uid), id))),
         );

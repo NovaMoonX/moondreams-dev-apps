@@ -20,7 +20,7 @@ const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your facts did not open.');
 
 /** A fact that won't open is left out: with no words there is nothing to show. */
-async function openFact(
+export async function openFact(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenFact[]> {

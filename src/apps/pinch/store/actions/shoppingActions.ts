@@ -2,7 +2,6 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
 import {
   doc,
-  runTransaction,
   updateDoc,
   writeBatch,
   type DocumentSnapshot,
@@ -12,6 +11,7 @@ import {
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import {
   MAX_SHOPPING_LINES_PER_ADD,
   SHOPPING_BATCH_SIZE,
@@ -130,7 +130,7 @@ export const addToShoppingList = createAsyncThunk<
     }
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           lines.map((line) => transaction.get(lineDoc(uid, line))),
         );
@@ -220,7 +220,7 @@ export const updateShoppingItem = createAsyncThunk<
       };
       const targetId = getShoppingItemId(item.ingredientId, unit);
       const rowIds = [item.id, ...mergedIds];
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(uid, async (transaction) => {
         const [current, target, ...merged] = await Promise.all([
           transaction.get(shoppingDoc(uid, item.id)),
           transaction.get(lineDoc(uid, line)),
@@ -308,7 +308,7 @@ export const clearCheckedShoppingItems = createAsyncThunk<
       // Each chunk is its own transaction, so one that fails leaves the others cleared.
       const cleared = await Promise.all(
         toChunks(ids).map((chunk) =>
-          runTransaction(db, async (transaction) => {
+          runHeldTransaction(uid, async (transaction) => {
             const snapshots = await Promise.all(
               chunk.map((id) => transaction.get(shoppingDoc(uid, id))),
             );
@@ -372,7 +372,7 @@ export const stopShoppingFor = createAsyncThunk<
       .map((item) => item.id);
 
     const stopChunk = (chunk: string[]) =>
-      runTransaction(db, async (transaction) => {
+      runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           chunk.map((id) => transaction.get(shoppingDoc(uid, id))),
         );
@@ -448,7 +448,7 @@ export const undoStopShopping = createAsyncThunk<
   try {
     const counts = await Promise.all(
       toChunks(entries).map((chunk) =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((entry) => transaction.get(shoppingDoc(uid, entry.id))),
           );
@@ -499,7 +499,7 @@ export const restoreShoppingItems = createAsyncThunk<
   try {
     const counts = await Promise.all(
       toChunks(items).map((chunk) =>
-        runTransaction(db, async (transaction) => {
+        runHeldTransaction(uid, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((item) => transaction.get(shoppingDoc(uid, item.id))),
           );

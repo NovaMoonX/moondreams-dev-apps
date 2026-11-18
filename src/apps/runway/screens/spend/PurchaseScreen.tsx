@@ -228,7 +228,14 @@ function PurchaseScreen({
     purchases.find((entry) => entry.id === purchaseId) ??
     lostPair ??
     (fallback?.id === purchaseId ? fallback : null);
-  const isWaiting = (purchase?.needsHome ?? false) || lostPair !== null;
+  // The server's copy, not the held one, so a sheet's own save keeps its view (and its failure line) until the server answers.
+  const isListedWaiting = useAppSelector((state) =>
+    state.runway.isNeedsHomeLoaded
+      ? state.runway.incomingNeedsHome.some((entry) => entry.id === purchaseId)
+      : null,
+  );
+  const isWaiting =
+    (isListedWaiting ?? purchase?.needsHome ?? false) || lostPair !== null;
   const isMaybeTwice = useAppSelector((state) =>
     selectHistoryDuplicates(state).offers.has(purchaseId),
   );
@@ -847,10 +854,7 @@ function PurchaseScreen({
             <SameAsOffer purchase={purchase} onDone={onClose} />
           )}
           {isWaiting && purchase.amountCents > 0 && (
-            <PairOffer
-              purchase={purchase}
-              onDone={onClose}
-            >
+            <PairOffer purchase={purchase} onDone={onClose}>
               <NeedsHomeAssign
                 purchase={purchase}
                 onDone={onClose}

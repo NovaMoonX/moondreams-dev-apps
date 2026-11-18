@@ -95,7 +95,7 @@ const toBody = (payload: Partial<ProcedureSealed>): ProcedureSealed => ({
 });
 
 /** A procedure that won't open is skipped, so a half-written one never shows as a blank row. */
-async function openProcedure(
+export async function openProcedure(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenProcedure | null> {
