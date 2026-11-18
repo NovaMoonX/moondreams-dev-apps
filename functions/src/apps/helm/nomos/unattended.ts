@@ -4,7 +4,7 @@ import type {
   ContextTask,
 } from './buildContext.js';
 import type { SyncedCopy } from '../syncedCopies.js';
-import type { TaskDue } from './commands.js';
+import { readMeets, type TaskDue } from './commands.js';
 import { readMaskedLabel } from '../privacy.js';
 
 /** The name each private thing is called by while the turn is unattended; the same words mask the reply. */
@@ -36,12 +36,19 @@ const readWindow = (due: TaskDue | null, timeZone: string) => {
 export const toTaskLabel = (
   task: { privacy?: string | null; due: TaskDue | null },
   title: string,
-  mask: { isOn: boolean; timeZone: string; names: MaskedName[] },
+  mask: {
+    isOn: boolean;
+    timeZone: string;
+    names: MaskedName[];
+    quoted?: MaskedName[];
+  },
 ) => {
-  if (!mask.isOn || task.privacy !== 'private') return title;
+  if (task.privacy !== 'private') return title;
   const label = readMaskedLabel({
     windowLabel: readWindow(task.due, mask.timeZone),
   });
+  mask.quoted?.push({ name: title, label });
+  if (!mask.isOn) return title;
   mask.names.push({ name: title, label });
   return label;
 };
@@ -54,9 +61,15 @@ export const toContextTask = (
     due: TaskDue | null;
     stepState?: Record<string, { doneAt: number | null }>;
     meeting?: { startAt: number } | null;
+    meets?: unknown;
   },
   words: { title: string },
-  mask: { isOn: boolean; timeZone: string; names: MaskedName[] },
+  mask: {
+    isOn: boolean;
+    timeZone: string;
+    names: MaskedName[];
+    quoted?: MaskedName[];
+  },
 ): ContextTask => {
   const steps = Object.values(task.stepState ?? {});
   const isHidden = mask.isOn && task.privacy === 'private';
@@ -72,6 +85,10 @@ export const toContextTask = (
             meetingAt: task.meeting.startAt,
           }
         : null,
+    meetsHow:
+      isHidden || task.due?.kind !== 'moment'
+        ? null
+        : (readMeets(task.meets)?.how ?? null),
   };
 };
 

@@ -35,9 +35,17 @@ function PastDay({ dayKey, sources }: PastDayProps) {
   const isBringing = useRef(false);
   const day = planDays[dayKey];
   const open = useAppSelector(selectOpenTasksById);
-  const keptIds = Object.values(day?.slots ?? {})
-    .filter((slot) => slot.status === 'kept')
-    .map((slot) => slot.taskId);
+  const dayAims = useAppSelector((state) => state.helm.dayAims.byId[dayKey]);
+  const keptIds = [
+    ...new Set([
+      ...Object.values(day?.slots ?? {})
+        .filter((slot) => slot.status === 'kept')
+        .map((slot) => slot.taskId),
+      ...(dayAims?.aims ?? [])
+        .filter((aim) => dayAims?.windDown[aim.taskId]?.choice !== 'dropped')
+        .map((aim) => aim.taskId),
+    ]),
+  ];
   const fetched = useFetchedTasks(
     uid,
     keptIds.filter((id) => !open.has(id)),

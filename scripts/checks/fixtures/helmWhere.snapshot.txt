@@ -22,6 +22,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
+- How the person seems: what works for them, what gets in the way, their rhythm, how they talk: look in <how_you_seem>; change it with correctSeenAs or removeSeenAs.
 - Whether a thing is private: change it with setPrivate.
 - Whether a thing is kept quiet: change it with setQuiet.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
@@ -30,11 +31,14 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Where the person is right now: change it with setCurrentPlace or planDay.
 - Where someone lives: look in <whereabouts>; change it with setWhereabouts.
 - Where someone will be away: look in <whereabouts>; change it with setWhereabouts.
+- How a stretch away fits the work and the calendar: look in <fit>, then call search_tasks or get_calendar; you cannot change it.
 - Phone location and the offers put off: look in <abilities>; you cannot change it.
+- How the assistant talks, with its traits and how honest it is: change it with setPersonality.
 - Earlier turns of the conversation: look in <earlier_turns>; you cannot change it.
 - Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
 - A question Helm asked and the answer: look in <answered_question>; you cannot change it.
 - Ending the conversation: change it with closeConversation.
+- Things that look like one thing, grouped overnight: look in <related_things>; you cannot change it.
 - Calendar events: look in <synced_records>, then call get_calendar or search_synced; you cannot change it.
 - Another app's synced things: look in <synced_records>, then call search_synced; you cannot change it.
 - Connections and what each one shares: call list_connections or connection_status; you cannot change it.
@@ -45,15 +49,22 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Saved theaters: look in <synced_records>, then call search_synced; you cannot change it.
 - Movies the person has seen: look in <synced_records>, then call search_synced; you cannot change it.
 - The movie watchlist: look in <synced_records>, then call search_synced; you cannot change it.
+- Movie membership savings: call search_app_records; you cannot change it.
 - Pickups: look in <synced_records>, then call search_synced; you cannot change it.
 - Sales: look in <synced_records>, then call search_synced; you cannot change it.
 - Things for sale: look in <synced_records>, then call search_synced; you cannot change it.
+- Everything in the sales: call search_app_records; you cannot change it.
+- Buyers' questions: call search_app_records; you cannot change it.
 - Cats: look in <synced_records>, then call search_synced; you cannot change it.
 - Vet visits: look in <synced_records>, then call search_synced; you cannot change it.
 - Vaccines and preventives due: look in <synced_records>, then call search_synced; you cannot change it.
 - Vet clinics: look in <synced_records>, then call search_synced; you cannot change it.
 - Health conditions: look in <synced_records>, then call search_synced; you cannot change it.
 - Symptoms: look in <synced_records>, then call search_synced; you cannot change it.
+- Vet visit notes: call search_app_records; you cannot change it.
+- Vaccines and preventives given: call search_app_records; you cannot change it.
+- Cat weights: call search_app_records; you cannot change it.
+- Cat spending: call search_app_records; you cannot change it.
 - Planned meals: look in <synced_records>, then call search_synced; you cannot change it.
 - The shopping list: look in <synced_records>, then call search_synced; you cannot change it.
 - Food to use soon: look in <synced_records>, then call search_synced; you cannot change it.
@@ -61,17 +72,26 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Recipes: look in <synced_records>, then call search_synced; you cannot change it.
 - Saved meals: look in <synced_records>, then call search_synced; you cannot change it.
 - Recipe ideas: look in <synced_records>, then call search_synced; you cannot change it.
+- Recipe ingredients: call search_app_records; you cannot change it.
+- Recipes the person cooked: call search_app_records; you cannot change it.
 - Free to Spend: look in <synced_records>, then call search_synced; you cannot change it.
 - Bills coming up: look in <synced_records>, then call search_synced; you cannot change it.
 - Horizon goals: look in <synced_records>, then call search_synced; you cannot change it.
 - Envelopes: look in <synced_records>, then call search_synced; you cannot change it.
 - Transactions: call search_app_records; you cannot change it.
+- Envelope spending: call search_app_records; you cannot change it.
+- Account balances: call search_app_records; you cannot change it.
+- Cards due: call search_app_records; you cannot change it.
 - Trips: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip plans: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip to-dos: look in <synced_records>, then call search_synced; you cannot change it.
 - What is owed on trips: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip checklists: look in <synced_records>, then call search_synced; you cannot change it.
+- The whole trip checklist: call search_app_records; you cannot change it.
+- Trip ideas: call search_app_records; you cannot change it.
+- Trip announcements: call search_app_records; you cannot change it.
 - Box counts: look in <synced_records>, then call search_synced; you cannot change it.
+- Revealed items: call search_app_records; you cannot change it.
 </where_things_live>
 
 <where_things_live>
@@ -98,6 +118,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
+- How the person seems: what works for them, what gets in the way, their rhythm, how they talk: look in <how_you_seem>; change it with correctSeenAs or removeSeenAs.
 - Whether a thing is private: change it with setPrivate.
 - Whether a thing is kept quiet: change it with setQuiet.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
@@ -106,11 +127,14 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Where the person is right now: change it with setCurrentPlace or planDay.
 - Where someone lives: look in <whereabouts>; change it with setWhereabouts.
 - Where someone will be away: look in <whereabouts>; change it with setWhereabouts.
+- How a stretch away fits the work and the calendar: look in <fit>, then call search_tasks or get_calendar; you cannot change it.
 - Phone location and the offers put off: look in <abilities>; you cannot change it.
+- How the assistant talks, with its traits and how honest it is: change it with setPersonality.
 - Earlier turns of the conversation: look in <earlier_turns>; you cannot change it.
 - Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
 - A question Helm asked and the answer: look in <answered_question>; you cannot change it.
 - Ending the conversation: change it with closeConversation.
+- Things that look like one thing, grouped overnight: look in <related_things>; you cannot change it.
 - Calendar events: look in <synced_records>, then call get_calendar or search_synced; you cannot change it.
 - Another app's synced things: look in <synced_records>, then call search_synced; you cannot change it.
 - Connections and what each one shares: call list_connections or connection_status; you cannot change it.
