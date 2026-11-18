@@ -170,6 +170,7 @@ check('a recipe copy has exactly the public keys', () => {
     'notes',
     'prepMinutes',
     'servings',
+    'stepSections',
     'steps',
     'tips',
     'title',

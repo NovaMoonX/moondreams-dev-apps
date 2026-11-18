@@ -286,6 +286,7 @@ const ids = (plan: ShareImportPlan) => ({
       'coverUrl',
       'ingredients',
       'steps',
+      'stepSections',
       'nutritionOverride',
       'source',
       'sourceId',
