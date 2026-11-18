@@ -204,6 +204,7 @@ export const planTweakUndo = (
           kind: 'REVERT',
           fields: {
             ...previous,
+            stepSections: previous.stepSections ?? [],
             ingredients: previous.ingredients.map((line) => ({
               ...line,
               freeText: line.freeText ?? null,
