@@ -2,7 +2,6 @@ import {
   collection,
   deleteField,
   doc,
-  runTransaction,
   setDoc,
   updateDoc,
   writeBatch,
@@ -10,6 +9,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import { generateUuid } from '@/utils';
@@ -165,7 +165,7 @@ export async function generatePlan(
     return true;
   };
   const writeFirst = () =>
-    runTransaction(db, async (transaction) => {
+    runHeldTransaction(uid, async (transaction) => {
       const fresh = await transaction.get(planRef);
       if (fresh.exists() && fresh.get('generatedAt') != null) return false;
       transaction.set(planRef, planData, { merge: true });
