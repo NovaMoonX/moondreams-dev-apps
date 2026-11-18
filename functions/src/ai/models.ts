@@ -5,7 +5,8 @@ export type ModelRole =
   | 'topicWrite'
   | 'topicOverview'
   | 'daySummary'
-  | 'reflect';
+  | 'reflect'
+  | 'research';
 
 export interface ModelUsage {
   inputTokens: number;
@@ -71,6 +72,12 @@ const MODELS: Record<ModelRole, ModelSpec> = {
     effort: 'low',
     hasServerFallback: false,
     price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.2 },
+  },
+  research: {
+    id: 'claude-sonnet-5-5',
+    effort: 'low',
+    hasServerFallback: false,
+    price: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   },
 };
 

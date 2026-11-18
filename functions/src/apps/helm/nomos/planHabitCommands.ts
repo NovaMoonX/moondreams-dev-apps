@@ -1236,6 +1236,7 @@ export function buildHabitAnswerExecution(
     questionId: string;
     now: number;
     seal: HabitPlanInput['seal'];
+    linkedWhoIds?: string[];
   },
 ): Record<string, unknown> {
   return {
@@ -1246,7 +1247,7 @@ export function buildHabitAnswerExecution(
     autonomyLevel: AUTOMATIC_LEVEL,
     state: 'succeeded',
     effectRefs: plan.effectRefs,
-    linkedWhoIds: [],
+    linkedWhoIds: input.linkedWhoIds ?? [],
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,

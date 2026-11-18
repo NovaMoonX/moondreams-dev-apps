@@ -244,6 +244,7 @@ function HelmApp() {
             onOpenRun={(runId) => showView('run', runId)}
             onOpenHabit={(habitId) => showView('habit', habitId)}
             onOpenImportance={(id) => showView('importance', id)}
+            onOpenTopic={(topicId) => showView('topic', topicId)}
           />
         )}
         {!isLocked && view === 'habits' && (

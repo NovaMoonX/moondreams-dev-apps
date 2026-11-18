@@ -1,5 +1,6 @@
 import type { ToolLoopResult } from '../../../ai/modelProvider.js';
 import { SCHEDULED_OWN_KINDS } from '../nomos/commands.js';
+import { readAheadStart } from '../nomos/planResearchAhead.js';
 
 export interface ScheduledCaptureFields {
   arrivedVia?: string | null;
@@ -43,12 +44,7 @@ export const buildHeldCommands = (capture: ScheduledCaptureFields) => {
   );
 };
 
-/** The reply a held-commands run files without asking a model: each held task is made as the person set it. */
-export const readHeldLoop = (
-  capture: ScheduledCaptureFields,
-): ToolLoopResult | null => {
-  const commands = buildHeldCommands(capture);
-  if (!commands) return null;
+const toFiledLoop = (commands: unknown[]): ToolLoopResult => {
   return {
     terminalInput: { commands },
     terminalName: 'file_results',
@@ -63,6 +59,18 @@ export const readHeldLoop = (
     toolCalls: [],
   };
 };
+
+/** The reply a held-commands run files without asking a model: each held task is made as the person set it. */
+export const readHeldLoop = (
+  capture: ScheduledCaptureFields,
+): ToolLoopResult | null => {
+  const commands = buildHeldCommands(capture);
+  return commands ? toFiledLoop(commands) : null;
+};
+
+/** The reply a yes on a research offer files without asking a model: it carries no command, since the start is read from the project by code. A capture whose offer can't be read takes the usual path. */
+export const readAheadLoop = (capture: ScheduledCaptureFields) =>
+  readAheadStart(capture) ? toFiledLoop([]) : null;
 
 /** Keeps only what the action was allowed to write: its command kinds, and nothing else the model read from the words. */
 export const narrowReply = <

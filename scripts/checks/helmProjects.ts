@@ -143,6 +143,8 @@ const existingProject = (
   ),
   milestoneTitles,
   kind: 'project',
+  targetDate: null,
+  researchOffers: [],
   sealed: {
     name,
     emoji: '💍',

@@ -264,10 +264,12 @@ service cloud.firestore {
     match /apps/helm/users/{uid} {
       allow read: if isHelmOwner(uid);
       allow create: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data) && isHelmLearning(request.resource.data)
-        && request.resource.data.get('reflectDueAt', null) == null;
+        && request.resource.data.get('reflectDueAt', null) == null
+        && request.resource.data.get('relateDueAt', null) == null;
       // When the nightly pass is due is the server's to set: the person's device may only leave it as it is or clear it.
       allow update: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data) && isHelmLearning(request.resource.data)
-        && (request.resource.data.get('reflectDueAt', null) == null || request.resource.data.get('reflectDueAt', null) == resource.data.get('reflectDueAt', null));
+        && (request.resource.data.get('reflectDueAt', null) == null || request.resource.data.get('reflectDueAt', null) == resource.data.get('reflectDueAt', null))
+        && (request.resource.data.get('relateDueAt', null) == null || request.resource.data.get('relateDueAt', null) == resource.data.get('relateDueAt', null));
     }
 
     // The reminder planner's queue (when to look at a person next, its lease and the reminders it wrote) is for the Admin SDK alone.
@@ -275,12 +277,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // The day job's queue (when to look at a person's day next, its lease) is for the Admin SDK alone.
+    match /apps/helm/dayQueue/{uid} {
+      allow read, write: if false;
+    }
+
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out.
     // `facts` are what an answer noted, `planDays` one plan per day, `keyDates` and `meta` (their sealed index) move in one transaction,
-    // and `notes` and `topics` are the person's Knowledge, sealed. `habits`, `habitDays` and `patterns` are the person's habits, their ticks by day and what Helm noticed, `observations` and `reflections` are what was said about them and the nightly pass's candidates (the server writes both and the owner reads, marks a reflection seen and deletes; the rule is the owner list, so only the code keeps the writer to the server), and `connections` are how two of their people are connected (the pair and kind in the id, the words sealed), and `scheduledActions` are what the assistant does at a set time (the server's runs write their last-run fields; the person's own writes only change their own Helm).
+    // and `notes` and `topics` are the person's Knowledge, sealed. `habits`, `habitDays` and `patterns` are the person's habits, their ticks by day and what Helm noticed, `observations` and `reflections` are what was said about them and the nightly pass's candidates (the server writes both and the owner reads, marks a reflection seen and deletes; the rule is the owner list, so only the code keeps the writer to the server), `seenAs` is how the assistant sees them (the server writes the derived lines; the owner reads, corrects, removes and deletes them, again held to the server's writer only by the code), and `connections` are how two of their people are connected (the pair and kind in the id, the words sealed), and `scheduledActions` are what the assistant does at a set time (the server's runs write their last-run fields; the person's own writes only change their own Helm), and `dayAims` is one document per day holding the aims and how the day wound down (the server only sets `windDownState`, `lookAt` and `rolledAt`).
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
-        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics', 'habits', 'habitDays', 'patterns', 'observations', 'reflections', 'connections', 'scheduledActions'];
+        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics', 'habits', 'habitDays', 'patterns', 'observations', 'reflections', 'seenAs', 'connections', 'scheduledActions', 'dayAims'];
     }
 
     // A day's written summary is made by the server; the owner reads it and may only mark it stale so the next open rewrites it.
@@ -289,6 +296,60 @@ service cloud.firestore {
       allow update: if isHelmOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staleAt'])
         && (request.resource.data.staleAt == null || request.resource.data.staleAt is int);
+    }
+
+    // Server-created; the owner reads, answers and deletes it, never the fields the server decided.
+    match /apps/helm/users/{uid}/groupings/{groupingId} {
+      allow read, delete: if isHelmOwner(uid);
+      allow update: if isHelmOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'parentId', 'linkedKeys', 'declineCount', 'nextOfferAfter', 'answeredAt', 'toldAt', 'executionId', 'sources', 'sourceKeys', 'privacy', 'sealed', 'updatedAt'])
+        && request.resource.data.state in ['proposed', 'filed', 'groupedByYou', 'notRelated', 'notNow']
+        && request.resource.data.declineCount is int
+        && request.resource.data.declineCount >= 0
+        && request.resource.data.declineCount <= 3
+        && (request.resource.data.parentId == null || request.resource.data.parentId is string)
+        && request.resource.data.linkedKeys is list
+        && request.resource.data.linkedKeys.size() <= 12
+        && request.resource.data.sourceKeys is list
+        && request.resource.data.sourceKeys.size() <= 12
+        && request.resource.data.sources is list
+        && request.resource.data.sources.size() <= 12
+        && (request.resource.data.nextOfferAfter == null || request.resource.data.nextOfferAfter is int)
+        && (request.resource.data.answeredAt == null || request.resource.data.answeredAt is int)
+        && (request.resource.data.toldAt == null || request.resource.data.toldAt is int)
+        && (request.resource.data.executionId == null || request.resource.data.executionId is string)
+        && request.resource.data.sealed is map
+        && request.resource.data.updatedAt is int;
+    }
+
+    // A research item is made, run and settled by the server; the owner reads it and may only stop it while it is asking, preparing or planned for its night (status to dismissed, with when) so the server gives back what it held. A learn-later item also takes the owner's answers (see below).
+    match /apps/helm/users/{uid}/research/{researchId} {
+      allow read: if isHelmOwner(uid);
+      allow update: if isHelmOwner(uid)
+        && resource.data.status in ['asking', 'preparing', 'planned']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'lastEditedAt'])
+        && request.resource.data.status == 'dismissed'
+        && (request.resource.data.cancelledAt == null || request.resource.data.cancelledAt is int)
+        && (request.resource.data.lastEditedAt == null || request.resource.data.lastEditedAt is int);
+      // A learn-later item is also the owner's to answer once the server has prepared it: not now, show me, keep it, done with it, remove it and Undo of each, and a reseal when Undo of a merge or an edit restores the words. What the server runs (the allowance, the start, the video lookup, when to prepare) stays out of reach, and nothing changes while it is being prepared.
+      allow update: if isHelmOwner(uid)
+        && resource.data.mode == 'learnLater'
+        && resource.data.status != 'preparing'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'notNowStreak', 'declineReason', 'offeredOn', 'offers', 'relatedOfferedAt', 'mergedInto', 'resultNoteId', 'removedAt', 'sealed', 'lastEditedAt'])
+        && request.resource.data.status in ['planned', 'ready', 'offered', 'done', 'dismissed']
+        && request.resource.data.notNowStreak is int
+        && request.resource.data.notNowStreak >= 0
+        && request.resource.data.notNowStreak <= 10
+        && (request.resource.data.declineReason == null || request.resource.data.declineReason in ['timing', 'lostInterest', 'changedMind'])
+        && (request.resource.data.offeredOn == null || request.resource.data.offeredOn is string)
+        && request.resource.data.offers is list
+        && request.resource.data.offers.size() <= 10
+        && request.resource.data.relatedOfferedAt is map
+        && (request.resource.data.mergedInto == null || request.resource.data.mergedInto is string)
+        && (request.resource.data.resultNoteId == null || request.resource.data.resultNoteId is string)
+        && (request.resource.data.removedAt == null || request.resource.data.removedAt is int)
+        && request.resource.data.sealed is map
+        && (request.resource.data.lastEditedAt == null || request.resource.data.lastEditedAt is int);
     }
 
     // A topic's versions are history: the owner reads, adds and trims them, and nobody rewrites one.

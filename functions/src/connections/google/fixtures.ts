@@ -25,6 +25,10 @@ interface FixtureEvent {
   attendees?: { self: boolean; responseStatus: string }[];
   transparency?: string;
   updated?: string;
+  location?: string;
+  hangoutLink?: string;
+  conferenceData?: { entryPoints: { entryPointType: string; uri: string }[] };
+  extendedProperties?: { private?: Record<string, string> };
 }
 
 const ZONE = 'America/Los_Angeles';
@@ -40,6 +44,7 @@ export const TZ_CALENDARS = [
   'tz-a@group.calendar.google.com',
   'tz-b@group.calendar.google.com',
 ];
+export const MEETING_CALENDAR = 'meetings@group.calendar.google.com';
 export const BULK_CALENDAR = 'bulk@group.calendar.google.com';
 export const BULK_EVENT_COUNT = 1100;
 const BULK_PAGE_SIZE = 300;
@@ -149,7 +154,50 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
     iCalUID: 'fixture-pottery@example.com',
     ...timed(2, '18:00', '19:30'),
   };
+  const meeting = (id: string, extra: Partial<FixtureEvent>) => ({
+    ...base,
+    id,
+    summary: id,
+    iCalUID: `${id}@example.com`,
+    ...timed(3, '10:00', '10:30'),
+    ...extra,
+  });
   const byCalendar: Record<string, FixtureEvent[]> = {
+    [MEETING_CALENDAR]: [
+      meeting('fx-m-conference', {
+        location: '12 Orchard Rd, Westford',
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: 'video', uri: 'https://meet.example/secret' },
+            { entryPointType: 'more', uri: 'https://meet.example/more' },
+          ],
+        },
+      }),
+      meeting('fx-m-hangout', {
+        hangoutLink: 'https://meet.google.com/abc-defg-hij',
+      }),
+      meeting('fx-m-zoom', { location: 'https://zoom.us/j/123456?pwd=secret' }),
+      meeting('fx-m-phone', {
+        conferenceData: {
+          entryPoints: [{ entryPointType: 'phone', uri: 'tel:+15551234567' }],
+        },
+      }),
+      meeting('fx-m-address', { location: '  Sweet Layer, 4 Main St  ' }),
+      meeting('fx-m-none', {}),
+      meeting('fx-m-zoom-mid', {
+        location: 'Zoom: https://zoom.us/j/987654?pwd=hidden',
+      }),
+      meeting('fx-m-teams-mid', {
+        location: 'Join teams.microsoft.com/l/meetup-join/xyz',
+      }),
+      meeting('fx-m-dial', { location: 'Dial +1 555 0100, PIN 482913' }),
+      meeting('fx-m-pin-oak', { location: 'Pin Oak Cafe @ 4 Elm St' }),
+      meeting('fx-m-teams-word', { location: 'Microsoft Teams Meeting' }),
+      meeting('fx-m-range', { location: '2000-2010 Main St, Suite 200' }),
+      meeting('fx-m-site', {
+        extendedProperties: { private: { siteRef: 'slot:2026-11-17:s1' } },
+      }),
+    ],
     'work@example.com': [
       {
         ...base,
@@ -184,6 +232,22 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
         ...timed(0, '12:30', '13:30'),
       },
       { ...pottery, id: 'fx-pottery' },
+      {
+        ...base,
+        id: 'fx-planning-call',
+        summary: 'Planning call with Priya and Sam',
+        iCalUID: 'fx-planning-call@example.com',
+        ...timed(1, '10:00', '10:45'),
+        hangoutLink: 'https://meet.google.com/fix-ture-call',
+        conferenceData: {
+          entryPoints: [
+            {
+              entryPointType: 'video',
+              uri: 'https://meet.google.com/fix-ture-call',
+            },
+          ],
+        },
+      },
       {
         ...base,
         id: 'fx-maya',
@@ -875,5 +939,44 @@ export const answerFixture = (
     return answerFiles(parsed.pathname, parsed.searchParams, context.email);
   if (parsed.pathname.startsWith(MAIL_PATH))
     return answerMail(parsed.pathname, parsed.searchParams, context.email);
+  return { status: 404, body: {} };
+};
+
+export interface FixtureSend {
+  method: string;
+  url: string;
+  body: unknown;
+}
+
+/** Every write the emulator's fixture token answered, in order, so a check can read what was sent. */
+export const FIXTURE_SENT: FixtureSend[] = [];
+
+export const answerFixtureSend = (
+  method: string,
+  url: string,
+  body: unknown,
+): FixtureAnswer => {
+  FIXTURE_SENT.push({ method, url, body });
+  const { pathname } = new URL(url);
+  if (method === 'DELETE') return { status: 204, body: null };
+  if (pathname === '/calendar/v3/calendars') {
+    const name = (body as { summary?: unknown } | null)?.summary;
+    return {
+      status: 200,
+      body: {
+        id: `fixture-plan-${FIXTURE_SENT.length}@group.calendar.google.com`,
+        summary: typeof name === 'string' ? name : 'Plan',
+      },
+    };
+  }
+  const id = /^\/calendar\/v3\/calendars\/[^/]+\/events\/([^/]+)$/.exec(
+    pathname,
+  );
+  if (id) return { status: 200, body: { id: decodeURIComponent(id[1]) } };
+  if (/^\/calendar\/v3\/calendars\/[^/]+\/events$/.test(pathname))
+    return {
+      status: 200,
+      body: { id: `fixture-event-${FIXTURE_SENT.length}` },
+    };
   return { status: 404, body: {} };
 };

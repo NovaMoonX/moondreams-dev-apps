@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { BATCH_JOBS } from '../../functions/src/apps/helm/batchJobs.ts';
+
 const ROOT = resolve(import.meta.dirname, '../..');
 const LAYER = 'functions/src/ai/batch.ts';
 
@@ -46,6 +48,23 @@ test('the layer itself may call it', () => {
     findProblems({ [LAYER]: 'client.messages.batches.create({})' }),
     [],
   );
+});
+
+test('every registered job answers all seven questions', () => {
+  Object.entries(BATCH_JOBS).forEach(([key, job]) => {
+    const { answers } = job;
+    assert.equal(job.jobId, key);
+    assert.deepEqual(
+      Object.entries(answers)
+        .filter(([name]) => name !== 'terms')
+        .filter(([, value]) => value !== true),
+      [],
+      key,
+    );
+    assert.equal(answers.terms, 'standard', key);
+    assert.ok(['runAtOnce', 'answerAtOnce'].includes(job.whenWantedNow), key);
+    assert.equal(Object.keys(answers).length, 7, key);
+  });
 });
 
 tests.forEach(([name, run]) => {

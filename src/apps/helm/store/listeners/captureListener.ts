@@ -98,6 +98,21 @@ const toIds = (value: unknown) =>
     ? (value as string[])
     : [];
 
+const toAheadOffer = (value: unknown): Capture['aheadOffer'] => {
+  const raw = (value ?? {}) as Record<string, unknown>;
+  return typeof raw.projectId === 'string' &&
+    typeof raw.offerId === 'string' &&
+    (raw.depth === 'light' || raw.depth === 'thorough') &&
+    (raw.when === 'now' || raw.when === 'later')
+    ? {
+        projectId: raw.projectId,
+        offerId: raw.offerId,
+        depth: raw.depth,
+        when: raw.when,
+      }
+    : null;
+};
+
 /** A turn that won't open is kept, with no words, so the surface can say so instead of dropping it. */
 async function openCapture(
   entry: DocumentSnapshot,
@@ -116,9 +131,12 @@ async function openCapture(
     answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
     arrivedVia:
-      data.arrivedVia === 'dropBox' || data.arrivedVia === 'scheduled'
+      data.arrivedVia === 'dropBox' ||
+      data.arrivedVia === 'scheduled' ||
+      data.arrivedVia === 'researchAhead'
         ? data.arrivedVia
         : 'direct',
+    aheadOffer: toAheadOffer(data.aheadOffer),
     scheduledActionId:
       typeof data.scheduledActionId === 'string'
         ? data.scheduledActionId
@@ -167,6 +185,7 @@ async function openCapture(
     whoIds: toIds(data.whoIds),
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
+    aimsDayKey: typeof data.aimsDayKey === 'string' ? data.aimsDayKey : null,
     createdAt: data.createdAt ?? 0,
     privacy: readPrivacy(data.privacy),
     touchesPrivate: data.touchesPrivate ?? null,
