@@ -34,6 +34,11 @@ assert.equal(
   'a task 59 days overdue still asks',
 );
 assert.equal(
+  needsYouOnDay(bill(-60), today),
+  true,
+  'a task exactly 60 days overdue still asks, as the server query does',
+);
+assert.equal(
   needsYouOnDay(bill(-61), today),
   false,
   'a task 61 days overdue no longer asks',

@@ -4005,6 +4005,18 @@ await Promise.all([
   runwayPlans.doc('runway-legacy').set({ uid: 'runway-legacy' }),
 ]);
 
+// Written 10 days before NOW (Oct 31): one bill past due by then, one due that day, one paid, one ahead.
+const staleBills = [
+  { name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' },
+  { name: 'Due that day', amountCents: 2_000, dueOn: '2026-10-31' },
+  {
+    name: 'Paid then',
+    amountCents: 5_000,
+    dueOn: '2026-10-25',
+    paidOn: '2026-10-26',
+  },
+  { name: 'Ahead', amountCents: 6_000, dueOn: '2026-11-20' },
+];
 const runwayPlanWith = (uid: string, shareSummary: unknown) =>
   Promise.all([
     runwayWrapped(uid).set(wrapDataKey(DEV_KEYRING, uid, runwayKey, NOW)),
@@ -4023,18 +4035,12 @@ await Promise.all([
     sealRunway({
       ...runwaySummary,
       computedAt: NOW - 10 * DAY,
-      bills: [
-        { name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' },
-        { name: 'Ahead', amountCents: 6_000, dueOn: '2026-11-20' },
-      ],
+      bills: staleBills,
     }),
   ),
   runwayPlanWith(
     'runway-fresh',
-    sealRunway({
-      ...runwaySummary,
-      bills: [{ name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' }],
-    }),
+    sealRunway({ ...runwaySummary, bills: staleBills }),
   ),
   runwayPlanWith(
     'runway-twins',
@@ -4133,15 +4139,24 @@ assert.deepEqual(
   ['Car insurance', 'Gym', 'Overdue', 'Phone', 'Rent'],
   'an unpaid bill already past stays as overdue, a paid one this month and a yearly one stay',
 );
-assert.deepEqual(
-  titles(await runRunway('runway-stale', 'upcomingBills')),
-  ['Ahead'],
-  'a summary older than a week no longer says a past-due bill is unpaid',
+const staleRecords = await runRunway('runway-stale', 'upcomingBills');
+const freshRecords = await runRunway('runway-fresh', 'upcomingBills');
+assert.ok(
+  !titles(staleRecords).includes('Long past') &&
+    titles(staleRecords).includes('Due that day') &&
+    titles(staleRecords).includes('Ahead'),
+  'a summary older than a week drops a bill already past due when written, keeps one due that day and one ahead',
 );
-assert.deepEqual(
-  titles(await runRunway('runway-fresh', 'upcomingBills')),
-  ['Long past'],
+assert.ok(
+  titles(freshRecords).includes('Long past'),
   'a fresh summary keeps its past-due bill as overdue',
+);
+const refOf = (records: SharedRecord[], title: string) =>
+  records.find((record) => record.title === title)?.sourceRef;
+assert.equal(
+  refOf(staleRecords, 'Ahead'),
+  refOf(freshRecords, 'Ahead'),
+  'dropping a stale bill leaves the other bills on the same refs',
 );
 const billExtra = (title: string) =>
   runwayBills.find((record) => record.title === title)?.extra;
