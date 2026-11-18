@@ -162,6 +162,8 @@ export interface HelmProfile {
   prunedOn: string | null;
   /** When the person last looked at what outside assistants added; null until then, and on a profile from before. */
   outsideSeenAt: number | null;
+  /** When each connected app's offer to bring its people, pets and businesses into the circle was told, by app id; null until one was. */
+  bringInToldAt: Record<string, number> | null;
   /** The depth research runs at when a request doesn't say; null asks when it feeds a decision and is a quick look otherwise. */
   researchDepth: 'light' | 'thorough' | null;
   /** This month's research allowance as the server last settled it, shown as "About 4 thorough looks left"; the server's own usage decides, never this. */
@@ -709,6 +711,12 @@ export interface Task {
   sealed: Sealed;
 }
 
+export interface AppSource {
+  connectorId: string;
+  sourceRef: string;
+  importedAt: number;
+}
+
 export type WhoKind = 'person' | 'pet' | 'organization';
 
 export type WhoTier = 'close' | 'regular' | 'passing';
@@ -730,6 +738,8 @@ export interface Who {
     importedAt: number;
   } | null;
   importedFields: Record<string, string>;
+  /** The records in other apps this one was brought in from, or merged with, so a later offer skips them and a disconnect can say what came from where; empty on one that came from nowhere and on one made before the field. */
+  appSources: AppSource[];
   /** The newest capture that named it. */
   lastMentionedAt: number | null;
   yearlyDateCount: number;

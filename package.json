@@ -111,6 +111,7 @@
     "check:helm-planner": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPlanner.ts",
     "check:helm-day-plan": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmDayPlan.ts",
     "check:helm-rest-day": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRestDay.ts",
+    "check:helm-bring-in": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmBringIn.ts",
     "check:helm-same-thing": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSameThing.ts",
     "check:helm-connections": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmConnections.ts",
     "check:helm-connection-commands": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmConnectionCommands.ts",

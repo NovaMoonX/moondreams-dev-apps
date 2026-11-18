@@ -28,6 +28,7 @@ import { store, useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import DayCard from '@apps/helm/components/dayCard/DayCard';
 import GroupingCard from '@apps/helm/components/home/GroupingCard';
+import BringInOfferLine from '@apps/helm/components/home/BringInOfferLine';
 import GroupingFiledLine from '@apps/helm/components/home/GroupingFiledLine';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
@@ -449,6 +450,7 @@ function HomeSurface({
             }
           />
         )}
+        {keyStatus === 'ready' && <BringInOfferLine />}
         {!hasFreshTurns && !isOpening && !isWaitingOnKey && (
           <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}

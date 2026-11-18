@@ -312,6 +312,33 @@ const syncClinics = (firestore: Firestore, uid: string) =>
     };
   });
 
+const syncVets = (firestore: Firestore, uid: string) =>
+  inEveryHousehold(firestore, uid, async (household) => {
+    const [clinicRead, doctorRead] = await Promise.all([
+      readClinics(household),
+      readDoctors(household),
+    ]);
+    const clinicNames = new Map(
+      clinicRead.clinics.map((clinic) => [clinic.id, clinic.name]),
+    );
+    return {
+      records: doctorRead.doctors.map((doctor) => {
+        const clinic =
+          doctor.clinicId === null
+            ? undefined
+            : clinicNames.get(doctor.clinicId);
+        return toRecord({
+          sourceRef: `households/${household.id}/doctors/${doctor.id}`,
+          kind: 'person',
+          title: doctor.name,
+          detail: clinic === undefined ? 'Veterinarian' : `Vet at ${clinic}`,
+          placeLabel: clinic ?? null,
+        });
+      }),
+      isFull: clinicRead.isFull && doctorRead.isFull,
+    };
+  });
+
 const syncVisits = (firestore: Firestore, uid: string, windowStart: number) =>
   inEveryHousehold(firestore, uid, async (household) => {
     const upcomingStart = Date.now() - UPCOMING_LOOKBACK_DAYS * DAY_MS;
@@ -1057,6 +1084,8 @@ export function createNineLivesAdapter(
         return syncDueCare(firestore, uid, req.windowStart);
       case 'clinics':
         return syncClinics(firestore, uid);
+      case 'vets':
+        return syncVets(firestore, uid);
       case 'conditions':
         return syncConditions(firestore, uid);
       case 'symptoms':

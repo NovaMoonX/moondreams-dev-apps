@@ -606,6 +606,99 @@ const queryQuestions = (firestore: Firestore, uid: string, args: QueryArgs) =>
     };
   });
 
+/** Buyers who asked about a thing (first names, one per name per sale) and the other people selling in the person's sales (first names). */
+const syncPeople = async (
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> => {
+  const snapshot = await firestore
+    .collection('apps/going-once/sales')
+    .where('members', 'array-contains', uid)
+    .limit(SALE_LIMIT)
+    .get();
+  const sales = snapshot.docs.flatMap((doc) => {
+    const name = readText(doc.get('name'));
+    return name === null
+      ? []
+      : [
+          {
+            id: doc.id,
+            name,
+            ref: doc.ref,
+            members: (Array.isArray(doc.get('members'))
+              ? (doc.get('members') as unknown[])
+              : []
+            ).filter(
+              (member): member is string =>
+                typeof member === 'string' && member !== uid,
+            ),
+          },
+        ];
+  });
+  const buyerReads = await Promise.all(
+    sales.map((sale) =>
+      sale.ref
+        .collection('inquiries')
+        .select('name', 'status')
+        .limit(ITEM_LIMIT)
+        .get(),
+    ),
+  );
+  const buyers = sales.flatMap((sale, index) => {
+    const names = new Map<string, string>();
+    (buyerReads[index]?.docs ?? []).forEach((inquiry) => {
+      const status = readText(inquiry.get('status'));
+      const first = readFirstName(readText(inquiry.get('name')));
+      if ((status === 'NEW' || status === 'HANDLED') && first !== null)
+        names.set(first.toLowerCase(), first);
+    });
+    return Array.from(names, ([key, first]) =>
+      toRecord({
+        sourceRef: `sales/${sale.id}/buyers/${key}`,
+        kind: 'person',
+        title: first,
+        detail: clip(`Asked about things in ${sale.name}`),
+        subtitle: 'Buyer',
+      }),
+    );
+  });
+  const sellerIds = Array.from(new Set(sales.flatMap((sale) => sale.members)));
+  const profiles =
+    sellerIds.length === 0
+      ? []
+      : await firestore.getAll(
+          ...sellerIds.map((id) => firestore.doc(`users/${id}`)),
+          { fieldMask: ['displayName'] },
+        );
+  const firstNames = new Map(
+    profiles.map((profile) => [
+      profile.id,
+      readFirstName(readText(profile.get('displayName'))),
+    ]),
+  );
+  const sellers = sellerIds.flatMap((id) => {
+    const first = firstNames.get(id) ?? null;
+    const shared = sales
+      .filter((sale) => sale.members.includes(id))
+      .map((sale) => sale.name);
+    return first === null
+      ? []
+      : [
+          toRecord({
+            sourceRef: `users/${id}`,
+            kind: 'person',
+            title: first,
+            detail: clip(`Sells with you: ${shared.slice(0, 3).join(', ')}`),
+            subtitle: 'Co-seller',
+          }),
+        ];
+  });
+  return {
+    records: [...sellers, ...buyers].slice(0, MAX_RECORDS_PER_CATEGORY),
+    isFull: snapshot.size < SALE_LIMIT,
+  };
+};
+
 export interface GoingOnceAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -638,6 +731,8 @@ export function createGoingOnceAdapter(
         return syncSales(firestore, uid);
       case 'things':
         return syncThings(firestore, uid);
+      case 'people':
+        return syncPeople(firestore, uid);
       default:
         throw new Error('Unknown category.');
     }

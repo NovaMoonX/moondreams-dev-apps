@@ -121,6 +121,30 @@ export const NINE_LIVES_SHARES: SourceShares = {
           scopeVersion: 3,
         },
         {
+          id: 'vets',
+          kind: 'person',
+          label: 'Veterinarians',
+          meaning:
+            'The veterinarians at the vet clinics the person uses, each with the clinic they work at.',
+          detail: "Each vet's name and the clinic they work at",
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each veterinarian's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+            {
+              label: 'The clinic they work at',
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
           id: 'conditions',
           kind: 'knowledge',
           label: 'Health conditions',

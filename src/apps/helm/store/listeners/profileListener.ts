@@ -63,6 +63,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   forgottenAt: data.forgottenAt ?? null,
   prunedOn: data.prunedOn ?? null,
   outsideSeenAt: data.outsideSeenAt ?? null,
+  bringInToldAt: data.bringInToldAt ?? null,
   researchDepth:
     data.researchDepth === 'light' || data.researchDepth === 'thorough'
       ? data.researchDepth

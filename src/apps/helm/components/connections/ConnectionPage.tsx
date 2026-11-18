@@ -8,6 +8,7 @@ import {
   CalendarSync,
   ChevronDown,
   Tag,
+  Users,
 } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
@@ -47,10 +48,15 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import CalendarSyncSheet from '@apps/helm/components/connections/CalendarSyncSheet';
 import AccountLabelSheet from '@apps/helm/components/connections/AccountLabelSheet';
+import BringInSheet from '@apps/helm/components/connections/BringInSheet';
 import DisconnectSheet from '@apps/helm/components/connections/DisconnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import {
+  useBringInOffers,
+  type BringInOffer,
+} from '@apps/helm/hooks/useBringInOffers';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import {
   formatUpdatedAt,
@@ -118,6 +124,18 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [openReads, setOpenReads] = useState<Record<string, boolean>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+  // The sheet keeps the offer it opened for, so its Undo stays after the circle fills.
+  const [heldOffer, setHeldOffer] = useState<BringInOffer | null>(null);
+  const [isBringInOpen, setIsBringInOpen] = useState(false);
+  const offer = useBringInOffers().find((entry) => entry.grantId === grantId);
+  const broughtCount = useAppSelector(
+    (state) =>
+      state.helm.who.items.filter((who) =>
+        who.appSources.some(
+          (entry) => entry.connectorId === grant?.connectorId,
+        ),
+      ).length,
+  );
   const [isLabelOpen, setIsLabelOpen] = useState(false);
   const [isSyncOpen, setIsSyncOpen] = useState(false);
   const calendarSync = useAppSelector(
@@ -476,6 +494,20 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 ? HELM_COPY.googleContactsReadOnly(name)
                 : HELM_COPY.googleReadOnly(name)}
       </p>
+      {offer && !isOffline && (
+        <SettingsSection title={HELM_COPY.bringInOfferRowTitle}>
+          <SettingsRow
+            icon={<Users className='size-5' aria-hidden='true' />}
+            title={offer.line}
+            description={HELM_COPY.bringInOfferAction}
+            onClick={() => {
+              setHeldOffer(offer);
+              setIsBringInOpen(true);
+            }}
+            hasChevron
+          />
+        </SettingsSection>
+      )}
       {isGoogle && !isOffline && (
         <SettingsSection title={HELM_COPY.connectionAccountLabel}>
           <SettingsRow
@@ -820,6 +852,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           </Button>
         </div>
       )}
+      {heldOffer && (
+        <BringInSheet
+          isOpen={isBringInOpen}
+          onClose={() => setIsBringInOpen(false)}
+          offer={heldOffer}
+        />
+      )}
       <DisconnectSheet
         isOpen={isDisconnectOpen}
         onClose={() => setIsDisconnectOpen(false)}
@@ -837,13 +876,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             : null
         }
         extraLine={
-          isGmailGrant
-            ? HELM_COPY.gmailDisconnectNote
-            : isDriveGrant
-              ? HELM_COPY.driveDisconnectNote
-              : isContactsGrant
-                ? HELM_COPY.contactsDisconnectNote
-                : null
+          broughtCount > 0
+            ? HELM_COPY.disconnectBroughtIn(broughtCount, appName)
+            : isGmailGrant
+              ? HELM_COPY.gmailDisconnectNote
+              : isDriveGrant
+                ? HELM_COPY.driveDisconnectNote
+                : isContactsGrant
+                  ? HELM_COPY.contactsDisconnectNote
+                  : null
         }
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)

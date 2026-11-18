@@ -178,9 +178,34 @@ export const GOING_ONCE_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'people',
+          kind: 'person',
+          label: 'Buyers and co-sellers',
+          detail:
+            'First names of buyers who asked and of the people you sell with',
+          meaning:
+            'The buyers who asked about things for sale, by first name, and the other people selling alongside the person, by first name.',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 5,
+          reads: [
+            {
+              label: "A buyer's first name and the sale they asked in",
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+            {
+              label: "A co-seller's first name and the sales you share",
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
-        "buyers' emails, phone numbers and full names",
+        "buyers' emails, phone numbers, messages and full names",
         'where things were bought',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },

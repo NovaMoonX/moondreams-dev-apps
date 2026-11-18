@@ -939,6 +939,7 @@ export async function ensureSelfWho(
     photoMediaId: null,
     mediaIds: [],
     importedFrom: null,
+    appSources: [],
     importedFields: {},
     lastMentionedAt: null,
     yearlyDateCount: 0,

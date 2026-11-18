@@ -108,6 +108,30 @@ export const WAYPOINT_SHARES: SourceShares = {
           scopeVersion: 1,
         },
         {
+          id: 'travelers',
+          kind: 'person',
+          label: 'People you travel with',
+          detail: 'The other members of your trips and which trips they are on',
+          meaning:
+            'The other people on the same trips as the person, by name, with the trips they share.',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each fellow traveller's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+            {
+              label: 'The trips you share',
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
           id: 'tripBalances',
           kind: 'moneySummary',
           label: 'What you owe and are owed',
