@@ -3051,7 +3051,7 @@ export const HELM_COPY = {
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,
   searchTitle: 'Search',
   searchEverything: 'Search everything',
-  searchPlaceholder: 'Search people, tasks, notes…',
+  searchPlaceholder: 'Search your circle, tasks, notes…',
   searchHint: (assistant: string) =>
     `Find anything you have told ${assistant}: people, tasks, dates, facts, notes and more.`,
   searchNothing: (query: string, assistant: string) =>
