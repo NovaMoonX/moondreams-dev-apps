@@ -1,9 +1,10 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { doc, runTransaction, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import type { PlannedMeal } from '@apps/pinch/types';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { MAX_REPRICE_MEALS } from '@apps/pinch/constants';
@@ -173,7 +174,7 @@ export const repriceDay = createAsyncThunk<
       'This day changed while you were pricing it, so nothing was changed. Close it and try again.';
 
     try {
-      return await runTransaction(db, async (transaction) => {
+      return await runHeldTransaction(uid, async (transaction) => {
         const snapshots = await Promise.all(
           ids.map((id) => transaction.get(mealRef(uid, id))),
         );
