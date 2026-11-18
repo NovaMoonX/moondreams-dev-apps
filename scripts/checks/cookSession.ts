@@ -915,4 +915,50 @@ assert.equal(
   );
 }
 
+// The stopwatch's start
+{
+  const written = buildCookingSnapshot({
+    uid: UID,
+    sessionId: 'session-1',
+    now: NOW,
+    open: {
+      recipeId: 'adobo',
+      servings: null,
+      plannedMealId: null,
+      plannedMealDate: null,
+      plate: null,
+    },
+    currentId: 'adobo',
+    positions: { adobo: { stepIndex: 1, servings: 4 } },
+    timers: [],
+    startedAt: NOW - 20 * 60_000,
+  });
+  assert.equal(
+    parse(written)?.resume.startedAt,
+    NOW - 20 * 60_000,
+    'a picked-up cook keeps counting from when it began',
+  );
+  const { startedAt: ignored, ...withoutKey } = written.resume;
+  assert.ok(ignored);
+  assert.equal(
+    parse({ ...written, resume: withoutKey })?.resume.startedAt,
+    undefined,
+    'a session saved before the stopwatch still picks up, with no start',
+  );
+  assert.equal(
+    parse({ ...written, resume: { ...written.resume, startedAt: 'soon' } })
+      ?.resume.startedAt,
+    undefined,
+    'a start that is not a time is dropped without failing the pick-up',
+  );
+  assert.equal(
+    parse({
+      ...written,
+      resume: { ...written.resume, startedAt: NOW + 3_600_000 },
+    })?.resume.startedAt,
+    undefined,
+    'a start in the future is not trusted',
+  );
+}
+
 console.log('cookSession: all checks passed');
