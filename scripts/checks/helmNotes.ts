@@ -428,6 +428,7 @@ const asOpen = (
     previous: Record<string, unknown> | null;
   }[],
 ): OpenExecution => ({
+  privacy: 'ordinary',
   id: 'exec-1',
   said: null,
   via: null,
@@ -452,9 +453,12 @@ const asOpen = (
   effects,
   undoReport: null,
   spoken: null,
+  heldSpoken: null,
   goneIds: null,
   undoReason: null,
   lines: [],
+  abilityOffer: null,
+  awayZoneOffer: null,
   isUnreadable: false,
 });
 
@@ -472,6 +476,11 @@ const undoTargets = (
         body: 'x',
         via: null,
         links: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       },
     },
   ],
@@ -560,6 +569,11 @@ test('Undo of a filing restores the note topics and the topic marks without touc
             body: 'x',
             via: null,
             links: [],
+            privateMark: null,
+            isPrivacyCleared: false,
+            quietMark: null,
+            quietUntil: null,
+            isQuietCleared: false,
           },
         },
       ],
@@ -622,7 +636,17 @@ const noteTarget = (id: string, isEdited: boolean): [string, UndoTarget] => [
   {
     docId: id,
     data: { lastEditedAt: isEdited ? 7000 : null },
-    opened: { title: 'T', body: 'x', via: null, links: [] },
+    opened: {
+      title: 'T',
+      body: 'x',
+      via: null,
+      links: [],
+      privateMark: null,
+      isPrivacyCleared: false,
+      quietMark: null,
+      quietUntil: null,
+      isQuietCleared: false,
+    },
   },
 ];
 

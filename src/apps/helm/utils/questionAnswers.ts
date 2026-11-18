@@ -14,7 +14,7 @@ export type SpokenAnswer =
   | { kind: 'dismiss' }
   | { kind: 'answer'; value: QuestionAnswerValue };
 
-// "Never mind" and "forget it" are left to closing the conversation, which skips the question instead.
+// "Never mind" and "forget it" are left to closing the conversation, which dismisses the open questions instead.
 const DISMISS_PHRASES = [
   'dismiss',
   'dismiss it',

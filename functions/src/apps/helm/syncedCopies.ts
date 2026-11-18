@@ -31,6 +31,7 @@ export interface SyncedCopy {
   extra: Record<string, ExtraValue>;
   /** When the source last worked the copy out; null when it did not say. */
   asOf: number | null;
+  isPrivate?: boolean;
 }
 
 export const MAX_CONTEXT_SYNCED = 40;
@@ -148,7 +149,7 @@ const toExtra = (kind: string, value: unknown) => {
 const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['isTentative', 'isFree', 'hasTicket'],
+  event: ['isTentative', 'isFree', 'hasTicket', 'format'],
   task: [],
   project: [
     'available',
@@ -168,12 +169,13 @@ const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
-/** Opens one synced copy; one that won't open or holds no title is left out. */
+/** Opens one synced copy; one that won't open or holds no title is left out, and so is an event the plan itself wrote to the calendar. */
 export function openSyncedCopy(
   key: HelmKey,
   id: string,
   data: DocumentData,
 ): SyncedCopy | null {
+  if (typeof data.helmRef === 'string' && data.helmRef !== '') return null;
   try {
     const opened = openForHelm(key, data.sealed as SealedPayload);
     if (typeof opened.title !== 'string' || !opened.title) return null;
@@ -206,13 +208,14 @@ export function openSyncedCopy(
       currency: typeof opened.currency === 'string' ? opened.currency : null,
       extra: toExtra(kind, opened.extra),
       asOf: toNumber(data.sourceUpdatedAt),
+      isPrivate: data.privacy === 'private',
     };
   } catch {
     return null;
   }
 }
 
-/** What a model is told about a copy: words, times in the person's zone and the source's name. A site app's copy also carries its place, detail, amount and the kind's extras (a shared place's phone and address, a project's counts); a Google copy never does, so calendar locations and descriptions stay out. Never an id, attendees or notes. */
+/** What a model is told about a copy: words, times in the person's zone and the source's name. A site app's copy also carries its place, detail, amount and the kind's extras (a shared place's phone and address, a project's counts); a Google event carries only its place and format (video or phone), so descriptions and links stay out. Never an id, attendees or notes. */
 export function toSyncedView(
   copy: SyncedCopy,
   timeZone: string,
@@ -258,6 +261,14 @@ export function toSyncedView(
             copy.asOf === null
               ? null
               : Math.max(0, Math.floor((now - copy.asOf) / DAY_MS)),
+        }
+      : {}),
+    ...(copy.kind === 'event' && !isSite
+      ? {
+          ...(copy.placeLabel === null ? {} : { place: copy.placeLabel }),
+          ...(typeof copy.extra.format === 'string'
+            ? { details: { format: copy.extra.format } }
+            : {}),
         }
       : {}),
     ...(isSite

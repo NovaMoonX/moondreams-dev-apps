@@ -13,6 +13,7 @@ import { shallowEqual } from 'react-redux';
 
 import { useAppSelector } from '@/store';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { toDialableNumber } from '@/utils/contactUtils';
 import { formatTime } from '@/utils/formatUtils';
 import AvatarStack from '@/ui/AvatarStack';
 
@@ -79,7 +80,7 @@ function currentTime(): number {
 
 /** Kept as a plain top-level helper (rather than inline in the component) so this event-handler side effect isn't lexically inside the component body. */
 function callClinic(phone: string) {
-  window.location.href = `tel:${phone.replace(/[^+\d]/g, '')}`;
+  window.location.href = `tel:${toDialableNumber(phone)}`;
 }
 
 /** Same reasoning as `callClinic` above. */

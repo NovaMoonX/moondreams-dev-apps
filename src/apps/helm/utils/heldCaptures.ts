@@ -26,9 +26,14 @@ export const hasOpenChoice = (capture: OpenCapture) =>
   hasOpenQuestion(capture, [
     'whichPerson',
     'whichPlace',
+    'isThisWho',
+    'whichKin',
+    'kinOrder',
     'whichIsTrue',
     'whichTopic',
     'groupTopics',
+    'whichComesFirst',
+    'clashChoice',
     'undoOffer',
     'asked',
   ]);

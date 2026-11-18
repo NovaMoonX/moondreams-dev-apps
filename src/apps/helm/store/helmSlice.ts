@@ -19,18 +19,29 @@ import {
   type HelmListName,
 } from '@apps/helm/utils/heldLists';
 import { resetAllState } from '@/store/actions/globalActions';
+import type { OpenSeenAs } from '@apps/helm/store/listeners/seenAsListener';
 import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
 import type {
   HelmProfile,
   OpenCapture,
+  OpenDayAims,
   OpenConnectedAssistant,
   OpenExecution,
   OpenFact,
+  OpenGrouping,
+  OpenConnection,
+  OpenResearch,
+  OpenScheduledAction,
+  OpenHabit,
+  OpenHabitDay,
   OpenMedia,
   OpenNote,
+  OpenObservation,
+  OpenPattern,
   OpenPlace,
   OpenProject,
+  OpenReflection,
   OpenTask,
   OpenProcedure,
   OpenRun,
@@ -63,6 +74,22 @@ export interface PlanDaySet {
   /** Keyed by day ("YYYY-MM-DD" in the profile's zone). */
   byId: Record<string, PlanDay>;
   isLoaded: boolean;
+  /** The server has answered at least once, so a missing day is truly unplanned rather than not yet read. */
+  isFromServer: boolean;
+  isFailed: boolean;
+}
+
+export interface DayAimsSet {
+  /** Keyed by day ("YYYY-MM-DD" in the profile's zone). */
+  byId: Record<string, OpenDayAims>;
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
+export interface HabitDaySet {
+  /** Keyed by habit day ("YYYY-MM-DD" in the profile's zone, rolling over at 03:00). */
+  byId: Record<string, OpenHabitDay>;
+  isLoaded: boolean;
   isFailed: boolean;
 }
 
@@ -80,6 +107,7 @@ export interface HelmState {
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
   profile: HelmProfile | null;
   isProfileLoaded: boolean;
+  isProfileFailed: boolean;
   /** The uid the profile belongs to, so a person's profile never shows for another. */
   uid: string | null;
   /** Turns from yesterday on (the home surface's eager window). */
@@ -90,16 +118,39 @@ export interface HelmState {
   waitingCaptures: CaptureSet;
   /** Turns an outside assistant sent, whenever they were sent: the "From your assistants" view reads these, never home. */
   outsideCaptures: CaptureSet;
+  /** What Helm has noticed that is neither off nor retired; a screen reads `patternSelectors`, which leave out what Forget hid. */
+  patterns: LoadedSet<OpenPattern>;
+  /** Guardrails whose yes is being written or not yet heard back: their subject is already paused, so they must not read as no longer true meanwhile. Cleared when the stored pattern stops asking. */
+  answeringPatternIds: string[];
+  groupings: LoadedSet<OpenGrouping>;
+  /** What was said about habits, goals, tasks and the day in the last two weeks, oldest first. */
+  observations: LoadedSet<OpenObservation>;
+  /** The nightly pass's reflections the daily check has not weighed yet. */
+  unseenReflections: LoadedSet<OpenReflection>;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
   /** Every task that belongs to a project, open or done. */
   projectTasks: LoadedSet<OpenTask>;
   /** The plan days from yesterday to six days ahead. */
   planDays: PlanDaySet;
+  /** The days' aims and wind-down results, over the same window as the plan days. */
+  dayAims: DayAimsSet;
   /** The person's confirmed and inferred facts, and the superseded ones they replaced. */
   facts: LoadedSet<OpenFact>;
   /** The people, pets and organizations the person knows. */
   who: LoadedSet<OpenWho>;
+  /** How the people are connected, every document including the refused ones; a screen reads `selectShownConnections`. */
+  connections: LoadedSet<OpenConnection>;
+  /** What the assistant does at set times, ended ones included; a screen reads `selectScheduledActions`. */
+  scheduledActions: LoadedSet<OpenScheduledAction>;
+  /** Looking-into-it items and what they found; a screen reads `selectResearch`. */
+  research: LoadedSet<OpenResearch>;
+  /** Every question saved to learn later, whatever its age; a screen reads `selectLearnLater`. */
+  learnLater: LoadedSet<OpenResearch>;
+  /** The things the person keeps up, active or not. */
+  habits: LoadedSet<OpenHabit>;
+  /** Each habit's ticks and tallies for the days from two weeks back. */
+  habitDays: HabitDaySet;
   /** The sealed index of the dates that come back each year, opened. */
   keyDateIndex: KeyDateIndexSet;
   /** The places the person has named. */
@@ -116,6 +167,8 @@ export interface HelmState {
   openRuns: LoadedSet<OpenRun>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
+  /** How the assistant sees the person, every line including removed ones; a screen reads `seenAsSelectors`. */
+  seenAs: LoadedSet<OpenSeenAs>;
   /** The person's writing-style profiles, opened. */
   style: LoadedSet<OpenStyle>;
   /** The outside assistants the person connected, most recently used first; disconnected ones are left out. */
@@ -208,6 +261,19 @@ const emptyLoadedSet = { items: [], isLoaded: false, isFailed: false };
 const emptyPlanDays: PlanDaySet = {
   byId: {},
   isLoaded: false,
+  isFromServer: false,
+  isFailed: false,
+};
+
+const emptyDayAims: DayAimsSet = {
+  byId: {},
+  isLoaded: false,
+  isFailed: false,
+};
+
+const emptyHabitDays: HabitDaySet = {
+  byId: {},
+  isLoaded: false,
   isFailed: false,
 };
 
@@ -226,16 +292,29 @@ const initialState: HelmState = {
   keyRefusals: 0,
   profile: null,
   isProfileLoaded: false,
+  isProfileFailed: false,
   uid: null,
   recentCaptures: emptySet,
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
   outsideCaptures: emptySet,
+  patterns: emptyLoadedSet,
+  answeringPatternIds: [],
+  groupings: emptyLoadedSet,
+  observations: emptyLoadedSet,
+  unseenReflections: emptyLoadedSet,
   openTasks: emptyLoadedSet,
   projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
+  dayAims: emptyDayAims,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
+  connections: emptyLoadedSet,
+  scheduledActions: emptyLoadedSet,
+  research: emptyLoadedSet,
+  learnLater: emptyLoadedSet,
+  habits: emptyLoadedSet,
+  habitDays: emptyHabitDays,
   keyDateIndex: emptyKeyDateIndex,
   places: emptyLoadedSet,
   projects: emptyLoadedSet,
@@ -244,6 +323,7 @@ const initialState: HelmState = {
   procedures: emptyLoadedSet,
   openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
+  seenAs: emptyLoadedSet,
   style: emptyLoadedSet,
   assistants: emptyLoadedSet,
   synced: emptyLoadedSet,
@@ -285,6 +365,10 @@ const helmSlice = createSlice({
       state.uid = action.payload.uid;
       state.profile = action.payload.profile;
       state.isProfileLoaded = true;
+      state.isProfileFailed = false;
+    },
+    setProfileFailed: (state) => {
+      state.isProfileFailed = true;
     },
     setRecentCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
       state.recentCaptures = {
@@ -326,6 +410,64 @@ const helmSlice = createSlice({
     setOutsideCapturesFailed: (state) => {
       state.outsideCaptures.isFailed = true;
     },
+    setPatterns: (state, action: PayloadAction<OpenPattern[]>) => {
+      state.patterns = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+      state.answeringPatternIds = state.answeringPatternIds.filter((id) =>
+        action.payload.some(
+          (one) =>
+            one.id === id &&
+            (one.state === 'suggested' || one.state === 'candidate'),
+        ),
+      );
+    },
+    startAnsweringPattern: (state, action: PayloadAction<string>) => {
+      state.answeringPatternIds = [
+        ...state.answeringPatternIds.filter((id) => id !== action.payload),
+        action.payload,
+      ];
+    },
+    endAnsweringPattern: (state, action: PayloadAction<string>) => {
+      state.answeringPatternIds = state.answeringPatternIds.filter(
+        (id) => id !== action.payload,
+      );
+    },
+    setPatternsFailed: (state) => {
+      state.patterns.isFailed = true;
+    },
+    setGroupings: (state, action: PayloadAction<OpenGrouping[]>) => {
+      state.groupings = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setGroupingsFailed: (state) => {
+      state.groupings.isFailed = true;
+    },
+    setObservations: (state, action: PayloadAction<OpenObservation[]>) => {
+      state.observations = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setObservationsFailed: (state) => {
+      state.observations.isFailed = true;
+    },
+    setUnseenReflections: (state, action: PayloadAction<OpenReflection[]>) => {
+      state.unseenReflections = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setUnseenReflectionsFailed: (state) => {
+      state.unseenReflections.isFailed = true;
+    },
     setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
       deliver(state, 'openTasks', action.payload);
     },
@@ -334,8 +476,25 @@ const helmSlice = createSlice({
       deliver(state, 'projectTasks', action.payload);
     },
     setProjectTasksFailed: (state) => fail(state, 'projectTasks'),
-    setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
+    setPlanDays: (
+      state,
+      action: PayloadAction<{ days: PlanDay[]; isFromServer: boolean }>,
+    ) => {
       state.planDays = {
+        byId: Object.fromEntries(
+          action.payload.days.map((entry) => [entry.id, entry]),
+        ),
+        isLoaded: true,
+        isFromServer:
+          state.planDays.isFromServer || action.payload.isFromServer,
+        isFailed: false,
+      };
+    },
+    setPlanDaysFailed: (state) => {
+      state.planDays.isFailed = true;
+    },
+    setDayAims: (state, action: PayloadAction<OpenDayAims[]>) => {
+      state.dayAims = {
         byId: Object.fromEntries(
           action.payload.map((entry) => [entry.id, entry]),
         ),
@@ -343,13 +502,19 @@ const helmSlice = createSlice({
         isFailed: false,
       };
     },
-    setPlanDaysFailed: (state) => {
-      state.planDays.isFailed = true;
+    setDayAimsFailed: (state) => {
+      state.dayAims.isFailed = true;
     },
     setFacts: (state, action: PayloadAction<OpenFact[]>) => {
       deliver(state, 'facts', action.payload);
     },
     setFactsFailed: (state) => fail(state, 'facts'),
+    setSeenAs: (state, action: PayloadAction<OpenSeenAs[]>) => {
+      state.seenAs = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setSeenAsFailed: (state) => {
+      state.seenAs.isFailed = true;
+    },
     setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
       deliver(state, 'style', action.payload);
     },
@@ -368,6 +533,67 @@ const helmSlice = createSlice({
       deliver(state, 'who', action.payload);
     },
     setWhoFailed: (state) => fail(state, 'who'),
+    setConnections: (state, action: PayloadAction<OpenConnection[]>) => {
+      state.connections = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setConnectionsFailed: (state) => {
+      state.connections.isFailed = true;
+    },
+    setScheduledActions: (
+      state,
+      action: PayloadAction<OpenScheduledAction[]>,
+    ) => {
+      state.scheduledActions = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setScheduledActionsFailed: (state) => {
+      state.scheduledActions.isFailed = true;
+    },
+    setResearch: (state, action: PayloadAction<OpenResearch[]>) => {
+      state.research = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setResearchFailed: (state) => {
+      state.research.isFailed = true;
+    },
+    setLearnLater: (state, action: PayloadAction<OpenResearch[]>) => {
+      state.learnLater = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setLearnLaterFailed: (state) => {
+      state.learnLater.isFailed = true;
+    },
+    setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
+      state.habits = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setHabitsFailed: (state) => {
+      state.habits.isFailed = true;
+    },
+    setHabitDays: (state, action: PayloadAction<OpenHabitDay[]>) => {
+      state.habitDays = {
+        byId: Object.fromEntries(
+          action.payload.map((entry) => [entry.id, entry]),
+        ),
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setHabitDaysFailed: (state) => {
+      state.habitDays.isFailed = true;
+    },
     setKeyDateIndex: (state, action: PayloadAction<OpenKeyDateIndex>) => {
       state.keyDateIndex = {
         ...action.payload,
@@ -534,16 +760,40 @@ export const {
   setWaitingCapturesFailed,
   setOutsideCaptures,
   setOutsideCapturesFailed,
+  setPatterns,
+  setPatternsFailed,
+  setGroupings,
+  setGroupingsFailed,
+  startAnsweringPattern,
+  endAnsweringPattern,
+  setObservations,
+  setObservationsFailed,
+  setUnseenReflections,
+  setUnseenReflectionsFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setProjectTasks,
   setProjectTasksFailed,
   setPlanDays,
   setPlanDaysFailed,
+  setDayAims,
+  setDayAimsFailed,
   setFacts,
   setFactsFailed,
   setWho,
   setWhoFailed,
+  setConnections,
+  setConnectionsFailed,
+  setScheduledActions,
+  setScheduledActionsFailed,
+  setResearch,
+  setResearchFailed,
+  setLearnLater,
+  setLearnLaterFailed,
+  setHabits,
+  setHabitsFailed,
+  setHabitDays,
+  setHabitDaysFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setPlaces,
@@ -574,10 +824,13 @@ export const {
   startLoadingEarlier,
   addEarlierCaptures,
   setEarlierFailed,
+  setSeenAs,
+  setSeenAsFailed,
   setStyle,
   setStyleFailed,
   setAssistants,
   setAssistantsFailed,
+  setProfileFailed,
   clearHelm,
   setKeyStatus,
   retryKey,

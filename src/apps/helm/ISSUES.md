@@ -18,7 +18,7 @@ The tiers mirror PRODUCT.md's Build Plan: `## MVP` is Core MVP, `## Next Steps` 
 - `docs/conventions/data-contracts.md` (round 6b, 6e): a yearly date whose year or day may be unknown is `month`, a nullable `day` and a nullable `year`, never a placeholder, read through `@/utils/yearlyDateUtils`; a one-time life event is a moment with a precision, never a yearly date. `docs/conventions/state-data.md` (round 6e, owner's choice: seal everything): a sealed app that must find records by a sealed value keeps one sealed index document, rewritten in the same transaction as each change, with a stated size cap and split plan, never a readable or derived field.
 - `docs/conventions/product.md`: an answer from outside the person's records is labelled wherever it shows, aloud too, and is never stored as one of their records unless they save it.
 - `docs/conventions/cloud-functions.md` (in Issue 128, the day plan): "Work that must happen on time happens on the server", folded beside the scheduled-function bullets (text: `TECHNICAL.md` section 18).
-- `docs/conventions/cloud-functions.md` (in Issue 113, with the nightly pass): the batch test, the never-batched list and the `BATCH_JOBS` registry with `check:batch-jobs` (text: `TECHNICAL.md` section 18). `docs/conventions/security-privacy.md` (in Issue 103): private as a class, never named outside the app unless turned on for that thing or that copy. `docs/conventions/data-contracts.md` (in Issue 102): an assistant's map of where things live is the one source of its prompt map, tools, writers, batch reads and cascades, checked by `check:helm-where`.
+- `docs/conventions/cloud-functions.md` (in Issue 113, with the nightly pass): the batch test, the never-batched list and `check:batch-jobs` (text: `TECHNICAL.md` section 18). `docs/conventions/security-privacy.md` (in Issue 103): private as a class, never named outside the app unless turned on for that thing or that copy. `docs/conventions/data-contracts.md` (in Issue 102): an assistant's map of where things live is the one source of its prompt map, tools, writers, batch reads and cascades, checked by `check:helm-where`.
 
 **Shared code built or moved, by issue:** `createSealedReader` and `functions/src/appKeys/` (2), `parseNaturalDate` (4), `functions/src/ai/` (5), the voice skeleton in `src/lib/speech/voice/` and `useVoiceConversation` (12), the server voice providers and `voiceConfig` (13), `mintVoiceToken`, the streaming listener and the voice usage counters (14), `streamSpeech` (15), barge-in (16), the on-device recognizer in `src/lib/speech/onDevice/` and `useOnDeviceRecognition` (17), the connections contract, `useConnections`, `ConnectedSourcesList` and `functions/src/connections/` (18), the sync runner and expiry (19), `requestGoogleAuthCode`, the token store and the Google connectors (20, 28, 29, 38), `functions/src/vendor/` and `check:server-copies` (24; the matcher copies in 34), `readSpokenAnswer` in `@/lib/speech` (36), `useSealedObjectUrl` with Runway's receipt hook moved onto it (37), `yearlyDateUtils` with Nine Lives' anniversary helper moved onto it, and the server copy of `keyDateIndex.ts` under `check:server-copies` (43), `LinkedText` (46), `MarkdownText` (49), `transcribeVoiceNote` (52), `ChecklistGroup` moved from Runway (54), `recentSignIn` (62, moved from Runway), the site callable `signOutEverywhere` and `TrustBrowserRow`'s optional `onSignOutEverywhere` (61). Trust this browser itself is PR #819's shared store and row, reused by 60 with nothing rebuilt. Round 5's `BottomTabBar` and `DictationField` are dropped. Each adds its Pattern-index line in that PR. The account page's "Connected apps" index lands with issue 18.
 
@@ -1592,7 +1592,7 @@ The growth area is Issues 101–130, written out in full and in build order: the
 **Prerequisites:** 65, 20. Adds `drive.file` by incremental consent; export through a callable on the platform's token store. A private topic or note is left out of an export unless the person taps "Include them" for that export (`filterPrivate`, section 29 "Private is a class").
 
 ### Issue 67: Put a planned task on Google Calendar, approved one by one
-**Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue. A proposal for a private thing shows "· Private" in the queue and, once approved, is written with Google Calendar's `visibility: 'private'`.
+**Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue. A proposal for a private thing shows the lock in the queue and, once approved, is written with Google Calendar's `visibility: 'private'`.
 
 ### Issue 68: Preparation before an event
 **Prerequisites:** 65, 55. A scheduled drafter leaves a procedure run or a briefing topic on Today; no push.
@@ -1674,12 +1674,12 @@ The growth area is Issues 101–130, written out in full and in build order: the
 "Never mind", "forget it", "that's all" and their kin close the conversation, typed or spoken, matched on the device with no model call: what was pending is dropped, what was done keeps its Undo, and spoken, the microphone is released with a soft falling chime. A phrase that answers the open question is its answer, and no closing phrase ever deletes anything.
 ### CRUD & Entry-Point Requirements
 - [ ] **Update:** a close drops what was pending ("Okay, left it · Undo"); Undo restores it.
-- [ ] **Read:** a typed close folds the question card to "Left it".
+- [ ] **Read:** a typed close folds the question card to "Dismissed" and shows the quiet "Okay, left it" line with Undo.
 ### Success Criteria
 - [ ] "Never mind", "forget it", "cancel", "stop", "that's all", "thanks", "I'm done", "nothing", "no thanks", "leave it" and close variants, as the whole turn or (for a dismiss phrase after "actually", or a finish phrase after content) its end, close the conversation typed or spoken, matched on the device by the shared `readClosingPhrase` with no model call and offline; "remind me to cancel" and "stop suggesting that" are requests; "ugh, doesn't matter" closes through the model's `closeConversation`, which can carry no command (`check:helm-close`, `check:pinch-voice`).
 - [ ] A phrase that answers the open question is its answer ("nothing" = None of these, "no thanks" = No); "cancel it" with a page in view and nothing pending goes as a turn about that page; "stop" while it talks stops the voice and closes only when nothing is pending (`check:helm-close`).
-- [ ] A close drops unsent words, questions about requests not yet done and confirms waiting for a yes (`leftAt`; answering one late is refused), keeps everything done with its Undo, and moves a question about something already filed to Needs you as skipped; "Okay, left it · Undo" restores what was dropped; nothing else is written (`check:helm-close`).
-- [ ] No closing phrase reaches a delete: every `CLOSING_PHRASES` entry and variant writes nothing but `leftAt`/`skippedAt`, a model answer that pairs "forget it" with a deleting command is refused, and "forget that I like olives" still forgets that fact (`check:helm-close`).
+- [ ] A close drops unsent words, questions about requests not yet done and confirms waiting for a yes (let go as a dismiss does; answering one late is refused; a dispute between facts stays open), keeps everything done with its Undo, and moves a question about something already filed to Needs you as skipped; "Okay, left it · Undo" restores what was dropped; nothing else is written (`check:helm-close`).
+- [ ] No closing phrase reaches a delete: every `CLOSING_PHRASES` entry and variant writes nothing but the dismiss and `skippedAt` stamps, a model answer that pairs "forget it" with a deleting command is refused, and "forget that I like olives" still forgets that fact (`check:helm-close`).
 - [ ] Spoken, the microphone is released (TAP mode OFF, the follow-up gate stopped; WAKE mode back to waiting for the phrase), the window doesn't reopen, and the shared `close` cue plays a soft falling chime once; a typed close is silent; Pinch's cooking voice is unchanged (driven, `check:pinch-voice`).
 - [ ] Shared code built with no app words: `closingPhrase.ts`, the `close` cue and `CLOSE_HEARD` in `listeningMode.ts`. Conventions: `code.md`'s voice bullet gains `readClosingPhrase`, `CLOSING_PHRASES` (an app supplies extra words, never its own list) and the `close` cue.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
@@ -1705,7 +1705,7 @@ The assistant always knows where to look and where to write. `WHERE_THINGS_LIVE`
 **Target PR Size:** ~500 lines (L)
 **Context:** `TECHNICAL.md` section 2 ("Readable versus sealed": Private), section 29 ("Private is a class, not only health"); `PRODUCT.md` "Private Things"; `UX.md` 1i, D19.
 ### Description
-Health and care things are private on their own on any kind of record, and anything else is private when the person says so or turns on its Private switch; a thing filed under a private project or about a private person is private too. A private thing shows a quiet lock in lists and "· Private" on its filing line, is never named in a push, copy, export or anything written outside Helm unless turned on for that one thing or copy, and inside Helm nothing changes. Habits and their care switch join in Issue 108, the lock-screen name in Issue 110.
+Health and care things are private on their own on any kind of record, and anything else is private when the person says so or turns on its Private switch; a thing filed under a private project or about a private person is private too. A private thing shows a quiet lock after its name in lists, is never named in a push, copy, export or anything written outside Helm unless turned on for that one thing or copy, and inside Helm nothing changes. Habits and their care switch join in Issue 108, the lock-screen name in Issue 110.
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** "keep this private" on a new thing; a health or care thing marked by code with its reason shown.
 - [ ] **Read:** the lock beside a private thing's name; the sheet saying where an inherited class comes from.
@@ -1713,8 +1713,8 @@ Health and care things are private on their own on any kind of record, and anyth
 - [ ] **Delete:** a copy or export leaves private things out with "Include them" for that copy.
 ### Success Criteria
 - [ ] Every derived kind (patterns, observations, reflections, seen-as lines, Activity lines, moments, timeline, Today's lines) is private when any source is; copies and exports of them leave private ones out with "Include them" (`check:helm-private`).
-- [ ] A wake-phrase turn with the page hidden or untouched answers private things by label ("your morning medicine") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
-- [ ] Deleting a private project or forgetting a private person leaves each child that inherited it with its own mark (`check:helm-private`).
+- [x] A wake-phrase turn with the page hidden or untouched answers private things by a neutral label ("a private task this morning") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
+- [x] Deleting a private project or forgetting a private person leaves each child that inherited it with its own mark (`check:helm-private`).
 - [ ] Each source of the class (care, a health word the model missed, the person, a private project, a private who) and leaving the project; code never clears a health mark and never re-marks a cleared one; `setPrivate` is refused on an inherited class with its code-built line (`check:helm-private`); every copy and export goes through `filterPrivate` (`check:helm-copy`).
 - [ ] No rules change (`privacy` is a readable field under the owner wildcard); stated. Rows added to `WHERE_THINGS_LIVE` for `privacy` and `touchesPrivate`. Conventions: `security-privacy.md` "Private is a class any record can carry" written (Issue 110 folds the push bullet into it).
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
@@ -1728,18 +1728,18 @@ Health and care things are private on their own on any kind of record, and anyth
 ### Description
 A person can carry other names ("Bubs") and a family word ("younger brother"). Aliases find them everywhere a name does; a new nickname is asked about before it is saved; "this is for my younger brother" finds the right one from what was said or from birthdays with a year, and asks when it can't tell. The self's own birthday is a key date on the You page.
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** an alias by Add or a Yes to "Is Bubs Eli?"; a family word from the who page's list or said.
-- [ ] **Read:** "Also called" and the family word on the who page.
-- [ ] **Update:** change the family word; the saved answer to "Is Eli younger than you?".
-- [ ] **Delete:** Remove an alias; clear the family word.
+- [x] **Create:** an alias by Add or a Yes to "Is Bubs Eli?"; a family word from the who page's list or said.
+- [x] **Read:** "Also called" and the family word on the who page.
+- [x] **Update:** change the family word; the saved answer to "Is Eli younger than you?".
+- [x] **Delete:** Remove an alias; clear the family word.
 ### Success Criteria
-- [ ] The who page shows "Also called" with Add and Remove; aliases find the person in Search, `@`, the turn's matching, the context, the hints (never a private one's) and the sound-alike fix; "Also heard as" (`soundsLike`) and refused names are separate sealed lists (`check:helm-sort`, `check:helm-name-hints`).
-- [ ] A new nickname the model links to someone asks "Is Bubs Eli?" · Yes · No · Someone new before anything is saved; Yes saves the alias, No leaves the turn as written and is never asked again for that name and person (`refusedAliases`), Someone new makes the who (`check:helm-kin`).
-- [ ] Family words come only from `KIN_KINDS`, with order only on sibling and child kinds; the normalizer refuses anything else and keeps the said words in `relation` (`check:helm-kin`).
-- [ ] "This is for my younger brother" uses a said order first; else derives older/younger only from the person's and the brother's birthdays both with a year, and oldest/youngest from the siblings' years alone; one fit is used and named ("Added for Eli: …"), two ask "Which brother: Eli or Marcus?", an order it can't tell asks "Is Eli younger than you?" once and saves the answer, never asking for a birthday; no brother asks who with "Add your brother"; a private who resolves the same way (`check:helm-kin`).
-- [ ] No rules change (sealed fields only); stated. Conventions: none new; check made.
+- [ ] The who page shows "Also called" with Add and Remove; aliases find the person in Search, `@`, the turn's matching, the context, the hints (never a private one's) and the sound-alike fix; "Also heard as" (`soundsLike`) and refused names are separate sealed lists (`check:helm-sort`, `check:helm-name-hints`). Built here: the who page, Search, `@`, the turn's matching, the context and the separate sealed lists; the recognizer hints, the sound-alike fix and `check:helm-name-hints` arrive with Issue 105.
+- [x] A new nickname the model links to someone asks "Is Bubs Eli?" · Yes · No · Someone new before anything is saved; Yes saves the alias, No leaves the turn as written and is never asked again for that name and person (`refusedAliases`), Someone new makes the who (`check:helm-kin`).
+- [x] Family words come only from `KIN_KINDS`, with order only on sibling and child kinds; the normalizer refuses anything else and keeps the said words in `relation` (`check:helm-kin`).
+- [x] "This is for my younger brother" uses a said order first; else derives older/younger only from the person's and the brother's birthdays both with a year, and oldest/youngest from the siblings' years alone; one fit is used and named ("Added for Eli: …"), two ask "Which brother: Eli or Marcus?", an order it can't tell asks "Is Eli younger than you?" once and saves the answer, never asking for a birthday; no brother asks "Who's your brother?" as a who search with "Add your brother" (a typed name, never the said words, makes the person with the family word); a private who resolves the same way (`check:helm-kin`).
+- [x] No rules change (sealed fields only); stated. Conventions: none new; check made.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
-- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+- [x] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
 ### Issue 105: Names heard right
 
@@ -1787,14 +1787,14 @@ One way to say how often something repeats, for every app: Google Calendar's pre
 **Target PR Size:** ~450 lines (M)
 **Context:** `TECHNICAL.md` section 29 ("Where the person is, and where they will be"); `PRODUCT.md` "Where You and Your People Are"; `UX.md` 1g (Where people are); canvas rows 20 (LC1, LC2) and 22 (SA4).
 ### Description
-The person and each who have a home and, now and then, somewhere else for a while, from what is said, the calendar and Waypoint trips, each with its source; "nearby" is worked out from them. The phone's location is the person's choice of Off, City only or Precise, offered only when an answer needs it. A time away in another zone offers its time and a pause of what runs at home. What exists when this lands (Today's planning, the day's turn) follows the away zone here; habits, reminders, the nightly pass and scheduled actions read the same `zoneSpans` in Issues 108, 110, 113 and 115, and each re-runs this criterion's case for itself.
+The person and each who have a home and, now and then, somewhere else for a while, from what is said, the calendar and Waypoint trips, each with its source; "nearby" is worked out from them. The phone's location is the person's choice of Off, City only or Precise, offered only when an answer needs it. A time away in another zone offers its time (the pause of what runs at home arrives with scheduled actions). What exists when this lands (Today's planning, the day's turn) follows the away zone here; habits, reminders, the nightly pass and scheduled actions read the same `zoneSpans` in Issues 108, 110, 113 and 115, and each re-runs this criterion's case for itself.
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** a home or a time away, said or set on the page (`CitySelect`).
 - [ ] **Read:** "Lives in Leavenworth" and "In Portland · until Sun, Nov 15" with their source.
 - [ ] **Update:** Change; "I'm back" ends a time away early; the phone location setting.
 - [ ] **Delete:** Remove; a time away ends on its last day on its own.
 ### Success Criteria
-- [ ] Saying "I'm in Lisbon Dec 2–9" offers "Use Lisbon time Dec 2–9" (Undo) and "Pause what runs at home", once per span, only when the offsets differ; a Waypoint trip in another zone offers the same; with it on, reminders, the 03:00 day, Today's planning and the nightly pass follow Lisbon time while scheduled actions stay on home time unless paused, and no day is counted twice (`check:helm-whereabouts`, `check:helm-habits`, `check:helm-scheduled`).
+- [ ] Saying "I'm in Lisbon Dec 2–9" offers "Use Lisbon time Dec 2–9" (Undo), once per span, only when the offsets differ ("Pause what runs at home" arrives with scheduled actions in Issue 115, and the same offer for a Waypoint trip in another zone is a follow-up); with it on, reminders, the 03:00 day, Today's planning and the nightly pass follow Lisbon time while scheduled actions stay on home time unless paused, and no day is counted twice (`check:helm-whereabouts`, `check:helm-habits`, `check:helm-scheduled`).
 - [ ] `readWhereabouts` picks a stated away, then a trip, then a marked calendar event, then the current place, then home; two cities at 49 km are nearby and at 51 km are not; phone location stores no coordinates at City only (`check:helm-whereabouts`).
 - [ ] No rules change (sealed fields on the self who and each who); stated. Rows added to `WHERE_THINGS_LIVE` for `home`, `away`, `zoneSpans` and `nearNow`. Conventions: none new; check made.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
@@ -1910,7 +1910,7 @@ Patterns about when things work, from the person's ticks and from what they say 
 - [ ] An observation whose quote names another person with a health word keeps its tags and no quote (`check:helm-said`).
 - [ ] Retention runs weekly: observations past 26 weeks not cited by a live pattern deleted, stopped patterns cut to their signature and still blocking, seen-as and Activity caps held (`check:helm-retention`).
 - [ ] A candidate on 2 days refused, a care candidate forced to ask-only, a result written once on a retry, a lost run re-queued (`check:helm-reflection`); every batch job registered (`check:batch-jobs`); derived records carry `privacy` from their sources (`check:helm-private`).
-- [ ] Rows added to `WHERE_THINGS_LIVE` for patterns, observations and reflections; lists added to `helmScale.ts`. Conventions: `cloud-functions.md` gains the batch test and `BATCH_JOBS`; `product.md` gains the back-off for anything learned and offered.
+- [ ] Rows added to `WHERE_THINGS_LIVE` for patterns, observations and reflections; lists added to `helmScale.ts`. Conventions: `cloud-functions.md` gains the batch test; `product.md` gains the back-off for anything learned and offered.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
 - [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
@@ -2172,9 +2172,9 @@ One card at the top of home on the first open each day asks "What do you want to
 ### Success Criteria
 - [ ] The first open each day after the person's day start shows one day card at the top of home, "What do you want to get done today?", with yesterday's unfinished aims and tasks in the same card, each Bring to today or Not today; answering "finish the deck, call Mom, gym" by voice or typing files each aim as a task or links it to an existing one (one Undo), and the card folds to one line once answered or dismissed; "what's my plan today?" brings it back.
 - [ ] Home's top holds at most 3 cards at any time (Needs you and the day card, the morning or the wind-down, never both; Issue 130 adds the third); `.claude/rules/helm.md` and `UX.md` say so, and a check at 320px shows home with both cards and the dock (`check:helm-day-plan`).
-- [ ] Today's code plans the aims first, then overdue, due soon and what matters most; each aim has a length, said or guessed from past similar tasks and shown as a guess ("about 1h?", tap to fix, written to the task); every plan keeps 15 minutes around events and a break after each planned task sized by its effort (light 5, moderate 15, heavy 30 minutes; judged once when the task is made, by the turn or one `'quick'`-role call, never during planning; editable on the task) and never fills more than the fill cap (about half), aims included; aims that don't fit are named up front ("These fit. The gym doesn't today unless you move the call.") (`check:helm-day-plan`).
+- [ ] Today's code plans the aims first, then overdue, due soon and what matters most; each aim has a length, said or guessed from past similar tasks and shown as a guess ("about 1h?", tap to fix, written to the task); every plan keeps 15 minutes around events and a break after each planned task sized by its effort (light 5, moderate 15, heavy 30 minutes; judged once when the task is made, by the turn or one `'quick'`-role call, never during planning; editable on the task) and never fills more than the fill cap (about half), aims included; aims that don't fit are named up front ("The gym doesn't fit today unless you move the call. The rest fit.") (`check:helm-day-plan`).
 - [ ] On the first open in the last 2 hours of the person's day the day card becomes the wind-down: done, still possible tonight, won't happen today; each unfinished aim has Tomorrow, Later or Drop it and an optional reason, tapped or said, from Issue 113's fixed signals; the choices land as specified (Tomorrow arrives brought, Later and Drop it leave the task) and fold to "Wound down: 2 done, 1 to tomorrow, 1 dropped." (`check:helm-day-plan`, `check:helm-copy`).
-- [ ] The "why" across days comes only from the nightly reflective batch (`BATCH_JOBS`, `whenWantedNow`, one added read in the job's map, private and care reasons left out) and feeds the next morning's plan through `avoidBuckets`; nothing is computed while the person waits (`check:helm-reflection`, `check:batch-jobs`).
+- [ ] The "why" across days comes only from the nightly reflective batch (`REFLECT_BATCH`, `whenWantedNow`, one added read in the job's map, private and care reasons left out) and feeds the next morning's plan through `avoidBuckets`; nothing is computed while the person waits (`check:helm-reflection`, `check:batch-jobs`).
 - [ ] The rollover of unfinished aims, marking the wind-down ready, catching a calendar change that now overlaps a kept aim and re-planning what no longer fits run in `runHelmDayPlan` on a timer and never depend on the app being open; the device does only drawing and a tap's own write; a missed rollover runs once on the next pass; a kept aim is never moved silently ("Now overlaps…" with Another time); no push is sent and both cards wait for the next open (`check:helm-day-plan`).
 - [ ] The function binds the keyring and no model key, opens only each aim's task id, order and wind-down result (never a task's words), finds people through `dayQueue/{uid}.lookAt` and not by scanning, and "What the AI sees" says it runs while the person is away; `cloud-functions.md` gains "Work that must happen on time happens on the server" (`check:helm-day-plan`).
 - [ ] Planned and done show in Today and the day strip, and a past day keeps its plan with done ticked as built; once Issue 127's calendar is chosen, kept aims are events in their slots, marked done when ticked and moved or removed on Tomorrow or Drop it, a private task is "Busy"; nothing is written to Google before that calendar is chosen (`check:helm-day-plan`, `check:helm-private`).
@@ -2217,9 +2217,95 @@ The nightly reflective batch also looks across the person's records and connecte
 - [ ] A thing that clearly belongs to an existing project or topic is linked quietly (an Activity line, Undo, one quiet line on the next open); a new project or group, a new parent topic or any link under the confidence bar is only proposed and never made unasked, keeping "Ask, then file" (`check:helm-grouping`).
 - [ ] Home's top holds at most 3 cards: Needs you, the day card and the grouping card ("These look like one thing: Moving", sources by app logo; Group them, Not related, Not now); `.claude/rules/helm.md`, `UX.md` 1k and section 1 say so; at most one grouping is offered per open and the rest wait; the learned-offer back-off applies and Not related stays no until new evidence (`check:helm-grouping`).
 - [ ] The job adds no data access and no adapter or category: it reads only what Helm already holds and what connected apps already share, and the PR names what the Going Once and Runway PR made readable and any gap asked of that session.
-- [ ] `relate` is registered in `BATCH_JOBS` with its seven answers and `whenWantedNow: 'answerAtOnce'`, so "anything related to my move?" is answered at once from what is known; nobody waits on it, a retry or a second arrival writes one grouping, and it writes nothing outside Helm (`check:batch-jobs`, `check:helm-grouping`).
+- [ ] `relate` has its own batch settings const with its seven answers and `whenWantedNow: 'answerAtOnce'`, so "anything related to my move?" is answered at once from what is known; nobody waits on it, a retry or a second arrival writes one grouping, and it writes nothing outside Helm (`check:batch-jobs`, `check:helm-grouping`).
 - [ ] A private source is never sent in a request or named on the card or in a line unless Issue 103's rules allow it, and a care record never enters a request (`check:helm-private`, `check:helm-grouping`).
 - [ ] Rules for `groupings` proven as owner, another user and signed out; row added to `WHERE_THINGS_LIVE`. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 131: Several phones and emails, labelled, with a primary
+
+**Prerequisites:** 35, 38
+**Target PR Size:** ~700 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (the first bullet); `TECHNICAL.md` section on who records; `.claude/rules/helm.md`.
+### Description
+A person or organization holds several phone numbers and emails, each labelled, one of each primary. The single `phone` and `email` a record held before read as the primary of each, labelled Other, so nothing is lost and nothing needs a migration job.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** Add a phone, Add an email on the who's page and in its edit sheet; "Dana's work number is 555-0142" by voice or typing.
+- [ ] **Read:** "How to reach" on the who's page, primary first with its mark and each label; the assistant uses the primary.
+- [ ] **Update:** each row's sheet: Make primary, Change (number or address and label), Copy, Call or Text, Email.
+- [ ] **Delete:** Remove on each row's sheet with Undo; removing the primary makes the next one primary.
+### Success Criteria
+- [ ] The sealed who payload holds `phones` and `emails` (each `{ id, value, label, isPrimary }`, at most 10 each, exactly one primary when any); `phone` and `email` are deprecated, written null, and a payload that has only them reads as one primary each labelled Other (`check:helm-who-contacts`).
+- [ ] Labels: Mobile, Home, Work, Other or the person's own word (at most 20 characters); a phone is kept as typed and compared by its digits, so the same number twice is refused with a line saying it's already there (`check:helm-who-contacts`).
+- [ ] The Google Contacts import keeps every number and email with its label, and matching an imported contact to an existing who compares against all of them (`check:helm-contact-import`).
+- [ ] The server's people context gives the primary phone and email and the labels; "text Dana" uses the primary, "Dana's work email" the labelled one; a private who's numbers never leave the device beyond what Private Things allows (`check:helm-private`).
+- [ ] At 320px the rows keep one line each (value truncated, label beside it) and every action sits in the row's sheet, not on the row.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 132: Connections between people, and a couple's status
+
+**Prerequisites:** 131, 44 (moments, for "got engaged"), 104 (family words, for the reading from each side)
+**Target PR Size:** ~1,200 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullets 2, 3 and 7); `.claude/rules/helm.md`; `docs/conventions/data-contracts.md`.
+### Description
+Any two who records can be linked: family (parent, child, sibling, grandparent, aunt or uncle, cousin, in-law, step), a couple (with a status: dating, engaged, married, separated, divorced, widowed, and an optional since date), friends, or work. One link is one record read from either side, so each person's page names it from their side.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** Add a connection on a who's page (pick the person, then what they are to each other); "Dana and Sam are married" or "Joan is Dana's mom" said or typed, with a line and Undo.
+- [ ] **Read:** "Connections" on each page, read from that person's side ("Eli · brother"); "Who is Eli's wife?" answered.
+- [ ] **Update:** a connection's sheet: change what they are, a couple's status and since date; "Dana and Sam got engaged" changes the status and keeps a moment on both pages.
+- [ ] **Delete:** Remove on the sheet with Undo; forgetting a who removes their connections and the confirm names how many.
+### Success Criteria
+- [ ] `apps/helm/users/{uid}/connections/{id}` holds `whoIds` (two ids, sorted), the kind and, sealed, the relation from each side, the status and since date, `source` (`said`, `page`, `confirmed`) and the usual `createdBy`, `executionId` and timestamps; every field `T | null`; a duplicate pair-and-kind is refused (`check:helm-connections`).
+- [ ] The reading from each side is one pure function (Maya is Eli's sister ⇒ Eli is Maya's brother or sibling, by Eli's known gender words or "sibling"), shared by the page, the server and the checks (`check:helm-connections`).
+- [ ] The server gets `connect`, `updateConnection` and `disconnect` commands; a turn that names two people and how they relate makes the link; one that only implies it ("Dana's husband Sam called") proposes it once and never again after No; each is undoable (`check:helm-connection-commands`).
+- [ ] The people context lists each person's connections so "Who is Eli's wife?" and "How do I know Priya?" are answered; a private who's connections follow Private Things (`check:helm-private`).
+- [ ] Rules for `connections` proven as owner, another user and signed out; row added to `WHERE_THINGS_LIVE`; the scale seed gets 200 people and 400 connections.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+**Note for 133 and 134:** 132 already writes `refused` documents (a No to a proposed link, `source: 'refused'`, never drawn) and the implied-link proposals are built by the pure `impliedConnections`; 133's worked-out links and 134's map read both and never re-propose a refused pair.
+
+### Issue 133: Family links worked out, and marked "Figured out"
+
+**Prerequisites:** 132
+**Target PR Size:** ~700 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullet 4); `engine/kinKinds.ts`.
+### Description
+From the owner's own family words (`kin`) and the connections set, a pure engine works out the family links that follow (siblings through a shared parent or both being the owner's siblings, aunts and uncles, cousins, grandparents, in-laws, step-parents) and shows them as "Figured out" on the pages and the map. One tap confirms one (it becomes a stored connection with `source: 'confirmed'`) or corrects it (stored as a refusal in the same `connections` collection, `source: 'refused'` with the pair and the relation it refused, so it is never worked out again and needs no new rule). Inferred links are computed when read, never stored.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** Confirm on a figured-out link makes it a connection.
+- [ ] **Read:** figured-out links on each page, quieter, with "Figured out"; the assistant says when an answer rests on one.
+- [ ] **Update:** Not right on a figured-out link: "Not related" or the right relation.
+- [ ] **Delete:** Undo on Confirm or Not right.
+### Success Criteria
+- [ ] `inferFamilyLinks(selfId, people, connections, refusals)` is pure, in the engine, vendored to the server, and covers: two of the owner's siblings are siblings; a parent's sibling is an aunt or uncle and their child a cousin; a parent's parent a grandparent; a sibling's spouse an in-law; a parent's spouse who isn't a parent a step-parent; nothing for friends or work (`check:helm-family-links`).
+- [ ] A stored connection or a refusal always beats an inferred one; a refusal is a `connections` record with `source: 'refused'`, kept sealed with the pair and relation, never shown as a connection and never inferred again; "Not right" with the right relation writes the right connection and the refusal together in one batch (`check:helm-family-links`).
+- [ ] Each inferred link carries the chain it came from, shown on its sheet ("Because Maya and Eli are both your siblings"); the server answers with the same function and says the link was worked out.
+- [ ] It runs in under 50 ms on the scale seed (200 people, 400 connections).
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 134: The map of your circle
+
+**Prerequisites:** 133
+**Target PR Size:** ~800 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullet 5); `docs/conventions/design-ux.md`; `docs/conventions/state-data.md` "Performance is a design check".
+### Description
+People → Map draws the owner's circle as a network with Cytoscape.js (MIT), loaded only when the map opens: the owner in the middle, each person a circle with their photo or initials, a line per link styled by kind, figured-out lines lighter. Tapping a person opens a small card with Open. Filters: Close only (the default past 30 people), Family, Everyone.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** from a person's card on the map, Add a connection.
+- [ ] **Read:** the map from People (a Map view beside the list); a person's card.
+- [ ] **Update:** drag a person to place them, kept on this device; Reset layout.
+- [ ] **Delete:** none on the map; a connection is removed from its sheet.
+### Success Criteria
+- [ ] Cytoscape.js is a lazily loaded chunk (not in the main bundle), its licence is named in the PR, and the map opens in under a second on the scale seed at 390px.
+- [ ] Line styles: family solid, couple double, friends dotted, work dashed, figured out lighter, past couples faint; a legend sheet explains them; colours are the theme's tokens in light and dark.
+- [ ] Touch: pinch to zoom, drag to pan, tap a person for their card; a drag that starts on a person moves only that person; checked in the emulated phone at 320 and 390.
+- [ ] Pets and organizations show only when linked; Passing people never show; private people show with initials only when the screen is masked.
+- [ ] Positions dragged are kept in localStorage per uid and cleared by Reset layout and by "Remove from this device" (its list of what it clears names them).
+- [ ] Masking on the map is covered by `check:helm-private`: a private person's name and photo never reach the map's nodes or card while the screen is masked.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
 - [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 

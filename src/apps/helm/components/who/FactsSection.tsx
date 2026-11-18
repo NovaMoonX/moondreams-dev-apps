@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import SectionDivider from '@/components/SectionDivider';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -42,20 +40,7 @@ function FactsSection({ subject, name }: FactsSectionProps) {
       {facts.length === 0 ? (
         <AddRow label={HELM_COPY.factsAdd} onClick={() => setIsAdding(true)} />
       ) : (
-        <SectionDivider
-          label={HELM_COPY.whoFactsTitle}
-          trailing={
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-              onClick={() => setIsAdding(true)}
-            >
-              {HELM_COPY.factsAdd}
-            </Button>
-          }
-        />
+        <SectionDivider label={HELM_COPY.whoFactsTitle} />
       )}
       {facts.length === 0 ? null : (
         <ul className='helm-card divide-border divide-y overflow-hidden'>
@@ -69,6 +54,13 @@ function FactsSection({ subject, name }: FactsSectionProps) {
               />
             </li>
           ))}
+          <li>
+            <AddRow
+              label={HELM_COPY.factsAdd}
+              isInList
+              onClick={() => setIsAdding(true)}
+            />
+          </li>
         </ul>
       )}
       <FactSheet
