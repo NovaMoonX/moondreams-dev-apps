@@ -249,7 +249,6 @@ export const getListeningEffect = (
   return null;
 };
 
-
 /** Which cue goes with a change of phase: a rising chime when the mic opens for commands or starts waiting, none when a window closes, a wait runs out, the mic is turned off or a failure stops it. */
 export const getListeningCue = (
   previous: ListeningState,

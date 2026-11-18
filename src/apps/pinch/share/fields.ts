@@ -352,6 +352,7 @@ const COOKING_RESUME_FIELDS = {
   positions: 'notUseful',
   timers: 'notUseful',
   captured: 'notUseful',
+  startedAt: 'notUseful',
 } satisfies Record<keyof CookingResume, ShareDecision>;
 
 const PINCH_SHARE_FIELDS = {
