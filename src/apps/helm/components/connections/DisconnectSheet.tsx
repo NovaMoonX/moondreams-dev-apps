@@ -9,8 +9,10 @@ import HelpTip from '@/components/HelpTip';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { endConnection } from '@/lib/connections/connectionCalls';
+import { useConnections } from '@/lib/connections/useConnections';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { formatDateShort } from '@/utils/formatUtils';
 import {
   DAY_MS,
@@ -59,6 +61,8 @@ function DisconnectForm({
   );
   const [isEnding, setIsEnding] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { grants, isLoading } = useConnections({ readerAppId: 'helm' });
+  const waitFor = useWaitUntilShown({ grants, isLoading });
 
   const disconnect = async () => {
     if (isEnding) return;
@@ -69,6 +73,11 @@ function DisconnectForm({
         grantId,
         deleteCopies: deletesCopies,
       });
+      await waitFor(
+        (current) =>
+          !current.isLoading &&
+          !current.grants.some((grant) => grant.id === grantId),
+      );
       onClose();
     } catch (error) {
       console.error('Helm connection did not end', error);

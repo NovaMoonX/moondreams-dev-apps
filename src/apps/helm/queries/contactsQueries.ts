@@ -6,6 +6,8 @@ import {
 import { httpsCallable } from 'firebase/functions';
 
 import { readConnectorOptions } from '@/lib/connections/connectionCalls';
+import { store } from '@/store';
+import { waitUntil } from '@/utils/waitUntil';
 import { functions } from '@lib/firebase/config';
 
 export const CONTACTS_CONNECTOR_ID = 'google:contacts';
@@ -72,8 +74,27 @@ export function useImportContacts(
   > = {},
 ) {
   return useMutation({
-    mutationFn: async (request: ImportRequest) =>
-      (await importHelmContactsCallable(request)).data,
+    mutationFn: async (request: ImportRequest) => {
+      const countIn = () =>
+        'resourceNames' in request
+          ? store
+              .getState()
+              .helm.who.items.filter(
+                (entry) =>
+                  !entry.isUnreadable &&
+                  entry.importedFrom !== null &&
+                  request.resourceNames.includes(
+                    entry.importedFrom.resourceName,
+                  ),
+              ).length
+          : 0;
+      const before = countIn();
+      const result = (await importHelmContactsCallable(request)).data;
+      if (result.brought > 0) {
+        await waitUntil(() => countIn() >= before + result.brought);
+      }
+      return result;
+    },
     ...handlers,
   });
 }
