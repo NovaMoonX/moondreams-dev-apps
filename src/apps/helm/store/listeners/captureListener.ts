@@ -167,7 +167,11 @@ async function openCapture(
     questionState: Object.fromEntries(
       Object.entries(data.questionState ?? {}).map(([id, state]) => [
         id,
-        { ...state, dismissedAt: state.dismissedAt ?? null },
+        {
+          ...state,
+          dismissedAt: state.dismissedAt ?? null,
+          reaskedAt: state.reaskedAt ?? null,
+        },
       ]),
     ),
     hasPendingWrites: isMetadataTracked && entry.metadata.hasPendingWrites,
@@ -186,6 +190,8 @@ async function openCapture(
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
     aimsDayKey: typeof data.aimsDayKey === 'string' ? data.aimsDayKey : null,
+    morningDayKey:
+      typeof data.morningDayKey === 'string' ? data.morningDayKey : null,
     createdAt: data.createdAt ?? 0,
     privacy: readPrivacy(data.privacy),
     touchesPrivate: data.touchesPrivate ?? null,
