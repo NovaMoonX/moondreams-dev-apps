@@ -1217,6 +1217,7 @@ export function useVoiceConversation({
       ) => void;
     } = {},
   ): VoiceRepeat => {
+    unlockAudio();
     endFollowUp(true);
     const { lastLine } = run.current;
     const line = text ?? lastLine?.text ?? null;

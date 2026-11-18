@@ -16,7 +16,7 @@ Waiting for a wake phrase ("Hey" plus the assistant's name, or a name that sound
 
 Picked fresh for every turn by `voiceRouter.ts`:
 
-1. **Cloud**, if the person is online, their mode allows it, they are under today's allowance, and the cloud token arrives within 1.5 seconds.
+1. **Cloud**, if the person is online, their mode allows it, they are under today's allowance, and the cloud token arrives within 6 seconds (what is said meanwhile is kept).
 2. Otherwise the **on-device model**, if it is downloaded.
 3. Otherwise **browser recognition**.
 
@@ -32,7 +32,7 @@ An app that doesn't use the router always uses browser recognition.
 
 Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon").
 
-**Streaming playback.** The server streams the provider's audio as it is made. `cloudTts` waits for the first byte (6 seconds for a conversation's first line, 5 after that: sign-in, App Check, a cold function and the first sound), then times the gaps between chunks; `pcmStream.ts` schedules each chunk on the shared `AudioContext` with a 200 ms prebuffer, so a reply starts speaking before it is fully made, and the speaking state begins at the first sound, not at the request. Waits are bounded by the clock, never only by the end of playback.
+**Streaming playback.** The server streams the provider's audio as it is made. `cloudTts` waits for the first byte (6 seconds for a conversation's first line, 5 after that: sign-in, App Check, a cold function and the first sound), then times the gaps between chunks; `pcmStream.ts` schedules each chunk on the shared `AudioContext` with a 200 ms prebuffer, so a reply starts speaking before it is fully made, and the speaking state begins at the first sound, not at the request. After a few seconds of silence, `wakeAudioOutput` first plays an inaudible hiss and holds the first sound back until 1.5 s after it began, because phone speakers and Bluetooth headphones drop the start of the sound that wakes them. A line that waited on a request has usually spent that time already. Waits are bounded by the clock, never only by the end of playback.
 
 **The speech source's voice.** `createSpeechSource` sends the app's `voiceId` and `speed` (from its `readVoice`, or per call) with each request. The server checks the voice against the app's allowed names (otherwise its default) and the speed against 0.8 to 1.2 (otherwise 1), so a bad value never fails a reply.
 
@@ -109,7 +109,7 @@ Both downloads work the same way: an opt-in row in the app's voice settings that
 
 ## When something fails
 
-- **No token in 1.5 seconds, a socket that fails, or a spent allowance:** that turn listens on the device.
+- **No token in 6 seconds, a socket that fails, or a spent allowance:** that turn listens on the device.
 - **A model that can't start on the phone:** its own sentence ("Couldn't start listening on this phone"), never a silent "nothing heard".
 - **A refused microphone:** stays blocked until the permission changes, which is watched, so allowing it in the browser's settings clears the notice without a reload. The notice is `MicrophoneAccess`: an Allow microphone button that asks properly and, once the browser refuses, Try again and the steps for the device it runs on behind one tap. It is never asked before a speech start: an iPhone lets recognition start only straight from the tap, so a request awaited first would break every start there. An installed app on Android can refuse recognition at once while the permission still reads "prompt", so a refusal is remembered on the device until the permission reads granted, Listening shows only once the browser starts (or after 400 ms) until the microphone is known to be allowed, and every listener checks `needsMicrophoneAsk` before starting: the tap then shows the notice where it was made rather than a flash of listening. Listed debug emails see what went wrong under the notice (`SpeechDebugDetails`), with Copy.
 - **The browser's speech service is off** (`service`, Siri or Dictation off on an iPhone): it says the browser can't listen, never that the microphone is blocked, since allowing the microphone would not help.
