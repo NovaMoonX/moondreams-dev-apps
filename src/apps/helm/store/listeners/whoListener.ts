@@ -25,7 +25,7 @@ const toTexts = (value: unknown) =>
 const toText = (value: unknown) => (typeof value === 'string' ? value : null);
 
 /** A who that won't open is kept, with no name, so the surface can say so instead of dropping it. */
-async function openWho(
+export async function openWho(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenWho> {
