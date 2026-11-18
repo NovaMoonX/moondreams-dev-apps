@@ -4949,6 +4949,25 @@ export const HELM_COPY = {
   sayWhenOnce: (day: string, time: string | null) =>
     time ? `${day} at ${time}` : day,
   sayWhenTimeOnly: (time: string) => `At ${time}`,
+  sayWhenTaskDay: (day: string, hasTime: boolean) =>
+    hasTime
+      ? `When is set to ${day}. A task keeps the day, not the time.`
+      : `When is set to ${day}.`,
+  sayWhenWeekdays: 'Weekdays',
+  sayWhenWeekends: 'Weekends',
+  sayWhenHabit: (
+    days: string | null,
+    time: string | null,
+    parts: string | null,
+  ) =>
+    [
+      days && time
+        ? `${days} at ${time}`
+        : (days ?? (time ? `At ${time}` : null)),
+      days && parts ? parts.toLowerCase() : parts,
+    ]
+      .filter(Boolean)
+      .join(', '),
   sayWhenStarting: (rule: string, day: string) => `${rule}, starting ${day}`,
   scheduledDayLabel: 'Day',
   scheduledTimeLabel: 'Time',

@@ -218,6 +218,18 @@ assert.equal(
   'a phrase the draft already says still reads back',
 );
 assert.equal(readHabitWords('soon', EMPTY_WHEN, habit), null);
-assert.ok(readHabitWords('weekdays', EMPTY_WHEN, habit));
+assert.equal(
+  readHabitWords('weekdays at 7am', EMPTY_WHEN, habit)?.words,
+  'Weekdays at 7:00 AM',
+);
+assert.equal(readHabitWords('weekends', EMPTY_WHEN, habit)?.words, 'Weekends');
+assert.equal(
+  readHabitWords('3 times a week', EMPTY_WHEN, habit)?.words,
+  '3 times a week',
+);
+assert.ok(
+  readOnceWords('tomorrow at 3pm', context)?.words.includes('not the time'),
+  'a time the task cannot keep is said, not dropped silently',
+);
 
 console.log(`Natural repeats: ${cases.length} cases and the extras passed.`);

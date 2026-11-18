@@ -72,10 +72,24 @@ export function readOnceWords(text: string, context: SayWhenContext) {
   return schedule && !schedule.rule && schedule.startsOn
     ? {
         schedule,
-        words: HELM_COPY.sayWhenOnce(formatRunDay(schedule.startsOn), null),
+        words: HELM_COPY.sayWhenTaskDay(
+          formatRunDay(schedule.startsOn),
+          schedule.time !== null,
+        ),
       }
     : null;
 }
+
+const sameDays = (days: CadenceWeekday[], target: CadenceWeekday[]) =>
+  days.length === target.length && target.every((day) => days.includes(day));
+
+const readDaysWords = (draft: WhenDraft) => {
+  if (draft.often === 'onWeekdays' && sameDays(draft.weekdays, [1, 2, 3, 4, 5]))
+    return HELM_COPY.sayWhenWeekdays;
+  if (draft.often === 'onWeekdays' && sameDays(draft.weekdays, [0, 6]))
+    return HELM_COPY.sayWhenWeekends;
+  return formatCadence(fromWhenDraft(draft, null, 0).cadence);
+};
 
 const nextHour = (time: string) => {
   const [hour, minute] = time.split(':').map(Number);
@@ -145,17 +159,17 @@ export function readHabitWords(
         : withDays;
   const hasDays = week !== null || rule !== null;
   if (!hasDays && parts.length === 0 && !time) return null;
-  const timeWords =
+  const partWords =
     parts.length > 0
       ? parts.map((part) => HELM_COPY.habitPartLabels[part]).join(', ')
-      : time
-        ? formatClockWords(time)
-        : null;
-  const cadenceWords = hasDays
-    ? formatCadence(fromWhenDraft(withDays, null, 0).cadence)
-    : null;
+      : null;
+  const clockWords = parts.length === 0 && time ? formatClockWords(time) : null;
   return {
     draft: withTimes,
-    words: [cadenceWords, timeWords].filter(Boolean).join(', '),
+    words: HELM_COPY.sayWhenHabit(
+      hasDays ? readDaysWords(withDays) : null,
+      clockWords,
+      partWords,
+    ),
   };
 }
