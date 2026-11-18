@@ -27,13 +27,18 @@ const holdOf = (
 ) => {
   if (after === null) return toHeldWrite<unknown>(id, null, [], token);
   const opened = open(kind, { ...after, id });
-  const fields = changedFields(
-    before === null ? null : open(kind, { ...before, id }),
-    opened,
-  );
+  const openedBefore = before === null ? null : open(kind, { ...before, id });
+  const fields = changedFields(openedBefore, opened);
   return fields.length === 0
     ? null
-    : toHeldWrite<unknown>(id, opened, fields, token, before !== null);
+    : toHeldWrite<unknown>(
+        id,
+        opened,
+        fields,
+        token,
+        openedBefore !== null,
+        openedBefore,
+      );
 };
 
 /** Each listed record a transaction changed, as its listener would read it, by kind; null when any of them can't be worked out, so none is held. */

@@ -5,6 +5,7 @@ import {
   addHeldWrites,
   applyHeldWrites,
   dropHeldWrites,
+  forHeldList,
   patchHeldWrite,
   settleHeldWrites,
   toFingerprint,
@@ -329,6 +330,48 @@ assert.equal(
   )[1].isEdit,
   true,
   'a patched edit stays an edit',
+);
+
+const moved = toHeldWrite<Row>(
+  'a',
+  { id: 'a', cents: 5 },
+  ['cents'],
+  'm1',
+  true,
+  { id: 'a', cents: 50 },
+);
+const inWindow = (row: Row) => row.cents < 10;
+assert.deepEqual(
+  apply([], forHeldList([moved], inWindow)).list,
+  [{ id: 'a', cents: 5 }],
+  'an edit that moves a record into a filtered list shows it there at once',
+);
+assert.deepEqual(
+  apply(
+    [],
+    forHeldList([{ ...moved, before: { id: 'a', cents: 1 } }], inWindow),
+  ).list,
+  [],
+  'but an edit of a record the list held and no longer has never brings it back',
+);
+assert.deepEqual(
+  apply(
+    [],
+    [hold({ id: 'a', cents: 1 }, 'a', 'c1', 0), edit(5)],
+    HELD_WRITE_SETTLED_MS + 1,
+    10,
+  ).list,
+  [],
+  'an expired create never lets a later edit bring back a record the list lost',
+);
+const takenOver = addHeldWrites(
+  [hold({ id: 'a', cents: 1 }, 'a', 'c1', null, ['cents'])],
+  [edit(5)],
+);
+assert.deepEqual(
+  apply([], takenOver).list,
+  [{ id: 'a', cents: 5 }],
+  'an edit that takes over every field of a create still in flight keeps the record showing',
 );
 
 console.log('held writes: all checks passed');

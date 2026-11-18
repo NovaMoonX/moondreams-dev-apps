@@ -10,6 +10,8 @@ export interface HeldWrite<T> {
   fields: string[];
   /** A change to a record that already existed: it never brings back a record the list no longer has. */
   isEdit?: boolean;
+  /** An edit's record as it was before, so a list it newly enters (a filtered window) shows it rather than reading it as deleted. */
+  before?: T | null;
 }
 
 /** A settled hold the list never shows, though the list has been delivered since, lets go after this long. */
@@ -42,6 +44,7 @@ export const toHeldWrite = <T>(
   fields: readonly string[],
   token: string,
   isEdit = false,
+  before: T | null = null,
 ): HeldWrite<T> => ({
   id,
   item,
@@ -50,6 +53,18 @@ export const toHeldWrite = <T>(
   settledAt: null,
   fields: [...fields],
   isEdit,
+  before,
+});
+
+const rehold = <T>(
+  hold: HeldWrite<T>,
+  item: T,
+  fields: readonly string[],
+): HeldWrite<T> => ({
+  ...hold,
+  item,
+  fields: [...fields],
+  fingerprint: toFingerprint(pickFields(item, fields)),
 });
 
 const hasLanded = <T>(hold: HeldWrite<T>, incoming: T | undefined): boolean => {
@@ -82,14 +97,17 @@ export function applyHeldWrites<T>(
   { now = Date.now(), deliveredAt = null }: ApplyHeldOptions = {},
 ): { list: T[]; held: HeldWrite<T>[] } {
   const byId = new Map(incoming.map((item) => [idOf(item), item]));
-  const adds = new Set(
-    held.filter((hold) => hold.isEdit !== true).map((hold) => hold.id),
-  );
-  const kept = held.filter(
+  const live = held.filter(
     (hold) =>
-      !(hold.isEdit === true && !byId.has(hold.id) && !adds.has(hold.id)) &&
       !hasLanded(hold, byId.get(hold.id)) &&
       !hasExpired(hold, now, deliveredAt),
+  );
+  const adds = new Set(
+    live.filter((hold) => hold.isEdit !== true).map((hold) => hold.id),
+  );
+  const kept = live.filter(
+    (hold) =>
+      !(hold.isEdit === true && !byId.has(hold.id) && !adds.has(hold.id)),
   );
   if (kept.length === 0) return { list: [...incoming], held: [] };
   const holdsById = kept.reduce(
@@ -126,6 +144,7 @@ export const addHeldWrites = <T>(
   held: readonly HeldWrite<T>[],
   added: readonly HeldWrite<T>[],
 ): HeldWrite<T>[] => {
+  const takenCreates = new Set<string>();
   const kept = held.flatMap((hold): HeldWrite<T>[] => {
     const newer = added.filter((entry) => entry.id === hold.id);
     if (newer.length === 0) return [hold];
@@ -135,7 +154,10 @@ export const addHeldWrites = <T>(
     }
     const taken = new Set(newer.flatMap((entry) => entry.fields));
     const fields = hold.fields.filter((field) => !taken.has(field));
-    if (fields.length === 0) return [];
+    if (fields.length === 0) {
+      if (hold.isEdit !== true) takenCreates.add(hold.id);
+      return [];
+    }
     const item = newer.reduce<T>(
       (sum, entry) => ({
         ...sum,
@@ -143,14 +165,14 @@ export const addHeldWrites = <T>(
       }),
       hold.item,
     );
-    return [
-      {
-        ...toHeldWrite(hold.id, item, fields, hold.token, hold.isEdit),
-        settledAt: hold.settledAt,
-      },
-    ];
+    return [rehold(hold, item, fields)];
   });
-  return [...kept, ...added];
+  return [
+    ...kept,
+    ...added.map((entry) =>
+      takenCreates.has(entry.id) ? { ...entry, isEdit: false } : entry,
+    ),
+  ];
 };
 
 export const settleHeldWrites = <T>(
@@ -177,25 +199,25 @@ export const patchHeldWrite = <T>(
 ): HeldWrite<T>[] =>
   held.map((hold) => {
     if (hold.id !== id || hold.item === null) return hold;
-    const item = { ...hold.item, ...fields } as T;
-    return {
-      ...toHeldWrite(hold.id, item, hold.fields, hold.token, hold.isEdit),
-      settledAt: hold.settledAt,
-    };
+    return rehold(hold, { ...hold.item, ...fields } as T, hold.fields);
   });
 
 const holdKey = <T>(hold: HeldWrite<T>) => `${hold.id}/${hold.token}`;
 
-/** A hold stays only in a list its item belongs to; in any other it is a removal, which lands at once. */
+/** A hold stays only in a list its item belongs to; in any other it is a removal, which lands at once. An edit of a record the list never held enters it as new. */
 export const forHeldList = <T>(
   held: readonly HeldWrite<T>[],
   belongs: (item: T) => boolean,
 ): HeldWrite<T>[] =>
-  held.map((hold) =>
-    hold.item === null || belongs(hold.item)
-      ? hold
-      : { ...hold, item: null, fields: [], fingerprint: '' },
-  );
+  held.map((hold) => {
+    if (hold.item !== null && !belongs(hold.item)) {
+      return { ...hold, item: null, fields: [], fingerprint: '' };
+    }
+    if (hold.isEdit === true && hold.before != null && !belongs(hold.before)) {
+      return { ...hold, isEdit: false };
+    }
+    return hold;
+  });
 
 export interface HeldListInput<T> {
   incoming: readonly T[];
