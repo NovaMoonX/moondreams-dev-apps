@@ -119,7 +119,12 @@ const getOriginalText = (from: NonNullable<IngredientRow['adaptedFrom']>) =>
   `${formatAmountText(from.amount)} ${UNIT_LABELS[from.unit]}`;
 
 const UNIT_WORDS = {
-  weight: { AS_WRITTEN: '', METRIC: 'grams', US: 'ounces' },
+  weight: {
+    AS_WRITTEN: '',
+    METRIC: 'grams',
+    US: 'ounces',
+    LB_OZ: 'pounds and ounces',
+  },
   volume: {
     AS_WRITTEN: '',
     METRIC: 'millilitres',
