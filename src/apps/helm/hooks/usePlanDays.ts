@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useConnections } from '@/lib/connections/useConnections';
 import { store, useAppSelector } from '@/store';
 import { dayKeyToMs } from '@/utils/cadenceUtils';
@@ -50,6 +51,7 @@ import type {
 } from '@apps/helm/types';
 
 const MINUTE_MS = 60_000;
+const FIRST_PLAN_SERVER_WAIT_MS = 10_000;
 
 interface SourceParts {
   awayKey: string | null;
@@ -162,6 +164,25 @@ const attempted = new Set<string>();
 /** Plans one day now, answering whether it was written: the planner's slots, reasons and snapshot are written in one batch. Never a past day, and nothing while the calendar can't be read, since a plan made then would ignore it. `isRestOverridden` plans a rest day anyway. */
 type PlanResult = 'planned' | 'skipped' | 'failed';
 
+/** Whether the device may make a day's first plan: the server has answered without one, the device is offline, or the server has not answered for a while after the days loaded. */
+function useCanPlanFirst() {
+  const isServerKnown = useAppSelector(
+    (state) => state.helm.planDays.isFromServer,
+  );
+  const isLoaded = useAppSelector((state) => state.helm.planDays.isLoaded);
+  const isOffline = useNetworkStatus() === 'offline';
+  const [hasWaited, setHasWaited] = useState(false);
+  useEffect(() => {
+    if (!isLoaded || isServerKnown) return;
+    const timer = setTimeout(
+      () => setHasWaited(true),
+      FIRST_PLAN_SERVER_WAIT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [isLoaded, isServerKnown]);
+  return isServerKnown || isOffline || hasWaited;
+}
+
 export function usePlanDay() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -176,6 +197,8 @@ export function usePlanDay() {
   );
 
   const isFailing = isCalendarHeld(grants);
+  const canPlanFirst = useCanPlanFirst();
+  const isOffline = useNetworkStatus() === 'offline';
 
   const plan = useCallback(
     async (
@@ -188,25 +211,46 @@ export function usePlanDay() {
       if (isCalendarHeld(grants)) return 'skipped';
       try {
         const encryption = await getHelmEncryption(uid);
-        await generatePlan(
+        const written = await generatePlan(
           uid,
           encryption,
           buildPlanInput(sources, dayKey),
           sources.planDays[dayKey],
           formatDayWord(dayKey, sources.todayKey),
           isRestOverridden ? Date.now() : null,
+          isOffline,
         );
-        return 'planned';
+        return written === 'skipped' ? 'skipped' : 'planned';
       } catch (error) {
         console.error('Day was not planned', error);
         if (!isQuiet) addToast({ title: HELM_COPY.planFailed, type: 'error' });
         return 'failed';
       }
     },
-    [uid, grants, addToast],
+    [uid, grants, addToast, isOffline],
   );
 
-  return { plan, isReady: isReady && isKnown, uid, isFailing };
+  const isWaitingForServer = useCallback(
+    (dayKey: string) => {
+      if (canPlanFirst) return false;
+      const sources = readPlanSources(grants);
+      return (
+        sources !== null &&
+        dayKey === sources.todayKey &&
+        needsPlan(sources.planDays[dayKey])
+      );
+    },
+    [canPlanFirst, grants],
+  );
+
+  return {
+    plan,
+    isReady: isReady && isKnown,
+    canPlanFirst,
+    isWaitingForServer,
+    uid,
+    isFailing,
+  };
 }
 
 /** Plans today the first time Today shows it with no plan, once per day for the session. */
@@ -214,7 +258,7 @@ export function useAutoPlanToday(
   isShowingToday: boolean,
   sources: PlanSources | null,
 ) {
-  const { plan, isReady, uid, isFailing } = usePlanDay();
+  const { plan, isReady, canPlanFirst, uid, isFailing } = usePlanDay();
   const todayKey = sources?.todayKey ?? null;
   const isUnplanned =
     todayKey !== null && needsPlan(sources?.planDays[todayKey]);
@@ -230,12 +274,14 @@ export function useAutoPlanToday(
     const key = `${uid}|${todayKey}|${clashKey}`;
     const isDue = isUnplanned || clashKey !== '';
     if (!isShowingToday || !isReady || !uid || !todayKey || !isDue) return;
+    if (isUnplanned && !canPlanFirst) return;
     if (isFailing || attempted.has(key)) return;
     attempted.add(key);
     void plan(todayKey);
   }, [
     isShowingToday,
     isReady,
+    canPlanFirst,
     isFailing,
     uid,
     isUnplanned,
@@ -247,7 +293,7 @@ export function useAutoPlanToday(
 
 /** Plans the day a sorted turn asked for, on sight, once per turn. */
 export function usePlanOnCapture(uid: string | null) {
-  const { plan, isReady, isFailing } = usePlanDay();
+  const { plan, isReady, isWaitingForServer, isFailing } = usePlanDay();
   const captures = useAppSelector(
     (state) => state.helm.recentCaptures.captures,
   );
@@ -261,7 +307,8 @@ export function usePlanOnCapture(uid: string | null) {
       if (
         key === null ||
         capture.sortedAt === null ||
-        attempted.has(handledKey)
+        attempted.has(handledKey) ||
+        isWaitingForServer(key)
       ) {
         return;
       }
@@ -271,5 +318,5 @@ export function usePlanOnCapture(uid: string | null) {
         needsPlan(day) || (day?.generatedAt ?? 0) < (capture.sortedAt ?? 0);
       if (isStale) void plan(key);
     });
-  }, [uid, isReady, isFailing, captures, planDays, plan]);
+  }, [uid, isReady, isFailing, isWaitingForServer, captures, planDays, plan]);
 }

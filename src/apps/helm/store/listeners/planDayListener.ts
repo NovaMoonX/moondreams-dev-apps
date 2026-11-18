@@ -56,7 +56,7 @@ export function startPlanDaysListener(
   uid: string,
   read: SealedReader,
   window: { fromDate: number; toDate: number },
-  onChange: (days: PlanDay[]) => void,
+  onChange: (days: PlanDay[], isFromServer: boolean) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const sequence = { latest: 0 };
@@ -77,7 +77,7 @@ export function startPlanDaysListener(
         snapshot.docs.map((entry) => openPlanDay(entry, read)),
       );
       if (current !== sequence.latest || run.isStopped) return;
-      onChange(opened);
+      onChange(opened, !snapshot.metadata.fromCache);
     },
     (error) => onError(toError(error)),
   );

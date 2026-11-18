@@ -168,6 +168,8 @@
     "check:helm-name-hints": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmNameHints.ts",
     "check:helm-calendar-sync": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmCalendarSync.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmCalendarSync.ts",
     "check:helm-private": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPrivate.ts",
+    "check:helm-grouping": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmGrouping.ts",
+    "check:helm-relate": "firebase emulators:exec --only firestore --project demo-helm-relate \"TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRelate.ts\"",
     "check:yearly-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/yearlyDates.ts",
     "check:batch-jobs": "tsx scripts/checks/batchJobs.ts",
     "check:server-copies": "tsx scripts/checks/serverCopies.ts",

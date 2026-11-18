@@ -69,6 +69,7 @@ export function hasResultRow(
     ref.collection === 'connections' ||
     ref.collection === 'scheduledActions' ||
     ref.collection === 'dayAims' ||
+    ref.collection === 'groupings' ||
     ref.collection === 'research'
   )
     return false;

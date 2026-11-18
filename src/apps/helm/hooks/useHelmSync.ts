@@ -79,6 +79,8 @@ import {
   setOpenTasksFailed,
   setPatterns,
   setPatternsFailed,
+  setGroupings,
+  setGroupingsFailed,
   setObservationsFailed,
   setUnseenReflections,
   setUnseenReflectionsFailed,
@@ -106,6 +108,7 @@ import {
   startUnseenCapturesListener,
   startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
+import { startGroupingsListener } from '@apps/helm/store/listeners/groupingListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startSeenAsListener } from '@apps/helm/store/listeners/seenAsListener';
 import { startStyleListener } from '@apps/helm/store/listeners/styleListener';
@@ -476,7 +479,8 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             uid,
             read,
             getPlanDaysWindow(Date.now()),
-            (days) => dispatch(setPlanDays(days)),
+            (days, isFromServer) =>
+              dispatch(setPlanDays({ days, isFromServer })),
             (error) => {
               console.error('Helm plan days listener failed', error);
               dispatch(setPlanDaysFailed());
@@ -499,6 +503,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm patterns listener failed', error);
               dispatch(setPatternsFailed());
+            },
+          ),
+          startGroupingsListener(
+            uid,
+            read,
+            (groupings) => dispatch(setGroupings(groupings)),
+            (error) => {
+              console.error('Helm groupings listener failed', error);
+              dispatch(setGroupingsFailed());
             },
           ),
           startReflectionsListener(

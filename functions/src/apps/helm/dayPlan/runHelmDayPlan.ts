@@ -10,9 +10,11 @@ import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import type { Keyring } from '../../../appKeys/keyring.js';
+import type { SealedPayload } from '../../../appKeys/seal.js';
 import { dayKeyToMs } from '../../../vendor/cadenceUtils.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
-import { unwrapHelmKey, type HelmKey } from '../helmKey.js';
+import { openForHelm, unwrapHelmKey, type HelmKey } from '../helmKey.js';
+import { readWhoWhere } from '../nomos/planWhereabouts.js';
 import { readZoneFor } from '../nomos/whereabouts.js';
 import { readProfile } from '../reminders/readRecords.js';
 import {
@@ -21,20 +23,31 @@ import {
   openAimsView,
   sealAimsView,
 } from './dayAimsStore.js';
+import { makeFirstPlan } from './firstPlanStore.js';
 import {
+  FIRST_PLAN_LEAD,
   findStaleSuggestions,
+  isFirstPlanDue,
   isRollable,
   isWindDownDue,
   planOverlapFlags,
   planReplan,
   planRollover,
+  readAimTaskIds,
   readDayClock,
   readPassLookAt,
   toDayKeyIn,
   type BusyEvent,
   type SlotRecord,
 } from './dayJob.js';
-import type { FinishedTask, PlannerTask } from './planner.js';
+import {
+  readFinished,
+  readSlots,
+  toNumber,
+  toPlannerTask,
+  userPath,
+} from './planRead.js';
+import type { PlannerTask } from './planner.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -46,62 +59,24 @@ const RETRY_AFTER = 60 * MINUTE;
 const PEOPLE_MAX = 100;
 const AT_ONCE = 5;
 const STOP_STARTING_AFTER = 180_000;
-const FINISHED_READ = 30;
 const EVENTS_READ = 200;
 const EVENT_LOOKBEHIND = 12 * 60 * MINUTE;
 const UNTIMED_EVENT = 30 * MINUTE;
 const SPAN_MAX = 12 * 60 * MINUTE;
 const DEFAULT_FILL = 50;
+const FIRST_PLAN_ACTIVE_WITHIN = 14 * 24 * 60 * MINUTE;
 
 export interface DayReport {
   people: number;
   rolled: number;
   ready: number;
+  firstPlans: number;
+  held: number;
   flagged: number;
   replanned: number;
   failed: number;
   deferred: number;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const toNumber = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-const userPath = (uid: string) => `apps/helm/users/${uid}`;
-
-const readSlots = (data: DocumentData | undefined) => {
-  const raw: unknown = data?.slots;
-  return Object.fromEntries(
-    Object.entries(isRecord(raw) ? raw : {}).flatMap(
-      ([id, slot]): [string, SlotRecord][] =>
-        isRecord(slot) &&
-        typeof slot.taskId === 'string' &&
-        (slot.status === 'suggested' ||
-          slot.status === 'kept' ||
-          slot.status === 'notToday')
-          ? [
-              [
-                id,
-                {
-                  taskId: slot.taskId,
-                  startAt: toNumber(slot.startAt),
-                  endAt: toNumber(slot.endAt),
-                  status: slot.status,
-                  source: slot.source === 'person' ? 'person' : 'nomos',
-                  decidedAt: toNumber(slot.decidedAt),
-                  overlapsEventRef:
-                    typeof slot.overlapsEventRef === 'string'
-                      ? slot.overlapsEventRef
-                      : null,
-                },
-              ],
-            ]
-          : [],
-    ),
-  );
-};
 
 /** The events that block the day, from the copies' readable fields alone: nothing of their words is opened. */
 const readBusy = async (
@@ -152,64 +127,6 @@ const readTaskStatuses = async (
         : [],
     ),
   );
-};
-
-const toPlannerTask = (id: string, data: DocumentData): PlannerTask => ({
-  id,
-  title: '',
-  due: isRecord(data.due) ? (data.due as PlannerTask['due']) : null,
-  importance:
-    data.importance === 'must' ||
-    data.importance === 'should' ||
-    data.importance === 'could'
-      ? data.importance
-      : null,
-  isUrgent: data.isUrgent === true,
-  durationMinutes: toNumber(data.durationMinutes),
-  energy:
-    data.energy === 'low' || data.energy === 'medium' || data.energy === 'high'
-      ? data.energy
-      : null,
-  placeIds: Array.isArray(data.placeIds)
-    ? data.placeIds.filter(
-        (entry): entry is string => typeof entry === 'string',
-      )
-    : [],
-  projectId: typeof data.projectId === 'string' ? data.projectId : null,
-  context:
-    data.context === 'atHome' ||
-    data.context === 'out' ||
-    data.context === 'atComputer' ||
-    data.context === 'onPhone'
-      ? data.context
-      : null,
-  effort:
-    data.effort === 'light' ||
-    data.effort === 'moderate' ||
-    data.effort === 'heavy'
-      ? data.effort
-      : null,
-});
-
-const readFinished = async (
-  firestore: Firestore,
-  uid: string,
-): Promise<FinishedTask[]> => {
-  const snap = await firestore
-    .collection(`${userPath(uid)}/tasks`)
-    .where('status', '==', 'done')
-    .orderBy('createdAt', 'desc')
-    .limit(FINISHED_READ)
-    .get();
-  return snap.docs.map((doc) => {
-    const task = toPlannerTask(doc.id, doc.data());
-    return {
-      projectId: task.projectId ?? null,
-      context: task.context ?? null,
-      durationMinutes: task.durationMinutes,
-      completedAt: toNumber(doc.get('completedAt')),
-    };
-  });
 };
 
 const readRollablePast = async (
@@ -285,6 +202,40 @@ async function rollOver(
   });
 }
 
+/** The self's current away span ids, which decide whether a zone span still counts; null when there is no readable self, so every span counts. Read only when the person has zone spans. */
+const readAwayIds = async (
+  firestore: Firestore,
+  key: HelmKey,
+  uid: string,
+  selfWhoId: unknown,
+  isNeeded: boolean,
+): Promise<string[] | null> => {
+  if (!isNeeded || typeof selfWhoId !== 'string') return null;
+  try {
+    const snap = await firestore.doc(`${userPath(uid)}/who/${selfWhoId}`).get();
+    return snap.exists
+      ? readWhoWhere(
+          openForHelm(key, snap.get('sealed') as SealedPayload),
+        ).away.map((span) => span.id)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const isRecentlyActive = async (
+  firestore: Firestore,
+  uid: string,
+  now: number,
+) => {
+  const lastActiveAt = toNumber(
+    (await firestore.doc(`apps/helm/usage/${uid}`).get()).get('lastActiveAt'),
+  );
+  return (
+    lastActiveAt !== null && now - lastActiveAt <= FIRST_PLAN_ACTIVE_WITHIN
+  );
+};
+
 async function runPerson(
   firestore: Firestore,
   keyring: Keyring,
@@ -308,9 +259,17 @@ async function runPerson(
     return;
   }
   const home = readProfile(profileSnap.data() as DocumentData);
+  const key = await unwrapHelmKey(firestore, keyring, uid);
+  const awayIds = await readAwayIds(
+    firestore,
+    key,
+    uid,
+    profileSnap.get('selfWhoId'),
+    home.zoneSpans.length > 0,
+  );
   const profile = {
     ...home,
-    timeZone: readZoneFor(toDayKeyIn(now, home.timeZone), home),
+    timeZone: readZoneFor(toDayKeyIn(now, home.timeZone), home, awayIds),
   };
   const fillPercent =
     toNumber(profileSnap.get('planFillPercent')) ?? DEFAULT_FILL;
@@ -320,9 +279,8 @@ async function runPerson(
       )
     : [];
   const clock = readDayClock(now, profile);
-  const key = await unwrapHelmKey(firestore, keyring, uid);
 
-  if (now >= clock.startAt)
+  if (now >= clock.startAt - FIRST_PLAN_LEAD)
     report.rolled += await rollOver(firestore, key, uid, clock.dayKey, now);
 
   const todayRef = firestore.doc(dayAimsPath(uid, clock.dayKey));
@@ -343,11 +301,43 @@ async function runPerson(
   }
 
   const planRef = firestore.doc(`${userPath(uid)}/planDays/${clock.dayKey}`);
-  const planSnap = await planRef.get();
+  const firstSnap = await planRef.get();
+  const aimTaskIds = readAimTaskIds(view);
+  const isFirstDue = isFirstPlanDue({
+    now,
+    clock,
+    hasPlan: toNumber(firstSnap.get('generatedAt')) !== null,
+  });
+  const isEligible =
+    isFirstDue &&
+    typeof profileSnap.get('timeZone') === 'string' &&
+    (await isRecentlyActive(firestore, uid, now));
+  const firstPlan = isEligible
+    ? await makeFirstPlan({
+        firestore,
+        key,
+        uid,
+        now,
+        clock,
+        profile,
+        profileData: profileSnap.data() as DocumentData,
+        fillPercent,
+        aimTaskIds,
+      }).catch((error: unknown) => {
+        logger.error('helm.dayPlan.firstPlanFailed', {
+          who: uid.slice(0, 4),
+          name: error instanceof Error ? error.name : 'error',
+        });
+        return 'failed' as const;
+      })
+    : null;
+  const isFirstMade = firstPlan === 'made';
+  if (isFirstMade) report.firstPlans += 1;
+  if (firstPlan === 'held') report.held += 1;
+  const planSnap = isFirstMade ? await planRef.get() : firstSnap;
   const slots = readSlots(planSnap.data());
-  const aimTaskIds = view.aims.map((aim) => aim.taskId);
   const isPlanned = aimTaskIds.length > 0 && Object.keys(slots).length > 0;
-  if (planSnap.exists && Object.keys(slots).length > 0) {
+  if (!isFirstMade && planSnap.exists && Object.keys(slots).length > 0) {
     const busy = await readBusy(
       firestore,
       uid,
@@ -411,7 +401,7 @@ async function runPerson(
   }
 
   const isRolloverOwed =
-    now < clock.startAt &&
+    now < clock.startAt - FIRST_PLAN_LEAD &&
     (await readRollablePast(firestore, uid, clock.dayKey)) !== null;
   const lookAt = readPassLookAt({
     now,
@@ -420,6 +410,10 @@ async function runPerson(
     aimCount: view.aims.length,
     isPlanned,
     isRolloverOwed,
+    hasFirstPlan:
+      isFirstMade ||
+      (isFirstDue && !isEligible) ||
+      toNumber(firstSnap.get('generatedAt')) !== null,
   });
   await firestore.runTransaction(async (transaction) => {
     const queue = await transaction.get(queueRef);
@@ -543,6 +537,8 @@ export async function runDayPlans(
     people: people.length,
     rolled: 0,
     ready: 0,
+    firstPlans: 0,
+    held: 0,
     flagged: 0,
     replanned: 0,
     failed: 0,

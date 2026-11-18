@@ -27,6 +27,10 @@ import type { ContextProject } from '../projectStore.js';
 import type { ContextLearnItem } from '../research/learnStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
 import { SEEN_AS_LIMITS } from './seenAs.js';
+import {
+  MAX_RELATED_THINGS,
+  type ContextRelatedThing,
+} from './relatedThings.js';
 
 export interface ContextTask {
   id: string;
@@ -283,6 +287,7 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
   noticed?: string[];
+  relatedThings?: ContextRelatedThing[];
   seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
@@ -898,6 +903,13 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.noticed?.length
       ? [`<noticed>${toDataJson(input.noticed.slice(0, 10))}</noticed>`]
+      : []),
+    ...(input.relatedThings?.length
+      ? [
+          `<related_things>${toDataJson(
+            input.relatedThings.slice(0, MAX_RELATED_THINGS),
+          )}</related_things>`,
+        ]
       : []),
     ...(input.seenAs?.length
       ? [

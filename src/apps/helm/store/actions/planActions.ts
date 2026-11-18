@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 import { generateUuid } from '@/utils';
@@ -23,7 +24,7 @@ import type {
   PlanDaySealed,
   PlanSlot,
 } from '@apps/helm/types';
-import { formatClock, isDecided } from '@apps/helm/utils/planDays';
+import { formatClock, isDecided, needsPlan } from '@apps/helm/utils/planDays';
 import { getCurrentPlaceEndsAt } from '@apps/helm/engine/currentPlace';
 import type { buildPlanInput } from '@apps/helm/utils/planInput';
 
@@ -69,7 +70,7 @@ function settleExecution(
   ).catch(ignoreMissing);
 }
 
-/** Runs the planner for one day and writes its slots, reasons, calendar snapshot and one proposed execution in one batch. Kept and Not today slots stay as they were. A rest day is written too, with nothing suggested; `overrideRestAt` is the moment the person asked for a plan anyway, written with that plan. */
+/** Runs the planner for one day and writes its slots, reasons, calendar snapshot and one proposed execution in one batch; a day that still needs its first plan is written online in a transaction that leaves it alone when a plan arrived meanwhile ('skipped'). Kept and Not today slots stay as they were. A rest day is written too, with nothing suggested; `overrideRestAt` is the moment the person asked for a plan anyway, written with that plan. */
 export async function generatePlan(
   uid: string,
   encryption: HelmEncryption,
@@ -77,7 +78,8 @@ export async function generatePlan(
   existing: PlanDay | undefined,
   dayLabel: string,
   overrideRestAt: number | null = null,
-): Promise<PlannerResult> {
+  isOffline = false,
+): Promise<PlannerResult | 'skipped'> {
   const { calendarSnapshot, calendarReadAt } = plan;
   const input =
     overrideRestAt === null ? plan.input : { ...plan.input, restDay: null };
@@ -103,62 +105,80 @@ export async function generatePlan(
     { reasons, calendarSnapshot },
     encryption,
   );
-  const batch = writeBatch(db);
-  batch.set(
-    doc(planDaysOf(uid), input.dayKey),
-    {
-      date: toDate(input.dayKey),
-      slots,
-      isRestDay: input.restDay !== null || overriddenAt !== null,
-      restDayOverriddenAt: overriddenAt,
-      generatedAt: now,
-      calendarReadAt,
-      sealed,
-    },
-    { merge: true },
-  );
-  if (suggested > 0) {
-    const execution: Execution = {
-      captureId: null,
-      actor: 'nomos',
-      via: null,
-      category: 'plan',
-      autonomyLevel: 1,
-      state: 'proposed',
-      effectRefs: [],
-      linkedWhoIds: [],
-      linkedPlaceIds: [],
-      undoesExecutionId: null,
-      undoneByExecutionId: null,
-      undoneDocIds: null,
-      partUndoIds: null,
-      questionRef: null,
-      errorCode: null,
-      privacy: 'ordinary',
-      createdAt: now,
-      decidedAt: null,
-      finishedAt: null,
-      sealed: await sealJson<ExecutionSealed>(
-        {
-          summary: HELM_COPY.planSuggestedSummary(suggested, dayLabel),
-          commands: [],
-          effects: [],
-          undoReport: null,
-          spoken: null,
-          heldSpoken: null,
-          goneIds: null,
-          undoReason: null,
-          said: null,
-          lines: null,
-          abilityOffer: null,
-          awayZoneOffer: null,
-        },
-        encryption,
-      ),
-    };
-    batch.set(doc(executionsOf(uid), getExecutionId(input.dayKey)), execution);
-  }
-  await batch.commit();
+  const planRef = doc(planDaysOf(uid), input.dayKey);
+  const executionRef = doc(executionsOf(uid), getExecutionId(input.dayKey));
+  const planData = {
+    date: toDate(input.dayKey),
+    slots,
+    isRestDay: input.restDay !== null || overriddenAt !== null,
+    restDayOverriddenAt: overriddenAt,
+    generatedAt: now,
+    calendarReadAt,
+    sealed,
+  };
+  const execution: Execution | null =
+    suggested > 0
+      ? {
+          captureId: null,
+          actor: 'nomos',
+          via: null,
+          category: 'plan',
+          autonomyLevel: 1,
+          state: 'proposed',
+          effectRefs: [],
+          linkedWhoIds: [],
+          linkedPlaceIds: [],
+          undoesExecutionId: null,
+          undoneByExecutionId: null,
+          undoneDocIds: null,
+          partUndoIds: null,
+          questionRef: null,
+          errorCode: null,
+          privacy: 'ordinary',
+          createdAt: now,
+          decidedAt: null,
+          finishedAt: null,
+          sealed: await sealJson<ExecutionSealed>(
+            {
+              summary: HELM_COPY.planSuggestedSummary(suggested, dayLabel),
+              commands: [],
+              effects: [],
+              undoReport: null,
+              spoken: null,
+              heldSpoken: null,
+              goneIds: null,
+              undoReason: null,
+              said: null,
+              lines: null,
+              abilityOffer: null,
+              awayZoneOffer: null,
+            },
+            encryption,
+          ),
+        }
+      : null;
+  const writeBatched = async () => {
+    const batch = writeBatch(db);
+    batch.set(planRef, planData, { merge: true });
+    if (execution) batch.set(executionRef, execution);
+    await batch.commit();
+    return true;
+  };
+  const writeFirst = () =>
+    runHeldTransaction(uid, async (transaction) => {
+      const fresh = await transaction.get(planRef);
+      if (fresh.exists() && fresh.get('generatedAt') != null) return false;
+      transaction.set(planRef, planData, { merge: true });
+      if (execution) transaction.set(executionRef, execution);
+      return true;
+    }).catch((error: unknown) =>
+      isOfflineError(error) ? writeBatched() : Promise.reject(error),
+    );
+  // A rest day's "plan anyway" is the person's own ask, so it is written even over a plan that just arrived.
+  const isFirstWrite =
+    needsPlan(existing) && !isOffline && overrideRestAt === null;
+  const isWritten = isFirstWrite ? await writeFirst() : await writeBatched();
+  if (!isWritten) return 'skipped';
   if (suggested === 0 && removed.length > 0) {
     void settleExecution(
       uid,
@@ -167,6 +187,13 @@ export async function generatePlan(
     );
   }
   return result;
+}
+
+/** Whether a write failed only because the device has no connection yet. */
+function isOfflineError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === 'unavailable' || /offline/i.test(error.message);
 }
 
 const decide = (
