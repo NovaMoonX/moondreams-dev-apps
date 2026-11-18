@@ -2714,6 +2714,7 @@ export const HELM_COPY = {
   connectionPickLead: (name: string) => `Who is connected to ${name}?`,
   connectionSearch: 'Search people',
   connectionNoMatch: 'Nobody matches that.',
+  connectionEveryoneElse: 'Everyone else',
   connectionNobodyElse: 'There is nobody else to connect yet.',
   connectionPicked: 'Connected to',
   connectionKindField: 'How are they connected?',
