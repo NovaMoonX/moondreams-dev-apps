@@ -18,7 +18,8 @@ function EmojiField({
   maxLength,
 }: EmojiFieldProps) {
   return (
-    <div className='shrink-0'>
+    <div className='flex-none'>
+      {/* The library joins classes without merging, so its own w-full would win without the ! */}
       <Input
         variant='outline'
         aria-label={ariaLabel}
@@ -26,7 +27,7 @@ function EmojiField({
         maxLength={maxLength}
         autoComplete='off'
         value={value}
-        className='h-(--emoji-field-size) w-(--emoji-field-size) min-w-0 overflow-hidden px-0! py-0! text-center text-xl leading-none placeholder:opacity-40'
+        className='h-(--emoji-field-size)! w-(--emoji-field-size)! min-w-0 overflow-hidden px-0! py-0! text-center text-xl leading-none placeholder:opacity-40'
         onChange={(event) => onChange(event.target.value)}
       />
     </div>
