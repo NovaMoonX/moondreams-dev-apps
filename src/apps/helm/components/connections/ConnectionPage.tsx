@@ -238,7 +238,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     onIds.length > 0 &&
     onIds.every((id) => isLiveCategory(grant.connectorId, id));
   const freshnessLine = (categoryId: string, mode: 'sync' | 'live') => {
-    if (mode === 'live') return HELM_COPY.connectionLiveLine;
+    // A Google service's own description already says it is read only when asked.
+    if (mode === 'live')
+      return grant.connectorId.startsWith('google:')
+        ? null
+        : HELM_COPY.connectionLiveLine;
     const state = grant.categoryState[categoryId];
     if (state?.lastError) return HELM_COPY.syncedCouldNot;
     if (!state || state.lastOkAt === null) return HELM_COPY.syncedWaiting;

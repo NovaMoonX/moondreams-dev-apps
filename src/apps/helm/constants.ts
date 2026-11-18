@@ -1406,9 +1406,9 @@ export const HELM_COPY = {
   gmailDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its email are blanked. What was noted from it stays.',
   gmailFailed: "Gmail didn't turn on. Try again.",
-  googleDriveName: 'Drive',
-  googleDriveTitle: 'Connect Drive',
-  googleDriveReconnectTitle: 'Reconnect Drive',
+  googleDriveName: 'Google Drive',
+  googleDriveTitle: 'Connect Google Drive',
+  googleDriveReconnectTitle: 'Reconnect Google Drive',
   googleDriveReadOnly: (name: string) =>
     `${name} searches your Drive only when a question needs it, and reads only Google Docs and PDFs. It keeps only what an answer quotes, and can't create, change, share or delete files.`,
   driveDisconnectNote:
