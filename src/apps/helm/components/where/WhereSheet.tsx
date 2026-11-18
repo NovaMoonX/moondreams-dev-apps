@@ -193,6 +193,7 @@ function AwayForm({
       label: label.trim() || null,
       source: 'page',
       zoneOffered: existing?.zoneOffered ?? false,
+      pausesScheduled: existing?.pausesScheduled ?? null,
     };
     void write({ kind: 'save', span });
   };

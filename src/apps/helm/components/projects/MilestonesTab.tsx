@@ -77,7 +77,9 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
     });
     addToast({
       title: isDone
-        ? HELM_COPY.milestoneReachedToast(entry.title)
+        ? project.kind === 'goal'
+          ? HELM_COPY.goalMilestoneReachedToast(entry.title)
+          : HELM_COPY.milestoneReachedToast(entry.title)
         : HELM_COPY.milestoneReopenedToast(entry.title),
       type: 'success',
       action: {

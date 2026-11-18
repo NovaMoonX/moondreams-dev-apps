@@ -3,8 +3,11 @@ import { logger } from 'firebase-functions/v2';
 
 import type {
   ModelProvider,
+  SearchProvider,
   ToolLoopRequest,
   ToolLoopResult,
+  WebSearchRequest,
+  WebSearchResult,
 } from '../modelProvider.js';
 import {
   addUsage,
@@ -265,4 +268,115 @@ export function createAnthropicProvider(
   }
 
   return { runToolLoop };
+}
+
+// A turn that searches reads pages before it answers, so it is given far longer than a plain turn.
+const SEARCH_TURN_TIMEOUT_MS = 120_000;
+const MAX_SEARCH_OUTPUT_TOKENS = 16_000;
+// The API pauses a long server-tool turn; each pause is resent as it is, and past this many the work is given up.
+const MAX_PAUSES = 6;
+
+/** The Anthropic API with the web search server tool: a paused turn is continued by sending the assistant's content back, and the loop ends in the terminal tool. */
+export function createAnthropicSearchProvider(
+  apiKey: string,
+  client: Pick<Anthropic, 'beta'> = new Anthropic({ apiKey, maxRetries: 0 }),
+): SearchProvider {
+  async function runWebSearch({
+    role,
+    system,
+    message,
+    maxSearches,
+    maxMillis,
+    terminalTool,
+    signal,
+  }: WebSearchRequest): Promise<WebSearchResult> {
+    const spec = getModelSpec(role);
+    const startedAt = Date.now();
+    const messages: Message[] = [{ role: 'user', content: message }];
+    const state = { usage: EMPTY_USAGE, searches: 0, pauses: 0, asked: false };
+    const timeLeft = () => maxMillis - (Date.now() - startedAt);
+    const end = (
+      endedBy: WebSearchResult['endedBy'],
+      terminalInput: unknown = null,
+      errorCode: string | null = null,
+    ): WebSearchResult => ({
+      terminalInput,
+      endedBy,
+      errorCode,
+      usage: state.usage,
+      searches: state.searches,
+    });
+    const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
+      ...(maxSearches > 0
+        ? [
+            {
+              type: 'web_search_20260209' as const,
+              name: 'web_search' as const,
+              max_uses: maxSearches,
+            },
+          ]
+        : []),
+      {
+        name: terminalTool.name,
+        description: terminalTool.description,
+        input_schema:
+          terminalTool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
+      },
+    ];
+    try {
+      for (;;) {
+        if (signal?.aborted) return end('aborted');
+        if (timeLeft() < MIN_TURN_MS) return end('limit');
+        const response = await client.beta.messages.create(
+          {
+            model: spec.id,
+            max_tokens: MAX_SEARCH_OUTPUT_TOKENS,
+            system: `${system}\n\nAlways finish by calling ${terminalTool.name}.`,
+            tools,
+            tool_choice: { type: 'auto' },
+            messages,
+            output_config: { effort: spec.effort },
+          },
+          {
+            timeout: Math.min(SEARCH_TURN_TIMEOUT_MS, timeLeft()),
+            signal,
+          },
+        );
+        state.usage = addUsage(state.usage, toUsage(response.usage));
+        state.searches +=
+          response.usage.server_tool_use?.web_search_requests ?? 0;
+        if (response.stop_reason === 'refusal') return end('refused');
+        if (response.stop_reason === 'max_tokens') {
+          return end('error', null, 'maxTokens');
+        }
+        messages.push({
+          role: 'assistant',
+          content: response.content as Block[],
+        });
+        const terminalUse = response.content.find(
+          (block): block is Anthropic.Beta.Messages.BetaToolUseBlock =>
+            block.type === 'tool_use' && block.name === terminalTool.name,
+        );
+        if (terminalUse) return end('terminal', terminalUse.input);
+        if (response.stop_reason === 'pause_turn') {
+          state.pauses += 1;
+          if (state.pauses > MAX_PAUSES) return end('limit');
+          continue;
+        }
+        if (state.asked) return end('noTerminal');
+        state.asked = true;
+        messages.push({
+          role: 'user',
+          content: `Call ${terminalTool.name} now with what you have.`,
+        });
+      }
+    } catch (error) {
+      if (signal?.aborted || error instanceof Anthropic.APIUserAbortError) {
+        return end('aborted');
+      }
+      return end('error', null, getErrorCode(error));
+    }
+  }
+
+  return { runWebSearch };
 }

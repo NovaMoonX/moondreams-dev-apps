@@ -31,6 +31,8 @@ import TaskDetails, {
   type TaskEditing,
   type WordsOutcome,
 } from '@apps/helm/components/tasks/TaskDetails';
+import MeetingFormatRow from '@apps/helm/components/tasks/MeetingFormatRow';
+import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import TaskSteps, { TickButton } from '@apps/helm/components/tasks/TaskSteps';
 import WaitsOnPicker from '@apps/helm/components/tasks/WaitsOnPicker';
 import {
@@ -80,6 +82,11 @@ import {
   toPlannerTask,
   type Opening,
 } from '@apps/helm/utils/planInput';
+import {
+  formatMeetingWhen,
+  getMeetingDay,
+  useResolvedMeeting,
+} from '@apps/helm/utils/meetingWords';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
@@ -206,6 +213,7 @@ function TaskSheet({
   const { confirm } = useActionModal();
   const isOffline = useNetworkStatus() === 'offline';
   const nowMinute = Math.floor(useNow(MINUTE_MS) / MINUTE_MS) * MINUTE_MS;
+  const meeting = useResolvedMeeting(task);
   const split = useAppSelector((state) => selectTaskActivity(state, nowMinute));
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
@@ -556,6 +564,16 @@ function TaskSheet({
     );
   };
 
+  const getStepsSummary = () => {
+    const answered = steps.filter((entry) => entry.doneAt !== null).length;
+    const day = meeting
+      ? getMeetingDay(meeting.startAt, nowMinute, timeZone)
+      : null;
+    return day
+      ? HELM_COPY.stepsCountMeeting(answered, steps.length - answered, day)
+      : HELM_COPY.stepsCount(answered, steps.length);
+  };
+
   const getBody = () => {
     if (shownView === 'plan') return getPlanBody();
     if (shownView === 'title') {
@@ -646,6 +664,21 @@ function TaskSheet({
     }
     return (
       <div className='space-y-4'>
+        {meeting?.label && (
+          <p className='text-muted-foreground text-sm text-pretty break-words'>
+            {HELM_COPY.taskMeetingLabel(meeting.label)}
+            <span className='whitespace-nowrap'>
+              {HELM_COPY.taskMeetingWhen(
+                formatMeetingWhen(meeting.startAt, timeZone),
+              )}
+            </span>
+            <MeetingWhere
+              how={meeting.format}
+              place={meeting.place}
+              hasBefore
+            />
+          </p>
+        )}
         {task.isUnreadable && (
           <p className='text-muted-foreground text-sm text-pretty'>
             {HELM_COPY.taskWordsUnreadable}
@@ -682,6 +715,7 @@ function TaskSheet({
             </SummaryRow>
           )}
           <WhenRow editing={editing} now={nowMinute} />
+          <MeetingFormatRow editing={editing} />
           {linked.map((entry) => (
             <SummaryRow
               key={`${entry.kind}:${entry.id}`}
@@ -718,12 +752,7 @@ function TaskSheet({
               label={HELM_COPY.stepsLabel}
               onClick={() => go('steps')}
             >
-              {steps.length === 0
-                ? HELM_COPY.noneValue
-                : HELM_COPY.stepsCount(
-                    steps.filter((entry) => entry.doneAt !== null).length,
-                    steps.length,
-                  )}
+              {steps.length === 0 ? HELM_COPY.noneValue : getStepsSummary()}
             </SummaryRow>
           )}
         </div>

@@ -1,5 +1,6 @@
 import {
   collection,
+  getDocs,
   onSnapshot,
   query,
   where,
@@ -74,6 +75,22 @@ export const getHabitDaysWindow = (now: number) => {
     toDate: today + 2 * DAY_MS,
   };
 };
+
+/** The habit days in a window, read once; the same opening as the listener's. */
+export async function fetchHabitDays(
+  uid: string,
+  read: SealedReader,
+  window: { fromDate: number; toDate: number },
+): Promise<OpenHabitDay[]> {
+  const snapshot = await getDocs(
+    query(
+      collection(db, 'apps', 'helm', 'users', uid, 'habitDays'),
+      where('date', '>=', window.fromDate),
+      where('date', '<=', window.toDate),
+    ),
+  );
+  return Promise.all(snapshot.docs.map((entry) => openHabitDay(entry, read)));
+}
 
 /** The habit days whose date falls from `fromDate` to `toDate` (date-only, UTC midnight). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startHabitDaysListener(

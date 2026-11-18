@@ -29,6 +29,7 @@ import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
 import { readUnseenNews } from '../../src/lib/connections/newReads.ts';
 import {
   BULK_CALENDAR,
+  MEETING_CALENDAR,
   FIXTURE_CANCELLED_REF,
   FIXTURE_DUP_TOKEN,
   FIXTURE_GONE_LATER_TOKEN,
@@ -781,6 +782,7 @@ const main = async () => {
         `${personal}|fx-dentist`,
         `${personal}|fx-lunch`,
         `${personal}|fx-maya`,
+        `${personal}|fx-planning-call`,
         `${personal}|fx-pottery`,
         `${personal}|fx-starlight`,
         `${shifts}|fx-dinner-shift`,
@@ -842,6 +844,7 @@ const main = async () => {
         `${personal}|fx-dentist`,
         `${personal}|fx-lunch`,
         `${personal}|fx-maya`,
+        `${personal}|fx-planning-call`,
         `${personal}|fx-pottery`,
         `${personal}|fx-starlight`,
       ],
@@ -944,6 +947,79 @@ const main = async () => {
       refs(await t.copies()),
       [`${TZ_CALENDARS[0]}|fx-offsite-a`],
       'the same event on calendars in different UTC offsets is kept once',
+    );
+  }
+
+  {
+    const meetings = {
+      accountId: 'g_0000000000000005',
+      email: 'personal@example.com',
+      calendars: [MEETING_CALENDAR],
+    };
+    const t = await setupCalendar(meetings);
+    const readPages = async (
+      cursor: string | null,
+    ): Promise<SharedRecord[]> => {
+      const page = await SOURCE_ADAPTERS[CALENDAR_CONNECTOR].syncPage(
+        await t.ctx(),
+        {
+          category: 'events',
+          cursor,
+          resumeState: null,
+          windowStart: Date.now() - DAY,
+        },
+      );
+      return page.cursor
+        ? [...page.records, ...(await readPages(page.cursor))]
+        : page.records;
+    };
+    const result = { records: await readPages(null) };
+    const read = (id: string) => {
+      const found = result.records.find(
+        (entry) => entry.sourceRef === `${MEETING_CALENDAR}|${id}`,
+      );
+      assert.ok(found, id);
+      return { format: found.extra.format, place: found.placeLabel };
+    };
+    assert.deepEqual(read('fx-m-conference'), {
+      format: 'video',
+      place: '12 Orchard Rd, Westford',
+    });
+    assert.deepEqual(read('fx-m-hangout'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-zoom'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-phone'), { format: 'phone', place: null });
+    assert.deepEqual(read('fx-m-address'), {
+      format: null,
+      place: 'Sweet Layer, 4 Main St',
+    });
+    assert.deepEqual(read('fx-m-none'), { format: null, place: null });
+    assert.deepEqual(read('fx-m-zoom-mid'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-teams-mid'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-dial'), { format: 'phone', place: null });
+    assert.deepEqual(read('fx-m-pin-oak'), {
+      format: null,
+      place: 'Pin Oak Cafe @ 4 Elm St',
+    });
+    assert.deepEqual(read('fx-m-teams-word'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-range'), {
+      format: null,
+      place: '2000-2010 Main St, Suite 200',
+    });
+    const siteRefOf = (id: string) =>
+      result.records.find(
+        (entry) => entry.sourceRef === `${MEETING_CALENDAR}|${id}`,
+      )?.extra.siteRef;
+    assert.equal(
+      siteRefOf('fx-m-site'),
+      'slot:2026-11-17:s1',
+      "an event the plan wrote carries its ref, read from the event's private extended properties",
+    );
+    assert.equal(siteRefOf('fx-m-none'), null, 'any other event has none');
+    assert.ok(
+      !JSON.stringify(result.records).match(
+        /https?:|tel:|zoom|teams\.|secret|hidden|482913|meet\./,
+      ),
+      'no link, number or conference detail is kept',
     );
   }
 
