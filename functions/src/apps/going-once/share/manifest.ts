@@ -107,11 +107,81 @@ export const GOING_ONCE_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'allThings',
+          kind: 'artifact',
+          label: 'Everything in your sales',
+          detail:
+            'Every thing, drafts included, with its state, prices, condition and notes',
+          meaning:
+            "Your things read live, with what that one leaves out: drafts and ones not ready for buyers, and each one's state, lowest price, condition, private notes and last status change. Never where it was bought or who the buyer is.",
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label:
+                'Each thing, with its sale and whether it is a draft, available, pending, sold or taken off',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'Its asking price and the lowest price you would take',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'Its condition and your private notes',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'When its status last changed',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'questions',
+          kind: 'event',
+          label: "Buyers' questions",
+          detail:
+            "The thing, the buyer's first name, their message and whether it is handled",
+          meaning:
+            "Your things read live, with what that one leaves out: drafts and ones not ready for buyers, and each one's state, lowest price, condition, private notes and when its status last changed. Never where it was bought or who the buyer is.",
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: 'The thing a buyer asked about and when',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: "The buyer's first name",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label:
+                'Their message, unless it holds a link, email or phone number',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'Whether it is new or handled',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
-        "buyers' names, contacts and messages",
-        'floor prices',
-        'private notes',
+        "buyers' emails, phone numbers and full names",
         'where things were bought',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },

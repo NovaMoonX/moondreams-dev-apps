@@ -2,6 +2,7 @@ import FormSection from '@/components/FormSection';
 import SectionDivider from '@/components/SectionDivider';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
+import RecipeStepList from '@apps/pinch/components/recipes/RecipeStepList';
 import { UNIT_LABELS } from '@apps/pinch/constants';
 import type {
   SharedIngredient,
@@ -114,18 +115,11 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
 
       {recipe.steps.length > 0 && (
         <FormSection title='Steps'>
-          <ol className='space-y-5 pt-1'>
-            {recipe.steps.map((step, index) => (
-              <li key={index} className='flex gap-3.5'>
-                <span className='bg-accent text-accent-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold'>
-                  {index + 1}
-                </span>
-                <span className='min-w-0 text-base/7 wrap-break-word whitespace-pre-wrap'>
-                  {step}
-                </span>
-              </li>
-            ))}
-          </ol>
+          <RecipeStepList
+            steps={recipe.steps}
+            sections={recipe.stepSections ?? []}
+            isRoomy
+          />
         </FormSection>
       )}
 

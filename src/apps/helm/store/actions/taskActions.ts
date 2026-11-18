@@ -10,10 +10,12 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { store } from '@/store';
 import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { TASK_TITLE_CAP } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
+import type { TaskReadyAnswer } from '@apps/helm/engine/questionsTask';
 import type {
   HelmEncryption,
   Sealed,
@@ -23,6 +25,14 @@ import type {
   TaskSealed,
   TaskWordsChange,
 } from '@apps/helm/types';
+import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
+import { readPrivacyFacts, readPrivateMark } from '@apps/helm/utils/privacy';
+import {
+  readNewRecordPrivacy,
+  readRecordPrivacy,
+} from '@apps/helm/utils/privacyParents';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
   planPhotoRelease,
@@ -45,16 +55,24 @@ const isUnavailable = (error: unknown) =>
 export async function createTask(
   uid: string,
   encryption: HelmEncryption,
-  input: { title: string; due: TaskDue | null },
+  input: { title: string; due: TaskDue | null; isPrivate?: boolean },
 ) {
   const title = toTaskTitle(input.title).slice(0, TASK_TITLE_CAP);
   if (!title) throw new Error('A task needs words.');
+  const { facts, privacy } = readNewRecordPrivacy(
+    'task',
+    { id: '' },
+    title,
+    readParentIndex(),
+    { isPrivate: input.isPrivate === true },
+  );
   const task: Task = {
     status: 'open',
     importance: null,
     isUrgent: false,
     due: input.due,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,
@@ -65,29 +83,75 @@ export async function createTask(
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: null,
     executionId: null,
+    privacy,
     createdAt: Date.now(),
     lastEditedAt: null,
     completedAt: null,
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {} },
+      {
+        title,
+        notes: null,
+        steps: {},
+        meetingLabel: null,
+        privateMark: facts.privateMark,
+        isPrivacyCleared: facts.isPrivacyCleared,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
+      },
       encryption,
     ),
   };
   const ref = doc(tasksOf(uid));
+  markCreatedHere(ref.id);
   return { id: ref.id, write: setDoc(ref, task) };
 }
+
+const hasLinkChange = (fields: TaskPlainFields) =>
+  'projectId' in fields || 'whoIds' in fields || 'placeIds' in fields;
+
+/** A change of link carries the task's class with it, so the filing line and a job without the key agree. */
+const readLinkedPrivacy = (taskId: string, fields: TaskPlainFields) => {
+  const { helm } = store.getState();
+  const task = [...helm.openTasks.items, ...helm.projectTasks.items].find(
+    (entry) => entry.id === taskId,
+  );
+  return task
+    ? {
+        privacy: readRecordPrivacy(
+          'task',
+          { ...task, ...fields, privacy: null },
+          readParentIndex(),
+        ),
+      }
+    : {};
+};
 
 export const updateTaskFields = (
   uid: string,
   taskId: string,
   fields: TaskPlainFields,
 ) =>
-  updateDoc(doc(tasksOf(uid), taskId), { ...fields, lastEditedAt: Date.now() });
+  updateDoc(doc(tasksOf(uid), taskId), {
+    ...fields,
+    ...(hasLinkChange(fields) ? readLinkedPrivacy(taskId, fields) : {}),
+    lastEditedAt: Date.now(),
+  });
+
+/** Answers "Do you feel ready?" for a meeting, or null takes the answer back; the edit stamp is left alone so Undo of the turn that made the task still works. */
+export const setReadyAnswer = (
+  uid: string,
+  taskId: string,
+  readyAnswer: TaskReadyAnswer | null,
+) => updateDoc(doc(tasksOf(uid), taskId), { readyAnswer });
 
 /** Changes a task's words in one transaction that re-reads them first, so a change made on another device meanwhile is kept. Needs a connection. */
 export async function updateTaskWords(
@@ -110,8 +174,24 @@ export async function updateTaskWords(
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
+        const changed = applyWordsChange(opened, change);
+        const before = readPrivacyFacts(opened);
+        const marked =
+          change.kind === 'title'
+            ? readPrivateMark({
+                current: before,
+                isCare: false,
+                isForOtherWho: false,
+                commandMark: null,
+                isSensitiveHealth: false,
+                words: change.title,
+              })
+            : before;
+        const isNewlyMarked = marked.privateMark !== before.privateMark;
         const sealed = await sealJson<TaskSealed>(
-          applyWordsChange(opened, change),
+          isNewlyMarked
+            ? { ...changed, privateMark: marked.privateMark }
+            : changed,
           encryption,
         );
         const stepFields =
@@ -128,6 +208,7 @@ export async function updateTaskWords(
         transaction.update(ref, {
           sealed,
           lastEditedAt: Date.now(),
+          ...(isNewlyMarked && { privacy: 'private' }),
           ...stepFields,
         });
         return 'saved';
@@ -229,6 +310,7 @@ export async function deleteTask(
   const mediaRef = (id: string) =>
     doc(db, 'apps', 'helm', 'users', uid, 'media', id);
   const write = deleteDoc(ref);
+  dropFromGroupings(uid, `tasks/${taskId}`);
   released.forEach((entry) =>
     updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
   );

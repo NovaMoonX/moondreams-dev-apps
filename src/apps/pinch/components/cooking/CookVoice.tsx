@@ -424,6 +424,17 @@ function CookVoiceSheet({
       ],
     },
     {
+      label: 'Before you start',
+      rows: [
+        ['got the butter', 'Ticks it off, or say “got everything”'],
+        ['untick everything', 'Clears every tick, or “untick the butter”'],
+        ['what’s left', 'Reads what you still need to get out'],
+        ['what do I measure with', 'Reads the measuring tools'],
+        ['all together', 'Lists the ingredients together, or say “by part”'],
+        ['start cooking', 'Opens the first step'],
+      ],
+    },
+    {
       label: 'Amounts',
       rows: [
         [
@@ -431,6 +442,15 @@ function CookVoiceSheet({
           'Says the amount in that unit',
         ],
         ['what’s 200 ml in ounces', 'Changes a measure, no ingredient needed'],
+      ],
+    },
+    {
+      label: 'Servings',
+      rows: [
+        ['make six servings', 'Scales the amounts, or say “make it for six”'],
+        ['one more serving', 'Adds one, or say “one less serving”'],
+        ['double the recipe', 'Doubles the amounts, or say “halve the recipe”'],
+        ['how many servings', 'Says how many you are making'],
       ],
     },
     ...(dishExample === null

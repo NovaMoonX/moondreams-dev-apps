@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 
 import { X } from 'lucide-react';
 
@@ -32,7 +32,18 @@ interface FormSheetProps {
   isDrawerWhenShort?: boolean;
   /** Icon buttons on the title's line (40×40, each with an `aria-label`), such as the eye that shows or hides private figures. */
   actions?: ReactNode;
+  /** Names the view the body shows when the form swaps its body in place (the view opens with a `BackLink`, so the phone's Back returns one view): a new view starts at the top and coming back to one returns to where it was left. Absent, the sheet is one view. */
+  viewKey?: string;
 }
+
+const findScroller = (node: HTMLElement | null): HTMLElement | null => {
+  const parent = node?.parentElement ?? null;
+  if (!parent) return null;
+  const { overflowY } = getComputedStyle(parent);
+  return overflowY === 'auto' || overflowY === 'scroll'
+    ? parent
+    : findScroller(parent);
+};
 
 const STICKY_FOOTER =
   '[&_.form-footer]:bg-popover [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:z-10 [&_.form-footer]:-mx-6 [&_.form-footer]:border-t [&_.form-footer]:px-6 [&_.form-footer]:pt-3';
@@ -51,12 +62,41 @@ function FormSheet({
   wide = 'modal',
   isDrawerWhenShort = false,
   actions,
+  viewKey,
 }: FormSheetProps) {
   const { isBelow } = useMediaQuery();
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isPhone =
     isBelow('sm') || (isDrawerWhenShort && isShort && isBelow('lg'));
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
+  const bodyNode = useRef<HTMLDivElement | null>(null);
+  const scrollTops = useRef(new Map<string, number>());
+  const shownKey = useRef(viewKey);
+  const hasViews = viewKey !== undefined;
+
+  const attachBody = useCallback(
+    (node: HTMLDivElement | null) => {
+      bodyNode.current = node;
+      const scroller = hasViews ? findScroller(node) : null;
+      if (!scroller) return;
+      const record = () => {
+        if (shownKey.current !== undefined) {
+          scrollTops.current.set(shownKey.current, scroller.scrollTop);
+        }
+      };
+      scroller.addEventListener('scroll', record, { passive: true });
+      return () => scroller.removeEventListener('scroll', record);
+    },
+    [hasViews],
+  );
+
+  useLayoutEffect(() => {
+    if (viewKey === undefined || shownKey.current === viewKey) return;
+    shownKey.current = viewKey;
+    const scroller = findScroller(bodyNode.current);
+    if (scroller) scroller.scrollTop = scrollTops.current.get(viewKey) ?? 0;
+  });
+
   const heading = actions ? (
     <div
       className={join('flex items-start gap-2', isPhone && !isShort && 'pt-2')}
@@ -120,6 +160,7 @@ function FormSheet({
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
       >
         <div
+          ref={attachBody}
           className={join(
             STICKY_FOOTER,
             '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
@@ -141,6 +182,7 @@ function FormSheet({
         title={heading ?? title}
       >
         <div
+          ref={attachBody}
           className={join(
             STICKY_FOOTER,
             '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3',
@@ -161,6 +203,7 @@ function FormSheet({
       hideCloseButton={actions !== undefined}
     >
       <div
+        ref={attachBody}
         className={join(
           STICKY_FOOTER,
           '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3',

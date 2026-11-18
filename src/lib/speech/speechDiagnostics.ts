@@ -4,8 +4,12 @@ const KEY = 'speech:events';
 
 const readKept = () => {
   try {
-    const kept: unknown = JSON.parse(window.sessionStorage.getItem(KEY) ?? '[]');
-    return Array.isArray(kept) ? kept.filter((line) => typeof line === 'string') : [];
+    const kept: unknown = JSON.parse(
+      window.sessionStorage.getItem(KEY) ?? '[]',
+    );
+    return Array.isArray(kept)
+      ? kept.filter((line) => typeof line === 'string')
+      : [];
   } catch {
     return [];
   }

@@ -18,13 +18,18 @@ import { watchWriteLanded } from '@/lib/firebase/syncWatchdog';
 import { createSealedReader, type SealedReader } from '@lib/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson } from '@apps/helm/security';
+import { openConnection } from '@apps/helm/store/listeners/connectionListener';
 import { openFact } from '@apps/helm/store/listeners/factListener';
+import { openGrouping } from '@apps/helm/store/listeners/groupingListener';
+import { openHabit } from '@apps/helm/store/listeners/habitListener';
 import { openMedia } from '@apps/helm/store/listeners/mediaListener';
 import { openNote } from '@apps/helm/store/listeners/noteListener';
+import { openPattern } from '@apps/helm/store/listeners/patternListener';
 import { openPlace } from '@apps/helm/store/listeners/placeListener';
 import { openProcedure } from '@apps/helm/store/listeners/procedureListener';
 import { openProject } from '@apps/helm/store/listeners/projectListener';
 import { openRun } from '@apps/helm/store/listeners/runListener';
+import { openSeenAs } from '@apps/helm/store/listeners/seenAsListener';
 import { openStyle } from '@apps/helm/store/listeners/styleListener';
 import { openTask } from '@apps/helm/store/listeners/taskListener';
 import { openTopic } from '@apps/helm/store/listeners/topicListener';
@@ -53,6 +58,11 @@ const COLLECTION_KINDS: Record<string, HelmHeldKind> = {
   procedureRuns: 'runs',
   media: 'media',
   style: 'style',
+  habits: 'habits',
+  patterns: 'patterns',
+  groupings: 'groupings',
+  seenAs: 'seenAs',
+  connections: 'connections',
 };
 
 /** The kind and id of the person's own record in a collection a listener list reads; anything else is never held. */
@@ -66,6 +76,32 @@ const readTarget = (
   const kind = COLLECTION_KINDS[collection];
   return kind === undefined ? null : { kind, id };
 };
+
+/** The profile and the collections whose listener keeps its days by id, which a hold can't be laid over: the commit is watched until the listener delivers again. */
+const WATCHED_SLICES = {
+  planDays: 'planDays',
+  dayAims: 'dayAims',
+} as const;
+
+type WatchedSlice =
+  (typeof WATCHED_SLICES)[keyof typeof WATCHED_SLICES] | 'profile';
+
+const readWatchedSlices = (
+  writes: RecordedWrite[],
+  uid: string,
+): WatchedSlice[] =>
+  Array.from(
+    new Set(
+      writes.flatMap((write) => {
+        const [apps, helm, users, owner, collection] = write.segments;
+        if (apps !== 'apps' || helm !== 'helm' || users !== 'users') return [];
+        if (owner !== uid) return [];
+        if (collection === undefined) return ['profile' as const];
+        const slice = WATCHED_SLICES[collection as keyof typeof WATCHED_SLICES];
+        return slice === undefined ? [] : [slice];
+      }),
+    ),
+  );
 
 const UNSHOWABLE = Symbol('unshowable');
 
@@ -91,6 +127,11 @@ const OPENERS: {
   runs: openRun,
   media: openMedia,
   style: openStyle,
+  habits: openHabit,
+  patterns: openPattern,
+  groupings: openGrouping,
+  seenAs: openSeenAs,
+  connections: openConnection,
 };
 
 /** A document's raw data opened the way its listener opens it; one its listener would drop or mark unreadable can't be shown. */
@@ -179,7 +220,9 @@ export async function runHeldTransaction<T>(
 ): Promise<T> {
   const token = generateUuid();
   const encryption = await getHelmEncryption(uid).catch(() => null);
+  const watched = { slices: [] as WatchedSlice[] };
   const hold = async (writes: RecordedWrite[], reads: RecordedReads) => {
+    watched.slices = readWatchedSlices(writes, uid);
     if (encryption === null) return;
     const built = await buildHolds(
       writes,
@@ -197,6 +240,17 @@ export async function runHeldTransaction<T>(
   try {
     const result = await runRecordedTransaction(body, hold);
     store.dispatch(settleHelmWrites(token));
+    const before = watched.slices.map(
+      (slice) => [slice, store.getState().helm[slice]] as const,
+    );
+    if (before.length > 0) {
+      void watchWriteLanded({
+        feature: 'Helm',
+        what: 'a change you made',
+        hasLanded: () =>
+          before.every(([slice, was]) => store.getState().helm[slice] !== was),
+      });
+    }
     void watchWriteLanded({
       feature: 'Helm',
       what: 'a change you made',

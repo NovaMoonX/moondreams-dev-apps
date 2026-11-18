@@ -24,6 +24,9 @@ const KEEP_ALIVE_MS = 5000;
 // A token lasts a minute, so a stream ends just inside it.
 const UTTERANCE_MS = 59_000;
 const BUFFER_FRAMES = 500;
+// A cold server takes 2 to 4 s to mint; the wait stays inside the 10 s the buffer holds, so a slow token costs no words.
+const TOKEN_WAIT_MS = 6000;
+const SLOW_TOKEN_MS = 1500;
 
 type TokenOutcome =
   | VoiceTokenAnswer
@@ -85,6 +88,8 @@ interface DeepgramSttOptions {
   ) => void;
   /** A minted stream has ended, after `ms` open (0 when it never opened). */
   onClosed: (mintId: string, ms: number) => void;
+  /** Set once when the stream connects, never changed mid-stream. */
+  keyterms?: string[] | null;
 }
 
 interface Heard {
@@ -128,8 +133,12 @@ const openSocket = (url: string, token: string) => {
   }
 };
 
-const toListenUrl = (model: string, lang: string) =>
-  `${LISTEN_URL}?${new URLSearchParams({
+export const toListenUrl = (
+  model: string,
+  lang: string,
+  keyterms: string[] | null,
+) => {
+  const params = new URLSearchParams({
     model,
     language: lang,
     encoding: 'linear16',
@@ -139,16 +148,22 @@ const toListenUrl = (model: string, lang: string) =>
     smart_format: 'true',
     endpointing: '300',
     mip_opt_out: 'true',
-  }).toString()}`;
+  });
+  if (model.startsWith('nova-3')) {
+    keyterms?.forEach((term) => params.append('keyterm', term));
+  }
+  return `${LISTEN_URL}?${params.toString()}`;
+};
 
 /** Listens by streaming the microphone to Deepgram with a token minted for this stream. Nothing said while the socket opens is lost. `stop` (or a minute, or a page that goes to the background) delivers what was heard once, finished phrases and the one still being said. */
 export const createDeepgramStt = ({
   lang,
   getToken,
-  tokenWaitMs = 1500,
+  tokenWaitMs = TOKEN_WAIT_MS,
   source = null,
   onUnavailable,
   onClosed,
+  keyterms = null,
 }: DeepgramSttOptions): SttAdapter => {
   const run = {
     stop: null as (() => void) | null,
@@ -340,7 +355,12 @@ export const createDeepgramStt = ({
       const timeout = new Promise<TokenOutcome>((resolve) =>
         window.setTimeout(() => resolve({ status: 'timeout' }), tokenWaitMs),
       );
+      const askedAt = Date.now();
       const answer = await Promise.race([tokenRequest, timeout]);
+      const tokenMs = Date.now() - askedAt;
+      if (answer.status === 'ready' && tokenMs > SLOW_TOKEN_MS) {
+        recordSpeechEvent(`Cloud listening token took ${tokenMs} ms`);
+      }
       if (state.isDone || answer.status !== 'ready') releaseToken();
       if (state.isDone) return;
       if (answer.status !== 'ready') {
@@ -354,7 +374,10 @@ export const createDeepgramStt = ({
       }
 
       state.mintId = answer.mintId;
-      const opened = openSocket(toListenUrl(answer.model, lang), answer.token);
+      const opened = openSocket(
+        toListenUrl(answer.model, lang, keyterms),
+        answer.token,
+      );
       if (opened.socket === null) {
         fail(null, {
           stage: CLOUD_LISTEN_STAGES.socketConstruct,

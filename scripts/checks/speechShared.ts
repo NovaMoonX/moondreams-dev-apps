@@ -13,6 +13,7 @@ import {
   type ListeningPhase,
   type ListeningState,
 } from '../../src/lib/speech/listeningMode.ts';
+import { wakeAudioOutput } from '../../src/lib/speech/audioContext.ts';
 import {
   getNaturalVoiceHost,
   isNaturalVoiceLang,
@@ -26,6 +27,10 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import {
+  CLOSING_PHRASES,
+  readClosingPhrase,
+} from '../../src/lib/speech/closingPhrase.ts';
 import {
   BARGE_IN_GATE,
   BARGE_SUPPRESS_MS,
@@ -281,7 +286,7 @@ const rows: [
   from: ListeningState,
   to: ListeningState,
   effect: 'START' | 'STOP' | null,
-  cue: 'start' | null,
+  cue: 'start' | 'close' | null,
 ][] = [
   [
     'tap opens a window',
@@ -364,6 +369,145 @@ phases.forEach((phase) => {
     `no change of phase from ${phase} makes no cue`,
   );
 });
+
+const tapWindow = reduce(createListeningState('TAP'), { type: 'TAP_MIC' });
+const wakeWindow = reduce(waiting, { type: 'WAKE_HEARD' });
+const closeRows: [string, ListeningState, ListeningState, string | null][] = [
+  [
+    'a close in a window in tap mode turns the mic off',
+    tapWindow,
+    reduce(tapWindow, { type: 'CLOSE_HEARD' }),
+    'STOP',
+  ],
+  [
+    'a close in a wake window goes back to waiting for the phrase',
+    wakeWindow,
+    reduce(wakeWindow, { type: 'CLOSE_HEARD' }),
+    null,
+  ],
+  [
+    'a close on a kept-open mic ends it',
+    locked,
+    reduce(locked, { type: 'CLOSE_HEARD' }),
+    'STOP',
+  ],
+];
+closeRows.forEach(([title, from, to, effect]) => {
+  assert.equal(getListeningCue(from, to), 'close', `${title}: the close cue`);
+  assert.equal(getListeningEffect(from, to), effect, `${title}: the effect`);
+  assert.equal(to.closedByPhrase, true, `${title}: flagged`);
+  assert.equal(to.lockEndsAt, null, `${title}: no lock left`);
+});
+assert.equal(
+  reduce(wakeWindow, { type: 'CLOSE_HEARD' }).phase,
+  'WAITING',
+  'a close returns wake mode to waiting',
+);
+[waiting, createListeningState('TAP')].forEach((state) =>
+  assert.equal(
+    reduce(state, { type: 'CLOSE_HEARD' }),
+    state,
+    'a close with nothing open changes nothing',
+  ),
+);
+const closedOnce = reduce(wakeWindow, { type: 'CLOSE_HEARD' });
+assert.equal(
+  reduce(closedOnce, { type: 'CLOSE_HEARD' }),
+  closedOnce,
+  'a second close is no change and plays no second cue',
+);
+assert.equal(
+  reduce(closedOnce, { type: 'WAKE_HEARD' }).closedByPhrase,
+  false,
+  'the flag clears when the mic opens',
+);
+assert.equal(
+  reduce(reduce(tapWindow, { type: 'CLOSE_HEARD' }), { type: 'TAP_MIC' })
+    .closedByPhrase,
+  false,
+  'opening the mic by a tap clears it',
+);
+
+const readClose = (text: string, extra: string[] = []) =>
+  readClosingPhrase(text, { extra });
+const dismissWhole = { kind: 'dismiss', position: 'whole', rest: '' };
+const finishWhole = { kind: 'finish', position: 'whole', rest: '' };
+assert.ok(
+  CLOSING_PHRASES.dismiss.length > 0 && CLOSING_PHRASES.finish.length > 0,
+  'both kinds are listed',
+);
+CLOSING_PHRASES.dismiss.forEach((phrase) => {
+  assert.deepEqual(readClose(phrase), dismissWhole, `"${phrase}" dismisses`);
+  assert.deepEqual(
+    readClose(`Oh, ${phrase}.`),
+    dismissWhole,
+    `"${phrase}" after a filler`,
+  );
+});
+CLOSING_PHRASES.finish.forEach((phrase) =>
+  assert.deepEqual(readClose(phrase), finishWhole, `"${phrase}" finishes`),
+);
+assert.deepEqual(readClose('Never mind!'), dismissWhole, 'case and a mark');
+assert.deepEqual(readClose('just forget it'), dismissWhole, 'a leading "just"');
+assert.deepEqual(readClose('thats all'), finishWhole, 'a missing apostrophe');
+assert.deepEqual(
+  readClose('forget it, Robin', ['robin', 'hey robin']),
+  dismissWhole,
+  'a trailing name is ignored',
+);
+assert.deepEqual(
+  readClose('thanks, Robin', ['robin']),
+  finishWhole,
+  'a finish with a name',
+);
+assert.deepEqual(readClose('no thanks'), dismissWhole, '"no thanks" dismisses');
+assert.deepEqual(
+  readClose('Add milk. Actually never mind'),
+  { kind: 'dismiss', position: 'end', rest: 'Add milk' },
+  'a dismiss after a retraction closes the words before it',
+);
+assert.deepEqual(
+  readClose('call mom, actually, forget it'),
+  { kind: 'dismiss', position: 'end', rest: 'call mom' },
+  'a cue between commas',
+);
+assert.deepEqual(
+  readClose("eggs and milk, that's all"),
+  { kind: 'finish', position: 'end', rest: 'eggs and milk' },
+  'a finish after content leaves the content',
+);
+assert.deepEqual(
+  readClose('add milk. thank you'),
+  { kind: 'finish', position: 'end', rest: 'add milk' },
+  'a finish after a sentence break',
+);
+assert.deepEqual(
+  readClose('thanks, Zoë', ['Zoe']),
+  finishWhole,
+  'an accent in a name',
+);
+assert.deepEqual(
+  readClose("thanks, D'Arcy", ['darcy']),
+  finishWhole,
+  'an apostrophe in a name',
+);
+[
+  'tell Sam thank you',
+  'mark the laundry all done',
+  'the movie is all done',
+  'remind me to cancel',
+  'tell him to stop',
+  'stop suggesting that',
+  'I have nothing to wear',
+  'add thanks to the card',
+  'remind me to forget it',
+  'cancel the dentist',
+  'add milk, forget it',
+  'thanks for the reminder',
+  '',
+].forEach((text) =>
+  assert.equal(readClose(text), null, `"${text}" is not a closing phrase`),
+);
 
 const wait = { idleMs: 600_000, maxMs: 3_600_000 };
 assert.equal(
@@ -2343,6 +2487,68 @@ console.log('speechShared: voice router and playback queue checks passed');
     Math.abs(fake.starts[1]!.at - (fake.starts[0]!.at + 1 / 24000)) < 1e-9,
     'each chunk starts where the one before ends',
   );
+
+  const waking = makeContext();
+  let wakingStarts = 0;
+  const wakingSink = createPcmSink({
+    context: waking.context,
+    sampleRate: 24000,
+    prebufferSeconds: 0,
+    firstStartAt: 2.5,
+    onStart: () => {
+      wakingStarts += 1;
+    },
+  });
+  wakingSink.push(new Uint8Array([1, 0]));
+  assert.equal(
+    waking.starts[0]!.at,
+    2.5,
+    'the first sound waits for speakers that are still waking',
+  );
+  assert.equal(
+    wakingStarts,
+    0,
+    'speaking is not reported while the speakers are still waking',
+  );
+  wakingSink.stop();
+
+  const awake = makeContext();
+  const awakeSink = createPcmSink({
+    context: awake.context,
+    sampleRate: 24000,
+    prebufferSeconds: 0,
+    firstStartAt: 0.2,
+    onStart: () => undefined,
+  });
+  awakeSink.push(new Uint8Array([1, 0]));
+  assert.ok(
+    Math.abs(awake.starts[0]!.at - 1.05) < 1e-9,
+    'a wake time already past changes nothing',
+  );
+
+  const hissed: number[] = [];
+  const speakerContext = {
+    currentTime: 10,
+    sampleRate: 100,
+    destination: {},
+    createBuffer: () => ({ copyToChannel: () => undefined }),
+    createBufferSource: () => ({
+      connect: () => undefined,
+      start: () => hissed.push(1),
+    }),
+  } as unknown as AudioContext;
+  const firstLine = wakeAudioOutput(speakerContext);
+  assert.equal(firstLine.readyAt, 11.5, 'quiet speakers are woken first');
+  const secondLine = wakeAudioOutput(speakerContext);
+  assert.equal(
+    hissed.length,
+    1,
+    'a line while another holds them does not hiss again',
+  );
+  assert.ok(secondLine.readyAt <= 11.5, 'nor waits any longer');
+  firstLine.release();
+  firstLine.release();
+  secondLine.release();
   fake.clock.now = 5;
   sink.push(new Uint8Array([1, 0]));
   assert.ok(
@@ -2705,6 +2911,82 @@ console.log('speechShared: voice router and playback queue checks passed');
     globalThis.fetch = realFetch;
   }
 }
+{
+  const system: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async () => undefined,
+  };
+  const whisperFetches: (string | undefined)[] = [];
+  const whisperFallback = { calls: 0 };
+  const countingSystem: TtsAdapter = {
+    ...system,
+    speak: async () => {
+      whisperFallback.calls += 1;
+    },
+  };
+  const whisperSpeak = (
+    fetchSpeech: () => Promise<SpeechFetch>,
+    extra: { onHeld?: () => void } = {},
+  ) =>
+    createCloudTts({
+      source: {
+        fetchSpeech: (_text, _priority, _signal, _voice, delivery) => {
+          whisperFetches.push(delivery);
+          return fetchSpeech();
+        },
+      },
+      fallback: countingSystem,
+      firstByteMs: 10,
+      ...extra,
+    }).speak('Whisper this', {
+      priority: 'reply',
+      signal: new AbortController().signal,
+      onStart: () => undefined,
+      onEnd: () => undefined,
+      delivery: 'whisper',
+    });
+  const heldWhispers: string[] = [];
+  const whisperOutcomes = await Promise.allSettled([
+    whisperSpeak(async () => ({ status: 'unavailable', detail: 'test' })),
+    whisperSpeak(() => new Promise<never>(() => undefined)),
+    whisperSpeak(async () => ({ status: 'held', reason: 'speechLimit' }), {
+      onHeld: () => heldWhispers.push('held'),
+    }),
+  ]);
+  assert.deepEqual(
+    [
+      whisperOutcomes.map((outcome) => outcome.status),
+      whisperFallback.calls,
+      whisperFetches,
+      heldWhispers,
+    ],
+    [
+      ['rejected', 'rejected', 'rejected'],
+      0,
+      ['whisper', 'whisper', 'whisper'],
+      ['held'],
+    ],
+    'a whispered line that is unavailable, late or held rejects instead of falling back, asks for the whisper and still reports a hold',
+  );
+  const whisperRoute = createPlaybackQueue({ pick: () => system });
+  assert.deepEqual(
+    await whisperRoute.enqueue('Softly', {
+      priority: 'reply',
+      turnKey: 1,
+      delivery: 'whisper',
+    }),
+    { status: 'failed', adapterId: 'system' },
+    'the queue fails a whispered line a device adapter was picked for',
+  );
+  assert.equal(
+    (await whisperRoute.enqueue('Plainly', { priority: 'reply', turnKey: 2 }))
+      .status,
+    'spoken',
+    'an ordinary line still plays on the device adapter',
+  );
+}
 console.log('speechShared: cloud voice checks passed');
 
 const apiKey = 'sk-test-key-123';
@@ -2999,6 +3281,39 @@ assert.deepEqual(
     true,
   ],
   'Google is sent the voice, rate and PCM encoding, then the text, then the write side ends',
+);
+const whisperCall = fakeGoogleCall();
+await googleFrom(whisperCall.call).speak({
+  ...speakInput,
+  voiceId: 'Aoede',
+  speed: 1.1,
+  delivery: 'whisper',
+});
+assert.deepEqual(
+  whisperCall.state.writes,
+  [
+    {
+      streamingConfig: {
+        voice: {
+          languageCode: 'en-US',
+          name: 'Aoede',
+          modelName: 'gemini-2.5-flash-tts',
+        },
+        streamingAudioConfig: {
+          audioEncoding: 'PCM',
+          sampleRateHertz: 24_000,
+        },
+      },
+    },
+    {
+      input: {
+        text: 'Hello there.',
+        prompt:
+          'Whisper this, softly and close, as if no one else in the room should hear.',
+      },
+    },
+  ],
+  'a whisper names the Gemini model and carries the prompt beside the text',
 );
 const googleReader = googleSpeech.stream.getReader();
 googleCall.emit('data', { audioContent: new Uint8Array([1, 2, 3]) });
@@ -3550,6 +3865,26 @@ const goodRead = read();
 assert.ok(
   goodRead.ok && goodRead.text === 'Hello there' && goodRead.appId === 'helm',
   'a good request passes',
+);
+assert.deepEqual(
+  [
+    read({ body: { ...speechBody, delivery: 'whisper' } }),
+    read({ body: { ...speechBody, delivery: null } }),
+    read(),
+  ].map((result) => (result.ok ? result.delivery : 'refused')),
+  ['whisper', null, null],
+  'a whisper, a null and a missing delivery are read',
+);
+assert.deepEqual(
+  ['shout', 1, ''].map((delivery) =>
+    readFailure(read({ body: { ...speechBody, delivery } })),
+  ),
+  [
+    [400, 'delivery'],
+    [400, 'delivery'],
+    [400, 'delivery'],
+  ],
+  'any other delivery is refused',
 );
 const longZone = read({ body: { ...speechBody, timeZone: 'x'.repeat(65) } });
 assert.ok(

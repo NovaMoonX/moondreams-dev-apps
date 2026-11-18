@@ -10,6 +10,11 @@ import CookStepDock, {
   type DockView,
 } from '@apps/pinch/components/cooking/CookStepDock';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
+import {
+  getStepSectionPlace,
+  groupStepSections,
+  hasStepSections,
+} from '@apps/pinch/utils/stepSections';
 
 const SIDE_BY_SIDE = {
   top: '[@media(max-height:500px)_and_(min-width:640px)]:flex-row [@media(max-height:500px)_and_(min-width:640px)]:items-center [@media(max-height:500px)_and_(min-width:640px)]:gap-8',
@@ -35,12 +40,17 @@ export interface StepTimerSlot {
 
 interface CookStepViewProps {
   steps: string[];
+  sections: (string | null)[];
   index: number;
   /** The lines this step names, scaled. */
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
   /** Where the first step leads with the recipe's latest note, until "Got it"; null elsewhere. */
-  lastTime: { recipeId: string; isDismissed: boolean; onGotIt: () => void } | null;
+  lastTime: {
+    recipeId: string;
+    isDismissed: boolean;
+    onGotIt: () => void;
+  } | null;
   /** What was written for this step, tips first. */
   entries: RecipeNote[];
   onEditEntry: (id: string) => void;
@@ -86,6 +96,7 @@ const getStepType = (length: number) => {
 
 function CookStepView({
   steps,
+  sections,
   index,
   ingredients,
   isAmountNoteShown,
@@ -109,6 +120,13 @@ function CookStepView({
   const step = steps[index];
   const stepNumber = index + 1;
   const type = getStepType(step.length);
+  const place = getStepSectionPlace(steps, sections, index);
+  const eyebrow = place
+    ? `${place.name} · ${place.position} of ${place.count}`
+    : null;
+  const blocks = hasStepSections(steps, sections)
+    ? groupStepSections(steps, sections)
+    : [];
 
   return (
     <SwipeArea className='flex flex-1 flex-col' onSwipe={onSwipe}>
@@ -132,7 +150,30 @@ function CookStepView({
             <p className='text-muted-foreground text-sm font-medium whitespace-nowrap'>
               Step {stepNumber} of {steps.length}
             </p>
-            {steps.length > 1 && (
+            {steps.length > 1 && blocks.length > 0 && (
+              <div className='flex h-1.5 max-w-32 min-w-6 flex-1 gap-0.5'>
+                {blocks.map((block) => {
+                  const done = block.steps.filter(
+                    (entry) => entry.index <= index,
+                  ).length;
+                  return (
+                    <div
+                      key={block.key}
+                      className='bg-border h-full overflow-hidden rounded-full'
+                      style={{ flexGrow: block.steps.length, flexBasis: 0 }}
+                    >
+                      <div
+                        className='bg-primary h-full rounded-full'
+                        style={{
+                          width: `${(done / block.steps.length) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {steps.length > 1 && blocks.length === 0 && (
               <div className='bg-border h-1.5 max-w-32 min-w-6 flex-1 overflow-hidden rounded-full'>
                 <div
                   className='bg-primary h-full rounded-full'
@@ -148,8 +189,16 @@ function CookStepView({
         <div className='pt-8 [@media(max-height:640px)]:pt-5'>
           <div aria-live='polite' aria-atomic='true'>
             <span className='sr-only'>
-              Step {stepNumber} of {steps.length}.{' '}
+              Step {stepNumber} of {steps.length}. {eyebrow && `${eyebrow}. `}
             </span>
+            {eyebrow && (
+              <p
+                aria-hidden='true'
+                className='text-muted-foreground mb-2 truncate text-sm font-medium'
+              >
+                {eyebrow}
+              </p>
+            )}
             <p
               className={join(
                 'font-medium wrap-break-word whitespace-pre-wrap',

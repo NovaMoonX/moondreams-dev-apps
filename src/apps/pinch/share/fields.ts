@@ -192,7 +192,7 @@ const SOURCE_FIELDS = {
 
 const COLLECTION_FIELDS = {
   id: 'notUseful',
-  label: 'notUseful',
+  label: 'shared',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
 } satisfies Record<keyof Collection, ShareDecision>;
@@ -225,10 +225,10 @@ const IDEA_FIELDS = {
 
 const COOK_FIELDS = {
   id: 'never',
-  recipeId: 'never',
+  recipeId: 'shared',
   plannedMealId: 'never',
   servings: 'never',
-  cookedAt: 'never',
+  cookedAt: 'shared',
   rating: 'never',
   photoPath: 'never',
   createdAt: 'never',
@@ -299,10 +299,10 @@ const RECIPE_NOTE_FIELDS = {
 
 const RECIPE_INGREDIENT_FIELDS = {
   id: 'never',
-  ingredientId: 'never',
-  freeText: 'never',
-  amount: 'never',
-  unit: 'never',
+  ingredientId: 'shared',
+  freeText: 'shared',
+  amount: 'shared',
+  unit: 'shared',
   note: 'never',
   group: 'never',
   adaptedFrom: 'never',
@@ -331,13 +331,14 @@ const RECIPE_FIELDS = {
   cookMinutes: 'shared',
   coverPath: 'notUseful',
   coverUrl: 'notUseful',
-  ingredients: 'never',
+  ingredients: 'shared',
   steps: 'never',
+  stepSections: 'never',
   nutritionOverride: 'never',
   source: 'notUseful',
   sourceId: 'notUseful',
   care: 'never',
-  collectionIds: 'notUseful',
+  collectionIds: 'shared',
   categories: 'shared',
   links: 'never',
   isArchived: 'filter',
@@ -351,6 +352,7 @@ const COOKING_RESUME_FIELDS = {
   positions: 'notUseful',
   timers: 'notUseful',
   captured: 'notUseful',
+  startedAt: 'notUseful',
 } satisfies Record<keyof CookingResume, ShareDecision>;
 
 const PINCH_SHARE_FIELDS = {

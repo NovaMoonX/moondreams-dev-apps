@@ -1,6 +1,13 @@
 import { createHmac } from 'node:crypto';
 
 import type { SealedPayload } from '../../../appKeys/seal.js';
+import {
+  addContactPoint,
+  toContactKey,
+  toContactLabel,
+  toPhoneKey,
+  type ContactPoint,
+} from './contactPoints.js';
 import { buildWhoDoc } from './executeCommands.js';
 import type { Effect, EffectRef } from './executeCommands.js';
 import { formatYearlyDate } from '../../../vendor/yearlyDateUtils.js';
@@ -18,12 +25,18 @@ import { readWhoTier } from './whoTier.js';
 
 export const PHOTOS_PER_WHO = 12;
 
+/** A phone or email as Google holds it, with its label. */
+export interface ContactEntry {
+  value: string;
+  label: string | null;
+}
+
 /** What a person's Google contact is read as; the planner never sees anything else about it. */
 export interface ContactInput {
   resourceName: string;
   name: string;
-  emails: string[];
-  phones: string[];
+  emails: ContactEntry[];
+  phones: ContactEntry[];
   photoUrl: string | null;
   /** Google's birthday; the year is null when Google gives none. */
   birthday?: { month: number; day: number; year: number | null } | null;
@@ -43,8 +56,8 @@ export interface ExistingWho {
   isSelf: boolean;
   name: string;
   aliases: string[];
-  email: string | null;
-  phone: string | null;
+  emails: ContactPoint[];
+  phones: ContactPoint[];
   photoMediaId: string | null;
   mediaIds: string[];
   importedFrom: ImportedFrom | null;
@@ -72,7 +85,14 @@ export interface BirthdayOf {
   year: number | null;
 }
 
-type TextField = 'name' | 'email' | 'phone';
+type TextField = 'name';
+
+/** The lists to write when Google holds numbers or addresses the who lacks (null: that list is unchanged), and the marks of what was brought in so a later update never brings back what the person removed. */
+export interface ContactChange {
+  phones: ContactPoint[] | null;
+  emails: ContactPoint[] | null;
+  seen: Record<string, string>;
+}
 
 export interface WhoChange {
   id: string;
@@ -80,6 +100,7 @@ export interface WhoChange {
   contact: ContactInput;
   /** The words to write: every field for a new who, only the empty or unedited ones for an existing one. */
   fields: Partial<Record<TextField, string>>;
+  contacts: ContactChange | null;
   photo: { mediaId: string; url: string } | null;
   /** Google's birthday: written into an empty one, or replacing one the person has not edited. */
   birthday: BirthdayChange | null;
@@ -106,11 +127,67 @@ export const toWhoId = (
   resourceName: string,
 ) => digest('whoId', `${accountId}\n${resourceName}`).slice(0, 20);
 
-const emailKey = (email: string) => email.trim().toLowerCase();
+const toContactId = (
+  digest: Digest,
+  whoId: string,
+  kind: 'phone' | 'email',
+  key: string,
+) => digest('contactId', `${whoId}\n${kind}\n${key}`).slice(0, 12);
 
-const phoneKey = (phone: string) => {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 7 ? digits.slice(-10) : null;
+/** Brings in each of Google's numbers and addresses the who does not hold and was never given from Google before, labelled as Google labels them; the first of a kind a who gets is its primary, and a who's own primary never changes. */
+const planContacts = (input: {
+  whoId: string;
+  phones: ContactPoint[];
+  emails: ContactPoint[];
+  contact: ContactInput;
+  importedFields: Record<string, string>;
+  digest: Digest;
+}): ContactChange | null => {
+  const settle = (kind: 'phone' | 'email') => {
+    const incoming = input.contact[kind === 'phone' ? 'phones' : 'emails'];
+    return incoming.reduce(
+      (state, entry) => {
+        const key = toContactKey(kind, entry.value);
+        if (key === null) return state;
+        const mark = `${kind}.${input.digest(kind, key).slice(0, 16)}`;
+        if (
+          input.importedFields[mark] !== undefined ||
+          input.importedFields[kind] === input.digest(kind, entry.value) ||
+          state.points.some((point) => toContactKey(kind, point.value) === key)
+        )
+          return {
+            ...state,
+            seen: { ...state.seen, [mark]: '1' },
+          };
+        const added = addContactPoint(kind, state.points, {
+          id: toContactId(input.digest, input.whoId, kind, key),
+          value: entry.value,
+          label: toContactLabel(entry.label),
+        });
+        return typeof added === 'string'
+          ? state
+          : {
+              points: added.points,
+              seen: { ...state.seen, [mark]: '1' },
+              isChanged: true,
+            };
+      },
+      {
+        points: kind === 'phone' ? input.phones : input.emails,
+        seen: {} as Record<string, string>,
+        isChanged: false,
+      },
+    );
+  };
+  const phones = settle('phone');
+  const emails = settle('email');
+  return phones.isChanged || emails.isChanged
+    ? {
+        phones: phones.isChanged ? phones.points : null,
+        emails: emails.isChanged ? emails.points : null,
+        seen: { ...phones.seen, ...emails.seen },
+      }
+    : null;
 };
 
 const findMatch = (
@@ -119,19 +196,26 @@ const findMatch = (
   accountId: string,
 ) => {
   const people = known.filter((who) => who.kind === 'person' && !who.isSelf);
-  const emails = new Set(contact.emails.map(emailKey));
-  const phones = new Set(
-    contact.phones.flatMap((phone) => phoneKey(phone) ?? []),
+  const emails = new Set(
+    contact.emails.flatMap((entry) => toContactKey('email', entry.value) ?? []),
   );
+  const phones = new Set(
+    contact.phones.flatMap((entry) => toPhoneKey(entry.value) ?? []),
+  );
+  const emailsOf = (who: ExistingWho) =>
+    who.emails.flatMap((point) => toContactKey('email', point.value) ?? []);
+  const phonesOf = (who: ExistingWho) =>
+    who.phones.flatMap((point) => toPhoneKey(point.value) ?? []);
   const isSameContact = (who: ExistingWho) =>
     who.importedFrom?.accountId === accountId &&
     who.importedFrom.resourceName === contact.resourceName;
   const isNameCandidate = (who: ExistingWho) => {
-    const phone = who.phone === null ? null : phoneKey(who.phone);
+    const held = { emails: emailsOf(who), phones: phonesOf(who) };
     return (
       who.importedFrom === null &&
-      (who.email === null || emails.has(emailKey(who.email))) &&
-      (phone === null || phones.has(phone))
+      (held.emails.length === 0 ||
+        held.emails.some((key) => emails.has(key))) &&
+      (held.phones.length === 0 || held.phones.some((key) => phones.has(key)))
     );
   };
   const byName = matchWho({
@@ -147,13 +231,8 @@ const findMatch = (
   })[0];
   return (
     people.find(isSameContact) ??
-    people.find(
-      (who) => who.email !== null && emails.has(emailKey(who.email)),
-    ) ??
-    people.find((who) => {
-      const key = who.phone === null ? null : phoneKey(who.phone);
-      return key !== null && phones.has(key);
-    }) ??
+    people.find((who) => emailsOf(who).some((key) => emails.has(key))) ??
+    people.find((who) => phonesOf(who).some((key) => phones.has(key))) ??
     (byName.kind === 'match'
       ? people.find((who) => who.id === byName.id)
       : undefined) ??
@@ -245,14 +324,22 @@ export function planContactImport(input: {
         return { ...state, alreadyIn: state.alreadyIn + 1 };
       if (!match) {
         const id = toWhoId(input.digest, input.accountId, contact.resourceName);
+        const contacts = planContacts({
+          whoId: id,
+          phones: [],
+          emails: [],
+          contact,
+          importedFields: {},
+          digest: input.digest,
+        });
         const made: ExistingWho = {
           id,
           kind: 'person',
           isSelf: false,
           name: contact.name,
           aliases: [],
-          email: contact.emails[0] ?? null,
-          phone: contact.phones[0] ?? null,
+          emails: contacts?.emails ?? [],
+          phones: contacts?.phones ?? [],
           photoMediaId: null,
           mediaIds: [],
           importedFrom,
@@ -273,37 +360,34 @@ export function planContactImport(input: {
               id,
               before: null,
               contact,
-              fields: {
-                name: contact.name,
-                ...(made.email && { email: made.email }),
-                ...(made.phone && { phone: made.phone }),
-              },
+              fields: { name: contact.name },
+              contacts,
               photo: photoFor(contact, null, input.newId),
               birthday: addBirthday(contact, null, input.newId),
             },
           ],
         };
       }
-      const fields: WhoChange['fields'] = {
-        ...(match.email === null && contact.emails[0]
-          ? { email: contact.emails[0] }
-          : {}),
-        ...(match.phone === null && contact.phones[0]
-          ? { phone: contact.phones[0] }
-          : {}),
-      };
+      const contacts = planContacts({
+        whoId: match.id,
+        phones: match.phones,
+        emails: match.emails,
+        contact,
+        importedFields: match.importedFields,
+        digest: input.digest,
+      });
       const photo =
         match.photoMediaId === null
           ? photoFor(contact, match, input.newId)
           : null;
       const birthday = addBirthday(contact, match, input.newId);
-      if (Object.keys(fields).length === 0 && !photo && !birthday)
+      if (!contacts && !photo && !birthday)
         return { ...state, alreadyIn: state.alreadyIn + 1 };
       const filled: ExistingWho = {
         ...match,
         importedFrom: match.importedFrom ?? importedFrom,
-        email: fields.email ?? match.email,
-        phone: fields.phone ?? match.phone,
+        emails: contacts?.emails ?? match.emails,
+        phones: contacts?.phones ?? match.phones,
         photoMediaId: photo ? photo.mediaId : match.photoMediaId,
       };
       return {
@@ -312,7 +396,15 @@ export function planContactImport(input: {
         touched: new Set([...state.touched, match.id]),
         changes: [
           ...state.changes,
-          { id: match.id, before: match, contact, fields, photo, birthday },
+          {
+            id: match.id,
+            before: match,
+            contact,
+            fields: {},
+            contacts,
+            photo,
+            birthday,
+          },
         ],
       };
     },
@@ -329,17 +421,9 @@ export function planContactUpdate(input: {
   newId: NewId;
 }): WhoChange | null {
   const { contact, who, digest } = input;
-  const current: Record<TextField, string | null> = {
-    name: who.name,
-    email: who.email,
-    phone: who.phone,
-  };
-  const incoming: Record<TextField, string | null> = {
-    name: contact.name,
-    email: contact.emails[0] ?? null,
-    phone: contact.phones[0] ?? null,
-  };
-  const fields = (['name', 'email', 'phone'] as const).flatMap((field) => {
+  const current: Record<TextField, string | null> = { name: who.name };
+  const incoming: Record<TextField, string | null> = { name: contact.name };
+  const fields = (['name'] as const).flatMap((field) => {
     const next = incoming[field];
     const was = who.importedFields[field];
     const value = current[field];
@@ -349,6 +433,14 @@ export function planContactUpdate(input: {
         ? value === null
         : value !== null && digest(field, value) === was;
     return isUnedited ? [[field, next] as const] : [];
+  });
+  const contacts = planContacts({
+    whoId: who.id,
+    phones: who.phones,
+    emails: who.emails,
+    contact,
+    importedFields: who.importedFields,
+    digest,
   });
   const isPhotoNew =
     contact.photoUrl !== null &&
@@ -382,13 +474,14 @@ export function planContactUpdate(input: {
               was: who.birthday,
             }
           : null;
-  return fields.length === 0 && !photo && !birthday
+  return fields.length === 0 && !contacts && !photo && !birthday
     ? null
     : {
         id: who.id,
         before: who,
         contact,
         fields: Object.fromEntries(fields),
+        contacts,
         photo,
         birthday,
       };
@@ -466,6 +559,7 @@ export function buildImportWrites(input: {
           digest(field, value),
         ]),
       ),
+      ...change.contacts?.seen,
       ...(kept
         ? {
             photo: digest('photo', kept.photo.mediaId),
@@ -537,8 +631,8 @@ export function buildImportWrites(input: {
           seal: (words) =>
             seal({
               ...words,
-              email: fields.email ?? null,
-              phone: fields.phone ?? null,
+              phones: change.contacts?.phones ?? [],
+              emails: change.contacts?.emails ?? [],
             }),
         }),
         lastMentionedAt: null,
@@ -559,8 +653,18 @@ export function buildImportWrites(input: {
       return { change, mediaDoc, create: doc, update: null, effect, dated };
     }
     const label = { 'sealed.name': before.name };
+    const contactWords = {
+      ...(change.contacts?.phones && {
+        phones: change.contacts.phones,
+        phone: null,
+      }),
+      ...(change.contacts?.emails && {
+        emails: change.contacts.emails,
+        email: null,
+      }),
+    };
     const update = {
-      sealed: seal({ ...before.sealed, ...fields }),
+      sealed: seal({ ...before.sealed, ...fields, ...contactWords }),
       importedFrom,
       importedFields,
       ...photoFields,
@@ -574,6 +678,12 @@ export function buildImportWrites(input: {
             value,
           ]),
         ),
+        ...Object.fromEntries(
+          Object.entries(contactWords).map(([field, value]) => [
+            `sealed.${field}`,
+            value,
+          ]),
+        ),
         importedFrom,
         importedFields,
         ...photoFields,
@@ -582,6 +692,12 @@ export function buildImportWrites(input: {
         ...label,
         ...Object.fromEntries(
           Object.keys(fields).map((field) => [
+            `sealed.${field}`,
+            before.sealed[field] ?? null,
+          ]),
+        ),
+        ...Object.fromEntries(
+          Object.keys(contactWords).map((field) => [
             `sealed.${field}`,
             before.sealed[field] ?? null,
           ]),
@@ -766,7 +882,10 @@ export const buildImportExecution = (input: {
     commands: [],
     effects: input.writes.effects,
     undoReport: null,
+    abilityOffer: null,
+    awayZoneOffer: null,
     goneIds: null,
+    heldSpoken: null,
     undoReason: null,
     said: null,
     lines: null,

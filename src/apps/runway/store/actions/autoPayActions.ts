@@ -1,9 +1,5 @@
 import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
-import {
-  doc,
-  updateDoc,
-  type Transaction,
-} from 'firebase/firestore';
+import { doc, updateDoc, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 

@@ -17,17 +17,19 @@ import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection'
 import RecipeEntryRows from '@apps/pinch/components/recipes/RecipeEntryRows';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
+import RecipeStepList from '@apps/pinch/components/recipes/RecipeStepList';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
 import {
   selectCollectionCounts,
   selectCollections,
   selectHasPackages,
   selectIngredientsById,
   selectPackagesByIngredient,
+  selectPinchSettings,
   selectRecipeCosts,
   selectRecipeNutrition,
   selectShowNutrition,
@@ -61,6 +63,7 @@ import {
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
+import { getStepSections } from '@apps/pinch/utils/stepSections';
 
 const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NO_PRODUCT') return 'No price yet';
@@ -110,6 +113,7 @@ function RecipeFront({
   const show = useAppSelector(selectShowNutrition);
   const hasPantry = useAppSelector(selectHasPackages);
   const packagesByIngredient = useAppSelector(selectPackagesByIngredient);
+  const { units } = useAppSelector(selectPinchSettings);
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const { isBelow } = useMediaQuery();
   const isLandscape = isShort && !isBelow('sm');
@@ -173,6 +177,7 @@ function RecipeFront({
       ? null
       : getLineMarkers(
           Array.from(pantryStocks, ([id, stock]) => ({ id, stock })),
+          units,
         );
 
   const totalMinutes = getTotalMinutes(recipe);
@@ -434,7 +439,7 @@ function RecipeFront({
                         )
                       ) : (
                         <span className='text-muted-foreground text-sm whitespace-nowrap'>
-                          {formatKitchenAmount(line.amount, line.unit)}
+                          {formatReadableAmount(line.amount, line.unit, units)}
                         </span>
                       )}
                       {pantry !== null && pantryText !== null && (
@@ -451,18 +456,10 @@ function RecipeFront({
 
       {recipe.steps.length > 0 && (
         <FormSection title='Steps'>
-          <ol className='space-y-3'>
-            {recipe.steps.map((step, index) => (
-              <li key={index} className='flex gap-3 text-sm'>
-                <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
-                  {index + 1}
-                </span>
-                <span className='min-w-0 space-y-1'>
-                  <span className='block whitespace-pre-wrap'>{step}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+          <RecipeStepList
+            steps={recipe.steps}
+            sections={getStepSections(recipe)}
+          />
         </FormSection>
       )}
 

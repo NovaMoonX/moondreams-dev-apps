@@ -14,6 +14,7 @@ import BackLink from '@/components/BackLink';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import LockedButton from '@/components/LockedButton';
 import TickMark from '@/components/TickMark';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HELM_COPY, STEP_LIMIT, TASK_TITLE_CAP } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -23,6 +24,10 @@ import {
   tickTaskStep,
 } from '@apps/helm/store/actions/taskActions';
 import { selectProcedureFromTask } from '@apps/helm/store/selectors/procedureSelectors';
+import {
+  getMeetingDay,
+  useResolvedMeeting,
+} from '@apps/helm/utils/meetingWords';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
@@ -77,8 +82,13 @@ function TaskSteps({
   onBack,
   onOpenProcedure,
 }: TaskStepsProps) {
-  const { task, uid, isOffline, run, saveWords } = editing;
+  const { task, uid, timeZone, isOffline, run, saveWords } = editing;
   const { addToast } = useToast();
+  const now = useNow(60_000);
+  const meeting = useResolvedMeeting(task);
+  const meetingDay = meeting
+    ? getMeetingDay(meeting.startAt, now, timeZone)
+    : null;
   const steps = getOrderedSteps(task);
   const doneCount = steps.filter((step) => step.doneAt !== null).length;
   const [draft, setDraft] = useState('');
@@ -185,7 +195,13 @@ function TaskSteps({
           {steps.length > 0 && (
             <span className='text-muted-foreground font-normal tabular-nums'>
               {' · '}
-              {HELM_COPY.stepsCount(doneCount, steps.length)}
+              {meetingDay
+                ? HELM_COPY.stepsCountMeeting(
+                    doneCount,
+                    steps.length - doneCount,
+                    meetingDay,
+                  )
+                : HELM_COPY.stepsCount(doneCount, steps.length)}
             </span>
           )}
         </p>
