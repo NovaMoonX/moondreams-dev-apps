@@ -4,6 +4,11 @@ import { createInterface } from 'node:readline/promises';
 import { loadEnv } from 'vite';
 
 import { APP_REGISTRY } from '../src/lib/app/app.registry.ts';
+import { pinDevKeyrings } from './appKeys/pinDevKeyrings.ts';
+import {
+  DEV_SIGN_IN_PARAM,
+  getDefaultFixture,
+} from '../src/lib/dev/fixtureAccounts.ts';
 
 const VITE_URL = 'http://localhost:5173';
 const AUTH_URL = 'http://127.0.0.1:9099';
@@ -51,7 +56,7 @@ const waitForService = (
     pollUntilUp(urls, seconds),
     exited.then((code) => {
       throw new Error(
-        `${name} stopped (exit code ${code}) before it was ready. Fix the error above (leftovers from an earlier run: npm run emulators:kill), then run the same command again.`,
+        `${name} stopped (exit code ${code}) before it was ready. Fix the error above, then run the same command again (it clears leftover emulators itself).`,
       );
     }),
   ]);
@@ -97,14 +102,15 @@ const [target, ...flags] = process.argv.slice(2).filter(Boolean);
 const isReset = flags.includes('--reset');
 const isSkippingSeed = flags.includes('--no-seed');
 const isOpening = !flags.includes('--no-open');
+const isUsingDefaults = flags.includes('--defaults');
 const unknownFlags = flags.filter(
-  (flag) => !['--reset', '--no-seed', '--no-open'].includes(flag),
+  (flag) => !['--reset', '--no-seed', '--no-open', '--defaults'].includes(flag),
 );
 const app = APP_REGISTRY.find((entry) => entry.id === target);
 
 if (!app || unknownFlags.length > 0) {
   console.error(
-    `${unknownFlags.length > 0 ? `Unknown option: ${unknownFlags.join(' ')}\n` : ''}Usage: npm run local:app -- <app> [--reset] [--no-seed] [--no-open]\nApps: ${APP_REGISTRY.map((entry) => entry.id).join(', ')}`,
+    `${unknownFlags.length > 0 ? `Unknown option: ${unknownFlags.join(' ')}\n` : ''}Usage: npm run local:app -- <app> [--defaults] [--reset] [--no-seed] [--no-open]\nApps: ${APP_REGISTRY.map((entry) => entry.id).join(', ')}`,
   );
   process.exit(1);
 }
@@ -147,7 +153,15 @@ const askAboutServices = () => {
   try {
     execFileSync(
       'npm',
-      ['run', '--silent', 'local:services', '--', 'choose', app.id],
+      [
+        'run',
+        '--silent',
+        'local:services',
+        '--',
+        'choose',
+        app.id,
+        ...(isUsingDefaults ? ['--defaults'] : []),
+      ],
       {
         stdio: 'inherit',
       },
@@ -161,6 +175,10 @@ const askAboutServices = () => {
 };
 
 const askToRestartEmulators = async () => {
+  if (isUsingDefaults) {
+    console.log('\nRestarting the emulators to use that (--defaults).');
+    return true;
+  }
   const prompt = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -202,10 +220,17 @@ const checkFirebaseLogin = () => {
 
 const main = async () => {
   const isRunning = await areAllUp(EMULATOR_READY_URLS);
+  const pinned = pinDevKeyrings();
+  if (pinned.length > 0)
+    console.log(
+      `✓ Pinned the development keyring for ${pinned.join(', ')}, so seeded accounts open.${isRunning ? ' Restarting the emulators to use it.' : ''}`,
+    );
   const hasChanged = askAboutServices();
   const isRestarting =
-    isRunning && hasChanged && (await askToRestartEmulators());
-  if (isRestarting) {
+    isRunning &&
+    (pinned.length > 0 || (hasChanged && (await askToRestartEmulators())));
+  // Half-running emulators (a crash, a closed terminal, a check run) hold ports a fresh start needs.
+  if (!isRunning || isRestarting) {
     execFileSync('npm', ['run', '--silent', 'emulators:kill'], {
       stdio: 'inherit',
     });
@@ -248,9 +273,10 @@ const main = async () => {
     await waitForService(vite, [VITE_URL], 120);
   }
 
-  const url = `${VITE_URL}${app.path}`;
+  const fixture = getDefaultFixture(app.id);
+  const url = `${VITE_URL}${app.path}?${DEV_SIGN_IN_PARAM}=${encodeURIComponent(fixture.email)}`;
   console.log(
-    `\n✅ ${app.name} is ready: ${url}\n   Pick a fixture account from the dev switcher.`,
+    `\n✅ ${app.name} is ready: ${url}\n   It opens signed in as ${fixture.displayName}, who has the most seeded data; the dev switcher changes it.`,
   );
   if (isOpening && process.platform === 'darwin') execFileSync('open', [url]);
   showServices();
