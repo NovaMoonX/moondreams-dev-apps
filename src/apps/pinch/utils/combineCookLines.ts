@@ -5,7 +5,10 @@ import {
 } from '@/utils/measureUtils';
 import type { CookMeasure } from '@apps/pinch/utils/cookConversions';
 import type { PinchUnitSettings } from '@apps/pinch/types';
-import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
+import {
+  formatReadableAmount,
+  stepUpAmount,
+} from '@apps/pinch/utils/kitchenMeasure';
 
 export interface CombineSource {
   recipeId: string;
@@ -116,7 +119,13 @@ const combineOne = (
         ? totalText
         : joinAmounts(sources.map((source) => source.amountText)),
     isMeasured: sources.some((source) => source.isMeasured),
-    measure: isTotalShown ? total : null,
+    measure:
+      isTotalShown && total !== null
+        ? {
+            ...stepUpAmount(total.amount, total.unit, units),
+            gramsPerMl: total.gramsPerMl,
+          }
+        : null,
     sources: ids,
   };
 };
@@ -132,6 +141,7 @@ export function combineCookLines(
       result.set(source.key, [...(result.get(source.key) ?? []), source]),
     new Map(),
   );
-  return Array.from(grouped, ([key, group]) => combineOne(key, group, isPlate, units),
+  return Array.from(grouped, ([key, group]) =>
+    combineOne(key, group, isPlate, units),
   );
 }

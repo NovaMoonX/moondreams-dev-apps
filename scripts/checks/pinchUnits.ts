@@ -190,19 +190,22 @@ const line = (
   isLiquid = false,
   gramsPerMl: number | null = null,
 ) => ({ name, amount, unit, isLiquid, gramsPerMl });
-const tools = getMeasuringTools([
-  line('Flour', 4 / 3, 'CUP'),
-  line('Milk', 0.75, 'CUP', true),
-  line('Stock', 500, 'ML', true),
-  line('Soy sauce', 0.31, 'CUP', true),
-  line('Salt', 0.5, 'TSP'),
-  line('Vanilla', 1.5, 'TBSP'),
-  line('Butter', 113, 'G', false, 0.96),
-  line('Ground beef', 1, 'LB'),
-  line('Chicken', 1.5, 'LB'),
-  line('Pepper', 0.01, 'TSP'),
-  line('Eggs', 2, 'EACH'),
-]);
+const tools = getMeasuringTools(
+  [
+    line('Flour', 4 / 3, 'CUP'),
+    line('Milk', 0.75, 'CUP', true),
+    line('Stock', 500, 'ML', true),
+    line('Soy sauce', 0.31, 'CUP', true),
+    line('Salt', 0.5, 'TSP'),
+    line('Vanilla', 1.5, 'TBSP'),
+    line('Butter', 113, 'G', false, 0.96),
+    line('Ground beef', 1, 'LB'),
+    line('Chicken', 1.5, 'LB'),
+    line('Pepper', 0.01, 'TSP'),
+    line('Eggs', 2, 'EACH'),
+  ],
+  null,
+);
 assert.deepEqual(
   tools.map((tool) => [tool.key, tool.sizes, tool.names]),
   [
@@ -216,19 +219,31 @@ assert.deepEqual(
 assert.deepEqual(tools[0].swaps, [{ name: 'Butter', text: '½ cup' }]);
 // Two weighed lines of one ingredient make one swap, added up
 assert.deepEqual(
-  getMeasuringTools([
-    line('Butter', 113, 'G', false, 0.96),
-    line('Butter', 113, 'G', false, 0.96),
-  ])[0].swaps,
+  getMeasuringTools(
+    [
+      line('Butter', 113, 'G', false, 0.96),
+      line('Butter', 113, 'G', false, 0.96),
+    ],
+    null,
+  )[0].swaps,
   [{ name: 'Butter', text: '1 cup' }],
 );
 // 0.31 cup reads as 5 tbsp, so it is spoons, not a cup
 assert.equal(formatKitchenAmount(0.31, 'CUP'), '5 tbsp');
-assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')])[0].sizes, [
+assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')], null)[0].sizes, [
   '½ tsp',
   '¼ tsp',
 ]);
-assert.deepEqual(getMeasuringTools([line('Salt', 0.01, 'TSP')]), []);
+assert.deepEqual(getMeasuringTools([line('Salt', 0.01, 'TSP')], null), []);
+// A scale tile reads its weights the way the rows do, pounds and ounces included
+assert.deepEqual(
+  getMeasuringTools([line('Chicken', 20, 'OZ')], {
+    weight: 'LB_OZ',
+    volume: 'AS_WRITTEN',
+    keepSpoons: false,
+  })[0].sizes,
+  ['1 lb 4 oz'],
+);
 
 // "All together" adds one ingredient's lines up and says where each part goes
 const source = (
@@ -272,6 +287,18 @@ assert.equal(
     null,
   )[0].amountText,
   '1 tbsp',
+);
+// The total's measure is the stepped one, so its conversion line never repeats it
+assert.deepEqual(
+  combineCookLines(
+    [
+      source('i', 'Oil', 3, 'TSP', 'For the chicken'),
+      source('j', 'Oil', 3, 'TSP', 'For the sauce'),
+    ],
+    false,
+    null,
+  )[0].measure,
+  { amount: 2, unit: 'TBSP', gramsPerMl: null },
 );
 assert.deepEqual(
   combined.map((line) => [line.key, line.amountText, line.note]),

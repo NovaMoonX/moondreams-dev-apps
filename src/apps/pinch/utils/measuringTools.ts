@@ -1,6 +1,7 @@
-import type { Unit } from '@apps/pinch/types';
+import type { PinchUnitSettings, Unit } from '@apps/pinch/types';
 import {
   formatKitchenAmount,
+  formatReadableAmount,
   getSpoonMeasure,
 } from '@apps/pinch/utils/kitchenMeasure';
 import { convertForIngredient } from '@apps/pinch/utils/units';
@@ -166,17 +167,26 @@ const getSwaps = (lines: ToolLine[]) => {
   }));
 };
 
-const getToolSizes = (key: MeasuringTool['key'], lines: ToolLine[]) =>
+const getToolSizes = (
+  key: MeasuringTool['key'],
+  lines: ToolLine[],
+  units: PinchUnitSettings | null,
+) =>
   key === 'SPOONS' || key === 'DRY_CUPS'
     ? sortSizes(lines.flatMap(getSizes))
     : Array.from(
         new Set(
-          lines.map((line) => formatKitchenAmount(line.amount, line.unit)),
+          lines.map((line) =>
+            formatReadableAmount(line.amount, line.unit, units),
+          ),
         ),
       );
 
 /** The measuring tools a set of measured lines calls for, with the cup and spoon sizes each needs. */
-export function getMeasuringTools(lines: ToolLine[]): MeasuringTool[] {
+export function getMeasuringTools(
+  lines: ToolLine[],
+  units: PinchUnitSettings | null,
+): MeasuringTool[] {
   const grouped = lines.reduce<Map<MeasuringTool['key'], ToolLine[]>>(
     (result, line) => {
       const key = line.amount > 0 ? getToolKey(line) : null;
@@ -193,7 +203,7 @@ export function getMeasuringTools(lines: ToolLine[]): MeasuringTool[] {
       {
         key,
         name: TOOL_NAMES[key],
-        sizes: getToolSizes(key, matched),
+        sizes: getToolSizes(key, matched, units),
         names: Array.from(new Set(matched.map((line) => line.name))),
         swaps: key === 'SCALE' ? getSwaps(matched) : [],
       },

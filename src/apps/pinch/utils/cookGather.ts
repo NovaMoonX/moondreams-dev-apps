@@ -315,7 +315,10 @@ export const describeGatherLeft = (
   };
 };
 
-export const getGatherTools = (rows: GatherRow[]) =>
+export const getGatherTools = (
+  rows: GatherRow[],
+  units: PinchUnitSettings | null,
+) =>
   getMeasuringTools(
     rows.flatMap((row) =>
       row.measure === null
@@ -330,6 +333,7 @@ export const getGatherTools = (rows: GatherRow[]) =>
             },
           ],
     ),
+    units,
   );
 
 export const describeGatherTools = (tools: MeasuringTool[]): GatherAnswer => {

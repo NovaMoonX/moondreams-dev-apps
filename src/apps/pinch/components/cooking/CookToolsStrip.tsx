@@ -1,5 +1,7 @@
 import MeasuringToolIcon from '@apps/pinch/components/cooking/MeasuringToolIcons';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
+import { useAppSelector } from '@/store';
+import { selectPinchSettings } from '@apps/pinch/store/selectors';
 import { getMeasuringTools } from '@apps/pinch/utils/measuringTools';
 
 const lowerName = (name: string) =>
@@ -19,6 +21,7 @@ const sayNames = (names: string[]) => {
 
 /** The measuring tools the rows call for, one tile each with the sizes to reach for first; nothing when no row is measured. */
 function CookToolsStrip({ rows }: { rows: CookRow[] }) {
+  const { units } = useAppSelector(selectPinchSettings);
   const tools = getMeasuringTools(
     rows.flatMap((row) =>
       row.measure === null
@@ -33,6 +36,7 @@ function CookToolsStrip({ rows }: { rows: CookRow[] }) {
             },
           ],
     ),
+    units,
   );
   if (tools.length === 0) return null;
 

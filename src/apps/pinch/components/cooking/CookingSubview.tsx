@@ -2688,6 +2688,7 @@ function CookingSession({
       const answer = describeGatherTools(
         getGatherTools(
           isGatherView ? getGatherDishes().flatMap((dish) => dish.rows) : rows,
+          units,
         ),
       );
       return done(answer.show, answer.speak);

@@ -2758,8 +2758,11 @@ assert.equal(
   'by part names the part when there are several',
 );
 assert.equal(
-  describeGatherLeft([{ ...sauceDish, rows: [sauceDish.rows[1]] }], 'PARTS', null)
-    .speak,
+  describeGatherLeft(
+    [{ ...sauceDish, rows: [sauceDish.rows[1]] }],
+    'PARTS',
+    null,
+  ).speak,
   'Still to get: Garlic, 3 cloves.',
   'one part is not named',
 );
@@ -2795,16 +2798,19 @@ assert.equal(
   'no tools',
 );
 const spoons = describeGatherTools(
-  getGatherTools([
-    {
-      ...row('s', 'Salt', '½ tsp'),
-      measure: { amount: 0.5, unit: 'TSP', gramsPerMl: null },
-    },
-    {
-      ...row('o', 'Oil', '1 tbsp'),
-      measure: { amount: 1, unit: 'TBSP', gramsPerMl: null },
-    },
-  ]),
+  getGatherTools(
+    [
+      {
+        ...row('s', 'Salt', '½ tsp'),
+        measure: { amount: 0.5, unit: 'TSP', gramsPerMl: null },
+      },
+      {
+        ...row('o', 'Oil', '1 tbsp'),
+        measure: { amount: 1, unit: 'TBSP', gramsPerMl: null },
+      },
+    ],
+    null,
+  ),
 );
 assert.match(
   spoons.speak,
