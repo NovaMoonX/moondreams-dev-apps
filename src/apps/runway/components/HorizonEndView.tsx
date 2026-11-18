@@ -695,17 +695,24 @@ function HorizonEndView({
           </MaskedText>
         </ActionTitle>
         {isChained && (
-          <ChoiceCards
-            options={[
-              {
-                value: 'next' as const,
-                title: HORIZON_END_WORDS.nextTitle,
-                body: nextSub,
-              },
-            ]}
-            value={pick === 'next' ? 'next' : null}
-            onChange={() => choose('next')}
-          />
+          <div
+            className={join(
+              'bg-primary/10 overflow-hidden rounded-2xl shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-primary)_35%,transparent)]',
+              pick === 'next' &&
+                'shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+            )}
+            aria-current={pick === 'next'}
+          >
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<CalendarPlus />}
+              label={HORIZON_END_WORDS.nextTitle}
+              subtitle={nextSub}
+              onClick={() => choose('next')}
+            />
+          </div>
         )}
         <ActionGroup isRoomy>
           <div className={rowClass('free')} aria-current={pick === 'free'}>
