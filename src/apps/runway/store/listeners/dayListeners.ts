@@ -23,7 +23,7 @@ import type {
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
-async function openDay(
+export async function openDay(
   entry: IncomeDayDoc,
   read: SealedReader,
 ): Promise<OpenDay> {

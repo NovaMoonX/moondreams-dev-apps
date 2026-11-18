@@ -5,7 +5,6 @@ import {
   arrayUnion,
   deleteDoc,
   doc,
-  runTransaction,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
@@ -15,6 +14,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
@@ -427,7 +427,7 @@ export const undoRecipeChange = createAsyncThunk<
     );
     try {
       await freezeBeforeEdit(uid, getState());
-      const refusal = await runTransaction(db, async (transaction) => {
+      const refusal = await runHeldTransaction(uid, async (transaction) => {
         const recipeSnapshot = await transaction.get(recipeDoc(uid, recipeId));
         const noteSnapshots = await Promise.all(
           noteDocs.map((ref) => transaction.get(ref)),
