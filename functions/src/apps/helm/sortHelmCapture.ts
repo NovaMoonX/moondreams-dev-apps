@@ -595,6 +595,8 @@ export interface CaptureDoc {
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   /** The day whose aims this turn files, set by the device when the morning card is answered. */
   aimsDayKey?: string | null;
+  /** The day of the morning question that was open when the device sent the turn; it files aims only when the reply flags one. */
+  morningDayKey?: string | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
   abilities?: unknown;
@@ -608,6 +610,12 @@ const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const readAimsDayKey = (capture: Pick<CaptureDoc, 'aimsDayKey'>) =>
   typeof capture.aimsDayKey === 'string' && DAY_KEY_RE.test(capture.aimsDayKey)
     ? capture.aimsDayKey
+    : null;
+
+const readMorningDayKey = (capture: Pick<CaptureDoc, 'morningDayKey'>) =>
+  typeof capture.morningDayKey === 'string' &&
+  DAY_KEY_RE.test(capture.morningDayKey)
+    ? capture.morningDayKey
     : null;
 
 /** A spoken turn, or a choice tapped while a spoken conversation was open; a turn from before the flag reads its input mode. */
@@ -3097,6 +3105,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       earlierTurns,
       answeredQuestion,
       aimsDayKey: readAimsDayKey(capture),
+      morningDayKey: readAimsDayKey(capture)
+        ? null
+        : readMorningDayKey(capture),
       facts: masked.facts,
       people: contextPeople,
       heardNames: toContextHeard(
@@ -5149,7 +5160,15 @@ async function writeResult(
           habitPlan.effects.length,
       ),
     });
-    const aimsDayKey = isStale ? null : readAimsDayKey(capture);
+    const hintedDayKey = isStale ? null : readMorningDayKey(capture);
+    const isFlagged = commands.some(
+      (command) =>
+        (command.kind === 'createTask' || command.kind === 'updateTask') &&
+        command.isAim === true,
+    );
+    const aimsDayKey = isStale
+      ? null
+      : (readAimsDayKey(capture) ?? (isFlagged ? hintedDayKey : null));
     const aimsRef = aimsDayKey
       ? firestore.doc(`${base}/dayAims/${aimsDayKey}`)
       : null;
@@ -5167,6 +5186,7 @@ async function writeResult(
       aimsDayKey && aimsRef
         ? planDayAims({
             dayKey: aimsDayKey,
+            isFlaggedOnly: readAimsDayKey(capture) === null,
             commands,
             taskIdByRef: written.taskIdByRef,
             existing,

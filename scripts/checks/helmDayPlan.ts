@@ -741,6 +741,27 @@ test('a turn on the morning card files its tasks as aims in one write', () => {
   );
 });
 
+test('a turn that only might have answered the card files just the flagged tasks', () => {
+  const plan = planDayAims({
+    dayKey: DAY,
+    isFlaggedOnly: true,
+    commands: [
+      { kind: 'createTask', ref: '$new1', durationMinutes: 45, isAim: true },
+      { kind: 'createTask', ref: '$new2', durationMinutes: null },
+    ] as never,
+    taskIdByRef: { $new1: 'x1', $new2: 'x2' },
+    existing: new Map(),
+    current: null,
+    newAimId: () => 'aim1',
+    seal: (fields) => fields as never,
+  });
+  const sealed = plan.write!.data.sealed as unknown as AimsView;
+  assert.deepEqual(
+    sealed.aims.map((aim) => aim.taskId),
+    ['x1'],
+  );
+});
+
 const calendarSlot = (extra: Record<string, unknown> = {}) => ({
   dayKey: DAY,
   slotId: 's1',

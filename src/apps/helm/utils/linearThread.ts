@@ -27,3 +27,16 @@ export function readQuestionPlace(input: {
   if (isPast) return 'settled';
   return reaskedAt === null ? 'live' : 'below';
 }
+
+/** Whether the person has moved past a question, read over every turn the way the thread reads it, so the voice never asks one the thread shows settled. */
+export const createSettledReader = (captures: readonly OpenCapture[]) => {
+  const newestTurnAt = readNewestTurnAt(
+    captures.filter((turn) => turn.turnLeadId === null),
+  );
+  return (capture: OpenCapture, questionId: string) =>
+    readQuestionPlace({
+      turnAt: capture.createdAt,
+      reaskedAt: capture.questionState[questionId]?.reaskedAt ?? null,
+      newestTurnAt,
+    }) === 'settled';
+};

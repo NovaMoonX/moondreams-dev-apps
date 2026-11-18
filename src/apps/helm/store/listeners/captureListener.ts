@@ -190,6 +190,8 @@ async function openCapture(
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
     aimsDayKey: typeof data.aimsDayKey === 'string' ? data.aimsDayKey : null,
+    morningDayKey:
+      typeof data.morningDayKey === 'string' ? data.morningDayKey : null,
     createdAt: data.createdAt ?? 0,
     privacy: readPrivacy(data.privacy),
     touchesPrivate: data.touchesPrivate ?? null,

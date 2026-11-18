@@ -500,6 +500,8 @@ export interface Capture {
   planDayKey: string | null;
   /** Set on the answer to the morning card: the day ("YYYY-MM-DD") whose aims it files; null on every other turn and on one made before the field. */
   aimsDayKey: string | null;
+  /** The day of the morning question that was open on screen when the turn was sent; the server files aims from it only when the turn answers the question. Null on every other turn. */
+  morningDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
   /** The class of what the turn quotes; private when the turn filed or touched a private thing. */

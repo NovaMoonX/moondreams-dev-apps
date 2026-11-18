@@ -40,20 +40,33 @@ function MorningQuestionTurn({
     if (picked.length === 0 || isBusy) return;
     setIsBusy(true);
     try {
-      const changes: DayAimsChange[] = await Promise.all(
-        carry
-          .filter((row) => picked.includes(row.taskId))
-          .map((row) =>
-            bringAimToToday(uid, {
-              todayKey,
-              fromKey: yesterdayKey,
-              taskId: row.taskId,
-              hasLength: row.minutes !== null,
-            }),
-          ),
+      const rows = carry.filter((row) => picked.includes(row.taskId));
+      const settled = await Promise.allSettled([
+        ...rows.map((row) =>
+          bringAimToToday(uid, {
+            todayKey,
+            fromKey: yesterdayKey,
+            taskId: row.taskId,
+            hasLength: row.minutes !== null,
+          }),
+        ),
+        setMorningState(uid, todayKey, 'answered'),
+      ]);
+      const made = settled.flatMap((entry) =>
+        entry.status === 'fulfilled' ? [entry.value] : [],
       );
-      const answered = await setMorningState(uid, todayKey, 'answered');
-      await Promise.all([...changes, answered].map((change) => change.write));
+      const written = await Promise.allSettled(
+        made.map((change) => change.write),
+      );
+      if (
+        made.length < settled.length ||
+        written.some((entry) => entry.status === 'rejected')
+      ) {
+        await Promise.allSettled(made.map((change) => change.undo()));
+        throw new Error('Not every morning pick was saved.');
+      }
+      const changes: DayAimsChange[] = made.slice(0, rows.length);
+      const answered = made[rows.length];
       addToast({
         title: HELM_COPY.dayAimsAdded(changes.length),
         type: 'info',
