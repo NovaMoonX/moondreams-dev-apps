@@ -21,6 +21,7 @@ import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
 import type {
   Capture,
   CaptureSealed,
+  HeardName,
   OpenCapture,
   ScreenContext,
 } from '@apps/helm/types';
@@ -31,6 +32,7 @@ import {
   normalizeReading,
 } from '@apps/helm/utils/captureReading';
 import { groupSessions } from '@apps/helm/utils/sessions';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const EARLIER_FETCH_LIMIT = 200;
 const UNSEEN_LIMIT = 200;
@@ -66,6 +68,29 @@ const toScreen = (value: unknown): ScreenContext | null => {
   return screen as ScreenContext;
 };
 
+const toIdList = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === 'string')
+    : [];
+
+const normalizeHeardNames = (value: unknown): HeardName[] | null => {
+  const found = (Array.isArray(value) ? value : []).flatMap(
+    (entry: Partial<HeardName> | null) =>
+      typeof entry?.heard === 'string'
+        ? [
+            {
+              heard: entry.heard,
+              said: typeof entry.said === 'string' ? entry.said : null,
+              recordId:
+                typeof entry.recordId === 'string' ? entry.recordId : null,
+              candidateIds: toIdList(entry.candidateIds).slice(0, 2),
+            },
+          ]
+        : [],
+  );
+  return found.length > 0 ? found : null;
+};
+
 const toLeadId = (value: unknown) => (typeof value === 'string' ? value : null);
 
 const toIds = (value: unknown) =>
@@ -73,21 +98,55 @@ const toIds = (value: unknown) =>
     ? (value as string[])
     : [];
 
+const toAheadOffer = (value: unknown): Capture['aheadOffer'] => {
+  const raw = (value ?? {}) as Record<string, unknown>;
+  return typeof raw.projectId === 'string' &&
+    typeof raw.offerId === 'string' &&
+    (raw.depth === 'light' || raw.depth === 'thorough') &&
+    (raw.when === 'now' || raw.when === 'later')
+    ? {
+        projectId: raw.projectId,
+        offerId: raw.offerId,
+        depth: raw.depth,
+        when: raw.when,
+      }
+    : null;
+};
+
 /** A turn that won't open is kept, with no words, so the surface can say so instead of dropping it. */
 async function openCapture(
   entry: DocumentSnapshot,
   read: SealedReader,
   isMetadataTracked: boolean,
 ): Promise<OpenCapture> {
-  const data = (entry.data() ?? {}) as Partial<Capture>;
+  const data = (entry.data() ?? {}) as Partial<Capture> & {
+    endedConversation?: boolean;
+  };
   const base = {
     id: entry.id,
     inputMode: data.inputMode ?? 'typed',
+    isSpokenTurn: data.isSpokenTurn ?? data.inputMode === 'voice',
     sttProvider: data.sttProvider ?? null,
     interruptedCaptureId: data.interruptedCaptureId ?? null,
     answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
-    arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
+    arrivedVia:
+      data.arrivedVia === 'dropBox' ||
+      data.arrivedVia === 'scheduled' ||
+      data.arrivedVia === 'researchAhead'
+        ? data.arrivedVia
+        : 'direct',
+    aheadOffer: toAheadOffer(data.aheadOffer),
+    scheduledActionId:
+      typeof data.scheduledActionId === 'string'
+        ? data.scheduledActionId
+        : null,
+    disposition:
+      data.disposition === 'acted' ||
+      data.disposition === 'noted' ||
+      data.disposition === 'answered'
+        ? data.disposition
+        : null,
     medium: data.medium === 'mcp' ? 'mcp' : 'web',
     via: typeof data.via === 'string' ? data.via : null,
     outsideReadScopes: Array.isArray(data.outsideReadScopes)
@@ -126,7 +185,13 @@ async function openCapture(
     whoIds: toIds(data.whoIds),
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
+    aimsDayKey: typeof data.aimsDayKey === 'string' ? data.aimsDayKey : null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
+    touchesPrivate: data.touchesPrivate ?? null,
+    noticedCount: data.noticedCount ?? null,
+    presence: data.presence ?? null,
+    abilities: data.abilities ?? null,
     sortedAt: data.sortedAt ?? null,
     screen: toScreen(data.screen ?? null),
   } as const;
@@ -138,10 +203,17 @@ async function openCapture(
       text: payload.text ?? '',
       reading: normalizeReading(payload.reading),
       answer: normalizeAnswer(payload.answer),
+      heardNames: normalizeHeardNames(payload.heardNames),
       questions: toQuestions(payload.questions),
       line:
         typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
+      heldLine:
+        typeof payload.spoken?.heldText === 'string'
+          ? payload.spoken.heldText
+          : null,
+      asksHeldLine: payload.asksHeldLine === true,
       isUnreadable: false,
+      endedConversation: data.endedConversation === true,
     };
   } catch {
     return {
@@ -149,9 +221,13 @@ async function openCapture(
       text: '',
       reading: EMPTY_READING,
       answer: null,
+      heardNames: null,
       questions: {},
       line: null,
+      heldLine: null,
+      asksHeldLine: false,
       isUnreadable: true,
+      endedConversation: data.endedConversation === true,
     };
   }
 }

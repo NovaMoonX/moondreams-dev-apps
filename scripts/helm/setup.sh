@@ -217,10 +217,31 @@ deepgram_run() {
   pause "Set a spend alert if you see one (or skip it), then press Enter: "
 }
 
-tts_done() { api_enabled texttospeech.googleapis.com; }
+tts_whisper_granted() {
+  gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' \
+    --filter='bindings.role=roles/aiplatform.user AND bindings.members~-compute@developer.gserviceaccount.com' \
+    --format='value(bindings.role)' 2>/dev/null | grep -q aiplatform
+}
+tts_done() { api_enabled texttospeech.googleapis.com && api_enabled aiplatform.googleapis.com && tts_whisper_granted; }
 # stdin is closed so the script doesn't offer a second sign-in; the check above already did it.
 tts_run() { bash scripts/voice/googleSetup.sh </dev/null; }
 
+youtube_read_granted() {
+  gcloud secrets get-iam-policy YOUTUBE_API_KEY --project="$PROJECT" 2>/dev/null | grep -q -- '-compute@developer.gserviceaccount.com'
+}
+youtube_done() { secret_has YOUTUBE_API_KEY && youtube_read_granted; }
+youtube_run() {
+  if secret_has YOUTUBE_API_KEY; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding YOUTUBE_API_KEY --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "✓ The functions can read YOUTUBE_API_KEY"
+  else
+    bash scripts/video/youtubeSecret.sh
+  fi
+}
 gemini_done() { secret_has GEMINI_API_KEY; }
 gemini_run() { bash scripts/voice/geminiSecret.sh; }
 
@@ -340,6 +361,7 @@ step "Connections keyring" connections_keyring_done connections_keyring_run
 step "Connections keyring canary" never_done connections_canary_run
 optional_step "Deepgram key (saved, readable by the functions)" deepgram_done deepgram_run y "Save the Deepgram key? Without it, voice listens with the device instead"
 optional_step "Google Text-to-Speech" tts_done tts_run y "Turn on Google Text-to-Speech? Without it, answers are read by the phone's voice"
+optional_step "YouTube key" youtube_done youtube_run y "Save a YouTube key? Without it, Learn later overviews show no videos"
 optional_step "Gemini key" gemini_done gemini_run n "Save a Gemini key? Only needed to compare Gemini's voices in the benchmark"
 
 if (( AFTER_DEPLOY )) && (( ! DRY )) && ! both_deployed; then

@@ -21,6 +21,9 @@ function PickOneAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
     ...question.options.filter((option) => !isQuietId(option.id)),
     ...question.options.filter((option) => isQuietId(option.id)),
   ];
+  // A thorough look used up for the month arrives as its own option with the reason in `detail`, printed in its row.
+  const isLocked = (id: string) =>
+    question.kind === 'researchDepth' && id === 'thoroughLocked';
   const pick = (optionId: string) => {
     setChosenId(optionId);
     setIsElseOpen(false);
@@ -37,7 +40,7 @@ function PickOneAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
           detail={option.detail}
           isQuiet={isQuietId(option.id)}
           isSelected={isBusy && chosenId === option.id}
-          isDisabled={isBusy}
+          isDisabled={isBusy || isLocked(option.id)}
           onClick={() => pick(option.id)}
         />
       ))}

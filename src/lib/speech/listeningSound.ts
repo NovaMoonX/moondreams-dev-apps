@@ -1,6 +1,6 @@
 import { getAudioContext } from '@/lib/speech/audioContext';
 
-export type ListeningCue = 'start';
+export type ListeningCue = 'start' | 'close';
 
 const NOTE_GAP_S = 0.09;
 const NOTE_LENGTH_S = 0.2;
@@ -10,6 +10,7 @@ export const CUE_DEAF_EXTRA_MS = 200;
 const CUES: Record<ListeningCue, { hertz: [number, number]; volume: number }> =
   {
     start: { hertz: [659.25, 880], volume: 0.09 },
+    close: { hertz: [880, 659.25], volume: 0.05 },
   };
 
 const playNote = (
@@ -32,7 +33,7 @@ const playNote = (
 };
 
 /**
- * Plays a short rising two-note chime when listening starts. Returns how many
+ * Plays a short two-note chime: rising when listening starts, falling and quieter when a closing phrase ends it. Returns how many
  * milliseconds it lasts, or 0 when nothing was scheduled (no audio, a hidden page), so the caller can ignore what the
  * recognizer hears meanwhile. A context no tap has resumed yet stays silent. It fails quietly.
  */

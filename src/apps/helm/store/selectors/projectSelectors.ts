@@ -21,6 +21,19 @@ export const selectActiveProjects = createSelector(
       ),
 );
 
+/** Active and set-aside projects, the most recently touched first: everything still open to link to. */
+export const selectOpenProjects = createSelector([selectProjects], (projects) =>
+  readable(projects)
+    .filter(
+      (project) => project.status === 'active' || project.status === 'paused',
+    )
+    .sort(
+      (left, right) =>
+        (right.lastEditedAt ?? right.createdAt) -
+        (left.lastEditedAt ?? left.createdAt),
+    ),
+);
+
 /** Finished projects, the latest finished first. */
 export const selectFinishedProjects = createSelector(
   [selectProjects],

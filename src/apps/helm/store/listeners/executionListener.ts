@@ -21,6 +21,7 @@ import type {
   ExecutionSealed,
   OpenExecution,
 } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const executionsOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'executions');
@@ -51,6 +52,7 @@ export async function openExecution(
     questionRef: data.questionRef ?? null,
     errorCode: data.errorCode ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     decidedAt: data.decidedAt ?? null,
     finishedAt: data.finishedAt ?? null,
   } as const;
@@ -64,9 +66,13 @@ export async function openExecution(
       effects: payload.effects ?? [],
       undoReport: payload.undoReport ?? null,
       spoken: payload.spoken ?? null,
+      heldSpoken:
+        typeof payload.heldSpoken === 'string' ? payload.heldSpoken : null,
       goneIds: payload.goneIds ?? null,
       undoReason: payload.undoReason ?? null,
       lines: payload.lines ?? [],
+      abilityOffer: payload.abilityOffer ?? null,
+      awayZoneOffer: payload.awayZoneOffer ?? null,
       isUnreadable: false,
     };
   } catch {
@@ -77,9 +83,12 @@ export async function openExecution(
       effects: [],
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       undoReason: null,
       lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
       isUnreadable: true,
     };
   }

@@ -165,6 +165,8 @@ assert.ok(
 const commands: NomosCommand[] = [
   {
     kind: 'createTask',
+    questions: [],
+    meeting: null,
     ref: '$new1',
     title: 'Call the florist',
     due: { kind: 'day', date: Date.UTC(2026, 10, 13) },
@@ -382,6 +384,14 @@ const closers: [string, boolean][] = [
   ['goodbye', true],
   ['Thanks, nothing else.', true],
   ["tell Sam I'm done", false],
+  ["Gotcha, that's all", true],
+  ["okay that's it", true],
+  ["that's everything", true],
+  ['Okay, im done', true],
+  ['all done', true],
+  ['Gotcha, stop', true],
+  ['tell Sam that is all', false],
+  ['tell Sam all done', false],
   ['stop the timer', false],
   ['okay', false],
 ];
@@ -392,11 +402,29 @@ closers.forEach(([said, expected]) =>
     `"${said}" ${expected ? 'ends' : 'does not end'} a live conversation`,
   ),
 );
-["that's it", 'thats all', 'end the conversation'].forEach((phrase) =>
+[
+  "that's it",
+  'thats all',
+  "that's everything",
+  'thats everything',
+  "that's all for now",
+  'thats it for now',
+  'end the conversation',
+  'bye for now',
+].forEach((phrase) =>
   assert.ok(
     END_PHRASES.includes(phrase.toLowerCase()),
     `"${phrase}" ends a live conversation`,
   ),
+);
+assert.ok(
+  !END_PHRASES.some((phrase) => /\b(?:i'?m|we'?re) done/.test(phrase)),
+  'a whole-utterance closer is never an end phrase',
+);
+assert.equal(
+  new Set(END_PHRASES).size,
+  END_PHRASES.length,
+  'each end phrase is listed once',
 );
 
 const paragraphCases: [string, string[]][] = [

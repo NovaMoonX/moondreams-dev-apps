@@ -175,12 +175,111 @@ export const NINE_LIVES_SHARES: SourceShares = {
           scopeVersion: 1,
           historyDays: 180,
         },
+        {
+          id: 'visitNotes',
+          kind: 'event',
+          label: 'Vet visit notes',
+          meaning:
+            "What the person wrote down after each of their cats' past vet visits, with the reason for the visit; read only when asked.",
+          detail: "Each past visit's cats, reason, clinic, date and notes",
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label:
+                'The cats, the reason, the clinic and the date of each past visit',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The notes written after the visit',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'doseHistory',
+          kind: 'event',
+          label: 'Vaccines and preventives given',
+          meaning:
+            'Every dose of a vaccine or preventive the person gave their cats, with the day and the dose they wrote down; read only when asked.',
+          detail:
+            'Each dose given: the cat, the product, the day and the dosage',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label:
+                'The cat, the vaccine or preventive and the day of each dose',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: "A preventive's dosage",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'weights',
+          kind: 'knowledge',
+          label: 'Weights',
+          meaning:
+            'Each time the person weighed one of their cats, with the weight and the day; read only when asked.',
+          detail: "Each cat's weigh-ins: the weight and the day",
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each cat's weight, in the unit the person used",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The day it was weighed',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'catExpenses',
+          kind: 'artifact',
+          label: 'Cat spending',
+          meaning:
+            'What the person spent on each cat in each month, in dollars, as one total per cat per month (an expense shared by several cats is split evenly, and a recurring charge counts once, on the day it began); read only when asked.',
+          detail:
+            "Each cat's spending by month: the total and how many expenses",
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each cat's total spending for a month",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'How many expenses made up the total',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
         'uploaded records and documents',
-        'expenses and vet costs',
+        'expense notes, line items and receipts',
         'microchip and insurance details',
-        'weights',
         'litter logs',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },
