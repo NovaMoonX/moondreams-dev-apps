@@ -6,7 +6,8 @@ import {
   deliverHeld,
   emptyHeldList,
   type HeldList,
-} from '@apps/pinch/store/heldLists';
+} from '@/store/heldLists';
+import { pinchHeldActions } from '@apps/pinch/store/heldLists';
 import type { Collection } from '@apps/pinch/types';
 
 export interface CollectionsState {
@@ -46,10 +47,14 @@ export const collectionsSlice = createSlice({
     builder.addCase(resetAllState, () => initialState);
     addHeldCases<Collection, CollectionsState>(
       builder,
+      pinchHeldActions,
       'collections',
-      belongs,
-      (state, list) => {
-        state.items = list;
+      {
+        belongs,
+        show: (state, list) => {
+          state.items = list;
+        },
+        accepts: (state) => state.loadError === null,
       },
     );
   },

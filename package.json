@@ -170,6 +170,7 @@
     "connections:alerts": "bash scripts/connections/alerts.sh",
     "connections:google-secrets": "bash scripts/connections/googleSecrets.sh",
     "connections:google-setup": "bash scripts/connections/googleSetup.sh",
+    "check:waypoint-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointHeldLists.ts",
     "check:pinch-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchHeldLists.ts"
   },
   "dependencies": {
