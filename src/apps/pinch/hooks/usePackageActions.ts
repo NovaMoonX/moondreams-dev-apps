@@ -20,9 +20,10 @@ import {
 import {
   selectIsPackagesReady,
   selectPackagesLoadError,
+  selectUnitSettings,
 } from '@apps/pinch/store/selectors';
 import type { Package, PackagePlace } from '@apps/pinch/types';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 import {
   buildPackage,
   getNewPackagesProblem,
@@ -62,6 +63,7 @@ export function usePackageActions(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast, removeToast } = useToast();
   const isReady = useAppSelector(selectIsPackagesReady);
+  const units = useAppSelector(selectUnitSettings);
   const loadError = useAppSelector(selectPackagesLoadError);
   const inStockCount = useAppSelector(
     (state) => state.pinch.packages.items.length,
@@ -172,10 +174,10 @@ export function usePackageActions(uid: string) {
       addUndoToast(
         isFinished
           ? `Used up ${name}`
-          : `Used ${formatSize(used, pkg.unit)} of ${name}`,
+          : `Used ${formatReadableSize(used, pkg.unit, units)} of ${name}`,
         isFinished || amountLeft === null
           ? undefined
-          : `${formatSize(amountLeft, pkg.unit)} left`,
+          : `${formatReadableSize(amountLeft, pkg.unit, units)} left`,
         () => undoEnd(pkg.id, at),
       );
       return isFinished;
