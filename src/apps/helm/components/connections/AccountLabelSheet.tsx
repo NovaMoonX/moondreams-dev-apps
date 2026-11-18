@@ -45,12 +45,14 @@ function LabelForm({
     try {
       const nextLabel = value.trim() === '' ? null : value.trim();
       await updateConnection({ grantId, accountLabel: nextLabel });
-      await waitFor(
-        (current) =>
-          !current.isLoading &&
-          (current.accounts.find((account) => account.id === accountId)
-            ?.label ?? null) === nextLabel,
-      );
+      if (accountId !== null) {
+        await waitFor(
+          (current) =>
+            !current.isLoading &&
+            (current.accounts.find((account) => account.id === accountId)
+              ?.label ?? null) === nextLabel,
+        );
+      }
       onClose();
     } catch (error) {
       console.error('Helm account label was not saved', error);

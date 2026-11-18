@@ -72,12 +72,11 @@ function RevealAction() {
       return;
     }
 
+    const startedFrom = activeAction;
     setIsWaiting(true);
     try {
-      await startAction(mutualMethod);
-      await waitFor(
-        (current) => current !== null && current.status !== 'completed',
-      );
+      const isStarted = await startAction(mutualMethod);
+      if (isStarted) await waitFor((current) => current !== startedFrom);
     } finally {
       setIsWaiting(false);
     }

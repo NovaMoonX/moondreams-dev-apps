@@ -136,11 +136,15 @@ function CardStatementSection({
       try {
         const result = await agreeToCardDetails(link.id);
         if (result === null) return;
-        await waitUntil(
-          () =>
-            store.getState().runway.links.find((entry) => entry.id === link.id)
-              ?.cardDetails !== 'needsConsent',
-        );
+        if (result.state === 'ok') {
+          await waitUntil(
+            () =>
+              store
+                .getState()
+                .runway.links.find((entry) => entry.id === link.id)
+                ?.cardDetails !== 'needsConsent',
+          );
+        }
         addToast({
           title:
             result.state === 'ok'

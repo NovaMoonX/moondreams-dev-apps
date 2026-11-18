@@ -170,13 +170,16 @@ export async function writeTopic(topicId: string): Promise<void> {
   if (topicWrites.get(topicId)?.kind === 'writing') return;
   setTopicWrite(topicId, { kind: 'writing' });
   try {
+    const versionBefore = selectTopicById(store.getState()).get(
+      topicId,
+    )?.version;
     const { status, waiting, retry } = (
       await writeHelmTopicCallable({ topicId })
     ).data;
-    if (status === 'written' || status === 'current') {
+    if (status === 'written') {
       await waitUntil(() => {
         const shown = selectTopicById(store.getState()).get(topicId);
-        return shown === undefined || shown.docState === 'current';
+        return shown === undefined || shown.version !== versionBefore;
       });
     }
     setTopicWrite(

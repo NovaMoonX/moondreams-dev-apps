@@ -324,12 +324,14 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     setSyncFailure(null);
     try {
       const { lastSyncAt } = grant;
-      await syncConnections({ grantId: grant.id });
-      await waitFor((current) =>
-        current.every(
-          (entry) => entry.id !== grant.id || entry.lastSyncAt !== lastSyncAt,
-        ),
-      );
+      const synced = await syncConnections({ grantId: grant.id });
+      if (synced > 0) {
+        await waitFor((current) =>
+          current.every(
+            (entry) => entry.id !== grant.id || entry.lastSyncAt !== lastSyncAt,
+          ),
+        );
+      }
     } catch (error) {
       console.error('Helm connection was not updated', error);
       setSyncFailure(HELM_COPY.syncedNowFailed);

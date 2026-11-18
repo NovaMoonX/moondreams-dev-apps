@@ -25,15 +25,22 @@ function CalendarFailedLine({ grants, hasPlan }: CalendarFailedLineProps) {
   const retry = () => {
     setIsRetrying(true);
     setHasFailed(false);
-    const before = new Map(grants.map((grant) => [grant.id, grant.lastSyncAt]));
-    Promise.all(grants.map((grant) => syncConnections({ grantId: grant.id })))
-      .then(() =>
+    Promise.all(
+      grants.map(async (grant) => ({
+        id: grant.id,
+        lastSyncAt: grant.lastSyncAt,
+        synced: await syncConnections({ grantId: grant.id }),
+      })),
+    )
+      .then((results) =>
         waitFor((current) =>
-          [...before].every(([id, lastSyncAt]) =>
-            current.every(
-              (entry) => entry.id !== id || entry.lastSyncAt !== lastSyncAt,
+          results
+            .filter((result) => result.synced > 0)
+            .every(({ id, lastSyncAt }) =>
+              current.every(
+                (entry) => entry.id !== id || entry.lastSyncAt !== lastSyncAt,
+              ),
             ),
-          ),
         ),
       )
       .catch((error: unknown) => {
