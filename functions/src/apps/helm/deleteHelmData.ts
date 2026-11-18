@@ -24,6 +24,8 @@ if (getApps().length === 0) {
 const userPath = (uid: string) => `apps/helm/users/${uid}`;
 const serverPath = (uid: string) => `apps/helm/server/${uid}`;
 const mediaPrefix = (uid: string) => `apps/helm/media/${uid}/`;
+const syncedPicturesPrefix = (uid: string) =>
+  `apps/helm/syncedPictures/${uid}/`;
 // No other app records voice usage yet, so the whole tree is this app's; once one does, only this app's days may go.
 const voiceUsagePath = (uid: string) => `voiceUsage/${uid}`;
 
@@ -43,9 +45,15 @@ async function deleteTree(
 
 async function deleteMedia(uid: string) {
   const bucket = getStorage().bucket();
-  const [files] = await bucket.getFiles({ prefix: mediaPrefix(uid) });
-  await bucket.deleteFiles({ prefix: mediaPrefix(uid) });
-  return files.length;
+  const prefixes = [mediaPrefix(uid), syncedPicturesPrefix(uid)];
+  const counts = await Promise.all(
+    prefixes.map(async (prefix) => {
+      const [files] = await bucket.getFiles({ prefix });
+      await bucket.deleteFiles({ prefix });
+      return files.length;
+    }),
+  );
+  return counts.reduce((sum, value) => sum + value, 0);
 }
 
 async function deleteUserCollections(firestore: Firestore, uid: string) {

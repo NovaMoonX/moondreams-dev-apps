@@ -155,6 +155,7 @@
     "voice:gemini-secret": "bash scripts/voice/geminiSecret.sh",
     "video:youtube-secret": "bash scripts/video/youtubeSecret.sh",
     "voice:google-setup": "bash scripts/voice/googleSetup.sh",
+    "check:helm-app-pictures": "firebase emulators:exec --only firestore --project demo-app-pictures \"tsx --tsconfig tsconfig.app.json scripts/checks/helmAppPictures.ts\"",
     "check:helm-media": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMedia.ts",
     "check:helm-voice": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmVoice.ts",
     "check:helm-voice-turn": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmVoiceTurn.ts",

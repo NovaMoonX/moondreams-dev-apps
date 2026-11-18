@@ -34,14 +34,18 @@ function movie(
   return { title, releaseDate, posterUrl, runtimeMinutes, contentRating };
 }
 
+// A stand-in 2:3 poster link; Helm draws it from its address and never copies it.
+const posterFor = (title: string) =>
+  `https://placehold.co/200x300.png?text=${encodeURIComponent(title)}`;
+
 // Keys and snapshots match the emulator's OMDb fixture catalog, so a seeded movie and a
 // searched one are the same movie; one `tmdb-` key (already released, so never refreshed)
-// covers the TMDB key shape. Posters are null so seeds work offline.
+// covers the TMDB key shape. Most posters are null so seeds work offline.
 function getWatchlistFixtures(now: number) {
   return [
     {
       movieKey: 'imdb-tt99000001',
-      movie: movie('Starlight Harbor', getDayUtcAhead(now, 3), 118, 'PG-13'),
+      movie: movie('Starlight Harbor', getDayUtcAhead(now, 3), 118, 'PG-13', posterFor('Starlight Harbor')),
       priority: 'MUST_SEE',
       preferredFormat: 'IMAX',
     },
@@ -53,7 +57,7 @@ function getWatchlistFixtures(now: number) {
     },
     {
       movieKey: 'imdb-tt99000003',
-      movie: movie('Galaxy Drift', getDayUtcAhead(now, 24), 142, 'PG-13'),
+      movie: movie('Galaxy Drift', getDayUtcAhead(now, 24), 142, 'PG-13', posterFor('Galaxy Drift')),
       priority: 'WANT_TO_SEE',
       preferredFormat: null,
     },
@@ -77,7 +81,7 @@ function getWatchlistFixtures(now: number) {
     // Unplanned releases: the Calendar marks their days (one on a planned day, two sharing one).
     {
       movieKey: 'manual-seed-0002-paper-moons',
-      movie: movie('Paper Moons', getDayUtcAhead(now, 4), 101, 'PG'),
+      movie: movie('Paper Moons', getDayUtcAhead(now, 4), 101, 'PG', posterFor('Paper Moons')),
       priority: 'WANT_TO_SEE',
       preferredFormat: null,
     },

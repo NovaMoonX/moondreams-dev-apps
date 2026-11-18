@@ -60,6 +60,7 @@ function SearchRow({ entry, when, onOpen }: SearchRowProps) {
           kind={mark.who.kind}
           name={mark.who.name}
           mediaId={mark.who.photoMediaId}
+          appSources={mark.who.appSources}
         />
       )}
       {mark?.kind === 'done' && <TickMark className='size-6' />}

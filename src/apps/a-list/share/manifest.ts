@@ -44,8 +44,13 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 3,
               addedOn: '2026-11-14',
             },
+            {
+              label: "A link to the movie's poster",
+              sinceVersion: 4,
+              addedOn: '2026-11-18',
+            },
           ],
-          scopeVersion: 3,
+          scopeVersion: 4,
         },
         {
           id: 'savedTheaters',
@@ -103,8 +108,13 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 3,
               addedOn: '2026-11-14',
             },
+            {
+              label: "A link to the movie's poster",
+              sinceVersion: 4,
+              addedOn: '2026-11-18',
+            },
           ],
-          scopeVersion: 3,
+          scopeVersion: 4,
         },
         {
           id: 'watchlist',
@@ -134,8 +144,13 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label: "A link to the movie's poster",
+              sinceVersion: 3,
+              addedOn: '2026-11-18',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'savings',

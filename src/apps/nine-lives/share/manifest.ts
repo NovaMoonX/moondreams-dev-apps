@@ -16,8 +16,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'pet',
           label: 'Your cats',
           meaning:
-            "The cats in the person's household, with each one's birth date, breed and food.",
-          detail: "Each cat's name, birth date, breed and food",
+            "The cats in the person's household, with each one's photo, birth date, breed and food.",
+          detail: "Each cat's name, photo, birth date, breed and food",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -28,8 +28,13 @@ export const NINE_LIVES_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label: "A small copy of each cat's photo",
+              sinceVersion: 3,
+              addedOn: '2026-11-18',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'vetVisits',

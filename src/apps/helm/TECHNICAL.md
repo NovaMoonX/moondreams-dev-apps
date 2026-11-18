@@ -1214,9 +1214,19 @@ interface SyncedRecord {               // synced/{syncedId}: client reads; only 
   transformVersion: number;            // the adapter's version when it wrote this shape
   connectionEndedAt: number | null;    // set when the grant ends and the copy is kept ("no longer updated")
   deleteAfter: number | null;          // set for a kept copy: connectionEndedAt + 90 days; null while connected
+  picture: { hash: string; nonce: string; contentType: string; keyId: string } | null; // a pet's photo kept as a small sealed copy (below); null for every other record
   sealed: Sealed;                      // { title, subtitle, detail (≤500), placeLabel, amountCents, currency, deepLink, extra }
 }
 ```
+
+**A picture from another app (issue 144).** A person's or pet's photo is kept as Helm's own small sealed copy; anything public is linked and never copied.
+
+- **Pet photo (Nine Lives `cats`).** The adapter puts the cat's Storage path in the pet kind's `extra.photoPath` (the one path the app uses, `nine-lives/households/{householdId}/cats/{catId}/photo`); no photo URL travels. The Helm sink strips `photoPath` before sealing, accepts it only under its own app's prefix (`readPictureSource`), reads the source object's `md5Hash` and `generation` through the Admin SDK, and keys the copy on an HMAC of them (`picture.hash`, a subkey of the person's data key). A cat with no photo gets no copy; an unchanged photo is not downloaded again; a changed one is shrunk with sharp to 256 px WebP (`toWebpCopy`, metadata dropped), sealed with the person's data key (`gcmEncrypt`, the same layout as media bytes) and written over `apps/helm/syncedPictures/{uid}/{syncedId}` as `application/octet-stream`, with `picture` on the document. A source that cannot be read right now keeps the copy; a photo gone or removed deletes it.
+- **Deleted with the connection.** The copy's object is deleted before its record changes, in every place a copy ends: `keepGrant` (the connection ended and the record is kept 90 days, `picture` becomes null), `deleteCategory`, `deleteGrant`, `deleteKept`, `deleteRefs`, `finishCategory` (a record that left the grant or aged out) and the expiry sweep; account deletion removes the whole `apps/helm/syncedPictures/{uid}/` prefix. A failed delete throws, so the record that names the object stays and the next run retries; nothing orphans.
+- **Storage rule.** `apps/helm/syncedPictures/{uid}/{fileName}`: the person reads their own; no client writes or deletes (`check:helm-rules`).
+- **Shown** only avatar-sized (at most 56 px): `SyncedAvatar` opens it through `useSyncedPictureUrl` (`useSealedObjectUrl`, the key's `keyId` checked) in a synced pet record's sheet and as a pet who's photo when the who has none of its own (`findAppPicture` matches the who's `appSources` to the synced record).
+- **Poster (A-List).** `extra.posterUrl` on a showing, a watchlist movie and a seen movie, only when `readPictureLink` accepts it (https, at most 500 characters), is a link only: no copy and no Storage. `PosterThumb` draws it with `FallbackImage` at `IMAGE_SHAPES.poster` (2/3), about 40 px wide on a showing's card and 56 px in the sheet.
+- `check:helm-app-pictures` covers the copy rules and each deletion.
 
 `SharedKind` and each kind's sealed fields are the platform contract's (section 19), not Helm's; Helm's type re-exports them. A record sealed by an older `transformVersion` is rewritten at its next sync, never migrated.
 

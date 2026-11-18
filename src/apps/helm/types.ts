@@ -1634,6 +1634,14 @@ export interface SyncedContent {
   extra: Record<string, ExtraValue>;
 }
 
+/** The small sealed copy of another app's photo (a pet's) kept in Helm's own Storage area; the server makes and deletes it. */
+export interface SyncedPicture {
+  hash: string;
+  nonce: string;
+  contentType: string;
+  keyId: string;
+}
+
 /** A copy of another app's record, written only by the platform's Helm sink and opened on the device. */
 export interface SyncedRecord {
   id: string;
@@ -1659,6 +1667,8 @@ export interface SyncedRecord {
   /** Set when the connection ended and the copy was kept. */
   connectionEndedAt: number | null;
   deleteAfter: number | null;
+  /** Null when the record has no photo or the connection ended; a copy made before pictures has none. */
+  picture: SyncedPicture | null;
   sealed: SyncedContent;
 }
 

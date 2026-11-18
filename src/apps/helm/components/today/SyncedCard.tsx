@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { CalendarDays, ChevronRight, Clock, ListChecks } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
+import { PosterThumb } from '@apps/helm/components/connections/SyncedPictures';
 import { readConnectorAppId } from '@/lib/connections/contract';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
@@ -100,6 +101,7 @@ export function SyncedCard({
           />
         )}
       </span>
+      <PosterThumb record={record} />
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {record.sealed.title}

@@ -58,7 +58,12 @@ function PersonRow({ who, role, note, onOpen }: PersonRowProps) {
       className='flex h-auto w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={() => onOpen(who.id)}
     >
-      <WhoPhoto kind={who.kind} name={who.name} mediaId={who.photoMediaId} />
+      <WhoPhoto
+        kind={who.kind}
+        name={who.name}
+        mediaId={who.photoMediaId}
+        appSources={who.appSources}
+      />
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {who.name}

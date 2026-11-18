@@ -28,7 +28,12 @@ function WhoRow({ who, onOpen }: WhoRowProps) {
       className='flex h-auto w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={() => onOpen(who.id)}
     >
-      <WhoPhoto kind={who.kind} name={name} mediaId={who.photoMediaId} />
+      <WhoPhoto
+        kind={who.kind}
+        name={name}
+        mediaId={who.photoMediaId}
+        appSources={who.appSources}
+      />
       <span className='min-w-0 flex-1'>
         <PrivateTitle
           kind='who'

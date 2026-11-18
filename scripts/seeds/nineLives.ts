@@ -1,3 +1,4 @@
+import { uploadSeedPhoto } from './goingOnce.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -7,6 +8,7 @@ import {
 
 const HOUSEHOLD_ID = 'seed-nine-lives-household';
 const SECOND_HOUSEHOLD_ID = 'seed-nine-lives-other-household';
+const MOCHI_PHOTO_PATH = `nine-lives/households/${HOUSEHOLD_ID}/cats/seed-cat-mochi/photo`;
 
 export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const caretaker = FIXTURE_USERS.nineLivesCaretaker;
@@ -71,6 +73,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-cat-mochi',
       name: 'Mochi',
+      photoURL: `https://firebasestorage.googleapis.com/v0/b/seed/o/${encodeURIComponent(MOCHI_PHOTO_PATH)}?alt=media`,
       originalName: 'Pumpkin',
       breed: 'Domestic Shorthair',
       coatColors: ['Orange / Ginger', 'White'],
@@ -2329,6 +2332,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   );
 
   await batch.commit();
+  // The photo Helm's synced pet picture is made from; missing when the Storage emulator is down.
+  await uploadSeedPhoto(MOCHI_PHOTO_PATH, 2);
 
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
