@@ -34,7 +34,6 @@ export interface GatherDish {
   gotOut: Record<string, boolean>;
 }
 
-/** Whether "By part" and "All together" differ, so the choice is offered at all. */
 export const canCombineGather = (dishes: GatherDish[]) => {
   const rows = dishes.flatMap((dish) => dish.rows);
   return (
@@ -49,7 +48,6 @@ export const getGatherLayout = (
   dishes: GatherDish[],
 ): GatherLayout => (canCombineGather(dishes) ? (stored ?? 'PARTS') : 'PARTS');
 
-/** One line per ingredient across every dish, as "All together" lists them. */
 export const combineGatherDishes = (dishes: GatherDish[]) =>
   combineCookLines(
     dishes.flatMap((dish) =>
@@ -76,13 +74,13 @@ export const isGatherLineOut = (line: CombinedLine, dishes: GatherDish[]) =>
       true,
   );
 
-/** An ingredient as the person can say it: every name it goes by and every line a tick of it reaches. */
 export interface GatherItem {
   key: string;
   name: string;
   names: string[];
   sources: { recipeId: string; lineId: string }[];
   isOut: boolean;
+  isAnyOut: boolean;
 }
 
 const itemMatcher = createOptionMatcher<GatherItem>({
@@ -90,7 +88,6 @@ const itemMatcher = createOptionMatcher<GatherItem>({
   foldPlurals: true,
 });
 
-/** The ingredients a spoken name means: those whose name holds its words (an exact name first), else one close spelling. */
 export const findGatherItems = (query: string, items: GatherItem[]) => {
   const byName = matchByName(
     query,
@@ -100,6 +97,12 @@ export const findGatherItems = (query: string, items: GatherItem[]) => {
   const close = itemMatcher.match(query, items);
   return close === null ? [] : [close];
 };
+
+const looseItemMatcher = createOptionMatcher<GatherItem>({
+  names: (item) => item.names,
+  foldPlurals: true,
+  typos: 'loose',
+});
 
 const lowerFirst = (text: string) =>
   /^[A-Z][a-z]/.test(text) ? text[0].toLowerCase() + text.slice(1) : text;
@@ -129,46 +132,85 @@ const say = (
   sources,
 });
 
-/** A tick or untick by name: what it reaches, and the answer that says what was heard and what is left. */
 export const planGatherTick = (
-  query: string,
+  queries: string[],
   items: GatherItem[],
   isOut: boolean,
   isPlate: boolean,
 ): GatherAnswer => {
-  const found = findGatherItems(query, items);
-  if (found.length === 0) {
-    return say(
-      false,
-      `No ${query} ${isPlate ? 'on this plate' : 'in this recipe'}.`,
-    );
-  }
-  if (found.length > 1) {
-    return say(
-      false,
-      `Which one: ${OR_LIST.format(found.map((item) => lowerFirst(item.name)))}?`,
-    );
-  }
-  const [item] = found;
-  const name = lowerFirst(item.name);
-  if (item.isOut === isOut) {
-    return say(
-      false,
-      isOut
-        ? `${capitalize(name)} is already ticked.`
-        : `${capitalize(name)} isn't ticked.`,
-    );
-  }
-  if (!isOut) return say(true, `Unticked ${name}.`, item.sources);
+  const where = isPlate ? 'on this plate' : 'in this recipe';
+  const results = queries.map((query) => ({
+    query,
+    found: findGatherItems(query, items),
+  }));
+  const hits = Array.from(
+    new Map(
+      results.flatMap(({ found }) =>
+        found.length === 1 ? [[found[0].key, found[0]] as const] : [],
+      ),
+    ).values(),
+  );
+  const isTicked = (item: GatherItem) => (isOut ? item.isOut : item.isAnyOut);
+  const changed = hits.filter((item) => isTicked(item) !== isOut);
+  const unchanged = hits.filter((item) => isTicked(item) === isOut);
+  const changedKeys = new Set(changed.map((item) => item.key));
+  const names = (list: GatherItem[]) =>
+    LIST.format(list.map((item) => lowerFirst(item.name)));
   const left = items.filter(
-    (other) => other.key !== item.key && !other.isOut,
+    (item) => !item.isOut && !changedKeys.has(item.key),
   ).length;
+  const missing = results.filter(({ found }) => found.length === 0);
+  const suggestions = missing.map(({ query }) => ({
+    query,
+    near: looseItemMatcher.match(query, items),
+  }));
+  const parts = [
+    changed.length === 0
+      ? []
+      : !isOut
+        ? [`Unticked ${names(changed)}.`]
+        : left === 0
+          ? ["That's everything. Say start cooking when you're ready."]
+          : [`Got ${names(changed)}. ${left} left.`],
+    unchanged.length === 0
+      ? []
+      : [
+          `${capitalize(names(unchanged))} ${
+            unchanged.length === 1
+              ? isOut
+                ? 'is already ticked'
+                : "isn't ticked"
+              : isOut
+                ? 'are already ticked'
+                : "aren't ticked"
+          }.`,
+        ],
+    suggestions.some(({ near }) => near === null)
+      ? [
+          `No ${OR_LIST.format(
+            suggestions
+              .filter(({ near }) => near === null)
+              .map(({ query }) => query),
+          )} ${where}.`,
+        ]
+      : [],
+    suggestions.flatMap(({ query, near }) =>
+      near === null
+        ? []
+        : [`No ${query} ${where}. Did you mean ${lowerFirst(near.name)}?`],
+    ),
+    results.flatMap(({ found }) =>
+      found.length > 1
+        ? [
+            `Which one: ${OR_LIST.format(found.map((item) => lowerFirst(item.name)))}?`,
+          ]
+        : [],
+    ),
+  ].flat();
   return say(
-    true,
-    left === 0
-      ? "That's everything. Say start cooking when you're ready."
-      : `Got ${name}. ${left} left.`,
-    item.sources,
+    changed.length > 0,
+    parts.join(' '),
+    changed.flatMap((item) => item.sources),
   );
 };
 
@@ -179,7 +221,6 @@ const toGroupLabel = (group: string) => {
   return text.startsWith('for ') ? text : `for ${text}`;
 };
 
-/** What is still to get out, as the layout on screen lists it: one line per ingredient with the amounts added up, or by part with the part named only when there are several. */
 export const describeGatherLeft = (
   dishes: GatherDish[],
   layout: GatherLayout,
@@ -268,9 +309,6 @@ export const describeGatherLeft = (
   };
 };
 
-const lowerName = lowerFirst;
-
-/** The tools the rows call for, as the tiles list them. */
 export const getGatherTools = (rows: GatherRow[]) =>
   getMeasuringTools(
     rows.flatMap((row) =>
@@ -288,7 +326,6 @@ export const getGatherTools = (rows: GatherRow[]) =>
     ),
   );
 
-/** The measuring tools as the tiles list them: each tool with its sizes, and what to use without a scale. */
 export const describeGatherTools = (tools: MeasuringTool[]): GatherAnswer => {
   if (tools.length === 0) {
     return say(true, "Nothing to measure with: it's all counted.");
@@ -302,7 +339,7 @@ export const describeGatherTools = (tools: MeasuringTool[]): GatherAnswer => {
             : `${LIST.format(
                 tool.swaps.map(
                   (swap, index) =>
-                    `${index === 0 ? swap.name : lowerName(swap.name)} is about ${swap.text}`,
+                    `${index === 0 ? swap.name : lowerFirst(swap.name)} is about ${swap.text}`,
                 ),
               )}.`
         }`;

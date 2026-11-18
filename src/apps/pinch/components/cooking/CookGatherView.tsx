@@ -15,19 +15,19 @@ import {
   combineGatherDishes,
   getGatherLayout,
   isGatherLineOut,
+  type GatherDish,
   type GatherLayout,
 } from '@apps/pinch/utils/cookGather';
 import { getConversionLine } from '@apps/pinch/utils/cookConversions';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-export interface CookGatherDish {
+interface CookGatherDish extends GatherDish {
   recipe: Recipe;
   rows: CookRow[];
   hasWrittenAmounts: boolean;
   servings: number;
   plannedServings: number | null;
-  gotOut: Record<string, boolean>;
 }
 
 interface CookGatherViewProps {
@@ -35,7 +35,6 @@ interface CookGatherViewProps {
   onServingsChange: (recipeId: string, servings: number) => void;
   onToggle: (recipeId: string, id: string, isOut: boolean) => void;
   onReset: (recipeId: string) => void;
-  /** The layout the person chose, or null before any choice. */
   storedLayout: GatherLayout | null;
   onLayoutChange: (layout: GatherLayout) => void;
 }
@@ -203,7 +202,7 @@ function CookGatherView({
 
   return (
     <div className='mx-auto w-full max-w-2xl space-y-5 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start lg:gap-10 lg:space-y-0 [@media(max-height:500px)_and_(min-width:640px)]:grid [@media(max-height:500px)_and_(min-width:640px)]:max-w-4xl [@media(max-height:500px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:500px)_and_(min-width:640px)]:items-start [@media(max-height:500px)_and_(min-width:640px)]:gap-6 [@media(max-height:500px)_and_(min-width:640px)]:space-y-0'>
-      <div className='space-y-5 lg:sticky lg:top-0'>
+      <div className='space-y-5'>
         <div className='space-y-1'>
           <h2 className='text-xl leading-snug font-medium min-[360px]:text-2xl'>
             Get your ingredients out

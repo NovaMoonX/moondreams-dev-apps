@@ -2347,7 +2347,7 @@ assert.equal(
   'double four',
 );
 
-// Before you start: the gather screen's commands.
+// Gather commands.
 const gather: CookVoiceContext = {
   ...plate,
   isGathering: true,
@@ -2360,9 +2360,9 @@ const gather: CookVoiceContext = {
 };
 const parseG = (text: string | string[], context = gather) =>
   parseCookCommand(text, context);
-const got = (query: string, isOut = true): CookCommand => ({
+const got = (query: string | string[], isOut = true): CookCommand => ({
   kind: 'GOT_INGREDIENT',
-  query,
+  queries: Array.isArray(query) ? query : [query],
   isOut,
 });
 [
@@ -2375,7 +2375,8 @@ const got = (query: string, isOut = true): CookCommand => ({
   ['check off garlic', 'garlic'],
   ["butter's out", 'butters'],
   ['the butter is out', 'butter'],
-  ['got the almond flour', 'almond flour'],
+  ['I got the garlic', 'garlic'],
+  ['we got the flour', 'flour'],
 ].forEach(([phrase, query]) =>
   assert.deepEqual(parseG(phrase), got(query), `tick: "${phrase}"`),
 );
@@ -2450,19 +2451,22 @@ assert.deepEqual(
 ].forEach((phrase) =>
   assert.deepEqual(parse(phrase), { kind: 'READ_TOOLS' }, `tools: "${phrase}"`),
 );
-[
-  'start cooking',
-  "let's cook",
-  "let's start cooking",
-  "let's start",
-  "I'm ready",
-  'ready to cook',
-].forEach((phrase) =>
+['start cooking', "let's cook", "let's start cooking"].forEach((phrase) =>
   assert.deepEqual(
     parse(phrase),
     { kind: 'START_COOKING' },
-    `start: "${phrase}"`,
+    `start anywhere: "${phrase}"`,
   ),
+);
+["let's start", "let's begin", "I'm ready", 'ready to cook'].forEach(
+  (phrase) => {
+    assert.deepEqual(
+      parseG(phrase),
+      { kind: 'START_COOKING' },
+      `start while gathering: "${phrase}"`,
+    );
+    assert.equal(parse(phrase), null, `not a start off gather: "${phrase}"`);
+  },
 );
 assert.equal(
   parse("let's cook the rice"),
@@ -2481,17 +2485,122 @@ assert.equal(
 );
 ['all together', 'show them all together', 'combine them'].forEach((phrase) =>
   assert.deepEqual(
-    parse(phrase),
+    parseG(phrase),
     { kind: 'SET_GATHER_LAYOUT', layout: 'ALL' },
     `layout all: "${phrase}"`,
   ),
 );
 ['by part', 'by dish', 'separately', 'split them up'].forEach((phrase) =>
   assert.deepEqual(
-    parse(phrase),
+    parseG(phrase),
     { kind: 'SET_GATHER_LAYOUT', layout: 'PARTS' },
     `layout parts: "${phrase}"`,
   ),
+);
+
+[
+  ['got garlic and butter', ['garlic', 'butter']],
+  ['tick the flour, garlic and butter', ['flour', 'garlic', 'butter']],
+  ['got garlic and saffron', ['garlic', 'saffron']],
+  ['untick garlic and flour', ['garlic', 'flour']],
+].forEach(([phrase, queries]) =>
+  assert.deepEqual(
+    parseG(phrase as string),
+    got(queries as string[], !(phrase as string).startsWith('untick')),
+    `list: "${phrase}"`,
+  ),
+);
+[
+  'got a minute',
+  'got my phone',
+  'got ready',
+  'got steps',
+  'got timers',
+  'i have a lot',
+  'got two',
+  'got the almond flour',
+  'got saffron',
+  'tick the saffron and thyme',
+].forEach((phrase) =>
+  assert.equal(parseG(phrase), null, `silent: "${phrase}"`),
+);
+[
+  'untick everything',
+  'untick all',
+  'uncheck everything',
+  'start over',
+  'clear the ticks',
+  'reset the list',
+  'reset',
+].forEach((phrase) => {
+  assert.deepEqual(
+    parseG(phrase),
+    { kind: 'UNTICK_ALL' },
+    `untick all: "${phrase}"`,
+  );
+  assert.equal(
+    parse(phrase),
+    null,
+    `untick all only while gathering: "${phrase}"`,
+  );
+});
+assert.deepEqual(
+  parseG("let's cook"),
+  { kind: 'START_COOKING' },
+  "let's cook anywhere",
+);
+assert.deepEqual(
+  parse('how many servings'),
+  { kind: 'TELL_SERVINGS' },
+  'servings question unchanged',
+);
+
+// Servings by dish while gathering a plate.
+const gatherPlate: CookVoiceContext = {
+  ...gather,
+  recipes: [
+    { id: 'adobo', title: 'Adobo chicken' },
+    { id: 'rice', title: 'Rice' },
+  ],
+};
+assert.deepEqual(
+  parseG('make the rice six servings', gatherPlate),
+  {
+    kind: 'SET_SERVINGS',
+    change: { kind: 'TO', servings: 6 },
+    recipeId: 'rice',
+  },
+  'a dish named with the count',
+);
+assert.deepEqual(
+  parseG('make six servings', gatherPlate),
+  servingsTo(6),
+  'no dish named',
+);
+const askedDish: CookVoiceContext = {
+  ...gatherPlate,
+  choice: {
+    kind: 'DISH',
+    dishes: [
+      { id: 'adobo', title: 'Adobo chicken' },
+      { id: 'rice', title: 'Rice' },
+    ],
+  },
+};
+assert.deepEqual(
+  parseG('the rice', askedDish),
+  { kind: 'DISH_ANSWER', recipeId: 'rice' },
+  'dish by name',
+);
+assert.deepEqual(
+  parseG('the first one', askedDish),
+  { kind: 'DISH_ANSWER', recipeId: 'adobo' },
+  'dish by place',
+);
+assert.deepEqual(
+  parseG('never mind', askedDish),
+  { kind: 'TIMER_ANSWER', answer: { kind: 'NEVER_MIND' } },
+  'dish question can be dropped',
 );
 
 const item = (
@@ -2504,6 +2613,7 @@ const item = (
   name,
   names,
   isOut,
+  isAnyOut: isOut,
   sources: [{ recipeId: 'r', lineId: key }],
 });
 const items = [
@@ -2511,7 +2621,7 @@ const items = [
   item('flour', 'Flour', false),
   item('garlic', 'Garlic', true),
 ];
-const tick = planGatherTick('butter', items, true, false);
+const tick = planGatherTick(['butter'], items, true, false);
 assert.deepEqual(
   [tick.ok, tick.speak],
   [true, 'Got butter. 1 left.'],
@@ -2523,42 +2633,83 @@ assert.deepEqual(
   'tick reaches its lines',
 );
 assert.equal(
-  planGatherTick('flour', [items[1], items[2]], true, false).speak,
+  planGatherTick(['flour'], [items[1], items[2]], true, false).speak,
   "That's everything. Say start cooking when you're ready.",
   'the last tick says so',
 );
 assert.equal(
-  planGatherTick('garlic', items, true, false).speak,
+  planGatherTick(['garlic'], items, true, false).speak,
   'Garlic is already ticked.',
   'already ticked',
 );
 assert.equal(
-  planGatherTick('garlic', items, false, false).speak,
+  planGatherTick(['garlic'], items, false, false).speak,
   'Unticked garlic.',
   'untick',
 );
 assert.equal(
-  planGatherTick('milk', items, true, false).speak,
+  planGatherTick(['milk'], items, true, false).speak,
   'No milk in this recipe.',
   'no match',
 );
 assert.equal(
-  planGatherTick('milk', items, true, true).speak,
+  planGatherTick(['milk'], items, true, true).speak,
   'No milk on this plate.',
   'no match on a plate',
+);
+assert.equal(
+  planGatherTick(['butter', 'flour'], items, true, false).speak,
+  "That's everything. Say start cooking when you're ready.",
+  'a list ticks each',
+);
+assert.equal(
+  planGatherTick(
+    ['butter', 'saffron'],
+    [...items, item('o', 'Oil', false)],
+    true,
+    false,
+  ).speak,
+  'Got butter. 2 left. No saffron in this recipe.',
+  'a list names only what is missing',
+);
+assert.equal(
+  planGatherTick(['saffron', 'thyme'], items, true, false).ok,
+  false,
+  'a list of none is refused',
+);
+assert.equal(
+  planGatherTick(
+    ['butters'],
+    [item('b', 'Butter', false, ['Butter'])],
+    true,
+    false,
+  ).speak,
+  "That's everything. Say start cooking when you're ready.",
+  'a plural is the same ingredient',
+);
+assert.equal(
+  planGatherTick(['buttr'], [item('b', 'Butter', false)], true, false).speak,
+  'No buttr in this recipe. Did you mean butter?',
+  'a near miss is offered',
+);
+const partly = { ...item('p', 'Sugar', false), isAnyOut: true };
+assert.equal(
+  planGatherTick(['sugar'], [partly], false, false).speak,
+  'Unticked sugar.',
+  'a partly ticked item unticks',
 );
 const two = [
   item('u', 'Unsalted butter', false),
   item('p', 'Peanut butter', false),
 ];
-const which = planGatherTick('butter', two, true, false);
+const which = planGatherTick(['butter'], two, true, false);
 assert.deepEqual(
   [which.ok, which.speak],
   [false, 'Which one: unsalted butter or peanut butter?'],
   'several ingredients match',
 );
 assert.equal(
-  planGatherTick('butter', [...two, item('b', 'Butter', false)], true, false)
+  planGatherTick(['butter'], [...two, item('b', 'Butter', false)], true, false)
     .ok,
   true,
   'an exact name wins',

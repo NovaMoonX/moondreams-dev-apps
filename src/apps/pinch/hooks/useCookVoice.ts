@@ -95,7 +95,11 @@ export interface CookVoiceActions {
     candidates: string[],
   ) => CookVoiceResult;
   cycleRecipe: (direction: 1 | -1) => CookVoiceResult;
-  setServings: (change: CookServingsChange) => CookVoiceResult;
+  setServings: (
+    change: CookServingsChange,
+    recipeId: string | null,
+  ) => CookVoiceResult;
+  answerDish: (recipeId: string) => CookVoiceResult;
   tellServings: () => CookVoiceResult;
   readTips: () => CookVoiceResult;
   readNotes: () => CookVoiceResult;
@@ -108,8 +112,9 @@ export interface CookVoiceActions {
   dictation: (text: string) => CookVoiceResult;
   undoEntry: () => CookVoiceResult;
   startCooking: () => CookVoiceResult;
-  gotIngredient: (query: string, isOut: boolean) => CookVoiceResult;
+  gotIngredient: (queries: string[], isOut: boolean) => CookVoiceResult;
   tickAll: () => CookVoiceResult;
+  untickAll: () => CookVoiceResult;
   readLeft: () => CookVoiceResult;
   readTools: () => CookVoiceResult;
   setGatherLayout: (layout: 'ALL' | 'PARTS') => CookVoiceResult;
@@ -174,7 +179,9 @@ export const runCookCommand = (
     case 'CYCLE_RECIPE':
       return actions.cycleRecipe(command.direction);
     case 'SET_SERVINGS':
-      return actions.setServings(command.change);
+      return actions.setServings(command.change, command.recipeId ?? null);
+    case 'DISH_ANSWER':
+      return actions.answerDish(command.recipeId);
     case 'TELL_SERVINGS':
       return actions.tellServings();
     case 'READ_TIPS':
@@ -200,9 +207,11 @@ export const runCookCommand = (
     case 'START_COOKING':
       return actions.startCooking();
     case 'GOT_INGREDIENT':
-      return actions.gotIngredient(command.query, command.isOut);
+      return actions.gotIngredient(command.queries, command.isOut);
     case 'TICK_ALL':
       return actions.tickAll();
+    case 'UNTICK_ALL':
+      return actions.untickAll();
     case 'READ_LEFT':
       return actions.readLeft();
     case 'READ_TOOLS':
