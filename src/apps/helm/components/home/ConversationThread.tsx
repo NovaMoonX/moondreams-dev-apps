@@ -37,12 +37,12 @@ const readRestTop = (
   const box = element.getBoundingClientRect();
   const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
   const viewHeight = scroller ? scroller.clientHeight : window.innerHeight;
-  const dock =
-    parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        '--helm-composer-h',
-      ),
-    ) || 0;
+  const rootStyle = getComputedStyle(document.documentElement);
+  const readPx = (name: string) =>
+    parseFloat(rootStyle.getPropertyValue(name)) || 0;
+  const composer = readPx('--helm-composer-h');
+  // The composer floats 8px above the dock, so it covers its own height plus everything under it.
+  const dock = composer > 0 ? composer + readPx('--helm-dock-top') + 8 : 0;
   const current = scroller ? scroller.scrollTop : window.scrollY;
   const top = current + box.top - viewTop;
   const endClear = current + box.bottom - viewTop - (viewHeight - dock - 16);
