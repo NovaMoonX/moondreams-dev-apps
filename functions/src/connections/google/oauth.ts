@@ -55,6 +55,11 @@ const MAX_OPEN_STATES = 10;
 const MAX_TEXT_LENGTH = 2000;
 const FIXTURE_CODE = 'fixture';
 const IDENTITY_SCOPES = ['openid', 'email'];
+const EXTRA_CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.app.created',
+  'https://www.googleapis.com/auth/calendar.events',
+];
+const MAX_EXTRA_SCOPES = 2;
 
 const FIXTURE_ACCOUNTS = [
   { sub: 'fixture-personal', email: 'personal@example.com' },
@@ -105,10 +110,33 @@ const isAllowedRedirect = (redirectUri: string, readerPath: string) => {
   }
 };
 
+/** Only the two calendar permissions, only for the calendar connector; anything else is a bad request. */
+const readExtraScopes = (value: unknown, connectorId: string): string[] => {
+  if (value === undefined || value === null) return [];
+  if (
+    connectorId !== 'google:calendar' ||
+    !Array.isArray(value) ||
+    value.length > MAX_EXTRA_SCOPES ||
+    !value.every(
+      (scope) =>
+        typeof scope === 'string' && EXTRA_CALENDAR_SCOPES.includes(scope),
+    )
+  ) {
+    throw badRequest();
+  }
+  return Array.from(new Set(value as string[]));
+};
+
 const readStartRequest = (data: unknown) => {
   if (!isRecord(data)) throw badRequest();
-  const { readerAppId, connectorId, redirectUri, accountId, isAnotherAccount } =
-    data;
+  const {
+    readerAppId,
+    connectorId,
+    redirectUri,
+    accountId,
+    isAnotherAccount,
+    extraScopes,
+  } = data;
   if (
     !isText(readerAppId) ||
     !isText(connectorId) ||
@@ -119,6 +147,7 @@ const readStartRequest = (data: unknown) => {
     throw badRequest();
   }
   return {
+    extraScopes: readExtraScopes(extraScopes, connectorId),
     readerAppId,
     connectorId: connectorId as ConnectorId,
     redirectUri,
@@ -224,6 +253,7 @@ export const startGoogleConnection = onCall(OPTIONS, async (request) => {
     redirectUri: req.redirectUri,
     codeVerifier,
     accountId: req.accountId,
+    extraScopes: req.extraScopes,
     createdAt: now,
     expiresAt: now + STATE_TTL_MS,
   });
@@ -240,7 +270,11 @@ export const startGoogleConnection = onCall(OPTIONS, async (request) => {
     client_id: client.clientId,
     redirect_uri: req.redirectUri,
     response_type: 'code',
-    scope: [...IDENTITY_SCOPES, ...requestedScopes(manifest)].join(' '),
+    scope: [
+      ...IDENTITY_SCOPES,
+      ...requestedScopes(manifest),
+      ...req.extraScopes,
+    ].join(' '),
     access_type: 'offline',
     include_granted_scopes: 'true',
     prompt: req.isAnotherAccount ? 'select_account consent' : 'consent',
@@ -276,6 +310,7 @@ interface StoredState {
   redirectUri: string;
   codeVerifier: string;
   accountId: string | null;
+  extraScopes: string[];
   expiresAt: number;
 }
 
@@ -285,6 +320,11 @@ const readState = (data: Record<string, unknown>): StoredState => ({
   redirectUri: String(data.redirectUri),
   codeVerifier: String(data.codeVerifier),
   accountId: typeof data.accountId === 'string' ? data.accountId : null,
+  extraScopes: Array.isArray(data.extraScopes)
+    ? data.extraScopes.filter((scope): scope is string =>
+        EXTRA_CALENDAR_SCOPES.includes(String(scope)),
+      )
+    : [],
   expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : 0,
 });
 
@@ -421,7 +461,10 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
   const scopes = requestedScopes(manifest);
   const isFixture = isEmulator() && req.code === FIXTURE_CODE;
   const identity = isFixture
-    ? await pickFixtureIdentity(firestore, auth.uid, state, scopes)
+    ? await pickFixtureIdentity(firestore, auth.uid, state, [
+        ...scopes,
+        ...state.extraScopes,
+      ])
     : await exchangeCode(req.code, state);
 
   const accountId = toAccountId(identity.sub);

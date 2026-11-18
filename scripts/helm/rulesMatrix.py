@@ -164,6 +164,15 @@ def main():
     admin([rm(path)])
     check('profile reflectDueAt set create [o]', commit(o_tok, [put_new(path, dict(profile, reflectDueAt=NOW))]), False)
     admin([put(path, profile)])
+    admin([put(path, dict(profile, relateDueAt=NOW))])
+    check('profile relateDueAt unchanged update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=NOW, planFillPercent=60))]), True)
+    check('profile relateDueAt cleared update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=None))]), True)
+    check('profile relateDueAt changed update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=NOW + 1))]), False)
+    admin([put(path, profile)])
+    check('profile relateDueAt set update [o]', commit(o_tok, [put(path, dict(profile, relateDueAt=NOW))]), False)
+    admin([rm(path)])
+    check('profile relateDueAt set create [o]', commit(o_tok, [put_new(path, dict(profile, relateDueAt=NOW))]), False)
+    admin([put(path, profile)])
     check('profile isLearningOn false update [x]', commit(x_tok, [put(path, dict(profile, isLearningOn=False))]), False)
     check('profile isLearningOn false update [a]', commit(None, [put(path, dict(profile, isLearningOn=False))]), False)
     check("profile voiceId 'Sulafat' update [x]", commit(x_tok, [put(path, dict(profile, voiceId='Sulafat'))]), False)
@@ -245,6 +254,25 @@ def main():
         admin([rm(sk + '-new-' + a)])
     check('daySummaries read at another uid [o]', get(f'apps/helm/users/{x_uid}/daySummaries/d', o_tok), False)
 
+    # A grouping is made by the server: the owner reads it, answers it and deletes it; what the server decided stays out of reach.
+    grouping = dict(parentKind='project', parentId=None, sourceKeys=['tasks/t1', 'tasks/t2'], sources=[dict(key='tasks/t1', app=None, kind='task'), dict(key='tasks/t2', app=None, kind='task')], linkedKeys=[], state='proposed', confidence='likely', evidence=['titleMatch'], declineCount=0, nextOfferAfter=None, answeredAt=None, toldAt=None, executionId=None, dayKey='2030-01-01', proposedAt=NOW, updatedAt=NOW, privacy=None, createdBy='nomos', sealed=SEAL)
+    gk = f'{path}/groupings/g_1'
+    for a, tok in actors.items():
+        admin([put(gk, grouping)])
+        check(f'groupings read [{a}]', get(gk, tok), a == 'o')
+        check(f'groupings list [{a}]', get(f'{path}/groupings', tok), a == 'o')
+        check(f'groupings create [{a}]', commit(tok, [put_new(gk + '-new-' + a, grouping)]), False)
+        check(f'groupings answer [{a}]', commit(tok, [put(gk, dict(grouping, state='groupedByYou', parentId='project-1', linkedKeys=['tasks/t1'], answeredAt=NOW, updatedAt=NOW + 1))]), a == 'o')
+        check(f'groupings not now [{a}]', commit(tok, [put(gk, dict(grouping, state='notNow', declineCount=1, nextOfferAfter=NOW, updatedAt=NOW + 1))]), a == 'o')
+        check(f'groupings state outside the set [{a}]', commit(tok, [put(gk, dict(grouping, state='done', updatedAt=NOW + 1))]), False)
+        check(f'groupings declineCount over 3 [{a}]', commit(tok, [put(gk, dict(grouping, declineCount=4, updatedAt=NOW + 1))]), False)
+        check(f'groupings dayKey [{a}]', commit(tok, [put(gk, dict(grouping, dayKey='2030-01-02'))]), False)
+        check(f'groupings confidence [{a}]', commit(tok, [put(gk, dict(grouping, confidence='certain'))]), False)
+        check(f'groupings evidence [{a}]', commit(tok, [put(gk, dict(grouping, evidence=[]))]), False)
+        check(f'groupings proposedAt [{a}]', commit(tok, [put(gk, dict(grouping, proposedAt=NOW + 1))]), False)
+        check(f'groupings delete [{a}]', commit(tok, [rm(gk)]), a == 'o')
+    check('groupings read at another uid [o]', get(f'apps/helm/users/{x_uid}/groupings/g_1', o_tok), False)
+
     # A research item is made and settled by the server: the owner reads it and may only stop it (status dismissed, cancelledAt, lastEditedAt).
     research = dict(mode='asked', status='preparing', captureId='capture-1', projectId=None, depth='light', isWithoutWeb=False, reservedCents=11, searchesUsed=0, costCents=0, rerunOn=None, startedAt=None, preparedAt=None, cancelledAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
     rk = f'{path}/research/research-1'
@@ -305,7 +333,7 @@ def main():
         check(f'learn later rules leave an asked item alone [{a}]', commit(tok, [put(rk, dict(research, status='ready', reservedCents=0, preparedAt=NOW, notNowStreak=1))]), False)
     check('research read at another uid [o]', get(f'apps/helm/users/{x_uid}/research/r', o_tok), False)
 
-    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection and a connection are the owner's alone, like a task.
+    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection, a day's aims and a connection are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     projectDoc = dict(status='active', targetDate=None, whoRoles={}, createdBy='person', createdAt=NOW, sealed=SEAL)
@@ -317,8 +345,9 @@ def main():
     observationDoc = dict(subject=dict(collection='habits', id='habit-1'), dayKey='2030-01-01', at=NOW, source='turn', sourceKeys=['captures/capture-1'], isCare=False, writtenBy='turn', createdAt=NOW, privacy='ordinary', sealed=SEAL)
     reflectionDoc = dict(dayKey='2030-01-01', reflectionId='r1', candidateCount=1, seenAt=None, sourceKeys=['observations/observation-1'], createdAt=NOW, privacy='ordinary', sealed=SEAL)
     scheduledActionDoc = dict(status='active', endedBy=None, repeat='FREQ=WEEKLY;BYDAY=SU', startsOn='2030-01-06', time='18:00', timeZone=None, skipped=[], moved={}, nextRunAt=NOW, nextRunKey='2030-01-06', splitFromId=None, kind='commands', allowed=['createTask'], needsApproval=False, lastRunAt=None, lastRunCaptureId=None, lastRunDueAt=None, lastOutcome=None, lastFailReason=None, pausedFrom=None, pausedUntil=None, createdBy='person', sourceCaptureId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    dayAimsDoc = dict(date=1893456000000, state='open', windDownState='waiting', lookAt=None, rolledAt=None, sealed=SEAL)
     connectionDoc = dict(whoIds=['who-1', 'who-2'], kind='family', source='page', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
-    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed'), ('scheduledActions', scheduledActionDoc, 'status', 'paused')):
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed'), ('scheduledActions', scheduledActionDoc, 'status', 'paused'), ('dayAims', dayAimsDoc, 'state', 'dismissed')):
         dk = f'{path}/{name}/{name}-1'
         for a, tok in actors.items():
             admin([put(dk, doc)])
@@ -522,7 +551,7 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'apps/helm/server/{uid}/research/usage', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'apps/helm/server/{uid}/research/usage', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}', f'apps/helm/dayQueue/{uid}'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else '/'.join(p.split("/")[-2:]) if p.endswith('/usage') else p.split("/")[-2]
         for a, tok in actors.items():
@@ -541,6 +570,12 @@ def main():
         check(f'actionQueue list [{a}]', get('apps/helm/actionQueue', tok), False)
         check(f'actionQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/actionQueue/{uid}-own', {'lookAt': NOW})]), False)
         check(f'actionQueue delete [{a}]', commit(tok, [rm(f'apps/helm/actionQueue/{uid}')]), False)
+
+    # The day job's queue is Admin SDK only as well.
+    for a, tok in actors.items():
+        check(f'dayQueue list [{a}]', get('apps/helm/dayQueue', tok), False)
+        check(f'dayQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/dayQueue/{uid}-own', {'lookAt': NOW})]), False)
+        check(f'dayQueue delete [{a}]', commit(tok, [rm(f'apps/helm/dayQueue/{uid}')]), False)
 
     if STORAGE_HOST:
         storage_cases(o_tok, x_tok, uid, x_uid, actors)

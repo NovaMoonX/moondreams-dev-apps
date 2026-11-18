@@ -31,6 +31,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   dayStartTime: data.dayStartTime ?? DEFAULT_DAY_START_TIME,
   dayEndTime: data.dayEndTime ?? DEFAULT_DAY_END_TIME,
   planFillPercent: data.planFillPercent ?? DEFAULT_PLAN_FILL_PERCENT,
+  dayAimsChangedAt: data.dayAimsChangedAt ?? null,
   shiftCalendarIds: data.shiftCalendarIds ?? [],
   busyAllDayEventRefs: data.busyAllDayEventRefs ?? [],
   calendarOfferFoldedAt: data.calendarOfferFoldedAt ?? null,
@@ -57,6 +58,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   isLearningOn: data.isLearningOn !== false,
   patternsCheckedOn: data.patternsCheckedOn ?? null,
   reflectDueAt: data.reflectDueAt ?? null,
+  relateDueAt: data.relateDueAt ?? null,
   scheduledActionsChangedAt: data.scheduledActionsChangedAt ?? null,
   forgottenAt: data.forgottenAt ?? null,
   prunedOn: data.prunedOn ?? null,
@@ -70,6 +72,25 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
       ? {
           month: data.researchAllowance.month,
           leftCents: Number(data.researchAllowance.leftCents) || 0,
+        }
+      : null,
+  calendarSync:
+    data.calendarSync && typeof data.calendarSync.calendarId === 'string'
+      ? {
+          accountId: String(data.calendarSync.accountId ?? ''),
+          calendarId: data.calendarSync.calendarId,
+          calendarName: String(data.calendarSync.calendarName ?? ''),
+          isMadeByHelm: data.calendarSync.isMadeByHelm === true,
+          wasAlreadyRead: data.calendarSync.wasAlreadyRead === true,
+          startedAt: Number(data.calendarSync.startedAt) || 0,
+          lastWrittenAt:
+            typeof data.calendarSync.lastWrittenAt === 'number'
+              ? data.calendarSync.lastWrittenAt
+              : null,
+          lastError:
+            typeof data.calendarSync.lastError === 'string'
+              ? data.calendarSync.lastError
+              : null,
         }
       : null,
   createdAt: data.createdAt ?? 0,

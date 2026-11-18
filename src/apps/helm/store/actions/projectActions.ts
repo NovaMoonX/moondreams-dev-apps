@@ -27,6 +27,7 @@ import {
 import { rewriteOfferDays } from '@apps/helm/engine/researchAhead';
 import { readWhoTier } from '@apps/helm/engine/whoTier';
 import { openJson, sealJson } from '@apps/helm/security';
+import { dropFromGroupings } from '@apps/helm/store/actions/groupingActions';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
@@ -541,6 +542,10 @@ export async function deleteProject(uid: string, projectId: string) {
     return snapshot.data() as DocumentData;
   }).catch(abandon);
   if (!raw) throw new Error('This is already gone.');
+  dropFromGroupings(uid, `projects/${projectId}`, {
+    kind: 'project',
+    id: projectId,
+  });
   return {
     taskCount: cut.length,
     restore: async (): Promise<'restored' | 'exists'> => {

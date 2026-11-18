@@ -133,6 +133,7 @@ const toCapture = async (
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
     createdAt: turn.createdAt,
     sortedAt: turn.createdAt,
     screen: null,

@@ -148,6 +148,8 @@ import {
   type TaskDue,
   type MeetsHow,
   MEETS_HOWS,
+  MAX_TASK_MINUTES,
+  TASK_EFFORTS,
   type HabitCommand,
   type SeenAsCommand,
   type SetPersonalityCommand,
@@ -1232,6 +1234,17 @@ const isQuotedPrivateChange = (
 const readMeetsHow = (value: unknown): MeetsHow | undefined =>
   MEETS_HOWS.find((known) => known === value);
 
+const readEffort = (value: unknown) =>
+  TASK_EFFORTS.find((known) => known === value) ?? null;
+
+const readMinutes = (value: unknown) =>
+  typeof value === 'number' &&
+  Number.isInteger(value) &&
+  value > 0 &&
+  value <= MAX_TASK_MINUTES
+    ? value
+    : null;
+
 export type QuietDrop =
   | 'quiet-guess-release'
   | 'quiet-unquoted'
@@ -1392,6 +1405,9 @@ const readCommand = (
       ...(readMeetsHow(item.meetsHow) && {
         meetsHow: readMeetsHow(item.meetsHow),
       }),
+      effort: readEffort(item.effort),
+      durationMinutes: readMinutes(item.durationMinutes),
+      ...(item.isAim === true && { isAim: true }),
     };
   }
 
@@ -1403,12 +1419,14 @@ const readCommand = (
   const links = readLinks(item, title, reading, entities);
   const hasLinks = links.whoRefs.length > 0 || links.placeRefs.length > 0;
   const meetsHow = readMeetsHow(item.meetsHow);
+  const isAim = item.isAim === true;
   if (
     !title &&
     !hasDue &&
     isUrgent === null &&
     !hasLinks &&
-    meetsHow === undefined
+    meetsHow === undefined &&
+    !isAim
   )
     return null;
   return {
@@ -1420,6 +1438,7 @@ const readCommand = (
     isUrgent,
     ...links,
     ...(meetsHow !== undefined && { meetsHow }),
+    ...(isAim && { isAim }),
   };
 };
 

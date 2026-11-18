@@ -49,6 +49,10 @@ export type TaskDue =
 export const MEETS_HOWS = ['inPerson', 'video', 'phone'] as const;
 export type MeetsHow = (typeof MEETS_HOWS)[number];
 
+export const TASK_EFFORTS = ['light', 'moderate', 'heavy'] as const;
+export type TaskEffort = (typeof TASK_EFFORTS)[number];
+export const MAX_TASK_MINUTES = 12 * 60;
+
 /** What a task stores about how it meets; a missing or odd field reads as none. */
 export const readMeets = (
   value: unknown,
@@ -727,6 +731,12 @@ export type NomosCommand =
       whoIds?: string[];
       /** How the task meets; absent or null means it was not said. */
       meetsHow?: MeetsHow | null;
+      /** How heavy the task is, judged once when it is made; absent or null reads as moderate. */
+      effort?: TaskEffort | null;
+      /** The length the person said, in minutes; absent or null when none was said. */
+      durationMinutes?: number | null;
+      /** Said on the day's aims; a turn that answers the morning card files each thing it names. */
+      isAim?: boolean;
     }
   | {
       kind: 'updateTask';
@@ -739,6 +749,8 @@ export type NomosCommand =
       placeRefs: string[];
       /** Absent leaves it as it is; null clears it. */
       meetsHow?: MeetsHow | null;
+      /** An existing task named as one of the day's aims; changes nothing about the task itself. */
+      isAim?: boolean;
     }
   | { kind: 'completeTask'; taskId: string }
   | { kind: 'setPrivate'; taskId: string; isPrivate: boolean };
@@ -1289,6 +1301,9 @@ export const buildFileResultsTool = ({
             'dueSpanId',
             'isUrgent',
             'meetsHow',
+            'effort',
+            'durationMinutes',
+            'isAim',
             'isPrivate',
             'targetAlias',
             'isQuiet',
@@ -1479,6 +1494,20 @@ export const buildFileResultsTool = ({
               description:
                 'createTask and updateTask: inPerson, video or phone only when the person says how that meeting or call happens; null for every other kind and whenever it is not said.',
             },
+            effort: {
+              type: ['string', 'null'],
+              enum: [...TASK_EFFORTS, null],
+              description:
+                'createTask: how heavy the task is, judged once now: light (a quick errand or message), moderate, or heavy (deep or draining work); null when unsure.',
+            },
+            durationMinutes: nullable(
+              'integer',
+              `createTask: the length in minutes only when the person says how long it takes ("an hour" is 60); null when they do not say, never a guess.`,
+            ),
+            isAim: nullable(
+              'boolean',
+              'createTask and updateTask: true on each thing the person names when <aims_turn> is present, in the order said, for an existing task an updateTask with its alias and every other field null; null otherwise.',
+            ),
             isPrivate: nullable(
               'boolean',
               'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private. createHabit: true only when the person asks to keep the habit private; null for every other kind.',

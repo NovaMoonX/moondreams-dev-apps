@@ -15,6 +15,9 @@ Helm is a private companion for one person's whole life, and you mostly talk to 
 ## Status
 
 Built:
+- Your day: the first open each day asks what you want done today, with yesterday's leftovers in the same card; what you say becomes tasks planned first with breaks, a guessed length you can fix and a line when they don't all fit, and the last 2 hours wind the day down (Tomorrow, Later or Drop it, with an optional why); the day turns over on the server; the first plan is made before you open the app
+- Keep your plan in a calendar: on a Google Calendar connection's page, make a calendar for your plan or use one of yours; kept slots, habit windows and appointments are written there, a move or removal there is followed here (a habit window's move is only noted), and stopping removes the upcoming events (device side: the row and sheets; the sync runs on the server)
+- Related things grouped overnight: tasks, notes, topics and what connected apps share (a Going Once sale, a Runway horizon item) that belong together are found by the nightly pass; a thing that clearly fits an existing project is linked quietly ("Linked 2 things to Moving. · Undo"), anything else is offered once as a card on home (Group them, Not related, Not now, with the same back-off as other offers), and a project or topic shows what is linked under it.
 - Learn later: questions saved to learn later are listed under Knowledge, prepared into an overview with up to 2 videos, and offered as one card on Today in a free evening; Show me, Not now, Done with it, Remove and Save to my knowledge each have an Undo.
 - What Nomos has noticed: patterns about when things work, from ticks and from what you say, under "What I've noticed" in How Nomos sees you with their evidence, a switch to turn learning off and "Forget what you've noticed"; offered once on the habit page and in Today (a no waits 4 then 8 weeks, a third is final), acted on with Undo only for what Helm planned, never for care.
 - How Nomos sees you, widened (device side): lines about what works for you, what gets in the way, your rhythm, how you talk and your tendencies, each with where it came from, open to its quoted sources with "That's not quite right" (say or type how it is) and "Remove this", both with Undo; "Forget what you've noticed" deletes them too. The nightly pass writes them, and you can change or remove a line by voice; when a thing a line came from is deleted, the line goes at the next weekly rebuild.
@@ -66,7 +69,7 @@ Next (Core MVP):
 - [ ] Knowledge as nested topics that read as documents, with sources on every part and a history of versions
 - [x] Procedures run each time, attached to a trip, event or project
 - [ ] Tasks with steps, projects with health from evidence, the Inbox, Today
-- [ ] Connected apps, read only: Google Calendar, Gmail, Drive and every site app, each sharing only what you switch on
+- [ ] Connected apps, read only (but the one calendar you choose to keep your plan in): Google Calendar, Gmail, Drive and every site app, each sharing only what you switch on
 - [ ] Encrypted from day one; Trust this browser; Activity with Undo; search
 
 Later:
@@ -84,7 +87,9 @@ Later:
 - [x] Hands-free first: every question answered aloud, listening after it asks, talk over it any time
 - [x] Voice follows the turn on every page: speak on a person's page or after the wake phrase and the answer is said there; type and it's written
 - [ ] "How Nomos sees you" grows to how you talk and what works for you, each line citing where it came from; give the assistant a personality (blunt, kind, brief…) and say how honest it may be
-- [ ] Your phone's location only if you choose (Off, City only or Precise), and one Google Calendar kept in step both ways
+- [ ] Your phone's location only if you choose (Off, City only or Precise)
+- [x] One Google Calendar kept in step both ways: your plan, habit windows and appointments written there, and a move or removal there followed here
+- [x] Your day: say what you want done and get it planned with breaks, then wind down in the evening
 - [ ] Drafting in your style, video, app cards (a Pinch recipe card), a life timeline and milestones from the moments Helm keeps, writes to other apps
 - [ ] A browser extension and other ways to reach the assistant, orders, Apple contacts and sign-in
 
