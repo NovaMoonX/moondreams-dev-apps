@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, UserPlus } from 'lucide-react';
 
 import LazyMount from '@/components/LazyMount';
@@ -12,6 +17,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useKeptScroll } from '@/hooks/useKeptScroll';
 import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import CircleMap from '@apps/helm/components/who/CircleMap';
 import InferredFacts from '@apps/helm/components/who/InferredFacts';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import WhoRow from '@apps/helm/components/who/WhoRow';
@@ -25,6 +31,11 @@ import { groupWho } from '@apps/helm/utils/whoGroups';
 const SEARCH_FROM = 8;
 const ROWS_PER_CHUNK = 40;
 const ROW_HEIGHT = 65.5;
+
+type PeopleView = 'list' | 'map';
+
+// Coming back from a person's page lands on the view that was open.
+let lastView: PeopleView = 'list';
 
 const toChunks = (list: OpenWho[]) =>
   Array.from({ length: Math.ceil(list.length / ROWS_PER_CHUNK) }, (_, index) =>
@@ -45,6 +56,7 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
   const assistant = useAssistantName();
   const { openContacts } = useGoogleConnect();
   const isOffline = useNetworkStatus() === 'offline';
+  const [view, setView] = useState<PeopleView>(lastView);
   const [search, setSearch] = useState('');
   const [isOthersOpen, setIsOthersOpen] = useState(false);
   const [isInferredOpen, setIsInferredOpen] = useState(false);
@@ -120,84 +132,107 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
             {HELM_COPY.peopleEmpty(assistant)}
           </p>
         )}
-        {items.length >= SEARCH_FROM && (
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder={HELM_COPY.peopleSearch}
-          />
-        )}
-        {inferredCount > 0 && (
-          <Button
-            type='button'
-            variant='tertiary'
-            onClick={() => setIsInferredOpen(true)}
-            className='border-border text-foreground! h-10 w-full min-w-0 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+        {items.length > 0 && (
+          <Tabs
+            value={view}
+            onValueChange={(value) => {
+              lastView = value as PeopleView;
+              setView(lastView);
+            }}
+            variant='pills'
+            aria-label={HELM_COPY.peopleViewsLabel}
           >
-            <span className='flex min-w-0 items-center gap-2'>
-              <SourceRing
-                isConfirmed={false}
-                label={HELM_COPY.factRingInferred(assistant)}
+            <TabsList>
+              <TabsTrigger value='list'>{HELM_COPY.peopleViewList}</TabsTrigger>
+              <TabsTrigger value='map'>{HELM_COPY.peopleViewMap}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+        {view === 'map' && items.length > 0 && (
+          <CircleMap onOpenWho={onOpenWho} />
+        )}
+        {view === 'list' && (
+          <>
+            {items.length >= SEARCH_FROM && (
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder={HELM_COPY.peopleSearch}
               />
-              <span className='text-foreground truncate'>
-                {HELM_COPY.inferredDoor(inferredCount)}
-              </span>
-            </span>
-            <ChevronRight
-              className='text-muted-foreground size-4 shrink-0'
-              aria-hidden='true'
-            />
-          </Button>
-        )}
-        {isOffline ? (
-          <LockedButton
-            label={HELM_COPY.contactsBringIn}
-            title={HELM_COPY.connectionsNeedConnection}
-            className='h-10 w-full justify-start rounded-xl'
-          >
-            <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
-          </LockedButton>
-        ) : (
-          <Button
-            type='button'
-            variant='tertiary'
-            onClick={openContacts}
-            className='border-border text-foreground! h-10 w-full min-w-0 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
-          >
-            <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
-              <UserPlus className='size-4 shrink-0' aria-hidden='true' />
-              <span className='text-foreground truncate'>
-                {HELM_COPY.contactsBringIn}
-              </span>
-            </span>
-            <ChevronRight
-              className='text-muted-foreground size-4 shrink-0'
-              aria-hidden='true'
-            />
-          </Button>
-        )}
-        {isNoMatch && (
-          <p className='text-muted-foreground text-[15px] text-pretty'>
-            {HELM_COPY.peopleNoMatch}
-          </p>
-        )}
-        {renderGroup(HELM_COPY.tierClose, groups.close)}
-        {renderGroup(HELM_COPY.tierRegular, groups.regular)}
-        {groups.others.length > 0 && (
-          <section className='space-y-3'>
-            <SectionDivider label={HELM_COPY.othersDivider} />
-            {!isSearching && (
-              <ShowMoreButton
-                isOpen={isOthersOpen}
-                onClick={() => setIsOthersOpen((isOpen) => !isOpen)}
-              >
-                {isOthersOpen
-                  ? HELM_COPY.hideOthers
-                  : HELM_COPY.showOthers(groups.others.length)}
-              </ShowMoreButton>
             )}
-            {isOthersShown && renderRows(groups.others)}
-          </section>
+            {inferredCount > 0 && (
+              <Button
+                type='button'
+                variant='tertiary'
+                onClick={() => setIsInferredOpen(true)}
+                className='border-border text-foreground! h-10 w-full min-w-0 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+              >
+                <span className='flex min-w-0 items-center gap-2'>
+                  <SourceRing
+                    isConfirmed={false}
+                    label={HELM_COPY.factRingInferred(assistant)}
+                  />
+                  <span className='text-foreground truncate'>
+                    {HELM_COPY.inferredDoor(inferredCount)}
+                  </span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            )}
+            {isOffline ? (
+              <LockedButton
+                label={HELM_COPY.contactsBringIn}
+                title={HELM_COPY.connectionsNeedConnection}
+                className='h-10 w-full justify-start rounded-xl'
+              >
+                <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
+              </LockedButton>
+            ) : (
+              <Button
+                type='button'
+                variant='tertiary'
+                onClick={openContacts}
+                className='border-border text-foreground! h-10 w-full min-w-0 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+              >
+                <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
+                  <UserPlus className='size-4 shrink-0' aria-hidden='true' />
+                  <span className='text-foreground truncate'>
+                    {HELM_COPY.contactsBringIn}
+                  </span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            )}
+            {isNoMatch && (
+              <p className='text-muted-foreground text-[15px] text-pretty'>
+                {HELM_COPY.peopleNoMatch}
+              </p>
+            )}
+            {renderGroup(HELM_COPY.tierClose, groups.close)}
+            {renderGroup(HELM_COPY.tierRegular, groups.regular)}
+            {groups.others.length > 0 && (
+              <section className='space-y-3'>
+                <SectionDivider label={HELM_COPY.othersDivider} />
+                {!isSearching && (
+                  <ShowMoreButton
+                    isOpen={isOthersOpen}
+                    onClick={() => setIsOthersOpen((isOpen) => !isOpen)}
+                  >
+                    {isOthersOpen
+                      ? HELM_COPY.hideOthers
+                      : HELM_COPY.showOthers(groups.others.length)}
+                  </ShowMoreButton>
+                )}
+                {isOthersShown && renderRows(groups.others)}
+              </section>
+            )}
+          </>
         )}
       </main>
       {isInferredOpen && (

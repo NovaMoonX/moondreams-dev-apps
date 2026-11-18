@@ -6,8 +6,37 @@ import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
 import { extractLinks, normalizeProse } from '../../../vendor/proseUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { normalizeKin } from './kin.js';
+import {
+  CONTACT_VALUE_CAP,
+  toContactKey,
+  toContactLabel,
+} from './contactPoints.js';
+import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
 import { KIN_KINDS } from './kinKinds.js';
+import {
+  readObservations,
+  readTurnIntent,
+  withoutWatchingPhrases,
+  type ObservationRead,
+  type TurnIntent,
+} from './actNow.js';
 import { ASK_WORDS } from './summaries.js';
+import { readHabitCommands, type HabitDrop } from './readHabitCommands.js';
+import {
+  readScheduledCommands,
+  type ScheduleCommand,
+  type ScheduleDrop,
+} from './readScheduledCommands.js';
+import {
+  readImportanceCommands,
+  type ImportanceDrop,
+} from './readImportanceCommands.js';
+import { readSeenAsCommands, type SeenAsDrop } from './readSeenAsCommands.js';
+import {
+  readPersonalityCommands,
+  type PersonalityDrop,
+} from './readPersonalityCommands.js';
+import type { Personality } from './personality.js';
 import {
   hasProcedureCue,
   hasProcedureReviseCue,
@@ -53,10 +82,21 @@ import {
   type ProcedureCommand,
   MAX_TICKS_PER_TURN,
   RUN_COMMAND_KINDS,
+  SOUNDS_LIKE_COMMAND_KINDS,
+  CONTACT_COMMAND_KINDS,
+  type AddContactPointCommand,
+  type NoteSoundsLikeCommand,
+  type SetWhereaboutsCommand,
+  WHEREABOUTS_CHANGES,
+  WHEREABOUTS_CITY_CAP,
+  WHEREABOUTS_LABEL_CAP,
   MAX_UNDO_OFFERS,
   UNDO_QUOTE_CAP,
   UNDO_REASONS,
   type UndoOffer,
+  type LearnAsk,
+  type LearnCommand,
+  type ResearchCommand,
   type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
@@ -75,6 +115,7 @@ import {
   PROJECT_ROLE_NOTE_CAP,
   PROJECT_ROLES,
   type ProjectCommand,
+  type CreateProjectCommand,
   KEY_DATE_KINDS,
   KEY_DATE_LABEL_CAP,
   type KeyDateCommand,
@@ -105,7 +146,32 @@ import {
   type SetQuietCommand,
   MAX_QUIET_COMMANDS,
   type TaskDue,
+  type MeetsHow,
+  MEETS_HOWS,
+  MAX_TASK_MINUTES,
+  TASK_EFFORTS,
+  type HabitCommand,
+  type SeenAsCommand,
+  type SetPersonalityCommand,
+  type SetImportanceCommand,
+  type ConnectionCommand,
 } from './commands.js';
+import {
+  WHY_CLEANED_CAP,
+  WHY_SUMMARY_CAP,
+  WHY_TAGS_CAP,
+  WHY_VERBATIM_CAP,
+  isWorthTidying,
+} from '../goalWhy.js';
+import { readConnectionCommands } from './readConnectionCommands.js';
+import { readResearchCommands } from './readResearchCommands.js';
+import { readOfferResearch } from './readOfferResearch.js';
+import { readLearnCommands, refuseDoubledGoals } from './readLearnCommands.js';
+import {
+  readOfferQuestions,
+  readQuestionList,
+  readQuestionsMeeting,
+} from './readQuestionTask.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
 
@@ -158,10 +224,19 @@ const KNOWN_KEYS = new Set([
   'keyDateKind',
   'keyDateLabel',
   'dateSpanId',
+  'startsSpanId',
+  'timeSpanId',
+  'fromSpanId',
+  'toSpanId',
   'comesBack',
   'projectRef',
   'projectEmoji',
   'objective',
+  'projectKind',
+  'whyQuote',
+  'whyCleaned',
+  'whySummary',
+  'whyTags',
   'role',
   'roleNote',
   'bodyQuote',
@@ -195,6 +270,16 @@ const KNOWN_KEYS = new Set([
   'unit',
   'isMoney',
   'decimals',
+  'habitAlias',
+  'cadence',
+  'windows',
+  'timesPerDay',
+  'isCare',
+  'habitChange',
+  'windowKey',
+  'candidateAliases',
+  'checkDay',
+  'checkStatus',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -630,16 +715,54 @@ const readProjectDate = (
     : getDayIn(span.due.at, toKnownZone(timeZone));
 };
 
+/** The person's own words for a goal's why: the capture's exact slice the quote points at (case and spacing as the person wrote them), or null when the quote is not in the capture. */
+const readWhyWords = (value: unknown, captureText: string) => {
+  const quote = toText(value, WHY_VERBATIM_CAP);
+  if (!quote) return null;
+  const pattern = quote
+    .split(' ')
+    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('\\s+');
+  return (
+    new RegExp(`(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`, 'iu').exec(
+      captureText,
+    )?.[0] ?? null
+  );
+};
+
+const readGoalWhy = (
+  item: Record<string, unknown>,
+  captureText: string,
+): CreateProjectCommand['why'] => {
+  const verbatim = readWhyWords(item.whyQuote, captureText);
+  if (!verbatim) return null;
+  const cleaned = toText(item.whyCleaned, WHY_CLEANED_CAP);
+  return {
+    verbatim: verbatim.slice(0, WHY_VERBATIM_CAP),
+    cleaned: isWorthTidying(verbatim, cleaned) ? cleaned : null,
+    summary: toText(item.whySummary, WHY_SUMMARY_CAP),
+    tags: (Array.isArray(item.whyTags) ? item.whyTags : [])
+      .flatMap((tag) => {
+        const text = toText(tag, 24)?.toLowerCase();
+        return text ? [text] : [];
+      })
+      .filter((tag, index, all) => all.indexOf(tag) === index)
+      .slice(0, WHY_TAGS_CAP),
+  };
+};
+
 /** A project to start, a role to give or a milestone to add; null when its words are missing. At most one project, `MAX_PROJECT_ROLES` roles and `MAX_MILESTONES_PER_TURN` milestones. */
 const readProjects = (
   items: Record<string, unknown>[],
   entities: Entities,
   reading: CaptureReading,
   timeZone: string,
+  captureText: string,
 ): ProjectCommand[] => {
   const read = items.flatMap((item): ProjectCommand[] => {
     if (item.kind === 'createProject') {
       const name = toText(item.title, PROJECT_NAME_CAP);
+      const isGoal = item.projectKind === 'goal';
       return name
         ? [
             {
@@ -649,6 +772,8 @@ const readProjects = (
               emoji: toEmoji(item.projectEmoji),
               objective: toText(item.objective, PROJECT_OBJECTIVE_CAP),
               targetDate: readProjectDate(item.dueSpanId, reading, timeZone),
+              projectKind: isGoal ? 'goal' : 'project',
+              why: isGoal ? readGoalWhy(item, captureText) : null,
             },
           ]
         : [];
@@ -691,6 +816,7 @@ const readProjects = (
     ...read
       .filter((command) => command.kind === 'addMilestone')
       .slice(0, MAX_MILESTONES_PER_TURN),
+    ...readOfferResearch(items),
   ];
 };
 
@@ -1104,6 +1230,21 @@ const isQuotedPrivateChange = (
   );
 };
 
+/** A format the model named; undefined when it named none, so an update leaves the field as it is. */
+const readMeetsHow = (value: unknown): MeetsHow | undefined =>
+  MEETS_HOWS.find((known) => known === value);
+
+const readEffort = (value: unknown) =>
+  TASK_EFFORTS.find((known) => known === value) ?? null;
+
+const readMinutes = (value: unknown) =>
+  typeof value === 'number' &&
+  Number.isInteger(value) &&
+  value > 0 &&
+  value <= MAX_TASK_MINUTES
+    ? value
+    : null;
+
 export type QuietDrop =
   | 'quiet-guess-release'
   | 'quiet-unquoted'
@@ -1209,6 +1350,8 @@ const readCommand = (
   aliases: AliasBook,
   entities: Entities,
   captureText: string,
+  synced: SyncedBook | undefined,
+  now: number,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (
@@ -1216,12 +1359,14 @@ const readCommand = (
     kind === 'remember' ||
     kind === 'planDay' ||
     kind === 'setCurrentPlace' ||
+    kind === 'setWhereabouts' ||
     kind === 'noteFact' ||
     kind === 'setKeyDate' ||
     kind === 'removeKeyDate' ||
     kind === 'createProject' ||
     kind === 'setProjectRole' ||
     kind === 'addMilestone' ||
+    kind === 'offerResearch' ||
     kind === 'createNote' ||
     kind === 'setQuiet'
   ) {
@@ -1255,6 +1400,14 @@ const readCommand = (
       isUrgent: isUrgent ?? reading.isUrgent,
       ...readLinks(item, title, reading, entities),
       projectRef: toText(item.projectRef, PROJECT_NAME_CAP),
+      questions: readQuestionList(item.questions),
+      meeting: readQuestionsMeeting(item.aboutAlias, synced, now),
+      ...(readMeetsHow(item.meetsHow) && {
+        meetsHow: readMeetsHow(item.meetsHow),
+      }),
+      effort: readEffort(item.effort),
+      durationMinutes: readMinutes(item.durationMinutes),
+      ...(item.isAim === true && { isAim: true }),
     };
   }
 
@@ -1265,8 +1418,28 @@ const readCommand = (
   const hasDue = item.dueSpanId !== null && item.dueSpanId !== undefined;
   const links = readLinks(item, title, reading, entities);
   const hasLinks = links.whoRefs.length > 0 || links.placeRefs.length > 0;
-  if (!title && !hasDue && isUrgent === null && !hasLinks) return null;
-  return { kind, taskId, title, due, hasDue, isUrgent, ...links };
+  const meetsHow = readMeetsHow(item.meetsHow);
+  const isAim = item.isAim === true;
+  if (
+    !title &&
+    !hasDue &&
+    isUrgent === null &&
+    !hasLinks &&
+    meetsHow === undefined &&
+    !isAim
+  )
+    return null;
+  return {
+    kind,
+    taskId,
+    title,
+    due,
+    hasDue,
+    isUrgent,
+    ...links,
+    ...(meetsHow !== undefined && { meetsHow }),
+    ...(isAim && { isAim }),
+  };
 };
 
 export type TopicDrop =
@@ -1697,6 +1870,180 @@ const readProcedureCommands = (
     );
 };
 
+const readSoundsLike = (
+  items: Record<string, unknown>[],
+  people: AliasBook | undefined,
+  previous: { text: string; heard: string[] } | undefined,
+): NoteSoundsLikeCommand[] =>
+  items
+    .filter((item) =>
+      (SOUNDS_LIKE_COMMAND_KINDS as readonly unknown[]).includes(item.kind),
+    )
+    .flatMap((item): NoteSoundsLikeCommand[] => {
+      const whoId =
+        typeof item.whoAlias === 'string'
+          ? (people?.idOf(item.whoAlias) ?? null)
+          : null;
+      const heardSpan = toText(item.heardSpan, SOUNDS_LIKE_CAP);
+      const isHeard =
+        !!previous &&
+        !!heardSpan &&
+        (isSpanOf(heardSpan, previous.text) ||
+          previous.heard.some(
+            (heard) => toComparable(heard) === toComparable(heardSpan),
+          ));
+      return whoId && heardSpan && isHeard
+        ? [{ kind: 'noteSoundsLike', whoId, heardSpan }]
+        : [];
+    })
+    .slice(0, 1);
+
+const MAX_CONTACTS_PER_TURN = 3;
+
+const readContactPoints = (
+  items: Record<string, unknown>[],
+  people: AliasBook | undefined,
+): AddContactPointCommand[] =>
+  items
+    .filter((item) =>
+      (CONTACT_COMMAND_KINDS as readonly unknown[]).includes(item.kind),
+    )
+    .flatMap((item): AddContactPointCommand[] => {
+      const whoId =
+        typeof item.whoAlias === 'string'
+          ? (people?.idOf(item.whoAlias) ?? null)
+          : null;
+      const contactKind =
+        item.contactKind === 'phone' || item.contactKind === 'email'
+          ? item.contactKind
+          : null;
+      const value = toText(item.contactValue, CONTACT_VALUE_CAP);
+      return whoId && contactKind && value && toContactKey(contactKind, value)
+        ? [
+            {
+              kind: 'addContactPoint',
+              whoId,
+              contactKind,
+              value,
+              label:
+                typeof item.contactLabel === 'string' &&
+                item.contactLabel.trim() !== ''
+                  ? toContactLabel(item.contactLabel)
+                  : null,
+            },
+          ]
+        : [];
+    })
+    .slice(0, MAX_CONTACTS_PER_TURN);
+
+const toDateSpanDay = (
+  value: unknown,
+  reading: CaptureReading,
+  timeZone: string,
+) => {
+  if (value === null || value === undefined) return null;
+  const span =
+    typeof value === 'string'
+      ? reading.dates.find((entry) => entry.id === value)
+      : undefined;
+  if (!span || span.precision) throw new NomosReplyError('badDate');
+  return span.due.kind === 'day'
+    ? span.due.date
+    : getDayIn(span.due.at, toKnownZone(timeZone));
+};
+
+/** A place or a person the person said, by the id the reading gave it, as the words of an away label. */
+const toTokenWords = (value: unknown, reading: CaptureReading) =>
+  typeof value === 'string'
+    ? ([...reading.places, ...reading.people].find(
+        (token) => token.id === value,
+      )?.text ?? null)
+    : null;
+
+/** At most one where-someone-is change per who: the words must be quoted, an away needs a city and a first day from the reading's dates, and only the person themself can be back. */
+const readWhereabouts = (
+  items: Record<string, unknown>[],
+  people: AliasBook | undefined,
+  reading: CaptureReading,
+  captureText: string,
+  timeZone: string,
+  now: number | undefined,
+): SetWhereaboutsCommand[] => {
+  const words = ` ${toComparable(captureText)} `;
+  const today = now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
+  const isSaid = (cityName: string) =>
+    words.includes(` ${toComparable(cityName.split(',')[0] ?? '')} `);
+  const read = items
+    .filter((item) => item.kind === 'setWhereabouts')
+    .flatMap((item): SetWhereaboutsCommand[] => {
+      const change = WHEREABOUTS_CHANGES.find((entry) => entry === item.change);
+      const quote = toText(item.quote, FACT_QUOTE_CAP);
+      const alias = typeof item.whoAlias === 'string' ? item.whoAlias : '';
+      const isSelf = alias.toLowerCase() === 'me';
+      const whoId = isSelf ? null : (people?.idOf(alias) ?? null);
+      if (!change || !quote || (!isSelf && !whoId)) return [];
+      if (!words.includes(` ${toComparable(quote)} `)) return [];
+      if (change === 'back') {
+        return isSelf
+          ? [
+              {
+                kind: 'setWhereabouts',
+                whoId,
+                change,
+                cityName: null,
+                from: null,
+                to: null,
+                label: null,
+                quote,
+              },
+            ]
+          : [];
+      }
+      const cityName = toText(item.cityName, WHEREABOUTS_CITY_CAP);
+      if (!cityName || !isSaid(cityName)) return [];
+      if (change === 'home') {
+        return [
+          {
+            kind: 'setWhereabouts',
+            whoId,
+            change,
+            cityName,
+            from: null,
+            to: null,
+            label: null,
+            quote,
+          },
+        ];
+      }
+      const from = toDateSpanDay(item.fromSpanId, reading, timeZone);
+      const to = toDateSpanDay(item.toSpanId, reading, timeZone) ?? from;
+      if (from === null || to === null || to < from) return [];
+      if (today !== null && to < today) return [];
+      if ((to - from) / DAY_MS > 366) return [];
+      const label = toTokenWords(item.labelSpanId, reading);
+      return [
+        {
+          kind: 'setWhereabouts',
+          whoId,
+          change,
+          cityName,
+          from,
+          to,
+          label: label ? label.slice(0, WHEREABOUTS_LABEL_CAP) : null,
+          quote,
+        },
+      ];
+    });
+  return [
+    ...new Map(
+      read.map((command) => [
+        `${command.whoId ?? 'me'}:${command.change}`,
+        command,
+      ]),
+    ).values(),
+  ].slice(0, 4);
+};
+
 export type RunDrop =
   | 'run-start-unasked'
   | 'run-start-unknown'
@@ -2029,6 +2376,8 @@ export function normalizeNomosReply(
     keyDates?: AliasBook;
     /** The people listed in the context, by alias (w1, w2, …). */
     people?: AliasBook;
+    /** Every name and alias of each listed person, by id. */
+    personNames?: Map<string, string[]>;
     topics?: AliasBook;
     notes?: AliasBook;
     /** The open projects, by alias. */
@@ -2053,6 +2402,16 @@ export function normalizeNomosReply(
     procedureVersions?: Map<string, number>;
     /** The undone steps of the open runs, by alias. */
     runSteps?: AliasBook;
+    /** The person's habits, by alias (h1, h2, …). */
+    habits?: AliasBook;
+    /** The person's scheduled actions, by alias (sa1, sa2, …). */
+    scheduledActions?: AliasBook;
+    /** The person's projects and goals, by alias (p1, p2, …). */
+    projects?: AliasBook;
+    /** The saved learn-later questions, by alias (r1, r2, …). */
+    learnLater?: AliasBook;
+    /** Each habit's real name by id, for the check that words in the turn name it. */
+    habitNames?: Map<string, string>;
     /** The earlier turns the model may offer to take back, by handle, and how many lines each has. */
     undoTurns?: AliasBook;
     undoUnitCounts?: Map<string, number>;
@@ -2060,6 +2419,11 @@ export function normalizeNomosReply(
     captureText?: string;
     /** What names each date in the context (who, label, kind), for the check that a removal is still asked once closing phrases are taken out. */
     keyDateNames?: Map<string, string[]>;
+    /** The lines of how the assistant sees the person, by alias (sy1, sy2, …), and the words of each by id. */
+    seenAs?: AliasBook;
+    seenAsWords?: Map<string, string>;
+    /** The personality the person has now, for the cap on traits. */
+    personality?: Personality;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -2067,8 +2431,13 @@ export function normalizeNomosReply(
     timeZone?: string;
     /** The photos and files the turn sent, by alias. */
     attachments?: { alias: string; kind: string }[];
+    previousTurn?: { text: string; heard: string[] };
+    /** Missing means on. */
+    isLearningOn?: boolean;
   },
 ): {
+  intent: TurnIntent;
+  observations: ObservationRead[];
   media: MediaDecision[];
   mediaDropped: MediaDrop[];
   commands: NomosCommand[];
@@ -2090,6 +2459,23 @@ export function normalizeNomosReply(
   procedureDropped: ProcedureDrop[];
   runCommands: RunCommand[];
   runDropped: RunDrop[];
+  habitCommands: HabitCommand[];
+  habitDropped: HabitDrop[];
+  scheduleCommands: ScheduleCommand[];
+  scheduleDropped: ScheduleDrop[];
+  researchCommands: ResearchCommand[];
+  learnCommands: LearnCommand[];
+  learnAsks: LearnAsk[];
+  importanceCommands: SetImportanceCommand[];
+  importanceDropped: ImportanceDrop[];
+  seenAsCommands: SeenAsCommand[];
+  seenAsDropped: SeenAsDrop[];
+  personalityCommands: SetPersonalityCommand[];
+  personalityDropped: PersonalityDrop[];
+  soundsLike: NoteSoundsLikeCommand[];
+  contactPoints: AddContactPointCommand[];
+  connectionCommands: ConnectionCommand[];
+  whereabouts: SetWhereaboutsCommand[];
   undoOffers: UndoOffer[];
   undoOfferDropped: UndoOfferDrop[];
   planDay: PlanDayCommand | null;
@@ -2108,7 +2494,10 @@ export function normalizeNomosReply(
   const made = new Set((context.alreadyMade ?? []).map(toKey));
   const items = raw.commands.filter(isRecord);
   items.forEach(assertNoDateKeys);
-  const answer =
+  const isLearningOn = context.isLearningOn !== false;
+  const readAnswerText = (text: string | null) =>
+    isLearningOn ? text : withoutWatchingPhrases(text);
+  const answerRead =
     items
       .filter((item) => item.kind === 'answer')
       .flatMap((item) => {
@@ -2124,6 +2513,13 @@ export function normalizeNomosReply(
         );
         return read ? [read] : [];
       })[0] ?? null;
+  const answer = answerRead
+    ? {
+        ...answerRead,
+        generalText: readAnswerText(answerRead.generalText),
+        generalSpoken: readAnswerText(answerRead.generalSpoken),
+      }
+    : null;
   const remember = items
     .filter((item) => item.kind === 'remember')
     .map((item) => readRemember(item, context.synced, context.quotes));
@@ -2198,17 +2594,98 @@ export function normalizeNomosReply(
       captureText: context.captureText,
     },
   );
+  const { commands: habitCommands, dropped: habitDropped } = readHabitCommands(
+    items,
+    {
+      habits: context.habits,
+      habitNames: context.habitNames,
+      people: context.people,
+      reading: context.reading,
+      captureText: context.captureText,
+      timeZone: context.timeZone,
+      now: context.now,
+    },
+  );
+  const { commands: scheduleCommands, dropped: scheduleDropped } =
+    readScheduledCommands(items, {
+      actions: context.scheduledActions,
+      reading: context.reading,
+      captureText: context.captureText,
+      timeZone: context.timeZone,
+    });
+  const researchCommands = readResearchCommands(items);
+  const { commands: importanceCommands, dropped: importanceDropped } =
+    readImportanceCommands(items, {
+      projects: context.projects,
+      habits: context.habits,
+      reading: context.reading,
+      captureText: context.captureText,
+    });
+  const { commands: seenAsCommands, dropped: seenAsDropped } =
+    readSeenAsCommands(items, {
+      lines: context.seenAs,
+      lineWords: context.seenAsWords,
+      captureText: context.captureText,
+    });
+  const { commands: personalityCommands, dropped: personalityDropped } =
+    readPersonalityCommands(items, {
+      captureText: context.captureText,
+      current: context.personality,
+    });
+  const soundsLike = readSoundsLike(
+    items,
+    context.people,
+    context.previousTurn,
+  );
+  const contactPoints = readContactPoints(items, context.people);
+  const connectionCommands = readConnectionCommands(items, {
+    people: context.people,
+    reading: context.reading,
+    captureText: context.captureText,
+    personNames: context.personNames,
+    timeZone: context.timeZone,
+  });
+  const whereabouts = readWhereabouts(
+    items,
+    context.people,
+    context.reading,
+    context.captureText ?? '',
+    context.timeZone ?? 'UTC',
+    context.now,
+  );
   const { offers: undoOffers, dropped: undoOfferDropped } = readUndoOffers(
     items,
     context.undoTurns,
     context.undoUnitCounts ?? new Map(),
     context.captureText ?? '',
   );
-  const projects = readProjects(
+  const learnFound = readLearnCommands(
     items,
-    entities,
-    context.reading,
-    context.timeZone ?? 'UTC',
+    context.learnLater ?? { add: () => '', idOf: () => null },
+    context.captureText ?? '',
+  );
+  const learnRead = {
+    ...learnFound,
+    commands: [
+      ...learnFound.commands,
+      ...readOfferQuestions(items, {
+        quotes: context.quotes,
+        synced: context.synced,
+        mentions: entities.mentions,
+        whoRefs: entities.whoRefs,
+        now: context.now ?? Date.now(),
+      }),
+    ],
+  };
+  const { learn, projects } = refuseDoubledGoals(
+    learnRead,
+    readProjects(
+      items,
+      entities,
+      context.reading,
+      context.timeZone ?? 'UTC',
+      context.captureText ?? '',
+    ),
   );
   const { asks, dropped: askDropped } = readAsks(
     items,
@@ -2232,6 +2709,8 @@ export function normalizeNomosReply(
       context.aliases,
       entities,
       context.captureText ?? '',
+      context.synced,
+      context.now ?? Date.now(),
     );
     return command ? [command] : [];
   });
@@ -2281,11 +2760,26 @@ export function normalizeNomosReply(
     ),
   });
   return {
+    intent: readTurnIntent(raw.intent, answer !== null),
+    observations: readObservations(raw.observations, {
+      isLearningOn,
+      turnText: context.captureText ?? '',
+      resolve: (alias) => {
+        const habitId = context.habits?.idOf(alias);
+        if (habitId) return { collection: 'habits', id: habitId };
+        const projectId = context.projects?.idOf(alias);
+        if (projectId) return { collection: 'projects', id: projectId };
+        const taskId = context.aliases.idOf(alias);
+        return taskId ? { collection: 'tasks', id: taskId } : null;
+      },
+    }),
     media,
     mediaDropped,
     commands: kept,
     hasMore: fresh.length > MAX_COMMANDS,
-    replyLine: readReplyLine(raw.replyLine, context.captureText ?? ''),
+    replyLine: readAnswerText(
+      readReplyLine(raw.replyLine, context.captureText ?? ''),
+    ),
     answer,
     remember,
     noteFacts,
@@ -2302,6 +2796,23 @@ export function normalizeNomosReply(
     procedureDropped,
     runCommands,
     runDropped,
+    habitCommands,
+    habitDropped,
+    scheduleCommands,
+    scheduleDropped,
+    researchCommands,
+    learnCommands: learn.commands,
+    learnAsks: learn.asks,
+    importanceCommands,
+    importanceDropped,
+    seenAsCommands,
+    seenAsDropped,
+    personalityCommands,
+    personalityDropped,
+    soundsLike,
+    contactPoints,
+    connectionCommands,
+    whereabouts,
     undoOffers,
     undoOfferDropped,
     planDay,

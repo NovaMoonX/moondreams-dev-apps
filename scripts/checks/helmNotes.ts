@@ -457,6 +457,8 @@ const asOpen = (
   goneIds: null,
   undoReason: null,
   lines: [],
+  abilityOffer: null,
+  awayZoneOffer: null,
   isUnreadable: false,
 });
 

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, GraduationCap, Plus } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
+import LearnLaterList from '@apps/helm/components/research/LearnLaterList';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import NoteRow from '@apps/helm/components/knowledge/NoteRow';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
@@ -15,6 +16,7 @@ import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY, KNOWLEDGE_SEARCH_FROM } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { selectLearnLater } from '@apps/helm/store/selectors/researchSelectors';
 import {
   selectAllNotes,
   selectAllTopics,
@@ -53,12 +55,14 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
   const notes = useAppSelector(selectAllNotes);
   const allTopics = useAppSelector(selectAllTopics);
   const loose = useAppSelector(selectLooseNotes);
+  const learnLater = useAppSelector(selectLearnLater);
   const tree = useAppSelector(selectTopicTree);
   const [query, setQuery] = useState('');
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [isMakingNote, setIsMakingNote] = useState(false);
   const [isMakingTopic, setIsMakingTopic] = useState(false);
   const [isLooseOpen, setIsLooseOpen] = useState(false);
+  const [isLearnOpen, setIsLearnOpen] = useState(false);
 
   useScreenContext('knowledge', null, [], {
     ask: HELM_COPY.askKnowledge,
@@ -91,6 +95,14 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
         .filter(({ text }) => words.every((word) => text.includes(word)))
         .map(({ note }) => note)
     : [];
+  const learnMatches = isSearching
+    ? learnLater.filter((item) => {
+        const text = fold(
+          [item.subject, item.question, ...item.moreAsked].join(' '),
+        );
+        return words.every((word) => text.includes(word));
+      }).length
+    : 0;
 
   return (
     <>
@@ -124,28 +136,65 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
           </p>
         )}
         {isSearching ? (
-          found.length === 0 ? (
-            <p className='text-muted-foreground text-[15px]'>
-              {HELM_COPY.knowledgeNoMatch}
-            </p>
-          ) : (
-            <ul className='helm-card divide-border divide-y overflow-hidden'>
-              {found.map((note) => (
-                <li key={note.id}>
-                  <NoteRow
-                    note={note}
-                    onOpen={setOpenNoteId}
-                    topicLine={note.topicIds
-                      .map((id) => pathOf(id, allTopics).join(' › '))
-                      .filter(Boolean)
-                      .join(', ')}
+          <>
+            {found.length === 0 ? (
+              <p className='text-muted-foreground text-[15px]'>
+                {HELM_COPY.knowledgeNoMatch}
+              </p>
+            ) : (
+              <ul className='helm-card divide-border divide-y overflow-hidden'>
+                {found.map((note) => (
+                  <li key={note.id}>
+                    <NoteRow
+                      note={note}
+                      onOpen={setOpenNoteId}
+                      topicLine={note.topicIds
+                        .map((id) => pathOf(id, allTopics).join(' › '))
+                        .filter(Boolean)
+                        .join(', ')}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {learnMatches > 0 && (
+              <Button
+                type='button'
+                variant='secondary'
+                className='flex h-auto w-full items-center justify-between gap-3 px-4 py-3 text-left'
+                onClick={() => setIsLearnOpen(true)}
+              >
+                <span className='flex min-w-0 flex-1 items-center gap-2.5'>
+                  <GraduationCap
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
                   />
-                </li>
-              ))}
-            </ul>
-          )
+                  <span>{HELM_COPY.learnMatchRow(learnMatches)}</span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            )}
+          </>
         ) : (
           <>
+            <Button
+              type='button'
+              variant='secondary'
+              className='flex h-auto w-full items-center justify-between gap-3 px-4 py-3 text-left'
+              onClick={() => setIsLearnOpen(true)}
+            >
+              <span className='flex min-w-0 flex-1 items-center gap-2.5'>
+                <GraduationCap className='size-4 shrink-0' aria-hidden='true' />
+                <span>{HELM_COPY.learnLaterRow(learnLater.length)}</span>
+              </span>
+              <ChevronRight
+                className='text-muted-foreground size-4 shrink-0'
+                aria-hidden='true'
+              />
+            </Button>
             {isEmpty && (
               <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
                 {HELM_COPY.knowledgeEmpty(assistant)}
@@ -223,6 +272,7 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
           )}
         </Subview>
       )}
+      {isLearnOpen && <LearnLaterList onClose={() => setIsLearnOpen(false)} />}
       <NoteSheet noteId={openNoteId} onClose={() => setOpenNoteId(null)} />
       <NoteForm
         isOpen={isMakingNote}

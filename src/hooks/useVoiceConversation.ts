@@ -113,6 +113,8 @@ interface VoiceConversationOptions {
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
   isOnDeviceReady?: boolean;
+  /** Read at the start of each listen, never sent mid-stream. */
+  getNameHints?: () => string[];
   /** Silence this long before anything is heard ends the listen; once words are heard, the turn ends when they stop changing (`getSettleMs`). */
   quietMs?: number;
   /** The cloud turned this device away for the rest of the local day; called once per day. */
@@ -188,7 +190,8 @@ const FIRST_LINE_FIRST_BYTE_MS = 6000;
 const CLOUD_FAILURES_MAX = 2;
 const LATCH_FALLBACK_KEY = 'speech:device-voice-latch';
 const CLOUD_LISTEN_FALLBACK_KEY = 'speech:cloud-listening';
-const FOLLOW_UP_MS = 8000;
+/** How long the short window after an answer listens. */
+export const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
 // A phrase heard by mistake (a TV, a passing remark) must not hold the microphone for the full quiet limit.
 const LIVE_FIRST_IDLE_MS = 15 * 1000;
@@ -270,6 +273,7 @@ export function useVoiceConversation({
   liveIdleMs = LIVE_IDLE_MS,
   onLiveEnd,
   wake = null,
+  getNameHints,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -323,6 +327,7 @@ export function useVoiceConversation({
     liveIdleMs,
     onLiveEnd,
     wake,
+    getNameHints,
     reason,
   });
   const gateHandler = useRef<
@@ -417,6 +422,7 @@ export function useVoiceConversation({
       liveIdleMs,
       onLiveEnd,
       wake,
+      getNameHints,
       reason,
     };
   });
@@ -920,6 +926,7 @@ export function useVoiceConversation({
         if (isCurrent()) handleError('unavailable');
       });
     };
+    const nameHints = latest.current.getNameHints?.() ?? null;
     const startDevice = (source: FrameSource | null) => {
       if (latest.current.canHearOnDevice) {
         if (run.current.heardWords === '') {
@@ -935,6 +942,7 @@ export function useVoiceConversation({
         createBrowserStt({
           lang: latest.current.lang,
           isFromTap: !run.current.isUnasked,
+          nameHints,
         }),
       );
     };
@@ -976,6 +984,7 @@ export function useVoiceConversation({
         createDeepgramStt({
           lang: latest.current.lang,
           source: options.source ?? null,
+          keyterms: nameHints,
           getToken: cloud.tokenSource.getToken,
           onUnavailable: (heldReason, cause) => {
             if (

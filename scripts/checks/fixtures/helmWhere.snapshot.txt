@@ -1,10 +1,12 @@
 <where_things_live>
 To answer about a thing, look in its block, then call its tool; never guess where it lives. To change it, use only the commands listed for it; a thing with no command is changed by the person.
-- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask or completeTask.
+- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask, completeTask or offerQuestionTask.
 - Goals and projects, with their milestones: look in <open_projects>; change it with createProject, setProjectRole or addMilestone.
+- Research offered ahead of a dated project, and what the person answered: look in <open_projects>; change it with offerResearch.
 - What the person says about themselves: look in <about_you>; change it with noteFact or remember.
 - What is known about the people and places named: look in <known_facts>; change it with noteFact or remember.
 - People and pets: look in <people>; you cannot change it.
+- How people are connected to each other, and a couple's status: look in <people>; change it with connect, updateConnection or disconnect.
 - Places: look in <known_facts>; you cannot change it.
 - Key dates: look in <key_dates>; change it with setKeyDate or removeKeyDate.
 - The next dates coming up: look in <upcoming_dates>; you cannot change it.
@@ -14,15 +16,29 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Procedures: look in <your_procedures>, then call search_procedures; change it with createProcedure or reviseProcedure.
 - The procedure that is open: look in <procedure_open>, then call search_procedures; change it with reviseProcedure.
 - Runs of a procedure: look in <open_runs>; change it with startRun or tickRun.
+- Habits, with their cadence and windows: look in <habits>; change it with createHabit, updateHabit or setCare.
+- Scheduled actions, what the assistant does at set times: look in <scheduled_actions>; change it with scheduleAction or changeScheduledAction.
+- Research the person asked for, and questions saved to learn later: look in <learn_later>; change it with research, saveForLater, declineLearn, relatedLearn or offerLearnGoal.
+- What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
+- A habit ticked, skipped or counted by a sentence: change it with checkIn.
+- What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
+- How the person seems: what works for them, what gets in the way, their rhythm, how they talk: look in <how_you_seem>; change it with correctSeenAs or removeSeenAs.
 - Whether a thing is private: change it with setPrivate.
 - Whether a thing is kept quiet: change it with setQuiet.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.
 - Helm's plan for a day: call get_calendar; you cannot change it.
 - Where the person is right now: change it with setCurrentPlace or planDay.
+- Where someone lives: look in <whereabouts>; change it with setWhereabouts.
+- Where someone will be away: look in <whereabouts>; change it with setWhereabouts.
+- How a stretch away fits the work and the calendar: look in <fit>, then call search_tasks or get_calendar; you cannot change it.
+- Phone location and the offers put off: look in <abilities>; you cannot change it.
+- How the assistant talks, with its traits and how honest it is: change it with setPersonality.
 - Earlier turns of the conversation: look in <earlier_turns>; you cannot change it.
+- Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
 - A question Helm asked and the answer: look in <answered_question>; you cannot change it.
 - Ending the conversation: change it with closeConversation.
+- Things that look like one thing, grouped overnight: look in <related_things>; you cannot change it.
 - Calendar events: look in <synced_records>, then call get_calendar or search_synced; you cannot change it.
 - Another app's synced things: look in <synced_records>, then call search_synced; you cannot change it.
 - Connections and what each one shares: call list_connections or connection_status; you cannot change it.
@@ -33,15 +49,22 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Saved theaters: look in <synced_records>, then call search_synced; you cannot change it.
 - Movies the person has seen: look in <synced_records>, then call search_synced; you cannot change it.
 - The movie watchlist: look in <synced_records>, then call search_synced; you cannot change it.
+- Movie membership savings: call search_app_records; you cannot change it.
 - Pickups: look in <synced_records>, then call search_synced; you cannot change it.
 - Sales: look in <synced_records>, then call search_synced; you cannot change it.
 - Things for sale: look in <synced_records>, then call search_synced; you cannot change it.
+- Everything in the sales: call search_app_records; you cannot change it.
+- Buyers' questions: call search_app_records; you cannot change it.
 - Cats: look in <synced_records>, then call search_synced; you cannot change it.
 - Vet visits: look in <synced_records>, then call search_synced; you cannot change it.
 - Vaccines and preventives due: look in <synced_records>, then call search_synced; you cannot change it.
 - Vet clinics: look in <synced_records>, then call search_synced; you cannot change it.
 - Health conditions: look in <synced_records>, then call search_synced; you cannot change it.
 - Symptoms: look in <synced_records>, then call search_synced; you cannot change it.
+- Vet visit notes: call search_app_records; you cannot change it.
+- Vaccines and preventives given: call search_app_records; you cannot change it.
+- Cat weights: call search_app_records; you cannot change it.
+- Cat spending: call search_app_records; you cannot change it.
 - Planned meals: look in <synced_records>, then call search_synced; you cannot change it.
 - The shopping list: look in <synced_records>, then call search_synced; you cannot change it.
 - Food to use soon: look in <synced_records>, then call search_synced; you cannot change it.
@@ -49,26 +72,37 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Recipes: look in <synced_records>, then call search_synced; you cannot change it.
 - Saved meals: look in <synced_records>, then call search_synced; you cannot change it.
 - Recipe ideas: look in <synced_records>, then call search_synced; you cannot change it.
+- Recipe ingredients: call search_app_records; you cannot change it.
+- Recipes the person cooked: call search_app_records; you cannot change it.
 - Free to Spend: look in <synced_records>, then call search_synced; you cannot change it.
 - Bills coming up: look in <synced_records>, then call search_synced; you cannot change it.
 - Horizon goals: look in <synced_records>, then call search_synced; you cannot change it.
 - Envelopes: look in <synced_records>, then call search_synced; you cannot change it.
 - Transactions: call search_app_records; you cannot change it.
+- Envelope spending: call search_app_records; you cannot change it.
+- Account balances: call search_app_records; you cannot change it.
+- Cards due: call search_app_records; you cannot change it.
 - Trips: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip plans: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip to-dos: look in <synced_records>, then call search_synced; you cannot change it.
 - What is owed on trips: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip checklists: look in <synced_records>, then call search_synced; you cannot change it.
+- The whole trip checklist: call search_app_records; you cannot change it.
+- Trip ideas: call search_app_records; you cannot change it.
+- Trip announcements: call search_app_records; you cannot change it.
 - Box counts: look in <synced_records>, then call search_synced; you cannot change it.
+- Revealed items: call search_app_records; you cannot change it.
 </where_things_live>
 
 <where_things_live>
 To answer about a thing, look in its block, then call its tool; never guess where it lives. To change it, use only the commands listed for it; a thing with no command is changed by the person.
-- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask or completeTask.
+- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask, completeTask or offerQuestionTask.
 - Goals and projects, with their milestones: look in <open_projects>; change it with createProject, setProjectRole or addMilestone.
+- Research offered ahead of a dated project, and what the person answered: look in <open_projects>; change it with offerResearch.
 - What the person says about themselves: look in <about_you>; change it with noteFact or remember.
 - What is known about the people and places named: look in <known_facts>; change it with noteFact or remember.
 - People and pets: look in <people>; you cannot change it.
+- How people are connected to each other, and a couple's status: look in <people>; change it with connect, updateConnection or disconnect.
 - Places: look in <known_facts>; you cannot change it.
 - Key dates: look in <key_dates>; change it with setKeyDate or removeKeyDate.
 - The next dates coming up: look in <upcoming_dates>; you cannot change it.
@@ -78,15 +112,29 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Procedures: look in <your_procedures>, then call search_procedures; change it with createProcedure or reviseProcedure.
 - The procedure that is open: look in <procedure_open>, then call search_procedures; change it with reviseProcedure.
 - Runs of a procedure: look in <open_runs>; change it with startRun or tickRun.
+- Habits, with their cadence and windows: look in <habits>; change it with createHabit, updateHabit or setCare.
+- Scheduled actions, what the assistant does at set times: look in <scheduled_actions>; change it with scheduleAction or changeScheduledAction.
+- Research the person asked for, and questions saved to learn later: look in <learn_later>; change it with research, saveForLater, declineLearn, relatedLearn or offerLearnGoal.
+- What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
+- A habit ticked, skipped or counted by a sentence: change it with checkIn.
+- What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
+- How the person seems: what works for them, what gets in the way, their rhythm, how they talk: look in <how_you_seem>; change it with correctSeenAs or removeSeenAs.
 - Whether a thing is private: change it with setPrivate.
 - Whether a thing is kept quiet: change it with setQuiet.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.
 - Helm's plan for a day: call get_calendar; you cannot change it.
 - Where the person is right now: change it with setCurrentPlace or planDay.
+- Where someone lives: look in <whereabouts>; change it with setWhereabouts.
+- Where someone will be away: look in <whereabouts>; change it with setWhereabouts.
+- How a stretch away fits the work and the calendar: look in <fit>, then call search_tasks or get_calendar; you cannot change it.
+- Phone location and the offers put off: look in <abilities>; you cannot change it.
+- How the assistant talks, with its traits and how honest it is: change it with setPersonality.
 - Earlier turns of the conversation: look in <earlier_turns>; you cannot change it.
+- Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
 - A question Helm asked and the answer: look in <answered_question>; you cannot change it.
 - Ending the conversation: change it with closeConversation.
+- Things that look like one thing, grouped overnight: look in <related_things>; you cannot change it.
 - Calendar events: look in <synced_records>, then call get_calendar or search_synced; you cannot change it.
 - Another app's synced things: look in <synced_records>, then call search_synced; you cannot change it.
 - Connections and what each one shares: call list_connections or connection_status; you cannot change it.
