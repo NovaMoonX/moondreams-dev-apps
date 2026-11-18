@@ -1,9 +1,5 @@
-import {
-  doc,
-  runTransaction,
-  writeBatch,
-  type Transaction,
-} from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc, writeBatch, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -163,7 +159,7 @@ export async function addHorizon(
     note: null,
     isOutside: false,
   });
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [plan, from, existing] = await Promise.all([
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
       toward.fromId === null
@@ -415,7 +411,7 @@ export async function markCostPaid(
     goalId: goal?.goalId ?? null,
   };
   const sealed = await sealJson(payload, encryption);
-  const written = await runTransaction(db, async (transaction) => {
+  const written = await runHeldTransaction(uid, async (transaction) => {
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
     const id = await findOpenCostMark(
       transaction,
@@ -600,7 +596,7 @@ export async function undoCostPaid(
     finished === null
       ? null
       : await sealReopen(encryption, finished, paid.itemId, names.cost, on);
-  const isWritten = await runTransaction(db, async (transaction) => {
+  const isWritten = await runHeldTransaction(uid, async (transaction) => {
     const [isDone, plan, isReopenGone] = await Promise.all([
       isCostUnmarked(transaction, uid, paid),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
@@ -724,7 +720,7 @@ export async function makeCostABill(
     input.baseVersionId === undefined
       ? generateUuid()
       : getNextVersionId(input.baseVersionId);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const [plan, item, existing, taken] = await Promise.all([
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
       transaction.get(planDoc(uid, 'items', input.itemId)),
@@ -858,7 +854,7 @@ export async function setHorizonStateWith(
     ),
   ]);
 
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const [[plan, item, version, existing, ...places], writes] =
       await Promise.all([
         Promise.all([

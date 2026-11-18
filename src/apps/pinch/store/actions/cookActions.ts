@@ -6,7 +6,6 @@ import {
   doc,
   getDocs,
   query,
-  runTransaction,
   setDoc,
   updateDoc,
   where,
@@ -17,11 +16,9 @@ import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
-import {
-  getErrorMessage,
-  getStorageErrorMessage,
-} from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { compressImageForUse } from '@/utils/imageCompression';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import {
   COOK_BATCH_SIZE,
   MAX_COOKED_SERVINGS,
@@ -160,7 +157,7 @@ export const markPlannedCooked = createAsyncThunk<
     if (problem !== null) return rejectWithValue(problem);
 
     try {
-      const isNew = await runTransaction(db, async (transaction) => {
+      const isNew = await runHeldTransaction(uid, async (transaction) => {
         const ref = cookDoc(uid, id);
         const snapshot = await transaction.get(ref);
         const now = Date.now();
@@ -226,7 +223,7 @@ export const markPlannedPlateCooked = createAsyncThunk<
     if (problem !== null) return rejectWithValue(problem);
 
     try {
-      const results = await runTransaction(db, async (transaction) => {
+      const results = await runHeldTransaction(uid, async (transaction) => {
         const targets = entries.map((entry) => {
           const id = getCookId(plannedMealId, entry.recipeId);
           return { entry, id, ref: cookDoc(uid, id) };
@@ -356,23 +353,26 @@ export const removeCooks = createAsyncThunk<
   string[],
   RemoveCooksInput,
   { state: RootState; rejectValue: string }
->('pinch/cooks/removeMany', async ({ uid, ids }, { getState, rejectWithValue }) => {
-  const photoPaths = getState()
-    .pinch.cooks.items.filter((cook) => ids.includes(cook.id))
-    .map((cook) => cook.photoPath);
-  try {
-    const batch = writeBatch(db);
-    ids.forEach((id) => batch.delete(cookDoc(uid, id)));
-    await batch.commit();
-  } catch (error) {
-    return rejectWithValue(
-      getWriteMessage(error, 'Unable to delete these cooks.'),
-    );
-  }
-  await deletePhotos(photoPaths);
+>(
+  'pinch/cooks/removeMany',
+  async ({ uid, ids }, { getState, rejectWithValue }) => {
+    const photoPaths = getState()
+      .pinch.cooks.items.filter((cook) => ids.includes(cook.id))
+      .map((cook) => cook.photoPath);
+    try {
+      const batch = writeBatch(db);
+      ids.forEach((id) => batch.delete(cookDoc(uid, id)));
+      await batch.commit();
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to delete these cooks.'),
+      );
+    }
+    await deletePhotos(photoPaths);
 
-  return ids;
-});
+    return ids;
+  },
+);
 
 interface SetCookReviewInput {
   uid: string;
@@ -417,9 +417,7 @@ export const setCookReview = createAsyncThunk<
       await updateDoc(cookDoc(uid, id), {
         ...getMissingCookFields(existing),
         ...(rating === undefined ? {} : { rating }),
-        ...(photoFile === undefined
-          ? {}
-          : { photoPath: newPath }),
+        ...(photoFile === undefined ? {} : { photoPath: newPath }),
         updatedAt: now,
       });
     } catch (error) {
@@ -427,7 +425,7 @@ export const setCookReview = createAsyncThunk<
       return rejectWithValue(
         error instanceof FirebaseError && error.code.startsWith('storage/')
           ? getStorageErrorMessage(error, "We couldn't save that picture.")
-          : getWriteMessage(error, "Unable to save how it turned out."),
+          : getWriteMessage(error, 'Unable to save how it turned out.'),
       );
     }
 

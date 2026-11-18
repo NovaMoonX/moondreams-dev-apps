@@ -5,16 +5,28 @@ import {
   collection,
   deleteDoc,
   doc,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { isValidHttpUrl } from '@/utils/urlUtils';
-import { validateEventTime, type EventFields } from '@apps/waypoint/store/actions/eventActions';
-import type { IdeaDetails, IdeaType, TimelineEvent, TripIdea, TripSpace } from '@apps/waypoint/types';
-import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
+import {
+  validateEventTime,
+  type EventFields,
+} from '@apps/waypoint/store/actions/eventActions';
+import type {
+  IdeaDetails,
+  IdeaType,
+  TimelineEvent,
+  TripIdea,
+  TripSpace,
+} from '@apps/waypoint/types';
+import {
+  cancelEventReminder,
+  scheduleEventReminder,
+} from '@apps/waypoint/utils/reminders';
 import {
   canCreateItem,
   canDeleteIdea,
@@ -32,11 +44,17 @@ interface CreateIdeaInput {
   ideaDetails: IdeaDetails | null;
 }
 
-export const createIdea = createAsyncThunk<TripIdea, CreateIdeaInput, { rejectValue: string }>(
+export const createIdea = createAsyncThunk<
+  TripIdea,
+  CreateIdeaInput,
+  { rejectValue: string }
+>(
   'waypoint/ideas/create',
   async ({ uid, trip, ...fields }, { rejectWithValue }) => {
     if (!isTripMember(trip, uid)) {
-      return rejectWithValue('You do not have permission to add ideas to this trip.');
+      return rejectWithValue(
+        'You do not have permission to add ideas to this trip.',
+      );
     }
     if (!fields.title.trim()) {
       return rejectWithValue('Enter a name for this idea.');
@@ -46,7 +64,9 @@ export const createIdea = createAsyncThunk<TripIdea, CreateIdeaInput, { rejectVa
       return rejectWithValue('Enter a valid link, like https://example.com.');
     }
 
-    const ideaRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas'));
+    const ideaRef = doc(
+      collection(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas'),
+    );
     const now = Date.now();
     const idea: TripIdea = {
       id: ideaRef.id,
@@ -75,14 +95,28 @@ interface ToggleIdeaVoteInput {
   hasVoted: boolean;
 }
 
-export const toggleIdeaVote = createAsyncThunk<void, ToggleIdeaVoteInput, { rejectValue: string }>(
+export const toggleIdeaVote = createAsyncThunk<
+  void,
+  ToggleIdeaVoteInput,
+  { rejectValue: string }
+>(
   'waypoint/ideas/toggleVote',
   async ({ uid, trip, ideaId, hasVoted }, { rejectWithValue }) => {
     if (!isTripMember(trip, uid)) {
-      return rejectWithValue('You do not have permission to vote on this idea.');
+      return rejectWithValue(
+        'You do not have permission to vote on this idea.',
+      );
     }
 
-    const ideaRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', ideaId);
+    const ideaRef = doc(
+      db,
+      'apps',
+      'waypoint',
+      'trips',
+      trip.id,
+      'ideas',
+      ideaId,
+    );
     await updateDoc(ideaRef, {
       voterUids: hasVoted ? arrayRemove(uid) : arrayUnion(uid),
     });
@@ -93,11 +127,17 @@ interface UpdateIdeaInput extends CreateIdeaInput {
   idea: TripIdea;
 }
 
-export const updateIdea = createAsyncThunk<void, UpdateIdeaInput, { rejectValue: string }>(
+export const updateIdea = createAsyncThunk<
+  void,
+  UpdateIdeaInput,
+  { rejectValue: string }
+>(
   'waypoint/ideas/update',
   async ({ uid, trip, idea, ...fields }, { rejectWithValue }) => {
     if (!canEditIdea(trip, uid, idea)) {
-      return rejectWithValue('Only the person who added this idea can change it.');
+      return rejectWithValue(
+        'Only the person who added this idea can change it.',
+      );
     }
     if (!fields.title.trim()) {
       return rejectWithValue('Enter a name for this idea.');
@@ -106,14 +146,17 @@ export const updateIdea = createAsyncThunk<void, UpdateIdeaInput, { rejectValue:
       return rejectWithValue('Enter a valid link, like https://example.com.');
     }
 
-    await updateDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id), {
-      ideaType: fields.ideaType,
-      title: fields.title.trim(),
-      notes: fields.notes?.trim() || null,
-      linkUrl: fields.linkUrl?.trim() || null,
-      ideaDetails: fields.ideaDetails ?? null,
-      lastEditedAt: Date.now(),
-    });
+    await updateDoc(
+      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id),
+      {
+        ideaType: fields.ideaType,
+        title: fields.title.trim(),
+        notes: fields.notes?.trim() || null,
+        linkUrl: fields.linkUrl?.trim() || null,
+        ideaDetails: fields.ideaDetails ?? null,
+        lastEditedAt: Date.now(),
+      },
+    );
   },
 );
 
@@ -123,15 +166,20 @@ interface DeleteIdeaInput {
   idea: TripIdea;
 }
 
-export const deleteIdea = createAsyncThunk<void, DeleteIdeaInput, { rejectValue: string }>(
-  'waypoint/ideas/delete',
-  async ({ uid, trip, idea }, { rejectWithValue }) => {
-    if (!canDeleteIdea(trip, uid, idea)) {
-      return rejectWithValue('Only the person who added this idea, or an Admin, can delete it.');
-    }
-    await deleteDoc(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id));
-  },
-);
+export const deleteIdea = createAsyncThunk<
+  void,
+  DeleteIdeaInput,
+  { rejectValue: string }
+>('waypoint/ideas/delete', async ({ uid, trip, idea }, { rejectWithValue }) => {
+  if (!canDeleteIdea(trip, uid, idea)) {
+    return rejectWithValue(
+      'Only the person who added this idea, or an Admin, can delete it.',
+    );
+  }
+  await deleteDoc(
+    doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id),
+  );
+});
 
 interface ConvertIdeaToEventInput {
   uid: string;
@@ -144,78 +192,108 @@ export const convertIdeaToEvent = createAsyncThunk<
   TimelineEvent,
   ConvertIdeaToEventInput,
   { rejectValue: string }
->('waypoint/ideas/convertToEvent', async ({ uid, trip, idea, event }, { rejectWithValue }) => {
-  if (!canCreateItem(trip, uid)) {
-    return rejectWithValue('You do not have permission to add timeline events.');
-  }
-  if (!event.title.trim()) {
-    return rejectWithValue('Event title is required.');
-  }
-  const timeError = validateEventTime(trip, event);
-  if (timeError) {
-    return rejectWithValue(timeError);
-  }
-
-  const ideaRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id);
-  const eventRef = doc(collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'));
-  const now = Date.now();
-  const trimmedTitle = event.title.trim();
-  const reminderId = await scheduleEventReminder({
-    trip,
-    uid,
-    event: { ...event, id: eventRef.id, title: trimmedTitle },
-  });
-  const linkUrl = event.linkUrl?.trim() || null;
-  const createdEvent: TimelineEvent = {
-    ...event,
-    id: eventRef.id,
-    tripId: trip.id,
-    title: trimmedTitle,
-    locationName: event.locationName?.trim() || null,
-    address: event.address?.trim() || null,
-    linkUrl,
-    linkPreview: linkUrl ? event.linkPreview : null,
-    linkKind: linkUrl ? event.linkKind : null,
-    groupLabel: event.groupLabel?.trim() || null,
-    stackLabel: event.stackLabel?.trim() || null,
-    notes: event.notes?.trim() || null,
-    changeHistory: [],
-    reminderId,
-    isArchived: false,
-    archivedBy: null,
-    archivedAt: null,
-    seenBy: { [uid]: now },
-    createdBy: uid,
-    createdAt: now,
-    lastEditedAt: now,
-  };
-
-  try {
-    await runTransaction(db, async (transaction) => {
-      const ideaSnapshot = await transaction.get(ideaRef);
-      if (!ideaSnapshot.exists()) {
-        throw new Error('This idea was removed, so it can no longer be added to the itinerary.');
-      }
-      const linkedEventId: string | null = ideaSnapshot.data().convertedToEntityId ?? null;
-      const linkedEvent =
-        linkedEventId === null
-          ? null
-          : await transaction.get(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', linkedEventId));
-      if (linkedEvent?.exists()) {
-        throw new Error('Someone already added this idea to the itinerary.');
-      }
-
-      transaction.set(eventRef, createdEvent);
-      transaction.update(ideaRef, { convertedToEntityId: eventRef.id });
-    });
-  } catch (conversionError) {
-    if (reminderId) {
-      await cancelEventReminder(reminderId);
+>(
+  'waypoint/ideas/convertToEvent',
+  async ({ uid, trip, idea, event }, { rejectWithValue }) => {
+    if (!canCreateItem(trip, uid)) {
+      return rejectWithValue(
+        'You do not have permission to add timeline events.',
+      );
     }
-    return rejectWithValue(
-      conversionError instanceof Error ? conversionError.message : 'Unable to add this idea to the itinerary.',
-    );
-  }
+    if (!event.title.trim()) {
+      return rejectWithValue('Event title is required.');
+    }
+    const timeError = validateEventTime(trip, event);
+    if (timeError) {
+      return rejectWithValue(timeError);
+    }
 
-  return createdEvent;
-});
+    const ideaRef = doc(
+      db,
+      'apps',
+      'waypoint',
+      'trips',
+      trip.id,
+      'ideas',
+      idea.id,
+    );
+    const eventRef = doc(
+      collection(db, 'apps', 'waypoint', 'trips', trip.id, 'events'),
+    );
+    const now = Date.now();
+    const trimmedTitle = event.title.trim();
+    const reminderId = await scheduleEventReminder({
+      trip,
+      uid,
+      event: { ...event, id: eventRef.id, title: trimmedTitle },
+    });
+    const linkUrl = event.linkUrl?.trim() || null;
+    const createdEvent: TimelineEvent = {
+      ...event,
+      id: eventRef.id,
+      tripId: trip.id,
+      title: trimmedTitle,
+      locationName: event.locationName?.trim() || null,
+      address: event.address?.trim() || null,
+      linkUrl,
+      linkPreview: linkUrl ? event.linkPreview : null,
+      linkKind: linkUrl ? event.linkKind : null,
+      groupLabel: event.groupLabel?.trim() || null,
+      stackLabel: event.stackLabel?.trim() || null,
+      notes: event.notes?.trim() || null,
+      changeHistory: [],
+      reminderId,
+      isArchived: false,
+      archivedBy: null,
+      archivedAt: null,
+      seenBy: { [uid]: now },
+      createdBy: uid,
+      createdAt: now,
+      lastEditedAt: now,
+    };
+
+    try {
+      await runHeldTransaction(trip.id, async (transaction) => {
+        const ideaSnapshot = await transaction.get(ideaRef);
+        if (!ideaSnapshot.exists()) {
+          throw new Error(
+            'This idea was removed, so it can no longer be added to the itinerary.',
+          );
+        }
+        const linkedEventId: string | null =
+          ideaSnapshot.data().convertedToEntityId ?? null;
+        const linkedEvent =
+          linkedEventId === null
+            ? null
+            : await transaction.get(
+                doc(
+                  db,
+                  'apps',
+                  'waypoint',
+                  'trips',
+                  trip.id,
+                  'events',
+                  linkedEventId,
+                ),
+              );
+        if (linkedEvent?.exists()) {
+          throw new Error('Someone already added this idea to the itinerary.');
+        }
+
+        transaction.set(eventRef, createdEvent);
+        transaction.update(ideaRef, { convertedToEntityId: eventRef.id });
+      });
+    } catch (conversionError) {
+      if (reminderId) {
+        await cancelEventReminder(reminderId);
+      }
+      return rejectWithValue(
+        conversionError instanceof Error
+          ? conversionError.message
+          : 'Unable to add this idea to the itinerary.',
+      );
+    }
+
+    return createdEvent;
+  },
+);
