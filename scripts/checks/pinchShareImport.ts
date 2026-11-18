@@ -81,6 +81,7 @@ const recipeOf = (
   cookMinutes: 20,
   ingredients,
   steps: ['Mix it.', 'Cook it.'],
+  stepSections: [],
   care: null,
   links: [],
   tips: [],
