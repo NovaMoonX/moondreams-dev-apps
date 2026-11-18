@@ -258,12 +258,12 @@ const openKey = (firestore: Firestore, keyring: Keyring, uid: string) =>
     return null;
   });
 
-type Decision = 'superseded' | 'off' | 'forgotten' | 'failed' | 'write';
+export type Decision = 'superseded' | 'off' | 'forgotten' | 'failed' | 'write';
 
 const toNumberOrNull = (value: unknown) =>
   typeof value === 'number' ? value : null;
 
-function decide(input: {
+export function decide(input: {
   run: ReflectionRun;
   customId: string;
   state: ReflectionState;

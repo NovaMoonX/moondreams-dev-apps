@@ -422,6 +422,8 @@ export const HELM_CAPS = {
   indexSplit: 6_000,
   /** Scheduled actions a person has that have not ended; also the listener's cap. */
   scheduledActions: 50,
+  /** Aims in one day. */
+  dayAims: 12,
 } as const;
 
 /** The kinds of date that come back each year, in the order the add sheet offers them. */
@@ -1790,6 +1792,40 @@ export const HELM_COPY = {
     weeks === null
       ? "I'll leave it."
       : `I won't bring it up for ${weeks} weeks.`,
+  groupingTitle: (name: string) => `These look like one thing: ${name}`,
+  groupingTitleUnnamed: 'These look like one thing',
+  groupingGroup: 'Group them',
+  groupingNotRelated: 'Not related',
+  groupingNotNow: 'Ask me later',
+  groupingSubtitleExisting: (name: string) =>
+    `Link them to ${name} so they stay together.`,
+  groupingSubtitleNew: (name: string) => `Make ${name} to hold them.`,
+  groupingMore: (count: number) => `+${count} more`,
+  groupingFromApp: (app: string) => `From ${app}`,
+  groupingPrivateItem: 'A private item',
+  groupingYourTask: 'Your task',
+  groupingYourNote: 'Your note',
+  groupingYourTopic: 'Your topic',
+  groupingYourProject: 'Your project',
+  groupingGroupedToast: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}.`,
+  groupingNotRelatedToast: "Okay, I won't suggest these together.",
+  groupingNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave those alone."
+      : `I won't bring these up for ${weeks} weeks.`,
+  groupingLinkedLine: (count: number, name: string) =>
+    `Linked ${count} things to ${name}.`,
+  groupingActivityGrouped: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}`,
+  groupingActivityLinked: (count: number, name: string) =>
+    `Linked ${count} things to ${name}`,
+  groupingActionFailed: "Couldn't save that. Check your connection.",
+  groupingTookBackSummary: 'Took back the grouping',
+  groupingTookBackReport: 'Took those links back.',
+  groupingLinkedHeading: 'Linked',
+  groupingSourcesTitle: 'What goes together',
+  groupingFiledUndoFailed: "Couldn't take that back. Try again.",
   aheadActionFailed: "Couldn't save that. Check your connection.",
   aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
   aheadBriefLabel: "What I'll send:",
@@ -1964,7 +2000,7 @@ export const HELM_COPY = {
     `What you tell ${name}, and the records it needs to file or answer it.`,
   aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools. While you're away, a timer on the server carries your unfinished aims into the next day and keeps your plan up to date; it never opens what a task says and never sends anything to Anthropic.`,
   aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
     "What you say, your records and every line in Activity are encrypted before they're saved.",
@@ -2080,6 +2116,92 @@ export const HELM_COPY = {
   planSuggestedSummary: (count: number, day: string) =>
     `Suggested ${count} ${count === 1 ? 'task' : 'tasks'} for ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
   planFailed: "Couldn't plan the day. Try again.",
+  todayAimMark: 'Your aim',
+  dayAimsQuestion: 'What do you want to get done today?',
+  dayAimsField: 'What you want to get done today',
+  dayAimsPlaceholder: 'Say it or type it',
+  dayAimsFiling: 'Filing what you said…',
+  dayAimsFilingOffline: "Saved here. It will be filed when you're back online.",
+  dayAimsFailedFiling: "That didn't get filed. Say it again when you're ready.",
+  dayAimsFromYesterday: 'From yesterday',
+  dayAimsBring: 'Bring to today',
+  dayAimsNotToday: 'Not today',
+  dayAimsBrought: (title: string) => `${title} is on today.`,
+  dayAimsLeftOff: (title: string) => `${title} stays off today.`,
+  dayAimsAnyTime: 'Any time',
+  dayAimsNoFit: "Doesn't fit today",
+  dayAimsMoveOnToday: 'Make room on Today',
+  dayAimsGuess: (length: string) => `about ${length}?`,
+  dayAimsFixLength: (title: string) => `Set how long ${title} takes`,
+  dayAimsLengthTitle: 'How long will it take?',
+  dayAimsLengthSaved: (title: string, length: string) =>
+    `${title} takes ${length}.`,
+  dayAimsLengthFailed: "Couldn't save the length. Try again.",
+  dayAimsDone: (title: string) => `Mark ${title} done`,
+  dayAimsFolded: (aims: number, planned: number) =>
+    `Today: ${aims} ${aims === 1 ? 'aim' : 'aims'} · ${planned} planned`,
+  dayAimsSkipped: "Skipped today's aims.",
+  dayAimsSayIt: 'Say what you want done',
+  dayAimsSkip: 'Skip for today',
+  dayAimsSkippedToast: "Skipped today's aims.",
+  dayAimsOpen: "Show today's aims",
+  dayAimsHide: "Fold today's aims",
+  dayAimsPlanFailed: "Couldn't plan today. Your aims are saved.",
+  dayAimsTryAgain: 'Try again',
+  dayAimsRestDay: 'Nothing planned after a late night.',
+  dayAimsSaveFailed: "Couldn't save that. Try again.",
+  windDownTitle: 'How did today go?',
+  windDownDone: (count: number) => `Done · ${count}`,
+  windDownTonight: (count: number) => `Still possible tonight · ${count}`,
+  windDownWont: (count: number) => `Won't happen today · ${count}`,
+  windDownChoice: (title: string) => `What to do with ${title}`,
+  windDownTomorrow: 'Tomorrow',
+  windDownLater: 'Later',
+  windDownDrop: 'Drop it',
+  windDownWhy: 'Why?',
+  windDownReasonChosen: (reason: string) => `Why: ${reason}`,
+  windDownFinish: 'Done',
+  windDownChose: (title: string, choice: 'tomorrow' | 'later' | 'dropped') =>
+    choice === 'tomorrow'
+      ? `${title} moves to tomorrow.`
+      : choice === 'later'
+        ? `${title} moved to later.`
+        : `Dropped ${title}. The task stays.`,
+  windDownReasonSaved: (reason: string | null) =>
+    reason ? `Noted: ${reason.toLowerCase()}.` : 'Reason cleared.',
+  windDownSummary: (counts: {
+    done: number;
+    tomorrow: number;
+    later: number;
+    dropped: number;
+    left: number;
+  }) => {
+    const parts = [
+      counts.done > 0 ? `${counts.done} done` : null,
+      counts.tomorrow > 0 ? `${counts.tomorrow} to tomorrow` : null,
+      counts.later > 0 ? `${counts.later} for later` : null,
+      counts.dropped > 0 ? `${counts.dropped} dropped` : null,
+      counts.left > 0 ? `${counts.left} left as they were` : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0
+      ? `Wound down: ${parts.join(', ')}.`
+      : 'Wound down.';
+  },
+  windDownReview: 'Show how the day wound down',
+  windDownLeft: 'Left as it was',
+  windDownChange: (title: string) => `Change ${title}`,
+  windDownEmpty: 'Nothing left for today.',
+  planNowOverlaps: (title: string) => `Now overlaps ${title}`,
+  planKeepOverlap: 'Keep it as it is',
+  planKeptOverlap: 'Kept where it is.',
+  dayAimsStruggle: {
+    tired: 'Tired',
+    reluctant: "Didn't feel like it",
+    tooBusy: 'Too busy',
+    unwell: 'Unwell',
+    bored: 'Bored',
+    stressed: 'Stressed',
+  },
   dayStripLabel: 'Day',
   dayStripToday: 'Today',
   planEvents: (count: number) => `${count} ${count === 1 ? 'event' : 'events'}`,
@@ -4828,6 +4950,19 @@ export const WATCHING_PHRASES = [
 /** Weeks Helm waits after the first and the second no; the third is final. */
 export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;
 
+export { GROUPING_CONFIDENCE } from '@apps/helm/engine/grouping';
+
+/** Synced categories the nightly grouping may read, never live ones; each `<connector id>/<category id>`. */
+export const RELATE_SYNCED_CATEGORIES = [
+  'app:going-once/sales',
+  'app:going-once/things',
+  'app:going-once/pickups',
+  'app:runway/horizon',
+  'app:runway/upcomingBills',
+  'app:waypoint/trips',
+  'app:waypoint/myTasks',
+] as const;
+
 export const PATTERN_THRESHOLDS = {
   windowMissedMatched: 4,
   windowMissedOf: 5,
@@ -4868,6 +5003,7 @@ export const SEEN_AS_REMOVED_CAP = 200;
 
 export const PLANNER_COPY = {
   estimate: 'about 30 min · estimate',
+  estimateOf: (length: string) => `about ${length} · estimate`,
   fitsBefore: (length: string, title: string) =>
     `${length} · fits before ${title}`,
   fitsAfter: (length: string, title: string) =>

@@ -35,6 +35,7 @@ export async function openTask(
     isUrgent: data.isUrgent ?? false,
     due: data.due ?? null,
     durationMinutes: data.durationMinutes ?? null,
+    effort: data.effort ?? null,
     energy: data.energy ?? null,
     context: data.context ?? null,
     projectId: data.projectId ?? null,

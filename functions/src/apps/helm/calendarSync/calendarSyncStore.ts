@@ -12,6 +12,8 @@ import type { SealedPayload } from '../../../appKeys/seal.js';
 import { toGrantId } from '../../../vendor/connectionsContract.js';
 import { toSyncedId } from '../connections/sink.js';
 import { isPrivateHabit, openLiveHabit } from '../habitStore.js';
+import { openAimsView } from '../dayPlan/dayAimsStore.js';
+import type { AimsView } from '../dayPlan/dayJob.js';
 import { openForHelm, sealForHelm, type HelmKey } from '../helmKey.js';
 import { AUTOMATIC_LEVEL } from '../nomos/policy.js';
 import { isPrivateInEffect } from '../privacy.js';
@@ -210,6 +212,12 @@ const openTitle = (key: HelmKey, data: DocumentData) => {
   }
 };
 
+const toAimFlags = (view: AimsView | undefined, taskId: string) => {
+  const aim = view?.aims.find((entry) => entry.taskId === taskId);
+  const choice = aim ? (view?.windDown[aim.taskId]?.choice ?? null) : null;
+  return { isAim: aim !== undefined, isLetGo: choice !== null };
+};
+
 const toTask = (
   key: HelmKey,
   id: string,
@@ -245,9 +253,12 @@ export const readSyncInputs = async (
 ): Promise<SyncInputs> => {
   const base = userPath(uid);
   const { dayKeys, startAt, endAt } = toWindow(now, timeZone);
-  const [days, meetSnap, habitSnap] = await Promise.all([
+  const [days, aimDays, meetSnap, habitSnap] = await Promise.all([
     firestore.getAll(
       ...dayKeys.map((dayKey) => firestore.doc(`${base}/planDays/${dayKey}`)),
+    ),
+    firestore.getAll(
+      ...dayKeys.map((dayKey) => firestore.doc(`${base}/dayAims/${dayKey}`)),
     ),
     firestore
       .collection(`${base}/tasks`)
@@ -265,6 +276,9 @@ export const readSyncInputs = async (
       .get(),
   ]);
   if (meetSnap.size >= TASKS_READ) logger.warn('helm.calendarSync.tasksLimit');
+  const aimsByDay = new Map(
+    aimDays.map((day) => [day.id, openAimsView(key, day.data())]),
+  );
   const slots = days.flatMap((day) => {
     const raw: unknown = day.get('slots');
     return day.exists && isRecord(raw)
@@ -279,6 +293,7 @@ export const readSyncInputs = async (
                   endAt: toNumber(slot.endAt),
                   status: typeof slot.status === 'string' ? slot.status : '',
                   decidedAt: toNumber(slot.decidedAt),
+                  ...toAimFlags(aimsByDay.get(day.id), slot.taskId),
                 },
               ]
             : [],

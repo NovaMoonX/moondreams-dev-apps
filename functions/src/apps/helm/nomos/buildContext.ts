@@ -27,6 +27,10 @@ import type { ContextProject } from '../projectStore.js';
 import type { ContextLearnItem } from '../research/learnStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
 import { SEEN_AS_LIMITS } from './seenAs.js';
+import {
+  MAX_RELATED_THINGS,
+  type ContextRelatedThing,
+} from './relatedThings.js';
 
 export interface ContextTask {
   id: string;
@@ -237,6 +241,8 @@ export interface ContextInput {
   earlierTurns?: EarlierTurn[];
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
+  /** Set when the turn answers the morning card: the day whose aims it files. */
+  aimsDayKey?: string | null;
   facts?: ContextFact[];
   /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
   people?: ContextPerson[];
@@ -281,6 +287,7 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
   noticed?: string[];
+  relatedThings?: ContextRelatedThing[];
   seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
@@ -729,6 +736,9 @@ export function buildContext(input: ContextInput): {
           `<nothing_to_undo>Nothing from earlier turns can be taken back now. If they are asking to take something back, say plainly you can't and send no offerUndo; otherwise carry on as usual.</nothing_to_undo>`,
         ]
       : []),
+    ...(input.aimsDayKey
+      ? [`<aims_turn>${toDataJson({ day: input.aimsDayKey })}</aims_turn>`]
+      : []),
     ...(input.answeredQuestion
       ? [
           `<answered_question>${toDataJson(input.answeredQuestion)}</answered_question>`,
@@ -893,6 +903,13 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.noticed?.length
       ? [`<noticed>${toDataJson(input.noticed.slice(0, 10))}</noticed>`]
+      : []),
+    ...(input.relatedThings?.length
+      ? [
+          `<related_things>${toDataJson(
+            input.relatedThings.slice(0, MAX_RELATED_THINGS),
+          )}</related_things>`,
+        ]
       : []),
     ...(input.seenAs?.length
       ? [

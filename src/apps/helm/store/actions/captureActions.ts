@@ -127,6 +127,8 @@ export async function sendCapture(
     /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
     answersQuestion: Capture['answersQuestion'];
     questionAnswer: QuestionAnswerValue | null;
+    /** The day whose aims this turn files (the answer to the morning card); left out on every other turn. */
+    aimsDayKey?: string;
     /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
     noteIds?: string[];
     /** The photos sent with the turn, uploaded already, in pick order; a turn with photos never joins a running one. */
@@ -207,6 +209,7 @@ export async function sendCapture(
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: turn.aimsDayKey ?? null,
     createdAt,
     sortedAt: null,
     screen: turn.screen,
@@ -603,6 +606,7 @@ export async function makeTaskAsWritten(
     isUrgent: false,
     due: null,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,

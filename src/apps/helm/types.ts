@@ -3,7 +3,7 @@ import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { ImportancePlace } from '@apps/helm/engine/importance';
 import type { Personality } from '@apps/helm/engine/personality';
-import type { ObservationTag } from '@apps/helm/engine/said';
+import type { ObservationTag, STRUGGLING_TAGS } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type {
   TaskMeeting,
@@ -22,6 +22,7 @@ import type {
   CoupleStatus,
 } from '@apps/helm/engine/connections';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
+import type { GroupingMeta } from '@apps/helm/engine/grouping';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 export type { GoalWhy } from '@apps/helm/utils/goalWhy';
 import type { GoalWhy } from '@apps/helm/utils/goalWhy';
@@ -99,6 +100,8 @@ export interface HelmProfile {
   dayEndTime: string;
   /** Share of free time the planner may fill. */
   planFillPercent: number;
+  /** @deprecated Nothing reads it: a day's aims are noticed by the server's trigger on the day document. Written `null` going forward. */
+  dayAimsChangedAt: number | null;
   /** "{accountId}/{calendarId}" of each calendar marked as shifts. */
   shiftCalendarIds: string[];
   /** Synced ids of all-day events the person said block their day. */
@@ -149,6 +152,8 @@ export interface HelmProfile {
   patternsCheckedOn: string | null;
   /** The next night's reflection is due from this instant; null when nothing new waits. */
   reflectDueAt: number | null;
+  /** The next night's grouping of related things is due from this instant; null when nothing new waits. */
+  relateDueAt: number | null;
   /** Stamped with any change to a scheduled action, so the server looks at the person's actions within minutes; null on a profile from before. */
   scheduledActionsChangedAt: number | null;
   /** When the person last chose Forget what you've noticed; what was made at or before it is hidden. */
@@ -491,6 +496,8 @@ export interface Capture {
   sortedAt: number | null;
   /** Set when the assistant was asked to plan a day: "YYYY-MM-DD", which the device plans on sight. */
   planDayKey: string | null;
+  /** Set on the answer to the morning card: the day ("YYYY-MM-DD") whose aims it files; null on every other turn and on one made before the field. */
+  aimsDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
   /** The class of what the turn quotes; private when the turn filed or touched a private thing. */
@@ -653,6 +660,7 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
 export type TaskStatus = 'open' | 'done';
 export type Importance = 'must' | 'should' | 'could';
 export type Energy = 'low' | 'medium' | 'high';
+export type TaskEffort = 'light' | 'moderate' | 'heavy';
 export type TaskContext = 'atHome' | 'out' | 'atComputer' | 'onPhone';
 
 export type MeetingFormat = 'inPerson' | 'video' | 'phone';
@@ -669,6 +677,8 @@ export interface Task {
   isUrgent: boolean;
   due: TaskDue | null;
   durationMinutes: number | null;
+  /** How heavy the task is, for the break after it; null reads as moderate. */
+  effort: TaskEffort | null;
   energy: Energy | null;
   context: TaskContext | null;
   projectId: string | null;
@@ -1122,6 +1132,23 @@ export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
   isUnreadable: boolean;
 }
 
+/** `apps/helm/users/{uid}/groupings/{groupingId}`; the id hashes the sorted source keys. */
+export interface Grouping extends GroupingMeta {
+  sealed: Sealed;
+}
+
+export interface GroupingSealed {
+  proposedTitle: string | null;
+  emoji: string | null;
+  /** Source key to its title; none for a private source. */
+  titles: Record<string, string>;
+}
+
+export interface OpenGrouping extends Omit<Grouping, 'sealed'>, GroupingSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
 export type TopicDepth = 1 | 2 | 3;
 
 export type TopicSource =
@@ -1458,7 +1485,9 @@ export interface EffectRef {
     | 'connections'
     | 'patterns'
     | 'scheduledActions'
-    | 'research';
+    | 'research'
+    | 'dayAims'
+    | 'groupings';
   docId: string;
 }
 
@@ -1697,6 +1726,50 @@ export interface PlanSlot {
   status: PlanSlotStatus;
   source: 'nomos' | 'person';
   decidedAt: number | null;
+  /** The synced event a kept slot overlaps, when it does. */
+  overlapsEventRef: string | null;
+}
+
+export type StruggleSignal = (typeof STRUGGLING_TAGS)[number];
+
+/** The sealed part of a day's aims; `windDown` is keyed by taskId. */
+export interface DayAimsSealed {
+  aims: {
+    aimId: string;
+    taskId: string;
+    order: number;
+    lengthIsGuess: boolean;
+    broughtFrom: string | null;
+  }[];
+  windDown: Record<
+    string,
+    {
+      result: 'done' | 'tonight' | 'wontHappen';
+      choice: 'tomorrow' | 'later' | 'dropped' | null;
+      reason: StruggleSignal | null;
+      saidSpanId: string | null;
+    }
+  >;
+}
+
+/** One document per day, id = "YYYY-MM-DD" in the profile's zone. */
+export interface DayAims {
+  /** Date-only, UTC midnight. */
+  date: number;
+  state: 'open' | 'answered' | 'dismissed';
+  windDownState: 'waiting' | 'ready' | 'done' | 'dismissed';
+  lookAt: number | null;
+  rolledAt: number | null;
+  sealed: Sealed;
+}
+
+/** A day's aims after their sealed payload is opened; an unreadable one keeps its readable fields and no aims. */
+export interface OpenDayAims extends Omit<DayAims, 'sealed'> {
+  /** "YYYY-MM-DD" in the profile's zone. */
+  id: string;
+  aims: DayAimsSealed['aims'];
+  windDown: DayAimsSealed['windDown'];
+  isUnreadable: boolean;
 }
 
 export interface PlanCalendarEntry {

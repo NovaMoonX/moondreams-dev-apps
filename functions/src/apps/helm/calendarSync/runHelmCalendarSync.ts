@@ -18,6 +18,8 @@ import {
   getGoogleAccessToken,
 } from '../../../connections/tokens.js';
 import { readAssistantName } from '../assistantName.js';
+import { hasAimsFrom, stampDayQueue } from '../dayPlan/dayAimsStore.js';
+import { toDayKeyIn } from '../dayPlan/dayJob.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
 import { unwrapHelmKey } from '../helmKey.js';
 import { DEFAULT_ASSISTANT_NAME } from '../nomos/commands.js';
@@ -139,6 +141,18 @@ const setSyncState = (
     });
   });
 
+/** A synced calendar may have changed under a kept aim, so a person with aims has the day job look soon. Only a pass that changed something asks. */
+const askDayPlan = async (
+  firestore: Firestore,
+  uid: string,
+  profile: Record<string, unknown>,
+) => {
+  const now = Date.now();
+  const todayKey = toDayKeyIn(now, String(profile.timeZone ?? 'UTC'));
+  if (await hasAimsFrom(firestore, uid, todayKey))
+    await stampDayQueue(firestore, uid, now);
+};
+
 export async function syncPerson(
   firestore: Firestore,
   keyring: Keyring,
@@ -161,11 +175,16 @@ export async function syncPerson(
   if (!(await takeLease(firestore, uid, Date.now(), LEASE)))
     return { ...EMPTY_REPORT, state: 'busy' };
   try {
-    return await run(firestore, keyring, uid, {
+    const report = await run(firestore, keyring, uid, {
       profile,
       accountId,
       calendarId,
     });
+    const isChanged =
+      report.inserted + report.patched + report.deleted + report.readBack > 0;
+    if (report.state === 'ran' && isChanged)
+      await askDayPlan(firestore, uid, profile);
+    return report;
   } finally {
     await releaseLease(firestore, uid);
   }

@@ -64,6 +64,8 @@ const slot = (
   endAt: at(TODAY, '14:30'),
   status: 'kept',
   decidedAt: NOW - 60 * MINUTE,
+  isAim: false,
+  isLetGo: false,
   ...extra,
 });
 

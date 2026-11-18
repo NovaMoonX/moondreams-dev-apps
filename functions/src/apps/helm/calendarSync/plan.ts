@@ -14,6 +14,7 @@ export const MAX_EVENTS = 150;
 export const SKEW_MS = 5_000;
 export const BUSY_TITLE = 'Busy';
 export const DEFAULT_MEET_MINUTES = 60;
+export const DONE_PREFIX = '✓ ';
 export const PLAN_LINK = 'https://apps.moondreams.dev/helm?view=today';
 
 const MINUTE = 60_000;
@@ -26,6 +27,10 @@ export interface SlotInput {
   endAt: number | null;
   status: string;
   decidedAt: number | null;
+  /** The task is one of that day's aims. */
+  isAim: boolean;
+  /** The person sent that aim to Tomorrow or Later or dropped it, so its slot no longer belongs on the calendar. */
+  isLetGo: boolean;
 }
 
 export interface TaskInput {
@@ -174,6 +179,7 @@ export function buildDesired(input: {
     const task = tasks.get(slot.taskId);
     if (
       slot.status !== 'kept' ||
+      slot.isLetGo ||
       slot.startAt === null ||
       slot.endAt === null ||
       slot.endAt <= slot.startAt ||
@@ -192,7 +198,10 @@ export function buildDesired(input: {
           slotId: slot.slotId,
           taskId: task.id,
         },
-        title: task.title,
+        title:
+          slot.isAim && task.status === 'done'
+            ? `${DONE_PREFIX}${task.title}`
+            : task.title,
         isPrivate: task.isPrivate,
         startAt: slot.startAt,
         endAt: slot.endAt,

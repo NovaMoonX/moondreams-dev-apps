@@ -1966,6 +1966,8 @@ test('a private thing is a bare Busy block in the calendar the plan is kept in',
         endAt: START + 1_800_000,
         status: 'kept',
         decidedAt: null,
+        isAim: false,
+        isLetGo: false,
       },
     ],
     tasks: [
