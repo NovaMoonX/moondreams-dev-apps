@@ -51,6 +51,7 @@ import {
   selectIngredientsById,
   selectLeadDays,
   selectPackages,
+  selectUnitSettings,
 } from '@apps/pinch/store/selectors';
 import type { Package, PackagePlace } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
@@ -113,6 +114,7 @@ function PantrySubview({
   const packages = useAppSelector(selectPackages);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const soonDays = useAppSelector(selectLeadDays);
+  const units = useAppSelector(selectUnitSettings);
   const [pick, setPick] = useState<PackagePlace | null>(null);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PACKAGE_LIST_PAGE_SIZE);
@@ -254,7 +256,12 @@ function PantrySubview({
     getName(pkg.ingredientId, pkg.ingredientName);
 
   const confirmToss = (list: Package[]) => {
-    const { lines, more } = getPackageBulkNames(list, getNameOf);
+    const { lines, more } = getPackageBulkNames(
+      list,
+      getNameOf,
+      undefined,
+      units,
+    );
     return confirm({
       title: getPackageTossTitle(list.length),
       message: (

@@ -3,7 +3,9 @@ import { memo } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { useAppSelector } from '@/store';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
+import { selectUnitSettings } from '@apps/pinch/store/selectors';
 import {
   getStockFlag,
   getStockSummaryParts,
@@ -20,7 +22,8 @@ interface PantryRowProps {
 
 /** One ingredient and what is on hand of it: how many packages, how much in all and the one date that matters, so five cartons read as one line that opens them. */
 function PantryRow({ view, name, soonDays, onOpen }: PantryRowProps) {
-  const parts = getStockSummaryParts(view);
+  const units = useAppSelector(selectUnitSettings);
+  const parts = getStockSummaryParts(view, units);
   const flag = getStockFlag(view, undefined, soonDays);
 
   return (
