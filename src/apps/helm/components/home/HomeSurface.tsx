@@ -27,6 +27,8 @@ import { getDeviceTimeZone, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import DayCard from '@apps/helm/components/dayCard/DayCard';
+import GroupingCard from '@apps/helm/components/home/GroupingCard';
+import GroupingFiledLine from '@apps/helm/components/home/GroupingFiledLine';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
@@ -40,6 +42,7 @@ import {
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useDayCard } from '@apps/helm/hooks/useDayCard';
+import { useGroupingOffer } from '@apps/helm/hooks/useGroupingOffer';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
@@ -54,6 +57,7 @@ import {
   selectNoteById,
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
+import { pickHomeCards } from '@apps/helm/utils/groupingOffer';
 import { readOutsideAdditions } from '@apps/helm/utils/outsideTurns';
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
@@ -308,6 +312,12 @@ function HomeSurface({
   const voice = useHelmVoiceContext();
   const now = useNow(60_000);
   const dayCard = useDayCard(now);
+  const grouping = useGroupingOffer(now);
+  const cards = pickHomeCards({
+    hasDay: keyStatus === 'ready',
+    hasOffer: keyStatus === 'ready' && grouping.offer !== null,
+    hasFiled: keyStatus === 'ready' && grouping.filed !== null,
+  });
   const isDayCardAsking =
     dayCard.model?.mode === 'ask' || dayCard.model?.mode === 'windDown';
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
@@ -388,10 +398,19 @@ function HomeSurface({
         {keyStatus === 'ready' && <QuietLines now={now} />}
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
-        {keyStatus === 'ready' && (
+        {cards.includes('day') && (
           <div ref={dayCardBox}>
             <DayCard card={dayCard} />
           </div>
+        )}
+        {cards.includes('grouping') && grouping.offer && (
+          <GroupingCard key={grouping.offer.id} grouping={grouping.offer} />
+        )}
+        {cards.includes('filedLine') && grouping.filed && (
+          <GroupingFiledLine
+            key={grouping.filed.id}
+            grouping={grouping.filed}
+          />
         )}
         {isOpening && (
           <div

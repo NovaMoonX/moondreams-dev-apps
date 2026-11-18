@@ -1792,6 +1792,40 @@ export const HELM_COPY = {
     weeks === null
       ? "I'll leave it."
       : `I won't bring it up for ${weeks} weeks.`,
+  groupingTitle: (name: string) => `These look like one thing: ${name}`,
+  groupingTitleUnnamed: 'These look like one thing',
+  groupingGroup: 'Group them',
+  groupingNotRelated: 'Not related',
+  groupingNotNow: 'Ask me later',
+  groupingSubtitleExisting: (name: string) =>
+    `Link them to ${name} so they stay together.`,
+  groupingSubtitleNew: (name: string) => `Make ${name} to hold them.`,
+  groupingMore: (count: number) => `+${count} more`,
+  groupingFromApp: (app: string) => `From ${app}`,
+  groupingPrivateItem: 'A private item',
+  groupingYourTask: 'Your task',
+  groupingYourNote: 'Your note',
+  groupingYourTopic: 'Your topic',
+  groupingYourProject: 'Your project',
+  groupingGroupedToast: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}.`,
+  groupingNotRelatedToast: "Okay, I won't suggest these together.",
+  groupingNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave those alone."
+      : `I won't bring these up for ${weeks} weeks.`,
+  groupingLinkedLine: (count: number, name: string) =>
+    `Linked ${count} things to ${name}.`,
+  groupingActivityGrouped: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}`,
+  groupingActivityLinked: (count: number, name: string) =>
+    `Linked ${count} things to ${name}`,
+  groupingActionFailed: "Couldn't save that. Check your connection.",
+  groupingTookBackSummary: 'Took back the grouping',
+  groupingTookBackReport: 'Took those links back.',
+  groupingLinkedHeading: 'Linked',
+  groupingSourcesTitle: 'What goes together',
+  groupingFiledUndoFailed: "Couldn't take that back. Try again.",
   aheadActionFailed: "Couldn't save that. Check your connection.",
   aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
   aheadBriefLabel: "What I'll send:",
@@ -4915,6 +4949,19 @@ export const WATCHING_PHRASES = [
 
 /** Weeks Helm waits after the first and the second no; the third is final. */
 export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;
+
+export { GROUPING_CONFIDENCE } from '@apps/helm/engine/grouping';
+
+/** Synced categories the nightly grouping may read, never live ones; each `<connector id>/<category id>`. */
+export const RELATE_SYNCED_CATEGORIES = [
+  'app:going-once/sales',
+  'app:going-once/things',
+  'app:going-once/pickups',
+  'app:runway/horizon',
+  'app:runway/upcomingBills',
+  'app:waypoint/trips',
+  'app:waypoint/myTasks',
+] as const;
 
 export const PATTERN_THRESHOLDS = {
   windowMissedMatched: 4,

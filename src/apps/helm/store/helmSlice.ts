@@ -29,6 +29,7 @@ import type {
   OpenConnectedAssistant,
   OpenExecution,
   OpenFact,
+  OpenGrouping,
   OpenConnection,
   OpenResearch,
   OpenScheduledAction,
@@ -121,6 +122,7 @@ export interface HelmState {
   patterns: LoadedSet<OpenPattern>;
   /** Guardrails whose yes is being written or not yet heard back: their subject is already paused, so they must not read as no longer true meanwhile. Cleared when the stored pattern stops asking. */
   answeringPatternIds: string[];
+  groupings: LoadedSet<OpenGrouping>;
   /** What was said about habits, goals, tasks and the day in the last two weeks, oldest first. */
   observations: LoadedSet<OpenObservation>;
   /** The nightly pass's reflections the daily check has not weighed yet. */
@@ -298,6 +300,7 @@ const initialState: HelmState = {
   outsideCaptures: emptySet,
   patterns: emptyLoadedSet,
   answeringPatternIds: [],
+  groupings: emptyLoadedSet,
   observations: emptyLoadedSet,
   unseenReflections: emptyLoadedSet,
   openTasks: emptyLoadedSet,
@@ -434,6 +437,16 @@ const helmSlice = createSlice({
     },
     setPatternsFailed: (state) => {
       state.patterns.isFailed = true;
+    },
+    setGroupings: (state, action: PayloadAction<OpenGrouping[]>) => {
+      state.groupings = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setGroupingsFailed: (state) => {
+      state.groupings.isFailed = true;
     },
     setObservations: (state, action: PayloadAction<OpenObservation[]>) => {
       state.observations = {
@@ -749,6 +762,8 @@ export const {
   setOutsideCapturesFailed,
   setPatterns,
   setPatternsFailed,
+  setGroupings,
+  setGroupingsFailed,
   startAnsweringPattern,
   endAnsweringPattern,
   setObservations,

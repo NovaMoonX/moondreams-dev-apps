@@ -20,6 +20,9 @@ import {
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
+import { nextReflectionAt } from '../nomos/planObservations.js';
+import { toKnownZone } from '../nomos/spoken.js';
+import { RELATE_SYNCED_CATEGORIES } from '../reflection/relate/relateRuns.js';
 import {
   openForHelm,
   sealForHelm,
@@ -152,6 +155,25 @@ class HelmSinkSession implements SinkSession {
     return created;
   }
 
+  private async markRelateDue(now: number) {
+    const ref = this.firestore.doc(`apps/helm/users/${this.uid}`);
+    await this.firestore.runTransaction(async (transaction) => {
+      const profile = await transaction.get(ref);
+      if (
+        !profile.exists ||
+        profile.get('isLearningOn') === false ||
+        (profile.get('relateDueAt') ?? null) !== null
+      )
+        return;
+      transaction.update(ref, {
+        relateDueAt: nextReflectionAt(
+          now,
+          toKnownZone(String(profile.get('timeZone') ?? 'UTC')),
+        ),
+      });
+    });
+  }
+
   async writePage(args: WritePageArgs) {
     const {
       grantId,
@@ -263,6 +285,13 @@ class HelmSinkSession implements SinkSession {
       );
       await batch.commit();
     }, Promise.resolve());
+    if (
+      changed.length > 0 &&
+      RELATE_SYNCED_CATEGORIES.some(
+        (entry) => entry === `${connectorId}/${category}`,
+      )
+    )
+      await this.markRelateDue(now);
   }
 
   async finishCategory(args: {

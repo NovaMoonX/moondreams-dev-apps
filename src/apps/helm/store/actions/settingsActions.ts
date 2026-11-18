@@ -89,6 +89,7 @@ export async function ensureHelmProfile(uid: string) {
       isLearningOn: true,
       patternsCheckedOn: null,
       reflectDueAt: null,
+      relateDueAt: null,
       scheduledActionsChangedAt: null,
       forgottenAt: null,
       prunedOn: null,
@@ -148,7 +149,11 @@ export const setDailyFreshOn = (uid: string, isDailyFreshOn: boolean) =>
 /** "Notice what works for me". Turning it off puts what was asked but not answered back to waiting, so nothing stays on offer that Helm has stopped watching for; what the person accepted or answered stays. */
 export async function setLearningOn(uid: string, isLearningOn: boolean) {
   const userRef = doc(db, 'apps', 'helm', 'users', uid);
-  await updateDoc(userRef, { isLearningOn, lastEditedAt: Date.now() });
+  await updateDoc(userRef, {
+    isLearningOn,
+    ...(isLearningOn ? {} : { relateDueAt: null }),
+    lastEditedAt: Date.now(),
+  });
   if (isLearningOn) return;
   const asked = await getDocs(
     query(
