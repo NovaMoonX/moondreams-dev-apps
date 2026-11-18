@@ -598,7 +598,9 @@ function HorizonEndView({
             disabled={nextRead?.blocker != null}
             onClick={() => setEditing(null)}
           >
-            {HORIZON_NEXT_WORDS.done}
+            {isCallOff
+              ? HORIZON_NEXT_WORDS.callOffAndPlan
+              : HORIZON_NEXT_WORDS.finishAndPlan}
           </Button>
         ) : null
       }

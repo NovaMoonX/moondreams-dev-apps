@@ -928,6 +928,7 @@ export const HORIZON_END_WORDS = {
     `The next ${name} is planned and starts with the ${money}.`,
   nextRowLabel: 'The next one',
   nextFact: (date: string) => `Next one: ${date}`,
+  fromFact: (date: string) => `From: ${date}`,
   nextDontPlan: "Don't plan the next one",
   earlierCaption: 'Earlier ones',
   earlierRow: (date: string, spent: string | null) =>
@@ -4305,7 +4306,9 @@ export const HORIZON_NEXT_WORDS = {
   highOf: (name: string) => `${name}, highest`,
   needsAmount: 'Enter an amount for each cost.',
   planConfirm: 'Plan it',
-  done: 'Done',
+  tooFar: 'Pick a day within 10 years.',
+  finishAndPlan: 'Finish and plan it',
+  callOffAndPlan: 'Call off and plan it',
   planned: (name: string) => `Planned the next ${name}.`,
   undoPlanned: (name: string) => `Took back the next ${name}.`,
   planFailed: 'That did not save. Try again.',

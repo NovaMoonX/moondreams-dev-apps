@@ -248,7 +248,25 @@ function HorizonSheet({
     : null;
   const nextEvent = events.find(({ item }) => item.id === next?.itemId) ?? null;
   const earlier = listEarlierEvents(itemId, versions);
+  const fromEvent =
+    horizon.fromId === null
+      ? null
+      : (events.find(({ item }) => item.id === horizon.fromId) ?? null);
   const linkedEvent = events.find(({ item }) => item.id === linkedId) ?? null;
+  const fromLine = fromEvent && (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      className='text-muted-foreground! -ml-2 h-auto gap-1 self-start py-0.5 text-sm font-normal'
+      onClick={() => setLinkedId(fromEvent.item.id)}
+    >
+      {HORIZON_END_WORDS.fromFact(
+        formatDateOrdinalUTC(fromEvent.version.payload.happensOn),
+      )}
+      <ChevronRight className='size-4' aria-hidden='true' />
+    </Button>
+  );
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -960,6 +978,7 @@ function HorizonSheet({
                 </MaskedText>
               </p>
             )}
+            {fromLine}
             {next && nextEvent && (
               <Button
                 type='button'
@@ -1097,6 +1116,7 @@ function HorizonSheet({
               }
             />
           )}
+          {fromLine}
           {!isChangesOnly && (
             <CoversLine
               plan={plan}

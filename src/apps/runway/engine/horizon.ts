@@ -742,7 +742,22 @@ export interface NextHorizonPlan {
   startsOn: DateOnly | null;
   /** The amounts the person changed, by the earlier event's cost id. */
   amounts?: Readonly<Record<string, MoneyRange>>;
+  /** When given, no copied date lands before it. */
+  today?: DateOnly;
 }
+
+/** Where a date of the earlier event lands in the next one: moved by the gap between the two events, never before `plan.today`. */
+export const shiftNextDate = (
+  fromHappensOn: DateOnly,
+  plan: NextHorizonPlan,
+  date: DateOnly,
+): DateOnly => {
+  const shifted = addUtcDays(
+    date,
+    Math.round((plan.happensOn - fromHappensOn) / DAY_MS),
+  );
+  return plan.today === undefined ? shifted : Math.max(shifted, plan.today);
+};
 
 /** The costs an event's next one copies, each with the amount it starts at: costs that became bills or were removed are left out, and a one-time cost that was paid starts at exactly what it came to. */
 export function listCarriedCosts(
@@ -776,8 +791,8 @@ export function getNextHorizon(
   thisId: string,
   plan: NextHorizonPlan,
 ): HorizonSealed {
-  const gapDays = Math.round((plan.happensOn - horizon.happensOn) / DAY_MS);
-  const shift = (date: DateOnly) => addUtcDays(date, gapDays);
+  const shift = (date: DateOnly) =>
+    shiftNextDate(horizon.happensOn, plan, date);
   return {
     ...horizon,
     happensOn: plan.happensOn,

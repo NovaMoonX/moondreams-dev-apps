@@ -1,12 +1,14 @@
 import DateInput from '@/components/DateInput';
 import SummaryEditor from '@/components/SummaryEditor';
 import MoneyInput from '@/components/MoneyInput';
-import { toDateInputValue } from '@/utils/dateInputUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import PaysStartRow from '@apps/runway/components/PaysStartRow';
 import { HORIZON_NEXT_WORDS } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   listCarriedCosts,
+  shiftNextDate,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
 import type { HorizonSealed } from '@apps/runway/types';
@@ -35,6 +37,9 @@ function HorizonNextFields({
 }: HorizonNextFieldsProps) {
   const lastDate = addUtcMonths(today, NEXT_LAST_DATE_MONTHS);
   const carried = listCarriedCosts(horizon, paid);
+  const newDay = fromDateInputValue(draft.date);
+  const isNewDayUsable =
+    newDay !== undefined && newDay >= today && newDay <= lastDate;
   const setAmount = (id: string, part: 'low' | 'high', text: string) =>
     onChange({
       ...draft,
@@ -77,7 +82,20 @@ function HorizonNextFields({
               const isRange = cost.amount.lowCents !== cost.amount.highCents;
               return (
                 <li key={cost.id} className='space-y-1'>
-                  <p className='text-sm break-words'>{cost.name}</p>
+                  <div className='flex items-baseline justify-between gap-3'>
+                    <p className='min-w-0 text-sm break-words'>{cost.name}</p>
+                    {isNewDayUsable && cost.schedule.anchor !== null && (
+                      <p className='text-muted-foreground shrink-0 text-sm'>
+                        {formatDateOrdinalUTC(
+                          shiftNextDate(
+                            horizon.happensOn,
+                            { happensOn: newDay, startsOn: null, today },
+                            cost.schedule.anchor,
+                          ),
+                        )}
+                      </p>
+                    )}
+                  </div>
                   <div className='flex gap-2'>
                     <MoneyInput
                       variant='outline'

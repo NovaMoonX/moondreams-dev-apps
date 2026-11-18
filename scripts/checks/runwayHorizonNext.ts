@@ -184,6 +184,27 @@ assert.equal(
   'the event it came from is untouched',
 );
 
+const clamped = getNextHorizon(horizon, [], 't', {
+  happensOn: day('2026-11-20'),
+  startsOn: null,
+  today: day('2026-11-19'),
+});
+assert.equal(
+  clamped.costs[0].schedule.anchor,
+  day('2026-11-19'),
+  'a copied date that would fall before today lands on today',
+);
+assert.equal(
+  clamped.costs[3].schedule.anchor,
+  day('2026-11-19'),
+  'a long past start lands on today too',
+);
+assert.equal(
+  clamped.happensUntil,
+  day('2026-11-22'),
+  'the end of the event still moves by the gap',
+);
+
 assert.equal(
   describeChange(
     { ...horizon, rest: { kind: 'pays', startsOn: null } },

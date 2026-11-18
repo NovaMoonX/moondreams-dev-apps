@@ -25,10 +25,14 @@ export const makeNextDraft = (
   paid: readonly CostPaidEntry[],
   today: number,
 ): NextDraft => {
-  const yearOn = addUtcMonths(horizon.happensOn, 12);
   const lastDate = addUtcMonths(today, NEXT_LAST_DATE_MONTHS);
+  const yearOn = addUtcMonths(horizon.happensOn, 12);
+  const start =
+    horizon.state === 'calledOff' && horizon.happensOn >= today
+      ? horizon.happensOn
+      : yearOn;
   return {
-    date: toDateInputValue(Math.min(Math.max(yearOn, today), lastDate)),
+    date: toDateInputValue(Math.min(Math.max(start, today), lastDate)),
     startsOn: null,
     amounts: Object.fromEntries(
       listCarriedCosts(horizon, paid).map(({ cost, amount }) => [
@@ -50,12 +54,11 @@ export const readNextDraft = (
   today: number,
 ): { plan: NextHorizonPlan | null; blocker: string | null } => {
   const happensOn = fromDateInputValue(draft.date);
-  if (
-    happensOn === undefined ||
-    happensOn < today ||
-    happensOn > addUtcMonths(today, NEXT_LAST_DATE_MONTHS)
-  ) {
+  if (happensOn === undefined || happensOn < today) {
     return { plan: null, blocker: FORM_FLOW_WORDS.pastDay };
+  }
+  if (happensOn > addUtcMonths(today, NEXT_LAST_DATE_MONTHS)) {
+    return { plan: null, blocker: HORIZON_NEXT_WORDS.tooFar };
   }
   const read = listCarriedCosts(horizon, paid).map(({ cost }) => {
     const typed = draft.amounts[cost.id];
@@ -77,6 +80,7 @@ export const readNextDraft = (
   const plan: NextHorizonPlan = {
     happensOn,
     startsOn,
+    today,
     amounts: Object.fromEntries(
       read.flatMap(([id, amount]) => (amount ? [[id, amount]] : [])),
     ) as Record<string, MoneyRange>,
