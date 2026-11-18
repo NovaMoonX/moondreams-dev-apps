@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { CloudOff, RotateCw } from 'lucide-react';
 
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { syncConnections } from '@/lib/connections/connectionCalls';
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -19,10 +20,22 @@ function CalendarFailedLine({ grants, hasPlan }: CalendarFailedLineProps) {
   const [isRetrying, setIsRetrying] = useState(false);
   const [hasFailed, setHasFailed] = useState(false);
 
+  const waitFor = useWaitUntilShown(grants);
+
   const retry = () => {
     setIsRetrying(true);
     setHasFailed(false);
+    const before = new Map(grants.map((grant) => [grant.id, grant.lastSyncAt]));
     Promise.all(grants.map((grant) => syncConnections({ grantId: grant.id })))
+      .then(() =>
+        waitFor((current) =>
+          [...before].every(([id, lastSyncAt]) =>
+            current.every(
+              (entry) => entry.id !== id || entry.lastSyncAt !== lastSyncAt,
+            ),
+          ),
+        ),
+      )
       .catch((error: unknown) => {
         console.error('Helm calendar was not updated', error);
         setHasFailed(true);
