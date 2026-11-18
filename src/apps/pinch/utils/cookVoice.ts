@@ -1810,7 +1810,6 @@ const looseLineMatcher = createOptionMatcher<CookVoiceContext['lines'][number]>(
   { names: (line) => line.names, foldPlurals: true, typos: 'loose' },
 );
 
-/** A tick or untick phrase; a query that matches no ingredient, even nearly, is kitchen talk and gives null. */
 const parseGather = (
   transcript: string,
   context: CookVoiceContext,
@@ -1851,7 +1850,6 @@ const parseGather = (
   );
 };
 
-/** "Make the rice six servings": a servings change with its dish named. */
 const parseDishServings = (
   text: string,
   context: CookVoiceContext,

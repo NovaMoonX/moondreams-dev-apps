@@ -2347,7 +2347,6 @@ assert.equal(
   'double four',
 );
 
-// Gather commands.
 const gather: CookVoiceContext = {
   ...plate,
   isGathering: true,
@@ -2555,7 +2554,6 @@ assert.deepEqual(
   'servings question unchanged',
 );
 
-// Servings by dish while gathering a plate.
 const gatherPlate: CookVoiceContext = {
   ...gather,
   recipes: [
