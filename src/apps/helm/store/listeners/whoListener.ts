@@ -15,7 +15,7 @@ import type { OpenWho, Who, WhoSealed } from '@apps/helm/types';
 import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
-  error instanceof Error ? error : new Error('Your people did not open.');
+  error instanceof Error ? error : new Error('Your circle did not open.');
 
 const toTexts = (value: unknown) =>
   Array.isArray(value)

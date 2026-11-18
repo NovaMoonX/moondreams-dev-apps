@@ -1,7 +1,11 @@
 import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@lib/firebase/config';
+import { store } from '@/store';
 import { generateUuid } from '@/utils';
+import { waitUntil } from '@/utils/waitUntil';
+import { selectEveryCapture } from '@apps/helm/store/selectors/captureSelectors';
+import { selectTopicById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { HeldReason } from '@apps/helm/types';
 
 interface SortResult {
@@ -98,6 +102,14 @@ export async function sortCapture(
       mode === 'rest'
         ? status === 'sorted'
         : status === 'sorted' || status === 'needsYou';
+    if (isSorted) {
+      await waitUntil(() => {
+        const shown = selectEveryCapture(store.getState()).find(
+          (capture) => capture.id === captureId,
+        );
+        return shown === undefined || shown.status === status;
+      });
+    }
     return outcome(isSorted ? 'done' : 'notSorted');
   } catch (error) {
     const isHeld =
@@ -158,9 +170,18 @@ export async function writeTopic(topicId: string): Promise<void> {
   if (topicWrites.get(topicId)?.kind === 'writing') return;
   setTopicWrite(topicId, { kind: 'writing' });
   try {
+    const versionBefore = selectTopicById(store.getState()).get(
+      topicId,
+    )?.version;
     const { status, waiting, retry } = (
       await writeHelmTopicCallable({ topicId })
     ).data;
+    if (status === 'written') {
+      await waitUntil(() => {
+        const shown = selectTopicById(store.getState()).get(topicId);
+        return shown === undefined || shown.version !== versionBefore;
+      });
+    }
     setTopicWrite(
       topicId,
       status === 'limited'

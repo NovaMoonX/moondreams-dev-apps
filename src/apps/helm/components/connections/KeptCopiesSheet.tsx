@@ -7,7 +7,9 @@ import FormSheet from '@/components/FormSheet';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { deleteKeptCopies } from '@/lib/connections/connectionCalls';
+import { useConnections } from '@/lib/connections/useConnections';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { formatDateShort } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -34,6 +36,11 @@ function KeptForm({
   const isOffline = useNetworkStatus() === 'offline';
   const [isDeleting, setIsDeleting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const { grants, isLoading } = useConnections({
+    readerAppId: 'helm',
+    includeEnded: true,
+  });
+  const waitFor = useWaitUntilShown({ grants, isLoading });
 
   const deleteNow = async () => {
     const isConfirmed = await confirm({
@@ -47,6 +54,14 @@ function KeptForm({
     setFailure(null);
     try {
       await deleteKeptCopies({ grantId: kept.grantId });
+      await waitFor(
+        (current) =>
+          !current.isLoading &&
+          !current.grants.some(
+            (grant) =>
+              grant.id === kept.grantId && (grant.keptCopies?.count ?? 0) > 0,
+          ),
+      );
       onClose();
     } catch (error) {
       console.error('Helm kept copies were not deleted', error);
