@@ -608,6 +608,31 @@ export const stepCookServings = (current: number, direction: 1 | -1) => {
   return next >= 1 ? next : MIN_COOK_SERVINGS;
 };
 
+/** The servings a spoken change asks for, before any limit: a number or a multiple rounds to a half, and servings added or taken away move as the stepper does. */
+export const getSpokenServings = (
+  current: number,
+  change:
+    | { kind: 'TO'; servings: number }
+    | { kind: 'BY'; delta: number }
+    | { kind: 'TIMES'; factor: number },
+) => {
+  if (change.kind === 'TO') return Math.round(change.servings * 2) / 2;
+  if (change.kind === 'TIMES') {
+    return Math.max(
+      MIN_COOK_SERVINGS,
+      Math.round(current * change.factor * 2) / 2,
+    );
+  }
+  if (Math.abs(change.delta) > MAX_COOKED_SERVINGS) {
+    return current + change.delta;
+  }
+  const direction = change.delta > 0 ? 1 : -1;
+  return Array.from({ length: Math.abs(change.delta) }).reduce<number>(
+    (servings) => stepCookServings(servings, direction),
+    current,
+  );
+};
+
 const TRAILING_LITTLE_WORDS = new Set([
   'a',
   'an',

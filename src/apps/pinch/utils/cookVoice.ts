@@ -1,3 +1,4 @@
+import { readHeardCount } from '@/lib/speech/heardCount';
 import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
 import {
@@ -163,6 +164,8 @@ export type CookCommand =
     }
   | { kind: 'SWITCH_RECIPE'; recipeId: string | null; candidates: string[] }
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
+  | { kind: 'SET_SERVINGS'; change: CookServingsChange }
+  | { kind: 'TELL_SERVINGS' }
   | { kind: 'READ_TIPS' }
   | { kind: 'READ_NOTES' }
   | { kind: 'READ_CHANGES' }
@@ -175,6 +178,12 @@ export type CookCommand =
   | { kind: 'STOP_LISTENING' };
 
 /** A timer as a spoken name can reach it: every name it goes by (its step's first words, a kitchen timer's name, its recipe) and its length as the card shows it ("10 min"). */
+/** A spoken change to the servings being made: a number, servings added (negative takes away) or a multiple. */
+export type CookServingsChange =
+  | { kind: 'TO'; servings: number }
+  | { kind: 'BY'; delta: number }
+  | { kind: 'TIMES'; factor: number };
+
 export interface CookVoiceTimer {
   id: string;
   names: string[];
@@ -1298,6 +1307,157 @@ const parseConvert = (
   return { kind: 'CONVERT', query, lineIds, unit };
 };
 
+const SERVING_NOUN =
+  '(?:servings?|servins?|serving size|servants?|service|portions?|people|persons?|helpings?|plates?)';
+const ONE_SERVING = '(?:a|an|one|1)';
+const EXTRA_SERVING = '(?:another|an extra|one more|1 more)';
+/** Up to three words where a count stands; `readHeardCount` decides whether they are one. */
+const COUNT_SLOT = String.raw`(?<n>[a-z0-9.]+(?: [a-z0-9.]+){0,2})`;
+const SERVINGS_VERB =
+  '(?:make|cook|do|set|change|scale|adjust|switch|update|put|bump|increase|decrease|reduce|lower|raise|go)';
+const SERVINGS_OBJECT =
+  '(?: it| this| that| the recipe| recipe| the servings| servings| the serving size| serving size| the portions| portions)?';
+
+const SET_SERVINGS_PATTERNS = [
+  new RegExp(
+    String.raw`^(?:${SERVINGS_VERB}${SERVINGS_OBJECT}(?: up| down)?(?: to| for| at)? )?(?:enough for )?${COUNT_SLOT} ${SERVING_NOUN}(?: instead)?$`,
+  ),
+  new RegExp(
+    String.raw`^(?:${SERVINGS_VERB} )?(?:the )?(?:serving size|servings?|portions?|serves|yield)(?: up| down)?(?: to| at| for)? ${COUNT_SLOT}$`,
+  ),
+  new RegExp(
+    String.raw`^(?:make|scale|do) (?:it|this|the recipe|that)(?: up| down)? (?:to|for) ${COUNT_SLOT}$`,
+  ),
+  new RegExp(String.raw`^scale(?: up| down)? to ${COUNT_SLOT}$`),
+  new RegExp(
+    String.raw`^(?:make|cook|scale) (?:it |this )?for ${COUNT_SLOT} ${SERVING_NOUN}$`,
+  ),
+];
+
+const ADD_SERVINGS_PATTERNS: [RegExp, 1 | -1][] = [
+  [
+    new RegExp(
+      String.raw`^(?:(?:add|give me|i need|we need) ${ONE_SERVING}|(?:(?:add|give me|make|i need|we need) )?${EXTRA_SERVING}|${ONE_SERVING} more) ${SERVING_NOUN}(?: more)?$`,
+    ),
+    1,
+  ],
+  [
+    new RegExp(
+      String.raw`^(?:add|plus) ${COUNT_SLOT}(?: more)? ${SERVING_NOUN}$`,
+    ),
+    1,
+  ],
+  [new RegExp(String.raw`^${COUNT_SLOT} more ${SERVING_NOUN}$`), 1],
+  [
+    new RegExp(
+      String.raw`^(?:increase|raise|bump up|up|add to)(?: the)? ${SERVING_NOUN} by ${COUNT_SLOT}$`,
+    ),
+    1,
+  ],
+  [
+    new RegExp(
+      String.raw`^(?:${ONE_SERVING} )?(?:less|fewer) ${SERVING_NOUN}$`,
+    ),
+    -1,
+  ],
+  [new RegExp(String.raw`^${COUNT_SLOT} (?:less|fewer) ${SERVING_NOUN}$`), -1],
+  [
+    new RegExp(
+      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) (?:a|an|one|1) ${SERVING_NOUN}$`,
+    ),
+    -1,
+  ],
+  [
+    new RegExp(
+      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) ${COUNT_SLOT} ${SERVING_NOUN}$`,
+    ),
+    -1,
+  ],
+  [
+    new RegExp(
+      String.raw`^(?:decrease|reduce|lower|cut|drop)(?: the)? ${SERVING_NOUN} by ${COUNT_SLOT}$`,
+    ),
+    -1,
+  ],
+];
+
+const STEP_SERVINGS: Record<string, 1 | -1> = {
+  'more servings': 1,
+  'increase servings': 1,
+  'increase the servings': 1,
+  'raise the servings': 1,
+  'add a serving': 1,
+  'servings up': 1,
+  'fewer servings': -1,
+  'less servings': -1,
+  'decrease servings': -1,
+  'decrease the servings': -1,
+  'reduce servings': -1,
+  'reduce the servings': -1,
+  'lower the servings': -1,
+  'servings down': -1,
+};
+
+const FACTOR_WORDS: Record<string, number> = {
+  double: 2,
+  triple: 3,
+  quadruple: 4,
+  halve: 0.5,
+  half: 0.5,
+};
+const TIMES_PATTERNS = [
+  /^(?:make )?(?<factor>double|triple|quadruple|halve|half) (?:it|this|that|the recipe|recipe|the servings|servings|the batch|the amounts|everything)$/,
+  /^(?:make )?(?:a )?(?<factor>double|triple|quadruple|half) (?:batch|recipe|portion|the recipe)$/,
+  /^make (?:it|this) (?<factor>double|triple)$/,
+  /^(?<factor>double|triple|halve) it up$/,
+];
+const HALF_PATTERN =
+  /^cut (?:it|this|the recipe|the servings|everything) in half$/;
+
+const TELL_SERVINGS_PATTERN = new RegExp(
+  String.raw`^(?:how many (?:${SERVING_NOUN}|is this for|does (?:it|this) (?:make|serve|feed)|people does (?:it|this) (?:serve|feed|make)|am i making|are we making)(?: (?:is (?:it|this|that)|am i making|are we making|does (?:it|this) make|is it set to|are there|right now|now))?|whats the serving size|what are the servings|what is the serving size|servings)$`,
+);
+
+/** Servings set, added, taken away, multiplied or asked about. A count only counts beside a servings word or a scaling verb, so a bare "six" or "cook for ten" is never one. */
+const parseServings = (text: string): CookCommand | null => {
+  if (TELL_SERVINGS_PATTERN.test(text)) return { kind: 'TELL_SERVINGS' };
+  if (Object.hasOwn(STEP_SERVINGS, text)) {
+    return {
+      kind: 'SET_SERVINGS',
+      change: { kind: 'BY', delta: STEP_SERVINGS[text] },
+    };
+  }
+  const factor = TIMES_PATTERNS.map((pattern) => text.match(pattern)).find(
+    Boolean,
+  )?.groups?.factor;
+  if (factor) {
+    return {
+      kind: 'SET_SERVINGS',
+      change: { kind: 'TIMES', factor: FACTOR_WORDS[factor] },
+    };
+  }
+  if (HALF_PATTERN.test(text)) {
+    return { kind: 'SET_SERVINGS', change: { kind: 'TIMES', factor: 0.5 } };
+  }
+  const added = ADD_SERVINGS_PATTERNS.map(([pattern, sign]) => {
+    const match = text.match(pattern);
+    if (!match) return null;
+    const n = match.groups?.n;
+    const count = n === undefined ? 1 : readHeardCount(n);
+    return count === null || !(count > 0) ? null : sign * count;
+  }).find((delta) => delta !== null);
+  if (typeof added === 'number') {
+    return { kind: 'SET_SERVINGS', change: { kind: 'BY', delta: added } };
+  }
+  const servings = SET_SERVINGS_PATTERNS.map((pattern) => {
+    const n = text.match(pattern)?.groups?.n;
+    return n === undefined ? null : readHeardCount(n);
+  }).find((count) => typeof count === 'number');
+  return typeof servings !== 'number' || !(servings > 0)
+    ? null
+    : { kind: 'SET_SERVINGS', change: { kind: 'TO', servings } };
+};
+
 const parseSwitch = (
   text: string,
   context: CookVoiceContext,
@@ -1377,6 +1537,7 @@ const parseOne = (
     return { kind: 'CYCLE_RECIPE', direction: CYCLE_PHRASES[text] };
   }
   const result =
+    parseServings(text) ??
     parseTimer(text, context) ??
     parseConvert(text, context) ??
     parseAmount(text, context) ??
