@@ -1,8 +1,13 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { Announcement, AnnouncementSeverity, TripSpace } from '@apps/waypoint/types';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
+import type {
+  Announcement,
+  AnnouncementSeverity,
+  TripSpace,
+} from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateAnnouncementInput {
@@ -20,12 +25,17 @@ export const createAnnouncement = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/announcements/create',
-  async ({ uid, trip, severity, title, body, expiresAt }, { rejectWithValue }) => {
+  async (
+    { uid, trip, severity, title, body, expiresAt },
+    { rejectWithValue },
+  ) => {
     if (!isTripAdmin(trip, uid)) {
       return rejectWithValue('Only trip admins can post announcements.');
     }
     if (!title.trim() || !body.trim()) {
-      return rejectWithValue('Enter a title and message for this announcement.');
+      return rejectWithValue(
+        'Enter a title and message for this announcement.',
+      );
     }
 
     const announcementRef = doc(
@@ -66,7 +76,15 @@ export const deleteAnnouncement = createAsyncThunk<
     }
 
     await deleteDoc(
-      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'announcements', announcementId),
+      doc(
+        db,
+        'apps',
+        'waypoint',
+        'trips',
+        trip.id,
+        'announcements',
+        announcementId,
+      ),
     );
   },
 );
@@ -93,12 +111,17 @@ export const dismissAnnouncement = createAsyncThunk<
     'announcements',
     announcementId,
   );
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(trip.id, async (transaction) => {
     const snapshot = await transaction.get(announcementRef);
     if (!snapshot.exists()) {
       return;
     }
-    const dismissedBy = (snapshot.data().dismissedBy ?? {}) as Record<string, number>;
-    transaction.update(announcementRef, { dismissedBy: { ...dismissedBy, [uid]: Date.now() } });
+    const dismissedBy = (snapshot.data().dismissedBy ?? {}) as Record<
+      string,
+      number
+    >;
+    transaction.update(announcementRef, {
+      dismissedBy: { ...dismissedBy, [uid]: Date.now() },
+    });
   });
 });

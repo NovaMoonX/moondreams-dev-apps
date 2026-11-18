@@ -48,7 +48,7 @@ export function useAListSync(uid: string | null) {
 
     const unsubscribeMembership = startMembershipListener(
       uid,
-      (membership) => dispatch(setMembership(membership)),
+      (membership) => dispatch(setMembership({ uid, membership })),
       (error) =>
         dispatch(
           setMembershipLoadError(
@@ -58,7 +58,7 @@ export function useAListSync(uid: string | null) {
     );
     const unsubscribeWatchlist = startWatchlistListener(
       uid,
-      (items) => dispatch(setWatchlist(items)),
+      (items) => dispatch(setWatchlist({ uid, items })),
       (error) =>
         dispatch(
           setWatchlistLoadError(
@@ -69,7 +69,7 @@ export function useAListSync(uid: string | null) {
 
     const unsubscribeViewings = startViewingsListener(
       uid,
-      (viewings) => dispatch(setViewings(viewings)),
+      (viewings) => dispatch(setViewings({ uid, items: viewings })),
       (error) =>
         dispatch(
           setViewingsLoadError(
@@ -80,7 +80,7 @@ export function useAListSync(uid: string | null) {
 
     const unsubscribeTheatres = startTheatresListener(
       uid,
-      (theatres) => dispatch(setTheatres(theatres)),
+      (theatres) => dispatch(setTheatres({ uid, items: theatres })),
       (error) =>
         dispatch(
           setTheatresLoadError(
