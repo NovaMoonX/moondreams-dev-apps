@@ -1091,7 +1091,7 @@ function CookingSession({
       title: 'Stop timers and leave?',
       message: <LeaveMessage count={goingCount} />,
       confirmText: 'Leave',
-      cancelText: 'Stay',
+      cancelText: 'Keep cooking',
       destructive: true,
     });
     return isConfirmed;
