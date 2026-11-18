@@ -243,6 +243,8 @@ export interface ContextInput {
   answeredQuestion?: string | null;
   /** Set when the turn answers the morning card: the day whose aims it files. */
   aimsDayKey?: string | null;
+  /** Set when the morning question was open as the turn was sent: the day it asks about. Whether the turn answers it is for the reply to say. */
+  morningDayKey?: string | null;
   facts?: ContextFact[];
   /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
   people?: ContextPerson[];
@@ -738,6 +740,11 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.aimsDayKey
       ? [`<aims_turn>${toDataJson({ day: input.aimsDayKey })}</aims_turn>`]
+      : []),
+    ...(input.morningDayKey
+      ? [
+          `<morning_question>${toDataJson({ day: input.morningDayKey })}</morning_question>`,
+        ]
       : []),
     ...(input.answeredQuestion
       ? [
