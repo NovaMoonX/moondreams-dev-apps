@@ -1,6 +1,6 @@
 // shared helpers for throwaway validation scripts
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
-export const BASE = 'http://127.0.0.1:5173';
+export const BASE = process.env.PW_BASE ?? 'http://127.0.0.1:5173';
 // The sandbox can't reach outside services, so a screen fed by them would look complete without them: answer with fixtures.
 const FIXTURE_IMAGE = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6c177"/><stop offset=".6" stop-color="#e07a5f"/><stop offset="1" stop-color="#2a9d8f"/></linearGradient></defs><rect width="800" height="450" fill="url(#g)"/></svg>`;
 export async function fillOutsideData(ctx) {

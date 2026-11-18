@@ -4,6 +4,7 @@ import type {
   OpenFact,
   OpenMedia,
   OpenNote,
+  OpenResearch,
   OpenPlace,
   OpenProcedure,
   OpenProject,
@@ -32,6 +33,7 @@ const empty: SearchSources = {
   byWho: {},
   moments: [],
   notes: [],
+  learnLater: [],
   topics: [],
   projects: [],
   procedures: [],
@@ -115,6 +117,34 @@ assert.deepEqual(titlesOf(words, 'cake fridge', 'notes'), [
 ]);
 assert.deepEqual(titlesOf(words, 'cake dragon', 'notes'), []);
 assert.deepEqual(titlesOf(words, '   ', 'notes'), []);
+
+// A question saved to learn later is found by its subject and by a word it holds; one that is removed or done is not.
+const learnItem = (id: string, subject: string, extra: Partial<OpenResearch>) =>
+  ({
+    id,
+    mode: 'learnLater',
+    status: 'ready',
+    subject,
+    question: `how does ${subject} work`,
+    moreAsked: [],
+    createdAt: 1,
+    isUnreadable: false,
+    ...extra,
+  }) as unknown as OpenResearch;
+const learning = {
+  ...empty,
+  learnLater: [
+    learnItem('l1', 'Engines', { moreAsked: ['what a camshaft does'] }),
+    learnItem('l2', 'Chess openings', { status: 'dismissed' }),
+    learnItem('l3', 'Sourdough starters', { status: 'done' }),
+    learnItem('l4', 'Tides', { isUnreadable: true }),
+  ],
+};
+assert.deepEqual(titlesOf(learning, 'engines', 'learnLater'), ['Engines']);
+assert.deepEqual(titlesOf(learning, 'camshaft', 'learnLater'), ['Engines']);
+assert.deepEqual(titlesOf(learning, 'chess', 'learnLater'), []);
+assert.deepEqual(titlesOf(learning, 'sourdough', 'learnLater'), []);
+assert.deepEqual(titlesOf(learning, 'tides', 'learnLater'), []);
 
 // Accents and case fold.
 const accents = { ...empty, who: [who('w1', 'José Núñez'), who('w2', 'Dana')] };
@@ -348,6 +378,7 @@ const makeBig = (): SearchSources => ({
       `p${index % 40}`,
     ]),
   ),
+  learnLater: [],
   topics: bigTopics,
   projects: Array.from({ length: 20 }, (_, index) => ({
     id: `pr${index}`,

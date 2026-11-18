@@ -45,6 +45,8 @@ const env = {
   startError: null as string | null,
   speech: 'normal' as 'normal' | 'silent' | 'never-ends',
   current: null as FakeRecognition | null,
+  refusesPhrases: 'never' as 'never' | 'when-set' | 'always',
+  phrasesAtStart: [] as number[],
 };
 const record = (entry: string) => {
   env.log = [...env.log, `${clock.now}:${entry}`];
@@ -61,6 +63,7 @@ class FakeRecognition {
   onresult: ((event: unknown) => void) | null = null;
   isRunning = false;
   results: unknown[] = [];
+  phrases: unknown[] = [];
 
   constructor() {
     record('new');
@@ -75,7 +78,11 @@ class FakeRecognition {
     this.results = [];
     env.current = this;
     record('start');
-    const error = env.startError;
+    env.phrasesAtStart = [...env.phrasesAtStart, this.phrases.length];
+    const isRefused =
+      env.refusesPhrases === 'always' ||
+      (env.refusesPhrases === 'when-set' && this.phrases.length > 0);
+    const error = isRefused ? 'phrases-not-supported' : env.startError;
     setTimeoutFake(() => {
       if (!this.isRunning) return;
       if (error !== null) {
@@ -163,6 +170,12 @@ Object.assign(globalThis, {
     setTimeout: setTimeoutFake,
     clearTimeout: clearTimeoutFake,
     webkitSpeechRecognition: FakeRecognition,
+    SpeechRecognitionPhrase: class {
+      constructor(
+        public phrase: string,
+        public boost: number,
+      ) {}
+    },
     speechSynthesis: synth,
   },
   document: { visibilityState: 'visible' },
@@ -190,6 +203,8 @@ const setUp = (used: (alternatives: string[]) => boolean = () => true) => {
   env.startError = null;
   env.speech = 'normal';
   env.current = null;
+  env.refusesPhrases = 'never';
+  env.phrasesAtStart = [];
   const seen = {
     status: 'off' as SpeechCommandsStatus,
     error: null as SpeechCommandsError | null,
@@ -493,6 +508,87 @@ const entries = (name: string) =>
     seen.heard.length,
     1,
     'a shorter mute never cuts a longer one short',
+  );
+  listener.teardown();
+}
+
+{
+  const { listener } = setUp();
+  listener.setOptions({
+    lang: 'en-US',
+    speechLang: 'en-US',
+    idleStopMs: IDLE_MS,
+    phrases: ['Anya', 'Bram'],
+    onFinalTranscript: () => true,
+  });
+  listener.start();
+  advance(30);
+  env.current?.end();
+  advance(3000);
+  assert.deepEqual(
+    env.phrasesAtStart,
+    [2, 2],
+    'a restarted session keeps the hints the person asked for',
+  );
+  listener.stop();
+  listener.setOptions({
+    lang: 'en-US',
+    speechLang: 'en-US',
+    idleStopMs: IDLE_MS,
+    phrases: null,
+    onFinalTranscript: () => true,
+  });
+  listener.start();
+  advance(30);
+  assert.deepEqual(
+    env.phrasesAtStart,
+    [2, 2, 0],
+    'the cached recognizer drops its hints when the next listen has none',
+  );
+  listener.teardown();
+}
+
+{
+  const { listener, seen } = setUp();
+  env.refusesPhrases = 'when-set';
+  const refusals: number[] = [];
+  listener.setOptions({
+    lang: 'en-US',
+    speechLang: 'en-US',
+    idleStopMs: IDLE_MS,
+    phrases: ['Anya'],
+    onPhrasesRefused: () => refusals.push(clock.now),
+    onFinalTranscript: () => true,
+  });
+  listener.start();
+  advance(60_000);
+  assert.deepEqual(
+    [env.phrasesAtStart, refusals.length, seen.status],
+    [[1, 0], 1, 'listening'],
+    'a browser that refuses hints is retried once without them and then listens',
+  );
+  listener.teardown();
+}
+
+{
+  const { listener, seen } = setUp();
+  env.refusesPhrases = 'always';
+  listener.setOptions({
+    lang: 'en-US',
+    speechLang: 'en-US',
+    idleStopMs: IDLE_MS,
+    phrases: ['Anya'],
+    onHalt: (error) => {
+      seen.halts = [...seen.halts, error];
+    },
+    onFinalTranscript: () => true,
+  });
+  listener.start();
+  advance(120_000);
+  assert.deepEqual(
+    [env.phrasesAtStart.length <= 8, seen.halts, env.phrasesAtStart[1]],
+    [true, ['unavailable'], 0],
+    'a refusal that keeps coming counts as a failed start and stops instead of looping',
   );
   listener.teardown();
 }

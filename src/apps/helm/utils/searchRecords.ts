@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/utils/formatUtils';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { formatYearlyDate } from '@/utils/yearlyDateUtils';
 import type {
@@ -14,6 +15,7 @@ import type {
   OpenPlace,
   OpenProcedure,
   OpenProject,
+  OpenResearch,
   OpenTask,
   OpenTopic,
   OpenWho,
@@ -28,6 +30,7 @@ import {
 } from '@apps/helm/utils/keyDateText';
 import type { WhoMoment } from '@apps/helm/utils/moments';
 import { formatTaskDue } from '@apps/helm/utils/taskDue';
+import { formatKin } from '@apps/helm/utils/kinText';
 import { pathOf } from '@apps/helm/utils/topicTree';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
 
@@ -35,6 +38,8 @@ import { getWhoLine } from '@apps/helm/utils/whoGroups';
 export interface SearchWhen {
   timeZone: string;
   now: number;
+  /** What was typed, so a person found through a nickname says which one. */
+  query?: string;
 }
 
 /** Every date row in one style: "Nov 13", "Nov 17, 2015", "Jun 2020", "2015". */
@@ -62,6 +67,7 @@ export const SEARCH_GROUPS = [
   'dates',
   'facts',
   'notes',
+  'learnLater',
   'topics',
   'projects',
   'procedures',
@@ -87,6 +93,7 @@ export type SearchTarget =
   | { kind: 'seesYou' }
   | { kind: 'task'; id: string }
   | { kind: 'note'; id: string }
+  | { kind: 'learnLater'; id: string }
   | { kind: 'synced'; id: string }
   | { kind: 'media'; id: string };
 
@@ -130,6 +137,8 @@ export interface SearchSources {
   byWho: ByWho;
   moments: WhoMoment[];
   notes: OpenNote[];
+  /** The questions saved to learn later that are still open. */
+  learnLater: OpenResearch[];
   topics: OpenTopic[];
   projects: OpenProject[];
   procedures: OpenProcedure[];
@@ -193,6 +202,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       title: [entry.name],
       body: [
         ...entry.aliases,
+        entry.kin ? formatKin(entry.kin) : null,
         entry.relation,
         entry.species,
         entry.organizationKind,
@@ -216,15 +226,29 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
 
   const people = who.map<SearchEntry>((entry, index) => ({
     id: entry.id,
-    describe: () => ({
-      title: entry.name,
-      line:
-        getWhoLine(entry, {
-          you: HELM_COPY.youLabel,
-          pet: HELM_COPY.petKindFallback,
-          organization: HELM_COPY.organizationKindFallback,
-        }) || HELM_COPY.whoKindPerson,
-    }),
+    describe: (when) => {
+      const words = toComparable(when?.query ?? '')
+        .split(' ')
+        .filter(Boolean);
+      const isNamed = words.every((word) =>
+        whoTexts[index].titleText.includes(word),
+      );
+      const alias = isNamed
+        ? undefined
+        : entry.aliases.find((name) =>
+            words.some((word) => toComparable(name).includes(word)),
+          );
+      return {
+        title: entry.name,
+        line: alias
+          ? HELM_COPY.searchAlsoCalled(alias)
+          : getWhoLine(entry, {
+              you: HELM_COPY.youLabel,
+              pet: HELM_COPY.petKindFallback,
+              organization: HELM_COPY.organizationKindFallback,
+            }) || HELM_COPY.whoKindPerson,
+      };
+    },
     ...whoTexts[index],
     target: { kind: 'view', view: 'who', id: entry.id },
     mark: { kind: 'who', who: entry },
@@ -414,6 +438,35 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     };
   });
 
+  const learnEntries = sources.learnLater
+    .filter(
+      (item) =>
+        !item.isUnreadable &&
+        item.status !== 'dismissed' &&
+        item.status !== 'done',
+    )
+    .map<SearchEntry>((item) => {
+      const texts = textsOf(item, () => ({
+        title: [item.subject],
+        body: [item.question, ...item.moreAsked],
+      }));
+      return {
+        id: item.id,
+        describe: () => ({
+          title: item.subject,
+          line: HELM_COPY.learnSavedLine(
+            formatDateShort(item.createdAt),
+            item.contextLine,
+          ),
+        }),
+        ...texts,
+        target: { kind: 'learnLater', id: item.id },
+        mark: null,
+        tier: 0,
+        recency: item.createdAt,
+      };
+    });
+
   const topicEntries = topics.map<SearchEntry>((topic) => ({
     id: topic.id,
     describe: () => ({
@@ -565,6 +618,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     dates: [...yearly, ...moments.sort(byRecency)],
     facts: sorted(facts),
     notes: sorted(noteEntries),
+    learnLater: sorted(learnEntries),
     topics: sorted(topicEntries),
     projects: sorted(projectEntries),
     procedures: sorted(procedureEntries),
@@ -580,6 +634,7 @@ const EMPTY_INDEX: SearchIndex = {
   dates: [],
   facts: [],
   notes: [],
+  learnLater: [],
   topics: [],
   projects: [],
   procedures: [],

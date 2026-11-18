@@ -1,28 +1,17 @@
 import { useId, useState } from 'react';
 
-import {
-  Button,
-  Input,
-  RadioGroup,
-  RadioGroupItem,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppSelector } from '@/store';
-import {
-  ASSISTANT_TONES,
-  DEFAULT_ASSISTANT_NAME,
-  HELM_COPY,
-} from '@apps/helm/constants';
+import { DEFAULT_ASSISTANT_NAME, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { setAssistantNameAndTone } from '@apps/helm/store/actions/settingsActions';
-import type { AssistantTone } from '@apps/helm/types';
 import { readAssistantName } from '@apps/helm/utils/assistantName';
 
 interface AssistantNameToneSheetProps {
@@ -50,17 +39,14 @@ function AssistantForm({
   const [text, setText] = useState(
     savedName === DEFAULT_ASSISTANT_NAME ? '' : savedName,
   );
-  const [tone, setTone] = useState<AssistantTone>(savedTone);
   const typedName = readAssistantName(text);
   const isNameValid = text.trim() === '' || typedName !== null;
   const nextName = typedName ?? DEFAULT_ASSISTANT_NAME;
 
-  const change = (nextText: string, nextTone: AssistantTone) => {
+  const change = (nextText: string) => {
     setText(nextText);
-    setTone(nextTone);
     onDirtyChange(
-      (readAssistantName(nextText) ?? DEFAULT_ASSISTANT_NAME) !== savedName ||
-        nextTone !== savedTone,
+      (readAssistantName(nextText) ?? DEFAULT_ASSISTANT_NAME) !== savedName,
     );
   };
 
@@ -69,10 +55,10 @@ function AssistantForm({
     setAssistantNameAndTone(
       user.uid,
       nextName === DEFAULT_ASSISTANT_NAME ? null : nextName,
-      tone,
+      savedTone,
       nextName !== savedName,
     ).catch((error) => {
-      console.error('Helm assistant name and tone were not saved', error);
+      console.error('Helm assistant name was not saved', error);
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
     });
     onSaved();
@@ -91,7 +77,7 @@ function AssistantForm({
               variant='tertiary'
               size='sm'
               className='relative -mr-2 after:absolute after:inset-x-0 after:-inset-y-1.5'
-              onClick={() => change('', tone)}
+              onClick={() => change('')}
             >
               {HELM_COPY.assistantUseDefault(DEFAULT_ASSISTANT_NAME)}
             </Button>
@@ -105,7 +91,7 @@ function AssistantForm({
           value={text}
           autoComplete='off'
           errorMessage={isNameValid ? undefined : HELM_COPY.assistantNameError}
-          onChange={(event) => change(event.target.value, tone)}
+          onChange={(event) => change(event.target.value)}
         />
         {isNameValid && (
           <p
@@ -117,38 +103,6 @@ function AssistantForm({
               : HELM_COPY.assistantNameHint}
           </p>
         )}
-      </div>
-      <div className='space-y-2'>
-        <p className='text-sm font-medium'>{HELM_COPY.assistantToneLabel}</p>
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.assistantToneHint}
-        </p>
-        <RadioGroup
-          value={tone}
-          onChange={(value) => change(text, value as AssistantTone)}
-          className='grid gap-2'
-        >
-          {ASSISTANT_TONES.map((option) => (
-            <RadioGroupItem
-              key={option.value}
-              value={option.value}
-              hideInput
-              className={join(
-                'has-[:focus-visible]:ring-primary rounded-xl !border px-3 py-2.5 text-left transition-none focus-within:!border-solid has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-2',
-                tone === option.value
-                  ? '!border-primary bg-primary/5'
-                  : 'bg-card !border-border',
-              )}
-            >
-              <span className='flex flex-col items-start gap-0.5'>
-                <span className='text-sm font-medium'>{option.label}</span>
-                <span className='text-muted-foreground text-[13px] text-pretty'>
-                  {option.sample}
-                </span>
-              </span>
-            </RadioGroupItem>
-          ))}
-        </RadioGroup>
       </div>
       <ModalFooterActions
         cancelAction={
@@ -166,7 +120,7 @@ function AssistantForm({
   );
 }
 
-/** Your assistant: the name it answers to and how its answers sound. */
+/** Your assistant: the name it answers to. */
 function AssistantNameToneSheet({
   isOpen,
   onClose,

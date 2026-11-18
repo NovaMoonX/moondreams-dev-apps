@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import { httpsCallable } from 'firebase/functions';
@@ -28,6 +29,7 @@ import {
   type MintVoiceTokenResult,
 } from '@/lib/speech/voice/voiceToken';
 import { store, useAppSelector } from '@/store';
+import { toComparable } from '@/utils/optionMatchUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
 import {
@@ -48,7 +50,10 @@ import {
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
-import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
+import {
+  toKinSearchChoice,
+  toQuestionChoice,
+} from '@apps/helm/utils/questionChoice';
 import {
   closeQuestions,
   loadExecutionsById,
@@ -78,6 +83,7 @@ import {
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
 import type {
+  HeardName,
   HelmQuestion,
   OpenCapture,
   QuestionAnswerValue,
@@ -97,8 +103,25 @@ import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
+import {
+  isSpokenTurn,
+  OPEN_QUESTION_MS,
+  pickQuestionTurn,
+} from '@apps/helm/utils/openQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
+import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
+import { isUnattendedTurn } from '@apps/helm/utils/privacy';
 import { readPresence } from '@apps/helm/utils/presence';
+import { setLockScreenName } from '@apps/helm/store/actions/habitActions';
+import {
+  answerShowName,
+  planNameRequest,
+  readNameRequest,
+  toNameLine,
+} from '@apps/helm/utils/lockScreenName';
+import { readHelmNameHints } from '@apps/helm/utils/nameHints';
+import { readSwappedWords } from '@apps/helm/utils/spokenNames';
+import { selectNameRecords } from '@apps/helm/store/selectors/nameSelectors';
 import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
 import { findHeldLine, heldDelivery } from '@apps/helm/utils/quietSpeech';
 import {
@@ -108,6 +131,7 @@ import {
 } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
+const NAME_ASK_MS = 60_000;
 const CLOSED_MS = 10_000;
 const CLOSE_FRESH_MS = 30_000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
@@ -129,6 +153,30 @@ const toVoiceIdentity = (label: string): VoiceIdentity => ({
     pitch: 1,
   },
 });
+
+type AskedAloud = {
+  captureId: string;
+  questionId: string;
+  question: HelmQuestion;
+  wakeUntil: number;
+} | null;
+
+// Kept outside React state: it is set from a reply's playback, and a setter there makes the compiler treat every clock read on the answer path as render work.
+function createAskedStore() {
+  let value: AskedAloud = null;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next: AskedAloud) => {
+      value = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
 
 /** Helm's voice: talking writes a spoken turn like a typed one, the line the server sealed for it is said once the turn is sorted, and "undo that" takes the open session's latest turn back. One instance serves home and the conversation over a page. */
 
@@ -154,13 +202,33 @@ export function useHelmVoice() {
   const fieldWriter = useRef<((text: string) => void) | null>(null);
   // Turns whose reply, once said, doesn't reopen listening: they ended with a finish phrase.
   const finishedIds = useRef(new Set<string>());
+  const [askedStore] = useState(createAskedStore);
+  const askedMark = useSyncExternalStore(askedStore.subscribe, askedStore.get);
   const captures = useAppSelector(selectAllCaptures);
+  const askedCapture = askedMark
+    ? captures.find((capture) => capture.id === askedMark.captureId)
+    : undefined;
+  // The mark is drawn only while its question is still open, so an answer or a skip from the card clears it at once.
+  const askedAloud =
+    askedMark &&
+    askedCapture?.status === 'needsYou' &&
+    getOpenQuestions(askedCapture).some(
+      (entry) => entry.id === askedMark.questionId && entry.skippedAt === null,
+    )
+      ? askedMark
+      : null;
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const screen = useRef<ScreenContext | null>(null);
   const isWakeStarted = useRef(false);
+  // The latest tick the device made from words, so "undo that" takes it back when nothing newer was done.
+  const nameAsk = useRef<{ habitId: string; at: number } | null>(null);
+  const lastCheckIn = useRef<{ undo: () => Promise<void>; at: number } | null>(
+    null,
+  );
   const noteId = useRef(0);
   const waiting = useRef(new Set<string>());
+  const isTypedSince = useRef(false);
   // Code-built questions already asked again once, so a second miss goes on as a turn.
   const askedAgain = useRef(new Set<string>());
   // Answer turns by id, with the question each answered, so its reply is followed by the turn's next question.
@@ -208,6 +276,10 @@ export function useHelmVoice() {
       (isWakeWordOn || voiceMode !== 'cloudWhenOnline'),
   });
 
+  const nameRecords = useAppSelector(selectNameRecords);
+  const [restored, setRestored] = useState<string[]>([]);
+  const restoredRef = useRef<string[]>([]);
+
   const voice = useVoiceConversation({
     lang,
     isOnDeviceReady: onDevice.isOn,
@@ -215,6 +287,8 @@ export function useHelmVoice() {
     endPhrases: END_PHRASES,
     readsClose: true,
     conversationIdleMs: SESSION_IDLE_MS,
+    getNameHints: () =>
+      readHelmNameHints(store.getState().helm, screen.current, uid),
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
     },
@@ -281,6 +355,16 @@ export function useHelmVoice() {
     dictation.current = null;
     setDictationOwner(null);
   }
+
+  function clearRestored() {
+    restoredRef.current = [];
+    setRestored([]);
+  }
+
+  const restoreHeard = (heard: string) => {
+    restoredRef.current = [...restoredRef.current, toComparable(heard)];
+    setRestored(restoredRef.current);
+  };
 
   function showNote(text: string) {
     setNote(text);
@@ -391,15 +475,24 @@ export function useHelmVoice() {
       return;
     }
     if (isRepeatRequest(text)) {
+      clearRestored();
       voice.settle();
       repeatLast(now);
       return;
     }
-    await takeOnDevice(text, {
+    const swapped = readSwappedWords(
+      text,
+      selectNameRecords(store.getState()),
+      restoredRef.current,
+    );
+    clearRestored();
+    isTypedSince.current = false;
+    await takeOnDevice(swapped.text, {
       isSpoken: true,
       sttProvider,
       interrupted,
       hasPage: screen.current !== null,
+      heardNames: swapped.heardNames,
     });
   }
 
@@ -411,6 +504,7 @@ export function useHelmVoice() {
       sttProvider: string | undefined;
       interrupted: string | null;
       hasPage: boolean;
+      heardNames?: HeardName[];
     },
   ) {
     const { isSpoken, sttProvider, interrupted } = opts;
@@ -452,6 +546,19 @@ export function useHelmVoice() {
       else say(HELM_COPY.talkSendFailed, now);
       return true;
     }
+    if (await takeLockScreenName(text, turn, isSpoken)) return true;
+    if (
+      turn.kind === 'send' &&
+      (await takeCheckIn(
+        turn.text,
+        isSpoken,
+        isSpoken
+          ? { sttProvider: sttProvider ?? 'browser', interrupted }
+          : null,
+      ))
+    ) {
+      return true;
+    }
     if (!isSpoken) {
       return turn.kind === 'answer'
         ? answerQuestion(text, sttProvider, now, false)
@@ -473,7 +580,208 @@ export function useHelmVoice() {
       sttProvider ?? 'browser',
       interrupted,
       turn.kind === 'send' && turn.isFinish,
+      opts.heardNames,
     );
+    return true;
+  }
+
+  /** "Show Pills's name on the lock screen" and "hide it", on the device before any server turn. Showing says the warning and holds a yes or no here; only a tapped Show it or a clear spoken yes writes, and anything else drops the question. Hiding is one step with Undo. A private habit's name is spoken as its masked label while nobody is looking. */
+  async function takeLockScreenName(
+    text: string,
+    turn: { kind: string; text?: string },
+    isSpoken: boolean,
+  ) {
+    if (!uid) return false;
+    const { helm } = store.getState();
+    if (helm.uid !== uid || !helm.habits.isLoaded) return false;
+    const now = Date.now();
+    const candidates = helm.habits.items.flatMap((item) =>
+      item.isUnreadable || item.status === 'retired'
+        ? []
+        : [
+            {
+              item,
+              habit: {
+                id: item.id,
+                name: item.name,
+                lockScreenName: item.lockScreenName,
+                isPrivate: item.privacy === 'private' || item.isCare === true,
+              },
+            },
+          ],
+    );
+    const isQuiet =
+      isSpoken && isUnattendedTurn(isWakeStarted.current, readPresence());
+    const show = (line: string, type: 'info' | 'success') => {
+      if (isSpoken) say(line, now);
+      else addToast({ title: line, type });
+    };
+    const write = (
+      entry: (typeof candidates)[number],
+      isShown: boolean,
+      line: string,
+    ) => {
+      const result = setLockScreenName(uid, entry.item, isShown);
+      result.written.catch((error: unknown) => {
+        console.error('Helm lock screen name was not changed', error);
+        addToast({ title: HELM_COPY.lockScreenNameFailed, type: 'error' });
+      });
+      if (isSpoken) say(line, now);
+      addToast({
+        title: line,
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () => {
+            void result.undo().catch((error: unknown) => {
+              console.error('Helm lock screen name was not taken back', error);
+              addToast({ title: HELM_COPY.habitUndoFailed, type: 'error' });
+            });
+          },
+        },
+      });
+    };
+    const pending = nameAsk.current;
+    nameAsk.current = null;
+    if (pending && now - pending.at < NAME_ASK_MS) {
+      const entry = candidates.find(
+        (item) => item.habit.id === pending.habitId,
+      );
+      if (entry) {
+        const said = turn.kind === 'send' && turn.text ? turn.text : text;
+        const answer = answerShowName(entry.habit, said, {
+          now,
+          timeZone: helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
+        });
+        if (answer.kind === 'write' && isQuiet && entry.habit.isPrivate) {
+          nameAsk.current = pending;
+          show(HELM_COPY.lockScreenNameConfirmOnScreen, 'info');
+          return true;
+        }
+        if (answer.kind === 'write') {
+          write(entry, true, toNameLine(answer, entry.habit, isQuiet));
+          return true;
+        }
+        if (answer.kind === 'kept') {
+          show(answer.line, 'info');
+          return true;
+        }
+      }
+    }
+    const request = readNameRequest(
+      turn.kind === 'send' && turn.text ? turn.text : text,
+      candidates.map((entry) => entry.habit),
+    );
+    if (!request) return false;
+    const entry = candidates.find((item) => item.habit.id === request.habit.id);
+    if (!entry) return false;
+    const plan = planNameRequest(entry.habit, request.isShown);
+    const line = toNameLine(plan, entry.habit, isQuiet);
+    if (plan.kind === 'write') {
+      write(entry, false, line);
+      return true;
+    }
+    if (plan.kind !== 'ask') {
+      show(line, 'info');
+      return true;
+    }
+    nameAsk.current = { habitId: entry.habit.id, at: now };
+    if (isSpoken) say(line, now);
+    addToast({
+      title: line,
+      type: 'info',
+      duration: NAME_ASK_MS,
+      action: {
+        label: HELM_COPY.lockScreenNameConfirmAction,
+        onClick: () => {
+          const live = nameAsk.current;
+          if (!live || live.habitId !== entry.habit.id) return;
+          nameAsk.current = null;
+          write(
+            entry,
+            true,
+            toNameLine(
+              {
+                kind: 'write',
+                lockScreenName: entry.habit.name,
+                line: '',
+              },
+              entry.habit,
+              false,
+            ),
+          );
+        },
+      },
+    });
+    return true;
+  }
+
+  /** A plain check-in on a habit due today ("took my evening pills"): ticked on the device with no model call and offline, and kept in the thread as a turn whose card is the habit line with Undo. Anything more than the check-in goes on as a turn. */
+  async function takeCheckIn(
+    text: string,
+    isSpoken: boolean,
+    voiceTurn: {
+      sttProvider: string;
+      interrupted: string | null;
+    } | null = null,
+  ) {
+    if (!uid) return false;
+    if (!isSpoken) isTypedSince.current = true;
+    const turn = getNextTurn();
+    const result = await takeDeviceCheckIn(uid, text, {
+      sessionId: turn.sessionId,
+      turnIndex: turn.turnIndex,
+      inputMode: isSpoken ? 'voice' : 'typed',
+      sttProvider: isSpoken ? (voiceTurn?.sttProvider ?? 'browser') : null,
+      interruptedCaptureId: voiceTurn?.interrupted ?? null,
+      presence: isSpoken
+        ? { startedByWake: isWakeStarted.current, ...readPresence() }
+        : null,
+    }).catch((error: unknown) => {
+      console.error('Helm check-in was not read', error);
+      return null;
+    });
+    if (result === null || result.kind === 'none') return false;
+    if (result.kind === 'said') {
+      const line = result.quietLine ?? result.line;
+      if (isSpoken) say(line, Date.now());
+      else addToast({ title: line, type: 'info' });
+      return true;
+    }
+    const { recorded } = result;
+    const createdAt = Date.now();
+    if (recorded) {
+      recordSentTurn(
+        uid,
+        { ...turn, leadId: null, joinedCount: 0, createdAt },
+        recorded.captureId,
+      );
+    }
+    const entry = { undo: result.undo, at: createdAt };
+    // With a recorded turn, "undo that" and the card's Undo go through its execution; the device's own undo is for a tick written without one.
+    if (!recorded) lastCheckIn.current = entry;
+    result.committed.catch((error: unknown) => {
+      console.error('Helm check-in was not saved', error);
+      if (lastCheckIn.current === entry) lastCheckIn.current = null;
+      addToast({ title: HELM_COPY.habitCheckInFailed, type: 'error' });
+    });
+    const line = result.quietLine ?? result.line;
+    if (isSpoken) say(line, createdAt);
+    if (recorded) return true;
+    addToast({
+      title: line,
+      type: 'success',
+      action: {
+        label: HELM_COPY.undo,
+        onClick: () => {
+          if (lastCheckIn.current === entry) lastCheckIn.current = null;
+          void result.undo().catch((error: unknown) => {
+            console.error('Helm check-in was not taken back', error);
+            addToast({ title: HELM_COPY.habitUndoFailed, type: 'error' });
+          });
+        },
+      },
+    });
     return true;
   }
 
@@ -546,13 +854,15 @@ export function useHelmVoice() {
   }
 
   /** Typed Send: true when the device took the words (a close, or an answer to the open question), so the field is cleared and nothing is sent. */
-  const handleTyped = (text: string, page: ScreenContext | null) =>
-    takeOnDevice(text, {
+  const handleTyped = (text: string, page: ScreenContext | null) => {
+    isTypedSince.current = true;
+    return takeOnDevice(text, {
       isSpoken: false,
       sttProvider: undefined,
       interrupted: null,
       hasPage: page !== null,
     });
+  };
 
   const registerField = useCallback((write: (text: string) => void) => {
     fieldWriter.current = write;
@@ -592,7 +902,7 @@ export function useHelmVoice() {
     );
   }
 
-  /** The first open, unskipped question (of a kind, when given) of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one; with that turn. */
+  /** The first open, unskipped question (of a kind, when given) of the turn an answer goes to (`pickQuestionTurn`), with that turn. */
   function findAskedQuestion(
     now: number,
     kind: string | null = null,
@@ -605,14 +915,13 @@ export function useHelmVoice() {
       now,
       getFreshFrom(state.helm.profile),
     );
-    const latest = all
-      .filter((capture) => capture.sessionId === sessionId)
-      .reverse()
-      .find((capture) => capture.answersQuestion === null);
+    const latest = pickQuestionTurn(
+      all.filter((capture) => capture.sessionId === sessionId),
+      !isSpoken ? 'typed' : isWakeStarted.current ? 'wake' : 'spoken',
+      now,
+    );
     const asked =
-      latest &&
-      (!isSpoken || latest.inputMode === 'voice') &&
-      latest.status === 'needsYou'
+      latest && latest.status === 'needsYou'
         ? getOpenQuestions(latest)
             .filter(
               (entry) =>
@@ -729,7 +1038,9 @@ export function useHelmVoice() {
       return true;
     }
     const isModel = question.builtBy === 'model';
-    const choice = toQuestionChoice(question, answer?.value ?? null);
+    const choice =
+      toKinSearchChoice(question, text, state.helm.who.items) ??
+      toQuestionChoice(question, answer?.value ?? null);
     const optionId = choice && 'optionId' in choice ? choice.optionId : null;
     if (isModel ? answer === null : choice === null) {
       const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
@@ -810,6 +1121,35 @@ export function useHelmVoice() {
     return true;
   }
 
+  /** Whether a spoken conversation is open now: listening, thinking, speaking or live, and its answer window or an awaited reply until a typed Send ends it. */
+  function conversation() {
+    return {
+      isOpen:
+        voice.isLive ||
+        voice.state !== 'idle' ||
+        (!isTypedSince.current &&
+          (voice.isFollowUpOpen || waiting.current.size > 0)),
+      isMuted: voice.isMuted,
+    };
+  }
+
+  /** A choice tapped on a card: whether its turn is spoken, and once sent, its reply is said like a spoken answer's. */
+  function followTap() {
+    const isSpoken = isSpokenTurn('tap', conversation());
+    const stopsAtSend = stopCount.current;
+    return {
+      isSpokenTurn: isSpoken,
+      onSent: (
+        sent: { id: string; write: Promise<void> },
+        asked: { captureId: string; questionId: string },
+      ) => {
+        if (!uid || !isSpoken) return;
+        afterAnswer.current.set(sent.id, asked);
+        trackSent(uid, sent.id, sent.id, sent.write, stopsAtSend);
+      },
+    };
+  }
+
   /** Waits for the sorted reply of a sent turn so it is said once, and gives up the wait when the device is offline. */
   function trackSent(
     uid: string,
@@ -844,6 +1184,7 @@ export function useHelmVoice() {
     sttProvider: string,
     interrupted: string | null,
     isFinish: boolean,
+    heardNames?: HeardName[],
   ) {
     const { helm } = store.getState();
     if (!uid || helm.keyStatus !== 'ready' || !helm.recentCaptures.isLoaded) {
@@ -878,11 +1219,13 @@ export function useHelmVoice() {
         answersQuestion: null,
         questionAnswer: null,
         noteIds: rankStoredNotes(text),
+        ...(heardNames ? { heardNames } : {}),
         ...turn,
         voice: {
           sttProvider,
           interruptedCaptureId: interrupted,
         },
+        isSpokenTurn: isSpokenTurn('spoken', conversation()),
         presence: { startedByWake, ...readPresence() },
         onRepeat: (captureId) => {
           waiting.current.delete(captureId);
@@ -925,6 +1268,18 @@ export function useHelmVoice() {
       .flatMap((id) => executions.get(id) ?? [])
       .filter(canUndo)
       .sort((a, b) => b.createdAt - a.createdAt)[0];
+    const checkIn = lastCheckIn.current;
+    if (checkIn && (!latest || checkIn.at > latest.createdAt)) {
+      lastCheckIn.current = null;
+      try {
+        await checkIn.undo();
+        say(HELM_COPY.habitCheckInTakenBack, now);
+      } catch (error) {
+        console.error('Helm check-in undo by voice failed', error);
+        say(HELM_COPY.undoFailed, now);
+      }
+      return;
+    }
     if (!uid || !latest) {
       say(HELM_COPY.nothingToUndo, now);
       return;
@@ -959,7 +1314,7 @@ export function useHelmVoice() {
       priority: 'reply',
       turnKey: capture.createdAt,
       canAnswer:
-        capture.inputMode === 'voice' &&
+        capture.isSpokenTurn === true &&
         isHandsFreeOn &&
         isSurfaceShown.current &&
         !finishedIds.current.has(capture.id),
@@ -1109,9 +1464,33 @@ export function useHelmVoice() {
     });
   };
 
+  const isListeningForAnswer =
+    voice.isFollowUpOpen || (voice.isLive && voice.state === 'listening');
+
+  // Each time it listens for an answer, the question an answer would go to is marked on its card.
+  useEffect(() => {
+    if (!isListeningForAnswer) return;
+    const found = findAskedQuestion(Date.now());
+    askedStore.set(
+      found
+        ? {
+            captureId: found.asked.captureId,
+            questionId: found.asked.id,
+            question: found.asked.question,
+            wakeUntil:
+              (found.latest.sortedAt ?? found.latest.createdAt) +
+              OPEN_QUESTION_MS,
+          }
+        : null,
+    );
+  }, [isListeningForAnswer, askedStore]);
+
+  useEffect(() => () => askedStore.set(null), [uid, askedStore]);
+
   /** Starts listening from `page` (what the page publishes, null from home), as a live conversation when that setting is on and the listen isn't a one-off (dictation), or sends what is being said, or stops what is working or speaking. */
   const talk = (page: ScreenContext | null, isOneOff = false) => {
     const isLive = isHandsFreeOn && !isOneOff;
+    isWakeStarted.current = false;
     // An answer window or a line being said gives way to listening: the tap is the answer.
     if (
       voice.isAvailable &&
@@ -1161,6 +1540,7 @@ export function useHelmVoice() {
     // A listen that ended on an error never says so, so each new one starts as a turn.
     endDictation();
     screen.current = page;
+    clearRestored();
     setClosed(null);
     setNotice(null);
     setHasNoticeDoor(false);
@@ -1194,8 +1574,16 @@ export function useHelmVoice() {
   // A listen that ends on a lasting error (the mic refused) reports nothing, so the owner counts only while it listens.
   const liveOwner = voice.state === 'listening' ? dictationOwner : null;
 
+  const live = useMemo(
+    () => readSwappedWords(voice.heard, nameRecords, restored),
+    [voice.heard, nameRecords, restored],
+  );
+
   return {
     ...voice,
+    heard: dictationOwner === null ? live.text : voice.heard,
+    heardSwaps: dictationOwner === null ? live.swaps : [],
+    restoreHeard,
     isDictating: liveOwner !== null,
     dictationOwner: liveOwner,
     dictate,
@@ -1223,7 +1611,14 @@ export function useHelmVoice() {
     closed: closed === null ? null : { hasDropped: closed.hasDropped },
     undoClose,
     handleTyped,
+    handleCheckIn: (text: string) => takeCheckIn(text, false),
     registerField,
+    /** A tapped choice: whether its turn is spoken, and how to have its reply said. */
+    followTap,
+    /** The question a reply last said aloud, which its card marks as listened for. */
+    askedAloud,
+    /** The wake phrase is on here, so a question asked aloud can still be answered with it for a while. */
+    canWakeAnswer: isWakeWordOn && keyStatus === 'ready',
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line), Date.now()),
     /** Says the line a turn kept off the speaker, whispered by default; never in the usual voice when the whisper can't play. */

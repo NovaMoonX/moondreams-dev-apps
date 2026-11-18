@@ -321,6 +321,13 @@ function Composer({
     const createdAt = Date.now();
     setIsSending(true);
     try {
+      if (attachments.items.length === 0 && (await voice.handleCheckIn(sent))) {
+        changeText('');
+        setDismissed([]);
+        setFixedDays({});
+        setLastDrop(null);
+        return;
+      }
       await saveToOutbox(user.uid, {
         text: sent,
         reading: applyReadingEdits(

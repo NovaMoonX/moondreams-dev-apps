@@ -1,4 +1,5 @@
 import type {
+  HabitCommand,
   NomosCommand,
   SetQuietCommand,
   TopicCommand,
@@ -28,3 +29,15 @@ export const decideTopic = (command: TopicCommand): TopicDecision =>
   command.kind === 'createParentTopic' && !command.isAsked
     ? 'propose'
     : 'automatic';
+
+/** A habit made, changed, ticked or marked as care lands on the person's own records and can be undone, so each runs without asking; what a habit's state forbids (retiring a care habit, a tick on a paused one) is settled in the plan. */
+export const decideHabit = (command: HabitCommand): Decision => {
+  switch (command.kind) {
+    case 'createHabit':
+    case 'updateHabit':
+    case 'checkIn':
+    case 'setCare':
+    case 'setMedicine':
+      return 'automatic';
+  }
+};

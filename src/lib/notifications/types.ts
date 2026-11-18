@@ -17,6 +17,8 @@ export interface Reminder {
   /** Where tapping the notification goes: a same-origin path and query (`/waypoint?trip=…`). Missing on reminders saved before links existed. */
   link: string | null;
   recurrence: ReminderRecurrence;
+  /** What the reminder is about, as the app that wrote it names things (Helm: "habitId/windowId"); null on reminders saved before the field. */
+  subjectRefs: string[] | null;
   /** `false` when the page that scheduled it tells the person by itself (a ringing timer), so the in-app toast skips it. Null or missing: it toasts. */
   inAppToast: boolean | null;
   /** When the sender last pushed it; null until then, and missing on reminders saved before it was read. */

@@ -10,6 +10,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import ActorMark from '@apps/helm/components/activity/ActorMark';
 import ExecutionSheet from '@apps/helm/components/activity/ExecutionSheet';
+import ScheduledRunLines from '@apps/helm/components/scheduled/ScheduledRunLines';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -40,6 +41,7 @@ import { createSealedReader } from '@lib/security';
 interface ActivityScreenProps {
   onBack: () => void;
   onOpenOutside: () => void;
+  onOpenConnectedApps: () => void;
 }
 
 const ROW_ESTIMATED_HEIGHT = 48;
@@ -152,7 +154,11 @@ function ActivityRow({
 }
 
 /** A utility screen: every execution newest first under its day, thirty at a time. */
-function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
+function ActivityScreen({
+  onBack,
+  onOpenOutside,
+  onOpenConnectedApps,
+}: ActivityScreenProps) {
   const { user } = useAuth();
   const name = useAssistantName();
   const { items, isLoaded, isFailed, limit, isExhausted } = useAppSelector(
@@ -209,6 +215,10 @@ function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
             />
           </Button>
         )}
+        <ScheduledRunLines
+          scope='activity'
+          onOpenConnectedApps={onOpenConnectedApps}
+        />
         {isFailed && (
           <p className='helm-card p-4 text-[15px] text-pretty' role='alert'>
             {HELM_COPY.activityFailed}

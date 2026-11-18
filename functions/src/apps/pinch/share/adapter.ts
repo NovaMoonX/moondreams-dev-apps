@@ -3,12 +3,16 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  LiveQueryRequest,
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import {
+  MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
@@ -689,8 +693,219 @@ async function syncIdeas(
   return { records, isFull: snapshot.size < IDEA_LIMIT };
 }
 
+const COOK_LIMIT = MAX_RECORDS_PER_CATEGORY;
+
+interface LiveArgs {
+  text: string | null;
+  from: string | null;
+  to: string | null;
+  zone: string | null;
+}
+
+const readDayText = (value: unknown) =>
+  typeof value === 'string' &&
+  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+    ? value
+    : null;
+
+const readLiveArgs = (args: unknown): LiveArgs => {
+  const source =
+    typeof args === 'object' && args !== null
+      ? (args as Record<string, unknown>)
+      : {};
+  return {
+    text: readText(source.text)?.toLowerCase() ?? null,
+    from: readDayText(source.from),
+    to: readDayText(source.to),
+    zone: typeof source.timeZone === 'string' ? source.timeZone : null,
+  };
+};
+
+const matchesText = (text: string | null, ...names: (string | null)[]) =>
+  text === null ||
+  names.some((name) => name !== null && name.toLowerCase().includes(text));
+
+/** As many items as fit in the room, the rest named as a count; the tail is counted from what is shown. */
+const listWithin = (items: string[], room: number) => {
+  const tail = (shown: number) =>
+    shown === items.length ? '' : ` and ${items.length - shown} more`;
+  const text = (shown: number) =>
+    `${items.slice(0, shown).join(', ')}${tail(shown)}`;
+  const shown = items
+    .map((_, index) => items.length - index)
+    .find((count) => text(count).length <= room);
+  return shown === undefined ? null : text(shown);
+};
+
+const readCollectionLabels = async (firestore: Firestore, uid: string) => {
+  const snapshot = await firestore
+    .collection(kitchenPath(uid, 'collections'))
+    .select('label')
+    .limit(RECIPE_LIMIT)
+    .get();
+  return new Map(
+    snapshot.docs.map((doc) => [doc.id, readText(doc.get('label'))]),
+  );
+};
+
+const toIngredientLine = (
+  names: Map<string, string | null>,
+  row: unknown,
+): string[] => {
+  const line = typeof row === 'object' && row !== null ? row : {};
+  const record = line as Record<string, unknown>;
+  const name =
+    typeof record.ingredientId === 'string'
+      ? (names.get(record.ingredientId) ?? null)
+      : null;
+  if (name === null) return [];
+  const amount = formatAmount(record.amount, record.unit);
+  return [clipTo(amount === null ? name : `${amount} ${name}`, NAME_CLIP)];
+};
+
+async function queryRecipeIngredients(
+  firestore: Firestore,
+  uid: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const [snapshot, collections] = await Promise.all([
+    firestore
+      .collection(kitchenPath(uid, 'recipes'))
+      .orderBy('updatedAt', 'desc')
+      .select(
+        'title',
+        'ingredients',
+        'prepMinutes',
+        'cookMinutes',
+        'collectionIds',
+        'isArchived',
+        'updatedAt',
+      )
+      .limit(RECIPE_LIMIT)
+      .get(),
+    readCollectionLabels(firestore, uid),
+  ]);
+  const recipes = snapshot.docs.filter(
+    (doc) =>
+      readText(doc.get('title')) !== null && doc.get('isArchived') !== true,
+  );
+  const rows = recipes.map((doc) => (doc.get('ingredients') ?? []) as unknown);
+  const ingredientIds = rows.flatMap((row) =>
+    Array.isArray(row)
+      ? row.flatMap((line) =>
+          typeof line?.ingredientId === 'string' ? [line.ingredientId] : [],
+        )
+      : [],
+  );
+  const names = await readIngredientNames(firestore, uid, ingredientIds);
+  const records = recipes.flatMap((doc, index) => {
+    const title = readText(doc.get('title')) ?? '';
+    const row = rows[index];
+    const lines = Array.isArray(row)
+      ? row.flatMap((line) => toIngredientLine(names, line))
+      : [];
+    const collectionIds = doc.get('collectionIds') as unknown;
+    const labels = (Array.isArray(collectionIds) ? collectionIds : []).flatMap(
+      (id) =>
+        typeof id === 'string' && collections.get(id)
+          ? [collections.get(id) as string]
+          : [],
+    );
+    if (!matchesText(args.text, title, ...labels, ...lines)) return [];
+    const minutes =
+      (readTime(doc.get('prepMinutes')) ?? 0) +
+      (readTime(doc.get('cookMinutes')) ?? 0);
+    const lead = joinLines([
+      minutes > 0 ? `${minutes} min` : null,
+      labels.length > 0 ? `in ${clipTo(labels.join(', '), NAME_CLIP)}` : null,
+    ]);
+    const listed = listWithin(
+      lines,
+      DETAIL_LIMIT - (lead === null ? 0 : lead.length + 3) - 'With '.length,
+    );
+    return [
+      toRecord({
+        sourceRef: `recipes/${doc.id}`,
+        kind: 'artifact',
+        title,
+        detail: clip(
+          joinLines([lead, listed === null ? null : `With ${listed}`]),
+        ),
+        sourceUpdatedAt: readTime(doc.get('updatedAt')),
+      }),
+    ];
+  });
+  return {
+    records: records.slice(0, MAX_RECORDS_PER_CATEGORY),
+    matchedCount: records.length,
+    totalCents: null,
+    currency: null,
+    isPartial:
+      snapshot.size >= RECIPE_LIMIT ||
+      records.length > MAX_RECORDS_PER_CATEGORY,
+    from: null,
+    to: null,
+  };
+}
+
+async function queryCooked(
+  firestore: Firestore,
+  uid: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const { fromMs: fromAt, toMsExclusive: toAt } = dayRangeMs(
+    args.from,
+    args.to,
+    args.zone,
+  );
+  const base = firestore.collection(kitchenPath(uid, 'cooks'));
+  const dated = [
+    ...(fromAt === null ? [] : [['>=', fromAt] as const]),
+    ...(toAt === null ? [] : [['<', toAt] as const]),
+  ].reduce<FirebaseFirestore.Query>(
+    (query, [operator, at]) => query.where('cookedAt', operator, at),
+    base,
+  );
+  const snapshot = await dated
+    .orderBy('cookedAt', 'desc')
+    .select('recipeId', 'cookedAt')
+    .limit(COOK_LIMIT)
+    .get();
+  const titles = await readRecipeTitles(
+    firestore,
+    uid,
+    snapshot.docs.flatMap((doc) => readText(doc.get('recipeId')) ?? []),
+  );
+  const records = snapshot.docs.flatMap((doc) => {
+    const title = titles.get(readText(doc.get('recipeId')) ?? '') ?? null;
+    const cookedAt = readTime(doc.get('cookedAt'));
+    if (title === null || cookedAt === null || !matchesText(args.text, title))
+      return [];
+    return [
+      toRecord({
+        sourceRef: `cooks/${doc.id}`,
+        kind: 'event',
+        title,
+        detail: `Cooked ${formatDay(cookedAt)}`,
+        startAt: cookedAt,
+      }),
+    ];
+  });
+  return {
+    records,
+    matchedCount: records.length,
+    totalCents: null,
+    currency: null,
+    isPartial: snapshot.size >= COOK_LIMIT,
+    from: args.from,
+    to: args.to,
+  };
+}
+
 const DEEP_LINKS: Record<string, string> = {
   recipes: '/pinch?tab=recipes',
+  cooks: '/pinch?tab=recipes',
   meals: '/pinch?tab=recipes',
   ideas: '/pinch?tab=recipes',
   plannedMeals: '/pinch?tab=calendar',
@@ -757,6 +972,18 @@ export function createPinchAdapter(
       isDone: true,
       resumeState: null,
     }),
+    query: async (ctx, req: LiveQueryRequest): Promise<LiveQueryResult> => {
+      const firestore = deps.firestore();
+      const args = readLiveArgs(req.args);
+      switch (req.category) {
+        case 'recipeIngredients':
+          return queryRecipeIngredients(firestore, ctx.uid, args);
+        case 'cooked':
+          return queryCooked(firestore, ctx.uid, args);
+        default:
+          throw new Error('Unknown category.');
+      }
+    },
     deepLink: (ref) => {
       const [collection] = ref.split('/');
       return Object.hasOwn(DEEP_LINKS, collection)

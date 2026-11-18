@@ -9,12 +9,21 @@ import { GOOGLE_CONTACTS_MANIFEST } from '../../src/lib/connections/google/conta
 import { GOOGLE_DRIVE_MANIFEST } from '../../src/lib/connections/google/driveManifest.ts';
 import { GOOGLE_GMAIL_MANIFEST } from '../../src/lib/connections/google/gmailManifest.ts';
 import { SOURCE_SHARES } from '../../src/lib/connections/sources.ts';
+import { BATCH_JOBS } from '../../functions/src/apps/helm/batchJobs.ts';
 import {
   CLOSE_CONVERSATION_TOOL,
   COMMAND_KINDS,
+  CONNECTION_COMMAND_KINDS,
   DELETING_COMMANDS,
   PROCEDURE_COMMAND_KINDS,
   RUN_COMMAND_KINDS,
+  HABIT_COMMAND_KINDS,
+  IMPORTANCE_COMMAND_KINDS,
+  RESEARCH_COMMAND_KINDS,
+  LEARN_COMMAND_KINDS,
+  SCHEDULE_COMMAND_KINDS,
+  SEEN_AS_COMMAND_KINDS,
+  PERSONALITY_COMMAND_KINDS,
   TOPIC_COMMAND_KINDS,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -29,7 +38,7 @@ import {
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const SNAPSHOT = join(ROOT, 'scripts/checks/fixtures/helmWhere.snapshot.txt');
-const VIRTUAL_HOMES = ['profile', 'live', 'connections'];
+const VIRTUAL_HOMES = ['profile', 'live', 'platform'];
 
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
 
@@ -91,6 +100,14 @@ const world: World = {
     ...TOPIC_COMMAND_KINDS,
     ...PROCEDURE_COMMAND_KINDS,
     ...RUN_COMMAND_KINDS,
+    ...HABIT_COMMAND_KINDS,
+    ...IMPORTANCE_COMMAND_KINDS,
+    ...SCHEDULE_COMMAND_KINDS,
+    ...RESEARCH_COMMAND_KINDS,
+    ...SEEN_AS_COMMAND_KINDS,
+    ...PERSONALITY_COMMAND_KINDS,
+    ...LEARN_COMMAND_KINDS,
+    ...CONNECTION_COMMAND_KINDS,
     CLOSE_CONVERSATION_TOOL.name,
   ],
   collections: [
@@ -110,9 +127,7 @@ const world: World = {
   categories: manifests.flatMap((manifest) =>
     manifest.categories.map((category) => `${manifest.id}/${category.id}`),
   ),
-  batchJobs: serverFiles.some((path) => /\bBATCH_JOBS\b/.test(read(path)))
-    ? ['BATCH_JOBS exists: teach check:helm-where to read it']
-    : [],
+  batchJobs: Object.keys(BATCH_JOBS),
   writerExists: (writer) =>
     writer === 'none' ||
     writerPath(writer).some((path) => existsSync(join(ROOT, path))),
@@ -134,6 +149,7 @@ function findProblems(rows: WhereRow[], known: World) {
   const rowBlocks = toSet(
     rows.flatMap((entry) => (entry.contextBlock ? [entry.contextBlock] : [])),
   );
+  const rowBatchJobs = toSet(rows.flatMap((entry) => entry.batchJobs));
   const rowCategories = toSet(
     rows.flatMap((entry) =>
       entry.grant ? [`${entry.grant.source}/${entry.grant.category}`] : [],
@@ -160,7 +176,12 @@ function findProblems(rows: WhereRow[], known: World) {
       rowBlocks,
     ),
     ...missing('connected category', known.categories, rowCategories),
-    ...known.batchJobs.map((job) => `batch job ${job} has no row`),
+    ...missing('batch job', known.batchJobs, rowBatchJobs),
+    ...rows.flatMap((entry) =>
+      entry.batchJobs
+        .filter((job) => !known.batchJobs.includes(job))
+        .map((job) => `${entry.thing}: batch job ${job} is not registered`),
+    ),
     ...unknown('tool', [...rowTools], known.tools),
     ...unknown('command', [...rowCommands], known.commands),
     ...unknown('context block', [...rowBlocks], [...known.blocks]),
@@ -195,9 +216,6 @@ function findProblems(rows: WhereRow[], known: World) {
         : []),
       ...(entry.home !== 'live' && !entry.isSynced
         ? [`${entry.thing}: a stored result must sync`]
-        : []),
-      ...(entry.batchJobs.length > 0
-        ? [`${entry.thing}: names a batch job that does not exist`]
         : []),
     ]),
   ];
@@ -333,6 +351,9 @@ const SAME_CHANGE: [string, string, string][] = [
   ['tickRun', 'runActions', 'tickRunSteps'],
   ['setCurrentPlace', 'planActions', 'setCurrentPlace'],
   ['closeConversation', 'captureActions', 'closeQuestions'],
+  ['createHabit', 'habitActions', 'createHabit'],
+  ['setCare', 'habitActions', 'setHabitCare'],
+  ['checkIn', 'habitCheckInActions', 'writeDeviceCheckIn'],
 ];
 
 test('a sentence and a tap make the same change through one writer', () => {
@@ -393,12 +414,22 @@ test('a missing row is caught for each kind of thing', () => {
   });
 });
 
-test('a batch job with no row is caught', () => {
-  const problems = findProblems(WHERE_THINGS_LIVE, {
-    ...world,
-    batchJobs: ['relate'],
-  });
-  assert.ok(problems.includes('batch job relate has no row'));
+test('a row naming an unregistered batch job is caught', () => {
+  const problems = findProblems(
+    [...WHERE_THINGS_LIVE, { ...first, batchJobs: ['rederive'] }],
+    world,
+  );
+  assert.ok(
+    problems.some((line) => line.includes('batch job rederive is not')),
+  );
+});
+
+test('a row naming a registered batch job passes', () => {
+  const problems = findProblems(
+    [...WHERE_THINGS_LIVE, { ...first, batchJobs: ['reflect'] }],
+    world,
+  );
+  assert.ok(!problems.some((line) => line.includes('batch job')));
 });
 
 test('a row naming something that does not exist is caught', () => {
