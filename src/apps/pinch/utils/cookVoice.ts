@@ -1,4 +1,7 @@
-import { readHeardCount } from '@/lib/speech/heardCount';
+import {
+  type HeardCountSoundAlikes,
+  readHeardCount,
+} from '@/lib/speech/heardCount';
 import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
 import {
@@ -1307,8 +1310,12 @@ const parseConvert = (
   return { kind: 'CONVERT', query, lineIds, unit };
 };
 
-const SERVING_NOUN =
-  '(?:servings?|servins?|serving size|servants?|service|portions?|people|persons?|helpings?|plates?)';
+/** Words that only ever mean servings, so a count right before one is read loosely ("for servings" is four). */
+const STRICT_NOUN =
+  '(?:servings?|servins?|serving size|servants?|service|portions?|helpings?)';
+/** Words that mean servings only after "make it for", so "four people" or "a plate" on its own never changes a recipe. */
+const LOOSE_NOUN = '(?:people|persons?|plates?)';
+const ANY_NOUN = `(?:${STRICT_NOUN}|${LOOSE_NOUN})`;
 const ONE_SERVING = '(?:a|an|one|1)';
 const EXTRA_SERVING = '(?:another|an extra|one more|1 more)';
 /** Up to three words where a count stands; `readHeardCount` decides whether they are one. */
@@ -1318,67 +1325,119 @@ const SERVINGS_VERB =
 const SERVINGS_OBJECT =
   '(?: it| this| that| the recipe| recipe| the servings| servings| the serving size| serving size| the portions| portions)?';
 
-const SET_SERVINGS_PATTERNS = [
-  new RegExp(
-    String.raw`^(?:${SERVINGS_VERB}${SERVINGS_OBJECT}(?: up| down)?(?: to| for| at)? )?(?:enough for )?${COUNT_SLOT} ${SERVING_NOUN}(?: instead)?$`,
-  ),
-  new RegExp(
-    String.raw`^(?:${SERVINGS_VERB} )?(?:the )?(?:serving size|servings?|portions?|serves|yield)(?: up| down)?(?: to| at| for)? ${COUNT_SLOT}$`,
-  ),
-  new RegExp(
-    String.raw`^(?:make|scale|do) (?:it|this|the recipe|that)(?: up| down)? (?:to|for) ${COUNT_SLOT}$`,
-  ),
-  new RegExp(String.raw`^scale(?: up| down)? to ${COUNT_SLOT}$`),
-  new RegExp(
-    String.raw`^(?:make|cook|scale) (?:it |this )?for ${COUNT_SLOT} ${SERVING_NOUN}$`,
-  ),
+type CountPattern = { pattern: RegExp; soundAlikes: HeardCountSoundAlikes };
+
+/** Reads a matched count, refusing "a"/"an" unless a verb asked for it ("make a serving", never a bare "a serving"). */
+const readMatchedCount = (
+  groups: Record<string, string | undefined>,
+  soundAlikes: HeardCountSoundAlikes,
+) => {
+  const n = groups.n;
+  if (n === undefined) return null;
+  if (/^an?$/.test(n) && groups.verb === undefined) return null;
+  const count = readHeardCount(n, soundAlikes);
+  return count !== null && count > 0 ? count : null;
+};
+
+const SET_SERVINGS_PATTERNS: CountPattern[] = [
+  {
+    pattern: new RegExp(
+      String.raw`^(?:(?<verb>${SERVINGS_VERB})${SERVINGS_OBJECT}(?: up| down)?(?: to| for| at)? )?(?:enough for )?${COUNT_SLOT} ${STRICT_NOUN}(?: instead)?$`,
+    ),
+    soundAlikes: 'all',
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:${SERVINGS_VERB} )?(?:the )?(?:serving size|servings?|portions?|serves|yield)(?: up| down)? (?:to|at|for) ${COUNT_SLOT}$`,
+    ),
+    soundAlikes: 'all',
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:${SERVINGS_VERB} )?(?:the )?(?:serving size|servings?|portions?|serves|yield)(?: up| down)? ${COUNT_SLOT}$`,
+    ),
+    soundAlikes: 'distinct',
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:make|scale|do) (?:it|this|the recipe|that)(?: up| down)? (?:to|for) ${COUNT_SLOT}$`,
+    ),
+    soundAlikes: 'distinct',
+  },
+  {
+    pattern: new RegExp(String.raw`^scale(?: up| down)? to ${COUNT_SLOT}$`),
+    soundAlikes: 'distinct',
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:(?:make|cook|scale) (?:it |this )?|enough )for ${COUNT_SLOT} ${LOOSE_NOUN}$`,
+    ),
+    soundAlikes: 'distinct',
+  },
 ];
 
-const ADD_SERVINGS_PATTERNS: [RegExp, 1 | -1][] = [
-  [
-    new RegExp(
-      String.raw`^(?:(?:add|give me|i need|we need) ${ONE_SERVING}|(?:(?:add|give me|make|i need|we need) )?${EXTRA_SERVING}|${ONE_SERVING} more) ${SERVING_NOUN}(?: more)?$`,
+const ADD_SERVINGS_PATTERNS: (CountPattern & { sign: 1 | -1 })[] = [
+  {
+    pattern: new RegExp(
+      String.raw`^(?:(?:add|give me|i need|we need) ${ONE_SERVING}|(?:(?:add|give me|make|i need|we need) )?${EXTRA_SERVING}|${ONE_SERVING} more) ${STRICT_NOUN}(?: more)?$`,
     ),
-    1,
-  ],
-  [
-    new RegExp(
-      String.raw`^(?:add|plus) ${COUNT_SLOT}(?: more)? ${SERVING_NOUN}$`,
+    soundAlikes: 'all',
+    sign: 1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:add|plus) ${COUNT_SLOT}(?: more)? ${STRICT_NOUN}$`,
     ),
-    1,
-  ],
-  [new RegExp(String.raw`^${COUNT_SLOT} more ${SERVING_NOUN}$`), 1],
-  [
-    new RegExp(
-      String.raw`^(?:increase|raise|bump up|up|add to)(?: the)? ${SERVING_NOUN} by ${COUNT_SLOT}$`,
+    soundAlikes: 'all',
+    sign: 1,
+  },
+  {
+    pattern: new RegExp(String.raw`^${COUNT_SLOT} more ${STRICT_NOUN}$`),
+    soundAlikes: 'all',
+    sign: 1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:increase|raise|bump up|up|add to)(?: the)? ${STRICT_NOUN} by ${COUNT_SLOT}$`,
     ),
-    1,
-  ],
-  [
-    new RegExp(
-      String.raw`^(?:${ONE_SERVING} )?(?:less|fewer) ${SERVING_NOUN}$`,
+    soundAlikes: 'distinct',
+    sign: 1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:${ONE_SERVING} )?(?:less|fewer) ${STRICT_NOUN}$`,
     ),
-    -1,
-  ],
-  [new RegExp(String.raw`^${COUNT_SLOT} (?:less|fewer) ${SERVING_NOUN}$`), -1],
-  [
-    new RegExp(
-      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) (?:a|an|one|1) ${SERVING_NOUN}$`,
+    soundAlikes: 'all',
+    sign: -1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^${COUNT_SLOT} (?:less|fewer) ${STRICT_NOUN}$`,
     ),
-    -1,
-  ],
-  [
-    new RegExp(
-      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) ${COUNT_SLOT} ${SERVING_NOUN}$`,
+    soundAlikes: 'all',
+    sign: -1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) ${ONE_SERVING} ${STRICT_NOUN}$`,
     ),
-    -1,
-  ],
-  [
-    new RegExp(
-      String.raw`^(?:decrease|reduce|lower|cut|drop)(?: the)? ${SERVING_NOUN} by ${COUNT_SLOT}$`,
+    soundAlikes: 'all',
+    sign: -1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:take away|take off|remove|drop|minus|subtract|cut|lose) ${COUNT_SLOT} ${STRICT_NOUN}$`,
     ),
-    -1,
-  ],
+    soundAlikes: 'all',
+    sign: -1,
+  },
+  {
+    pattern: new RegExp(
+      String.raw`^(?:decrease|reduce|lower|cut|drop)(?: the)? ${STRICT_NOUN} by ${COUNT_SLOT}$`,
+    ),
+    soundAlikes: 'distinct',
+    sign: -1,
+  },
 ];
 
 const STEP_SERVINGS: Record<string, 1 | -1> = {
@@ -1415,10 +1474,10 @@ const HALF_PATTERN =
   /^cut (?:it|this|the recipe|the servings|everything) in half$/;
 
 const TELL_SERVINGS_PATTERN = new RegExp(
-  String.raw`^(?:how many (?:${SERVING_NOUN}|is this for|does (?:it|this) (?:make|serve|feed)|people does (?:it|this) (?:serve|feed|make)|am i making|are we making)(?: (?:is (?:it|this|that)|am i making|are we making|does (?:it|this) make|is it set to|are there|right now|now))?|whats the serving size|what are the servings|what is the serving size|servings)$`,
+  String.raw`^(?:how many (?:${ANY_NOUN}|is this for|does (?:it|this) (?:make|serve|feed)|people does (?:it|this) (?:serve|feed|make)|am i making|are we making)(?: (?:is (?:it|this|that)|am i making|are we making|does (?:it|this) make|is it set to|are there|right now|now))?|whats the serving size|what are the servings|what is the serving size|servings)$`,
 );
 
-/** Servings set, added, taken away, multiplied or asked about. A count only counts beside a servings word or a scaling verb, so a bare "six" or "cook for ten" is never one. */
+/** Servings set, added, taken away, multiplied or asked about. A count only counts beside a servings word or after "make it for", so a bare "six", "four people" or "cook for ten" is never one, and an everyday word heard as a number ("for", "free") only right before a servings word. */
 const parseServings = (text: string): CookCommand | null => {
   if (TELL_SERVINGS_PATTERN.test(text)) return { kind: 'TELL_SERVINGS' };
   if (Object.hasOwn(STEP_SERVINGS, text)) {
@@ -1439,23 +1498,22 @@ const parseServings = (text: string): CookCommand | null => {
   if (HALF_PATTERN.test(text)) {
     return { kind: 'SET_SERVINGS', change: { kind: 'TIMES', factor: 0.5 } };
   }
-  const added = ADD_SERVINGS_PATTERNS.map(([pattern, sign]) => {
-    const match = text.match(pattern);
-    if (!match) return null;
-    const n = match.groups?.n;
-    const count = n === undefined ? 1 : readHeardCount(n);
-    return count === null || !(count > 0) ? null : sign * count;
+  const added = ADD_SERVINGS_PATTERNS.map(({ pattern, soundAlikes, sign }) => {
+    const groups = text.match(pattern)?.groups;
+    if (groups === undefined) return text.match(pattern) ? sign : null;
+    const count = readMatchedCount({ ...groups, verb: '' }, soundAlikes);
+    return count === null ? null : sign * count;
   }).find((delta) => delta !== null);
   if (typeof added === 'number') {
     return { kind: 'SET_SERVINGS', change: { kind: 'BY', delta: added } };
   }
-  const servings = SET_SERVINGS_PATTERNS.map((pattern) => {
-    const n = text.match(pattern)?.groups?.n;
-    return n === undefined ? null : readHeardCount(n);
-  }).find((count) => typeof count === 'number');
-  return typeof servings !== 'number' || !(servings > 0)
-    ? null
-    : { kind: 'SET_SERVINGS', change: { kind: 'TO', servings } };
+  const servings = SET_SERVINGS_PATTERNS.map(({ pattern, soundAlikes }) => {
+    const groups = text.match(pattern)?.groups;
+    return groups === undefined ? null : readMatchedCount(groups, soundAlikes);
+  }).find((count) => count !== null);
+  return typeof servings === 'number'
+    ? { kind: 'SET_SERVINGS', change: { kind: 'TO', servings } }
+    : null;
 };
 
 const parseSwitch = (
@@ -1537,7 +1595,7 @@ const parseOne = (
     return { kind: 'CYCLE_RECIPE', direction: CYCLE_PHRASES[text] };
   }
   const result =
-    parseServings(text) ??
+    (context.choice === null ? parseServings(text) : null) ??
     parseTimer(text, context) ??
     parseConvert(text, context) ??
     parseAmount(text, context) ??

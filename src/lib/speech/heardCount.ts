@@ -31,21 +31,13 @@ const TENS: Record<string, number> = {
   ninety: 90,
 };
 
-/** What a recognizer writes for a small number said on its own, so "sick" in a number's place is six. */
-const SOUND_ALIKES: Record<string, number> = {
-  a: 1,
-  an: 1,
+/** What a recognizer writes for a small number said on its own that is rarely a word of its own at a phrase's end ("sick" for six). */
+const DISTINCT_SOUND_ALIKES: Record<string, number> = {
   won: 1,
   wan: 1,
   juan: 1,
-  to: 2,
-  too: 2,
-  tu: 2,
   couple: 2,
   tree: 3,
-  free: 3,
-  for: 4,
-  fore: 4,
   fifth: 5,
   fife: 5,
   hive: 5,
@@ -60,26 +52,47 @@ const SOUND_ALIKES: Record<string, number> = {
   sevin: 7,
   seventh: 7,
   ate: 8,
-  eat: 8,
   eighth: 8,
   nein: 9,
   ninth: 9,
   tin: 10,
-  then: 10,
   tenth: 10,
   twelfth: 12,
   dozen: 12,
 };
 
-const readWord = (word: string, isLoose: boolean) =>
-  ONES[word] ?? TENS[word] ?? (isLoose ? SOUND_ALIKES[word] : undefined);
+/** Sound-alikes that are everyday words ("for", "to", "a"): a number only where nothing else could stand. */
+const COMMON_SOUND_ALIKES: Record<string, number> = {
+  a: 1,
+  an: 1,
+  to: 2,
+  too: 2,
+  tu: 2,
+  free: 3,
+  for: 4,
+  fore: 4,
+  eat: 8,
+  then: 10,
+};
+
+/** How loosely a count is heard: `'all'` where only a number can stand (right before "servings"), `'distinct'` where an everyday word could also end the phrase, `'none'` for digits and number words only. */
+export type HeardCountSoundAlikes = 'all' | 'distinct' | 'none';
+
+const readWord = (word: string, soundAlikes: HeardCountSoundAlikes) =>
+  ONES[word] ??
+  TENS[word] ??
+  (soundAlikes === 'none' ? undefined : DISTINCT_SOUND_ALIKES[word]) ??
+  (soundAlikes === 'all' ? COMMON_SOUND_ALIKES[word] : undefined);
 
 /**
- * A count heard where the caller expects one: digits ("6", "2.5"), words ("twenty four") or, as a single word, what a
- * recognizer writes for a small number ("sick" is 6, "for" is 4, "ate" is 8). Null for anything else; only for a slot
- * that holds nothing but a number, since the sound-alikes are ordinary words anywhere else.
+ * A count heard where the caller expects one: digits ("6", "2.5"), words ("twenty four", "a dozen") and, as a single
+ * word and only as loosely as `soundAlikes` allows, what a recognizer writes for a small number ("sick" is 6, "for" is
+ * 4). Null for anything else.
  */
-export const readHeardCount = (text: string): number | null => {
+export const readHeardCount = (
+  text: string,
+  soundAlikes: HeardCountSoundAlikes = 'distinct',
+): number | null => {
   const words = text
     .trim()
     .toLowerCase()
@@ -90,10 +103,10 @@ export const readHeardCount = (text: string): number | null => {
   if (words.length === 1 && /^\d+(?:\.\d+)?$/.test(words[0])) {
     return Number(words[0]);
   }
-  if (words.length === 1) return readWord(words[0], true) ?? null;
+  if (words.length === 1) return readWord(words[0], soundAlikes) ?? null;
   if (words.length !== 2) return null;
   const tens = TENS[words[0]];
-  const ones = readWord(words[1], false);
+  const ones = readWord(words[1], 'none');
   if (tens === undefined || ones === undefined || ones >= 10) return null;
   return tens + ones;
 };

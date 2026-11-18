@@ -2150,7 +2150,7 @@ expectKind(
   'tens and ones',
 );
 expectKind(
-  ['one serving', 'make one serving', 'a serving'],
+  ['one serving', 'make one serving', 'make a serving'],
   servingsTo(1),
   'one serving is a number, not one more',
 );
@@ -2222,6 +2222,17 @@ expectKind(
   'make dinner for my family',
   'serve it hot',
   'double check the oven',
+  'a serving',
+  'a plate',
+  'another plate',
+  'remove a plate',
+  'four people',
+  'for people',
+  'to people',
+  'make it for free',
+  'make it for then',
+  'make it to a',
+  'servings for',
 ].forEach((phrase) =>
   assert.equal(parse(phrase), null, `not a servings command: "${phrase}"`),
 );
@@ -2232,7 +2243,17 @@ assert.deepEqual(
 );
 
 assert.equal(readHeardCount('sick'), 6, 'sick is six');
-assert.equal(readHeardCount('for'), 4, 'for is four');
+assert.equal(
+  readHeardCount('for', 'all'),
+  4,
+  'for is four where only a number fits',
+);
+assert.equal(
+  readHeardCount('for'),
+  null,
+  'an everyday word is no number by default',
+);
+assert.equal(readHeardCount('sick', 'none'), null, 'no sound-alikes asked');
 assert.equal(readHeardCount('ate'), 8, 'ate is eight');
 assert.equal(readHeardCount('twenty four'), 24, 'twenty four');
 assert.equal(
