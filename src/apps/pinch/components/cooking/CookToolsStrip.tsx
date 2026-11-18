@@ -51,9 +51,9 @@ function CookToolsStrip({ rows }: { rows: CookRow[] }) {
         {tools.map((tool) => (
           <li
             key={tool.key}
-            className='bg-accent min-w-0 rounded-xl p-3 [@media(max-height:640px)]:w-36 [@media(max-height:640px)]:shrink-0 [@media(max-height:640px)]:snap-start'
+            className='bg-accent min-w-0 rounded-xl p-3 last:odd:col-span-2 [@media(max-height:640px)]:w-36 [@media(max-height:640px)]:shrink-0 [@media(max-height:640px)]:snap-start'
           >
-            <p className='text-muted-foreground flex items-center gap-1.5 text-xs leading-tight'>
+            <p className='text-muted-foreground flex min-h-[2lh] items-center gap-1.5 text-xs leading-tight'>
               <MeasuringToolIcon
                 tool={tool.key}
                 className='text-foreground size-5 shrink-0'
