@@ -5,6 +5,8 @@ import {
   addHeldWrites,
   applyHeldWrites,
   dropHeldWrites,
+  forHeldList,
+  layHeldLists,
   patchHeldWrite,
   settleHeldWrites,
   toFingerprint,
@@ -304,6 +306,86 @@ assert.deepEqual(
   showsThrough.list[0],
   { id: 'a', cents: 9, meta: { a: 8, b: 8 } },
   'a hold shows only the fields it wrote, so a later write to another field shows through',
+);
+
+const edit = (cents: number, token = 'e1') =>
+  toHeldWrite<Row>('a', { id: 'a', cents }, ['cents'], token, true);
+const deleted = apply([], [edit(5)]);
+assert.deepEqual(
+  [deleted.list, deleted.held],
+  [[], []],
+  'an edit never brings back a record another write deleted, and lets go',
+);
+const createThenEdit = apply(
+  [],
+  addHeldWrites([hold({ id: 'a', cents: 1 }, 'a', 'c1')], [edit(5)]),
+);
+assert.deepEqual(
+  createThenEdit.list,
+  [{ id: 'a', cents: 5 }],
+  'an edit of a record still being created shows with it',
+);
+assert.equal(
+  addHeldWrites([], [edit(5)]).concat(
+    patchHeldWrite([edit(5)], 'a', { cents: 6 }),
+  )[1].isEdit,
+  true,
+  'a patched edit stays an edit',
+);
+
+const moved = toHeldWrite<Row>(
+  'a',
+  { id: 'a', cents: 5 },
+  ['cents'],
+  'm1',
+  true,
+  { id: 'a', cents: 50 },
+);
+const inWindow = (row: Row) => row.cents < 10;
+assert.deepEqual(
+  apply([], forHeldList([moved], inWindow)).list,
+  [{ id: 'a', cents: 5 }],
+  'an edit that moves a record into a filtered list shows it there at once',
+);
+assert.deepEqual(
+  apply(
+    [],
+    forHeldList([{ ...moved, before: { id: 'a', cents: 1 } }], inWindow),
+  ).list,
+  [],
+  'but an edit of a record the list held and no longer has never brings it back',
+);
+assert.deepEqual(
+  apply(
+    [],
+    [hold({ id: 'a', cents: 1 }, 'a', 'c1', 0), edit(5)],
+    HELD_WRITE_SETTLED_MS + 1,
+    10,
+  ).list,
+  [],
+  'an expired create never lets a later edit bring back a record the list lost',
+);
+const laidMove = (before: Row) =>
+  layHeldLists<Row, 'week'>({
+    lists: { week: { incoming: [], deliveredAt: 10, belongs: inWindow } },
+    held: [{ ...moved, before }],
+    landed: {},
+    idOf,
+    now: 20,
+  }).lists.week;
+assert.deepEqual(
+  [laidMove({ id: 'a', cents: 50 }), laidMove({ id: 'a', cents: 1 })],
+  [[{ id: 'a', cents: 5 }], []],
+  'laid lists judge an edit by whether the list held its record before',
+);
+const takenOver = addHeldWrites(
+  [hold({ id: 'a', cents: 1 }, 'a', 'c1', null, ['cents'])],
+  [edit(5)],
+);
+assert.deepEqual(
+  apply([], takenOver).list,
+  [{ id: 'a', cents: 5 }],
+  'an edit that takes over every field of a create still in flight keeps the record showing',
 );
 
 console.log('held writes: all checks passed');
