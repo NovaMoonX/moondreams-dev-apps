@@ -244,6 +244,7 @@ test('the fixture follows this, it and the nth one from the context', async () =
       title: null,
       dueSpanId: 'd1',
       isUrgent: null,
+      meetsHow: null,
     },
   ]);
   const second = await runFixture(

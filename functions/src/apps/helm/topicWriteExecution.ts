@@ -54,6 +54,8 @@ export const buildWriteExecution = (
           ]
         : [],
       undoReport: null,
+      abilityOffer: null,
+      awayZoneOffer: null,
       spoken: null,
       goneIds: null,
       undoReason: null,

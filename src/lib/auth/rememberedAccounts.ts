@@ -153,7 +153,7 @@ export async function cacheRememberedPhoto(uid: string) {
   return writeRememberedAccounts(next) && dataURL ? next : null;
 }
 
-/** Drops an account from the device's list along with the keys this device saved under its uid (`…:<uid>…`: sessions, drafts, view choices). */
+/** Drops an account from the device's list along with the keys this device saved under its uid (`…:<uid>…`: sessions, drafts, view choices, layouts). */
 export function forgetAccount(uid: string) {
   const next = readRememberedAccounts().filter((saved) => saved.uid !== uid);
   writeRememberedAccounts(next);

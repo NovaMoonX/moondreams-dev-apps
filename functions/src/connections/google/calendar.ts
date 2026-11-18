@@ -19,8 +19,9 @@ import { GOOGLE_CALENDAR_MANIFEST } from './calendarManifest.js';
 import { toEventLink } from './deepLinks.js';
 
 const API = 'https://www.googleapis.com/calendar/v3';
+const TRANSFORM_VERSION = GOOGLE_CALENDAR_MANIFEST.transformVersion;
 const EVENT_FIELDS =
-  'items(id,status,summary,start,end,iCalUID,attendees(self,responseStatus),transparency,updated),nextPageToken,nextSyncToken';
+  'items(id,status,summary,start,end,iCalUID,attendees(self,responseStatus),transparency,updated,location,hangoutLink,conferenceData(entryPoints(entryPointType)),extendedProperties(private)),nextPageToken,nextSyncToken';
 const LIST_FIELDS =
   'items(id,summary,summaryOverride,backgroundColor,primary,accessRole)';
 const PAGE_SIZE = 250;
@@ -46,6 +47,10 @@ interface CalendarEvent {
   attendees?: { self?: boolean; responseStatus?: string }[];
   transparency?: string;
   updated?: string;
+  location?: string;
+  hangoutLink?: string;
+  conferenceData?: { entryPoints?: { entryPointType?: string }[] };
+  extendedProperties?: { private?: Record<string, string> };
 }
 
 interface EventsPage {
@@ -65,6 +70,7 @@ interface CalendarListEntry {
 
 /** What a finished read keeps for the next one: a sync token per calendar, or null where Google gave none, and the winning ref of each event key that had a copy dropped. */
 interface Saved {
+  transformVersion: number;
   calendarIds: string[];
   syncedAt: number;
   tokens: Record<string, string | null>;
@@ -106,11 +112,14 @@ const parseSaved = (text: string | null): Saved | null => {
   if (text === null) return null;
   try {
     const value = JSON.parse(text) as Partial<Saved>;
-    return Array.isArray(value.calendarIds) &&
+    // A newer transform reads every event again once, so older copies gain what it adds.
+    return value.transformVersion === TRANSFORM_VERSION &&
+      Array.isArray(value.calendarIds) &&
       typeof value.syncedAt === 'number' &&
       typeof value.tokens === 'object' &&
       value.tokens !== null
       ? {
+          transformVersion: TRANSFORM_VERSION,
           calendarIds: value.calendarIds,
           syncedAt: value.syncedAt,
           tokens: value.tokens,
@@ -212,6 +221,60 @@ const toInstants = (event: CalendarEvent) => {
 const self = (event: CalendarEvent) =>
   event.attendees?.find((attendee) => attendee.self === true);
 
+const MEETING_HOSTS = [
+  'meet.google.com',
+  'zoom.us',
+  'teams.microsoft.com',
+  'teams.live.com',
+  'webex.com',
+];
+const PLACE_CHARS = 120;
+
+const LINK_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
+const EMAIL_RE = /\S@\S+\.\S/;
+const MEETING_WORDS_RE =
+  /\b(?:zoom|webex|google meet|microsoft teams|teams meeting|facetime)\b/i;
+const DIAL_RE =
+  /(?:\+|\btel:)\s?\d|\(\d{3}\)\s?\d{3}|\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b|\bpin\b\s*[:#]?\s*\d{4,}|\bdial\b[^a-z]*\d/i;
+
+const hasMeetingHost = (text: string) => {
+  const lower = text.toLowerCase();
+  return MEETING_HOSTS.some((known) => lower.includes(known));
+};
+
+const isVideoText = (text: string) =>
+  LINK_RE.test(text) || hasMeetingHost(text) || MEETING_WORDS_RE.test(text);
+
+const toPlace = (event: CalendarEvent) => {
+  const text = event.location?.trim() ?? '';
+  return text &&
+    !isVideoText(text) &&
+    !EMAIL_RE.test(text) &&
+    !DIAL_RE.test(text)
+    ? text.slice(0, PLACE_CHARS)
+    : null;
+};
+
+/** Read only for presence: no link, number or guest is ever kept. A location text alone never means in person. */
+const toFormat = (event: CalendarEvent): 'video' | 'phone' | null => {
+  const types = (event.conferenceData?.entryPoints ?? []).map(
+    (entry) => entry.entryPointType,
+  );
+  const location = event.location?.trim() ?? '';
+  if (
+    types.includes('video') ||
+    Boolean(event.hangoutLink) ||
+    isVideoText(location)
+  )
+    return 'video';
+  return types.includes('phone') || DIAL_RE.test(location) ? 'phone' : null;
+};
+
+const toSiteRef = (event: CalendarEvent) => {
+  const ref = event.extendedProperties?.private?.siteRef;
+  return typeof ref === 'string' && ref !== '' ? ref.slice(0, 200) : null;
+};
+
 const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
   sourceRef: `${calendarId}|${event.id}`,
   kind: 'event',
@@ -221,7 +284,7 @@ const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
   ...toInstants(event),
   dueAt: null,
   timeZone: event.start?.timeZone ?? null,
-  placeLabel: null,
+  placeLabel: toPlace(event),
   amountCents: null,
   currency: null,
   sourceUpdatedAt: event.updated ? Date.parse(event.updated) : null,
@@ -232,6 +295,8 @@ const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
       self(event)?.responseStatus === 'tentative',
     isFree: event.transparency === 'transparent',
     sameEventKey: toSameEventKey(event),
+    format: toFormat(event),
+    siteRef: toSiteRef(event),
   },
 });
 
@@ -407,6 +472,7 @@ const toResult = ({ cursor, records, deletedRefs }: Round): SyncPageResult => {
     (progress) => progress.isDone,
   );
   const saved: Saved = {
+    transformVersion: TRANSFORM_VERSION,
     calendarIds: cursor.calendarIds,
     syncedAt: cursor.startedAt,
     tokens: Object.fromEntries(
@@ -442,6 +508,7 @@ const toOption = (entry: CalendarListEntry): ConnectorOption => ({
   photoUrl: null,
   isPrimary: entry.primary === true,
   isOnByDefault: isOnByDefault(entry),
+  isWritable: entry.accessRole === 'owner' || entry.accessRole === 'writer',
 });
 
 const accountPath = (uid: string, accountId: string) =>

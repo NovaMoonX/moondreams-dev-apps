@@ -73,11 +73,11 @@ const BOX_FIELDS = {
 } satisfies Record<keyof Box, ShareDecision>;
 
 const ITEM_FIELDS = {
-  id: 'never',
+  id: 'notUseful',
   authorId: 'never',
-  content: 'never',
+  content: 'shared',
   isRevealed: 'filter',
-  revealedAt: 'never',
+  revealedAt: 'shared',
   revealedMethod: 'never',
   createdAt: 'never',
   lastEditedAt: 'never',

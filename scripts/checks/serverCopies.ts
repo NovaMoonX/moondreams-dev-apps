@@ -35,6 +35,24 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/a-list/types.ts',
+    dest: 'functions/src/apps/a-list/share/aListTypes.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/a-list/utils/billing.ts',
+    dest: 'functions/src/apps/a-list/share/billing.ts',
+    importRewrites: { '@apps/a-list/types': './aListTypes.js' },
+  },
+  {
+    src: 'src/apps/a-list/utils/savings.ts',
+    dest: 'functions/src/apps/a-list/share/savings.ts',
+    importRewrites: {
+      '@apps/a-list/types': './aListTypes.js',
+      '@apps/a-list/utils/billing': './billing.js',
+    },
+  },
+  {
     src: 'src/apps/going-once/share/manifest.ts',
     dest: 'functions/src/apps/going-once/share/manifest.ts',
     importRewrites: {
@@ -118,14 +136,54 @@ const COPIES: Copy[] = [
     importRewrites: { '@/utils/stringUtils': './stringUtils.js' },
   },
   {
+    src: 'src/apps/helm/engine/importance.ts',
+    dest: 'functions/src/apps/helm/nomos/importanceOrder.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/research.ts',
+    dest: 'functions/src/apps/helm/nomos/research.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/questionsTask.ts',
+    dest: 'functions/src/apps/helm/nomos/questionsTask.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/seenAs.ts',
+    dest: 'functions/src/apps/helm/nomos/seenAs.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/personality.ts',
+    dest: 'functions/src/apps/helm/nomos/personality.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/researchAhead.ts',
+    dest: 'functions/src/apps/helm/nomos/researchAhead.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/engine/whoTier.ts',
     dest: 'functions/src/apps/helm/nomos/whoTier.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/contactPoints.ts',
+    dest: 'functions/src/apps/helm/nomos/contactPoints.ts',
     importRewrites: {},
   },
   {
     src: 'src/apps/helm/engine/kinKinds.ts',
     dest: 'functions/src/apps/helm/nomos/kinKinds.ts',
     importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/connections.ts',
+    dest: 'functions/src/apps/helm/nomos/connections.ts',
+    importRewrites: { '@apps/helm/engine/kinKinds': './kinKinds.js' },
   },
   {
     src: 'src/apps/helm/engine/kin.ts',
@@ -183,6 +241,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/utils/goalWhy.ts',
+    dest: 'functions/src/apps/helm/goalWhy.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/utils/privacy.ts',
     dest: 'functions/src/apps/helm/privacy.ts',
     importRewrites: {
@@ -200,14 +263,115 @@ const COPIES: Copy[] = [
     importRewrites: { '@/lib/speech/speechText': './speechText.js' },
   },
   {
+    src: 'src/apps/helm/engine/whereabouts.ts',
+    dest: 'functions/src/apps/helm/nomos/whereabouts.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/utils/repeatRule.ts',
     dest: 'functions/src/vendor/repeatRule.ts',
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/engine/scheduledActions.ts',
+    dest: 'functions/src/apps/helm/nomos/scheduledActions.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/repeatRule': '../../../vendor/repeatRule.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/freeTime.ts',
+    dest: 'functions/src/apps/helm/nomos/freeTime.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+    },
+  },
+  {
     src: 'src/utils/yearlyDateUtils.ts',
     dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},
+  },
+  {
+    src: 'src/utils/cadenceUtils.ts',
+    dest: 'functions/src/vendor/cadenceUtils.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/habitDay.ts',
+    dest: 'functions/src/apps/helm/nomos/habitDay.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/engine/whereabouts': './whereabouts.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/habitLife.ts',
+    dest: 'functions/src/apps/helm/nomos/habitLife.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/engine/habitDay': './habitDay.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/habitReminders.ts',
+    dest: 'functions/src/apps/helm/nomos/habitReminders.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/engine/habitDay': './habitDay.js',
+      '@apps/helm/engine/habitLife': './habitLife.js',
+    },
+  },
+  {
+    src: 'src/utils/sha256.ts',
+    dest: 'functions/src/vendor/sha256.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/grouping.ts',
+    dest: 'functions/src/apps/helm/nomos/grouping.ts',
+    importRewrites: {
+      '@/utils/sha256': '../../../vendor/sha256.js',
+      '@apps/helm/utils/privacy': '../privacy.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/said.ts',
+    dest: 'functions/src/apps/helm/nomos/said.ts',
+    importRewrites: { '@apps/helm/utils/privacy': '../privacy.js' },
+  },
+  {
+    src: 'src/apps/helm/engine/checkInMatch.ts',
+    dest: 'functions/src/apps/helm/nomos/checkInMatch.ts',
+    importRewrites: {
+      '@/utils/optionMatchUtils': '../../../vendor/optionMatchUtils.js',
+      '@apps/helm/engine/habitDay': './habitDay.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/restDay.ts',
+    dest: 'functions/src/apps/helm/dayPlan/restDay.ts',
+    importRewrites: {
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/planner.ts',
+    dest: 'functions/src/apps/helm/dayPlan/planner.ts',
+    importRewrites: {
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/constants': './plannerCopy.js',
+      '@apps/helm/engine/freeTime': '../nomos/freeTime.js',
+      '@apps/helm/engine/importance': '../nomos/importanceOrder.js',
+      '@apps/helm/engine/restDay': './restDay.js',
+      '@apps/helm/types': './plannerTypes.js',
+      '@apps/helm/utils/taskDue': './taskDue.js',
+    },
   },
 ];
 
