@@ -40,6 +40,7 @@ import {
   isCoverUrl,
 } from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
+import { toStoredStepSections } from '@apps/pinch/utils/stepSections';
 import { compressImageForUse } from '@/utils/imageCompression';
 import type {
   Collection,
@@ -120,6 +121,8 @@ export interface RecipeDraft {
   cookMinutes: number | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** Index for index with `steps`; written on every save (`[]` when no step has a section), so older recipes gain the key. */
+  stepSections: (string | null)[];
   /** How to keep the leftovers, or null; written on every save, so older recipes gain the key. */
   care: RecipeCare | null;
   /** The how-to video and other links; written on every save, so older recipes gain the key. */
@@ -284,6 +287,7 @@ export const saveRecipe = createAsyncThunk<
         ...cover,
         ingredients: draft.ingredients,
         steps: draft.steps,
+        stepSections: toStoredStepSections(draft.steps, draft.stepSections),
         care: draft.care,
         links: draft.links,
         nutritionOverride: draft.nutritionOverride,

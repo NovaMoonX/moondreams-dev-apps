@@ -333,6 +333,7 @@ const RECIPE_FIELDS = {
   coverUrl: 'notUseful',
   ingredients: 'never',
   steps: 'never',
+  stepSections: 'never',
   nutritionOverride: 'never',
   source: 'notUseful',
   sourceId: 'notUseful',

@@ -620,6 +620,8 @@ export interface Recipe {
   coverUrl: string | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** The section each step sits in ("Cook the chicken"), index for index with `steps`; consecutive steps with one name are one section. A recipe written before sections lacks the key, and a missing or short entry reads as null; read through `getStepSections`. */
+  stepSections: (string | null)[];
   /** Per serving; a null metric falls back to the value added up from the ingredients. */
   nutritionOverride: NutritionValues | null;
   source: RecipeSource;
@@ -738,6 +740,8 @@ export interface SharedRecipe {
   cookMinutes: number | null;
   ingredients: SharedIngredient[];
   steps: string[];
+  /** Index for index with `steps`; a snapshot from before sections lacks the key, which reads as no sections. */
+  stepSections: (string | null)[];
   care: RecipeCare | null;
   links: SharedRecipeLink[];
   /** Empty unless the owner includes their tips. */
