@@ -3574,6 +3574,7 @@ test('the fit block carries aliases, only for tasks and projects the model is sh
       deadlines: [
         {
           thingId: 'p1',
+          id: 'project-wedding',
           name: 'Wedding',
           date: Date.UTC(2026, 10, 27),
           taskCount: 3,
@@ -3608,6 +3609,7 @@ test('the fit block carries aliases, only for tasks and projects the model is sh
     synced: [copy as never],
     projects: [
       {
+        id: 'project-wedding',
         name: 'Wedding',
         milestones: [],
         kind: 'project' as const,
