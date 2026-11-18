@@ -424,6 +424,17 @@ function CookVoiceSheet({
       ],
     },
     {
+      label: 'Before you start',
+      rows: [
+        ['got the butter', 'Ticks it off, or say “got everything”'],
+        ['untick everything', 'Clears every tick, or “untick the butter”'],
+        ['what’s left', 'Reads what you still need to get out'],
+        ['what do I measure with', 'Reads the measuring tools'],
+        ['all together', 'Lists the ingredients together, or say “by part”'],
+        ['start cooking', 'Opens the first step'],
+      ],
+    },
+    {
       label: 'Amounts',
       rows: [
         [
