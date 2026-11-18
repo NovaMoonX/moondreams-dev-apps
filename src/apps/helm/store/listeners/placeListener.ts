@@ -20,7 +20,7 @@ const toError = (error: unknown) =>
 const toText = (value: unknown) => (typeof value === 'string' ? value : null);
 
 /** A place that won't open is kept, with no name, so the surface can say so instead of dropping it. */
-async function openPlace(
+export async function openPlace(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenPlace> {
