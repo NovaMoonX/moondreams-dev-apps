@@ -2833,14 +2833,40 @@ export const HELM_COPY = {
   mapFailed: "The map didn't open. Try again in a moment.",
   mapNoLinks: 'Link people to each other and the lines show up here.',
   mapNoLinksFiltered: 'Nobody here is linked yet. Try Everyone.',
-  mapHint: "Tap someone to open them. Lines show who's linked to whom.",
+  mapHint:
+    'Tap someone for a quick look. Tap a line to see what it means. Pinch to zoom.',
   mapCovered: 'Tap to show your map.',
   mapAddForYou: 'Link someone to you',
   mapPrivateName: 'Private',
   mapYou: 'You',
   mapConnectionCount: (count: number) =>
     count === 1 ? '1 connection' : `${count} connections`,
-  mapOpen: 'Open',
+  mapOpen: 'Open their page',
+  mapCardLinked: (names: string[], more: number) =>
+    more > 0
+      ? `Linked to ${names.join(', ')} and ${more} more here`
+      : names.length === 1
+        ? `Linked to ${names[0]} here`
+        : `Linked to ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} here`,
+  mapCardNext: (title: string, when: string) => `Next: ${title}, ${when}`,
+  mapCardLastCameUp: (date: string) => `Last came up ${date}`,
+  mapCardDate: (word: string, days: number) =>
+    days === 0
+      ? `${word} is today`
+      : days === 1
+        ? `${word} is tomorrow`
+        : `${word} is in ${days} days`,
+  mapLineGuess: "That's a guess from what you said.",
+  mapLineUpdated: (date: string) => `Last changed ${date}`,
+  mapLineChange: 'Change this link',
+  mapLineChangeLine: 'Edit what they are to each other, or remove it.',
+  mapLineTitle: 'This line',
+  mapLineFiguredChange: 'Look at this guess',
+  mapLineFiguredChangeLine: 'Confirm it, fix it or say it is wrong.',
+  mapZoomLabel: 'Zoom',
+  mapZoomIn: 'Zoom in',
+  mapZoomOut: 'Zoom out',
+  mapZoomFit: 'Show everyone',
   mapAddConnection: 'Add a connection',
   mapCardClose: 'Close',
   mapLegendOpen: 'Lines and layout',
@@ -2851,9 +2877,10 @@ export const HELM_COPY = {
   mapLegendWork: 'Work',
   mapLegendFigured: 'Figured out',
   mapLegendFiguredLine:
-    'Lighter lines are links worked out from what you said.',
+    'Lighter lines are guesses worked out from what you said, not confirmed.',
   mapLegendPast: 'Past couple',
-  mapLegendPastLine: 'Faint lines are couples who are no longer together.',
+  mapLegendPastLine:
+    'Faint lines are couples who are no longer together. Tap any line to see what it means.',
   mapLegendMoveLine:
     'Drag a person to place them. Where you put them stays on this phone.',
   mapResetLayout: 'Reset layout',
