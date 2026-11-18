@@ -4216,6 +4216,9 @@ export const HELM_COPY = {
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,
   searchTitle: 'Search',
   searchEverything: 'Search everything',
+  sidebarLabel: 'Sidebar',
+  sidebarNavLabel: 'Browse',
+  searchShortcutLabel: (key: string) => (key === '⌘' ? '⌘K' : `${key} K`),
   searchPlaceholder: 'Search your circle, tasks, notes…',
   searchHint: (assistant: string) =>
     `Find anything you have told ${assistant}: people, tasks, dates, facts, notes and more.`,
