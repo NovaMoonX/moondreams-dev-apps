@@ -33,11 +33,13 @@ export interface CookRow {
   conversion: { key: string; text: string } | null;
   /** Its group again where it is shown away from its heading (a step), set only when its ingredient is in more than one group. */
   groupLabel: string | null;
+  /** Poured rather than scooped, so a cup of it wants a liquid measuring cup. */
+  isLiquid: boolean;
 }
 
 interface CookIngredientRowProps extends Omit<
   CookRow,
-  'group' | 'groupLabel' | 'measure'
+  'group' | 'groupLabel' | 'measure' | 'isLiquid'
 > {
   isInStep: boolean;
   isOut: boolean;

@@ -9,6 +9,8 @@ import {
   toPreferredUnits,
 } from '../../src/apps/pinch/utils/units.ts';
 import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
+import { getMeasuringTools } from '../../src/apps/pinch/utils/measuringTools.ts';
+import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
 import {
   convertMeasure,
   formatAmountText,
@@ -177,5 +179,42 @@ assert.deepEqual(getConversions(2, 'EACH', { gramsPerMl: 1 }), []);
 near(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: 0.53 }), 125.39, 1);
 assert.equal(convertForIngredient(1, 'CUP', 'G', { gramsPerMl: null }), null);
 near(convertForIngredient(1, 'CUP', 'ML', { gramsPerMl: null }), 236.588);
+
+// Measuring tools follow the amount as the row shows it
+const line = (
+  name: string,
+  amount: number,
+  unit: Parameters<typeof getMeasuringTools>[0][number]['unit'],
+  isLiquid = false,
+) => ({ name, amount, unit, isLiquid });
+const tools = getMeasuringTools([
+  line('Flour', 4 / 3, 'CUP'),
+  line('Milk', 0.75, 'CUP', true),
+  line('Stock', 500, 'ML', true),
+  line('Soy sauce', 0.31, 'CUP', true),
+  line('Salt', 0.5, 'TSP'),
+  line('Vanilla', 1.5, 'TBSP'),
+  line('Butter', 113, 'G'),
+  line('Ground beef', 1, 'LB'),
+  line('Chicken', 1.5, 'LB'),
+  line('Pepper', 0.01, 'TSP'),
+  line('Eggs', 2, 'EACH'),
+]);
+assert.deepEqual(
+  tools.map((tool) => [tool.key, tool.sizes, tool.names]),
+  [
+    ['SCALE', [], ['Butter', 'Chicken']],
+    ['LIQUID_CUP', [], ['Milk', 'Stock']],
+    ['DRY_CUPS', ['1 cup', '⅓ cup'], ['Flour']],
+    ['SPOONS', ['1 tbsp', '1 tsp', '½ tsp'], ['Soy sauce', 'Salt', 'Vanilla']],
+  ],
+);
+// 0.31 cup reads as 5 tbsp, so it is spoons, not a cup
+assert.equal(formatKitchenAmount(0.31, 'CUP'), '5 tbsp');
+assert.deepEqual(getMeasuringTools([line('Oil', 0.75, 'TSP')])[0].sizes, [
+  '½ tsp',
+  '¼ tsp',
+]);
+assert.deepEqual(getMeasuringTools([line('Salt', 0.01, 'TSP')]), []);
 
 console.log('pinch units: ok');

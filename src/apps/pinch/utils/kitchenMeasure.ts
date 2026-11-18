@@ -48,32 +48,80 @@ const readGrid = (value: number, fractions: number[], label: string) => {
   return say(rounded, label, !isClose(value, rounded));
 };
 
-const readTeaspoons = (value: number) => {
-  if (value < 1 / 16) return 'a pinch';
-  return readGrid(
+/** A spoon or cup amount rounded the way a cook measures it, or a pinch. */
+export type SpoonMeasure =
+  | { kind: 'PINCH' }
+  | {
+      kind: 'MEASURE';
+      value: number;
+      unit: 'TSP' | 'TBSP' | 'CUP';
+      isApprox: boolean;
+    };
+
+const onGrid = (
+  value: number,
+  fractions: number[],
+  unit: 'TSP' | 'TBSP' | 'CUP',
+): SpoonMeasure => {
+  const rounded = nearestOnGrid(value, fractions);
+  return {
+    kind: 'MEASURE',
+    value: rounded,
+    unit,
+    isApprox: !isClose(value, rounded),
+  };
+};
+
+const measureTeaspoons = (value: number): SpoonMeasure => {
+  if (value < 1 / 16) return { kind: 'PINCH' };
+  return onGrid(
     value,
     value < 1 ? SMALL_SPOON_FRACTIONS : CUP_FRACTIONS,
-    UNIT_LABELS.TSP,
+    'TSP',
   );
 };
 
-const readTablespoons = (value: number) => {
-  if (value < 1 - EPSILON) return readTeaspoons(value * 3);
+const measureTablespoons = (value: number): SpoonMeasure => {
+  if (value < 1 - EPSILON) return measureTeaspoons(value * 3);
 
   const rounded = nearestOnGrid(value, HALVES);
-  if (isClose(value, rounded)) return say(rounded, UNIT_LABELS.TBSP, false);
-  if (value < 2) return readTeaspoons(value * 3);
-  return say(rounded, UNIT_LABELS.TBSP, true);
+  if (isClose(value, rounded)) {
+    return { kind: 'MEASURE', value: rounded, unit: 'TBSP', isApprox: false };
+  }
+  if (value < 2) return measureTeaspoons(value * 3);
+  return { kind: 'MEASURE', value: rounded, unit: 'TBSP', isApprox: true };
 };
 
-const readCups = (value: number) => {
-  if (value < 1 / 4 - EPSILON) return readTablespoons(value * 16);
+const measureCups = (value: number): SpoonMeasure => {
+  if (value < 1 / 4 - EPSILON) return measureTablespoons(value * 16);
 
   const rounded = nearestOnGrid(value, CUP_FRACTIONS);
-  const label = rounded > 1 ? 'cups' : UNIT_LABELS.CUP;
-  if (isClose(value, rounded)) return say(rounded, label, false);
-  if (value <= 1 / 2) return readTablespoons(value * 16);
-  return say(rounded, label, true);
+  if (isClose(value, rounded)) {
+    return { kind: 'MEASURE', value: rounded, unit: 'CUP', isApprox: false };
+  }
+  if (value <= 1 / 2) return measureTablespoons(value * 16);
+  return { kind: 'MEASURE', value: rounded, unit: 'CUP', isApprox: true };
+};
+
+/** The spoon or cup a volume is measured with, rounded as `formatKitchenAmount` shows it; null for any other unit. */
+export function getSpoonMeasure(
+  amount: number,
+  unit: Unit,
+): SpoonMeasure | null {
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (unit === 'CUP') return measureCups(amount);
+  if (unit === 'TBSP') return measureTablespoons(amount);
+  if (unit === 'TSP') return measureTeaspoons(amount);
+  return null;
+}
+
+const saySpoon = (measure: SpoonMeasure) => {
+  if (measure.kind === 'PINCH') return 'a pinch';
+  const label =
+    measure.unit === 'CUP' && measure.value > 1
+      ? 'cups'
+      : UNIT_LABELS[measure.unit];
+  return say(measure.value, label, measure.isApprox);
 };
 
 const readCount = (value: number, label: string) => {
@@ -101,11 +149,11 @@ export function formatKitchenAmount(amount: number, unit: Unit) {
 
   switch (unit) {
     case 'CUP':
-      return readCups(amount);
+      return saySpoon(measureCups(amount));
     case 'TBSP':
-      return readTablespoons(amount);
+      return saySpoon(measureTablespoons(amount));
     case 'TSP':
-      return readTeaspoons(amount);
+      return saySpoon(measureTeaspoons(amount));
     case 'LB':
       return amount < 1 / 4 - EPSILON
         ? readGrid(amount * 16, HALVES, UNIT_LABELS.OZ)

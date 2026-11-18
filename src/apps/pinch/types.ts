@@ -664,7 +664,7 @@ export interface RecipeCost {
   lines: Map<string, LineCost>;
 }
 
-export type CookView = 'steps' | 'ingredients' | 'timers';
+export type CookView = 'gather' | 'steps' | 'ingredients' | 'timers';
 
 /** A recipe of a planned plate that cooking holds, with what the plan has for it tonight. */
 export interface PlateCookRecipe {
