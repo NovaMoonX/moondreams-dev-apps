@@ -56,6 +56,9 @@ interface QuestionCardProps {
   isPromptHidden?: boolean;
   /** The words typed under "Neither", held by a sheet that must guard them when it closes; a card on its own keeps them itself. */
   neitherDraft?: { text: string; onChange: (text: string) => void };
+  /** The person has moved past this question: it is drawn muted with no choices, and offers Ask me again when `onAskAgain` is given. */
+  isSettled?: boolean;
+  onAskAgain?: () => void;
 }
 
 const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
@@ -83,6 +86,8 @@ function QuestionCard({
   isInSheet,
   isPromptHidden = false,
   neitherDraft,
+  isSettled = false,
+  onAskAgain,
 }: QuestionCardProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -356,6 +361,31 @@ function QuestionCard({
       {canDismiss && dismissButton}
     </>
   );
+
+  if (isSettled && !isInSheet) {
+    return (
+      <div className='flex w-full flex-col items-start gap-1'>
+        <div className='w-full opacity-60'>
+          <AssistantLine isQuiet>
+            {question.lead === null
+              ? question.prompt
+              : `${question.lead} ${question.prompt}`}
+          </AssistantLine>
+        </div>
+        {onAskAgain && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className={join(QUIET_CLASS, 'text-muted-foreground! ml-[30px]')}
+            onClick={onAskAgain}
+          >
+            {HELM_COPY.questionAskMeAgain}
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   if (isSkipped && !isInSheet) {
     return (

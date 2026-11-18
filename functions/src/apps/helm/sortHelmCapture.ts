@@ -3270,6 +3270,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               versions: topicVersions,
             }
           : undefined,
+        questionReask:
+          mode === 'full' && !read.isOutside
+            ? { turnAt: capture.createdAt }
+            : undefined,
         procedureRead: isProcedureSearchOffered
           ? {
               procedures: context.procedures,

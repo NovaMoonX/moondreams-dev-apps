@@ -127,6 +127,8 @@ export interface HelmToolScope {
     sections: AliasBook;
     versions: Map<string, number>;
   };
+  /** Offers `bring_back_question`; `turnAt` is when the person's turn was sent, so a question brought back is live after it. */
+  questionReask?: { turnAt: number };
   /** Offers `search_procedures`; each procedure it returns has its version and name written into `versions` and `names`. */
   procedureRead?: {
     procedures: AliasBook;
@@ -136,7 +138,7 @@ export interface HelmToolScope {
   };
 }
 
-/** Who is offered a tool: Nomos in process, an outside assistant over HTTP, or both. Every tool here only reads. */
+/** Who is offered a tool: Nomos in process, an outside assistant over HTTP, or both. Every tool here only reads, except `bring_back_question`, which moves a waiting question to the bottom of the thread. */
 export type ToolAudience = 'nomos' | 'external' | 'both';
 
 export interface HelmTool<Shape extends z.ZodRawShape> {
@@ -348,6 +350,20 @@ const readDocumentShape = {
     .optional()
     .describe(
       'Words to look for in the document, such as deposit; the passages around them come back.',
+    ),
+};
+
+const MAX_CAPTURES_SCANNED = 60;
+const MAX_QUESTIONS_LISTED = 3;
+// Kinds the code reports about the turn itself; they have no question to hear again.
+const STATUS_QUESTION_KINDS = ['couldNotRead', 'moreToSort'];
+
+const bringBackQuestionShape = {
+  about: z
+    .string()
+    .max(MAX_QUERY_CHARS)
+    .describe(
+      'Words about the question the person means, such as moving, or empty for the most recent one that is still waiting.',
     ),
 };
 
@@ -1313,6 +1329,82 @@ export function buildHelmTools(scope: HelmToolScope) {
     },
   };
 
+  const questionReask = scope.questionReask;
+  const bringBackQuestion: HelmTool<typeof bringBackQuestionShape> = {
+    name: 'bring_back_question',
+    audience: 'nomos',
+    description:
+      'Puts a question the person was asked earlier and has not answered back at the bottom of the conversation, live again, and returns what it asked. Use it when they ask what you asked them, or what was that about something, or want to come back to something they passed over. Pass words about what they mean, or none for the most recent. It only moves the question: it changes nothing the person has said or kept, and reply in your own words that it is back, never answering the question for them. If it finds nothing, say there is nothing waiting.',
+    shape: bringBackQuestionShape,
+    run: async ({ about }) => {
+      if (!questionReask) return { error: 'Questions are not available.' };
+      const wanted = new Set(toWords(about));
+      const docs = (
+        await scope.firestore
+          .collection(`apps/helm/users/${scope.uid}/captures`)
+          .orderBy('createdAt', 'desc')
+          .limit(MAX_CAPTURES_SCANNED)
+          .get()
+      ).docs;
+      const open = docs
+        .flatMap((doc) => {
+          const data = doc.data();
+          if (data.privacy === 'private' && scope.mask !== undefined) return [];
+          const state = (data.questionState ?? {}) as Record<
+            string,
+            { kind?: string; answeredAt?: number | null }
+          >;
+          const ids = Object.entries(state)
+            .filter(
+              ([, entry]) =>
+                (entry.answeredAt ?? null) === null &&
+                !STATUS_QUESTION_KINDS.includes(entry.kind ?? ''),
+            )
+            .map(([id]) => id);
+          if (ids.length === 0) return [];
+          const opened = readOpenedCapture(scope.key, data.sealed);
+          return ids.flatMap((id) => {
+            const question = opened.questions?.[id];
+            if (!question?.prompt) return [];
+            const words = toWords(
+              [
+                question.prompt,
+                ...(question.options ?? []).map((option) => option.label ?? ''),
+                opened.text ?? '',
+              ].join(' '),
+            );
+            return [
+              {
+                doc,
+                id,
+                prompt: question.prompt,
+                score: words.filter((word) => wanted.has(word)).length,
+                at: data.createdAt as number,
+              },
+            ];
+          });
+        })
+        .sort((a, b) => b.score - a.score || b.at - a.at);
+      const best = open.filter((entry) => wanted.size === 0 || entry.score > 0);
+      const chosen = best[0];
+      if (!chosen) return { found: false, waiting: open.length };
+      await chosen.doc.ref.update({
+        [`questionState.${chosen.id}.reaskedAt`]: Math.max(
+          Date.now(),
+          questionReask.turnAt + 1,
+        ),
+        [`questionState.${chosen.id}.skippedAt`]: null,
+      });
+      return {
+        found: true,
+        asked: chosen.prompt,
+        alsoWaiting: best
+          .slice(1, MAX_QUESTIONS_LISTED)
+          .map((entry) => entry.prompt),
+      };
+    },
+  };
+
   return [
     searchTasks,
     getCalendar,
@@ -1326,8 +1418,27 @@ export function buildHelmTools(scope: HelmToolScope) {
       : []),
     ...(topicRead ? [getTopic, listTopics] : []),
     ...(procedureRead ? [searchProcedures] : []),
+    ...(questionReask ? [bringBackQuestion] : []),
   ];
 }
+
+const readOpenedCapture = (key: HelmKey, sealed: SealedPayload) => {
+  try {
+    const opened = openForHelm(key, sealed);
+    return {
+      text: typeof opened.text === 'string' ? opened.text : null,
+      questions: (opened.questions ?? {}) as Record<
+        string,
+        {
+          prompt?: string;
+          options?: { label?: string }[];
+        }
+      >,
+    };
+  } catch {
+    return { text: null, questions: {} as Record<string, never> };
+  }
+};
 
 const readTask = (key: HelmKey, sealed: SealedPayload) => {
   try {

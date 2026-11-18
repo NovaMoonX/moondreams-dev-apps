@@ -57,6 +57,7 @@ const tools = buildHelmTools({
   siteGrants: [
     { connectorId: 'app:pinch', categories: [{ id: 'x', label: 'X' }] },
   ],
+  questionReask: { turnAt: 0 },
   topicRead: {
     topics: createAliasBook('tp'),
     sections: createAliasBook('s'),
@@ -76,6 +77,7 @@ const NOMOS_ONLY = [
   /document/,
   /app_records/,
   /^search_synced$/,
+  /^bring_back_question$/,
   /^file_results$/,
   /^hand_over$/,
 ];

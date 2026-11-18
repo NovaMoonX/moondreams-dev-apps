@@ -167,7 +167,11 @@ async function openCapture(
     questionState: Object.fromEntries(
       Object.entries(data.questionState ?? {}).map(([id, state]) => [
         id,
-        { ...state, dismissedAt: state.dismissedAt ?? null },
+        {
+          ...state,
+          dismissedAt: state.dismissedAt ?? null,
+          reaskedAt: state.reaskedAt ?? null,
+        },
       ]),
     ),
     hasPendingWrites: isMetadataTracked && entry.metadata.hasPendingWrites,

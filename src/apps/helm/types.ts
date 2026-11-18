@@ -290,6 +290,8 @@ export interface QuestionState {
   skippedAt: number | null;
   /** The person let the question go without answering; `answeredAt` is set with it so it stops waiting. Null on one from before. */
   dismissedAt: number | null;
+  /** The person asked for it again: it is live at the bottom of the thread from this moment. Null until then, and on one from before. */
+  reaskedAt: number | null;
 }
 
 /** One choice of a question; `new` and `none` carry no ref. */

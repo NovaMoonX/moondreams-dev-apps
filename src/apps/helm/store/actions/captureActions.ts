@@ -50,6 +50,7 @@ import { readLocationPermission } from '@apps/helm/utils/phoneLocation';
 import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import { markCreatedHere } from '@apps/helm/utils/createdHere';
+import { getLiveAimsDay } from '@apps/helm/utils/morningAsk';
 import { clearRemindersIdle } from '@apps/helm/store/actions/markRemindersChanged';
 import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import type {
@@ -127,7 +128,7 @@ export async function sendCapture(
     /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
     answersQuestion: Capture['answersQuestion'];
     questionAnswer: QuestionAnswerValue | null;
-    /** The day whose aims this turn files (the answer to the morning card); left out on every other turn. */
+    /** The day whose aims this turn files (the answer to the morning question); left out, a turn sent while the question is live in home's thread files them too. */
     aimsDayKey?: string;
     /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
     noteIds?: string[];
@@ -209,7 +210,9 @@ export async function sendCapture(
     whoIds: [],
     placeIds: [],
     planDayKey: null,
-    aimsDayKey: turn.aimsDayKey ?? null,
+    aimsDayKey:
+      turn.aimsDayKey ??
+      (turn.answersQuestion === null && !turn.ahead ? getLiveAimsDay() : null),
     createdAt,
     sortedAt: null,
     screen: turn.screen,
@@ -332,6 +335,17 @@ export const skipQuestion = (
 ) =>
   updateDoc(doc(capturesOf(uid), captureId), {
     [`questionState.${questionId}.skippedAt`]: Date.now(),
+  });
+
+/** Puts a question the person moved past back at the bottom of the thread, live again; it keeps its record and touches only its own two fields. */
+export const reaskQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+) =>
+  updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.reaskedAt`]: Date.now(),
+    [`questionState.${questionId}.skippedAt`]: null,
   });
 
 export interface QuestionRef {
