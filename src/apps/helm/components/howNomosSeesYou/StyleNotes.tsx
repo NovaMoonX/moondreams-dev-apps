@@ -13,6 +13,7 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useConnections } from '@/lib/connections/useConnections';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useAppSelector } from '@/store';
 import AddRow from '@apps/helm/components/who/AddRow';
 import {
@@ -366,6 +367,7 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
   const { showView } = useHelmUrlState();
   const isGateOpen = useIsGateOpen('helm', 'google-mail-and-drive');
   const { grants } = useConnections({ readerAppId: 'helm' });
+  const waitFor = useWaitUntilShown(isOn);
   const [isWorking, setIsWorking] = useState(false);
   const [failure, setFailure] = useState<MailFailure | null>(null);
   const isConnected = grants.some(
@@ -386,6 +388,7 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
       const result = await learnMailStyle();
       if (result.status !== 'learned') setFailure(result.status);
       else if (result.groups === 0) setFailure('nothingLearned');
+      else await waitFor((shown) => shown);
     } catch (error) {
       console.error('Sent mail was not read', error);
       setFailure(toMailFailure(error));
