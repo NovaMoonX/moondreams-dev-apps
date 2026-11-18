@@ -2,6 +2,7 @@ import { memo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import AppCheckbox from '@/components/AppCheckbox';
+import { useAppSelector } from '@/store';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
@@ -16,7 +17,8 @@ import {
   getPackageLabel,
   getPackageState,
 } from '@apps/pinch/utils/packages';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { selectUnitSettings } from '@apps/pinch/store/selectors';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 
 interface PackageRowProps {
   pkg: Package;
@@ -53,7 +55,8 @@ function PackageRow({
   const state = getPackageState(pkg.expiresAt, undefined, soonDays);
   const label = getPackageLabel(pkg.expiresAt);
   const opened = getOpenedText(pkg);
-  const amountText = formatSize(pkg.amount, pkg.unit);
+  const units = useAppSelector(selectUnitSettings);
+  const amountText = formatReadableSize(pkg.amount, pkg.unit, units);
   const placeText = PACKAGE_PLACE_LABELS[pkg.place];
 
   const chip = title === undefined && (

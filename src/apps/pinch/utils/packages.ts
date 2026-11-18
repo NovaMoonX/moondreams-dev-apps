@@ -18,6 +18,7 @@ import type {
   PackageEvent,
   PackageEventKind,
   PackagePlace,
+  PinchUnitSettings,
   Recipe,
   ResolvedIngredient,
   Unit,
@@ -35,8 +36,8 @@ import {
   getLocalTodayDate,
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
 import { getShopSection, isUsuallyAtHome } from '@apps/pinch/utils/shopping';
 
@@ -286,15 +287,18 @@ export const sumAmounts = (
     ];
   });
 
-export const formatTotal = (total: Pick<AmountTotal, 'amount' | 'unit'>) =>
-  formatSize(total.amount, total.unit);
+export const formatTotal = (
+  total: Pick<AmountTotal, 'amount' | 'unit'>,
+  units: PinchUnitSettings | null = null,
+) => formatReadableSize(total.amount, total.unit, units);
 
 /** An amount said the way a cook says it ("2½ cups", "about ½ lb"); a bare count keeps its "each" so it still reads as an amount, and "about" is said once. */
 export const formatKitchenTotal = (
   total: Pick<AmountTotal, 'amount' | 'unit'>,
   isConverted = false,
+  units: PinchUnitSettings | null = null,
 ) => {
-  const text = formatKitchenAmount(total.amount, total.unit);
+  const text = formatReadableAmount(total.amount, total.unit, units);
   const bare = text.replace(/^about /, '');
   const isAbout = isConverted || bare !== text;
   return `${isAbout ? 'about ' : ''}${total.unit === 'EACH' ? `${bare} each` : bare}`;
@@ -376,12 +380,17 @@ export const getStockFlag = (
 };
 
 /** How many packages and how much, in the order a row reads them ("3 packages · 2.4 lb in all"). Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
-export const getStockSummaryParts = (view: StockView) => {
+export const getStockSummaryParts = (
+  view: StockView,
+  units: PinchUnitSettings | null = null,
+) => {
   const count = view.packages.length;
   const isPartlyPast = count > 1 && view.pastCount > 0;
   const totals = isPartlyPast ? view.inDateTotals : view.totals;
   const total =
-    totals.length === 0 ? null : totals.map(formatTotal).join(' and ');
+    totals.length === 0
+      ? null
+      : totals.map((entry) => formatTotal(entry, units)).join(' and ');
   return [
     count > 1 ? `${count} packages` : null,
     total === null
@@ -480,6 +489,7 @@ export const getPackageBulkNames = (
   packages: Package[],
   getName: (pkg: Package) => string,
   now = Date.now(),
+  units: PinchUnitSettings | null = null,
 ) => {
   const sorted = [...packages].sort(byUseBy);
   const lines: PackageNameLine[] = sorted
@@ -487,7 +497,7 @@ export const getPackageBulkNames = (
     .map((pkg) => ({
       title: getName(pkg),
       details: [
-        formatSize(pkg.amount, pkg.unit),
+        formatReadableSize(pkg.amount, pkg.unit, units),
         pkg.expiresAt === null
           ? 'No date'
           : `Use by ${formatDayShort(getPlannedDayKey(pkg.expiresAt), now)}`,
@@ -531,7 +541,7 @@ export const planUse = (
   if (!isValidPackageAmount(used)) return { error: 'Say how much you used.' };
   if (used > pkg.amount + EPSILON) {
     return {
-      error: `Only ${formatSize(pkg.amount, pkg.unit)} is left, so nothing was changed.`,
+      error: `Only ${formatReadableSize(pkg.amount, pkg.unit)} is left, so nothing was changed.`,
     };
   }
 
@@ -645,7 +655,7 @@ export const planPackageEdit = (
 
   const notes = [
     isAmountChanged &&
-      `Amount ${formatSize(pkg.amount, pkg.unit)} → ${formatSize(amount, unit)}`,
+      `Amount ${formatReadableSize(pkg.amount, pkg.unit)} → ${formatReadableSize(amount, unit)}`,
     isDateChanged &&
       `Use by ${getDayText(pkg.expiresAt, now)} → ${getDayText(expiresAt, now)}`,
   ].filter((part) => part !== false);
@@ -962,21 +972,27 @@ export const getTakeGroups = (
   );
 
 /** "2 cup", "about 0.42 lb", "1 cup and 1.25 lb". */
-export const getTakeAmountText = (group: TakeGroup) =>
+export const getTakeAmountText = (
+  group: TakeGroup,
+  units: PinchUnitSettings | null = null,
+) =>
   group.totals
     .map((total, index) =>
-      formatKitchenTotal(total, group.isConverted && index === 0),
+      formatKitchenTotal(total, group.isConverted && index === 0, units),
     )
     .join(' and ');
 
 /** What was taken, in one line: "Took 2 cup rice from 1 package", or a count when it was several things. */
-export const getTakenHeadline = (groups: TakeGroup[]) => {
+export const getTakenHeadline = (
+  groups: TakeGroup[],
+  units: PinchUnitSettings | null = null,
+) => {
   if (groups.length !== 1) {
     return `Took ${groups.length} things out of your pantry`;
   }
 
   const [group] = groups;
-  return `Took ${getTakeAmountText(group)} ${group.name.toLowerCase()} from ${countPackages(group.packageCount)}`;
+  return `Took ${getTakeAmountText(group, units)} ${group.name.toLowerCase()} from ${countPackages(group.packageCount)}`;
 };
 
 /** What turns a weight into a volume or a count for one ingredient: its own numbers, or none. */
@@ -1202,12 +1218,15 @@ export const getLineStock = (
 };
 
 /** The quiet words a recipe line or a shopping row carries about the pantry. */
-export const getLineStockText = (stock: LineStock) => {
+export const getLineStockText = (
+  stock: LineStock,
+  units: PinchUnitSettings | null = null,
+) => {
   switch (stock.kind) {
     case 'HAVE':
       return 'You have it';
     case 'SOME':
-      return `You have ${formatKitchenTotal(stock.have, stock.isConverted)}`;
+      return `You have ${formatKitchenTotal(stock.have, stock.isConverted, units)}`;
     case 'OTHER':
       return 'In your pantry';
     case 'PAST':
@@ -1229,6 +1248,7 @@ export interface LineMarkers {
 /** The marks for a recipe's lines, saying only the exception: a line past its date always, and then whichever of "in your pantry" and "not in your pantry" is the minority, so a list the pantry mostly covers flags what is missing and a list it hardly touches flags what is there. The share is said once as the summary. */
 export const getLineMarkers = (
   entries: { id: string; stock: LineStock }[],
+  units: PinchUnitSettings | null = null,
 ): LineMarkers => {
   const isPresent = (stock: LineStock) =>
     stock.kind === 'HAVE' || stock.kind === 'SOME' || stock.kind === 'OTHER';
@@ -1238,10 +1258,10 @@ export const getLineMarkers = (
   const flagsAbsent = present >= absent;
   const getText = (stock: LineStock) => {
     if (stock.kind === 'STAPLE') return null;
-    if (stock.kind === 'PAST') return getLineStockText(stock);
+    if (stock.kind === 'PAST') return getLineStockText(stock, units);
     if (flagsAbsent)
-      return stock.kind === 'NONE' ? getLineStockText(stock) : null;
-    return isPresent(stock) ? getLineStockText(stock) : null;
+      return stock.kind === 'NONE' ? getLineStockText(stock, units) : null;
+    return isPresent(stock) ? getLineStockText(stock, units) : null;
   };
   return {
     byId: new Map(entries.map((entry) => [entry.id, getText(entry.stock)])),
@@ -1250,8 +1270,13 @@ export const getLineMarkers = (
   };
 };
 
-export const getPackageEventText = (event: PackageEvent, unit: Unit) => {
-  const amount = event.amount === null ? '' : formatSize(event.amount, unit);
+export const getPackageEventText = (
+  event: PackageEvent,
+  unit: Unit,
+  units: PinchUnitSettings | null = null,
+) => {
+  const amount =
+    event.amount === null ? '' : formatReadableSize(event.amount, unit, units);
   const where = event.place === null ? '' : getPlaceText(event.place);
   switch (event.kind) {
     case 'ADDED':

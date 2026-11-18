@@ -42,6 +42,7 @@ import {
   selectPackagesById,
   selectPackagesByIngredient,
   selectRecipes,
+  selectUnitSettings,
 } from '@apps/pinch/store/selectors';
 import type { Package, PackagePlace } from '@apps/pinch/types';
 import {
@@ -62,7 +63,7 @@ import {
   round2,
   type DateAnswer,
 } from '@apps/pinch/utils/packages';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatReadableSize } from '@apps/pinch/utils/productFormat';
 import PackageRow from '@apps/pinch/components/pantry/PackageRow';
 
 type SheetView =
@@ -92,6 +93,7 @@ interface ViewProps {
 }
 
 function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
+  const units = useAppSelector(selectUnitSettings);
   const { consume } = usePackageActions(uid);
   const [text, setText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -104,12 +106,12 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
 
   const getLine = () => {
     if (isOver) {
-      return `Only ${formatSize(pkg.amount, pkg.unit)} is left.`;
+      return `Only ${formatReadableSize(pkg.amount, pkg.unit, units)} is left.`;
     }
     if (isAll) return 'That uses it up, so it leaves your pantry.';
     return left === null
-      ? `${formatSize(pkg.amount, pkg.unit)} left now.`
-      : `Leaves ${formatSize(left, pkg.unit)}.`;
+      ? `${formatReadableSize(pkg.amount, pkg.unit, units)} left now.`
+      : `Leaves ${formatReadableSize(left, pkg.unit, units)}.`;
   };
 
   const handleSave = async () => {
@@ -137,7 +139,7 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
       <div className='space-y-1'>
         <p className='font-medium'>How much did you use?</p>
         <p className='text-muted-foreground text-sm'>
-          {formatSize(pkg.amount, pkg.unit)} left now.
+          {formatReadableSize(pkg.amount, pkg.unit, units)} left now.
         </p>
       </div>
       <div className='space-y-2'>
@@ -385,6 +387,7 @@ interface FactsProps {
 }
 
 function Facts({ pkg, soonDays }: FactsProps) {
+  const units = useAppSelector(selectUnitSettings);
   const state = getPackageState(pkg.expiresAt, undefined, soonDays);
   const label = getPackageLabel(pkg.expiresAt) ?? 'No date';
   const openedDays = getOpenedDays(pkg);
@@ -403,7 +406,7 @@ function Facts({ pkg, soonDays }: FactsProps) {
           {PACKAGE_PLACE_LABELS[pkg.place]}
         </span>
         <span className='whitespace-nowrap'>
-          {formatSize(pkg.amount, pkg.unit)} left
+          {formatReadableSize(pkg.amount, pkg.unit, units)} left
         </span>
         {opened !== null && <span className='whitespace-nowrap'>{opened}</span>}
       </p>
@@ -449,6 +452,7 @@ function PackageSheet({
     useAppSelector(selectIngredientsById).get(ingredientId)?.name ??
     'Removed ingredient';
   const soonDays = useAppSelector(selectLeadDays);
+  const units = useAppSelector(selectUnitSettings);
   const [pickedId, setPickedId] = useState<string | null>(packageId);
   const [view, setView] = useState<SheetView>(
     packageId === null ? { kind: 'list' } : { kind: 'package' },
@@ -512,7 +516,7 @@ function PackageSheet({
       return (
         <div className='grid gap-3'>
           <p className='text-muted-foreground text-sm'>
-            {getStockSummaryParts(stock).join(' · ')}
+            {getStockSummaryParts(stock, units).join(' · ')}
           </p>
           <ul className='divide-border divide-y'>
             {packages.map((entry) => (
@@ -561,7 +565,7 @@ function PackageSheet({
               {[...pkg.history].reverse().map((event, index) => (
                 <li key={`${event.at}-${index}`} className='py-2'>
                   <p className='text-sm wrap-break-word'>
-                    {getPackageEventText(event, pkg.unit)}
+                    {getPackageEventText(event, pkg.unit, units)}
                   </p>
                   {event.note !== null && event.kind !== 'EDITED' && (
                     <p className='text-muted-foreground text-xs'>
