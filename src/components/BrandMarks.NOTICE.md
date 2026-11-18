@@ -12,3 +12,4 @@ Fetched with `npm run icon:get` from the Iconify API (https://api.iconify.design
 | `GoogleDriveMark`    | `logos:google-drive`       | SVG Logos  | [CC0-1.0](https://raw.githubusercontent.com/gilbarbara/logos/master/LICENSE.txt) | [Gil Barbara](https://github.com/gilbarbara/logos)      |
 | `GoogleMark`         | `logos:google-icon`        | SVG Logos  | [CC0-1.0](https://raw.githubusercontent.com/gilbarbara/logos/master/LICENSE.txt) | [Gil Barbara](https://github.com/gilbarbara/logos)      |
 | `ChatGptMark`        | `ri:openai-fill`           | Remix Icon | [Apache-2.0](https://github.com/cyberalien/RemixIcon/blob/master/License)        | [Remix Design](https://github.com/cyberalien/RemixIcon) |
+| `GoogleContactsMark` | `selfhst:google-contacts` | selfh.st/icons | [CC-BY-4.0](https://github.com/selfhst/icons/blob/main/LICENSE) | [selfh.st](https://github.com/selfhst/icons) |

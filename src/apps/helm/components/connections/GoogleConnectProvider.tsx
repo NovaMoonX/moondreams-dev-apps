@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
+import { parseAsString, useQueryStates } from 'nuqs';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -92,14 +93,30 @@ const toIntroTitle = (connectorId: GoogleConnectorId, isReconnect: boolean) => {
 };
 
 const RECONNECT_KEY = 'helm-google-reconnect';
+const RETURN_VIEW_KEY = 'helm-google-return-view';
+
+/** Returns being finished by this page load; a second run of the same return would find its sign-in already used. */
+const finishedReturns = new Set<string>();
 
 const keepConnector = (
   connectorId: GoogleConnectorId | null,
   isReconnect = false,
 ) => {
   try {
-    if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
-    else sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+    if (connectorId === null) {
+      sessionStorage.removeItem(CONNECTOR_KEY);
+      sessionStorage.removeItem(RETURN_VIEW_KEY);
+    } else {
+      sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+      const params = new URLSearchParams(window.location.search);
+      sessionStorage.setItem(
+        RETURN_VIEW_KEY,
+        JSON.stringify({
+          view: params.get('view'),
+          grant: params.get('grant'),
+        }),
+      );
+    }
     if (isReconnect) sessionStorage.setItem(RECONNECT_KEY, '1');
     else sessionStorage.removeItem(RECONNECT_KEY);
   } catch {
@@ -117,6 +134,27 @@ const readKeptConnector = (): GoogleConnectorId => {
       : 'google:calendar';
   } catch {
     return 'google:calendar';
+  }
+};
+
+/** Where the person was when they left for Google: a connection's page or the view they started from, else Connected apps. */
+const takeReturnView = () => {
+  try {
+    const kept = JSON.parse(
+      sessionStorage.getItem(RETURN_VIEW_KEY) ?? 'null',
+    ) as {
+      view: string | null;
+      grant: string | null;
+    } | null;
+    sessionStorage.removeItem(RETURN_VIEW_KEY);
+    return kept?.view
+      ? {
+          view: kept.view,
+          grant: kept.view === 'connection' ? kept.grant : null,
+        }
+      : { view: 'connectedApps', grant: null };
+  } catch {
+    return { view: 'connectedApps', grant: null };
   }
 };
 
@@ -261,6 +299,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const [returned] = useState(() =>
     readGoogleAuthReturn(window.location.search),
   );
+  const [, setReturnUrl] = useQueryStates({
+    view: parseAsString,
+    grant: parseAsString,
+  });
   const [returnedConnector] = useState(readKeptConnector);
   const [isReturnedReconnect] = useState(readKeptReconnect);
   const [intro, setIntro] = useState<Intro | null>(() =>
@@ -393,13 +435,24 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         accountId: finished.accountId,
         categoryIds: [restrictedCategory],
         options: null,
-      }).catch((error: unknown) => {
-        console.error('Helm restricted connector was not connected', error);
-        addToast({
-          title: isDrive ? HELM_COPY.driveFailed : HELM_COPY.gmailFailed,
-          type: 'error',
+      })
+        .then(() =>
+          addToast({
+            title: HELM_COPY.googleServiceConnected(
+              isDrive
+                ? HELM_COPY.googleDriveRowName
+                : HELM_COPY.googleGmailName,
+            ),
+            type: 'success',
+          }),
+        )
+        .catch((error: unknown) => {
+          console.error('Helm restricted connector was not connected', error);
+          addToast({
+            title: isDrive ? HELM_COPY.driveFailed : HELM_COPY.gmailFailed,
+            type: 'error',
+          });
         });
-      });
       return;
     }
     if (wasDismissed) {
@@ -428,9 +481,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     if (!returned || handOffGoogleAuthReturn()) return;
     if ('error' in returned) {
       stripReturnQuery();
+      void setReturnUrl(takeReturnView(), { history: 'replace' });
       keepConnector(null);
     }
-  }, [returned]);
+  }, [returned, setReturnUrl]);
 
   const isReturningWithCode =
     returned !== null && 'code' in returned && !isPopupPage();
@@ -446,7 +500,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     staleTime: Infinity,
     queryFn: async () => {
       if (!returned || !('code' in returned)) return false;
+      if (finishedReturns.has(returned.state)) return true;
+      finishedReturns.add(returned.state);
       stripReturnQuery();
+      void setReturnUrl(takeReturnView(), { history: 'replace' });
       keepConnector(null);
       const kept = takeGoogleAuthState();
       try {
