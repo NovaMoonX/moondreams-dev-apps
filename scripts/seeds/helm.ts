@@ -1990,6 +1990,9 @@ async function buildProjects(input: {
         roleNotes: {},
         privateMark: null,
         isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: null,
       },
     ),
     projectOf(
