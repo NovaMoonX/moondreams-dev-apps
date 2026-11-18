@@ -756,13 +756,30 @@ function ExpenseFormModal({
   ];
   const privateNote = 'Only you can see this. It stays out of everyone’s list, totals and dues.';
 
+  const getReceiptCategory = () => {
+    const key = resolveChoice(formData.category);
+    const parsed = key === null ? null : parseExpenseCategoryKey(formData.category.choice === NEW_CHOICE ? toCustomCategoryKey(key) : key);
+    return { category: parsed?.category ?? null, customCategoryLabel: parsed?.customCategoryLabel ?? null };
+  };
+  const canSplitReceipt = !isEditing && !isPrivate && canShare && Boolean(onSplitReceipt);
+  const receiptChip = { key: 'receipt', label: 'Split a receipt', icon: <Receipt className='h-4 w-4' />, isWide: true };
+  const splitReceipt = () =>
+    onSplitReceipt?.({
+      title: formData.title.trim() || pickedSubject?.title || '',
+      dayIndex: linkedDay ?? (formData.dayIndex === '' ? null : Number(formData.dayIndex)),
+      link,
+      ...getReceiptCategory(),
+    });
   const chips = [
     ...(hasDayField || linkedDay !== null ? [] : [{ key: 'day', label: 'Trip day', icon: <CalendarDays className='h-4 w-4' /> }]),
     ...(showGroupField || isPrivate ? [] : [{ key: 'group', label: 'Group', icon: <Route className='h-4 w-4' /> }]),
     ...(showNoteField ? [] : [{ key: 'note', label: 'Note', icon: <StickyNote className='h-4 w-4' /> }]),
+    ...(canSplitReceipt ? [receiptChip] : []),
   ];
   const addChip = (key: string) => {
-    if (key === 'day') {
+    if (key === 'receipt') {
+      splitReceipt();
+    } else if (key === 'day') {
       setShowDayField(true);
     } else if (key === 'group') {
       setShowGroupField(true);
@@ -798,35 +815,6 @@ function ExpenseFormModal({
         />
     </>
   );
-  const getReceiptCategory = () => {
-    const key = resolveChoice(formData.category);
-    const parsed = key === null ? null : parseExpenseCategoryKey(formData.category.choice === NEW_CHOICE ? toCustomCategoryKey(key) : key);
-    return { category: parsed?.category ?? null, customCategoryLabel: parsed?.customCategoryLabel ?? null };
-  };
-  const canSplitReceipt = !isEditing && !isPrivate && canShare && Boolean(onSplitReceipt);
-  const receiptDoor = canSplitReceipt && (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='border-border h-auto min-h-14 w-full justify-start gap-3 rounded-2xl border border-dashed px-3! py-2.5 text-left font-normal whitespace-normal'
-      onClick={() =>
-        onSplitReceipt?.({
-          title: formData.title.trim() || pickedSubject?.title || '',
-          dayIndex: linkedDay ?? (formData.dayIndex === '' ? null : Number(formData.dayIndex)),
-          link,
-          ...getReceiptCategory(),
-        })
-      }
-    >
-      <span className='bg-accent grid size-10 shrink-0 place-items-center rounded-xl' aria-hidden='true'>
-        <Receipt className='h-5 w-5' />
-      </span>
-      <span className='min-w-0'>
-        <span className='block text-sm font-medium'>Split a receipt</span>
-        <span className='text-muted-foreground block text-xs'>Add the bill and pick who had what, tax and tip included.</span>
-      </span>
-    </Button>
-  );
   const planQuestion = (
     <div className='space-y-4'>
       <div className='min-h-60 space-y-2'>
@@ -844,7 +832,7 @@ function ExpenseFormModal({
       >
         Something else
       </Button>
-      {receiptDoor}
+      {canSplitReceipt && <AddFieldChips heading='Have the bill?' chips={[receiptChip]} onAdd={splitReceipt} />}
     </div>
   );
 
@@ -920,7 +908,6 @@ function ExpenseFormModal({
               Choose from your itinerary
             </Button>
           )}
-          {receiptDoor && <div className='mb-4'>{receiptDoor}</div>}
           {!isEditing && canShare && !startsPrivate && (
             <div className='mb-4 space-y-2'>
               <Label>Who&apos;s this for?</Label>
