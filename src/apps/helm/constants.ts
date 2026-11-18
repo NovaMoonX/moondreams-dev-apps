@@ -2133,16 +2133,17 @@ export const HELM_COPY = {
   planFailed: "Couldn't plan the day. Try again.",
   todayAimMark: 'Your aim',
   dayAimsQuestion: 'What do you want to get done today?',
-  dayAimsField: 'What you want to get done today',
-  dayAimsPlaceholder: 'Say it or type it',
   dayAimsFiling: 'Filing what you said…',
   dayAimsFilingOffline: "Saved here. It will be filed when you're back online.",
   dayAimsFailedFiling: "That didn't get filed. Say it again when you're ready.",
   dayAimsFromYesterday: 'From yesterday',
-  dayAimsBring: 'Bring to today',
-  dayAimsNotToday: 'Not today',
+  dayAimsAnswer: 'Answer',
+  dayAimsPicked: (count: number) =>
+    count === 0 ? 'Add to today' : `Add ${count} to today`,
+  dayAimsAdded: (count: number) =>
+    `${count} ${count === 1 ? 'task is' : 'tasks are'} on today.`,
+  dayAimsOrSayIt: 'Or tell me in your own words.',
   dayAimsBrought: (title: string) => `${title} is on today.`,
-  dayAimsLeftOff: (title: string) => `${title} stays off today.`,
   dayAimsAnyTime: 'Any time',
   dayAimsNoFit: "Doesn't fit today",
   dayAimsMoveOnToday: 'Make room on Today',
@@ -2155,10 +2156,6 @@ export const HELM_COPY = {
   dayAimsDone: (title: string) => `Mark ${title} done`,
   dayAimsFolded: (aims: number, planned: number) =>
     `Today: ${aims} ${aims === 1 ? 'aim' : 'aims'} · ${planned} planned`,
-  dayAimsSkipped: "Skipped today's aims.",
-  dayAimsSayIt: 'Say what you want done',
-  dayAimsSkip: 'Skip for today',
-  dayAimsSkippedToast: "Skipped today's aims.",
   dayAimsOpen: "Show today's aims",
   dayAimsHide: "Fold today's aims",
   dayAimsPlanFailed: "Couldn't plan today. Your aims are saved.",
@@ -2579,6 +2576,7 @@ export const HELM_COPY = {
   placeTasksEmpty: 'No open tasks here.',
   questionNeedsConnection: 'Answering needs a connection.',
   questionSkip: 'Answer later',
+  questionAskMeAgain: 'Ask me again',
   questionSkipped: "Saved for later. It's waiting in Needs you.",
   questionDismiss: 'Dismiss',
   questionDismissed: 'Dismissed.',
@@ -4939,6 +4937,36 @@ export const HELM_COPY = {
   scheduledWhatLabel: 'What should it do?',
   scheduledWhatPlaceholder: 'Look at my week and plan the weekend',
   scheduledFirstDayLabel: 'First day',
+  sayWhenLabel: 'Say when',
+  sayWhenScheduledPlaceholder: 'Try “every other Tuesday at 9”',
+  sayWhenHabitPlaceholder: 'Try “weekdays at 7am”',
+  sayWhenDatePlaceholder: 'Try “next Friday at 3”',
+  sayWhenUnread: "That didn't read as a time. You can set it below.",
+  sayWhenHabitUnread:
+    "That didn't read as days and times. You can set them below.",
+  sayWhenOnce: (day: string, time: string | null) =>
+    time ? `${day} at ${time}` : day,
+  sayWhenTimeOnly: (time: string) => `At ${time}`,
+  sayWhenTaskDay: (day: string, hasTime: boolean) =>
+    hasTime
+      ? `When is set to ${day}. A task keeps the day, not the time.`
+      : `When is set to ${day}.`,
+  sayWhenWeekdays: 'Weekdays',
+  sayWhenWeekends: 'Weekends',
+  sayWhenHabit: (
+    days: string | null,
+    time: string | null,
+    parts: string | null,
+  ) =>
+    [
+      days && time
+        ? `${days} at ${time}`
+        : (days ?? (time ? `At ${time}` : null)),
+      days && parts ? parts.toLowerCase() : parts,
+    ]
+      .filter(Boolean)
+      .join(', '),
+  sayWhenStarting: (rule: string, day: string) => `${rule}, starting ${day}`,
   scheduledDayLabel: 'Day',
   scheduledTimeLabel: 'Time',
   scheduledMake: 'Schedule it',

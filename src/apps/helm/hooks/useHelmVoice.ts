@@ -94,6 +94,7 @@ import {
   readCapture,
 } from '@apps/helm/utils/captureReading';
 import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
+import { createSettledReader } from '@apps/helm/utils/linearThread';
 import {
   readCloseEffects,
   readDeviceTurn,
@@ -214,7 +215,10 @@ export function useHelmVoice() {
     askedMark &&
     askedCapture?.status === 'needsYou' &&
     getOpenQuestions(askedCapture).some(
-      (entry) => entry.id === askedMark.questionId && entry.skippedAt === null,
+      (entry) =>
+        entry.id === askedMark.questionId &&
+        entry.skippedAt === null &&
+        !createSettledReader(captures)(askedCapture, entry.id),
     )
       ? askedMark
       : null;
@@ -879,9 +883,13 @@ export function useHelmVoice() {
     const capture = selectAllCaptures(store.getState()).find(
       (entry) => entry.id === captureId,
     );
+    const isSettled = createSettledReader(selectAllCaptures(store.getState()));
     const next = capture
       ? getOpenQuestions(capture).find(
-          (entry) => entry.id !== settledId && entry.skippedAt === null,
+          (entry) =>
+            entry.id !== settledId &&
+            entry.skippedAt === null &&
+            !isSettled(capture, entry.id),
         )
       : undefined;
     return next && !isTurnHeld(captureId)
@@ -923,12 +931,14 @@ export function useHelmVoice() {
       !isSpoken ? 'typed' : isWakeStarted.current ? 'wake' : 'spoken',
       now,
     );
+    const isSettled = createSettledReader(all);
     const asked =
       latest && latest.status === 'needsYou'
         ? getOpenQuestions(latest)
             .filter(
               (entry) =>
                 entry.skippedAt === null &&
+                !isSettled(latest, entry.id) &&
                 !isAnswerInFlight(latest.id, entry.id),
             )
             .map((entry) => ({ captureId: latest.id, ...entry }))

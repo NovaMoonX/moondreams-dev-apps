@@ -6,21 +6,15 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import AimLengthSheet from '@apps/helm/components/dayCard/AimLengthSheet';
 import AimRows from '@apps/helm/components/dayCard/AimRows';
 import FoldedLine from '@apps/helm/components/dayCard/FoldedLine';
-import MorningCard from '@apps/helm/components/dayCard/MorningCard';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import WindDownCard from '@apps/helm/components/dayCard/WindDownCard';
 import { HELM_COPY } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { AimRow, useDayCard } from '@apps/helm/hooks/useDayCard';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import {
-  bringAimToToday,
-  fileAims,
   finishWindDown,
   fixAimLength,
-  leaveAimOffToday,
-  setMorningState,
   setWindDownEntry,
   type DayAimsChange,
 } from '@apps/helm/store/actions/dayAimsActions';
@@ -31,9 +25,17 @@ import { UNDO_WINDOW_MS } from '@/lib/undo';
 // Plans already tried this session for a day's aims, so a plan that fails never loops.
 const attempted = new Set<string>();
 
-/** Home's day card: in the morning it asks what the person wants done and carries yesterday's leftovers; once answered it is one folded line; in the last 2 hours it winds the day down. The server turns the day over while the app is closed, so the card is already right when it opens. */
-function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
-  const name = useAssistantName();
+/** Home's day card: in the morning the question is a turn in the thread, and the card shows it as one line (Answer asks it again there) only once the person has moved past it, until about a third of their day is gone; once answered it is one folded line; in the last 2 hours it winds the day down. The server turns the day over while the app is closed, so the card is already right when it opens. */
+function DayCard({
+  card,
+  isMorningLive,
+  onAsk,
+}: {
+  card: ReturnType<typeof useDayCard>;
+  /** The question is live in the thread, so the card shows nothing. */
+  isMorningLive: boolean;
+  onAsk: () => void;
+}) {
   const { addToast } = useToast();
   const { uid, model, filing } = card;
   const { held, tick, undoTick } = useTaskTicks(uid);
@@ -130,84 +132,30 @@ function DayCard({ card }: { card: ReturnType<typeof useDayCard> }) {
   );
 
   if (mode === 'ask') {
-    return (
-      <>
-        <MorningCard
-          rows={model.wanted}
-          carry={model.carry}
-          fitLine={model.fitLine}
-          isRest={model.isRest}
-          filing={filing}
-          isPlanFailed={isPlanFailed}
-          heldIds={heldIds}
-          onSend={async (text) => {
-            try {
-              await fileAims(uid, {
-                text,
-                dayKey: todayKey,
-                assistantName: name,
-              });
-              return true;
-            } catch (error) {
-              console.error('Helm aims were not sent', error);
-              addToast({ title: HELM_COPY.sendFailed, type: 'error' });
-              return false;
-            }
-          }}
-          onBring={(row) =>
-            void apply(
-              () =>
-                bringAimToToday(uid, {
-                  todayKey,
-                  fromKey: model.yesterdayKey,
-                  taskId: row.taskId,
-                  hasLength: row.minutes !== null,
-                }),
-              HELM_COPY.dayAimsBrought(row.title),
-            )
-          }
-          onLeaveOff={(row) =>
-            void apply(
-              () => leaveAimOffToday(uid, model.yesterdayKey, row.taskId),
-              HELM_COPY.dayAimsLeftOff(row.title),
-            )
-          }
-          onSkip={() =>
-            void apply(
-              () => setMorningState(uid, todayKey, 'dismissed'),
-              HELM_COPY.dayAimsSkippedToast,
-            )
-          }
-          onTick={tick}
-          onUndoTick={(taskId) => void undoTick(taskId)}
-          onFixLength={setLengthRow}
-          onOpenToday={openToday}
-          onRetryPlan={() => {
-            attempted.delete(planKey);
-            setFailedPlanKey(null);
-          }}
-        />
-        {sheet}
-      </>
-    );
-  }
-
-  if (mode === 'skipped') {
+    if (isMorningLive) return null;
+    const isFiling = filing === 'filing' || filing === 'offline';
     return (
       <section className='border-border border-b py-1'>
-        <p className='text-muted-foreground pt-3 text-[15px]'>
-          {HELM_COPY.dayAimsSkipped}
+        <p className='text-muted-foreground pt-3 text-[15px] text-pretty'>
+          {isFiling
+            ? filing === 'offline'
+              ? HELM_COPY.dayAimsFilingOffline
+              : HELM_COPY.dayAimsFiling
+            : filing === 'failed'
+              ? HELM_COPY.dayAimsFailedFiling
+              : HELM_COPY.dayAimsQuestion}
         </p>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-11 px-0! text-[15px] font-normal'
-          onClick={() =>
-            void setMorningState(uid, todayKey, 'open').catch(fail)
-          }
-        >
-          {HELM_COPY.dayAimsSayIt}
-        </Button>
+        {!isFiling && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-11 px-0! text-[15px] font-normal'
+            onClick={onAsk}
+          >
+            {HELM_COPY.dayAimsAnswer}
+          </Button>
+        )}
+        {sheet}
       </section>
     );
   }
