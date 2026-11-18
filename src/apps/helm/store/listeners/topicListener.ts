@@ -101,7 +101,7 @@ const toSections = (value: unknown): TopicSection[] =>
     : [];
 
 /** A topic that won't open is skipped, so a half-written one never shows as a blank row. */
-async function openTopic(
+export async function openTopic(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenTopic | null> {
