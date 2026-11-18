@@ -118,9 +118,9 @@ function ShoppingItemSheet({
       const readable = formatShopAmount({ amount, unit }, units);
       const isStepped =
         readable !== null && readable !== formatSize(amount, unit);
-      if (isChanged) return isStepped ? `That's ${readable}.` : null;
+      if (isChanged) return isStepped ? `On your list as ${readable}.` : null;
       return isStepped
-        ? `That's ${readable} on your list. Change the amount or unit to save.`
+        ? `That's ${readable} on your list.`
         : 'Change the amount or unit to save.';
     }
     const there =
