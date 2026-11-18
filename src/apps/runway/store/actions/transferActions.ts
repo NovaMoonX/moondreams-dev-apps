@@ -1,4 +1,5 @@
-import { doc, runTransaction, type Transaction } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -175,7 +176,7 @@ export async function moveLeftover(
   input: MoveLeftoverInput,
 ): Promise<DateOnly> {
   const sealedMove = await sealMoveLeftover(encryption, input);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [plan, from, to, existing] = await Promise.all([
       transaction.get(planRef(uid)),
       input.fromId === null
@@ -238,7 +239,7 @@ export async function undoTransfer(
       { ...moved, isUndo: true },
     ),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [existing, plan] = await Promise.all([
       transaction.get(moveRef(uid, id)),
       transaction.get(planRef(uid)),
