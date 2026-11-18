@@ -1324,6 +1324,7 @@ export const HELM_COPY = {
   googleCalendarName: 'Google Calendar',
   googleDriveRowName: 'Google Drive',
   googleServiceMeta: (email: string, reads: string) => `${email} · ${reads}`,
+  googleServiceConnecting: 'Connecting…',
   gmailAddHint: (name: string) => `Let ${name} search your email when you ask.`,
   driveAddHint: (name: string) =>
     `Let ${name} search your Docs and PDFs when you ask.`,
@@ -1381,7 +1382,7 @@ export const HELM_COPY = {
   googleContactsReadOnly: (name: string) =>
     `${name} lists your contacts only when you open the list, and copies just the people you tick: name, email, phone and photo. It can't add, change or delete anything in Google Contacts.`,
   contactsDisconnectNote:
-    'People you brought in stay in People, just as they are.',
+    'People you brought in stay in your circle, just as they are.',
   googleContactsFailed: "Google Contacts didn't connect. Try again.",
   googleReadOnly: (name: string) =>
     `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
@@ -1606,7 +1607,7 @@ export const HELM_COPY = {
   }) =>
     [
       [counts.tasks, 'open task', 'open tasks'],
-      [counts.people, 'person or pet', 'people and pets'],
+      [counts.people, 'person, pet or business', 'people, pets and businesses'],
       [counts.places, 'place', 'places'],
       [counts.projects, 'project', 'projects'],
       [counts.procedures, 'procedure', 'procedures'],
@@ -1935,11 +1936,11 @@ export const HELM_COPY = {
     'Suggestions stay inside these hours, leaving room around your events.',
   yourDayEndError: 'The day has to end after it starts.',
   yourDaySave: 'Save',
-  peopleTitle: 'People',
-  peopleSearch: 'Search people',
+  peopleTitle: 'Your circle',
+  peopleSearch: 'Search your circle',
   peopleEmpty: (assistant: string) =>
     `Nobody yet. Tell ${assistant} about someone, a pet or a business and they show up here.`,
-  peopleFailed: 'People did not open. Try again in a moment.',
+  peopleFailed: 'Your circle did not open. Try again in a moment.',
   peopleNoMatch: 'Nobody by that name.',
   contactsBringIn: 'Bring in from Google Contacts',
   contactsTitle: 'Bring in people',
@@ -1953,8 +1954,8 @@ export const HELM_COPY = {
   contactsCapped: 'Showing your first 2,000 contacts.',
   contactsNeedConnection: 'Opening your contacts needs a connection.',
   contactsTryAgain: 'Try again',
-  contactsEveryoneIn: 'Everyone here is already in People.',
-  contactsAlreadyIn: 'Already in People',
+  contactsEveryoneIn: 'Everyone here is already in your circle.',
+  contactsAlreadyIn: 'Already in your circle',
   contactsReconnect:
     'Google stopped sharing your contacts. Reconnect to continue.',
   contactsReconnectAction: 'Reconnect Google',
@@ -1962,7 +1963,7 @@ export const HELM_COPY = {
     count === 0
       ? 'Bring in people'
       : `Bring in ${count} ${count === 1 ? 'person' : 'people'}`,
-  contactsAllIn: 'Everyone you picked is already in People.',
+  contactsAllIn: 'Everyone you picked is already in your circle.',
   contactsImportFailed: "Those people didn't come in. Try again.",
   contactsChanged: 'Someone you picked changed just now. Try again.',
   contactsTooMany: (limit: number) => `Pick up to ${limit} at a time.`,
@@ -1981,20 +1982,20 @@ export const HELM_COPY = {
   youLabel: 'You',
   selfFallbackName: 'Me',
   petKindFallback: 'Pet',
-  organizationKindFallback: 'Organization',
+  organizationKindFallback: 'Business',
   askPeople: (count: number) =>
     count === 0
-      ? 'Ask about your people'
+      ? 'Ask about your circle'
       : count === 1
         ? 'Ask about this person'
         : `Ask about these ${count} people`,
   chipPeople: (count: number) =>
     count === 0
-      ? 'About your people'
+      ? 'About your circle'
       : count === 1
         ? 'About 1 person'
         : `About ${count} people`,
-  backToPeople: 'Back to People',
+  backToPeople: 'Back to your circle',
   askWho: (name: string) => `Ask about ${name}`,
   backToWho: (name: string) => `Back to ${name}`,
   askPlace: (name: string) => `Ask about ${name}`,
@@ -2188,8 +2189,8 @@ export const HELM_COPY = {
     kinds.length === 1 && kinds[0] === 'place'
       ? 'Search your places'
       : kinds.length === 1
-        ? 'Search your people'
-        : 'Search your people and places',
+        ? 'Search your circle'
+        : 'Search your circle and places',
   questionRecordNone: 'Nothing found. Try another name.',
   questionNewNameField: (isPlace: boolean) =>
     isPlace ? 'Name of the place' : 'Their name',
@@ -2276,12 +2277,12 @@ export const HELM_COPY = {
   whoKindField: 'Kind',
   whoKindPerson: 'Person',
   whoKindPet: 'Pet',
-  whoKindOrganization: 'Organization',
+  whoKindOrganization: 'Business',
   whoRelationField: 'How they relate',
   whoRelationPlaceholder: 'my sister',
   whoSpeciesField: 'Species',
   whoSpeciesPlaceholder: 'Cat',
-  whoOrganizationKindField: 'Kind of organization',
+  whoOrganizationKindField: 'Kind of business',
   whoOrganizationKindPlaceholder: 'Bakery',
   whoPhoneField: 'Phone',
   whoEmailField: 'Email',
@@ -2355,7 +2356,7 @@ export const HELM_COPY = {
   placeIsHomeHelp: 'Only one place is home. Choosing this one moves it.',
   linkedPerson: 'Person',
   linkedPet: 'Pet',
-  linkedOrganization: 'Organization',
+  linkedOrganization: 'Business',
   linkedPlace: 'Place',
   photosTitle: 'Photos',
   photoAdd: 'Add a photo',
@@ -3434,11 +3435,11 @@ export const HELM_COPY = {
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,
   searchTitle: 'Search',
   searchEverything: 'Search everything',
-  searchPlaceholder: 'Search people, tasks, notes…',
+  searchPlaceholder: 'Search your circle, tasks, notes…',
   searchHint: (assistant: string) =>
     `Find anything you have told ${assistant}: people, tasks, dates, facts, notes and more.`,
   searchNothing: (query: string, assistant: string) =>
-    `Nothing matches "${query}". Searched your people, tasks, dates, facts, notes, topics, projects, procedures, places, photos and connected apps. Mail and Drive are searched only when you ask ${assistant}.`,
+    `Nothing matches "${query}". Searched your circle, tasks, dates, facts, notes, topics, projects, procedures, places, photos and connected apps. Mail and Drive are searched only when you ask ${assistant}.`,
   searchLookingDone: 'Still looking through done tasks…',
   searchLookingDates: 'Still looking through older dates…',
   searchFailedDone:
@@ -3447,7 +3448,7 @@ export const HELM_COPY = {
     "Some of what's kept couldn't be loaded, so a match may be missing. Reopen the app to retry.",
   searchFailedDates:
     "Couldn't look through older dates. Open Search again to retry.",
-  searchGroupPeople: 'People',
+  searchGroupPeople: 'Your circle',
   searchGroupTasks: 'Tasks',
   searchGroupDates: 'Dates',
   searchGroupFacts: 'Facts',
