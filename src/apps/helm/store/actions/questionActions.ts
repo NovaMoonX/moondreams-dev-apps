@@ -26,6 +26,8 @@ export interface QuestionAnswerTurn {
   assistantName: string;
   /** Set on a spoken answer. */
   sttProvider?: string;
+  /** Set on a tap made while a spoken conversation is open, so its reply is said aloud. */
+  isSpokenTurn?: boolean;
 }
 
 const inFlight = new Set<string>();
@@ -65,6 +67,9 @@ export async function sendQuestionAnswer(
     voice: turn.sttProvider
       ? { sttProvider: turn.sttProvider, interruptedCaptureId: null }
       : undefined,
+    ...(turn.isSpokenTurn === undefined
+      ? {}
+      : { isSpokenTurn: turn.isSpokenTurn }),
   });
   const key = `${turn.captureId}:${turn.questionId}`;
   inFlight.add(key);

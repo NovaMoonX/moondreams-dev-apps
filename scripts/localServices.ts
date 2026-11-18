@@ -62,6 +62,15 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
       'add GEMINI_API_KEY=... to functions/.env.local (read at run time, so production is not used locally)',
     caution: 'Real Gemini speech is billed per request.',
   },
+  youtube: {
+    apps: 'Helm (videos for things saved to learn later)',
+    appIds: ['helm'],
+    keys: ['YOUTUBE_API_KEY'],
+    isBound: false,
+    setup:
+      'add YOUTUBE_API_KEY=... to functions/.env.local (read at run time; without it the emulator shows two sample videos)',
+    caution: 'Each search counts against the YouTube Data API daily quota.',
+  },
   omdb: {
     apps: 'A-List',
     appIds: ['a-list'],

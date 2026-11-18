@@ -2,6 +2,7 @@ import { CLOSING_PHRASES } from '@/lib/speech/closingPhrase';
 import { formatList, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { ThemeOption } from '@/components/ThemePicker';
+import { DEADLINE_FIT_LIMITS } from '@apps/helm/engine/freeTime';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type {
   AssistantTone,
@@ -233,7 +234,7 @@ export const ACKNOWLEDGEMENT_WORDS = [
   'so',
 ];
 /** Commands that delete a record. A closing phrase never reaches one: the reading keeps one only when its subject is still named once every closing phrase is taken out of the words. */
-export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+export const DELETING_COMMANDS = ['removeKeyDate', 'removeSeenAs'] as const;
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
 export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];
 
@@ -256,6 +257,12 @@ export const IMPORTANCE_OPTIONS = [
   { value: 'must', label: 'Must' },
   { value: 'should', label: 'Should' },
   { value: 'could', label: 'Could' },
+] as const;
+
+export const MEETING_FORMAT_OPTIONS = [
+  { value: 'inPerson', label: 'In person' },
+  { value: 'video', label: 'Video' },
+  { value: 'phone', label: 'Phone' },
 ] as const;
 
 export const ENERGY_OPTIONS = [
@@ -415,6 +422,8 @@ export const HELM_CAPS = {
   indexSplit: 6_000,
   /** Scheduled actions a person has that have not ended; also the listener's cap. */
   scheduledActions: 50,
+  /** Aims in one day. */
+  dayAims: 12,
 } as const;
 
 /** The kinds of date that come back each year, in the order the add sheet offers them. */
@@ -683,6 +692,13 @@ export const HELM_COPY = {
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
+  questionListening: (hint: string) => `Listening · ${hint}`,
+  questionSay: (phrases: string) => `say ${phrases}`,
+  questionSaySeveral: (phrases: string) =>
+    `say ${phrases}, as many as you like`,
+  questionSayAnswer: 'say your answer',
+  questionSayMore: 'another one',
+  questionWakeToAnswer: (name: string) => `Say “Hey ${name}” to answer`,
   talkGettingReady: 'Getting ready…',
   heardAsTitle: (heard: string) => `Heard “${heard}”`,
   heardAsShownAs: (name: string) =>
@@ -1149,7 +1165,7 @@ export const HELM_COPY = {
   connectedAppsCount: (count: number) => `${count} connected`,
   connectedAppsNone: 'Not connected',
   connectedAppsLead: (name: string) =>
-    `${name} can read these. It can't add, change or delete anything in them.`,
+    `${name} can read these. It doesn't change anything in them, apart from keeping your plan in a Google Calendar when you ask it to.`,
   connectReadOnlyPromise: (name: string, app: string) =>
     `${name} can read these. It can't add, change or delete anything in ${app}.`,
   connectedSection: 'Connected',
@@ -1351,7 +1367,7 @@ export const HELM_COPY = {
   googleReconnectTitle: 'Reconnect Google Calendar',
   googleReconnectAccount: (account: string) => `Reconnecting ${account}.`,
   googleConnectReadOnly: (name: string) =>
-    `${name} reads each event's title, time and calendar so it can plan around your day. It can't add, change or delete anything in Google Calendar.`,
+    `${name} reads each event's title, time and calendar so it can plan around your day. It changes nothing in Google Calendar unless you ask it to keep your plan there.`,
   googleConnectTesting: (name: string) =>
     `While ${name} is private, Google shows an "unverified app" screen before you agree, and may ask you to reconnect about once a week.`,
   googleContinue: 'Continue to Google',
@@ -1397,7 +1413,7 @@ export const HELM_COPY = {
     'People you brought in stay in your circle, just as they are.',
   googleContactsFailed: "Google Contacts didn't connect. Try again.",
   googleReadOnly: (name: string) =>
-    `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
+    `${name} can read your events. It only adds to Google Calendar when you ask it to keep your plan there.`,
   googleDisconnectNote: 'Google also forgets this access to the account.',
   googleDisconnectNoteTitle: 'Access at Google',
   googleLabelRow: 'Label',
@@ -1410,6 +1426,62 @@ export const HELM_COPY = {
   googleWhichCalendars: 'Which calendars',
   googleCalendarsCount: (count: number) =>
     `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
+  calendarSyncTitle: 'Keep your plan in a calendar',
+  calendarSyncOff: 'Show your plan in Google Calendar',
+  calendarSyncOn: (calendarName: string) => `Your plan is in ${calendarName}`,
+  calendarSyncPending: (calendarName: string) =>
+    `Getting ${calendarName} ready`,
+  calendarSyncReconnect: 'Reconnect Google to keep going',
+  calendarSyncGone: 'That calendar is gone. Choose one again.',
+  calendarSyncLead: (name: string) =>
+    `${name} puts your kept plan, habit windows and appointments in one calendar, and moves you make there come back here.`,
+  calendarSyncLeadNote: (name: string) =>
+    `It updates about every 10 minutes. A habit window you move there stays put here, and ${name} tells you.`,
+  calendarSyncMakeTitle: 'Make a calendar for your plan',
+  calendarSyncMakeDetail: (name: string) =>
+    `Recommended. ${name} can only touch this one, never your others.`,
+  calendarSyncChooseTitle: 'Use one of your calendars',
+  calendarSyncChooseDetail: (name: string) =>
+    `Pick one you already look at. Google asks for wider access; ${name} only uses that one.`,
+  calendarSyncPickLead: 'Which calendar should carry your plan?',
+  calendarSyncNoneWritable:
+    "None of your calendars can have events added. Make a new one instead and it's ready straight away.",
+  calendarSyncLoadingCalendars: 'Opening your calendars',
+  calendarSyncBack: 'Back',
+  calendarSyncGoneLead: (name: string) =>
+    `The calendar ${name} was keeping your plan in was deleted in Google, so nothing is being kept there now. Choose a calendar again to pick it back up.`,
+  calendarSyncOnLead: (calendarName: string, lastWrittenAt: string | null) =>
+    lastWrittenAt === null
+      ? `Your plan lands in ${calendarName} within about 10 minutes, then updates about every 10 minutes.`
+      : `Your plan is in ${calendarName} and updates about every 10 minutes. Last updated ${lastWrittenAt}.`,
+  calendarSyncReconnectLead: (name: string) =>
+    `Google needs you to reconnect before ${name} can keep your plan in your calendar again.`,
+  calendarSyncStopRow: 'Stop keeping your plan there',
+  calendarSyncStopRowDetail: 'Removes its upcoming events',
+  calendarSyncStopTitle: 'Stop keeping your plan there?',
+  calendarSyncStopDetail: (name: string, calendarName: string) =>
+    `${name} removes its upcoming events from ${calendarName}. Events from earlier days stay, your plan here is untouched, and you can turn it back on any time.`,
+  calendarSyncStopMade:
+    ' The calendar itself stays; delete it in Google Calendar if you no longer want it.',
+  calendarSyncStopAction: 'Stop and remove',
+  calendarSyncStopped: (count: number, calendarName: string) =>
+    count === 0
+      ? `Stopped. Nothing upcoming was left in ${calendarName}.`
+      : `Stopped. Removed ${count} upcoming ${count === 1 ? 'event' : 'events'} from ${calendarName}.`,
+  calendarSyncStoppedLeft: (count: number) =>
+    `${count} ${count === 1 ? 'event' : 'events'} couldn't be removed yet; they'll be tried again.`,
+  calendarSyncDone: 'Done',
+  calendarSyncReconnectAction: 'Reconnect Google',
+  calendarSyncWorking: 'Setting it up',
+  calendarSyncStopping: 'Removing upcoming events',
+  calendarSyncCancelled:
+    "Google didn't get your OK, so nothing changed. Try again whenever you're ready.",
+  calendarSyncNotWritable:
+    "That calendar can't have events added. Pick another, or make a new one.",
+  calendarSyncFailed:
+    "That didn't work and nothing changed. Give it another try.",
+  calendarSyncStopFailed:
+    "That didn't stop and nothing was removed. Give it another try.",
   calendarPickerLead: (name: string) =>
     `Pick the calendars ${name} plans around. Holidays and subscriptions start off.`,
   calendarPickerLoading: 'Opening your calendars',
@@ -1666,6 +1738,194 @@ export const HELM_COPY = {
   sheetChanged: 'What it changed',
   answerNothingInRecords: 'Nothing in your records answers this.',
   answerNotFromRecords: 'Not from your records',
+  researchNotFromWeb: 'Not from the web',
+  researchLookingInto: (subject: string) => `Looking into ${subject}…`,
+  researchArrival: {
+    fewMinutes: 'Give me about 2 minutes.',
+    fiveToTen: "About 5 to 10 minutes; I'll tell you when it's in.",
+    byMorning: 'It will be ready by morning.',
+  },
+  researchIn: (subject: string) => `What I found on ${subject}`,
+  researchOpen: 'Open',
+  researchCancel: 'Stop looking',
+  researchCancelled: 'Stopped looking.',
+  researchStoppedLine: (subject: string) =>
+    `You stopped the look into ${subject}.`,
+  researchStopFailed: "Couldn't stop that look. Try again in a moment.",
+  researchRerunOn: (resetOn: string) => `I'll look on the web on ${resetOn}`,
+  researchSources: 'Sources',
+  researchDepthQuestion: (subject: string) =>
+    `How deep should I look into ${subject}?`,
+  researchDepthQuick: 'A quick look',
+  researchDepthThorough: 'A thorough look',
+  researchDepthAlwaysQuick: 'Always a quick look',
+  researchDepthAlwaysThorough: 'Always a thorough look',
+  researchThoroughLocked: (resetOn: string) =>
+    `Thorough looks are used up this month; they come back ${resetOn}.`,
+  researchCappedLine: (resetOn: string) =>
+    `This month's web searches are used up, so this is from what I already know. Want me to look on the web on ${resetOn}?`,
+  researchRerunYes: (resetOn: string) => `Look on ${resetOn}`,
+  researchRerunNo: 'This is enough',
+  researchSettingsTitle: 'Research',
+  researchSettingsDefault: 'How deep to look',
+  researchSettingsAsk: 'Ask me when it matters',
+  researchSettingsIntro: (name: string) =>
+    `How deep ${name} looks on the web. A thorough look reads more and uses more of this month's allowance.`,
+  researchSettingsFailed: "Couldn't save that. Check your connection.",
+  researchNothingToShow: "I couldn't put anything together for this one.",
+  researchComparisonLabel: 'Side by side',
+  researchThoroughLeft: (count: number, resetOn: string) =>
+    count === 0
+      ? `No thorough looks left this month; they come back ${resetOn}.`
+      : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
+  aheadStatement: (subject: string, project: string) =>
+    `Want me to look into ${subject} before ${project}?`,
+  aheadDateReason: (date: string, days: number, project: string) =>
+    days <= 1
+      ? `${project}'s date is ${date}, tomorrow.`
+      : days < 14
+        ? `${project}'s date is ${date}, in ${days} days.`
+        : `${project}'s date is ${date}, ${Math.round(days / 7)} weeks from now.`,
+  aheadAsk: 'Ask me a few things first',
+  aheadNotNow: 'Not now',
+  aheadNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave it."
+      : `I won't bring it up for ${weeks} weeks.`,
+  groupingTitle: (name: string) => `These look like one thing: ${name}`,
+  groupingTitleUnnamed: 'These look like one thing',
+  groupingGroup: 'Group them',
+  groupingNotRelated: 'Not related',
+  groupingNotNow: 'Ask me later',
+  groupingSubtitleExisting: (name: string) =>
+    `Link them to ${name} so they stay together.`,
+  groupingSubtitleNew: (name: string) => `Make ${name} to hold them.`,
+  groupingMore: (count: number) => `+${count} more`,
+  groupingFromApp: (app: string) => `From ${app}`,
+  groupingPrivateItem: 'A private item',
+  groupingYourTask: 'Your task',
+  groupingYourNote: 'Your note',
+  groupingYourTopic: 'Your topic',
+  groupingYourProject: 'Your project',
+  groupingGroupedToast: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}.`,
+  groupingNotRelatedToast: "Okay, I won't suggest these together.",
+  groupingNotNowToast: (weeks: number | null) =>
+    weeks === null
+      ? "I'll leave those alone."
+      : `I won't bring these up for ${weeks} weeks.`,
+  groupingLinkedLine: (count: number, name: string) =>
+    `Linked ${count} things to ${name}.`,
+  groupingActivityGrouped: (count: number, name: string) =>
+    `Grouped ${count} things under ${name}`,
+  groupingActivityLinked: (count: number, name: string) =>
+    `Linked ${count} things to ${name}`,
+  groupingActionFailed: "Couldn't save that. Check your connection.",
+  groupingTookBackSummary: 'Took back the grouping',
+  groupingTookBackReport: 'Took those links back.',
+  groupingLinkedHeading: 'Linked',
+  groupingSourcesTitle: 'What goes together',
+  groupingFiledUndoFailed: "Couldn't take that back. Try again.",
+  aheadActionFailed: "Couldn't save that. Check your connection.",
+  aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
+  aheadBriefLabel: "What I'll send:",
+  aheadOptional: 'Everything here is optional. Skip what you like.',
+  aheadInferred: (assistant: string, from: string) =>
+    `${assistant} inferred · ${from}`,
+  aheadMinField: 'From',
+  aheadMaxField: 'Up to',
+  aheadDepthLabel: 'How deep',
+  aheadDepthQuick: 'Quick look',
+  aheadDepthQuickLine: 'Reads a few good sources',
+  aheadDepthThorough: 'Thorough',
+  aheadDepthThoroughLine: (left: number) =>
+    `Reads more widely · ${left} left this month`,
+  aheadStartNow: 'Start now',
+  aheadStartNowLine: (arrival: string | null) =>
+    arrival === null
+      ? 'Ready by morning. Turn this on to start right away.'
+      : `Starts right away. ${arrival}`,
+  aheadSend: 'Look into it',
+  aheadCancel: 'Cancel',
+  aheadSendFailed: "Couldn't send that. Check your connection and try again.",
+  aheadGone: 'This offer is no longer here.',
+  aheadAlreadyAnswered: 'That was already answered.',
+  aheadArrival: {
+    fewMinutes: 'Ready in a few minutes.',
+    fiveToTen: 'Ready in about 5 to 10 minutes.',
+    byMorning: 'Ready by morning.',
+  },
+  aheadSent: (subject: string, arrival: string) =>
+    `Looking into ${subject}. ${arrival}`,
+  aheadLooking: (subject: string, arrival: string) =>
+    `Looking into ${subject} · ${arrival.replace(/\.$/, '')}`,
+  aheadTold: (subject: string) => `Looked into ${subject} for you.`,
+  aheadOpenIt: 'Open it',
+  aheadToldDismiss: 'Dismiss',
+  learnLaterRow: (count: number) =>
+    count === 0 ? 'Learn later' : `Learn later · ${count}`,
+  learnLaterTitle: 'Learn later',
+  learnMatchRow: (count: number) => `${count} in Learn later`,
+  learnSaved: (subject: string) =>
+    `Saved to learn later: ${subject}. I'll bring it up when you have a free half hour.`,
+  learnSavedPlain:
+    "Saved to learn later. I'll bring it up when you have a free half hour.",
+  learnMerged: (subject: string) =>
+    `Added that to what you wanted to learn about ${subject}.`,
+  learnRevived: (subject: string) =>
+    `${subject} is back on your learn later list.`,
+  learnRemoved: (subject: string) => `Okay, I took ${subject} off your list.`,
+  learnNotNowLine: 'Okay, it stays on your list.',
+  learnCardTitle: (subject: string) =>
+    `${subject.charAt(0).toUpperCase()}${subject.slice(1)}, the longer version`,
+  learnCardLine: 'Remember that thing you wanted to learn?',
+  learnCardMeta: (minutes: number, savedOn: string) =>
+    `${minutes} min · you saved it ${savedOn} · Suggested`,
+  learnShowMe: 'Show me',
+  learnNotNow: 'Not now',
+  learnStill: (subject: string) =>
+    `Do you still want to learn about ${subject}?`,
+  learnKeepIt: 'Keep it',
+  learnRemoveIt: 'Remove it',
+  learnTogether: (subject: string) => `Want these as one: ${subject}?`,
+  learnTogetherYes: 'Together',
+  learnApart: 'Keep them apart',
+  learnMergedTogether: (subject: string) => `Put those together as ${subject}.`,
+  learnKindQuestion: (subject: string) =>
+    `What would you like to do with ${subject}?`,
+  learnRead: 'Read up on it later',
+  learnGoal: 'Make it a goal you practise',
+  learnGoalOffer: (name: string) => `Make ${name} a goal?`,
+  learnGoalMade: (name: string) => `Made ${name} a goal.`,
+  learnCaution:
+    'From general knowledge and the web, not checked against your records.',
+  learnCautionGeneral:
+    'From general knowledge, not checked against your records. It may be out of date.',
+  learnKeep: 'Save to my knowledge',
+  learnKept: 'Saved to your knowledge.',
+  learnKeptIn: (topicName: string) => `Saved to ${topicName}.`,
+  learnDone: 'Done with it',
+  learnDoneLine: (subject: string) => `Marked ${subject} as learned.`,
+  learnRemove: 'Remove',
+  learnVideos: (count: number) => `Videos · ${count}`,
+  learnVideoMeta: (channel: string, minutes: number) =>
+    `${channel} · ${minutes} min`,
+  learnFailed: "Couldn't put the overview together. It'll try again tomorrow.",
+  learnPreparing: 'Preparing this for you. Ready by tomorrow morning.',
+  learnPreparingLine: (savedOn: string) =>
+    `Saved ${savedOn} · ready by tomorrow morning`,
+  learnSavedLine: (savedOn: string, context: string | null) =>
+    context ? `Saved ${savedOn} · ${context}` : `Saved ${savedOn}`,
+  learnEmpty:
+    'Nothing saved yet. Say "one day I want to learn…" and it waits here for a free half hour.',
+  learnActionFailed: "Couldn't save that. Check your connection.",
+  learnRowMeta: (savedOn: string) => `Learn later · saved ${savedOn}`,
+  learnToday: 'today',
+  learnNoMatch: 'Nothing you saved matches that.',
+  learnSearch: 'Search what you saved',
+  learnOpen: (subject: string) => `Open ${subject}`,
+  learnVideoPlay: (title: string) => `Play ${title}`,
+  searchGroupLearn: 'Learn later',
   answerGeneralHeading: 'General knowledge',
   answerGeneralCaution: (name: string) =>
     `From general knowledge, not checked against anything you've told ${name}. It may be out of date.`,
@@ -1740,7 +2000,7 @@ export const HELM_COPY = {
     `What you tell ${name}, and the records it needs to file or answer it.`,
   aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools. While you're away, a timer on the server carries your unfinished aims into the next day and keeps your plan up to date; it never opens what a task says and never sends anything to Anthropic.`,
   aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
     "What you say, your records and every line in Activity are encrypted before they're saved.",
@@ -1755,12 +2015,36 @@ export const HELM_COPY = {
   taskTitleMissing: 'Write what to do first',
   addTask: 'Add task',
   whenLabel: 'When',
+  meetsLabel: 'How it meets',
+  meetsSet: (how: string) => `Marked as ${how.toLowerCase()}.`,
+  meetsCleared: 'Cleared how it meets.',
+  meetsFrom: (source: string) => `From ${source}`,
   noDay: 'No day',
   addTime: 'Add a time',
   removeField: 'Remove',
   doneEditing: 'Done',
   stepsLabel: 'Steps',
   stepsCount: (done: number, total: number) => `${done} of ${total}`,
+  stepsCountMeeting: (answered: number, toAsk: number, day: string) =>
+    toAsk === 0
+      ? `All ${answered} answered`
+      : answered === 0
+        ? `${toAsk} to ask ${day}`
+        : `${answered} answered · ${toAsk} to ask ${day}`,
+  taskMeetingLabel: (label: string) => `For ${label} `,
+  taskMeetingWhen: (when: string) => `· ${when}`,
+  questionsMeetingLabel: (label: string) => `${label} `,
+  questionsMeetingWhen: (time: string) => `· ${time}`,
+  questionsReadyAsk: 'Do you feel ready?',
+  questionsReadyToast: (day: string) => `Marked ready for ${day}'s call`,
+  questionsReady: "I'm ready",
+  questionsNotYet: 'Not yet',
+  questionsOpenLabel: (label: string) => `Open your questions for ${label}`,
+  questionsNotYetToast: (time: string, day: string) =>
+    `Set aside ${time} ${day} for your questions`,
+  questionsNoTime:
+    "There's no free time before the meeting, so here are your questions.",
+  questionsActionFailed: "Couldn't save that. Check your connection.",
   noneValue: 'None',
   addStep: 'Add a step',
   stepPlaceholder: 'A step',
@@ -1832,6 +2116,92 @@ export const HELM_COPY = {
   planSuggestedSummary: (count: number, day: string) =>
     `Suggested ${count} ${count === 1 ? 'task' : 'tasks'} for ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
   planFailed: "Couldn't plan the day. Try again.",
+  todayAimMark: 'Your aim',
+  dayAimsQuestion: 'What do you want to get done today?',
+  dayAimsField: 'What you want to get done today',
+  dayAimsPlaceholder: 'Say it or type it',
+  dayAimsFiling: 'Filing what you said…',
+  dayAimsFilingOffline: "Saved here. It will be filed when you're back online.",
+  dayAimsFailedFiling: "That didn't get filed. Say it again when you're ready.",
+  dayAimsFromYesterday: 'From yesterday',
+  dayAimsBring: 'Bring to today',
+  dayAimsNotToday: 'Not today',
+  dayAimsBrought: (title: string) => `${title} is on today.`,
+  dayAimsLeftOff: (title: string) => `${title} stays off today.`,
+  dayAimsAnyTime: 'Any time',
+  dayAimsNoFit: "Doesn't fit today",
+  dayAimsMoveOnToday: 'Make room on Today',
+  dayAimsGuess: (length: string) => `about ${length}?`,
+  dayAimsFixLength: (title: string) => `Set how long ${title} takes`,
+  dayAimsLengthTitle: 'How long will it take?',
+  dayAimsLengthSaved: (title: string, length: string) =>
+    `${title} takes ${length}.`,
+  dayAimsLengthFailed: "Couldn't save the length. Try again.",
+  dayAimsDone: (title: string) => `Mark ${title} done`,
+  dayAimsFolded: (aims: number, planned: number) =>
+    `Today: ${aims} ${aims === 1 ? 'aim' : 'aims'} · ${planned} planned`,
+  dayAimsSkipped: "Skipped today's aims.",
+  dayAimsSayIt: 'Say what you want done',
+  dayAimsSkip: 'Skip for today',
+  dayAimsSkippedToast: "Skipped today's aims.",
+  dayAimsOpen: "Show today's aims",
+  dayAimsHide: "Fold today's aims",
+  dayAimsPlanFailed: "Couldn't plan today. Your aims are saved.",
+  dayAimsTryAgain: 'Try again',
+  dayAimsRestDay: 'Nothing planned after a late night.',
+  dayAimsSaveFailed: "Couldn't save that. Try again.",
+  windDownTitle: 'How did today go?',
+  windDownDone: (count: number) => `Done · ${count}`,
+  windDownTonight: (count: number) => `Still possible tonight · ${count}`,
+  windDownWont: (count: number) => `Won't happen today · ${count}`,
+  windDownChoice: (title: string) => `What to do with ${title}`,
+  windDownTomorrow: 'Tomorrow',
+  windDownLater: 'Later',
+  windDownDrop: 'Drop it',
+  windDownWhy: 'Why?',
+  windDownReasonChosen: (reason: string) => `Why: ${reason}`,
+  windDownFinish: 'Done',
+  windDownChose: (title: string, choice: 'tomorrow' | 'later' | 'dropped') =>
+    choice === 'tomorrow'
+      ? `${title} moves to tomorrow.`
+      : choice === 'later'
+        ? `${title} moved to later.`
+        : `Dropped ${title}. The task stays.`,
+  windDownReasonSaved: (reason: string | null) =>
+    reason ? `Noted: ${reason.toLowerCase()}.` : 'Reason cleared.',
+  windDownSummary: (counts: {
+    done: number;
+    tomorrow: number;
+    later: number;
+    dropped: number;
+    left: number;
+  }) => {
+    const parts = [
+      counts.done > 0 ? `${counts.done} done` : null,
+      counts.tomorrow > 0 ? `${counts.tomorrow} to tomorrow` : null,
+      counts.later > 0 ? `${counts.later} for later` : null,
+      counts.dropped > 0 ? `${counts.dropped} dropped` : null,
+      counts.left > 0 ? `${counts.left} left as they were` : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0
+      ? `Wound down: ${parts.join(', ')}.`
+      : 'Wound down.';
+  },
+  windDownReview: 'Show how the day wound down',
+  windDownLeft: 'Left as it was',
+  windDownChange: (title: string) => `Change ${title}`,
+  windDownEmpty: 'Nothing left for today.',
+  planNowOverlaps: (title: string) => `Now overlaps ${title}`,
+  planKeepOverlap: 'Keep it as it is',
+  planKeptOverlap: 'Kept where it is.',
+  dayAimsStruggle: {
+    tired: 'Tired',
+    reluctant: "Didn't feel like it",
+    tooBusy: 'Too busy',
+    unwell: 'Unwell',
+    bored: 'Bored',
+    stressed: 'Stressed',
+  },
   dayStripLabel: 'Day',
   dayStripToday: 'Today',
   planEvents: (count: number) => `${count} ${count === 1 ? 'event' : 'events'}`,
@@ -1926,9 +2296,8 @@ export const HELM_COPY = {
   coloursLabel: 'Colour theme',
   coloursLight: 'Light',
   coloursDark: 'Dark',
-  assistantRow: 'Name and tone',
+  assistantRow: 'Name',
   assistantSheetTitle: 'Your assistant',
-  assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
     "With Hey on in Voice service, it's also the name you say.",
@@ -1937,9 +2306,33 @@ export const HELM_COPY = {
   assistantNameError:
     'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
   assistantUseDefault: (name: string) => `Use ${name}`,
-  assistantToneLabel: 'How it answers',
-  assistantToneHint:
-    'Shapes its written answers. Names, dates and what it files never change.',
+  personalityRow: (assistant: string) => `How ${assistant} talks`,
+  personalityLead: (assistant: string) =>
+    `Pick what ${assistant} should be like. It shows you how replies will read.`,
+  personalityTraitsHeader: (count: number, max: number) =>
+    `Traits · ${count} of up to ${max}`,
+  personalityTraitsLabel: 'Traits',
+  personalityTooMany: 'Up to five. Drop one first.',
+  personalityHonestHeader: 'How honest',
+  personalityClashTitle: (left: string, right: string) =>
+    `${left} and ${right} pull against each other.`,
+  personalityClashLabel: (assistant: string) =>
+    `What should ${assistant} do when they do?`,
+  personalityKeepBoth: 'Keep both',
+  personalityDrop: (trait: string) => `Drop ${trait}`,
+  personalityPreviewHeader: 'How replies will read',
+  personalityPreviewWaiting: 'Writing a sample',
+  personalitySampleReal: 'Example replies to two set questions.',
+  personalitySampleOffline:
+    'A plain example for now. Real samples come back with a connection.',
+  personalitySampleFailed:
+    "A plain example for now. Real samples couldn't be written.",
+  personalityDropped: (trait: string) => `Dropped ${trait}`,
+  personalityUndo: 'Undo',
+  personalityKept: (left: string, right: string, line: string) =>
+    `Keeping both ${left} and ${right}: ${line}`,
+  personalityAskAgain: 'Ask me again',
+  personalityCareNote: 'Health and care stay careful whatever you pick.',
   assistantSave: 'Save',
   settingsPlanning: 'Planning',
   yourDayRow: 'Your day',
@@ -2507,7 +2900,7 @@ export const HELM_COPY = {
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
       ? 'That changed since.'
-      : kind === 'whichComesFirst'
+      : kind === 'whichComesFirst' || kind === 'clashChoice'
         ? 'That changed since.'
         : kind === 'whichTopic'
           ? 'That note or one of those topics was removed.'
@@ -2853,6 +3246,21 @@ export const HELM_COPY = {
   undoReportHabitsToo: (ticked: number, changed: number) =>
     `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
   resultHabitFallback: 'Habit',
+  resultSeenAsFallback: 'A line about you',
+  tookBackSeenAs: (count: number) =>
+    `Put back ${count} ${count === 1 ? 'line' : 'lines'} about you`,
+  undoSeenAsPhrase: (count: number) =>
+    `${count} ${count === 1 ? 'line' : 'lines'} about you`,
+  undoReportSeenAs: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Put back ${takenBack} ${takenBack === 1 ? 'line' : 'lines'} about you.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportSeenAsToo: (count: number) =>
+    `${count === 1 ? '1 line' : `${count} lines`} about you too.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
@@ -4542,6 +4950,19 @@ export const WATCHING_PHRASES = [
 /** Weeks Helm waits after the first and the second no; the third is final. */
 export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;
 
+export { GROUPING_CONFIDENCE } from '@apps/helm/engine/grouping';
+
+/** Synced categories the nightly grouping may read, never live ones; each `<connector id>/<category id>`. */
+export const RELATE_SYNCED_CATEGORIES = [
+  'app:going-once/sales',
+  'app:going-once/things',
+  'app:going-once/pickups',
+  'app:runway/horizon',
+  'app:runway/upcomingBills',
+  'app:waypoint/trips',
+  'app:waypoint/myTasks',
+] as const;
+
 export const PATTERN_THRESHOLDS = {
   windowMissedMatched: 4,
   windowMissedOf: 5,
@@ -4560,11 +4981,7 @@ export const GUARDRAIL_LIMITS = {
   goalsOnStart: 3,
   goalsDaily: 4,
   quietGoalDays: 21,
-  deadlineWindowDays: 60,
-  deadlineSlackMinutes: 60,
-  deadlineMinTasks: 3,
-  lengthsKnownShare: 0.5,
-  defaultTaskMinutes: 30,
+  ...DEADLINE_FIT_LIMITS,
   starvedDays: 14,
   starvedOtherMin: 3,
   busyDayShare: 0.75,
@@ -4586,6 +5003,7 @@ export const SEEN_AS_REMOVED_CAP = 200;
 
 export const PLANNER_COPY = {
   estimate: 'about 30 min · estimate',
+  estimateOf: (length: string) => `about ${length} · estimate`,
   fitsBefore: (length: string, title: string) =>
     `${length} · fits before ${title}`,
   fitsAfter: (length: string, title: string) =>

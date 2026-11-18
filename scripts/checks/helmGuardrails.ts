@@ -14,6 +14,10 @@ import {
   type GuardrailThing,
 } from '../../src/apps/helm/engine/guardrails.ts';
 import {
+  readTripFit,
+  type FitTask,
+} from '../../src/apps/helm/engine/freeTime.ts';
+import {
   isSameEvidence,
   toPatternFields,
 } from '../../src/apps/helm/engine/patternCheck.ts';
@@ -585,6 +589,133 @@ const run = async () => {
       rows.find((row) => row.pattern.id === 'paused')?.isUsed,
       false,
     );
+  });
+
+  const fitTask = (id: string, more: Partial<FitTask> = {}): FitTask => ({
+    id,
+    projectId: null,
+    dueDay: null,
+    minutes: 30,
+    isLatent: false,
+    ...more,
+  });
+  const dayMs = (offset: number) => ms(shiftDayKeyBy(TODAY, offset));
+  const trip = (firstOffset: number, lastOffset: number) => ({
+    firstDay: shiftDayKeyBy(TODAY, firstOffset),
+    lastDay: shiftDayKeyBy(TODAY, lastOffset),
+  });
+  const base = { todayKey: TODAY, things: [], freeDay: () => QUIET };
+
+  await test('a trip lists overdue and in-range tasks soonest first, not undated, latent or later ones', () => {
+    const fit = readTripFit({
+      ...base,
+      tasks: [
+        fitTask('soon', { dueDay: dayMs(3) }),
+        fitTask('overdue', { dueDay: dayMs(-2), minutes: 60 }),
+        fitTask('undated'),
+        fitTask('latent', { dueDay: dayMs(1), isLatent: true }),
+        fitTask('later', { dueDay: dayMs(10) }),
+        fitTask('unsized', { dueDay: dayMs(5), minutes: null }),
+      ],
+      range: trip(4, 6),
+      events: [],
+    });
+    assert.deepEqual(
+      fit.mustDoFirst.map((task) => [task.id, task.minutes]),
+      [
+        ['overdue', 60],
+        ['soon', 30],
+        ['unsized', 30],
+      ],
+    );
+    assert.equal(fit.workMinutes, 120);
+    assert.equal(fit.freeMinutesBefore, 4 * 240);
+    assert.equal(fit.isWontFit, false);
+  });
+
+  await test('leaving today leaves no free time before, and a long list does not fit', () => {
+    const fit = readTripFit({
+      ...base,
+      tasks: [fitTask('a', { dueDay: dayMs(1), minutes: 90 })],
+      range: trip(0, 2),
+      events: [],
+    });
+    assert.equal(fit.freeMinutesBefore, 0);
+    assert.equal(fit.hasCalendar, true);
+    assert.equal(fit.isWontFit, true);
+  });
+
+  await test("tasks with no length do not make a trip a won't-fit", () => {
+    const fit = readTripFit({
+      ...base,
+      tasks: [
+        fitTask('a', { dueDay: dayMs(1), minutes: null }),
+        fitTask('b', { dueDay: dayMs(1), minutes: null }),
+      ],
+      range: trip(1, 2),
+      events: [],
+    });
+    assert.equal(fit.isWontFit, false);
+    assert.equal(fit.mustDoCount, 2);
+    assert.deepEqual(
+      fit.mustDoFirst.map((task) => task.isOverdue),
+      [false, false],
+    );
+  });
+
+  await test('leaving today with no calendar says so, and overdue tasks are marked', () => {
+    const fit = readTripFit({
+      ...base,
+      freeDay: () => ({ minutes: 0, busyShare: 0, hasCalendar: false }),
+      tasks: [fitTask('a', { dueDay: dayMs(-1) })],
+      range: trip(0, 2),
+      events: [],
+    });
+    assert.equal(fit.hasCalendar, false);
+    assert.equal(fit.mustDoFirst[0].isOverdue, true);
+  });
+
+  await test('a deadline after the trip fits at home and does not once the days away count as full', () => {
+    const project = thing('p', 'project', null, { dates: [dayMs(8)] });
+    const tasks = ['a', 'b', 'c'].map((id) =>
+      fitTask(id, { projectId: 'p', minutes: 60 }),
+    );
+    const hourADay = () => ({ minutes: 60, busyShare: 0.5, hasCalendar: true });
+    const home = readTripFit({
+      todayKey: TODAY,
+      things: [project],
+      tasks,
+      freeDay: hourADay,
+      range: trip(20, 21),
+      events: [],
+    });
+    assert.deepEqual(home.deadlines, []);
+    const away = readTripFit({
+      todayKey: TODAY,
+      things: [project],
+      tasks,
+      freeDay: hourADay,
+      range: trip(1, 7),
+      events: [],
+    });
+    assert.equal(away.deadlines.length, 1);
+    assert.equal(away.deadlines[0].isBecauseAway, true);
+    assert.equal(away.deadlines[0].freeMinutes, 120);
+  });
+
+  await test('only events inside the days away would move', () => {
+    const fit = readTripFit({
+      ...base,
+      tasks: [],
+      range: trip(2, 3),
+      events: [
+        { id: 'before', dayKey: shiftDayKeyBy(TODAY, 1) },
+        { id: 'first', dayKey: shiftDayKeyBy(TODAY, 2) },
+        { id: 'last', dayKey: shiftDayKeyBy(TODAY, 3) },
+        { id: 'after', dayKey: shiftDayKeyBy(TODAY, 4) },
+      ],
+    });
+    assert.deepEqual(fit.wouldMove, ['first', 'last']);
   });
 };
 
