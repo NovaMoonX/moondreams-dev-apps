@@ -17,6 +17,7 @@ import {
   HELM_COPY,
   KEY_DATE_LABEL_MAX,
   MOMENT_KINDS,
+  MOMENT_KINDS_BY_WHO,
 } from '@apps/helm/constants';
 import { useKeyDates, type WhoKeyDate } from '@apps/helm/hooks/useKeyDates';
 import {
@@ -29,7 +30,12 @@ import {
 } from '@apps/helm/store/actions/keyDateActions';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { selectEveryCapture } from '@apps/helm/store/selectors/captureSelectors';
-import type { KeyDateKind, MomentPrecision, OpenWho } from '@apps/helm/types';
+import type {
+  KeyDateKind,
+  MomentPrecision,
+  OpenWho,
+  WhoKind,
+} from '@apps/helm/types';
 import {
   checkKeyDateParts,
   checkMomentParts,
@@ -119,8 +125,14 @@ const MONTHS = Array.from({ length: 12 }, (_, index) => ({
   }),
 }));
 
-const MOMENT_KIND_OPTIONS: PillOption<KeyDateKind>[] = [
-  ...MOMENT_KINDS.map((value) => ({ value, label: MOMENT_WORDS[value] })),
+const toMomentKindOptions = (
+  whoKind: WhoKind,
+  current: KeyDateKind,
+): PillOption<KeyDateKind>[] => [
+  ...MOMENT_KINDS.filter(
+    (value) =>
+      MOMENT_KINDS_BY_WHO[whoKind].includes(value) || value === current,
+  ).map((value) => ({ value, label: MOMENT_WORDS[value] })),
   { value: 'custom', label: HELM_COPY.keyDateKindCustom },
 ];
 
@@ -301,7 +313,9 @@ function KeyDateForm({
   };
 
   const kinds = (
-    isMomentStart(startKind) ? MOMENT_KIND_OPTIONS : DATE_KIND_OPTIONS
+    isMomentStart(startKind)
+      ? toMomentKindOptions(who.kind, initial.kind)
+      : DATE_KIND_OPTIONS
   ).filter((option) => option.value !== 'birthday' || canBirthday);
   const isYearlyDraft = isYearly(draft);
   const hasMonthField =
