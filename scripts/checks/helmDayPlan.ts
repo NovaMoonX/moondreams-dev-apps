@@ -11,8 +11,13 @@ import {
   readAimTaskIds,
   readCarryOver,
   readDayCardMode,
+  readMorningCutoff,
   readWindDownCounts,
 } from '../../src/apps/helm/utils/dayCard.ts';
+import {
+  isPastTurn,
+  readQuestionPlace,
+} from '../../src/apps/helm/utils/linearThread.ts';
 import type { OpenDayAims } from '../../src/apps/helm/types.ts';
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
 import {
@@ -734,6 +739,27 @@ test('a turn on the morning card files its tasks as aims in one write', () => {
   );
 });
 
+test('a turn that only might have answered the card files just the flagged tasks', () => {
+  const plan = planDayAims({
+    dayKey: DAY,
+    isFlaggedOnly: true,
+    commands: [
+      { kind: 'createTask', ref: '$new1', durationMinutes: 45, isAim: true },
+      { kind: 'createTask', ref: '$new2', durationMinutes: null },
+    ] as never,
+    taskIdByRef: { $new1: 'x1', $new2: 'x2' },
+    existing: new Map(),
+    current: null,
+    newAimId: () => 'aim1',
+    seal: (fields) => fields as never,
+  });
+  const sealed = plan.write!.data.sealed as unknown as AimsView;
+  assert.deepEqual(
+    sealed.aims.map((aim) => aim.taskId),
+    ['x1'],
+  );
+});
+
 const calendarSlot = (extra: Record<string, unknown> = {}) => ({
   dayKey: DAY,
   slotId: 's1',
@@ -853,10 +879,27 @@ test('the card is the question, the folded line, then the wind-down, never both'
   const start = at('08:00');
   const end = at('21:00');
   const mode = (day: OpenDayAims | null, now: string) =>
-    readDayCardMode({ day, now: at(now), dayStart: start, dayEnd: end });
+    readDayCardMode({
+      day,
+      now: at(now),
+      dayStart: start,
+      dayEnd: end,
+      morningUntil: readMorningCutoff({
+        dayStart: start,
+        dayEnd: end,
+        fallback: at('13:00'),
+      }),
+    });
   assert.equal(mode(null, '07:00'), 'hidden');
   assert.equal(mode(null, '09:00'), 'ask');
-  assert.equal(mode(dayAims({ state: 'dismissed' }), '09:00'), 'skipped');
+  assert.equal(mode(dayAims({ state: 'dismissed' }), '09:00'), 'hidden');
+  // 08:00 to 21:00 is 13 hours: the question waits at the top until 12:20, then is gone for the day.
+  assert.equal(mode(null, '12:19'), 'ask');
+  assert.equal(mode(null, '12:20'), 'hidden');
+  assert.equal(
+    readMorningCutoff({ dayStart: end, dayEnd: start, fallback: 5 }),
+    5,
+  );
   assert.equal(
     mode(dayAims({ state: 'answered', aims: [aim('a', 1)] }), '09:00'),
     'answered',
@@ -867,6 +910,26 @@ test('the card is the question, the folded line, then the wind-down, never both'
   assert.equal(mode(withAims, '19:00'), 'windDown');
   assert.equal(mode(null, '19:30'), 'hidden');
   assert.equal(mode({ ...withAims, windDownState: 'done' }, '20:00'), 'wound');
+});
+
+test('a question is live until the person sends a later turn, and a re-ask lives at the bottom', () => {
+  assert.equal(
+    readQuestionPlace({ turnAt: 10, reaskedAt: null, newestTurnAt: 10 }),
+    'live',
+  );
+  assert.equal(
+    readQuestionPlace({ turnAt: 10, reaskedAt: null, newestTurnAt: 11 }),
+    'settled',
+  );
+  assert.equal(
+    readQuestionPlace({ turnAt: 10, reaskedAt: 20, newestTurnAt: 15 }),
+    'below',
+  );
+  assert.equal(
+    readQuestionPlace({ turnAt: 10, reaskedAt: 20, newestTurnAt: 21 }),
+    'settled',
+  );
+  assert.equal(isPastTurn(10, null), false);
 });
 
 test("yesterday's undone aims are listed until something answers them", () => {

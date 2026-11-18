@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useRef, useState, type RefObject } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -8,9 +15,11 @@ import SectionDivider from '@/components/SectionDivider';
 import StickyDivider from '@/components/StickyDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import ReaskedQuestions from '@apps/helm/components/home/ReaskedQuestions';
 import TurnCard from '@apps/helm/components/home/TurnCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import { loadEarlierSessions } from '@apps/helm/store/actions/captureActions';
+import { readNewestTurnAt } from '@apps/helm/utils/linearThread';
 import {
   groupSessionsByDay,
   groupTurns,
@@ -28,14 +37,16 @@ const readRestTop = (
   const box = element.getBoundingClientRect();
   const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
   const viewHeight = scroller ? scroller.clientHeight : window.innerHeight;
-  const dock =
-    parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        '--helm-composer-h',
-      ),
-    ) || 0;
+  const rootStyle = getComputedStyle(document.documentElement);
+  const readPx = (name: string) =>
+    parseFloat(rootStyle.getPropertyValue(name)) || 0;
+  const composer = readPx('--helm-composer-h');
+  // The composer floats 8px above the dock, so it covers its own height plus everything under it.
+  const dock = composer > 0 ? composer + readPx('--helm-dock-top') + 8 : 0;
+  // The pinned header covers the top of the page, so the question rests just under it.
+  const header = readPx('--helm-home-header-h');
   const current = scroller ? scroller.scrollTop : window.scrollY;
-  const top = current + box.top - viewTop;
+  const top = current + box.top - viewTop - header - 8;
   const endClear = current + box.bottom - viewTop - (viewHeight - dock - 16);
   return Math.max(0, Math.min(top, endClear));
 };
@@ -51,8 +62,10 @@ interface ConversationThreadProps {
   foldsBefore?: number | null;
   /** Sessions that started before this moment fold too, the newest included (a fresh start, or today's midnight with Start each day fresh on). */
   freshFrom?: number;
-  /** While the page opens, rest on this element with its end clear of the dock instead of following the newest turn. */
+  /** While the page opens, rest on this element, its top clear of the header and its end of the dock, instead of following the newest turn. */
   holdsOn?: RefObject<HTMLElement | null> | null;
+  /** What the assistant is asking now, drawn after the newest turn (the morning question). */
+  tail?: ReactNode;
 }
 
 type Place = { id: string; top: number } | null;
@@ -137,10 +150,12 @@ function SessionTurns({
   session,
   latestId,
   noticeId,
+  newestTurnAt,
 }: {
   session: Session;
   latestId: string | null;
   noticeId: string | null;
+  newestTurnAt: number | null;
 }) {
   return (
     <div className='flex flex-col gap-4'>
@@ -153,6 +168,7 @@ function SessionTurns({
           showsReading={false}
           isOnHome
           showsNotice={lead.id === noticeId}
+          newestTurnAt={newestTurnAt}
         />
       ))}
     </div>
@@ -168,6 +184,7 @@ function ConversationThread({
   foldsBefore = null,
   freshFrom = 0,
   holdsOn = null,
+  tail = null,
 }: ConversationThreadProps) {
   const { user } = useAuth();
   const [isUnfolded, setIsUnfolded] = useState(false);
@@ -176,6 +193,11 @@ function ConversationThread({
   const isFollowing = useRef(true);
   const place = useRef<Place>(null);
   const latestId = sessions.at(-1)?.turns.at(-1)?.id ?? null;
+  const newestTurnAt = readNewestTurnAt(
+    sessions.flatMap((session) =>
+      groupTurns(session.turns).map((turn) => turn.lead),
+    ),
+  );
   const noticeId =
     sessions
       .flatMap((session) => groupTurns(session.turns).map((turn) => turn.lead))
@@ -289,6 +311,7 @@ function ConversationThread({
             session={session}
             latestId={latestId}
             noticeId={noticeId}
+            newestTurnAt={newestTurnAt}
           />
         ) : (
           <LazyMount
@@ -298,6 +321,7 @@ function ConversationThread({
               session={session}
               latestId={latestId}
               noticeId={noticeId}
+              newestTurnAt={newestTurnAt}
             />
           </LazyMount>
         )}
@@ -371,6 +395,10 @@ function ConversationThread({
           );
         })}
         {!hasFold && foldEnd === sessions.length && hideButton}
+        {scroll === 'window' && (
+          <ReaskedQuestions newestTurnAt={newestTurnAt} />
+        )}
+        {tail}
         <div data-anchor='end' />
       </div>
     </div>

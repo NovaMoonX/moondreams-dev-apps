@@ -1621,6 +1621,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       sortedAt: at + 4_000,
       planDayKey: null,
       aimsDayKey: null,
+      morningDayKey: null,
       screen: null,
       sealed: await seal<CaptureSealed>({
         text,

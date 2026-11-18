@@ -15,6 +15,7 @@ import {
   readAimResult,
   readCarryOver,
   readDayCardMode,
+  readMorningCutoff,
   type AimResult,
 } from '@apps/helm/utils/dayCard';
 import { formatClock, shiftDayKey } from '@apps/helm/utils/planDays';
@@ -91,6 +92,11 @@ export function useDayCard(now: number) {
       now: nowMinute,
       dayStart,
       dayEnd,
+      morningUntil: readMorningCutoff({
+        dayStart,
+        dayEnd,
+        fallback: zonedDateTimeToEpoch(todayKey, '13:00', timeZone),
+      }),
     });
     const tasks = new Map(
       [...fetched, ...openById.values()].map((t) => [t.id, t]),
@@ -203,6 +209,7 @@ export function useDayCard(now: number) {
           );
     return {
       mode,
+      dayStart,
       todayKey,
       yesterdayKey,
       today,

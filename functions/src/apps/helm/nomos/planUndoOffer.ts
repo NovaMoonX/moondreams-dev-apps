@@ -155,6 +155,7 @@ export function planUndoOffer(input: {
       answeredAt: null,
       skippedAt: null,
       dismissedAt: null,
+      reaskedAt: null,
     },
     sealed,
     spoken: [

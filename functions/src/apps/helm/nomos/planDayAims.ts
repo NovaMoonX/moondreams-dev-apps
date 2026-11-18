@@ -11,6 +11,8 @@ import type { Effect, EffectRef } from './executeCommands.js';
 
 export interface DayAimsPlanInput {
   dayKey: string;
+  /** True when the turn only might have answered the question: a task made without `isAim` is then not an aim. */
+  isFlaggedOnly?: boolean;
   commands: NomosCommand[];
   /** The id each task this turn makes was given, by its `$new` ref. */
   taskIdByRef: Record<string, string>;
@@ -124,6 +126,7 @@ export function planDayAims(input: DayAimsPlanInput): DayAimsPlan {
       title: string | null;
     }[] => {
       if (command.kind === 'createTask') {
+        if (input.isFlaggedOnly && command.isAim !== true) return [];
         const taskId = input.taskIdByRef[command.ref];
         return taskId
           ? [
