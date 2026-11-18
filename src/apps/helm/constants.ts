@@ -393,6 +393,7 @@ export const QUESTIONS_PER_TURN = 3;
 
 /** The longest typed answer to a question. */
 export const ANSWER_TEXT_MAX = 500;
+export const NEW_NAME_MAX = 80;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
@@ -2454,7 +2455,14 @@ export const HELM_COPY = {
   factTwoAnswers: 'Two answers',
   factSettle: 'Settle it',
   whichIsTrueNoneBack: 'Back',
-  whichIsTrueNoneVoice: "Tell me what's true now on the card.",
+  whichIsTrueNoneVoice: "Say or type what's true now.",
+  questionNeitherHint: "Neither? Just say what's true now.",
+  questionElseHint: "None of these? Just say what you'd like.",
+  questionFreeTextHint: 'Answer below, by typing or speaking.',
+  questionNewNameHint: (isPlace: boolean) =>
+    isPlace
+      ? "Not on the list? Just say the place's name."
+      : 'Not on the list? Just say their name.',
   factDisagrees: (statement: string) => `Disagrees with “${statement}”`,
   whichIsTrueNoneTitle: "What's true now?",
   whichIsTrueNoneHelp:
@@ -2575,7 +2583,6 @@ export const HELM_COPY = {
   placeHomeLine: 'Your home',
   placeTasksEmpty: 'No open tasks here.',
   questionNeedsConnection: 'Answering needs a connection.',
-  questionSkip: 'Answer later',
   questionAskMeAgain: 'Ask me again',
   questionSkipped: "Saved for later. It's waiting in Needs you.",
   questionDismiss: 'Dismiss',

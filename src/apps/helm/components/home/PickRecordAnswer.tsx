@@ -11,10 +11,9 @@ import {
   ChoiceGroup,
   ChoiceRow,
 } from '@apps/helm/components/home/ChoiceButton';
-import { HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY, NEW_NAME_MAX } from '@apps/helm/constants';
 
 const RESULTS = 6;
-const NEW_NAME_MAX = 80;
 
 interface Candidate {
   ref: { collection: 'who' | 'places'; id: string };
@@ -24,7 +23,12 @@ interface Candidate {
 }
 
 /** The person's own people and places, by what the question allows: the ones it listed first, a search over the rest, then a quiet "new" that opens a name field. */
-function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
+function PickRecordAnswer({
+  question,
+  isBusy,
+  isComposerAnswer,
+  onAnswer,
+}: AnswerPartProps) {
   const [query, setQuery] = useState('');
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -91,7 +95,7 @@ function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
           {HELM_COPY.questionRecordNone}
         </p>
       )}
-      {(shown.length > 0 || newOption) && (
+      {(shown.length > 0 || (newOption && !isComposerAnswer)) && (
         <ChoiceGroup label={question.prompt} kind='radio'>
           {shown.map((entry) => {
             const key = `${entry.ref.collection}:${entry.ref.id}`;
@@ -113,7 +117,7 @@ function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
               />
             );
           })}
-          {newOption && (
+          {newOption && !isComposerAnswer && (
             <ChoiceRow
               kind='radio'
               label={newOption.label}
@@ -123,7 +127,7 @@ function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
               onClick={() => setIsNewOpen((isOpen) => !isOpen)}
             />
           )}
-          {isNewOpen && (
+          {isNewOpen && !isComposerAnswer && (
             <div className='p-3.5'>
               <AnswerField
                 label={HELM_COPY.questionNewNameField(isPlace)}
@@ -144,6 +148,11 @@ function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
             </div>
           )}
         </ChoiceGroup>
+      )}
+      {isComposerAnswer && newOption && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.questionNewNameHint(isPlace)}
+        </p>
       )}
     </>
   );

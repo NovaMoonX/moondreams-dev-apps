@@ -25,7 +25,11 @@ import {
   HELM_VOICE_NAMES,
 } from '../../functions/src/apps/helm/voiceIdentity.ts';
 import type { HelmQuestion } from '../../src/apps/helm/types.ts';
-import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
+import {
+  acceptsFreeAnswer,
+  matchSpokenAnswer,
+  toFreeAnswer,
+} from '../../src/apps/helm/utils/questionAnswers.ts';
 import {
   HELM_DEFAULT_VOICE,
   HELM_VOICES,
@@ -356,6 +360,59 @@ assert.ok(
     matchSpokenAnswer('undo that', undoOffer, { now: NOW, timeZone: ZONE })
       ?.kind === 'answer',
   'an undo phrase is an undo phrase and, with an offer open, also reads as yes',
+);
+
+const pickWithElse: HelmQuestion = {
+  ...undoOffer,
+  kind: 'asked',
+  builtBy: 'model',
+  shape: 'pickOne',
+  prompt: 'What should happen with the meatball recipe?',
+  options: [
+    { id: 'keep', label: 'Keep it', detail: null, ref: null },
+    { id: 'drop', label: 'Drop it', detail: null, ref: null },
+  ],
+  allowsSomethingElse: true,
+};
+assert.deepEqual(
+  toFreeAnswer(pickWithElse, '  put it in the freezer '),
+  {
+    kind: 'value',
+    value: {
+      shape: 'pickOne',
+      optionId: 'other',
+      otherText: 'put it in the freezer',
+    },
+  },
+  'words that are none of the choices answer "something else" from the composer',
+);
+assert.deepEqual(
+  toFreeAnswer({ ...pickWithElse, shape: 'freeText', options: [] }, 'Friday'),
+  { kind: 'value', value: { shape: 'freeText', text: 'Friday' } },
+  'a free text question takes the composer words',
+);
+assert.equal(
+  toFreeAnswer({ ...pickWithElse, allowsSomethingElse: false }, 'hm'),
+  null,
+  'a pick with no "something else" leaves the words to go on as a turn',
+);
+const neitherFact: HelmQuestion = {
+  ...undoOffer,
+  kind: 'whichIsTrue',
+  shape: 'pickOne',
+  options: [
+    { id: 'a', label: 'A', detail: null, ref: null },
+    { id: 'none', label: 'Neither', detail: null, ref: null },
+  ],
+};
+assert.deepEqual(
+  toFreeAnswer(neitherFact, 'It is $2,000'),
+  { kind: 'neither', text: 'It is $2,000' },
+  'words answer "Neither" to which fact is true',
+);
+assert.ok(
+  !acceptsFreeAnswer(undoOffer) && toFreeAnswer(pickWithElse, '   ') === null,
+  'an undo offer and empty words take no free answer',
 );
 
 const nods: [string, boolean][] = [

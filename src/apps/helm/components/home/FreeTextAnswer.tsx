@@ -4,9 +4,21 @@ import AnswerField from '@apps/helm/components/home/AnswerField';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
 import { ANSWER_TEXT_MAX, HELM_COPY } from '@apps/helm/constants';
 
-/** A few words, up to the cap, with a send button. */
-function FreeTextAnswer({ isBusy, skip, onAnswer }: AnswerPartProps) {
+/** A few words, up to the cap: from the composer at the bottom in the thread, from its own field in a sheet that covers it. */
+function FreeTextAnswer({
+  isBusy,
+  isComposerAnswer,
+  skip,
+  onAnswer,
+}: AnswerPartProps) {
   const [text, setText] = useState('');
+  if (isComposerAnswer) {
+    return (
+      <p className='text-muted-foreground text-[13px] text-pretty'>
+        {HELM_COPY.questionFreeTextHint}
+      </p>
+    );
+  }
   return (
     <AnswerField
       label={HELM_COPY.questionFreeTextPlaceholder}

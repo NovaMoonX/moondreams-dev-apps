@@ -99,7 +99,11 @@ import {
   readCloseEffects,
   readDeviceTurn,
 } from '@apps/helm/utils/closeConversation';
-import { matchSpokenAnswer } from '@apps/helm/utils/questionAnswers';
+import {
+  acceptsFreeAnswer,
+  matchSpokenAnswer,
+  toFreeAnswer,
+} from '@apps/helm/utils/questionAnswers';
 import {
   buildAskAgainLine,
   buildSpokenQuestion,
@@ -564,7 +568,8 @@ export function useHelmVoice() {
       return true;
     }
     if (!isSpoken) {
-      return turn.kind === 'answer'
+      return turn.kind === 'answer' ||
+        (turn.kind === 'send' && asked && acceptsFreeAnswer(asked.question))
         ? answerQuestion(text, sttProvider, now, false)
         : false;
     }
@@ -1048,13 +1053,20 @@ export function useHelmVoice() {
       return true;
     }
     const isModel = question.builtBy === 'model';
-    const choice =
+    const placed =
       toKinSearchChoice(question, text, state.helm.who.items) ??
       toQuestionChoice(question, answer?.value ?? null);
+    // Words that are none of the choices answer a question that takes free words.
+    const free =
+      answer === null && placed === null ? toFreeAnswer(question, text) : null;
+    const neitherText = free?.kind === 'neither' ? free.text : null;
+    const choice = neitherText === null ? placed : { optionId: 'none' };
     const optionId = choice && 'optionId' in choice ? choice.optionId : null;
-    if (isModel ? answer === null : choice === null) {
+    if (free === null && (isModel ? answer === null : choice === null)) {
       const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
-      if (!isShort || askedAgain.current.has(askedKey)) return false;
+      if (!isShort || !isSpoken || askedAgain.current.has(askedKey)) {
+        return false;
+      }
       askedAgain.current.add(askedKey);
       const askAgain = question.options.some(
         (option) => option.id !== 'none' && option.id !== 'new',
@@ -1069,20 +1081,30 @@ export function useHelmVoice() {
       return true;
     }
     if (isModel) {
-      return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
+      return answerAsTurn(
+        asked,
+        answer?.value ?? (free?.kind === 'value' ? free.value : null),
+        text,
+        sttProvider,
+      );
     }
     if (choice === null) return false;
     if (question.kind === 'undoOffer' && optionId !== null) {
       await answerOpenUndoOffer(asked, optionId, now);
       return true;
     }
-    if (question.kind === 'whichIsTrue' && optionId === 'none') {
+    if (
+      question.kind === 'whichIsTrue' &&
+      optionId === 'none' &&
+      neitherText === null
+    ) {
       say(HELM_COPY.whichIsTrueNoneVoice, now);
       return true;
     }
     const result = await resolveQuestion(asked.captureId, asked.id, {
       by: isSpoken ? 'voice' : 'tap',
       ...choice,
+      ...(neitherText !== null && { text: neitherText }),
     });
     if (result.kind === 'done') {
       say(

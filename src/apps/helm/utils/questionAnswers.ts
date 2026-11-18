@@ -4,7 +4,12 @@ import {
 } from '@/lib/speech/readSpokenAnswer';
 import { formatCents } from '@/utils/moneyUtils';
 import { parseNaturalDate } from '@/utils/naturalDateUtils';
-import { HELM_COPY } from '@apps/helm/constants';
+import {
+  ANSWER_TEXT_MAX,
+  FACT_STATEMENT_MAX,
+  HELM_COPY,
+  NEW_NAME_MAX,
+} from '@apps/helm/constants';
 import type { HelmQuestion, QuestionAnswerValue } from '@apps/helm/types';
 import { getClockOf, getDueDay } from '@apps/helm/utils/captureReading';
 import { isDismissable } from '@apps/helm/utils/heldCaptures';
@@ -152,6 +157,68 @@ export function matchSpokenAnswer(
         value: { shape: 'pickRecord', ref: option.ref, newName: null },
       }
     : null;
+}
+
+export type FreeAnswer =
+  | { kind: 'value'; value: QuestionAnswerValue }
+  | { kind: 'neither'; text: string };
+
+/** Whether the words that are none of a question's choices are themselves an answer: free text, "something else" on a pick, or "neither" to which fact is true. The composer at the bottom takes them. */
+export function acceptsFreeAnswer(question: HelmQuestion): boolean {
+  if (
+    question.shape === 'pickRecord' &&
+    question.options.some((option) => option.id === 'new')
+  ) {
+    return true;
+  }
+  if (question.builtBy === 'model') {
+    return (
+      question.shape === 'freeText' ||
+      ((question.shape === 'pickOne' || question.shape === 'pickSeveral') &&
+        question.allowsSomethingElse)
+    );
+  }
+  return (
+    question.kind === 'whichIsTrue' &&
+    question.options.some((option) => option.id === 'none') &&
+    !question.options.some((option) => option.ref?.collection === 'keyDates')
+  );
+}
+
+/** What words that were not one of the choices answer: the question's free text, its "something else", or "neither" with those words; null when the question takes no free words. */
+export function toFreeAnswer(
+  question: HelmQuestion,
+  text: string,
+): FreeAnswer | null {
+  const words = text.trim();
+  if (words === '' || !acceptsFreeAnswer(question)) return null;
+  if (question.shape === 'pickRecord') {
+    // A code-built "who" question reads the name through its own matcher.
+    return question.builtBy === 'model'
+      ? {
+          kind: 'value',
+          value: {
+            shape: 'pickRecord',
+            ref: null,
+            newName: words.slice(0, NEW_NAME_MAX),
+          },
+        }
+      : null;
+  }
+  if (question.builtBy !== 'model') {
+    return { kind: 'neither', text: words.slice(0, FACT_STATEMENT_MAX) };
+  }
+  const capped = words.slice(0, ANSWER_TEXT_MAX);
+  if (question.shape === 'freeText') {
+    return { kind: 'value', value: { shape: 'freeText', text: capped } };
+  }
+  return {
+    kind: 'value',
+    value:
+      question.shape === 'pickSeveral'
+        ? { shape: 'pickSeveral', optionIds: [], otherText: capped }
+        : { shape: 'pickOne', optionId: 'other', otherText: capped },
+  };
 }
 
 const joinLabels = (labels: string[]) =>

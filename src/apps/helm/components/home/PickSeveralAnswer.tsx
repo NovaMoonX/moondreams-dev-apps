@@ -16,6 +16,7 @@ const NONE_ID = 'none';
 function PickSeveralAnswer({
   question,
   isBusy,
+  isComposerAnswer,
   skip,
   onAnswer,
 }: AnswerPartProps) {
@@ -79,7 +80,7 @@ function PickSeveralAnswer({
             }}
           />
         )}
-        {question.allowsSomethingElse && (
+        {question.allowsSomethingElse && !isComposerAnswer && (
           <ChoiceRow
             kind='checkbox'
             label={HELM_COPY.questionSomethingElse}
@@ -95,7 +96,7 @@ function PickSeveralAnswer({
             }}
           />
         )}
-        {isElseOpen && (
+        {isElseOpen && !isComposerAnswer && (
           <div className='p-3.5'>
             <Input
               variant='outline'
@@ -118,6 +119,11 @@ function PickSeveralAnswer({
           </div>
         )}
       </ChoiceGroup>
+      {isComposerAnswer && question.allowsSomethingElse && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.questionElseHint}
+        </p>
+      )}
       <div className='flex items-center justify-between gap-3'>
         {skip}
         <Button
