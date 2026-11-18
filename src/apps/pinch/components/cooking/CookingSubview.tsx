@@ -10,6 +10,8 @@ import {
 } from 'react';
 import { useStore } from 'react-redux';
 
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -180,6 +182,18 @@ import {
 } from '@apps/pinch/utils/stepSections';
 import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 import { isPouredIngredient } from '@apps/pinch/utils/measuringTools';
+import {
+  canCombineGather,
+  combineGatherDishes,
+  describeGatherLeft,
+  describeGatherTools,
+  getGatherLayout,
+  getGatherTools,
+  isGatherLineOut,
+  parseGatherLayout,
+  planGatherTick,
+  type GatherLayout,
+} from '@apps/pinch/utils/cookGather';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 interface ChangeTarget {
@@ -636,6 +650,12 @@ function CookingSession({
     () => getRows(recipe, servings),
     [getRows, recipe, servings],
   );
+  const [storedGatherLayout, setGatherLayout] =
+    useLocalStorageState<GatherLayout | null>(
+      `pinch:${uid}:cook-gather-layout`,
+      null,
+      parseGatherLayout,
+    );
   const wakeLock = useWakeLock(true);
   const {
     isReady: isCooksReady,
@@ -1713,13 +1733,60 @@ function CookingSession({
         : voiceStep.recipe.servings)
     );
   };
-  const getVoiceRows = () =>
-    voiceStep.recipe.id === recipe.id
-      ? rows
-      : getRows(
-          voiceStep.recipe,
-          plate[voiceStep.recipe.id]?.servings ?? voiceStep.recipe.servings,
+  const getGatherDishes = () =>
+    entries.map((candidate) => {
+      const state = plate[candidate.recipe.id];
+      const dishServings =
+        state?.servings ??
+        getCookStartServings(
+          candidate.recipe.servings,
+          candidate.plannedServings,
         );
+      return {
+        recipe: candidate.recipe,
+        rows: getRows(candidate.recipe, dishServings),
+        hasWrittenAmounts: (
+          matchesByRecipe.get(candidate.recipe.id) ?? []
+        ).some((match) => match.hasWrittenAmount),
+        servings: dishServings,
+        plannedServings: candidate.plannedServings,
+        gotOut: state?.gotOut ?? {},
+      };
+    });
+  const getLineNames = (line: Recipe['ingredients'][number]) => {
+    const ingredient =
+      line.ingredientId === null
+        ? undefined
+        : ingredientsById.get(line.ingredientId);
+    if (ingredient) return [ingredient.name, ...ingredient.aliases];
+    return line.freeText ? [line.freeText] : [];
+  };
+  /** Every ingredient on the gather screen once, each with the names it goes by and every line a tick of it reaches. */
+  const getGatherItems = (dishes: ReturnType<typeof getGatherDishes>) => {
+    const namesByKey = new Map(
+      entries.flatMap((candidate) =>
+        candidate.recipe.ingredients.map(
+          (line) => [getLineKey(line), getLineNames(line)] as const,
+        ),
+      ),
+    );
+    return combineGatherDishes(dishes).map((line) => ({
+      key: line.key,
+      name: line.name,
+      names: [line.name, ...(namesByKey.get(line.key) ?? [])],
+      sources: line.sources,
+      isOut: isGatherLineOut(line, dishes),
+    }));
+  };
+  const getVoiceRows = () =>
+    isGatherView
+      ? getGatherDishes().flatMap((dish) => dish.rows)
+      : voiceStep.recipe.id === recipe.id
+        ? rows
+        : getRows(
+            voiceStep.recipe,
+            plate[voiceStep.recipe.id]?.servings ?? voiceStep.recipe.servings,
+          );
 
   const askWhich = (
     verb: PendingTimerVerb,
@@ -1920,6 +1987,18 @@ function CookingSession({
   const isUntargeted = (target: CookTimerTarget) =>
     target.seconds === null && target.name === null && !target.isAll;
 
+  const readGatherLeft = (): CookVoiceResult => {
+    if (!isGatherView) {
+      return refuse('Say “ingredients” to see the list.');
+    }
+    const dishes = getGatherDishes();
+    const answer = describeGatherLeft(
+      dishes,
+      getGatherLayout(storedGatherLayout, dishes),
+    );
+    return done(answer.show, answer.speak);
+  };
+
   const makeVoiceActions = (): CookVoiceActions => ({
     next: () => {
       if (timerSecondary === 'NEXT') {
@@ -1979,7 +2058,7 @@ function CookingSession({
         : done(undefined, spokenShownStep),
     showIngredients: () => {
       if (focused !== null) backToStep();
-      if (isGatherView) return done();
+      if (isGatherView) return readGatherLeft();
       if (isWide) {
         return focused !== null
           ? done()
@@ -2465,6 +2544,72 @@ function CookingSession({
         `${lead}You're making ${formatServings(current)}.${written === '' ? '' : ` The recipe makes ${target.servings}.`}`,
       );
     },
+    startCooking: () => {
+      if (!isGatherView) return refuse("You're already cooking.");
+      showView('steps');
+      return done();
+    },
+    gotIngredient: (query, isOut) => {
+      if (!isGatherView) {
+        return refuse('Ticking is on the “Get your ingredients out” screen.');
+      }
+      const dishes = getGatherDishes();
+      const plan = planGatherTick(
+        query,
+        getGatherItems(dishes),
+        isOut,
+        isPlate,
+      );
+      if (!plan.ok) return refuse(plan.show, plan.speak);
+      plan.sources.forEach(({ recipeId, lineId }) =>
+        toggleGotOutFor(recipeId, lineId, isOut),
+      );
+      return done(plan.show, plan.speak);
+    },
+    tickAll: () => {
+      if (!isGatherView) {
+        return refuse('Ticking is on the “Get your ingredients out” screen.');
+      }
+      const dishes = getGatherDishes();
+      const items = getGatherItems(dishes);
+      if (items.every((item) => item.isOut)) {
+        return refuse('Everything is already ticked.');
+      }
+      dishes.forEach((dish) =>
+        dish.rows.forEach((row) =>
+          toggleGotOutFor(dish.recipe.id, row.id, true),
+        ),
+      );
+      const count =
+        getGatherLayout(storedGatherLayout, dishes) === 'ALL'
+          ? items.length
+          : dishes.reduce((sum, dish) => sum + dish.rows.length, 0);
+      const text = `Ticked all ${count}.`;
+      return done(text, text);
+    },
+    readLeft: readGatherLeft,
+    readTools: () => {
+      if (!isGatherView && view !== 'ingredients' && !(isWide && isStepsView)) {
+        return refuse('Say “ingredients” to see what to measure with.');
+      }
+      const answer = describeGatherTools(
+        getGatherTools(
+          isGatherView ? getGatherDishes().flatMap((dish) => dish.rows) : rows,
+        ),
+      );
+      return done(answer.show, answer.speak);
+    },
+    setGatherLayout: (layout) => {
+      if (!isGatherView || !canCombineGather(getGatherDishes())) {
+        return refuse("There's only one way to list these.");
+      }
+      const text =
+        layout === 'ALL'
+          ? 'Showing them all together.'
+          : `Showing them by ${isPlate ? 'dish' : 'part'}.`;
+      setGatherLayout(layout);
+      return done(text, text);
+    },
   });
   const voiceStepMatch =
     matchesByRecipe.get(voiceStep.recipe.id)?.[voiceStep.stepNumber - 1] ??
@@ -2538,21 +2683,16 @@ function CookingSession({
     shownRecipeId: voiceStep.recipe.id,
     timers: timers.timers.map(toVoiceTimerRef),
     choice: getVoiceChoice(),
-    lines: voiceStep.recipe.ingredients.map((line) => {
-      const ingredient =
-        line.ingredientId === null
-          ? undefined
-          : ingredientsById.get(line.ingredientId);
-      return {
-        id: line.id,
-        names: ingredient
-          ? [ingredient.name, ...ingredient.aliases]
-          : line.freeText
-            ? [line.freeText]
-            : [],
-        isInStep: voiceStepMatch?.lineIds.includes(line.id) ?? false,
-      };
-    }),
+    isGathering: isGatherView,
+    lines: (isGatherView
+      ? entries.flatMap((candidate) => candidate.recipe.ingredients)
+      : voiceStep.recipe.ingredients
+    ).map((line) => ({
+      id: line.id,
+      names: getLineNames(line),
+      isInStep:
+        !isGatherView && (voiceStepMatch?.lineIds.includes(line.id) ?? false),
+    })),
   };
   const { connect: connectVoice } = voice;
   const runVoiceCommand = useEffectEvent((command: CookActionCommand) =>
@@ -3162,31 +3302,14 @@ function CookingSession({
             </div>
           ) : isGatherView ? (
             <CookGatherView
-              uid={uid}
-              dishes={entries.map((candidate) => {
-                const state = plate[candidate.recipe.id];
-                const dishServings =
-                  state?.servings ??
-                  getCookStartServings(
-                    candidate.recipe.servings,
-                    candidate.plannedServings,
-                  );
-                return {
-                  recipe: candidate.recipe,
-                  rows: getRows(candidate.recipe, dishServings),
-                  hasWrittenAmounts: (
-                    matchesByRecipe.get(candidate.recipe.id) ?? []
-                  ).some((match) => match.hasWrittenAmount),
-                  servings: dishServings,
-                  plannedServings: candidate.plannedServings,
-                  gotOut: state?.gotOut ?? {},
-                };
-              })}
+              dishes={getGatherDishes()}
               onServingsChange={(recipeId, next) =>
                 updateRecipe(recipeId, { servings: next })
               }
               onToggle={toggleGotOutFor}
               onReset={resetGotOutFor}
+              storedLayout={storedGatherLayout}
+              onLayoutChange={setGatherLayout}
             />
           ) : isWide ? (
             <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-stretch gap-10'>

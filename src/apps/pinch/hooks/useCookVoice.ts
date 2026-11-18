@@ -107,6 +107,12 @@ export interface CookVoiceActions {
   addEntry: (kind: CookEntryKind) => CookVoiceResult;
   dictation: (text: string) => CookVoiceResult;
   undoEntry: () => CookVoiceResult;
+  startCooking: () => CookVoiceResult;
+  gotIngredient: (query: string, isOut: boolean) => CookVoiceResult;
+  tickAll: () => CookVoiceResult;
+  readLeft: () => CookVoiceResult;
+  readTools: () => CookVoiceResult;
+  setGatherLayout: (layout: 'ALL' | 'PARTS') => CookVoiceResult;
 }
 
 export interface CookVoiceMessage {
@@ -191,6 +197,18 @@ export const runCookCommand = (
       return actions.dictation(command.text);
     case 'UNDO_ENTRY':
       return actions.undoEntry();
+    case 'START_COOKING':
+      return actions.startCooking();
+    case 'GOT_INGREDIENT':
+      return actions.gotIngredient(command.query, command.isOut);
+    case 'TICK_ALL':
+      return actions.tickAll();
+    case 'READ_LEFT':
+      return actions.readLeft();
+    case 'READ_TOOLS':
+      return actions.readTools();
+    case 'SET_GATHER_LAYOUT':
+      return actions.setGatherLayout(command.layout);
   }
 };
 

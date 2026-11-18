@@ -43,6 +43,14 @@ import {
   type CookVoiceContext,
 } from '../../src/apps/pinch/utils/cookVoice.ts';
 import type { MeasureUnit } from '../../src/utils/measureUtils.ts';
+import {
+  describeGatherLeft,
+  describeGatherTools,
+  planGatherTick,
+  type GatherDish,
+  type GatherItem,
+} from '../../src/apps/pinch/utils/cookGather.ts';
+import { getGatherTools } from '../../src/apps/pinch/utils/cookGather.ts';
 
 const plate: CookVoiceContext = {
   recipes: [
@@ -2337,6 +2345,307 @@ assert.equal(
   getSpokenServings(4, { kind: 'TIMES', factor: 2 }),
   8,
   'double four',
+);
+
+// Before you start: the gather screen's commands.
+const gather: CookVoiceContext = {
+  ...plate,
+  isGathering: true,
+  lines: [
+    { id: 'butter', names: ['Butter', 'unsalted butter'], isInStep: false },
+    { id: 'peanut', names: ['Peanut butter'], isInStep: false },
+    { id: 'flour', names: ['Flour'], isInStep: false },
+    { id: 'garlic', names: ['Garlic'], isInStep: false },
+  ],
+};
+const parseG = (text: string | string[], context = gather) =>
+  parseCookCommand(text, context);
+const got = (query: string, isOut = true): CookCommand => ({
+  kind: 'GOT_INGREDIENT',
+  query,
+  isOut,
+});
+[
+  ['got the butter', 'butter'],
+  ["I've got the butter", 'butter'],
+  ['I have the flour', 'flour'],
+  ['got butter', 'butter'],
+  ['tick butter', 'butter'],
+  ['tick off the garlic', 'garlic'],
+  ['check off garlic', 'garlic'],
+  ["butter's out", 'butters'],
+  ['the butter is out', 'butter'],
+  ['got the almond flour', 'almond flour'],
+].forEach(([phrase, query]) =>
+  assert.deepEqual(parseG(phrase), got(query), `tick: "${phrase}"`),
+);
+[
+  ['untick the butter', 'butter'],
+  ["I don't have the butter", 'butter'],
+  ['no butter yet', 'butter'],
+  ['put the butter back', 'butter'],
+].forEach(([phrase, query]) =>
+  assert.deepEqual(parseG(phrase), got(query, false), `untick: "${phrase}"`),
+);
+[
+  'butter',
+  'add butter',
+  'the butter is melting',
+  'melt the butter',
+  'got',
+  'the oven is out',
+  'butter is out of date',
+].forEach((phrase) =>
+  assert.equal(
+    parseG(phrase)?.kind === 'GOT_INGREDIENT',
+    false,
+    `not a tick: "${phrase}"`,
+  ),
+);
+assert.equal(
+  parse('got the butter'),
+  null,
+  'ticking is heard only while gathering',
+);
+assert.equal(
+  parse('whats left'),
+  null,
+  'what is left is heard only while gathering',
+);
+assert.equal(
+  parseG('got the butter', { ...gather, choice: { kind: 'LENGTH' } })?.kind ===
+    'GOT_INGREDIENT',
+  false,
+  'no tick while a question waits',
+);
+['got everything', 'I have everything', 'tick all', 'tick everything'].forEach(
+  (phrase) =>
+    assert.deepEqual(
+      parseG(phrase),
+      { kind: 'TICK_ALL' },
+      `tick all: "${phrase}"`,
+    ),
+);
+[
+  "what's left",
+  'what do I still need',
+  'what else do I need',
+  'read the ingredients',
+  "read what's left",
+].forEach((phrase) =>
+  assert.deepEqual(parseG(phrase), { kind: 'READ_LEFT' }, `left: "${phrase}"`),
+);
+assert.deepEqual(
+  parseG('ingredients'),
+  { kind: 'SHOW_INGREDIENTS' },
+  'ingredients stays a command',
+);
+[
+  'what do I measure with',
+  'what tools do I need',
+  'which measuring cups',
+  'which spoons do I need',
+  'read the tools',
+  'measuring tools',
+].forEach((phrase) =>
+  assert.deepEqual(parse(phrase), { kind: 'READ_TOOLS' }, `tools: "${phrase}"`),
+);
+[
+  'start cooking',
+  "let's cook",
+  "let's start cooking",
+  "let's start",
+  "I'm ready",
+  'ready to cook',
+].forEach((phrase) =>
+  assert.deepEqual(
+    parse(phrase),
+    { kind: 'START_COOKING' },
+    `start: "${phrase}"`,
+  ),
+);
+assert.equal(
+  parse("let's cook the rice"),
+  null,
+  'cook the rice never starts cooking',
+);
+assert.equal(
+  parse(['start cooking', 'start'])?.kind,
+  'START_COOKING',
+  'top guess wins',
+);
+assert.equal(
+  parse(['black', "let's start cooking"]),
+  null,
+  'a lower guess is no move',
+);
+['all together', 'show them all together', 'combine them'].forEach((phrase) =>
+  assert.deepEqual(
+    parse(phrase),
+    { kind: 'SET_GATHER_LAYOUT', layout: 'ALL' },
+    `layout all: "${phrase}"`,
+  ),
+);
+['by part', 'by dish', 'separately', 'split them up'].forEach((phrase) =>
+  assert.deepEqual(
+    parse(phrase),
+    { kind: 'SET_GATHER_LAYOUT', layout: 'PARTS' },
+    `layout parts: "${phrase}"`,
+  ),
+);
+
+const item = (
+  key: string,
+  name: string,
+  isOut: boolean,
+  names: string[] = [name],
+): GatherItem => ({
+  key,
+  name,
+  names,
+  isOut,
+  sources: [{ recipeId: 'r', lineId: key }],
+});
+const items = [
+  item('butter', 'Butter', false),
+  item('flour', 'Flour', false),
+  item('garlic', 'Garlic', true),
+];
+const tick = planGatherTick('butter', items, true, false);
+assert.deepEqual(
+  [tick.ok, tick.speak],
+  [true, 'Got butter. 1 left.'],
+  'tick says what is left',
+);
+assert.deepEqual(
+  tick.sources,
+  [{ recipeId: 'r', lineId: 'butter' }],
+  'tick reaches its lines',
+);
+assert.equal(
+  planGatherTick('flour', [items[1], items[2]], true, false).speak,
+  "That's everything. Say start cooking when you're ready.",
+  'the last tick says so',
+);
+assert.equal(
+  planGatherTick('garlic', items, true, false).speak,
+  'Garlic is already ticked.',
+  'already ticked',
+);
+assert.equal(
+  planGatherTick('garlic', items, false, false).speak,
+  'Unticked garlic.',
+  'untick',
+);
+assert.equal(
+  planGatherTick('milk', items, true, false).speak,
+  'No milk in this recipe.',
+  'no match',
+);
+assert.equal(
+  planGatherTick('milk', items, true, true).speak,
+  'No milk on this plate.',
+  'no match on a plate',
+);
+const two = [
+  item('u', 'Unsalted butter', false),
+  item('p', 'Peanut butter', false),
+];
+const which = planGatherTick('butter', two, true, false);
+assert.deepEqual(
+  [which.ok, which.speak],
+  [false, 'Which one: unsalted butter or peanut butter?'],
+  'several ingredients match',
+);
+assert.equal(
+  planGatherTick('butter', [...two, item('b', 'Butter', false)], true, false)
+    .ok,
+  true,
+  'an exact name wins',
+);
+
+const row = (
+  id: string,
+  name: string,
+  amountText: string,
+  group: string | null = null,
+) => ({
+  id,
+  name,
+  note: null,
+  amountText,
+  isMeasured: amountText !== '',
+  group,
+  measure: null,
+  ingredientKey: name,
+  isLiquid: false,
+});
+const sauceDish: GatherDish = {
+  recipe: { id: 'r', title: 'Stir fry' },
+  rows: [
+    row('a', 'Soy sauce', '2 tbsp', 'Sauce'),
+    row('b', 'Garlic', '3 cloves'),
+    row('c', 'Salt', '½ tsp'),
+  ],
+  gotOut: { c: true },
+};
+assert.equal(
+  describeGatherLeft([sauceDish], 'PARTS').speak,
+  'Still to get: For sauce: Soy sauce, 2 tablespoons. Garlic, 3 cloves.',
+  'by part names the part when there are several',
+);
+assert.equal(
+  describeGatherLeft([{ ...sauceDish, rows: [sauceDish.rows[1]] }], 'PARTS')
+    .speak,
+  'Still to get: Garlic, 3 cloves.',
+  'one part is not named',
+);
+assert.equal(
+  describeGatherLeft([sauceDish], 'ALL').speak,
+  'Still to get: Soy sauce, 2 tablespoons. Garlic, 3 cloves.',
+  'all together lists each ingredient once',
+);
+assert.equal(
+  describeGatherLeft(
+    [{ ...sauceDish, gotOut: { a: true, b: true, c: true } }],
+    'ALL',
+  ).speak,
+  "You've got everything out.",
+  'all ticked',
+);
+const many: GatherDish = {
+  recipe: { id: 'r', title: 'Big' },
+  rows: Array.from({ length: 11 }, (_, i) =>
+    row(`x${i}`, `Thing ${i}`, '1 cup'),
+  ),
+  gotOut: {},
+};
+assert.match(
+  describeGatherLeft([many], 'ALL').speak,
+  /And 3 more\.$/,
+  'long lists are cut',
+);
+assert.equal(
+  describeGatherTools([]).speak,
+  "Nothing to measure with: it's all counted.",
+  'no tools',
+);
+const spoons = describeGatherTools(
+  getGatherTools([
+    {
+      ...row('s', 'Salt', '½ tsp'),
+      measure: { amount: 0.5, unit: 'TSP', gramsPerMl: null },
+    },
+    {
+      ...row('o', 'Oil', '1 tbsp'),
+      measure: { amount: 1, unit: 'TBSP', gramsPerMl: null },
+    },
+  ]),
+);
+assert.match(
+  spoons.speak,
+  /Measuring spoons: 1 tablespoon and half a teaspoon\./,
+  'spoons read in words',
 );
 
 console.log('pinchVoice: all checks passed');

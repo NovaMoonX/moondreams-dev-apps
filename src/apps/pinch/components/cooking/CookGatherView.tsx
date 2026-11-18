@@ -3,7 +3,6 @@ import { RotateCcw } from 'lucide-react';
 import ActionChips from '@/components/ActionChips';
 import { PillGroup } from '@/components/PillGroup';
 import Stepper from '@/components/Stepper';
-import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import CookIngredientsView, {
   CookIngredientRow,
   type CookRow,
@@ -11,7 +10,13 @@ import CookIngredientsView, {
 import CookToolsStrip from '@apps/pinch/components/cooking/CookToolsStrip';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
 import type { Recipe } from '@apps/pinch/types';
-import { combineCookLines } from '@apps/pinch/utils/combineCookLines';
+import {
+  canCombineGather,
+  combineGatherDishes,
+  getGatherLayout,
+  isGatherLineOut,
+  type GatherLayout,
+} from '@apps/pinch/utils/cookGather';
 import { getConversionLine } from '@apps/pinch/utils/cookConversions';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -26,17 +31,14 @@ export interface CookGatherDish {
 }
 
 interface CookGatherViewProps {
-  uid: string;
   dishes: CookGatherDish[];
   onServingsChange: (recipeId: string, servings: number) => void;
   onToggle: (recipeId: string, id: string, isOut: boolean) => void;
   onReset: (recipeId: string) => void;
+  /** The layout the person chose, or null before any choice. */
+  storedLayout: GatherLayout | null;
+  onLayoutChange: (layout: GatherLayout) => void;
 }
-
-type GatherLayout = 'PARTS' | 'ALL';
-
-const parseLayout = (stored: unknown): GatherLayout | null =>
-  stored === 'PARTS' || stored === 'ALL' ? stored : null;
 
 function ServingsCard({
   dishes,
@@ -124,29 +126,9 @@ function AllTogetherList({
   onToggle,
   onReset,
 }: Pick<CookGatherViewProps, 'dishes' | 'onToggle' | 'onReset'>) {
-  const isPlate = dishes.length > 1;
-  const lines = combineCookLines(
-    dishes.flatMap((dish) =>
-      dish.rows.map((row) => ({
-        recipeId: dish.recipe.id,
-        recipeTitle: dish.recipe.title,
-        lineId: row.id,
-        key: row.ingredientKey,
-        name: row.name,
-        note: row.note,
-        amountText: row.amountText,
-        isMeasured: row.isMeasured,
-        group: row.group,
-        measure: row.measure,
-      })),
-    ),
-    isPlate,
-  );
-  const gotOutBy = new Map(dishes.map((dish) => [dish.recipe.id, dish.gotOut]));
+  const lines = combineGatherDishes(dishes);
   const isLineOut = (line: (typeof lines)[number]) =>
-    line.sources.every(
-      ({ recipeId, lineId }) => gotOutBy.get(recipeId)?.[lineId] === true,
-    );
+    isGatherLineOut(line, dishes);
   const outCount = lines.filter(isLineOut).length;
   const byKey = new Map(lines.map((line) => [line.key, line]));
   const toggle = (key: string, isOut: boolean) =>
@@ -207,28 +189,21 @@ function AllTogetherList({
 }
 
 function CookGatherView({
-  uid,
   dishes,
   onServingsChange,
   onToggle,
   onReset,
+  storedLayout,
+  onLayoutChange,
 }: CookGatherViewProps) {
   const isPlate = dishes.length > 1;
-  const [storedLayout, setLayout] = useLocalStorageState<GatherLayout | null>(
-    `pinch:${uid}:cook-gather-layout`,
-    null,
-    parseLayout,
-  );
   const allRows = dishes.flatMap((dish) => dish.rows);
-  const canCombine =
-    isPlate ||
-    new Set(allRows.map((row) => row.group)).size > 1 ||
-    new Set(allRows.map((row) => row.ingredientKey)).size < allRows.length;
-  const layout = canCombine ? (storedLayout ?? 'PARTS') : 'PARTS';
+  const canCombine = canCombineGather(dishes);
+  const layout = getGatherLayout(storedLayout, dishes);
 
   return (
-    <div className='mx-auto w-full max-w-2xl space-y-5 [@media(max-height:500px)_and_(min-width:640px)]:grid [@media(max-height:500px)_and_(min-width:640px)]:max-w-4xl [@media(max-height:500px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:500px)_and_(min-width:640px)]:items-start [@media(max-height:500px)_and_(min-width:640px)]:gap-6 [@media(max-height:500px)_and_(min-width:640px)]:space-y-0'>
-      <div className='space-y-5'>
+    <div className='mx-auto w-full max-w-2xl space-y-5 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start lg:gap-10 lg:space-y-0 [@media(max-height:500px)_and_(min-width:640px)]:grid [@media(max-height:500px)_and_(min-width:640px)]:max-w-4xl [@media(max-height:500px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:500px)_and_(min-width:640px)]:items-start [@media(max-height:500px)_and_(min-width:640px)]:gap-6 [@media(max-height:500px)_and_(min-width:640px)]:space-y-0'>
+      <div className='space-y-5 lg:sticky lg:top-0'>
         <div className='space-y-1'>
           <h2 className='text-xl leading-snug font-medium min-[360px]:text-2xl'>
             Get your ingredients out
@@ -249,7 +224,7 @@ function CookGatherView({
               { value: 'ALL', label: 'All together' },
             ]}
             value={layout}
-            onChange={setLayout}
+            onChange={onLayoutChange}
             isThin
           />
         )}

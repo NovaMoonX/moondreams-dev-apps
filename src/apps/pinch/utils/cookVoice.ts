@@ -178,6 +178,13 @@ export type CookCommand =
   /** The words said after "add a tip": heard only while that question waits. */
   | { kind: 'DICTATION'; text: string }
   | { kind: 'UNDO_ENTRY' }
+  | { kind: 'START_COOKING' }
+  /** "Got the butter" (`isOut`) or "untick the butter": the words after the verb, resolved against the gather list by the screen. */
+  | { kind: 'GOT_INGREDIENT'; query: string; isOut: boolean }
+  | { kind: 'TICK_ALL' }
+  | { kind: 'READ_LEFT' }
+  | { kind: 'READ_TOOLS' }
+  | { kind: 'SET_GATHER_LAYOUT'; layout: 'ALL' | 'PARTS' }
   | { kind: 'STOP_LISTENING' };
 
 /** A timer as a spoken name can reach it: every name it goes by (its step's first words, a kitchen timer's name, its recipe) and its length as the card shows it ("10 min"). */
@@ -211,6 +218,8 @@ export interface CookVoiceContext {
   timers: CookVoiceTimer[];
   /** The question waiting for an answer, if any; only then does a bare name, "the second one" or "ten minutes" mean something. */
   choice: CookVoiceChoice | null;
+  /** On "Get your ingredients out": `lines` then covers every recipe on the plate, and ticking by name is heard. */
+  isGathering?: boolean;
 }
 
 type PlainKind =
@@ -227,6 +236,10 @@ type PlainKind =
   | 'READ_CHANGES'
   | 'CLOSE_ENTRIES'
   | 'UNDO_ENTRY'
+  | 'START_COOKING'
+  | 'TICK_ALL'
+  | 'READ_LEFT'
+  | 'READ_TOOLS'
   | 'FINISH'
   | 'STOP_LISTENING';
 
@@ -449,6 +462,85 @@ const PHRASES: Record<PlainKind, string[]> = {
     'undo that note',
     'undo that change',
   ],
+  START_COOKING: [
+    'start cooking',
+    'start cooking now',
+    'begin cooking',
+    'start the cooking',
+    'im ready',
+    'i am ready',
+    'ready to cook',
+    'im ready to cook',
+    'i am ready to cook',
+    'ready to start cooking',
+    'im ready to start cooking',
+  ],
+  TICK_ALL: [
+    'got everything',
+    'got it all',
+    'got them all',
+    'got all of it',
+    'i have everything',
+    'i have it all',
+    'i have them all',
+    'ive got everything',
+    'ive got it all',
+    'ive got them all',
+    'we have everything',
+    'weve got everything',
+    'tick all',
+    'tick everything',
+    'tick them all',
+    'tick off all',
+    'tick off everything',
+    'tick off them all',
+    'check all',
+    'check everything',
+    'check off all',
+    'check off everything',
+    'check them all',
+  ],
+  READ_LEFT: [
+    'whats left',
+    'what is left',
+    'what do i still need',
+    'what else do i need',
+    'what do i still have to get',
+    'what else do i have to get',
+    'what am i missing',
+    'read the ingredients',
+    'read ingredients',
+    'read me the ingredients',
+    'read whats left',
+    'read what is left',
+    'read me whats left',
+    'read what i still need',
+  ],
+  READ_TOOLS: [
+    'what do i measure with',
+    'what should i measure with',
+    'what do i need to measure with',
+    'what tools do i need',
+    'what measuring tools do i need',
+    'which tools do i need',
+    'which measuring tools do i need',
+    'which measuring cups',
+    'which measuring cup',
+    'which measuring spoons',
+    'which measuring spoon',
+    'which measuring cups do i need',
+    'which measuring spoons do i need',
+    'which spoons do i need',
+    'which spoons',
+    'which cups do i need',
+    'read the tools',
+    'read tools',
+    'read the measuring tools',
+    'read me the tools',
+    'measuring tools',
+    'the measuring tools',
+    'show the measuring tools',
+  ],
   FINISH: [
     'finish',
     'done',
@@ -550,6 +642,49 @@ const SHOW_PHRASES: Record<string, CookEntryKind> = Object.fromEntries(
     ),
   ),
 );
+
+const LAYOUT_PHRASES: Record<string, 'ALL' | 'PARTS'> = Object.fromEntries([
+  ...[
+    'all together',
+    'show them all together',
+    'show all together',
+    'show it all together',
+    'list them all together',
+    'list all together',
+    'combine them',
+    'combine the ingredients',
+    'combine ingredients',
+    'put them together',
+  ].map((phrase) => [phrase, 'ALL'] as const),
+  ...[
+    'by part',
+    'by parts',
+    'buy part',
+    'by dish',
+    'by dishes',
+    'by recipe',
+    'separately',
+    'separate them',
+    'split them up',
+    'split them',
+    'show them by part',
+    'show them by dish',
+    'show them separately',
+    'show by part',
+    'show by dish',
+    'list them by part',
+    'list them by dish',
+  ].map((phrase) => [phrase, 'PARTS'] as const),
+]);
+
+/** Said while gathering, these only mean the gather screen, so each is heard only there (and never while a question waits). */
+const GATHER_ONLY_KINDS = new Set<PlainKind>(['TICK_ALL', 'READ_LEFT']);
+const NEEDS_NO_QUESTION_KINDS = new Set<PlainKind>([
+  'START_COOKING',
+  'TICK_ALL',
+  'READ_LEFT',
+  'READ_TOOLS',
+]);
 
 const EXACT = new Map<string, PlainKind>(
   (Object.entries(PHRASES) as [PlainKind, string[]][]).flatMap(
@@ -1578,6 +1713,81 @@ const parseDictation = (transcript: string): CookCommand | null => {
   };
 };
 
+const LETS_START =
+  /^(?:(?:ok|okay|hey|hi|pepper|pinch|alright|all right|so|um|uh|er|please)\s+)*lets (?<rest>.+?)(?:\s+(?:please|now))?$/;
+const LETS_START_REST = new Set([
+  'cook',
+  'start',
+  'begin',
+  'get cooking',
+  'start cooking',
+  'begin cooking',
+]);
+
+const TICK_PATTERNS = [
+  /^(?:(?:i have|we have|ive|weve)(?: got)?|got) (?<query>.+)$/,
+  /^(?:tick(?: off)?|check off|mark off|cross off) (?<query>.+)$/,
+];
+/** Said about a thing, not as a command: these need the gather list to hold the name before they count. */
+const LOOSE_TICK_PATTERNS = [
+  /^(?<query>.+?) (?:is|are) out$/,
+  /^(?<query>(?:(?:the|my) )?[a-z]+(?: [a-z]+)?s) out$/,
+];
+const UNTICK_PATTERNS = [/^(?:untick|uncheck|unmark|un tick) (?<query>.+)$/];
+const LOOSE_UNTICK_PATTERNS = [
+  /^(?:i )?(?:dont|do not|havent|have not) (?:have|got) (?<query>.+)$/,
+  /^no (?<query>.+?) yet$/,
+  /^put (?<query>.+?) back$/,
+];
+
+const MAX_TICK_QUERY_WORDS = 4;
+
+const readTickQuery = (raw: string | undefined) => {
+  if (!raw) return null;
+  const query = cleanQuery(raw.replace(/^(?:my|any) /, ''));
+  const words = query.split(' ').filter(Boolean);
+  if (
+    words.length === 0 ||
+    words.length > MAX_TICK_QUERY_WORDS ||
+    words.some(
+      (word) =>
+        QUERY_STOP_WORDS.has(word) || ALL_WORDS.has(word) || /^\d/.test(word),
+    )
+  ) {
+    return null;
+  }
+  return query;
+};
+
+/** Ticking, unticking and the layout are heard only on the gather screen; a verb ("got", "tick") names the ingredient even when the recipe lacks it, a looser phrase counts only for an ingredient the list holds. */
+const parseGather = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const holds = (query: string) =>
+    matchByName(query, context.lines).length > 0 ||
+    lineNameMatcher.match(query, context.lines) !== null;
+  const read = (
+    patterns: RegExp[],
+    isOut: boolean,
+    isLoose: boolean,
+  ): CookCommand | null => {
+    const query = patterns
+      .map((pattern) => readTickQuery(text.match(pattern)?.groups?.query))
+      .find((found) => found !== null);
+    if (query === undefined || query === null) return null;
+    return !isLoose || holds(query)
+      ? { kind: 'GOT_INGREDIENT', query, isOut }
+      : null;
+  };
+  return (
+    read(UNTICK_PATTERNS, false, false) ??
+    read(TICK_PATTERNS, true, false) ??
+    read(LOOSE_UNTICK_PATTERNS, false, true) ??
+    read(LOOSE_TICK_PATTERNS, true, true)
+  );
+};
+
 const parseOne = (
   transcript: string,
   context: CookVoiceContext,
@@ -1587,8 +1797,24 @@ const parseOne = (
   const text = normalizeTranscript(transcript);
   if (text === '' || text.length > MAX_COMMAND_CHARS) return null;
 
+  const isAsking = context.choice !== null;
   const exact = EXACT.get(text);
-  if (exact) return { kind: exact };
+  if (
+    exact &&
+    !(isAsking && NEEDS_NO_QUESTION_KINDS.has(exact)) &&
+    !(GATHER_ONLY_KINDS.has(exact) && context.isGathering !== true)
+  ) {
+    return { kind: exact };
+  }
+  if (!isAsking) {
+    const lets = toPlainText(transcript).match(LETS_START)?.groups?.rest;
+    if (lets !== undefined && LETS_START_REST.has(lets)) {
+      return { kind: 'START_COOKING' };
+    }
+    if (Object.hasOwn(LAYOUT_PHRASES, text)) {
+      return { kind: 'SET_GATHER_LAYOUT', layout: LAYOUT_PHRASES[text] };
+    }
+  }
   if (Object.hasOwn(SHOW_PHRASES, text)) {
     return { kind: 'SHOW_ENTRIES', entryKind: SHOW_PHRASES[text] };
   }
@@ -1610,6 +1836,9 @@ const parseOne = (
   }
   const result =
     (context.choice === null ? parseServings(text) : null) ??
+    (context.choice === null && context.isGathering === true
+      ? parseGather(text, context)
+      : null) ??
     parseTimer(text, context) ??
     parseConvert(text, context) ??
     parseAmount(text, context) ??
@@ -1624,6 +1853,7 @@ const NAVIGATION_KINDS = new Set<CookCommand['kind']>([
   'REPEAT',
   'SHOW_INGREDIENTS',
   'SHOW_STEPS',
+  'START_COOKING',
   'FINISH',
 ]);
 
