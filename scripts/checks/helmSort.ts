@@ -3758,6 +3758,7 @@ test('the fit block carries aliases, only for tasks and projects the model is sh
     synced: [copy as never],
     projects: [
       {
+        id: 'project-wedding',
         name: 'Wedding',
         milestones: [],
         kind: 'project' as const,

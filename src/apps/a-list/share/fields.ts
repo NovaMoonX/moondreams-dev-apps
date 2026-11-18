@@ -71,6 +71,7 @@ const TICKET_FIELDS = {
   feeAvoidedCents: 'never',
   taxRate: 'never',
   taxCents: 'never',
+  taxChoice: 'never',
   totalCents: 'shared',
 } satisfies Record<keyof Ticket, ShareDecision>;
 
@@ -125,6 +126,7 @@ const PURCHASE_PLAN_FIELDS = {
   standardPriceCents: 'never',
   taxCents: 'never',
   purchaseUrl: 'never',
+  isDiscountDay: 'never',
   startedAt: 'never',
 } satisfies Record<keyof PurchasePlan, ShareDecision>;
 

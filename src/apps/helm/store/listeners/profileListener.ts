@@ -42,6 +42,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   voiceMode: data.voiceMode ?? 'cloudWhenOnline',
   voiceId: data.voiceId ?? null,
   voiceSpeed: data.voiceSpeed ?? null,
+  whisperHeld: data.whisperHeld ?? null,
   isWakeWordOn: data.isWakeWordOn ?? false,
   isHandsFreeOn: data.isHandsFreeOn ?? true,
   hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? null,

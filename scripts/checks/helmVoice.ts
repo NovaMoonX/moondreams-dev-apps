@@ -33,6 +33,7 @@ import {
   toHelmVoiceSpeed,
 } from '../../src/apps/helm/voices.ts';
 import { readWakePhrase } from '../../src/lib/speech/speechText.ts';
+import { splitIntoParagraphs } from '../../src/utils/proseUtils.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 20, 0);
 const ZONE = 'America/Los_Angeles';
@@ -426,6 +427,53 @@ assert.equal(
   'each end phrase is listed once',
 );
 
+const paragraphCases: [string, string[]][] = [
+  ['One short sentence.', ['One short sentence.']],
+  [
+    'It is at 2:30. Bring 2.5 kg of flour. Dr. Smith will meet you there. Bye now.',
+    [
+      'It is at 2:30. Bring 2.5 kg of flour.',
+      'Dr. Smith will meet you there. Bye now.',
+    ],
+  ],
+  [
+    'Use a pan, e.g. a wide one. Then wait... then stir. Ask J. Smith about it. Done!',
+    [
+      'Use a pan, e.g. a wide one. Then wait... then stir.',
+      'Ask J. Smith about it. Done!',
+    ],
+  ],
+  [
+    'Dinner is at 6 p.m. Bring wine. It is fine… really. Okay?',
+    ['Dinner is at 6 p.m. Bring wine. It is fine… really.', 'Okay?'],
+  ],
+  [
+    `${'A long first sentence that keeps going '.repeat(4).trim()}. Short one. Another short one.`,
+    [
+      `${'A long first sentence that keeps going '.repeat(4).trim()}.`,
+      'Short one. Another short one.',
+    ],
+  ],
+  [
+    'First idea.\n\nSecond idea. Third.',
+    ['First idea.', 'Second idea. Third.'],
+  ],
+  ['no punctuation at all', ['no punctuation at all']],
+  ['', []],
+];
+paragraphCases.forEach(([text, expected]) =>
+  assert.deepEqual(
+    splitIntoParagraphs(text),
+    expected,
+    `"${text.slice(0, 40)}" splits into paragraphs of about two sentences`,
+  ),
+);
+assert.ok(
+  splitIntoParagraphs('One. Two. Three. Four. Five.').every(
+    (part) => !part.includes('\n'),
+  ),
+);
+
 console.log(
-  'check:helm-voice: spoken lines, undo phrases, nods and the wake phrase passed.',
+  'check:helm-voice: spoken lines, undo phrases, nods, the wake phrase and paragraph splitting passed.',
 );
