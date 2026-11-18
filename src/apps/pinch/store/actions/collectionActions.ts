@@ -1,11 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import {
   COLLECTION_NOUN,
   MAX_COLLECTION_LABEL_LENGTH,
@@ -128,7 +129,7 @@ export const removeCollection = createAsyncThunk<
     try {
       const counts = await Promise.all(
         chunks.map((recipeIds) =>
-          runTransaction(db, async (transaction) => {
+          runHeldTransaction(uid, async (transaction) => {
             const snapshots = await Promise.all(
               recipeIds.map((recipeId) =>
                 transaction.get(recipeDoc(uid, recipeId)),
@@ -230,7 +231,7 @@ export const addRecipesToCollections = createAsyncThunk<
         if (soFar.error !== null) return soFar;
 
         try {
-          const part = await runTransaction(db, async (transaction) => {
+          const part = await runHeldTransaction(uid, async (transaction) => {
             const snapshots = await Promise.all(
               chunk.map((id) => transaction.get(recipeDoc(uid, id))),
             );
@@ -367,25 +368,28 @@ export const undoAddToCollections = createAsyncThunk<
         if (soFar.error !== null) return soFar;
 
         try {
-          const restored = await runTransaction(db, async (transaction) => {
-            const snapshots = await Promise.all(
-              chunk.map(({ id }) => transaction.get(recipeDoc(uid, id))),
-            );
+          const restored = await runHeldTransaction(
+            uid,
+            async (transaction) => {
+              const snapshots = await Promise.all(
+                chunk.map(({ id }) => transaction.get(recipeDoc(uid, id))),
+              );
 
-            return snapshots.reduce((count, snapshot, index) => {
-              const next = snapshot.exists()
-                ? planRemoveFromCollections(
-                    snapshot.data().collectionIds,
-                    chunk[index].added,
-                  )
-                : null;
-              const { noteId } = chunk[index];
-              if (noteId !== null) transaction.delete(noteDoc(uid, noteId));
-              if (next === null) return count;
-              transaction.update(snapshot.ref, { collectionIds: next });
-              return count + 1;
-            }, 0);
-          });
+              return snapshots.reduce((count, snapshot, index) => {
+                const next = snapshot.exists()
+                  ? planRemoveFromCollections(
+                      snapshot.data().collectionIds,
+                      chunk[index].added,
+                    )
+                  : null;
+                const { noteId } = chunk[index];
+                if (noteId !== null) transaction.delete(noteDoc(uid, noteId));
+                if (next === null) return count;
+                transaction.update(snapshot.ref, { collectionIds: next });
+                return count + 1;
+              }, 0);
+            },
+          );
           return { restored: soFar.restored + restored, error: null };
         } catch (error) {
           return {
