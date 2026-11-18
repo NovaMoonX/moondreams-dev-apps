@@ -24,6 +24,9 @@ const KEEP_ALIVE_MS = 5000;
 // A token lasts a minute, so a stream ends just inside it.
 const UTTERANCE_MS = 59_000;
 const BUFFER_FRAMES = 500;
+// A cold server takes 2 to 4 s to mint; the wait stays inside the 10 s the buffer holds, so a slow token costs no words.
+const TOKEN_WAIT_MS = 6000;
+const SLOW_TOKEN_MS = 1500;
 
 type TokenOutcome =
   | VoiceTokenAnswer
@@ -156,7 +159,7 @@ export const toListenUrl = (
 export const createDeepgramStt = ({
   lang,
   getToken,
-  tokenWaitMs = 1500,
+  tokenWaitMs = TOKEN_WAIT_MS,
   source = null,
   onUnavailable,
   onClosed,
@@ -352,7 +355,12 @@ export const createDeepgramStt = ({
       const timeout = new Promise<TokenOutcome>((resolve) =>
         window.setTimeout(() => resolve({ status: 'timeout' }), tokenWaitMs),
       );
+      const askedAt = Date.now();
       const answer = await Promise.race([tokenRequest, timeout]);
+      const tokenMs = Date.now() - askedAt;
+      if (answer.status === 'ready' && tokenMs > SLOW_TOKEN_MS) {
+        recordSpeechEvent(`Cloud listening token took ${tokenMs} ms`);
+      }
       if (state.isDone || answer.status !== 'ready') releaseToken();
       if (state.isDone) return;
       if (answer.status !== 'ready') {

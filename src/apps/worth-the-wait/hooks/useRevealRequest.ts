@@ -61,9 +61,9 @@ export function useRevealRequest({
   );
 
   const startAction = useCallback(
-    async (method: RevealMethod) => {
+    async (method: RevealMethod): Promise<boolean> => {
       if (!spaceId || !userUid) {
-        return;
+        return false;
       }
       setLoading(true);
 
@@ -75,6 +75,7 @@ export function useRevealRequest({
           boxId: box.id,
           method,
         });
+        return true;
       } catch (error) {
         console.error('Error triggering box action:', error);
         throw new Error(
