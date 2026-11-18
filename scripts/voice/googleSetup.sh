@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Turns on Google's Text-to-Speech API for the project, lets the functions use its Gemini voices (a whispered line) and checks it answers; nothing secret is created or kept.
-# Each step checks the project first and only changes what is missing, so a re-run just reports what is already done.
+# Each part checks the project first and only changes what is missing, so a re-run just reports what is already done.
 #   npm run voice:google-setup
 set -euo pipefail
 
