@@ -26,6 +26,11 @@ import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
 import type { ContextLearnItem } from '../research/learnStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
+import { SEEN_AS_LIMITS } from './seenAs.js';
+import {
+  MAX_RELATED_THINGS,
+  type ContextRelatedThing,
+} from './relatedThings.js';
 
 export interface ContextTask {
   id: string;
@@ -236,6 +241,8 @@ export interface ContextInput {
   earlierTurns?: EarlierTurn[];
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
+  /** Set when the turn answers the morning card: the day whose aims it files. */
+  aimsDayKey?: string | null;
   facts?: ContextFact[];
   /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
   people?: ContextPerson[];
@@ -280,6 +287,8 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
   noticed?: string[];
+  relatedThings?: ContextRelatedThing[];
+  seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
   /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
@@ -293,6 +302,14 @@ export interface ContextInput {
       permission: 'granted' | 'prompt' | 'denied' | 'unsupported';
     };
   } | null;
+}
+
+/** A line of how the assistant sees the person, as the model is shown it: a correction already stands in place of the line it corrects. */
+export interface ContextSeenAs {
+  id: string;
+  kind: string;
+  text: string;
+  isCorrected: boolean;
 }
 
 export interface ContextFocusedTopic {
@@ -433,6 +450,9 @@ export function buildContext(input: ContextInput): {
   habits: AliasBook;
   scheduledActions: AliasBook;
   learnLater: AliasBook;
+  seenAs: AliasBook;
+  /** What each line shown says, by id, for the check that a removal still names it. */
+  seenAsWords: Map<string, string>;
   habitNames: Map<string, string>;
   undoTurns: AliasBook;
   /** How many lines the model was shown for each turn it may offer to take back. */
@@ -450,6 +470,7 @@ export function buildContext(input: ContextInput): {
   const habits = createAliasBook('h');
   const scheduledBook = createAliasBook('sa');
   const learnBook = createAliasBook('r');
+  const seenAsBook = createAliasBook('sy');
   const undoTurns = createAliasBook('u');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
@@ -715,6 +736,9 @@ export function buildContext(input: ContextInput): {
           `<nothing_to_undo>Nothing from earlier turns can be taken back now. If they are asking to take something back, say plainly you can't and send no offerUndo; otherwise carry on as usual.</nothing_to_undo>`,
         ]
       : []),
+    ...(input.aimsDayKey
+      ? [`<aims_turn>${toDataJson({ day: input.aimsDayKey })}</aims_turn>`]
+      : []),
     ...(input.answeredQuestion
       ? [
           `<answered_question>${toDataJson(input.answeredQuestion)}</answered_question>`,
@@ -880,6 +904,25 @@ export function buildContext(input: ContextInput): {
     ...(input.noticed?.length
       ? [`<noticed>${toDataJson(input.noticed.slice(0, 10))}</noticed>`]
       : []),
+    ...(input.relatedThings?.length
+      ? [
+          `<related_things>${toDataJson(
+            input.relatedThings.slice(0, MAX_RELATED_THINGS),
+          )}</related_things>`,
+        ]
+      : []),
+    ...(input.seenAs?.length
+      ? [
+          `<how_you_seem>${toDataJson(
+            input.seenAs.slice(0, SEEN_AS_LIMITS.toModel).map((line) => ({
+              alias: seenAsBook.add(line.id),
+              kind: line.kind,
+              text: line.text,
+              ...(line.isCorrected && { from: 'the person says' }),
+            })),
+          )}</how_you_seem>`,
+        ]
+      : []),
     ...(openRuns.length > 0
       ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]
       : []),
@@ -935,6 +978,12 @@ export function buildContext(input: ContextInput): {
     habits,
     scheduledActions: scheduledBook,
     learnLater: learnBook,
+    seenAs: seenAsBook,
+    seenAsWords: new Map(
+      (input.seenAs ?? [])
+        .slice(0, SEEN_AS_LIMITS.toModel)
+        .map((line): [string, string] => [line.id, line.text]),
+    ),
     habitNames: new Map(
       (input.habits ?? [])
         .slice(0, MAX_CONTEXT_HABITS)

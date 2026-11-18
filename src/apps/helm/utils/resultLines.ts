@@ -70,6 +70,19 @@ export function buildResultLines(
         },
       ];
     }
+    if (
+      ref.collection === 'profile' &&
+      'personality' in (effect?.written ?? {})
+    ) {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: toText(effect?.written['sealed.title']) ?? '',
+          detail: toText(effect?.written['sealed.detail']),
+        },
+      ];
+    }
     if (ref.collection === 'profile') {
       return [
         {
@@ -115,6 +128,16 @@ export function buildResultLines(
             toText(effect?.written['sealed.title']) ??
             HELM_COPY.resultHabitFallback,
           detail: check?.status === 'done' ? HELM_COPY.resultDone : null,
+        },
+      ];
+    }
+    if (ref.collection === 'seenAs') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: HELM_COPY.resultSeenAsFallback,
+          detail: null,
         },
       ];
     }

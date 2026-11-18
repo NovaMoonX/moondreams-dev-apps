@@ -283,6 +283,7 @@ const outsideCaptureFields = (ctx: McpRequestContext, createdAt: number) => ({
   whoIds: [],
   placeIds: [],
   planDayKey: null,
+  aimsDayKey: null,
   createdAt,
   screen: null,
 });
