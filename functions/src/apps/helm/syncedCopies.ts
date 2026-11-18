@@ -9,6 +9,7 @@ import {
 } from '../../vendor/connectionsContract.js';
 import { formatMoney } from '../../utils/formatMoney.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
+import { isOpenTask } from './nomos/needsYou.js';
 
 export interface SyncedCopy {
   id: string;
@@ -37,6 +38,7 @@ export interface SyncedCopy {
 export const MAX_CONTEXT_SYNCED = 40;
 export const CONTEXT_EVENT_DAYS = 2;
 export const CONTEXT_TASK_DAYS = 7;
+const TASK_OVERDUE_DAYS = 60;
 const DAY_MS = 86_400_000;
 const MAX_ZONE_OFFSET_MS = 14 * 3_600_000;
 const MAX_SCANNED_EVENTS = 100;
@@ -150,7 +152,7 @@ const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
   event: ['isTentative', 'isFree', 'hasTicket', 'format'],
-  task: [],
+  task: ['isDone', 'isAutomatic'],
   project: [
     'available',
     'pending',
@@ -345,7 +347,7 @@ export async function readSyncedEvents(
     .slice(0, input.limit);
 }
 
-/** Tasks from other apps due in `days` calendar days from `firstDay`, still connected, soonest first. */
+/** Open tasks from other apps overdue (up to `TASK_OVERDUE_DAYS` back) or due in `days` calendar days from `firstDay`, still connected, soonest first; a finished, paid or automatic one never asks for the person. */
 export async function readSyncedTasks(
   firestore: Firestore,
   uid: string,
@@ -355,13 +357,13 @@ export async function readSyncedTasks(
   const snapshot = await firestore
     .collection(syncedPath(uid))
     .where('kind', '==', 'task')
-    .where('dueAt', '>=', input.firstDay)
+    .where('dueAt', '>=', input.firstDay - TASK_OVERDUE_DAYS * DAY_MS)
     .where('dueAt', '<', input.firstDay + input.days * DAY_MS)
     .orderBy('dueAt')
     .limit(input.limit * 2)
     .get();
   return openAll(key, snapshot.docs)
-    .filter((copy) => !copy.isEnded)
+    .filter((copy) => !copy.isEnded && isOpenTask(copy))
     .slice(0, input.limit);
 }
 

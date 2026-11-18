@@ -137,6 +137,7 @@
     "check:helm-checkin-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmCheckinMatch.ts",
     "check:helm-personality": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPersonality.ts",
     "check:helm-seen-as": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSeenAs.ts",
+    "check:helm-needs-you": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmNeedsYou.ts",
     "check:helm-where": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhere.ts",
     "check:helm-close": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmClose.ts",
     "check:helm-questions": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmQuestions.ts",

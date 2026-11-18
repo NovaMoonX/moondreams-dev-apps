@@ -607,13 +607,16 @@ const TASK_FIELDS = [
   'lastEditedAt',
 ];
 
-/** Tasks assigned to the person on trips they are in, and their own private ones; no one else's private task is ever read. */
+/** Open tasks assigned to the person on trips that have not ended, and their own private ones; no one else's private task is ever read, and a finished trip's leftovers never ask for them. */
 const syncTasks = async (
   firestore: Firestore,
   uid: string,
   windowStart: number,
+  now: number,
 ): Promise<CategoryRead> => {
-  const { trips, isFull } = await readTrips(firestore, uid, windowStart);
+  const read = await readTrips(firestore, uid, windowStart);
+  const { isFull } = read;
+  const trips = read.trips.filter((trip) => trip.endDate + DAY_MS > now);
   const tripsById = new Map(trips.map((trip) => [trip.id, trip]));
   const [assigned, privateRead] = await Promise.all([
     Promise.all(
@@ -1261,6 +1264,7 @@ async function queryAnnouncements(
 export interface WaypointAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
+  now?: () => number;
 }
 
 const defaultDeps: WaypointAdapterDeps = {
@@ -1289,7 +1293,12 @@ export function createWaypointAdapter(
       case 'itinerary':
         return syncItinerary(firestore, uid, req.windowStart);
       case 'myTasks':
-        return syncTasks(firestore, uid, req.windowStart);
+        return syncTasks(
+          firestore,
+          uid,
+          req.windowStart,
+          (deps.now ?? Date.now)(),
+        );
       case 'tripChecklist':
         return syncChecklist(firestore, uid, req.windowStart);
       case 'tripBalances':

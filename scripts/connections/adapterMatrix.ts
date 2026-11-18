@@ -3105,6 +3105,7 @@ await Promise.all([
 const waypointAdapter = createWaypointAdapter({
   firestore: () => firestore,
   canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 9, 2),
 });
 const waypointDefaults = waypointAdapter.manifest.categories.filter(
   (category) => category.isOnAtConnect,
@@ -3270,6 +3271,21 @@ assert.equal(oldStyle?.endAt, TODAY + 2 * DAY + 17 * 3_600_000);
 assert.equal(oldStyle?.timeZone, null);
 assert.equal(oldStyle?.isAllDay, false);
 
+const afterTrip = await createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 10, 5),
+}).syncPage(waypointCtx(OWNER), {
+  category: 'myTasks',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.deepEqual(
+  refs(afterTrip.records),
+  [],
+  'a trip that has ended sends none of its to-dos, not even an undated one',
+);
 const tasks = await runWaypoint(OWNER, 'myTasks');
 assert.deepEqual(refs(tasks).sort(), [
   'trips/nyc/checklist/passports',
@@ -3880,7 +3896,12 @@ const runwaySummary = {
   dueBeforeIncomeCents: 45_000,
   bills: [
     { name: 'Overdue', amountCents: 9_000, dueOn: '2026-11-09' },
-    { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
+    {
+      name: 'Rent',
+      amountCents: 150_000,
+      dueOn: '2026-11-14',
+      paysItself: true,
+    },
     {
       name: 'Phone',
       amountCents: 6_000,
@@ -4077,9 +4098,14 @@ assert.deepEqual(summaryRecord.extra, {
 assert.match(summaryRecord.detail ?? '', /\$450\.00.*2026-11-15/);
 assert.deepEqual(
   titles(runwayBills),
-  ['Car insurance', 'Gym', 'Phone', 'Rent'],
-  'an unpaid bill already past is dropped, a paid one this month and a yearly one stay',
+  ['Car insurance', 'Gym', 'Overdue', 'Phone', 'Rent'],
+  'an unpaid bill already past stays as overdue, a paid one this month and a yearly one stay',
 );
+const billExtra = (title: string) =>
+  runwayBills.find((record) => record.title === title)?.extra;
+assert.deepEqual(billExtra('Rent'), { isDone: false, isAutomatic: true });
+assert.deepEqual(billExtra('Gym'), { isDone: true, isAutomatic: false });
+assert.deepEqual(billExtra('Overdue'), { isDone: false, isAutomatic: false });
 const billDetail = (title: string) =>
   runwayBills.find((record) => record.title === title)?.detail ?? null;
 assert.equal(billDetail('Phone'), 'Every other week');

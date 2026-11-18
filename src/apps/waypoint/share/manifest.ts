@@ -90,7 +90,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           label: 'Your trip to-dos',
           detail: 'Before the Road tasks assigned to you or private to you',
           meaning:
-            "Before the Road is a trip's checklist of things to do before leaving; these are the items assigned to the person or private to them.",
+            "Before the Road is a trip's checklist of things to do before leaving; these are the items still to do that are assigned to the person or private to them, on trips that have not ended.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
