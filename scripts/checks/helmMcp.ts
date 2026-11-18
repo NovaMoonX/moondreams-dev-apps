@@ -225,6 +225,16 @@ assert.match(
   /mode !== 'rest' &&\s*!read\.isOutside &&\s*!isScheduledCapture\(capture\) &&\s*isQuestion/,
 );
 
+// A trip's city and dates reach an outside turn's whereabouts only while its Read your apps switch is on.
+assert.match(
+  sortSource,
+  /const placeTrips = read\.isOutside\s*\?\s*filterSourcesForOutside\(read\.outsideReadScopes, await readPlaceTrips\(\)\)/,
+);
+const tripCopy = { connectorId: 'app:waypoint', kind: 'trip' };
+assert.deepEqual(filterSourcesForOutside([], [tripCopy]), []);
+assert.deepEqual(filterSourcesForOutside(['mail', 'drive'], [tripCopy]), []);
+assert.deepEqual(filterSourcesForOutside(['apps'], [tripCopy]), [tripCopy]);
+
 // An outside assistant is never there to see: its tools and its filed turns always mask a private record.
 assert.match(external, /mask: \{\s*isOn: true,/);
 assert.match(sortSource, /isOn:\s*capture\.medium === 'mcp' \|\|/);

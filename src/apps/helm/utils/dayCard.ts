@@ -4,17 +4,6 @@ import type { OpenDayAims, PlanSlot } from '@apps/helm/types';
 const HOUR_MS = 3_600_000;
 const DEFAULT_MINUTES = 30;
 
-export type TopCard = 'needsYou' | 'day' | 'grouping';
-
-const TOP_CARDS: readonly TopCard[] = ['needsYou', 'day', 'grouping'];
-
-/** Home's top never holds more than this many cards. */
-export const TOP_CARD_CAP = 3;
-
-/** The cards home's top shows, in order and at most `TOP_CARD_CAP`; the day card is one card whether it is the morning or the wind-down. */
-export const pickTopCards = (offered: readonly TopCard[]): TopCard[] =>
-  TOP_CARDS.filter((card) => offered.includes(card)).slice(0, TOP_CARD_CAP);
-
 export type DayCardMode = 'hidden' | 'ask' | 'answered' | 'windDown' | 'wound';
 
 /** When the morning question stops being offered: a third of the way through the waking day (from the usual start to the usual end), or `fallback` when those two don't make a day. */
