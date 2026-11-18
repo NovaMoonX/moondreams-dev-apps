@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FormSheet from '@/components/FormSheet';
+import SayWhenField from '@/components/SayWhenField';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -16,6 +17,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { updateHabitWhen } from '@apps/helm/store/actions/habitActions';
 import type { OpenHabit } from '@apps/helm/types';
+import { readHabitWords } from '@apps/helm/utils/sayWhen';
 import {
   fromWhenDraft,
   readWhenBlocker,
@@ -49,6 +51,22 @@ function HabitWhenForm({
   const [draft, setDraft] = useState<WhenDraft>(() => toWhenDraft(habit));
   const [isSaving, setIsSaving] = useState(false);
   const blocker = readWhenBlocker(draft);
+
+  const dayWindow = {
+    dayStartTime: profile?.dayStartTime ?? '08:00',
+    dayEndTime: profile?.dayEndTime ?? '22:00',
+  };
+  const sayWhen = (text: string) => {
+    const read = readHabitWords(text, draft, {
+      now: Date.now(),
+      zone: profile?.timeZone ?? 'UTC',
+      profile: dayWindow,
+    });
+    if (!read) return null;
+    setDraft(read.draft);
+    onDirtyChange(true);
+    return read.words;
+  };
 
   const change = (next: WhenDraft) => {
     setDraft(next);
@@ -91,13 +109,17 @@ function HabitWhenForm({
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.habitWhenHint}
       </p>
+      <SayWhenField
+        label={HELM_COPY.sayWhenLabel}
+        placeholder={HELM_COPY.sayWhenHabitPlaceholder}
+        unreadLine={HELM_COPY.sayWhenHabitUnread}
+        className='helm-field'
+        onRead={sayWhen}
+      />
       <OftenFields draft={draft} onChange={change} showsLabels />
       <TimesFields
         draft={draft}
-        profile={{
-          dayStartTime: profile?.dayStartTime ?? '08:00',
-          dayEndTime: profile?.dayEndTime ?? '22:00',
-        }}
+        profile={dayWindow}
         onChange={change}
         showsLabels
       />

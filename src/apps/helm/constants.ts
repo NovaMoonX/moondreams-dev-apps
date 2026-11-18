@@ -4905,6 +4905,17 @@ export const HELM_COPY = {
   scheduledWhatLabel: 'What should it do?',
   scheduledWhatPlaceholder: 'Look at my week and plan the weekend',
   scheduledFirstDayLabel: 'First day',
+  sayWhenLabel: 'Say when',
+  sayWhenScheduledPlaceholder: 'Try “every other Tuesday at 9”',
+  sayWhenHabitPlaceholder: 'Try “weekdays at 7am”',
+  sayWhenDatePlaceholder: 'Try “next Friday at 3”',
+  sayWhenUnread: "That didn't read as a time. You can set it below.",
+  sayWhenHabitUnread:
+    "That didn't read as days and times. You can set them below.",
+  sayWhenOnce: (day: string, time: string | null) =>
+    time ? `${day} at ${time}` : day,
+  sayWhenTimeOnly: (time: string) => `At ${time}`,
+  sayWhenStarting: (rule: string, day: string) => `${rule}, starting ${day}`,
   scheduledDayLabel: 'Day',
   scheduledTimeLabel: 'Time',
   scheduledMake: 'Schedule it',
