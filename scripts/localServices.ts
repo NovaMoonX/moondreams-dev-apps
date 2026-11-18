@@ -1,8 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 
 import {
   FIXTURE_SERVICES,
@@ -507,7 +513,33 @@ const getKeys = async (service: FixtureService) => {
   return values.length === keys.length && storeKeys(service, values);
 };
 
-const chooseOne = async (service: FixtureService) => {
+// Which services this machine has been asked about, so --defaults asks only about ones added since.
+const ASKED_FILE = resolve(
+  process.env.XDG_STATE_HOME ?? resolve(homedir(), '.local/state'),
+  'moondreams/local-services-asked',
+);
+
+const readAsked = () =>
+  existsSync(ASKED_FILE)
+    ? readFileSync(ASKED_FILE, 'utf8').split('\n').filter(Boolean)
+    : [];
+
+const recordAsked = (service: FixtureService) => {
+  const asked = readAsked();
+  if (asked.includes(service)) return;
+  mkdirSync(resolve(ASKED_FILE, '..'), { recursive: true });
+  writeFileSync(ASKED_FILE, `${[...asked, service].join('\n')}\n`);
+};
+
+const keepAsIs = (service: FixtureService) => {
+  const state = describeService(service, readForced(), isSignedInToGcloud());
+  console.log(`${service}: keeping ${state} (--defaults).`);
+  return false;
+};
+
+const chooseOne = async (service: FixtureService, isUsingDefaults: boolean) => {
+  if (isUsingDefaults && readAsked().includes(service))
+    return keepAsIs(service);
   const forced = readForced();
   const state = describeService(service, forced, isSignedInToGcloud());
   const isReal = state.startsWith('real');
@@ -516,6 +548,7 @@ const chooseOne = async (service: FixtureService) => {
     `\n${service} (${apps}): now ${state}.${caution && isReal ? `\n  ⚠ ${caution}` : ''}`,
   );
   const wantsReal = await askYesNo(`Use the real ${service}?`, isReal);
+  recordAsked(service);
   if (wantsReal) {
     if (isReal) return false;
     if (!isStoredLocally(service) && !(await getKeys(service))) {
@@ -540,7 +573,7 @@ const chooseOne = async (service: FixtureService) => {
   return isReal || state.includes('production not checked');
 };
 
-const chooseServices = async (appId: string) => {
+const chooseServices = async (appId: string, isUsingDefaults: boolean) => {
   const services = FIXTURE_SERVICES.filter(
     (service) =>
       SERVICES[service].appIds.includes(appId) &&
@@ -553,25 +586,28 @@ const chooseServices = async (appId: string) => {
     return;
   }
   const changes = await services.reduce<Promise<boolean[]>>(
-    async (done, service) => [...(await done), await chooseOne(service)],
+    async (done, service) => [
+      ...(await done),
+      await chooseOne(service, isUsingDefaults),
+    ],
     Promise.resolve([]),
   );
   if (changes.some(Boolean)) process.exitCode = 10;
 };
 
-const [mode, target] = process.argv.slice(2);
+const [mode, target, ...options] = process.argv.slice(2);
 
 if (!mode) {
   showStatus();
 } else if (mode === 'for' && target) {
   showStatus(target);
 } else if (mode === 'choose' && target) {
-  await chooseServices(target);
+  await chooseServices(target, options.includes('--defaults'));
 } else if ((mode === 'fixtures' || mode === 'real') && target) {
   setMode(mode, target);
 } else {
   console.error(
-    'Usage: npm run local:services [-- for <app> | choose <app> | fixtures|real <service|all>]',
+    'Usage: npm run local:services [-- for <app> | choose <app> [--defaults] | fixtures|real <service|all>]',
   );
   process.exitCode = 1;
 }
