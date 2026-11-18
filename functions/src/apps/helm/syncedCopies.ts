@@ -169,12 +169,13 @@ const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
-/** Opens one synced copy; one that won't open or holds no title is left out. */
+/** Opens one synced copy; one that won't open or holds no title is left out, and so is an event the plan itself wrote to the calendar. */
 export function openSyncedCopy(
   key: HelmKey,
   id: string,
   data: DocumentData,
 ): SyncedCopy | null {
+  if (typeof data.helmRef === 'string' && data.helmRef !== '') return null;
   try {
     const opened = openForHelm(key, data.sealed as SealedPayload);
     if (typeof opened.title !== 'string' || !opened.title) return null;

@@ -1917,6 +1917,7 @@ const tests: [string, () => void | Promise<void>][] = [
             category: null,
             from: '2026-10-01',
             to: '2026-10-31',
+            timeZone: 'UTC',
           },
         },
       ]);
@@ -1967,6 +1968,7 @@ const tests: [string, () => void | Promise<void>][] = [
           category: 'Groceries',
           from: '2026-10-01',
           to: '2026-10-31',
+          timeZone: 'UTC',
         },
         "a spending category is sent as the read's category filter",
       );

@@ -1005,6 +1005,16 @@ const main = async () => {
       format: null,
       place: '2000-2010 Main St, Suite 200',
     });
+    const siteRefOf = (id: string) =>
+      result.records.find(
+        (entry) => entry.sourceRef === `${MEETING_CALENDAR}|${id}`,
+      )?.extra.siteRef;
+    assert.equal(
+      siteRefOf('fx-m-site'),
+      'slot:2026-11-17:s1',
+      "an event the plan wrote carries its ref, read from the event's private extended properties",
+    );
+    assert.equal(siteRefOf('fx-m-none'), null, 'any other event has none');
     assert.ok(
       !JSON.stringify(result.records).match(
         /https?:|tel:|zoom|teams\.|secret|hidden|482913|meet\./,
