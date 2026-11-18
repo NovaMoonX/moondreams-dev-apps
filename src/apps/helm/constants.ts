@@ -1346,7 +1346,7 @@ export const HELM_COPY = {
   bringInOfferRowTitle: 'Bring into your circle',
   bringInTitle: (app: string) => `From ${app}`,
   bringInIntro:
-    'Tick who to bring in. Anyone who looks like someone already in your circle is merged with them, and both keep what they had. Undo takes it back.',
+    'Tick who to bring in. Anyone already in your circle is merged with them.',
   bringInNewRow: 'New to your circle',
   bringInSameRow: (name: string) => `Same as ${name}`,
   bringInMaybeRow: (name: string) => `Is this ${name}?`,
