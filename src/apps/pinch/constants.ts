@@ -509,6 +509,8 @@ export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
 /** The client's cap on the heading a recipe line sits under ("For the sauce"); the rules don't check a line's fields. */
 export const MAX_INGREDIENT_GROUP_LENGTH = 40;
+/** The client's cap on a steps section's name ("Cook the chicken"); the rules don't check it. */
+export const MAX_STEP_SECTION_LENGTH = 40;
 export const MAX_MINUTES = 100_000;
 /** The cap the rules enforce. */
 export const MAX_CARE_DAYS = 365;

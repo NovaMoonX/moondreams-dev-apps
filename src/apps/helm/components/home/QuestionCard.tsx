@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { waitUntil } from '@/utils/waitUntil';
 import { store, useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
@@ -176,6 +177,17 @@ function QuestionCard({
               ...(text !== undefined && { text }),
             },
     );
+    if (result.kind === 'done' || result.kind === 'stale') {
+      await waitUntil(() => {
+        const capture = selectAllCaptures(store.getState()).find(
+          (entry) => entry.id === captureId,
+        );
+        return (
+          capture === undefined ||
+          getOpenQuestions(capture).every((entry) => entry.id !== id)
+        );
+      });
+    }
     setIsWorking(false);
     if (result.kind === 'done' && result.executionId && isInSheet && user) {
       const { uid } = user;
