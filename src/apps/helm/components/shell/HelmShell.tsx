@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
 import DesktopSidebar from '@apps/helm/components/shell/DesktopSidebar';
@@ -21,18 +22,20 @@ function HelmShell({ children, dock, isAskAvailable }: HelmShellProps) {
   const entry = useAppSelector(selectTopScreen);
   useNearNow(isAskAvailable);
   const hasAskBar = isAskAvailable && entry !== null;
+  const hasSidebar = useMediaQuery().isAtLeast('lg') && isAskAvailable;
 
   return (
     <div
       className={join(
-        'page flex min-h-dvh flex-col lg:pl-65',
+        'page flex min-h-dvh flex-col',
+        hasSidebar && 'pl-65',
         hasAskBar ? 'pb-28' : 'pb-40',
       )}
     >
       <div className='mx-auto flex w-full max-w-xl flex-1 flex-col pt-4 lg:max-w-3xl'>
         {children}
       </div>
-      {isAskAvailable && <DesktopSidebar />}
+      {hasSidebar && <DesktopSidebar />}
       {dock}
       {isAskAvailable && <AskAboutThisControl placement='page' />}
     </div>

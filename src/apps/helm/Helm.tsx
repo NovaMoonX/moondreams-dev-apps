@@ -4,7 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import {
+  isLayerOpen,
+  useKeyboardShortcuts,
+} from '@/hooks/useKeyboardShortcuts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import Loading from '@/ui/Loading';
 import ImportanceView from '@apps/helm/components/importance/ImportanceView';
@@ -97,9 +100,12 @@ function HelmApp() {
   useKeyboardShortcuts(
     {
       'mod+k': () => {
-        if (voice.isLive) return;
+        if (voice.isLive || isLayerOpen()) return;
         if (view !== 'search') void showView('search');
-        else document.querySelector<HTMLInputElement>('main input')?.focus();
+        else
+          document
+            .querySelector<HTMLInputElement>('[data-search-field] input')
+            ?.focus();
       },
     },
     !isLocked,

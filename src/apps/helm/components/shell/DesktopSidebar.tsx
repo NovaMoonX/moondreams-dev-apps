@@ -77,7 +77,7 @@ function DesktopSidebar() {
   return (
     <aside
       aria-label={HELM_COPY.sidebarLabel}
-      className='border-border bg-background fixed top-[calc(4rem+var(--site-banner-inset,0px))] bottom-0 left-0 z-10 hidden w-65 flex-col gap-4 overflow-y-auto border-r px-3 pt-4 pb-4 lg:flex'
+      className='border-border bg-background fixed top-[calc(4rem+var(--site-banner-inset,0px))] bottom-0 left-0 z-10 flex w-65 flex-col gap-4 overflow-y-auto border-r px-3 pt-4 pb-4'
     >
       <Button
         type='button'
@@ -116,7 +116,7 @@ function DesktopSidebar() {
           {HELM_COPY.searchShortcutLabel(getModifierKeyLabel())}
         </kbd>
       </Button>
-      <nav aria-label={HELM_COPY.sidebarLabel} className='flex-1'>
+      <nav aria-label={HELM_COPY.sidebarNavLabel} className='flex-1'>
         <ul className='space-y-0.5'>
           {tiles.map((tile) => renderRow(tile.view))}
         </ul>

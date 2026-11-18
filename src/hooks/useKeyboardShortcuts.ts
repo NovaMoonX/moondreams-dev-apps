@@ -5,7 +5,8 @@ const TYPING_SELECTOR =
 const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
 // A closed popover stays in the page as an invisible, inert dialog, so only a shown one counts.
-const isLayerOpen = () =>
+/** True while a dialog, alert or drawer is shown over the page. */
+export const isLayerOpen = () =>
   Array.from(document.querySelectorAll(LAYER_SELECTOR)).some((layer) => {
     const style = getComputedStyle(layer);
     return (
@@ -15,14 +16,14 @@ const isLayerOpen = () =>
     );
   });
 
-/** The platform's command key as printed on a keycap: ⌘ on Apple devices, Ctrl elsewhere. */
-export const getModifierKeyLabel = () =>
+const isApplePlatform = () =>
   typeof navigator !== 'undefined' &&
-  /mac|iphone|ipad|ipod/i.test(navigator.userAgent)
-    ? '⌘'
-    : 'Ctrl';
+  /mac|iphone|ipad|ipod/i.test(navigator.userAgent);
 
-/** Runs the handler for a pressed key (lower-case; `?` for Shift+/) while `isEnabled`. A plain key is ignored while typing in a field or with a dialog or drawer open, and with Ctrl, Meta or Alt held. A `mod+<key>` handler (`mod+k`) answers ⌘ on Apple devices and Ctrl elsewhere, and works while typing and over a dialog. */
+/** The platform's command key as printed on a keycap: ⌘ on Apple devices, Ctrl elsewhere. */
+export const getModifierKeyLabel = () => (isApplePlatform() ? '⌘' : 'Ctrl');
+
+/** Runs the handler for a pressed key (lower-case; `?` for Shift+/) while `isEnabled`. A plain key is ignored while typing in a field or with a dialog or drawer open, and with Ctrl, Meta or Alt held. A `mod+<key>` handler (`mod+k`) answers ⌘ alone on Apple devices and Ctrl alone elsewhere (never with Shift or Alt), and works while typing; a handler that must not act over a dialog checks `isLayerOpen`. */
 export function useKeyboardShortcuts(
   handlers: Record<string, () => void>,
   isEnabled: boolean,
@@ -39,9 +40,14 @@ export function useKeyboardShortcuts(
       if (keyEvent.repeat) return;
       const key = keyEvent.key?.toLowerCase() ?? '';
       if (keyEvent.ctrlKey || keyEvent.metaKey) {
-        const combo = keyEvent.altKey
-          ? undefined
-          : handlersRef.current[`mod+${key}`];
+        const isApple = isApplePlatform();
+        const isPlatformMod = isApple
+          ? keyEvent.metaKey && !keyEvent.ctrlKey
+          : keyEvent.ctrlKey && !keyEvent.metaKey;
+        const combo =
+          isPlatformMod && !keyEvent.altKey && !keyEvent.shiftKey
+            ? handlersRef.current[`mod+${key}`]
+            : undefined;
         if (!combo) return;
         keyEvent.preventDefault();
         combo();
