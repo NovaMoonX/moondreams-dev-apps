@@ -102,7 +102,7 @@ const toStatus = (value: unknown): Project['status'] =>
   value === 'finished' || value === 'paused' ? value : 'active';
 
 /** A project that won't open is kept, with no name, so the surface can say so instead of dropping it. */
-async function openProject(
+export async function openProject(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenProject> {
