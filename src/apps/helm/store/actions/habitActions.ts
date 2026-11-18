@@ -2,12 +2,12 @@ import {
   collection,
   deleteDoc,
   doc,
-  runTransaction,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { runHeldTransaction } from '@apps/helm/store/actions/heldTransaction';
 
 import { store } from '@/store';
 
@@ -151,7 +151,7 @@ async function editHabit(
   if (!navigator.onLine) return 'offline';
   const ref = doc(habitsOf(uid), habitId);
   try {
-    return await runTransaction(db, async (transaction) => {
+    return await runHeldTransaction(uid, async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists()) return 'missing';
       const current = snapshot.data() as Habit;
