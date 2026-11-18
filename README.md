@@ -200,6 +200,13 @@ The project's consent screen (Google Cloud console, Google Auth Platform, Audien
 - **Fix:** a turn ends when the heard words stop changing for about 1.5 s (2.5 s after "and", "um", a comma and the like; `readTurnEndDelay` in `src/lib/speech/turnEnd.ts`, up from 0.9 s), the wake phrase hands its running listener or open microphone to the turn instead of sending or restarting, and an error sends the words already heard.
 - **Telling it apart:** a turn that ends a second or two after the person stops, with all the words, is this fix working; one that ends while they are still talking points at the recognizer itself (Android Chrome's backoff after repeated empty sessions, shown in the voice debug details as `Recognition error: no-speech`).
 
+### Helm's first listen uses the browser's listening, with "token wait timed out"
+
+- **Symptom:** the fallback notice said "Using the browser's listening instead of the cloud listener … (token wait timed out)", Error "No token within 1500 ms", usually on the first listen after Helm sat unused, and later listens were fine ("Working again").
+- **Cause:** the phone waited only 1.5 s for `mintVoiceToken`, and a cold Cloud Function plus the App Check token takes 2 to 4 s.
+- **Fix:** the wait is 6 s (`TOKEN_WAIT_MS` in `deepgramStream.ts`). What is said meanwhile is buffered (up to 10 s) and sent once the socket opens, so nothing is lost, and a token slower than 1.5 s is noted in the speech trace as "Cloud listening token took N ms".
+- **Telling it apart:** a trace line "token took 3000 ms" and no fallback is a cold start, handled. A timeout at 6 s points at App Check or the network, not a cold start. A fallback with Step "token request" or "token refused by the server" is a different cause, and its Error names it.
+
 ### Music stops when Helm opens with "Hey Nomos" on
 
 - **Symptom:** on an Android phone, music from another app paused or went quiet as soon as Helm was open with the wake phrase switched on.
