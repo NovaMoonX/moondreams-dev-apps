@@ -161,6 +161,7 @@
     "pipeline:secrets": "bash scripts/pipelineSecrets.sh",
     "runway:plaid-secrets": "bash scripts/runway/plaidSecrets.sh",
     "local:services": "tsx scripts/localServices.ts",
+    "prelocal:app": "bash scripts/lib/ensureDeps.sh",
     "local:app": "tsx scripts/localApp.ts",
     "ai:anthropic-secret": "bash scripts/ai/anthropicSecret.sh",
     "helm:setup": "bash scripts/helm/setup.sh",
