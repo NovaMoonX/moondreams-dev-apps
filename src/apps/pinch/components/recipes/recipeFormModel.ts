@@ -53,6 +53,10 @@ import {
   type ReadExtras,
 } from '@apps/pinch/utils/readExtras';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
+import {
+  cleanStepSection,
+  getStepSections,
+} from '@apps/pinch/utils/stepSections';
 import type {
   Collection,
   DishCategory,
@@ -106,6 +110,8 @@ export interface RecipeFormData {
   description: string;
   ingredients: IngredientRow[];
   steps: string[];
+  /** Each step's section, index for index with `steps`. */
+  stepSections: (string | null)[];
   care: CareText;
   links: LinksText;
   sourceChoice: SourceChoice;
@@ -141,6 +147,10 @@ export const getInitialData = (
     adaptedFrom: line.adaptedFrom ?? null,
   })),
   steps: recipe?.steps ?? [],
+  stepSections: getStepSections({
+    steps: recipe?.steps ?? [],
+    stepSections: recipe?.stepSections,
+  }),
   care: recipe ? getCareText(getRecipeCare(recipe)) : { ...EMPTY_CARE_TEXT },
   links: getLinksText(recipe ? getRecipeLinks(recipe) : []),
   sourceChoice: {
@@ -251,6 +261,9 @@ export const getDataFromExtracted = (
     description: extracted.description ?? '',
     ingredients: orderIngredientLines(rows).slice(0, MAX_RECIPE_INGREDIENTS),
     steps: extracted.steps,
+    stepSections: extracted.steps.map((_, index) =>
+      cleanStepSection(extracted.stepSections[index] ?? null),
+    ),
     care: getCareText(extracted.care),
     links: getLinksText(getExtraLinks(extras)),
   };
@@ -463,6 +476,7 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
     description,
     ingredients,
     steps,
+    stepSections,
     care,
     links,
     sourceChoice,
@@ -511,6 +525,11 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
       freeText: row.freeText ?? null,
     })),
     categories: getCategories({ categories: categories as DishCategory[] }),
+    stepSections: (steps as string[]).map((_, index) =>
+      Array.isArray(stepSections) && typeof stepSections[index] === 'string'
+        ? cleanStepSection(stepSections[index])
+        : null,
+    ),
   };
 };
 
