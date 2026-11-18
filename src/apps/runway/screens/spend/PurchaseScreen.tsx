@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import {
   HandCoins,
+  Camera,
   ImagePlus,
   Layers,
   Pencil,
@@ -10,12 +11,10 @@ import {
   Undo2,
 } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import CameraTile from '@/components/forms/CameraTile';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -826,27 +825,6 @@ function PurchaseScreen({
               isAddDisabled={!isReceiptsLoaded || isAddingReceipt}
             />
           )}
-          {isCameraFirst && (
-            <div className='space-y-2'>
-              <CameraTile
-                title={SPEND_WORDS.takeReceiptPhoto}
-                isDisabled={!isReceiptsLoaded || isAddingReceipt}
-                onClick={() => receiptChooser.current?.open({ isCamera: true })}
-              />
-              <Button
-                type='button'
-                variant='tertiary'
-                className='border-border h-11 w-full gap-2 border whitespace-nowrap'
-                disabled={!isReceiptsLoaded || isAddingReceipt}
-                onClick={() => receiptChooser.current?.open()}
-              >
-                <ImagePlus className='h-4 w-4 shrink-0' aria-hidden='true' />
-                {isAddingReceipt
-                  ? SPEND_WORDS.receiptAdding
-                  : SPEND_WORDS.readReceiptChoose}
-              </Button>
-            </div>
-          )}
           {lostPair !== null && (
             <p className='text-muted-foreground text-sm'>{PAIR_WORDS.lost}</p>
           )}
@@ -970,31 +948,39 @@ function PurchaseScreen({
                   onClick={() => setIsCostOpen(true)}
                 />
               )}
-            {!isCameraFirst && (
+            {isCameraFirst && (
               <ActionRow
                 isGrouped
                 isRoomy
-                icon={<ImagePlus />}
-                label={
-                  canTakePhoto
-                    ? SPEND_WORDS.chooseReceiptPhoto
-                    : SPEND_WORDS.addReceipt
-                }
-                subtitle={
-                  isAddingReceipt
-                    ? SPEND_WORDS.receiptAdding
-                    : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
-                      ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
-                      : SPEND_WORDS.addReceiptSub
-                }
-                isDisabled={
-                  !isReceiptsLoaded ||
-                  isAddingReceipt ||
-                  receipts.length >= MAX_RECEIPTS_PER_PURCHASE
-                }
-                onClick={() => receiptChooser.current?.open()}
+                icon={<Camera />}
+                label={SPEND_WORDS.takeReceiptPhoto}
+                isDisabled={!isReceiptsLoaded || isAddingReceipt}
+                onClick={() => receiptChooser.current?.open({ isCamera: true })}
               />
             )}
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<ImagePlus />}
+              label={
+                canTakePhoto
+                  ? SPEND_WORDS.chooseReceiptPhoto
+                  : SPEND_WORDS.addReceipt
+              }
+              subtitle={
+                isAddingReceipt
+                  ? SPEND_WORDS.receiptAdding
+                  : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                    ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
+                    : SPEND_WORDS.addReceiptSub
+              }
+              isDisabled={
+                !isReceiptsLoaded ||
+                isAddingReceipt ||
+                receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+              }
+              onClick={() => receiptChooser.current?.open()}
+            />
             <ReceiptFileInput
               chooser={receiptChooser}
               onFiles={(files) => void addReceipts(files)}
