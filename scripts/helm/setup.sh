@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # Every production setup step, in order; finished steps are skipped and no secret is printed, so it is safe to re-run.
 # --after-deploy: only the alerts, once the merge has deployed. --dry: print the plan and write nothing.
+# --defaults: an optional step answered on this machine before gets that answer again without asking; a new one is still asked.
 set -Eeuo pipefail
 cd "$(dirname "$0")/../.."
 
 PROJECT=moondreams-dev-apps
 DRY=0
 AFTER_DEPLOY=0
+DEFAULTS=0
 for arg in "$@"; do
   case "$arg" in
     --dry) DRY=1 ;;
     --after-deploy) AFTER_DEPLOY=1 ;;
-    *) echo "✗ Unknown option $arg. Use --dry or --after-deploy." >&2; exit 1 ;;
+    --defaults) DEFAULTS=1 ;;
+    *) echo "✗ Unknown option $arg. Use --dry, --defaults or --after-deploy." >&2; exit 1 ;;
   esac
 done
 
@@ -341,7 +344,15 @@ optional_step() { # title, detect, run, default, question
   if (( DRY )); then
     echo "→ would ask ($default): $question, then run: $title"; return 0
   fi
-  if ask "$question" "$default"; then
+  local answers="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/helm-setup-answers" kept=""
+  kept="$(awk -F'\t' -v k="$title" '$1 == k { v = $2 } END { print v }' "$answers" 2>/dev/null || true)"
+  if (( DEFAULTS )) && [[ -n "$kept" ]]; then
+    echo "• $title: answering $kept, as last time (--defaults)"
+  else
+    if ask "$question" "$default"; then kept=y; else kept=n; fi
+    mkdir -p "$(dirname "$answers")"; { awk -F'\t' -v k="$title" '$1 != k' "$answers" 2>/dev/null || true; printf '%s\t%s\n' "$title" "$kept"; } >"$answers.tmp"; mv "$answers.tmp" "$answers"
+  fi
+  if [[ "$kept" == y ]]; then
     echo "→ ${title}…"; "$run"; add DONE_LIST "$title"
   else
     echo "• Skipped: $title"; add SKIPPED_LIST "$title"
