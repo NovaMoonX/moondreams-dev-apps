@@ -33,7 +33,7 @@ const holdOf = (
   );
   return fields.length === 0
     ? null
-    : toHeldWrite<unknown>(id, opened, fields, token);
+    : toHeldWrite<unknown>(id, opened, fields, token, before !== null);
 };
 
 /** Each listed record a transaction changed, as its listener would read it, by kind; null when any of them can't be worked out, so none is held. */

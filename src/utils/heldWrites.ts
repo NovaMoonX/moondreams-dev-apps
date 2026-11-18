@@ -8,6 +8,8 @@ export interface HeldWrite<T> {
   settledAt: number | null;
   /** The fields the write set; another device's change to any other field never holds it back. */
   fields: string[];
+  /** A change to a record that already existed: it never brings back a record the list no longer has. */
+  isEdit?: boolean;
 }
 
 /** A settled hold the list never shows, though the list has been delivered since, lets go after this long. */
@@ -39,6 +41,7 @@ export const toHeldWrite = <T>(
   item: T | null,
   fields: readonly string[],
   token: string,
+  isEdit = false,
 ): HeldWrite<T> => ({
   id,
   item,
@@ -46,6 +49,7 @@ export const toHeldWrite = <T>(
   token,
   settledAt: null,
   fields: [...fields],
+  isEdit,
 });
 
 const hasLanded = <T>(hold: HeldWrite<T>, incoming: T | undefined): boolean => {
@@ -78,8 +82,12 @@ export function applyHeldWrites<T>(
   { now = Date.now(), deliveredAt = null }: ApplyHeldOptions = {},
 ): { list: T[]; held: HeldWrite<T>[] } {
   const byId = new Map(incoming.map((item) => [idOf(item), item]));
+  const adds = new Set(
+    held.filter((hold) => hold.isEdit !== true).map((hold) => hold.id),
+  );
   const kept = held.filter(
     (hold) =>
+      !(hold.isEdit === true && !byId.has(hold.id) && !adds.has(hold.id)) &&
       !hasLanded(hold, byId.get(hold.id)) &&
       !hasExpired(hold, now, deliveredAt),
   );
@@ -137,7 +145,7 @@ export const addHeldWrites = <T>(
     );
     return [
       {
-        ...toHeldWrite(hold.id, item, fields, hold.token),
+        ...toHeldWrite(hold.id, item, fields, hold.token, hold.isEdit),
         settledAt: hold.settledAt,
       },
     ];
@@ -171,7 +179,7 @@ export const patchHeldWrite = <T>(
     if (hold.id !== id || hold.item === null) return hold;
     const item = { ...hold.item, ...fields } as T;
     return {
-      ...toHeldWrite(hold.id, item, hold.fields, hold.token),
+      ...toHeldWrite(hold.id, item, hold.fields, hold.token, hold.isEdit),
       settledAt: hold.settledAt,
     };
   });

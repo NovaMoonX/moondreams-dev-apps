@@ -306,4 +306,29 @@ assert.deepEqual(
   'a hold shows only the fields it wrote, so a later write to another field shows through',
 );
 
+const edit = (cents: number, token = 'e1') =>
+  toHeldWrite<Row>('a', { id: 'a', cents }, ['cents'], token, true);
+const deleted = apply([], [edit(5)]);
+assert.deepEqual(
+  [deleted.list, deleted.held],
+  [[], []],
+  'an edit never brings back a record another write deleted, and lets go',
+);
+const createThenEdit = apply(
+  [],
+  addHeldWrites([hold({ id: 'a', cents: 1 }, 'a', 'c1')], [edit(5)]),
+);
+assert.deepEqual(
+  createThenEdit.list,
+  [{ id: 'a', cents: 5 }],
+  'an edit of a record still being created shows with it',
+);
+assert.equal(
+  addHeldWrites([], [edit(5)]).concat(
+    patchHeldWrite([edit(5)], 'a', { cents: 6 }),
+  )[1].isEdit,
+  true,
+  'a patched edit stays an edit',
+);
+
 console.log('held writes: all checks passed');

@@ -30,7 +30,6 @@ export interface GoingOnceState {
   openSale: { sale: Sale | null; status: LoadStatus };
   /** Tagged with the sale they were read for, so a stale list is never shown. */
   items: { saleId: string | null; items: Item[]; status: LoadStatus };
-  /** The items listener's own copy and the device's transactions waiting to show in it. */
   hold: HeldList<Item>;
   inquiries: {
     saleId: string | null;
@@ -112,6 +111,8 @@ export const goingOnceSlice = createSlice({
       };
     },
     setItemsError(state) {
+      if (state.hold.deliveredAt !== null)
+        state.items.items = state.hold.incoming;
       state.hold = emptyHeldList();
       state.items.status = 'error';
     },
@@ -168,7 +169,8 @@ export const goingOnceSlice = createSlice({
     retryLoading(state) {
       state.loadAttempt += 1;
       if (state.sales.status === 'error') state.sales.status = 'loading';
-      if (state.openSale.status === 'error') state.openSale.status = 'loading';
+      if (state.openSale.status === 'error')
+        state.openSale.status = 'loading';
       if (state.items.status === 'error') state.items.status = 'loading';
       if (state.inquiries.new.status === 'error')
         state.inquiries.new.status = 'loading';
