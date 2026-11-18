@@ -2864,6 +2864,7 @@ export function planWrites(input: PlanInput): WritePlan {
               answeredAt: null,
               skippedAt: null,
               dismissedAt: null,
+              reaskedAt: null,
             },
             sealed: buildWhichIsTrueQuestion({ older: before, newer }),
             spoken: buildSpokenWhichIsTrue(before.statement, newer.statement),
@@ -2880,6 +2881,7 @@ export function planWrites(input: PlanInput): WritePlan {
         answeredAt: null,
         skippedAt: null,
         dismissedAt: null,
+        reaskedAt: null,
       },
       sealed,
       spoken,
@@ -2926,6 +2928,7 @@ export function planWrites(input: PlanInput): WritePlan {
               answeredAt: null,
               skippedAt: null,
               dismissedAt: null,
+              reaskedAt: null,
             },
             sealed: buildTopicQuestion({ noteId, title, candidates }),
             spoken: buildSpokenWhichTopic(
@@ -3177,6 +3180,7 @@ function buildPickQuestions(input: {
       answeredAt: null,
       skippedAt: null,
       dismissedAt: null,
+      reaskedAt: null,
     },
     sealed,
     spoken,
@@ -3405,6 +3409,7 @@ export function planAsks(input: {
           answeredAt: null,
           skippedAt: null,
           dismissedAt: null,
+          reaskedAt: null,
         },
         sealed,
         spoken: buildSpokenQuestion(sealed),
@@ -3658,6 +3663,8 @@ export interface QuestionStateEntry {
   answeredAt: number | null;
   skippedAt: number | null;
   dismissedAt: number | null;
+  /** The person asked for it again; null until then, and absent on one from before. */
+  reaskedAt?: number | null;
 }
 
 interface SettleInput {
@@ -3737,6 +3744,7 @@ const asked = (kind: CodeQuestionKind, id: string, now: number) => ({
       answeredAt: null,
       skippedAt: null,
       dismissedAt: null,
+      reaskedAt: null,
     },
   },
   sealed: { [id]: buildCodeQuestion(kind) },
