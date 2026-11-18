@@ -1,4 +1,5 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { formatCents } from '@/utils/moneyUtils';
@@ -200,7 +201,7 @@ export async function putEnvelopeIntoHorizon(
     encryption,
   );
   const archivedAt = sealedMove.date;
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [plan, envelope, event, existing] = await Promise.all([
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
       transaction.get(planDoc(uid, 'items', input.envelopeId)),
@@ -287,7 +288,7 @@ export async function undoEnvelopeIntoHorizon(
       },
     ),
   ]);
-  return runTransaction(db, async (transaction) => {
+  return runHeldTransaction(uid, async (transaction) => {
     const [existing, plan, envelope] = await Promise.all([
       transaction.get(planDoc(uid, 'moves', id)),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),

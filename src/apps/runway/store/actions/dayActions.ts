@@ -1,4 +1,5 @@
-import { doc, runTransaction, setDoc } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -75,7 +76,7 @@ export async function saveDayOverride(
       )
     : null;
   const ref = doc(db, 'apps', 'runway', 'plans', uid, 'days', dayKey);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const existing = snapshot.exists()
       ? (snapshot.data() as Partial<IncomeDayDoc>)
@@ -378,7 +379,7 @@ export async function confirmDay(
   ]);
 
   const ref = dayRef(uid, dayId);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [snapshot, plan] = await Promise.all([
       transaction.get(ref),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
@@ -468,7 +469,7 @@ async function moveDay(
   const ref = dayRef(uid, dayId);
   const sealedEmpty =
     from === 'draft' ? await sealJson(EMPTY_OVERRIDE, encryption) : null;
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const existing = snapshot.exists()
       ? (snapshot.data() as Partial<IncomeDayDoc>)
@@ -578,7 +579,7 @@ export async function correctDay(
   const sealed = await sealJson(sealedPayload, encryption);
   const id = getCorrectionId(base.recordId);
   const ref = dayRef(uid, dayId);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [daySnapshot, replaced, existing, plan] = await Promise.all([
       transaction.get(ref),
       transaction.get(recordRef(uid, dayId, base.recordId)),
@@ -643,7 +644,7 @@ export async function carryDayOverrides(
   const results = await Promise.allSettled(
     moves.map(({ fromId, to }) => {
       const toId = toDayKey(to.payLineId, to.expectedOn);
-      return runTransaction(db, async (transaction) => {
+      return runHeldTransaction(uid, async (transaction) => {
         const [fromSnapshot, toSnapshot] = await Promise.all([
           transaction.get(dayRef(uid, fromId)),
           transaction.get(dayRef(uid, toId)),
