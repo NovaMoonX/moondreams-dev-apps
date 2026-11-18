@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
@@ -8,6 +8,7 @@ import type {
   ExpenseLink,
   TripSpace,
 } from '@apps/waypoint/types';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import { PLAN_COLLECTIONS } from '@apps/waypoint/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
@@ -214,7 +215,7 @@ export const linkChecklistItems = createAsyncThunk<void, LinkChecklistItemsInput
   'waypoint/checklist/link',
   async ({ tripId, itemIds, link }, { rejectWithValue }) => {
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(tripId, async (transaction) => {
         const itemRefs = itemIds.map((itemId) => doc(CHECKLIST_COLLECTION(tripId), itemId));
         const snapshots = await Promise.all(itemRefs.map((itemRef) => transaction.get(itemRef)));
         const currentLinks = snapshots.map((snapshot) => {
@@ -251,7 +252,7 @@ export const unlinkChecklistItems = createAsyncThunk<
   'waypoint/checklist/unlink',
   async ({ tripId, itemIds, link }, { rejectWithValue }) => {
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(tripId, async (transaction) => {
         const itemRefs = itemIds.map((itemId) => doc(CHECKLIST_COLLECTION(tripId), itemId));
         const snapshots = await Promise.all(itemRefs.map((itemRef) => transaction.get(itemRef)));
         const lastEditedAt = Date.now();

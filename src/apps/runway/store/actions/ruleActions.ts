@@ -1,4 +1,5 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
+import { doc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -74,7 +75,7 @@ export async function createRule(
     sealJson(toPayload(input), encryption),
     sealChange(encryption, summary, input.target, now),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     transaction.set(ruleRef(uid, id), {
       id,
       createdAt: now,
@@ -103,7 +104,7 @@ export async function updateRule(
     sealJson(toPayload(input), encryption),
     sealChange(encryption, summary, input.target, now),
   ]);
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const stored = await transaction.get(ruleRef(uid, previous.id));
     if (
       !stored.exists() ||
@@ -133,7 +134,7 @@ export async function deleteRule(
     previous.target,
     Date.now(),
   );
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const stored = await transaction.get(ruleRef(uid, previous.id));
     if (!stored.exists()) throw new Error(RULE_WORDS.gone);
     transaction.delete(ruleRef(uid, previous.id));

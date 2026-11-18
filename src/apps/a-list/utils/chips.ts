@@ -1,5 +1,5 @@
 import { MAX_FEE_CHIPS, MAX_TAX_CHIPS } from '@apps/a-list/constants';
-import type { AmcFormat, Viewing } from '@apps/a-list/types';
+import type { AmcFormat, TaxChoice, Viewing } from '@apps/a-list/types';
 import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 
 /** Five decimals, so a three-decimal percent like 8.875% survives. */
@@ -72,6 +72,17 @@ export interface TicketSuggestion {
   taxRate: number | null;
   /** The rate came from tickets at this theater. */
   isTaxLearned: boolean;
+  /** The rate this theater's rate stands in for when AMC lists its own tax: this theater's, else the member's most-used rate anywhere. */
+  usualTaxRate: number | null;
+  /** Which figure starts the field when AMC's tax and the usual rate disagree: AMC only once it has been kept here more often. */
+  preferredTaxChoice: TaxChoice;
+}
+
+function getPreferredTaxChoice(here: Viewing[]): TaxChoice {
+  const count = (choice: TaxChoice) =>
+    here.filter((viewing) => viewing.ticket!.taxChoice === choice).length;
+  const result = count('AMC') > count('USUAL') ? 'AMC' : 'USUAL';
+  return result;
 }
 
 function getMostUsed(uses: { value: number; at: number }[]): number | null {
@@ -120,13 +131,14 @@ function getBestFittingRate(taxed: Viewing[]): number | null {
 /**
  * Tax follows the theater (it's a local rate) and the fee follows the theater and format (premium
  * formats charge more). Both take the most-used value, ties to the most recent. With no history the
- * fee falls back to `fallbackFeeCents` and the tax stays unknown.
+ * fee falls back to `fallbackFeeCents` and the tax stays unknown unless AMC lists one.
  */
 export function getTicketSuggestion(
   viewings: Viewing[],
   theatreId: string | null,
   format: AmcFormat,
   fallbackFeeCents: number,
+  fallbackTaxRate: number | null,
 ): TicketSuggestion {
   const here = viewings.filter(
     (viewing) =>
@@ -152,6 +164,8 @@ export function getTicketSuggestion(
     isFeeLearned: learnedFee !== null,
     taxRate: learnedRate,
     isTaxLearned: learnedRate !== null,
+    usualTaxRate: learnedRate ?? fallbackTaxRate,
+    preferredTaxChoice: getPreferredTaxChoice(here),
   };
   return result;
 }

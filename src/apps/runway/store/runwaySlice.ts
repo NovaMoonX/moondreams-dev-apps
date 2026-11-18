@@ -1,6 +1,22 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import {
+  createAction,
+  createSlice,
+  type PayloadAction,
+} from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import {
+  addHeldWrites,
+  applyHeldWrites,
+  dropHeldWrites,
+  patchHeldWrite,
+  settleHeldWrites,
+  type HeldWrite,
+} from '@/utils/heldWrites';
+import {
+  layPurchaseLists,
+  type PurchaseList,
+} from '@apps/runway/utils/purchaseHolds';
 import { withBankBalances } from '@apps/runway/engine/accounts';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -13,6 +29,7 @@ import type {
   OpenCard,
   OpenExpense,
   OpenMemory,
+  OpenStartedPayment,
   OpenRule,
   OpenChange,
   OpenDay,
@@ -68,6 +85,7 @@ export interface RunwayState {
   isRulesLoaded: boolean;
   /** The moves and payers the person confirmed by hand, and whether they have been read once, so no pass runs before they arrive. */
   memories: OpenMemory[];
+  startedPayments: OpenStartedPayment[];
   isMemoriesLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
@@ -105,7 +123,72 @@ export interface RunwayState {
   /** The confirmed day ids the history records were read for, as the selector joins them. */
   historyRecordsFor: string | null;
   historyFailedFor: string | null;
+  incoming: HeldLists;
+  incomingNeedsHome: OpenPurchase[];
+  incomingPeriod: OpenPurchase[];
+  deliveredAtNeedsHome: number | null;
+  deliveredAtPeriod: number | null;
+  purchaseLanded: Record<string, PurchaseList[]>;
+  held: { [K in HeldKind]: HeldWrite<HeldLists[K][number]>[] };
+  deliveredAt: { [K in HeldKind]: number | null };
 }
+
+interface HeldLists {
+  days: OpenDay[];
+  records: OpenRecord[];
+  moves: OpenMove[];
+  purchases: OpenPurchase[];
+}
+
+export type HeldKind = keyof HeldLists;
+
+export interface HeldWritesInput {
+  token: string;
+  days?: HeldWrite<OpenDay>[];
+  records?: HeldWrite<OpenRecord>[];
+  moves?: HeldWrite<OpenMove>[];
+  purchases?: HeldWrite<OpenPurchase>[];
+}
+
+const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves', 'purchases'];
+
+const layPurchases = (state: RunwayState) => {
+  const laid = layPurchaseLists({
+    window: state.incoming.purchases,
+    needsHome: state.incomingNeedsHome,
+    period: state.incomingPeriod,
+    deliveredAt: {
+      window: state.deliveredAt.purchases,
+      needsHome: state.deliveredAtNeedsHome,
+      period: state.deliveredAtPeriod,
+    },
+    purchasesFrom: state.purchasesFrom,
+    periodFor:
+      state.periodFailedFor === state.periodFor ? null : state.periodFor,
+    held: state.held.purchases,
+    landed: state.purchaseLanded,
+  });
+  state.purchases = laid.purchases;
+  state.needsHome = laid.needsHome;
+  state.periodPurchases = laid.periodPurchases;
+  state.held.purchases = laid.held;
+  state.purchaseLanded = laid.landed;
+};
+
+const layHeld = (state: RunwayState, kind: HeldKind) => {
+  if (kind === 'purchases') {
+    layPurchases(state);
+    return;
+  }
+  const { list, held } = applyHeldWrites<HeldLists[typeof kind][number]>(
+    state.incoming[kind],
+    state.held[kind],
+    (item) => item.id,
+    { deliveredAt: state.deliveredAt[kind] },
+  );
+  (state[kind] as HeldLists[typeof kind]) = list as HeldLists[typeof kind];
+  (state.held[kind] as HeldWrite<HeldLists[typeof kind][number]>[]) = held;
+};
 
 const initialState: RunwayState = {
   keyStatus: 'idle',
@@ -136,6 +219,7 @@ const initialState: RunwayState = {
   rules: [],
   isRulesLoaded: false,
   memories: [],
+  startedPayments: [],
   isMemoriesLoaded: false,
   purchases: [],
   needsHome: [],
@@ -160,7 +244,25 @@ const initialState: RunwayState = {
   historyFor: null,
   historyRecordsFor: null,
   historyFailedFor: null,
+  incoming: { days: [], records: [], moves: [], purchases: [] },
+  incomingNeedsHome: [],
+  incomingPeriod: [],
+  deliveredAtNeedsHome: null,
+  deliveredAtPeriod: null,
+  purchaseLanded: {},
+  deliveredAt: { days: null, records: null, moves: null, purchases: null },
+  held: { days: [], records: [], moves: [], purchases: [] },
 };
+
+export const holdWrites = createAction<HeldWritesInput>('runway/holdWrites');
+export const settleWrites = createAction<string>('runway/settleWrites');
+export const dropWrites = createAction<string>('runway/dropWrites');
+// A plain write to a held record shows through the hold, which would otherwise hide Firestore's own local copy.
+export const patchHeld = createAction<{
+  kind: HeldKind;
+  id: string;
+  fields: Record<string, unknown>;
+}>('runway/patchHeld');
 
 export const runwaySlice = createSlice({
   name: 'runway',
@@ -190,7 +292,9 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ from: DateOnly; days: OpenDay[] }>,
     ) => {
-      state.days = action.payload.days;
+      state.incoming.days = action.payload.days;
+      state.deliveredAt.days = Date.now();
+      layHeld(state, 'days');
       state.daysFrom = action.payload.from;
     },
     setChanges: (
@@ -208,7 +312,9 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<{ dayIds: string; records: OpenRecord[] }>,
     ) => {
-      state.records = action.payload.records;
+      state.incoming.records = action.payload.records;
+      state.deliveredAt.records = Date.now();
+      layHeld(state, 'records');
       state.recordsFor = action.payload.dayIds;
     },
     setExpenses: (state, action: PayloadAction<OpenExpense[]>) => {
@@ -253,19 +359,29 @@ export const runwaySlice = createSlice({
       state.recurringCharges = action.payload;
       state.isRecurringChargesLoaded = true;
     },
+    setStartedPayments: (
+      state,
+      action: PayloadAction<OpenStartedPayment[]>,
+    ) => {
+      state.startedPayments = action.payload;
+    },
     setMoves: (
       state,
       action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
     ) => {
-      state.moves = action.payload.moves;
+      state.incoming.moves = action.payload.moves;
+      state.deliveredAt.moves = Date.now();
+      layHeld(state, 'moves');
       state.movesFrom = action.payload.from;
     },
     setPurchases: (
       state,
       action: PayloadAction<{ from: DateOnly; purchases: OpenPurchase[] }>,
     ) => {
-      state.purchases = action.payload.purchases;
+      state.incoming.purchases = action.payload.purchases;
+      state.deliveredAt.purchases = Date.now();
       state.purchasesFrom = action.payload.from;
+      layPurchases(state);
     },
     setLinkHistoryPurchases: (
       state,
@@ -274,24 +390,31 @@ export const runwaySlice = createSlice({
       state.linkHistoryPurchases = action.payload;
     },
     setNeedsHome: (state, action: PayloadAction<OpenPurchase[]>) => {
-      state.needsHome = action.payload;
+      state.incomingNeedsHome = action.payload;
+      state.deliveredAtNeedsHome = Date.now();
       state.isNeedsHomeLoaded = true;
+      layPurchases(state);
     },
     setPeriodPurchases: (
       state,
       action: PayloadAction<{ key: string; purchases: OpenPurchase[] }>,
     ) => {
-      state.periodPurchases = action.payload.purchases;
+      state.incomingPeriod = action.payload.purchases;
+      state.deliveredAtPeriod = Date.now();
       state.periodFor = action.payload.key;
       state.periodFailedFor = null;
+      layPurchases(state);
     },
     clearPeriodPurchases: (state) => {
-      state.periodPurchases = [];
+      state.incomingPeriod = [];
+      state.deliveredAtPeriod = null;
       state.periodFor = null;
       state.periodFailedFor = null;
+      layPurchases(state);
     },
     setPeriodFailed: (state, action: PayloadAction<string>) => {
       state.periodFailedFor = action.payload;
+      layPurchases(state);
     },
     setHistoryDays: (
       state,
@@ -333,6 +456,48 @@ export const runwaySlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    builder.addCase(holdWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        const added = action.payload[kind] ?? [];
+        const before = state.held[kind] as HeldWrite<unknown>[];
+        if (added.length === 0 && before.length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = addHeldWrites<unknown>(
+          dropHeldWrites<unknown>(before, action.payload.token),
+          added,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(settleWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        if (state.held[kind].length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = settleHeldWrites<unknown>(
+          state.held[kind],
+          action.payload,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(dropWrites, (state, action) => {
+      HELD_KINDS.forEach((kind) => {
+        if (state.held[kind].length === 0) return;
+        (state.held[kind] as HeldWrite<unknown>[]) = dropHeldWrites<unknown>(
+          state.held[kind],
+          action.payload,
+        );
+        layHeld(state, kind);
+      });
+    });
+    builder.addCase(patchHeld, (state, action) => {
+      const { kind, id, fields } = action.payload;
+      if (!state.held[kind].some((hold) => hold.id === id)) return;
+      (state.held[kind] as HeldWrite<unknown>[]) = patchHeldWrite<unknown>(
+        state.held[kind],
+        id,
+        fields,
+      );
+      layHeld(state, kind);
+    });
     builder.addCase(resetAllState, () => initialState);
   },
 });
@@ -353,6 +518,7 @@ export const {
   setAccountBalances,
   setCardStatements,
   setRecurringCharges,
+  setStartedPayments,
   setExpenses,
   setRules,
   setMemories,

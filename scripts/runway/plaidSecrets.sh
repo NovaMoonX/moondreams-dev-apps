@@ -69,7 +69,7 @@ case "$mode" in
   production)
     need curl "It ships with macOS and most Linux systems."
     need firebase "Install it with: npm install -g firebase-tools"
-    firebase login:list 2>/dev/null | grep -q '@' || { echo "✗ The firebase CLI isn't signed in. Run: firebase login" >&2; exit 1; }
+    source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
     ask_keys production
     check_keys production
     trap '[[ $? -eq 0 ]] || echo "✗ Stopped partway: run the same command again; it saves both." >&2' EXIT

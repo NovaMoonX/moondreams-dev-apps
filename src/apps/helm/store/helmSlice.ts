@@ -1,0 +1,585 @@
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+
+import {
+  addHeldWrites,
+  dropHeldWrites,
+  settleHeldWrites,
+  type HeldWrite,
+} from '@/utils/heldWrites';
+import { ACTIVITY_PAGE } from '@apps/helm/constants';
+import {
+  emptyHelmHeld,
+  HELM_HELD_KINDS,
+  kindOfList,
+  layHelmKind,
+  type HelmHeldItems,
+  type HelmHeldKind,
+  type HelmHeldLists,
+  type HelmHeldState,
+  type HelmListName,
+} from '@apps/helm/utils/heldLists';
+import { resetAllState } from '@/store/actions/globalActions';
+import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
+import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
+import type {
+  HelmProfile,
+  OpenCapture,
+  OpenConnectedAssistant,
+  OpenExecution,
+  OpenFact,
+  OpenMedia,
+  OpenNote,
+  OpenPlace,
+  OpenProject,
+  OpenTask,
+  OpenProcedure,
+  OpenRun,
+  OpenTopic,
+  OpenWho,
+  PlanDay,
+  SyncedRecord,
+} from '@apps/helm/types';
+
+export interface CaptureSet {
+  captures: OpenCapture[];
+  /** Whether the first snapshot has arrived, so an empty set is never mistaken for one still loading. */
+  isLoaded: boolean;
+  /** Set when the listener failed; the last value stays. */
+  isFailed: boolean;
+}
+
+export interface LoadedSet<T> {
+  items: T[];
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
+export interface KeyDateIndexSet extends OpenKeyDateIndex {
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
+export interface PlanDaySet {
+  /** Keyed by day ("YYYY-MM-DD" in the profile's zone). */
+  byId: Record<string, PlanDay>;
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
+/** Whether the data key is here: `offline` when it couldn't be asked for, `failed` when the server refused it. */
+export type KeyStatus = 'loading' | 'ready' | 'offline' | 'failed';
+
+export interface HelmState {
+  keyStatus: KeyStatus;
+  /** Raised by Try again; asking for the key again follows it. */
+  keyAttempt: number;
+  isKeyRetrying: boolean;
+  /** Set while the app is open on this browser's kept key: when the server last confirmed it (0 when unknown), for the "As of" line. */
+  /** Refusals in a row, so a Try again that fails again can say so. */
+  keyRefusals: number;
+  /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
+  profile: HelmProfile | null;
+  isProfileLoaded: boolean;
+  /** The uid the profile belongs to, so a person's profile never shows for another. */
+  uid: string | null;
+  /** Turns from yesterday on (the home surface's eager window). */
+  recentCaptures: CaptureSet;
+  /** Turns not yet seen in the Inbox, whenever they were said. */
+  unseenCaptures: CaptureSet;
+  /** Turns waiting to be read, being read, failed or asking the person, whenever they were said. */
+  waitingCaptures: CaptureSet;
+  /** Turns an outside assistant sent, whenever they were sent: the "From your assistants" view reads these, never home. */
+  outsideCaptures: CaptureSet;
+  /** The person's open tasks, newest first. */
+  openTasks: LoadedSet<OpenTask>;
+  /** Every task that belongs to a project, open or done. */
+  projectTasks: LoadedSet<OpenTask>;
+  /** The plan days from yesterday to six days ahead. */
+  planDays: PlanDaySet;
+  /** The person's confirmed and inferred facts, and the superseded ones they replaced. */
+  facts: LoadedSet<OpenFact>;
+  /** The people, pets and organizations the person knows. */
+  who: LoadedSet<OpenWho>;
+  /** The sealed index of the dates that come back each year, opened. */
+  keyDateIndex: KeyDateIndexSet;
+  /** The places the person has named. */
+  places: LoadedSet<OpenPlace>;
+  /** The projects the person has started, active and finished. */
+  projects: LoadedSet<OpenProject>;
+  /** The person's notes, newest first. */
+  notes: LoadedSet<OpenNote>;
+  /** The topics notes are filed under, every level. */
+  topics: LoadedSet<OpenTopic>;
+  /** The person's procedures, opened. */
+  procedures: LoadedSet<OpenProcedure>;
+  /** The runs still going. */
+  openRuns: LoadedSet<OpenRun>;
+  /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
+  media: LoadedSet<OpenMedia>;
+  /** The person's writing-style profiles, opened. */
+  style: LoadedSet<OpenStyle>;
+  /** The outside assistants the person connected, most recently used first; disconnected ones are left out. */
+  assistants: LoadedSet<OpenConnectedAssistant>;
+  /** Copies of other apps' records, opened. */
+  synced: LoadedSet<SyncedRecord>;
+  /** What the assistant did for the turns in the eager window. */
+  recentExecutions: LoadedSet<OpenExecution>;
+  /** What it did for the earlier sessions scrolled into view. */
+  earlierExecutions: OpenExecution[];
+  /** Every execution, newest first, while Activity is open. */
+  activity: LoadedSet<OpenExecution> & { limit: number; isExhausted: boolean };
+  /** Executions fetched by id that couldn't be opened, so their turns can say so. */
+  failedExecutionIds: string[];
+  /** Older sessions, brought in a page at a time as the person scrolls up. */
+  earlier: {
+    captures: OpenCapture[];
+    isLoading: boolean;
+    isFailed: boolean;
+    isExhausted: boolean;
+  };
+  /** The listeners' own lists and this device's transaction writes held over them until they show. */
+  hold: HelmHeldState;
+}
+
+export interface HelmHoldInput {
+  token: string;
+  writes: { [K in HelmHeldKind]?: HeldWrite<HelmHeldItems[K]>[] };
+}
+
+const layKind = (state: HelmState, kind: HelmHeldKind) => {
+  const laid = layHelmKind(kind, state.hold);
+  (Object.entries(laid.lists) as [HelmListName, unknown[]][]).forEach(
+    ([name, items]) => {
+      (state[name] as LoadedSet<unknown>).items = items;
+    },
+  );
+  (state.hold.held[kind] as HeldWrite<unknown>[]) = laid.held;
+  state.hold.landed[kind] = laid.landed;
+};
+
+const deliver = <L extends HelmListName>(
+  state: HelmState,
+  name: L,
+  items: HelmHeldLists[L][],
+) => {
+  (state.hold.incoming[name] as HelmHeldLists[L][]) = items;
+  state.hold.deliveredAt[name] = Date.now();
+  state.hold.failed[name] = false;
+  const kind = kindOfList(name);
+  if (state.hold.held[kind].length === 0) {
+    (state[name] as LoadedSet<HelmHeldLists[L]>) = {
+      items,
+      isLoaded: true,
+      isFailed: false,
+    };
+    return;
+  }
+  layKind(state, kind);
+  state[name].isLoaded = true;
+  state[name].isFailed = false;
+};
+
+const fail = (state: HelmState, name: HelmListName) => {
+  state[name].isFailed = true;
+  state.hold.failed[name] = true;
+  const kind = kindOfList(name);
+  if (state.hold.held[kind].length > 0) layKind(state, kind);
+};
+
+const changeHolds = (
+  state: HelmState,
+  change: (
+    held: HeldWrite<unknown>[],
+    kind: HelmHeldKind,
+  ) => HeldWrite<unknown>[],
+) =>
+  HELM_HELD_KINDS.forEach((kind) => {
+    const before = state.hold.held[kind] as HeldWrite<unknown>[];
+    const after = change(before, kind);
+    if (before.length === 0 && after.length === 0) return;
+    (state.hold.held[kind] as HeldWrite<unknown>[]) = after;
+    layKind(state, kind);
+  });
+
+const emptySet: CaptureSet = { captures: [], isLoaded: false, isFailed: false };
+
+const emptyLoadedSet = { items: [], isLoaded: false, isFailed: false };
+
+const emptyPlanDays: PlanDaySet = {
+  byId: {},
+  isLoaded: false,
+  isFailed: false,
+};
+
+const emptyKeyDateIndex: KeyDateIndexSet = {
+  byWho: {},
+  entryCount: 0,
+  rebuiltAt: null,
+  isLoaded: false,
+  isFailed: false,
+};
+
+const initialState: HelmState = {
+  keyStatus: 'loading',
+  keyAttempt: 0,
+  isKeyRetrying: false,
+  keyRefusals: 0,
+  profile: null,
+  isProfileLoaded: false,
+  uid: null,
+  recentCaptures: emptySet,
+  unseenCaptures: emptySet,
+  waitingCaptures: emptySet,
+  outsideCaptures: emptySet,
+  openTasks: emptyLoadedSet,
+  projectTasks: emptyLoadedSet,
+  planDays: emptyPlanDays,
+  facts: emptyLoadedSet,
+  who: emptyLoadedSet,
+  keyDateIndex: emptyKeyDateIndex,
+  places: emptyLoadedSet,
+  projects: emptyLoadedSet,
+  notes: emptyLoadedSet,
+  topics: emptyLoadedSet,
+  procedures: emptyLoadedSet,
+  openRuns: emptyLoadedSet,
+  media: emptyLoadedSet,
+  style: emptyLoadedSet,
+  assistants: emptyLoadedSet,
+  synced: emptyLoadedSet,
+  recentExecutions: emptyLoadedSet,
+  earlierExecutions: [],
+  activity: {
+    ...emptyLoadedSet,
+    limit: ACTIVITY_PAGE,
+    isExhausted: false,
+  },
+  failedExecutionIds: [],
+  earlier: {
+    captures: [],
+    isLoading: false,
+    isFailed: false,
+    isExhausted: false,
+  },
+  hold: emptyHelmHeld(),
+};
+
+const helmSlice = createSlice({
+  name: 'helm',
+  initialState,
+  reducers: {
+    setKeyStatus: (state, action: PayloadAction<KeyStatus>) => {
+      state.keyStatus = action.payload;
+      state.isKeyRetrying = false;
+      state.keyRefusals =
+        action.payload === 'failed' ? state.keyRefusals + 1 : 0;
+    },
+    retryKey: (state) => {
+      state.keyAttempt += 1;
+      state.isKeyRetrying = true;
+    },
+    setProfile: (
+      state,
+      action: PayloadAction<{ uid: string; profile: HelmProfile | null }>,
+    ) => {
+      state.uid = action.payload.uid;
+      state.profile = action.payload.profile;
+      state.isProfileLoaded = true;
+    },
+    setRecentCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.recentCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setRecentCapturesFailed: (state) => {
+      state.recentCaptures.isFailed = true;
+    },
+    setUnseenCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.unseenCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setUnseenCapturesFailed: (state) => {
+      state.unseenCaptures.isFailed = true;
+    },
+    setWaitingCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.waitingCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setWaitingCapturesFailed: (state) => {
+      state.waitingCaptures.isFailed = true;
+    },
+    setOutsideCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.outsideCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setOutsideCapturesFailed: (state) => {
+      state.outsideCaptures.isFailed = true;
+    },
+    setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
+      deliver(state, 'openTasks', action.payload);
+    },
+    setOpenTasksFailed: (state) => fail(state, 'openTasks'),
+    setProjectTasks: (state, action: PayloadAction<OpenTask[]>) => {
+      deliver(state, 'projectTasks', action.payload);
+    },
+    setProjectTasksFailed: (state) => fail(state, 'projectTasks'),
+    setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
+      state.planDays = {
+        byId: Object.fromEntries(
+          action.payload.map((entry) => [entry.id, entry]),
+        ),
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setPlanDaysFailed: (state) => {
+      state.planDays.isFailed = true;
+    },
+    setFacts: (state, action: PayloadAction<OpenFact[]>) => {
+      deliver(state, 'facts', action.payload);
+    },
+    setFactsFailed: (state) => fail(state, 'facts'),
+    setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
+      deliver(state, 'style', action.payload);
+    },
+    setStyleFailed: (state) => fail(state, 'style'),
+    setAssistants: (state, action: PayloadAction<OpenConnectedAssistant[]>) => {
+      state.assistants = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setAssistantsFailed: (state) => {
+      state.assistants.isFailed = true;
+    },
+    setWho: (state, action: PayloadAction<OpenWho[]>) => {
+      deliver(state, 'who', action.payload);
+    },
+    setWhoFailed: (state) => fail(state, 'who'),
+    setKeyDateIndex: (state, action: PayloadAction<OpenKeyDateIndex>) => {
+      state.keyDateIndex = {
+        ...action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setKeyDateIndexFailed: (state) => {
+      state.keyDateIndex.isFailed = true;
+    },
+    setPlaces: (state, action: PayloadAction<OpenPlace[]>) => {
+      deliver(state, 'places', action.payload);
+    },
+    setPlacesFailed: (state) => fail(state, 'places'),
+    setProjects: (state, action: PayloadAction<OpenProject[]>) => {
+      deliver(state, 'projects', action.payload);
+    },
+    setProjectsFailed: (state) => fail(state, 'projects'),
+    setNotes: (state, action: PayloadAction<OpenNote[]>) => {
+      deliver(state, 'notes', action.payload);
+    },
+    setNotesFailed: (state) => fail(state, 'notes'),
+    setTopics: (state, action: PayloadAction<OpenTopic[]>) => {
+      deliver(state, 'topics', action.payload);
+    },
+    setTopicsFailed: (state) => fail(state, 'topics'),
+    setProcedures: (state, action: PayloadAction<OpenProcedure[]>) => {
+      deliver(state, 'procedures', action.payload);
+    },
+    setProceduresFailed: (state) => fail(state, 'procedures'),
+    setOpenRuns: (state, action: PayloadAction<OpenRun[]>) => {
+      deliver(state, 'openRuns', action.payload);
+    },
+    setOpenRunsFailed: (state) => fail(state, 'openRuns'),
+    setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
+      deliver(state, 'media', action.payload);
+    },
+    setMediaFailed: (state) => fail(state, 'media'),
+    setSynced: (state, action: PayloadAction<SyncedRecord[]>) => {
+      state.synced = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setSyncedFailed: (state) => {
+      state.synced.isFailed = true;
+    },
+    setRecentExecutions: (state, action: PayloadAction<OpenExecution[]>) => {
+      state.recentExecutions = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setRecentExecutionsFailed: (state) => {
+      state.recentExecutions.isFailed = true;
+    },
+    addEarlierExecutions: (state, action: PayloadAction<OpenExecution[]>) => {
+      const known = new Set(state.earlierExecutions.map((entry) => entry.id));
+      state.earlierExecutions = [
+        ...state.earlierExecutions,
+        ...action.payload.filter((entry) => !known.has(entry.id)),
+      ];
+    },
+    markExecutionPartUndone: (
+      state,
+      action: PayloadAction<{
+        executionId: string;
+        undoExecutionId: string;
+        undoneDocIds: string[];
+        isFinal: boolean;
+      }>,
+    ) => {
+      const { executionId, undoExecutionId, undoneDocIds, isFinal } =
+        action.payload;
+      const patch = (entry: OpenExecution) =>
+        entry.id === executionId
+          ? {
+              ...entry,
+              undoneDocIds,
+              partUndoIds: entry.partUndoIds.includes(undoExecutionId)
+                ? entry.partUndoIds
+                : [...entry.partUndoIds, undoExecutionId],
+              ...(isFinal && { undoneByExecutionId: undoExecutionId }),
+            }
+          : entry;
+      state.earlierExecutions = state.earlierExecutions.map(patch);
+      state.recentExecutions.items = state.recentExecutions.items.map(patch);
+      state.activity.items = state.activity.items.map(patch);
+    },
+    setActivity: (state, action: PayloadAction<OpenExecution[]>) => {
+      state.activity = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+        limit: state.activity.limit,
+        isExhausted: action.payload.length < state.activity.limit,
+      };
+    },
+    setActivityFailed: (state) => {
+      state.activity.isFailed = true;
+    },
+    showMoreActivity: (state, action: PayloadAction<number>) => {
+      if (state.activity.limit === action.payload) {
+        state.activity.limit += ACTIVITY_PAGE;
+      }
+    },
+    clearActivity: (state) => {
+      state.activity = initialState.activity;
+    },
+    addFailedExecutions: (state, action: PayloadAction<string[]>) => {
+      state.failedExecutionIds = [
+        ...new Set([...state.failedExecutionIds, ...action.payload]),
+      ];
+    },
+    startLoadingEarlier: (state) => {
+      state.earlier.isLoading = true;
+      state.earlier.isFailed = false;
+    },
+    addEarlierCaptures: (
+      state,
+      action: PayloadAction<{ captures: OpenCapture[]; isExhausted: boolean }>,
+    ) => {
+      state.earlier = {
+        captures: [...state.earlier.captures, ...action.payload.captures],
+        isLoading: false,
+        isFailed: false,
+        isExhausted: action.payload.isExhausted,
+      };
+    },
+    setEarlierFailed: (state) => {
+      state.earlier.isLoading = false;
+      state.earlier.isFailed = true;
+    },
+    holdHelmWrites: (state, action: PayloadAction<HelmHoldInput>) =>
+      changeHolds(state, (held, kind) =>
+        addHeldWrites(
+          dropHeldWrites(held, action.payload.token),
+          (action.payload.writes[kind] ?? []) as HeldWrite<unknown>[],
+        ),
+      ),
+    settleHelmWrites: (state, action: PayloadAction<string>) =>
+      changeHolds(state, (held) => settleHeldWrites(held, action.payload)),
+    dropHelmWrites: (state, action: PayloadAction<string>) =>
+      changeHolds(state, (held) => dropHeldWrites(held, action.payload)),
+    clearHelm: () => initialState,
+  },
+  extraReducers: (builder) => {
+    builder.addCase(resetAllState, () => initialState);
+  },
+});
+
+export const {
+  holdHelmWrites,
+  settleHelmWrites,
+  dropHelmWrites,
+  setProfile,
+  setRecentCaptures,
+  setRecentCapturesFailed,
+  setUnseenCaptures,
+  setUnseenCapturesFailed,
+  setWaitingCaptures,
+  setWaitingCapturesFailed,
+  setOutsideCaptures,
+  setOutsideCapturesFailed,
+  setOpenTasks,
+  setOpenTasksFailed,
+  setProjectTasks,
+  setProjectTasksFailed,
+  setPlanDays,
+  setPlanDaysFailed,
+  setFacts,
+  setFactsFailed,
+  setWho,
+  setWhoFailed,
+  setKeyDateIndex,
+  setKeyDateIndexFailed,
+  setPlaces,
+  setPlacesFailed,
+  setProjects,
+  setProjectsFailed,
+  setNotes,
+  setNotesFailed,
+  setTopics,
+  setTopicsFailed,
+  setProcedures,
+  setProceduresFailed,
+  setOpenRuns,
+  setOpenRunsFailed,
+  setMedia,
+  setMediaFailed,
+  setSynced,
+  setSyncedFailed,
+  setRecentExecutions,
+  setRecentExecutionsFailed,
+  addEarlierExecutions,
+  markExecutionPartUndone,
+  setActivity,
+  setActivityFailed,
+  showMoreActivity,
+  clearActivity,
+  addFailedExecutions,
+  startLoadingEarlier,
+  addEarlierCaptures,
+  setEarlierFailed,
+  setStyle,
+  setStyleFailed,
+  setAssistants,
+  setAssistantsFailed,
+  clearHelm,
+  setKeyStatus,
+  retryKey,
+} = helmSlice.actions;
+export const helmReducer = helmSlice.reducer;

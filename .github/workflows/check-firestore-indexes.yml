@@ -6,6 +6,8 @@ on:
       - 'functions/src/**'
       - 'firestore.indexes.json'
       - 'firestore.rules'
+      - 'firebase.json'
+      - 'cloudflare-worker.js'
       - 'scripts/checkRulesSize.ts'
       - 'scripts/checkFirestoreIndexes.ts'
       - 'scripts/fbInvoker.ts'
@@ -27,7 +29,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:indexes
+      - run: npm run check:server-copies
+      - run: npm run check:connection-boundaries
+      - run: npm run check:share-fields
       - run: npm run check:rules-size
+      - run: npm run check:serving
       - run: npm run check:gates
       - run: npm run check:pipeline-map
       - run: npm run check:pipeline-answers
@@ -71,7 +77,35 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:option-match
+      - run: npm run check:held-writes
+      - run: npm run check:runway-purchase-holds
+      - run: npm run check:project-writes
+      - run: npm run check:helm-held-lists
+      - run: npm run check:pinch-held-lists
+      - run: npm run check:waypoint-held-lists
+      - run: npm run check:a-list-held-lists
       - run: npm run check:runway-notify-text
       - run: npm run check:waypoint-pushes
+      - run: npm run check:waypoint-balances
       - run: npm run check:a-list
       - run: npm run check:receipts
+      - run: npm run check:helm-copy
+      - run: npm run check:natural-dates
+      - run: npm run check:helm-undo
+      - run: npm run check:helm-activation
+      - run: npm run check:helm-task-edits
+      - run: npm ci --prefix functions
+      - run: npm run check:helm-sort
+      - run: npm run check:helm-screen
+      - run: npm run check:helm-topic-tree
+      - run: npm run check:helm-notes
+      - run: npm run check:helm-note-search
+      - run: npm run check:helm-topic-write
+      - run: npm run check:helm-procedures
+      - run: npm run check:helm-procedure-steps
+      - run: npm run check:helm-runs
+      - run: npm run check:helm-style
+      - run: npm run check:helm-assistant
+      - run: npm run check:helm-search
+      - run: npm run check:helm-drop-box
+      - run: npm run check:helm-trust

@@ -4,13 +4,13 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  runTransaction,
   setDoc,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import { ASSIGNABLE_MEMBER_ROLES } from '@apps/waypoint/constants';
 import type {
   TripJoinRequest,
@@ -107,7 +107,7 @@ export const approveJoinRequest = createAsyncThunk<
     const requestRef = pendingRequestRef(uid, tripId);
 
     try {
-      const request = await runTransaction(db, async (transaction) => {
+      const request = await runHeldTransaction(tripId, async (transaction) => {
         const tripSnapshot = await transaction.get(tripRef);
         if (!tripSnapshot.exists()) {
           throw new Error('Trip not found.');
@@ -210,7 +210,7 @@ export const changeRole = createAsyncThunk<
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
 
     try {
-      return await runTransaction(db, async (transaction) => {
+      return await runHeldTransaction(tripId, async (transaction) => {
         const snapshot = await transaction.get(tripRef);
         if (!snapshot.exists()) {
           throw new Error('Trip not found.');
@@ -255,7 +255,7 @@ export const removeMember = createAsyncThunk<
     const tripRef = doc(db, ...TRIP_COLLECTION_PATH, tripId);
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runHeldTransaction(tripId, async (transaction) => {
         const snapshot = await transaction.get(tripRef);
         if (!snapshot.exists()) {
           throw new Error('Trip not found.');

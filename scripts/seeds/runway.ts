@@ -80,6 +80,7 @@ import type {
   RuleSealed,
   ExpenseSealed,
   ChangeDoc,
+  ShareSummary,
   ChangeSealed,
   ClosingDoc,
   BillPaidSealed,
@@ -123,14 +124,14 @@ const SEED_LOGO_PURPLE =
 
 const SECRET_FILE = new URL('../../functions/.secret.local', import.meta.url);
 
-/** The emulator's keyring: `RUNWAY_MASTER_KEYS` in functions/.secret.local, else the built-in development one. */
-export function readEmulatorKeyring() {
+/** The emulator's keyring: the named secret (an app's `<APP>_MASTER_KEYS`) in functions/.secret.local, else the built-in development one. */
+export function readEmulatorKeyring(secretName = 'RUNWAY_MASTER_KEYS') {
   try {
     const line = readFileSync(SECRET_FILE, 'utf8')
       .split('\n')
-      .find((entry) => entry.startsWith('RUNWAY_MASTER_KEYS='));
+      .find((entry) => entry.startsWith(`${secretName}=`));
     const raw = line
-      ?.slice('RUNWAY_MASTER_KEYS='.length)
+      ?.slice(`${secretName}=`.length)
       .trim()
       .replace(/^(['"])(.*)\1$/, '$2');
     return raw ? readKeyring(raw) : DEV_KEYRING;
@@ -187,6 +188,44 @@ export const change = (
   sealed,
 });
 
+/** Sample figures for a seeded shared summary; the device replaces them with the plan's own on first open. */
+export function buildSampleShareSummary(now: number): ShareSummary {
+  const today = startOfUtcDay(now);
+  const day = (at: number) => new Date(at).toISOString().slice(0, 10);
+  const nextIncome = today + 3 * DAY_MS;
+  const firstOfNextMonth = Date.UTC(
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth() + 1,
+    1,
+  );
+  const rent = {
+    name: 'Rent',
+    amountCents: 125_000,
+    dueOn: day(firstOfNextMonth),
+    repeats: 'Monthly',
+    endsOn: null,
+    endsAfter: null,
+    paidOn: null,
+  };
+  const isRentSoon = firstOfNextMonth - today <= 30 * DAY_MS;
+  return {
+    computedAt: now - 10 * 60_000,
+    currency: DEFAULT_CURRENCY_CODE,
+    freeToSpendCents: 84_250,
+    nextIncomeOn: day(nextIncome),
+    dueBeforeIncomeCents: firstOfNextMonth < nextIncome ? rent.amountCents : 0,
+    bills: isRentSoon ? [rent] : [],
+    horizon: [
+      {
+        name: 'Moving',
+        targetCents: 90_000,
+        setAsideCents: 80_000,
+        targetOn: day(nextCalendarDay(today, 0, 15)),
+      },
+    ],
+  };
+}
+
 /** Alex has a plan that opens like a real one; every other account has none, so its first open creates one. */
 export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   const keyring = readEmulatorKeyring();
@@ -222,6 +261,10 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     sorting: null,
     keyId: data.keyId,
     sealed,
+    shareSummary: await sealJson(
+      buildSampleShareSummary(context.now),
+      encryption,
+    ),
   });
   const incomeDocuments = await writeSeedIncome(context, owner.uid, encryption);
   const envelopeDocuments = await writeSeedEnvelopes(
@@ -1461,7 +1504,7 @@ const SEED_WEALTHFRONT_LINK = 'seed-link-wealthfront';
 const SEED_CHASE_CARD = 'seed-card-chase';
 const SEED_DISCOVER_CARD = 'seed-card-discover';
 
-/** Three cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid, and a Discover it owing $140.00, due in two days and paid from Checking B, so the last paycheck has money to move. One bank link holds the Venture X and Checking A (a third provider account was skipped), with their balances. Ten documents. */
+/** Three cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid, and a Discover it owing $140.00, due in two days and paid from Checking B, so the last paycheck has money to move. One bank link holds the Venture X and Checking A (a third provider account was skipped), with their balances: the Venture X's $412.00 statement was paid in full eight days after it was made, and $96.84 has posted since. Ten documents. */
 async function writeSeedCards(
   context: SeedContext,
   uid: string,
@@ -1609,7 +1652,7 @@ async function writeSeedCards(
             name: 'Venture X',
             kind: 'credit',
             mask: '8841',
-            balanceCents: 0,
+            balanceCents: 9_684,
             accountId: null,
             cardId: SEED_VENTURE_CARD,
             isSkipped: false,
@@ -1713,7 +1756,7 @@ async function writeSeedCards(
       asOf: context.now - 2 * 60_000,
       sealed: await sealJson(
         {
-          cents: 0,
+          cents: 9_684,
           availableCents: null,
           limitCents: 1_000_000,
           hasInstantBalance: false,
@@ -1734,8 +1777,8 @@ async function writeSeedCards(
           statementCents: 41_200,
           statementOn,
           dueOn: today + 9 * DAY_MS,
-          lastPaymentCents: 30_000,
-          lastPaymentOn: statementOn - 10 * DAY_MS,
+          lastPaymentCents: 41_200,
+          lastPaymentOn: statementOn + 8 * DAY_MS,
         } satisfies CardStatementSealed,
         encryption,
       ),

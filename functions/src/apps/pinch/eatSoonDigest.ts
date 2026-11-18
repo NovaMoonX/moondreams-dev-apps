@@ -1,6 +1,8 @@
 // Pure parts of Pinch's morning note, kept free of imports so the app's checks can run them. Its day arithmetic mirrors `getDaysLeft` and `getEatByState` in the app's src/apps/pinch/utils/containers.ts (this package can't import from src); scripts/checks/pinchDigest.ts keeps the two equal.
 
 export const DAY_MS = 86_400_000;
+/** Days ahead a note counts when the person has not chosen. */
+export const DEFAULT_LEAD_DAYS = 1;
 /** A box this many days past its date still counts, so a note about it goes out the morning after and then stops. */
 export const DIGEST_PAST_DAYS = 1;
 /** A note goes out only within the chosen hour: two runs of the half-hourly schedule fall in it, so one failed or late run still leaves the other, the day's stamp makes it one note, and a run that wakes after the hour drops it instead of sending it hours late. */
@@ -228,5 +230,31 @@ export const getDigestMessage = (items: DigestItem[]): DigestMessage | null => {
       due.length === 0
         ? pastText
         : `${pastText}, and ${due.length} more ${be(due)} due soon`,
+  };
+};
+
+/** A person's reminder settings, each field read as its default when missing or out of range. */
+export const readReminders = (data: Record<string, unknown>) => {
+  const reminders = (data.reminders ?? {}) as Record<string, unknown>;
+  const hour = reminders.hour;
+  const leadDays = reminders.leadDays;
+  return {
+    reminders,
+    hour:
+      typeof hour === 'number' &&
+      Number.isInteger(hour) &&
+      hour >= 0 &&
+      hour <= 23
+        ? hour
+        : null,
+    leadDays:
+      typeof leadDays === 'number' &&
+      Number.isInteger(leadDays) &&
+      leadDays >= 1 &&
+      leadDays <= 3
+        ? leadDays
+        : DEFAULT_LEAD_DAYS,
+    timeZone:
+      typeof reminders.timeZone === 'string' ? reminders.timeZone : null,
   };
 };

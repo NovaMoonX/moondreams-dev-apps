@@ -3,6 +3,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import {
   AMC_API_KEY,
+  readAmcKey,
   findNearbyTheatres,
   findStateTheatres,
   isFixtureMode,
@@ -65,7 +66,7 @@ export const findTheatres = onCall(
       throw new HttpsError('unauthenticated', 'Sign in to find theaters.');
     }
 
-    const apiKey = AMC_API_KEY.value();
+    const apiKey = readAmcKey();
     const rawQuery = typeof request.data?.query === 'string' ? request.data.query : '';
     const query = rawQuery.trim().replace(/\s+/g, ' ').toLowerCase();
     const latitude = toCoordinate(request.data?.latitude, 90);

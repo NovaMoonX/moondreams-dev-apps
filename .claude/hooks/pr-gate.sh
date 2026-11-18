@@ -49,6 +49,12 @@ own_commits=$(git rev-list "origin/$default_branch..HEAD" --count 2>/dev/null) |
 
 base=$(git merge-base "origin/$default_branch" HEAD 2>/dev/null || echo "")
 [[ -n "$base" ]] || exit 0
+# A stacked PR (`branch.<head>.prBase`) is measured from the branch under it.
+stack_base=$(git config "branch.$current_branch.prBase" 2>/dev/null || true)
+if [[ -n "$stack_base" && "$stack_base" != "$default_branch" ]]; then
+  timeout 15 git fetch -q origin "$stack_base" >/dev/null 2>&1 || true
+  base=$(git merge-base "origin/$stack_base" HEAD 2>/dev/null || echo "$base")
+fi
 echo "$head_sha" > "$marker_file"
 
 # The delta since the last pass, or the whole PR on the first one.

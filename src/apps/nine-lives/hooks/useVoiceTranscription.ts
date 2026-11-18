@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  needsMicrophoneAsk,
+  peekMicrophonePermission,
+  rememberRecognitionRefused,
+  wasMicrophoneGranted,
+} from '@/lib/speech/microphonePermission';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
+
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
 }
@@ -28,6 +39,7 @@ interface SpeechRecognitionLike {
   interimResults: boolean;
   lang: string;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   start: () => void;
@@ -54,8 +66,12 @@ function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null 
 }
 
 function getSpeechRecognitionError(error: string): string {
-  if (error === 'not-allowed' || error === 'service-not-allowed') {
-    return 'Microphone access was blocked. Allow microphone access and try again.';
+  if (error === 'not-allowed') {
+    return 'The microphone is blocked.';
+  }
+
+  if (error === 'service-not-allowed') {
+    return 'This browser’s speech service is off, so it can’t listen. Turn on dictation in the device settings and try again.';
   }
 
   if (error === 'no-speech') {
@@ -67,7 +83,11 @@ function getSpeechRecognitionError(error: string): string {
 
 export interface VoiceTranscription {
   error: string | null;
+  /** The browser refused the microphone, as opposed to any other stop. */
+  isBlocked: boolean;
   isListening: boolean;
+  /** Tapped and waiting for the browser to start listening (or ask for the microphone). */
+  isStarting: boolean;
   isSupported: boolean;
   start: () => void;
   stop: () => Promise<string>;
@@ -85,7 +105,9 @@ export function useVoiceTranscription(): VoiceTranscription {
   const resolveStopRef = useRef<((transcript: string) => void) | null>(null);
   const rejectStopRef = useRef<((error: Error) => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [transcript, setTranscript] = useState('');
   const isSupported = getSpeechRecognitionConstructor() !== null;
 
@@ -137,9 +159,20 @@ export function useVoiceTranscription(): VoiceTranscription {
       if (event.error === 'no-speech' || isStoppingRef.current) {
         return;
       }
+      recordSpeechEvent(`Recognition error: ${event.error}`);
+      // With the microphone already allowed, the refusal is the speech service's.
+      const isMicrophoneAllowed =
+        peekMicrophonePermission() === 'granted' || wasMicrophoneGranted();
+      const code =
+        event.error === 'not-allowed' && isMicrophoneAllowed
+          ? 'service-not-allowed'
+          : event.error;
+      if (code === 'not-allowed') rememberRecognitionRefused();
 
-      const nextError = new Error(getSpeechRecognitionError(event.error));
+      const nextError = new Error(getSpeechRecognitionError(code));
       setError(nextError.message);
+      setIsStarting(false);
+      setIsBlocked(code === 'not-allowed');
       setIsListening(false);
       recognitionRef.current = null;
       finish(nextError);
@@ -147,6 +180,7 @@ export function useVoiceTranscription(): VoiceTranscription {
     recognition.onend = () => {
       if (isStoppingRef.current) {
         isStoppingRef.current = false;
+        setIsStarting(false);
         setIsListening(false);
         recognitionRef.current = null;
         finish();
@@ -157,8 +191,22 @@ export function useVoiceTranscription(): VoiceTranscription {
       createAndStartRecognitionRef.current();
     };
 
+    recognition.onstart = () => {
+      setIsStarting(false);
+      setIsListening(true);
+    };
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (thrown) {
+      recordSpeechEvent(`Start threw: ${describeThrown(thrown)}`);
+      const nextError = new Error(getSpeechRecognitionError('aborted'));
+      setError(nextError.message);
+      setIsStarting(false);
+      setIsListening(false);
+      recognitionRef.current = null;
+      finish(nextError);
+    }
   }, [finish]);
 
   useEffect(() => {
@@ -173,9 +221,20 @@ export function useVoiceTranscription(): VoiceTranscription {
     accumulatedTranscriptRef.current = '';
     transcriptRef.current = '';
     setTranscript('');
+    // Starting would only flash on and off: the modal shows the way to allow the microphone instead.
+    if (needsMicrophoneAsk(peekMicrophonePermission())) {
+      recordSpeechEvent('Not started: the microphone has to be allowed first');
+      setError(getSpeechRecognitionError('not-allowed'));
+      setIsBlocked(true);
+      return;
+    }
     setError(null);
+    setIsBlocked(false);
     isStoppingRef.current = false;
-    setIsListening(true);
+    // Until the microphone is allowed, Listening waits for the browser to start, so a refusal never flashes it.
+    if (peekMicrophonePermission() === 'granted' || wasMicrophoneGranted())
+      setIsListening(true);
+    else setIsStarting(true);
     createAndStartRecognition();
   }, [createAndStartRecognition]);
 
@@ -202,11 +261,13 @@ export function useVoiceTranscription(): VoiceTranscription {
     recognitionRef.current = null;
     resolveStopRef.current = null;
     rejectStopRef.current = null;
+    setIsStarting(false);
     setIsListening(false);
   }, []);
 
   const reset = useCallback(() => {
     setError(null);
+    setIsBlocked(false);
     setTranscript('');
     transcriptRef.current = '';
   }, []);
@@ -220,7 +281,9 @@ export function useVoiceTranscription(): VoiceTranscription {
 
   return {
     error,
+    isBlocked,
     isListening,
+    isStarting,
     isSupported,
     start,
     stop,

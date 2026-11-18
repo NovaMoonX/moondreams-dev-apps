@@ -583,7 +583,7 @@ When the money or the plan differs from the draft, the person adjusts any line's
 - `src/apps/runway/store/actions/moveActions.ts` (`markBillPaid`, `undoBillPaid`), `listeners/moveListeners.ts`
 - `src/apps/runway/types.ts`, `constants.ts` (`MoveDoc`, `MOVE_KINDS`)
 - `src/apps/runway/engine/demands.ts` (paid-ahead rule), `progress.ts`
-- `src/apps/runway/screens/days/ChecklistScreen.tsx`, `components/ChecklistGroup.tsx`
+- `src/apps/runway/screens/days/ChecklistScreen.tsx`, `src/components/ChecklistGroup.tsx`
 - `src/apps/runway/screens/plan/BillScreen.tsx` (progress)
 - `firestore.rules` (`moves` create-only, deterministic ids; `doneLineIds` bounds)
 - `scripts/seeds/runway.ts`

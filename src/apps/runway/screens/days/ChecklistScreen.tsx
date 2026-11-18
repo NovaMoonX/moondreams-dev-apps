@@ -14,7 +14,7 @@ import {
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
+import ChecklistGroup from '@/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import MoveRow from '@apps/runway/components/MoveRow';

@@ -1,3 +1,15 @@
+const dateTimeFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** One `Intl.DateTimeFormat` per locale and options, built once: building one costs far more than formatting with it. */
+export function getDateTimeFormat(options: Intl.DateTimeFormatOptions, locale = 'en-US'): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  const cached = dateTimeFormats.get(key);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat(locale, options);
+  dateTimeFormats.set(key, formatter);
+  return formatter;
+}
+
 const zoneNameFormatters = new Map<string, Intl.DateTimeFormat>();
 
 const getZoneNameFormatter = (timeZone: string, timeZoneName: 'longGeneric' | 'short') => {

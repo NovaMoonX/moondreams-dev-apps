@@ -34,6 +34,7 @@ import {
   startAccountBalancesListener,
   startCardStatementsListener,
   startRecurringChargesListener,
+  startStartedPaymentsListener,
   startLinksListener,
 } from '@apps/runway/store/listeners/linkListeners';
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
@@ -77,6 +78,7 @@ import {
   setAccountBalances,
   setCardStatements,
   setRecurringCharges,
+  setStartedPayments,
   setAccounts,
   setExpenses,
   setRules,
@@ -215,6 +217,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (charges) => dispatch(setRecurringCharges(charges)),
+          fail,
+        ),
+        startStartedPaymentsListener(
+          uid,
+          encryption,
+          (payments) => dispatch(setStartedPayments(payments)),
           fail,
         ),
         startExpensesListener(

@@ -36,6 +36,7 @@ import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatList } from '@/utils/formatUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
@@ -53,17 +54,20 @@ import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
 import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
 import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField';
 import {
+  adaptRows,
   getDataFromExtracted,
   getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
   isRowAmountValid,
+  isRowUnresolved,
   isValidMinutes,
   isValidNutrition,
   parseMinutes,
   parseNutrition,
   parseRecipeFormDraft,
   getRecipeDraftKey,
+  settleNewIngredients,
   toRecipeLine,
   type IngredientRow,
   type RecipeFormData,
@@ -89,6 +93,7 @@ import {
   saveRecipe,
   type RecipeDraft,
 } from '@apps/pinch/store/actions/recipeActions';
+import { removeIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   selectCollections,
@@ -100,6 +105,7 @@ import {
   selectCollectionsById,
   selectIsCollectionsReady,
   selectNotesByRecipe,
+  selectPinchSettings,
   selectRecipesById,
   selectShareBySource,
   selectShowNutrition,
@@ -113,6 +119,7 @@ import type {
   DishCategory,
   Idea,
   NutritionMetric,
+  PinchUnitSettings,
   Recipe,
   RecipeNote,
   RecipeSource,
@@ -127,7 +134,6 @@ import {
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
-import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import {
@@ -135,6 +141,7 @@ import {
   getWhyChoices,
   isWhyAsked,
 } from '@apps/pinch/utils/recipeChanges';
+import { readaptLine } from '@apps/pinch/utils/units';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { getShownCover } from '@apps/pinch/utils/recipeCover';
 import {
@@ -142,6 +149,7 @@ import {
   isOverLinkCap,
   toRecipeLinks,
 } from '@apps/pinch/utils/recipeLinks';
+import { getFreedIngredientIds } from '@apps/pinch/utils/freeLines';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -155,6 +163,8 @@ export interface RecipeRead {
   label: string;
   extras: ReadExtras;
 }
+
+const USAGE_READ_TIMEOUT_MS = 4000;
 
 /** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
 const findLoadablePhoto = (photos: WebPhoto[]) =>
@@ -172,7 +182,9 @@ const findLoadablePhoto = (photos: WebPhoto[]) =>
   );
 
 const isRowValid = (row: IngredientRow) =>
-  row.ingredientId !== '' && isRowAmountValid(row);
+  (row.freeText === null
+    ? row.ingredientId !== ''
+    : row.freeText.trim() !== '') && isRowAmountValid(row);
 
 interface RecipeFormProps {
   uid: string;
@@ -195,6 +207,32 @@ interface RecipeFormProps {
   /** For a form shown inside another screen: runs after a save instead of closing the open subview, and the form offers no delete. */
   onSaved?: () => void;
 }
+
+// Adapting units or putting them back is not an edit, so it never asks why.
+const withLinesAsWritten = (
+  draft: RecipeDraft,
+  recipe: Recipe,
+  units: PinchUnitSettings,
+): RecipeDraft => ({
+  ...draft,
+  ingredients: draft.ingredients.map((line) => {
+    const before = recipe.ingredients.find((saved) => saved.id === line.id);
+    if (before === undefined) return line;
+    const adapted = readaptLine(before, units);
+    const isAdaptedNow =
+      adapted !== null &&
+      line.amount === adapted.amount &&
+      line.unit === adapted.unit;
+    const isPutBackNow =
+      before.adaptedFrom !== null &&
+      line.adaptedFrom === null &&
+      line.amount === before.adaptedFrom.amount &&
+      line.unit === before.adaptedFrom.unit;
+    return isAdaptedNow || isPutBackNow
+      ? { ...line, amount: before.amount, unit: before.unit }
+      : line;
+  }),
+});
 
 function RecipeForm({
   uid,
@@ -237,14 +275,22 @@ function RecipeForm({
   );
   const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
+  const units = useAppSelector(selectPinchSettings).units;
+  const [readStart] = useState(() => {
+    if (!initialRead) return null;
+    const read = getDataFromExtracted(
+      initialRead.recipe,
+      ingredients,
+      initialRead.extras,
+    );
+    const adapted = adaptRows(read.ingredients, units);
+    return { data: { ...read, ingredients: adapted.rows }, ids: adapted.ids };
+  });
+  const [adaptedIds, setAdaptedIds] = useState<string[]>(readStart?.ids ?? []);
   const [initialData] = useState(() =>
-    initialRead
+    initialRead && readStart
       ? {
-          ...getDataFromExtracted(
-            initialRead.recipe,
-            ingredients,
-            initialRead.extras,
-          ),
+          ...readStart.data,
           sourceChoice: getReadSourceChoice(
             initialRead.source,
             initialRead.label,
@@ -299,6 +345,7 @@ function RecipeForm({
       ingredients: restored.ingredients.filter(
         (row) =>
           row.ingredientId === '' ||
+          row.freeText !== null ||
           row.newName !== null ||
           ingredientIds.has(row.ingredientId),
       ),
@@ -416,9 +463,7 @@ function RecipeForm({
       ingredientsById,
     );
 
-    const unresolved = formData.ingredients.filter(
-      (row) => row.ingredientId === '',
-    ).length;
+    const unresolved = formData.ingredients.filter(isRowUnresolved).length;
 
     return {
       values: result.values,
@@ -427,7 +472,9 @@ function RecipeForm({
         count:
           new Set(result.missing.map((entry) => entry.ingredientId)).size +
           unresolved,
-        total: lines.filter((row) => !row.isAmountless).length + unresolved,
+        total:
+          lines.filter((row) => !row.isAmountless && row.freeText === null)
+            .length + unresolved,
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
@@ -461,9 +508,7 @@ function RecipeForm({
     initialRead === null &&
     initialIdea === null &&
     draft.restored === null;
-  const unresolvedCount = formData.ingredients.filter(
-    (row) => row.ingredientId === '',
-  ).length;
+  const unresolvedCount = formData.ingredients.filter(isRowUnresolved).length;
   const getBlocker = (): { text: string; target: string | null } | null => {
     const plain = (text: string) => ({ text, target: null });
     if (
@@ -687,6 +732,12 @@ function RecipeForm({
             canSuggest={recipe === null}
             sourcePhoto={sourcePhoto}
             title={formData.title}
+            searchWords={
+              initialRead?.recipe.photoSearch &&
+              formData.title === initialData.title
+                ? initialRead.recipe.photoSearch
+                : null
+            }
             onSelect={(file) => {
               hasChosenCover.current = true;
               void pickCover(file);
@@ -727,6 +778,9 @@ function RecipeForm({
               rows={props.value as IngredientRow[]}
               onChange={props.onValueChange}
               onRemoved={showUndo}
+              adaptedIds={adaptedIds}
+              onAdaptedIdsChange={setAdaptedIds}
+              adaptUnits={recipe === null ? null : units}
             />
           </FormSection>
         ),
@@ -779,6 +833,7 @@ function RecipeForm({
         : []),
     ];
   }, [
+    initialData.title,
     uid,
     cover,
     sourcePhoto,
@@ -796,8 +851,11 @@ function RecipeForm({
     collections,
     suggestions,
     isBlankByHand,
+    initialRead,
     showUndo,
     tracking,
+    adaptedIds,
+    units,
   ]);
 
   const handleDelete = async () => {
@@ -901,6 +959,7 @@ function RecipeForm({
     reason: string,
     coverFile: File | null = upload.file,
   ): RecipeDraft => {
+    const settled = settleNewIngredients(data.ingredients);
     const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
     const { collectionIds, newCollections } = ownsCollections
       ? getCollectionsToSave(data.collections, collections)
@@ -913,7 +972,7 @@ function RecipeForm({
       servings: data.basics.servings,
       prepMinutes: parseMinutes(data.basics.prep),
       cookMinutes: parseMinutes(data.basics.cook),
-      ingredients: data.ingredients.map(toRecipeLine),
+      ingredients: settled.rows.map(toRecipeLine),
       source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
       sourceId,
       newSource,
@@ -922,19 +981,7 @@ function RecipeForm({
           ? null
           : getCollectionChange(initialData.collections.ids, collectionIds),
       newCollections,
-      newIngredients: [
-        ...new Map(
-          data.ingredients
-            .filter((row) => row.newName !== null)
-            .map((row) => [
-              row.ingredientId,
-              {
-                id: row.ingredientId,
-                name: toTypedIngredientName(row.newName ?? ''),
-              },
-            ]),
-        ).values(),
-      ],
+      newIngredients: settled.newIngredients,
       nutritionOverride: parseNutrition(data.nutrition),
       care: parseCareText(data.care),
       links: toRecipeLinks(data.links),
@@ -948,15 +995,63 @@ function RecipeForm({
     };
   };
 
+  const offerKitchenRemoval = async (ingredientId: string, savedId: string) => {
+    const state = store.getState().pinch;
+    const record = state.ingredients.records.find(
+      (entry) => entry.id === ingredientId,
+    );
+    if (!record || record.catalogId !== null || !record.name) return;
+    const usage = await Promise.race([
+      dispatch(getUsage({ uid, kind: 'INGREDIENT', id: ingredientId }))
+        .unwrap()
+        .catch(() => null),
+      new Promise<null>((resolve) =>
+        window.setTimeout(() => resolve(null), USAGE_READ_TIMEOUT_MS),
+      ),
+    ]);
+    if (usage === null) return;
+    const isUsedElsewhere =
+      isInUse({
+        ...usage,
+        recipes: state.recipes.items.filter(
+          (other) =>
+            other.id !== savedId &&
+            other.ingredients.some(
+              (line) => line.ingredientId === ingredientId,
+            ),
+        ).length,
+      }) ||
+      state.packages.items.some((item) => item.ingredientId === ingredientId) ||
+      state.shopping.items.some((item) => item.ingredientId === ingredientId);
+    if (isUsedElsewhere) return;
+    const isConfirmed = await confirm({
+      title: `Also remove ${record.name} from your kitchen?`,
+      message: `No other recipe uses ${record.name}, and it has no prices or stock. This recipe keeps the line as plain text.`,
+      confirmText: 'Remove',
+      cancelText: 'Keep it',
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    await dispatch(removeIngredient({ uid, id: ingredientId }))
+      .unwrap()
+      .catch((removeError) =>
+        addToast({
+          title: getErrorMessage(
+            removeError,
+            'Unable to remove this ingredient.',
+          ),
+          type: 'error',
+        }),
+      );
+  };
+
   const save = async (data: RecipeFormData) => {
     setError(null);
     setIsSubmitting(true);
     try {
+      const draft = getDraft(data, why, await upload.readyFile());
       const { recipeId: savedId } = await dispatch(
-        saveRecipe({
-          uid,
-          draft: getDraft(data, why, await upload.readyFile()),
-        }),
+        saveRecipe({ uid, draft }),
       ).unwrap();
       if (!recipe) {
         addToast({
@@ -979,6 +1074,15 @@ function RecipeForm({
       }
       if (onSaved) onSaved();
       else closeSubviewIf((current) => current === subview);
+      if (recipe) {
+        void getFreedIngredientIds(recipe.ingredients, draft.ingredients)
+          .reduce(
+            (done, ingredientId) =>
+              done.then(() => offerKitchenRemoval(ingredientId, savedId)),
+            Promise.resolve(),
+          )
+          .catch(() => undefined);
+      }
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
       setIsSubmitting(false);
@@ -990,7 +1094,7 @@ function RecipeForm({
     if (recipe && (tracking === 'on' || applied.length > 0) && !hasReason) {
       const { changes, topics } = getDraftChanges(
         recipe,
-        getDraft(data, ''),
+        withLinesAsWritten(getDraft(data, ''), recipe, units),
         ingredientsById,
         sourcesById,
         collectionsById,
@@ -1114,6 +1218,11 @@ function RecipeForm({
             {initialRead.recipe.unread.length > 0 && (
               <p className='text-muted-foreground text-xs'>
                 We couldn&apos;t read: {initialRead.recipe.unread.join(', ')}.
+              </p>
+            )}
+            {initialRead.recipe.guided.length > 0 && (
+              <p className='text-muted-foreground text-xs'>
+                Followed your guidance: {formatList(initialRead.recipe.guided)}.
               </p>
             )}
           </div>

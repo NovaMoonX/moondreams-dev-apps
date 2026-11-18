@@ -1,7 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { arrayUnion, collection, deleteDoc, doc, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
 import type { Stay, StayChangeSnapshot, StayFieldChange, TripSpace } from '@apps/waypoint/types';
 import { compareDayTime } from '@/utils/dayTimeUtils';
 import { canCreateItem, canEditExistingItem, isTripActive } from '@apps/waypoint/utils/roleGuards';
@@ -262,7 +263,7 @@ export const markStaySeen = createAsyncThunk<void, MarkStaySeenInput, { rejectVa
   'waypoint/stays/markSeen',
   async ({ uid, trip, stayId }) => {
     const stayRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'stays', stayId);
-    await runTransaction(db, async (transaction) => {
+    await runHeldTransaction(trip.id, async (transaction) => {
       const snapshot = await transaction.get(stayRef);
       if (!snapshot.exists()) {
         return;

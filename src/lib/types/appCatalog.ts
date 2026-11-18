@@ -6,6 +6,7 @@ export type AppId =
   | 'pinch'
   | 'runway'
   | 'going-once'
+  | 'helm'
   | (string & {});
 
 export type AppStatus = 'draft' | 'public' | 'removed';

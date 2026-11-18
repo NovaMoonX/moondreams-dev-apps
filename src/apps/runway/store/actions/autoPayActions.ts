@@ -1,6 +1,6 @@
+import { runHeldTransaction } from '@apps/runway/store/actions/heldTransaction';
 import {
   doc,
-  runTransaction,
   updateDoc,
   type Transaction,
 } from 'firebase/firestore';
@@ -181,7 +181,7 @@ export async function correctPaidAmount(
   input: CorrectPaidAmountInput,
 ): Promise<CorrectedPaidAmount> {
   const { mark } = input;
-  const result = await runTransaction(db, async (transaction) => {
+  const result = await runHeldTransaction(uid, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
     const slot = await readMarkSlot(
       transaction,
@@ -272,7 +272,7 @@ export async function matchChargeToBill(
   input: MatchChargeInput,
 ): Promise<ChargeMatchResult> {
   const { purchase, bill, payment } = input;
-  const result = await runTransaction(db, async (transaction) => {
+  const result = await runHeldTransaction(uid, async (transaction) => {
     const [plan, stored, header] = await Promise.all([
       transaction.get(planRef(uid)),
       transaction.get(purchaseRef(uid, purchase.id)),
@@ -378,7 +378,7 @@ export async function undoChargeMatch(
   encryption: RunwayEncryption,
   match: ChargeMatchResult,
 ): Promise<void> {
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const [plan, stored, header] = await Promise.all([
       transaction.get(planRef(uid)),
       transaction.get(purchaseRef(uid, match.purchase.id)),
@@ -516,7 +516,7 @@ export async function learnBillMerchant(
   billId: string,
   keys: readonly string[],
 ): Promise<void> {
-  await runTransaction(db, async (transaction) => {
+  await runHeldTransaction(uid, async (transaction) => {
     const header = await transaction.get(itemRef(uid, billId));
     const before = await readKeys(
       header.data() as Partial<PlanItemDoc> | undefined,
