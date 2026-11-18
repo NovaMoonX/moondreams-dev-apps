@@ -168,8 +168,15 @@ class HelmSinkSession implements SinkSession {
     if (ids.length > 0) await deletePictures(this.bucket(), this.uid, ids);
   }
 
-  private sweepPictures() {
-    return sweepOrphanPictures(this.bucket(), this.firestore, this.uid);
+  /** A sweep failure is only logged: the copies it looks for are already gone or retried by the next end. */
+  private async sweepPictures() {
+    try {
+      await sweepOrphanPictures(this.bucket(), this.firestore, this.uid);
+    } catch (error) {
+      logger.warn('helm.syncedPicture.sweepFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+    }
   }
 
   private async isStillWanted(grantId: string, category: string) {
@@ -388,14 +395,24 @@ class HelmSinkSession implements SinkSession {
     if (
       changed.some((entry) => entry.picture !== null) &&
       !(await this.isStillWanted(grantId, category))
-    )
+    ) {
+      const pictured = changed.filter((entry) => entry.picture !== null);
       await deletePictures(
         this.bucket(),
         this.uid,
-        changed
-          .filter((entry) => entry.picture !== null)
-          .map((entry) => entry.id),
+        pictured.map((entry) => entry.id),
       );
+      await chunk(pictured, BATCH_SIZE).reduce(async (done, group) => {
+        await done;
+        const batch = this.firestore.batch();
+        group.forEach(({ id }) =>
+          batch.update(this.firestore.doc(`${syncedPath(this.uid)}/${id}`), {
+            picture: null,
+          }),
+        );
+        await batch.commit();
+      }, Promise.resolve());
+    }
     if (
       contentChangedCount > 0 &&
       RELATE_SYNCED_CATEGORIES.some(
@@ -448,12 +465,6 @@ class HelmSinkSession implements SinkSession {
     return docs.length;
   }
 
-  private async deleteAndSweep(grantId: string, category: string | null) {
-    const count = await this.deleteWhere(grantId, category, () => true);
-    await this.sweepPictures();
-    return count;
-  }
-
   async deleteRefs(grantId: string, category: string, refs: string[]) {
     const docs = (
       await Promise.all(
@@ -480,11 +491,13 @@ class HelmSinkSession implements SinkSession {
   }
 
   deleteCategory(grantId: string, category: string) {
-    return this.deleteAndSweep(grantId, category);
+    return this.deleteWhere(grantId, category, () => true);
   }
 
-  deleteGrant(grantId: string) {
-    return this.deleteAndSweep(grantId, null);
+  async deleteGrant(grantId: string) {
+    const count = await this.deleteWhere(grantId, null, () => true);
+    await this.sweepPictures();
+    return count;
   }
 
   deleteKept(grantId: string) {

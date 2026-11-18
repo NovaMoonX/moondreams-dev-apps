@@ -435,6 +435,20 @@ test('an object with no record is swept and one with a record stays', async () =
   );
 });
 
+test('a category switched off mid-copy clears the record, so switching it back on copies again', async () => {
+  const t = await setup();
+  t.bucket.put(PHOTO, await makeJpeg(10));
+  const grant = firestore.doc(`connections/${t.uid}/grants/${GRANT_ID}`);
+  await grant.set({ status: 'live', categories: { cats: { isOn: false } } });
+  await t.write([cat('miso', PHOTO)]);
+  assert.equal(t.bucket.objects.has(t.path('miso')), false);
+  assert.equal((await t.doc('miso')).get('picture'), null);
+  await grant.set({ status: 'live', categories: { cats: { isOn: true } } });
+  await t.write([cat('miso', PHOTO)], NOW + DAY);
+  assert.ok(t.bucket.objects.has(t.path('miso')), 'copied again once on');
+  assert.notEqual((await t.doc('miso')).get('picture'), null);
+});
+
 test('a photo that cannot be decoded is not fetched again until it changes', async () => {
   const t = await setup();
   t.bucket.put(PHOTO, Buffer.from('not an image'));

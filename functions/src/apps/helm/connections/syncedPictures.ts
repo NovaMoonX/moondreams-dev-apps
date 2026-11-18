@@ -53,7 +53,7 @@ export interface PictureBucket {
       {
         name: string;
         metadata?: { timeCreated?: string };
-        delete(): Promise<unknown>;
+        delete(options?: { ignoreNotFound?: boolean }): Promise<unknown>;
       }[],
       ...unknown[],
     ]
@@ -223,7 +223,9 @@ export async function sweepOrphanPictures(
       .map((doc) => doc.id),
   );
   const orphans = entries.filter(({ id }) => id !== '' && !present.has(id));
-  await Promise.all(orphans.map(({ file }) => file.delete()));
+  await Promise.all(
+    orphans.map(({ file }) => file.delete({ ignoreNotFound: true })),
+  );
   return orphans.length;
 }
 
