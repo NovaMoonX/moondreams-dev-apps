@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { toAwayIds, toTurnZone } from './nomos/planWhereabouts.js';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -6,6 +8,8 @@ import type { SealedPayload } from '../../appKeys/seal.js';
 import { HELM_MASTER_KEYS } from './getHelmKey.js';
 import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import { loadKeyringOrFail } from './sortHelmCapture.js';
+import { readPrivacyFacts } from './privacy.js';
+import { toPrivateMark } from './nomos/contextPeople.js';
 import type { QuestionStateEntry } from './nomos/executeCommands.js';
 import { openKeyDate } from './sortHelmCapture.js';
 import { openTopicRecord } from './noteStore.js';
@@ -17,7 +21,37 @@ import {
 } from './topicVersionStore.js';
 import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
-import { NOTE_TOPICS_CAP } from './nomos/commands.js';
+import { planResolveHabit } from './nomos/planHabitCommands.js';
+import { importanceToday, readImportanceRecordsIn } from './importanceStore.js';
+import { planResolveImportance } from './nomos/planImportance.js';
+import { planResolvePersonality } from './nomos/planPersonality.js';
+import { readAssistantName } from './assistantName.js';
+import { planResolveScheduled } from './nomos/planScheduledActions.js';
+import { planResolveResearch } from './nomos/planResearch.js';
+import { readUsageIn, usageRef } from './research/researchStore.js';
+import { readLearnItemsIn } from './research/learnStore.js';
+import {
+  LEARN_QUESTION_KINDS,
+  LEARN_WORDS,
+  buildLearnAnswerExecution,
+  planResolveLearn,
+} from './nomos/planLearnLater.js';
+import { buildGoalCreate } from './nomos/planProjects.js';
+import { readActiveProjectsIn } from './projectStore.js';
+import { buildHabitAnswerExecution } from './nomos/planHabitCommands.js';
+import {
+  QUESTIONS_TASK_KIND,
+  planResolveQuestionsTask,
+} from './nomos/planQuestionsTask.js';
+import { readScheduledState } from './scheduledActions/actionStore.js';
+import {
+  planResolveConnection,
+  type PlanWho,
+} from './nomos/planConnections.js';
+import { readStoredConnections } from './connectionStore.js';
+import { toConnectionId, type ConnectionKind } from './nomos/connections.js';
+import { habitDayRef, readHabitState, writeHabitDayIn } from './habitStore.js';
+import { DEFAULT_ASSISTANT_NAME, NOTE_TOPICS_CAP } from './nomos/commands.js';
 import type { NoteTopicState } from './nomos/executeCommands.js';
 import { readIndexIn, writeIndexIn } from './keyDateStore.js';
 import { applyChanges } from './keyDateIndex.js';
@@ -220,6 +254,14 @@ const readInput = (data: unknown) => {
   };
 };
 
+const openWords = (key: Parameters<typeof openForHelm>[0], sealed: unknown) => {
+  try {
+    return openForHelm(key, sealed as SealedPayload) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
 export const resolveHelmQuestion = onCall(
   {
     region: 'us-central1',
@@ -274,10 +316,559 @@ export const resolveHelmQuestion = onCall(
             whoIds?: unknown;
             alias?: { whoId?: unknown };
             mention?: { kin?: unknown };
+            firstId?: unknown;
+            secondId?: unknown;
+            connectionKind?: unknown;
           }[];
         }
       >;
       const held = questions[questionId]?.heldCommands?.[0];
+      if (held?.kind === 'checkInChoice' || held?.kind === 'askCare') {
+        const now = Date.now();
+        const habitState = await readHabitState(
+          transaction,
+          firestore,
+          base,
+          key,
+          capture.createdAt,
+          String(profileSnap.get('timeZone') ?? 'UTC'),
+        );
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const habitResult = planResolveHabit({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          capture: {
+            status: capture.status,
+            createdAt: capture.createdAt,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          habits: habitState.habits,
+          days: habitState.days,
+          timeZone: String(profileSnap.get('timeZone') ?? 'UTC'),
+          profile: {
+            dayStartTime: String(profileSnap.get('dayStartTime') ?? '08:00'),
+            dayEndTime: String(profileSnap.get('dayEndTime') ?? '22:00'),
+          },
+          newId: () => crypto.randomUUID(),
+          seal,
+        });
+        if (habitResult.refused !== null) {
+          throw toRefusal(habitResult.refused, 'person');
+        }
+        habitResult.habit?.creates.forEach(({ id, doc }) =>
+          transaction.create(firestore.doc(`${base}/habits/${id}`), doc),
+        );
+        habitResult.habit?.updates.forEach(({ id, data }) =>
+          transaction.update(firestore.doc(`${base}/habits/${id}`), data),
+        );
+        if (
+          habitResult.habit &&
+          habitResult.habit.creates.length + habitResult.habit.updates.length >
+            0
+        )
+          transaction.update(firestore.doc(base), {
+            habitRemindersChangedAt: now,
+          });
+        habitResult.habit?.dayWrites.forEach((write) =>
+          writeHabitDayIn(
+            transaction,
+            habitDayRef(firestore, base, write.dayKey),
+            write,
+          ),
+        );
+        if (habitResult.execution)
+          transaction.create(executionRef, habitResult.execution);
+        transaction.update(captureRef, {
+          ...habitResult.capture,
+          sealed: seal(habitResult.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: habitResult.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'splitDaily') {
+        const now = Date.now();
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const stored =
+          optionId === 'yes'
+            ? await readScheduledState(transaction, firestore, base, key)
+            : new Map();
+        const scheduled = planResolveScheduled({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          stored,
+          homeZone: String(profileSnap.get('timeZone') ?? 'UTC'),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          newId: () => crypto.randomUUID(),
+          seal,
+        });
+        if (scheduled.refused !== null) {
+          throw toRefusal(scheduled.refused, 'person');
+        }
+        const plan = scheduled.plan;
+        plan?.creates.forEach(({ id, doc }) =>
+          transaction.create(
+            firestore.doc(`${base}/scheduledActions/${id}`),
+            doc,
+          ),
+        );
+        if (plan && plan.creates.length > 0)
+          transaction.update(firestore.doc(base), {
+            scheduledActionsChangedAt: now,
+          });
+        if (plan && plan.effects.length > 0)
+          transaction.create(
+            executionRef,
+            buildHabitAnswerExecution(plan, {
+              captureId,
+              questionId,
+              now,
+              seal,
+            }),
+          );
+        transaction.update(captureRef, {
+          ...scheduled.capture,
+          sealed: seal(scheduled.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: plan && plan.effects.length > 0 ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'researchDepth' || held?.kind === 'researchRerun') {
+        const now = Date.now();
+        const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
+        const researchId = String(
+          (held as { researchId?: unknown }).researchId ?? '',
+        );
+        const researchSnap = ID_RE.test(researchId)
+          ? await transaction.get(
+              firestore.doc(`${base}/research/${researchId}`),
+            )
+          : null;
+        const usage = await readUsageIn(
+          transaction,
+          firestore,
+          uid,
+          now,
+          timeZone,
+        );
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const answered = planResolveResearch({
+          captureId,
+          executionId: executionRef.id,
+          seal,
+          questionId,
+          optionId,
+          by,
+          now,
+          research: researchSnap?.exists
+            ? {
+                id: researchId,
+                status: String(researchSnap.get('status') ?? ''),
+              }
+            : null,
+          usage,
+          timeZone,
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        if (answered.research)
+          transaction.update(
+            firestore.doc(`${base}/research/${answered.research.id}`),
+            answered.research.data,
+          );
+        if (answered.execution)
+          transaction.create(executionRef, answered.execution);
+        if (answered.usage)
+          transaction.set(usageRef(firestore, uid), answered.usage);
+        if (answered.profile && profileSnap.exists)
+          transaction.update(firestore.doc(base), answered.profile);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: answered.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (
+        held &&
+        LEARN_QUESTION_KINDS.some(
+          (kind) => kind === (held as { kind?: unknown }).kind,
+        )
+      ) {
+        const now = Date.now();
+        const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
+        const items = await readLearnItemsIn(transaction, firestore, base, key);
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const answered = planResolveLearn({
+          captureId,
+          executionId: executionRef.id,
+          seal,
+          questionId,
+          optionId,
+          by,
+          now,
+          timeZone,
+          items,
+          newId: () => randomUUID(),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        const goal = answered.goal
+          ? buildGoalCreate({
+              name: answered.goal,
+              existing: await readActiveProjectsIn(
+                transaction,
+                firestore,
+                base,
+                key,
+              ),
+              newId: () => randomUUID(),
+              executionId: executionRef.id,
+              captureId,
+              now,
+              seal,
+            })
+          : null;
+        const made = goal && !goal.isExisting ? goal : null;
+        const plan = {
+          ...answered.plan,
+          effectRefs: [
+            ...answered.plan.effectRefs,
+            ...(made?.effects.map(({ ref }) => ref) ?? []),
+          ],
+          effects: [
+            ...answered.plan.effects,
+            ...(made?.effects.map(({ effect }) => effect) ?? []),
+          ],
+          lines: [
+            ...answered.plan.lines,
+            ...(answered.goal
+              ? [
+                  goal?.isExisting
+                    ? LEARN_WORDS.goalExists(answered.goal)
+                    : LEARN_WORDS.goalMade(answered.goal),
+                ]
+              : []),
+          ],
+        };
+        answered.plan.creates.forEach(({ id, doc }) =>
+          transaction.create(firestore.doc(`${base}/research/${id}`), doc),
+        );
+        answered.plan.updates.forEach(({ id, data }) =>
+          transaction.update(firestore.doc(`${base}/research/${id}`), data),
+        );
+        made?.creates.forEach(({ id, data }) =>
+          transaction.create(firestore.doc(`${base}/projects/${id}`), data),
+        );
+        const execution = buildLearnAnswerExecution(plan, {
+          captureId,
+          questionId,
+          now,
+          seal,
+        });
+        if (execution) transaction.create(executionRef, execution);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          executionIds: execution
+            ? [...(capture.executionIds ?? []), executionRef.id]
+            : (capture.executionIds ?? []),
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === QUESTIONS_TASK_KIND) {
+        const now = Date.now();
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const heldWhoIds = (Array.isArray(held.whoIds) ? held.whoIds : [])
+          .filter(
+            (id): id is string => typeof id === 'string' && ID_RE.test(id),
+          )
+          .slice(0, 4);
+        const whoFacts = (
+          await Promise.all(
+            heldWhoIds.map((id) =>
+              transaction.get(firestore.doc(`${base}/who/${id}`)),
+            ),
+          )
+        ).flatMap((snap) => {
+          const words = snap.exists ? openWords(key, snap.get('sealed')) : null;
+          return words
+            ? [
+                {
+                  id: snap.id,
+                  privacyFacts: readPrivacyFacts({
+                    privateMark: toPrivateMark(words.privateMark),
+                    isPrivacyCleared: words.isPrivacyCleared === true,
+                  }),
+                },
+              ]
+            : [];
+        });
+        const answered = planResolveQuestionsTask({
+          whoFacts,
+          captureId,
+          executionId: executionRef.id,
+          questionId,
+          optionId,
+          by,
+          now,
+          seal,
+          newId: () => randomUUID(),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        if (answered.create) {
+          transaction.create(
+            firestore.doc(`${base}/tasks/${answered.create.id}`),
+            answered.create.data,
+          );
+        }
+        const execution = answered.create
+          ? buildHabitAnswerExecution(
+              {
+                isPrivate: answered.isPrivate,
+                effectRefs: answered.effectRefs,
+                effects: answered.effects,
+                lines: answered.lines,
+                notKept: [],
+              },
+              {
+                captureId,
+                questionId,
+                now,
+                seal,
+                linkedWhoIds: answered.linkedWhoIds,
+              },
+            )
+          : null;
+        if (execution) transaction.create(executionRef, execution);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          executionIds: execution
+            ? [...(capture.executionIds ?? []), executionRef.id]
+            : (capture.executionIds ?? []),
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'clashChoice') {
+        const now = Date.now();
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const storedSetAt = profileSnap.get('personalitySetAt');
+        const picked = planResolvePersonality({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          stored: profileSnap.get('personality') ?? null,
+          legacyTone: profileSnap.get('assistantTone'),
+          storedSetAt: typeof storedSetAt === 'number' ? storedSetAt : null,
+          profileId: firestore.doc(base).id,
+          assistantName:
+            readAssistantName(profileSnap.get('assistantName')) ??
+            DEFAULT_ASSISTANT_NAME,
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          seal,
+        });
+        if (picked.refused !== null) {
+          throw toRefusal(picked.refused, 'person');
+        }
+        if (picked.data) transaction.update(firestore.doc(base), picked.data);
+        if (picked.execution)
+          transaction.create(executionRef, picked.execution);
+        transaction.update(captureRef, {
+          ...picked.capture,
+          sealed: seal(picked.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: picked.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'whichComesFirst') {
+        const now = Date.now();
+        const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
+        const records = await readImportanceRecordsIn(
+          transaction,
+          firestore,
+          base,
+          key,
+          now,
+          timeZone,
+        );
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const picked = planResolveImportance({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          records,
+          today: importanceToday(now, timeZone),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          seal,
+        });
+        if (picked.refused !== null) {
+          throw toRefusal(picked.refused, 'person');
+        }
+        picked.plan?.updates.forEach(({ collection, id, data }) =>
+          transaction.update(
+            firestore.doc(`${base}/${collection}/${id}`),
+            data,
+          ),
+        );
+        if (picked.execution)
+          transaction.create(executionRef, picked.execution);
+        transaction.update(captureRef, {
+          ...picked.capture,
+          sealed: seal(picked.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: picked.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'askConnection') {
+        const now = Date.now();
+        const firstId = typeof held.firstId === 'string' ? held.firstId : '';
+        const secondId = typeof held.secondId === 'string' ? held.secondId : '';
+        const connectionKind = held.connectionKind as ConnectionKind;
+        const pairIds = [firstId, secondId].filter((id) => ID_RE.test(id));
+        const [whoSnaps, connectionSnap] = await Promise.all([
+          Promise.all(
+            pairIds.map((id) =>
+              transaction.get(firestore.doc(`${base}/who/${id}`)),
+            ),
+          ),
+          pairIds.length === 2
+            ? transaction.get(
+                firestore.doc(
+                  `${base}/connections/${toConnectionId(firstId, secondId, connectionKind)}`,
+                ),
+              )
+            : Promise.resolve(null),
+        ]);
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const answered = planResolveConnection({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          whos: new Map(
+            whoSnaps.map((snap): [string, PlanWho | null] => {
+              const data = snap.data();
+              try {
+                return [
+                  snap.id,
+                  data
+                    ? {
+                        kind:
+                          data.kind === 'pet' || data.kind === 'organization'
+                            ? data.kind
+                            : 'person',
+                        opened: openForHelm(key, data.sealed as SealedPayload),
+                      }
+                    : null,
+                ];
+              } catch {
+                return [snap.id, null];
+              }
+            }),
+          ),
+          existing: connectionSnap
+            ? ([...readStoredConnections(key, [connectionSnap]).values()][0] ??
+              null)
+            : null,
+          seal,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        if (answered.write) {
+          const ref = firestore.doc(`${base}/connections/${answered.write.id}`);
+          if (answered.write.doc.op === 'create')
+            transaction.create(ref, answered.write.doc.data);
+          else transaction.update(ref, answered.write.doc.data);
+        }
+        if (answered.execution)
+          transaction.create(executionRef, answered.execution);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: answered.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
       const taskIds = (held?.taskIds ?? []).filter(
         (id): id is string => typeof id === 'string' && ID_RE.test(id),
       );
@@ -477,6 +1068,14 @@ export const resolveHelmQuestion = onCall(
           return [[snap.id, fact]];
         }),
       );
+      const selfWhoId = profileSnap.get('selfWhoId') as
+        string | null | undefined;
+      const selfSnap = selfWhoId
+        ? await transaction.get(firestore.doc(`${base}/who/${selfWhoId}`))
+        : null;
+      const selfAwayIds = selfSnap?.exists
+        ? toAwayIds(openWords(key, selfSnap.get('sealed')))
+        : null;
       const executionRef = firestore.collection(`${base}/executions`).doc();
       const result = planResolve({
         captureId,
@@ -485,7 +1084,7 @@ export const resolveHelmQuestion = onCall(
         optionIds,
         by,
         now: Date.now(),
-        timeZone: (profileSnap.data()?.timeZone as string | undefined) ?? 'UTC',
+        timeZone: toTurnZone(profileSnap.data(), Date.now(), selfAwayIds),
         executionId: executionRef.id,
         capture: {
           status: capture.status,

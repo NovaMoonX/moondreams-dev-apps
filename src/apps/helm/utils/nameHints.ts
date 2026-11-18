@@ -20,6 +20,7 @@ export type NameHintState = Pick<
   | 'projects'
   | 'topics'
   | 'procedures'
+  | 'habits'
   | 'openTasks'
   | 'projectTasks'
   | 'recentCaptures'
@@ -37,6 +38,8 @@ interface Entry {
   kind: PrivateKind;
   record: PrivacyRecord;
   forms: string[];
+  /** Words that are never sent, whoever else carries them (a medicine and its dose). */
+  hidden?: string[];
   firstName: string | null;
   fallbackRank: number;
   soundsLike: readonly string[];
@@ -51,6 +54,7 @@ const slicesOf = (state: NameHintState) => [
   state.projects,
   state.topics,
   state.procedures,
+  state.habits,
   state.openTasks,
   state.projectTasks,
   state.recentCaptures,
@@ -147,6 +151,25 @@ const toEntries = (state: NameHintState): Entry[] => [
           },
         ],
   ),
+  ...state.habits.items.flatMap((habit) =>
+    habit.isUnreadable || habit.name.trim() === ''
+      ? []
+      : [
+          {
+            kind: 'habit' as const,
+            record: habit,
+            forms: [habit.name],
+            hidden: [habit.medicine?.name, habit.medicine?.dose].flatMap(
+              (text) => (text ? [text] : []),
+            ),
+            firstName: null,
+            fallbackRank: habit.status === 'active' ? 2 : 3,
+            soundsLike: [],
+            lastMentionedAt: null,
+            touchedAt: habit.lastEditedAt ?? habit.createdAt,
+          },
+        ],
+  ),
 ];
 
 const countMentions = (state: NameHintState, since: number) =>
@@ -191,8 +214,11 @@ const readPageIds = (state: NameHintState, screen: ScreenContext | null) => {
 const toWords = (text: string) => toComparable(text).split(' ').filter(Boolean);
 
 /** Built from the whole store, not the candidates, so a record sharing a private one's word is refused too. */
-const toExclude = (privateEntries: Entry[]) => {
-  const forms = privateEntries.flatMap((entry) => entry.forms);
+const toExclude = (privateEntries: Entry[], entries: Entry[]) => {
+  const forms = [
+    ...privateEntries.flatMap((entry) => entry.forms),
+    ...entries.flatMap((entry) => entry.hidden ?? []),
+  ];
   const whole = new Set(forms.map((form) => toComparable(form)));
   const words = new Set(
     forms
@@ -268,7 +294,7 @@ export function readHelmNameHints(
         weight: ASSISTANT_WEIGHT,
       },
     ],
-    { exclude: toExclude(entries.filter(isPrivate)) },
+    { exclude: toExclude(entries.filter(isPrivate), entries) },
   );
   Object.assign(memo, { uid, slices, screen, hour, result });
 

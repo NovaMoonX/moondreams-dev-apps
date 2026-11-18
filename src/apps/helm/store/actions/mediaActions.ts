@@ -586,6 +586,8 @@ export async function keepLetGoMedia(
       undoReason: null,
       said: null,
       lines: null,
+      abilityOffer: null,
+      awayZoneOffer: null,
     },
     encryption,
   );

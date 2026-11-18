@@ -4,6 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAppSelector } from '@/store';
 import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
+import { useNearNow } from '@apps/helm/hooks/useNearNow';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
 
 interface HelmShellProps {
@@ -17,6 +18,7 @@ interface HelmShellProps {
 /** The page every view sits in: one column, with the dock fixed at the foot of home and the ask bar at the foot of a content page. */
 function HelmShell({ children, dock, isAskAvailable }: HelmShellProps) {
   const entry = useAppSelector(selectTopScreen);
+  useNearNow(isAskAvailable);
   const hasAskBar = isAskAvailable && entry !== null;
 
   return (

@@ -10,6 +10,7 @@ import {
   query,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -30,10 +31,31 @@ import {
 } from '@apps/helm/store/actions/mediaActions';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { MAX_ALIASES, MAX_SOUNDS_LIKE } from '@apps/helm/constants';
+import {
+  addContactPoint,
+  applyContactDiff,
+  changeContactPoint,
+  type ContactListDiff,
+  makePrimaryContactPoint,
+  readContactPoints,
+  removeContactPoint,
+  restoreContactPoint,
+  type ContactRefusal,
+} from '@apps/helm/engine/contactPoints';
 import { normalizeKin } from '@apps/helm/engine/kin';
+import { addEvent } from '@apps/helm/store/actions/habitActions';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
+import type { City } from '@/lib/cities/types';
+import { store } from '@/store';
+import { keepCurrentAway, MAX_AWAY_SPANS } from '@apps/helm/engine/whereabouts';
 import type {
+  AwaySpan,
+  ContactKind,
+  ContactPoint,
   HelmEncryption,
+  NearNow,
+  OpenHabit,
   HelmProfile,
   Sealed,
   Who,
@@ -54,6 +76,12 @@ const isUnavailable = (error: unknown) =>
 
 export type EditResult = 'saved' | 'offline' | 'missing' | 'unreadable';
 
+/** A list the edit sheet could not save, and which one. */
+export interface ContactEditRefusal {
+  refusal: ContactRefusal;
+  kind: ContactKind;
+}
+
 /** The fields a person edits on a who's edit sheet: its sealed words and its kind. Its other names and its family word have their own sheets. */
 export interface WhoEdit {
   name: string;
@@ -61,23 +89,23 @@ export interface WhoEdit {
   relation: string | null;
   species: string | null;
   organizationKind: string | null;
-  phone: string | null;
-  email: string | null;
+  phones: ContactListDiff;
+  emails: ContactListDiff;
 }
 
-/** Changes a who's name, kind and contact details in one transaction that re-reads it, so notes and anything changed on another device meanwhile are kept. Needs a connection. */
+/** Changes a who's name, kind and contact details in one transaction that re-reads it, so notes and anything changed on another device meanwhile are kept. The phones and emails arrive as the difference from what the sheet opened with and are applied to the lists read inside the transaction, with the duplicate and cap checks re-run. Needs a connection. */
 export async function updateWho(
   uid: string,
   encryption: HelmEncryption,
   whoId: string,
   edit: WhoEdit,
-): Promise<EditResult> {
+): Promise<EditResult | ContactEditRefusal> {
   if (!navigator.onLine) return 'offline';
   const ref = doc(userOf(uid), 'who', whoId);
   try {
     return await runHeldTransaction(
       uid,
-      async (transaction): Promise<EditResult> => {
+      async (transaction): Promise<EditResult | ContactEditRefusal> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
         const opened = await openJson<WhoSealed>(
@@ -85,9 +113,31 @@ export async function updateWho(
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
-        const { kind, ...words } = edit;
+        const { kind, phones: phoneDiff, emails: emailDiff, ...words } = edit;
+        const phones = applyContactDiff(
+          'phone',
+          readContactPoints('phone', opened),
+          phoneDiff,
+        );
+        if (typeof phones === 'string')
+          return { refusal: phones, kind: 'phone' };
+        const emails = applyContactDiff(
+          'email',
+          readContactPoints('email', opened),
+          emailDiff,
+        );
+        if (typeof emails === 'string')
+          return { refusal: emails, kind: 'email' };
         const sealed = await sealJson<WhoSealed>(
-          { ...opened, ...words, ...(kind === 'person' ? {} : { kin: null }) },
+          {
+            ...opened,
+            ...words,
+            phones: phones.points,
+            emails: emails.points,
+            phone: null,
+            email: null,
+            ...(kind === 'person' ? {} : { kin: null }),
+          },
           encryption,
         );
         transaction.update(ref, { sealed, kind, lastEditedAt: Date.now() });
@@ -135,6 +185,115 @@ async function rewriteWhoWords<Refusal extends string = never>(
     throw error;
   }
 }
+
+export type WhereChange =
+  | { kind: 'home'; city: City | null }
+  | { kind: 'save'; span: AwaySpan }
+  | { kind: 'remove'; id: string }
+  | { kind: 'pauses'; id: string; value: boolean | null }
+  | { kind: 'back'; id: string; todayKey: string };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const nextAway = (
+  away: AwaySpan[],
+  change: Exclude<WhereChange, { kind: 'home' }>,
+  todayKey: string,
+): AwaySpan[] => {
+  if (change.kind === 'remove') {
+    return away.filter((span) => span.id !== change.id);
+  }
+  if (change.kind === 'pauses') {
+    return away.map((span) =>
+      span.id === change.id ? { ...span, pausesScheduled: change.value } : span,
+    );
+  }
+  if (change.kind === 'back') {
+    const yesterday = Date.parse(todayKey) - DAY_MS;
+    return away.flatMap((span) =>
+      span.id !== change.id
+        ? [span]
+        : span.from > yesterday
+          ? []
+          : [{ ...span, to: yesterday }],
+    );
+  }
+  return away.some((span) => span.id === change.span.id)
+    ? away.map((span) => (span.id === change.span.id ? change.span : span))
+    : [...away, change.span];
+};
+
+/** Sets or clears a who's home, or adds, changes, removes or ends early one away span, on the list opened inside the transaction; spans that ended before today are dropped in the same write. */
+export const setWhoWhere = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  todayKey: string,
+  change: WhereChange,
+): Promise<EditResult | 'full'> =>
+  rewriteWhoWords<'full'>(uid, encryption, whoId, (opened) => {
+    if (change.kind === 'home') {
+      return {
+        home: change.city,
+        homeSource: change.city ? 'page' : null,
+      };
+    }
+    const away = keepCurrentAway(
+      Array.isArray(opened.away) ? opened.away : [],
+      todayKey,
+    );
+    const next = nextAway(away, change, todayKey);
+    if (next.length > MAX_AWAY_SPANS) return 'full';
+    return { away: next.length > 0 ? next : null };
+  });
+
+/** Sets the self's last phone reading, or clears it. */
+export const setWhoNearNow = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  nearNow: NearNow | null,
+): Promise<EditResult> =>
+  rewriteWhoWords<never>(uid, encryption, whoId, () => ({ nearNow }));
+
+export type ContactChange =
+  | { kind: 'add'; id: string; value: string; label: string }
+  | { kind: 'change'; id: string; value: string; label: string }
+  | { kind: 'remove'; id: string }
+  | { kind: 'primary'; id: string }
+  | { kind: 'restore'; point: ContactPoint; index: number };
+
+const applyContactChange = (
+  kind: ContactKind,
+  points: ContactPoint[],
+  change: ContactChange,
+): { points: ContactPoint[] } | ContactRefusal => {
+  if (change.kind === 'add') return addContactPoint(kind, points, change);
+  if (change.kind === 'change')
+    return changeContactPoint(kind, points, change.id, change);
+  if (change.kind === 'remove')
+    return { points: removeContactPoint(points, change.id) };
+  if (change.kind === 'primary')
+    return { points: makePrimaryContactPoint(points, change.id) };
+  return restoreContactPoint(kind, points, change.point, change.index);
+};
+
+/** Adds, changes, removes, makes primary or puts back one phone or email on the list opened inside the transaction, so an entry added elsewhere meanwhile is kept; the cap and repeats are re-checked on that fresh list, and the old single `phone` or `email` is written null. */
+export const setWhoContacts = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  kind: ContactKind,
+  change: ContactChange,
+): Promise<EditResult | ContactRefusal> =>
+  rewriteWhoWords<ContactRefusal>(uid, encryption, whoId, (opened) => {
+    const points = readContactPoints(kind, opened);
+    const next = applyContactChange(kind, points, change);
+    if (typeof next === 'string') return next;
+    return kind === 'phone'
+      ? { phones: next.points, phone: null }
+      : { emails: next.points, email: null };
+  });
 
 export type AliasChange = { add: string } | { remove: string };
 export type AliasResult = EditResult | 'full' | 'duplicate';
@@ -248,6 +407,8 @@ export interface ForgetCounts {
   who: number;
   /** Facts that were only about the forgotten record and went with it. */
   facts: number;
+  /** Connections to other people that went with the forgotten person. */
+  connections: number;
 }
 
 /** The links already taken could not all be put back after a failure, so some may be gone. */
@@ -292,6 +453,24 @@ export async function countLinkedTasks(
     query(collection(userOf(uid), 'tasks'), where(field, 'array-contains', id)),
   );
   return snapshot.data().count;
+}
+
+/** Shown connections only, so the forget line counts what the person saw; needs a connection. */
+export async function countConnectionsOf(
+  uid: string,
+  id: string,
+  unreadableIds: ReadonlySet<string>,
+) {
+  const snapshot = await getDocs(
+    query(
+      collection(userOf(uid), 'connections'),
+      where('whoIds', 'array-contains', id),
+    ),
+  );
+  return snapshot.docs.filter(
+    (entry) =>
+      entry.get('source') !== 'refused' && !unreadableIds.has(entry.id),
+  ).length;
 }
 
 /** How many facts are only about this who or place, so forgetting it forgets them too; needs a connection. */
@@ -434,13 +613,65 @@ export async function forgetLinked(
         }
       }),
     );
+  const connectionIds =
+    target === 'who'
+      ? (
+          await getDocs(
+            query(
+              collection(userOf(uid), 'connections'),
+              where('whoIds', 'array-contains', id),
+            ),
+          )
+        ).docs.map((entry) => entry.id)
+      : [];
+  const connectionOutcomes = await Promise.allSettled(
+    toChunks(connectionIds).map((chunk) =>
+      runHeldTransaction(uid, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map((entryId) =>
+            transaction.get(
+              doc(collection(userOf(uid), 'connections'), entryId),
+            ),
+          ),
+        );
+        return snapshots.flatMap((snapshot) => {
+          const data = snapshot.data() as DocumentData | undefined;
+          if (!data) return [];
+          transaction.delete(snapshot.ref);
+          return [{ id: snapshot.id, data }];
+        });
+      }),
+    ),
+  );
+  const connectionsTaken = connectionOutcomes.flatMap((outcome) =>
+    outcome.status === 'fulfilled' ? outcome.value : [],
+  );
+  const putBackConnections = () =>
+    inSequence(connectionsTaken, (entry) =>
+      runHeldTransaction(uid, async (transaction) => {
+        const connectionRef = doc(
+          collection(userOf(uid), 'connections'),
+          entry.id,
+        );
+        if (!(await transaction.get(connectionRef)).exists())
+          transaction.set(connectionRef, entry.data);
+      }),
+    );
   const putBack = () =>
-    Promise.allSettled([putBackLinks(), putBackFacts()]).then((settled) => {
+    Promise.allSettled([
+      putBackLinks(),
+      putBackFacts(),
+      putBackConnections(),
+    ]).then((settled) => {
       const failed = settled.find((entry) => entry.status === 'rejected');
       if (failed) throw failed.reason;
     });
   const failedOutcome = (
-    [...outcomes, ...factOutcomes] as PromiseSettledResult<unknown>[]
+    [
+      ...outcomes,
+      ...factOutcomes,
+      ...connectionOutcomes,
+    ] as PromiseSettledResult<unknown>[]
   ).find((outcome) => outcome.status === 'rejected');
   const abandon = async (reason: unknown): Promise<never> => {
     await putBack().catch((error: unknown) => {
@@ -526,6 +757,7 @@ export async function forgetLinked(
         (entry) =>
           entry.kind === 'deleted' && entry.data.status !== 'superseded',
       ).length,
+      connections: connectionsTaken.length,
     },
     restore,
   };
@@ -569,9 +801,100 @@ export async function forgetWithPhotos(
   };
 }
 
+const CARE_WRITES_MAX = 399;
+
+/** Ends the person's care habits from the store (reminder off, off the lock screen, an `ended` event) and stamps reminders, in batches of at most 399 writes, so it works offline. Undo puts back what it wrote on each habit still as this left it. */
+function endCareHabits(uid: string, whoId: string) {
+  const caring = store
+    .getState()
+    .helm.habits.items.filter(
+      (habit) =>
+        habit.forWhoId === whoId &&
+        habit.isCare === true &&
+        habit.status !== 'ended',
+    );
+  const now = Date.now();
+  const refOf = (id: string) => doc(collection(userOf(uid), 'habits'), id);
+  const commit = (writes: { id: string; data: Record<string, unknown> }[]) =>
+    Promise.all(
+      Array.from(
+        { length: Math.ceil(writes.length / CARE_WRITES_MAX) },
+        (_, index) => {
+          const batch = writeBatch(db);
+          writes
+            .slice(index * CARE_WRITES_MAX, (index + 1) * CARE_WRITES_MAX)
+            .forEach((write) => batch.update(refOf(write.id), write.data));
+          markRemindersChanged(batch, uid, now);
+          return batch.commit();
+        },
+      ),
+    ).then(() => undefined);
+  const written = commit(
+    caring.map((habit) => ({
+      id: habit.id,
+      data: {
+        status: 'ended',
+        endedAt: now,
+        history: addEvent(habit.history, 'ended', now),
+        reminder: habit.reminder ? { ...habit.reminder, isOn: false } : null,
+        lockScreenName: null,
+        lastEditedAt: now,
+      },
+    })),
+  );
+  return {
+    written,
+    restore: async () => {
+      const ids = new Set(caring.map((habit) => habit.id));
+      const live = store
+        .getState()
+        .helm.habits.items.filter(
+          (habit) => ids.has(habit.id) && habit.endedAt === now,
+        );
+      const before = new Map(caring.map((habit) => [habit.id, habit]));
+      const undoNow = Date.now();
+      await commit(
+        live.map((habit) => {
+          const earlier = before.get(habit.id) as OpenHabit;
+          return {
+            id: habit.id,
+            data: {
+              status: earlier.status,
+              endedAt: earlier.endedAt,
+              history: earlier.history,
+              reminder: earlier.reminder,
+              lockScreenName: earlier.lockScreenName,
+              lastEditedAt: undoNow,
+            },
+          };
+        }),
+      );
+    },
+  };
+}
+
+/** Forgets a person; their care habits end with them, and Undo brings the person and those habits back. */
 export const forgetWho = async (uid: string, whoId: string) => {
   await keepInheritedPrivate(uid, 'who', whoId);
-  return forgetWithPhotos(uid, 'who', whoId);
+  const forgotten = await forgetWithPhotos(uid, 'who', whoId);
+  const ended = endCareHabits(uid, whoId);
+  ended.written.catch(async (error: unknown) => {
+    console.error('Helm care habits were not ended', error);
+    await forgotten.restore().catch((restoreError: unknown) => {
+      console.error('Helm forgotten person was not put back', restoreError);
+    });
+  });
+  return {
+    ...forgotten,
+    restore: async () => {
+      const outcome = await forgotten.restore();
+      await ended.restore().catch((error: unknown) => {
+        console.error('Helm care habits were not put back', error);
+        throw error;
+      });
+      return outcome;
+    },
+  };
 };
 
 /** Makes the person's own who once; the transaction keeps two tabs from making two. */
@@ -591,6 +914,8 @@ export async function ensureSelfWho(
       soundsLike: null,
       refusedAliases: null,
       relation: null,
+      phones: [],
+      emails: [],
       phone: null,
       email: null,
       notes: null,
@@ -598,6 +923,10 @@ export async function ensureSelfWho(
       organizationKind: null,
       privateMark: null,
       isPrivacyCleared: false,
+      home: null,
+      homeSource: null,
+      away: null,
+      nearNow: null,
     },
     encryption,
   );

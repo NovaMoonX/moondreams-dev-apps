@@ -40,6 +40,10 @@ import {
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { SourceRef, SyncedRecord } from '@apps/helm/types';
+import {
+  findMeetingFormat,
+  formatMeetingWhere,
+} from '@apps/helm/utils/meetingWhere';
 import { formatTaskDue } from '@apps/helm/utils/taskDue';
 import { pathOf } from '@apps/helm/utils/topicTree';
 
@@ -218,7 +222,14 @@ function SyncedSourceRow({
   const title = record
     ? (record.sealed.title ?? HELM_COPY.unreadable)
     : (source.title ?? HELM_COPY.answerSyncedGone);
-  const detail = toSyncedDay(source, record);
+  const detail = [
+    toSyncedDay(source, record),
+    record
+      ? formatMeetingWhere(findMeetingFormat(record), record.sealed.placeLabel)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   if (!record || !canOpen) {
     return <PlainRow mark={mark} title={title} detail={detail} />;
   }

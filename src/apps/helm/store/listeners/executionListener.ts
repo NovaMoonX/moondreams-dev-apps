@@ -71,6 +71,8 @@ export async function openExecution(
       goneIds: payload.goneIds ?? null,
       undoReason: payload.undoReason ?? null,
       lines: payload.lines ?? [],
+      abilityOffer: payload.abilityOffer ?? null,
+      awayZoneOffer: payload.awayZoneOffer ?? null,
       isUnreadable: false,
     };
   } catch {
@@ -85,6 +87,8 @@ export async function openExecution(
       goneIds: null,
       undoReason: null,
       lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
       isUnreadable: true,
     };
   }

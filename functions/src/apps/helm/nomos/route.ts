@@ -77,6 +77,87 @@ export const hasProcedureCue = (text: string) =>
 export const hasProcedureReviseCue = (text: string) =>
   hasWordIn(PROCEDURE_REVISE_CUES, text);
 
+const MEDICINE_CUES = new Set([
+  'pill',
+  'pills',
+  'med',
+  'meds',
+  'medicine',
+  'medication',
+  'tablet',
+  'tablets',
+  'vitamin',
+  'vitamins',
+]);
+
+const HABIT_CUES = new Set(['habit', 'habits', ...MEDICINE_CUES]);
+
+/** Whether the words could make a habit: "habit", or a medicine or vitamin word. A bare "every" or "daily" is not enough, since a task or a note says those too. */
+export const hasHabitCue = (text: string) => hasWordIn(HABIT_CUES, text);
+
+const SCHEDULE_CUES = new Set(
+  'schedule scheduled every each weekly daily monthly yearly weekdays weekends annually nightly hourly other skip skipping pause paused resume unpause stop'.split(
+    ' ',
+  ),
+);
+
+/** Whether the words could set or change something done on a schedule: "every", "weekly", "schedule", as a word of its own; on Browse › Scheduled any words could. */
+export const hasScheduleCue = (text: string, view: string | null = null) =>
+  view === 'scheduled' || hasWordIn(SCHEDULE_CUES, text);
+
+const IMPORTANCE_CUES = new Set(
+  'matter matters important importance priority priorities first before after order equally wait waits waiting whenever'.split(
+    ' ',
+  ),
+);
+
+/** Whether the words could say what matters more or less: "matters", "important", "priority", "first", "before", "after", "equally", "can wait", as a word of its own; on What matters most itself ("guitar too", "the wedding, then work") any words could. */
+export const hasImportanceCue = (text: string, view: string | null = null) =>
+  view === 'importance' || hasWordIn(IMPORTANCE_CUES, text);
+
+const CHECKIN_WORDS = new Set(
+  (
+    'took take taken gave give given done did had finished finish drank drink ' +
+    'ate eat completed skipped skip skipping forgot missed'
+  ).split(' '),
+);
+
+/** Whether the words say something was done (or skipped), as a word of its own. */
+export const hasCheckInWord = (text: string) => hasWordIn(CHECKIN_WORDS, text);
+
+const NAME_STOP_WORDS = new Set(
+  'for the and with minute minutes ten five fifteen thirty day days times a my'
+    .split(' ')
+    .concat(['of', 'an', 'to', 'in', 'at', 'on']),
+);
+
+const nameWords = (name: string) =>
+  toComparable(name, true)
+    .split(' ')
+    .filter((word) => word.length >= 3 && !NAME_STOP_WORDS.has(word));
+
+/** Whether the words use a word of one of the habits' names. */
+export const mentionsHabit = (text: string, names: readonly string[]) => {
+  const said = new Set(toComparable(text, true).split(' '));
+  return names.some((name) => nameWords(name).some((word) => said.has(word)));
+};
+
+/** Whether a turn is about habits: the habits screen, a habit or medicine cue, or, for someone who has habits, a check-in word or a word from a habit's name. */
+export const isHabitTurn = (
+  text: string,
+  view: string | null,
+  habits: readonly { name: string }[],
+) =>
+  view === 'habits' ||
+  view === 'habit' ||
+  hasHabitCue(text) ||
+  (habits.length > 0 &&
+    (hasCheckInWord(text) ||
+      mentionsHabit(
+        text,
+        habits.map((habit) => habit.name),
+      )));
+
 const RUN_START_CUES = new Set([
   'start',
   'starting',
