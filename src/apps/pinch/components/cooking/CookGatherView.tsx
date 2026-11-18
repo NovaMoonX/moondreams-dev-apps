@@ -3,12 +3,14 @@ import { RotateCcw } from 'lucide-react';
 import ActionChips from '@/components/ActionChips';
 import { PillGroup } from '@/components/PillGroup';
 import Stepper from '@/components/Stepper';
+import { useAppSelector } from '@/store';
 import CookIngredientsView, {
   CookIngredientRow,
   type CookRow,
 } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookToolsStrip from '@apps/pinch/components/cooking/CookToolsStrip';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
+import { selectPinchSettings } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
 import {
   canCombineGather,
@@ -125,7 +127,8 @@ function AllTogetherList({
   onToggle,
   onReset,
 }: Pick<CookGatherViewProps, 'dishes' | 'onToggle' | 'onReset'>) {
-  const lines = combineGatherDishes(dishes);
+  const { units } = useAppSelector(selectPinchSettings);
+  const lines = combineGatherDishes(dishes, units);
   const isLineOut = (line: (typeof lines)[number]) =>
     isGatherLineOut(line, dishes);
   const outCount = lines.filter(isLineOut).length;

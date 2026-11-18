@@ -4,6 +4,7 @@ import {
   combineCookLines,
   type CombinedLine,
 } from '@apps/pinch/utils/combineCookLines';
+import type { PinchUnitSettings } from '@apps/pinch/types';
 import type { CookMeasure } from '@apps/pinch/utils/cookConversions';
 import { matchByName } from '@apps/pinch/utils/cookVoice';
 import {
@@ -48,7 +49,10 @@ export const getGatherLayout = (
   dishes: GatherDish[],
 ): GatherLayout => (canCombineGather(dishes) ? (stored ?? 'PARTS') : 'PARTS');
 
-export const combineGatherDishes = (dishes: GatherDish[]) =>
+export const combineGatherDishes = (
+  dishes: GatherDish[],
+  units: PinchUnitSettings | null,
+) =>
   combineCookLines(
     dishes.flatMap((dish) =>
       dish.rows.map((row) => ({
@@ -65,6 +69,7 @@ export const combineGatherDishes = (dishes: GatherDish[]) =>
       })),
     ),
     dishes.length > 1,
+    units,
   );
 
 export const isGatherLineOut = (line: CombinedLine, dishes: GatherDish[]) =>
@@ -224,6 +229,7 @@ const toGroupLabel = (group: string) => {
 export const describeGatherLeft = (
   dishes: GatherDish[],
   layout: GatherLayout,
+  units: PinchUnitSettings | null,
 ): GatherAnswer => {
   const isPlate = dishes.length > 1;
   const sections =
@@ -231,7 +237,7 @@ export const describeGatherLeft = (
       ? [
           {
             label: null,
-            lines: combineGatherDishes(dishes)
+            lines: combineGatherDishes(dishes, units)
               .filter((line) => !isGatherLineOut(line, dishes))
               .map((line) => ({
                 name: line.name,

@@ -2029,8 +2029,15 @@ const SPOKEN_UNITS: Record<string, [string, string]> = {
 const AMOUNT_TEXT =
   /^(?<about>about )?(?<whole>\d+(?:\.\d+)?)?(?<fraction>[½¼¾⅓⅔⅛])?(?: (?<unit>.+))?$/;
 
-/** A kitchen amount as it is said rather than written: "1½ tbsp" is "1 and a half tablespoons". */
-export const toSpokenAmount = (amountText: string) => {
+const POUNDS_AND_OUNCES =
+  /^(?<about>about )?(?<pounds>\d+) lb (?<ounces>\d+) oz$/;
+
+/** A kitchen amount as it is said rather than written: "1½ tbsp" is "1 and a half tablespoons", "2 lb 8 oz" is "2 pounds 8 ounces". */
+export const toSpokenAmount = (amountText: string): string => {
+  const both = amountText.match(POUNDS_AND_OUNCES)?.groups;
+  if (both) {
+    return `${both.about ?? ''}${toSpokenAmount(`${both.pounds} lb`)} ${toSpokenAmount(`${both.ounces} oz`)}`;
+  }
   const groups = amountText.match(AMOUNT_TEXT)?.groups;
   if (!groups || (!groups.whole && !groups.fraction)) return amountText;
   const whole = groups.whole ? Number(groups.whole) : 0;

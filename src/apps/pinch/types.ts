@@ -141,8 +141,8 @@ export interface PinchVoiceSettings {
   isWaiting: boolean | null;
 }
 
-/** How weights are written in the person's recipes: as each recipe wrote them, grams and kilograms, or ounces and pounds. */
-export type WeightUnits = 'AS_WRITTEN' | 'METRIC' | 'US';
+/** How weights are written in the person's recipes: as each recipe wrote them, grams and kilograms, ounces and pounds, or pounds and ounces together as a kitchen scale's lb:oz mode shows them ("2 lb 8 oz"). */
+export type WeightUnits = 'AS_WRITTEN' | 'METRIC' | 'US' | 'LB_OZ';
 /** How volumes are written: as written, millilitres and litres, cups (with spoons for small amounts), or fluid ounces. */
 export type VolumeUnits = 'AS_WRITTEN' | 'METRIC' | 'CUPS' | 'FL_OZ';
 

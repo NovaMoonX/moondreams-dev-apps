@@ -4,7 +4,8 @@ import {
   MEASURE_TO_BASE,
 } from '@/utils/measureUtils';
 import type { CookMeasure } from '@apps/pinch/utils/cookConversions';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import type { PinchUnitSettings } from '@apps/pinch/types';
+import { formatReadableAmount } from '@apps/pinch/utils/kitchenMeasure';
 
 export interface CombineSource {
   recipeId: string;
@@ -77,6 +78,7 @@ const combineOne = (
   key: string,
   sources: CombineSource[],
   isPlate: boolean,
+  units: PinchUnitSettings | null,
 ): CombinedLine => {
   const [first] = sources;
   const ids = sources.map(({ recipeId, lineId }) => ({ recipeId, lineId }));
@@ -89,7 +91,9 @@ const combineOne = (
       ? addMeasures(measured.map((source) => source.measure as CookMeasure))
       : null;
   const totalText =
-    total === null ? null : formatKitchenAmount(total.amount, total.unit);
+    total === null
+      ? null
+      : formatReadableAmount(total.amount, total.unit, units);
   const isExactParts = sources.every(
     (source) => !source.amountText.startsWith('about '),
   );
@@ -121,11 +125,13 @@ const combineOne = (
 export function combineCookLines(
   sources: CombineSource[],
   isPlate: boolean,
+  units: PinchUnitSettings | null,
 ): CombinedLine[] {
   const grouped = sources.reduce<Map<string, CombineSource[]>>(
     (result, source) =>
       result.set(source.key, [...(result.get(source.key) ?? []), source]),
     new Map(),
   );
-  return Array.from(grouped, ([key, group]) => combineOne(key, group, isPlate));
+  return Array.from(grouped, ([key, group]) => combineOne(key, group, isPlate, units),
+  );
 }

@@ -797,6 +797,20 @@ assert.ok(
   'a weight is given in oz or lb, not both',
 );
 assert.equal(
+  getConversionLine({ amount: 1.5, unit: 'KG', gramsPerMl: null }),
+  '= 3¼\u00A0lb',
+  'an amount stepped up to kg never repeats itself in grams',
+);
+assert.deepEqual(
+  [
+    toSpokenAmount('2 lb 8 oz'),
+    toSpokenAmount('1 lb 1 oz'),
+    toSpokenAmount('about 1 lb 2 oz'),
+  ],
+  ['2 pounds 8 ounces', '1 pound 1 ounce', 'about 1 pound 2 ounces'],
+  'pounds and ounces are said as both',
+);
+assert.equal(
   getConversionLine({ amount: 2, unit: 'EACH', gramsPerMl: null }),
   null,
   'a count has nothing to convert',
@@ -2739,18 +2753,18 @@ const sauceDish: GatherDish = {
   gotOut: { c: true },
 };
 assert.equal(
-  describeGatherLeft([sauceDish], 'PARTS').speak,
+  describeGatherLeft([sauceDish], 'PARTS', null).speak,
   'Still to get: For sauce: Soy sauce, 2 tablespoons. Garlic, 3 cloves.',
   'by part names the part when there are several',
 );
 assert.equal(
-  describeGatherLeft([{ ...sauceDish, rows: [sauceDish.rows[1]] }], 'PARTS')
+  describeGatherLeft([{ ...sauceDish, rows: [sauceDish.rows[1]] }], 'PARTS', null)
     .speak,
   'Still to get: Garlic, 3 cloves.',
   'one part is not named',
 );
 assert.equal(
-  describeGatherLeft([sauceDish], 'ALL').speak,
+  describeGatherLeft([sauceDish], 'ALL', null).speak,
   'Still to get: Soy sauce, 2 tablespoons. Garlic, 3 cloves.',
   'all together lists each ingredient once',
 );
@@ -2758,6 +2772,7 @@ assert.equal(
   describeGatherLeft(
     [{ ...sauceDish, gotOut: { a: true, b: true, c: true } }],
     'ALL',
+    null,
   ).speak,
   "You've got everything out.",
   'all ticked',
@@ -2770,7 +2785,7 @@ const many: GatherDish = {
   gotOut: {},
 };
 assert.match(
-  describeGatherLeft([many], 'ALL').speak,
+  describeGatherLeft([many], 'ALL', null).speak,
   /And 3 more\.$/,
   'long lists are cut',
 );
