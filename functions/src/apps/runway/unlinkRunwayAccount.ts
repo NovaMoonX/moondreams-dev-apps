@@ -65,6 +65,9 @@ export const unlinkRunwayAccount = onCall(
       if (linkSnapshot.data()?.status !== 'revoked') {
         transaction.update(linkRef, { status: 'revoked' });
       }
+      transaction.delete(
+        firestore.doc(planDocPath(uid, 'recurringCharges', linkId)),
+      );
       if (!grantSnapshot.exists) return null;
       const grant = grantSnapshot.data() as ProviderGrantDoc;
       transaction.delete(firestore.doc(itemIndexPath(grant.providerItemId)));

@@ -1770,6 +1770,13 @@ export const BANK_HINTS_WORDS = {
   toCheckHeading: 'To check',
   chargedElsewhereHeading: 'Charged elsewhere',
   chargedElsewhereHelpTitle: 'Charged somewhere else?',
+  notInPlanHeading: 'Not in your plan',
+  notInPlanPhrase: 'to add',
+  notInPlanHelpTitle: 'How we found these',
+  notInPlanHelp:
+    'We compare the bank’s own list of repeating charges with your bills. Nothing changes until you say yes.',
+  showMore: (count: number) => `Show ${count} more`,
+  showFewer: 'Show fewer',
 } as const;
 
 /** What Runway says when a bill's recent bank charges were on a card or account other than the one the bill names. */
@@ -1779,6 +1786,8 @@ export const CHARGED_TO_HINT_WORDS = {
   fromToday: 'Applies from today, for every payment after.',
   chargeIt: (place: string) => `Charge it to ${place}`,
   notThisOne: 'Not this one',
+  declined: (name: string, place: string) =>
+    `We won’t suggest ${place} for ${name} again`,
   done: (name: string, place: string) =>
     `${name} is now charged to ${place} from today`,
   undo: 'Undo',
@@ -1790,6 +1799,77 @@ export const CHARGED_TO_HINT_WORDS = {
   rowLine: (place: string) => `Last charged on ${place}`,
   openAria: (name: string, place: string) =>
     `${name}. Last charged on ${place}. Open`,
+} as const;
+
+/** The words of the bank's repeating charges in the Heads-up sheet and the sheets its rows open. */
+export const BILLS_NOTICED_WORDS = {
+  amountLine: (last: string, plan: string) =>
+    `Last charged ${last} · plan says ${plan}`,
+  amountRangeLine: (low: string, high: string, plan: string) =>
+    `Charged ${low} to ${high} lately · plan says ${plan}`,
+  amountAria: (name: string) =>
+    `${name}. Its bank charges differ from your plan. Open`,
+  amountHiddenAria: (name: string) =>
+    `${name}. Its bank charges differ from your plan. Amount hidden. Open`,
+  newLine: (amount: string, how: string, place: string) =>
+    `${amount} ${how} on ${place}`,
+  newAria: (name: string, line: string) => `${name}. ${line}. Open`,
+  newHiddenAria: (name: string) =>
+    `${name}. A repeating charge that is not a bill yet. Amount hidden. Open`,
+  placeName: (name: string, mask: string | null) =>
+    mask ? `${name}\u00a0••${mask}` : name,
+  placeLine: (count: number) =>
+    count === 1 ? '1 repeating charge' : `${count} repeating charges`,
+  placeAria: (name: string, line: string) => `${name}. ${line}. Open`,
+  frequency: {
+    weekly: 'weekly',
+    biweekly: 'every 2 weeks',
+    semiMonthly: 'twice a month',
+    monthly: 'monthly',
+    annually: 'yearly',
+    unknown: 'repeating',
+  },
+} as const;
+
+/** What a bill's sheet says when the bank's charges differ from its amount. */
+export const BILL_AMOUNT_HINT_WORDS = {
+  single: (last: string, plan: string) =>
+    `Last charged ${last} · plan says ${plan}`,
+  range: (low: string, high: string, plan: string) =>
+    `Charged ${low} to ${high} lately · plan says ${plan}`,
+  more: (difference: string) => `The bank’s is ${difference} more`,
+  less: (difference: string) => `The bank’s is ${difference} less`,
+  covers: (extra: string, on: string) =>
+    `Free to Spend covers the extra ${extra} for ${on}`,
+  reviewIt: (amount: string) => `Review the change to ${amount}`,
+  changeIt: (amount: string) => `Change it to ${amount}`,
+  notThisOne: 'Not this one',
+  wontSuggest: (name: string) => `We won’t suggest ${name} again`,
+  done: (name: string, amount: string) => `${name} is now ${amount} from today`,
+  alreadyHolds: (name: string) => `${name} already has that amount from today.`,
+  undo: 'Undo',
+  undoFailed: 'That could not be undone.',
+  saveFailed: 'This did not save. Nothing was changed.',
+  offline: 'You are offline, so nothing was changed.',
+} as const;
+
+/** The sheet a repeating charge the bank found opens, and the one for an account that is not in the plan. */
+export const RECURRING_SHEET_WORDS = {
+  amount: 'Amount',
+  howOften: 'How often',
+  lastCharged: 'Last charged',
+  nextExpected: 'Next expected',
+  chargedTo: 'Charged to',
+  about: (amount: string) => `About ${amount}`,
+  addBill: 'Add it as a bill',
+  addBillSub: 'You will check the details before it is added.',
+  notABill: 'Not a bill',
+  accountIntro:
+    'This account isn’t in your plan. It has repeating charges Runway can read once it’s in your plan.',
+  addAccount: 'Add it to my plan',
+  keepOut: 'Keep it out',
+  wontSuggest: (name: string) => `We won’t suggest ${name} again`,
+  undo: 'Undo',
 } as const;
 
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */

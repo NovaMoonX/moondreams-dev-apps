@@ -91,7 +91,7 @@ def main():
                 dirtyFrom=None, keyId='k1', sealed=SEAL)
     check('plan create [o]', commit(o_tok, [put_new(base, plan)]), True)
     admin([put(base, plan)])
-    for c in ('links', 'accountBalances', 'cardStatements'):
+    for c in ('links', 'accountBalances', 'cardStatements', 'recurringCharges'):
         admin([put(f'{base}/{c}/l1', dict(id='l1', sealed=SEAL))])
         check(f'{c} read [o]', get(f'{base}/{c}/l1', o_tok), True)
         check(f'{c} read [x]', get(f'{base}/{c}/l1', x_tok), False)

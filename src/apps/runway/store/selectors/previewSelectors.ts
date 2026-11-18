@@ -35,6 +35,8 @@ import {
   getVersionStretches,
   resolveCurrentOrNext,
 } from '@apps/runway/engine/resolve';
+import type { BillCover } from '@apps/runway/engine/billCover';
+import { selectBillCover } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLookahead } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   computeDraftView,
@@ -594,6 +596,28 @@ export function previewLookahead(
     ),
   };
   return result;
+}
+
+/** What Free to Spend covers for bills as the plan stands and with the change layered over it. */
+export function previewBillCover(
+  state: RootState,
+  change: PreviewChange,
+): { before: BillCover; after: BillCover } {
+  const { items, versions, openDays } = layerPlan(
+    {
+      items: state.runway.items,
+      versions: state.runway.versions,
+      openDays: state.runway.days,
+    },
+    change,
+  );
+  return {
+    before: selectBillCover(state),
+    after: selectBillCover({
+      ...state,
+      runway: { ...state.runway, items, versions, days: openDays },
+    }),
+  };
 }
 
 /** Where the days the person changed for themselves go when a change moves their payday; nothing moves for any other change. */

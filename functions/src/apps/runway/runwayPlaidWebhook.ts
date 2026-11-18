@@ -55,8 +55,12 @@ export const runwayPlaidWebhook = onRequest(
     const isStatementsNotice =
       body.webhook_type === 'LIABILITIES' &&
       body.webhook_code === 'DEFAULT_UPDATE';
+    const isRecurringNotice =
+      body.webhook_type === 'TRANSACTIONS' &&
+      body.webhook_code === 'RECURRING_TRANSACTIONS_UPDATE';
     const isSyncNotice =
       isStatementsNotice ||
+      isRecurringNotice ||
       (body.webhook_type === 'TRANSACTIONS' &&
         body.webhook_code === 'SYNC_UPDATES_AVAILABLE') ||
       (body.webhook_type === 'ITEM' && body.webhook_code === 'LOGIN_REPAIRED');
@@ -75,6 +79,7 @@ export const runwayPlaidWebhook = onRequest(
         const sync = syncRunwayLink(firestore, loadKeyring(), uid, linkId, {
           isFresh: false,
           isStatementsDue: isStatementsNotice,
+          isRecurringDue: isRecurringNotice,
         }).then(
           (result) => {
             logger.info('runway.webhook.synced', {
