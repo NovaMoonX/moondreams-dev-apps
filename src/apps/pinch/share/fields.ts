@@ -333,6 +333,7 @@ const RECIPE_FIELDS = {
   coverUrl: 'notUseful',
   ingredients: 'never',
   steps: 'never',
+  stepSections: 'never',
   nutritionOverride: 'never',
   source: 'notUseful',
   sourceId: 'notUseful',
@@ -351,6 +352,7 @@ const COOKING_RESUME_FIELDS = {
   positions: 'notUseful',
   timers: 'notUseful',
   captured: 'notUseful',
+  startedAt: 'notUseful',
 } satisfies Record<keyof CookingResume, ShareDecision>;
 
 const PINCH_SHARE_FIELDS = {
