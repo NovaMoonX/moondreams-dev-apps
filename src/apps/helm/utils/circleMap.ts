@@ -1,14 +1,29 @@
 import type { ElementDefinition } from 'cytoscape';
 
+import { formatDate, formatRelativeDayUTC } from '@/utils/formatUtils';
+import { daysUntil, nextYearlyOccurrence } from '@/utils/yearlyDateUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   CONNECTION_KINDS,
   isPastStatus,
   readFromSide,
+  toConnectionId,
   type InferredLink,
 } from '@apps/helm/engine/connections';
-import type { ConnectionKind, OpenConnection, OpenWho } from '@apps/helm/types';
-import { toFiguredSide, toSideLine } from '@apps/helm/utils/connectionText';
+import type {
+  ConnectionKind,
+  OpenConnection,
+  OpenTask,
+  OpenWho,
+} from '@apps/helm/types';
+import {
+  toBecauseLine,
+  toConnectionSentence,
+  toFiguredSide,
+  toSideLine,
+} from '@apps/helm/utils/connectionText';
+import type { IndexEntry } from '@apps/helm/utils/keyDateIndex';
+import { toKeyDateTitleWord } from '@apps/helm/utils/keyDateText';
 
 export type MapFilter = 'close' | 'family' | 'everyone';
 
@@ -71,7 +86,13 @@ type MapWho = Pick<
 
 type MapConnection = Pick<
   OpenConnection,
-  'whoIds' | 'kind' | 'status' | 'fromFirst' | 'fromSecond' | 'since'
+  | 'whoIds'
+  | 'kind'
+  | 'status'
+  | 'fromFirst'
+  | 'fromSecond'
+  | 'since'
+  | 'lastEditedAt'
 >;
 
 interface MapInput {
@@ -340,4 +361,167 @@ export const toCircleCard = (input: MapInput & { id: string }): MapCard => {
       connection.whoIds.includes(input.id),
     ).length,
   };
+};
+
+export interface MapLine {
+  /** What the line means, in words. */
+  sentence: string;
+  /** The date or reason that goes with it; null when it has none. */
+  note: string | null;
+  isGuess: boolean;
+  /** The saved connection's id; null for a worked-out line. */
+  connectionId: string | null;
+  /** Who the line joins, in the order of the edge. */
+  whoIds: [string, string];
+}
+
+/** What a line on the map says: "Dana is Sam's mother." (a couple's since is inside it) and, for a past couple, when it was last changed; a worked-out line says it is a guess and why. Null when the line is not on the map. */
+export const toCircleLine = (
+  input: MapInput & { id: string },
+): MapLine | null => {
+  const ownerId = readOwnerId(input);
+  const nameOf = (id: string) =>
+    hidesName(input, id, ownerId)
+      ? HELM_COPY.mapPrivateName
+      : (input.people.find((who) => who.id === id)?.name ?? '');
+  const toPair = (firstId: string, secondId: string) =>
+    secondId === ownerId
+      ? { subjectId: secondId, otherId: firstId }
+      : { subjectId: firstId, otherId: secondId };
+  const saved = input.connections.find(
+    (connection) =>
+      toConnectionId(
+        connection.whoIds[0],
+        connection.whoIds[1],
+        connection.kind,
+      ) === input.id,
+  );
+  if (saved) {
+    const { subjectId, otherId } = toPair(saved.whoIds[0], saved.whoIds[1]);
+    const side = readFromSide(saved, subjectId);
+    if (!side) return null;
+    const isPast = saved.kind === 'couple' && isPastStatus(saved.status);
+    return {
+      sentence: toConnectionSentence(
+        saved.kind,
+        side,
+        nameOf(otherId),
+        subjectId === ownerId ? null : nameOf(subjectId),
+      ),
+      note:
+        isPast && saved.lastEditedAt
+          ? HELM_COPY.mapLineUpdated(formatDate(saved.lastEditedAt))
+          : null,
+      isGuess: false,
+      connectionId: input.id,
+      whoIds: saved.whoIds,
+    };
+  }
+  const figured = [...input.figuredOut.values()]
+    .flat()
+    .find((link) => `${link.firstId}_${link.secondId}_figured` === input.id);
+  if (!figured) return null;
+  const { subjectId, otherId } = toPair(figured.firstId, figured.secondId);
+  return {
+    sentence: `${toConnectionSentence(
+      'family',
+      toFiguredSide(figured, subjectId),
+      nameOf(otherId),
+      subjectId === ownerId ? null : nameOf(subjectId),
+    )} ${HELM_COPY.mapLineGuess}`,
+    note: toBecauseLine(figured, ownerId, nameOf),
+    isGuess: true,
+    connectionId: null,
+    whoIds: [figured.firstId, figured.secondId],
+  };
+};
+
+const SUMMARY_NAMES = 3;
+const KEY_DATE_NEAR_DAYS = 30;
+
+/** The lines a tapped person's card adds under what they are: who they are linked to here, the next dated task with them or when they last came up, and a key date within a month. Nothing for the owner or a hidden private person. */
+export const toCircleSummary = (
+  input: MapInput & {
+    id: string;
+    /** `isPrivate` is the task's own class in effect, so a private task's title stays off the card while nobody is looking. */
+    tasks: readonly (Pick<
+      OpenTask,
+      'title' | 'whoIds' | 'due' | 'status' | 'isUnreadable'
+    > & { isPrivate: boolean })[];
+    keyDates: readonly IndexEntry[];
+    todayKey: string;
+    lastMentionedAt: number | null;
+  },
+): string[] => {
+  const ownerId = readOwnerId(input);
+  if (input.id === ownerId || hidesName(input, input.id, ownerId)) return [];
+  const otherNames = [
+    ...new Set(
+      input.connections
+        .filter((connection) => connection.whoIds.includes(input.id))
+        .map((connection) => connection.whoIds.find((id) => id !== input.id)),
+    ),
+  ].flatMap((id) => {
+    const other = input.people.find((who) => who.id === id);
+    return id === undefined || id === ownerId || !other || other.isUnreadable
+      ? []
+      : [hidesName(input, id, ownerId) ? HELM_COPY.mapPrivateName : other.name];
+  });
+  const linked =
+    otherNames.length === 0
+      ? []
+      : [
+          HELM_COPY.mapCardLinked(
+            otherNames.slice(0, SUMMARY_NAMES),
+            otherNames.length - SUMMARY_NAMES,
+          ),
+        ];
+
+  const todayAt = Date.parse(input.todayKey);
+  const toDueAt = (due: NonNullable<OpenTask['due']>) =>
+    due.kind === 'day' ? due.date : due.at;
+  const next = input.tasks
+    .flatMap((task) =>
+      task.status === 'open' &&
+      !task.isUnreadable &&
+      !(input.isMasked && task.isPrivate) &&
+      task.due !== null &&
+      task.whoIds.includes(input.id)
+        ? [{ title: task.title, due: task.due }]
+        : [],
+    )
+    .sort((a, b) => toDueAt(a.due) - toDueAt(b.due))[0];
+  const nextLine = next
+    ? [
+        HELM_COPY.mapCardNext(
+          next.title,
+          next.due.kind === 'day'
+            ? formatRelativeDayUTC(next.due.date, todayAt)
+            : formatDate(next.due.at),
+        ),
+      ]
+    : input.lastMentionedAt !== null
+      ? [HELM_COPY.mapCardLastCameUp(formatDate(input.lastMentionedAt))]
+      : [];
+
+  const nearest = input.keyDates
+    .flatMap(([, kind, month, day, , label]) =>
+      day === null
+        ? []
+        : [
+            {
+              word: toKeyDateTitleWord(kind, label),
+              days: daysUntil(
+                input.todayKey,
+                nextYearlyOccurrence({ month, day }, input.todayKey),
+              ),
+            },
+          ],
+    )
+    .filter((entry) => entry.days <= KEY_DATE_NEAR_DAYS)
+    .sort((a, b) => a.days - b.days)[0];
+  const dateLine = nearest
+    ? [HELM_COPY.mapCardDate(nearest.word, nearest.days)]
+    : [];
+  return [...linked, ...nextLine, ...dateLine];
 };
