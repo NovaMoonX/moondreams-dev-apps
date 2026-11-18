@@ -676,10 +676,10 @@ match /apps/a-list/calendarShares/{shareId} {
 Per-app store under `src/apps/a-list/store/`, exposing `AListState` and `aListReducer`, mounted in the central `src/store/index.ts` as `aList` (next to `nineLives` and `waypoint`).
 
 ```typescript
-interface MembershipState { membership: MembershipProfile | null; hold: HeldList; uid: string | null; isLoaded: boolean }
-interface WatchlistState  { items: WatchlistItem[];                isLoaded: boolean }
-interface ViewingsState   { items: Viewing[];                      isLoaded: boolean }
-interface TheatresState   { items: AListTheatre[];                 isLoaded: boolean }
+interface MembershipState { membership: WithId<MembershipProfile> | null; hold: HeldList; uid: string | null; isLoaded: boolean; loadError: string | null }
+interface WatchlistState  { items: WithId<WatchlistItem>[]; hold: HeldList; uid: string | null; isLoaded: boolean; loadError: string | null }
+interface ViewingsState   { items: WithId<Viewing>[];       hold: HeldList; uid: string | null; isLoaded: boolean; loadError: string | null }
+interface TheatresState   { items: WithId<AListTheatre>[];  hold: HeldList; uid: string | null; isLoaded: boolean; loadError: string | null }
 export interface AListState { membership: MembershipState; watchlist: WatchlistState; viewings: ViewingsState; theatres: TheatresState }
 ```
 
