@@ -36,6 +36,7 @@ import {
   setAssistantsFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
+  setKeyFailure,
   setKeyStatus,
   setPlaces,
   setPlacesFailed,
@@ -481,6 +482,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
         // A cleanup that clears the key cancels its fetch; that is not a failure.
         if (!isCurrent) return;
         console.error('Helm could not get its key', error);
+        dispatch(
+          setKeyFailure({
+            message: error instanceof Error ? error.message : String(error),
+            code:
+              typeof (error as { code?: unknown } | null)?.code === 'string'
+                ? (error as { code: string }).code
+                : null,
+          }),
+        );
         dispatch(setKeyStatus(isOfflineError(error) ? 'offline' : 'failed'));
         // A dropped connection can read as a server failure, so both ask again once the device is back online.
         window.addEventListener('online', retryOnline);

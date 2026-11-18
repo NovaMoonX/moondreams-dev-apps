@@ -69,8 +69,15 @@ export interface PlanDaySet {
 /** Whether the data key is here: `offline` when it couldn't be asked for, `failed` when the server refused it. */
 export type KeyStatus = 'loading' | 'ready' | 'offline' | 'failed';
 
+export interface KeyFailure {
+  message: string;
+  code: string | null;
+}
+
 export interface HelmState {
   keyStatus: KeyStatus;
+  /** Why the key last failed, in the server's or browser's words, for debug viewers. */
+  keyFailure: KeyFailure | null;
   /** Raised by Try again; asking for the key again follows it. */
   keyAttempt: number;
   isKeyRetrying: boolean;
@@ -221,6 +228,7 @@ const emptyKeyDateIndex: KeyDateIndexSet = {
 
 const initialState: HelmState = {
   keyStatus: 'loading',
+  keyFailure: null,
   keyAttempt: 0,
   isKeyRetrying: false,
   keyRefusals: 0,
@@ -273,6 +281,10 @@ const helmSlice = createSlice({
       state.isKeyRetrying = false;
       state.keyRefusals =
         action.payload === 'failed' ? state.keyRefusals + 1 : 0;
+      if (action.payload === 'ready') state.keyFailure = null;
+    },
+    setKeyFailure: (state, action: PayloadAction<KeyFailure>) => {
+      state.keyFailure = action.payload;
     },
     retryKey: (state) => {
       state.keyAttempt += 1;
@@ -580,6 +592,7 @@ export const {
   setAssistantsFailed,
   clearHelm,
   setKeyStatus,
+  setKeyFailure,
   retryKey,
 } = helmSlice.actions;
 export const helmReducer = helmSlice.reducer;

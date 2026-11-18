@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline/promises';
 import { loadEnv } from 'vite';
 
 import { APP_REGISTRY } from '../src/lib/app/app.registry.ts';
+import { pinDevKeyrings } from './appKeys/pinDevKeyrings.ts';
 import {
   DEV_SIGN_IN_PARAM,
   getDefaultFixture,
@@ -219,9 +220,15 @@ const checkFirebaseLogin = () => {
 
 const main = async () => {
   const isRunning = await areAllUp(EMULATOR_READY_URLS);
+  const pinned = pinDevKeyrings();
+  if (pinned.length > 0)
+    console.log(
+      `✓ Pinned the development keyring for ${pinned.join(', ')}, so seeded accounts open.${isRunning ? ' Restarting the emulators to use it.' : ''}`,
+    );
   const hasChanged = askAboutServices();
   const isRestarting =
-    isRunning && hasChanged && (await askToRestartEmulators());
+    isRunning &&
+    (pinned.length > 0 || (hasChanged && (await askToRestartEmulators())));
   // Half-running emulators (a crash, a closed terminal, a check run) hold ports a fresh start needs.
   if (!isRunning || isRestarting) {
     execFileSync('npm', ['run', '--silent', 'emulators:kill'], {
