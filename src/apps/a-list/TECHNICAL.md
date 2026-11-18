@@ -676,7 +676,7 @@ match /apps/a-list/calendarShares/{shareId} {
 Per-app store under `src/apps/a-list/store/`, exposing `AListState` and `aListReducer`, mounted in the central `src/store/index.ts` as `aList` (next to `nineLives` and `waypoint`).
 
 ```typescript
-interface MembershipState { membership: MembershipProfile | null; isLoaded: boolean }
+interface MembershipState { membership: MembershipProfile | null; hold: HeldList; uid: string | null; isLoaded: boolean }
 interface WatchlistState  { items: WatchlistItem[];                isLoaded: boolean }
 interface ViewingsState   { items: Viewing[];                      isLoaded: boolean }
 interface TheatresState   { items: AListTheatre[];                 isLoaded: boolean }
@@ -714,6 +714,8 @@ All four live in `store/listeners/`, and are started once by `useAListSync(uid)`
 | `recordTicket(id, ticket)` | `updateDoc({ ticket, lastEditedAt })` — the form owns the whole object |
 | `markViewingSeen(id, rating)` | `updateDoc({ status: 'SEEN', rating, lastEditedAt })` |
 | `removeViewing(id)` | a transaction (so it needs a connection) that reads and deletes the viewing after a destructive confirm (also what "Didn't go" does); a trailer reminder still ahead is cancelled afterwards, not awaited |
+
+**Transactions show at once.** Every transaction (`addWatchlistItem`, `restoreWatchlistItem`, `addTheatre`, `removeTheatre`, `setFavoriteTheatre`, `linkTheatre`'s, `addViewing`, `editViewing`'s edits and `removeViewing`) runs through `runHeldTransaction(uid, body)` (`store/actions/heldTransaction.ts`, built on `createHeldTransaction`): the documents it wrote are laid over the listeners' lists (shown at once, put back if the write fails) and held until the listener shows them, with the sync watchdog watching. Held: the member's `watchlist`, `viewings` and `theatres` records and their own membership document (a list of one, so a favorite star moves with its theater). Each slice keeps the listener's copy (`hold`) and the `uid` it belongs to, takes no hold while loading, after a load error or for another member, and every listener record carries its document id as `id`. Not held: plain `setDoc`/`updateDoc`/batch writes (Firestore's own latency compensation shows them), `linkTheatre`'s showing batches, shared calendars, and the trailer reminder callable. Nothing is filtered or windowed, so no record leaves or joins a list by changing a field.
 
 No cached document is ever written back whole. A transaction is used only where one action must create two documents consistently or create-if-absent; the single-member data has no other concurrency hazard.
 
