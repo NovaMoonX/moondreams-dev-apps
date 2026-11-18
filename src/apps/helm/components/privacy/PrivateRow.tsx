@@ -30,10 +30,18 @@ interface PrivateRowProps {
   title: string;
   /** Opens the project, person or place an inherited class comes from; left out, the row opens its page. */
   onOpenParent?: (parentId: string) => void;
+  /** Drawn as its own card, for a page whose other settings sit in cards, so its switch ends on their edge. */
+  isCard?: boolean;
 }
 
 /** The Private switch every record's sheet carries: immediate, never locked, and it says why when the class is not the person's own. */
-function PrivateRow({ kind, record, title, onOpenParent }: PrivateRowProps) {
+function PrivateRow({
+  kind,
+  record,
+  title,
+  onOpenParent,
+  isCard = false,
+}: PrivateRowProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -113,7 +121,11 @@ function PrivateRow({ kind, record, title, onOpenParent }: PrivateRowProps) {
 
   const Mark = codeMark === 'care' ? HeartHandshake : Stethoscope;
   return (
-    <div className='border-border mt-3 border-t pt-3'>
+    <div
+      className={
+        isCard ? 'helm-card px-4 py-3' : 'border-border mt-3 border-t pt-3'
+      }
+    >
       <PrivateSwitchLine checked={isOn} onCheckedChange={onChange} />
       {codeMark !== null && (
         <div className='text-muted-foreground mt-2 flex items-center gap-2 pl-[30px] text-[13px]'>

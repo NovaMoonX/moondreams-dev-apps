@@ -93,6 +93,8 @@ const getWaitingPlaceholder = (
   return null;
 };
 
+const LEAD = 'flex size-4 shrink-0 items-center justify-center';
+
 const ROW =
   'h-11 w-full min-w-0 justify-between! gap-2 rounded-none px-0! text-[15px] font-normal';
 
@@ -186,10 +188,12 @@ function QuietLines({ now }: { now: number }) {
             onClick={() => void showView('today')}
           >
             <span className='flex min-w-0 items-center gap-2'>
-              <CalendarDays
-                className='text-muted-foreground size-4 shrink-0'
-                aria-hidden='true'
-              />
+              <span className={LEAD}>
+                <CalendarDays
+                  className='text-muted-foreground size-4'
+                  aria-hidden='true'
+                />
+              </span>
               <span className='truncate'>{nextEvent.label}</span>
             </span>
             <ChevronRight
@@ -208,10 +212,12 @@ function QuietLines({ now }: { now: number }) {
             onClick={() => void showView('inbox')}
           >
             <span className='flex min-w-0 items-center gap-2'>
-              <span
-                className='size-2 shrink-0 rounded-full bg-(--helm-verdigris)'
-                aria-hidden='true'
-              />
+              <span className={LEAD}>
+                <span
+                  className='size-2 rounded-full bg-(--helm-verdigris)'
+                  aria-hidden='true'
+                />
+              </span>
               <span className='truncate'>
                 {HELM_COPY.needsYouCount(needsYou)}
               </span>
@@ -232,14 +238,16 @@ function QuietLines({ now }: { now: number }) {
             onClick={() => void showView('outside')}
           >
             <span className='flex min-w-0 items-center gap-2'>
-              {outside.via !== null ? (
-                <OutsideMark via={outside.via} isSmall />
-              ) : (
-                <Sparkles
-                  className='text-muted-foreground size-4 shrink-0'
-                  aria-hidden='true'
-                />
-              )}
+              <span className={LEAD}>
+                {outside.via !== null ? (
+                  <OutsideMark via={outside.via} isSmall />
+                ) : (
+                  <Sparkles
+                    className='text-muted-foreground size-4'
+                    aria-hidden='true'
+                  />
+                )}
+              </span>
               <span className='truncate'>{outside.label}</span>
             </span>
             <ChevronRight
