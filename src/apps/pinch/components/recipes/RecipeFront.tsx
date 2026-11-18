@@ -177,6 +177,7 @@ function RecipeFront({
       ? null
       : getLineMarkers(
           Array.from(pantryStocks, ([id, stock]) => ({ id, stock })),
+          units,
         );
 
   const totalMinutes = getTotalMinutes(recipe);

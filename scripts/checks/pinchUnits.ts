@@ -285,4 +285,27 @@ assert.deepEqual(adaptAmount(1, 'KG', lbOz), { amount: 35, unit: 'OZ' });
 assert.equal(adaptAmount(2, 'LB', lbOz), null);
 assert.equal(adaptAmount(8, 'OZ', lbOz), null);
 assert.deepEqual(adaptAmount(0.5, 'LB', lbOz), { amount: 8, unit: 'OZ' });
+const { getLineStockText, formatTotal } =
+  await import('../../src/apps/pinch/utils/packages.ts');
+assert.deepEqual(
+  [
+    getLineStockText(
+      {
+        kind: 'SOME',
+        have: { amount: 40, unit: 'OZ' },
+        isConverted: false,
+      } as never,
+      lbOz,
+    ),
+    getLineStockText({
+      kind: 'SOME',
+      have: { amount: 40, unit: 'OZ' },
+      isConverted: false,
+    } as never),
+    formatTotal({ amount: 40, unit: 'OZ' }, lbOz),
+    formatTotal({ amount: 40, unit: 'OZ' }),
+  ],
+  ['You have 2 lb 8 oz', 'You have 40 oz', '2 lb 8 oz', '40 oz'],
+  "the pantry reads the person's way of weighing too",
+);
 console.log('pinch units: ok');

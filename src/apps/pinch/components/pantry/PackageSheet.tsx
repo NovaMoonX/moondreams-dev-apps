@@ -516,7 +516,7 @@ function PackageSheet({
       return (
         <div className='grid gap-3'>
           <p className='text-muted-foreground text-sm'>
-            {getStockSummaryParts(stock).join(' · ')}
+            {getStockSummaryParts(stock, units).join(' · ')}
           </p>
           <ul className='divide-border divide-y'>
             {packages.map((entry) => (

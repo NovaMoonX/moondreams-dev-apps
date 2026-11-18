@@ -29,6 +29,7 @@ const PILL_BUTTON =
 function CookPantryTake({ take }: CookPantryTakeProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { taken } = take;
+  const units = useAppSelector(selectUnitSettings);
   const lines: TakeGroup[] = taken === null ? take.groups : taken.groups;
   if (lines.length === 0) return null;
 
@@ -54,7 +55,7 @@ function CookPantryTake({ take }: CookPantryTakeProps) {
         <span className='min-w-0 flex-1 font-medium text-balance'>
           {taken === null
             ? 'Take it out of your pantry?'
-            : getTakenHeadline(taken.groups)}
+            : getTakenHeadline(taken.groups, units)}
         </span>
         {taken === null ? (
           <Button

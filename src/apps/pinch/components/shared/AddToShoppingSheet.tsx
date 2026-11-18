@@ -418,11 +418,11 @@ export function ShoppingPick({
       return null;
     }
     if (pantry.kind === 'HAVE') {
-      return `${getLineStockText(pantry)} in your pantry. Tick to add it anyway.`;
+      return `${getLineStockText(pantry, units)} in your pantry. Tick to add it anyway.`;
     }
     return pantry.kind === 'PAST'
       ? 'What is in your pantry is past its date.'
-      : `${getLineStockText(pantry)} in your pantry.`;
+      : `${getLineStockText(pantry, units)} in your pantry.`;
   };
   const atHomeRows = rows.filter(isUsuallyAtHome);
   const shownRows = [

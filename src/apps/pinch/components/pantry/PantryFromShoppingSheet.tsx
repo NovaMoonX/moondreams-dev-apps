@@ -166,7 +166,7 @@ function PantryFromShoppingSheet({
                 ? 'On your list'
                 : `On your list: ${formatShopAmount({ amount: row.amount, unit: row.unit }, units)}`,
               stock.length > 0
-                ? `Already in your pantry: ${getStockSummaryParts(getStockView(row.ingredientId, stock, undefined, soonDays)).join(', ')}`
+                ? `Already in your pantry: ${getStockSummaryParts(getStockView(row.ingredientId, stock, undefined, soonDays), units).join(', ')}`
                 : null,
             ]
               .filter((part) => part !== null)
