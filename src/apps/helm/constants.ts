@@ -1343,6 +1343,7 @@ export const HELM_COPY = {
   bringInOfferLine: (app: string, phrase: string) =>
     `${app} has ${phrase} you can bring into your circle.`,
   bringInOfferAction: 'Review',
+  bringInOfferCount: (count: number) => `${count} not in your circle`,
   bringInOfferRowTitle: 'Bring into your circle',
   bringInTitle: (app: string) => `From ${app}`,
   bringInIntro:

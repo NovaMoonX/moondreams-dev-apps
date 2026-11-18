@@ -39,6 +39,7 @@ import KeptCopiesSheet from '@apps/helm/components/connections/KeptCopiesSheet';
 import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useBringInOffers } from '@apps/helm/hooks/useBringInOffers';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
@@ -147,6 +148,7 @@ function ConnectedAppsScreen({
   const grants = everyGrant.filter((grant) => grant.status !== 'ended');
   const waitFor = useWaitUntilShown(everyGrant);
   const { nameOf: sourceNameOf } = useSourceAppName();
+  const offers = useBringInOffers();
   const kept = everyGrant.flatMap((grant) => {
     const account = accounts.find((entry) => entry.id === grant.accountId);
     return grant.status === 'ended' &&
@@ -183,8 +185,11 @@ function ConnectedAppsScreen({
         .map((category) => category.label);
       const isTrouble = grant.status !== 'live';
       const newestOkAt = getNewestOkAt(grant);
-      const readLine =
-        labels.length > 0 ? labels.join(', ') : HELM_COPY.connectedNothingOn;
+      const offered = offers.find((offer) => offer.grantId === grant.id);
+      const readLine = [
+        labels.length > 0 ? labels.join(', ') : HELM_COPY.connectedNothingOn,
+        ...(offered ? [HELM_COPY.bringInOfferCount(offered.plans.length)] : []),
+      ].join(' · ');
       return {
         id: grant.id,
         appName: nameOf(appId),

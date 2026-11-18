@@ -4,6 +4,7 @@ import {
   BRING_IN_SOURCES,
   countBySource,
   planBringIn,
+  readMentionedOffer,
   toCandidates,
   toCountPhrase,
   toSourceKey,
@@ -312,6 +313,38 @@ assert.equal(
     counted.map(({ source: one, count }) => ({ count, ...one.noun })),
   ),
   '3 pets, a clinic and 2 vets',
+);
+
+// A turn brings an offer up only when it names someone in it.
+const mentionPlans = planBringIn(
+  [
+    candidate('cats', 'Mittens Brown'),
+    candidate('cats', 'Mo'),
+    candidate('vets', 'Dr. Patel'),
+  ],
+  [],
+);
+const offers = [{ appId: 'x', plans: mentionPlans }];
+assert.equal(readMentionedOffer('Mittens needs a checkup', offers), offers[0]);
+assert.equal(readMentionedOffer('feed mittens brown at 6', offers), offers[0]);
+assert.equal(readMentionedOffer('Dr. Patel called', offers), offers[0]);
+assert.equal(readMentionedOffer('Remind me to call Jordan', offers), null);
+assert.equal(readMentionedOffer('Good Morning, Mitten', offers), null);
+assert.equal(readMentionedOffer('Mittens', offers, { told: { x: 1 } }), null);
+const privatePlans = planBringIn(
+  [candidate('cats', 'Biscuit')],
+  [who('w9', 'pet', 'Biscuit', { privacy: 'private' } as Partial<OpenWho>)],
+);
+assert.equal(privatePlans.length, 1);
+assert.equal(
+  readMentionedOffer('Biscuit ate', [{ appId: 'x', plans: privatePlans }], {
+    isMasked: true,
+  }),
+  null,
+);
+assert.notEqual(
+  readMentionedOffer('Biscuit ate', [{ appId: 'x', plans: privatePlans }]),
+  null,
 );
 
 console.log('check:helm-bring-in: new, same and maybe are told apart.');

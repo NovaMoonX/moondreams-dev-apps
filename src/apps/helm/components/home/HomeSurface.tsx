@@ -363,6 +363,19 @@ function HomeSurface({
       <MorningQuestionTurn card={dayCard} />
     </div>
   ) : null;
+  const openSession = sessions.find(
+    (session) => session.sessionId === openSessionId,
+  );
+  const newestGroup = openSession ? groupTurns(openSession.turns).at(-1) : null;
+  const offerLine =
+    keyStatus === 'ready' && newestGroup ? (
+      <BringInOfferLine
+        turnId={newestGroup.lead.id}
+        words={[newestGroup.lead, ...newestGroup.joined]
+          .map((turn) => turn.text)
+          .join(' ')}
+      />
+    ) : null;
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const todayStart = zonedDateTimeToEpoch(
@@ -501,10 +514,16 @@ function HomeSurface({
                   ? dayCardBox
                   : null
             }
-            tail={morningTurn}
+            tail={
+              morningTurn || offerLine ? (
+                <>
+                  {offerLine}
+                  {morningTurn}
+                </>
+              ) : null
+            }
           />
         )}
-        {keyStatus === 'ready' && <BringInOfferLine />}
         {!hasFreshTurns && !isOpening && !isWaitingOnKey && !isMorningLive && (
           <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}
