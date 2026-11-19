@@ -17,8 +17,7 @@ import {
   getUndoAddText,
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
-
-const UNDO_TOAST_MS = 6000;
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const undone = new Set<string>();
 
@@ -80,7 +79,7 @@ export function useAddToCollections(uid: string) {
       title,
       description: result.error ?? description ?? undefined,
       type: 'success',
-      duration: UNDO_TOAST_MS,
+      duration: UNDO_WINDOW_MS,
       action: {
         label: 'Undo',
         onClick: () => {

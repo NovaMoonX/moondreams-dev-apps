@@ -40,6 +40,7 @@ import {
   setWhoContacts,
   type ContactChange,
 } from '@apps/helm/store/actions/whoActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface ContactPointSheetProps {
   isOpen: boolean;
@@ -175,6 +176,7 @@ function ContactPointBody({
     if (!(await write({ kind: 'remove', id: point.id }))) return;
     onClose();
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.contactRemovedToast(point.value),
       type: 'info',
       action: {

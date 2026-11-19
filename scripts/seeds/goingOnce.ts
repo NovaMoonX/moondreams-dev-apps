@@ -107,6 +107,8 @@ export function buildSeedInquiry(saleId: string, seed: SeedInquiry) {
     saleId,
     itemId: seed.itemId,
     itemTitleAtSend: seed.itemTitle,
+    bundleId: null,
+    bundleLabelAtSend: null,
     name: seed.name,
     email: isEmail ? seed.contact : null,
     phone: isEmail ? null : seed.contact,
@@ -272,6 +274,9 @@ export const EMPTY_OPTIONALS = {
   isDraft: false,
 };
 
+const CAT_BUNDLE_ID = 'seed-go-bundle-cat-stuff';
+const LIVING_ROOM_BUNDLE_ID = 'seed-go-bundle-living-room';
+
 interface SeedThing {
   id: string;
   title: string;
@@ -280,6 +285,8 @@ interface SeedThing {
   askingPriceCents: number | null;
   floorPriceCents: number | null;
   optionals?: Partial<typeof EMPTY_OPTIONALS>;
+  bundleId?: string;
+  isBundleOnly?: boolean;
   status?: (people: { maya: string; theo: string }) => SeedStatus;
 }
 
@@ -336,6 +343,7 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'GOOD',
     askingPriceCents: 2500,
     floorPriceCents: null,
+    bundleId: LIVING_ROOM_BUNDLE_ID,
     optionals: {
       description: 'Brushed brass with a linen shade.',
     },
@@ -355,6 +363,7 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'LIKE_NEW',
     askingPriceCents: 1500,
     floorPriceCents: null,
+    bundleId: LIVING_ROOM_BUNDLE_ID,
   },
   {
     id: 'road-bike',
@@ -434,6 +443,7 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'FAIR',
     askingPriceCents: 4000,
     floorPriceCents: null,
+    bundleId: LIVING_ROOM_BUNDLE_ID,
     status: ({ maya }) => ({
       kind: 'SOLD',
       by: maya,
@@ -481,6 +491,34 @@ const SEED_THINGS: SeedThing[] = [
     askingPriceCents: 4000,
     floorPriceCents: null,
     status: ({ maya }) => ({ kind: 'WITHDRAWN', by: maya, daysAgo: 1 }),
+  },
+  {
+    id: 'cat-tree',
+    title: 'Cat tree',
+    photoCount: 2,
+    condition: 'GOOD',
+    askingPriceCents: 4500,
+    floorPriceCents: null,
+    bundleId: CAT_BUNDLE_ID,
+    isBundleOnly: true,
+  },
+  {
+    id: 'cat-carrier',
+    title: 'Cat carrier',
+    photoCount: 2,
+    condition: 'LIKE_NEW',
+    askingPriceCents: 2000,
+    floorPriceCents: null,
+    bundleId: CAT_BUNDLE_ID,
+  },
+  {
+    id: 'litter-box',
+    title: 'Litter box with scoop',
+    photoCount: 1,
+    condition: 'GOOD',
+    askingPriceCents: 1200,
+    floorPriceCents: null,
+    bundleId: CAT_BUNDLE_ID,
   },
 ];
 
@@ -635,6 +673,8 @@ async function seedFinishedSale(context: SeedContext) {
               createdAt,
             },
           ],
+          bundleId: null,
+          isBundleOnly: false,
           ...buildSeedStatus(thing.status, context.now),
           createdBy: maya.uid,
           createdAt,
@@ -776,6 +816,8 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
           ...EMPTY_OPTIONALS,
           ...thing.optionals,
           photos: photos.map(({ photo }) => photo),
+          bundleId: thing.bundleId ?? null,
+          isBundleOnly: thing.isBundleOnly ?? false,
           ...buildSeedStatus(
             thing.status?.({ maya: maya.uid, theo: theo.uid }) ?? {
               kind: 'AVAILABLE',
@@ -790,6 +832,81 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       return photos;
     }),
   );
+
+  const emptyChange = {
+    itemId: null,
+    itemStatus: null,
+    priceCents: null,
+    fromPriceCents: null,
+  };
+  const bundleBase = {
+    saleId: SALE_ID,
+    status: 'ACTIVE',
+    dealItemIds: null,
+    sale: null,
+    keptAtGoneCount: null,
+    createdBy: maya.uid,
+    lastEditedAt: null,
+    lastEditedBy: null,
+  };
+  await sale
+    .collection('bundles')
+    .doc(CAT_BUNDLE_ID)
+    .set({
+      ...bundleBase,
+      id: CAT_BUNDLE_ID,
+      name: 'Cat stuff',
+      itemIds: [
+        'seed-go-cat-tree',
+        'seed-go-cat-carrier',
+        'seed-go-litter-box',
+      ],
+      priceCents: 6700,
+      history: [
+        {
+          ...emptyChange,
+          kind: 'CREATE',
+          byUid: maya.uid,
+          at: context.now - 2 * DAY_MS,
+          priceCents: 6700,
+        },
+      ],
+      createdAt: context.now - 2 * DAY_MS,
+    });
+  // The bookshelf sold on its own, so the bundle's price dropped by its $40 asking price.
+  await sale
+    .collection('bundles')
+    .doc(LIVING_ROOM_BUNDLE_ID)
+    .set({
+      ...bundleBase,
+      id: LIVING_ROOM_BUNDLE_ID,
+      name: 'Living room extras',
+      itemIds: [
+        'seed-go-floor-lamp',
+        'seed-go-plant-stand',
+        'seed-go-bookshelf',
+      ],
+      priceCents: 3000,
+      history: [
+        {
+          ...emptyChange,
+          kind: 'CREATE',
+          byUid: maya.uid,
+          at: context.now - 4 * DAY_MS,
+          priceCents: 7000,
+        },
+        {
+          kind: 'THING_LEFT',
+          byUid: maya.uid,
+          at: context.now - 3 * DAY_MS,
+          itemId: 'seed-go-bookshelf',
+          itemStatus: 'SOLD',
+          priceCents: 3000,
+          fromPriceCents: 7000,
+        },
+      ],
+      createdAt: context.now - 4 * DAY_MS,
+    });
 
   const sofa = { itemId: 'seed-go-gray-sofa', itemTitle: 'Gray sofa' };
   const inquiries: SeedInquiry[] = [
@@ -913,6 +1030,6 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 3 + SEED_THINGS.length + 9 + finishedDocuments,
+    firestoreDocuments: 3 + SEED_THINGS.length + 2 + 9 + finishedDocuments,
   };
 }

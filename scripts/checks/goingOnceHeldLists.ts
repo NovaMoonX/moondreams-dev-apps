@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 
 import {
   goingOnceReducer,
+  setBundles,
   setItems,
   setItemsError,
 } from '../../src/apps/going-once/store/index.ts';
 import { goingOnceHeldActions } from '../../src/apps/going-once/store/heldLists.ts';
 import { readGoingOnceTarget } from '../../src/apps/going-once/utils/heldHolds.ts';
-import type { Item } from '../../src/apps/going-once/types.ts';
+import type { Bundle, Item } from '../../src/apps/going-once/types.ts';
 import { buildHolds } from '../../src/lib/firebase/heldHolds.ts';
 
 const itemPath = (saleId: string, id: string) => [
@@ -159,6 +160,63 @@ assert.deepEqual(
   goingOnceReducer(marked, setItemsError()).hold.held,
   [],
   'a failed list keeps no hold',
+);
+
+assert.deepEqual(
+  readGoingOnceTarget(
+    ['apps', 'going-once', 'sales', 's1', 'bundles', 'b'],
+    's1',
+  ),
+  { kind: 'bundles', id: 'b' },
+  'a bundle is held like a thing',
+);
+
+const bundle = {
+  id: 'b',
+  saleId: 's1',
+  status: 'ACTIVE',
+  itemIds: ['a'],
+  dealItemIds: null,
+} as unknown as Bundle;
+const heldBundle = {
+  ...bundle,
+  status: 'SOLD',
+  dealItemIds: ['a'],
+} as unknown as Bundle;
+const both = goingOnceReducer(
+  goingOnceReducer(loaded, setBundles({ saleId: 's1', bundles: [bundle] })),
+  goingOnceHeldActions.hold({
+    token: 'v',
+    scope: 's1',
+    writes: {
+      items: holdSold.payload.writes.items?.map((write) => ({
+        ...write,
+        token: 'v',
+      })),
+      bundles: [
+        {
+          id: 'b',
+          item: heldBundle,
+          fingerprint: JSON.stringify({ status: 'SOLD', dealItemIds: ['a'] }),
+          token: 'v',
+          settledAt: null,
+          fields: ['status', 'dealItemIds'],
+        },
+      ],
+    },
+  }),
+);
+assert.equal(both.items.items[0].status, 'SOLD');
+assert.equal(
+  both.bundles.items[0].status,
+  'SOLD',
+  'a bundle marked sold flips with its things, so they never read as gone on their own',
+);
+assert.equal(
+  goingOnceReducer(both, goingOnceHeldActions.drop('v')).bundles.items[0]
+    .status,
+  'ACTIVE',
+  'a failed write puts the bundle back too',
 );
 
 console.log('going once held lists: ok');

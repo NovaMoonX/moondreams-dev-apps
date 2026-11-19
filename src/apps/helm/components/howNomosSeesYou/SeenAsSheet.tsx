@@ -42,6 +42,7 @@ import {
   selectShownPatterns,
 } from '@apps/helm/store/selectors/patternSelectors';
 import { selectShownSeenAs } from '@apps/helm/store/selectors/seenAsSelectors';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface SeenAsSheetProps {
   lineId: string | null;
@@ -180,6 +181,7 @@ function SeenAsSheet({ lineId, onClose }: SeenAsSheetProps) {
       if (change) {
         close();
         addToast({
+          duration: UNDO_WINDOW_MS,
           title,
           type: 'success',
           action: { label: HELM_COPY.undo, onClick: undoWith(change) },

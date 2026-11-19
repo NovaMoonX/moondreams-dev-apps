@@ -44,6 +44,7 @@ import {
   toConnectionSentence,
   toSideLine,
 } from '@apps/helm/utils/connectionText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 export type ConnectionTarget = { kind: 'add' } | { kind: 'row'; id: string };
 
@@ -352,6 +353,7 @@ function RowBody({
         onClose();
         if (before && connection.kind === 'couple' && status !== side.status)
           addToast({
+            duration: UNDO_WINDOW_MS,
             title: HELM_COPY.connectionChangedToast(
               toSideLine(
                 connection.kind,
@@ -403,6 +405,7 @@ function RowBody({
       }
       onClose();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.connectionRemovedToast(other.name),
         type: 'info',
         action: {

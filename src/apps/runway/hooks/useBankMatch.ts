@@ -73,6 +73,7 @@ import {
   getPairSideName,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface MatchPair {
   bank: OpenPurchase;
@@ -147,6 +148,7 @@ export function useMergeWithUndo() {
           ? NEEDS_HOME_WORDS.matchedOneSub
           : NEEDS_HOME_WORDS.matchedManySub,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () => void undo(uid, merged),
@@ -381,6 +383,7 @@ export function useLinkDepositsWithUndo() {
           ? DEPOSIT_WORDS.linkedSub
           : DEPOSIT_WORDS.linkedManySub,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () => void undo(uid, done, memoryId),
@@ -630,6 +633,7 @@ export function usePairAccountsWithUndo() {
             : PAIR_WORDS.transferredSub
           : PAIR_WORDS.pairedManySub,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () => void undo(uid, done, memoryId),
@@ -661,6 +665,7 @@ export function useUnpairAccounts() {
     addToast({
       title: PAIR_WORDS.unpaired,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () =>

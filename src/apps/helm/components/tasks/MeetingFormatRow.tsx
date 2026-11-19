@@ -7,6 +7,7 @@ import { store } from '@/store';
 import type { TaskEditing } from '@apps/helm/components/tasks/TaskDetails';
 import { HELM_COPY, MEETING_FORMAT_OPTIONS } from '@apps/helm/constants';
 import type { MeetingFormat, TaskMeets } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface MeetingFormatRowProps {
   editing: TaskEditing;
@@ -21,6 +22,7 @@ function MeetingFormatRow({ editing }: MeetingFormatRowProps) {
     const previous = task.meets;
     saveFields({ meets });
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: line,
       type: 'success',
       action: {

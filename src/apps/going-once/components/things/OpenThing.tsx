@@ -15,6 +15,8 @@ interface OpenThingProps {
   /** Opens straight on Mark pending, held for this person. */
   holdFor?: Inquiry | null;
   onClose: () => void;
+  /** Opens the sheet of the bundle the thing is part of. */
+  onOpenBundle: (bundleId: string) => void;
   /** Reopens the add-a-thing walk-through on this thing. */
   onFinish: () => void;
 }
@@ -27,6 +29,7 @@ function OpenThing({
   sold,
   holdFor = null,
   onClose,
+  onOpenBundle,
   onFinish,
 }: OpenThingProps) {
   const [isModifying, setIsModifying] = useState(false);
@@ -49,6 +52,7 @@ function OpenThing({
       sold={sold}
       holdFor={holdFor}
       onClose={onClose}
+      onOpenBundle={onOpenBundle}
       onFinish={onFinish}
       onModify={() => {
         keepEntryFor('thing');

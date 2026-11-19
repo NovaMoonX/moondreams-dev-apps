@@ -87,6 +87,7 @@ import {
   type ShoppingRowData,
   type ShoppingSourceLabel,
 } from '@apps/pinch/utils/shopping';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const EAGER_GROUPS = 3;
 const ROW_CHUNK = 12;
@@ -95,7 +96,6 @@ const DETAIL_LINE_HEIGHT = 16;
 const DETAIL_LINE_CHARS = 44;
 
 const MAX_NAMES_SHOWN = 4;
-const UNDO_TOAST_MS = 6000;
 
 const undone = new Set<string>();
 
@@ -439,7 +439,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       title,
       description,
       type: 'success',
-      duration: UNDO_TOAST_MS,
+      duration: UNDO_WINDOW_MS,
       action: {
         label: 'Undo',
         onClick: () => {

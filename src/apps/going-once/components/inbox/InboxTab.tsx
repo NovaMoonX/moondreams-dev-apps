@@ -66,6 +66,8 @@ interface InboxTabProps {
   openThingId: string | null;
   onOpenThing: (id: string) => void;
   onCloseThing: () => void;
+  /** Opens a bundle's sheet on the Things tab. */
+  onOpenBundle: (bundleId: string) => void;
   /** Opens the Things tab with this thing's add-a-thing walk-through. */
   onFinishThing: (id: string) => void;
   /** Goes to the Sale tab, where the public page is switched on. */
@@ -108,6 +110,7 @@ function InboxTab({
   openThingId,
   onOpenThing,
   onCloseThing,
+  onOpenBundle,
   onFinishThing,
   onOpenSale,
 }: InboxTabProps) {
@@ -309,6 +312,7 @@ function InboxTab({
             setHoldFor(null);
             onCloseThing();
           }}
+          onOpenBundle={onOpenBundle}
           onFinish={() => onFinishThing(openThing.id)}
         />
       )}

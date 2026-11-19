@@ -61,6 +61,7 @@ import { formatCadence } from '@apps/helm/utils/habitDraft';
 import { readHabitStatus } from '@apps/helm/utils/habitToday';
 import { formatSlotRange } from '@apps/helm/utils/planDays';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const { option, separator } = DropdownMenuFactories;
 
@@ -176,6 +177,7 @@ function HabitScreen({
     const change = setHabitStatus(user.uid, habit, next, until);
     change.written.catch(reportStatusFailure);
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: toast,
       type: 'success',
       action: {
@@ -286,6 +288,7 @@ function HabitScreen({
         addToast({ title: HELM_COPY.habitCareFailed, type: 'error' });
       } else if (isCare) {
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.habitCareOnToast(habit.name),
           type: 'success',
           action: {

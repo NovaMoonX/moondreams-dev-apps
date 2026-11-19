@@ -42,6 +42,7 @@ import {
   describePaidFrom,
   describePayChoice,
 } from '@apps/runway/utils/payFrom';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface BillPaidFromNoticeProps {
   billId: string;
@@ -193,6 +194,7 @@ function BillPaidFromNotice({
       addToast({
         title: PAID_FROM_WORDS.changed(bill.name),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: PAID_FROM_WORDS.undo,
           onClick: () => void undo(),

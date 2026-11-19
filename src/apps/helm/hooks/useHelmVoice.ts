@@ -127,6 +127,7 @@ import {
   isLiveCloser,
   toWakeSpellings,
 } from '@apps/helm/utils/voicePhrases';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const NOTE_MS = 6000;
 const NAME_ASK_MS = 60_000;
@@ -639,6 +640,7 @@ export function useHelmVoice() {
       });
       if (isSpoken) say(line, now);
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: line,
         type: 'success',
         action: {
@@ -780,6 +782,7 @@ export function useHelmVoice() {
     if (isSpoken) say(line, createdAt);
     if (recorded) return true;
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: line,
       type: 'success',
       action: {

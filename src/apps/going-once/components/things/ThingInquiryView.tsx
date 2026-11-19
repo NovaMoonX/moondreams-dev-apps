@@ -57,6 +57,11 @@ function ThingInquiryView({
       <div className='space-y-2'>
         <BackLink onBack={onBack} label={getItemName(item)} />
         <p className='text-lg font-semibold break-words'>{name} asked</p>
+        {inquiry.bundleId !== null && (
+          <p className='text-muted-foreground text-sm break-words'>
+            Bundle: {inquiry.bundleLabelAtSend ?? 'a bundle'}
+          </p>
+        )}
         <p className='text-muted-foreground text-sm'>
           {inquiry.sendCount > 1
             ? `Sent ${inquiry.sendCount} times · latest ${formatSentAt(inquiry.lastSentAt, now)}`

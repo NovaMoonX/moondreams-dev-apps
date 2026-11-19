@@ -69,6 +69,7 @@ import { setCurrentUser } from '@/store/slices/userSlice';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
 import { getProviderPhotoURL } from '@/utils/accountUtils';
 import { queryClient } from '@lib/query/queryClient';
+import { settleAllDeferred } from '@/lib/undo/deferredUndo';
 
 const RELEASE_PUSH_WAIT_MS = 3000;
 const ENDED_SESSION_CODES = new Set([
@@ -347,6 +348,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!navigator.onLine) {
       throw new Error("You're offline. Switch accounts once you're back online.");
     }
+    await settleAllDeferred();
     const openGooglePicker = () => {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters(
@@ -432,6 +434,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (!isConfirmed) return;
       clearPendingDeviceWork(uid);
     }
+    await settleAllDeferred();
     if (uid) {
       const userStatusRef = ref(realtimeDb, `status/${uid}`);
       await Promise.race([

@@ -40,6 +40,7 @@ import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase, OpenRule, PurchaseLine } from '@apps/runway/types';
 import { describePurchaseReturned } from '@apps/runway/utils/purchaseText';
 import { describeRulePlaced } from '@apps/runway/utils/ruleText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const MAX_ATTEMPTS = 3;
 
@@ -254,6 +255,7 @@ export function usePlaceByRules(uid: string | null) {
               : RULE_WORDS.placedMany(placed.length),
           description: RULE_WORDS.placedSub,
           type: 'success',
+          duration: UNDO_WINDOW_MS,
           action: { label: RULE_WORDS.undo, onClick: () => void undo() },
         });
       } catch (error) {

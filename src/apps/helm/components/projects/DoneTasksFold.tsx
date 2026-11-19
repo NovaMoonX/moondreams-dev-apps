@@ -17,6 +17,7 @@ import {
   reopenTask,
 } from '@apps/helm/store/actions/taskActions';
 import type { OpenTask } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface DoneTasksFoldProps {
   projectId: string;
@@ -45,6 +46,7 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
     });
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.taskReopenedToast(task?.title ?? ''),
       type: 'success',
       action: {
@@ -83,6 +85,7 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
         return;
       }
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.doneTasksCleared(cleared.count),
         type: 'success',
         action: {
@@ -162,6 +165,7 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
         onUndoTick={reopen}
         onDeleted={(_, title, restore) =>
           addToast({
+            duration: UNDO_WINDOW_MS,
             title: HELM_COPY.deletedTask(title),
             type: 'success',
             action: {
