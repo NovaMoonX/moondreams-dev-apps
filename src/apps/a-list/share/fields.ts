@@ -31,7 +31,7 @@ const MEMBERSHIP_PROFILE_FIELDS = {
 const MOVIE_SNAPSHOT_FIELDS = {
   title: 'shared',
   releaseDate: 'shared',
-  posterUrl: 'notUseful',
+  posterUrl: 'shared',
   runtimeMinutes: 'shared',
   contentRating: 'shared',
 } satisfies Record<keyof MovieSnapshot, ShareDecision>;

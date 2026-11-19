@@ -12,6 +12,7 @@ import type {
 } from '../../../connections/registry.js';
 import { startOfDay, todayIn } from '../../../connections/liveDay.js';
 import {
+  readPictureLink,
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
@@ -74,6 +75,14 @@ interface CategoryRead {
   isFull: boolean;
 }
 
+/** The poster as a link only, and only when it is an https address. */
+const toPosterExtra = (
+  doc: FirebaseFirestore.DocumentSnapshot,
+): Record<string, string> => {
+  const posterUrl = readPictureLink(doc.get('movie.posterUrl'));
+  return posterUrl === null ? {} : { posterUrl };
+};
+
 const readMovieTitle = (doc: FirebaseFirestore.DocumentSnapshot) =>
   readText(doc.get('movie.title'));
 
@@ -112,6 +121,7 @@ async function syncPlannedShowings(
       'movie.title',
       'movie.runtimeMinutes',
       'movie.contentRating',
+      'movie.posterUrl',
       'showtimeAt',
       'endsAt',
       'theatre.name',
@@ -136,7 +146,10 @@ async function syncPlannedShowings(
         timeZone: readText(doc.get('theatre.timeZone')),
         placeLabel: readText(doc.get('theatre.name')),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
-        extra: { hasTicket: readText(doc.get('ticket.entryMode')) !== null },
+        extra: {
+          hasTicket: readText(doc.get('ticket.entryMode')) !== null,
+          ...toPosterExtra(doc),
+        },
       }),
     ];
   });
@@ -294,6 +307,7 @@ async function syncSeenMovies(
       'movie.title',
       'movie.runtimeMinutes',
       'movie.contentRating',
+      'movie.posterUrl',
       'showtimeAt',
       'theatre.name',
       'theatre.timeZone',
@@ -328,7 +342,10 @@ async function syncSeenMovies(
         ),
         placeLabel: readText(doc.get('theatre.name')),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
-        extra: rating === null ? {} : { rating },
+        extra: {
+          ...(rating === null ? {} : { rating }),
+          ...toPosterExtra(doc),
+        },
       }),
     ];
   });
@@ -357,6 +374,7 @@ async function syncWatchlist(
         'movie.releaseDate',
         'movie.runtimeMinutes',
         'movie.contentRating',
+        'movie.posterUrl',
         'priority',
         'archivedAt',
         'lastEditedAt',
@@ -392,6 +410,7 @@ async function syncWatchlist(
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
         extra: {
           status: PRIORITY_LABELS[readText(doc.get('priority')) ?? ''] ?? null,
+          ...toPosterExtra(doc),
         },
       }),
     ];

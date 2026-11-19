@@ -10,7 +10,7 @@ import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import { HELM_COPY, PHOTOS_PER_RECORD } from '@apps/helm/constants';
 import { useMediaUpload } from '@apps/helm/hooks/useMediaUpload';
 import type { PhotoOwner } from '@apps/helm/store/actions/mediaActions';
-import type { WhoKind } from '@apps/helm/types';
+import type { AppSource, WhoKind } from '@apps/helm/types';
 
 const { option } = DropdownMenuFactories;
 const TAKE = 'take';
@@ -21,6 +21,8 @@ interface PhotoHeaderProps {
   kind: WhoKind | 'place';
   name: string;
   mainId: string | null;
+  /** Where the who was brought in from, so its app's photo shows while it has none. */
+  appSources?: AppSource[];
   photoCount: number;
   children: ReactNode;
 }
@@ -31,6 +33,7 @@ function PhotoHeader({
   kind,
   name,
   mainId,
+  appSources,
   photoCount,
   children,
 }: PhotoHeaderProps) {
@@ -45,7 +48,13 @@ function PhotoHeader({
 
   const picture = (
     <span className='relative block'>
-      <WhoPhoto kind={kind} name={name} mediaId={mainId} isLarge />
+      <WhoPhoto
+        kind={kind}
+        name={name}
+        mediaId={mainId}
+        appSources={appSources}
+        isLarge
+      />
       <span className='bg-background border-border text-muted-foreground absolute -right-1 -bottom-1 grid size-6 place-items-center rounded-full border'>
         <Camera className='size-3.5' aria-hidden='true' />
       </span>

@@ -89,7 +89,7 @@ const CAT_FIELDS = {
   householdId: 'notUseful',
   name: 'shared',
   originalName: 'notUseful',
-  photoURL: 'notUseful',
+  photoURL: 'shared',
   dateOfBirth: 'shared',
   isDateOfBirthEstimated: 'shared',
   sex: 'notUseful',

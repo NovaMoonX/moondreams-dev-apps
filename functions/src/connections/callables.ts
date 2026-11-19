@@ -69,6 +69,7 @@ const OPTIONS: CallableOptions = {
 const SYNC_OPTIONS: CallableOptions = {
   ...OPTIONS,
   timeoutSeconds: 120,
+  memory: '1GiB',
   secrets: [
     ...Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
     ...SOURCE_SECRETS,

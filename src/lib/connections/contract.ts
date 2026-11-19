@@ -128,6 +128,7 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'format',
     'buyerFirstName',
     'status',
+    'posterUrl',
   ],
   /** `isDone`: finished or paid; `isAutomatic`: the source handles it itself (autopay). A reader never asks the person about either. */
   task: ['isDone', 'isAutomatic'],
@@ -139,15 +140,25 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'collectedCents',
     'leftCents',
   ],
-  knowledge: ['rating'],
-  artifact: ['status', 'state', 'condition', 'floorPriceCents'],
+  knowledge: ['rating', 'posterUrl'],
+  artifact: ['status', 'state', 'condition', 'floorPriceCents', 'posterUrl'],
   scenario: [],
   trip: [],
-  pet: [],
+  pet: ['photoPath'],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
   countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
+
+const MAX_PICTURE_LINK_CHARS = 500;
+
+/** The https address a source may link a picture by (never copied), or null for anything else. */
+export const readPictureLink = (value: unknown): string | null =>
+  typeof value === 'string' &&
+  value.startsWith('https://') &&
+  value.length <= MAX_PICTURE_LINK_CHARS
+    ? value
+    : null;
 
 export type GrantStatus = 'live' | 'needsReconnect' | 'noAccess' | 'ended';
 

@@ -295,6 +295,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               kind={who.kind}
               name={who.name}
               mainId={who.photoMediaId}
+              appSources={who.appSources}
               photoCount={who.mediaIds.length}
             >
               <h1 className='helm-serif text-[28px] leading-[34px] break-words'>

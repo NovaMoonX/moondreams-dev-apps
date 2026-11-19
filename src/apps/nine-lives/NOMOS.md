@@ -6,7 +6,7 @@
 
 | Category | Kind | At connect | Why |
 |---|---|---|---|
-| Your cats | pet | On | Names, birth date, breed, food. |
+| Your cats | pet | On | Names, birth date, breed, food, and a small private copy of each cat's photo. |
 | Vet clinics | place | On | Phone, address, doctors, 24-hour emergency care. |
 | Veterinarians | person | Off | Each vet's name and clinic; turn on to bring vets into your circle. |
 | Vet visits, Vaccines and preventives due | event, task | On | What is coming up and what is due. |

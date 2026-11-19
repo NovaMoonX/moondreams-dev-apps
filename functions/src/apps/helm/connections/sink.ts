@@ -6,6 +6,7 @@ import type {
   QueryDocumentSnapshot,
   WriteBatch,
 } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { logger } from 'firebase-functions';
 
 import type { SealedPayload } from '../../../appKeys/seal.js';
@@ -19,6 +20,7 @@ import {
   MAX_RECORDS_PER_CATEGORY,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
+import { readGrant } from '../../../connections/grants.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
 import { nextReflectionAt } from '../nomos/planObservations.js';
 import { toKnownZone } from '../nomos/spoken.js';
@@ -29,6 +31,16 @@ import {
   unwrapHelmKey,
   type HelmKey,
 } from '../helmKey.js';
+import {
+  chunk,
+  deletePictures,
+  readFailedSource,
+  readPictureSource,
+  readStoredPicture,
+  sweepOrphanPictures,
+  syncPicture,
+  type PictureBucket,
+} from './syncedPictures.js';
 
 export const KEPT_COPY_DAYS = 90;
 export const TRANSFORM_VERSION = 2;
@@ -38,6 +50,9 @@ const BATCH_SIZE = 400;
 const READ_CHUNK = 300;
 const HASH_INFO = 'helm-sync-content';
 const DETAIL_LIMIT = 500;
+const PICTURE_PARALLEL = 5;
+
+const defaultBucket = () => getStorage().bucket() as PictureBucket;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -99,10 +114,13 @@ const toCalendarKey = (accountId: string, record: SharedRecord) =>
     ? `${accountId}/${record.extra.calendarId}`
     : null;
 
-const chunk = <T>(items: T[], size: number): T[][] =>
-  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
-    items.slice(index * size, (index + 1) * size),
-  );
+/** The ids of the documents that name a sealed picture copy. */
+const toPictureIds = (
+  docs: { id: string; get: (field: string) => unknown }[],
+) =>
+  docs
+    .filter((doc) => readStoredPicture(doc.get('picture')) !== null)
+    .map((doc) => doc.id);
 
 const commitAll = (
   firestore: Firestore,
@@ -139,7 +157,40 @@ class HelmSinkSession implements SinkSession {
   constructor(
     private readonly firestore: Firestore,
     private readonly uid: string,
+    private readonly bucket: () => PictureBucket,
   ) {}
+
+  /** The copies' objects go before their records, so a failed delete leaves the record to name them on the next run. */
+  private async dropPictures(
+    docs: { id: string; get: (field: string) => unknown }[],
+  ) {
+    const ids = toPictureIds(docs);
+    if (ids.length > 0) await deletePictures(this.bucket(), this.uid, ids);
+  }
+
+  /** A sweep failure is only logged: the copies it looks for are already gone or retried by the next end. */
+  private async sweepPictures() {
+    try {
+      await sweepOrphanPictures(this.bucket(), this.firestore, this.uid);
+    } catch (error) {
+      logger.warn('helm.syncedPicture.sweepFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+    }
+  }
+
+  private async isStillWanted(grantId: string, category: string) {
+    const grant = readGrant(
+      (
+        await this.firestore
+          .doc(`connections/${this.uid}/grants/${grantId}`)
+          .get()
+      ).data(),
+    );
+    return (
+      grant.status !== 'ended' && grant.categories[category]?.isOn === true
+    );
+  }
 
   private openKey() {
     this.key ??= unwrapHelmKey(this.firestore, loadHelmKeyring(), this.uid);
@@ -208,10 +259,18 @@ class HelmSinkSession implements SinkSession {
 
     const key = await this.openKey();
     const subkey = hashSubkey(key);
-    const entries = kept.map((record) => {
+    const toPictureHash = (version: string) =>
+      createHmac('sha256', subkey).update(`picture|${version}`).digest('hex');
+    const entries = kept.map((original) => {
+      const { photoPath, ...extra } = original.extra;
+      const record = { ...original, extra };
       const deepLink = args.deepLink(record.sourceRef);
       return {
         record,
+        photoSource:
+          record.kind === 'pet'
+            ? readPictureSource(connectorId, photoPath)
+            : null,
         deepLink,
         id: toSyncedId(grantId, category, record.sourceRef),
         hash: toContentHash(subkey, record, deepLink),
@@ -231,7 +290,40 @@ class HelmSinkSession implements SinkSession {
         chunk(refs, READ_CHUNK).map((group) => this.firestore.getAll(...group)),
       )
     ).flat();
-    const changed = entries.filter((entry, index) => {
+    const pictures = await chunk(entries, PICTURE_PARALLEL).reduce(
+      async (done, group) => {
+        const soFar = await done;
+        const settled = await Promise.all(
+          group.map(async (entry) => {
+            const index = soFar.length + group.indexOf(entry);
+            const data = existing[index].data();
+            const stored = readStoredPicture(data?.picture);
+            const failedSource = readFailedSource(data?.pictureFailedSource);
+            return entry.record.kind === 'pet' &&
+              (entry.photoSource !== null ||
+                stored !== null ||
+                failedSource !== null)
+              ? syncPicture({
+                  bucket: this.bucket(),
+                  uid: this.uid,
+                  id: entry.id,
+                  key,
+                  sourcePath: entry.photoSource,
+                  stored,
+                  failedSource,
+                  toHash: toPictureHash,
+                })
+              : { picture: stored, failedSource, isChanged: false };
+          }),
+        );
+        return [...soFar, ...settled];
+      },
+      Promise.resolve([] as Awaited<ReturnType<typeof syncPicture>>[]),
+    );
+    const isContentChanged = (
+      entry: (typeof entries)[number],
+      index: number,
+    ) => {
       const stored = existing[index].data();
       return !(
         stored &&
@@ -239,54 +331,97 @@ class HelmSinkSession implements SinkSession {
         stored.transformVersion === TRANSFORM_VERSION &&
         stored.connectionEndedAt === null
       );
-    });
+    };
+    const changed = entries.flatMap((entry, index) =>
+      isContentChanged(entry, index) || pictures[index].isChanged
+        ? [
+            {
+              ...entry,
+              picture: pictures[index].picture,
+              pictureFailedSource: pictures[index].failedSource,
+            },
+          ]
+        : [],
+    );
+    const contentChangedCount = entries.filter(isContentChanged).length;
 
     await chunk(changed, BATCH_SIZE).reduce(async (done, group) => {
       await done;
       const batch = this.firestore.batch();
-      group.forEach(({ record, deepLink, id, hash }) =>
-        batch.set(this.firestore.doc(`${syncedPath(this.uid)}/${id}`), {
-          connectorId,
-          accountId,
-          grantId,
-          category,
-          kind: record.kind,
-          sourceRef: record.sourceRef,
-          startAt: record.startAt,
-          endAt: record.endAt,
-          isAllDay: record.isAllDay,
-          dueAt: record.dueAt,
-          calendarKey: toCalendarKey(accountId, record),
-          isBusy:
-            typeof record.extra.calendarId === 'string'
-              ? record.extra.isFree !== true
-              : null,
-          sourceUpdatedAt: record.sourceUpdatedAt,
-          helmRef:
-            typeof record.extra.siteRef === 'string'
-              ? record.extra.siteRef
-              : null,
-          contentHash: hash,
-          syncedAt: now,
-          transformVersion: TRANSFORM_VERSION,
-          connectionEndedAt: null,
-          deleteAfter: null,
-          sealed: sealForHelm(key, {
-            title: record.title,
-            subtitle: record.subtitle,
-            detail: record.detail?.slice(0, DETAIL_LIMIT) ?? null,
-            placeLabel: record.placeLabel,
-            amountCents: record.amountCents,
-            currency: record.currency,
-            deepLink,
-            extra: record.extra,
+      group.forEach(
+        ({ record, deepLink, id, hash, picture, pictureFailedSource }) =>
+          batch.set(this.firestore.doc(`${syncedPath(this.uid)}/${id}`), {
+            connectorId,
+            accountId,
+            grantId,
+            category,
+            kind: record.kind,
+            sourceRef: record.sourceRef,
+            startAt: record.startAt,
+            endAt: record.endAt,
+            isAllDay: record.isAllDay,
+            dueAt: record.dueAt,
+            calendarKey: toCalendarKey(accountId, record),
+            isBusy:
+              typeof record.extra.calendarId === 'string'
+                ? record.extra.isFree !== true
+                : null,
+            sourceUpdatedAt: record.sourceUpdatedAt,
+            helmRef:
+              typeof record.extra.siteRef === 'string'
+                ? record.extra.siteRef
+                : null,
+            contentHash: hash,
+            syncedAt: now,
+            transformVersion: TRANSFORM_VERSION,
+            connectionEndedAt: null,
+            deleteAfter: null,
+            picture,
+            pictureFailedSource,
+            sealed: sealForHelm(key, {
+              title: record.title,
+              subtitle: record.subtitle,
+              detail: record.detail?.slice(0, DETAIL_LIMIT) ?? null,
+              placeLabel: record.placeLabel,
+              amountCents: record.amountCents,
+              currency: record.currency,
+              deepLink,
+              extra: record.extra,
+            }),
           }),
-        }),
       );
       await batch.commit();
     }, Promise.resolve());
     if (
-      changed.length > 0 &&
+      changed.some((entry) => entry.picture !== null) &&
+      !(await this.isStillWanted(grantId, category))
+    ) {
+      const pictured = changed.filter((entry) => entry.picture !== null);
+      await deletePictures(
+        this.bucket(),
+        this.uid,
+        pictured.map((entry) => entry.id),
+      );
+      // Switching the category off can delete these records meanwhile; the next sync settles them.
+      await chunk(pictured, BATCH_SIZE)
+        .reduce(async (done, group) => {
+          await done;
+          const batch = this.firestore.batch();
+          group.forEach(({ id }) =>
+            batch.update(this.firestore.doc(`${syncedPath(this.uid)}/${id}`), {
+              picture: null,
+            }),
+          );
+          await batch.commit();
+        }, Promise.resolve())
+        .catch((error: unknown) =>
+          logger.warn('helm.syncedPicture.clearFailed', {
+            cause: error instanceof Error ? error.name : 'error',
+          }),
+        );
+    }
+    if (
+      contentChangedCount > 0 &&
       RELATE_SYNCED_CATEGORIES.some(
         (entry) => entry === `${connectorId}/${category}`,
       )
@@ -311,6 +446,7 @@ class HelmSinkSession implements SinkSession {
       (args.isFull && !seen.has(doc.id)) ||
       hasEndedBefore(doc.data(), args.windowStart);
     const gone = docs.filter(isGone);
+    await this.dropPictures(gone);
     await commitAll(this.firestore, gone, (batch, doc) =>
       batch.delete(doc.ref),
     );
@@ -329,6 +465,7 @@ class HelmSinkSession implements SinkSession {
     const docs = (
       await toCategoryDocs(this.firestore, this.uid, grantId, category)
     ).filter(isMatch);
+    await this.dropPictures(docs);
     await commitAll(this.firestore, docs, (batch, doc) =>
       batch.delete(doc.ref),
     );
@@ -350,6 +487,7 @@ class HelmSinkSession implements SinkSession {
     )
       .flat()
       .filter((doc) => doc.exists);
+    await this.dropPictures(docs);
     await chunk(docs, BATCH_SIZE).reduce(async (done, group) => {
       await done;
       const batch = this.firestore.batch();
@@ -363,8 +501,10 @@ class HelmSinkSession implements SinkSession {
     return this.deleteWhere(grantId, category, () => true);
   }
 
-  deleteGrant(grantId: string) {
-    return this.deleteWhere(grantId, null, () => true);
+  async deleteGrant(grantId: string) {
+    const count = await this.deleteWhere(grantId, null, () => true);
+    await this.sweepPictures();
+    return count;
   }
 
   deleteKept(grantId: string) {
@@ -441,10 +581,13 @@ class HelmSinkSession implements SinkSession {
 
   async keepGrant(grantId: string, endedAt: number, deleteAfter: number) {
     const docs = await toCategoryDocs(this.firestore, this.uid, grantId, null);
+    await this.dropPictures(docs);
     await commitAll(this.firestore, docs, (batch, doc) => {
       const stored = doc.get('deleteAfter');
       const isKept = typeof stored === 'number';
       batch.update(doc.ref, {
+        picture: null,
+        pictureFailedSource: null,
         connectionEndedAt: isKept ? doc.get('connectionEndedAt') : endedAt,
         deleteAfter: isKept ? Math.min(stored, deleteAfter) : deleteAfter,
       });
@@ -461,6 +604,7 @@ const toUid = (doc: QueryDocumentSnapshot) => doc.ref.parent.parent?.id ?? '';
 const expirePages = async (
   firestore: Firestore,
   now: number,
+  bucket: () => PictureBucket,
 ): Promise<QueryDocumentSnapshot[]> => {
   const snapshot = await firestore
     .collectionGroup('synced')
@@ -470,16 +614,45 @@ const expirePages = async (
   const docs = snapshot.docs.filter(
     (doc) => doc.ref.path.startsWith('apps/helm/users/') && toUid(doc) !== '',
   );
-  await commitAll(firestore, docs, (batch, doc) => batch.delete(doc.ref));
-  if (snapshot.size < EXPIRE_LIMIT || docs.length === 0) return docs;
-  return [...docs, ...(await expirePages(firestore, now))];
+  const results = await Promise.allSettled(
+    Array.from(new Set(docs.map(toUid))).map(async (uid) => {
+      const ids = toPictureIds(docs.filter((doc) => toUid(doc) === uid));
+      if (ids.length > 0) await deletePictures(bucket(), uid, ids);
+      return uid;
+    }),
+  );
+  const failed = new Set(
+    results.flatMap((result, index) => {
+      if (result.status === 'fulfilled') return [];
+      logger.warn('helm.syncedPicture.expireFailed', {
+        cause: result.reason instanceof Error ? result.reason.name : 'error',
+      });
+      return [Array.from(new Set(docs.map(toUid)))[index]];
+    }),
+  );
+  const expiring = docs.filter((doc) => !failed.has(toUid(doc)));
+  await commitAll(firestore, expiring, (batch, doc) => batch.delete(doc.ref));
+  if (snapshot.size < EXPIRE_LIMIT || expiring.length === 0) return expiring;
+  return [...expiring, ...(await expirePages(firestore, now, bucket))];
 };
 
 const expire = async (
   firestore: Firestore,
   now: number,
+  bucket: () => PictureBucket,
 ): Promise<ExpiredGrant[]> => {
-  const docs = await expirePages(firestore, now);
+  const docs = await expirePages(firestore, now, bucket);
+  const sweeps = await Promise.allSettled(
+    Array.from(new Set(docs.map(toUid))).map((uid) =>
+      sweepOrphanPictures(bucket(), firestore, uid),
+    ),
+  );
+  sweeps.forEach((result) => {
+    if (result.status === 'rejected')
+      logger.warn('helm.syncedPicture.sweepFailed', {
+        cause: result.reason instanceof Error ? result.reason.name : 'error',
+      });
+  });
   const grants = Array.from(
     new Map(
       docs.map((doc) => [
@@ -499,9 +672,17 @@ const expire = async (
   );
 };
 
-export const createHelmSink = (): ReaderSink => ({
+export const openHelmSession = (
+  firestore: Firestore,
+  uid: string,
+  bucket: () => PictureBucket = defaultBucket,
+): SinkSession => new HelmSinkSession(firestore, uid, bucket);
+
+export const createHelmSink = (
+  bucket: () => PictureBucket = defaultBucket,
+): ReaderSink => ({
   secrets: [HELM_MASTER_KEYS],
   keptCopyDays: KEPT_COPY_DAYS,
-  openSession: (firestore, uid) => new HelmSinkSession(firestore, uid),
-  expire,
+  openSession: (firestore, uid) => openHelmSession(firestore, uid, bucket),
+  expire: (firestore, now) => expire(firestore, now, bucket),
 });

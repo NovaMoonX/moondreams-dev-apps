@@ -22,6 +22,7 @@ export const syncConnectionsHourly = onSchedule(
   {
     schedule: 'every 60 minutes',
     timeoutSeconds: 540,
+    memory: '1GiB',
     secrets: [
       ...Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
       ...SOURCE_SECRETS,
