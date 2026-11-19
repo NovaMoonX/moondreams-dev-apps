@@ -12,6 +12,7 @@ function DateTimeAnswer({
   question,
   isBusy,
   isComposerAnswer,
+  isComposerTarget,
   skip,
   onAnswer,
 }: AnswerPartProps) {
@@ -28,9 +29,11 @@ function DateTimeAnswer({
   if (isComposerAnswer) {
     return (
       <div className='flex w-full flex-col items-start gap-2'>
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.questionFreeTextHint}
-        </p>
+        {isComposerTarget && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.questionFreeTextHint}
+          </p>
+        )}
         {skip}
       </div>
     );

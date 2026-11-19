@@ -16,6 +16,7 @@ function PickOneAnswer({
   question,
   isBusy,
   isComposerAnswer,
+  isComposerTarget,
   onAnswer,
 }: AnswerPartProps) {
   const name = useAssistantName();
@@ -24,7 +25,8 @@ function PickOneAnswer({
   const [chosenId, setChosenId] = useState<string | null>(null);
   const isQuietId = (id: string) => id === 'new' || id === 'none';
   // "Neither" to which fact is true is the words typed below, so its pill goes.
-  const isNeitherWords = isComposerAnswer && acceptsFreeAnswer(question);
+  const isNeitherWords =
+    isComposerAnswer && isComposerTarget && acceptsFreeAnswer(question);
   const shown = question.options.filter(
     (option) => !(isNeitherWords && option.id === 'none'),
   );
@@ -32,7 +34,7 @@ function PickOneAnswer({
     ...shown.filter((option) => !isQuietId(option.id)),
     ...shown.filter((option) => isQuietId(option.id)),
   ];
-  const hint = !isComposerAnswer
+  const hint = !(isComposerAnswer && isComposerTarget)
     ? null
     : question.kind === 'whichIsTrue' && isNeitherWords
       ? HELM_COPY.questionNeitherHint

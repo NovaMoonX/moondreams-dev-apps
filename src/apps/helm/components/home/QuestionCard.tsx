@@ -37,6 +37,7 @@ import {
 } from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import { readAskedQuestion } from '@apps/helm/utils/askedQuestion';
 import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
   getOpenQuestions,
@@ -108,6 +109,10 @@ function QuestionCard({
           (entry) => entry.id === question.aboutRef?.id && !entry.isUnreadable,
         ) ?? null),
   );
+  const isComposerTarget = useAppSelector((state) => {
+    const target = readAskedQuestion(state, 'typed', Date.now())?.asked;
+    return target?.captureId === captureId && target.id === id;
+  });
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
   const Part =
@@ -280,8 +285,9 @@ function QuestionCard({
       value.optionId === 'none'
     ) {
       if (dateId !== null && dateWho) setIsDateOpen(true);
-      else if (isInSheet) setIsNeitherOpen(true);
-      else setNote(HELM_COPY.whichIsTrueNoneVoice);
+      else if (isInSheet || !isComposerTarget || dateId !== null) {
+        setIsNeitherOpen(true);
+      } else setNote(HELM_COPY.whichIsTrueNoneVoice);
       return;
     }
     if (
@@ -433,6 +439,7 @@ function QuestionCard({
               question={question}
               isBusy={isWorking}
               isComposerAnswer={!isInSheet}
+              isComposerTarget={isComposerTarget}
               skip={quietActions}
               onAnswer={answer}
             />

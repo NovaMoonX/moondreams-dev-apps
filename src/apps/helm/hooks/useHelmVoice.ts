@@ -69,10 +69,7 @@ import {
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
-import {
-  isAnswerInFlight,
-  sendQuestionAnswer,
-} from '@apps/helm/store/actions/questionActions';
+import { sendQuestionAnswer } from '@apps/helm/store/actions/questionActions';
 import { isExecutionHeld } from '@apps/helm/store/actions/privacyActions';
 import {
   answerUndoOffer,
@@ -101,19 +98,15 @@ import {
 } from '@apps/helm/utils/closeConversation';
 import {
   matchSpokenAnswer,
-  takesComposerAnswer,
   toFreeAnswer,
 } from '@apps/helm/utils/questionAnswers';
 import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
-import {
-  isSpokenTurn,
-  OPEN_QUESTION_MS,
-  pickQuestionTurn,
-} from '@apps/helm/utils/openQuestion';
+import { isSpokenTurn, OPEN_QUESTION_MS } from '@apps/helm/utils/openQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
+import { readAskedQuestion } from '@apps/helm/utils/askedQuestion';
 import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
 import { isUnattendedTurn } from '@apps/helm/utils/privacy';
 import { readPresence } from '@apps/helm/utils/presence';
@@ -568,10 +561,19 @@ export function useHelmVoice() {
       return true;
     }
     if (!isSpoken) {
-      return turn.kind === 'answer' ||
-        (turn.kind === 'send' && asked && takesComposerAnswer(asked.question))
-        ? answerQuestion(text, sttProvider, now, false)
-        : false;
+      if (turn.kind !== 'answer' && !(turn.kind === 'send' && asked)) {
+        return false;
+      }
+      const took = await answerQuestion(
+        turn.kind === 'send' ? turn.text : text,
+        sttProvider,
+        now,
+        false,
+      );
+      if (took === true && turn.kind === 'send' && turn.isFinish) {
+        voice.settle();
+      }
+      return took;
     }
     const said = turn.kind === 'send' ? turn.text : text;
     if (await answerQuestion(said, sttProvider, now, true)) return true;
@@ -922,31 +924,13 @@ export function useHelmVoice() {
     isSpoken = true,
   ) {
     const state = store.getState();
-    const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(
-      all,
-      now,
-      getFreshFrom(state.helm.profile),
-    );
-    const latest = pickQuestionTurn(
-      all.filter((capture) => capture.sessionId === sessionId),
+    const found = readAskedQuestion(
+      state,
       !isSpoken ? 'typed' : isWakeStarted.current ? 'wake' : 'spoken',
       now,
+      kind,
     );
-    const isSettled = createSettledReader(all);
-    const asked =
-      latest && latest.status === 'needsYou'
-        ? getOpenQuestions(latest)
-            .filter(
-              (entry) =>
-                entry.skippedAt === null &&
-                !isSettled(latest, entry.id) &&
-                !isAnswerInFlight(latest.id, entry.id),
-            )
-            .map((entry) => ({ captureId: latest.id, ...entry }))
-            .find((entry) => kind === null || entry.question.kind === kind)
-        : undefined;
-    return latest && asked ? { state, latest, asked } : null;
+    return found ? { state, ...found } : null;
   }
 
   /** Answers an open undo offer by voice and says what happened; a pick between several is finished on the card, never guessed. */
@@ -1099,7 +1083,7 @@ export function useHelmVoice() {
       neitherText === null
     ) {
       say(HELM_COPY.whichIsTrueNoneVoice, now);
-      return true;
+      return isSpoken ? true : ('kept' as const);
     }
     const result = await resolveQuestion(asked.captureId, asked.id, {
       by: isSpoken ? 'voice' : 'tap',
@@ -1119,7 +1103,10 @@ export function useHelmVoice() {
       say(HELM_COPY.questionGone(question.kind), now);
     } else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed, now);
     else voice.settle();
-    return true;
+    return !isSpoken &&
+      ['offline', 'failed', 'gone', 'stale'].includes(result.kind)
+      ? ('kept' as const)
+      : true;
   }
 
   async function answerAsTurn(

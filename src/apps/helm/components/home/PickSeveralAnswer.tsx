@@ -17,6 +17,7 @@ function PickSeveralAnswer({
   question,
   isBusy,
   isComposerAnswer,
+  isComposerTarget,
   skip,
   onAnswer,
 }: AnswerPartProps) {
@@ -119,7 +120,7 @@ function PickSeveralAnswer({
           </div>
         )}
       </ChoiceGroup>
-      {isComposerAnswer && question.allowsSomethingElse && (
+      {isComposerAnswer && isComposerTarget && question.allowsSomethingElse && (
         <p className='text-muted-foreground text-[13px] text-pretty'>
           {HELM_COPY.questionElseHint}
         </p>

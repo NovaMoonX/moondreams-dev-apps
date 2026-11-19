@@ -8,15 +8,20 @@ import { ANSWER_TEXT_MAX, HELM_COPY } from '@apps/helm/constants';
 function FreeTextAnswer({
   isBusy,
   isComposerAnswer,
+  isComposerTarget,
   skip,
   onAnswer,
 }: AnswerPartProps) {
   const [text, setText] = useState('');
   if (isComposerAnswer) {
     return (
-      <p className='text-muted-foreground text-[13px] text-pretty'>
-        {HELM_COPY.questionFreeTextHint}
-      </p>
+      <>
+        {isComposerTarget && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.questionFreeTextHint}
+          </p>
+        )}
+      </>
     );
   }
   return (

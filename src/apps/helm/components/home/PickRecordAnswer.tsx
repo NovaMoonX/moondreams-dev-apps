@@ -27,6 +27,7 @@ function PickRecordAnswer({
   question,
   isBusy,
   isComposerAnswer,
+  isComposerTarget,
   onAnswer,
 }: AnswerPartProps) {
   const [query, setQuery] = useState('');
@@ -149,7 +150,7 @@ function PickRecordAnswer({
           )}
         </ChoiceGroup>
       )}
-      {isComposerAnswer && newOption && (
+      {isComposerAnswer && isComposerTarget && newOption && (
         <p className='text-muted-foreground text-[13px] text-pretty'>
           {HELM_COPY.questionNewNameHint(isPlace)}
         </p>

@@ -194,6 +194,13 @@ export function takesComposerAnswer(question: HelmQuestion): boolean {
   );
 }
 
+/** The question the composer answers: the first open one that takes a typed answer, so a card of choices ahead of it never swallows the words. */
+export function pickComposerTarget<T extends { question: HelmQuestion }>(
+  open: readonly T[],
+): T | undefined {
+  return open.find((entry) => takesComposerAnswer(entry.question));
+}
+
 /** What words that were not one of the choices answer: the question's free text, its "something else", or "neither" with those words; null when the question takes no free words. */
 export function toFreeAnswer(
   question: HelmQuestion,

@@ -28,6 +28,7 @@ import type { HelmQuestion } from '../../src/apps/helm/types.ts';
 import {
   acceptsFreeAnswer,
   matchSpokenAnswer,
+  pickComposerTarget,
   takesComposerAnswer,
   toFreeAnswer,
 } from '../../src/apps/helm/utils/questionAnswers.ts';
@@ -375,6 +376,27 @@ const pickWithElse: HelmQuestion = {
   ],
   allowsSomethingElse: true,
 };
+const choicesOnly: HelmQuestion = {
+  ...pickWithElse,
+  allowsSomethingElse: false,
+};
+const typedWords: HelmQuestion = {
+  ...pickWithElse,
+  shape: 'freeText',
+  options: [],
+};
+assert.equal(
+  pickComposerTarget([
+    { id: 'q1', question: choicesOnly },
+    { id: 'q2', question: typedWords },
+  ])?.id,
+  'q2',
+  'the composer answers the first question that takes typed words, not the choices ahead of it',
+);
+assert.equal(
+  pickComposerTarget([{ id: 'q1', question: choicesOnly }]),
+  undefined,
+);
 assert.deepEqual(
   toFreeAnswer(pickWithElse, '  put it in the freezer '),
   {
