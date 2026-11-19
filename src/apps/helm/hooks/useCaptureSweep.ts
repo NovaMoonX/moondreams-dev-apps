@@ -28,6 +28,7 @@ const isHoldOver = (
     : isUtcDayOver(heldAt, now);
 };
 
+/** A scheduled run's turn is sorted by the server's runner, which knows when a run was skipped, moved or paused since. */
 const isDue = (capture: OpenCapture, now: number, waiting: OpenCapture[]) => {
   const lead = capture.turnLeadId
     ? waiting.find((entry) => entry.id === capture.turnLeadId)
@@ -67,6 +68,7 @@ function createSweep() {
     const next = waiting
       .filter(
         (capture) =>
+          capture.arrivedVia !== 'scheduled' &&
           isDue(capture, now, waiting) &&
           !tried.has(capture.id) &&
           !capture.hasPendingWrites &&
@@ -129,7 +131,8 @@ export function useCaptureSweep(uid: string | null) {
   const receivedCount = useAppSelector(
     (state) =>
       state.helm.waitingCaptures.captures.filter(
-        (capture) => capture.status === 'received',
+        (capture) =>
+          capture.status === 'received' && capture.arrivedVia !== 'scheduled',
       ).length,
   );
   const sweep = useRef<ReturnType<typeof createSweep> | null>(null);

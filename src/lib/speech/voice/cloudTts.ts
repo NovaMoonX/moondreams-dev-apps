@@ -14,7 +14,10 @@ import {
   type PcmFormat,
   type PcmSink,
 } from '@/lib/speech/voice/pcmStream';
-import { SPOKEN_CHARS_PER_SECOND } from '@/lib/speech/voice/playbackQueue';
+import {
+  SPOKEN_CHARS_PER_SECOND,
+  WHISPER_FALLBACK_KEY,
+} from '@/lib/speech/voice/playbackQueue';
 import type {
   SpeechFetch,
   SpeechSource,
@@ -230,7 +233,8 @@ export const createCloudTts = ({
     options: Parameters<TtsAdapter['speak']>[1],
     readyAt: number,
   ) {
-    const { priority, signal, onStart, onProgress, onRouteChange } = options;
+    const { priority, delivery, signal, onStart, onProgress, onRouteChange } =
+      options;
     const spoken = toSpokenText(text);
     const pieces = toPieces(spoken);
     const totalChars = pieces.reduce((sum, piece) => sum + piece.length, 0);
@@ -248,22 +252,38 @@ export const createCloudTts = ({
     };
     const reportFailure = (index: number, isCut: boolean) =>
       reportsFallback &&
-      reportFallback({
-        key: CLOUD_VOICE_FALLBACK_KEY,
-        feature: 'Speaking',
-        wanted: isCut
-          ? 'the whole line in your chosen voice'
-          : 'your chosen voice',
-        used: isCut ? 'the part that played' : "this device's voice",
-        reason: run.failure.reason,
-        cause: run.failure.cause,
-        facts: [
-          `Failed part: ${index + 1} of ${pieces.length}`,
-          `Line: ${totalChars} characters, ${priority}`,
-          `Stood in: ${fallback.id}`,
-          `First-byte limit: ${firstByteMs} ms`,
-        ],
-      });
+      (delivery !== undefined
+        ? reportFallback({
+            key: WHISPER_FALLBACK_KEY,
+            feature: 'Speaking',
+            wanted: 'a whispered line',
+            used: isCut
+              ? 'the part that played'
+              : 'nothing: a whispered line is never said in the device voice',
+            reason: run.failure.reason,
+            cause: run.failure.cause,
+            facts: [
+              `Failed part: ${index + 1} of ${pieces.length}`,
+              `Line: ${totalChars} characters, ${priority}`,
+              `First-byte limit: ${firstByteMs} ms`,
+            ],
+          })
+        : reportFallback({
+            key: CLOUD_VOICE_FALLBACK_KEY,
+            feature: 'Speaking',
+            wanted: isCut
+              ? 'the whole line in your chosen voice'
+              : 'your chosen voice',
+            used: isCut ? 'the part that played' : "this device's voice",
+            reason: run.failure.reason,
+            cause: run.failure.cause,
+            facts: [
+              `Failed part: ${index + 1} of ${pieces.length}`,
+              `Line: ${totalChars} characters, ${priority}`,
+              `Stood in: ${fallback.id}`,
+              `First-byte limit: ${firstByteMs} ms`,
+            ],
+          }));
     const prefetch = {
       index: -1,
       isTaken: false,
@@ -276,7 +296,13 @@ export const createCloudTts = ({
         return;
       }
       const controller = new AbortController();
-      const answer = source.fetchSpeech(piece, priority, controller.signal);
+      const answer = source.fetchSpeech(
+        piece,
+        priority,
+        controller.signal,
+        undefined,
+        delivery,
+      );
       answer.catch(() => undefined);
       Object.assign(prefetch, {
         index,
@@ -297,6 +323,10 @@ export const createCloudTts = ({
         : (charsBefore(index) + fraction * (pieces[index]?.length ?? 0)) /
           totalChars;
     const speakRest = async (index: number) => {
+      // A whispered line is never said in the device's voice: the queue reports it as failed instead.
+      if (delivery !== undefined) {
+        throw new Error('The cloud voice could not whisper this line');
+      }
       live.isFallingBack = true;
       live.isSounding = false;
       onRouteChange?.();
@@ -352,6 +382,10 @@ export const createCloudTts = ({
             },
           );
         });
+      // Sound can be scheduled and still be waiting on waking speakers, so "has sound" never waits for it to be heard.
+      const hasSound = () =>
+        state.isPlaying ||
+        sinks.some((sink) => sink.getTiming().scheduledMs > 0);
       const markSounding = () => {
         state.isPlaying = true;
         live.isSounding = true;
@@ -383,6 +417,7 @@ export const createCloudTts = ({
           }, PROGRESS_MS),
         );
         sink.push(first);
+        startPrefetch(index + 1);
         const pump = async (): Promise<void> => {
           const next = await within(reader.read(), gapMs);
           if (next === 'late' && !signal.aborted) {
@@ -400,9 +435,11 @@ export const createCloudTts = ({
         try {
           await pump();
         } catch (error) {
-          const wasPlaying = state.isPlaying;
+          if (!hasSound()) {
+            sink.stop();
+            throw error;
+          }
           sink.end();
-          if (!wasPlaying) throw error;
           if (!signal.aborted) {
             state.isCut = true;
             fail(
@@ -414,7 +451,7 @@ export const createCloudTts = ({
           }
         }
         sink.end();
-        if (!state.isPlaying && !signal.aborted) {
+        if (!hasSound() && !signal.aborted) {
           throw new Error('The cloud voice sent no audio');
         }
         // A suspended context freezes its clock: wait while the audio still advances, give up once it stalls.
@@ -436,7 +473,13 @@ export const createCloudTts = ({
       try {
         const answer = await within(
           (isPrefetched ? prefetch.answer : null) ??
-            source.fetchSpeech(piece, priority, controller.signal),
+            source.fetchSpeech(
+              piece,
+              priority,
+              controller.signal,
+              undefined,
+              delivery,
+            ),
           firstByteMs,
         );
         if (signal.aborted) {
@@ -492,7 +535,9 @@ export const createCloudTts = ({
         const pcm = parsePcmFormat(answer.contentType);
         if (pcm !== null && !first.done) {
           await streamPcm(pcm, reader, first.value);
-          if (!state.isPlaying) return 'aborted';
+          if (!state.isPlaying && (signal.aborted || !hasSound())) {
+            return 'aborted';
+          }
           return state.isCut ? 'cut' : 'played';
         }
         const bodyLimitMs =
@@ -516,10 +561,10 @@ export const createCloudTts = ({
         const audio = await player.decode(concat(rest));
         if (signal.aborted) return 'aborted';
         await player.play(audio, signal, markSounding, report, readyAt);
-        return 'played';
+        return signal.aborted && !state.isPlaying ? 'aborted' : 'played';
       } catch (error) {
         if (signal.aborted) return 'aborted';
-        if (state.isPlaying) {
+        if (hasSound()) {
           fail(
             'the voice stopped partway',
             'audio playback',
@@ -545,7 +590,13 @@ export const createCloudTts = ({
     const speakFrom = async (index: number): Promise<string | undefined> => {
       if (index >= pieces.length) {
         if (!run.isCut) {
-          if (reportsFallback) clearFallback(CLOUD_VOICE_FALLBACK_KEY);
+          if (reportsFallback) {
+            clearFallback(
+              delivery === undefined
+                ? CLOUD_VOICE_FALLBACK_KEY
+                : WHISPER_FALLBACK_KEY,
+            );
+          }
           onPlayed?.();
         }
         return run.playedBy;
@@ -557,7 +608,7 @@ export const createCloudTts = ({
       if (outcome === 'aborted') return index === 0 ? undefined : run.playedBy;
       if (outcome === 'failed') {
         reportFailure(index, false);
-        onFallback?.(run.failure.cause);
+        if (delivery === undefined) onFallback?.(run.failure.cause);
         return speakRest(index);
       }
       if (outcome === 'cut') {

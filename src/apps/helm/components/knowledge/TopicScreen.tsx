@@ -9,6 +9,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 
 import MarkdownText from '@/components/MarkdownText';
 import SectionDivider from '@/components/SectionDivider';
+import LinkedSection from '@apps/helm/components/home/LinkedSection';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
@@ -54,6 +55,7 @@ import {
   moveRefusal,
   pathOf,
 } from '@apps/helm/utils/topicTree';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 
@@ -579,6 +581,12 @@ function TopicScreen({
               </section>
             )}
           </>
+        )}
+        {topic && !topic.isUnreadable && (
+          <LinkedSection kind='topic' parentId={topic.id} />
+        )}
+        {topic && !topic.isUnreadable && (
+          <PrivateRow kind='topic' record={topic} title={topic.name} />
         )}
       </main>
       <NoteSheet noteId={openNoteId} onClose={() => setOpenNoteId(null)} />

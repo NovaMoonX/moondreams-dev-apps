@@ -1,5 +1,18 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
+  holdQuietSpoken,
+  QUIET_SPOKEN_LINE,
+  isPrivateInEffect,
+  readEffectivePrivacy,
+  readPersonMark,
+  readPrivacyFacts,
+  readPrivateMark,
+  readSetPrivate,
+  readSetQuiet,
+  type PrivacyFacts,
+  type PrivateParent,
+} from '../privacy.js';
+import {
   createOptionMatcher,
   toComparable,
   toDisplayCase,
@@ -19,11 +32,15 @@ import {
   type MentionRead,
   type NomosCommand,
   type NoteFactCommand,
+  type MeetsHow,
+  type TaskEffort,
   type NoteFactKind,
   type PlaceRead,
   type ProjectCommand,
   type ProcedureCommand,
+  type QuestionsMeeting,
   type RunCommand,
+  type SetQuietCommand,
   type TaskDue,
   type TopicCommand,
 } from './commands.js';
@@ -33,9 +50,11 @@ import {
   settleProjectStart,
   type ExistingProject,
 } from './planProjects.js';
+import type { HeardName } from './heardNames.js';
 import {
   matchPlaces,
   matchWho,
+  type EntityMatch,
   type KnownPlace,
   type KnownWho,
 } from './matchEntities.js';
@@ -67,11 +86,14 @@ import { TOPICS_LIMIT } from '../topicLimits.js';
 import { toNoteSource } from '../topicWrite.js';
 import type { LiveTopic } from '../topicVersionStore.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
+import { resolveKin, type KinBirthday, type KinResolution } from './kin.js';
+import { KIN_KINDS, type WhoKin } from './kinKinds.js';
 import { planKeyDates, type KeyDateRecord } from './planKeyDates.js';
 import type { ByWho } from '../keyDateIndex.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { shouldKeepSensitive } from './sensitive.js';
+import { readQuietFacts, toQuietKey } from './quietTurn.js';
 import { buildSpokenAck, toKnownZone } from './spoken.js';
 import {
   buildAskedQuestion,
@@ -88,12 +110,21 @@ import {
   NOTE_KEPT_SPOKEN,
   NOTES_FULL_LINE,
   NOTES_NOT_KEPT_LINE,
+  buildIsThisWhoQuestion,
+  buildKinOrderQuestion,
+  buildHeardPrompt,
   buildPickQuestion,
+  HEARD_NEW_LABEL,
+  buildSpokenIsThisWho,
+  buildSpokenKinOrder,
+  buildSpokenWhichKin,
+  buildWhichKinQuestion,
   buildSpokenPick,
   buildSpokenQuestion,
   buildFactLine,
   buildFactSource,
   buildNotKeptLine,
+  buildQuietLine,
   buildSpokenWhichIsTrue,
   buildWhichIsTrueQuestion,
   describeFacts,
@@ -118,11 +149,45 @@ export interface ExistingTask {
   title: string;
   whoIds: string[];
   placeIds: string[];
+  meets?: { how: MeetsHow; setBy: 'person' | 'calendar' } | null;
+  durationMinutes?: number | null;
   sealed: Record<string, unknown>;
+  /** What the task says about being private and the parents it is filed under, read with it. */
+  privacyFacts?: PrivacyFacts;
+  privateParents?: PrivateParent[];
+  /** The class stored on the task, which an unreadable parent may be the only source of. */
+  privacy?: string | null;
 }
+
+/** A note the person already has, opened, with the parents its class and quiet can come from. */
+export interface ExistingNote {
+  title: string;
+  sealed: Record<string, unknown>;
+  privacy: string | null;
+  parents: PrivateParent[];
+}
+
+/** A task, note or topic filed under a project, read to follow the project's class. */
+export interface ProjectChildRef {
+  kind: 'task' | 'note' | 'topic';
+  id: string;
+  title: string;
+  privacy: string | null;
+}
+
+/** What a project's children read found; `isMore` when the read stopped at its limit. */
+export interface ProjectChildren {
+  children: ProjectChildRef[];
+  isMore: boolean;
+}
+
+const MAX_QUIET_CHILD_WRITES = 200;
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {
+  kin?: WhoKin | null;
+  /** Names the person said are not this one, never proposed again. */
+  refusedAliases?: string[];
   relation?: string | null;
   species?: string | null;
   organizationKind?: string | null;
@@ -140,6 +205,9 @@ export interface PeopleInput {
   mentions: MentionRead[];
   places: PlaceRead[];
   known: KnownWhoState[];
+  /** The self's id and each person's birthday, read only when a mention is a family word. */
+  selfWhoId?: string | null;
+  birthdays?: Record<string, KinBirthday | null>;
   knownPlaces: KnownPlace[];
   assistantName: string | null;
   /** Every name the assistant answers to this turn (its own, the one the person said, the default), so none is filed as a person or place. */
@@ -147,6 +215,7 @@ export interface PeopleInput {
   /** The day the capture was made, in the person's zone. */
   dayKey: string;
   capturedAt: number;
+  heardNames?: HeardName[];
 }
 
 /** A fact the person already has, for the repeat check: its words and subjects. */
@@ -177,7 +246,14 @@ export interface EffectRef {
     | 'notes'
     | 'topics'
     | 'procedures'
-    | 'procedureRuns';
+    | 'procedureRuns'
+    | 'habits'
+    | 'habitDays'
+    | 'connections'
+    | 'scheduledActions'
+    | 'research'
+    | 'seenAs'
+    | 'dayAims';
   docId: string;
 }
 
@@ -561,6 +637,8 @@ export function planMediaDecisions(input: {
 }
 
 export interface WritePlan {
+  /** "Added for Eli: Buy a card" for a task whose person was found from a family word. */
+  kinLines: string[];
   creates: { id: string; data: Record<string, unknown> }[];
   updates: { id: string; data: Record<string, unknown> }[];
   whoCreates: { id: string; data: Record<string, unknown> }[];
@@ -575,7 +653,11 @@ export interface WritePlan {
   keyDateDeletes: string[];
   projectCreates: { id: string; data: Record<string, unknown> }[];
   projectUpdates: { id: string; data: Record<string, unknown> }[];
+  /** What each research offer this turn adds says, for the summary. */
+  offerLines: string[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
+  noteUpdates: { id: string; data: Record<string, unknown> }[];
+  topicPrivacyUpdates: { id: string; data: Record<string, unknown> }[];
   /** Photos kept by this turn, and photos let go for a day. */
   mediaKept: { id: string; data: Record<string, unknown> }[];
   mediaLetGo: { id: string; data: Record<string, unknown> }[];
@@ -615,6 +697,12 @@ export interface WritePlan {
   keyDateIndex: { byWho: ByWho; entryCount: number } | null;
   /** One line for each private detail the turn did not keep. */
   notKept: string[];
+  /** Whether a task the turn changed is private, before or after it. */
+  isPrivate: boolean;
+  /** Whether the turn touched something kept quiet, so its spoken line is only the screen line. */
+  isQuiet: boolean;
+  /** The result line of each thing kept quiet or let be said aloud again. */
+  quietLines: string[];
   /** The result line of each change the turn made to a topic. */
   topicLines: string[];
   /** The result line of each procedure the turn made or changed. */
@@ -629,6 +717,8 @@ export interface WritePlan {
   counts: EffectCounts;
   /** One "which one?" question for each unsure name a filed task points at, at most MAX_PICK_QUESTIONS. */
   questions: PlannedQuestion[];
+  /** The id each task this turn makes was given, by its `$new` ref. */
+  taskIdByRef: Record<string, string>;
 }
 
 export interface PlannedQuestion {
@@ -661,6 +751,10 @@ interface PlanInput {
   selfWhoId?: string | null;
   timeZone?: string;
   keyDates?: KeyDateCommand[];
+  /** People a key date command names by a ref that is no mention of the turn, with the name their line shows. */
+  extraWho?: Map<string, { id: string; name: string }>;
+  /** Effects another part of the turn already records, so the turn stays within its cap. */
+  reservedEffects?: number;
   /** The yearly index as read in the transaction. */
   keyDateIndex?: { byWho: ByWho; entryCount: number };
   /** The index could not be opened, so the turn's date commands are skipped lines and never written over an index taken for empty. */
@@ -703,6 +797,17 @@ interface PlanInput {
   /** When the capture was said, which a note's mark in a document carries. */
   capturedAt?: number;
   media?: MediaInput;
+  /** The wake phrase began this turn and nobody is looking at the screen. */
+  isUnattended?: boolean;
+  quietCommands?: SetQuietCommand[];
+  /** The calendar day in the person's zone, YYYY-MM-DD. */
+  today?: string;
+  /** The notes a quiet command names, opened. */
+  existingNotes?: Map<string, ExistingNote>;
+  /** The tasks (any status), notes and topics of each project, by project id, which follow it when it is kept quiet. */
+  projectChildren?: Map<string, ProjectChildren>;
+  /** The `task:id` and `project:id` keys of everything quiet today. */
+  quietKeys?: ReadonlySet<string>;
 }
 
 interface Draft {
@@ -714,7 +819,46 @@ interface Draft {
   isUrgent: boolean;
   status: 'open' | 'done';
   projectId: string | null;
+  isPrivate: boolean;
+  questions: string[];
+  meeting: QuestionsMeeting | null;
+  meetsHow: MeetsHow | null;
+  effort: TaskEffort | null;
+  durationMinutes: number | null;
+  quiet: PrivacyFacts | null;
 }
+
+/** How a task meets counts only when its due has a time. */
+const toMeetsHow = (due: TaskDue | null, how: MeetsHow | null | undefined) =>
+  due?.kind === 'moment' ? (how ?? null) : null;
+
+/** An update's meets: absent leaves it, null clears it, a format sets it as the person's only while the due has a time. */
+const toMeetsAfter = (
+  before: ExistingTask['meets'],
+  how: MeetsHow | null | undefined,
+  due: TaskDue | null,
+) => {
+  if (due?.kind !== 'moment' || how === null) return null;
+  return how === undefined
+    ? (before ?? null)
+    : { how, setBy: 'person' as const };
+};
+
+const toQuietSealed = (facts: PrivacyFacts) => ({
+  privateMark: facts.privateMark,
+  isPrivacyCleared: facts.isPrivacyCleared === true,
+  quietMark: facts.quietMark ?? null,
+  quietUntil: facts.quietUntil ?? null,
+  isQuietCleared: facts.isQuietCleared === true,
+});
+
+const toQuietKeys = (facts: PrivacyFacts) => ({
+  'sealed.privateMark': facts.privateMark,
+  'sealed.isPrivacyCleared': facts.isPrivacyCleared === true,
+  'sealed.quietMark': facts.quietMark ?? null,
+  'sealed.quietUntil': facts.quietUntil ?? null,
+  'sealed.isQuietCleared': facts.isQuietCleared === true,
+});
 
 const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
@@ -755,7 +899,12 @@ export const buildWhoDoc = (input: {
   sealed: input.seal({
     name: input.name,
     aliases: [],
+    kin: input.mention.kin ?? null,
+    soundsLike: null,
+    refusedAliases: null,
     relation: input.mention.relation,
+    phones: [],
+    emails: [],
     phone: null,
     email: null,
     notes: null,
@@ -792,6 +941,58 @@ export const buildPlaceDoc = (input: {
 /** A new name as the person would write it. */
 export const toNameCase = (name: string) => toDisplayCase(name, NAME_CASE);
 
+/** How an unsure mention came to be one: more than one fit, a nickname the model linked to someone, or a family word code could not settle. */
+export type UnsureVia =
+  | { kind: 'alias'; whoId: string }
+  | { kind: 'heard' }
+  | { kind: 'kin'; ref: WhoKin; resolution: 'many' | 'none' }
+  | {
+      kind: 'kinOrder';
+      ref: WhoKin;
+      shape: 'one' | 'several' | 'extreme';
+    }
+  | null;
+
+interface UnsureEntry {
+  mention: MentionRead;
+  candidateIds: string[];
+  via: UnsureVia;
+}
+
+const PRIVATE_PERSON_LABEL = 'a private person';
+
+/** The family kind as it is spoken, without the order: "brother", never "younger brother". */
+const toKinWord = (kind: string) =>
+  KIN_KINDS.find((entry) => entry.kind === kind)?.spoken ?? kind;
+
+/** A person's name as a question or a result line shows it: on an unattended turn a private person is only "a private person", as the context masks them. */
+const shownName = (who: KnownWhoState, isUnattended: boolean) =>
+  isUnattended && isPrivateInEffect(who.privacyFacts ?? readPrivacyFacts(null))
+    ? PRIVATE_PERSON_LABEL
+    : who.name;
+
+const toKinWho = (who: KnownWhoState) => ({ id: who.id, kin: who.kin ?? null });
+
+/** A proposed nickname is asked about only when the model linked it to someone who is there, who hasn't been told No to it, and it is not a word of the person's own name or nicknames. */
+const isProposalOpen = (mention: MentionRead, people: PeopleInput) => {
+  const proposed = people.known.find((who) => who.id === mention.proposedWhoId);
+  const comparable = mention.name.trim().toLowerCase();
+  const self = people.known.find((who) => who.id === people.selfWhoId);
+  const isSelfWord =
+    self !== undefined &&
+    self.id !== proposed?.id &&
+    [...self.name.split(/\s+/), ...(self.aliases ?? [])].some(
+      (word) => word.trim().toLowerCase() === comparable,
+    );
+  return (
+    proposed !== undefined &&
+    !isSelfWord &&
+    !(proposed.refusedAliases ?? []).some(
+      (refused) => refused.trim().toLowerCase() === comparable,
+    )
+  );
+};
+
 function settleEntities(input: PlanInput) {
   const people = input.people;
   const empty = {
@@ -799,31 +1000,74 @@ function settleEntities(input: PlanInput) {
     placeIdOf: new Map<string, string>(),
     newWho: [] as { id: string; mention: MentionRead }[],
     newPlaces: [] as { id: string; place: PlaceRead }[],
-    unsureWho: new Map<
-      string,
-      { mention: MentionRead; candidateIds: string[] }
-    >(),
+    unsureWho: new Map<string, UnsureEntry>(),
     unsurePlaces: new Map<
       string,
       { place: PlaceRead; candidateIds: string[] }
     >(),
+    kinNamed: new Map<string, string>(),
   };
   if (!people) return empty;
-  const whoMatches = matchWho({
-    mentions: people.mentions,
+  const named = people.mentions.filter((mention) => !mention.kinRef);
+  const namedMatches = matchWho({
+    mentions: named,
     known: people.known,
     assistantNames: people.assistantNames,
   });
+  const heardTies = new Map(
+    named.flatMap((mention): [string, string[]][] => {
+      const words = mention.name.trim().toLowerCase();
+      const tie = (people.heardNames ?? []).find(
+        (entry) =>
+          entry.candidateIds.length > 1 &&
+          [entry.heard, entry.said ?? ''].some(
+            (said) => said.trim().toLowerCase() === words,
+          ),
+      );
+      const ids = (tie?.candidateIds ?? []).filter((id) =>
+        people.known.some((who) => who.id === id),
+      );
+      return ids.length > 1 ? [[mention.ref, ids]] : [];
+    }),
+  );
+  const matchOf = new Map(
+    named.map((mention, index): [string, EntityMatch] => [
+      mention.ref,
+      heardTies.has(mention.ref)
+        ? {
+            kind: 'unsure',
+            candidateIds: heardTies.get(mention.ref) as string[],
+          }
+        : namedMatches[index],
+    ]),
+  );
   const placeMatches = matchPlaces({
     names: people.places.map((place) => place.name),
     known: people.knownPlaces,
     assistantNames: people.assistantNames,
   });
-  const whoSettled = people.mentions.flatMap((mention, index) => {
-    const match = whoMatches[index];
-    return match.kind === 'match'
+  const kinOf = new Map(
+    people.mentions.flatMap((mention): [string, KinResolution][] =>
+      mention.kinRef
+        ? [
+            [
+              mention.ref,
+              resolveKin(
+                mention.kinRef,
+                people.known.map(toKinWho),
+                people.birthdays ?? {},
+                people.selfWhoId ?? null,
+              ),
+            ],
+          ]
+        : [],
+    ),
+  );
+  const whoSettled = named.flatMap((mention) => {
+    const match = matchOf.get(mention.ref);
+    return match?.kind === 'match'
       ? [{ mention, id: match.id, isNew: false }]
-      : match.kind === 'new'
+      : match?.kind === 'new' && !isProposalOpen(mention, people)
         ? [{ mention, id: input.newId(), isNew: true }]
         : [];
   });
@@ -843,19 +1087,78 @@ function settleEntities(input: PlanInput) {
       const ids = matches[index].candidateIds;
       return ids && ids.length > 0 ? [[item.ref, item, ids]] : [];
     });
+  const sureKin = [...kinOf.entries()].flatMap(
+    ([ref, resolution]): [string, string][] =>
+      resolution.kind === 'one' ? [[ref, resolution.id]] : [],
+  );
+  const kinUnsure = people.mentions.flatMap(
+    (mention): [string, UnsureEntry][] => {
+      const resolution = kinOf.get(mention.ref);
+      const ref = mention.kinRef;
+      if (!resolution || !ref || resolution.kind === 'one') return [];
+      return [
+        [
+          mention.ref,
+          resolution.kind === 'askOrder'
+            ? {
+                mention,
+                candidateIds: resolution.ids,
+                via: { kind: 'kinOrder', ref, shape: resolution.shape },
+              }
+            : {
+                mention,
+                candidateIds: resolution.kind === 'many' ? resolution.ids : [],
+                via: { kind: 'kin', ref, resolution: resolution.kind },
+              },
+        ],
+      ];
+    },
+  );
+  const proposed = named.flatMap((mention): [string, UnsureEntry][] =>
+    matchOf.get(mention.ref)?.kind === 'new' &&
+    isProposalOpen(mention, people) &&
+    mention.proposedWhoId
+      ? [
+          [
+            mention.ref,
+            {
+              mention,
+              candidateIds: [mention.proposedWhoId],
+              via: { kind: 'alias', whoId: mention.proposedWhoId },
+            },
+          ],
+        ]
+      : [],
+  );
   return {
-    unsureWho: new Map(
-      unsure(people.mentions, whoMatches).map(
-        ([ref, mention, candidateIds]) => [ref, { mention, candidateIds }],
-      ),
-    ),
+    unsureWho: new Map<string, UnsureEntry>([
+      ...unsure(
+        named,
+        named.map((mention) => matchOf.get(mention.ref) ?? { kind: 'new' }),
+      ).map(([ref, mention, candidateIds]): [string, UnsureEntry] => [
+        ref,
+        {
+          mention,
+          candidateIds,
+          via: heardTies.has(ref) ? { kind: 'heard' } : null,
+        },
+      ]),
+      ...proposed,
+      ...kinUnsure,
+    ]),
     unsurePlaces: new Map(
       unsure(people.places, placeMatches).map(([ref, place, candidateIds]) => [
         ref,
         { place, candidateIds },
       ]),
     ),
-    whoIdOf: new Map(whoSettled.map((entry) => [entry.mention.ref, entry.id])),
+    whoIdOf: new Map([
+      ...whoSettled.map((entry): [string, string] => [
+        entry.mention.ref,
+        entry.id,
+      ]),
+      ...sureKin,
+    ]),
     placeIdOf: new Map(
       placeSettled.map((entry) => [entry.place.ref, entry.id]),
     ),
@@ -865,6 +1168,7 @@ function settleEntities(input: PlanInput) {
     newPlaces: placeSettled
       .filter((entry) => entry.isNew)
       .map(({ id, place }) => ({ id, place })),
+    kinNamed: new Map(sureKin),
   };
 }
 
@@ -944,6 +1248,36 @@ export function planWrites(input: PlanInput): WritePlan {
 
   const patch = (id: string, data: Record<string, unknown>) =>
     patches.set(id, { ...patches.get(id), ...data });
+  const privacyLines: string[] = [];
+  const NO_FACTS: PrivacyFacts = { privateMark: null, isPrivacyCleared: false };
+  const personalFactsOf = (draft: Draft) => {
+    const marked = readPrivateMark({
+      current: NO_FACTS,
+      isCare: false,
+      isForOtherWho: false,
+      commandMark: null,
+      isSensitiveHealth: false,
+      words: draft.title,
+    });
+    return draft.isPrivate ? readPersonMark(marked, true) : marked;
+  };
+  const linkedFactsOf = (whoIds: string[], placeIds: string[]) => [
+    ...whoIds.flatMap(
+      (id) =>
+        input.people?.known.find((who) => who.id === id)?.privacyFacts ?? [],
+    ),
+    ...placeIds.flatMap(
+      (id) =>
+        input.people?.knownPlaces.find((place) => place.id === id)
+          ?.privacyFacts ?? [],
+    ),
+  ];
+  const isTaskPrivate = (task: ExistingTask) =>
+    task.privacy === 'private' ||
+    readEffectivePrivacy(
+      task.privacyFacts ?? NO_FACTS,
+      (task.privateParents ?? []).map((parent) => parent.facts),
+    ) === 'private';
 
   input.commands.forEach((command) => {
     if (effects.length + drafts.size >= MAX_EFFECTS) return;
@@ -953,7 +1287,10 @@ export function planWrites(input: PlanInput): WritePlan {
       drafts.set(command.ref, {
         id,
         title: command.title,
-        whoIds: idsOf(command.whoRefs, entities.whoIdOf),
+        whoIds: union(
+          idsOf(command.whoRefs, entities.whoIdOf),
+          command.whoIds ?? [],
+        ),
         placeIds: idsOf(command.placeRefs, entities.placeIdOf),
         due: command.due,
         isUrgent: command.isUrgent,
@@ -961,10 +1298,84 @@ export function planWrites(input: PlanInput): WritePlan {
         projectId: command.projectRef
           ? matchProject(command.projectRef, projectStart.pool)
           : null,
+        isPrivate: false,
+        questions: command.questions,
+        meeting: command.meeting,
+        meetsHow: toMeetsHow(command.due, command.meetsHow),
+        effort: command.effort ?? null,
+        durationMinutes: command.durationMinutes ?? null,
+        quiet: null,
       });
       return;
     }
     const draft = drafts.get(command.taskId);
+    if (command.kind === 'setPrivate') {
+      if (draft) {
+        if (command.isPrivate) draft.isPrivate = true;
+        return;
+      }
+      const settled = working.get(command.taskId);
+      if (!settled) return;
+      const facts = settled.privacyFacts ?? {
+        privateMark: null,
+        isPrivacyCleared: false,
+      };
+      const parents = settled.privateParents ?? [];
+      const outcome = readSetPrivate({
+        current: facts,
+        isPrivate: command.isPrivate,
+        parents,
+        today: input.today ?? '',
+        byTurn: { isUnattended: input.isUnattended === true },
+      });
+      if (outcome.kind === 'refused') {
+        privacyLines.push(outcome.line);
+        return;
+      }
+      if (outcome.kind === 'unchanged') return;
+      const privacy = readEffectivePrivacy(
+        outcome.facts,
+        parents.map((parent) => parent.facts),
+      );
+      const before = readEffectivePrivacy(
+        facts,
+        parents.map((parent) => parent.facts),
+      );
+      record(
+        command.taskId,
+        'update',
+        {
+          'sealed.title': settled.title,
+          privacy,
+          'sealed.privateMark': outcome.facts.privateMark,
+          'sealed.isPrivacyCleared': outcome.facts.isPrivacyCleared,
+        },
+        {
+          'sealed.title': settled.title,
+          privacy: before,
+          'sealed.privateMark': facts.privateMark,
+          'sealed.isPrivacyCleared': facts.isPrivacyCleared,
+        },
+      );
+      const sealed = {
+        ...settled.sealed,
+        privateMark: outcome.facts.privateMark,
+        isPrivacyCleared: outcome.facts.isPrivacyCleared,
+      };
+      patch(command.taskId, {
+        privacy,
+        sealed: seal(sealed),
+        lastEditedAt: now,
+      });
+      working.set(command.taskId, {
+        ...settled,
+        sealed,
+        privacyFacts: outcome.facts,
+        privacy,
+      });
+      counts.updated += 1;
+      return;
+    }
     if (draft) {
       if (command.kind === 'completeTask') draft.status = 'done';
       else {
@@ -972,6 +1383,9 @@ export function planWrites(input: PlanInput): WritePlan {
         draft.title = command.title ?? draft.title;
         if (command.hasDue) draft.due = command.due;
         draft.isUrgent = command.isUrgent ?? draft.isUrgent;
+        if (command.meetsHow !== undefined) {
+          draft.meetsHow = toMeetsHow(draft.due, command.meetsHow);
+        }
         draft.whoIds = union(
           draft.whoIds,
           idsOf(command.whoRefs, entities.whoIdOf),
@@ -1029,21 +1443,58 @@ export function planWrites(input: PlanInput): WritePlan {
     );
     const hasNewWho = whoIds.length > current.whoIds.length;
     const hasNewPlace = placeIds.length > current.placeIds.length;
+    const meetsBefore = current.meets ?? null;
+    const meetsAfter = toMeetsAfter(
+      meetsBefore,
+      command.meetsHow,
+      due === undefined ? current.due : due,
+    );
+    const hasNewMeets =
+      meetsAfter?.how !== meetsBefore?.how ||
+      meetsAfter?.setBy !== meetsBefore?.setBy;
     if (
       title === null &&
       due === undefined &&
       isUrgent === null &&
       !hasNewWho &&
-      !hasNewPlace
+      !hasNewPlace &&
+      !hasNewMeets
     ) {
       return;
     }
+    const before = current.privacyFacts ?? NO_FACTS;
+    const marked =
+      title === null
+        ? before
+        : readPrivateMark({
+            current: before,
+            isCare: false,
+            isForOtherWho: false,
+            commandMark: null,
+            isSensitiveHealth: false,
+            words: title,
+          });
+    const hasNewMark = marked.privateMark !== before.privateMark;
+    const isPrivateBefore = isTaskPrivate(current);
+    const isPrivateAfter =
+      isPrivateBefore ||
+      readEffectivePrivacy(marked, [
+        ...(current.privateParents ?? []).map((parent) => parent.facts),
+        ...linkedFactsOf(
+          whoIds.filter((who) => !current.whoIds.includes(who)),
+          placeIds.filter((place) => !current.placeIds.includes(place)),
+        ),
+      ]) === 'private';
+    const hasNewClass = isPrivateAfter && !isPrivateBefore;
     const written: Record<string, unknown> = {
       'sealed.title': title ?? current.title,
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMeets && { meets: meetsAfter }),
+      ...(hasNewMark && { 'sealed.privateMark': marked.privateMark }),
+      ...(hasNewClass && { privacy: 'private' }),
     };
     const previous: Record<string, unknown> = {
       'sealed.title': current.title,
@@ -1051,28 +1502,270 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent: current.isUrgent }),
       ...(hasNewWho && { whoIds: current.whoIds }),
       ...(hasNewPlace && { placeIds: current.placeIds }),
+      ...(hasNewMeets && { meets: meetsBefore }),
+      ...(hasNewMark && { 'sealed.privateMark': before.privateMark }),
+      ...(hasNewClass && { privacy: 'ordinary' }),
     };
     record(id, 'update', written, previous);
     patch(id, {
-      ...(title !== null && {
-        sealed: seal({ ...current.sealed, title }),
+      ...((title !== null || hasNewMark) && {
+        sealed: seal({
+          ...current.sealed,
+          ...(title !== null && { title }),
+          ...(hasNewMark && { privateMark: marked.privateMark }),
+        }),
       }),
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMeets && { meets: meetsAfter }),
+      ...(hasNewClass && { privacy: 'private' }),
       lastEditedAt: now,
     });
     working.set(id, {
       ...current,
       whoIds,
       placeIds,
+      meets: meetsAfter,
       title: title ?? current.title,
       due: due === undefined ? current.due : due,
       isUrgent: isUrgent ?? current.isUrgent,
+      privacyFacts: marked,
+      privacy: isPrivateAfter ? 'private' : current.privacy,
     });
     counts.updated += 1;
   });
+
+  const quietCommands = [...(input.quietCommands ?? [])].sort(
+    (left, right) =>
+      Number(left.targetKind === 'project') -
+      Number(right.targetKind === 'project'),
+  );
+  const quietLines: string[] = [];
+  const quietNew = new Map<string, PrivacyFacts>();
+  const workingProjects = new Map(
+    (input.existingProjects ?? []).map((project) => [project.id, project]),
+  );
+  const projectQuiet = new Map<string, Record<string, unknown>>();
+  const noteQuiet = new Map<string, Record<string, unknown>>();
+  const topicPrivate = new Map<string, Record<string, unknown>>();
+  const childWrites = { spent: 0 };
+  const refNames = new Map(
+    projectCommands.flatMap((command): [string, string][] =>
+      command.kind === 'createProject' && command.ref
+        ? [[command.ref, command.name]]
+        : [],
+    ),
+  );
+  const settleQuiet = (
+    command: SetQuietCommand,
+    current: PrivacyFacts,
+    parents: PrivateParent[],
+    name: string,
+  ) => {
+    const outcome = readSetQuiet({
+      current,
+      isQuiet: command.isQuiet,
+      until: command.until,
+      mark: command.isGuess ? 'guessed' : 'person',
+      parents,
+      today: input.today ?? '',
+      byTurn: { isUnattended: input.isUnattended === true },
+    });
+    if (outcome.kind === 'refused') privacyLines.push(outcome.line);
+    if (outcome.kind !== 'applied') return null;
+    quietLines.push(
+      buildQuietLine({
+        name,
+        isQuiet: command.isQuiet,
+        isGuess: command.isGuess,
+        isUntilUnread: command.isUntilUnread,
+      }),
+    );
+    return outcome.facts;
+  };
+  quietCommands.forEach((command) => {
+    if (command.targetKind === 'task' && command.isNew) {
+      const draft = drafts.get(command.targetId);
+      if (!draft || !command.isQuiet) return;
+      draft.quiet = settleQuiet(
+        command,
+        personalFactsOf(draft),
+        [],
+        draft.title,
+      );
+      return;
+    }
+    if (command.targetKind === 'task') {
+      const settled = working.get(command.targetId);
+      if (!settled) return;
+      const facts = settled.privacyFacts ?? NO_FACTS;
+      const parents = settled.privateParents ?? [];
+      const next = settleQuiet(command, facts, parents, settled.title);
+      if (!next) return;
+      const parentFacts = parents.map((parent) => parent.facts);
+      const privacy = readEffectivePrivacy(next, parentFacts);
+      const sealed = {
+        ...settled.sealed,
+        title: settled.title,
+        ...toQuietSealed(next),
+      };
+      record(
+        command.targetId,
+        'update',
+        {
+          'sealed.title': settled.title,
+          privacy,
+          ...toQuietKeys(next),
+        },
+        {
+          'sealed.title': settled.title,
+          privacy: settled.privacy === 'private' ? 'private' : 'ordinary',
+          ...toQuietKeys(facts),
+        },
+      );
+      patch(command.targetId, {
+        privacy,
+        sealed: seal(sealed),
+        lastEditedAt: now,
+      });
+      working.set(command.targetId, {
+        ...settled,
+        sealed,
+        privacyFacts: next,
+        privacy,
+      });
+      return;
+    }
+    if (command.targetKind === 'note' && command.isNew) {
+      if (!command.isQuiet) return;
+      const next = readSetQuiet({
+        current: NO_FACTS,
+        isQuiet: true,
+        until: command.until,
+        mark: command.isGuess ? 'guessed' : 'person',
+        parents: [],
+        today: input.today ?? '',
+      });
+      if (next.kind === 'applied') quietNew.set(command.targetId, next.facts);
+      return;
+    }
+    if (command.targetKind === 'note') {
+      const note = input.existingNotes?.get(command.targetId);
+      if (!note) return;
+      const facts = readQuietFacts(note.sealed);
+      const next = settleQuiet(command, facts, note.parents, note.title);
+      if (!next) return;
+      const line = quietLines[quietLines.length - 1];
+      record(
+        command.targetId,
+        'update',
+        { 'sealed.title': line, privacy: 'private', ...toQuietKeys(next) },
+        {
+          'sealed.title': line,
+          privacy: note.privacy === 'private' ? 'private' : 'ordinary',
+          ...toQuietKeys(facts),
+        },
+        'notes',
+      );
+      noteQuiet.set(command.targetId, {
+        ...noteQuiet.get(command.targetId),
+        privacy: 'private',
+        sealed: seal({ ...note.sealed, ...toQuietSealed(next) }),
+        lastEditedAt: now,
+      });
+      return;
+    }
+    const projectId = command.isNew
+      ? matchProject(refNames.get(command.targetId) ?? '', projectStart.pool)
+      : command.targetId;
+    if (!projectId) return;
+    if (projectId === projectStart.created?.id) {
+      if (!command.isQuiet) return;
+      const next = settleQuiet(
+        command,
+        NO_FACTS,
+        [],
+        projectStart.created.command.name,
+      );
+      if (next && projectStart.created.command.ref) {
+        quietNew.set(projectStart.created.command.ref, next);
+      }
+      return;
+    }
+    const project = workingProjects.get(projectId);
+    if (!project) return;
+    const facts = readQuietFacts(project.sealed);
+    const next = settleQuiet(command, facts, [], project.name);
+    if (!next) return;
+    const line = quietLines[quietLines.length - 1];
+    const sealed = { ...project.sealed, ...toQuietSealed(next) };
+    record(
+      projectId,
+      'update',
+      { 'sealed.title': line, privacy: 'private', ...toQuietKeys(next) },
+      {
+        'sealed.title': line,
+        privacy: project.isPrivate ? 'private' : 'ordinary',
+        ...toQuietKeys(facts),
+      },
+      'projects',
+    );
+    workingProjects.set(projectId, { ...project, isPrivate: true, sealed });
+    projectQuiet.set(projectId, {
+      privacy: 'private',
+      sealed: seal(sealed),
+      lastEditedAt: now,
+    });
+    if (!command.isQuiet) return;
+    const read = input.projectChildren?.get(projectId);
+    const unmarked = (read?.children ?? []).filter(
+      (child) =>
+        child.privacy !== 'private' &&
+        !noteQuiet.has(child.id) &&
+        patches.get(child.id)?.privacy !== 'private',
+    );
+    const writable = unmarked.slice(
+      0,
+      Math.max(0, MAX_QUIET_CHILD_WRITES - childWrites.spent),
+    );
+    childWrites.spent += writable.length;
+    const left = unmarked.length - writable.length;
+    if (read?.isMore || left > 0) {
+      quietLines.push(
+        read?.isMore
+          ? `Some of ${project.name}'s things aren't private yet`
+          : `${left} of ${project.name}'s things aren't private yet`,
+      );
+    }
+    const room = Math.max(0, MAX_EFFECTS - effects.length - drafts.size);
+    writable.forEach((child, at) => {
+      const isUndoable =
+        at < room && child.kind !== 'topic' && child.title !== '';
+      if (isUndoable) {
+        record(
+          child.id,
+          'update',
+          { 'sealed.title': child.title, privacy: 'private' },
+          { 'sealed.title': child.title, privacy: 'ordinary' },
+          child.kind === 'note' ? 'notes' : 'tasks',
+        );
+      }
+      if (child.kind === 'task') {
+        patch(child.id, { privacy: 'private', lastEditedAt: now });
+      } else if (child.kind === 'note') {
+        noteQuiet.set(child.id, {
+          ...noteQuiet.get(child.id),
+          privacy: 'private',
+        });
+      } else {
+        topicPrivate.set(child.id, { privacy: 'private' });
+      }
+    });
+  });
+  const createdFacts =
+    quietNew.get(projectStart.created?.command.ref ?? '') ?? null;
 
   const nameOf = new Map<string, string>([
     ...(input.people?.known ?? []).map((who): [string, string] => [
@@ -1082,6 +1775,10 @@ export function planWrites(input: PlanInput): WritePlan {
     ...(input.people?.knownPlaces ?? []).map((place): [string, string] => [
       place.id,
       place.name,
+    ]),
+    ...[...(input.extraWho ?? []).values()].map((who): [string, string] => [
+      who.id,
+      who.name,
     ]),
     ...entities.newWho.map(({ id, mention }): [string, string] => [
       id,
@@ -1108,13 +1805,17 @@ export function planWrites(input: PlanInput): WritePlan {
   const selfWhoId = input.selfWhoId ?? null;
   const projectPlan = planProjectRoles({
     created: projectStart.created,
-    existing: input.existingProjects ?? [],
+    createdFacts,
+    existing: [...workingProjects.values()],
     pool: projectStart.pool,
     commands: projectCommands.flatMap((command) =>
       command.kind === 'setProjectRole' ? [command] : [],
     ),
     milestones: projectCommands.flatMap((command) =>
       command.kind === 'addMilestone' ? [command] : [],
+    ),
+    offers: projectCommands.flatMap((command) =>
+      command.kind === 'offerResearch' ? [command] : [],
     ),
     newId: input.newId,
     taskWho: [...drafts.values()].map((draft) => ({
@@ -1127,6 +1828,7 @@ export function planWrites(input: PlanInput): WritePlan {
     whoIdOf: entities.whoIdOf,
     nameOf,
     executionId: input.executionId,
+    captureId: input.captureId,
     now,
     seal,
   });
@@ -1247,6 +1949,24 @@ export function planWrites(input: PlanInput): WritePlan {
           ],
         };
       }
+      const factMark = readPrivateMark({
+        current: { privateMark: null, isPrivacyCleared: false },
+        isCare: false,
+        isForOtherWho: false,
+        commandMark: null,
+        isSensitiveHealth: fact.isSensitive === true,
+        words: fact.statement,
+      });
+      const factPrivacy = readEffectivePrivacy(
+        factMark,
+        subjectIds.flatMap(
+          (id) =>
+            input.people?.known.find((who) => who.id === id)?.privacyFacts ??
+            input.people?.knownPlaces.find((place) => place.id === id)
+              ?.privacyFacts ??
+            [],
+        ),
+      );
       const existing = existingByKey.get(repeatKey);
       const contradicted =
         existing ||
@@ -1363,6 +2083,7 @@ export function planWrites(input: PlanInput): WritePlan {
           {
             id,
             data: {
+              privacy: factPrivacy,
               status,
               stated,
               kind: fact.kind,
@@ -1389,6 +2110,8 @@ export function planWrites(input: PlanInput): WritePlan {
                 quote,
                 topic,
                 value: fact.value,
+                privateMark: factMark.privateMark,
+                isPrivacyCleared: false,
               }),
             },
           },
@@ -1405,7 +2128,13 @@ export function planWrites(input: PlanInput): WritePlan {
   }));
   const keyDatePlan = planKeyDates({
     commands: input.keyDates ?? [],
-    whoIdOf: entities.whoIdOf,
+    whoIdOf: new Map([
+      ...entities.whoIdOf,
+      ...[...(input.extraWho ?? [])].map(([ref, who]): [string, string] => [
+        ref,
+        who.id,
+      ]),
+    ]),
     selfWhoId,
     nameOf,
     whoCounts: new Map([
@@ -1443,7 +2172,8 @@ export function planWrites(input: PlanInput): WritePlan {
         (effects.length +
           drafts.size +
           entities.newWho.length +
-          entities.newPlaces.length),
+          entities.newPlaces.length +
+          (input.reservedEffects ?? 0)),
     ),
   });
   keyDatePlan.effects.forEach(({ ref, effect }) =>
@@ -1544,6 +2274,7 @@ export function planWrites(input: PlanInput): WritePlan {
         (topicId) => input.topics?.get(topicId)?.name ?? '',
       );
       const line = buildNoteLine(note.title, topicNames);
+      const quiet = note.ref ? (quietNew.get(note.ref) ?? null) : null;
       record(id, 'create', { 'sealed.title': line }, null, 'notes');
       const stepped = filedIds
         .filter((topicId) => !skipFiling.has(`${topicId}:${id}`))
@@ -1576,6 +2307,7 @@ export function planWrites(input: PlanInput): WritePlan {
           {
             id,
             data: {
+              ...(quiet && { privacy: 'private' }),
               topicIds: filedIds,
               source: 'capture',
               isFromGeneralAnswer: false,
@@ -1588,7 +2320,11 @@ export function planWrites(input: PlanInput): WritePlan {
               executionId: input.executionId,
               createdAt: now,
               lastEditedAt: null,
-              sealed: seal({ title: note.title, body: note.body }),
+              sealed: seal({
+                title: note.title,
+                body: note.body,
+                ...(quiet && toQuietSealed(quiet)),
+              }),
             },
           },
         ],
@@ -1615,6 +2351,18 @@ export function planWrites(input: PlanInput): WritePlan {
       names: [],
     },
   );
+  turnNotes.forEach((note, index) => {
+    const quiet = note.ref ? quietNew.get(note.ref) : undefined;
+    if (!quiet || !noteSteps.creates.some((made) => made.id === noteIds[index]))
+      return;
+    quietLines.push(
+      buildQuietLine({
+        name: note.title,
+        isQuiet: true,
+        isGuess: quiet.quietMark === 'guessed',
+      }),
+    );
+  });
   const topicPlan = planTopicCommands({
     ...topicInput,
     madeNoteIds: new Set(noteSteps.creates.map((created) => created.id)),
@@ -1713,6 +2461,7 @@ export function planWrites(input: PlanInput): WritePlan {
     );
   const notKept = [
     ...new Set([
+      ...privacyLines,
       ...factSteps.notKept,
       ...keyDatePlan.notKept,
       ...projectPlan.notKept,
@@ -1723,8 +2472,40 @@ export function planWrites(input: PlanInput): WritePlan {
     ]),
   ];
 
+  const parentFactsOf = (draft: Draft): PrivacyFacts[] => [
+    ...draft.whoIds.flatMap(
+      (id) =>
+        input.people?.known.find((who) => who.id === id)?.privacyFacts ?? [],
+    ),
+    ...draft.placeIds.flatMap(
+      (id) =>
+        input.people?.knownPlaces.find((place) => place.id === id)
+          ?.privacyFacts ?? [],
+    ),
+    ...(draft.projectId
+      ? [...workingProjects.values()]
+          .filter((project) => project.id === draft.projectId)
+          .map((project) => readQuietFacts(project.sealed))
+      : []),
+    ...(createdFacts && draft.projectId === projectStart.created?.id
+      ? [createdFacts]
+      : []),
+  ];
+  const kinIds = new Set(entities.kinNamed.values());
+  const kinLines = [...drafts.values()].flatMap((draft) => {
+    const names = draft.whoIds
+      .filter((id) => kinIds.has(id))
+      .flatMap((id) => {
+        const known = input.people?.known.find((who) => who.id === id);
+        return known ? [shownName(known, input.isUnattended === true)] : [];
+      });
+    return names.length > 0
+      ? [`Added for ${names.join(' and ')}: ${draft.title}`]
+      : [];
+  });
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
+    const facts = draft.quiet ?? personalFactsOf(draft);
     record(
       draft.id,
       'create',
@@ -1738,24 +2519,34 @@ export function planWrites(input: PlanInput): WritePlan {
       null,
     );
     counts.made += 1;
+    const stepIds = draft.questions.map(() => input.newId());
     return {
       id: draft.id,
       data: {
+        privacy: readEffectivePrivacy(facts, parentFactsOf(draft)),
         status: draft.status,
         importance: null,
         isUrgent: draft.isUrgent,
         due: draft.due,
-        durationMinutes: null,
+        durationMinutes: draft.durationMinutes,
+        effort: draft.effort,
         energy: null,
         context: null,
         projectId: draft.projectId,
         milestoneId: null,
         whoIds: draft.whoIds,
         placeIds: draft.placeIds,
+        meets: draft.meetsHow ? { how: draft.meetsHow, setBy: 'person' } : null,
         notUntil: null,
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
-        stepState: {},
+        stepState: Object.fromEntries(
+          stepIds.map((stepId, order) => [stepId, { order, doneAt: null }]),
+        ),
+        meeting: draft.meeting
+          ? { syncedId: draft.meeting.syncedId, startAt: draft.meeting.startAt }
+          : null,
+        readyAnswer: null,
         mediaIds: [],
         createdBy: 'nomos',
         sourceCaptureId: input.captureId,
@@ -1764,7 +2555,19 @@ export function planWrites(input: PlanInput): WritePlan {
         lastEditedAt: null,
         completedAt: isDone ? now : null,
         clearedAt: null,
-        sealed: seal({ title: draft.title, notes: null, steps: {} }),
+        sealed: seal({
+          title: draft.title,
+          notes: null,
+          steps: Object.fromEntries(
+            stepIds.map((stepId, order) => [
+              stepId,
+              { text: draft.questions[order] },
+            ]),
+          ),
+          meetingLabel: draft.meeting?.label ?? null,
+          ...(facts.privateMark && { privateMark: facts.privateMark }),
+          ...(draft.quiet && toQuietSealed(draft.quiet)),
+        }),
       },
     };
   });
@@ -2061,6 +2864,7 @@ export function planWrites(input: PlanInput): WritePlan {
               answeredAt: null,
               skippedAt: null,
               dismissedAt: null,
+              reaskedAt: null,
             },
             sealed: buildWhichIsTrueQuestion({ older: before, newer }),
             spoken: buildSpokenWhichIsTrue(before.statement, newer.statement),
@@ -2077,6 +2881,7 @@ export function planWrites(input: PlanInput): WritePlan {
         answeredAt: null,
         skippedAt: null,
         dismissedAt: null,
+        reaskedAt: null,
       },
       sealed,
       spoken,
@@ -2085,6 +2890,7 @@ export function planWrites(input: PlanInput): WritePlan {
   const pickQuestions = !isFiling
     ? []
     : buildPickQuestions({
+        isUnattended: input.isUnattended === true,
         entities,
         unsureTasks,
         people,
@@ -2122,6 +2928,7 @@ export function planWrites(input: PlanInput): WritePlan {
               answeredAt: null,
               skippedAt: null,
               dismissedAt: null,
+              reaskedAt: null,
             },
             sealed: buildTopicQuestion({ noteId, title, candidates }),
             spoken: buildSpokenWhichTopic(
@@ -2151,6 +2958,7 @@ export function planWrites(input: PlanInput): WritePlan {
   ];
 
   return {
+    kinLines,
     creates,
     updates: [...patches.entries()].map(([id, data]) => ({ id, data })),
     whoCreates: countedCreates,
@@ -2163,7 +2971,21 @@ export function planWrites(input: PlanInput): WritePlan {
     keyDateUpdates: keyDatePlan.updates,
     keyDateDeletes: keyDatePlan.deletes,
     projectCreates: projectPlan.creates,
-    projectUpdates: projectPlan.updates,
+    projectUpdates: [
+      ...projectPlan.updates.map(({ id, data }) => ({
+        id,
+        data: { ...projectQuiet.get(id), ...data },
+      })),
+      ...[...projectQuiet.entries()]
+        .filter(([id]) => !projectPlan.updates.some((entry) => entry.id === id))
+        .map(([id, data]) => ({ id, data })),
+    ],
+    noteUpdates: [...noteQuiet.entries()].map(([id, data]) => ({ id, data })),
+    topicPrivacyUpdates: [...topicPrivate.entries()].map(([id, data]) => ({
+      id,
+      data,
+    })),
+    offerLines: projectPlan.offerLines,
     noteCreates: [
       ...noteSteps.creates,
       ...knowledge.imports.map((made) => ({
@@ -2214,6 +3036,35 @@ export function planWrites(input: PlanInput): WritePlan {
         ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
         : null,
     notKept: [...notKept, ...knowledge.notKept],
+    isPrivate:
+      creates.some((made) => made.data.privacy === 'private') ||
+      factCreates.some((made) => made.data.privacy === 'private') ||
+      input.commands.some(
+        (command) =>
+          command.kind !== 'createTask' &&
+          [existing.get(command.taskId), working.get(command.taskId)].some(
+            (task) => task !== undefined && isTaskPrivate(task),
+          ),
+      ),
+    isQuiet:
+      quietCommands.length > 0 ||
+      input.commands.some(
+        (command) =>
+          command.kind !== 'createTask' &&
+          input.quietKeys?.has(toQuietKey('task', command.taskId)),
+      ) ||
+      [...drafts.values()].some(
+        (draft) =>
+          draft.quiet !== null ||
+          (draft.projectId !== null &&
+            input.quietKeys?.has(toQuietKey('project', draft.projectId))),
+      ) ||
+      projectCommands.some((command) => {
+        if (command.kind === 'createProject') return false;
+        const id = matchProject(command.projectRef, projectStart.pool);
+        return id !== null && input.quietKeys?.has(toQuietKey('project', id));
+      }),
+    quietLines,
     topicLines: topicPlan.topicLines,
     procedureLines: procedurePlan.lines,
     runLines: runPlan.lines,
@@ -2228,6 +3079,9 @@ export function planWrites(input: PlanInput): WritePlan {
     effects: [...effects, ...mediaPlan.effects],
     counts,
     questions,
+    taskIdByRef: Object.fromEntries(
+      [...drafts.entries()].map(([ref, draft]) => [ref, draft.id]),
+    ),
   };
 }
 
@@ -2256,6 +3110,7 @@ function buildPickQuestions(input: {
   newId: () => string;
   now: number;
   room: number;
+  isUnattended: boolean;
 }): PlannedQuestion[] {
   const { entities, unsureTasks, people, now } = input;
   if (!people) return [];
@@ -2292,6 +3147,9 @@ function buildPickQuestions(input: {
         )
         .flatMap((other) => unsureTasks.get(other.ref) ?? []),
     );
+  const whoVia = new Map(
+    [...entities.unsureWho.entries()].map(([ref, entry]) => [ref, entry.via]),
+  );
   const whoEntries = [...entities.unsureWho.entries()].map(
     ([ref, { mention, candidateIds }]) => ({
       ref,
@@ -2308,17 +3166,158 @@ function buildPickQuestions(input: {
       candidateIds,
     }),
   );
-  const whoQuestions = distinct(whoEntries).flatMap((entry) => {
+  const toPlanned = (
+    kind: string,
+    shape: string,
+    sealed: PlannedQuestion['sealed'],
+    spoken: string,
+  ): PlannedQuestion => ({
+    id: input.newId(),
+    state: {
+      kind,
+      shape,
+      askedAt: now,
+      answeredAt: null,
+      skippedAt: null,
+      dismissedAt: null,
+      reaskedAt: null,
+    },
+    sealed,
+    spoken,
+  });
+  type PickEntry =
+    | { planned: PlannedQuestion }
+    | {
+        kind: PickKind;
+        name: string;
+        candidates: PickCandidate[];
+        held: HeldLink;
+        heard?: { prompt: string; newLabel: string };
+      };
+  const whoQuestions = distinct(whoEntries).flatMap((entry): PickEntry[] => {
     const states = entry.candidateIds.flatMap(
       (id) => people.known.find((who) => who.id === id) ?? [],
     );
     const isMixed = new Set(states.map((who) => who.kind)).size > 1;
+    const via = whoVia.get(entry.ref) ?? null;
     const candidates: PickCandidate[] = states.map((who) => ({
       id: who.id,
-      label: who.name,
+      label: via ? shownName(who, input.isUnattended) : who.name,
       detail: detailOfWho(who, isMixed),
     }));
+    if (
+      via?.kind === 'heard' &&
+      input.isUnattended &&
+      candidates.length > 1 &&
+      candidates.every((who) => who.label === PRIVATE_PERSON_LABEL)
+    )
+      return [];
     const { name, kind, relation, species, organizationKind } = entry.item;
+    const taskIds = taskIdsFor(whoEntries, entry);
+    if (via?.kind === 'alias') {
+      const [who] = candidates;
+      if (!who) return [];
+      const alias = toNameCase(name);
+      return [
+        {
+          planned: toPlanned(
+            'isThisWho',
+            'pickOne',
+            buildIsThisWhoQuestion({
+              alias,
+              who: {
+                id: who.id,
+                name: who.label,
+                detail: who.detail ?? null,
+              },
+              mention: { name, kind, relation, species, organizationKind },
+              taskIds,
+            }),
+            buildSpokenIsThisWho(alias, who.label),
+          ),
+        },
+      ];
+    }
+    if (via?.kind === 'heard') {
+      const shown = toNameCase(name);
+      return [
+        {
+          kind: 'whichPerson' as PickKind,
+          name: shown,
+          candidates,
+          held: {
+            kind: 'linkWho',
+            taskIds,
+            mention: { name, kind, relation, species, organizationKind },
+          } as HeldLink,
+          heard: {
+            prompt: buildHeardPrompt(
+              shown,
+              candidates.map((candidate) => candidate.label),
+            ),
+            newLabel: HEARD_NEW_LABEL,
+          },
+        },
+      ];
+    }
+    if (via?.kind === 'kin') {
+      const words = toKinWord(via.ref.kind);
+      const mention = {
+        name: entry.item.name,
+        kind: 'person',
+        relation: `my ${entry.item.name}`,
+        species: null,
+        organizationKind: null,
+        kin: via.ref,
+      };
+      const labelled = candidates.map((candidate) => ({
+        ...candidate,
+        detail:
+          states.find((who) => who.id === candidate.id)?.kin?.order ?? null,
+      }));
+      const asked = buildWhichKinQuestion({
+        words,
+        candidates: labelled.map((candidate) => ({
+          ...candidate,
+          detail: candidate.detail && toDisplayCase(candidate.detail),
+        })),
+        mention,
+        taskIds,
+      });
+      return [
+        {
+          planned: toPlanned(
+            'whichKin',
+            asked.shape,
+            asked,
+            buildSpokenWhichKin(
+              words,
+              candidates.map((candidate) => candidate.label),
+              candidates.length === 0,
+            ),
+          ),
+        },
+      ];
+    }
+    if (via?.kind === 'kinOrder') {
+      const sealed = buildKinOrderQuestion({
+        words: toKinWord(via.ref.kind),
+        wanted: via.ref.order ?? 'younger',
+        shape: via.shape,
+        candidates,
+        taskIds,
+      });
+      return [
+        {
+          planned: toPlanned(
+            'kinOrder',
+            sealed.shape,
+            sealed,
+            buildSpokenKinOrder(sealed),
+          ),
+        },
+      ];
+    }
     return [
       {
         kind: 'whichPerson' as PickKind,
@@ -2326,52 +3325,57 @@ function buildPickQuestions(input: {
         candidates,
         held: {
           kind: 'linkWho',
-          taskIds: taskIdsFor(whoEntries, entry),
+          taskIds,
           mention: { name, kind, relation, species, organizationKind },
         } as HeldLink,
       },
     ];
   });
-  const placeQuestions = distinct(placeEntries).flatMap((entry) => {
-    const candidates: PickCandidate[] = entry.candidateIds.flatMap((id) => {
-      const place = people.knownPlaces.find((known) => known.id === id);
-      return place
-        ? [{ id, label: place.name, detail: place.address ?? null }]
-        : [];
-    });
-    return [
-      {
-        kind: 'whichPlace' as PickKind,
-        name: entry.item.name,
-        candidates,
-        held: {
-          kind: 'linkPlace',
-          taskIds: taskIdsFor(placeEntries, entry),
-          place: { name: entry.item.name },
-        } as HeldLink,
-      },
-    ];
-  });
-  return [...whoQuestions, ...placeQuestions]
-    .filter((question) => question.candidates.length > 0)
-    .slice(0, input.room)
-    .map((question) => ({
-      id: input.newId(),
-      state: {
-        kind: question.kind,
-        shape: 'pickOne',
-        askedAt: now,
-        answeredAt: null,
-        skippedAt: null,
-        dismissedAt: null,
-      },
-      sealed: buildPickQuestion(question),
-      spoken: buildSpokenPick(
-        question.name,
-        question.candidates.map((candidate) => candidate.label),
-        question.kind === 'whichPlace' ? 'a new place' : 'someone new',
-      ),
-    }));
+  const placeQuestions = distinct(placeEntries).flatMap(
+    (entry): PickEntry[] => {
+      const candidates: PickCandidate[] = entry.candidateIds.flatMap((id) => {
+        const place = people.knownPlaces.find((known) => known.id === id);
+        return place
+          ? [{ id, label: place.name, detail: place.address ?? null }]
+          : [];
+      });
+      return [
+        {
+          kind: 'whichPlace' as PickKind,
+          name: entry.item.name,
+          candidates,
+          held: {
+            kind: 'linkPlace',
+            taskIds: taskIdsFor(placeEntries, entry),
+            place: { name: entry.item.name },
+          } as HeldLink,
+        },
+      ];
+    },
+  );
+  const picks = [...whoQuestions, ...placeQuestions].flatMap((question) =>
+    'planned' in question
+      ? [question.planned]
+      : question.candidates.length > 0
+        ? [
+            toPlanned(
+              question.kind,
+              'pickOne',
+              buildPickQuestion(question),
+              buildSpokenPick(
+                question.name,
+                question.candidates.map((candidate) => candidate.label),
+                question.heard
+                  ? 'someone else'
+                  : question.kind === 'whichPlace'
+                    ? 'a new place'
+                    : 'someone new',
+              ),
+            ),
+          ]
+        : [],
+  );
+  return picks.slice(0, input.room);
 }
 
 /** How many model-written questions the person still has open across their waiting turns, a skipped one included. */
@@ -2405,6 +3409,7 @@ export function planAsks(input: {
           answeredAt: null,
           skippedAt: null,
           dismissedAt: null,
+          reaskedAt: null,
         },
         sealed,
         spoken: buildSpokenQuestion(sealed),
@@ -2418,6 +3423,7 @@ export function buildExecution(
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
     /** The line saying the person is home, added to the summary and the spoken reply. */
     homeLine?: string | null;
+    extraLines?: string[];
     /** The model's own line about the turn, already checked; the summary stays code's. */
     said?: string | null;
     questionRef?: { captureId: string; questionId: string } | null;
@@ -2425,8 +3431,25 @@ export function buildExecution(
     messageCount?: number;
     inputMode?: string;
     timeZone?: string;
+    offers?: Record<string, unknown>;
+    /** The day's aims filed this turn: their line replaces the made and updated counts they would be worded as. */
+    aims?: {
+      line: string | null;
+      madeCount: number;
+      linkedCount: number;
+    } | null;
+    /** The turn touched something kept quiet: only the screen line is spoken. */
+    isQuiet?: boolean;
   },
 ): Record<string, unknown> {
+  const aims = input.aims?.line ? input.aims : null;
+  const counts = aims
+    ? {
+        ...plan.counts,
+        made: Math.max(0, plan.counts.made - aims.madeCount),
+        updated: Math.max(0, plan.counts.updated - aims.linkedCount),
+      }
+    : plan.counts;
   const created = plan.effectRefs.flatMap((ref, index) => {
     const { written } = plan.effects[index];
     return ref.op === 'create' && ref.collection === 'tasks'
@@ -2438,11 +3461,12 @@ export function buildExecution(
         ]
       : [];
   });
-  const { homeLine = null, said = null } = input;
+  const { homeLine = null, said = null, extraLines = [] } = input;
   const ack = buildSpokenAck({
     inputMode: input.inputMode,
-    counts: plan.counts,
+    counts,
     messageCount: input.messageCount ?? 1,
+    aimsLine: aims?.line ?? null,
     created,
     timeZone: input.timeZone ?? 'UTC',
     now: input.now,
@@ -2461,12 +3485,36 @@ export function buildExecution(
   const spokenKept = isVoice && plan.lines.length > 0 ? NOTE_KEPT_SPOKEN : null;
   // Lines only code knows to say (home, a project, a note's name, a duplicate) keep code's summary.
   const own =
-    said && !homeLine && !projectLine && !plan.spokenNote && !plan.lines.length
+    said &&
+    !homeLine &&
+    !projectLine &&
+    !plan.spokenNote &&
+    !plan.lines.length &&
+    extraLines.length === 0
       ? said
       : null;
+  const line =
+    (own && isVoice
+      ? own
+      : [
+          ack,
+          spokenProject,
+          spokenNote,
+          spokenKept,
+          spokenHome,
+          isVoice ? extraLines.map((line) => `${line}.`).join(' ') : null,
+        ]
+          .filter(Boolean)
+          .join(' ')) || null;
+  const held = holdQuietSpoken(
+    withQuestion(line, plan.questions[0]?.spoken ?? null) ??
+      (input.isQuiet && isVoice ? QUIET_SPOKEN_LINE : null),
+    input.isQuiet === true,
+  );
   return {
     captureId: input.captureId,
     actor: 'nomos',
+    privacy: plan.isPrivate ? 'private' : 'ordinary',
     category:
       plan.factCreates.length +
         plan.factConfirms.length +
@@ -2492,38 +3540,50 @@ export function buildExecution(
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
-      summary: [
-        summarize(plan.counts, input.messageCount),
-        describeFacts(plan.factCreates.length + plan.factConfirms.length),
-        describeKeyDates(
-          plan.effectRefs.flatMap((ref, position) =>
-            ref.collection === 'keyDates'
-              ? [String(plan.effects[position].written['sealed.title'] ?? '')]
-              : [],
+      abilityOffer: null,
+      awayZoneOffer: null,
+      ...input.offers,
+      summary: withAims(
+        [
+          summarize(counts, input.messageCount),
+          ...plan.kinLines,
+          describeFacts(plan.factCreates.length + plan.factConfirms.length),
+          describeKeyDates(
+            plan.effectRefs.flatMap((ref, position) =>
+              ref.collection === 'keyDates'
+                ? [String(plan.effects[position].written['sealed.title'] ?? '')]
+                : [],
+            ),
           ),
-        ),
-        describeProjects(
-          plan.projectsMade,
-          plan.rolesSet,
-          plan.milestonesAdded,
-        ),
-        describeNotes(plan.notesMade),
-        describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
-        ...plan.fileSummaries,
-        describeTopicChanges(plan.topicLines.length),
-        describeProcedureChanges(
-          plan.procedureCreates.length,
-          plan.procedureVersions.length,
-        ),
-        describeRunChanges(
-          plan.runCreates.length,
-          plan.runTicks.reduce((total, tick) => total + tick.stepIds.length, 0),
-        ),
-        ...plan.notKept,
-        homeLine,
-      ]
-        .filter(Boolean)
-        .join('. '),
+          describeProjects(
+            plan.projectsMade,
+            plan.rolesSet,
+            plan.milestonesAdded,
+          ),
+          ...plan.quietLines,
+          describeNotes(plan.notesMade),
+          describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
+          ...plan.fileSummaries,
+          describeTopicChanges(plan.topicLines.length),
+          describeProcedureChanges(
+            plan.procedureCreates.length,
+            plan.procedureVersions.length,
+          ),
+          describeRunChanges(
+            plan.runCreates.length,
+            plan.runTicks.reduce(
+              (total, tick) => total + tick.stepIds.length,
+              0,
+            ),
+          ),
+          ...plan.notKept,
+          ...extraLines,
+          homeLine,
+        ]
+          .filter(Boolean)
+          .join('. '),
+        aims?.line ?? null,
+      ),
       said: own,
       commands: input.commands,
       effects: plan.effects,
@@ -2531,23 +3591,22 @@ export function buildExecution(
       undoReport: null,
       goneIds: null,
       undoReason: null,
-      spoken: withQuestion(
-        (own && isVoice
-          ? own
-          : [ack, spokenProject, spokenNote, spokenKept, spokenHome]
-              .filter(Boolean)
-              .join(' ')) || null,
-        plan.questions[0]?.spoken ?? null,
-      ),
+      spoken: held.spoken,
+      heldSpoken: held.heldSpoken,
     }),
   };
 }
+
+/** The aims line keeps its own full stop, so it ends the summary rather than joining the others. */
+const withAims = (summary: string, line: string | null) =>
+  [summary, line].filter(Boolean).join(summary ? '. ' : '');
 
 const withQuestion = (ack: string | null, question: string | null) =>
   ack && question ? `${ack} ${question}` : ack;
 
 /** An answer writes only the capture's sealed answer, so it has no effects and nothing to undo, unless it noted one fact: then that fact is its one effect and Undo deletes it. A refused fact is recorded as not done. */
 export function buildAnswerExecution(input: {
+  offers?: Record<string, unknown>;
   captureId: string;
   answer: CaptureAnswer;
   spoken: string | null;
@@ -2555,7 +3614,9 @@ export function buildAnswerExecution(input: {
   seal: (fields: Record<string, unknown>) => SealedPayload;
   fact?: { effectRef: EffectRef; effect: Effect; note: string } | null;
   notDone?: string[];
+  isQuiet?: boolean;
 }): Record<string, unknown> {
+  const held = holdQuietSpoken(input.spoken, input.isQuiet === true);
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -2575,6 +3636,9 @@ export function buildAnswerExecution(input: {
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
+      abilityOffer: null,
+      awayZoneOffer: null,
+      ...input.offers,
       summary: input.fact
         ? `${summarizeAnswer(input.answer)} ${input.fact.note}`
         : summarizeAnswer(input.answer),
@@ -2586,7 +3650,8 @@ export function buildAnswerExecution(input: {
       undoReason: null,
       said: null,
       lines: null,
-      spoken: input.spoken,
+      spoken: held.spoken,
+      heldSpoken: held.heldSpoken,
     }),
   };
 }
@@ -2598,6 +3663,8 @@ export interface QuestionStateEntry {
   answeredAt: number | null;
   skippedAt: number | null;
   dismissedAt: number | null;
+  /** The person asked for it again; null until then, and absent on one from before. */
+  reaskedAt?: number | null;
 }
 
 interface SettleInput {
@@ -2626,17 +3693,38 @@ interface SettleInput {
   hadAsks?: boolean;
   /** An answer turn that files nothing is a turn well taken, not an unread one. */
   isAnswerTurn?: boolean;
+  /** The person asked to hear the line kept off the speaker: a turn well taken whose reply the device works out. */
+  asksHeldLine?: boolean;
   /** A line to say back when the turn made no answer of its own: the first open question, or why nothing more was asked. */
   line?: string | null;
+  /** The turn touched something kept quiet: only the screen line is spoken, the real one held. */
+  isQuiet?: boolean;
 }
 
 const isPickKind = (kind: string) =>
   kind === 'whichPerson' ||
   kind === 'whichPlace' ||
+  kind === 'isThisWho' ||
+  kind === 'whichKin' ||
+  kind === 'kinOrder' ||
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||
+  kind === 'whichHabit' ||
+  kind === 'whichComesFirst' ||
+  kind === 'clashChoice' ||
+  kind === 'isMedicine' ||
+  kind === 'isConnection' ||
+  kind === 'whichMedicine' ||
+  kind === 'howWasIt' ||
   kind === 'undoOffer' ||
+  kind === 'researchDepth' ||
+  kind === 'researchRerun' ||
+  kind === 'learnKind' ||
+  kind === 'learnGoal' ||
+  kind === 'learnStill' ||
+  kind === 'learnTogether' ||
+  kind === 'questionsTask' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>
@@ -2656,10 +3744,24 @@ const asked = (kind: CodeQuestionKind, id: string, now: number) => ({
       answeredAt: null,
       skippedAt: null,
       dismissedAt: null,
+      reaskedAt: null,
     },
   },
   sealed: { [id]: buildCodeQuestion(kind) },
 });
+
+const toCaptureSpoken = (
+  spoken: { text: string; priority: 'reply'; builtBy: 'code' } | null,
+  isQuiet: boolean | undefined,
+) => {
+  if (!spoken) return null;
+  const held = holdQuietSpoken(spoken.text, isQuiet === true);
+  return {
+    ...spoken,
+    text: held.spoken ?? spoken.text,
+    heldText: held.heldSpoken,
+  };
+};
 
 /** Where a capture lands once a reading is filed: sorted, still more to sort, or nothing could be made of it. The opened payload is spread so its text and reading are never dropped. */
 export function settleCapture(input: SettleInput) {
@@ -2695,7 +3797,8 @@ export function settleCapture(input: SettleInput) {
     !input.hasFacts &&
     !input.hasMedia &&
     !input.hadAsks &&
-    !input.isAnswerTurn;
+    !input.isAnswerTurn &&
+    !input.asksHeldLine;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore
@@ -2732,15 +3835,18 @@ export function settleCapture(input: SettleInput) {
       sortedThrough: input.hasMore
         ? previous + input.filed
         : (opened.sortedThrough ?? null),
+      ...(input.asksHeldLine ? { asksHeldLine: true } : {}),
       ...(input.answer
-        ? { answer: input.answer.sealed, spoken: input.answer.spoken }
+        ? {
+            answer: input.answer.sealed,
+            spoken: toCaptureSpoken(input.answer.spoken, input.isQuiet),
+          }
         : input.line
           ? {
-              spoken: {
-                text: input.line,
-                priority: 'reply',
-                builtBy: 'code',
-              },
+              spoken: toCaptureSpoken(
+                { text: input.line, priority: 'reply', builtBy: 'code' },
+                input.isQuiet,
+              ),
             }
           : {}),
     },

@@ -274,6 +274,8 @@ export function buildDropBoxCapture(
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: null,
+    morningDayKey: null,
     createdAt: payload.createdAt,
     sortedAt: null,
     screen: null,

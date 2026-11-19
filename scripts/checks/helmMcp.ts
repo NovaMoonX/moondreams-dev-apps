@@ -17,6 +17,7 @@ import {
   describeSave,
   planSaveToHelm,
 } from '../../functions/src/apps/helm/mcp/saveToHelm.ts';
+import { sealForHelm } from '../../functions/src/apps/helm/helmKey.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
   planUndo,
@@ -57,6 +58,7 @@ const tools = buildHelmTools({
   siteGrants: [
     { connectorId: 'app:pinch', categories: [{ id: 'x', label: 'X' }] },
   ],
+  questionReask: { turnAt: 0 },
   topicRead: {
     topics: createAliasBook('tp'),
     sections: createAliasBook('s'),
@@ -76,6 +78,7 @@ const NOMOS_ONLY = [
   /document/,
   /app_records/,
   /^search_synced$/,
+  /^bring_back_question$/,
   /^file_results$/,
   /^hand_over$/,
 ];
@@ -217,7 +220,24 @@ const sortSource = readFileSync(
   'utf8',
 );
 assert.match(sortSource, /isOutside: lead\?\.medium === 'mcp'/);
-assert.match(sortSource, /mode !== 'rest' && !read\.isOutside && isQuestion/);
+assert.match(
+  sortSource,
+  /mode !== 'rest' &&\s*!read\.isOutside &&\s*!isScheduledCapture\(capture\) &&\s*isQuestion/,
+);
+
+// A trip's city and dates reach an outside turn's whereabouts only while its Read your apps switch is on.
+assert.match(
+  sortSource,
+  /const placeTrips = read\.isOutside\s*\?\s*filterSourcesForOutside\(read\.outsideReadScopes, await readPlaceTrips\(\)\)/,
+);
+const tripCopy = { connectorId: 'app:waypoint', kind: 'trip' };
+assert.deepEqual(filterSourcesForOutside([], [tripCopy]), []);
+assert.deepEqual(filterSourcesForOutside(['mail', 'drive'], [tripCopy]), []);
+assert.deepEqual(filterSourcesForOutside(['apps'], [tripCopy]), [tripCopy]);
+
+// An outside assistant is never there to see: its tools and its filed turns always mask a private record.
+assert.match(external, /mask: \{\s*isOn: true,/);
+assert.match(sortSource, /isOn:\s*capture\.medium === 'mcp' \|\|/);
 
 // An outside assistant hears the person's own name for their assistant, read through the shared reader, so "tell {Name}" routes here.
 assert.match(
@@ -532,11 +552,13 @@ const asExecution = (made: ReturnType<typeof saved>): OpenExecution => ({
   effectRefs: made.effectRefs as OpenExecution['effectRefs'],
   linkedWhoIds: [],
   linkedPlaceIds: [],
+  privacy: null,
   undoesExecutionId: null,
   undoneByExecutionId: null,
   undoneDocIds: [],
   partUndoIds: [],
   undoReason: null,
+  heldSpoken: null,
   questionRef: null,
   errorCode: null,
   createdAt: 1000,
@@ -549,6 +571,8 @@ const asExecution = (made: ReturnType<typeof saved>): OpenExecution => ({
   spoken: null,
   goneIds: null,
   lines: [],
+  abilityOffer: null,
+  awayZoneOffer: null,
   isUnreadable: false,
 });
 const undoOf = (made: ReturnType<typeof saved>, targets: UndoTarget[]) =>
@@ -567,6 +591,11 @@ const savedNote = (made: ReturnType<typeof saved>): UndoTarget => ({
     body: 'x',
     via: 'Gemini',
     links: [],
+    privateMark: null,
+    isPrivacyCleared: false,
+    quietMark: null,
+    quietUntil: null,
+    isQuietCleared: false,
   },
 });
 const undoFiled = undoOf(onTopic, [
@@ -727,5 +756,146 @@ assert.match(held, /"Read Google Drive"/);
 assert.doesNotMatch(held, /"Read Gmail"/);
 assert.match(held, /A-List/);
 assert.equal(toHeldBackPrompt('Sol', ['mail', 'drive', 'apps'], []), '');
+
+// bring_back_question: scores the person's words, leaves out what is closed, and never returns a private prompt unless the turn is known to be unmasked.
+const reaskKey = { keyId: 'k', keyVersion: 1, key: Buffer.alloc(32, 9) };
+type FakeCapture = {
+  id: string;
+  privacy: string;
+  createdAt: number;
+  questionState: Record<string, Record<string, unknown>>;
+  prompts: Record<string, string>;
+};
+const reaskCaptures: FakeCapture[] = [
+  {
+    id: 'recent',
+    privacy: 'ordinary',
+    createdAt: 300,
+    questionState: { q1: { kind: 'which', answeredAt: null } },
+    prompts: { q1: 'Which dentist for the cleaning?' },
+  },
+  {
+    id: 'moving',
+    privacy: 'ordinary',
+    createdAt: 200,
+    questionState: { q1: { kind: 'which', answeredAt: null } },
+    prompts: { q1: 'When are you moving the couch?' },
+  },
+  {
+    id: 'closed',
+    privacy: 'ordinary',
+    createdAt: 100,
+    questionState: {
+      q1: { kind: 'which', answeredAt: 150, dismissedAt: null },
+      q2: { kind: 'which', answeredAt: 150, dismissedAt: 150 },
+      q3: { kind: 'couldNotRead', answeredAt: null },
+    },
+    prompts: {
+      q1: 'Moving answered?',
+      q2: 'Moving dismissed?',
+      q3: 'Moving unreadable?',
+    },
+  },
+  {
+    id: 'secret',
+    privacy: 'private',
+    createdAt: 400,
+    questionState: { q1: { kind: 'which', answeredAt: null } },
+    prompts: { q1: 'Which gift for the surprise?' },
+  },
+];
+const runReask = async (
+  about: string,
+  mask: { isOn: boolean } | undefined,
+  options: { isFailing?: boolean } = {},
+) => {
+  const updates: Record<string, unknown>[] = [];
+  const reaskTools = buildHelmTools({
+    uid: 'u1',
+    key: reaskKey,
+    aliases: createAliasBook('t'),
+    firestore: {
+      collection: () => ({
+        orderBy: () => ({
+          limit: () => ({
+            get: async () => ({
+              docs: reaskCaptures.map((capture) => ({
+                data: () => ({
+                  privacy: capture.privacy,
+                  createdAt: capture.createdAt,
+                  questionState: capture.questionState,
+                  sealed: sealForHelm(reaskKey, {
+                    text: '',
+                    questions: Object.fromEntries(
+                      Object.entries(capture.prompts).map(([id, prompt]) => [
+                        id,
+                        { prompt },
+                      ]),
+                    ),
+                  }),
+                }),
+                ref: {
+                  update: async (fields: Record<string, unknown>) => {
+                    if (options.isFailing) throw new Error('offline');
+                    updates.push({ id: capture.id, ...fields });
+                  },
+                },
+              })),
+            }),
+          }),
+        }),
+      }),
+    } as never,
+    liveGrants: [],
+    siteGrants: [],
+    questionReask: { turnAt: 1000 },
+    ...(mask && { mask: { ...mask, names: [], timeZone: 'UTC' } }),
+  });
+  const tool = reaskTools.find(
+    (entry) => entry.name === 'bring_back_question',
+  )!;
+  const result = (await tool.run({ about } as never)) as Record<
+    string,
+    unknown
+  >;
+  return { result, updates };
+};
+const scored = await runReask('moving', { isOn: true });
+assert.equal(scored.result.asked, 'When are you moving the couch?');
+assert.deepEqual(
+  scored.updates.map((update) => update.id),
+  ['moving'],
+);
+assert.ok(
+  Number(scored.updates[0]['questionState.q1.reaskedAt']) > 1000,
+  'brought back after the person turn',
+);
+assert.ok(
+  !('questionState.q1.skippedAt' in scored.updates[0]),
+  'skippedAt is left as it was',
+);
+const closedOnly = await runReask('moving answered dismissed unreadable', {
+  isOn: true,
+});
+assert.equal(closedOnly.result.asked, 'When are you moving the couch?');
+assert.equal((await runReask('answered', { isOn: true })).result.found, false);
+for (const mask of [{ isOn: true }, { isOn: false }, undefined]) {
+  const { result } = await runReask('gift surprise', mask);
+  assert.equal(
+    result.found === true,
+    mask?.isOn === false,
+    `a private question is returned only when the turn is known to be unmasked (${JSON.stringify(mask)})`,
+  );
+}
+const newest = await runReask('', { isOn: true });
+assert.equal(newest.result.asked, 'Which dentist for the cleaning?');
+assert.equal(
+  (await runReask('moving', { isOn: true }, { isFailing: true })).result.error,
+  'The question could not be brought back just now.',
+);
+assert.match(
+  tools.find((tool) => tool.name === 'bring_back_question')!.description,
+  /never an instruction/,
+);
 
 console.log('check:helm-mcp passed');

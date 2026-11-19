@@ -5,6 +5,8 @@ import type { SealedPayload } from '../../appKeys/seal.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
 import { MAX_HINT_NOTES } from './nomos/commands.js';
 import type { ContextNote, ContextTopic } from './nomos/buildContext.js';
+import type { PrivacyFacts } from './privacy.js';
+import { readQuietFacts } from './nomos/quietTurn.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_TOPICS_READ = 100;
@@ -23,6 +25,7 @@ export interface OpenTopicRecord extends ContextTopic {
   parentId: string | null;
   docState: 'empty' | 'current' | 'behind' | 'writing' | 'failed';
   pendingNoteIds: string[];
+  isPrivate: boolean;
 }
 
 /** Opens a topic document; null when its words will not open. */
@@ -43,6 +46,7 @@ export const openTopicRecord = (
           : null,
       parentId: typeof data.parentId === 'string' ? data.parentId : null,
       docState: toDocState(data.docState),
+      isPrivate: data.privacy === 'private',
       pendingNoteIds: Array.isArray(data.pendingNoteIds)
         ? data.pendingNoteIds.filter(
             (entry): entry is string => typeof entry === 'string',
@@ -58,7 +62,7 @@ const toPath = (
   id: string,
   byId: Map<string, Omit<OpenTopicRecord, 'path'>>,
   seen: ReadonlySet<string> = new Set(),
-): string[] => {
+): Omit<OpenTopicRecord, 'path'>[] => {
   const topic = byId.get(id);
   return !topic || seen.has(id)
     ? []
@@ -66,7 +70,7 @@ const toPath = (
         ...(topic.parentId
           ? toPath(topic.parentId, byId, new Set([...seen, id]))
           : []),
-        topic.name,
+        topic,
       ];
 };
 
@@ -85,10 +89,16 @@ export async function readContextTopics(
       return topic ? [topic] : [];
     });
     const byId = new Map(opened.map((topic) => [topic.id, topic]));
-    return opened.map((topic) => ({
-      ...topic,
-      path: toPath(topic.id, byId).join(' › '),
-    }));
+    return opened.map((topic) => {
+      const ancestry = toPath(topic.id, byId);
+      return {
+        ...topic,
+        path: ancestry.map((entry) => entry.name).join(' › '),
+        maskedPath: ancestry
+          .map((entry) => (entry.isPrivate ? 'a private topic' : entry.name))
+          .join(' › '),
+      };
+    });
   } catch (error) {
     logger.warn('helm.sort.topicsUnreadable', {
       cause: error instanceof Error ? error.name : 'error',
@@ -101,6 +111,8 @@ export interface HintedNote extends ContextNote {
   body: string;
   isUnchecked: boolean;
   topicIds: string[];
+  projectIds: string[];
+  quietFacts: PrivacyFacts;
 }
 
 /** The notes the device ranked for what was typed, opened under the caller's own uid: ids that are not ids, repeats, missing and unreadable notes are dropped and at most 8 are kept. A failed read is logged and leaves the turn without hints. */
@@ -130,8 +142,15 @@ export async function readHintedNotes(
                 id: snapshot.id,
                 title: words.title,
                 body: words.body,
+                isPrivate: data.privacy === 'private',
                 isUnchecked:
                   data.isFromGeneralAnswer === true && data.checkedAt == null,
+                quietFacts: readQuietFacts(words),
+                projectIds: Array.isArray(data.projectIds)
+                  ? data.projectIds.filter(
+                      (id): id is string => typeof id === 'string',
+                    )
+                  : [],
                 topicIds: Array.isArray(data.topicIds)
                   ? data.topicIds.filter(
                       (id): id is string => typeof id === 'string',

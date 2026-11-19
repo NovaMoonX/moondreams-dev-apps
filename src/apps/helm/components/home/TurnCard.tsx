@@ -10,10 +10,17 @@ import { useNow } from '@/hooks/useNow';
 import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
-import AssistantLine from '@apps/helm/components/activity/AssistantLine';
+import AssistantLine, {
+  SayAloudButton,
+} from '@apps/helm/components/activity/AssistantLine';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import AnsweredQuestion from '@apps/helm/components/home/AnsweredQuestion';
-import MediaLine, { TurnPhotos } from '@apps/helm/components/home/MediaLine';
+import MediaLine, {
+  OpenTask,
+  TurnPhotos,
+} from '@apps/helm/components/home/MediaLine';
+import NotedRow from '@apps/helm/components/home/NotedRow';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
@@ -23,10 +30,18 @@ import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
 import {
   loadExecutionsById,
   markCaptureSeen,
+  reaskQuestion,
   retryCapture,
 } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import { selectStartGuardrail } from '@apps/helm/store/selectors/patternSelectors';
 import type { OpenCapture } from '@apps/helm/types';
+import {
+  isPastTurn,
+  readQuestionPlace,
+  type QuestionPlace,
+} from '@apps/helm/utils/linearThread';
+import { findHeldLine, readReplayLine } from '@apps/helm/utils/quietSpeech';
 import {
   getAnsweredQuestions,
   getDismissedQuestions,
@@ -48,6 +63,8 @@ interface TurnCardProps {
   isOnHome: boolean;
   /** Under this turn's reply, the one-time line that an AI service reads what is said. */
   showsNotice: boolean;
+  /** When the person last sent a turn of their own, where past offers settle; null on a surface where nothing is past (an inbox row, Activity). */
+  newestTurnAt?: number | null;
 }
 
 /** What the person sent, as their bubble with its time, and under it what became of it. */
@@ -81,6 +98,7 @@ function TurnCard({
   showsReading,
   isOnHome,
   showsNotice,
+  newestTurnAt = null,
 }: TurnCardProps) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const planDay = useAppSelector((state) =>
@@ -97,6 +115,7 @@ function TurnCard({
   );
   const { addToast } = useToast();
   const [isRetrying, setIsRetrying] = useState(false);
+  const [laterTaskId, setLaterTaskId] = useState<string | null>(null);
   const isOffline = useNetworkStatus() === 'offline';
   const isReading =
     isCallOut ||
@@ -111,6 +130,16 @@ function TurnCard({
     const execution = executionsById.get(id);
     return execution ? [execution] : [];
   });
+  const madeIds = executions
+    .flatMap((execution) =>
+      execution.effectRefs.flatMap((ref) =>
+        ref.op === 'create' ? [ref.docId] : [],
+      ),
+    )
+    .join(',');
+  const startGuardrail = useAppSelector((state) =>
+    madeIds === '' ? null : selectStartGuardrail(state, madeIds),
+  );
   // A turn that asked to sort the rest has already made something, and shows it while it waits.
   const hasResults = !capture.isUnreadable && capture.executionIds.length > 0;
   const missingKey = hasResults
@@ -122,10 +151,28 @@ function TurnCard({
   }, [uid, missingKey]);
   const openQuestions = capture.isUnreadable ? [] : getOpenQuestions(capture);
   const unskipped = openQuestions.filter((entry) => entry.skippedAt === null);
+  const placeOf = (entry: (typeof openQuestions)[number]): QuestionPlace =>
+    newestTurnAt === null
+      ? 'live'
+      : readQuestionPlace({
+          turnAt: capture.createdAt,
+          reaskedAt: capture.questionState[entry.id]?.reaskedAt ?? null,
+          newestTurnAt,
+        });
+  const isPast = isPastTurn(capture.createdAt, newestTurnAt);
   const questions = [
     ...unskipped,
     ...openQuestions.filter((entry) => entry.skippedAt !== null),
-  ].slice(0, QUESTIONS_PER_TURN);
+  ]
+    .filter((entry) => placeOf(entry) !== 'below')
+    .slice(0, QUESTIONS_PER_TURN);
+  const askAgain = (questionId: string) => {
+    if (!user) return;
+    reaskQuestion(user.uid, capture.id, questionId).catch((error: unknown) => {
+      console.error('Helm question was not asked again', error);
+      addToast({ title: HELM_COPY.heldActionFailed, type: 'error' });
+    });
+  };
   const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
   const dismissed = capture.isUnreadable ? [] : getDismissedQuestions(capture);
   const planLine = getPlanLine();
@@ -145,10 +192,11 @@ function TurnCard({
     !capture.planDayKey &&
     heldLine === null &&
     openQuestions.length === 0;
+  const quietHeld = findHeldLine([capture, ...joined], executions);
   const quietLine = isQuietAnswer
-    ? (capture.line ?? HELM_COPY.answerNoted)
+    ? (capture.heldLine ?? capture.line ?? HELM_COPY.answerNoted)
     : hasNothingShown
-      ? capture.line
+      ? (capture.heldLine ?? capture.line)
       : null;
   const heldKind = toHeldKind(capture);
   const canRetry =
@@ -259,9 +307,26 @@ function TurnCard({
               isSeen={capture.seenAt !== null}
               showsNotice={showsNotice}
               canReplay={showsOutcome && isOnHome}
+              isQuietTurn={quietHeld !== null}
+              isSettled={isPast}
             />
           ))}
         </div>
+      )}
+      {hasCard && startGuardrail && (
+        <div className='flex w-full flex-col items-start gap-2'>
+          <GuardrailLine
+            pattern={startGuardrail}
+            onFindLater={() => setLaterTaskId(startGuardrail.subject.id)}
+          />
+        </div>
+      )}
+      {laterTaskId && (
+        <OpenTask
+          taskId={laterTaskId}
+          isOpen
+          onClose={() => setLaterTaskId(null)}
+        />
       )}
       {!capture.isUnreadable && capture.attachmentIds.length > 0 && (
         <div className='flex w-full flex-col items-start gap-2'>
@@ -273,16 +338,37 @@ function TurnCard({
       {planLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
           <AssistantLine
-            speakText={showsOutcome && isOnHome ? planLine : undefined}
-          >{planLine}</AssistantLine>
+            speakText={
+              showsOutcome && isOnHome
+                ? readReplayLine(planLine, quietHeld)
+                : undefined
+            }
+          >
+            {planLine}
+          </AssistantLine>
         </div>
       )}
       {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
           <AssistantLine
-            speakText={showsOutcome && isOnHome ? quietLine : undefined}
-          >{quietLine}</AssistantLine>
+            speakText={
+              showsOutcome && isOnHome
+                ? readReplayLine(quietLine, quietHeld)
+                : undefined
+            }
+          >
+            {quietLine}
+          </AssistantLine>
         </div>
+      )}
+      {capture.disposition === 'noted' &&
+        (capture.noticedCount ?? 0) > 0 &&
+        !capture.isUnreadable &&
+        isSorted && (
+          <NotedRow captureId={capture.id} createdAt={capture.createdAt} />
+        )}
+      {quietHeld !== null && showsOutcome && isOnHome && (
+        <SayAloudButton line={quietHeld} />
       )}
       {capture.answer && !capture.isUnreadable && (
         <AnswerCard answer={capture.answer} isInset capture={capture} />
@@ -321,6 +407,8 @@ function TurnCard({
               captureId={capture.id}
               item={entry}
               isInSheet={false}
+              isSettled={placeOf(entry) === 'settled'}
+              onAskAgain={() => askAgain(entry.id)}
             />
           ))}
         </div>

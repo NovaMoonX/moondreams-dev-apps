@@ -1,5 +1,9 @@
-import { describeThrown } from '@/lib/speech/speechDiagnostics';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import type {
+  SpeechDelivery,
   SpeechHeldReason,
   SpeechPriority,
 } from '@/lib/speech/voice/types';
@@ -25,7 +29,10 @@ export interface SpeechSource {
     priority: SpeechPriority,
     signal: AbortSignal,
     voice?: SpeechVoice,
+    delivery?: SpeechDelivery,
   ) => Promise<SpeechFetch>;
+  /** Starts the speech server and checks sign-in ahead of the first line, so it isn't a cold start; speaks and counts nothing. */
+  warm?: () => Promise<void>;
 }
 
 const isHeldReason = (value: unknown): value is SpeechHeldReason =>
@@ -54,7 +61,30 @@ export const createSpeechSource = ({
   getHeaders: () => Promise<Record<string, string> | null>;
   readVoice?: () => SpeechVoice;
 }): SpeechSource => ({
-  fetchSpeech: async (text, priority, signal, voice) => {
+  warm: async () => {
+    const headers = await getHeaders().catch(
+      (error: unknown) => `Sign-in headers failed: ${describeThrown(error)}`,
+    );
+    if (headers === null) return;
+    if (typeof headers === 'string') {
+      recordSpeechEvent(`Voice warm-up, ${headers}`);
+      return;
+    }
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ warm: true }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          recordSpeechEvent(`Voice warm-up answered HTTP ${response.status}`);
+        }
+      })
+      .catch((error: unknown) => {
+        recordSpeechEvent(`Voice warm-up failed: ${describeThrown(error)}`);
+      });
+  },
+  fetchSpeech: async (text, priority, signal, voice, delivery) => {
     try {
       const headers = await getHeaders().catch(
         (error: unknown) => `Sign-in headers failed: ${describeThrown(error)}`,
@@ -76,6 +106,7 @@ export const createSpeechSource = ({
           priority,
           voiceId,
           speed,
+          ...(delivery ? { delivery } : {}),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         signal,
@@ -126,8 +157,9 @@ export const withSpeechVoice = (
   source: SpeechSource,
   voice: SpeechVoice,
 ): SpeechSource => ({
-  fetchSpeech: (text, priority, signal) =>
-    source.fetchSpeech(text, priority, signal, voice),
+  warm: source.warm,
+  fetchSpeech: (text, priority, signal, _voice, delivery) =>
+    source.fetchSpeech(text, priority, signal, voice, delivery),
 });
 
 interface CachedSpeech {
@@ -165,8 +197,9 @@ export const withSpeechCache = (
   cache: ReturnType<typeof createSpeechCache>,
   voiceKey: string,
 ): SpeechSource => ({
-  fetchSpeech: async (text, priority, signal, voice) => {
-    const key = `${voiceKey}|${text}`;
+  warm: source.warm,
+  fetchSpeech: async (text, priority, signal, voice, delivery) => {
+    const key = `${voiceKey}|${delivery ?? ''}|${text}`;
     const hit = cache.get(key);
     if (hit) {
       return {
@@ -176,7 +209,13 @@ export const withSpeechCache = (
         contentType: hit.contentType,
       };
     }
-    const answer = await source.fetchSpeech(text, priority, signal, voice);
+    const answer = await source.fetchSpeech(
+      text,
+      priority,
+      signal,
+      voice,
+      delivery,
+    );
     if (answer.status !== 'ready') return answer;
     const chunks: Uint8Array[] = [];
     return {

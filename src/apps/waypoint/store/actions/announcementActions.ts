@@ -3,7 +3,11 @@ import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { runHeldTransaction } from '@apps/waypoint/store/actions/heldTransaction';
-import type { Announcement, AnnouncementSeverity, TripSpace } from '@apps/waypoint/types';
+import type {
+  Announcement,
+  AnnouncementSeverity,
+  TripSpace,
+} from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
 interface CreateAnnouncementInput {
@@ -21,12 +25,17 @@ export const createAnnouncement = createAsyncThunk<
   { rejectValue: string }
 >(
   'waypoint/announcements/create',
-  async ({ uid, trip, severity, title, body, expiresAt }, { rejectWithValue }) => {
+  async (
+    { uid, trip, severity, title, body, expiresAt },
+    { rejectWithValue },
+  ) => {
     if (!isTripAdmin(trip, uid)) {
       return rejectWithValue('Only trip admins can post announcements.');
     }
     if (!title.trim() || !body.trim()) {
-      return rejectWithValue('Enter a title and message for this announcement.');
+      return rejectWithValue(
+        'Enter a title and message for this announcement.',
+      );
     }
 
     const announcementRef = doc(
@@ -67,7 +76,15 @@ export const deleteAnnouncement = createAsyncThunk<
     }
 
     await deleteDoc(
-      doc(db, 'apps', 'waypoint', 'trips', trip.id, 'announcements', announcementId),
+      doc(
+        db,
+        'apps',
+        'waypoint',
+        'trips',
+        trip.id,
+        'announcements',
+        announcementId,
+      ),
     );
   },
 );
@@ -99,7 +116,12 @@ export const dismissAnnouncement = createAsyncThunk<
     if (!snapshot.exists()) {
       return;
     }
-    const dismissedBy = (snapshot.data().dismissedBy ?? {}) as Record<string, number>;
-    transaction.update(announcementRef, { dismissedBy: { ...dismissedBy, [uid]: Date.now() } });
+    const dismissedBy = (snapshot.data().dismissedBy ?? {}) as Record<
+      string,
+      number
+    >;
+    transaction.update(announcementRef, {
+      dismissedBy: { ...dismissedBy, [uid]: Date.now() },
+    });
   });
 });

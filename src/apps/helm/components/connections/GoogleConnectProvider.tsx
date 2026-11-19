@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
+import { parseAsString, useQueryStates } from 'nuqs';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -92,14 +93,39 @@ const toIntroTitle = (connectorId: GoogleConnectorId, isReconnect: boolean) => {
 };
 
 const RECONNECT_KEY = 'helm-google-reconnect';
+const RETURN_VIEW_KEY = 'helm-google-return-view';
+
+/** Returns being finished by this page load; a second run of the same return would find its sign-in already used. */
+const finishedReturns = new Set<string>();
+
+const RETURN_KEYS = [
+  'view',
+  'item',
+  'q',
+  'sheet',
+  'ask',
+  'browse',
+  'grant',
+] as const;
 
 const keepConnector = (
   connectorId: GoogleConnectorId | null,
   isReconnect = false,
 ) => {
   try {
-    if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
-    else sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+    if (connectorId === null) {
+      sessionStorage.removeItem(CONNECTOR_KEY);
+      sessionStorage.removeItem(RETURN_VIEW_KEY);
+    } else {
+      sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+      const params = new URLSearchParams(window.location.search);
+      sessionStorage.setItem(
+        RETURN_VIEW_KEY,
+        JSON.stringify(
+          Object.fromEntries(RETURN_KEYS.map((key) => [key, params.get(key)])),
+        ),
+      );
+    }
     if (isReconnect) sessionStorage.setItem(RECONNECT_KEY, '1');
     else sessionStorage.removeItem(RECONNECT_KEY);
   } catch {
@@ -117,6 +143,27 @@ const readKeptConnector = (): GoogleConnectorId => {
       : 'google:calendar';
   } catch {
     return 'google:calendar';
+  }
+};
+
+const FALLBACK_RETURN = Object.fromEntries([
+  ...RETURN_KEYS.map((key) => [key, null]),
+  ['view', 'connectedApps'],
+]) as Record<(typeof RETURN_KEYS)[number], string | null>;
+
+/** Where the person was when they left for Google, every address key kept; Connected apps when nothing was kept. Read without clearing so a repeated effect finds the same place. */
+const readReturnUrl = () => {
+  try {
+    const kept = JSON.parse(
+      sessionStorage.getItem(RETURN_VIEW_KEY) ?? 'null',
+    ) as Partial<Record<(typeof RETURN_KEYS)[number], string | null>> | null;
+    return kept === null
+      ? FALLBACK_RETURN
+      : (Object.fromEntries(
+          RETURN_KEYS.map((key) => [key, kept[key] ?? null]),
+        ) as typeof FALLBACK_RETURN);
+  } catch {
+    return FALLBACK_RETURN;
   }
 };
 
@@ -141,13 +188,17 @@ const connectGoogle = async ({
   connectorId,
   accountId,
   isAnotherAccount,
-}: Pick<Intro, 'connectorId' | 'accountId' | 'isAnotherAccount'>) => {
+  extraScopes = null,
+}: Pick<Intro, 'connectorId' | 'accountId' | 'isAnotherAccount'> & {
+  extraScopes?: string[] | null;
+}) => {
   const { authUrl, state } = await startGoogleConnection({
     readerAppId: 'helm',
     connectorId,
     redirectUri: `${window.location.origin}/helm`,
     accountId,
     isAnotherAccount,
+    extraScopes,
   });
   keepConnector(connectorId, accountId !== null);
   const result = await requestGoogleAuthCode({ authUrl, state });
@@ -257,6 +308,16 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const [returned] = useState(() =>
     readGoogleAuthReturn(window.location.search),
   );
+  const [, setReturnUrl] = useQueryStates({
+    view: parseAsString,
+    item: parseAsString,
+    q: parseAsString,
+    sheet: parseAsString,
+    ask: parseAsString,
+    browse: parseAsString,
+    grant: parseAsString,
+  });
+  const [returnUrl] = useState(readReturnUrl);
   const [returnedConnector] = useState(readKeptConnector);
   const [isReturnedReconnect] = useState(readKeptReconnect);
   const [intro, setIntro] = useState<Intro | null>(() =>
@@ -314,6 +375,15 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
           failure: null,
         }),
       openCalendarPicker: (accountId) => setPicker({ accountId, mode: 'edit' }),
+      requestCalendarScopes: async (accountId, scopes) => {
+        const result = await connectGoogle({
+          connectorId: 'google:calendar',
+          accountId,
+          isAnotherAccount: false,
+          extraScopes: scopes,
+        });
+        return typeof result === 'string' ? result : 'granted';
+      },
       openContacts: () => {
         if (contactsAccountKey !== null) {
           setContactsAccountId(contactsAccountKey);
@@ -380,13 +450,24 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         accountId: finished.accountId,
         categoryIds: [restrictedCategory],
         options: null,
-      }).catch((error: unknown) => {
-        console.error('Helm restricted connector was not connected', error);
-        addToast({
-          title: isDrive ? HELM_COPY.driveFailed : HELM_COPY.gmailFailed,
-          type: 'error',
+      })
+        .then(() =>
+          addToast({
+            title: HELM_COPY.googleServiceConnected(
+              isDrive
+                ? HELM_COPY.googleDriveRowName
+                : HELM_COPY.googleGmailName,
+            ),
+            type: 'success',
+          }),
+        )
+        .catch((error: unknown) => {
+          console.error('Helm restricted connector was not connected', error);
+          addToast({
+            title: isDrive ? HELM_COPY.driveFailed : HELM_COPY.gmailFailed,
+            type: 'error',
+          });
         });
-      });
       return;
     }
     if (wasDismissed) {
@@ -415,9 +496,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     if (!returned || handOffGoogleAuthReturn()) return;
     if ('error' in returned) {
       stripReturnQuery();
+      void setReturnUrl(returnUrl, { history: 'replace' });
       keepConnector(null);
     }
-  }, [returned]);
+  }, [returned, returnUrl, setReturnUrl]);
 
   const isReturningWithCode =
     returned !== null && 'code' in returned && !isPopupPage();
@@ -433,7 +515,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     staleTime: Infinity,
     queryFn: async () => {
       if (!returned || !('code' in returned)) return false;
+      if (finishedReturns.has(returned.state)) return true;
+      finishedReturns.add(returned.state);
       stripReturnQuery();
+      void setReturnUrl(returnUrl, { history: 'replace' });
       keepConnector(null);
       const kept = takeGoogleAuthState();
       try {

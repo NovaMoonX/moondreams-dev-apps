@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, CircleHelp, Mic, Square, X } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import HeardWords from '@apps/helm/components/voice/HeardWords';
 import { splitIntoParagraphs } from '@/utils/proseUtils';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -64,9 +65,11 @@ function VoiceStatus({ hasControls = false, screen = null }: VoiceStatusProps) {
   const isIdle = voice.state === 'idle';
   const isWorking = voice.state === 'thinking' || voice.state === 'speaking';
   const showsPhoneLine = isIdle && voice.showsPhoneLine;
+  const closedLine = isIdle ? voice.closed : null;
   if (voice.isDictating) return null;
   if (
     text === '' &&
+    closedLine === null &&
     !(hasControls && isIdle) &&
     !voice.isMuted &&
     !showsPhoneLine
@@ -84,7 +87,15 @@ function VoiceStatus({ hasControls = false, screen = null }: VoiceStatusProps) {
         // A long sentence keeps its newest words in view: the start is what gives way.
         <div className='flex max-h-[84px] flex-col justify-end overflow-hidden'>
           <p className='text-[20px] leading-7 font-medium text-balance break-words'>
-            {text}
+            {voice.heard === '' ? (
+              text
+            ) : (
+              <HeardWords
+                text={text}
+                swaps={voice.heardSwaps}
+                onRestore={voice.restoreHeard}
+              />
+            )}
           </p>
         </div>
       )}
@@ -112,6 +123,24 @@ function VoiceStatus({ hasControls = false, screen = null }: VoiceStatusProps) {
       )}
       {voice.state === 'listening' && voice.listeningRoute === 'cloud' && (
         <VoiceNotice />
+      )}
+      {closedLine !== null && (
+        <div className='flex items-center gap-1'>
+          <p className='text-muted-foreground text-[15px]'>
+            {HELM_COPY.closedLeft}
+          </p>
+          {closedLine.hasDropped && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="relative gap-1 text-[15px] before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
+              onClick={() => void voice.undoClose()}
+            >
+              {HELM_COPY.closedUndo}
+            </Button>
+          )}
+        </div>
       )}
       {showsPhoneLine && (
         <p className='text-muted-foreground text-[13px] text-pretty'>

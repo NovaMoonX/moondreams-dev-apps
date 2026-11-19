@@ -6,12 +6,16 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import DateInput from '@/components/DateInput';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SayWhenField from '@/components/SayWhenField';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useAppSelector } from '@/store';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { HELM_COPY, TASK_TITLE_CAP } from '@apps/helm/constants';
+import PrivateSwitchLine from '@apps/helm/components/privacy/PrivateSwitchLine';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createTask } from '@apps/helm/store/actions/taskActions';
+import { readOnceWords } from '@apps/helm/utils/sayWhen';
 
 interface NewTaskSheetProps {
   isOpen: boolean;
@@ -34,8 +38,10 @@ function NewTaskForm({
   const { user } = useAuth();
   const { addToast } = useToast();
   const fieldId = useId();
+  const zone = useAppSelector((state) => state.helm.profile?.timeZone ?? 'UTC');
   const [title, setTitle] = useState('');
   const [day, setDay] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = title.trim() === '';
@@ -44,6 +50,13 @@ function NewTaskForm({
     setTitle(nextTitle);
     setDay(nextDay);
     onDirtyChange(nextTitle !== '' || nextDay !== '');
+  };
+
+  const sayWhen = (text: string) => {
+    const read = readOnceWords(text, { now: Date.now(), zone });
+    if (!read?.schedule.startsOn) return null;
+    change(title, read.schedule.startsOn);
+    return { words: read.words, key: read.schedule.startsOn };
   };
 
   const add = async () => {
@@ -59,6 +72,7 @@ function NewTaskForm({
       const { id, write } = await createTask(user.uid, encryption, {
         title,
         due: date === undefined ? null : { kind: 'day', date },
+        isPrivate,
       });
       write.catch((error: unknown) => {
         console.error('Helm task was not saved', error);
@@ -87,6 +101,13 @@ function NewTaskForm({
           onChange={(event) => change(event.target.value, day)}
         />
       </div>
+      <SayWhenField
+        label={HELM_COPY.sayWhenLabel}
+        placeholder={HELM_COPY.sayWhenDatePlaceholder}
+        unreadLine={HELM_COPY.sayWhenUnread}
+        onRead={sayWhen}
+        currentKey={day}
+      />
       <div className='space-y-1.5'>
         <label htmlFor={`${fieldId}-day`} className='text-sm font-medium'>
           {HELM_COPY.whenLabel}
@@ -98,6 +119,7 @@ function NewTaskForm({
           onChange={(event) => change(title, event.target.value)}
         />
       </div>
+      <PrivateSwitchLine checked={isPrivate} onCheckedChange={setIsPrivate} />
       <ModalFooterActions
         note={isTouched && isMissing ? HELM_COPY.taskTitleMissing : null}
         cancelAction={

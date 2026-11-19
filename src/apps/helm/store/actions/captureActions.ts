@@ -43,13 +43,21 @@ import {
   canMakeTaskAsWritten,
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
+import { selectNameRecords } from '@apps/helm/store/selectors/nameSelectors';
+import { readTypedHeardNames } from '@apps/helm/utils/spokenNames';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
+import { readLocationPermission } from '@apps/helm/utils/phoneLocation';
 import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
+import { markCreatedHere } from '@apps/helm/utils/createdHere';
+import { takeLiveAimsDay } from '@apps/helm/utils/morningAsk';
+import { clearRemindersIdle } from '@apps/helm/store/actions/markRemindersChanged';
+import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import type {
   Capture,
   CaptureReading,
   CaptureSealed,
+  HeardName,
   HelmEncryption,
   OpenCapture,
   QuestionAnswerValue,
@@ -100,6 +108,11 @@ export const rankStoredNotes = (text: string) => {
   );
 };
 
+const sentHere = new Set<string>();
+
+/** Whether this tab wrote the turn, so a reaction to it (a close) never runs on a turn another device sent. */
+export const wasSentHere = (captureId: string) => sentHere.has(captureId);
+
 /** Seals what the person typed or said and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
   uid: string,
@@ -115,12 +128,23 @@ export async function sendCapture(
     /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
     answersQuestion: Capture['answersQuestion'];
     questionAnswer: QuestionAnswerValue | null;
+    /** The day whose aims this turn files (the answer to the morning question). A turn sent while the question is live in home's thread instead carries it as a hint, and the server files aims only when the turn answers it. */
+    aimsDayKey?: string;
     /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
     noteIds?: string[];
     /** The photos sent with the turn, uploaded already, in pick order; a turn with photos never joins a running one. */
     attachmentIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
+    isSpokenTurn?: boolean;
+    /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
+    presence?: Capture['presence'];
+    heardNames?: HeardName[];
+    /** A turn that starts research ahead of a project: its offer, and the transaction that writes the turn together with the project's own change so neither lands without the other. Needs a connection. */
+    ahead?: {
+      offer: NonNullable<Capture['aheadOffer']>;
+      commit: (reference: DocumentReference, capture: Capture) => Promise<void>;
+    };
     /** Called with the turn's id when the server found the words only asked to hear the last reply again; the turn is then gone and leaves nothing in the history. */
     onRepeat?: (captureId: string) => void;
   },
@@ -135,12 +159,23 @@ export async function sendCapture(
     throw new Error('A turn is 1 to 4,000 characters, or up to 5 photos.');
   }
   const leadId = attachmentIds.length > 0 ? null : turn.leadId;
+  const morningDayKey =
+    turn.aimsDayKey === undefined &&
+    turn.answersQuestion === null &&
+    !turn.ahead
+      ? takeLiveAimsDay()
+      : null;
+  const heardNames =
+    turn.heardNames ??
+    readTypedHeardNames(text, selectNameRecords(store.getState())) ??
+    [];
   const sealed = await sealJson<CaptureSealed>(
     {
       text,
       reading: turn.reading,
       answer: null,
       questionAnswer: turn.questionAnswer,
+      heardNames: heardNames.length > 0 ? heardNames : null,
     },
     encryption,
   );
@@ -148,11 +183,15 @@ export async function sendCapture(
   // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {
     inputMode: turn.voice ? 'voice' : text ? 'typed' : 'attachment',
+    isSpokenTurn: turn.isSpokenTurn ?? turn.voice !== undefined,
     sttProvider: turn.voice?.sttProvider ?? null,
     interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
     answersQuestion: turn.answersQuestion,
     ttsProvider: null,
-    arrivedVia: 'direct',
+    arrivedVia: turn.ahead ? 'researchAhead' : 'direct',
+    scheduledActionId: null,
+    aheadOffer: turn.ahead?.offer ?? null,
+    disposition: null,
     medium: 'web',
     via: null,
     outsideReadScopes: null,
@@ -177,18 +216,33 @@ export async function sendCapture(
     whoIds: [],
     placeIds: [],
     planDayKey: null,
+    aimsDayKey: turn.aimsDayKey ?? null,
+    morningDayKey,
     createdAt,
     sortedAt: null,
     screen: turn.screen,
+    privacy: 'ordinary',
+    touchesPrivate: null,
+    noticedCount: null,
+    presence: turn.presence ?? null,
+    abilities: {
+      location: {
+        setting: store.getState().helm.profile?.phoneLocation ?? 'off',
+        permission: await readLocationPermission(),
+      },
+    },
     sealed,
   };
   const reference = doc(capturesOf(uid));
+  markCreatedHere(reference.id);
   // A message joining a turn is written with its lead's list in one batch, so neither lands without the other.
-  const write = leadId
-    ? writeJoined(uid, leadId, reference, capture)
-    : attachmentIds.length > 0
-      ? writeWithPhotos(uid, reference, capture)
-      : setDoc(reference, capture);
+  const write = turn.ahead
+    ? turn.ahead.commit(reference, capture)
+    : leadId
+      ? writeJoined(uid, leadId, reference, capture)
+      : attachmentIds.length > 0
+        ? writeWithPhotos(uid, reference, capture)
+        : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
     async () => {
@@ -201,6 +255,11 @@ export async function sendCapture(
     },
     () => undefined,
   );
+  const idleBatch = writeBatch(db);
+  if (clearRemindersIdle(idleBatch, uid, Date.now())) {
+    void idleBatch.commit().then(notifyRemindersBack, () => undefined);
+  }
+  sentHere.add(reference.id);
   return { write, id: reference.id };
 }
 
@@ -282,6 +341,85 @@ export const skipQuestion = (
   updateDoc(doc(capturesOf(uid), captureId), {
     [`questionState.${questionId}.skippedAt`]: Date.now(),
   });
+
+/** Puts a question the person moved past back at the bottom of the thread, live again; it keeps its record and touches only its own field and does nothing for one already answered or dismissed. */
+export const reaskQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+) => {
+  const state = selectEveryCapture(store.getState()).find(
+    (capture) => capture.id === captureId,
+  )?.questionState[questionId];
+  if (!state || state.answeredAt !== null || state.dismissedAt !== null)
+    return Promise.resolve();
+  return updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.reaskedAt`]: Date.now(),
+  });
+};
+
+export interface QuestionRef {
+  captureId: string;
+  questionId: string;
+}
+
+/** Applies a closing phrase: lets go of what it drops as `dismissQuestion` does and sets `skippedAt` on what it keeps waiting in Needs you, in one write; a turn with nothing left open is sorted, nothing else is touched and nothing runs. */
+export function closeQuestions(
+  uid: string,
+  { left, skipped }: { left: QuestionRef[]; skipped: QuestionRef[] },
+) {
+  const now = Date.now();
+  const captures = selectEveryCapture(store.getState());
+  const batch = writeBatch(db);
+  const isSettled = (captureId: string) => {
+    const capture = captures.find((entry) => entry.id === captureId);
+    return (
+      capture?.status === 'needsYou' &&
+      Object.entries(capture.questionState).every(
+        ([id, state]) =>
+          state.answeredAt !== null ||
+          left.some(
+            (ref) => ref.captureId === captureId && ref.questionId === id,
+          ),
+      )
+    );
+  };
+  left.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.answeredAt`]: now,
+      [`questionState.${questionId}.dismissedAt`]: now,
+      ...(isSettled(captureId) && { status: 'sorted' }),
+    }),
+  );
+  skipped.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.skippedAt`]: now,
+    }),
+  );
+  return batch.commit();
+}
+
+/** Undo of a close: the dropped questions wait again, and a turn the close sorted goes back to Needs you. */
+export function reopenQuestions(
+  uid: string,
+  left: QuestionRef[],
+  skipped: QuestionRef[] = [],
+) {
+  const batch = writeBatch(db);
+  left.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.answeredAt`]: null,
+      [`questionState.${questionId}.dismissedAt`]: null,
+      status: 'needsYou',
+    }),
+  );
+  skipped.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.skippedAt`]: null,
+    }),
+  );
+  return batch.commit();
+}
 
 /** Lets one question go without an answer: it stops waiting, and the turn is sorted once none is left open. Touches only its own fields. */
 export const dismissQuestion = (
@@ -492,6 +630,7 @@ export async function makeTaskAsWritten(
     isUrgent: false,
     due: null,
     durationMinutes: null,
+    effort: null,
     energy: null,
     context: null,
     projectId: null,
@@ -502,6 +641,9 @@ export async function makeTaskAsWritten(
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: current.id,
@@ -510,8 +652,19 @@ export async function makeTaskAsWritten(
     lastEditedAt: null,
     completedAt: null,
     clearedAt: null,
+    privacy: 'ordinary',
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {} },
+      {
+        title,
+        notes: null,
+        steps: {},
+        meetingLabel: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
+      },
       encryption,
     ),
   };

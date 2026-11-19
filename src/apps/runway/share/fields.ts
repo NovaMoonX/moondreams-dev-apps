@@ -390,15 +390,15 @@ const CARD_DOC_FIELDS = {
   id: 'never',
   createdAt: 'never',
   updatedAt: 'never',
-  archivedAt: 'never',
-  linkId: 'never',
-  sealed: 'never',
+  archivedAt: 'filter',
+  linkId: 'filter',
+  sealed: 'shared',
 } satisfies Record<keyof CardDoc, ShareDecision>;
 
 const CARD_SEALED_FIELDS = {
-  issuer: 'never',
-  name: 'never',
-  dueDay: 'never',
+  issuer: 'shared',
+  name: 'shared',
+  dueDay: 'shared',
   lastFour: 'never',
   payFromAccountId: 'never',
   annualFee: 'never',
@@ -414,20 +414,20 @@ const ACCOUNT_DOC_FIELDS = {
   id: 'never',
   createdAt: 'never',
   updatedAt: 'never',
-  archivedAt: 'never',
-  linkId: 'never',
-  sealed: 'never',
+  archivedAt: 'filter',
+  linkId: 'filter',
+  sealed: 'shared',
 } satisfies Record<keyof AccountDoc, ShareDecision>;
 
 const ACCOUNT_SEALED_FIELDS = {
-  name: 'never',
+  name: 'shared',
   institution: 'never',
-  kind: 'never',
-  countedTowardTotal: 'never',
+  kind: 'shared',
+  countedTowardTotal: 'shared',
   isPullAccount: 'never',
   lastFour: 'never',
-  balanceCents: 'never',
-  balanceOn: 'never',
+  balanceCents: 'shared',
+  balanceOn: 'shared',
   holds: 'never',
   apyBps: 'never',
   interestDay: 'never',
@@ -435,7 +435,7 @@ const ACCOUNT_SEALED_FIELDS = {
 
 const LINK_DOC_FIELDS = {
   id: 'never',
-  status: 'never',
+  status: 'filter',
   lastSyncAt: 'never',
   createdAt: 'never',
   needsCardConsent: 'never',
@@ -462,21 +462,21 @@ const LINK_SEALED_FIELDS = {
 
 const ACCOUNT_BALANCE_DOC_FIELDS = {
   id: 'never',
-  asOf: 'never',
-  sealed: 'never',
+  asOf: 'shared',
+  sealed: 'shared',
 } satisfies Record<keyof AccountBalanceDoc, ShareDecision>;
 
 const CARD_STATEMENT_DOC_FIELDS = {
   id: 'never',
   asOf: 'never',
-  sealed: 'never',
+  sealed: 'shared',
 } satisfies Record<keyof CardStatementDoc, ShareDecision>;
 
 const CARD_STATEMENT_SEALED_FIELDS = {
-  minimumCents: 'never',
-  statementCents: 'never',
+  minimumCents: 'shared',
+  statementCents: 'shared',
   statementOn: 'never',
-  dueOn: 'never',
+  dueOn: 'shared',
   lastPaymentCents: 'never',
   lastPaymentOn: 'never',
 } satisfies Record<keyof CardStatementSealed, ShareDecision>;
@@ -654,7 +654,7 @@ const TRACKING_CHANGE_SEALED_FIELDS = {
 
 const PURCHASE_LINE_FIELDS = {
   envelopeId: 'shared',
-  cents: 'never',
+  cents: 'shared',
   via: 'never',
 } satisfies Record<keyof PurchaseLine, ShareDecision>;
 

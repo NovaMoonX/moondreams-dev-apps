@@ -9,6 +9,7 @@ import {
   sealForHelm,
   wrappedKeyPath,
 } from '../../functions/src/apps/helm/helmKey.ts';
+import { habitDayKey } from '../../functions/src/apps/helm/nomos/habitDay.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
@@ -19,7 +20,16 @@ import {
   DEFAULT_PLAN_FILL_PERCENT,
   PHOTOS_PER_RECORD,
 } from '../../src/apps/helm/constants.ts';
+import {
+  buildConnection,
+  toConnectionId,
+  type ConnectionKind,
+  type ConnectionRelation,
+  type CoupleStatus,
+} from '../../src/apps/helm/engine/connections.ts';
+import { toGroupingId } from '../../src/apps/helm/engine/grouping.ts';
 import { sealJson } from '../../src/apps/helm/security.ts';
+import { buildLearningScale } from './helmLearning.ts';
 import type {
   Capture,
   CaptureSealed,
@@ -28,6 +38,8 @@ import type {
   HelmDayCounts,
   HelmDaySummary,
   HelmDaySummarySealed,
+  Grouping,
+  GroupingSealed,
   HelmEncryption,
   KeyDate,
   KeyDateIndexEntry,
@@ -37,6 +49,7 @@ import type {
   NoteSealed,
   Procedure,
   ProcedureRun,
+  ProcedureBody,
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
@@ -63,7 +76,14 @@ import {
   toGrantId,
   type ConnectionGrant,
 } from '../../src/lib/connections/contract.ts';
-import { buildSeedPhoto, toWho, uploadSealedSeed, wordsOf } from './helm.ts';
+import {
+  buildSeedPhoto,
+  toHabit,
+  toHabitDay,
+  toWho,
+  uploadSealedSeed,
+  wordsOf,
+} from './helm.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -80,6 +100,43 @@ const CHUNK = 250;
 
 const TASK_COUNT = 600;
 const WHO_COUNT = 2_000;
+
+const HOME_CITIES = [
+  [
+    'Seattle',
+    'Washington',
+    'United States',
+    47.606,
+    -122.332,
+    'America/Los_Angeles',
+  ],
+  [
+    'Portland',
+    'Oregon',
+    'United States',
+    45.523,
+    -122.676,
+    'America/Los_Angeles',
+  ],
+  [
+    'Leavenworth',
+    'Washington',
+    'United States',
+    47.596,
+    -120.661,
+    'America/Los_Angeles',
+  ],
+  ['Denver', 'Colorado', 'United States', 39.739, -104.99, 'America/Denver'],
+  ['Chicago', 'Illinois', 'United States', 41.878, -87.63, 'America/Chicago'],
+  ['Lisbon', null, 'Portugal', 38.722, -9.139, 'Europe/Lisbon'],
+].map(([name, region, country, latitude, longitude, timezone]) => ({
+  name: name as string,
+  region: region as string | null,
+  country: country as string | null,
+  latitude: latitude as number,
+  longitude: longitude as number,
+  timezone: timezone as string,
+}));
 const YEARLY_PER_WHO = 2;
 const MOMENT_TOTAL = 16_000;
 const MOMENTS_FOR_ONE_WHO = 500;
@@ -93,6 +150,9 @@ const TURN_COUNT = 400;
 const SESSION_COUNT = 60;
 const MEDIA_COUNT = 200;
 const PROJECT_COUNT = 40;
+const HABIT_COUNT = 30;
+const CONNECTION_COUNT = 400;
+const HABIT_DAY_COUNT = 28;
 const OWNER_TIME_ZONE = 'America/New_York';
 
 const FIRST_NAMES = [
@@ -619,6 +679,13 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       assistantName: null,
       assistantNameVariants: null,
       assistantTone: null,
+      personality: {
+        traits: ['honest', 'brief', 'warm'],
+        honesty: 'straight',
+        keptClashes: [],
+      },
+      personalitySetAt: null,
+      personalityPreview: null,
       theme: null,
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,
@@ -626,17 +693,31 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       shiftCalendarIds: [],
       busyAllDayEventRefs: [],
       calendarOfferFoldedAt: null,
+      quietHours: null,
+      remindersPausedAt: null,
+      habitRemindersChangedAt: null,
+      habitRemindersIdleAt: null,
       hasSeenAiNotice: true,
       voiceMode: 'cloudWhenOnline',
       isWakeWordOn: false,
       isHandsFreeOn: true,
+      whisperHeld: null,
       hasSeenVoiceNotice: null,
       selfWhoId: 'self',
       currentPlace: null,
       styleLearnedThroughAt: null,
       conversationFreshAt: null,
       isDailyFreshOn: false,
+      isLearningOn: true,
+      patternsCheckedOn: null,
+      reflectDueAt: null,
+      relateDueAt: null,
+      forgottenAt: null,
+      prunedOn: null,
       outsideSeenAt: null,
+      researchDepth: null,
+      researchAllowance: null,
+      calendarSync: null,
       createdAt,
       lastEditedAt: null,
     },
@@ -694,6 +775,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       }),
     ),
   );
+  const isPrivateWho = (index: number) => index > 0 && index % 40 === 7;
+  const isPrivateProject = (index: number) => index % 10 === 4;
   const whoDocs = await mapChunked(range(WHO_COUNT), async (index) => {
     const kind = whoKindOf(index);
     const name = nameOf(index);
@@ -724,9 +807,28 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             species: kind === 'pet' ? SPECIES[index % 4] : null,
             organizationKind:
               kind === 'organization' ? ORG_KINDS[index % 8] : null,
+            ...(isPrivateWho(index) && { privateMark: 'person' as const }),
+            home: HOME_CITIES[index % HOME_CITIES.length],
+            homeSource: index % 2 === 0 ? 'page' : 'said',
+            away:
+              index % 20 === 3
+                ? [
+                    {
+                      id: `scale-away-${pad(index)}`,
+                      city: HOME_CITIES[(index + 1) % HOME_CITIES.length],
+                      from: dayStart(now) + (index % 7) * DAY_MS,
+                      to: dayStart(now) + ((index % 7) + 3) * DAY_MS,
+                      label: null,
+                      source: 'said',
+                      zoneOffered: false,
+                      pausesScheduled: null,
+                    },
+                  ]
+                : null,
           }),
         ),
       ),
+      ...(isPrivateWho(index) && { privacy: 'private' as const }),
       yearlyDateCount: YEARLY_PER_WHO,
       momentCount: momentsOf(index),
       photoMediaId: photoIds[0] ?? null,
@@ -741,6 +843,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     async (entry: { id: string; whoId: string; words: KeyDateSealed }) => ({
       id: entry.id,
       keyDate: {
+        privacy: 'ordinary',
         whoId: entry.whoId,
         shape,
         source: 'person',
@@ -823,9 +926,18 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     projectIds.map(async (id, index) => {
       const isDone = index % 10 === 9;
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
+      const targetDate = isDone
+        ? null
+        : dayStart(now + between(5, 365) * DAY_MS);
+      const hasOffer = !isDone && index % 8 === 0;
+      const offerId = `scale-ahead-${pad(index, 3)}`;
       const project: Project = {
-        targetDate: isDone ? null : dayStart(now + between(5, 365) * DAY_MS),
+        privacy: isPrivateProject(index) ? 'private' : 'ordinary',
+        kind: 'project',
+        targetDate: hasOffer ? dayStart(now) + 30 * DAY_MS : targetDate,
         status: isDone ? 'finished' : 'active',
+        pausedAt: null,
+        pausedUntil: null,
         milestoneState: {
           'm-1': { date: null, order: 0, doneAt: isDone ? finishedAt : null },
           'm-2': {
@@ -844,7 +956,46 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         createdAt: now - between(30, 700) * DAY_MS,
         lastEditedAt: null,
         finishedAt,
+        researchOffers: hasOffer
+          ? [
+              {
+                id: offerId,
+                leadDays: 30,
+                offerOn: dayStart(now),
+                state: 'waiting',
+                declineCount: 0,
+                nextEligibleOn: null,
+                shownOn: null,
+                researchId: null,
+                toldAt: null,
+                createdAt: now - 2 * DAY_MS,
+              },
+            ]
+          : [],
         sealed: await seal<ProjectSealed>({
+          aheadAsks: hasOffer
+            ? {
+                [offerId]: {
+                  subject: 'what to plan for',
+                  question: 'What would help most to plan ahead for this?',
+                  whyNow: null,
+                  isDecision: false,
+                  questions: [
+                    {
+                      id: 'focus',
+                      label: 'What matters most',
+                      shape: 'text',
+                      options: [],
+                      prefill: [],
+                      from: null,
+                      isInferred: false,
+                    },
+                  ],
+                  answers: null,
+                  brief: null,
+                },
+              }
+            : null,
           name: `${PROJECT_NAMES[index % 10]}${index >= 10 ? ` ${Math.floor(index / 10) + 1}` : ''}`,
           emoji: index % 3 === 0 ? '🛠️' : null,
           objective:
@@ -854,6 +1005,23 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             'm-2': { title: 'Final stage' },
           },
           roleNotes: {},
+          why: null,
+          importance:
+            isDone || index % 3 === 2
+              ? null
+              : {
+                  rank:
+                    index % 9 === 0 ? -(index + 1) : Math.floor(index / 2) + 1,
+                  words: 'what I said about it',
+                  saidAt: now - between(1, 60) * DAY_MS,
+                  until: null,
+                  captureId: null,
+                },
+          privateMark: isPrivateProject(index) ? 'person' : null,
+          isPrivacyCleared: false,
+          quietMark: null,
+          quietUntil: null,
+          isQuietCleared: false,
         }),
       };
       return { id, project };
@@ -862,6 +1030,183 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   projects.forEach((entry) =>
     put('projects', `projects/${entry.id}`, entry.project),
   );
+
+  // Thirty habits (a tenth of them care) and four weeks of ticks and tallies.
+  const habitIds = range(HABIT_COUNT).map(
+    (index) => `scale-habit-${pad(index, 3)}`,
+  );
+  const habitSpecs = habitIds.map((id, index) => {
+    const isCare = index % 10 === 0;
+    const kind = index % 4;
+    return {
+      id,
+      index,
+      isCare,
+      kind,
+      windows:
+        kind === 0
+          ? { m: ['08:00', '10:00'], e: ['20:00', '22:00'] }
+          : kind === 2
+            ? { e: ['19:00', '22:00'] }
+            : {},
+    };
+  });
+  const habits = await Promise.all(
+    habitSpecs.map(async ({ id, index, isCare, kind, windows }) => ({
+      id,
+      habit: await toHabit(
+        {
+          cadence:
+            kind === 2
+              ? { kind: 'timesPerWeek', count: 3 }
+              : kind === 3 && index % 8 === 3
+                ? { kind: 'onWeekdays', weekdays: [1, 3, 5] }
+                : { kind: 'everyDay' },
+          windowState: Object.fromEntries(
+            Object.entries(windows).map(([windowId, [start, end]], order) => [
+              windowId,
+              { start, end, part: null, order, editedAt: null },
+            ]),
+          ),
+          timesPerDay: kind === 1 ? 6 : null,
+          isCare,
+          privacy: isCare ? 'private' : 'ordinary',
+          startsOn: dayStart(now - 60 * DAY_MS),
+          createdAt: now - 60 * DAY_MS,
+        },
+        {
+          name: `Habit ${index + 1}`,
+          emoji: null,
+          windows: Object.fromEntries(
+            Object.keys(windows).map((windowId) => [
+              windowId,
+              { label: windowId === 'm' ? 'Morning' : 'Evening' },
+            ]),
+          ),
+          privateMark: isCare ? 'health' : null,
+        },
+        encryption,
+      ),
+    })),
+  );
+  habits.forEach((entry) => put('habits', `habits/${entry.id}`, entry.habit));
+
+  // Four hundred connections between people, a quarter each of family, couples, friends and work.
+  const personIndexes = range(WHO_COUNT).filter(
+    (index) => index > 0 && whoKindOf(index) === 'person',
+  );
+  const FAMILY_WORDS: ConnectionRelation[] = [
+    'sister',
+    'cousin',
+    'uncle',
+    'parent',
+  ];
+  const COUPLE_STATUSES: CoupleStatus[] = [
+    'married',
+    'dating',
+    'engaged',
+    'divorced',
+  ];
+  const CONNECTION_KINDS: ConnectionKind[] = [
+    'family',
+    'couple',
+    'friend',
+    'work',
+  ];
+  const connectionSpecs = range(CONNECTION_COUNT).map((index) => ({
+    first: whoIdOf(personIndexes[index % personIndexes.length]),
+    second: whoIdOf(
+      personIndexes[
+        (index * 7 + 11 + Math.floor(index / personIndexes.length)) %
+          personIndexes.length
+      ],
+    ),
+    kind: CONNECTION_KINDS[index % 4],
+    index,
+  }));
+  const seenConnections = new Set<string>();
+  const connections = await Promise.all(
+    connectionSpecs
+      .filter(({ first, second, kind }) => {
+        const id = toConnectionId(first, second, kind);
+        if (first === second || seenConnections.has(id)) return false;
+        seenConnections.add(id);
+        return true;
+      })
+      .map(async ({ first, second, kind, index }) => {
+        const record = buildConnection(
+          first,
+          second,
+          kind,
+          kind === 'family' ? FAMILY_WORDS[(index >> 2) % 4] : null,
+          kind === 'couple' ? COUPLE_STATUSES[(index >> 2) % 4] : null,
+          kind === 'couple'
+            ? Date.UTC(2000 + (index % 24), index % 12, 1 + (index % 28))
+            : null,
+          {},
+        );
+        return {
+          id: toConnectionId(first, second, kind),
+          connection: {
+            whoIds: record.whoIds,
+            kind,
+            source: 'page',
+            createdBy: index % 5 === 0 ? 'nomos' : 'person',
+            executionId: null,
+            createdAt: createdAt + index * MINUTE_MS,
+            lastEditedAt: null,
+            sealed: await seal({
+              fromFirst: record.fromFirst,
+              fromSecond: record.fromSecond,
+              status: record.status,
+              since: record.since,
+            }),
+          },
+        };
+      }),
+  );
+  connections.forEach((entry) =>
+    put('connections', `connections/${entry.id}`, entry.connection),
+  );
+  range(HABIT_DAY_COUNT).forEach((back) => {
+    const dayKey = habitDayKey(now - back * DAY_MS, OWNER_TIME_ZONE);
+    const dayMs = Date.parse(`${dayKey}T00:00:00Z`);
+    put(
+      'habitDays',
+      `habitDays/${dayKey}`,
+      toHabitDay(
+        dayKey,
+        Object.fromEntries(
+          habitSpecs.map(({ id, index, kind, windows }) => [
+            id,
+            (index + back) % 5 === 0
+              ? {}
+              : kind === 1
+                ? {
+                    count: 6,
+                    lastCountAt: dayMs + 12 * HOUR_MS,
+                  }
+                : {
+                    checks: Object.fromEntries(
+                      (Object.keys(windows).length === 0
+                        ? ['day']
+                        : Object.keys(windows)
+                      ).map((windowId) => [
+                        windowId,
+                        {
+                          status: 'done',
+                          at: dayMs + 15 * HOUR_MS,
+                          by: 'person',
+                          executionId: null,
+                        },
+                      ]),
+                    ),
+                  },
+          ]),
+        ),
+      ),
+    );
+  });
 
   const taskDocs = await mapChunked(range(TASK_COUNT), async (index) => {
     const isDone = index % 3 === 2;
@@ -874,24 +1219,35 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           : { kind: 'day', date: dueDay };
     const hasProject = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
+    const projectAt = (index / 2) % PROJECT_COUNT;
+    const whoAt = index % 6 === 0 ? between(1, WHO_COUNT - 1) : null;
     const task: Task = {
+      privacy:
+        (hasProject && isPrivateProject(projectAt)) ||
+        (whoAt !== null && isPrivateWho(whoAt))
+          ? 'private'
+          : 'ordinary',
       status: isDone ? 'done' : 'open',
       importance: (['must', 'should', 'could', null] as const)[index % 4],
       isUrgent: index % 17 === 0,
       due,
       durationMinutes: index % 3 === 0 ? 15 * between(1, 8) : null,
+      effort: null,
       energy: (['low', 'medium', 'high', null] as const)[index % 4],
       context: (['atHome', 'out', 'atComputer', 'onPhone', null] as const)[
         index % 5
       ],
-      projectId: hasProject ? projectIds[(index / 2) % PROJECT_COUNT] : null,
+      projectId: hasProject ? projectIds[projectAt] : null,
       milestoneId: hasProject && index % 4 === 0 ? 'm-1' : null,
-      whoIds: index % 6 === 0 ? [whoIdOf(between(1, WHO_COUNT - 1))] : [],
+      whoIds: whoAt === null ? [] : [whoIdOf(whoAt)],
       placeIds: [],
       notUntil: null,
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
+      meets: null,
       mediaIds: [],
       createdBy: index % 2 === 0 ? 'person' : 'nomos',
       sourceCaptureId: null,
@@ -905,6 +1261,12 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         notes:
           index % 9 === 0 ? 'Ask for the earlier slot if there is one.' : null,
         steps: {},
+        meetingLabel: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id: `scale-task-${pad(index, 3)}`, task };
@@ -917,6 +1279,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     const isConfirmed = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
     const fact: Fact = {
+      privacy: isPrivateWho(whoIndex) ? 'private' : 'ordinary',
       status: isConfirmed ? 'confirmed' : 'inferred',
       stated: isConfirmed ? 'personSaid' : 'nomosInferred',
       kind: (['world', 'preference', 'favorite', 'identity'] as const)[
@@ -945,6 +1308,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         quote: null,
         topic: index % 4 === 1 ? 'coffee' : null,
         value: null,
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id: `scale-fact-${pad(index)}`, fact };
@@ -996,6 +1361,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       }));
       const writtenAt = now - between(1, 300) * DAY_MS;
       const topic: Topic = {
+        privacy: 'ordinary',
         parentId: spec.parentId,
         depth: spec.depth,
         projectIds: [],
@@ -1014,6 +1380,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           emoji: null,
           overview: null,
           sections,
+          privateMark: null,
+          isPrivacyCleared: false,
         }),
       };
       const version: TopicVersion = {
@@ -1045,6 +1413,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       index % 20 === 19 ? null : topicSpecs[index % topicSpecs.length].id;
     const subject = NOTE_SUBJECTS[(index * 5 + Math.floor(index / 14)) % 14];
     const note: Note = {
+      privacy: 'ordinary',
       topicIds: topicId ? [topicId] : [],
       source: 'typed',
       isFromGeneralAnswer: false,
@@ -1062,6 +1431,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         body: `What worked last time for ${subject}: ${pick(FACT_TEMPLATES)}. Check again before the next ${pick(['season', 'trip', 'service', 'filing'])}.`,
         via: null,
         links: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+        quietMark: null,
+        quietUntil: null,
+        isQuietCleared: false,
       }),
     };
     return { id, note };
@@ -1092,7 +1466,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const stepState = toStepState(
         steps.map(({ id: stepId, groupId }) => ({ id: stepId, groupId })),
       );
-      const body: ProcedureSealed = {
+      const body: ProcedureBody = {
         title,
         steps: Object.fromEntries(
           steps.map((step) => [step.id, { text: step.text, detail: null }]),
@@ -1103,6 +1477,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       };
       const madeAt = now - between(30, 700) * DAY_MS;
       const procedure: Procedure = {
+        privacy: 'ordinary',
         stepState,
         groupOrder: groups.map((group) => group.id),
         version: 1,
@@ -1112,7 +1487,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         executionId: null,
         createdAt: madeAt,
         lastEditedAt: madeAt,
-        sealed: await seal<ProcedureSealed>(body),
+        sealed: await seal<ProcedureSealed>({
+          ...body,
+          privateMark: null,
+          isPrivacyCleared: false,
+        }),
       };
       const version: ProcedureVersion = {
         version: 1,
@@ -1200,12 +1579,21 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       nameOf(between(1, WHO_COUNT - 1)).split(' ')[0],
     );
     const capture: Capture = {
+      privacy: 'ordinary',
+      touchesPrivate: null,
+      presence: null,
+      abilities: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,
+      isSpokenTurn: null,
       answersQuestion: null,
       ttsProvider: null,
       arrivedVia: 'direct',
+      scheduledActionId: null,
+      aheadOffer: null,
+      disposition: null,
+      noticedCount: null,
       medium: 'web',
       via: null,
       outsideReadScopes: null,
@@ -1232,6 +1620,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       createdAt: at,
       sortedAt: at + 4_000,
       planDayKey: null,
+      aimsDayKey: null,
+      morningDayKey: null,
       screen: null,
       sealed: await seal<CaptureSealed>({
         text,
@@ -1246,6 +1636,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         },
         answer: null,
         questionAnswer: null,
+        heardNames: null,
       }),
     };
     return { id: `scale-turn-${pad(index, 3)}`, capture };
@@ -1286,6 +1677,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         },
         answer: null,
         questionAnswer: null,
+        heardNames: null,
       }),
     };
     return { id: `scale-outside-${pad(index, 3)}`, capture };
@@ -1523,6 +1915,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       factsAdded: index % 3,
       peopleAdded: index % 13 === 0 ? 1 : 0,
       placesAdded: 0,
+      habitsStarted: index % 17 === 0 ? 1 : 0,
+      habitChecksDone: index % 4,
+      connectionsAdded: index % 19 === 0 ? 1 : 0,
       tasksDone: (index + 1) % 3,
       planned: index % 2,
       answered: index % 3 === 0 ? 2 : 0,
@@ -1555,6 +1950,85 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   });
   summaryDocs.forEach((entry) =>
     put('daySummaries', `daySummaries/${entry.dayKey}`, entry.value),
+  );
+
+  // Groupings: thirty of mixed states over the tasks, each in the shape the overnight pass writes.
+  const GROUPING_STATE_CYCLE = [
+    'proposed',
+    'proposed',
+    'filed',
+    'groupedByYou',
+    'notRelated',
+    'notNow',
+  ] as const;
+  const groupingDocs = await mapChunked(range(30), async (index) => {
+    const state = GROUPING_STATE_CYCLE[index % GROUPING_STATE_CYCLE.length];
+    const projectIndex = (index * 3) % PROJECT_COUNT;
+    const sourceKeys = range(2 + (index % 4)).map(
+      (offset) =>
+        `tasks/scale-task-${pad((index * 17 + offset * 2) % TASK_COUNT, 3)}`,
+    );
+    const isLinked = state === 'filed' || state === 'groupedByYou';
+    const proposedAt = now - between(1, 40) * DAY_MS;
+    const declineCount = state === 'notNow' ? between(1, 3) : 0;
+    const grouping: Grouping = {
+      parentKind: 'project',
+      parentId: projectIds[projectIndex],
+      sourceKeys,
+      sources: sourceKeys.map((key) => ({ key, app: null, kind: 'task' })),
+      linkedKeys: isLinked ? sourceKeys : [],
+      state,
+      confidence: index % 5 === 0 ? 'certain' : 'likely',
+      evidence: ['titleMatch'],
+      declineCount,
+      nextOfferAfter:
+        state === 'notNow' && declineCount < 3
+          ? now + declineCount * 28 * DAY_MS
+          : null,
+      answeredAt: state === 'proposed' || state === 'filed' ? null : proposedAt,
+      toldAt: state === 'filed' ? proposedAt + 3_600_000 : null,
+      executionId: null,
+      dayKey: habitDayKey(proposedAt, OWNER_TIME_ZONE),
+      proposedAt,
+      updatedAt: proposedAt,
+      privacy: 'ordinary',
+      createdBy: 'nomos',
+      sealed: await seal<GroupingSealed>({
+        proposedTitle: `Project ${pad(projectIndex, 3)}`,
+        emoji: null,
+        titles: Object.fromEntries(
+          sourceKeys.map((key) => [key, `Task ${key.slice(-3)}`]),
+        ),
+      }),
+    };
+    return { id: toGroupingId(uid, sourceKeys), grouping };
+  });
+  groupingDocs.forEach((entry) =>
+    put('groupings', `groupings/${entry.id}`, entry.grouping),
+  );
+
+  // Learning: live and off patterns, observations over 26 weeks and a fortnight of reflections.
+  const learning = await buildLearningScale({
+    now,
+    todayKey: habitDayKey(now, OWNER_TIME_ZONE),
+    encryption,
+    habits: habitSpecs.map((spec) => ({
+      id: spec.id,
+      isCare: spec.isCare,
+      windowIds: Object.keys(spec.windows),
+    })),
+  });
+  learning.patterns.forEach((entry) =>
+    put('patterns', `patterns/${entry.id}`, entry.pattern),
+  );
+  learning.observations.forEach((entry) =>
+    put('observations', `observations/${entry.id}`, entry.observation),
+  );
+  learning.reflections.forEach((entry) =>
+    put('reflections', `reflections/${entry.id}`, entry.reflection),
+  );
+  learning.seenAs.forEach((entry) =>
+    put('seenAs', `seenAs/${entry.id}`, entry.line),
   );
 
   // The emulator commits one batch at a time, so the batches are written one after another once everything is built.

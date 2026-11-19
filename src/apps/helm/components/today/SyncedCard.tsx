@@ -1,10 +1,9 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, ChevronRight, Clock, ListChecks } from 'lucide-react';
+import { ChevronRight, Clock, ListChecks } from 'lucide-react';
 
-import AppLogo from '@/components/AppLogo';
-import { readConnectorAppId } from '@/lib/connections/contract';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import DiscrepancyLine from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';
 import { findOtherTime, findPlace } from '@apps/helm/engine/authority';
@@ -14,8 +13,10 @@ import {
   selectOpenRuns,
 } from '@apps/helm/store/selectors/runSelectors';
 import type { SyncedRecord } from '@apps/helm/types';
+import { findMeetingFormat } from '@apps/helm/utils/meetingWhere';
 import { getRunProgress } from '@apps/helm/utils/runSteps';
 import { formatClock } from '@apps/helm/utils/planDays';
+import ConnectorMark from '@apps/helm/components/connections/ConnectorMark';
 
 interface SyncedCardProps {
   record: SyncedRecord;
@@ -35,17 +36,8 @@ function SourceMark({
   record: SyncedRecord;
   className: string;
 }) {
-  return record.connectorId === 'google:calendar' ? (
-    <span
-      className={`bg-muted text-muted-foreground flex shrink-0 items-center justify-center ${className}`}
-    >
-      <CalendarDays className='size-[55%]' aria-hidden='true' />
-    </span>
-  ) : (
-    <AppLogo
-      appId={readConnectorAppId(record.connectorId) ?? ''}
-      className={className}
-    />
+  return (
+    <ConnectorMark connectorId={record.connectorId} className={className} />
   );
 }
 
@@ -79,7 +71,6 @@ export function SyncedCard({
     timeLine(record),
     record.sealed.extra.isTentative === true ? HELM_COPY.syncedTentative : null,
     record.sealed.subtitle,
-    findPlace(record, alsoIn),
   ]
     .filter((part): part is string => !!part)
     .join(' · ');
@@ -105,6 +96,11 @@ export function SyncedCard({
         </span>
         <span className='text-muted-foreground block text-[13px] break-words'>
           {detail}
+          <MeetingWhere
+            how={findMeetingFormat(record, alsoIn)}
+            place={findPlace(record, alsoIn)}
+            hasBefore={detail !== ''}
+          />
         </span>
         {other && other.startAt !== null && (
           <span className='text-foreground flex items-start gap-1 text-[13px] break-words'>

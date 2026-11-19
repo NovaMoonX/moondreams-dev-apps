@@ -25,7 +25,13 @@ import {
   HELM_VOICE_NAMES,
 } from '../../functions/src/apps/helm/voiceIdentity.ts';
 import type { HelmQuestion } from '../../src/apps/helm/types.ts';
-import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
+import {
+  acceptsFreeAnswer,
+  matchSpokenAnswer,
+  pickComposerTarget,
+  takesComposerAnswer,
+  toFreeAnswer,
+} from '../../src/apps/helm/utils/questionAnswers.ts';
 import {
   HELM_DEFAULT_VOICE,
   HELM_VOICES,
@@ -165,6 +171,8 @@ assert.ok(
 const commands: NomosCommand[] = [
   {
     kind: 'createTask',
+    questions: [],
+    meeting: null,
     ref: '$new1',
     title: 'Call the florist',
     due: { kind: 'day', date: Date.UTC(2026, 10, 13) },
@@ -356,6 +364,86 @@ assert.ok(
   'an undo phrase is an undo phrase and, with an offer open, also reads as yes',
 );
 
+const pickWithElse: HelmQuestion = {
+  ...undoOffer,
+  kind: 'asked',
+  builtBy: 'model',
+  shape: 'pickOne',
+  prompt: 'What should happen with the meatball recipe?',
+  options: [
+    { id: 'keep', label: 'Keep it', detail: null, ref: null },
+    { id: 'drop', label: 'Drop it', detail: null, ref: null },
+  ],
+  allowsSomethingElse: true,
+};
+const choicesOnly: HelmQuestion = {
+  ...pickWithElse,
+  allowsSomethingElse: false,
+};
+const typedWords: HelmQuestion = {
+  ...pickWithElse,
+  shape: 'freeText',
+  options: [],
+};
+assert.equal(
+  pickComposerTarget([
+    { id: 'q1', question: choicesOnly },
+    { id: 'q2', question: typedWords },
+  ])?.id,
+  'q2',
+  'the composer answers the first question that takes typed words, not the choices ahead of it',
+);
+assert.equal(
+  pickComposerTarget([{ id: 'q1', question: choicesOnly }]),
+  undefined,
+);
+assert.deepEqual(
+  toFreeAnswer(pickWithElse, '  put it in the freezer '),
+  {
+    kind: 'value',
+    value: {
+      shape: 'pickOne',
+      optionId: 'other',
+      otherText: 'put it in the freezer',
+    },
+  },
+  'words that are none of the choices answer "something else" from the composer',
+);
+assert.deepEqual(
+  toFreeAnswer({ ...pickWithElse, shape: 'freeText', options: [] }, 'Friday'),
+  { kind: 'value', value: { shape: 'freeText', text: 'Friday' } },
+  'a free text question takes the composer words',
+);
+assert.equal(
+  toFreeAnswer({ ...pickWithElse, allowsSomethingElse: false }, 'hm'),
+  null,
+  'a pick with no "something else" leaves the words to go on as a turn',
+);
+const neitherFact: HelmQuestion = {
+  ...undoOffer,
+  kind: 'whichIsTrue',
+  shape: 'pickOne',
+  options: [
+    { id: 'a', label: 'A', detail: null, ref: null },
+    { id: 'none', label: 'Neither', detail: null, ref: null },
+  ],
+};
+assert.deepEqual(
+  toFreeAnswer(neitherFact, 'It is $2,000'),
+  { kind: 'neither', text: 'It is $2,000' },
+  'words answer "Neither" to which fact is true',
+);
+assert.ok(
+  !acceptsFreeAnswer(undoOffer) && toFreeAnswer(pickWithElse, '   ') === null,
+  'an undo offer and empty words take no free answer',
+);
+assert.ok(
+  takesComposerAnswer({ ...pickWithElse, shape: 'number', options: [] }) &&
+    takesComposerAnswer({ ...pickWithElse, shape: 'dateTime', options: [] }) &&
+    !takesComposerAnswer(undoOffer),
+  'the composer answers a number or a date in the thread, never an undo offer',
+);
+
 const nods: [string, boolean][] = [
   ['Gotcha. Okay.', true],
   ['Gotcha. Okay. Now', true],
@@ -382,6 +470,14 @@ const closers: [string, boolean][] = [
   ['goodbye', true],
   ['Thanks, nothing else.', true],
   ["tell Sam I'm done", false],
+  ["Gotcha, that's all", true],
+  ["okay that's it", true],
+  ["that's everything", true],
+  ['Okay, im done', true],
+  ['all done', true],
+  ['Gotcha, stop', true],
+  ['tell Sam that is all', false],
+  ['tell Sam all done', false],
   ['stop the timer', false],
   ['okay', false],
 ];
@@ -392,11 +488,29 @@ closers.forEach(([said, expected]) =>
     `"${said}" ${expected ? 'ends' : 'does not end'} a live conversation`,
   ),
 );
-["that's it", 'thats all', 'end the conversation'].forEach((phrase) =>
+[
+  "that's it",
+  'thats all',
+  "that's everything",
+  'thats everything',
+  "that's all for now",
+  'thats it for now',
+  'end the conversation',
+  'bye for now',
+].forEach((phrase) =>
   assert.ok(
     END_PHRASES.includes(phrase.toLowerCase()),
     `"${phrase}" ends a live conversation`,
   ),
+);
+assert.ok(
+  !END_PHRASES.some((phrase) => /\b(?:i'?m|we'?re) done/.test(phrase)),
+  'a whole-utterance closer is never an end phrase',
+);
+assert.equal(
+  new Set(END_PHRASES).size,
+  END_PHRASES.length,
+  'each end phrase is listed once',
 );
 
 const paragraphCases: [string, string[]][] = [

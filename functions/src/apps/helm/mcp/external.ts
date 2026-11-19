@@ -231,6 +231,7 @@ const STILL_READING: SortResult = {
   releasedIds: [],
   hasAnswer: false,
   spoken: null,
+  abilityOffer: null,
 };
 const RETRY_WINDOW_MS = 2 * 60 * 1000;
 const ALREADY_FILED_TEXT =
@@ -282,6 +283,8 @@ const outsideCaptureFields = (ctx: McpRequestContext, createdAt: number) => ({
   whoIds: [],
   placeIds: [],
   planDayKey: null,
+  aimsDayKey: null,
+  morningDayKey: null,
   createdAt,
   screen: null,
 });
@@ -353,6 +356,7 @@ async function fileTurn({
     releasedIds: [],
     hasAnswer: false,
     spoken: null,
+    abilityOffer: null,
   }));
   return describeTurn({
     firestore,
@@ -571,6 +575,7 @@ async function saveTurn({
           undoReport: null,
           goneIds: null,
           undoReason: null,
+          heldSpoken: null,
           spoken: null,
         }),
       });
@@ -705,6 +710,11 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
     outsideReadScopes: ctx.readScopes,
     firestore,
     timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
+    mask: {
+      isOn: true,
+      names: [],
+      timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
+    },
     aliases: createSealedAliasBook('t', ctx.uid, key),
     topicRead: {
       topics: topicAliases,

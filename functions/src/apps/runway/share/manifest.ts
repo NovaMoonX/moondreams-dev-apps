@@ -124,10 +124,91 @@ export const RUNWAY_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'envelopeBalances',
+          kind: 'artifact',
+          label: 'Envelope spending',
+          detail: "Each envelope's name and what was spent from it this month",
+          meaning:
+            'How much the person has spent from each envelope, such as groceries or gas, in a month or a stretch of days they ask about; what is left in an envelope is not shared, only what was spent. Read only when asked.',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each envelope's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'What was spent from it this month',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'accountBalances',
+          kind: 'artifact',
+          label: 'Account balances',
+          detail: "Each account's name and its balance",
+          meaning:
+            "The accounts where the person's money is held, each with the balance the bank or the person last gave and a total of those they count toward their own. Money, sent only with its currency and when asked; account numbers never.",
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each account's name and kind",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'Its balance and the day it was given',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'Whether it counts toward their total',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'cardsDue',
+          kind: 'task',
+          label: 'Cards due',
+          detail: "Each card's name, the amount owed and its due date",
+          meaning:
+            'The credit cards the person pays, each with its next due day and, when the bank gave a statement, what it says is owed. Money, sent only with its currency and when asked; card numbers never.',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each card's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The day its next payment is due',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'The amount on its latest statement',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
-        'accounts and balances',
-        'cards',
+        'account and card numbers',
         'income sources',
         'receipts and notes',
       ],

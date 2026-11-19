@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 # Every production setup step, in order; finished steps are skipped and no secret is printed, so it is safe to re-run.
 # --after-deploy: only the alerts, once the merge has deployed. --dry: print the plan and write nothing.
+# --defaults: an optional step answered on this machine before gets that answer again without asking; a new one is still asked.
 set -Eeuo pipefail
 cd "$(dirname "$0")/../.."
 
 PROJECT=moondreams-dev-apps
 DRY=0
 AFTER_DEPLOY=0
+DEFAULTS=0
 for arg in "$@"; do
   case "$arg" in
     --dry) DRY=1 ;;
     --after-deploy) AFTER_DEPLOY=1 ;;
-    *) echo "✗ Unknown option $arg. Use --dry or --after-deploy." >&2; exit 1 ;;
+    --defaults) DEFAULTS=1 ;;
+    *) echo "✗ Unknown option $arg. Use --dry, --defaults or --after-deploy." >&2; exit 1 ;;
   esac
 done
 
 source scripts/lib/firebaseLogin.sh
 source scripts/lib/gcloudTracks.sh
+source scripts/lib/setupState.sh
 
 CURRENT="starting"
 trap 'status=$?; (( status == 0 )) || echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' EXIT
@@ -190,7 +194,12 @@ anthropic_run() {
   pause "Set the spend cap with the steps above, then press Enter: "
 }
 
-google_done() { secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.googleapis.com && api_enabled gmail.googleapis.com && api_enabled drive.googleapis.com && api_enabled people.googleapis.com; }
+# The consent screen's calendar write scopes are recorded by googleSetup.sh once added, so a run from before they existed goes back through it.
+google_scopes_done() {
+  local SETUP_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/google-setup"
+  [[ -z "$(missing_from scopes https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.app.created)" ]]
+}
+google_done() { google_scopes_done && secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.googleapis.com && api_enabled gmail.googleapis.com && api_enabled drive.googleapis.com && api_enabled people.googleapis.com; }
 google_run() {
   bash scripts/connections/googleSetup.sh
 }
@@ -214,10 +223,31 @@ deepgram_run() {
   pause "Set a spend alert if you see one (or skip it), then press Enter: "
 }
 
-tts_done() { api_enabled texttospeech.googleapis.com; }
+tts_whisper_granted() {
+  gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' \
+    --filter='bindings.role=roles/aiplatform.user AND bindings.members~-compute@developer.gserviceaccount.com' \
+    --format='value(bindings.role)' 2>/dev/null | grep -q aiplatform
+}
+tts_done() { api_enabled texttospeech.googleapis.com && api_enabled aiplatform.googleapis.com && tts_whisper_granted; }
 # stdin is closed so the script doesn't offer a second sign-in; the check above already did it.
 tts_run() { bash scripts/voice/googleSetup.sh </dev/null; }
 
+youtube_read_granted() {
+  gcloud secrets get-iam-policy YOUTUBE_API_KEY --project="$PROJECT" 2>/dev/null | grep -q -- '-compute@developer.gserviceaccount.com'
+}
+youtube_done() { secret_has YOUTUBE_API_KEY && youtube_read_granted; }
+youtube_run() {
+  if secret_has YOUTUBE_API_KEY; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding YOUTUBE_API_KEY --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "✓ The functions can read YOUTUBE_API_KEY"
+  else
+    bash scripts/video/youtubeSecret.sh
+  fi
+}
 gemini_done() { secret_has GEMINI_API_KEY; }
 gemini_run() { bash scripts/voice/geminiSecret.sh; }
 
@@ -314,7 +344,15 @@ optional_step() { # title, detect, run, default, question
   if (( DRY )); then
     echo "→ would ask ($default): $question, then run: $title"; return 0
   fi
-  if ask "$question" "$default"; then
+  local answers="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/helm-setup-answers" kept=""
+  kept="$(awk -F'\t' -v k="$title" '$1 == k { v = $2 } END { print v }' "$answers" 2>/dev/null || true)"
+  if (( DEFAULTS )) && [[ -n "$kept" ]]; then
+    echo "• $title: answering $kept, as last time (--defaults)"
+  else
+    if ask "$question" "$default"; then kept=y; else kept=n; fi
+    mkdir -p "$(dirname "$answers")"; { awk -F'\t' -v k="$title" '$1 != k' "$answers" 2>/dev/null || true; printf '%s\t%s\n' "$title" "$kept"; } >"$answers.tmp"; mv "$answers.tmp" "$answers"
+  fi
+  if [[ "$kept" == y ]]; then
     echo "→ ${title}…"; "$run"; add DONE_LIST "$title"
   else
     echo "• Skipped: $title"; add SKIPPED_LIST "$title"
@@ -329,6 +367,7 @@ step "Connections keyring" connections_keyring_done connections_keyring_run
 step "Connections keyring canary" never_done connections_canary_run
 optional_step "Deepgram key (saved, readable by the functions)" deepgram_done deepgram_run y "Save the Deepgram key? Without it, voice listens with the device instead"
 optional_step "Google Text-to-Speech" tts_done tts_run y "Turn on Google Text-to-Speech? Without it, answers are read by the phone's voice"
+optional_step "YouTube key" youtube_done youtube_run y "Save a YouTube key? Without it, Learn later overviews show no videos"
 optional_step "Gemini key" gemini_done gemini_run n "Save a Gemini key? Only needed to compare Gemini's voices in the benchmark"
 
 if (( AFTER_DEPLOY )) && (( ! DRY )) && ! both_deployed; then

@@ -52,11 +52,41 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
           ],
           scopeVersion: 2,
         },
+        {
+          id: 'revealedItems',
+          kind: 'knowledge',
+          label: 'Revealed items',
+          detail:
+            'The things already revealed: what each says, its box and when',
+          meaning:
+            'The thoughts and wishes the two people have already revealed to each other, each with its box and the day it was revealed; what is still hidden is never read.',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: 'What each revealed item says',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'Which box it is in',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+            {
+              label: 'When it was revealed',
+              sinceVersion: 1,
+              addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
-        'anything an item says',
+        'anything an item that is still hidden says',
         'who added an item',
-        'when an item was added or revealed',
+        'when an item was added',
         'the invite code',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },

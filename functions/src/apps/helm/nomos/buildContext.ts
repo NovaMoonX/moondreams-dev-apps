@@ -5,7 +5,11 @@ import {
   type SyncedBook,
 } from './aliases.js';
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
+import type { ContextFit, NeedsDays } from './fitContext.js';
+import type { HeardName } from './heardNames.js';
 import {
+  MAX_CONTEXT_HABITS,
+  MAX_CONTEXT_IMPORTANCE,
   MAX_CONTEXT_PROJECTS,
   MAX_CONTEXT_TOPICS,
   MAX_HINT_NOTES,
@@ -13,18 +17,31 @@ import {
   type CaptureReading,
   type TaskDue,
   type Token,
+  type MeetsHow,
 } from './commands.js';
 import type { StepGroupBlock } from '../stepGroups.js';
 import { withoutAddress } from './joinedTurn.js';
 import { hasReviseCue, hasUndoCue, isQuestion } from './route.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
+import type { ContextLearnItem } from '../research/learnStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
+import { SEEN_AS_LIMITS } from './seenAs.js';
+import {
+  MAX_RELATED_THINGS,
+  type ContextRelatedThing,
+} from './relatedThings.js';
 
 export interface ContextTask {
   id: string;
   title: string;
   due: TaskDue | null;
+  /** How many of a task's questions are answered, and when its meeting starts; null for any other task. */
+  questions?: { answered: number; total: number; meetingAt: number } | null;
+  /** How a task with a moment due meets; null when it was never said. */
+  meetsHow?: MeetsHow | null;
+  /** Kept quiet today, by its own mark or a quiet project. */
+  isQuiet?: boolean;
 }
 
 /** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
@@ -33,7 +50,32 @@ export interface ContextFact {
   subject: string;
   statement: string;
   by: 'said' | 'inferred';
+  isPrivate?: boolean;
+  isSubjectPrivate?: boolean;
 }
+
+/** A person, pet or organization the person has, with the other names and the family word the model needs to link a name to them. */
+export interface ContextPerson {
+  id: string;
+  name: string;
+  alsoCalled: string[];
+  relation: string | null;
+  /** The family word and its order as the person says it ("younger brother"). */
+  kin: string | null;
+  /** Numbers and addresses, the primary first, each with its label; left out for a private person and when there are none. */
+  phones?: ContextContact[];
+  emails?: ContextContact[];
+  /** One line per connection from their side; never for a private person. */
+  connections?: string[];
+}
+
+export interface ContextContact {
+  value: string;
+  label: string;
+  isPrimary: boolean;
+}
+
+export const MAX_CONTEXT_PEOPLE = 60;
 
 /** What the records hold about the person themself: a preference, a favorite or who they are. */
 export interface ContextSelfFact {
@@ -43,6 +85,60 @@ export interface ContextSelfFact {
   value: string | null;
   statement: string;
   by: 'said' | 'inferred';
+  isPrivate?: boolean;
+}
+
+/** A habit as the model sees it: today's state, with no id and no time of day. */
+export interface ContextHabit {
+  id: string;
+  name: string;
+  emoji: string | null;
+  status: string;
+  isCare: boolean;
+  isDue: boolean;
+  /** Each window, by its label, with whether today's tick is in. */
+  windows: { label: string; isDone: boolean }[];
+  /** Counted habits: how many so far and how many a day. */
+  count: number | null;
+  timesPerDay: number | null;
+  /** Whether it is kept for someone else. */
+  isForOther: boolean;
+  isPrivate?: boolean;
+}
+
+/** A scheduled action as the model sees it: its words, when it runs, and whether it is paused. */
+export interface ContextScheduledAction {
+  id: string;
+  title: string;
+  /** The rule's one words line, built by code. */
+  repeat: string;
+  status: string;
+  next: string | null;
+  isPrivate?: boolean;
+}
+
+/** A project, goal or habit in the person's order of what matters, as the model sees it. */
+export interface ContextImportanceEntry {
+  id: string;
+  kind: 'project' | 'goal' | 'habit';
+  name: string;
+  /** The person's own words for where they put it. */
+  words: string | null;
+  /** Date-only, inclusive: the day the placing ends. */
+  until: string | null;
+  /** Its nearest date, shown for things nobody placed. */
+  date: string | null;
+  /** The place number in In order; ties share one. */
+  position: number | null;
+  isPrivate?: boolean;
+}
+
+/** The order as the model sees it: placed things first, then Can wait, then the unplaced, then health and care that are never placed. */
+export interface ContextImportance {
+  inOrder: ContextImportanceEntry[];
+  canWait: ContextImportanceEntry[];
+  notSaid: ContextImportanceEntry[];
+  alwaysKept: ContextImportanceEntry[];
 }
 
 /** A topic as the model sees it: its name and its path from the top down ("Car care › Washing"). */
@@ -50,6 +146,9 @@ export interface ContextTopic {
   id: string;
   name: string;
   path: string;
+  /** The path with each private topic on it named as one, for a turn nobody is looking at. */
+  maskedPath?: string;
+  isPrivate?: boolean;
 }
 
 /** A procedure as the model sees it: its title and how many steps it has. */
@@ -57,6 +156,7 @@ export interface ContextProcedure {
   id: string;
   title: string;
   stepCount: number;
+  isPrivate?: boolean;
 }
 
 /** The open procedure with its steps in their groups, ungrouped first. */
@@ -65,6 +165,7 @@ export interface ContextFocusedProcedure {
   title: string;
   version: number;
   blocks: StepGroupBlock[];
+  isPrivate?: boolean;
 }
 
 export const MAX_CONTEXT_PROCEDURES = 50;
@@ -74,6 +175,7 @@ export interface ContextRun {
   id: string;
   title: string;
   forLabel: string | null;
+  isPrivate?: boolean;
   /** The run the person has open on screen. */
   isOpen: boolean;
   doneCount: number;
@@ -90,6 +192,8 @@ export interface ContextNote {
   title: string;
   body?: string;
   isUnchecked?: boolean;
+  isPrivate?: boolean;
+  isQuiet?: boolean;
 }
 
 /** Each body trimmed so that all together stay within the cap: the shortest keep every word and what they leave over is shared by the longer ones. */
@@ -137,7 +241,14 @@ export interface ContextInput {
   earlierTurns?: EarlierTurn[];
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
+  /** Set when the turn answers the morning card: the day whose aims it files. */
+  aimsDayKey?: string | null;
+  /** Set when the morning question was open as the turn was sent: the day it asks about. Whether the turn answers it is for the reply to say. */
+  morningDayKey?: string | null;
   facts?: ContextFact[];
+  /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
+  people?: ContextPerson[];
+  heardNames?: HeardName[];
   selfFacts?: ContextSelfFact[];
   /** The dates that come back of the people the turn names. */
   keyDates?: ContextKeyDate[];
@@ -166,16 +277,48 @@ export interface ContextInput {
   focusedProcedure?: ContextFocusedProcedure | null;
   /** The runs not yet finished, the open one first, at most `MAX_CONTEXT_RUNS`; steps are aliased up to `MAX_CONTEXT_RUN_STEPS` in all. */
   runs?: ContextRun[];
+  /** The person's habits as of today, at most `MAX_CONTEXT_HABITS`; each name goes through `toDataJson`. */
+  habits?: ContextHabit[];
+  /** The person's scheduled actions that have not ended, at most 50, when the turn could be about one. */
+  scheduledActions?: ContextScheduledAction[];
+  /** The questions saved to learn later that are still open, at most 30, newest first. */
+  learnLater?: ContextLearnItem[];
+  /** What matters most, when the turn is about it; at most `MAX_CONTEXT_IMPORTANCE` entries. */
+  importance?: ContextImportance;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
+  /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
+  noticed?: string[];
+  relatedThings?: ContextRelatedThing[];
+  seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
+  /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
+  whereabouts?: Record<string, unknown> | null;
+  /** How a stretch away fits the work and the calendar, worked out by code for a can-I-go question. */
+  fit?: ContextFit | NeedsDays | null;
+  /** What this phone lets the assistant read of where it is. */
+  abilities?: {
+    location: {
+      setting: 'off' | 'city' | 'precise';
+      permission: 'granted' | 'prompt' | 'denied' | 'unsupported';
+    };
+  } | null;
+}
+
+/** A line of how the assistant sees the person, as the model is shown it: a correction already stands in place of the line it corrects. */
+export interface ContextSeenAs {
+  id: string;
+  kind: string;
+  text: string;
+  isCorrected: boolean;
 }
 
 export interface ContextFocusedTopic {
   id: string;
   name: string;
   version: number;
+  isPrivate?: boolean;
   sections: {
     id: string;
     heading: string | null;
@@ -201,6 +344,8 @@ export interface EarlierTurn {
   said: string;
   did: string | null;
   taskIds: string[];
+  /** The line it kept off the speaker; never handed to the model. */
+  heldLine?: string | null;
   /** What this turn did that can still be taken back, one entry per execution. */
   undoable?: {
     executionId: string;
@@ -232,6 +377,14 @@ export const describeDue = (due: TaskDue | null) => {
     : new Date(due.at).toISOString();
 };
 
+const describeMeetingDay = (at: number, timeZone: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: toKnownZone(timeZone),
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(at));
+
 const describeNow = (at: number, timeZone: string) => {
   const zone = toKnownZone(timeZone);
   const local = new Intl.DateTimeFormat('en-US', {
@@ -246,6 +399,38 @@ const describeNow = (at: number, timeZone: string) => {
   return { timeZone: zone, saidAt: new Date(at).toISOString(), local };
 };
 
+const toImportanceView = (
+  importance: ContextImportance,
+  aliasOf: (entry: ContextImportanceEntry) => string,
+) => {
+  const view = (entry: ContextImportanceEntry) => ({
+    alias: aliasOf(entry),
+    name: entry.name,
+    ...(entry.kind !== 'project' && { kind: entry.kind }),
+    ...(entry.position !== null && { place: entry.position }),
+    ...(entry.words && { saidAs: entry.words }),
+    ...(entry.until && { until: entry.until }),
+    ...(entry.date && { date: entry.date }),
+  });
+  const inOrder = importance.inOrder.slice(0, MAX_CONTEXT_IMPORTANCE);
+  const canWait = importance.canWait.slice(
+    0,
+    MAX_CONTEXT_IMPORTANCE - inOrder.length,
+  );
+  const notSaid = importance.notSaid.slice(
+    0,
+    MAX_CONTEXT_IMPORTANCE - inOrder.length - canWait.length,
+  );
+  return {
+    inOrder: inOrder.map(view),
+    canWait: canWait.map(view),
+    notSaid: notSaid.map(view),
+    alwaysKept: importance.alwaysKept
+      .slice(0, MAX_CONTEXT_IMPORTANCE)
+      .map(view),
+  };
+};
+
 const toTokenView = (token: Token) => ({ id: token.id, text: token.text });
 
 /** The whole of what the model is told about this capture. Records come as aliases; no id, no uid. */
@@ -254,14 +439,23 @@ export function buildContext(input: ContextInput): {
   aliases: AliasBook;
   synced: SyncedBook;
   facts: AliasBook;
+  people: AliasBook;
   keyDates: AliasBook;
   topics: AliasBook;
   notes: AliasBook;
+  projects: AliasBook;
   parts: AliasBook;
   sections: AliasBook;
   procedures: AliasBook;
   procedureSteps: AliasBook;
   runSteps: AliasBook;
+  habits: AliasBook;
+  scheduledActions: AliasBook;
+  learnLater: AliasBook;
+  seenAs: AliasBook;
+  /** What each line shown says, by id, for the check that a removal still names it. */
+  seenAsWords: Map<string, string>;
+  habitNames: Map<string, string>;
   undoTurns: AliasBook;
   /** How many lines the model was shown for each turn it may offer to take back. */
   undoUnitCounts: Map<string, number>;
@@ -271,9 +465,14 @@ export function buildContext(input: ContextInput): {
   const sectionBook = createAliasBook('s');
   const topics = createAliasBook('tp');
   const notes = createAliasBook('n');
+  const projects = createAliasBook('p');
   const procedures = createAliasBook('pr');
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
+  const habits = createAliasBook('h');
+  const scheduledBook = createAliasBook('sa');
+  const learnBook = createAliasBook('r');
+  const seenAsBook = createAliasBook('sy');
   const undoTurns = createAliasBook('u');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
@@ -285,6 +484,7 @@ export function buildContext(input: ContextInput): {
     idOf: (alias) => partIds.get(alias) ?? null,
   };
   const facts = createAliasBook('f');
+  const people = createAliasBook('w');
   const keyDates = createAliasBook('k');
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
@@ -295,10 +495,71 @@ export function buildContext(input: ContextInput): {
     alias: aliases.add(task.id),
     title: task.title,
     due: describeDue(task.due),
+    ...(task.meetsHow && { meets: task.meetsHow }),
+    ...(task.questions && {
+      questions: `${task.questions.answered} of ${task.questions.total} answered`,
+      meeting: describeMeetingDay(task.questions.meetingAt, input.timeZone),
+    }),
+    ...(task.isQuiet ? { isQuiet: true } : {}),
   }));
+  const listedTaskIds = new Set(
+    input.tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => task.id),
+  );
+  const listedProjects = new Set(
+    (input.projects ?? [])
+      .slice(0, MAX_CONTEXT_PROJECTS)
+      .map((project) => project.name),
+  );
+  const toFitBlock = (found: ContextFit) => ({
+    leaving: found.firstDay,
+    back: found.lastDay,
+    mustDoCount: found.fit.mustDoCount,
+    mustDoFirst: found.fit.mustDoFirst.flatMap((task) =>
+      listedTaskIds.has(task.id)
+        ? [
+            {
+              task: aliases.add(task.id),
+              due: new Date(task.dueDay).toISOString().slice(0, 10),
+              minutes: task.minutes,
+              isOverdue: task.isOverdue,
+            },
+          ]
+        : [],
+    ),
+    workMinutes: found.fit.workMinutes,
+    freeMinutesBefore: Math.round(found.fit.freeMinutesBefore),
+    noCalendar: !found.fit.hasCalendar,
+    wontFit: found.fit.isWontFit,
+    wouldMove: found.events
+      .filter(
+        (copy) =>
+          found.fit.wouldMove.includes(copy.id) &&
+          (input.synced ?? []).some((shown) => shown.id === copy.id),
+      )
+      .map((copy) => synced.add(copy)),
+    deadlines: found.fit.deadlines.flatMap((deadline) =>
+      listedProjects.has(deadline.name)
+        ? [
+            {
+              name: deadline.name,
+              date: new Date(deadline.date).toISOString().slice(0, 10),
+              workMinutes: deadline.workMinutes,
+              freeMinutes: Math.round(deadline.freeMinutes),
+              becauseAway: deadline.isBecauseAway,
+            },
+          ]
+        : [],
+    ),
+  });
+  const fit = !input.fit
+    ? null
+    : 'needsDays' in input.fit
+      ? { needsDays: true }
+      : toFitBlock(input.fit);
   const toRef = (task: ContextTask) => ({
     alias: aliases.add(task.id),
     title: task.title,
+    ...(task.isQuiet ? { isQuiet: true } : {}),
   });
   const screen = input.screen
     ? {
@@ -314,6 +575,7 @@ export function buildContext(input: ContextInput): {
     said: turn.said.slice(0, MAX_EARLIER_SAID_CHARS),
     did: turn.did,
     records: turn.taskIds.map((id) => aliases.add(id)),
+    ...((turn.heldLine ?? null) !== null ? { keptOffSpeaker: true } : {}),
     ...(turn.undoable?.some((entry) => entry.units.length > 0)
       ? {
           undoable: turn.undoable
@@ -325,12 +587,27 @@ export function buildContext(input: ContextInput): {
         }
       : {}),
   }));
+  const listed = new Set(
+    (input.people ?? []).slice(0, MAX_CONTEXT_PEOPLE).map(({ id }) => id),
+  );
+  const aliasOf = (id: string | null) =>
+    id !== null && listed.has(id) ? people.add(id) : null;
+  const heardRecords = (input.heardNames ?? []).map((entry) => {
+    const either = entry.candidateIds.flatMap((id) => aliasOf(id) ?? []);
+    return {
+      heard: entry.heard,
+      swappedTo: entry.said,
+      person: aliasOf(entry.recordId),
+      couldBeEither: either.length > 1 ? either : null,
+    };
+  });
   const keptNotes = (input.notes ?? []).slice(0, MAX_HINT_NOTES);
   const noteBodies = toNoteBodies(keptNotes);
   const noteRecords = keptNotes.map((note, index) => ({
     alias: notes.add(note.id),
     title: note.title,
     ...(noteBodies[index] === null ? {} : { body: noteBodies[index] }),
+    ...(note.isQuiet ? { isQuiet: true } : {}),
     ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
   const focusedProcedure = input.focusedProcedure ?? null;
@@ -461,6 +738,14 @@ export function buildContext(input: ContextInput): {
           `<nothing_to_undo>Nothing from earlier turns can be taken back now. If they are asking to take something back, say plainly you can't and send no offerUndo; otherwise carry on as usual.</nothing_to_undo>`,
         ]
       : []),
+    ...(input.aimsDayKey
+      ? [`<aims_turn>${toDataJson({ day: input.aimsDayKey })}</aims_turn>`]
+      : []),
+    ...(input.morningDayKey
+      ? [
+          `<morning_question>${toDataJson({ day: input.morningDayKey })}</morning_question>`,
+        ]
+      : []),
     ...(input.answeredQuestion
       ? [
           `<answered_question>${toDataJson(input.answeredQuestion)}</answered_question>`,
@@ -475,6 +760,21 @@ export function buildContext(input: ContextInput): {
             })),
           )}</known_facts>`,
         ]
+      : []),
+    ...(input.people?.length
+      ? [
+          `<people>${toDataJson(
+            input.people
+              .slice(0, MAX_CONTEXT_PEOPLE)
+              .map(({ id, ...person }) => ({
+                alias: people.add(id),
+                ...person,
+              })),
+          )}</people>`,
+        ]
+      : []),
+    ...(heardRecords.length
+      ? [`<heard_names>${toDataJson(heardRecords)}</heard_names>`]
       : []),
     ...(input.selfFacts?.length
       ? [
@@ -504,8 +804,28 @@ export function buildContext(input: ContextInput): {
           `<open_projects>${toDataJson(
             input.projects
               .slice(0, MAX_CONTEXT_PROJECTS)
-              .map(({ name, milestones }) =>
-                milestones.length > 0 ? { name, milestones } : { name },
+              .map(
+                ({
+                  id,
+                  name,
+                  milestones,
+                  isQuiet,
+                  kind,
+                  status,
+                  why,
+                  date,
+                  researchOffered,
+                }) => ({
+                  alias: projects.add(id),
+                  name,
+                  ...(date && { date }),
+                  ...(researchOffered.length > 0 && { researchOffered }),
+                  ...(kind === 'goal' && { kind }),
+                  ...(status && { status }),
+                  ...(why && { why }),
+                  ...(milestones.length > 0 ? { milestones } : {}),
+                  ...(isQuiet ? { isQuiet: true } : {}),
+                }),
               ),
           )}</open_projects>`,
         ]
@@ -534,6 +854,82 @@ export function buildContext(input: ContextInput): {
           )}</your_procedures>`,
         ]
       : []),
+    ...(input.habits?.length
+      ? [
+          `<habits>${toDataJson(
+            input.habits.slice(0, MAX_CONTEXT_HABITS).map((habit) => ({
+              habit: habits.add(habit.id),
+              name: habit.name,
+              emoji: habit.emoji,
+              status: habit.status,
+              isCare: habit.isCare,
+              isDueToday: habit.isDue,
+              windows: habit.windows,
+              count: habit.count,
+              timesPerDay: habit.timesPerDay,
+              isForSomeoneElse: habit.isForOther,
+            })),
+          )}</habits>`,
+        ]
+      : []),
+    ...(input.scheduledActions?.length
+      ? [
+          `<scheduled_actions>${toDataJson(
+            input.scheduledActions.map((action) => ({
+              action: scheduledBook.add(action.id),
+              title: action.title,
+              repeat: action.repeat,
+              status: action.status,
+              next: action.next,
+            })),
+          )}</scheduled_actions>`,
+        ]
+      : []),
+    ...(input.learnLater?.length
+      ? [
+          `<learn_later>${toDataJson(
+            input.learnLater.map((item) => ({
+              item: learnBook.add(item.id),
+              subject: item.subject,
+              status: item.status,
+              saved: item.saved,
+            })),
+          )}</learn_later>`,
+        ]
+      : []),
+    ...(input.importance
+      ? [
+          `<importance>${toDataJson(
+            toImportanceView(input.importance, (entry) =>
+              entry.kind === 'habit'
+                ? habits.add(entry.id)
+                : projects.add(entry.id),
+            ),
+          )}</importance>`,
+        ]
+      : []),
+    ...(input.noticed?.length
+      ? [`<noticed>${toDataJson(input.noticed.slice(0, 10))}</noticed>`]
+      : []),
+    ...(input.relatedThings?.length
+      ? [
+          `<related_things>${toDataJson(
+            input.relatedThings.slice(0, MAX_RELATED_THINGS),
+          )}</related_things>`,
+        ]
+      : []),
+    ...(input.seenAs?.length
+      ? [
+          `<how_you_seem>${toDataJson(
+            input.seenAs.slice(0, SEEN_AS_LIMITS.toModel).map((line) => ({
+              alias: seenAsBook.add(line.id),
+              kind: line.kind,
+              text: line.text,
+              ...(line.isCorrected && { from: 'the person says' }),
+            })),
+          )}</how_you_seem>`,
+        ]
+      : []),
     ...(openRuns.length > 0
       ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]
       : []),
@@ -555,6 +951,13 @@ export function buildContext(input: ContextInput): {
     ...(input.style
       ? [`<your_style>${toDataJson(input.style)}</your_style>`]
       : []),
+    ...(input.whereabouts
+      ? [`<whereabouts>${toDataJson(input.whereabouts)}</whereabouts>`]
+      : []),
+    ...(fit ? [`<fit>${toDataJson(fit)}</fit>`] : []),
+    ...(input.abilities
+      ? [`<abilities>${toDataJson(input.abilities)}</abilities>`]
+      : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
       : []),
@@ -569,14 +972,30 @@ export function buildContext(input: ContextInput): {
     aliases,
     synced,
     facts,
+    people,
     keyDates,
     topics,
     notes,
+    projects,
     parts,
     sections: sectionBook,
     procedures,
     procedureSteps,
     runSteps,
+    habits,
+    scheduledActions: scheduledBook,
+    learnLater: learnBook,
+    seenAs: seenAsBook,
+    seenAsWords: new Map(
+      (input.seenAs ?? [])
+        .slice(0, SEEN_AS_LIMITS.toModel)
+        .map((line): [string, string] => [line.id, line.text]),
+    ),
+    habitNames: new Map(
+      (input.habits ?? [])
+        .slice(0, MAX_CONTEXT_HABITS)
+        .map((habit): [string, string] => [habit.id, habit.name]),
+    ),
     undoTurns,
     undoUnitCounts: new Map(
       (input.earlierTurns ?? []).flatMap((turn) =>

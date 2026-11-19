@@ -22,7 +22,7 @@ const toHint = (date: WhoKeyDate) =>
       ? `${HELM_COPY.keyDateYearUnknown} · ${HELM_COPY.keyDateAddYear}`
       : null;
 
-/** The dates that come back for one who, each opening its sheet, with "Add a date" in the header. Read from the index alone. */
+/** The dates that come back for one who, each opening its sheet, with "Add a date" as the last row. Read from the index alone. */
 function KeyDatesList({ who }: KeyDatesListProps) {
   const { dates, isLoaded, isFailed } = useKeyDates(who.id);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -38,20 +38,7 @@ function KeyDatesList({ who }: KeyDatesListProps) {
           onClick={() => setIsAdding(true)}
         />
       ) : (
-        <SectionDivider
-          label={HELM_COPY.keyDatesHeading}
-          trailing={
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-              onClick={() => setIsAdding(true)}
-            >
-              {HELM_COPY.keyDateAdd}
-            </Button>
-          }
-        />
+        <SectionDivider label={HELM_COPY.keyDatesHeading} />
       )}
       {isEmpty ? null : dates.length === 0 ? (
         isFailed && (
@@ -89,6 +76,13 @@ function KeyDatesList({ who }: KeyDatesListProps) {
               </li>
             );
           })}
+          <li>
+            <AddRow
+              label={HELM_COPY.keyDateAdd}
+              isInList
+              onClick={() => setIsAdding(true)}
+            />
+          </li>
         </ul>
       )}
       <KeyDateSheet

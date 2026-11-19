@@ -45,6 +45,7 @@ import {
   toEffectTitles,
   type DayCapture,
   type DayExecution,
+  type DayHabitCheck,
   type HelmDayCounts,
 } from './countDay.js';
 
@@ -52,6 +53,7 @@ export type DaySummaryStatus = 'empty' | 'counted' | 'written';
 export type DaySummaryResult = DaySummaryStatus | 'busy';
 
 const MAX_TITLES = 15;
+const DAY_MS = 86_400_000;
 const MAX_EXTRA_CAPTURES = 300;
 const SUMMARY_LIMITS = { maxTurns: 2, maxToolCalls: 0, maxMillis: 45_000 };
 /** Another writer counted this day this recently and is still asking for its sentence. */
@@ -190,6 +192,28 @@ const toCapture = (data: DocumentData): DayCapture => ({
   questionState: (data.questionState ?? {}) as DayCapture['questionState'],
 });
 
+/** Every tick and skip in a habit day's entries; one made by an outside assistant's turn is marked so it counts for nothing. */
+const toHabitChecks = (
+  entries: unknown,
+  outsideExecutionIds: Set<string>,
+): DayHabitCheck[] =>
+  Object.values((entries ?? {}) as Record<string, { checks?: unknown }>)
+    .flatMap((entry) => Object.values((entry?.checks ?? {}) as object))
+    .flatMap((check) => {
+      const { at, status, executionId } = check as Record<string, unknown>;
+      return typeof at === 'number'
+        ? [
+            {
+              at,
+              status: String(status ?? ''),
+              isOutside:
+                typeof executionId === 'string' &&
+                outsideExecutionIds.has(executionId),
+            },
+          ]
+        : [];
+    });
+
 /** A summary that needs nothing more: an empty day, or a written one nobody marked stale. */
 const isClosed = (data: DocumentData | undefined) =>
   data?.status === 'empty' || (data?.status === 'written' && !data.staleAt);
@@ -237,11 +261,30 @@ export async function prepareDaySummary(
       .collection(`${base}/${collection}`)
       .where(field, '>=', dayStart)
       .where(field, '<', dayEnd);
-  const [created, dismissed, executionSnap, taskSnap] = await Promise.all([
+  const dayMidnight = Date.parse(`${dayKey}T00:00:00Z`);
+  const [
+    created,
+    dismissed,
+    executionSnap,
+    taskSnap,
+    habitSnap,
+    connectionSnap,
+    habitDaySnap,
+  ] = await Promise.all([
     range('createdAt', 'captures').get(),
     range('dismissedAt', 'captures').get(),
     range('createdAt', 'executions').get(),
     range('completedAt', 'tasks').select('completedAt').get(),
+    range('createdAt', 'habits').select('createdAt').get(),
+    range('createdAt', 'connections')
+      .select('createdAt', 'source', 'executionId')
+      .get(),
+    firestore
+      .collection(`${base}/habitDays`)
+      .where('date', '>=', dayMidnight - DAY_MS)
+      .where('date', '<=', dayMidnight + DAY_MS)
+      .select('entries')
+      .get(),
   ]);
   const captureDocs = new Map(
     [...created.docs, ...dismissed.docs].map((doc) => [doc.id, doc.data()]),
@@ -287,12 +330,37 @@ export async function prepareDaySummary(
       outsideIds.has(String(data.captureId)),
     effectRefs: (data.effectRefs ?? []) as DayExecution['effectRefs'],
   }));
+  const outsideExecutionIds = new Set(
+    executions
+      .filter((_, index) => dayExecutions[index].isOutside)
+      .map(({ id }) => id),
+  );
+  const outsideHabitIds = new Set(
+    dayExecutions
+      .filter((execution) => execution.isOutside)
+      .flatMap((execution) => execution.effectRefs)
+      .filter((ref) => ref.op === 'create' && ref.collection === 'habits')
+      .map((ref) => ref.docId),
+  );
   const counts = countHelmDay({
     captures: [...captureDocs.values()].map(toCapture),
     executions: dayExecutions,
     tasks: taskSnap.docs.map((doc) => ({
       completedAt: Number(doc.get('completedAt')),
     })),
+    habits: habitSnap.docs.map((doc) => ({
+      createdAt: Number(doc.get('createdAt')),
+      isOutside: outsideHabitIds.has(doc.id),
+    })),
+    connections: connectionSnap.docs
+      .filter((doc) => doc.get('source') !== 'refused')
+      .map((doc) => ({
+        createdAt: Number(doc.get('createdAt')),
+        isOutside: outsideExecutionIds.has(String(doc.get('executionId'))),
+      })),
+    habitChecks: habitDaySnap.docs.flatMap((doc) =>
+      toHabitChecks(doc.get('entries'), outsideExecutionIds),
+    ),
     dayStart,
     dayEnd,
   });
@@ -363,6 +431,7 @@ export async function prepareDaySummary(
         style ? STYLE_LINE : null,
         toPersonaPrompt(
           profile.data()?.assistantName,
+          profile.data()?.personality,
           profile.data()?.assistantTone,
         ),
       ]
