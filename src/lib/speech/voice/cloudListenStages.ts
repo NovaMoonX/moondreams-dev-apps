@@ -12,6 +12,8 @@ export const CLOUD_LISTEN_STAGES = {
   socketOpenTimeout: 'socket open timed out',
   socketError: 'socket error before open',
   socketClosed: 'socket closed before open',
+  socketDropError: 'socket error while open',
+  socketDropped: 'socket dropped while open',
 } as const;
 
 /** Never holds a token or the person's words. */

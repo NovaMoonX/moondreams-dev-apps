@@ -26,8 +26,8 @@ const KEEP_ALIVE_MS = 5000;
 const UTTERANCE_MS = 59_000;
 // 15 s of 20 ms frames: the 6 s token wait, the 3 s socket wait and a second of pre-roll, with margin.
 const BUFFER_FRAMES = 750;
-// What an open stream remembers sending, for a fallback if the socket drops mid-sentence.
-const RECENT_FRAMES = 150;
+// What an open stream remembers sending (10 s), for a fallback if the socket drops mid-sentence.
+const RECENT_FRAMES = 500;
 const FRAME_MS = 20;
 const NORMAL_CLOSE = 1000;
 // A cold server takes 2 to 4 s to mint; the wait stays inside the 10 s the buffer holds, so a slow token costs no words.
@@ -69,10 +69,15 @@ const toTokenCause = (
 const toCloseCause = (
   event: CloseEvent,
   hasErrored: boolean,
+  isOpen: boolean,
 ): CloudListenCause => ({
-  stage: hasErrored
-    ? CLOUD_LISTEN_STAGES.socketError
-    : CLOUD_LISTEN_STAGES.socketClosed,
+  stage: isOpen
+    ? hasErrored
+      ? CLOUD_LISTEN_STAGES.socketDropError
+      : CLOUD_LISTEN_STAGES.socketDropped
+    : hasErrored
+      ? CLOUD_LISTEN_STAGES.socketError
+      : CLOUD_LISTEN_STAGES.socketClosed,
   detail: `Close code ${event.code}, reason ${event.reason === '' ? 'none' : `"${event.reason}"`}, ${event.wasClean ? 'clean' : 'not clean'}${hasErrored ? ', after an error event' : ''}`,
   facts: [
     `Close code: ${event.code}`,
@@ -80,6 +85,14 @@ const toCloseCause = (
     `Closed cleanly: ${event.wasClean ? 'yes' : 'no'}`,
   ],
 });
+
+const isSocketStage = (stage: string) =>
+  [
+    CLOUD_LISTEN_STAGES.socketClosed,
+    CLOUD_LISTEN_STAGES.socketError,
+    CLOUD_LISTEN_STAGES.socketDropped,
+    CLOUD_LISTEN_STAGES.socketDropError,
+  ].some((known) => known === stage);
 
 interface DeepgramSttOptions {
   lang: string;
@@ -313,14 +326,25 @@ export const createDeepgramStt = ({
         const windowStart = state.isOpen
           ? ((state.sent - state.recent.length) * FRAME_MS) / 1000
           : 0;
+        const lastEnd = state.finals.at(-1)?.end ?? Infinity;
+        const isSettled =
+          state.isOpen && Number.isFinite(lastEnd) && lastEnd >= windowStart;
+        const replayed = Math.min(
+          state.recent.length,
+          Math.max(0, Math.round(state.sent - (lastEnd * 1000) / FRAME_MS)),
+        );
         const heard = {
           heardText: state.finals
-            .filter(({ end }) => end <= windowStart)
+            .filter(({ end }) => isSettled || end <= windowStart)
             .map(({ text }) => text)
             .join(' '),
           fullText: read(),
         };
-        const preRoll = state.isOpen ? state.recent : state.frames;
+        const preRoll = !state.isOpen
+          ? state.frames
+          : isSettled
+            ? state.recent.slice(state.recent.length - replayed)
+            : state.recent;
         if (state.isClosing) {
           return {
             ...heard,
@@ -358,12 +382,7 @@ export const createDeepgramStt = ({
         reason: CloudHeldReason | null,
         cause: CloudListenCause,
       ) => {
-        if (
-          state.isClosing &&
-          state.isOpen &&
-          cause.stage !== CLOUD_LISTEN_STAGES.socketClosed &&
-          cause.stage !== CLOUD_LISTEN_STAGES.socketError
-        ) {
+        if (state.isClosing && state.isOpen && !isSocketStage(cause.stage)) {
           deliver();
           return;
         }
@@ -524,7 +543,7 @@ export const createDeepgramStt = ({
       socket.onclose = (event: CloseEvent) =>
         state.isOpen && state.isClosing && event.code === NORMAL_CLOSE
           ? deliver()
-          : fail(null, toCloseCause(event, state.hasErrored));
+          : fail(null, toCloseCause(event, state.hasErrored, state.isOpen));
       socket.onmessage = (event: MessageEvent) => {
         const heard = readHeard(event.data);
         if (!heard || state.isDone) return;

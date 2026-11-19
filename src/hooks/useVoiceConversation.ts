@@ -210,6 +210,8 @@ const BARGE_CONFIRM_MS = 1500;
 // A server left idle about 15 minutes starts cold (2 to 6 s), so it is woken on arrival and kept warm while the screen shows.
 const WARM_EVERY_MS = 10 * 60_000;
 const WARM_SLACK_MS = 5000;
+// A recognizer that never reports it started must not hold a listen in Getting ready.
+const READY_CEILING_MS = 20_000;
 const TAP_CONFIG = { lockMs: 0 };
 const BLOCKED: SttErrorCode[] = ['denied', 'service', 'no-microphone'];
 
@@ -233,6 +235,12 @@ const toCloudListenReason = (
     stage === CLOUD_LISTEN_STAGES.microphoneCapture
   ) {
     return "the cloud listener couldn't use the microphone";
+  }
+  if (
+    stage === CLOUD_LISTEN_STAGES.socketDropped ||
+    stage === CLOUD_LISTEN_STAGES.socketDropError
+  ) {
+    return "the cloud listener's connection dropped mid-listen";
   }
   return `the cloud listener couldn't connect (${stage})`;
 };
@@ -980,6 +988,7 @@ export function useVoiceConversation({
         return;
       }
       source?.stop();
+      run.current.quietId = window.setTimeout(finish, READY_CEILING_MS);
       setIsPreparing(pendingText === undefined);
       startAdapter(
         createBrowserStt({

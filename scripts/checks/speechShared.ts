@@ -1656,7 +1656,7 @@ console.log('speechShared: on-device recognition checks passed');
         readValues(dropHandover.source!.preRoll),
         dropStopped.count,
       ],
-      [[], CLOUD_LISTEN_STAGES.socketClosed, false, [1, 2, 3], 0],
+      [[], CLOUD_LISTEN_STAGES.socketDropped, false, [1, 2, 3], 0],
       'an open socket that closes on its own hands its recent audio and the open microphone to the fallback, with the close code recorded',
     );
     dropped.live.push?.(frame(4));
@@ -1683,29 +1683,47 @@ console.log('speechShared: on-device recognition checks passed');
         duration,
         channel: { alternatives: [{ transcript: text }] },
       });
-    const longStopped = { count: 0 };
-    const long = handedSource(longStopped);
-    const longListen = listen(async () => READY_ANSWER, {
-      source: long.source,
-    });
-    await longListen.started;
-    const longSocket = FakeSocket.all.at(-1)!;
-    longSocket.onopen?.();
-    Array.from({ length: 200 }, (_, index) => index + 3).forEach((value) =>
-      long.live.push?.(frame(value)),
-    );
-    longSocket.onmessage?.({ data: heardAs('Add milk.', 0, 0.9) });
-    longSocket.onmessage?.({ data: heardAs('Then eggs.', 0.9, 0.5) });
-    longSocket.onclose?.({ code: 1011, reason: '', wasClean: false });
-    const [, , longHandover] = only(longListen.unavailable);
+    const dropAfter = async (finals: [string, number, number][]) => {
+      const held = handedSource({ count: 0 });
+      const run = listen(async () => READY_ANSWER, { source: held.source });
+      await run.started;
+      const socket = FakeSocket.all.at(-1)!;
+      socket.onopen?.();
+      Array.from({ length: 700 }, (_, index) => index + 3).forEach((value) =>
+        held.live.push?.(frame(value)),
+      );
+      finals.forEach(([text, start, duration]) =>
+        socket.onmessage?.({ data: heardAs(text, start, duration) }),
+      );
+      socket.onclose?.({ code: 1011, reason: '', wasClean: false });
+      return only(run.unavailable);
+    };
+    const [, longCause, straddled] = await dropAfter([
+      ['Add milk.', 0, 0.9],
+      ['Then eggs.', 4, 0.5],
+    ]);
     assert.deepEqual(
       [
-        longHandover.heardText,
-        longHandover.fullText,
-        longHandover.source!.preRoll.length,
+        straddled.heardText,
+        straddled.fullText,
+        straddled.source!.preRoll.length,
+        new Int16Array(straddled.source!.preRoll[0]!)[0],
+        longCause.stage,
       ],
-      ['Add milk.', 'Add milk. Then eggs.', 150],
-      'a dropped stream carries the words that end before the replayed audio starts, and not the one that overlaps it',
+      [
+        'Add milk. Then eggs.',
+        'Add milk. Then eggs.',
+        477,
+        226,
+        CLOUD_LISTEN_STAGES.socketDropped,
+      ],
+      'a phrase that straddles the window start is carried whole and the replay starts at its end, so text and audio meet with no gap or overlap',
+    );
+    const [, , outside] = await dropAfter([['Add milk.', 0, 0.5]]);
+    assert.deepEqual(
+      [outside.heardText, outside.source!.preRoll.length],
+      ['Add milk.', 500],
+      'a last phrase older than the ring is carried only up to the ring and the whole ring replays',
     );
 
     const afterStop = handedSource({ count: 0 });
@@ -1716,7 +1734,7 @@ console.log('speechShared: on-device recognition checks passed');
     const stopSocket = FakeSocket.all.at(-1)!;
     stopSocket.onopen?.();
     afterStop.live.push?.(frame(3));
-    stopSocket.onmessage?.({ data: heardAs('Add milk.', 0, 0.05) });
+    stopSocket.onmessage?.({ data: heardAs('Add milk.', 0, 0) });
     stopListen.stt.stop();
     stopSocket.onclose?.({ code: 1006, reason: '', wasClean: false });
     const [, , stopHandover] = only(stopListen.unavailable);
