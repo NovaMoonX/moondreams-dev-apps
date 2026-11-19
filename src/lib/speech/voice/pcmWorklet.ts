@@ -4,8 +4,14 @@ import {
 } from '@/lib/speech/speechDiagnostics';
 import {
   createNoiseNode,
+  failNoiseCleaning,
+  hasNoiseCleaningFailed,
+  isNoiseCleanerReady,
   isNoiseCleaningOn,
   NOISE_SAMPLE_RATE,
+  preloadNoiseCleaning,
+  reportNoiseCleaningApplied,
+  reportNoiseCleaningLoading,
 } from '@/lib/speech/voice/noiseCleaning';
 
 export const PCM_SAMPLE_RATE = 16_000;
@@ -125,11 +131,10 @@ const openCapture = async ({
   }
 };
 
-const CLEANING_WAIT_MS = 3000;
-const CLEANING_TIMEOUT = 'Noise cleaning did not load in time';
-const cleaning = { hasFailed: false };
+const CLEANING_WAIT_MS = 1000;
+const CLEANING_TIMEOUT = 'Noise cleaning did not finish starting in time';
 
-/** Turns a microphone stream into 16 kHz mono 16-bit little-endian frames of about 20 ms, cleaned of background noise first unless the person turned that off or it can't load (then the raw stream is used). */
+/** Turns a microphone stream into 16 kHz mono 16-bit little-endian frames of about 20 ms, cleaned of background noise first when the person has that on and the cleaner is already loaded. A cleaner still loading is never waited for: that listen is captured raw and the next one gets it. */
 export const startPcmCapture = async ({
   stream,
   onFrame,
@@ -137,17 +142,24 @@ export const startPcmCapture = async ({
   stream: MediaStream;
   onFrame: (frame: ArrayBuffer) => void;
 }): Promise<{ stop: () => void }> => {
-  if (isNoiseCleaningOn() && !cleaning.hasFailed) {
-    try {
-      return await openCapture({ stream, onFrame, isCleaned: true });
-    } catch (error) {
-      cleaning.hasFailed = !(
-        error instanceof Error && error.message === CLEANING_TIMEOUT
-      );
-      console.warn('Noise cleaning is off for this listen', error);
-      recordSpeechEvent(
-        `Noise cleaning failed, listening without it: ${describeThrown(error)}`,
-      );
+  if (isNoiseCleaningOn() && !hasNoiseCleaningFailed()) {
+    if (isNoiseCleanerReady()) {
+      try {
+        const capture = await openCapture({ stream, onFrame, isCleaned: true });
+        reportNoiseCleaningApplied();
+        return capture;
+      } catch (error) {
+        console.warn('Noise cleaning is off for this listen', error);
+        if (error instanceof Error && error.message === CLEANING_TIMEOUT) {
+          recordSpeechEvent(
+            `Noise cleaning was slow: ${describeThrown(error)}`,
+          );
+          reportNoiseCleaningLoading();
+        } else failNoiseCleaning(error);
+      }
+    } else {
+      preloadNoiseCleaning();
+      reportNoiseCleaningLoading();
     }
   }
   return openCapture({ stream, onFrame, isCleaned: false });
