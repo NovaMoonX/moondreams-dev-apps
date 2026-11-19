@@ -95,6 +95,7 @@ export async function ensureHelmProfile(uid: string) {
       forgottenAt: null,
       prunedOn: null,
       outsideSeenAt: null,
+      bringInToldAt: null,
       researchDepth: null,
       researchAllowance: null,
       calendarSync: null,
@@ -194,6 +195,13 @@ export const setConversationFreshAt = (
 export const setOutsideSeenAt = (uid: string, outsideSeenAt: number) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     outsideSeenAt,
+    lastEditedAt: Date.now(),
+  });
+
+/** Remembers that the offer to bring an app's people, pets and businesses in was told, so the conversation says it once. */
+export const markBringInTold = (uid: string, appId: string, at: number) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    [`bringInToldAt.${appId}`]: at,
     lastEditedAt: Date.now(),
   });
 

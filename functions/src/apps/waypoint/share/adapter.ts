@@ -117,6 +117,69 @@ const TRIP_FIELDS = [
   'lastEditedAt',
 ];
 
+const TRAVELER_TRIP_LIMIT = 3;
+
+/** A name is shared only when it reads as one: a profile named with the person's email is left out. */
+const toTravelerName = (displayName: unknown) =>
+  typeof displayName === 'string' &&
+  !displayName.includes('@') &&
+  displayName.trim() !== ''
+    ? displayName.trim()
+    : null;
+
+/** The other members of the person's trips, one record each however many trips they share. */
+const syncTravelers = async (
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> => {
+  const read = await readTrips(firestore, uid, 0, ['members']);
+  const tripsByPerson = new Map<string, string[]>();
+  read.docs.forEach((doc) => {
+    const title = readText(doc.get('title'));
+    if (title === null || doc.get('isArchived') === true) return;
+    Object.keys((doc.get('members') ?? {}) as Record<string, unknown>)
+      .filter((member) => member !== uid)
+      .forEach((member) =>
+        tripsByPerson.set(member, [
+          ...(tripsByPerson.get(member) ?? []),
+          title,
+        ]),
+      );
+  });
+  const ids = Array.from(tripsByPerson.keys());
+  if (ids.length === 0) return { records: [], isFull: read.isFull };
+  const snapshots = await firestore
+    .getAll(...ids.map((id) => firestore.doc(`users/${id}`)), {
+      fieldMask: ['displayName'],
+    })
+    .catch(() => null);
+  if (snapshots === null) return { records: [], isFull: false };
+  const records = snapshots.flatMap((snapshot) => {
+    const name = toTravelerName(snapshot.get('displayName'));
+    if (name === null) return [];
+    const titles = tripsByPerson.get(snapshot.id) ?? [];
+    const shown = titles
+      .slice(0, TRAVELER_TRIP_LIMIT)
+      .map((title) => clip(title, 30));
+    const more = titles.length - shown.length;
+    return [
+      toRecord({
+        sourceRef: `users/${snapshot.id}`,
+        kind: 'person',
+        title: name,
+        detail: clip(
+          `Travels with you: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`,
+          DETAIL_CHARS,
+        ),
+      }),
+    ];
+  });
+  return {
+    records: records.slice(0, MAX_RECORDS_PER_CATEGORY),
+    isFull: read.isFull && records.length <= MAX_RECORDS_PER_CATEGORY,
+  };
+};
+
 const TRANSIT_LABELS: Record<string, string> = {
   FLIGHT: 'Flight',
   DRIVE: 'Drive',
@@ -1302,6 +1365,8 @@ export function createWaypointAdapter(
         );
       case 'tripChecklist':
         return syncChecklist(firestore, uid, req.windowStart);
+      case 'travelers':
+        return syncTravelers(firestore, uid);
       case 'tripBalances':
         return syncBalances(firestore, uid, req.windowStart);
       default:

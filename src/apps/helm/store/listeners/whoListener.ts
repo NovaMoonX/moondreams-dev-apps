@@ -52,6 +52,7 @@ export async function openWho(
     mediaIds: data.mediaIds ?? [],
     importedFrom: data.importedFrom ?? null,
     importedFields: data.importedFields ?? {},
+    appSources: data.appSources ?? [],
     lastMentionedAt: data.lastMentionedAt ?? null,
     yearlyDateCount: data.yearlyDateCount ?? 0,
     momentCount: data.momentCount ?? 0,
