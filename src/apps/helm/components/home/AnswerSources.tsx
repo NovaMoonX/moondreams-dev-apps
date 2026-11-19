@@ -2,23 +2,15 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import {
-  BookOpen,
-  CalendarDays,
-  ChevronRight,
-  FolderOpen,
-  Stethoscope,
-} from 'lucide-react';
+import { BookOpen, ChevronRight, FolderOpen, Stethoscope } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import AppLogo from '@/components/AppLogo';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
-import { readConnectorAppId } from '@/lib/connections/contract';
 import { useAppSelector } from '@/store';
 import {
   formatDateShort,
@@ -46,6 +38,7 @@ import {
 } from '@apps/helm/utils/meetingWhere';
 import { formatTaskDue } from '@apps/helm/utils/taskDue';
 import { pathOf } from '@apps/helm/utils/topicTree';
+import ConnectorMark from '@apps/helm/components/connections/ConnectorMark';
 
 type SyncedSource = Extract<SourceRef, { kind: 'synced' }>;
 type ConnectionSource = Extract<SourceRef, { kind: 'connection' }>;
@@ -95,15 +88,8 @@ function RowBody({ mark, title, detail, hasDoor }: RowBodyProps) {
 }
 
 function SourceMark({ connectorId }: { connectorId: string }) {
-  return connectorId === 'google:calendar' ? (
-    <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
-      <CalendarDays className='size-5' aria-hidden='true' />
-    </span>
-  ) : (
-    <AppLogo
-      appId={readConnectorAppId(connectorId) ?? ''}
-      className='size-9 rounded-lg'
-    />
+  return (
+    <ConnectorMark connectorId={connectorId} className='size-9 rounded-lg' />
   );
 }
 

@@ -1,8 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, ChevronRight, Clock, ListChecks } from 'lucide-react';
+import { ChevronRight, Clock, ListChecks } from 'lucide-react';
 
-import AppLogo from '@/components/AppLogo';
-import { readConnectorAppId } from '@/lib/connections/contract';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
@@ -18,6 +16,7 @@ import type { SyncedRecord } from '@apps/helm/types';
 import { findMeetingFormat } from '@apps/helm/utils/meetingWhere';
 import { getRunProgress } from '@apps/helm/utils/runSteps';
 import { formatClock } from '@apps/helm/utils/planDays';
+import ConnectorMark from '@apps/helm/components/connections/ConnectorMark';
 
 interface SyncedCardProps {
   record: SyncedRecord;
@@ -37,17 +36,8 @@ function SourceMark({
   record: SyncedRecord;
   className: string;
 }) {
-  return record.connectorId === 'google:calendar' ? (
-    <span
-      className={`bg-muted text-muted-foreground flex shrink-0 items-center justify-center ${className}`}
-    >
-      <CalendarDays className='size-[55%]' aria-hidden='true' />
-    </span>
-  ) : (
-    <AppLogo
-      appId={readConnectorAppId(record.connectorId) ?? ''}
-      className={className}
-    />
+  return (
+    <ConnectorMark connectorId={record.connectorId} className={className} />
   );
 }
 
