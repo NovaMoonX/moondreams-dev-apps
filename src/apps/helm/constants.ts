@@ -2459,6 +2459,7 @@ export const HELM_COPY = {
   questionNeitherHint: "Neither? Just say what's true now.",
   questionElseHint: "None of these? Just say what you'd like.",
   questionFreeTextHint: 'Answer below, by typing or speaking.',
+  questionAnswerInSheet: 'Answer',
   questionNewNameHint: (isPlace: boolean) =>
     isPlace
       ? "Not on the list? Just say the place's name."

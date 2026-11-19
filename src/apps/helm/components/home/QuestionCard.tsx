@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { waitUntil } from '@/utils/waitUntil';
 import { store, useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import DetailSheet from '@/components/DetailSheet';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
 import { QUIET_CLASS } from '@apps/helm/components/home/ChoiceButton';
@@ -38,6 +39,7 @@ import {
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { readAskedQuestion } from '@apps/helm/utils/askedQuestion';
+import { takesComposerAnswer } from '@apps/helm/utils/questionAnswers';
 import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
   getOpenQuestions,
@@ -92,6 +94,7 @@ function QuestionCard({
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [isAnswerOpen, setIsAnswerOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [isNeitherOpen, setIsNeitherOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -333,7 +336,28 @@ function QuestionCard({
 
   const canDismiss = isDismissable(question.kind);
 
-  const quietActions = canDismiss ? dismissButton : null;
+  // Only the composer's target takes typed words, so any other card that needs them is answered in its own sheet, which covers the composer.
+  const canAnswerInSheet =
+    !isInSheet && !isComposerTarget && takesComposerAnswer(question);
+
+  const quietActions =
+    canAnswerInSheet || canDismiss ? (
+      <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+        {canAnswerInSheet && (
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className={join(QUIET_CLASS, 'rounded-full')}
+            disabled={isWorking}
+            onClick={() => setIsAnswerOpen(true)}
+          >
+            {HELM_COPY.questionAnswerInSheet}
+          </Button>
+        )}
+        {canDismiss && dismissButton}
+      </div>
+    ) : null;
 
   if (isSettled && !isInSheet) {
     return (
@@ -443,7 +467,7 @@ function QuestionCard({
               skip={quietActions}
               onAnswer={answer}
             />
-            {!OWN_PRIMARY.includes(question.shape) && canDismiss && (
+            {!OWN_PRIMARY.includes(question.shape) && quietActions && (
               <div className='flex flex-wrap items-center gap-x-3 gap-y-3'>
                 {quietActions}
               </div>
@@ -480,6 +504,20 @@ function QuestionCard({
           >
             {message}
           </p>
+        )}
+        {canAnswerInSheet && (
+          <DetailSheet
+            isOpen={isAnswerOpen}
+            onClose={() => setIsAnswerOpen(false)}
+            title={question.prompt}
+          >
+            <QuestionCard
+              captureId={captureId}
+              item={item}
+              isInSheet
+              isPromptHidden
+            />
+          </DetailSheet>
         )}
       </div>
     </div>
