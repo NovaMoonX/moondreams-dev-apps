@@ -50,7 +50,7 @@ function TakeFromPaysView({
       effectiveFrom: today,
       effectiveUntil: null,
       changeId: 'what-if',
-      payload: { ...horizon, rest: { kind: 'pays' } },
+      payload: { ...horizon, rest: { kind: 'pays', startsOn: null } },
     },
   } satisfies PreviewChange);
 
@@ -90,7 +90,7 @@ function TakeFromPaysView({
     setIsSaving(true);
     try {
       await write(
-        { ...live, rest: { kind: 'pays' } },
+        { ...live, rest: { kind: 'pays', startsOn: null } },
         HORIZON_WORDS.takeFromPaysSummary(live.name),
       );
       addToast({

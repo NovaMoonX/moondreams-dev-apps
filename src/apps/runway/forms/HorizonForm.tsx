@@ -39,6 +39,7 @@ import {
   PRIORITIES,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import PaysStartRow from '@apps/runway/components/PaysStartRow';
 import CostRow from '@apps/runway/components/CostRow';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -70,7 +71,10 @@ import type {
   HorizonSealed,
   Priority,
 } from '@apps/runway/types';
-import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
+import {
+  formatDateRangeOrdinalUTC,
+  getPaysStartBlocker,
+} from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 
 interface HorizonFormData {
@@ -89,6 +93,8 @@ interface HorizonFormData {
   isNotNow: boolean;
   /** Null until the person picks one. */
   rest: HorizonRest['kind'] | null;
+  /** The day "My pays before each cost is due" starts saving; null starts today. */
+  startsOn: number | null;
   /** The pay "One pay I pick" names; null until picked. */
   restDayKey: string | null;
   priority: Priority;
@@ -106,6 +112,7 @@ const INITIAL_DATA: HorizonFormData = {
   putPlaceId: null,
   isNotNow: false,
   rest: null,
+  startsOn: null,
   restDayKey: null,
   priority: 'should',
 };
@@ -288,6 +295,8 @@ function HorizonForm({
     if (!hasCosts) return { kind: 'later' };
     if (formData.rest === 'onePay')
       return pickedDay ? { kind: 'onePay', dayKey: pickedDay.dayKey } : null;
+    if (formData.rest === 'pays')
+      return { kind: 'pays', startsOn: formData.startsOn };
     return formData.rest === null ? null : { kind: formData.rest };
   };
   const rest = getRest();
@@ -312,7 +321,12 @@ function HorizonForm({
     stateMoney: null,
     links: [],
     goalId: seed?.kind === 'goal' ? seed.goalId : null,
+    fromId: null,
   });
+  const startBlocker =
+    hasCosts && formData.rest === 'pays'
+      ? getPaysStartBlocker(costs, formData.startsOn)
+      : null;
   const blocker =
     name === ''
       ? HORIZON_WORDS.needsName
@@ -324,7 +338,7 @@ function HorizonForm({
             ? HORIZON_WORDS.needsRest
             : hasCosts && formData.rest === 'onePay' && pickedDay === undefined
               ? HORIZON_WORDS.needsPay
-              : null;
+              : startBlocker;
 
   const isPaysAsked = rest?.kind === 'pays' || rest?.kind === 'onePay';
   const previewJson =
@@ -601,16 +615,21 @@ function HorizonForm({
       title: HORIZON_WORDS.restTitle,
       summaryLabel: HORIZON_WORDS.rest,
       summaryValue:
-        formData.rest === 'onePay'
-          ? pickedDay
-            ? HORIZON_WORDS.restOnePaySummary(
-                formatDateOrdinalUTC(pickedDay.on),
-              )
-            : ''
-          : (HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
-              ?.label ?? ''),
-      isAnswered: rest !== null,
-      blocker: formData.rest === 'onePay' ? HORIZON_WORDS.needsPay : null,
+        formData.rest === 'pays' && formData.startsOn !== null
+          ? HORIZON_WORDS.restPaysFromSummary(
+              formatDateOrdinalUTC(formData.startsOn),
+            )
+          : formData.rest === 'onePay'
+            ? pickedDay
+              ? HORIZON_WORDS.restOnePaySummary(
+                  formatDateOrdinalUTC(pickedDay.on),
+                )
+              : ''
+            : (HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
+                ?.label ?? ''),
+      isAnswered: rest !== null && startBlocker === null,
+      blocker:
+        formData.rest === 'onePay' ? HORIZON_WORDS.needsPay : startBlocker,
       render: ({ moveOn }) => (
         <div className='space-y-4'>
           <ActionGroup isRoomy>
@@ -631,7 +650,7 @@ function HorizonForm({
                   subtitle={meaning}
                   onClick={() => {
                     set({ rest: value, restDayKey: null });
-                    if (value !== 'onePay') {
+                    if (value !== 'onePay' && value !== 'pays') {
                       moveOn();
                       return;
                     }
@@ -643,6 +662,16 @@ function HorizonForm({
                     );
                   }}
                 />
+                {value === 'pays' && formData.rest === 'pays' && (
+                  <div className='px-4 pb-4'>
+                    <PaysStartRow
+                      value={formData.startsOn}
+                      onChange={(startsOn) => set({ startsOn })}
+                      today={today}
+                      lastDate={lastDate}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </ActionGroup>
