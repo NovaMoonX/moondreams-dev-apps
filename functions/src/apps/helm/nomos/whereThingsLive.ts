@@ -647,7 +647,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'captures',
     commands: ['closeConversation'],
     writer: 'actions/captureActions',
-    taps: ['closeQuestions', 'skipQuestion'],
+    taps: ['closeQuestions'],
   }),
   row({
     thing: 'What the assistant did',
