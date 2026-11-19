@@ -16,6 +16,7 @@ import { getWhoLine } from '@apps/helm/utils/whoGroups';
 const SEARCH_FROM = 8;
 const EAGER_ROWS = 20;
 const ROW_HEIGHT = 64;
+const KEPT_ROWS = 8;
 
 interface ConnectionPersonPickerProps {
   people: OpenWho[];
@@ -114,23 +115,32 @@ function ConnectionPersonPicker({
           placeholder={HELM_COPY.connectionSearch}
         />
       )}
-      {shown.length === 0 ? (
-        <p className='text-muted-foreground text-[15px] text-pretty'>
-          {HELM_COPY.connectionNoMatch}
-        </p>
-      ) : (
-        <div className='helm-card divide-border divide-y overflow-hidden'>
-          {shown.map((who, index) => (
-            <LazyMount
-              key={who.id}
-              estimatedHeight={ROW_HEIGHT}
-              eager={index < EAGER_ROWS}
-            >
-              <PersonRow who={who} onPick={onPick} />
-            </LazyMount>
-          ))}
-        </div>
-      )}
+      {/* The sheet sizes to its content, so the results keep the full list's height and the search field never drops under the finger. */}
+      <div
+        style={
+          people.length >= SEARCH_FROM
+            ? { minHeight: Math.min(people.length, KEPT_ROWS) * ROW_HEIGHT }
+            : undefined
+        }
+      >
+        {shown.length === 0 ? (
+          <p className='text-muted-foreground text-[15px] text-pretty'>
+            {HELM_COPY.connectionNoMatch}
+          </p>
+        ) : (
+          <div className='helm-card divide-border divide-y overflow-hidden'>
+            {shown.map((who, index) => (
+              <LazyMount
+                key={who.id}
+                estimatedHeight={ROW_HEIGHT}
+                eager={index < EAGER_ROWS}
+              >
+                <PersonRow who={who} onPick={onPick} />
+              </LazyMount>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
