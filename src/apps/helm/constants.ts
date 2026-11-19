@@ -1417,6 +1417,8 @@ export const HELM_COPY = {
   driveFailed: "Drive didn't turn on. Try again.",
   googleContactsName: 'Google Contacts',
   contactsRowTitle: 'Google Contacts',
+  contactsMarkCredit: 'Google Contacts icon by',
+  contactsMarkLicence: ', CC BY 4.0',
   googleContactsTitle: 'Connect Google Contacts',
   googleContactsReconnectTitle: 'Reconnect Google Contacts',
   googleContactsReadOnly: (name: string) =>

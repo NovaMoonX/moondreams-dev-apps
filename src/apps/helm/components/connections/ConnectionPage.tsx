@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarCheck, CalendarSync, ChevronDown, Tag } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
@@ -604,6 +605,17 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             {HELM_COPY.connectionDisconnect(appName)}
           </Button>
         </div>
+      )}
+      {isContactsGrant && (
+        <p className='text-muted-foreground text-xs'>
+          {HELM_COPY.contactsMarkCredit}{' '}
+          <ExternalLinkText
+            href='https://github.com/selfhst/icons'
+            className='text-xs'
+            label='selfh.st'
+          />
+          {HELM_COPY.contactsMarkLicence}
+        </p>
       )}
       <DisconnectSheet
         isOpen={isDisconnectOpen}
