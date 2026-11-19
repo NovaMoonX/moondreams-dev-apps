@@ -1,4 +1,8 @@
-import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
 import {
   describeThrown,
   recordSpeechEvent,
@@ -7,6 +11,8 @@ import {
 const STORAGE_KEY = 'speech.noiseCleaning';
 
 export const NOISE_SAMPLE_RATE = 48_000;
+
+export const NOISE_CLEANING_FALLBACK_KEY = 'speech-noise-cleaning';
 
 /** Whether the microphone is cleaned of music and chatter on this device before anything listens. On unless the person turned it off. */
 export const isNoiseCleaningOn = () => {
@@ -18,6 +24,7 @@ export const isNoiseCleaningOn = () => {
 };
 
 export const setNoiseCleaningOn = (isOn: boolean) => {
+  if (!isOn) removeFallback(NOISE_CLEANING_FALLBACK_KEY);
   try {
     if (isOn) window.localStorage.removeItem(STORAGE_KEY);
     else window.localStorage.setItem(STORAGE_KEY, 'off');
@@ -25,8 +32,6 @@ export const setNoiseCleaningOn = (isOn: boolean) => {
     // Storage is blocked; the choice lasts until the page closes.
   }
 };
-
-export const NOISE_CLEANING_FALLBACK_KEY = 'speech-noise-cleaning';
 
 const cleaner: {
   request: ReturnType<typeof fetchCleaner> | null;
@@ -85,7 +90,7 @@ export const reportNoiseCleaningLoading = () =>
 export const reportNoiseCleaningApplied = () =>
   clearFallback(NOISE_CLEANING_FALLBACK_KEY);
 
-/** Turns the cleaner off for the rest of the page's life after a failure that retrying would not fix. */
+/** Turns the cleaner off for the rest of the page's life after it failed inside a capture, which a retry would not fix. */
 export const failNoiseCleaning = (error: unknown) => {
   cleaner.hasFailed = true;
   recordSpeechEvent(
@@ -97,7 +102,12 @@ export const failNoiseCleaning = (error: unknown) => {
 /** Fetches and compiles the cleaner from the site's own origin ahead of a listen, once; a listen that opens before it is ready is captured raw, and the next one gets it. */
 export const preloadNoiseCleaning = () => {
   if (!isNoiseCleaningOn() || cleaner.hasFailed) return;
-  loadCleaner().then(reportNoiseCleaningApplied, failNoiseCleaning);
+  loadCleaner().then(reportNoiseCleaningApplied, (error: unknown) => {
+    recordSpeechEvent(
+      `Noise cleaning preload failed: ${describeThrown(error)}`,
+    );
+    reportSkipped("it couldn't load", 'preload', describeThrown(error));
+  });
 };
 
 /** Adds the RNNoise worklet to a 48 kHz context and returns a node that cleans one mono channel. */

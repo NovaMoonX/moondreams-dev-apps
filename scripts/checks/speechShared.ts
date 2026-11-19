@@ -1245,7 +1245,7 @@ console.log('speechShared: on-device recognition checks passed');
     onopen: (() => void) | null = null;
     onerror: (() => void) | null = null;
     onclose: ((event: FakeClose) => void) | null = null;
-    onmessage: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
     constructor(
       public url: string,
       public protocols: string[],
@@ -1673,6 +1673,76 @@ console.log('speechShared: on-device recognition checks passed');
       dropCause.detail,
       /Close code 1011/,
       'the close code of a dropped socket reaches the cause',
+    );
+
+    const heardAs = (text: string, start: number, duration: number) =>
+      JSON.stringify({
+        type: 'Results',
+        is_final: true,
+        start,
+        duration,
+        channel: { alternatives: [{ transcript: text }] },
+      });
+    const longStopped = { count: 0 };
+    const long = handedSource(longStopped);
+    const longListen = listen(async () => READY_ANSWER, {
+      source: long.source,
+    });
+    await longListen.started;
+    const longSocket = FakeSocket.all.at(-1)!;
+    longSocket.onopen?.();
+    Array.from({ length: 200 }, (_, index) => index + 3).forEach((value) =>
+      long.live.push?.(frame(value)),
+    );
+    longSocket.onmessage?.({ data: heardAs('Add milk.', 0, 0.9) });
+    longSocket.onmessage?.({ data: heardAs('Then eggs.', 0.9, 0.5) });
+    longSocket.onclose?.({ code: 1011, reason: '', wasClean: false });
+    const [, , longHandover] = only(longListen.unavailable);
+    assert.deepEqual(
+      [
+        longHandover.heardText,
+        longHandover.fullText,
+        longHandover.source!.preRoll.length,
+      ],
+      ['Add milk.', 'Add milk. Then eggs.', 150],
+      'a dropped stream carries the words that end before the replayed audio starts, and not the one that overlaps it',
+    );
+
+    const afterStop = handedSource({ count: 0 });
+    const stopListen = listen(async () => READY_ANSWER, {
+      source: afterStop.source,
+    });
+    await stopListen.started;
+    const stopSocket = FakeSocket.all.at(-1)!;
+    stopSocket.onopen?.();
+    afterStop.live.push?.(frame(3));
+    stopSocket.onmessage?.({ data: heardAs('Add milk.', 0, 0.05) });
+    stopListen.stt.stop();
+    stopSocket.onclose?.({ code: 1006, reason: '', wasClean: false });
+    const [, , stopHandover] = only(stopListen.unavailable);
+    assert.deepEqual(
+      [
+        stopListen.finals,
+        stopHandover.isClosing,
+        readValues(stopHandover.source!.preRoll),
+        stopHandover.fullText,
+      ],
+      [[], true, [1, 2, 3], 'Add milk.'],
+      'a stream that drops after the person pressed stop hands its audio over instead of delivering a partial',
+    );
+    const calmListen = listen(async () => READY_ANSWER, {
+      source: handedSource({ count: 0 }).source,
+    });
+    await calmListen.started;
+    const calmSocket = FakeSocket.all.at(-1)!;
+    calmSocket.onopen?.();
+    calmSocket.onmessage?.({ data: heardAs('Add milk.', 0, 0.05) });
+    calmListen.stt.stop();
+    calmSocket.onclose?.({ code: 1000, reason: '', wasClean: true });
+    assert.deepEqual(
+      [calmListen.finals, calmListen.unavailable.length],
+      [['Add milk.'], 0],
+      'the normal close after the stream was ended delivers the words as before',
     );
 
     assert.equal(

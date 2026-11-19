@@ -902,11 +902,12 @@ export function useVoiceConversation({
     // A listener stopped for an earlier listen can still report late; only this listen's own callbacks count.
     const isCurrent = () => run.current.listenId === listenId;
     // The phrase reader gives the seed in plain lower case, and the model on the device capitalises only its first word.
+    const carried = { text: seed };
     const withSeed = (text: string) =>
-      seed === ''
+      carried.text === ''
         ? text
         : [
-            seed.charAt(0).toUpperCase() + seed.slice(1),
+            carried.text.charAt(0).toUpperCase() + carried.text.slice(1),
             run.current.heardBy === 'on-device' && !/^I\b/.test(text)
               ? text.charAt(0).toLowerCase() + text.slice(1)
               : text,
@@ -972,15 +973,12 @@ export function useVoiceConversation({
         : "the browser's listening";
     };
     const startDevice = (source: FrameSource | null) => {
+      window.clearTimeout(run.current.quietId);
       if (latest.current.canHearOnDevice) {
-        if (run.current.heardWords === '') {
-          window.clearTimeout(run.current.quietId);
-        }
         setIsPreparing(source === null && pendingText === undefined);
         startAdapter(createOnDeviceStt({ source }));
         return;
       }
-      armQuiet();
       source?.stop();
       setIsPreparing(pendingText === undefined);
       startAdapter(
@@ -1021,7 +1019,7 @@ export function useVoiceConversation({
       setHeard('');
     }
     if (seed !== '') handlePartial(withSeed(''));
-    if (choice !== 'onDevice') armQuiet();
+    if (choice === 'cloud' || adopt) armQuiet();
     if (adopt) {
       startAdapter(createBrowserStt({ lang: latest.current.lang, adopt }));
     } else if (choice === 'cloud' && cloud) {
@@ -1061,9 +1059,18 @@ export function useVoiceConversation({
               trace: events.length > 0 ? events.join('\n') : null,
             });
             if (handover.isClosing && !latest.current.canHearOnDevice) {
-              callbacks.onFinal('');
+              handover.source?.stop();
+              callbacks.onFinal(handover.fullText);
               return;
             }
+            carried.text = [
+              seed,
+              latest.current.canHearOnDevice && handover.source !== null
+                ? handover.heardText
+                : handover.fullText,
+            ]
+              .filter((part) => part !== '')
+              .join(' ');
             startDevice(handover.source);
             if (handover.isClosing) run.current.stopListening?.();
           },

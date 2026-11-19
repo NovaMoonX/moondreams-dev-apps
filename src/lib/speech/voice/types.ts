@@ -42,6 +42,10 @@ export interface CloudHandover {
   source: FrameSource | null;
   /** The person had already ended the listen, so the audio in `source` is all there is and the new listener should finish at once. */
   isClosing: boolean;
+  /** What the cloud had finished hearing in the audio before the replay in `source` begins: a listener that replays that audio puts it in front of what it hears, so no word is lost or said twice. */
+  heardText: string;
+  /** Everything the cloud heard, finished or not, for a listener that cannot replay audio. */
+  fullText: string;
 }
 
 export interface SttAdapter {

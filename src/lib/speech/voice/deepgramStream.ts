@@ -28,6 +28,8 @@ const UTTERANCE_MS = 59_000;
 const BUFFER_FRAMES = 750;
 // What an open stream remembers sending, for a fallback if the socket drops mid-sentence.
 const RECENT_FRAMES = 150;
+const FRAME_MS = 20;
+const NORMAL_CLOSE = 1000;
 // A cold server takes 2 to 4 s to mint; the wait stays inside the 10 s the buffer holds, so a slow token costs no words.
 const TOKEN_WAIT_MS = 6000;
 const SLOW_TOKEN_MS = 1500;
@@ -100,6 +102,8 @@ interface DeepgramSttOptions {
 interface Heard {
   isFinal: boolean;
   text: string;
+  /** Seconds from the stream's first audio to the end of these words; infinite when the provider did not say. */
+  end: number;
 }
 
 const readHeard = (data: unknown): Heard | null => {
@@ -109,10 +113,14 @@ const readHeard = (data: unknown): Heard | null => {
     const {
       type,
       is_final: isFinal,
+      start,
+      duration,
       channel,
     } = message as {
       type?: unknown;
       is_final?: unknown;
+      start?: unknown;
+      duration?: unknown;
       channel?: { alternatives?: { transcript?: unknown }[] };
     };
     if (type !== 'Results') return null;
@@ -120,6 +128,10 @@ const readHeard = (data: unknown): Heard | null => {
     return {
       isFinal: isFinal === true,
       text: typeof text === 'string' ? text : '',
+      end:
+        typeof start === 'number' && typeof duration === 'number'
+          ? start + duration
+          : Infinity,
     };
   } catch {
     return null;
@@ -216,7 +228,12 @@ export const createDeepgramStt = ({
                     detail: describeThrown(error),
                     facts: [],
                   },
-                  { source: null, isClosing: false },
+                  {
+                    source: null,
+                    isClosing: false,
+                    heardText: '',
+                    fullText: '',
+                  },
                 );
               }
               return null;
@@ -249,7 +266,8 @@ export const createDeepgramStt = ({
           subscriber: ((frame: ArrayBuffer) => void) | null;
           waiting: ArrayBuffer[];
         } | null,
-        finals: [] as string[],
+        finals: [] as { text: string; end: number }[],
+        sent: 0,
         interim: '',
         isHeard: false,
         lastText: '',
@@ -258,7 +276,10 @@ export const createDeepgramStt = ({
         keepAliveId: 0,
         limitId: 0,
       };
-      const read = () => [...state.finals, state.interim].join(' ').trim();
+      const read = () =>
+        [...state.finals.map(({ text }) => text), state.interim]
+          .join(' ')
+          .trim();
       const releaseMicrophone = () => {
         state.isReleased = true;
         stream?.getTracks().forEach((track) => track.stop());
@@ -289,18 +310,30 @@ export const createDeepgramStt = ({
         }
       };
       const handOver = (cause: CloudListenCause): CloudHandover => {
+        const windowStart = state.isOpen
+          ? ((state.sent - state.recent.length) * FRAME_MS) / 1000
+          : 0;
+        const heard = {
+          heardText: state.finals
+            .filter(({ end }) => end <= windowStart)
+            .map(({ text }) => text)
+            .join(' '),
+          fullText: read(),
+        };
+        const preRoll = state.isOpen ? state.recent : state.frames;
         if (state.isClosing) {
           return {
+            ...heard,
             isClosing: true,
             source: {
-              preRoll: state.frames,
+              preRoll,
               subscribe: () => undefined,
               stop: () => undefined,
             },
           };
         }
         if (cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture) {
-          return { isClosing: false, source: null };
+          return { ...heard, isClosing: false, source: null };
         }
         const relay = {
           subscriber: null as ((frame: ArrayBuffer) => void) | null,
@@ -308,9 +341,10 @@ export const createDeepgramStt = ({
         };
         state.relay = relay;
         return {
+          ...heard,
           isClosing: false,
           source: {
-            preRoll: state.isOpen ? state.recent : state.frames,
+            preRoll,
             subscribe: (onFrame) => {
               relay.subscriber = onFrame;
               relay.waiting.forEach(onFrame);
@@ -324,7 +358,12 @@ export const createDeepgramStt = ({
         reason: CloudHeldReason | null,
         cause: CloudListenCause,
       ) => {
-        if (state.isClosing && state.isOpen) {
+        if (
+          state.isClosing &&
+          state.isOpen &&
+          cause.stage !== CLOUD_LISTEN_STAGES.socketClosed &&
+          cause.stage !== CLOUD_LISTEN_STAGES.socketError
+        ) {
           deliver();
           return;
         }
@@ -385,6 +424,7 @@ export const createDeepgramStt = ({
         }
         if (state.isOpen && !state.isClosing) {
           state.recent = [...state.recent, frame].slice(-RECENT_FRAMES);
+          state.sent += 1;
           state.socket?.send(frame);
         } else if (!state.isOpen) {
           state.frames = [...state.frames, frame].slice(-BUFFER_FRAMES);
@@ -465,6 +505,7 @@ export const createDeepgramStt = ({
         state.openedAt = Date.now();
         state.frames.forEach((frame) => socket.send(frame));
         state.recent = state.frames.slice(-RECENT_FRAMES);
+        state.sent = state.frames.length;
         state.frames = [];
         if (state.isClosing) {
           socket.send(JSON.stringify({ type: 'CloseStream' }));
@@ -481,7 +522,7 @@ export const createDeepgramStt = ({
         state.hasErrored = true;
       };
       socket.onclose = (event: CloseEvent) =>
-        state.isOpen && state.isClosing
+        state.isOpen && state.isClosing && event.code === NORMAL_CLOSE
           ? deliver()
           : fail(null, toCloseCause(event, state.hasErrored));
       socket.onmessage = (event: MessageEvent) => {
@@ -490,7 +531,7 @@ export const createDeepgramStt = ({
         if (heard.text === '' && !state.isHeard) return;
         if (heard.isFinal) {
           state.finals = heard.text
-            ? [...state.finals, heard.text]
+            ? [...state.finals, { text: heard.text, end: heard.end }]
             : state.finals;
           state.interim = '';
         } else state.interim = heard.text;
