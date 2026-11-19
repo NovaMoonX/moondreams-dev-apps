@@ -141,12 +141,10 @@ export const startPcmCapture = async ({
     try {
       return await openCapture({ stream, onFrame, isCleaned: true });
     } catch (error) {
-      cleaning.hasFailed = !(
-        error instanceof Error && error.message === CLEANING_TIMEOUT
-      );
-      console.warn('Noise cleaning is off for this listen', error);
+      cleaning.hasFailed = true;
+      console.warn('Noise cleaning is off until the page reloads', error);
       recordSpeechEvent(
-        `Noise cleaning failed, listening without it: ${describeThrown(error)}`,
+        `Noise cleaning failed, listening without it until the page reloads: ${describeThrown(error)}`,
       );
     }
   }

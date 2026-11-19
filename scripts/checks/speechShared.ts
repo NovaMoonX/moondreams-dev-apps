@@ -113,6 +113,7 @@ import {
   type MintVoiceTokenResult,
 } from '../../src/lib/speech/voice/voiceToken.ts';
 import type {
+  CloudHandover,
   CloudHeldReason,
   FrameSource,
   TtsAdapter,
@@ -129,7 +130,14 @@ import {
   ON_DEVICE_FILES,
   ON_DEVICE_SIZE_MB,
 } from '../../src/lib/speech/onDevice/config.ts';
-import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
+import {
+  createOnDeviceStt,
+  toHeardText,
+} from '../../src/lib/speech/onDevice/onDeviceStt.ts';
+import type {
+  FromRecognizerWorker,
+  ToRecognizerWorker,
+} from '../../src/lib/speech/onDevice/workerMessages.ts';
 import { unloadRecognizer } from '../../src/lib/speech/onDevice/recognizer.ts';
 import { removeOnDeviceModel } from '../../src/lib/speech/onDevice/modelStore.ts';
 import {
@@ -641,8 +649,8 @@ console.log('speechShared: all checks passed');
   const trigger = spoken[36];
   assert.equal(
     trigger.preRoll.length,
-    10,
-    'the pre-roll holds the last 300 ms',
+    34,
+    'the pre-roll holds the last second',
   );
   assert.ok(
     trigger.preRoll
@@ -725,8 +733,8 @@ console.log('speechShared: all checks passed');
   );
   assert.equal(
     spokenAt20[54]?.preRoll.length,
-    15,
-    'with 20 ms frames the pre-roll holds the last 300 ms',
+    50,
+    'with 20 ms frames the pre-roll holds the last second',
   );
   assert.ok(
     !runAt20([
@@ -1282,29 +1290,37 @@ console.log('speechShared: on-device recognition checks passed');
   });
   const listen = (
     getToken: () => Promise<VoiceTokenAnswer>,
-    { tokenWaitMs = 1500, isOwnMicrophone = false } = {},
+    { tokenWaitMs = 1500, isOwnMicrophone = false, source = microphone() } = {},
   ) => {
-    const unavailable: [CloudHeldReason | null, CloudListenCause][] = [];
+    const unavailable: [
+      CloudHeldReason | null,
+      CloudListenCause,
+      CloudHandover,
+    ][] = [];
     const errors: string[] = [];
+    const finals: string[] = [];
     const closed: [string, number][] = [];
     const stt = createDeepgramStt({
       lang: 'en',
       getToken,
       tokenWaitMs,
-      source: isOwnMicrophone ? null : microphone(),
-      onUnavailable: (reason, cause) => unavailable.push([reason, cause]),
+      source: isOwnMicrophone ? null : source,
+      onUnavailable: (reason, cause, handover) =>
+        unavailable.push([reason, cause, handover]),
       onClosed: (mintId, ms) => closed.push([mintId, ms]),
     });
     const started = stt.start({
       onPartial: () => undefined,
-      onFinal: () => undefined,
+      onFinal: (text) => finals.push(text),
       onSpeechStart: () => undefined,
       onError: (code) => errors.push(code),
       preRoll: null,
     });
-    return { unavailable, errors, closed, started };
+    return { unavailable, errors, finals, closed, started, stt };
   };
-  const only = (unavailable: [CloudHeldReason | null, CloudListenCause][]) => {
+  const only = (
+    unavailable: [CloudHeldReason | null, CloudListenCause, CloudHandover][],
+  ) => {
     assert.equal(unavailable.length, 1, 'one failure is reported once');
     return unavailable[0]!;
   };
@@ -1520,6 +1536,84 @@ console.log('speechShared: on-device recognition checks passed');
       false,
       'a constructor message that quotes the token never reaches the cause',
     );
+    const frame = (value: number) => new Int16Array([value]).buffer;
+    const handedSource = (stopped: { count: number }) => {
+      const live = { push: null as ((frame: ArrayBuffer) => void) | null };
+      const source: FrameSource = {
+        preRoll: [frame(1), frame(2)],
+        subscribe: (onFrame) => {
+          live.push = onFrame;
+        },
+        stop: () => {
+          live.push = null;
+          stopped.count += 1;
+        },
+      };
+      return { source, live };
+    };
+    const readValues = (frames: ArrayBuffer[]) =>
+      frames.map((one) => new Int16Array(one)[0]);
+
+    const stopped = { count: 0 };
+    const carried = handedSource(stopped);
+    const giveUp = listen(
+      () => new Promise<VoiceTokenAnswer>(() => undefined),
+      { tokenWaitMs: 1500, source: carried.source },
+    );
+    carried.live.push?.(frame(3));
+    fire(1500);
+    await giveUp.started;
+    const [, , giveUpHandover] = only(giveUp.unavailable);
+    assert.equal(
+      stopped.count,
+      0,
+      'a cloud listen that gives up leaves the microphone open for the next listener',
+    );
+    assert.deepEqual(
+      [giveUpHandover.isClosing, readValues(giveUpHandover.source!.preRoll)],
+      [false, [1, 2, 3]],
+      'the frames heard before the cloud gave up go to the fallback, oldest first',
+    );
+    const later: number[] = [];
+    giveUpHandover.source!.subscribe((one) =>
+      later.push(new Int16Array(one)[0]),
+    );
+    carried.live.push?.(frame(4));
+    assert.deepEqual(
+      later,
+      [4],
+      'the live audio after the hand over reaches the fallback',
+    );
+    giveUpHandover.source!.stop();
+    assert.equal(
+      stopped.count,
+      1,
+      'the fallback releases the microphone it was handed',
+    );
+
+    const endedStopped = { count: 0 };
+    const ended = handedSource(endedStopped);
+    const endedListen = listen(
+      () => new Promise<VoiceTokenAnswer>(() => undefined),
+      { tokenWaitMs: 1500, source: ended.source },
+    );
+    ended.live.push?.(frame(3));
+    endedListen.stt.stop();
+    ended.live.push?.(frame(4));
+    fire(1500);
+    await endedListen.started;
+    const [, endedCause, endedHandover] = only(endedListen.unavailable);
+    assert.deepEqual(
+      [
+        endedListen.finals,
+        endedCause.stage,
+        endedHandover.isClosing,
+        readValues(endedHandover.source!.preRoll),
+      ],
+      [[], CLOUD_LISTEN_STAGES.tokenTimeout, true, [1, 2, 3]],
+      'a listen the person already ended falls back with its audio instead of delivering nothing',
+    );
+
     assert.equal(
       JSON.stringify(
         [thrown, refused, keyless, limited, slow, closed, errored].map(
@@ -1545,6 +1639,170 @@ console.log('speechShared: on-device recognition checks passed');
     } else setNavigator(prior.navigator);
   }
   console.log('speechShared: cloud listening failure cause checks passed');
+}
+{
+  class FakeWorker {
+    static all: FakeWorker[] = [];
+    posted: ToRecognizerWorker[] = [];
+    onmessage: ((event: { data: FromRecognizerWorker }) => void) | null = null;
+    onerror: ((event: { message: string }) => void) | null = null;
+    constructor() {
+      FakeWorker.all.push(this);
+    }
+    postMessage(message: ToRecognizerWorker) {
+      this.posted.push(message);
+      if (message.type === 'finish') {
+        queueMicrotask(() =>
+          this.onmessage?.({
+            data: { type: 'finished', id: message.id, text: 'ADD MILK' },
+          }),
+        );
+      }
+    }
+    terminate() {}
+    makeReady() {
+      this.onmessage?.({ data: { type: 'ready' } });
+    }
+  }
+  const prior = {
+    window: Reflect.get(globalThis, 'window'),
+    document: Reflect.get(globalThis, 'document'),
+    worker: Reflect.get(globalThis, 'Worker'),
+  };
+  Object.assign(globalThis, {
+    window: { setTimeout, clearTimeout },
+    document: {
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      visibilityState: 'visible',
+    },
+    Worker: FakeWorker,
+  });
+  const frame = (value: number) => new Int16Array([value]).buffer;
+  const makeSource = () => {
+    const state = {
+      push: null as ((frame: ArrayBuffer) => void) | null,
+      stopped: 0,
+    };
+    const source: FrameSource = {
+      preRoll: [frame(1)],
+      subscribe: (onFrame) => {
+        state.push = onFrame;
+      },
+      stop: () => {
+        state.stopped += 1;
+        state.push = null;
+      },
+    };
+    return { source, state };
+  };
+  const heard = (worker: FakeWorker) =>
+    worker.posted.flatMap((message) =>
+      message.type === 'audio' ? [new Int16Array(message.pcm)[0]] : [],
+    );
+  const begin = (source: FrameSource) => {
+    const events = {
+      finals: [] as string[],
+      errors: [] as string[],
+      listening: 0,
+    };
+    const stt = createOnDeviceStt({ source });
+    const started = stt.start({
+      onPartial: () => undefined,
+      onFinal: (text) => events.finals.push(text),
+      onSpeechStart: () => undefined,
+      onError: (code) => events.errors.push(code),
+      onListening: () => {
+        events.listening += 1;
+      },
+      preRoll: null,
+    });
+    return { stt, started, events };
+  };
+  const realConsole = { error: console.error, warn: console.warn };
+  console.error = () => undefined;
+  console.warn = () => undefined;
+  try {
+    unloadRecognizer();
+    const loading = makeSource();
+    const first = begin(loading.source);
+    loading.state.push?.(frame(2));
+    loading.state.push?.(frame(3));
+    assert.equal(
+      first.events.listening,
+      1,
+      'the listen shows listening once the microphone is capturing, before the model has loaded',
+    );
+    const worker = FakeWorker.all.at(-1)!;
+    assert.deepEqual(
+      heard(worker),
+      [],
+      'nothing reaches the model before it has loaded',
+    );
+    worker.makeReady();
+    await first.started;
+    loading.state.push?.(frame(4));
+    assert.deepEqual(
+      heard(worker),
+      [1, 2, 3, 4],
+      'the audio held while the model loaded is recognized first, then the live audio',
+    );
+    first.stt.stop();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.deepEqual(
+      [first.events.finals, loading.state.stopped > 0],
+      [['Add milk'], true],
+      'a stop after the model loaded delivers what the held audio said and releases the microphone',
+    );
+
+    const ending = makeSource();
+    unloadRecognizer();
+    const second = begin(ending.source);
+    ending.state.push?.(frame(2));
+    second.stt.stop();
+    assert.deepEqual(
+      second.events.finals,
+      [],
+      'a stop while the model loads waits for it instead of delivering nothing',
+    );
+    FakeWorker.all.at(-1)!.makeReady();
+    await second.started;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.deepEqual(
+      [
+        heard(FakeWorker.all.at(-1)!),
+        second.events.finals,
+        ending.state.stopped > 0,
+      ],
+      [[1, 2], ['Add milk'], true],
+      'the audio said before the model loaded is transcribed when the person already ended the listen',
+    );
+
+    unloadRecognizer();
+    const failing = makeSource();
+    const third = begin(failing.source);
+    failing.state.push?.(frame(2));
+    FakeWorker.all.at(-1)!.onerror?.({ message: 'the model would not start' });
+    await third.started;
+    assert.deepEqual(
+      [third.events.errors, failing.state.stopped > 0],
+      [['unavailable'], true],
+      'a model that fails to load releases the microphone and reports it',
+    );
+  } finally {
+    console.error = realConsole.error;
+    console.warn = realConsole.warn;
+    unloadRecognizer();
+    Object.entries({
+      window: prior.window,
+      document: prior.document,
+      Worker: prior.worker,
+    }).forEach(([key, value]) => {
+      if (value === undefined) Reflect.deleteProperty(globalThis, key);
+      else Reflect.set(globalThis, key, value);
+    });
+  }
+  console.log('speechShared: on-device listening holds audio while loading');
 }
 {
   resetFallbacks();

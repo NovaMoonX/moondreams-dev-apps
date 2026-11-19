@@ -57,6 +57,7 @@ import {
   createCloudTts,
 } from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
+import { preloadNoiseCleaning } from '@/lib/speech/voice/noiseCleaning';
 import {
   createPlaybackQueue,
   toJoinKey,
@@ -421,6 +422,10 @@ export function useVoiceConversation({
       window.removeEventListener('online', warm);
     };
   }, [warmSpeech, warmToken]);
+
+  useEffect(() => {
+    if (isCloudListeningAllowed || canHearOnDevice) preloadNoiseCleaning();
+  }, [isCloudListeningAllowed, canHearOnDevice]);
 
   useEffect(() => {
     if (isCloudSpeakingAllowed) return;
@@ -959,6 +964,12 @@ export function useVoiceConversation({
       });
     };
     const nameHints = latest.current.getNameHints?.() ?? null;
+    const toFallbackUsed = (isClosing: boolean) => {
+      if (latest.current.canHearOnDevice) return 'the on-device speech model';
+      return isClosing
+        ? 'nothing for this listen, which had already ended'
+        : "the browser's listening";
+    };
     const startDevice = (source: FrameSource | null) => {
       if (latest.current.canHearOnDevice) {
         if (run.current.heardWords === '') {
@@ -970,6 +981,7 @@ export function useVoiceConversation({
       }
       armQuiet();
       source?.stop();
+      setIsPreparing(pendingText === undefined);
       startAdapter(
         createBrowserStt({
           lang: latest.current.lang,
@@ -1018,7 +1030,7 @@ export function useVoiceConversation({
           source: options.source ?? null,
           keyterms: nameHints,
           getToken: cloud.tokenSource.getToken,
-          onUnavailable: (heldReason, cause) => {
+          onUnavailable: (heldReason, cause, handover) => {
             if (
               !isCurrent() ||
               run.current.isCancelled ||
@@ -1036,9 +1048,7 @@ export function useVoiceConversation({
               key: CLOUD_LISTEN_FALLBACK_KEY,
               feature: 'Listening',
               wanted: 'the cloud listener',
-              used: latest.current.canHearOnDevice
-                ? 'the on-device speech model'
-                : "the browser's listening",
+              used: toFallbackUsed(handover.isClosing),
               reason: toCloudListenReason(heldReason, cause.stage),
               cause: { stage: cause.stage, detail: cause.detail },
               facts: [
@@ -1048,7 +1058,12 @@ export function useVoiceConversation({
               ],
               trace: events.length > 0 ? events.join('\n') : null,
             });
-            startDevice(null);
+            if (handover.isClosing && !latest.current.canHearOnDevice) {
+              callbacks.onFinal('');
+              return;
+            }
+            startDevice(handover.source);
+            if (handover.isClosing) run.current.stopListening?.();
           },
           onClosed: cloud.tokenSource.reportClosed,
         }),

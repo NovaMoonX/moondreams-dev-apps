@@ -34,6 +34,14 @@ export interface FrameSource {
   stop: () => void;
 }
 
+/** What a cloud listen that gave up hands to the listener that takes over. */
+export interface CloudHandover {
+  /** Everything heard so far, then the live audio while the microphone is open; null when no microphone was open to carry on. */
+  source: FrameSource | null;
+  /** The person had already ended the listen, so the audio in `source` is all there is and the new listener should finish at once. */
+  isClosing: boolean;
+}
+
 export interface SttAdapter {
   id: string;
   route: VoiceRoute;

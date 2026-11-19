@@ -272,12 +272,10 @@ export function useHelmVoice() {
   const isHomeView = VIEW_KINDS[view] === 'home';
 
   const lang = navigator.language || 'en-US';
-  // Started ahead of the first listen only where it will be the one listening: the phrase, or no cloud.
+  // The downloaded model starts ahead of the first listen, since it is also what a cloud listen falls back to.
   const onDevice = useOnDeviceRecognition({
     lang,
-    isWarm:
-      keyStatus === 'ready' &&
-      (isWakeWordOn || voiceMode !== 'cloudWhenOnline'),
+    isWarm: keyStatus === 'ready',
   });
 
   const nameRecords = useAppSelector(selectNameRecords);

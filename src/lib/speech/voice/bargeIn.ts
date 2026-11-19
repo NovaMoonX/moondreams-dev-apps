@@ -53,7 +53,7 @@ const readCrossings = (frame: Int16Array) =>
 export const createSpeechGate = ({
   frameMs = 30,
   triggerMs = 200,
-  preRollMs = 300,
+  preRollMs = 1000,
   floorMargin = 3,
   minEnergy = 0.01,
   crossingBand = [0.02, 0.35],
