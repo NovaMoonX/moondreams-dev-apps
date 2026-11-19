@@ -932,9 +932,10 @@ export function useVoiceConversation({
         }
       },
       onListening: () => {
-        if (!isCurrent()) return;
-        setIsPreparing(false);
-        armQuiet();
+        if (isCurrent()) setIsPreparing(false);
+      },
+      onReady: () => {
+        if (isCurrent()) armQuiet();
       },
       onError: (code: SttErrorCode) => {
         if (isCurrent()) handleError(code);
@@ -1036,6 +1037,7 @@ export function useVoiceConversation({
               run.current.isCancelled ||
               run.current.mode.phase === 'OFF'
             ) {
+              handover.source?.stop();
               return;
             }
             if (heldReason !== null) {

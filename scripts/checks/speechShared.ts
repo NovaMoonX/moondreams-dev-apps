@@ -102,6 +102,14 @@ import {
   createPlaybackQueue,
   toJoinKey,
 } from '../../src/lib/speech/voice/playbackQueue.ts';
+import {
+  failNoiseCleaning,
+  hasNoiseCleaningFailed,
+  isNoiseCleanerReady,
+  NOISE_CLEANING_FALLBACK_KEY,
+  reportNoiseCleaningApplied,
+  reportNoiseCleaningLoading,
+} from '../../src/lib/speech/voice/noiseCleaning.ts';
 import { createDeepgramStt } from '../../src/lib/speech/voice/deepgramStream.ts';
 import {
   CLOUD_LISTEN_STAGES,
@@ -761,6 +769,21 @@ console.log('speechShared: all checks passed');
     'a voice only a little above the room does not open the barge-in gate',
   );
   assert.ok(bargeRun(0.3), 'a clear voice over a line opens the barge-in gate');
+  const bargeGate = createSpeechGate({ frameMs: 20, ...BARGE_IN_GATE });
+  const bargeReads = Array.from({ length: 80 }, (_, index) =>
+    bargeGate.push(
+      Int16Array.from({ length: 320 }, (_, offset) =>
+        Math.round(
+          (index < 30 ? room : voiced(0.3))(index * 320 + offset) * 32767,
+        ),
+      ),
+    ),
+  );
+  assert.equal(
+    bargeReads.find((read) => read.isTriggered)?.preRoll.length,
+    15,
+    "the barge-in gate keeps only 300 ms before it opens, since earlier audio is the assistant's own voice",
+  );
   console.log('speechShared: speech gate checks passed');
 }
 
@@ -1614,6 +1637,44 @@ console.log('speechShared: on-device recognition checks passed');
       'a listen the person already ended falls back with its audio instead of delivering nothing',
     );
 
+    const dropStopped = { count: 0 };
+    const dropped = handedSource(dropStopped);
+    const droppedListen = listen(async () => READY_ANSWER, {
+      source: dropped.source,
+    });
+    await droppedListen.started;
+    const droppedSocket = FakeSocket.all.at(-1)!;
+    droppedSocket.onopen?.();
+    dropped.live.push?.(frame(3));
+    droppedSocket.onclose?.({ code: 1011, reason: 'timeout', wasClean: false });
+    const [, dropCause, dropHandover] = only(droppedListen.unavailable);
+    assert.deepEqual(
+      [
+        droppedListen.finals,
+        dropCause.stage,
+        dropHandover.isClosing,
+        readValues(dropHandover.source!.preRoll),
+        dropStopped.count,
+      ],
+      [[], CLOUD_LISTEN_STAGES.socketClosed, false, [1, 2, 3], 0],
+      'an open socket that closes on its own hands its recent audio and the open microphone to the fallback, with the close code recorded',
+    );
+    dropped.live.push?.(frame(4));
+    const afterDrop: number[] = [];
+    dropHandover.source!.subscribe((one) =>
+      afterDrop.push(new Int16Array(one)[0]),
+    );
+    assert.deepEqual(
+      afterDrop,
+      [4],
+      'audio arriving between the drop and the fallback is relayed to it',
+    );
+    assert.match(
+      dropCause.detail,
+      /Close code 1011/,
+      'the close code of a dropped socket reaches the cause',
+    );
+
     assert.equal(
       JSON.stringify(
         [thrown, refused, keyless, limited, slow, closed, errored].map(
@@ -1705,6 +1766,7 @@ console.log('speechShared: on-device recognition checks passed');
       finals: [] as string[],
       errors: [] as string[],
       listening: 0,
+      ready: 0,
     };
     const stt = createOnDeviceStt({ source });
     const started = stt.start({
@@ -1714,6 +1776,9 @@ console.log('speechShared: on-device recognition checks passed');
       onError: (code) => events.errors.push(code),
       onListening: () => {
         events.listening += 1;
+      },
+      onReady: () => {
+        events.ready += 1;
       },
       preRoll: null,
     });
@@ -1739,8 +1804,18 @@ console.log('speechShared: on-device recognition checks passed');
       [],
       'nothing reaches the model before it has loaded',
     );
+    assert.equal(
+      first.events.ready,
+      0,
+      'the no-speech timer does not start while the model is still loading',
+    );
     worker.makeReady();
     await first.started;
+    assert.equal(
+      first.events.ready,
+      1,
+      'the no-speech timer starts once the model is open on the audio',
+    );
     loading.state.push?.(frame(4));
     assert.deepEqual(
       heard(worker),
@@ -1803,6 +1878,38 @@ console.log('speechShared: on-device recognition checks passed');
     });
   }
   console.log('speechShared: on-device listening holds audio while loading');
+}
+{
+  resetFallbacks();
+  assert.equal(
+    isNoiseCleanerReady(),
+    false,
+    'a cleaner that has not loaded is not waited for',
+  );
+  reportNoiseCleaningLoading();
+  const skipped = readFallbacks().find(
+    ({ key }) => key === NOISE_CLEANING_FALLBACK_KEY,
+  );
+  assert.deepEqual(
+    [skipped?.used, skipped?.recoveredAt],
+    ['the raw microphone', null],
+    'a listen captured raw while the cleaner loads reports it',
+  );
+  reportNoiseCleaningApplied();
+  assert.notEqual(
+    readFallbacks().find(({ key }) => key === NOISE_CLEANING_FALLBACK_KEY)
+      ?.recoveredAt,
+    null,
+    'the report clears once the cleaning is applied',
+  );
+  failNoiseCleaning(new Error('worklet refused'));
+  assert.equal(
+    hasNoiseCleaningFailed(),
+    true,
+    'a real load failure turns the cleaner off for the page',
+  );
+  resetFallbacks();
+  console.log('speechShared: noise cleaning checks passed');
 }
 {
   resetFallbacks();

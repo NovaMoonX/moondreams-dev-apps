@@ -106,6 +106,8 @@ export const BARGE_IN_GATE: SpeechGateOptions = {
   floorMargin: 6,
   minEnergy: 0.025,
   triggerMs: 300,
+  // Earlier audio is the assistant's own voice.
+  preRollMs: 300,
 };
 
 export const BARGE_SUPPRESS_MS = 6000;

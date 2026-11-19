@@ -18,8 +18,10 @@ export interface SttStartOptions {
   onFinal: (text: string) => void;
   onSpeechStart: () => void;
   onError: (code: SttErrorCode) => void;
-  /** The adapter is ready to hear and the microphone is live; only an adapter that takes a while to get ready calls it. */
+  /** Audio is being captured (the microphone is live); only an adapter that takes a while to get ready calls it. */
   onListening?: () => void;
+  /** A recognizer is open on that audio, so silence now means nothing was said; a no-speech timer starts here, never at `onListening`. */
+  onReady?: () => void;
   /** The audio just before the tap, for adapters that keep a buffer; always null for now. */
   preRoll: Float32Array | null;
 }

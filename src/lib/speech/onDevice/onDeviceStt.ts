@@ -233,6 +233,7 @@ export const createOnDeviceStt = ({
         state.held = [];
         if (state.isFinishing) recognition.current.finish();
         clearFallback(FALLBACK_KEY);
+        options.onReady?.();
       } catch (error) {
         if (state.isDone) return;
         state.isDone = true;

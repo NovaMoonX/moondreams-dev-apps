@@ -59,6 +59,7 @@ export const createBrowserStt = ({
             if (status === 'listening' && !state.isListening) {
               state.isListening = true;
               options.onListening?.();
+              options.onReady?.();
             }
           },
           () => undefined,

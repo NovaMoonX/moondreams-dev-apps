@@ -24,7 +24,10 @@ const CLOSE_WAIT_MS = 1500;
 const KEEP_ALIVE_MS = 5000;
 // A token lasts a minute, so a stream ends just inside it.
 const UTTERANCE_MS = 59_000;
-const BUFFER_FRAMES = 500;
+// 15 s of 20 ms frames: the 6 s token wait, the 3 s socket wait and a second of pre-roll, with margin.
+const BUFFER_FRAMES = 750;
+// What an open stream remembers sending, for a fallback if the socket drops mid-sentence.
+const RECENT_FRAMES = 150;
 // A cold server takes 2 to 4 s to mint; the wait stays inside the 10 s the buffer holds, so a slow token costs no words.
 const TOKEN_WAIT_MS = 6000;
 const SLOW_TOKEN_MS = 1500;
@@ -240,6 +243,7 @@ export const createDeepgramStt = ({
         socket: null as WebSocket | null,
         capture: null as { stop: () => void } | null,
         frames: [] as ArrayBuffer[],
+        recent: [] as ArrayBuffer[],
         isReleased: false,
         relay: null as {
           subscriber: ((frame: ArrayBuffer) => void) | null;
@@ -306,7 +310,7 @@ export const createDeepgramStt = ({
         return {
           isClosing: false,
           source: {
-            preRoll: state.frames,
+            preRoll: state.isOpen ? state.recent : state.frames,
             subscribe: (onFrame) => {
               relay.subscriber = onFrame;
               relay.waiting.forEach(onFrame);
@@ -328,9 +332,14 @@ export const createDeepgramStt = ({
         state.isDone = true;
         const handover = handOver(cause);
         teardown(state.relay !== null);
-        if (state.mintId) onClosed(state.mintId, 0);
+        if (state.mintId) {
+          onClosed(
+            state.mintId,
+            state.isOpen ? Date.now() - state.openedAt : 0,
+          );
+        }
         recordSpeechEvent(
-          `Cloud listening failed${state.isClosing ? ' after the listen ended' : ''}, ${cause.stage}: ${cause.detail}, ${state.frames.length} frames handed on`,
+          `Cloud listening failed${state.isClosing ? ' after the listen ended' : state.isOpen ? ' while open' : ''}, ${cause.stage}: ${cause.detail}, ${handover.source?.preRoll.length ?? 0} frames handed on`,
         );
         onUnavailable(reason, cause, handover);
       };
@@ -374,8 +383,10 @@ export const createDeepgramStt = ({
           else relay.waiting = [...relay.waiting, frame].slice(-BUFFER_FRAMES);
           return;
         }
-        if (state.isOpen && !state.isClosing) state.socket?.send(frame);
-        else if (!state.isOpen) {
+        if (state.isOpen && !state.isClosing) {
+          state.recent = [...state.recent, frame].slice(-RECENT_FRAMES);
+          state.socket?.send(frame);
+        } else if (!state.isOpen) {
           state.frames = [...state.frames, frame].slice(-BUFFER_FRAMES);
         }
       };
@@ -453,6 +464,7 @@ export const createDeepgramStt = ({
         state.isOpen = true;
         state.openedAt = Date.now();
         state.frames.forEach((frame) => socket.send(frame));
+        state.recent = state.frames.slice(-RECENT_FRAMES);
         state.frames = [];
         if (state.isClosing) {
           socket.send(JSON.stringify({ type: 'CloseStream' }));
@@ -469,7 +481,7 @@ export const createDeepgramStt = ({
         state.hasErrored = true;
       };
       socket.onclose = (event: CloseEvent) =>
-        state.isOpen
+        state.isOpen && state.isClosing
           ? deliver()
           : fail(null, toCloseCause(event, state.hasErrored));
       socket.onmessage = (event: MessageEvent) => {
