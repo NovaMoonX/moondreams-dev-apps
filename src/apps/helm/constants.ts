@@ -1340,6 +1340,50 @@ export const HELM_COPY = {
   disconnectDeleteNote:
     "They're removed now and can't be brought back. Your tasks and notes that mention them stay.",
   disconnectCancel: 'Cancel',
+  disconnectBroughtIn: (count: number, app: string) =>
+    `The ${count} ${count === 1 ? 'person, pet or business' : 'people, pets and businesses'} you brought in from ${app} stay in your circle.`,
+  bringInOfferLine: (app: string, phrase: string) =>
+    `${app} has ${phrase} you can bring into your circle.`,
+  bringInOfferAction: 'Review',
+  bringInOfferCount: (count: number) => `${count} not in your circle`,
+  bringInOfferRowTitle: 'Bring into your circle',
+  bringInTitle: (app: string) => `From ${app}`,
+  bringInIntro:
+    'Tick who to bring in. Anyone already in your circle is merged with them.',
+  bringInNewRow: 'New to your circle',
+  bringInSameRow: (name: string) => `Same as ${name}`,
+  bringInMaybeRow: (name: string) => `Is this ${name}?`,
+  bringInMergeAdds: (adds: string[]) => `Adds: ${adds.join(' · ')}`,
+  bringInMergeAddsNothing: 'Nothing new to add, it just remembers the link',
+  bringInMaybeYes: (name: string) => `Yes, merge with ${name}`,
+  bringInMaybeNo: 'No, add as new',
+  bringInConfirm: (count: number) =>
+    count === 0 ? 'Bring in' : `Bring in ${count}`,
+  bringInCancel: 'Not now',
+  bringInSelectAll: 'Select all',
+  bringInSelectNone: 'Clear',
+  bringInWorking: 'Bringing in…',
+  bringInFailed: "That didn't come through. Try again.",
+  bringInOffline: 'Connect to the internet to bring people in.',
+  bringInNothing: 'Everyone from here is already in your circle.',
+  bringInSummary: (brought: number, merged: number) =>
+    [
+      brought === 0
+        ? null
+        : `Brought ${brought} ${brought === 1 ? 'new record' : 'new records'} into your circle`,
+      merged === 0
+        ? null
+        : `Merged ${merged} ${merged === 1 ? 'record' : 'records'} with who you already had`,
+    ]
+      .filter((part): part is string => part !== null)
+      .join('. '),
+  bringInDone: (summary: string, skipped: number) =>
+    `${summary}.${skipped === 0 ? '' : ` ${skipped} ${skipped === 1 ? 'was' : 'were'} left out because who they matched in your circle was removed.`}`,
+  bringInNothingDone:
+    'Nothing was brought in: who they matched in your circle was removed or no longer opens.',
+  bringInUndo: 'Undo',
+  bringInUndone: 'Taken back.',
+  bringInUndoFailed: "That couldn't be undone. Try Activity.",
   syncedFrom: (app: string) => `From ${app}`,
   syncedUpdated: (when: string, name: string) =>
     `Updated ${when} · read only in ${name}`,

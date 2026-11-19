@@ -3780,6 +3780,124 @@ test('a turn whose lines were all changed since takes nothing back', () => {
   assert.equal(refused.reason, 'nothingToTakeBack');
 });
 
+const FROM_APP = [{ connectorId: 'app:nine-lives', sourceRef: 'd1' }];
+
+test('a person merged from an app goes back to what they had, and is kept once the person edited them', () => {
+  const merge = execution(
+    [
+      {
+        ref: { op: 'update', collection: 'who', docId: 'w1' } as EffectRef,
+        effect: {
+          written: {
+            'sealed.name': 'Patel',
+            'sealed.aliases': ['Dr. Patel'],
+            'sealed.notes': 'Vet at Paws',
+            appSources: FROM_APP,
+          },
+          previous: {
+            'sealed.name': 'Patel',
+            'sealed.aliases': [],
+            'sealed.notes': null,
+            appSources: [],
+          },
+        },
+      },
+    ],
+    { category: 'import', actor: 'person' },
+  );
+  const words = { name: 'Patel', aliases: ['Dr. Patel'], notes: 'Vet at Paws' };
+  const restored = asWrite(
+    plan(merge, [
+      [
+        'w1',
+        {
+          docId: 'w1',
+          data: { lastEditedAt: null, appSources: FROM_APP },
+          opened: words,
+        } as unknown as UndoTarget,
+      ],
+    ]),
+  );
+  assert.equal(restored.updates.length, 1);
+  assert.deepEqual(
+    { ...restored.updates[0].reseal },
+    { name: 'Patel', aliases: [], notes: null },
+  );
+  const kept = plan(merge, [
+    [
+      'w1',
+      {
+        docId: 'w1',
+        data: { lastEditedAt: null, appSources: FROM_APP },
+        opened: { ...words, notes: 'Vet at Paws, great with Miso' },
+      } as unknown as UndoTarget,
+    ],
+  ]);
+  assert.equal(kept.kind === 'write' ? kept.updates.length : 0, 0);
+});
+
+test('two candidates merged into one person are one effect, and Undo restores every alias and source at once', () => {
+  const both = [
+    { connectorId: 'app:nine-lives', sourceRef: 'd1' },
+    { connectorId: 'app:nine-lives', sourceRef: 'd2' },
+  ];
+  const merge = execution(
+    [
+      {
+        ref: { op: 'update', collection: 'who', docId: 'w1' } as EffectRef,
+        effect: {
+          written: {
+            'sealed.name': 'Patel',
+            'sealed.aliases': ['Dr. P', 'Doc Patel'],
+            appSources: both,
+          },
+          previous: {
+            'sealed.name': 'Patel',
+            'sealed.aliases': [],
+            appSources: [],
+          },
+        },
+      },
+    ],
+    { category: 'import', actor: 'person' },
+  );
+  const restored = asWrite(
+    plan(merge, [
+      [
+        'w1',
+        {
+          docId: 'w1',
+          data: { lastEditedAt: null, appSources: both },
+          opened: { name: 'Patel', aliases: ['Dr. P', 'Doc Patel'] },
+        } as unknown as UndoTarget,
+      ],
+    ]),
+  );
+  assert.equal(restored.updates.length, 1);
+  assert.deepEqual(
+    { ...restored.updates[0].reseal },
+    { name: 'Patel', aliases: [] },
+  );
+});
+
+test('a person brought in from an app is deleted by Undo while untouched, and kept once in use', () => {
+  const made = execution([madeWho('w1', 'Mittens'), madeWho('w2', 'Biscuit')], {
+    category: 'import',
+    actor: 'person',
+  });
+  const result = asWrite(
+    plan(made, [
+      target('w1', { lastEditedAt: null, lastMentionedAt: null }, null),
+      target('w2', { lastEditedAt: null, lastMentionedAt: NOW }, null),
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['w1'],
+  );
+  assert.deepEqual(result.kept, ['Biscuit']);
+});
+
 const PLACE_BEFORE = {
   rank: 1,
   words: 'work comes first',

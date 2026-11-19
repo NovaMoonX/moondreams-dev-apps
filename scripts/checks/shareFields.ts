@@ -16,7 +16,11 @@ const ROOT = join(import.meta.dirname, '..', '..');
 const ADAPTER_EXEMPT: Record<string, Record<string, string>> = {
   waypoint: {
     displayName:
-      "a traveler's profile name, read only for the first name of whoever a checklist item is assigned to",
+      "a traveler's profile name, read for the first name of whoever a checklist item is assigned to and, as 'People you travel with', the name of each fellow traveller (never an email)",
+  },
+  'going-once': {
+    displayName:
+      "a co-seller's profile name, read only for their first name in 'Buyers and co-sellers'",
   },
 };
 
