@@ -1121,6 +1121,27 @@ console.log('speechShared: on-device recognition checks passed');
       return READY;
     },
   });
+  const warmRequests: MintVoiceTokenRequest[] = [];
+  const warmSource = createVoiceTokenSource({
+    appId: 'x',
+    mint: async (request) => {
+      warmRequests.push(request);
+      return { status: 'warm' };
+    },
+  });
+  await warmSource.warm();
+  assert.deepEqual(
+    [warmRequests[0]?.warm, warmRequests[0]?.closed],
+    [true, []],
+    'a warm-up asks for no token and sends no close reports',
+  );
+  const notToken = await warmSource.getToken();
+  assert.deepEqual(
+    [notToken.status, notToken.status === 'held' ? notToken.reason : null],
+    ['held', 'unavailable'],
+    'a warm answer to a token request is unavailable, never a token',
+  );
+
   source.reportClosed('a', 1000);
   const first = await source.getToken();
   assert.equal(first.status, 'ready', 'a minted token is ready');
@@ -2528,27 +2549,47 @@ console.log('speechShared: voice router and playback queue checks passed');
 
   const hissed: number[] = [];
   const speakerContext = {
+    state: 'running',
     currentTime: 10,
     sampleRate: 100,
     destination: {},
     createBuffer: () => ({ copyToChannel: () => undefined }),
     createBufferSource: () => ({
+      loop: false,
       connect: () => undefined,
       start: () => hissed.push(1),
+      stop: () => undefined,
     }),
   } as unknown as AudioContext;
   const firstLine = wakeAudioOutput(speakerContext);
-  assert.equal(firstLine.readyAt, 11.5, 'quiet speakers are woken first');
+  assert.equal(firstLine.readyAt, 12.5, 'quiet speakers are woken first');
   const secondLine = wakeAudioOutput(speakerContext);
   assert.equal(
     hissed.length,
     1,
     'a line while another holds them does not hiss again',
   );
-  assert.ok(secondLine.readyAt <= 11.5, 'nor waits any longer');
+  assert.ok(secondLine.readyAt <= 12.5, 'nor waits any longer');
   firstLine.release();
   firstLine.release();
   secondLine.release();
+  wakeAudioOutput(speakerContext).release();
+  assert.equal(
+    hissed.length,
+    1,
+    'a line within a minute of the last finds the speakers still awake',
+  );
+  const pausedContext = Object.assign(Object.create(speakerContext), {
+    state: 'suspended',
+    currentTime: 20,
+  }) as AudioContext;
+  const afterPause = wakeAudioOutput(pausedContext);
+  afterPause.release();
+  assert.deepEqual(
+    [hissed.length, afterPause.readyAt],
+    [2, 22.5],
+    'after the page was paused the speakers are woken again',
+  );
   fake.clock.now = 5;
   sink.push(new Uint8Array([1, 0]));
   assert.ok(
@@ -2679,6 +2720,51 @@ console.log('speechShared: voice router and playback queue checks passed');
   assert.deepEqual(pushed, [4, 2], 'every chunk reaches the player');
   assert.equal(events[0], 'end', 'the stream is ended when the body ends');
   assert.equal(calls.length, 0, 'a streamed answer never reaches the fallback');
+
+  const wakingBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0, 2, 0])])),
+    fallback,
+    player: {
+      ...player([]),
+      openStream: async () => ({
+        push: () => undefined,
+        end: () => undefined,
+        remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 80, isEnded: true }),
+        stop: () => undefined,
+        done: Promise.resolve(),
+      }),
+    },
+  }).speak('Waking', options());
+  assert.equal(
+    wakingBy,
+    'cloud:googleTts',
+    'a short line scheduled while the speakers wake is played, not taken for no audio',
+  );
+
+  const wakeAbort = new AbortController();
+  const playedLines: string[] = [];
+  const abortedBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0, 2, 0])])),
+    fallback,
+    onPlayed: () => playedLines.push('played'),
+    player: {
+      ...player([]),
+      openStream: async () => ({
+        push: () => wakeAbort.abort(),
+        end: () => undefined,
+        remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 80, isEnded: true }),
+        stop: () => undefined,
+        done: Promise.resolve(),
+      }),
+    },
+  }).speak('Never heard', options(wakeAbort.signal));
+  assert.deepEqual(
+    [abortedBy, playedLines],
+    [undefined, []],
+    'a line stopped before the speakers woke is never counted as played',
+  );
 
   const emptyBy = await createCloudTts({
     source: streamed(pcmBody([new Uint8Array(0)])),

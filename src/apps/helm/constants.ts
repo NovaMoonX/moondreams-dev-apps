@@ -1315,6 +1315,7 @@ export const HELM_COPY = {
   connectionGone: 'That app was already disconnected.',
   connectionConnectedOn: (date: string) => `Connected ${date}`,
   connectionAccountLabel: 'Account',
+  connectionThisAccount: 'This account',
   connectionAccountValue: 'Your moondreams account',
   connectionReads: (name: string) => `What ${name} reads`,
   connectionSwitchedOff: (label: string) =>
@@ -1371,6 +1372,8 @@ export const HELM_COPY = {
   gmailAddHint: (name: string) => `Let ${name} search your email when you ask.`,
   driveAddHint: (name: string) =>
     `Let ${name} search your Docs and PDFs when you ask.`,
+  contactsAddHint: (name: string) =>
+    `Pick people from Google Contacts to bring in to ${name}.`,
   googleAddAccount: 'Add a Google account',
   googleAddAccountHint: (name: string) =>
     `Start with Calendar, so ${name} can plan around your events.`,
@@ -1401,25 +1404,21 @@ export const HELM_COPY = {
   googleGmailReconnectTitle: 'Reconnect Gmail',
   googleGmailReadOnly: (name: string) =>
     `${name} searches your Gmail only when a question needs it, and keeps only what an answer quotes. It can't send, label, archive or delete mail.`,
-  gmailRowTitle: 'Gmail',
-  gmailStopTitle: 'Stop reading Gmail?',
-  gmailStopConfirm: 'Stop reading Gmail',
   gmailDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its email are blanked. What was noted from it stays.',
   gmailFailed: "Gmail didn't turn on. Try again.",
-  googleDriveName: 'Drive',
-  googleDriveTitle: 'Connect Drive',
-  googleDriveReconnectTitle: 'Reconnect Drive',
+  googleDriveName: 'Google Drive',
+  googleDriveTitle: 'Connect Google Drive',
+  googleDriveReconnectTitle: 'Reconnect Google Drive',
   googleDriveReadOnly: (name: string) =>
     `${name} searches your Drive only when a question needs it, and reads only Google Docs and PDFs. It keeps only what an answer quotes, and can't create, change, share or delete files.`,
-  driveRowTitle: 'Drive',
-  driveStopTitle: 'Stop reading Drive?',
-  driveStopConfirm: 'Stop reading Drive',
   driveDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its documents are blanked.',
   driveFailed: "Drive didn't turn on. Try again.",
-  googleContactsName: 'Contacts',
+  googleContactsName: 'Google Contacts',
   contactsRowTitle: 'Google Contacts',
+  contactsMarkCredit: 'Google Contacts icon by',
+  contactsMarkLicence: ', CC BY 4.0',
   googleContactsTitle: 'Connect Google Contacts',
   googleContactsReconnectTitle: 'Reconnect Google Contacts',
   googleContactsReadOnly: (name: string) =>
@@ -1441,9 +1440,12 @@ export const HELM_COPY = {
   googleWhichCalendars: 'Which calendars',
   googleCalendarsCount: (count: number) =>
     `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
+  calendarSyncSection: 'Two-way sync',
+  calendarSyncRowMeta: (calendarName: string) => `Plan kept in ${calendarName}`,
   calendarSyncTitle: 'Keep your plan in a calendar',
-  calendarSyncOff: 'Show your plan in Google Calendar',
-  calendarSyncOn: (calendarName: string) => `Your plan is in ${calendarName}`,
+  calendarSyncOff: 'Off · Your plan in Google Calendar, both ways',
+  calendarSyncOn: (calendarName: string) =>
+    `On, in ${calendarName}. Moves you make there come back here.`,
   calendarSyncPending: (calendarName: string) =>
     `Getting ${calendarName} ready`,
   calendarSyncReconnect: 'Reconnect Google to keep going',
