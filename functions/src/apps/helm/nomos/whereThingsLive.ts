@@ -79,6 +79,7 @@ export const TURN_BLOCKS = [
   '<files>',
   '<already_made>',
   '<aims_turn>',
+  '<morning_question>',
 ] as const;
 
 const row = (
@@ -637,6 +638,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     thing: 'A question Helm asked and the answer',
     home: 'captures',
     contextBlock: '<answered_question>',
+    tools: ['bring_back_question'],
     writer: 'actions/questionActions',
     taps: ['sendQuestionAnswer'],
   }),
@@ -645,7 +647,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'captures',
     commands: ['closeConversation'],
     writer: 'actions/captureActions',
-    taps: ['closeQuestions', 'skipQuestion'],
+    taps: ['closeQuestions'],
   }),
   row({
     thing: 'What the assistant did',

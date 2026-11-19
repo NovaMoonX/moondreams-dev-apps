@@ -30,11 +30,17 @@ import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
 import {
   loadExecutionsById,
   markCaptureSeen,
+  reaskQuestion,
   retryCapture,
 } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import { selectStartGuardrail } from '@apps/helm/store/selectors/patternSelectors';
 import type { OpenCapture } from '@apps/helm/types';
+import {
+  isPastTurn,
+  readQuestionPlace,
+  type QuestionPlace,
+} from '@apps/helm/utils/linearThread';
 import { findHeldLine, readReplayLine } from '@apps/helm/utils/quietSpeech';
 import {
   getAnsweredQuestions,
@@ -57,6 +63,8 @@ interface TurnCardProps {
   isOnHome: boolean;
   /** Under this turn's reply, the one-time line that an AI service reads what is said. */
   showsNotice: boolean;
+  /** When the person last sent a turn of their own, where past offers settle; null on a surface where nothing is past (an inbox row, Activity). */
+  newestTurnAt?: number | null;
 }
 
 /** What the person sent, as their bubble with its time, and under it what became of it. */
@@ -90,6 +98,7 @@ function TurnCard({
   showsReading,
   isOnHome,
   showsNotice,
+  newestTurnAt = null,
 }: TurnCardProps) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const planDay = useAppSelector((state) =>
@@ -142,10 +151,28 @@ function TurnCard({
   }, [uid, missingKey]);
   const openQuestions = capture.isUnreadable ? [] : getOpenQuestions(capture);
   const unskipped = openQuestions.filter((entry) => entry.skippedAt === null);
+  const placeOf = (entry: (typeof openQuestions)[number]): QuestionPlace =>
+    newestTurnAt === null
+      ? 'live'
+      : readQuestionPlace({
+          turnAt: capture.createdAt,
+          reaskedAt: capture.questionState[entry.id]?.reaskedAt ?? null,
+          newestTurnAt,
+        });
+  const isPast = isPastTurn(capture.createdAt, newestTurnAt);
   const questions = [
     ...unskipped,
     ...openQuestions.filter((entry) => entry.skippedAt !== null),
-  ].slice(0, QUESTIONS_PER_TURN);
+  ]
+    .filter((entry) => placeOf(entry) !== 'below')
+    .slice(0, QUESTIONS_PER_TURN);
+  const askAgain = (questionId: string) => {
+    if (!user) return;
+    reaskQuestion(user.uid, capture.id, questionId).catch((error: unknown) => {
+      console.error('Helm question was not asked again', error);
+      addToast({ title: HELM_COPY.heldActionFailed, type: 'error' });
+    });
+  };
   const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
   const dismissed = capture.isUnreadable ? [] : getDismissedQuestions(capture);
   const planLine = getPlanLine();
@@ -281,6 +308,7 @@ function TurnCard({
               showsNotice={showsNotice}
               canReplay={showsOutcome && isOnHome}
               isQuietTurn={quietHeld !== null}
+              isSettled={isPast}
             />
           ))}
         </div>
@@ -379,6 +407,8 @@ function TurnCard({
               captureId={capture.id}
               item={entry}
               isInSheet={false}
+              isSettled={placeOf(entry) === 'settled'}
+              onAskAgain={() => askAgain(entry.id)}
             />
           ))}
         </div>

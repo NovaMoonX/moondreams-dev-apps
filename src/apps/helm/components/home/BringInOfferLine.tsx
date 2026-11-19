@@ -11,10 +11,11 @@ import {
   useBringInOffers,
   type BringInOffer,
 } from '@apps/helm/hooks/useBringInOffers';
+import { readMentionedOffer } from '@apps/helm/engine/bringIn';
 import { markBringInTold } from '@apps/helm/store/actions/settingsActions';
 
-/** `uid|appId` of each offer this session has already shown, so the line stays until the person leaves even after it is marked told. */
-const shownThisSession = new Set<string>();
+/** `uid|appId` to the turn each offer was shown under, so the line stays there until the person leaves even after it is marked told. */
+const shownFor = new Map<string, string>();
 const toSessionKey = (uid: string, appId: string) => `${uid}|${appId}`;
 
 function OfferLine({ offer }: { offer: BringInOffer }) {
@@ -49,8 +50,14 @@ function OfferLine({ offer }: { offer: BringInOffer }) {
   );
 }
 
-/** What a connected app holds that the circle doesn't, said once in the conversation as the assistant's own line, with the review one tap away; the connection's page keeps the offer after. */
-function BringInOfferLine() {
+/** Said once per app, under the person's newest turn, and only when its words name someone or a pet an app holds that the circle doesn't; the connection's page and Connected apps carry the offer the rest of the time. */
+function BringInOfferLine({
+  turnId,
+  words,
+}: {
+  turnId: string;
+  words: string;
+}) {
   const { user } = useAuth();
   const offers = useBringInOffers();
   const toldAt = useAppSelector(
@@ -59,12 +66,15 @@ function BringInOfferLine() {
   const isProfileLoaded = useAppSelector(
     (state) => state.helm.profile !== null,
   );
-  const shown = offers.filter(
-    (offer) =>
-      isProfileLoaded &&
-      (shownThisSession.has(toSessionKey(user?.uid ?? '', offer.appId)) ||
-        toldAt?.[offer.appId] === undefined),
+  const uid = user?.uid ?? '';
+  const stays = offers.filter(
+    (offer) => shownFor.get(toSessionKey(uid, offer.appId)) === turnId,
   );
+  const mentioned =
+    isProfileLoaded && user
+      ? readMentionedOffer(words, offers, { told: toldAt })
+      : null;
+  const shown = stays.length > 0 ? stays : mentioned ? [mentioned] : [];
 
   const shownKey = shown.map((offer) => offer.appId).join('|');
   useEffect(() => {
@@ -74,13 +84,13 @@ function BringInOfferLine() {
       .filter(Boolean)
       .forEach((appId) => {
         const key = toSessionKey(user.uid, appId);
-        if (shownThisSession.has(key)) return;
-        shownThisSession.add(key);
+        if (shownFor.has(key)) return;
+        shownFor.set(key, turnId);
         markBringInTold(user.uid, appId, Date.now()).catch((error: unknown) =>
           console.error('Helm bring-in offer was not marked told', error),
         );
       });
-  }, [user, shownKey]);
+  }, [user, shownKey, turnId]);
 
   return (
     <>

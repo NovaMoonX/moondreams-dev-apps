@@ -297,6 +297,7 @@ export const toPlannedQuestion = (
     answeredAt: null,
     skippedAt: null,
     dismissedAt: null,
+    reaskedAt: null,
   },
   sealed,
   spoken: buildSpokenQuestion(sealed),

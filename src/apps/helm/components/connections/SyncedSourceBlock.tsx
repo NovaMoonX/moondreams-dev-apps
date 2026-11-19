@@ -1,13 +1,9 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import AppLogo from '@/components/AppLogo';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import {
-  isOutsideAccount,
-  readConnectorAppId,
-} from '@/lib/connections/contract';
+import { isOutsideAccount } from '@/lib/connections/contract';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useAuth } from '@/hooks/useAuth';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
@@ -16,6 +12,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { SyncedRecord } from '@apps/helm/types';
 import { formatUpdatedAt } from '@apps/helm/utils/synced';
+import ConnectorMark from '@apps/helm/components/connections/ConnectorMark';
 
 interface SyncedSourceBlockProps {
   record: SyncedRecord;
@@ -50,7 +47,6 @@ const isInternalRoute = (link: string) =>
 function SyncedSourceBlock({ record, appName, now }: SyncedSourceBlockProps) {
   const name = useAssistantName();
   const navigate = useNavigate();
-  const appId = readConnectorAppId(record.connectorId) ?? '';
   const link = record.sealed.deepLink;
   const isOutside = isOutsideAccount(record.accountId);
   const line =
@@ -63,13 +59,10 @@ function SyncedSourceBlock({ record, appName, now }: SyncedSourceBlockProps) {
   return (
     <div className='bg-muted/50 flex flex-col gap-3 rounded-[10px] p-3'>
       <div className='flex items-center gap-3'>
-        {isOutside ? (
-          <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
-            <CalendarDays className='size-5' aria-hidden='true' />
-          </span>
-        ) : (
-          <AppLogo appId={appId} className='size-9 rounded-lg' />
-        )}
+        <ConnectorMark
+          connectorId={record.connectorId}
+          className='size-9 rounded-lg'
+        />
         <div className='min-w-0'>
           <p className='text-foreground text-[15px] leading-[21px] break-words'>
             {isOutside ? (

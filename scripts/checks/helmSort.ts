@@ -361,6 +361,7 @@ test('an empty reply settles as couldNotRead, with its question sealed and reada
       askedAt: 9000,
       answeredAt: null,
       skippedAt: null,
+      reaskedAt: null,
       dismissedAt: null,
     },
   });

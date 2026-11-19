@@ -7,8 +7,15 @@ import { fromDateInputValue } from '@/utils/dateInputUtils';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
 import { HELM_COPY } from '@apps/helm/constants';
 
-/** A day, a time or both, by the question's mode; Send waits until every field it asks for is filled. */
-function DateTimeAnswer({ question, isBusy, skip, onAnswer }: AnswerPartProps) {
+/** In the thread, a line pointing to the composer; in a sheet, a day, a time or both, by the question's mode; Send waits until every field it asks for is filled. */
+function DateTimeAnswer({
+  question,
+  isBusy,
+  isComposerAnswer,
+  isComposerTarget,
+  skip,
+  onAnswer,
+}: AnswerPartProps) {
   const [day, setDay] = useState('');
   const [time, setTime] = useState('');
   const mode = question.dateMode ?? 'dateTime';
@@ -19,6 +26,18 @@ function DateTimeAnswer({ question, isBusy, skip, onAnswer }: AnswerPartProps) {
     !isBusy &&
     (!needsDay || date !== null) &&
     (!needsTime || /^\d{2}:\d{2}$/.test(time));
+  if (isComposerAnswer) {
+    return (
+      <div className='flex w-full flex-col items-start gap-2'>
+        {isComposerTarget && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.questionFreeTextHint}
+          </p>
+        )}
+        {skip}
+      </div>
+    );
+  }
 
   return (
     <div className='flex w-full flex-col items-stretch gap-2'>

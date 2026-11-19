@@ -48,24 +48,29 @@ export const unlockAudioOnNextTap = () => {
   );
 };
 
-// Phone speakers and Bluetooth headphones sleep after a few seconds of silence and drop the first second or two of
-// the sound that wakes them; a hiss too quiet to hear (about -70 dB, not digital zero, which some headphones ignore)
-// wakes them, and the first word waits until it has played long enough.
-const IDLE_MS = 3000;
-const WAKE_SECONDS = 1.5;
-const HISS_SECONDS = 4;
+// Phone speakers and Bluetooth headphones sleep after a few seconds of silence and drop up to a few seconds of the
+// sound that wakes them, and no browser says when they are awake again. So a hiss too quiet to hear (about -70 dB, not
+// digital zero, which some headphones ignore) wakes them before a first line and keeps them awake a minute after each.
+const WAKE_SECONDS = 2.5;
+const KEEP_AWAKE_MS = 60_000;
+const HISS_SECONDS = 2;
 const HISS_LEVEL = 0.0003;
-
-// A hold that is never released (a suspended page whose sound never ends) lapses, so the wake keeps working.
+// A hold that is never released (a suspended page whose sound never ends) lapses, so the hiss always stops.
 const HOLD_MAX_MS = 120_000;
 
 const output = {
   holds: new Map<object, number>(),
-  releasedAt: 0,
+  hiss: null as AudioBufferSourceNode | null,
   wokenAt: 0,
-  hissUntil: 0,
+  stopId: 0 as ReturnType<typeof setTimeout> | 0,
 };
-const playHiss = (context: AudioContext) => {
+
+const dropLapsedHolds = (now: number) =>
+  output.holds.forEach((until, hold) => {
+    if (until <= now) output.holds.delete(hold);
+  });
+
+const startHiss = (context: AudioContext) => {
   const length = Math.round(context.sampleRate * HISS_SECONDS);
   const buffer = context.createBuffer(1, length, context.sampleRate);
   buffer.copyToChannel(
@@ -74,24 +79,47 @@ const playHiss = (context: AudioContext) => {
   );
   const node = context.createBufferSource();
   node.buffer = buffer;
+  node.loop = true;
   node.connect(context.destination);
   node.start();
-  output.hissUntil = context.currentTime + HISS_SECONDS;
+  return node;
+};
+
+const stopHissLater = () => {
+  clearTimeout(output.stopId);
+  output.stopId = setTimeout(() => {
+    dropLapsedHolds(Date.now());
+    if (output.holds.size > 0) {
+      stopHissLater();
+      return;
+    }
+    try {
+      output.hiss?.stop();
+    } catch {
+      // Already stopped.
+    }
+    output.hiss = null;
+  }, KEEP_AWAKE_MS);
+  // In Node (the checks) the timer must not hold the process open.
+  (output.stopId as { unref?: () => void }).unref?.();
 };
 
 /** Keeps the speakers awake for one spoken line: its first sound starts no earlier than `readyAt`, and `release` ends the hold. */
 export const wakeAudioOutput = (context: AudioContext) => {
   const now = Date.now();
-  output.holds.forEach((until, hold) => {
-    if (until <= now) output.holds.delete(hold);
-  });
-  const isIdle =
-    output.holds.size === 0 &&
-    now - output.releasedAt > IDLE_MS &&
-    context.currentTime >= output.hissUntil;
-  if (isIdle) {
+  dropLapsedHolds(now);
+  // A suspended or interrupted context (a call, a route change) lets the speakers sleep under a hiss that isn't playing.
+  if (output.hiss !== null && context.state !== 'running') {
     try {
-      playHiss(context);
+      output.hiss.stop();
+    } catch {
+      // Already stopped.
+    }
+    output.hiss = null;
+  }
+  if (output.hiss === null) {
+    try {
+      output.hiss = startHiss(context);
       output.wokenAt = context.currentTime;
       recordSpeechEvent('Speakers were quiet; woke them before speaking');
     } catch (error) {
@@ -100,13 +128,13 @@ export const wakeAudioOutput = (context: AudioContext) => {
       );
     }
   }
+  stopHissLater();
   const hold = {};
   output.holds.set(hold, now + HOLD_MAX_MS);
   return {
     readyAt: output.wokenAt + WAKE_SECONDS,
     release: () => {
-      if (!output.holds.delete(hold)) return;
-      output.releasedAt = Date.now();
+      if (output.holds.delete(hold)) stopHissLater();
     },
   };
 };

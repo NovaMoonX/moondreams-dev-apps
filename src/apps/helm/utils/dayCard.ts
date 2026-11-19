@@ -4,8 +4,17 @@ import type { OpenDayAims, PlanSlot } from '@apps/helm/types';
 const HOUR_MS = 3_600_000;
 const DEFAULT_MINUTES = 30;
 
-export type DayCardMode =
-  'hidden' | 'ask' | 'answered' | 'skipped' | 'windDown' | 'wound';
+export type DayCardMode = 'hidden' | 'ask' | 'answered' | 'windDown' | 'wound';
+
+/** When the morning question stops being offered: a third of the way through the waking day (from the usual start to the usual end), or `fallback` when those two don't make a day. */
+export const readMorningCutoff = (input: {
+  dayStart: number;
+  dayEnd: number;
+  fallback: number;
+}) =>
+  input.dayEnd > input.dayStart
+    ? input.dayStart + Math.floor((input.dayEnd - input.dayStart) / 3)
+    : input.fallback;
 
 /** The task ids a day still wants done, in the person's order; a task sent to tomorrow, left for later or dropped is no longer one. */
 export const readAimTaskIds = (
@@ -16,14 +25,15 @@ export const readAimTaskIds = (
     .filter((aim) => (day?.windDown[aim.taskId]?.choice ?? null) === null)
     .map((aim) => aim.taskId);
 
-/** Which view of the day card home shows: the question, the aims folded, the skipped line, the wind-down or the wound-down line. Nothing before the person's day starts, and no question once the day's last 2 hours begin. */
+/** Which view of the day card home shows: the question (until `morningUntil`, then gone for the day with nothing said), the aims folded, the wind-down or the wound-down line. Nothing before the person's day starts, and no question once the day's last 2 hours begin. */
 export function readDayCardMode(input: {
   day: OpenDayAims | null;
   now: number;
   dayStart: number;
   dayEnd: number;
+  morningUntil: number;
 }): DayCardMode {
-  const { day, now, dayStart, dayEnd } = input;
+  const { day, now, dayStart, dayEnd, morningUntil } = input;
   if (now < dayStart) return 'hidden';
   if (day?.windDownState === 'done') return 'wound';
   if (day?.windDownState === 'dismissed') return 'hidden';
@@ -31,7 +41,7 @@ export function readDayCardMode(input: {
     return day !== null && day.aims.length > 0 ? 'windDown' : 'hidden';
   }
   if (day?.state === 'answered' && day.aims.length > 0) return 'answered';
-  return day?.state === 'dismissed' ? 'skipped' : 'ask';
+  return day?.state === 'dismissed' || now >= morningUntil ? 'hidden' : 'ask';
 }
 
 export type AimResult = 'done' | 'tonight' | 'wontHappen';

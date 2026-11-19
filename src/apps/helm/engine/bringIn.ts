@@ -362,3 +362,49 @@ export const toCountPhrase = (
   if (said.length <= 1) return said.join('');
   return `${said.slice(0, -1).join(', ')} and ${said.at(-1)}`;
 };
+
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The words a plan's record answers to in a sentence: its name, and its first name when that is at least 3 letters and not a title. */
+const toMentionNames = (name: string) => {
+  const first = name
+    .trim()
+    .split(/\s+/)[0]
+    ?.replace(/[^\p{L}\p{N}]/gu, '');
+  return [
+    name.trim(),
+    ...(first && first.length >= 3 && !TITLES.has(first.toLowerCase())
+      ? [first]
+      : []),
+  ].filter(Boolean);
+};
+
+const isNamedIn = (words: string, name: string) =>
+  toMentionNames(name).some((one) =>
+    new RegExp(
+      `(?<![\\p{L}\\p{N}])${escapeRegExp(one)}(?![\\p{L}\\p{N}])`,
+      'iu',
+    ).test(words),
+  );
+
+/** The first offer, from an app not yet told, whose plans name someone or a pet in `words` (whole words, case-insensitive). While masked, a plan matching a private who is skipped. */
+export const readMentionedOffer = <
+  T extends { appId: string; plans: BringInPlan[] },
+>(
+  words: string,
+  offers: T[],
+  options: { told?: Record<string, number> | null; isMasked?: boolean } = {},
+): T | null =>
+  offers.find(
+    (offer) =>
+      options.told?.[offer.appId] === undefined &&
+      offer.plans.some(
+        (plan) =>
+          !(
+            options.isMasked &&
+            plan.kind !== 'new' &&
+            isPrivateRead(plan.who)
+          ) && isNamedIn(words, plan.candidate.name),
+      ),
+  ) ?? null;
