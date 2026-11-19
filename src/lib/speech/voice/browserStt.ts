@@ -51,11 +51,17 @@ export const createBrowserStt = ({
         interim: adopt && !adopt.heard.isFinal ? adopt.heard.text : '',
         isHeard: false,
       };
-      const state = { isDone: false };
+      const state = { isDone: false, isListening: false };
       const listener =
         adopt?.listener ??
         createSpeechListener(
-          () => undefined,
+          (status) => {
+            if (status === 'listening' && !state.isListening) {
+              state.isListening = true;
+              options.onListening?.();
+              options.onReady?.();
+            }
+          },
           () => undefined,
         );
       const toWords = (text: string) => text.split(/\s+/).filter(Boolean);

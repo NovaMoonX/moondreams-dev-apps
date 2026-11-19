@@ -30,7 +30,7 @@ The rest of the conventions live in `docs/conventions/`, one file per topic, so 
 | Review agents, hooks, skills, the PR flow | `pipeline.md`, `agents.md` |
 | Reviewing as an agent | technical: `code.md`, `data-contracts.md`, `state-data.md`, `firestore-rules.md`, `cloud-functions.md`, `security-privacy.md`, `validation.md`; product: `product.md`, `design-ux.md`; design: `design-ux.md`, `forms-crud.md`, `app-look.md` |
 
-Lasting rules taught by a review or the owner go into the narrowest of these files (fold them in, never append); this file keeps only what every task needs.
+Lasting rules taught by a review or the owner go into the narrowest of these files (fold them in, never append); this file keeps only what every task needs. **Every new or changed rule is scoped first:** does it hold for every app (a convention file or a review agent), only this one (its rules file), or every app with a note for this one (both)? A lesson learned in one app is written for all apps whenever the same failure could happen in another, with the app named only as its example (owner, Helm voice: "anytime we're considering a rule change, we consider if it should be applied to just this app or all apps").
 
 ## Code style
 

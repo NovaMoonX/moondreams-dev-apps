@@ -53,7 +53,7 @@ const readCrossings = (frame: Int16Array) =>
 export const createSpeechGate = ({
   frameMs = 30,
   triggerMs = 200,
-  preRollMs = 300,
+  preRollMs = 1000,
   floorMargin = 3,
   minEnergy = 0.01,
   crossingBand = [0.02, 0.35],
@@ -106,6 +106,8 @@ export const BARGE_IN_GATE: SpeechGateOptions = {
   floorMargin: 6,
   minEnergy: 0.025,
   triggerMs: 300,
+  // Earlier audio is the assistant's own voice.
+  preRollMs: 300,
 };
 
 export const BARGE_SUPPRESS_MS = 6000;
