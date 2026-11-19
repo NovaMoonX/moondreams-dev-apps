@@ -28,6 +28,7 @@ import type { HelmQuestion } from '../../src/apps/helm/types.ts';
 import {
   acceptsFreeAnswer,
   matchSpokenAnswer,
+  takesComposerAnswer,
   toFreeAnswer,
 } from '../../src/apps/helm/utils/questionAnswers.ts';
 import {
@@ -413,6 +414,12 @@ assert.deepEqual(
 assert.ok(
   !acceptsFreeAnswer(undoOffer) && toFreeAnswer(pickWithElse, '   ') === null,
   'an undo offer and empty words take no free answer',
+);
+assert.ok(
+  takesComposerAnswer({ ...pickWithElse, shape: 'number', options: [] }) &&
+    takesComposerAnswer({ ...pickWithElse, shape: 'dateTime', options: [] }) &&
+    !takesComposerAnswer(undoOffer),
+  'the composer answers a number or a date in the thread, never an undo offer',
 );
 
 const nods: [string, boolean][] = [

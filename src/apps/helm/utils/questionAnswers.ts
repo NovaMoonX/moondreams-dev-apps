@@ -185,6 +185,15 @@ export function acceptsFreeAnswer(question: HelmQuestion): boolean {
   );
 }
 
+/** Whether the composer at the bottom answers a question shown in the thread: one that takes free words, or a number or a date its words name. */
+export function takesComposerAnswer(question: HelmQuestion): boolean {
+  return (
+    acceptsFreeAnswer(question) ||
+    question.shape === 'number' ||
+    question.shape === 'dateTime'
+  );
+}
+
 /** What words that were not one of the choices answer: the question's free text, its "something else", or "neither" with those words; null when the question takes no free words. */
 export function toFreeAnswer(
   question: HelmQuestion,

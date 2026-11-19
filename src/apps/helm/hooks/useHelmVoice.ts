@@ -100,8 +100,8 @@ import {
   readDeviceTurn,
 } from '@apps/helm/utils/closeConversation';
 import {
-  acceptsFreeAnswer,
   matchSpokenAnswer,
+  takesComposerAnswer,
   toFreeAnswer,
 } from '@apps/helm/utils/questionAnswers';
 import {
@@ -569,7 +569,7 @@ export function useHelmVoice() {
     }
     if (!isSpoken) {
       return turn.kind === 'answer' ||
-        (turn.kind === 'send' && asked && acceptsFreeAnswer(asked.question))
+        (turn.kind === 'send' && asked && takesComposerAnswer(asked.question))
         ? answerQuestion(text, sttProvider, now, false)
         : false;
     }

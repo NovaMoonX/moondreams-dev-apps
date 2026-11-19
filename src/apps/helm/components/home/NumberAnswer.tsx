@@ -7,8 +7,14 @@ import { parseMoneyToCents } from '@/utils/moneyUtils';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
 import { HELM_COPY } from '@apps/helm/constants';
 
-/** `MoneyInput` for an amount (answered in cents), else a number field with its unit after it; a value outside the range says so. */
-function NumberAnswer({ question, isBusy, skip, onAnswer }: AnswerPartProps) {
+/** In the thread, a line pointing to the composer; in a sheet, `MoneyInput` for an amount (answered in cents), else a number field with its unit after it; a value outside the range says so. */
+function NumberAnswer({
+  question,
+  isBusy,
+  isComposerAnswer,
+  skip,
+  onAnswer,
+}: AnswerPartProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { min, max, unit, isMoney, decimals } = question.number ?? {
@@ -34,6 +40,16 @@ function NumberAnswer({ question, isBusy, skip, onAnswer }: AnswerPartProps) {
     setError(null);
     setText(next);
   };
+  if (isComposerAnswer) {
+    return (
+      <div className='flex w-full flex-col items-start gap-2'>
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.questionFreeTextHint}
+        </p>
+        {skip}
+      </div>
+    );
+  }
 
   return (
     <div className='flex w-full flex-col items-stretch gap-2'>
