@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { waitUntil } from '@/utils/waitUntil';
 import { store, useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useNow } from '@/hooks/useNow';
 import DetailSheet from '@/components/DetailSheet';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
@@ -38,7 +39,7 @@ import {
 } from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
-import { readAskedQuestion } from '@apps/helm/utils/askedQuestion';
+import { selectComposerTargetKey } from '@apps/helm/utils/askedQuestion';
 import { takesComposerAnswer } from '@apps/helm/utils/questionAnswers';
 import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
@@ -112,10 +113,10 @@ function QuestionCard({
           (entry) => entry.id === question.aboutRef?.id && !entry.isUnreadable,
         ) ?? null),
   );
-  const isComposerTarget = useAppSelector((state) => {
-    const target = readAskedQuestion(state, 'typed', Date.now())?.asked;
-    return target?.captureId === captureId && target.id === id;
-  });
+  const now = useNow(60_000);
+  const isComposerTarget = useAppSelector(
+    (state) => selectComposerTargetKey(state, now) === `${captureId}:${id}`,
+  );
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
   const Part =
@@ -505,7 +506,7 @@ function QuestionCard({
             {message}
           </p>
         )}
-        {canAnswerInSheet && (
+        {!isInSheet && (
           <DetailSheet
             isOpen={isAnswerOpen}
             onClose={() => setIsAnswerOpen(false)}
