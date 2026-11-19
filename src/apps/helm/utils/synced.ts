@@ -4,6 +4,7 @@ import { getConnectorManifest } from '@/lib/connections/sources';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { DAY_MS, SYNC_REFRESH_MS, SYNC_STALE_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
+import { needsYouOnDay } from '@apps/helm/engine/needsYou';
 import { mergeSameThings } from '@apps/helm/utils/sameThing';
 import type { SyncedRecord } from '@apps/helm/types';
 
@@ -30,14 +31,16 @@ export const isEventToday = (
   );
 };
 
-/** A task copy with no due day is a list the person keeps; one with a day shows from that day on. */
+/** Whether a task copy asks for the person today: open, not automatic, due today or overdue (`needsYouOnDay`). */
 export const isTaskForToday = (
   record: SyncedRecord,
   now: number,
   timeZone: string,
 ) =>
-  record.kind === 'task' &&
-  (record.dueAt === null || record.dueAt <= getDay(now, timeZone));
+  needsYouOnDay(
+    { kind: record.kind, dueAt: record.dueAt, extra: record.sealed.extra },
+    getDay(now, timeZone),
+  );
 
 /** "today 9:30 AM", or "Nov 6, 9:30 AM" on another day. */
 export const formatUpdatedAt = (at: number, now: number) => {

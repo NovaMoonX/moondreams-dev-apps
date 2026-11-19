@@ -98,6 +98,7 @@ interface Summary {
     endsAt: number | null;
     endsAfter: number | null;
     paidAt: number | null;
+    paysItself: boolean;
   }[];
   horizon: {
     name: string;
@@ -140,17 +141,14 @@ const readList = <T>(
     return one === null ? [] : [one];
   });
 
-const readBill = (entry: unknown, today: number) => {
+const readBill = (entry: unknown) => {
   const bill = asObject(entry);
   const name = readName(bill?.name);
   const amountCents = readCents(bill?.amountCents);
   const dueAt = readDay(bill?.dueOn);
   const paidAt = readDay(bill?.paidOn);
   const endsAfter = readCents(bill?.endsAfter);
-  return name === null ||
-    amountCents === null ||
-    dueAt === null ||
-    (paidAt === null && dueAt < today)
+  return name === null || amountCents === null || dueAt === null
     ? null
     : {
         name,
@@ -160,6 +158,7 @@ const readBill = (entry: unknown, today: number) => {
         endsAt: readDay(bill?.endsOn),
         endsAfter: endsAfter !== null && endsAfter > 0 ? endsAfter : null,
         paidAt,
+        paysItself: paidAt === null && bill?.paysItself === true,
       };
 };
 
@@ -173,11 +172,8 @@ const readGoal = (entry: unknown) => {
     : { name, targetCents, setAsideCents, targetAt: readDay(goal?.targetOn) };
 };
 
-/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry or an unpaid bill already past is dropped. */
-const readSummary = (
-  opened: Record<string, unknown>,
-  today: number,
-): Summary | null => {
+/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry is dropped. */
+const readSummary = (opened: Record<string, unknown>): Summary | null => {
   const computedAt = opened.computedAt;
   const freeToSpendCents = readCents(opened.freeToSpendCents);
   const dueBeforeIncomeCents = readCents(opened.dueBeforeIncomeCents);
@@ -198,11 +194,7 @@ const readSummary = (
     freeToSpendCents,
     nextIncomeAt: readDay(opened.nextIncomeOn),
     dueBeforeIncomeCents,
-    bills: readList(
-      opened.bills,
-      (entry) => readBill(entry, today),
-      BILL_LIMIT,
-    ),
+    bills: readList(opened.bills, readBill, BILL_LIMIT),
     horizon: readList(opened.horizon, readGoal),
   };
 };
@@ -245,7 +237,6 @@ async function readStoredSummary(
   firestore: Firestore,
   keyring: Keyring,
   uid: string,
-  today: number,
 ): Promise<StoredSummary> {
   const [plan] = await firestore.getAll(
     firestore.doc(`apps/runway/plans/${uid}`),
@@ -263,7 +254,7 @@ async function readStoredSummary(
     warnUnreadable('key');
     return UNKNOWN;
   }
-  const summary = readSummary(opened, today);
+  const summary = readSummary(opened);
   if (summary === null) {
     warnUnreadable('malformed');
     return UNKNOWN;
@@ -315,7 +306,19 @@ const readBillDetail = (bill: Summary['bills'][number]) =>
     .filter((part) => part !== null)
     .join(', ') || null;
 
-const toRecords = (category: string, summary: Summary): SharedRecord[] => {
+/** Past this age a summary no longer says whether a bill already past due was paid since. */
+const STALE_SUMMARY_DAYS = 7;
+
+const toRecords = (
+  category: string,
+  summary: Summary,
+  now: number,
+): SharedRecord[] => {
+  const isStale = now - summary.computedAt > STALE_SUMMARY_DAYS * DAY_MS;
+  const computedDay = Math.floor(summary.computedAt / DAY_MS) * DAY_MS;
+  const bills = summary.bills.filter(
+    (bill) => !(isStale && bill.paidAt === null && bill.dueAt < computedDay),
+  );
   const billKeys = summary.bills.map(
     (bill) => `${bill.name}\n${formatDay(bill.dueAt)}`,
   );
@@ -340,9 +343,9 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
         }),
       ];
     case 'upcomingBills':
-      return summary.bills.map((bill, index) =>
+      return bills.map((bill) =>
         toRecord({
-          sourceRef: toRef('bills', billKeys, index),
+          sourceRef: toRef('bills', billKeys, summary.bills.indexOf(bill)),
           kind: 'task',
           title: bill.name,
           detail: readBillDetail(bill),
@@ -351,6 +354,10 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
           dueAt: bill.paidAt === null ? bill.dueAt : null,
           isAllDay: true,
           sourceUpdatedAt: summary.computedAt,
+          extra: {
+            isDone: bill.paidAt !== null,
+            isAutomatic: bill.paysItself,
+          },
         }),
       );
     case 'horizon':
@@ -594,13 +601,12 @@ export function createRunwayAdapter(
         deps.firestore(),
         deps.keyring(),
         ctx.uid,
-        Math.floor(deps.now() / DAY_MS) * DAY_MS,
       );
       // Cleared on purpose is a full, empty read; none yet or unreadable is unknown, so older copies stay.
       return {
         records:
           stored.kind === 'summary'
-            ? toRecords(req.category, stored.summary)
+            ? toRecords(req.category, stored.summary, deps.now())
             : [],
         isFull: stored.kind !== 'unknown',
         deletedRefs: [],
