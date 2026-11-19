@@ -8,7 +8,6 @@ import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
-import SectionHeader from '@/components/SectionHeader';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import SettingsRow from '@/components/SettingsRow';
 import {
@@ -381,7 +380,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           </SettingsSection>
         )}
       {isGoogle && !isOffline && (
-        <SettingsSection title={HELM_COPY.connectionAccountLabel}>
+        <SettingsSection title={HELM_COPY.connectionThisAccount}>
           <SettingsRow
             icon={<Tag className='size-5' aria-hidden='true' />}
             title={HELM_COPY.googleLabelRow}
@@ -405,8 +404,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             )}
         </SettingsSection>
       )}
-      <section className='flex flex-col gap-3'>
-        <SectionHeader title={HELM_COPY.connectionReads(name)} />
+      <section className='flex flex-col gap-2'>
+        <h2 className='text-muted-foreground text-[13px] font-medium'>
+          {HELM_COPY.connectionReads(name)}
+        </h2>
         <ul className='helm-card divide-border divide-y overflow-hidden'>
           {(manifest?.categories ?? []).map((category) => {
             const entry = pending[category.id];
@@ -420,7 +421,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 ? []
                 : ((handedNews ?? liveNews)[category.id] ?? []);
             return (
-              <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
+              <li key={category.id} className='flex flex-col gap-1 px-3 py-3'>
                 <label className='flex min-h-11 items-center gap-3'>
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground block text-[15px]'>

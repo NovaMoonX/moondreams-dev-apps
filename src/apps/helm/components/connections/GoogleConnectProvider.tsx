@@ -98,6 +98,16 @@ const RETURN_VIEW_KEY = 'helm-google-return-view';
 /** Returns being finished by this page load; a second run of the same return would find its sign-in already used. */
 const finishedReturns = new Set<string>();
 
+const RETURN_KEYS = [
+  'view',
+  'item',
+  'q',
+  'sheet',
+  'ask',
+  'browse',
+  'grant',
+] as const;
+
 const keepConnector = (
   connectorId: GoogleConnectorId | null,
   isReconnect = false,
@@ -111,10 +121,9 @@ const keepConnector = (
       const params = new URLSearchParams(window.location.search);
       sessionStorage.setItem(
         RETURN_VIEW_KEY,
-        JSON.stringify({
-          view: params.get('view'),
-          grant: params.get('grant'),
-        }),
+        JSON.stringify(
+          Object.fromEntries(RETURN_KEYS.map((key) => [key, params.get(key)])),
+        ),
       );
     }
     if (isReconnect) sessionStorage.setItem(RECONNECT_KEY, '1');
@@ -137,24 +146,24 @@ const readKeptConnector = (): GoogleConnectorId => {
   }
 };
 
-/** Where the person was when they left for Google: a connection's page or the view they started from, else Connected apps. */
-const takeReturnView = () => {
+const FALLBACK_RETURN = Object.fromEntries([
+  ...RETURN_KEYS.map((key) => [key, null]),
+  ['view', 'connectedApps'],
+]) as Record<(typeof RETURN_KEYS)[number], string | null>;
+
+/** Where the person was when they left for Google, every address key kept; Connected apps when nothing was kept. Read without clearing so a repeated effect finds the same place. */
+const readReturnUrl = () => {
   try {
     const kept = JSON.parse(
       sessionStorage.getItem(RETURN_VIEW_KEY) ?? 'null',
-    ) as {
-      view: string | null;
-      grant: string | null;
-    } | null;
-    sessionStorage.removeItem(RETURN_VIEW_KEY);
-    return kept?.view
-      ? {
-          view: kept.view,
-          grant: kept.view === 'connection' ? kept.grant : null,
-        }
-      : { view: 'connectedApps', grant: null };
+    ) as Partial<Record<(typeof RETURN_KEYS)[number], string | null>> | null;
+    return kept === null
+      ? FALLBACK_RETURN
+      : (Object.fromEntries(
+          RETURN_KEYS.map((key) => [key, kept[key] ?? null]),
+        ) as typeof FALLBACK_RETURN);
   } catch {
-    return { view: 'connectedApps', grant: null };
+    return FALLBACK_RETURN;
   }
 };
 
@@ -301,8 +310,14 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   );
   const [, setReturnUrl] = useQueryStates({
     view: parseAsString,
+    item: parseAsString,
+    q: parseAsString,
+    sheet: parseAsString,
+    ask: parseAsString,
+    browse: parseAsString,
     grant: parseAsString,
   });
+  const [returnUrl] = useState(readReturnUrl);
   const [returnedConnector] = useState(readKeptConnector);
   const [isReturnedReconnect] = useState(readKeptReconnect);
   const [intro, setIntro] = useState<Intro | null>(() =>
@@ -481,10 +496,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     if (!returned || handOffGoogleAuthReturn()) return;
     if ('error' in returned) {
       stripReturnQuery();
-      void setReturnUrl(takeReturnView(), { history: 'replace' });
+      void setReturnUrl(returnUrl, { history: 'replace' });
       keepConnector(null);
     }
-  }, [returned, setReturnUrl]);
+  }, [returned, returnUrl, setReturnUrl]);
 
   const isReturningWithCode =
     returned !== null && 'code' in returned && !isPopupPage();
@@ -503,7 +518,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
       if (finishedReturns.has(returned.state)) return true;
       finishedReturns.add(returned.state);
       stripReturnQuery();
-      void setReturnUrl(takeReturnView(), { history: 'replace' });
+      void setReturnUrl(returnUrl, { history: 'replace' });
       keepConnector(null);
       const kept = takeGoogleAuthState();
       try {

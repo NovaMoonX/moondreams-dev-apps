@@ -1315,6 +1315,7 @@ export const HELM_COPY = {
   connectionGone: 'That app was already disconnected.',
   connectionConnectedOn: (date: string) => `Connected ${date}`,
   connectionAccountLabel: 'Account',
+  connectionThisAccount: 'This account',
   connectionAccountValue: 'Your moondreams account',
   connectionReads: (name: string) => `What ${name} reads`,
   connectionSwitchedOff: (label: string) =>
@@ -1414,7 +1415,7 @@ export const HELM_COPY = {
   driveDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its documents are blanked.',
   driveFailed: "Drive didn't turn on. Try again.",
-  googleContactsName: 'Contacts',
+  googleContactsName: 'Google Contacts',
   contactsRowTitle: 'Google Contacts',
   googleContactsTitle: 'Connect Google Contacts',
   googleContactsReconnectTitle: 'Reconnect Google Contacts',
@@ -1440,8 +1441,7 @@ export const HELM_COPY = {
   calendarSyncSection: 'Two-way sync',
   calendarSyncRowMeta: (calendarName: string) => `Plan kept in ${calendarName}`,
   calendarSyncTitle: 'Keep your plan in a calendar',
-  calendarSyncOff:
-    'Off. Turn it on to see your plan in Google Calendar, and moves you make there come back here.',
+  calendarSyncOff: 'Off · Your plan in Google Calendar, both ways',
   calendarSyncOn: (calendarName: string) =>
     `On, in ${calendarName}. Moves you make there come back here.`,
   calendarSyncPending: (calendarName: string) =>
