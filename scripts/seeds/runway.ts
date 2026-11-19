@@ -203,6 +203,7 @@ export function buildSampleShareSummary(now: number): ShareSummary {
     endsOn: null,
     endsAfter: null,
     paidOn: null,
+    paysItself: false,
   };
   const isRentSoon = firstOfNextMonth - today <= 30 * DAY_MS;
   return {

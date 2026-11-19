@@ -130,7 +130,8 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
     'status',
     'posterUrl',
   ],
-  task: [],
+  /** `isDone`: finished or paid; `isAutomatic`: the source handles it itself (autopay). A reader never asks the person about either. */
+  task: ['isDone', 'isAutomatic'],
   project: [
     'available',
     'pending',
