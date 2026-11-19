@@ -24,7 +24,7 @@ interface PhotoGridProps {
   shape?: ImageShape;
 }
 
-/** A small grid of photos, 3 across, that shows at most `limit` and ends in a "+N" tile that opens the rest. */
+/** A small grid of photos, 3 across on a phone and 6 from `sm`, that shows at most `limit` and ends in a "+N" tile that opens the rest. */
 function PhotoGrid({
   items,
   renderTile,
@@ -38,7 +38,7 @@ function PhotoGrid({
   const shown = hasMore ? items.slice(0, limit) : items;
 
   return (
-    <ul className='grid max-w-md grid-cols-3 gap-2'>
+    <ul className='grid grid-cols-3 gap-2 sm:grid-cols-6'>
       {shown.map((item, index) => {
         const isMoreTile = hasMore && index === shown.length - 1;
         return (
