@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { waitUntil } from '@/utils/waitUntil';
 import { store, useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useNow } from '@/hooks/useNow';
+import DetailSheet from '@/components/DetailSheet';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
 import { QUIET_CLASS } from '@apps/helm/components/home/ChoiceButton';
@@ -30,16 +32,15 @@ import {
   answerUndoOffer,
   takeBack,
 } from '@apps/helm/store/actions/undoActions';
-import {
-  dismissQuestion,
-  skipQuestion,
-} from '@apps/helm/store/actions/captureActions';
+import { dismissQuestion } from '@apps/helm/store/actions/captureActions';
 import {
   isAnswerInFlight,
   sendQuestionAnswer,
 } from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import { selectComposerTargetKey } from '@apps/helm/utils/askedQuestion';
+import { takesComposerAnswer } from '@apps/helm/utils/questionAnswers';
 import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
   getOpenQuestions,
@@ -56,6 +57,9 @@ interface QuestionCardProps {
   isPromptHidden?: boolean;
   /** The words typed under "Neither", held by a sheet that must guard them when it closes; a card on its own keeps them itself. */
   neitherDraft?: { text: string; onChange: (text: string) => void };
+  /** The person has moved past this question: it is drawn muted with no choices, and offers Ask me again when `onAskAgain` is given. */
+  isSettled?: boolean;
+  onAskAgain?: () => void;
 }
 
 const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
@@ -69,20 +73,17 @@ const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
 };
 
 /** The shapes that draw their own primary button, which Skip shares a row with. */
-const OWN_PRIMARY: QuestionShape[] = [
-  'pickSeveral',
-  'number',
-  'dateTime',
-  'freeText',
-];
+const OWN_PRIMARY: QuestionShape[] = ['pickSeveral', 'number', 'dateTime'];
 
-/** One open question in the shape that fits it, with Answer later and Dismiss (which still shows once it waits in Needs you). A code-built question (which person or place) is answered on the server and needs a connection; one the assistant wrote is answered as a turn, which waits offline like any other. */
+/** One open question in the shape that fits it, with Dismiss as its one way out (leaving it unanswered already waits in Needs you). A code-built question (which person or place) is answered on the server and needs a connection; one the assistant wrote is answered as a turn, which waits offline like any other. */
 function QuestionCard({
   captureId,
   item,
   isInSheet,
   isPromptHidden = false,
   neitherDraft,
+  isSettled = false,
+  onAskAgain,
 }: QuestionCardProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -94,6 +95,7 @@ function QuestionCard({
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [isAnswerOpen, setIsAnswerOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [isNeitherOpen, setIsNeitherOpen] = useState(false);
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -110,6 +112,10 @@ function QuestionCard({
       : (state.helm.who.items.find(
           (entry) => entry.id === question.aboutRef?.id && !entry.isUnreadable,
         ) ?? null),
+  );
+  const now = useNow(60_000);
+  const isComposerTarget = useAppSelector(
+    (state) => selectComposerTargetKey(state, now) === `${captureId}:${id}`,
   );
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
@@ -283,7 +289,9 @@ function QuestionCard({
       value.optionId === 'none'
     ) {
       if (dateId !== null && dateWho) setIsDateOpen(true);
-      else setIsNeitherOpen(true);
+      else if (isInSheet || !isComposerTarget || dateId !== null) {
+        setIsNeitherOpen(true);
+      } else setNote(HELM_COPY.whichIsTrueNoneVoice);
       return;
     }
     if (
@@ -297,27 +305,6 @@ function QuestionCard({
       ? answerAsTurn(value, recordName)
       : answerOnServer(value));
   };
-
-  const skip = () => {
-    if (!user) return;
-    skipQuestion(user.uid, captureId, id).catch((error: unknown) => {
-      console.error('Helm question was not skipped', error);
-      setNote(HELM_COPY.heldActionFailed);
-    });
-  };
-
-  const skipButton = (
-    <Button
-      type='button'
-      variant='tertiary'
-      size='sm'
-      className={join(QUIET_CLASS, 'text-muted-foreground!')}
-      disabled={isWorking}
-      onClick={skip}
-    >
-      {HELM_COPY.questionSkip}
-    </Button>
-  );
 
   const dismiss = () => {
     if (!user) return;
@@ -350,12 +337,53 @@ function QuestionCard({
 
   const canDismiss = isDismissable(question.kind);
 
-  const quietActions = (
-    <>
-      {!isSkipped && skipButton}
-      {canDismiss && dismissButton}
-    </>
-  );
+  // Only the composer's target takes typed words, so any other card that needs them is answered in its own sheet, which covers the composer.
+  const canAnswerInSheet =
+    !isInSheet && !isComposerTarget && takesComposerAnswer(question);
+
+  const quietActions =
+    canAnswerInSheet || canDismiss ? (
+      <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+        {canAnswerInSheet && (
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className={join(QUIET_CLASS, 'rounded-full')}
+            disabled={isWorking}
+            onClick={() => setIsAnswerOpen(true)}
+          >
+            {HELM_COPY.questionAnswerInSheet}
+          </Button>
+        )}
+        {canDismiss && dismissButton}
+      </div>
+    ) : null;
+
+  if (isSettled && !isInSheet) {
+    return (
+      <div className='flex w-full flex-col items-start gap-1'>
+        <div className='w-full opacity-60'>
+          <AssistantLine isQuiet>
+            {question.lead === null
+              ? question.prompt
+              : `${question.lead} ${question.prompt}`}
+          </AssistantLine>
+        </div>
+        {onAskAgain && (
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className={join(QUIET_CLASS, 'ml-[30px] rounded-full')}
+            onClick={onAskAgain}
+          >
+            {HELM_COPY.questionAskMeAgain}
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   if (isSkipped && !isInSheet) {
     return (
@@ -435,10 +463,12 @@ function QuestionCard({
             <Part
               question={question}
               isBusy={isWorking}
+              isComposerAnswer={!isInSheet}
+              isComposerTarget={isComposerTarget}
               skip={quietActions}
               onAnswer={answer}
             />
-            {!OWN_PRIMARY.includes(question.shape) && (
+            {!OWN_PRIMARY.includes(question.shape) && quietActions && (
               <div className='flex flex-wrap items-center gap-x-3 gap-y-3'>
                 {quietActions}
               </div>
@@ -475,6 +505,20 @@ function QuestionCard({
           >
             {message}
           </p>
+        )}
+        {!isInSheet && (
+          <DetailSheet
+            isOpen={isAnswerOpen}
+            onClose={() => setIsAnswerOpen(false)}
+            title={question.prompt}
+          >
+            <QuestionCard
+              captureId={captureId}
+              item={item}
+              isInSheet
+              isPromptHidden
+            />
+          </DetailSheet>
         )}
       </div>
     </div>

@@ -30,7 +30,7 @@ interface AnswerFieldProps {
   isMultiline?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
-  /** Answer later, drawn on the row with the mic and Send. */
+  /** Dismiss, drawn on the row with the mic and Send. */
   skip?: ReactNode;
 }
 

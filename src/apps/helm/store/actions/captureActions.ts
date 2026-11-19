@@ -50,6 +50,7 @@ import { readLocationPermission } from '@apps/helm/utils/phoneLocation';
 import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import { markCreatedHere } from '@apps/helm/utils/createdHere';
+import { takeLiveAimsDay } from '@apps/helm/utils/morningAsk';
 import { clearRemindersIdle } from '@apps/helm/store/actions/markRemindersChanged';
 import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import type {
@@ -127,7 +128,7 @@ export async function sendCapture(
     /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
     answersQuestion: Capture['answersQuestion'];
     questionAnswer: QuestionAnswerValue | null;
-    /** The day whose aims this turn files (the answer to the morning card); left out on every other turn. */
+    /** The day whose aims this turn files (the answer to the morning question). A turn sent while the question is live in home's thread instead carries it as a hint, and the server files aims only when the turn answers it. */
     aimsDayKey?: string;
     /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
     noteIds?: string[];
@@ -158,6 +159,12 @@ export async function sendCapture(
     throw new Error('A turn is 1 to 4,000 characters, or up to 5 photos.');
   }
   const leadId = attachmentIds.length > 0 ? null : turn.leadId;
+  const morningDayKey =
+    turn.aimsDayKey === undefined &&
+    turn.answersQuestion === null &&
+    !turn.ahead
+      ? takeLiveAimsDay()
+      : null;
   const heardNames =
     turn.heardNames ??
     readTypedHeardNames(text, selectNameRecords(store.getState())) ??
@@ -210,6 +217,7 @@ export async function sendCapture(
     placeIds: [],
     planDayKey: null,
     aimsDayKey: turn.aimsDayKey ?? null,
+    morningDayKey,
     createdAt,
     sortedAt: null,
     screen: turn.screen,
@@ -333,6 +341,22 @@ export const skipQuestion = (
   updateDoc(doc(capturesOf(uid), captureId), {
     [`questionState.${questionId}.skippedAt`]: Date.now(),
   });
+
+/** Puts a question the person moved past back at the bottom of the thread, live again; it keeps its record and touches only its own field and does nothing for one already answered or dismissed. */
+export const reaskQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+) => {
+  const state = selectEveryCapture(store.getState()).find(
+    (capture) => capture.id === captureId,
+  )?.questionState[questionId];
+  if (!state || state.answeredAt !== null || state.dismissedAt !== null)
+    return Promise.resolve();
+  return updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.reaskedAt`]: Date.now(),
+  });
+};
 
 export interface QuestionRef {
   captureId: string;
