@@ -18,8 +18,10 @@ export interface SttStartOptions {
   onFinal: (text: string) => void;
   onSpeechStart: () => void;
   onError: (code: SttErrorCode) => void;
-  /** The adapter is ready to hear and the microphone is live; only an adapter that takes a while to get ready calls it. */
+  /** Audio is being captured (the microphone is live); only an adapter that takes a while to get ready calls it. */
   onListening?: () => void;
+  /** A recognizer is open on that audio, so silence now means nothing was said; a no-speech timer starts here, never at `onListening`. */
+  onReady?: () => void;
   /** The audio just before the tap, for adapters that keep a buffer; always null for now. */
   preRoll: Float32Array | null;
 }
@@ -32,6 +34,18 @@ export interface FrameSource {
   subscribe: (onFrame: (frame: ArrayBuffer) => void) => void;
   /** Releases the microphone. */
   stop: () => void;
+}
+
+/** What a cloud listen that gave up hands to the listener that takes over. */
+export interface CloudHandover {
+  /** Everything heard so far, then the live audio while the microphone is open; null when no microphone was open to carry on. */
+  source: FrameSource | null;
+  /** The person had already ended the listen, so the audio in `source` is all there is and the new listener should finish at once. */
+  isClosing: boolean;
+  /** What the cloud had finished hearing in the audio before the replay in `source` begins: a listener that replays that audio puts it in front of what it hears, so no word is lost or said twice. */
+  heardText: string;
+  /** Everything the cloud heard, finished or not, for a listener that cannot replay audio. */
+  fullText: string;
 }
 
 export interface SttAdapter {

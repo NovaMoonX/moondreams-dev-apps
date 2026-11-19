@@ -393,6 +393,7 @@ export const QUESTIONS_PER_TURN = 3;
 
 /** The longest typed answer to a question. */
 export const ANSWER_TEXT_MAX = 500;
+export const NEW_NAME_MAX = 80;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
@@ -1315,6 +1316,7 @@ export const HELM_COPY = {
   connectionGone: 'That app was already disconnected.',
   connectionConnectedOn: (date: string) => `Connected ${date}`,
   connectionAccountLabel: 'Account',
+  connectionThisAccount: 'This account',
   connectionAccountValue: 'Your moondreams account',
   connectionReads: (name: string) => `What ${name} reads`,
   connectionSwitchedOff: (label: string) =>
@@ -1338,6 +1340,50 @@ export const HELM_COPY = {
   disconnectDeleteNote:
     "They're removed now and can't be brought back. Your tasks and notes that mention them stay.",
   disconnectCancel: 'Cancel',
+  disconnectBroughtIn: (count: number, app: string) =>
+    `The ${count} ${count === 1 ? 'person, pet or business' : 'people, pets and businesses'} you brought in from ${app} stay in your circle.`,
+  bringInOfferLine: (app: string, phrase: string) =>
+    `${app} has ${phrase} you can bring into your circle.`,
+  bringInOfferAction: 'Review',
+  bringInOfferCount: (count: number) => `${count} not in your circle`,
+  bringInOfferRowTitle: 'Bring into your circle',
+  bringInTitle: (app: string) => `From ${app}`,
+  bringInIntro:
+    'Tick who to bring in. Anyone already in your circle is merged with them.',
+  bringInNewRow: 'New to your circle',
+  bringInSameRow: (name: string) => `Same as ${name}`,
+  bringInMaybeRow: (name: string) => `Is this ${name}?`,
+  bringInMergeAdds: (adds: string[]) => `Adds: ${adds.join(' · ')}`,
+  bringInMergeAddsNothing: 'Nothing new to add, it just remembers the link',
+  bringInMaybeYes: (name: string) => `Yes, merge with ${name}`,
+  bringInMaybeNo: 'No, add as new',
+  bringInConfirm: (count: number) =>
+    count === 0 ? 'Bring in' : `Bring in ${count}`,
+  bringInCancel: 'Not now',
+  bringInSelectAll: 'Select all',
+  bringInSelectNone: 'Clear',
+  bringInWorking: 'Bringing in…',
+  bringInFailed: "That didn't come through. Try again.",
+  bringInOffline: 'Connect to the internet to bring people in.',
+  bringInNothing: 'Everyone from here is already in your circle.',
+  bringInSummary: (brought: number, merged: number) =>
+    [
+      brought === 0
+        ? null
+        : `Brought ${brought} ${brought === 1 ? 'new record' : 'new records'} into your circle`,
+      merged === 0
+        ? null
+        : `Merged ${merged} ${merged === 1 ? 'record' : 'records'} with who you already had`,
+    ]
+      .filter((part): part is string => part !== null)
+      .join('. '),
+  bringInDone: (summary: string, skipped: number) =>
+    `${summary}.${skipped === 0 ? '' : ` ${skipped} ${skipped === 1 ? 'was' : 'were'} left out because who they matched in your circle was removed.`}`,
+  bringInNothingDone:
+    'Nothing was brought in: who they matched in your circle was removed or no longer opens.',
+  bringInUndo: 'Undo',
+  bringInUndone: 'Taken back.',
+  bringInUndoFailed: "That couldn't be undone. Try Activity.",
   syncedFrom: (app: string) => `From ${app}`,
   syncedUpdated: (when: string, name: string) =>
     `Updated ${when} · read only in ${name}`,
@@ -1371,6 +1417,8 @@ export const HELM_COPY = {
   gmailAddHint: (name: string) => `Let ${name} search your email when you ask.`,
   driveAddHint: (name: string) =>
     `Let ${name} search your Docs and PDFs when you ask.`,
+  contactsAddHint: (name: string) =>
+    `Pick people from Google Contacts to bring in to ${name}.`,
   googleAddAccount: 'Add a Google account',
   googleAddAccountHint: (name: string) =>
     `Start with Calendar, so ${name} can plan around your events.`,
@@ -1401,25 +1449,21 @@ export const HELM_COPY = {
   googleGmailReconnectTitle: 'Reconnect Gmail',
   googleGmailReadOnly: (name: string) =>
     `${name} searches your Gmail only when a question needs it, and keeps only what an answer quotes. It can't send, label, archive or delete mail.`,
-  gmailRowTitle: 'Gmail',
-  gmailStopTitle: 'Stop reading Gmail?',
-  gmailStopConfirm: 'Stop reading Gmail',
   gmailDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its email are blanked. What was noted from it stays.',
   gmailFailed: "Gmail didn't turn on. Try again.",
-  googleDriveName: 'Drive',
-  googleDriveTitle: 'Connect Drive',
-  googleDriveReconnectTitle: 'Reconnect Drive',
+  googleDriveName: 'Google Drive',
+  googleDriveTitle: 'Connect Google Drive',
+  googleDriveReconnectTitle: 'Reconnect Google Drive',
   googleDriveReadOnly: (name: string) =>
     `${name} searches your Drive only when a question needs it, and reads only Google Docs and PDFs. It keeps only what an answer quotes, and can't create, change, share or delete files.`,
-  driveRowTitle: 'Drive',
-  driveStopTitle: 'Stop reading Drive?',
-  driveStopConfirm: 'Stop reading Drive',
   driveDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its documents are blanked.',
   driveFailed: "Drive didn't turn on. Try again.",
-  googleContactsName: 'Contacts',
+  googleContactsName: 'Google Contacts',
   contactsRowTitle: 'Google Contacts',
+  contactsMarkCredit: 'Google Contacts icon by',
+  contactsMarkLicence: ', CC BY 4.0',
   googleContactsTitle: 'Connect Google Contacts',
   googleContactsReconnectTitle: 'Reconnect Google Contacts',
   googleContactsReadOnly: (name: string) =>
@@ -1441,9 +1485,12 @@ export const HELM_COPY = {
   googleWhichCalendars: 'Which calendars',
   googleCalendarsCount: (count: number) =>
     `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
+  calendarSyncSection: 'Two-way sync',
+  calendarSyncRowMeta: (calendarName: string) => `Plan kept in ${calendarName}`,
   calendarSyncTitle: 'Keep your plan in a calendar',
-  calendarSyncOff: 'Show your plan in Google Calendar',
-  calendarSyncOn: (calendarName: string) => `Your plan is in ${calendarName}`,
+  calendarSyncOff: 'Off · Your plan in Google Calendar, both ways',
+  calendarSyncOn: (calendarName: string) =>
+    `On, in ${calendarName}. Moves you make there come back here.`,
   calendarSyncPending: (calendarName: string) =>
     `Getting ${calendarName} ready`,
   calendarSyncReconnect: 'Reconnect Google to keep going',
@@ -2454,7 +2501,15 @@ export const HELM_COPY = {
   factTwoAnswers: 'Two answers',
   factSettle: 'Settle it',
   whichIsTrueNoneBack: 'Back',
-  whichIsTrueNoneVoice: "Tell me what's true now on the card.",
+  whichIsTrueNoneVoice: "Say or type what's true now.",
+  questionNeitherHint: "Neither? Just say what's true now.",
+  questionElseHint: "None of these? Just say what you'd like.",
+  questionFreeTextHint: 'Answer below, by typing or speaking.',
+  questionAnswerInSheet: 'Answer',
+  questionNewNameHint: (isPlace: boolean) =>
+    isPlace
+      ? "Not on the list? Just say the place's name."
+      : 'Not on the list? Just say their name.',
   factDisagrees: (statement: string) => `Disagrees with “${statement}”`,
   whichIsTrueNoneTitle: "What's true now?",
   whichIsTrueNoneHelp:
@@ -2575,7 +2630,6 @@ export const HELM_COPY = {
   placeHomeLine: 'Your home',
   placeTasksEmpty: 'No open tasks here.',
   questionNeedsConnection: 'Answering needs a connection.',
-  questionSkip: 'Answer later',
   questionAskMeAgain: 'Ask me again',
   questionSkipped: "Saved for later. It's waiting in Needs you.",
   questionDismiss: 'Dismiss',
@@ -2714,6 +2768,7 @@ export const HELM_COPY = {
   connectionPickLead: (name: string) => `Who is connected to ${name}?`,
   connectionSearch: 'Search people',
   connectionNoMatch: 'Nobody matches that.',
+  connectionEveryoneElse: 'Everyone else',
   connectionNobodyElse: 'There is nobody else to connect yet.',
   connectionPicked: 'Connected to',
   connectionKindField: 'How are they connected?',
@@ -3024,6 +3079,7 @@ export const HELM_COPY = {
   photosTitleCounted: (count: number) =>
     `Photos · ${count} of ${PHOTOS_PER_RECORD}`,
   photoMainBadge: 'Main',
+  photosShowAll: (count: number) => `Show all ${count} photos`,
   photoSheetTitle: 'Photo',
   photoOpenFull: 'Open full screen',
   photoMakeMain: 'Make main photo',

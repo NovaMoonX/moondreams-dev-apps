@@ -96,6 +96,7 @@ function AddBody({
   const { user } = useAuth();
   const { addToast } = useToast();
   const people = useAppSelector((state) => state.helm.who.items);
+  const connections = useAppSelector(selectShownConnections);
   const [otherId, setOtherId] = useState<string | null>(null);
   const [kind, setKind] = useState<ConnectionKind>('family');
   const [word, setWord] = useState<KinKind | null>(null);
@@ -113,6 +114,16 @@ function AddBody({
         !entry.isUnreadable,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
+  const self = people.find((entry) => entry.isSelf && !entry.isUnreadable);
+  const you =
+    self &&
+    self.id !== who.id &&
+    !connections.some(
+      (entry) =>
+        entry.whoIds.includes(self.id) && entry.whoIds.includes(who.id),
+    )
+      ? self
+      : null;
 
   const preview = toConnectionSentence(
     kind,
@@ -181,6 +192,7 @@ function AddBody({
         </p>
         <ConnectionPersonPicker
           people={others}
+          you={you}
           onPick={(id) => {
             setOtherId(id);
             onDirtyChange(true);

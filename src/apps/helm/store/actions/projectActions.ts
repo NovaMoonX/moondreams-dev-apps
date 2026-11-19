@@ -347,6 +347,7 @@ async function raiseWho(
       photoMediaId: null,
       mediaIds: [],
       importedFrom: null,
+      appSources: [],
       importedFields: {},
       lastMentionedAt: null,
       yearlyDateCount: 0,

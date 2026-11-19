@@ -382,6 +382,10 @@ export const createCloudTts = ({
             },
           );
         });
+      // Sound can be scheduled and still be waiting on waking speakers, so "has sound" never waits for it to be heard.
+      const hasSound = () =>
+        state.isPlaying ||
+        sinks.some((sink) => sink.getTiming().scheduledMs > 0);
       const markSounding = () => {
         state.isPlaying = true;
         live.isSounding = true;
@@ -413,6 +417,7 @@ export const createCloudTts = ({
           }, PROGRESS_MS),
         );
         sink.push(first);
+        startPrefetch(index + 1);
         const pump = async (): Promise<void> => {
           const next = await within(reader.read(), gapMs);
           if (next === 'late' && !signal.aborted) {
@@ -430,9 +435,11 @@ export const createCloudTts = ({
         try {
           await pump();
         } catch (error) {
-          const wasPlaying = state.isPlaying;
+          if (!hasSound()) {
+            sink.stop();
+            throw error;
+          }
           sink.end();
-          if (!wasPlaying) throw error;
           if (!signal.aborted) {
             state.isCut = true;
             fail(
@@ -444,7 +451,7 @@ export const createCloudTts = ({
           }
         }
         sink.end();
-        if (!state.isPlaying && !signal.aborted) {
+        if (!hasSound() && !signal.aborted) {
           throw new Error('The cloud voice sent no audio');
         }
         // A suspended context freezes its clock: wait while the audio still advances, give up once it stalls.
@@ -528,7 +535,9 @@ export const createCloudTts = ({
         const pcm = parsePcmFormat(answer.contentType);
         if (pcm !== null && !first.done) {
           await streamPcm(pcm, reader, first.value);
-          if (!state.isPlaying) return 'aborted';
+          if (!state.isPlaying && (signal.aborted || !hasSound())) {
+            return 'aborted';
+          }
           return state.isCut ? 'cut' : 'played';
         }
         const bodyLimitMs =
@@ -552,10 +561,10 @@ export const createCloudTts = ({
         const audio = await player.decode(concat(rest));
         if (signal.aborted) return 'aborted';
         await player.play(audio, signal, markSounding, report, readyAt);
-        return 'played';
+        return signal.aborted && !state.isPlaying ? 'aborted' : 'played';
       } catch (error) {
         if (signal.aborted) return 'aborted';
-        if (state.isPlaying) {
+        if (hasSound()) {
           fail(
             'the voice stopped partway',
             'audio playback',
