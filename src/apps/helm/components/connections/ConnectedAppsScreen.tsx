@@ -1,16 +1,8 @@
 import { useState, type ReactNode } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Contact } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
-import {
-  GmailMark,
-  GoogleCalendarMark,
-  GoogleDriveMark,
-  GoogleMark,
-} from '@/components/BrandMarks';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
 import WorkingRing from '@/components/WorkingRing';
@@ -34,9 +26,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
+import { CONTACTS_SCOPE } from '@apps/helm/queries/contactsQueries';
 import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
+import { useAppSelector } from '@/store';
 import KeptCopiesSheet from '@apps/helm/components/connections/KeptCopiesSheet';
 import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
+import ConnectorMark from '@apps/helm/components/connections/ConnectorMark';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useBringInOffers } from '@apps/helm/hooks/useBringInOffers';
@@ -59,45 +54,30 @@ const LOGO = 'size-10 rounded-[10px]';
 const GOOGLE_ADD_ID = 'google-add';
 const GMAIL_ADD_ID = 'google:gmail';
 const DRIVE_ADD_ID = 'google:drive';
+const CONTACTS_ADD_ID = 'google:contacts';
 
-const serviceLogo = (icon: ReactNode) => (
-  <span
-    className={join(LOGO, 'bg-muted flex shrink-0 items-center justify-center')}
-  >
-    {icon}
-  </span>
-);
-
-const BRAND = 'size-8';
-const googleLogo = serviceLogo(<GoogleMark className='size-7' />);
-
-const ICON = 'text-muted-foreground size-5';
+const googleLogo = <ConnectorMark connectorId={null} className={LOGO} />;
 
 const GOOGLE_SERVICES: Record<
   string,
   { name: string; logo: ReactNode; order: number }
-> = {
-  'google:calendar': {
-    name: HELM_COPY.googleCalendarName,
-    logo: serviceLogo(<GoogleCalendarMark className={BRAND} />),
-    order: 0,
-  },
-  'google:gmail': {
-    name: HELM_COPY.googleGmailName,
-    logo: serviceLogo(<GmailMark className={BRAND} />),
-    order: 1,
-  },
-  'google:drive': {
-    name: HELM_COPY.googleDriveRowName,
-    logo: serviceLogo(<GoogleDriveMark className={BRAND} />),
-    order: 2,
-  },
-  'google:contacts': {
-    name: HELM_COPY.contactsRowTitle,
-    logo: serviceLogo(<Contact className={ICON} aria-hidden='true' />),
-    order: 3,
-  },
-};
+> = Object.fromEntries(
+  (
+    [
+      ['google:calendar', HELM_COPY.googleCalendarName],
+      ['google:gmail', HELM_COPY.googleGmailName],
+      ['google:drive', HELM_COPY.googleDriveRowName],
+      ['google:contacts', HELM_COPY.contactsRowTitle],
+    ] as const
+  ).map(([connectorId, name], order) => [
+    connectorId,
+    {
+      name,
+      logo: <ConnectorMark connectorId={connectorId} className={LOGO} />,
+      order,
+    },
+  ]),
+);
 
 const scopeOf = (manifest: ConnectorManifest, categoryId: string) =>
   manifest.connect.kind === 'oauth'
@@ -205,6 +185,9 @@ function ConnectedAppsScreen({
     })
     .sort((a, b) => a.appName.localeCompare(b.appName));
 
+  const calendarSync = useAppSelector(
+    (state) => state.helm.profile?.calendarSync ?? null,
+  );
   const googleAccountIds = [
     ...new Set(
       grants
@@ -226,11 +209,16 @@ function ConnectedAppsScreen({
           .filter((category) => grant.categories[category.id]?.isOn)
           .map((category) => category.label)
           .join(', ') || HELM_COPY.connectedNothingOn;
+      const syncLine =
+        grant.connectorId === 'google:calendar' &&
+        calendarSync?.accountId === grant.accountId
+          ? ` · ${HELM_COPY.calendarSyncRowMeta(calendarSync.calendarName)}`
+          : '';
       const statusLine = isTrouble
         ? HELM_COPY.connectedStopped
         : newestOkAt === null || !isStale(newestOkAt, now)
-          ? readLine
-          : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`;
+          ? `${readLine}${syncLine}`
+          : `${readLine}${syncLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`;
       return {
         id: grant.id,
         appName: service?.name ?? HELM_COPY.googleCalendarName,
@@ -273,6 +261,22 @@ function ConnectedAppsScreen({
       isGoogleReadOpen &&
       !grants.some((grant) => grant.connectorId === service.connectorId),
   );
+
+  const hasContactsGrant = grants.some(
+    (grant) => grant.connectorId === 'google:contacts',
+  );
+
+  const connectContacts = () => {
+    const live = accounts.filter(
+      (entry) =>
+        googleAccountIds.includes(entry.id) &&
+        entry.status !== 'needsReconnect',
+    );
+    const account =
+      live.find((entry) => entry.grantedScopes.includes(CONTACTS_SCOPE)) ??
+      live[0];
+    begin({ accountId: account?.id ?? null, connectorId: 'google:contacts' });
+  };
 
   const connectMailOrDrive = async (
     service: (typeof MAIL_AND_DRIVE)[number],
@@ -382,15 +386,12 @@ function ConnectedAppsScreen({
               <ConnectedSourcesList
                 rows={kept.map((row) => ({
                   id: row.grantId,
-                  logo:
-                    readConnectorAppId(row.connectorId) === null ? (
-                      googleLogo
-                    ) : (
-                      <AppLogo
-                        appId={readConnectorAppId(row.connectorId) ?? ''}
-                        className={LOGO}
-                      />
-                    ),
+                  logo: (
+                    <ConnectorMark
+                      connectorId={row.connectorId}
+                      className={LOGO}
+                    />
+                  ),
                   title: row.appName,
                   meta: HELM_COPY.keptFromRow(
                     row.count,
@@ -437,6 +438,17 @@ function ConnectedAppsScreen({
                       : service.hint(name),
                     isTrouble: false,
                   })),
+                  ...(hasContactsGrant
+                    ? []
+                    : [
+                        {
+                          id: CONTACTS_ADD_ID,
+                          logo: GOOGLE_SERVICES['google:contacts']?.logo,
+                          title: HELM_COPY.contactsRowTitle,
+                          meta: HELM_COPY.contactsAddHint(name),
+                          isTrouble: false,
+                        },
+                      ]),
                   ...available.map((app) => ({
                     id: app.id,
                     logo: <AppLogo appId={app.id} className={LOGO} />,
@@ -450,6 +462,7 @@ function ConnectedAppsScreen({
                     (entry) => entry.id === id,
                   );
                   if (service) return void connectMailOrDrive(service);
+                  if (id === CONTACTS_ADD_ID) return connectContacts();
                   return id === GOOGLE_ADD_ID
                     ? begin({ isAnotherAccount: hasGoogleAccount })
                     : setConnecting({ id, name: nameOf(id) });

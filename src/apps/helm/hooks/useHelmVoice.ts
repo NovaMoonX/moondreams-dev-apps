@@ -272,7 +272,7 @@ export function useHelmVoice() {
   const isHomeView = VIEW_KINDS[view] === 'home';
 
   const lang = navigator.language || 'en-US';
-  // Started ahead of the first listen only where it will be the one listening: the phrase, or no cloud.
+  // Started ahead of the first listen only where it will be the one listening: the phrase, or no cloud. A cloud listen that falls back loads it then, holding the audio meanwhile.
   const onDevice = useOnDeviceRecognition({
     lang,
     isWarm:

@@ -57,6 +57,7 @@ import {
   createCloudTts,
 } from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
+import { preloadNoiseCleaning } from '@/lib/speech/voice/noiseCleaning';
 import {
   createPlaybackQueue,
   toJoinKey,
@@ -206,6 +207,11 @@ const WAKE_RETRY_MS = 3000;
 // An end phrase still closing the words this long after it was last heard counts; "that's all I need" keeps going.
 const END_PHRASE_HOLD_MS = 900;
 const BARGE_CONFIRM_MS = 1500;
+// A server left idle about 15 minutes starts cold (2 to 6 s), so it is woken on arrival and kept warm while the screen shows.
+const WARM_EVERY_MS = 10 * 60_000;
+const WARM_SLACK_MS = 5000;
+// A recognizer that never reports it started must not hold a listen in Getting ready.
+const READY_CEILING_MS = 20_000;
 const TAP_CONFIG = { lockMs: 0 };
 const BLOCKED: SttErrorCode[] = ['denied', 'service', 'no-microphone'];
 
@@ -229,6 +235,12 @@ const toCloudListenReason = (
     stage === CLOUD_LISTEN_STAGES.microphoneCapture
   ) {
     return "the cloud listener couldn't use the microphone";
+  }
+  if (
+    stage === CLOUD_LISTEN_STAGES.socketDropped ||
+    stage === CLOUD_LISTEN_STAGES.socketDropError
+  ) {
+    return "the cloud listener's connection dropped mid-listen";
   }
   return `the cloud listener couldn't connect (${stage})`;
 };
@@ -389,6 +401,39 @@ export function useVoiceConversation({
   const [lineProgress] = useState(createLineProgress);
   const isCloudSpeakingAllowed = cloudSpeaking?.isAllowed === true;
   const isCloudListeningAllowed = cloudListening?.isAllowed === true;
+
+  const warmSpeech = isCloudSpeakingAllowed ? cloudSpeaking.source : null;
+  const warmToken = isCloudListeningAllowed ? cloudListening.tokenSource : null;
+  useEffect(() => {
+    if (warmSpeech === null && warmToken === null) return;
+    const warmed = { at: 0 };
+    const warm = () => {
+      const isDue = Date.now() - warmed.at >= WARM_EVERY_MS - WARM_SLACK_MS;
+      if (
+        !isDue ||
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine
+      ) {
+        return;
+      }
+      warmed.at = Date.now();
+      void warmSpeech?.warm?.();
+      void warmToken?.warm();
+    };
+    warm();
+    const id = window.setInterval(warm, WARM_EVERY_MS);
+    document.addEventListener('visibilitychange', warm);
+    window.addEventListener('online', warm);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', warm);
+      window.removeEventListener('online', warm);
+    };
+  }, [warmSpeech, warmToken]);
+
+  useEffect(() => {
+    if (isCloudListeningAllowed || canHearOnDevice) preloadNoiseCleaning();
+  }, [isCloudListeningAllowed, canHearOnDevice]);
 
   useEffect(() => {
     if (isCloudSpeakingAllowed) return;
@@ -865,11 +910,12 @@ export function useVoiceConversation({
     // A listener stopped for an earlier listen can still report late; only this listen's own callbacks count.
     const isCurrent = () => run.current.listenId === listenId;
     // The phrase reader gives the seed in plain lower case, and the model on the device capitalises only its first word.
+    const carried = { text: seed };
     const withSeed = (text: string) =>
-      seed === ''
+      carried.text === ''
         ? text
         : [
-            seed.charAt(0).toUpperCase() + seed.slice(1),
+            carried.text.charAt(0).toUpperCase() + carried.text.slice(1),
             run.current.heardBy === 'on-device' && !/^I\b/.test(text)
               ? text.charAt(0).toLowerCase() + text.slice(1)
               : text,
@@ -895,9 +941,10 @@ export function useVoiceConversation({
         }
       },
       onListening: () => {
-        if (!isCurrent()) return;
-        setIsPreparing(false);
-        armQuiet();
+        if (isCurrent()) setIsPreparing(false);
+      },
+      onReady: () => {
+        if (isCurrent()) armQuiet();
       },
       onError: (code: SttErrorCode) => {
         if (isCurrent()) handleError(code);
@@ -927,17 +974,22 @@ export function useVoiceConversation({
       });
     };
     const nameHints = latest.current.getNameHints?.() ?? null;
+    const toFallbackUsed = (isClosing: boolean) => {
+      if (latest.current.canHearOnDevice) return 'the on-device speech model';
+      return isClosing
+        ? 'nothing for this listen, which had already ended'
+        : "the browser's listening";
+    };
     const startDevice = (source: FrameSource | null) => {
+      window.clearTimeout(run.current.quietId);
       if (latest.current.canHearOnDevice) {
-        if (run.current.heardWords === '') {
-          window.clearTimeout(run.current.quietId);
-        }
         setIsPreparing(source === null && pendingText === undefined);
         startAdapter(createOnDeviceStt({ source }));
         return;
       }
-      armQuiet();
       source?.stop();
+      run.current.quietId = window.setTimeout(finish, READY_CEILING_MS);
+      setIsPreparing(pendingText === undefined);
       startAdapter(
         createBrowserStt({
           lang: latest.current.lang,
@@ -976,7 +1028,7 @@ export function useVoiceConversation({
       setHeard('');
     }
     if (seed !== '') handlePartial(withSeed(''));
-    if (choice !== 'onDevice') armQuiet();
+    if (choice === 'cloud' || adopt) armQuiet();
     if (adopt) {
       startAdapter(createBrowserStt({ lang: latest.current.lang, adopt }));
     } else if (choice === 'cloud' && cloud) {
@@ -986,12 +1038,13 @@ export function useVoiceConversation({
           source: options.source ?? null,
           keyterms: nameHints,
           getToken: cloud.tokenSource.getToken,
-          onUnavailable: (heldReason, cause) => {
+          onUnavailable: (heldReason, cause, handover) => {
             if (
               !isCurrent() ||
               run.current.isCancelled ||
               run.current.mode.phase === 'OFF'
             ) {
+              handover.source?.stop();
               return;
             }
             if (heldReason !== null) {
@@ -1004,9 +1057,7 @@ export function useVoiceConversation({
               key: CLOUD_LISTEN_FALLBACK_KEY,
               feature: 'Listening',
               wanted: 'the cloud listener',
-              used: latest.current.canHearOnDevice
-                ? 'the on-device speech model'
-                : "the browser's listening",
+              used: toFallbackUsed(handover.isClosing),
               reason: toCloudListenReason(heldReason, cause.stage),
               cause: { stage: cause.stage, detail: cause.detail },
               facts: [
@@ -1016,7 +1067,21 @@ export function useVoiceConversation({
               ],
               trace: events.length > 0 ? events.join('\n') : null,
             });
-            startDevice(null);
+            if (handover.isClosing && !latest.current.canHearOnDevice) {
+              handover.source?.stop();
+              callbacks.onFinal(handover.fullText);
+              return;
+            }
+            carried.text = [
+              seed,
+              latest.current.canHearOnDevice && handover.source !== null
+                ? handover.heardText
+                : handover.fullText,
+            ]
+              .filter((part) => part !== '')
+              .join(' ');
+            startDevice(handover.source);
+            if (handover.isClosing) run.current.stopListening?.();
           },
           onClosed: cloud.tokenSource.reportClosed,
         }),
