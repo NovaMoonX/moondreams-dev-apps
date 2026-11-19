@@ -3,6 +3,7 @@ import {
   PCM_SAMPLE_RATE,
 } from '@/lib/speech/voice/pcmWorklet';
 import type {
+  CloudHandover,
   CloudHeldReason,
   FrameSource,
   SttAdapter,
@@ -23,7 +24,12 @@ const CLOSE_WAIT_MS = 1500;
 const KEEP_ALIVE_MS = 5000;
 // A token lasts a minute, so a stream ends just inside it.
 const UTTERANCE_MS = 59_000;
-const BUFFER_FRAMES = 500;
+// 15 s of 20 ms frames: the 6 s token wait, the 3 s socket wait and a second of pre-roll, with margin.
+const BUFFER_FRAMES = 750;
+// What an open stream remembers sending (10 s), for a fallback if the socket drops mid-sentence.
+const RECENT_FRAMES = 500;
+const FRAME_MS = 20;
+const NORMAL_CLOSE = 1000;
 // A cold server takes 2 to 4 s to mint; the wait stays inside the 10 s the buffer holds, so a slow token costs no words.
 const TOKEN_WAIT_MS = 6000;
 const SLOW_TOKEN_MS = 1500;
@@ -63,10 +69,15 @@ const toTokenCause = (
 const toCloseCause = (
   event: CloseEvent,
   hasErrored: boolean,
+  isOpen: boolean,
 ): CloudListenCause => ({
-  stage: hasErrored
-    ? CLOUD_LISTEN_STAGES.socketError
-    : CLOUD_LISTEN_STAGES.socketClosed,
+  stage: isOpen
+    ? hasErrored
+      ? CLOUD_LISTEN_STAGES.socketDropError
+      : CLOUD_LISTEN_STAGES.socketDropped
+    : hasErrored
+      ? CLOUD_LISTEN_STAGES.socketError
+      : CLOUD_LISTEN_STAGES.socketClosed,
   detail: `Close code ${event.code}, reason ${event.reason === '' ? 'none' : `"${event.reason}"`}, ${event.wasClean ? 'clean' : 'not clean'}${hasErrored ? ', after an error event' : ''}`,
   facts: [
     `Close code: ${event.code}`,
@@ -75,16 +86,25 @@ const toCloseCause = (
   ],
 });
 
+const isSocketStage = (stage: string) =>
+  [
+    CLOUD_LISTEN_STAGES.socketClosed,
+    CLOUD_LISTEN_STAGES.socketError,
+    CLOUD_LISTEN_STAGES.socketDropped,
+    CLOUD_LISTEN_STAGES.socketDropError,
+  ].some((known) => known === stage);
+
 interface DeepgramSttOptions {
   lang: string;
   getToken: () => Promise<VoiceTokenAnswer>;
   tokenWaitMs?: number;
   /** A microphone already open (a speech gate that heard the person start): its pre-roll is sent first, then its live frames, and the stream releases it when it ends. Without one the stream opens the microphone itself. */
   source?: FrameSource | null;
-  /** `reason` is the limit that held it, null for any other cause. */
+  /** `reason` is the limit that held it, null for any other cause. `handover` carries the audio heard so far (and the open microphone) to whatever listens next, which then owns the microphone. */
   onUnavailable: (
     reason: CloudHeldReason | null,
     cause: CloudListenCause,
+    handover: CloudHandover,
   ) => void;
   /** A minted stream has ended, after `ms` open (0 when it never opened). */
   onClosed: (mintId: string, ms: number) => void;
@@ -95,6 +115,8 @@ interface DeepgramSttOptions {
 interface Heard {
   isFinal: boolean;
   text: string;
+  /** Seconds from the stream's first audio to the end of these words; infinite when the provider did not say. */
+  end: number;
 }
 
 const readHeard = (data: unknown): Heard | null => {
@@ -104,10 +126,14 @@ const readHeard = (data: unknown): Heard | null => {
     const {
       type,
       is_final: isFinal,
+      start,
+      duration,
       channel,
     } = message as {
       type?: unknown;
       is_final?: unknown;
+      start?: unknown;
+      duration?: unknown;
       channel?: { alternatives?: { transcript?: unknown }[] };
     };
     if (type !== 'Results') return null;
@@ -115,6 +141,10 @@ const readHeard = (data: unknown): Heard | null => {
     return {
       isFinal: isFinal === true,
       text: typeof text === 'string' ? text : '',
+      end:
+        typeof start === 'number' && typeof duration === 'number'
+          ? start + duration
+          : Infinity,
     };
   } catch {
     return null;
@@ -204,11 +234,20 @@ export const createDeepgramStt = ({
               } else if (name === 'NotFoundError') {
                 options.onError('no-microphone');
               } else {
-                onUnavailable(null, {
-                  stage: CLOUD_LISTEN_STAGES.microphoneOpen,
-                  detail: describeThrown(error),
-                  facts: [],
-                });
+                onUnavailable(
+                  null,
+                  {
+                    stage: CLOUD_LISTEN_STAGES.microphoneOpen,
+                    detail: describeThrown(error),
+                    facts: [],
+                  },
+                  {
+                    source: null,
+                    isClosing: false,
+                    heardText: '',
+                    fullText: '',
+                  },
+                );
               }
               return null;
             });
@@ -234,7 +273,14 @@ export const createDeepgramStt = ({
         socket: null as WebSocket | null,
         capture: null as { stop: () => void } | null,
         frames: [] as ArrayBuffer[],
-        finals: [] as string[],
+        recent: [] as ArrayBuffer[],
+        isReleased: false,
+        relay: null as {
+          subscriber: ((frame: ArrayBuffer) => void) | null;
+          waiting: ArrayBuffer[];
+        } | null,
+        finals: [] as { text: string; end: number }[],
+        sent: 0,
         interim: '',
         isHeard: false,
         lastText: '',
@@ -243,8 +289,12 @@ export const createDeepgramStt = ({
         keepAliveId: 0,
         limitId: 0,
       };
-      const read = () => [...state.finals, state.interim].join(' ').trim();
+      const read = () =>
+        [...state.finals.map(({ text }) => text), state.interim]
+          .join(' ')
+          .trim();
       const releaseMicrophone = () => {
+        state.isReleased = true;
         stream?.getTracks().forEach((track) => track.stop());
         source?.stop();
         state.capture?.stop();
@@ -253,7 +303,7 @@ export const createDeepgramStt = ({
       const handleVisibility = () => {
         if (document.visibilityState === 'hidden') stop();
       };
-      const teardown = () => {
+      const teardown = (isKeepingMicrophone = false) => {
         run.stop = null;
         run.cancel = null;
         document.removeEventListener('visibilitychange', handleVisibility);
@@ -261,7 +311,7 @@ export const createDeepgramStt = ({
         window.clearTimeout(state.closeId);
         window.clearTimeout(state.limitId);
         window.clearInterval(state.keepAliveId);
-        releaseMicrophone();
+        if (!isKeepingMicrophone) releaseMicrophone();
         const { socket } = state;
         state.socket = null;
         if (socket) {
@@ -272,22 +322,84 @@ export const createDeepgramStt = ({
           socket.close();
         }
       };
+      const handOver = (cause: CloudListenCause): CloudHandover => {
+        const windowStart = state.isOpen
+          ? ((state.sent - state.recent.length) * FRAME_MS) / 1000
+          : 0;
+        const lastEnd = state.finals.at(-1)?.end ?? Infinity;
+        const isSettled =
+          state.isOpen && Number.isFinite(lastEnd) && lastEnd >= windowStart;
+        const replayed = Math.min(
+          state.recent.length,
+          Math.max(0, Math.round(state.sent - (lastEnd * 1000) / FRAME_MS)),
+        );
+        const heard = {
+          heardText: state.finals
+            .filter(({ end }) => isSettled || end <= windowStart)
+            .map(({ text }) => text)
+            .join(' '),
+          fullText: read(),
+        };
+        const preRoll = !state.isOpen
+          ? state.frames
+          : isSettled
+            ? state.recent.slice(state.recent.length - replayed)
+            : state.recent;
+        if (state.isClosing) {
+          return {
+            ...heard,
+            isClosing: true,
+            source: {
+              preRoll,
+              subscribe: () => undefined,
+              stop: () => undefined,
+            },
+          };
+        }
+        if (cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture) {
+          return { ...heard, isClosing: false, source: null };
+        }
+        const relay = {
+          subscriber: null as ((frame: ArrayBuffer) => void) | null,
+          waiting: [] as ArrayBuffer[],
+        };
+        state.relay = relay;
+        return {
+          ...heard,
+          isClosing: false,
+          source: {
+            preRoll,
+            subscribe: (onFrame) => {
+              relay.subscriber = onFrame;
+              relay.waiting.forEach(onFrame);
+              relay.waiting = [];
+            },
+            stop: releaseMicrophone,
+          },
+        };
+      };
       const fail = (
         reason: CloudHeldReason | null,
         cause: CloudListenCause,
       ) => {
-        if (state.isClosing) {
+        if (state.isClosing && state.isOpen && !isSocketStage(cause.stage)) {
           deliver();
           return;
         }
         if (state.isDone) return;
         state.isDone = true;
-        teardown();
-        if (state.mintId) onClosed(state.mintId, 0);
+        const handover = handOver(cause);
+        teardown(state.relay !== null);
+        if (state.mintId) {
+          onClosed(
+            state.mintId,
+            state.isOpen ? Date.now() - state.openedAt : 0,
+          );
+        }
         recordSpeechEvent(
-          `Cloud listening failed, ${cause.stage}: ${cause.detail}`,
+          `Cloud listening failed${state.isClosing ? ' after the listen ended' : state.isOpen ? ' while open' : ''}, ${cause.stage}: ${cause.detail}, ${handover.source?.preRoll.length ?? 0} frames handed on`,
         );
-        onUnavailable(reason, cause);
+        onUnavailable(reason, cause, handover);
       };
       const deliver = () => {
         if (state.isDone) return;
@@ -323,8 +435,17 @@ export const createDeepgramStt = ({
         state.closeId = window.setTimeout(deliver, CLOSE_WAIT_MS);
       }
       const send = (frame: ArrayBuffer) => {
-        if (state.isOpen && !state.isClosing) state.socket?.send(frame);
-        else if (!state.isOpen) {
+        const { relay } = state;
+        if (relay) {
+          if (relay.subscriber) relay.subscriber(frame);
+          else relay.waiting = [...relay.waiting, frame].slice(-BUFFER_FRAMES);
+          return;
+        }
+        if (state.isOpen && !state.isClosing) {
+          state.recent = [...state.recent, frame].slice(-RECENT_FRAMES);
+          state.sent += 1;
+          state.socket?.send(frame);
+        } else if (!state.isOpen) {
           state.frames = [...state.frames, frame].slice(-BUFFER_FRAMES);
         }
       };
@@ -338,7 +459,7 @@ export const createDeepgramStt = ({
       } else if (stream) {
         startPcmCapture({ stream, onFrame: send }).then(
           (capture) => {
-            if (state.isDone || state.isClosing) capture.stop();
+            if (state.isReleased) capture.stop();
             else state.capture = capture;
           },
           (error: unknown) => {
@@ -402,6 +523,8 @@ export const createDeepgramStt = ({
         state.isOpen = true;
         state.openedAt = Date.now();
         state.frames.forEach((frame) => socket.send(frame));
+        state.recent = state.frames.slice(-RECENT_FRAMES);
+        state.sent = state.frames.length;
         state.frames = [];
         if (state.isClosing) {
           socket.send(JSON.stringify({ type: 'CloseStream' }));
@@ -418,16 +541,16 @@ export const createDeepgramStt = ({
         state.hasErrored = true;
       };
       socket.onclose = (event: CloseEvent) =>
-        state.isOpen
+        state.isOpen && state.isClosing && event.code === NORMAL_CLOSE
           ? deliver()
-          : fail(null, toCloseCause(event, state.hasErrored));
+          : fail(null, toCloseCause(event, state.hasErrored, state.isOpen));
       socket.onmessage = (event: MessageEvent) => {
         const heard = readHeard(event.data);
         if (!heard || state.isDone) return;
         if (heard.text === '' && !state.isHeard) return;
         if (heard.isFinal) {
           state.finals = heard.text
-            ? [...state.finals, heard.text]
+            ? [...state.finals, { text: heard.text, end: heard.end }]
             : state.finals;
           state.interim = '';
         } else state.interim = heard.text;
