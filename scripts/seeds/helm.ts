@@ -1721,6 +1721,7 @@ export const toWho = (
   mediaIds: [],
   importedFrom: null,
   importedFields: {},
+  appSources: [],
   lastMentionedAt: null,
   yearlyDateCount: 0,
   momentCount: 0,
