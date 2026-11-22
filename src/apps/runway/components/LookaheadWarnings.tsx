@@ -349,7 +349,12 @@ function LookaheadWarnings({
       </DetailSheet>
       <CardSheets cards={allCards} open={paying} onChange={setPaying} />
       {isEmailOpen && (
-        <EmailOverdueScreen onClose={() => setIsEmailOpen(false)} />
+        <EmailOverdueScreen
+          onClose={() => {
+            setIsEmailOpen(false);
+            openFixes();
+          }}
+        />
       )}
     </>
   );

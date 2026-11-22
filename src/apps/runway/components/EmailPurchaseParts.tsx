@@ -8,6 +8,11 @@ import InlineNotice from '@/components/InlineNotice';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import { EMAIL_WAIT_DAYS } from '@apps/runway/constants';
+import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isWaitingEmail } from '@apps/runway/engine/emailTwins';
+import { selectTwinnedEmailIds } from '@apps/runway/store/selectors/emailSelectors';
+import { useAppSelector } from '@/store';
 import {
   useEmailActions,
   useEmailEvents,
@@ -20,7 +25,22 @@ interface EmailPurchaseProps {
 
 /** The one quiet line on an emailed purchase's sheet: where it came from and, while it waits, that it merges on its own. */
 export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
+  const today = todayAsUtcDate();
+  const twinned = useAppSelector(selectTwinnedEmailIds);
   if (purchase.source !== 'email') return null;
+  if (
+    isWaitingEmail(purchase) &&
+    !twinned.has(purchase.id) &&
+    purchase.date < today - EMAIL_WAIT_DAYS * DAY_MS
+  ) {
+    return (
+      <InlineNotice tone='warning'>
+        {EMAIL_WORDS.overdueNotice(
+          Math.floor((today - purchase.date) / DAY_MS),
+        )}
+      </InlineNotice>
+    );
+  }
   return (
     <InlineNotice tone='info'>
       {purchase.emailWaiting === true
@@ -86,6 +106,7 @@ export function EmailPurchaseRows({
           hasChevron
           icon={<Filter />}
           label={EMAIL_WORDS.filterOut}
+          subtitle={EMAIL_WORDS.filterOutRowSub}
           onClick={() => setIsFiltering(true)}
         />
       )}

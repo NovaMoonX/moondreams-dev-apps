@@ -20,6 +20,8 @@ interface PurchaseRowProps {
   paidWith?: string | null;
   /** What a row with no envelopes says instead of "Not counted". */
   emptyWhere?: string;
+  /** Only the day and the card or account: the screen's own title says the rest. */
+  isBrief?: boolean;
   onOpen: () => void;
 }
 
@@ -29,6 +31,7 @@ function PurchaseRow({
   looks,
   paidWith = null,
   emptyWhere,
+  isBrief = false,
   onOpen,
 }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
@@ -50,14 +53,12 @@ function PurchaseRow({
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateOrdinalUTC(purchase.date);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
-  const detail =
-    purchase.emailWaiting === true
-      ? [date, EMAIL_WORDS.waitingLine].join(' · ')
-      : [
-          date,
-          ...(paidWith ? [paidWith] : []),
-          ...getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere),
-        ].join(' · ');
+  const facts = isBrief
+    ? []
+    : purchase.emailWaiting === true
+      ? [EMAIL_WORDS.waitingShort]
+      : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
+  const detail = [date, ...(paidWith ? [paidWith] : []), ...facts].join(' · ');
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`
     : formatCents(purchase.amountCents);

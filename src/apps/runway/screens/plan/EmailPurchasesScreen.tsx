@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-import { Filter, Trash2 } from 'lucide-react';
+import { Filter, KeyRound, Trash2 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
 import ExternalLinkText from '@/components/ExternalLinkText';
@@ -19,6 +20,7 @@ import {
   EMAIL_FILTER_TEXT,
   EMAIL_WORDS,
   GMAIL_FILTERS_URL,
+  GMAIL_FORWARDING_URL,
   describeEmailFilter,
   describeEmailOutcome,
 } from '@apps/runway/components/emailWords';
@@ -55,6 +57,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
   const shownEvents = isAllShown ? events : events.slice(0, EVENTS_SHOWN);
+  const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const confirmUrl =
     intake.confirm?.url?.startsWith('https://') === true
       ? intake.confirm.url
@@ -102,6 +105,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     <Subview
       overlay
       title={EMAIL_WORDS.title}
+      isTitleWrapped
       onClose={onClose}
       headerAction={<ValuesEyeButton />}
     >
@@ -117,8 +121,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             </Button>
           ) : (
             <div className='border-border space-y-3 rounded-2xl border p-3'>
-              <p className='text-base font-semibold break-all select-all'>
-                {intake.address}
+              <p className='text-base font-semibold select-all'>
+                <span className='break-all'>{addressParts[0]}@</span>
+                <wbr />
+                <span className='whitespace-nowrap'>{addressParts[1]}</span>
               </p>
               <div className='flex flex-wrap items-center gap-2'>
                 <CopyTextButton
@@ -126,13 +132,6 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                   label='Copy address'
                   variant={confirmUrl === null ? 'primary' : 'secondary'}
                 />
-                <Button
-                  variant='tertiary'
-                  disabled={isBusy}
-                  onClick={() => void getNewAddress()}
-                >
-                  {EMAIL_WORDS.newAddress}
-                </Button>
               </div>
             </div>
           )}
@@ -142,34 +141,6 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             </p>
           )}
         </ActionSection>
-        {confirmUrl !== null && (
-          <div className='space-y-2'>
-            <Button
-              className='w-full'
-              onClick={() =>
-                window.open(confirmUrl, '_blank', 'noopener,noreferrer')
-              }
-            >
-              {EMAIL_WORDS.confirmForwarding}
-            </Button>
-            {intake.confirm?.code && (
-              <div className='flex items-center justify-between gap-3 text-sm'>
-                <span className='text-muted-foreground'>
-                  {EMAIL_WORDS.confirmCode}{' '}
-                  <span className='text-foreground font-semibold tabular-nums'>
-                    {intake.confirm.code}
-                  </span>
-                </span>
-                <CopyTextButton
-                  text={intake.confirm.code}
-                  label='Copy code'
-                  variant='tertiary'
-                  isCompact
-                />
-              </div>
-            )}
-          </div>
-        )}
         <ActionSection caption={EMAIL_WORDS.stepsCaption}>
           <ol className='space-y-3 text-sm'>
             {EMAIL_WORDS.steps.map((step, index) => (
@@ -182,11 +153,56 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 </span>
                 <span className='min-w-0 flex-1 break-words'>
                   {step}
+                  {index === 1 && (
+                    <span className='mt-2 block space-y-3'>
+                      <ExternalLinkText
+                        href={GMAIL_FORWARDING_URL}
+                        label={EMAIL_WORDS.gmailForwarding}
+                      />
+                      {confirmUrl !== null && (
+                        <span className='block space-y-2'>
+                          <Button
+                            className='w-full'
+                            onClick={() =>
+                              window.open(
+                                confirmUrl,
+                                '_blank',
+                                'noopener,noreferrer',
+                              )
+                            }
+                          >
+                            {EMAIL_WORDS.confirmForwarding}
+                          </Button>
+                          {intake.confirm?.code && (
+                            <span className='flex items-center justify-between gap-3'>
+                              <span className='text-muted-foreground'>
+                                {EMAIL_WORDS.confirmCode}{' '}
+                                <span className='text-foreground font-semibold tabular-nums'>
+                                  {intake.confirm.code}
+                                </span>
+                              </span>
+                              <span className='shrink-0'>
+                                <CopyTextButton
+                                  text={intake.confirm.code}
+                                  label='Copy code'
+                                  variant='tertiary'
+                                  isCompact
+                                />
+                              </span>
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {index === 2 && (
                     <span className='mt-2 block space-y-2'>
-                      <code className='bg-muted block rounded-lg px-2 py-1.5 text-xs break-all'>
+                      <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
                         {EMAIL_FILTER_TEXT}
                       </code>
+                      <span className='text-muted-foreground block text-xs'>
+                        {EMAIL_WORDS.filterHint}
+                      </span>
                       <span className='flex flex-wrap items-center gap-3'>
                         <CopyTextButton
                           text={EMAIL_FILTER_TEXT}
@@ -267,6 +283,18 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             </>
           )}
         </ActionSection>
+        {intake.address !== null && (
+          <ActionGroup>
+            <ActionRow
+              isGrouped
+              icon={<KeyRound />}
+              label={EMAIL_WORDS.newAddress}
+              subtitle={EMAIL_WORDS.newAddressSub}
+              isDisabled={isBusy}
+              onClick={() => void getNewAddress()}
+            />
+          </ActionGroup>
+        )}
       </div>
       {openEvent && (
         <EmailEventSheet

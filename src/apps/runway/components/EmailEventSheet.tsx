@@ -56,6 +56,13 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
             <MaskedText>{event.snippet}</MaskedText>
           </p>
         )}
+        {(event.outcome === 'unread' || event.outcome === 'notPurchase') && (
+          <p className='text-muted-foreground text-sm'>
+            {event.outcome === 'unread'
+              ? EMAIL_WORDS.unreadLine
+              : EMAIL_WORDS.notPurchaseLine}
+          </p>
+        )}
         {event.outcome !== 'filtered' && (
           <ActionGroup isRoomy>
             <ActionRow

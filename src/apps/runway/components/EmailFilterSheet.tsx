@@ -76,7 +76,7 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
   }, [actions, event.id]);
 
   const presets: Choice[] = [
-    ...(event.from
+    ...(event.from && event.outcome !== 'purchase'
       ? [
           {
             key: 'from',

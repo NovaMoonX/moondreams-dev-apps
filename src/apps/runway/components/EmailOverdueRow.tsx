@@ -55,13 +55,13 @@ export function EmailWarningRow({
   count: number;
   onOpen: () => void;
 }) {
-  const sentence = EMAIL_WORDS.homeSentence(count);
+  const title = EMAIL_WORDS.homeCount(count);
   return (
     <Button
       type='button'
       variant='tertiary'
       className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
-      aria-label={`${sentence}. ${EMAIL_WORDS.overdueSub}`}
+      aria-label={`${title}. ${EMAIL_WORDS.homeSub}`}
       onClick={onOpen}
     >
       <span
@@ -71,9 +71,9 @@ export function EmailWarningRow({
         <Mail className='size-4' />
       </span>
       <span className='min-w-0 flex-1'>
-        <span className='block font-medium break-words'>{sentence}</span>
+        <span className='block font-medium break-words'>{title}</span>
         <span className='text-muted-foreground block text-sm'>
-          {EMAIL_WORDS.overdueSub}
+          {EMAIL_WORDS.homeSub}
         </span>
       </span>
       <ChevronRight

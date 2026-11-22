@@ -41,6 +41,7 @@ function EmailOverdueScreen({ onClose }: EmailOverdueScreenProps) {
               purchase={purchase}
               looks={looks}
               paidWith={getPaidWithName(purchase, cards, accounts)}
+              isBrief
               onOpen={() => setOpenId(purchase.id)}
             />
           ))}
