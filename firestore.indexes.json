@@ -212,6 +212,14 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "emailEvents",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "synced",
       "fieldPath": "deleteAfter",
       "indexes": [
