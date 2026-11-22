@@ -9,6 +9,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import {
   EMAIL_WORDS,
   describeEmailFilter,
+  readSubjectTemplate,
 } from '@apps/runway/components/emailWords';
 import {
   useEmailActions,
@@ -90,7 +91,7 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
           {
             key: 'subject',
             title: EMAIL_WORDS.withSubject,
-            detail: event.subjectTemplate,
+            detail: readSubjectTemplate(event.subjectTemplate),
             filter: { ...EMPTY, subjectTemplate: event.subjectTemplate },
           },
         ]
@@ -149,7 +150,7 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
   );
 
   return (
-    <FormSheet isOpen onClose={onClose} title={EMAIL_WORDS.filterTitle}>
+    <FormSheet isOpen onClose={onClose} title={EMAIL_WORDS.filterOut}>
       <div className='space-y-4 pb-4'>
         <p className='text-muted-foreground text-sm'>
           {EMAIL_WORDS.filterOutSub}

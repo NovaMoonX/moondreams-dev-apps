@@ -4799,7 +4799,7 @@ async function writeSeedEmail(
         subject: entry.subject,
         subjectTemplate: entry.subject
           .toLowerCase()
-          .replace(/\$\d[\d,]*\.\d{2}/, '$amount'),
+          .replace(/\$\d[\d,]*\.\d{2}/, '{amount}'),
         snippet: `Hi Jamie, a purchase of ${formatCents(entry.cents)} was made at ${entry.merchant} with your Venture X card ending in 4821.`,
         readBy: 'pattern' as const,
       },

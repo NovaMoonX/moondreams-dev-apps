@@ -300,7 +300,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
           <ActionSection caption={EMAIL_WORDS.rowLabel}>
             <SettingsRow
               icon={<Mail />}
-              label={EMAIL_WORDS.title}
+              label={EMAIL_WORDS.rowAction}
               value={
                 emailIntake.address === null
                   ? EMAIL_WORDS.rowNotSetUp

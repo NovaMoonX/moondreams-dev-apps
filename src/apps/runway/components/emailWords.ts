@@ -8,8 +8,9 @@ export const GMAIL_FILTERS_URL =
 export const EMAIL_WORDS = {
   rowLabel: 'Purchases from email',
   rowNotSetUp: 'Not set up yet',
-  rowSetUp: 'Bank alerts become purchases',
-  title: 'Email purchases',
+  rowSetUp: 'Each alert becomes a purchase',
+  rowAction: 'Forward your bank’s alerts',
+  title: 'Purchases from email',
   addressCaption: 'Your address',
   getAddress: 'Get your address',
   newAddress: 'Get a new address',
@@ -78,6 +79,13 @@ const OUTCOME_WORDS: Record<EmailOutcome, string> = {
 export const describeEmailOutcome = (outcome: EmailOutcome) =>
   OUTCOME_WORDS[outcome];
 
+/** A subject's shape as the person reads it: its placeholders said in words. */
+export const readSubjectTemplate = (template: string) =>
+  template
+    .replaceAll('{amount}', 'any amount')
+    .replaceAll('{date}', 'any date')
+    .replaceAll('{n}', 'any number');
+
 /** A filter as a name and one more line, in the person's words. */
 export function describeEmailFilter(filter: EmailFilterSealed): {
   name: string;
@@ -86,7 +94,7 @@ export function describeEmailFilter(filter: EmailFilterSealed): {
   const parts = [
     ...(filter.fromAddress ? [`From ${filter.fromAddress}`] : []),
     ...(filter.subjectTemplate
-      ? [`Subject like “${filter.subjectTemplate}”`]
+      ? [`Subject like “${readSubjectTemplate(filter.subjectTemplate)}”`]
       : []),
     ...filter.subjectContains.map((text) => `Subject has “${text}”`),
     ...filter.bodyContains.map((text) => `Email says “${text}”`),
