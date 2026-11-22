@@ -8,6 +8,7 @@ import {
   Gauge,
   Landmark,
   Link2,
+  Mail,
   Shuffle,
   Trash2,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ import Subview from '@/components/Subview';
 import SettingsRowWithSwitch from '@/components/SettingsRow';
 import SummaryEditor from '@/components/SummaryEditor';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAuth } from '@/hooks/useAuth';
 import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { canKeepDeviceSecrets } from '@/lib/security';
@@ -32,6 +34,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
+  EMAIL_PURCHASES_GATE_ID,
   LINK_WORDS,
   MADE_UP_WORDS,
   NOTIFY_WORDS,
@@ -45,9 +48,13 @@ import {
   TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import { useEmailIntake } from '@apps/runway/hooks/useEmailPurchases';
+import EmailPurchasesScreen from '@apps/runway/screens/plan/EmailPurchasesScreen';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
@@ -149,6 +156,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
   const canLink = useCanLinkBank();
+  const level = useAppSelector(selectLevel);
+  const canEmail =
+    useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID) && level !== 'plan';
+  const emailIntake = useEmailIntake();
+  const [isEmailOpen, setIsEmailOpen] = useState(false);
   const deviceState = useQuery({
     ...devicePushQueryOptions(user?.uid ?? ''),
     enabled: canLink && user !== null,
@@ -284,6 +296,20 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             </div>
           </ActionSection>
         )}
+        {canEmail && (
+          <ActionSection caption={EMAIL_WORDS.rowLabel}>
+            <SettingsRow
+              icon={<Mail />}
+              label={EMAIL_WORDS.title}
+              value={
+                emailIntake.address === null
+                  ? EMAIL_WORDS.rowNotSetUp
+                  : EMAIL_WORDS.rowSetUp
+              }
+              onOpen={() => setIsEmailOpen(true)}
+            />
+          </ActionSection>
+        )}
         {canLink && (
           <ActionSection caption={SORTING_WORDS.caption}>
             <SortingPausedRow />
@@ -360,6 +386,9 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             setLinking({ resume: link, addTo: null });
           }}
         />
+      )}
+      {isEmailOpen && (
+        <EmailPurchasesScreen onClose={() => setIsEmailOpen(false)} />
       )}
       {linking && (
         <LinkBankScreen

@@ -658,3 +658,7 @@ Every change says from when and shows, before it saves, which coming income days
 ### Changing several at once
 
 A person tidying their plan (moving every auto bill to be paid on the 1st, putting three subscriptions into a group) can press and hold a row, or a group heading, in Bills, Envelopes or Goals to tick several and change them together: Pay on, Comes out of and Charged to for bills, Priority and Move to a group for all three, or Archive. Selecting stays in one view, so the header's count always covers everything ticked (a card's annual fee bill keeps its group, card and place in the plan, and the sheet says so), and each change ends in one toast with one Undo (Archive asks first instead).
+
+## Purchases from email
+
+For the owner who tracks at Track or Link: bank alert emails forwarded to a private Runway address become purchases within seconds, so Free to Spend is right before the bank's own charge arrives. The purchase says it came from email and is waiting for the bank; when the bank sends the same charge the two merge on their own with an Undo. After a week with no match, Home shows one row for all of them, and each can be removed or left as typed ("Stop waiting for it"). The person can filter out emails like one they see (a sender, a subject shape), and filters are matched by plain rules, never AI. Shown only while the feature's switch is on and the plan is at Track or Link; Plan-only people never see it.

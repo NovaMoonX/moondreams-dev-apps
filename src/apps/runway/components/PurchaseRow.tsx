@@ -2,6 +2,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import FallbackImage from '@/components/FallbackImage';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import type { OpenPurchase } from '@apps/runway/types';
@@ -49,11 +50,14 @@ function PurchaseRow({
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateOrdinalUTC(purchase.date);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
-  const detail = [
-    date,
-    ...(paidWith ? [paidWith] : []),
-    ...getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere),
-  ].join(' · ');
+  const detail =
+    purchase.emailWaiting === true
+      ? [date, EMAIL_WORDS.waitingLine].join(' · ')
+      : [
+          date,
+          ...(paidWith ? [paidWith] : []),
+          ...getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere),
+        ].join(' · ');
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`
     : formatCents(purchase.amountCents);
