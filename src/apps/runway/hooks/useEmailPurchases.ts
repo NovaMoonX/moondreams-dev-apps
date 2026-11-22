@@ -1,9 +1,27 @@
+import { useMemo } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
+import {
+  createEmailFilter,
+  deleteEmailFilter,
+  rotateEmailAddress,
+  stopWaitingForEmailPurchase,
+  suggestEmailFilters,
+} from '@apps/runway/store/actions/emailActions';
+import {
+  selectEmailEvents,
+  selectEmailFilters,
+  selectEmailIntake,
+  selectEmailOverdue,
+} from '@apps/runway/store/selectors/emailSelectors';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
   EmailEventSealed,
   EmailFilterSealed,
   EmailOutcome,
   OpenPurchase,
 } from '@apps/runway/types';
+import { EMAIL_ADDRESS_PREFIX, EMAIL_DOMAIN } from '@apps/runway/constants';
 
 export interface EmailIntakeRead {
   address: string | null;
@@ -36,45 +54,68 @@ export interface EmailActions {
   deleteFilter(id: string): Promise<void>;
   suggestFilters(eventId: string): Promise<EmailFilterSuggestion[]>;
   stopWaiting(purchaseId: string): Promise<void>;
-  removePurchase(purchase: OpenPurchase): Promise<void>;
 }
 
-const NO_INTAKE: EmailIntakeRead = {
-  address: null,
-  lastReceivedAt: null,
-  confirm: null,
-  isLoading: false,
-};
-const NO_EVENTS: EmailEventRead[] = [];
-const NO_FILTERS: EmailFilterRead[] = [];
-const NO_PURCHASES: OpenPurchase[] = [];
-const NO_ACTIONS: EmailActions = {
-  rotateAddress: async () => {},
-  createFilter: async () => {},
-  deleteFilter: async () => {},
-  suggestFilters: async () => [],
-  stopWaiting: async () => {},
-  removePurchase: async () => {},
-};
+const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
 
-/** TEMPORARY stubs: the data layer replaces these bodies. */
 export function useEmailIntake(): EmailIntakeRead {
-  return NO_INTAKE;
+  const intake = useAppSelector(selectEmailIntake);
+  return useMemo(() => {
+    if (intake === null) {
+      return {
+        address: null,
+        lastReceivedAt: null,
+        confirm: null,
+        isLoading: false,
+      };
+    }
+    const hasConfirm = intake.confirmUrl !== null || intake.confirmCode !== null;
+    return {
+      address: `${EMAIL_ADDRESS_PREFIX}-${intake.token}@${EMAIL_DOMAIN}`,
+      lastReceivedAt: intake.lastReceivedAt,
+      confirm: hasConfirm
+        ? {
+            url: intake.confirmUrl,
+            code: intake.confirmCode,
+            at: intake.confirmAt,
+          }
+        : null,
+      isLoading: false,
+    };
+  }, [intake]);
 }
 
 export function useEmailEvents(): EmailEventRead[] {
-  return NO_EVENTS;
+  return useAppSelector(selectEmailEvents);
 }
 
 export function useEmailFilters(): EmailFilterRead[] {
-  return NO_FILTERS;
+  return useAppSelector(selectEmailFilters);
 }
 
 /** Emailed purchases still waiting for their bank's charge after `EMAIL_WAIT_DAYS`. */
 export function useEmailOverduePurchases(): OpenPurchase[] {
-  return NO_PURCHASES;
+  return useAppSelector(selectEmailOverdue);
 }
 
 export function useEmailActions(): EmailActions {
-  return NO_ACTIONS;
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  return useMemo(
+    () => ({
+      rotateAddress: async () => {
+        await rotateEmailAddress();
+      },
+      createFilter: async (filter) => {
+        if (uid === null) return NO_UID();
+        await createEmailFilter(uid, await getRunwayEncryption(uid), filter);
+      },
+      deleteFilter: (id) =>
+        uid === null ? NO_UID() : deleteEmailFilter(uid, id),
+      suggestFilters: suggestEmailFilters,
+      stopWaiting: (purchaseId) =>
+        uid === null ? NO_UID() : stopWaitingForEmailPurchase(uid, purchaseId),
+    }),
+    [uid],
+  );
 }

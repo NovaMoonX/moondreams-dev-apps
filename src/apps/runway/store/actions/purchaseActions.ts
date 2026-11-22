@@ -1427,6 +1427,61 @@ export async function mergeBankPurchase(
   return { bank, typed, images, updatedAt: now };
 }
 
+/** Makes a bank charge and the purchase read from its email one purchase. One the person never placed (every line free) leaves the charge as it is, in Needs a home, and gives it the email's name, note, link and group; one they placed merges like a typed purchase. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
+export async function mergeEmailPurchase(
+  uid: string,
+  encryption: RunwayEncryption,
+  bank: OpenPurchase,
+  email: OpenPurchase,
+  summary: string,
+): Promise<MergedPurchase> {
+  if (email.lines.some((line) => line.envelopeId !== null)) {
+    return mergeBankPurchase(uid, encryption, bank, email, summary);
+  }
+  const [sealed, changeSealed, images] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(bank),
+        label: bank.label ?? email.label,
+        note: bank.note ?? email.note,
+        link: bank.link ?? email.link,
+        receiptText: bank.receiptText ?? email.receiptText,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    readImages(uid, email.id),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), bank.updatedAt + 1);
+
+  await runHeldTransaction(uid, async (transaction) => {
+    await readUnchanged(transaction, uid, bank);
+    await readUnchanged(transaction, uid, email);
+    const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
+    markLedgerWrite(transaction, uid, plan.data(), [bank.date, email.date]);
+    transaction.update(purchaseRef(uid, bank.id), {
+      expenseId: bank.expenseId ?? email.expenseId,
+      updatedAt: now,
+      sealed,
+    });
+    transaction.delete(purchaseRef(uid, email.id));
+    moveImages(transaction, uid, images, email.id, bank.id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(email.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return { bank, typed: email, images, updatedAt: now };
+}
+
 /** Undoes a merge: the typed purchase comes back as it was, marked as not this bank purchase so it is never matched to it again, and the bank's goes back to how it was. Refused when the merged purchase changed since. */
 export async function splitBankPurchase(
   uid: string,
@@ -1473,7 +1528,7 @@ export async function splitBankPurchase(
       source: typed.source,
       status: null,
       needsHome: false,
-      accountId: null,
+      accountId: typed.accountId,
       dedupeKey: null,
       expenseId: typed.expenseId,
       emailEventId: typed.emailEventId,
