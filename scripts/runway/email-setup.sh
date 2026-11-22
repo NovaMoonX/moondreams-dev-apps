@@ -2,7 +2,7 @@
 # Sets up Runway's purchases-from-email intake: one shared secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
 # The secret is generated here, never printed or written to disk. Safe to re-run.
 #   npm run runway:email-setup                 picks up where the last run stopped
-#   npm run runway:email-setup -- --from 3     starts at step 3 (and replaces the secrets from there on)
+#   npm run runway:email-setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
 #   npm run runway:email-setup -- --restart    starts over from step 1
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -63,8 +63,11 @@ if (( START > LAST_STEP )); then
 fi
 
 # One value is shared by both sides, so it is made once, kept only in this process, and saved in steps 1 and 2 of the same run.
-# A run that starts at step 2 or later cannot know it, so it makes steps 1 and 2 run together.
-(( START == 2 )) && START=1
+# A run that starts at step 2 cannot know the secret, so it restarts at step 1.
+if (( START == 2 )); then
+  echo "Step 2 needs the secret made in step 1, and that secret exists only while one run lasts, so this run starts again at step 1."
+  START=1
+fi
 SHARED=$(openssl rand -hex 32)
 
 if start_step 1 "the secret in Firebase"; then

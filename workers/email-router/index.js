@@ -1,6 +1,7 @@
 import PostalMime from 'postal-mime';
 
 const MAX_BYTES = 500 * 1024;
+const MAX_FIELD = 200 * 1024;
 const REJECTIONS = {
   403: 'Message not accepted',
   404: 'No such address',
@@ -36,8 +37,9 @@ export default {
           to: message.to,
           from: message.from,
           subject: mail.subject ?? '',
-          text: mail.text ?? '',
-          html: mail.html ?? '',
+          text: (mail.text ?? '').slice(0, MAX_FIELD),
+          html: mail.text?.trim() ? '' : (mail.html ?? '').slice(0, MAX_FIELD),
+          messageId: mail.messageId ?? message.headers.get('message-id') ?? '',
           spf: readResult(mail.headers, 'spf'),
           dkim: readResult(mail.headers, 'dkim'),
           receivedAt: Date.now(),

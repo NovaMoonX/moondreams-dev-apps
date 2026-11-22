@@ -38,7 +38,7 @@ export const rotateRunwayEmailAddress = onCall(
     );
     const uid = request.auth?.uid as string;
     const firestore = getFirestore();
-    const token = randomBytes(12).toString('base64url').toLowerCase();
+    const token = randomBytes(16).toString('hex');
     const intakeRef = firestore.doc(intakePath(uid));
     const now = Date.now();
     await firestore.runTransaction(async (transaction) => {

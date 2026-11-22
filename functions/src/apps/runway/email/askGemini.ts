@@ -1,3 +1,5 @@
+import { logger } from 'firebase-functions';
+
 import { createOptionalSecretReader } from '../../../imageSearch/optionalSecret.js';
 
 const MODEL = 'gemini-3.5-flash-lite';
@@ -29,13 +31,19 @@ export async function askGemini(
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      logger.warn('runway.email.aiFailed', { status: response.status });
+      return null;
+    }
     const body = (await response.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
     return typeof text === 'string' ? JSON.parse(text) : null;
-  } catch {
+  } catch (error) {
+    logger.warn('runway.email.aiFailed', {
+      name: (error as Error)?.name ?? 'Error',
+    });
     return null;
   }
 }

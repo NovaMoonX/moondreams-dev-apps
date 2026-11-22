@@ -2,7 +2,6 @@ export const EMAIL_DOMAIN = 'apps.moondreams.dev';
 export const EMAIL_ADDRESS_PREFIX = 'finance';
 export const EMAIL_PURCHASES_GATE_ID = 'email-purchases';
 export const EMAIL_EVENT_KEEP_DAYS = 30;
-export const EMAIL_SCHEMA_VERSION = 1;
 
 export const emailTokenPath = (token: string) =>
   `apps/runway/emailTokens/${token}`;

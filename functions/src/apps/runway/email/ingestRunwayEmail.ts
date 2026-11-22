@@ -4,6 +4,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import {
   getFirestore,
   Timestamp,
+  type DocumentReference,
   type Firestore,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
@@ -12,6 +13,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
 import { createOptionalSecretReader } from '../../../imageSearch/optionalSecret.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
+import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
 import { markClosedMonths } from '../link/syncRunwayLink.js';
 import {
   openWithKey,
@@ -22,7 +24,6 @@ import {
 import {
   EMAIL_EVENT_KEEP_DAYS,
   EMAIL_PURCHASES_GATE_ID,
-  EMAIL_SCHEMA_VERSION,
   emailEventsPath,
   emailFiltersPath,
   emailRatePath,
@@ -45,6 +46,7 @@ if (getApps().length === 0) {
 
 const MAX_BODY_BYTES = 500 * 1024;
 const MAX_PER_HOUR = 30;
+const RATE_KEEP_MS = 2 * 86_400_000;
 const DAY_MS = 86_400_000;
 const SECRET_NAME = 'RUNWAY_EMAIL_WEBHOOK_SECRET';
 const GMAIL_SENDER = 'forwarding-noreply@google.com';
@@ -74,9 +76,15 @@ interface Filter {
   bodyContains: string[];
 }
 
+interface PurchaseWrite {
+  ref: DocumentReference;
+  data: Record<string, unknown>;
+}
+
 interface Handled {
   outcome: Outcome;
-  purchaseId: string | null;
+  purchase: PurchaseWrite | null;
+  date: number | null;
   readBy: 'pattern' | 'ai' | null;
 }
 
@@ -91,6 +99,9 @@ const asString = (value: unknown, max: number) =>
 const toAddress = (value: string) =>
   (/<([^>]+)>/.exec(value)?.[1] ?? value).trim().toLowerCase();
 
+const eventIdFor = (uid: string, messageId: string) =>
+  createHash('sha256').update(`${uid}:${messageId}`).digest('hex').slice(0, 32);
+
 const hourKey = (now: number) =>
   new Date(now).toISOString().slice(0, 13).replace(/\D/g, '');
 
@@ -99,9 +110,32 @@ async function takeRateSlot(firestore: Firestore, uid: string, now: number) {
   return firestore.runTransaction(async (transaction) => {
     const count = ((await transaction.get(ref)).data()?.count as number) ?? 0;
     if (count >= MAX_PER_HOUR) return false;
-    transaction.set(ref, { count: count + 1 });
+    transaction.set(ref, {
+      count: count + 1,
+      expiresAt: Timestamp.fromMillis(now + RATE_KEEP_MS),
+    });
     return true;
   });
+}
+
+async function markWithRetry(
+  firestore: Firestore,
+  uid: string,
+  date: number,
+  now: number,
+) {
+  const attempt = async () => {
+    try {
+      await markClosedMonths(firestore, uid, [date], now);
+      return null;
+    } catch (error) {
+      return (error as Error)?.name ?? 'Error';
+    }
+  };
+  const failed = (await attempt()) !== null ? await attempt() : null;
+  if (failed !== null) {
+    logger.error('runway.email.closingMarkFailed', { name: failed });
+  }
 }
 
 const lower = (value: string) => value.toLowerCase();
@@ -238,10 +272,13 @@ async function handleMail(
   firestore: Firestore,
   uid: string,
   mail: Mail,
+  messageId: string | null,
   now: number,
 ): Promise<Outcome> {
   const planKey = await unwrapPlanKey(firestore, loadKeyring(), uid);
-  const eventRef = firestore.collection(emailEventsPath(uid)).doc();
+  const events = firestore.collection(emailEventsPath(uid));
+  const eventRef =
+    messageId === null ? events.doc() : events.doc(eventIdFor(uid, messageId));
   const intakeRef = firestore.doc(intakePath(uid));
   const template = subjectTemplate(mail.subject);
 
@@ -253,14 +290,14 @@ async function handleMail(
         sealed: sealWithKey(
           planKey,
           { ...readConfirmation(mail) },
-          EMAIL_SCHEMA_VERSION,
+          SEALED_SCHEMA_VERSION,
         ),
       });
-      return { outcome: 'confirm', purchaseId: null, readBy: null };
+      return { outcome: 'confirm', purchase: null, date: null, readBy: null };
     }
     const filters = await loadFilters(firestore, uid, planKey.key);
     if (filters.some((filter) => isFiltered(filter, mail))) {
-      return { outcome: 'filtered', purchaseId: null, readBy: null };
+      return { outcome: 'filtered', purchase: null, date: null, readBy: null };
     }
     const byPattern = parseAlertEmail(mail);
     const read: { alert: ParsedAlert | null; readBy: 'pattern' | 'ai' } =
@@ -269,10 +306,15 @@ async function handleMail(
         : { alert: await readAlertWithAi(mail), readBy: 'ai' };
     const { alert } = read;
     if (alert === null) {
-      return { outcome: 'unread', purchaseId: null, readBy: null };
+      return { outcome: 'unread', purchase: null, date: null, readBy: null };
     }
     if (!alert.isPurchase) {
-      return { outcome: 'notPurchase', purchaseId: null, readBy: read.readBy };
+      return {
+        outcome: 'notPurchase',
+        purchase: null,
+        date: null,
+        readBy: read.readBy,
+      };
     }
     const plan = (await firestore.doc(planPath(uid)).get()).data();
     const date = alert.date as number;
@@ -282,7 +324,12 @@ async function handleMail(
         date,
       )
     ) {
-      return { outcome: 'notTracking', purchaseId: null, readBy: read.readBy };
+      return {
+        outcome: 'notTracking',
+        purchase: null,
+        date: null,
+        readBy: read.readBy,
+      };
     }
     const targets = await findTargets(
       firestore,
@@ -294,7 +341,7 @@ async function handleMail(
       .collection(`${planPath(uid)}/purchases`)
       .doc();
     const cents = alert.amountCents as number;
-    await purchaseRef.create({
+    const data = {
       id: purchaseRef.id,
       date,
       source: 'email',
@@ -333,23 +380,27 @@ async function handleMail(
           cardPaymentMoveId: null,
           tickedDayKey: null,
         },
-        EMAIL_SCHEMA_VERSION,
+        SEALED_SCHEMA_VERSION,
       ),
-    });
-    await markClosedMonths(firestore, uid, [date], now);
+    };
     return {
       outcome: 'purchase',
-      purchaseId: purchaseRef.id,
+      purchase: { ref: purchaseRef, data },
+      date,
       readBy: read.readBy,
     };
   };
 
   const result = await decide();
-  await eventRef.create({
+  const batch = firestore.batch();
+  if (result.purchase !== null) {
+    batch.create(result.purchase.ref, result.purchase.data);
+  }
+  batch.create(eventRef, {
     id: eventRef.id,
     receivedAt: mail.receivedAt,
     outcome: result.outcome,
-    purchaseId: result.purchaseId,
+    purchaseId: result.purchase?.ref.id ?? null,
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
       planKey,
@@ -360,9 +411,13 @@ async function handleMail(
         snippet: snippetOf(mail.text),
         readBy: result.readBy,
       },
-      EMAIL_SCHEMA_VERSION,
+      SEALED_SCHEMA_VERSION,
     ),
   });
+  await batch.commit();
+  if (result.date !== null) {
+    await markWithRetry(firestore, uid, result.date, now);
+  }
   await intakeRef.update({ lastReceivedAt: now }).catch(() => undefined);
   return result.outcome;
 }
@@ -403,16 +458,16 @@ export const ingestRunwayEmail = onRequest(
       response.status(404).send('No such address');
       return;
     }
-    const authentication = [body.spf, body.dkim].map((value) =>
+    const [spf, dkim] = [body.spf, body.dkim].map((value) =>
       asString(value, 20).toLowerCase(),
     );
-    if (authentication.includes('fail')) {
-      logger.warn('runway.email.authFailed', {
-        spf: authentication[0],
-        dkim: authentication[1],
-      });
+    if (dkim === 'fail') {
+      logger.warn('runway.email.authFailed', { spf, dkim });
       response.status(403).send('Rejected');
       return;
+    }
+    if (dkim !== 'pass') {
+      logger.info('runway.email.authUnverified', { spf, dkim });
     }
     const firestore = getFirestore();
     const owner = await firestore.doc(emailTokenPath(token)).get();
@@ -428,6 +483,18 @@ export const ingestRunwayEmail = onRequest(
       return;
     }
     const now = Date.now();
+    const messageId = asString(body.messageId, 998).trim() || null;
+    if (
+      messageId !== null &&
+      (
+        await firestore
+          .doc(`${emailEventsPath(uid)}/${eventIdFor(uid, messageId)}`)
+          .get()
+      ).exists
+    ) {
+      response.status(200).json({ outcome: 'duplicate' });
+      return;
+    }
     if (!(await takeRateSlot(firestore, uid, now))) {
       logger.warn('runway.email.rateLimited');
       response.status(429).send('Too many');
@@ -452,11 +519,16 @@ export const ingestRunwayEmail = onRequest(
           text: text.trim() !== '' ? text : htmlToText(html),
           receivedAt,
         },
+        messageId,
         now,
       );
       logger.info('runway.email.handled', { outcome });
       response.status(200).json({ outcome });
     } catch (error) {
+      if ((error as { code?: unknown })?.code === 6) {
+        response.status(200).json({ outcome: 'duplicate' });
+        return;
+      }
       logger.error('runway.email.failed', {
         name: (error as Error)?.name ?? 'Error',
       });

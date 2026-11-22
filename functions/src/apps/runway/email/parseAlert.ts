@@ -60,6 +60,10 @@ const AMOUNT_PATTERNS = [
 
 const PURCHASE_SIGNAL =
   /\b(transaction|purchase|purchased|charge|charged|spent|spend|approved|authorization|authorized|debit card|card was used|card used)\b/i;
+const HARD_NOT_PURCHASE_SIGNAL =
+  /\b(declined|refund(?:ed)?|credit(?:ed)? (?:posted|to your)|(?:received|posted) your payment|payment (?:received|posted|was received|has been received)|thank you for your payment|revers(?:ed|al)|voided)\b/i;
+const STRONG_PURCHASE_SUBJECT =
+  /\$\s?\d[\d,.]*\s+(?:transaction|charge|purchase)\b|\b(?:you made|you spent|purchase (?:approved|of)|was charged)\b/i;
 const NOT_PURCHASE_SIGNAL =
   /\b(payment (?:received|posted|scheduled|due|reminder|confirmation|was received|has been received|is due)|statement (?:is )?(?:ready|available)|password|verification code|security code|one-time|refund|credit (?:posted|to your)|deposit|low balance|balance (?:alert|summary)|declined|minimum payment|due date|thank you for your payment|zelle|transfer|unsubscribe from)\b/i;
 const MERCHANT_STOP = /^(?:this|your|the|least|any|a|an|\d{1,2}:\d{2})\b/i;
@@ -223,17 +227,21 @@ function readDate(text: string, receivedAt: number): number {
   return plausible ?? arrivedOn;
 }
 
-const readInstitution = (from: string, text: string): string | null => {
-  const known = INSTITUTIONS.find(([pattern]) =>
-    pattern.test(`${from} ${text.slice(0, 600)}`),
-  );
-  if (known) return known[1];
+const readInstitution = (
+  from: string,
+  subject: string,
+  text: string,
+): string | null => {
+  const named = (value: string) =>
+    INSTITUTIONS.find(([pattern]) => pattern.test(value))?.[1] ?? null;
   const host = from.split('@')[1]?.toLowerCase() ?? '';
   const label = host.split('.').slice(-2, -1)[0] ?? '';
-  return label === '' ||
+  const fromHost =
+    label === '' ||
     /^(gmail|yahoo|outlook|hotmail|icloud|googlemail)$/.test(label)
-    ? null
-    : label.charAt(0).toUpperCase() + label.slice(1);
+      ? null
+      : label.charAt(0).toUpperCase() + label.slice(1);
+  return named(from) ?? named(subject) ?? fromHost ?? named(text.slice(0, 600));
 };
 
 /** Reads a bank's purchase alert by pattern. `null` when it cannot be sure (the caller may ask the AI); `isPurchase: false` when it is plainly something else. */
@@ -254,6 +262,16 @@ export function parseAlertEmail({
   if (NOT_PURCHASE_SIGNAL.test(subject) && !PURCHASE_SIGNAL.test(subject)) {
     return NOT_A_PURCHASE;
   }
+  const bodyHead = body.slice(0, 300);
+  if (HARD_NOT_PURCHASE_SIGNAL.test(`${subject} | ${bodyHead}`)) {
+    return NOT_A_PURCHASE;
+  }
+  if (
+    NOT_PURCHASE_SIGNAL.test(bodyHead) &&
+    !STRONG_PURCHASE_SUBJECT.test(subject)
+  ) {
+    return NOT_A_PURCHASE;
+  }
   const amountCents = readAmount(all);
   const merchant = readMerchant(all);
   if (amountCents === null || merchant === null || !PURCHASE_SIGNAL.test(all)) {
@@ -267,6 +285,6 @@ export function parseAlertEmail({
     merchant,
     lastFour: readLastFour(all),
     date: readDate(all, receivedAt),
-    institution: readInstitution(from, all),
+    institution: readInstitution(from, subject, body),
   };
 }
