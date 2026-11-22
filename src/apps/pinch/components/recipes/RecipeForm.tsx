@@ -808,7 +808,8 @@ function RecipeForm({
               onRemoved={showUndo}
               footerAction={
                 (props.value as string[]).filter((step) => step.trim()).length >
-                  1 && (
+                  1 &&
+                formData.stepSections.every((section) => section === null) && (
                   <ActionRow
                     icon={<Sparkles className='h-4 w-4' />}
                     label='Split into sections'
