@@ -176,7 +176,12 @@ function RecipeReader({
   const isMounted = useIsMounted();
   const isReading = state.status === 'reading';
   const canPasteText = initialUrl === undefined;
-  const typed = method === 'text' ? text : link;
+  const getTyped = () => {
+    if (method === 'text') return text;
+    if (method === 'file') return file === null ? '' : 'picked';
+    return link;
+  };
+  const typed = getTyped();
   const copy = READER_COPY[method];
   const guidance = guidanceText.trim() || null;
   useGrowingTextarea(guidanceRef, guidanceText, GUIDANCE_MAX_LINES);
@@ -247,6 +252,7 @@ function RecipeReader({
 
   const rejectFile = (message: string) => {
     setFile(null);
+    reportTyped('', guidanceText);
     setState(failed(message));
     setFileKey((current) => current + 1);
   };
