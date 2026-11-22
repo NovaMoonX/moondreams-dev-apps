@@ -1,3 +1,5 @@
+import { Mail } from 'lucide-react';
+
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import FallbackImage from '@/components/FallbackImage';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -69,6 +71,14 @@ function PurchaseRow({
   return (
     <ItemRow
       name={title}
+      nameMark={
+        purchase.source === 'email' && (
+          <Mail
+            className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
+            aria-hidden='true'
+          />
+        )
+      }
       leading={
         purchase.merchantLogo ? (
           <FallbackImage

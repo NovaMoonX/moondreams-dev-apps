@@ -49,11 +49,17 @@ export const EMAIL_WORDS = {
     'This looked like a payment, refund or notice, not a purchase.',
   noSubject: 'No subject',
   from: 'From',
+  subject: 'Subject',
+  received: 'Received',
+  showMore: 'Show more',
+  showLess: 'Show less',
+  openPurchase: 'Open the purchase',
   readOnPattern: 'Read from a known layout',
   readByAi: 'Read by AI',
   fromSender: 'From this sender',
   withSubject: 'With this subject',
   suggestionsCaption: 'Suggestions',
+  suggestedByAi: 'Suggested by AI',
   saveFilter: 'Save filter',
   pickOne: 'Pick at least one',
   saveFailed: 'The filter did not save. Try again.',
@@ -62,6 +68,9 @@ export const EMAIL_WORDS = {
   drawerWaiting:
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
   drawerFromEmail: 'Read from your bank’s alert email.',
+  drawerWaitingByAi:
+    'Read by AI from your bank’s alert email. It merges on its own when your bank sends the same charge.',
+  drawerFromEmailByAi: 'Read by AI from your bank’s alert email.',
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
     `Your bank hasn’t sent this charge in ${days} days. Stop waiting to keep it as it is, or remove it.`,

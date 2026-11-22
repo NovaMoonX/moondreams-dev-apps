@@ -1137,7 +1137,7 @@ export const PURCHASE_SOURCES = ['manual', 'csv', 'link', 'email'] as const;
 export const EMAIL_DOMAIN = 'apps.moondreams.dev';
 export const EMAIL_ADDRESS_PREFIX = 'finance';
 /** How long an emailed purchase waits for its bank before Home asks about it. */
-export const EMAIL_WAIT_DAYS = 7;
+export const EMAIL_WAIT_DAYS = 5;
 /** How many days after an emailed purchase a bank charge can still be it (a hold can post days later). */
 export const EMAIL_MATCH_DAYS_AFTER = 7;
 /** How many days before the email a bank charge can be dated and still be it (the bank dates a charge by when it happened). */

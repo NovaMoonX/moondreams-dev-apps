@@ -4683,7 +4683,7 @@ async function writeSeedPurchases(
 }
 
 /**
- * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, three emailed purchases on the Venture X (today's, and two waiting past a week for their bank, so Home counts 2), one email of each other outcome and a filter. No bank charge of the same amount sits on the Venture X, so none merges.
+ * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome and a filter. No bank charge of the same amount sits on the Venture X, so none merges.
  */
 async function writeSeedEmail(
   context: SeedContext,
@@ -4712,7 +4712,16 @@ async function writeSeedEmail(
     ),
   } satisfies EmailIntakeDoc);
 
-  const purchases = [
+  const purchases: {
+    id: string;
+    eventId: string;
+    daysAgo: number;
+    receivedAt: number;
+    merchant: string;
+    cents: number;
+    subject: string;
+    readBy: 'pattern' | 'ai';
+  }[] = [
     {
       id: 'seed-email-purchase-coffee',
       eventId: 'seed-email-event-coffee',
@@ -4721,6 +4730,7 @@ async function writeSeedEmail(
       merchant: 'Blue Bottle Coffee',
       cents: 675,
       subject: 'Transaction alert: $6.75 at Blue Bottle Coffee',
+      readBy: 'pattern',
     },
     {
       id: 'seed-email-purchase-target',
@@ -4730,6 +4740,7 @@ async function writeSeedEmail(
       merchant: 'Target',
       cents: 4_218,
       subject: 'A charge of $42.18 on your Venture X',
+      readBy: 'pattern',
     },
     {
       id: 'seed-email-purchase-shell',
@@ -4739,6 +4750,17 @@ async function writeSeedEmail(
       merchant: 'Shell',
       cents: 3_840,
       subject: 'Transaction alert: $38.40 at Shell',
+      readBy: 'ai',
+    },
+    {
+      id: 'seed-email-purchase-trader-joes',
+      eventId: 'seed-email-event-trader-joes',
+      daysAgo: 3,
+      receivedAt: today - 3 * DAY_MS + 16 * hour,
+      merchant: "Trader Joe's",
+      cents: 2_764,
+      subject: 'A charge of $27.64 on your Venture X',
+      readBy: 'pattern',
     },
   ];
   await Promise.all(
@@ -4801,7 +4823,7 @@ async function writeSeedEmail(
           .toLowerCase()
           .replace(/\$\d[\d,]*\.\d{2}/, '{amount}'),
         snippet: `Hi Jamie, a purchase of ${formatCents(entry.cents)} was made at ${entry.merchant} with your Venture X card ending in 4821.`,
-        readBy: 'pattern' as const,
+        readBy: entry.readBy,
       },
     })),
     {
@@ -5070,14 +5092,14 @@ async function seedRules(
       source: 'link',
       daysAgo: 16,
       amountCents: 6_210,
-      merchant: 'Trader Joe’s',
+      merchant: "Trader Joe's",
     },
     {
       id: 'seed-typed-before-link',
       source: 'manual',
       daysAgo: 17,
       amountCents: 5_400,
-      merchant: 'Trader Joe’s',
+      merchant: "Trader Joe's",
     },
   ];
   await Promise.all(

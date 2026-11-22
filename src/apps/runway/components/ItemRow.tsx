@@ -16,10 +16,7 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import {
-  PRIORITIES_WORDS,
-  PRIORITY_DIAL_WORDS,
-} from '@apps/runway/constants';
+import { PRIORITIES_WORDS, PRIORITY_DIAL_WORDS } from '@apps/runway/constants';
 
 /** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
 export interface ItemRowReorder {
@@ -39,6 +36,8 @@ export interface ItemRowReorder {
 
 interface ItemRowProps {
   name: string;
+  /** A small mark after the name, inside its line clamp (an envelope on an emailed purchase). */
+  nameMark?: ReactNode;
   emoji?: string | null;
   /** Replaces the badge (a date chip on an income day). */
   leading?: ReactNode;
@@ -92,6 +91,7 @@ interface ItemRowProps {
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
 function ItemRow({
   name,
+  nameMark,
   emoji = null,
   leading,
   detail,
@@ -203,7 +203,10 @@ function ItemRow({
   );
   const nameLine = (
     <span className='block min-w-0 font-medium break-words'>
-      <span className='line-clamp-2'>{name}</span>
+      <span className='line-clamp-2'>
+        {name}
+        {nameMark}
+      </span>
     </span>
   );
   // A two-line figure would push the detail down, so the detail sits under the name instead.
