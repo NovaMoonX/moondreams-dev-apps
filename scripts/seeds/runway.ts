@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+import { Timestamp } from 'firebase-admin/firestore';
+
 import {
   DEV_KEYRING,
   deriveSeedDataKey,
@@ -15,6 +17,8 @@ import {
   DEFAULT_CURRENCY_CODE,
   PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
+  EMAIL_EVENT_KEEP_DAYS,
+  EMAIL_PURCHASES_GATE_ID,
   LINK_BANKS_GATE_ID,
 } from '../../src/apps/runway/constants.ts';
 import { formatCents } from '../../src/utils/moneyUtils.ts';
@@ -83,6 +87,12 @@ import type {
   ShareSummary,
   ChangeSealed,
   ClosingDoc,
+  EmailEventDoc,
+  EmailEventSealed,
+  EmailFilterDoc,
+  EmailFilterSealed,
+  EmailIntakeDoc,
+  EmailIntakeSealed,
   BillPaidSealed,
   CostPaidSealed,
   BillSealed,
@@ -319,6 +329,13 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
           ],
           alwaysOffUids: [],
           reason: 'Seeded: Alex, Jamie and Taylor test linking',
+          updatedAt: context.now,
+        },
+        [EMAIL_PURCHASES_GATE_ID]: {
+          rollout: 'off',
+          alwaysOnUids: [FIXTURE_USERS.partnerTwo.uid],
+          alwaysOffUids: [],
+          reason: 'Seeded: Jamie tests purchases from email',
           updatedAt: context.now,
         },
       },
@@ -4605,6 +4622,13 @@ async function writeSeedPurchases(
     }),
   );
   const ruled = await seedRules(context, plan, encryption, today);
+  const emailDocuments = await writeSeedEmail(
+    context,
+    plan,
+    encryption,
+    today,
+    batch,
+  );
   const safewayDate = today - 3 * DAY_MS;
   const removedDate = today - 8 * DAY_MS;
   const changes = [
@@ -4648,7 +4672,224 @@ async function writeSeedPurchases(
     } satisfies ExpenseDoc,
   );
   await batch.commit();
-  return purchases.length + waiting.length + changes.length + 1 + ruled;
+  return (
+    purchases.length +
+    waiting.length +
+    changes.length +
+    1 +
+    ruled +
+    emailDocuments
+  );
+}
+
+/**
+ * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, three emailed purchases on the Venture X (today's, and two waiting past a week for their bank, so Home counts 2), one email of each other outcome and a filter. No bank charge of the same amount sits on the Venture X, so none merges.
+ */
+async function writeSeedEmail(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+) {
+  const hour = 3_600_000;
+  const expiresAt = (receivedAt: number) =>
+    Timestamp.fromMillis(receivedAt + EMAIL_EVENT_KEEP_DAYS * DAY_MS);
+  batch.set(context.firestore.doc(`${plan}/emailIntake/address`), {
+    id: 'address',
+    token: '3f9a1c7e5b2d48a6906de1f4b7c8a253',
+    createdAt: context.now - 12 * DAY_MS,
+    updatedAt: context.now - DAY_MS,
+    lastReceivedAt: context.now - 2 * hour,
+    confirmAt: context.now - DAY_MS,
+    sealed: await sealJson(
+      {
+        confirmUrl:
+          'https://mail.google.com/mail/vf-%5BANGjdJ8x2kQ%5D-seeded-confirmation',
+        confirmCode: '123456789',
+      } satisfies EmailIntakeSealed,
+      encryption,
+    ),
+  } satisfies EmailIntakeDoc);
+
+  const purchases = [
+    {
+      id: 'seed-email-purchase-coffee',
+      eventId: 'seed-email-event-coffee',
+      daysAgo: 0,
+      receivedAt: context.now - 2 * hour,
+      merchant: 'Blue Bottle Coffee',
+      cents: 675,
+      subject: 'Transaction alert: $6.75 at Blue Bottle Coffee',
+    },
+    {
+      id: 'seed-email-purchase-target',
+      eventId: 'seed-email-event-target',
+      daysAgo: 9,
+      receivedAt: today - 9 * DAY_MS + 15 * hour,
+      merchant: 'Target',
+      cents: 4_218,
+      subject: 'A charge of $42.18 on your Venture X',
+    },
+    {
+      id: 'seed-email-purchase-shell',
+      eventId: 'seed-email-event-shell',
+      daysAgo: 10,
+      receivedAt: today - 10 * DAY_MS + 17 * hour,
+      merchant: 'Shell',
+      cents: 3_840,
+      subject: 'Transaction alert: $38.40 at Shell',
+    },
+  ];
+  await Promise.all(
+    purchases.map(async (entry) => {
+      const date = today - entry.daysAgo * DAY_MS;
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date,
+        source: 'email',
+        status: null,
+        needsHome: false,
+        accountId: null,
+        dedupeKey: null,
+        expenseId: null,
+        emailEventId: entry.eventId,
+        emailWaiting: true,
+        createdAt: entry.receivedAt,
+        updatedAt: entry.receivedAt,
+        sealed: await sealJson(
+          {
+            amountCents: entry.cents,
+            merchant: entry.merchant,
+            label: null,
+            note: null,
+            lines: [{ envelopeId: null, cents: entry.cents, via: 'free' }],
+            refundOfId: null,
+            paidByCardId: SEED_VENTURE_CARD,
+            link: null,
+            receiptText: null,
+            costRef: null,
+            notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
+            tickedDayKey: null,
+            category: null,
+            ruleId: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
+
+  const events: (Pick<EmailEventDoc, 'id' | 'receivedAt' | 'outcome'> & {
+    purchaseId: string | null;
+    sealed: EmailEventSealed;
+  })[] = [
+    ...purchases.map((entry) => ({
+      id: entry.eventId,
+      receivedAt: entry.receivedAt,
+      outcome: 'purchase' as const,
+      purchaseId: entry.id,
+      sealed: {
+        from: 'alerts@capitalone.com',
+        subject: entry.subject,
+        subjectTemplate: entry.subject
+          .toLowerCase()
+          .replace(/\$\d[\d,]*\.\d{2}/, '$amount'),
+        snippet: `Hi Jamie, a purchase of ${formatCents(entry.cents)} was made at ${entry.merchant} with your Venture X card ending in 4821.`,
+        readBy: 'pattern' as const,
+      },
+    })),
+    {
+      id: 'seed-email-event-deposit',
+      receivedAt: context.now - 5 * hour,
+      outcome: 'notPurchase',
+      purchaseId: null,
+      sealed: {
+        from: 'alerts@capitalone.com',
+        subject: 'A payment was received on your Venture X',
+        subjectTemplate: 'a payment was received on your venture x',
+        snippet:
+          'Thanks, we got your payment of $480.00 on your Venture X card ending in 4821.',
+        readBy: 'ai',
+      },
+    },
+    {
+      id: 'seed-email-event-filtered',
+      receivedAt: context.now - DAY_MS - 3 * hour,
+      outcome: 'filtered',
+      purchaseId: null,
+      sealed: {
+        from: 'marketing@chase.com',
+        subject: 'Your card could earn 5x points this season',
+        subjectTemplate: 'your card could earn 5x points this season',
+        snippet:
+          'Activate your quarterly bonus categories and earn more on gas, groceries and dining.',
+        readBy: null,
+      },
+    },
+    {
+      id: 'seed-email-event-confirm',
+      receivedAt: context.now - DAY_MS,
+      outcome: 'confirm',
+      purchaseId: null,
+      sealed: {
+        from: 'forwarding-noreply@google.com',
+        subject:
+          'Gmail Forwarding Confirmation - Receive Mail from jamie@example.com',
+        subjectTemplate:
+          'gmail forwarding confirmation - receive mail from jamie@example.com',
+        snippet:
+          'jamie@example.com has requested to automatically forward mail to your email address. Confirmation code: 123456789',
+        readBy: null,
+      },
+    },
+    {
+      id: 'seed-email-event-unread',
+      receivedAt: context.now - 3 * DAY_MS,
+      outcome: 'unread',
+      purchaseId: null,
+      sealed: {
+        from: 'statements@discover.com',
+        subject: 'Your Discover statement is ready',
+        subjectTemplate: 'your discover statement is ready',
+        snippet: 'Your latest statement is now available. Sign in to view it.',
+        readBy: null,
+      },
+    },
+  ];
+  await Promise.all(
+    events.map(async (entry) => {
+      batch.set(context.firestore.doc(`${plan}/emailEvents/${entry.id}`), {
+        id: entry.id,
+        receivedAt: entry.receivedAt,
+        outcome: entry.outcome,
+        purchaseId: entry.purchaseId,
+        expiresAt: expiresAt(entry.receivedAt),
+        sealed: await sealJson(entry.sealed, encryption),
+      });
+    }),
+  );
+
+  const filterId = 'seed-email-filter-chase-marketing';
+  batch.set(context.firestore.doc(`${plan}/emailFilters/${filterId}`), {
+    id: filterId,
+    createdAt: context.now - 4 * DAY_MS,
+    sealed: await sealJson(
+      {
+        fromAddress: 'marketing@chase.com',
+        subjectTemplate: null,
+        subjectContains: [],
+        bodyContains: [],
+      } satisfies EmailFilterSealed,
+      encryption,
+    ),
+  } satisfies EmailFilterDoc);
+  return 1 + purchases.length + events.length + 1;
 }
 
 /**

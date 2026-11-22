@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Filter, Hourglass } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
@@ -41,6 +42,7 @@ export function EmailPurchaseRows({
 }: EmailPurchaseRowsProps) {
   const events = useEmailEvents();
   const actions = useEmailActions();
+  const { addToast } = useToast();
   const [isFiltering, setIsFiltering] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const event =
@@ -54,6 +56,20 @@ export function EmailPurchaseRows({
     setIsBusy(true);
     try {
       await actions.stopWaiting(purchase.id);
+      addToast({
+        title: EMAIL_WORDS.stoppedWaiting,
+        type: 'success',
+        action: {
+          label: EMAIL_WORDS.undo,
+          onClick: () =>
+            void actions.resumeWaiting(purchase.id).catch((error) =>
+              addToast({
+                title: getErrorMessage(error, EMAIL_WORDS.removeFailed),
+                type: 'error',
+              }),
+            ),
+        },
+      });
     } catch (error) {
       onFailed(getErrorMessage(error, EMAIL_WORDS.removeFailed));
     } finally {

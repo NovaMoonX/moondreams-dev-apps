@@ -260,7 +260,9 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     };
   }, [uid, keyStatus, dispatch]);
 
-  const isEmailOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
+  const isEmailGateOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
+  const emailLevel = useAppSelector(selectLevel);
+  const isEmailOpen = isEmailGateOpen && emailLevel !== 'plan';
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !isEmailOpen) return;
@@ -302,6 +304,9 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     return () => {
       run.isCurrent = false;
       stops.current.forEach((stop) => stop());
+      dispatch(setEmailIntake(null));
+      dispatch(setEmailEvents([]));
+      dispatch(setEmailFilters([]));
     };
   }, [uid, keyStatus, isEmailOpen, dispatch]);
 

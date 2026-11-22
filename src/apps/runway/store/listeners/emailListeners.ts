@@ -127,7 +127,7 @@ export function startEmailEventsListener(
       sequence.latest += 1;
       const current = sequence.latest;
       try {
-        const opened = await Promise.all(
+        const settled = await Promise.allSettled(
           snapshot.docs.map(async (entry): Promise<OpenEmailEvent> => {
             const data = entry.data() as EmailEventDoc;
             const payload = await read<Partial<EmailEventSealed>>(data.sealed);
@@ -145,8 +145,13 @@ export function startEmailEventsListener(
             };
           }),
         );
+        const opened = settled.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        );
+        const failed = settled.find((result) => result.status === 'rejected');
         if (current !== sequence.latest || run.isStopped) return;
         onChange(opened);
+        if (failed?.status === 'rejected') onError(toError(failed.reason));
       } catch (error) {
         if (current === sequence.latest) onError(toError(error));
       }

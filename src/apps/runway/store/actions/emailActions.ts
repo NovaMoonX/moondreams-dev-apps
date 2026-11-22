@@ -69,13 +69,14 @@ export async function deleteEmailEvent(
   await deleteDoc(planRef(uid, 'emailEvents', eventId));
 }
 
-/** Says an emailed purchase is no longer waiting for its bank; it stays a purchase and counts as before below Link. */
-export async function stopWaitingForEmailPurchase(
+/** Says whether an emailed purchase is still waiting for its bank; one that isn't stays a purchase and counts as before below Link. */
+export async function setEmailWaiting(
   uid: string,
   purchaseId: string,
+  isWaiting: boolean,
 ): Promise<void> {
   await updateDoc(planRef(uid, 'purchases', purchaseId), {
-    emailWaiting: false,
+    emailWaiting: isWaiting,
     updatedAt: Date.now(),
   });
 }

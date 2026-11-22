@@ -5,7 +5,7 @@ import {
   createEmailFilter,
   deleteEmailFilter,
   rotateEmailAddress,
-  stopWaitingForEmailPurchase,
+  setEmailWaiting,
   suggestEmailFilters,
 } from '@apps/runway/store/actions/emailActions';
 import {
@@ -54,6 +54,7 @@ export interface EmailActions {
   deleteFilter(id: string): Promise<void>;
   suggestFilters(eventId: string): Promise<EmailFilterSuggestion[]>;
   stopWaiting(purchaseId: string): Promise<void>;
+  resumeWaiting(purchaseId: string): Promise<void>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
@@ -114,7 +115,9 @@ export function useEmailActions(): EmailActions {
         uid === null ? NO_UID() : deleteEmailFilter(uid, id),
       suggestFilters: suggestEmailFilters,
       stopWaiting: (purchaseId) =>
-        uid === null ? NO_UID() : stopWaitingForEmailPurchase(uid, purchaseId),
+        uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, false),
+      resumeWaiting: (purchaseId) =>
+        uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, true),
     }),
     [uid],
   );

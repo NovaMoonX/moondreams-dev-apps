@@ -25,10 +25,11 @@ export const selectEmailTwins = createSelector(
   findEmailTwins,
 );
 
-/** The ids of emailed purchases whose bank charge is here: the charge counts, so Free to Spend and a card's balance leave them out. */
+/** The ids of emailed purchases whose bank charge is here, or could be one of several here: the charge counts, so Free to Spend and a card's balance leave them out rather than count one purchase twice. */
 export const selectTwinnedEmailIds = createSelector(
   [selectEmailTwins],
-  (twins): ReadonlySet<string> => new Set(twins.clear.keys()),
+  (twins): ReadonlySet<string> =>
+    new Set([...twins.clear.keys(), ...twins.ambiguous]),
 );
 
 /** The ids of every emailed purchase still waiting for its bank. */

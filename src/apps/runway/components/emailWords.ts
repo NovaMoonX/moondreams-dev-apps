@@ -52,6 +52,8 @@ export const EMAIL_WORDS = {
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
   drawerFromEmail: 'Read from your bank’s alert email.',
   stopWaiting: 'Stop waiting for it',
+  stoppedWaiting: 'No longer waiting for your bank',
+  undo: 'Undo',
   stopWaitingSub: 'Keep it as typed; your bank’s charge won’t merge with it.',
   homeCount: (count: number) =>
     count === 1 ? '1 purchase from email' : `${count} purchases from email`,
