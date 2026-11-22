@@ -75,6 +75,13 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
     };
   }, [actions, event.id]);
 
+  const isAllowedSuggestion = (suggestion: EmailFilterSuggestion) =>
+    event.outcome !== 'purchase' ||
+    suggestion.fromAddress === null ||
+    suggestion.subjectTemplate !== null ||
+    suggestion.subjectContains.length > 0 ||
+    suggestion.bodyContains.length > 0;
+
   const presets: Choice[] = [
     ...(event.from && event.outcome !== 'purchase'
       ? [
@@ -97,12 +104,14 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
         ]
       : []),
   ];
-  const extras: Choice[] = suggestions.map((suggestion, index) => ({
-    key: `s${index}`,
-    title: suggestion.label,
-    detail: describeEmailFilter(suggestion).name,
-    filter: suggestion,
-  }));
+  const extras: Choice[] = suggestions
+    .filter(isAllowedSuggestion)
+    .map((suggestion, index) => ({
+      key: `s${index}`,
+      title: suggestion.label,
+      detail: describeEmailFilter(suggestion).name,
+      filter: suggestion,
+    }));
 
   const toggle = (key: string, isOn: boolean) =>
     setPicked((current) => {

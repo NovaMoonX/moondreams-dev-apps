@@ -8,10 +8,11 @@ import InlineNotice from '@/components/InlineNotice';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
-import { EMAIL_WAIT_DAYS } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { isWaitingEmail } from '@apps/runway/engine/emailTwins';
-import { selectTwinnedEmailIds } from '@apps/runway/store/selectors/emailSelectors';
+import {
+  isOverdueEmail,
+  selectTwinnedEmailIds,
+} from '@apps/runway/store/selectors/emailSelectors';
 import { useAppSelector } from '@/store';
 import {
   useEmailActions,
@@ -28,11 +29,7 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   const today = todayAsUtcDate();
   const twinned = useAppSelector(selectTwinnedEmailIds);
   if (purchase.source !== 'email') return null;
-  if (
-    isWaitingEmail(purchase) &&
-    !twinned.has(purchase.id) &&
-    purchase.date < today - EMAIL_WAIT_DAYS * DAY_MS
-  ) {
+  if (isOverdueEmail(purchase, twinned, today)) {
     return (
       <InlineNotice tone='warning'>
         {EMAIL_WORDS.overdueNotice(
