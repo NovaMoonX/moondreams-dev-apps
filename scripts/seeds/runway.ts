@@ -3529,6 +3529,8 @@ async function writeSeedSelfPaying(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4087,6 +4089,8 @@ async function seedUnlinkedPlan(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4305,6 +4309,8 @@ async function writeSeedPurchases(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4593,6 +4599,8 @@ async function writeSeedPurchases(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4754,6 +4762,8 @@ async function seedRules(
         } satisfies PurchaseSealed,
         encryption,
       ),
+      emailEventId: null,
+      emailWaiting: null,
     } satisfies PurchaseDoc,
   );
   await Promise.all(
@@ -4802,6 +4812,8 @@ async function seedRules(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4876,6 +4888,8 @@ async function seedRules(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );

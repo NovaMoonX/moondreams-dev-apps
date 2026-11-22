@@ -703,6 +703,8 @@ const PURCHASE_DOC_FIELDS = {
   accountId: 'never',
   dedupeKey: 'notUseful',
   expenseId: 'notUseful',
+  emailEventId: 'notUseful',
+  emailWaiting: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
   sealed: 'shared',

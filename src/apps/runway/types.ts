@@ -1225,9 +1225,83 @@ export interface PurchaseDoc {
   dedupeKey: string | null;
   /** The expense group it belongs to; null (or missing on an older purchase) when none. */
   expenseId: string | null;
+  /** On a purchase read from a bank's alert email (`source` 'email'): the email it came from; null otherwise (and missing on an older purchase, read as null). */
+  emailEventId: string | null;
+  /** On a purchase read from an email: true while Runway waits for its bank to send the same charge, false once there is nothing to wait for (its card or account isn't linked, or the person stopped waiting); null on every other purchase (and missing on an older one). */
+  emailWaiting: boolean | null;
   createdAt: number;
   updatedAt: number;
   sealed: Sealed;
+}
+
+/** The person's forwarding address for bank alert emails, written only by Functions; one per plan, at `emailIntake/address`. The address is `finance-<token>@apps.moondreams.dev`. */
+export interface EmailIntakeDoc {
+  id: 'address';
+  /** Lowercase letters and digits; changes when the person asks for a new address, and the old one stops working at once. */
+  token: string;
+  createdAt: number;
+  updatedAt: number;
+  /** When an email last reached the address; null until one does. */
+  lastReceivedAt: number | null;
+  /** When a mail provider's forwarding confirmation last arrived; null until one does. */
+  confirmAt: number | null;
+  /** `EmailIntakeSealed`; null until a confirmation arrives. */
+  sealed: Sealed | null;
+}
+
+export interface EmailIntakeSealed {
+  /** The https link that confirms forwarding, from the provider's confirmation email. */
+  confirmUrl: string | null;
+  /** The confirmation code the same email carries, for a provider that asks for it instead; null when none was found. */
+  confirmCode: string | null;
+}
+
+/** What became of one email that reached the address. */
+export type EmailOutcome =
+  | 'purchase'
+  | 'notPurchase'
+  | 'filtered'
+  | 'confirm'
+  | 'unread'
+  | 'notTracking';
+
+/** One email that reached the address, written only by Functions and removed on its own after `EMAIL_EVENT_KEEP_DAYS`; kept so a filter can be built from it. */
+export interface EmailEventDoc {
+  id: string;
+  receivedAt: number;
+  outcome: EmailOutcome;
+  /** The purchase it became; null for any other outcome. */
+  purchaseId: string | null;
+  /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
+  expiresAt: number;
+  sealed: Sealed;
+}
+
+export interface EmailEventSealed {
+  /** The sender's address, lowercase. */
+  from: string;
+  subject: string;
+  /** The subject with amounts, card numbers and dates replaced (`toSubjectTemplate`), lowercase. */
+  subjectTemplate: string;
+  /** The start of the email's text, for building a filter. */
+  snippet: string;
+  /** How the purchase was read: a known pattern or the AI; null when nothing was read. */
+  readBy: 'pattern' | 'ai' | null;
+}
+
+/** A filter the person made from an email: an email that matches every condition it sets is skipped before anything reads it. Created and deleted by the app, read by Functions. */
+export interface EmailFilterDoc {
+  id: string;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+/** Every condition is lowercase; an empty list or null is no condition, and a filter with no condition matches nothing. */
+export interface EmailFilterSealed {
+  fromAddress: string | null;
+  subjectTemplate: string | null;
+  subjectContains: string[];
+  bodyContains: string[];
 }
 
 /** A placed pending charge the bank dropped, noted by Functions so the app can say where its money went back; the app deletes it once read. */
@@ -1257,6 +1331,8 @@ export interface OpenPurchase extends PurchaseSealed {
   accountId: string | null;
   needsHome: boolean;
   expenseId: string | null;
+  emailEventId: string | null;
+  emailWaiting: boolean | null;
   createdAt: number;
   updatedAt: number;
 }
