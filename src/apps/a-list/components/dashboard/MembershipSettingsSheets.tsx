@@ -142,6 +142,7 @@ export function CostSheet({ membership, onClose }: SheetProps) {
     startDate: toDateInputValue(membership.startDate),
     showBillTotal: membership.taxRate !== null,
   }));
+  const [openedWith] = useState(membership);
   const [values, setValues] = useState(start);
   const [formKey, setFormKey] = useState(0);
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
@@ -149,15 +150,15 @@ export function CostSheet({ membership, onClose }: SheetProps) {
   const billTotalError = cost.errors.billTotal;
   const isValid = cost.isValid && cost.costCents !== null;
   const next = {
-    monthlyCostCents: cost.costCents ?? membership.monthlyCostCents,
+    monthlyCostCents: cost.costCents ?? openedWith.monthlyCostCents,
     monthlyTotalCents:
-      cost.billTotalCents ?? cost.costCents ?? membership.monthlyTotalCents,
+      cost.billTotalCents ?? cost.costCents ?? openedWith.monthlyTotalCents,
     taxRate: cost.billTotalCents === null ? null : cost.taxRate,
   };
   const isDirty =
-    next.monthlyCostCents !== membership.monthlyCostCents ||
-    next.monthlyTotalCents !== membership.monthlyTotalCents ||
-    next.taxRate !== membership.taxRate;
+    next.monthlyCostCents !== openedWith.monthlyCostCents ||
+    next.monthlyTotalCents !== openedWith.monthlyTotalCents ||
+    next.taxRate !== openedWith.taxRate;
   // Cost, total and rate are derived from each other, so they're written as one group.
   const fields = isValid && isDirty ? next : {};
 
@@ -302,13 +303,14 @@ export function GoalsSheet({ membership, onClose }: SheetProps) {
     weeklyGoal: membership.weeklyGoal?.toString() ?? '',
     monthlyGoal: membership.monthlyGoal?.toString() ?? '',
   }));
+  const [openedWith] = useState(membership);
   const [values, setValues] = useState(start);
   const weekly = parseGoal(values.weeklyGoal, MAX_WEEKLY_GOAL);
   const monthly = parseGoal(values.monthlyGoal, MAX_MONTHLY_GOAL);
   const isValid = weekly.isValid && monthly.isValid;
   const fields: Partial<MembershipEditableFields> = {
-    ...(weekly.goal !== membership.weeklyGoal && { weeklyGoal: weekly.goal }),
-    ...(monthly.goal !== membership.monthlyGoal && {
+    ...(weekly.goal !== openedWith.weeklyGoal && { weeklyGoal: weekly.goal }),
+    ...(monthly.goal !== openedWith.monthlyGoal && {
       monthlyGoal: monthly.goal,
     }),
   };

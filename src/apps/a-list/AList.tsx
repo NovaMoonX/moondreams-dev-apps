@@ -215,16 +215,11 @@ function AList() {
           }
         />
       )}
-      {/* Stays mounted, hidden, while the email screen opened from its row is on top, so unsaved edits are still there on return. */}
-      {(overlay?.kind === 'membership' ||
-        (overlay?.kind === 'emailTickets' &&
-          overlay.returnTo === 'membership')) && (
-        <div className={join(overlay.kind === 'emailTickets' && 'hidden')}>
-          <MembershipSettingsSubview
-            membership={membership}
-            onClose={closeOverlay}
-          />
-        </div>
+      {overlay?.kind === 'membership' && (
+        <MembershipSettingsSubview
+          membership={membership}
+          onClose={closeOverlay}
+        />
       )}
       {/* A subview takes over the app; the screens stay mounted underneath so filters and the selected day survive. */}
       <div className={join(isSubviewOpen && 'hidden')}>
