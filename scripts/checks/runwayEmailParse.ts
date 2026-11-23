@@ -297,6 +297,15 @@ assert.ok(
     isDkimPassed: true,
   }),
 );
+assert.ok(
+  !isProtonInvitation({
+    ...protonInvite,
+    subject: 'Fwd: your Uber receipt',
+    text: 'Your trip was $18.20. See https://proton.me/mail for more.',
+    isDkimPassed: true,
+  }),
+);
+assert.equal(readProtonLink('Read https://proton.me/pricing'), undefined);
 assert.equal(
   readProtonLink(protonInvite.text),
   'https://account.proton.me/u/0/forwarding/accept?token=abc123',

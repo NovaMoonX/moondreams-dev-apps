@@ -219,13 +219,11 @@ const readAlertAddress = (text: string) =>
 interface AlertAddressFieldProps {
   value: string;
   onChange: (value: string) => void;
-  lead?: string;
 }
 
-function AlertAddressField({ value, onChange, lead }: AlertAddressFieldProps) {
+function AlertAddressField({ value, onChange }: AlertAddressFieldProps) {
   return (
     <ClearOfFooter>
-      {lead && <Muted>{lead}</Muted>}
       <Input
         variant='outline'
         type='email'
@@ -371,8 +369,10 @@ function EmailSetupWalkthrough({
           title: WORDS.protonRuleTitle,
           content: (
             <div className='space-y-4'>
+              <Muted>{WORDS.protonRuleNote}</Muted>
               <NumberedSteps
                 items={[
+                  typed,
                   {
                     text: WORDS.protonRuleGo,
                     control: (
@@ -383,20 +383,10 @@ function EmailSetupWalkthrough({
                     ),
                   },
                   { text: WORDS.protonRulePaste },
-                  {
-                    text: WORDS.protonRuleCondition(alertAddress),
-                    control: (
-                      <AlertAddressField
-                        value={alertText}
-                        onChange={setAlertText}
-                        lead={WORDS.alertAddressLead}
-                      />
-                    ),
-                  },
+                  { text: WORDS.protonRuleCondition(alertAddress) },
                   { text: WORDS.protonRuleSave },
                 ]}
               />
-              <Muted>{WORDS.protonRuleNote}</Muted>
             </div>
           ),
         };

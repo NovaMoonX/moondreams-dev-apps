@@ -456,7 +456,19 @@ async function handleMail(
   };
 
   const result = await decide();
-  const bodyText = readableBody(mail.text);
+  const readText = readableBody(mail.text);
+  const isBankEmail =
+    result.outcome === 'purchase' ||
+    result.outcome === 'notPurchase' ||
+    result.outcome === 'notTracking';
+  const bodyText = isBankEmail ? readText : null;
+  const snippet =
+    result.outcome === 'confirm'
+      ? ''
+      : excerptOf(
+          readText,
+          result.found ?? { amountCents: null, merchant: null },
+        );
   const batch = firestore.batch();
   if (result.purchase !== null) {
     batch.create(result.purchase.ref, result.purchase.data);
@@ -473,10 +485,7 @@ async function handleMail(
         from: toAddress(mail.from),
         subject: mail.subject.slice(0, 300),
         subjectTemplate: template,
-        snippet: excerptOf(
-          bodyText,
-          result.found ?? { amountCents: null, merchant: null },
-        ),
+        snippet,
         bodyText,
         readBy: result.readBy,
       },

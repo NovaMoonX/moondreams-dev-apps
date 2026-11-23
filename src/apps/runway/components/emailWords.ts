@@ -172,7 +172,7 @@ export const EMAIL_SETUP_WORDS = {
     'Go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address',
   yahooForwardingPaste: 'Paste your address and press Verify',
   yahooForwardingNote:
-    'Yahoo forwards all your mail; Runway skips anything that isn’t a bank alert without reading it.',
+    'Yahoo forwards all your mail; Runway only turns bank alerts into purchases and keeps just the subject and a few lines of anything else, for 30 days, so you can filter it out.',
   yahooForwardingLink: 'Open Yahoo Mail',
   outlookRuleTitle: 'Make a rule for your bank’s alerts',
   outlookRuleOpen: 'Open Outlook’s rules',
@@ -189,10 +189,11 @@ export const EMAIL_SETUP_WORDS = {
     'In Proton Mail, go to Settings → All settings → Forward and auto-reply → Add forwarding rule',
   protonRulePaste: 'Paste your Runway address in Forward to',
   protonRuleCondition: (address: string | null) =>
-    `Add a condition: the sender is ${address ?? 'your bank’s alert address'}`,
-  protonRuleSave: 'Then Save and Send confirmation email',
+    `Choose Add condition → If → Sender → is, and enter ${address ?? 'your bank’s alert address'}`,
+  protonRuleSave:
+    'Click Save. Proton sends an invitation to your Runway address, and the next step catches it',
   protonRuleNote:
-    'Proton doesn’t end-to-end encrypt the mail it forwards to another provider.',
+    'Forwarding to another provider turns off end-to-end encryption for all mail on the Proton address you forward from. Your other Proton addresses aren’t affected.',
   protonRuleLink: 'Open Proton Mail',
   otherRuleTitle: 'Set up forwarding',
   otherRuleLine: (address: string | null) =>
@@ -219,7 +220,9 @@ export const EMAIL_SETUP_WORDS = {
     'Check that you pasted the address exactly.',
     provider === 'other'
       ? 'Send the confirmation again from your email’s forwarding settings.'
-      : `Send it again from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
+      : provider === 'proton'
+        ? 'In Forward and auto-reply, check the rule isn’t marked pending, then save it again.'
+        : `Send it again from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
   ],
   linkFailed: 'Link didn’t work?',
   codeLine: (provider: EmailProvider) =>

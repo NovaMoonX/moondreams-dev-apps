@@ -4818,9 +4818,13 @@ async function writeSeedEmail(
       amountCents: null,
       merchant: null,
     },
+    keeps: 'all' | 'excerpt' | 'none' = 'all',
   ) => {
-    const bodyText = readableBody(text);
-    return { snippet: excerptOf(bodyText, found), bodyText };
+    const readText = readableBody(text);
+    return {
+      snippet: keeps === 'none' ? '' : excerptOf(readText, found),
+      bodyText: keeps === 'all' ? readText : null,
+    };
   };
   const cluttered = (alert: string, brand: string, bank: string) =>
     [
@@ -4913,6 +4917,8 @@ async function writeSeedEmail(
             'Chase',
             'chase.com',
           ),
+          undefined,
+          'excerpt',
         ),
         readBy: null,
       },
@@ -4930,6 +4936,8 @@ async function writeSeedEmail(
           'gmail forwarding confirmation - receive mail from jamie@example.com',
         ...readEmail(
           'jamie@example.com has requested to automatically forward mail to your email address. Confirmation code: 123456789\n\nTo allow this, open https://mail-settings.google.com/mail/vf-abc123',
+          undefined,
+          'none',
         ),
         readBy: null,
       },
@@ -4945,6 +4953,8 @@ async function writeSeedEmail(
         subjectTemplate: 'your discover statement is ready',
         ...readEmail(
           'Your latest statement is now available. Sign in to view it.',
+          undefined,
+          'excerpt',
         ),
         readBy: null,
       },

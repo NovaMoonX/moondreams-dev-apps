@@ -196,17 +196,19 @@ export function isProtonSender(from: string): boolean {
   );
 }
 
-/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject. */
+/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject and an invitation link. */
 export const isProtonInvitation = (mail: {
   from: string;
   subject: string;
+  text: string;
   isDkimPassed: boolean;
 }): boolean =>
   isProtonSender(mail.from) &&
   mail.isDkimPassed &&
-  /forward/i.test(mail.subject);
+  /forward/i.test(mail.subject) &&
+  readProtonLink(mail.text) !== undefined;
 
-/** The invitation's accept link: a proton.me https link, preferring one that mentions forwarding, accepting or an invite; support, legal and blog pages are never it. */
+/** The invitation's accept link: a proton.me https link that mentions forwarding, accepting or an invite; support, legal and blog pages are never it. */
 export function readProtonLink(text: string) {
   const links = Array.from(
     text.matchAll(
@@ -221,7 +223,7 @@ export function readProtonLink(text: string) {
     .map(([, link]) => link);
   const isInvitePath = (link: string) =>
     /forward|accept|invite/i.test(link.replace(/^https:\/\/[^/]+/i, ''));
-  return links.find(isInvitePath) ?? links[0];
+  return links.find(isInvitePath);
 }
 
 export function toCents(value: string): number | null {

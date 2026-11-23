@@ -95,7 +95,8 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   const OutcomeIcon = OUTCOME_ICONS[event.outcome];
   const hasWholeEmail =
     event.bodyText !== null &&
-    event.bodyText.replace(/\n\s*\n/g, '\n').trim() !== event.snippet.trim();
+    (event.bodyText.replace(/\n\s*\n/g, '\n').trim() !== event.snippet.trim() ||
+      event.snippet.length > 280);
   const hasPurchase =
     event.purchaseId !== null && purchaseIds.has(event.purchaseId);
 
