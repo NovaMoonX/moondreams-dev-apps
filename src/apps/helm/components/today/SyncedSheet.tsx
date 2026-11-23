@@ -6,6 +6,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import {
+  PosterThumb,
+  SyncedAvatar,
+} from '@apps/helm/components/connections/SyncedPictures';
 import SyncedSourceBlock from '@apps/helm/components/connections/SyncedSourceBlock';
 import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import { DiscrepancyBlock } from '@apps/helm/components/today/DiscrepancyLine';
@@ -125,6 +129,14 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
     >
       {record && (
         <div className='flex flex-col gap-4'>
+          {record.picture !== null && (
+            <SyncedAvatar
+              record={record}
+              fallback={null}
+              className='size-14 rounded-full'
+            />
+          )}
+          <PosterThumb record={record} className='w-14' />
           {[
             isCalendar ? getEventFacts(record, now, timeZone) : null,
             other && other.startAt !== null

@@ -37,6 +37,7 @@ const copy = (
   syncedAt: 0,
   transformVersion: 1,
   contentHash: null,
+  picture: null,
   connectionEndedAt: null,
   deleteAfter: null,
   sealed: {

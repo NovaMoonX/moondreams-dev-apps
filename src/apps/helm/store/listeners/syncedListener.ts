@@ -11,7 +11,12 @@ import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
 import { SYNCED_LIMIT } from '@apps/helm/constants';
-import type { SyncedContent, SyncedRecord, SharedKind } from '@apps/helm/types';
+import type {
+  SharedKind,
+  SyncedContent,
+  SyncedPicture,
+  SyncedRecord,
+} from '@apps/helm/types';
 
 const toError = (error: unknown) =>
   error instanceof Error
@@ -20,6 +25,17 @@ const toError = (error: unknown) =>
 
 const text = (value: unknown) => (typeof value === 'string' ? value : null);
 const number = (value: unknown) => (typeof value === 'number' ? value : null);
+
+const readPicture = (value: unknown): SyncedPicture | null => {
+  if (typeof value !== 'object' || value === null) return null;
+  const { hash, nonce, contentType, keyId } = value as Record<string, unknown>;
+  return typeof hash === 'string' &&
+    typeof nonce === 'string' &&
+    typeof contentType === 'string' &&
+    typeof keyId === 'string'
+    ? { hash, nonce, contentType, keyId }
+    : null;
+};
 
 /** A copy that won't open is left out: with no words there is nothing to show. */
 async function openSynced(
@@ -54,6 +70,7 @@ async function openSynced(
         helmRef: text(data.helmRef),
         connectionEndedAt: data.connectionEndedAt ?? null,
         deleteAfter: data.deleteAfter ?? null,
+        picture: readPicture(data.picture),
         sealed: {
           title: content.title,
           subtitle: text(content.subtitle),

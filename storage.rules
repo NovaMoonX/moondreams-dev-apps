@@ -64,6 +64,12 @@ service firebase.storage {
         && request.resource.contentType == 'application/octet-stream';
     }
 
+    // Written only by the server; the person reads their own.
+    match /apps/helm/syncedPictures/{uid}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // A store's own image, private to the person whose kitchen it is (mirrors apps/pinch/kitchens/{uid}/stores/{storeId}).
     match /apps/pinch/kitchens/{uid}/stores/{storeId}/{fileName} {
       function isKitchenOwner() {

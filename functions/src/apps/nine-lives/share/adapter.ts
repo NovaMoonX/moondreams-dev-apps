@@ -246,6 +246,10 @@ const inEveryHousehold = async (
   };
 };
 
+/** Where the app keeps a cat's photo; the reader's server copies the bytes from here, so a picture's address never travels. */
+const toCatPhotoPath = (householdId: string, catId: string) =>
+  `nine-lives/households/${householdId}/cats/${catId}/photo`;
+
 const syncCats = (firestore: Firestore, uid: string) =>
   inEveryHousehold(firestore, uid, async (household) => {
     const { cats, isFull } = await readCatNames(household, [
@@ -254,6 +258,7 @@ const syncCats = (firestore: Firestore, uid: string) =>
       'breed',
       'diet.foodType',
       'diet.brand',
+      'photoURL',
     ]);
     return {
       records: cats.map((cat) => {
@@ -278,6 +283,10 @@ const syncCats = (firestore: Firestore, uid: string) =>
             food === null ? null : `Food: ${food}`,
           ]),
           sourceUpdatedAt: cat.updatedAt,
+          extra:
+            readText(cat.doc.get('photoURL')) === null
+              ? {}
+              : { photoPath: toCatPhotoPath(household.id, cat.id) },
         });
       }),
       isFull,

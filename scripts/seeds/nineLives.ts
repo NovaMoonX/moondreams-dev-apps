@@ -1,3 +1,4 @@
+import { uploadSeedPhoto } from './goingOnce.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -7,6 +8,8 @@ import {
 
 const HOUSEHOLD_ID = 'seed-nine-lives-household';
 const SECOND_HOUSEHOLD_ID = 'seed-nine-lives-other-household';
+const MOCHI_PHOTO_PATH = `nine-lives/households/${HOUSEHOLD_ID}/cats/seed-cat-mochi/photo`;
+const PIXEL_PHOTO_PATH = `nine-lives/households/${SECOND_HOUSEHOLD_ID}/cats/seed-cat-other-household/photo`;
 
 export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const caretaker = FIXTURE_USERS.nineLivesCaretaker;
@@ -71,6 +74,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-cat-mochi',
       name: 'Mochi',
+      photoURL: `https://firebasestorage.googleapis.com/v0/b/seed/o/${encodeURIComponent(MOCHI_PHOTO_PATH)}?alt=media`,
       originalName: 'Pumpkin',
       breed: 'Domestic Shorthair',
       coatColors: ['Orange / Ginger', 'White'],
@@ -1829,7 +1833,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-cat-other-household',
       householdId: SECOND_HOUSEHOLD_ID,
       name: 'Pixel',
-      photoURL: null,
+      photoURL: `https://firebasestorage.googleapis.com/v0/b/seed/o/${encodeURIComponent(PIXEL_PHOTO_PATH)}?alt=media`,
       dateOfBirth: context.now - 31_536_000_000,
       isDateOfBirthEstimated: false,
       breed: 'Domestic Shorthair',
@@ -2329,6 +2333,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   );
 
   await batch.commit();
+  // Missing when the Storage emulator is down.
+  await uploadSeedPhoto(MOCHI_PHOTO_PATH, 2);
+  await uploadSeedPhoto(PIXEL_PHOTO_PATH, 4);
 
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,

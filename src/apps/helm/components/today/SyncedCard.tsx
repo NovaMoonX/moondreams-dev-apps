@@ -3,6 +3,7 @@ import { ChevronRight, Clock, ListChecks } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import { PosterThumb } from '@apps/helm/components/connections/SyncedPictures';
 import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import DiscrepancyLine from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -90,6 +91,7 @@ export function SyncedCard({
           />
         )}
       </span>
+      <PosterThumb record={record} />
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {record.sealed.title}
