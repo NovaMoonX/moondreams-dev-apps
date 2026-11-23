@@ -202,7 +202,7 @@ const runScenario = ({ name, input, zones }: Scenario, firstDay: number) => {
       const base = { ...input, today, zone };
       const context = {
         today,
-        currency: input.plan.currencyCode,
+        currency: 'USD',
         startDate: input.plan.startDate,
         recentFrom: today - 180 * DAY_MS,
       };

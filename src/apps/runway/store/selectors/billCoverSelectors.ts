@@ -23,9 +23,9 @@ export type { CoveredBalances };
 
 const selectToday = () => todayAsUtcDate();
 
-/** The server's stored figures while the ledger is still being read and they still describe the plan; null otherwise, so every figure below is the phone's own once it is read. */
-const selectHeadStart = (state: RootState) =>
-  selectIsLedgerReady(state)
+/** The server's stored figures until the ledger is first read, while they still describe the plan; null otherwise, so every figure below is the phone's own from then on, even while a later window loads. */
+export const selectHeadStart = (state: RootState) =>
+  state.runway.isHeadStartOver || selectIsLedgerReady(state)
     ? null
     : (selectUsableSnapshot(state, todayAsUtcDate())?.figures ?? null);
 

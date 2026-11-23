@@ -118,8 +118,9 @@ import {
   setPeriodFailed,
   setPeriodPurchases,
   setPlan,
+  endHeadStart,
   setFiguresSnapshot,
-  setLastWriteAt,
+  startHeadStart,
   setPurchases,
   setRecords,
   setVersions,
@@ -147,6 +148,9 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     selectReachedEndingsKey(state, today),
   );
   const isLedgerReady = useAppSelector(selectIsLedgerReady);
+  const isHeadStartOver = useAppSelector(
+    (state) => state.runway.isHeadStartOver,
+  );
   const isPlanOpen = useAppSelector((state) => state.runway.plan !== null);
   const savedZone = useAppSelector(
     (state) => state.runway.plan?.timeZone ?? null,
@@ -184,11 +188,16 @@ export function useRunwaySync(uid: string | null, attempt: number) {
 
   useEffect(() => {
     if (!uid) return;
-    dispatch(setLastWriteAt(readLastWriteAt(uid)));
+    dispatch(startHeadStart(readLastWriteAt(uid)));
   }, [uid, dispatch]);
 
   useEffect(() => {
-    if (!uid || keyStatus !== 'ready' || isLedgerReady) return;
+    if (isLedgerReady) dispatch(endHeadStart());
+  }, [isLedgerReady, dispatch]);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || isLedgerReady || isHeadStartOver)
+      return;
 
     const stop: { current: (() => void) | null } = { current: null };
     const run = { isCurrent: true };
@@ -206,7 +215,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       run.isCurrent = false;
       stop.current?.();
     };
-  }, [uid, keyStatus, isLedgerReady, dispatch]);
+  }, [uid, keyStatus, isLedgerReady, isHeadStartOver, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !isPlanOpen) return;
@@ -215,7 +224,9 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     zoneSent.add(uid);
     getRunwayEncryption(uid)
       .then((encryption) => setPlanTimeZone(uid, encryption, zone))
-      .catch(() => undefined);
+      .catch(() => {
+        zoneSent.delete(uid);
+      });
   }, [uid, keyStatus, isPlanOpen, savedZone]);
 
   useEffect(() => {

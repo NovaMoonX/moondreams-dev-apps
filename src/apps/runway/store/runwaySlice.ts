@@ -56,8 +56,10 @@ export interface RunwayState {
   isLoaded: boolean;
   /** The server's stored figures, a head start for Home until the ledger is read; null when there are none. */
   figuresSnapshot: OpenFiguresSnapshot | null;
-  /** Epoch ms of the latest write this phone made that the server may not have seen; null when none is known. */
+  /** Epoch ms of the latest write this device had made when the plan opened; null when none is known. */
   lastWriteAt: number | null;
+  /** True once the ledger has been read this open, so the head start never stands in for a later reload. */
+  isHeadStartOver: boolean;
   items: PlanItemDoc[];
   versions: OpenVersion[];
   isItemsLoaded: boolean;
@@ -214,6 +216,7 @@ const initialState: RunwayState = {
   isLoaded: false,
   figuresSnapshot: null,
   lastWriteAt: null,
+  isHeadStartOver: false,
   items: [],
   versions: [],
   isItemsLoaded: false,
@@ -305,11 +308,17 @@ export const runwaySlice = createSlice({
       state,
       action: PayloadAction<OpenFiguresSnapshot | null>,
     ) => {
+      if (state.isHeadStartOver) return;
       state.figuresSnapshot = action.payload;
     },
-    setLastWriteAt: (state, action: PayloadAction<number | null>) => {
-      state.lastWriteAt =
-        Math.max(state.lastWriteAt ?? 0, action.payload ?? 0) || null;
+    startHeadStart: (state, action: PayloadAction<number | null>) => {
+      state.figuresSnapshot = null;
+      state.isHeadStartOver = false;
+      state.lastWriteAt = action.payload;
+    },
+    endHeadStart: (state) => {
+      state.figuresSnapshot = null;
+      state.isHeadStartOver = true;
     },
     setItems: (state, action: PayloadAction<PlanItemDoc[]>) => {
       state.items = action.payload;
@@ -550,9 +559,10 @@ export const runwaySlice = createSlice({
 export const {
   setKeyStatus,
   clearRunway,
+  endHeadStart,
+  startHeadStart,
   setPlan,
   setFiguresSnapshot,
-  setLastWriteAt,
   setItems,
   setMatchKeys,
   setVersions,

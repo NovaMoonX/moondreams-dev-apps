@@ -46,10 +46,12 @@ import TrackInviteCard from '@apps/runway/components/TrackInviteCard';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
 import { selectHomeMoves } from '@apps/runway/store/selectors/moveSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { selectUsableSnapshot } from '@apps/runway/store/selectors/figuresSnapshotSelectors';
 import { getListedCards } from '@apps/runway/utils/cardText';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import {
+  selectBalances,
+  selectHeadStart,
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   selectHasIncome,
@@ -75,7 +77,7 @@ function HomeScreen() {
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isLedgerReady = useAppSelector(selectIsLedgerReady);
   const hasHeadStart = useAppSelector(
-    (state) => selectUsableSnapshot(state, today) !== null,
+    (state) => selectHeadStart(state) !== null,
   );
   const isLoaded = isItemsLoaded && isDaysLoaded;
   const hasIncome = useAppSelector((state) => selectHasIncome(state, today));

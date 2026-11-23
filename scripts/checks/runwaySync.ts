@@ -684,7 +684,7 @@ const heldFigures = {
   planStamp: 1_000,
   figures: {},
 } as unknown as OpenFiguresSnapshot;
-const usableFacts = {
+const usableFacts: Parameters<typeof isSnapshotUsable>[1] = {
   today: 20_000 * DAY,
   planUpdatedAt: 1_000,
   lastWriteAt: 4_000,

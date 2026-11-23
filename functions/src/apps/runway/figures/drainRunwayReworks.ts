@@ -7,11 +7,13 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import type { Keyring } from '../planKey.js';
+import { ENGINE_VERSION } from '../engine/engineConstants.js';
 import { reworkPlan } from './reworkPlan.js';
 import {
   afterFailure,
   afterRun,
   MINUTE_MS,
+  newReworkState,
   reworkPath,
   type ReworkState,
 } from './reworkState.js';
@@ -35,6 +37,11 @@ const takeLease = (firestore: Firestore, uid: string, now: number) =>
     if (!snapshot.exists) return null;
     const state = snapshot.data() as ReworkState;
     if (state.leaseUntil > now || state.dueAt > now) return null;
+    // A lease that ran out without being settled is a run that died (out of memory, a timeout): it backs off like a failure.
+    if (state.leaseUntil !== 0) {
+      transaction.set(ref, afterFailure(state, now));
+      return null;
+    }
     transaction.update(ref, { leaseUntil: now + LEASE_MS });
     return state;
   });
@@ -52,14 +59,40 @@ const settle = (
     transaction.set(ref, next(snapshot.data() as ReworkState));
   });
 
-type Outcome = 'done' | 'gone' | 'failed' | 'skipped';
+const SWEEP_PATH = 'apps/runway/server/_reworkSweep';
+
+/**
+ * Once per engine version (the first deploy included) marks every plan due, so a plan nobody has written
+ * to since gets figures, and figures from older maths, which the phone ignores, are worked out again.
+ */
+async function sweepOnNewEngine(firestore: Firestore, now: number) {
+  const marker = firestore.doc(SWEEP_PATH);
+  if ((await marker.get()).get('engineVersion') === ENGINE_VERSION) return;
+  const plans = await firestore.collection('apps/runway/plans').select().get();
+  const refs = plans.docs.map((entry) => firestore.doc(reworkPath(entry.id)));
+  const states = refs.length === 0 ? [] : await firestore.getAll(...refs);
+  const writer = firestore.bulkWriter();
+  states.forEach((state, index) => {
+    const uid = plans.docs[index].id;
+    if (state.exists) {
+      void writer.update(state.ref, { dueAt: now });
+      return;
+    }
+    void writer.set(state.ref, { ...newReworkState(uid), dueAt: now });
+  });
+  await writer.close();
+  await marker.set({ engineVersion: ENGINE_VERSION, at: now });
+  logger.info('runway.rework.swept', { plans: refs.length });
+}
+
+type Outcome = 'done' | 'waiting' | 'gone' | 'failed' | 'skipped';
 
 async function drainOne(
   firestore: Firestore,
   keyring: Keyring,
   uid: string,
-  now: number,
 ): Promise<Outcome> {
+  const now = Date.now();
   const leased = await takeLease(firestore, uid, now);
   if (leased === null) return 'skipped';
   try {
@@ -71,7 +104,7 @@ async function drainOne(
     await settle(firestore, uid, (current) =>
       afterRun(current, leased.seq, now, outcome.zone),
     );
-    return 'done';
+    return outcome.kind;
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
     logger.warn('runway.rework.failed', {
@@ -92,12 +125,14 @@ export const drainRunwayReworks = onSchedule(
     schedule: 'every 1 minutes',
     timeZone: 'UTC',
     timeoutSeconds: 300,
+    memory: '512MiB',
     maxInstances: 1,
     secrets: [RUNWAY_MASTER_KEYS],
   },
   async () => {
     const now = Date.now();
     const firestore = getFirestore();
+    await sweepOnNewEngine(firestore, now);
     const due = await firestore
       .collection('apps/runway/reworks')
       .where('dueAt', '<=', now)
@@ -115,7 +150,7 @@ export const drainRunwayReworks = onSchedule(
       async (done, batch) => [
         ...(await done),
         ...(await Promise.all(
-          batch.map((uid) => drainOne(firestore, keyring, uid, now)),
+          batch.map((uid) => drainOne(firestore, keyring, uid)),
         )),
       ],
       Promise.resolve([]),

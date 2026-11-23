@@ -5,22 +5,13 @@ import type {
 } from 'firebase-admin/firestore';
 
 import { getFreeToSpendFigure } from '../engine/balances.js';
-import { DAY_MS, dayInZone } from '../engine/dates.js';
+import { dayInZone } from '../engine/dates.js';
 import {
   decodeClosing,
   getHistory,
-  getMonthStart,
-  getNextMonth,
-  getPreviousMonth,
-  getValidClosing,
-  toMonthKey,
   type ClosingState,
 } from '../engine/closings.js';
-import {
-  ENGINE_VERSION,
-  MOVE_KINDS,
-  RECENT_DAYS_WINDOW,
-} from '../engine/engineConstants.js';
+import { ENGINE_VERSION, MOVE_KINDS } from '../engine/engineConstants.js';
 import {
   computeFigures,
   toFiguresInput,
@@ -75,7 +66,10 @@ import { HOUR_MS, pickZone } from './reworkState.js';
 const SUMMARY_FRESH_MS = 6 * HOUR_MS;
 const KNOWN_KINDS: readonly string[] = MOVE_KINDS;
 
-export type ReworkOutcome = { kind: 'gone' } | { kind: 'done'; zone: string };
+export type ReworkOutcome =
+  | { kind: 'gone' }
+  | { kind: 'done'; zone: string }
+  | { kind: 'waiting'; zone: string };
 
 const planPath = (uid: string) => `apps/runway/plans/${uid}`;
 
@@ -116,26 +110,6 @@ async function readClosing(
   } catch {
     return null;
   }
-}
-
-/** Where the window the figures sum starts: the phone's reading when its history is ready, else (a rebuild the server never does) from the month after the newest valid closing, or from the month before the starting day. */
-function getWindow(
-  startDate: number | null,
-  dirtyFrom: string | null,
-  candidate: ClosingState | null,
-  today: number,
-) {
-  const input = { startDate, dirtyFrom, closing: candidate, today };
-  const history = getHistory({ ...input, hasFailed: false });
-  if (history.status === 'ready') return history;
-  const closing = getValidClosing(input);
-  const from =
-    closing !== null
-      ? getMonthStart(getNextMonth(closing.month))
-      : startDate === null
-        ? today - RECENT_DAYS_WINDOW * DAY_MS
-        : getMonthStart(getPreviousMonth(toMonthKey(startDate)));
-  return { closing, from };
 }
 
 const toDocs = <T>(snapshot: QuerySnapshot) =>
@@ -214,12 +188,20 @@ export async function reworkPlan(
   const zone = pickZone(plan.timeZone, plan.notifyTimeZone);
   const today = dayInZone(now, zone);
   const dirtyFrom = plan.dirtyFrom;
-  const { closing, from } = getWindow(
-    plan.startDate,
+  const history = getHistory({
+    startDate: plan.startDate,
     dirtyFrom,
-    await readClosing(firestore, uid, dirtyFrom, planKey.key),
+    closing: await readClosing(firestore, uid, dirtyFrom, planKey.key),
     today,
-  );
+    hasFailed: false,
+  });
+  // Closings are rebuilt only on the phone; until then the whole ledger would have to be read, so the
+  // stored figures go (bank writes don't move the plan's stamp, so they could pass as current) and the run waits.
+  if (history.status !== 'ready') {
+    await firestore.doc(`${planPath(uid)}/figures/current`).delete();
+    return { kind: 'waiting', zone };
+  }
+  const { closing, from } = history;
 
   const under = (name: string) =>
     firestore.collection(`${planPath(uid)}/${name}`);
@@ -339,14 +321,20 @@ export async function reworkPlan(
     nextPayOn: figures.nextPayOn,
     dueBeforePay: figures.dueBeforePay,
   };
-  await firestore.doc(`${planPath(uid)}/figures/current`).set({
-    id: 'current',
-    engineVersion: ENGINE_VERSION,
-    asOf: today,
-    computedAt: now,
-    planStamp: plan.updatedAt,
-    sealed: sealWithKey(planKey, { ...snapshot }, SEALED_SCHEMA_VERSION),
+  const planRef = firestore.doc(planPath(uid));
+  const isWritten = await firestore.runTransaction(async (transaction) => {
+    if (!(await transaction.get(planRef)).exists) return false;
+    transaction.set(firestore.doc(`${planPath(uid)}/figures/current`), {
+      id: 'current',
+      engineVersion: ENGINE_VERSION,
+      asOf: today,
+      computedAt: now,
+      planStamp: plan.updatedAt,
+      sealed: sealWithKey(planKey, { ...snapshot }, SEALED_SCHEMA_VERSION),
+    });
+    return true;
   });
+  if (!isWritten) return { kind: 'gone' };
 
   await writeShareSummary(
     firestore,
