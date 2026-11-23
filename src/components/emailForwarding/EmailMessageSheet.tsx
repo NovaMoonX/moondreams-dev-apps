@@ -21,7 +21,7 @@ interface EmailMessageSheetProps {
   /** The whole email's readable text when the server kept it, offered as "Read the whole email" when it says more than the excerpt; null or omitted when none was kept. */
   wholeText?: string | null;
   onClose: () => void;
-  /** What the app did with it ("Added as a ticket"), with its reason when there is one. */
+  /** What the app did with it ("Added to your list"), with its reason when there is one. */
   outcome?: ReactNode;
   /** The app's actions on it (open the record, filter out more like it), usually an `ActionGroup`. */
   children?: ReactNode;

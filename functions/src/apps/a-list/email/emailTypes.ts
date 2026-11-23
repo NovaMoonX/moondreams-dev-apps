@@ -1,6 +1,6 @@
 import type { AmcFormat, MovieSnapshot } from '../types.js';
 
-// Copies of the app's `Ticket`, `TheatreSnapshot`, `Viewing` and `AListEmailEvent` (src/apps/a-list/types.ts): this package can't import from src.
+// Copies of the app's own types: this package can't import from the client.
 
 export interface Ticket {
   entryMode: 'ITEMIZED' | 'ALL_IN';

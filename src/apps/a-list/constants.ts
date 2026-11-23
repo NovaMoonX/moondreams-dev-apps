@@ -1,3 +1,4 @@
+import type { EmailForwardingWords } from '@/components/emailForwarding/emailForwardingWords';
 import type { PillOption } from '@/components/PillGroup';
 import type { SortOrder } from '@/components/SortControl';
 import type {
@@ -17,6 +18,23 @@ export const ARCHIVE_GATE_ID = 'archive';
 export const CALENDAR_RELEASES_GATE_ID = 'calendar-releases';
 export const EMAIL_TICKETS_GATE_ID = 'email-tickets';
 export const EMAIL_EVENT_KEEP_DAYS = 30;
+
+export const EMAIL_TICKETS_TITLE = 'Tickets from your AMC emails';
+
+export const EMAIL_TICKETS_WORDS: EmailForwardingWords = {
+  appName: 'A-List',
+  emails: 'AMC’s ticket emails',
+  senderAddress: null,
+  senderAddressPlaceholder: 'name@amctheatres.com',
+  gmailSubjectWords: [],
+  otherMailLine:
+    'A-List only reads AMC’s ticket emails and keeps just the subject and a few lines of anything else, for 30 days, so you can filter it out.',
+  copyLine:
+    'Forward AMC’s reservation and cancellation emails here and your calendar keeps up. AMC’s offers and other mail are skipped, so a filter on the sender alone is enough.',
+  testLine:
+    'Forward one AMC reservation email to your address. Your latest booking works.',
+  testDone: 'It worked. Your showing is on the calendar.',
+};
 
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';

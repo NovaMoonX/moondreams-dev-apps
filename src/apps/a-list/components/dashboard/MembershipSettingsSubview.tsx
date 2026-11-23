@@ -27,6 +27,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import MoneyInput from '@/components/MoneyInput';
 import Pill from '@/components/Pill';
+import EmailTicketsRow from '@apps/a-list/components/email/EmailTicketsRow';
 import WeekResetHelp from '@apps/a-list/components/shared/WeekResetHelp';
 import {
   MAX_MONTHLY_GOAL,
@@ -474,6 +475,7 @@ function MembershipSettingsSubview({
           spacing='normal'
           onDataChange={(data) => setGoalValues(data as GoalValues)}
         />
+        <EmailTicketsRow />
         <div className='text-muted-foreground space-y-2 pt-2 text-xs'>
           <div className='flex items-center gap-3'>
             <img

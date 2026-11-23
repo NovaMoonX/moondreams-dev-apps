@@ -359,3 +359,16 @@ export const selectOpeningRows = createSelector(
     return result;
   },
 );
+
+export const selectEmailIntake = (state: RootState) => state.aList.email.intake;
+
+export const selectEmailProgress = (state: RootState) =>
+  state.aList.email.progress;
+
+/** Newest first. */
+export const selectEmailEvents = (state: RootState) => state.aList.email.events;
+
+export const selectIsEmailLoaded = (state: RootState) =>
+  state.aList.email.isIntakeLoaded &&
+  state.aList.email.isProgressLoaded &&
+  state.aList.email.isEventsLoaded;

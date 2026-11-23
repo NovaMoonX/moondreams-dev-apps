@@ -7,7 +7,7 @@ const MINUTE_MS = 60_000;
 export const ATTACH_WINDOW_MS = 45 * MINUTE_MS;
 export const CANCEL_WINDOW_MS = 5 * MINUTE_MS;
 const SHOWTIME_MATCH_MS = MINUTE_MS;
-// The app's previews allowance and default runtime (src/apps/a-list/constants.ts).
+// Kept equal to the app's previews allowance and default runtime.
 const PREVIEWS_BUFFER_MINUTES = 20;
 const DEFAULT_RUNTIME_MINUTES = 120;
 

@@ -86,6 +86,7 @@ export type AListOverlay =
   | { kind: 'tickets'; view: 'paid' | 'unpriced' }
   | { kind: 'theaters' }
   | { kind: 'membership' }
+  | { kind: 'emailTickets' }
   | { kind: 'projection' }
   | { kind: 'share' };
 
