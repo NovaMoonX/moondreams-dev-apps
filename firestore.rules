@@ -218,9 +218,20 @@ service cloud.firestore {
 
     // --- App: a-list ---
 
-    // Everything of a member's is private to them and nests under their uid.
-    match /apps/a-list/memberships/{uid}/{document=**} {
+    // Everything of a member's is private to them and nests under their uid. `emailIntake` (the forwarding address and what the server caught of a provider's confirmation)
+    // and `emailEvents` (what became of each forwarded email) are written only by Functions: the member reads both and deletes an event, never an intake document.
+    // `emailSetup/progress` (the walkthrough's provider and furthest step, nothing sensitive) is created and updated by the app, never deleted.
+    // `apps/a-list/emailTokens` and `apps/a-list/server` match no rule, so they stay Functions-only.
+    match /apps/a-list/memberships/{uid} {
       allow read, write: if isUser(uid);
+    }
+
+    match /apps/a-list/memberships/{uid}/{document=**} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && !(document[0] in ['emailIntake', 'emailEvents'])
+        && (document[0] != 'emailSetup' || document[1] == 'progress');
+      allow delete: if isUser(uid) && !(document[0] in ['emailIntake', 'emailSetup']);
     }
 
     // A share is addressed by an unguessable id; visitors never read it, a Function does.

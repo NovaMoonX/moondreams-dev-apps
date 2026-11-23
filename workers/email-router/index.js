@@ -19,19 +19,34 @@ const readResult = (headers, name) => {
   );
 };
 
+const readTarget = (to, env) => {
+  const prefix = /^([a-z]+)-/.exec(to.trim().toLowerCase())?.[1];
+  return prefix === 'finance'
+    ? env.INGEST_URL
+    : prefix === 'tickets'
+      ? env.TICKETS_INGEST_URL
+      : null;
+};
+
 export default {
   async email(message, env) {
+    const target = readTarget(message.to, env);
+    if (!target) {
+      message.setReject('No such address');
+      return;
+    }
     if (message.rawSize > MAX_BYTES) {
       message.setReject('Message too large');
       return;
     }
     try {
       const mail = await PostalMime.parse(message.raw);
-      const response = await fetch(env.INGEST_URL, {
+      const response = await fetch(target, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           'x-runway-email-secret': env.INGEST_SECRET,
+          'x-app-email-secret': env.INGEST_SECRET,
         },
         body: JSON.stringify({
           to: message.to,
