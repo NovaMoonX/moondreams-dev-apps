@@ -55,7 +55,8 @@ function EmailChangesNotice() {
         className="relative shrink-0 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
         onClick={() => openOverlay({ kind: 'emailTickets' })}
       >
-        See them
+        See
+        <span className='max-[359px]:hidden'>&nbsp;them</span>
       </Button>
       <Button
         type='button'

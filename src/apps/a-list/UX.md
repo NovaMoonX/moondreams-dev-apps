@@ -12,7 +12,7 @@
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Modal`, `Drawer`, `Tabs`, `Badge` — custom only where the catalog has nothing: the poster split and the star rating |
 | Log in a tap or two | defaults, chips and pickers over typing; anything optional waits behind a "+ Add X" link |
 | Never overlay on overlay | tapping a day opens nothing (its movies show in a panel under the grid); tapping a movie opens a `Drawer`; whatever continues inside an open drawer — the ticket form, Change day/time/theater, Add to calendar from the watchlist — swaps that drawer's content in place with a "‹ Back" link. Only a destructive confirm may sit on top |
-| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup is a `Modal`. Adding a movie and Membership settings are full-page subviews with their own back button. This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
+| Drawers for movie flows, modals for the rest | Add to calendar, Add to watchlist, Add past movies, the viewing details and the Seen prompt are all `Drawer`s at every width; only Setup is a `Modal`. Adding a movie and Membership settings are full-page subviews with their own back button; Membership settings is a short page of one-line summary rows (Monthly cost, Start date, Goals open a sheet with Save; Ticket price and Release days open a small editor that saves as you pick). This is a deliberate exception to the usual "forms are modals" default: the movie flows are a search-then-fill sequence that reads better as a sheet |
 | Never offer what can't be done | "Mark seen" appears only once the showtime has ended; "Standard price" appears only for a premium format |
 | Honest, kind math | negative net savings reads "Not yet" in a plain tone, never an alarm |
 
@@ -73,7 +73,7 @@ flowchart TD
     E -->|+ Add| M["Add drawer · pick, then details"]
     E -->|tap an item| N[Watchlist drawer]
     N -->|Add to calendar · swaps in place| G
-    F -->|gear| O[Membership settings modal]
+    F -->|gear| O[Membership settings page]
     style Bar fill:transparent,stroke:#888888,stroke-width:1px;
 ```
 *Past movies and skipping differ only in what the Calendar opens to: with them it's already populated and the savings tiles already have numbers; without them it's empty and every counter starts at zero. Nothing is lost by skipping — a movie on a past date can be added any time with "+ Add" and is saved as Seen the same way. The empty Calendar's nudge offers "Add your first movie" and, for anyone who skipped, "Add past movies" to start the same loop later (an addition).*
@@ -569,7 +569,7 @@ block-beta
   style N3 fill:transparent,stroke:#888888,stroke-width:1px;
   style N4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as stacked `Disclosure` groups instead of steps.*
+*Ticket savings count everything a non-member would have paid — price, the convenience fee you skipped, and tax — and the fees tile shows the fee part on its own. The money tiles are the MVP dashboard; the four chart sections below them arrive in Next Steps. Movies watched and movies since Friday stay on the Calendar's counters rather than repeating here. The gear opens Membership settings — the Setup fields again, as a short page of summary rows that each open their own editor.*
 
 ### Shared calendars (owner) and the shared page (visitor)
 
@@ -610,7 +610,6 @@ block-beta
 | SetupStepper | Setup | a local step index, not a library component; `StepThroughModal` pages through dismissable items and doesn't fit |
 | `SectionHeader`, `ModalFooterActions`, `DeleteIconButton` | every tab and form | the phone-shell basics. Today they live in Waypoint's folder; a second app using them means moving them to central `src/components` |
 | Chart blocks | Dashboard (Next Steps) | built on `recharts` (already installed); Nine Lives' `TrendLineChart` is app-scoped and line-only, so bars and share charts are new |
-| `FormSection` (central `src/ui`) | Membership settings | the shared `Disclosure` group shell |
 | Empty state | each list, and the empty Calendar | an icon, one muted line, and the CTA in the header |
 
 ## User Journeys
@@ -716,7 +715,7 @@ flowchart LR
 
 | Entity | Initial (create) | Later (edit only) | Later-set entry point | Grouping | "Other" option? |
 |---|---|---|---|---|---|
-| Membership | perks (confirm, read-only), monthly cost before tax, start date (required), total on your bill with tax (optional), weekly goal, monthly goal | — | later edits through the Dashboard gear (catch-all edit) | **Steps** (3), for first-run; Membership settings uses `Disclosure` groups | none |
+| Membership | perks (confirm, read-only), monthly cost before tax, start date (required), total on your bill with tax (optional), weekly goal, monthly goal | — | later edits through the Dashboard gear (catch-all edit) | **Steps** (3), for first-run; Membership settings uses summary rows | none |
 | Watchlist item | movie (picked), priority (defaults to Want to See), preferred format (optional, defaults to no preference)¹ | — | later edits through the watchlist drawer (catch-all edit) | none | none: priority is closed; format is a closed list¹ |
 | Viewing | movie (picked), date (defaults to the selected day), showtime | ticket details, star rating | ticket: contextual Mark paid inside the viewing drawer, and an inline reveal on the add form; rating: contextual Seen prompt | none | none |
 | Ticket | entry mode (itemized or all-in total), format¹, ticket price before tax or the all-in total, standard price (only when format isn't Standard), convenience fee skipped², tax rate³ | — | edits through the viewing drawer's Edit ticket | none | none |
@@ -750,11 +749,11 @@ flowchart LR
 
 ## Tickets from your AMC emails
 
-For members the `email-tickets` switch is on for. Membership settings gets one row, "Tickets from your AMC emails", whose line says where they are ("Not set up yet", "Step 3 of 6", "Working · last email 2 hours ago"); it opens a full-page subview (`EmailTicketsSubview`) and nothing shows while the switch is closed.
+For members the `amc-emails` switch is on for. Membership settings gets one row, "Tickets from your AMC emails", whose line says where they are ("Not set up yet", "Step 3 of 6", "Working · last email 2 hours ago"); it opens a full-page subview (`EmailTicketsSubview`) and nothing shows while the switch is closed.
 
 - **Setting up** is the shared walkthrough (`EmailSetupWalkthrough`), one step per card: pick an email service, copy the address, forward, confirm, a filter on AMC's sender, then "Forward one AMC reservation email to your address. Your latest booking works." It resumes on any device and stays until they press Done, so "It worked. Your showing is on the calendar." is seen.
 - **Once it works** the subview opens on a status line, "Recent emails" (one row per email, its own emoji per outcome, a chevron, a sparkle on one an AI read), the address with Copy, then "Set it up again" and "Get a new address". The newest 5 show, then "See all N" opens the full list in an overlay with a search; each list ends "Emails are kept here for 30 days." Empty: "Nothing has reached your address yet.", or "Nothing in the last 30 days." once mail has come. The header says "AMC emails"; the settings row keeps the long name.
-- **Rows say what happened:** 🎬 "Added Focker In-Law · Wed, Nov 25, 4:15 PM", 🎟️ "Ticket added to …", 👋 "Took … off your calendar", ✂️ "Part of the … order was refunded" (the showing stays, with fewer tickets on record), ♻️ "Already on your calendar", 🔍 "Couldn’t find … on your calendar", 📬 "Forwarding confirmed", 📰 "Not an AMC ticket email", 🤔 "Couldn’t read this AMC email". A row opens the email as a sheet: the outcome in words, the ticket's price, waived fee and tax, "This order had 2 tickets; the showing records yours." when it was more than one, then "Open the showing", "Undo" (with what it will do) and a red "Remove from this list". Undo only reverses a showing the email left as it was (an attached ticket goes back to the planned showing as it was; an added showing takes the watchlist entry it created with it); if the member has changed it since, the sheet says "You’ve changed this showing since, so it was left as it is." and Undo goes away. A part-refunded order has no Undo.
-- **The Calendar tab** opens with a quiet notice when AMC emails changed showings since the member last looked, "2 showings changed from your AMC emails" with See (opens the email screen) and a dismiss; nothing while the switch is closed or setup isn't done.
+- **Rows say what happened:** 🎬 "Added Focker In-Law · Wed, Nov 25, 4:15 PM", 🎟️ "Ticket added to …", 🚫 "Took … off your calendar", ✂️ "Part of the … order was refunded" (the showing stays, with fewer tickets on record), ♻️ "Already on your calendar", 🔍 "Couldn’t find … on your calendar", 📬 "Forwarding confirmed", 📭 "Not an AMC ticket email", 🤔 "Couldn’t read this AMC email". A row opens the email as a sheet: a card with 🍿 in its top corner and the outcome in words, the ticket's price, waived fee and tax, "This order had 2 tickets; the showing records yours." when it was more than one, then "View the email" (the kept lines on their own screen), "Open the showing", "Undo" (with what it will do) and a red "Remove from this list". Undo only reverses a showing the email left as it was (an attached ticket goes back to the planned showing as it was; an added showing takes the watchlist entry it created with it); if the member has changed it since, the sheet says "You’ve changed this showing since, so it was left as it is." and Undo goes away. A part-refunded order has no Undo.
+- **The Calendar tab** opens with a small card when AMC emails changed showings since the member last looked: 🍿 in a round chip, "2 showings changed" over "From your AMC emails", then See them (opens the email screen) and a dismiss on the right; nothing while the switch is closed or setup isn't done.
 - **A showing that came from an email** carries one quiet line in its drawer, "Added from your AMC email · Confirmation 0195443676" ("Ticket from your AMC email" when it went onto a planned showing), the number copyable.
 

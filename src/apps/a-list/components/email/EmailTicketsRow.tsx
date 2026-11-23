@@ -1,7 +1,4 @@
-import { Mail } from 'lucide-react';
-
-import ActionGroup from '@/components/ActionGroup';
-import ActionRow from '@/components/ActionRow';
+import SettingsRow from '@/components/SettingsRow';
 import { EMAIL_FORWARDING_WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useNow } from '@/hooks/useNow';
@@ -52,19 +49,15 @@ function EmailTicketsRow() {
   };
 
   return (
-    <ActionGroup>
-      <ActionRow
-        isGrouped
-        isRoomy
-        hasChevron
-        icon={<Mail />}
-        label={EMAIL_TICKETS_TITLE}
-        subtitle={getSubtitle()}
-        onClick={() =>
-          openOverlay({ kind: 'emailTickets', returnTo: 'membership' })
-        }
-      />
-    </ActionGroup>
+    <SettingsRow
+      icon='📬'
+      title={EMAIL_TICKETS_TITLE}
+      description={getSubtitle()}
+      hasChevron
+      onClick={() =>
+        openOverlay({ kind: 'emailTickets', returnTo: 'membership' })
+      }
+    />
   );
 }
 
