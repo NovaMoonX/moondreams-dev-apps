@@ -107,12 +107,13 @@ export function ViewingPanel({
     selectViewingById(state, viewingId),
   );
   const membership = useAppSelector(selectMembership);
-  const emailOutcome = useAppSelector(
+  const emailEvent = useAppSelector(
     (state) =>
       state.aList.email.events.find(
         (entry) => entry.id === viewing?.emailEventId,
-      )?.outcome ?? null,
+      ) ?? null,
   );
+  const emailOutcome = emailEvent?.outcome ?? null;
   const [view, setView] = useState<DrawerView>('details');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -383,6 +384,14 @@ export function ViewingPanel({
                 />
               </>
             )}
+            {emailEvent !== null &&
+              emailEvent.ticketCount !== null &&
+              emailEvent.ticketCount > 1 && (
+                <span className='basis-full'>
+                  This order had {emailEvent.ticketCount} tickets; the showing
+                  records yours.
+                </span>
+              )}
           </p>
         )}
       </div>

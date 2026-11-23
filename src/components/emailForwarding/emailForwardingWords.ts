@@ -62,8 +62,8 @@ export const EMAIL_FORWARDING_WORDS = {
     outlook: 'Also Hotmail and Live',
     icloud: 'Apple Mail',
     yahoo: 'Needs Yahoo Mail Plus',
-    proton: 'Needs a paid Proton plan',
-    other: 'Any email that can forward',
+    proton: 'Needs a paid plan',
+    other: 'Any email that forwards',
   } satisfies Record<EmailProvider, string>,
   providerLabels: {
     gmail: 'Gmail',

@@ -15,6 +15,8 @@ export interface EmailSetupProgress {
   startedAt: number | null;
   /** When setup was finished (the first useful email arrived, or the person completed it); null while unfinished. */
   doneAt: number | null;
+  /** The newest email change the app has told the person about (an email's `receivedAt`, a server time); null until one has been seen. Documents written before it lack the key. */
+  noticeSeenThrough: number | null;
   createdAt: number;
   updatedAt: number;
 }

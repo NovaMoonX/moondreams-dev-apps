@@ -60,7 +60,9 @@ function EmailTicketsRow() {
         icon={<Mail />}
         label={EMAIL_TICKETS_TITLE}
         subtitle={getSubtitle()}
-        onClick={() => openOverlay({ kind: 'emailTickets' })}
+        onClick={() =>
+          openOverlay({ kind: 'emailTickets', returnTo: 'membership' })
+        }
       />
     </ActionGroup>
   );

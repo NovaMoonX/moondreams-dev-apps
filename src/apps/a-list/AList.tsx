@@ -154,7 +154,9 @@ function AList() {
 
   // A link to a showing deleted since it was shared opens nothing rather than an empty sheet.
   const overlay: AListOverlay | null =
-    openedOverlay ??
+    (openedOverlay?.kind === 'emailTickets' && !isEmailGateOpen
+      ? null
+      : openedOverlay) ??
     (linkedViewingId !== null && isLinkedViewingKnown
       ? { kind: 'viewing', id: linkedViewingId }
       : null);
@@ -205,13 +207,24 @@ function AList() {
         <ProjectionSubview membership={membership} onClose={closeOverlay} />
       )}
       {overlay?.kind === 'emailTickets' && (
-        <EmailTicketsSubview onClose={closeOverlay} />
-      )}
-      {overlay?.kind === 'membership' && (
-        <MembershipSettingsSubview
-          membership={membership}
-          onClose={closeOverlay}
+        <EmailTicketsSubview
+          onClose={() =>
+            overlay.returnTo === 'membership'
+              ? setOverlay({ kind: 'membership' })
+              : closeOverlay()
+          }
         />
+      )}
+      {/* Stays mounted, hidden, while the email screen opened from its row is on top, so unsaved edits are still there on return. */}
+      {(overlay?.kind === 'membership' ||
+        (overlay?.kind === 'emailTickets' &&
+          overlay.returnTo === 'membership')) && (
+        <div className={join(overlay.kind === 'emailTickets' && 'hidden')}>
+          <MembershipSettingsSubview
+            membership={membership}
+            onClose={closeOverlay}
+          />
+        </div>
       )}
       {/* A subview takes over the app; the screens stay mounted underneath so filters and the selected day survive. */}
       <div className={join(isSubviewOpen && 'hidden')}>

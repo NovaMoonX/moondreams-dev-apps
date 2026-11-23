@@ -13,6 +13,7 @@ import type { EmailSetupProgress } from '@/lib/emailForwarding/types';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { runHeldTransaction } from '@apps/a-list/store/actions/heldTransaction';
 import type { AListEmailEvent } from '@apps/a-list/types';
+import { getEmailHandledAt } from '@apps/a-list/utils/emailEvents';
 import {
   cancelTrailerReminder,
   isTrailerReminderAhead,
@@ -46,7 +47,10 @@ async function writeProgress(
   decide: (
     current: EmailSetupProgress | null,
   ) => Partial<
-    Pick<EmailSetupProgress, 'provider' | 'stepId' | 'startedAt' | 'doneAt'>
+    Pick<
+      EmailSetupProgress,
+      'provider' | 'stepId' | 'startedAt' | 'doneAt' | 'noticeSeenThrough'
+    >
   > | null,
 ) {
   const ref = progressRef(uid);
@@ -64,6 +68,7 @@ async function writeProgress(
       stepId: current?.stepId ?? null,
       startedAt: current?.startedAt ?? null,
       doneAt: current?.doneAt ?? null,
+      noticeSeenThrough: current?.noticeSeenThrough ?? null,
       createdAt: current?.createdAt ?? now,
       ...change,
       updatedAt: now,
@@ -117,8 +122,17 @@ export function finishEmailSetup(uid: string) {
   );
 }
 
+/** Records that the person has been told about email changes up to `receivedAt` (a server time), never moving it back. */
+export function markEmailChangesSeen(uid: string, receivedAt: number) {
+  return writeProgress(uid, (current) =>
+    current === null || (current.noticeSeenThrough ?? 0) >= receivedAt
+      ? null
+      : { noticeSeenThrough: receivedAt },
+  );
+}
+
 export type UndoResult =
-  'restored' | 'alreadyBack' | 'removed' | 'cleared' | 'gone';
+  'restored' | 'alreadyBack' | 'removed' | 'cleared' | 'gone' | 'movedOn';
 
 const markUndone = (transaction: Transaction, uid: string, eventId: string) =>
   transaction.update(memberRef(uid, 'emailEvents', eventId), {
@@ -161,6 +175,13 @@ export const undoEmailEvent = createAsyncThunk<
         }
         const viewingSnapshot = await transaction.get(viewingRef);
         const stored = viewingSnapshot.exists() ? viewingSnapshot.data() : null;
+        const watchSnapshot =
+          event.outcome === 'added' && event.watchlistKey !== null
+            ? await transaction.get(
+                memberRef(uid, 'watchlist', event.watchlistKey),
+              )
+            : null;
+        const handledAt = getEmailHandledAt(event);
 
         if (event.outcome === 'canceled') {
           const removed = event.removedViewing;
@@ -186,16 +207,48 @@ export const undoEmailEvent = createAsyncThunk<
           };
         }
 
-        markUndone(transaction, uid, event.id);
         if (stored === null) {
+          markUndone(transaction, uid, event.id);
           return { result: 'gone', reminder: null, showtimeAt: 0 };
         }
+        // The server stamps `lastEditedAt` with the instant it handled the email, so anything later is the member's.
+        if (
+          stored.emailEventId !== event.id ||
+          stored.lastEditedAt > handledAt
+        ) {
+          return {
+            result: 'movedOn',
+            reminder: null,
+            showtimeAt: stored.showtimeAt,
+          };
+        }
+        markUndone(transaction, uid, event.id);
         if (event.outcome === 'added') {
           transaction.delete(viewingRef);
+          if (
+            watchSnapshot?.exists() &&
+            watchSnapshot.get('lastEditedAt') <= handledAt &&
+            watchSnapshot.get('archivedAt') == null
+          ) {
+            transaction.delete(watchSnapshot.ref);
+          }
           return {
             result: 'removed',
             reminder: stored.trailerReminderId ?? null,
             showtimeAt: stored.showtimeAt,
+          };
+        }
+        const prior = event.priorViewing;
+        if (prior !== null) {
+          transaction.set(viewingRef, {
+            ...prior,
+            trailerReminderId: stored.trailerReminderId ?? null,
+            lastEditedAt: Date.now(),
+          });
+          return {
+            result: 'cleared',
+            reminder: null,
+            showtimeAt: prior.showtimeAt,
           };
         }
         transaction.update(viewingRef, {

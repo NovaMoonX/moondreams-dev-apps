@@ -1,4 +1,5 @@
 import type { EmailIntakeState } from '@/lib/emailForwarding/types';
+import { EMAIL_EVENT_KEEP_DAYS } from '@apps/a-list/constants';
 import { formatTimeInZone } from '@apps/a-list/utils/theatreTime';
 import type { AListEmailEvent, AListEmailOutcome } from '@apps/a-list/types';
 
@@ -91,11 +92,40 @@ export function canUndoEmailEvent(event: AListEmailEvent) {
   );
 }
 
+export const MOVED_ON_MESSAGE =
+  'You’ve changed this showing since, so it was left as it is.';
+
 export const UNDO_SUBTITLES: Partial<Record<AListEmailOutcome, string>> = {
   added: 'Take this showing off your calendar',
   attached: 'Remove the ticket, keep the showing',
   canceled: 'Put the showing back on your calendar',
 };
+
+const NOTICE_OUTCOMES: AListEmailOutcome[] = [
+  'added',
+  'attached',
+  'canceled',
+  'partlyCanceled',
+];
+
+/** The emails that changed the calendar and haven't been told about yet. */
+export function getUnseenChanges(
+  events: AListEmailEvent[],
+  seenThrough: number | null,
+) {
+  return events.filter(
+    (event) =>
+      NOTICE_OUTCOMES.includes(event.outcome) &&
+      event.undoneAt === null &&
+      event.receivedAt > (seenThrough ?? 0),
+  );
+}
+
+const DAY_MS = 86_400_000;
+
+/** The instant the server handled the email, which it stamps on what it wrote: the event's expiry less its keep time. */
+export const getEmailHandledAt = (event: AListEmailEvent) =>
+  event.expiresAt - EMAIL_EVENT_KEEP_DAYS * DAY_MS;
 
 /** The instant a new walk begins, from server-written times only (never this phone's clock): one past the latest confirmation or email, so a re-walk ticks only what arrives after it. */
 export function getWalkStartedAt(
@@ -104,6 +134,7 @@ export function getWalkStartedAt(
 ) {
   const known = [
     intake?.confirmAt ?? null,
+    intake?.lastReceivedAt ?? null,
     events[0]?.receivedAt ?? null,
   ].filter((value): value is number => value !== null);
   return known.length === 0 ? 0 : Math.max(...known) + 1;

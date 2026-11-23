@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Clapperboard, Trash2, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import EmailMessageSheet from '@/components/emailForwarding/EmailMessageSheet';
+import StatTile from '@/components/StatTile';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -21,8 +21,8 @@ import { selectViewingById } from '@apps/a-list/store/selectors';
 import type { AListEmailEvent } from '@apps/a-list/types';
 import {
   canUndoEmailEvent,
-  describeEmailEvent,
   describeEmailOutcome,
+  MOVED_ON_MESSAGE,
   UNDO_SUBTITLES,
 } from '@apps/a-list/utils/emailEvents';
 
@@ -37,6 +37,7 @@ const UNDO_TOASTS: Record<UndoResult, (title: string) => string> = {
   removed: (title) => `${title} is off your calendar.`,
   cleared: (title) => `The ticket is off ${title}; the showing stays.`,
   gone: (title) => `${title} was already off your calendar.`,
+  movedOn: () => MOVED_ON_MESSAGE,
 };
 
 /** One forwarded email, what it did to the calendar, and the ways to open, undo or clear it. */
@@ -50,15 +51,14 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   );
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMovedOn, setIsMovedOn] = useState(false);
 
   const title =
     event.movieTitle ?? event.removedViewing?.movie.title ?? 'The showing';
-  const timeZone =
-    viewing?.theatre?.timeZone ??
-    event.removedViewing?.theatre?.timeZone ??
-    null;
   const ticket = viewing?.ticket ?? null;
-  const canUndo = canUndoEmailEvent(event);
+  const isTicketOrder =
+    event.outcome === 'added' || event.outcome === 'attached';
+  const canUndo = canUndoEmailEvent(event) && !isMovedOn;
 
   const undo = async () => {
     if (!user) return;
@@ -68,6 +68,11 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       const result = await dispatch(
         undoEmailEvent({ uid: user.uid, event }),
       ).unwrap();
+      if (result === 'movedOn') {
+        setIsMovedOn(true);
+        setIsBusy(false);
+        return;
+      }
       addToast({ title: 'Undone', description: UNDO_TOASTS[result](title) });
       onClose();
     } catch (undoError) {
@@ -99,21 +104,35 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       text={event.snippet}
       onClose={onClose}
       outcome={
-        <div className='bg-secondary/60 space-y-1 rounded-2xl px-4 py-3 text-sm'>
-          <p className='font-medium'>{describeEmailEvent(event, timeZone)}</p>
-          <p className='text-muted-foreground'>{describeEmailOutcome(event)}</p>
+        <div className='bg-secondary/60 space-y-3 rounded-2xl px-4 py-3 text-sm'>
+          <p className='font-medium'>{describeEmailOutcome(event)}</p>
           {ticket && (
-            <p className='text-muted-foreground'>
-              {formatCents(ticket.priceCents)} ticket ·{' '}
-              {formatCents(ticket.feeAvoidedCents)} fee waived ·{' '}
-              {formatCents(ticket.taxCents)} tax
-            </p>
+            <div className='grid grid-cols-3 gap-2'>
+              <StatTile
+                isStacked
+                label='Ticket'
+                value={formatCents(ticket.priceCents)}
+              />
+              <StatTile
+                isStacked
+                label='Fee waived'
+                value={formatCents(ticket.feeAvoidedCents)}
+              />
+              <StatTile
+                isStacked
+                label='Tax'
+                value={formatCents(ticket.taxCents)}
+              />
+            </div>
           )}
-          {event.ticketCount !== null && event.ticketCount > 1 && (
-            <p className='text-muted-foreground'>
-              {event.ticketCount} tickets on this order; A-List counts one.
-            </p>
-          )}
+          {isTicketOrder &&
+            event.ticketCount !== null &&
+            event.ticketCount > 1 && (
+              <p className='text-muted-foreground'>
+                This order had {event.ticketCount} tickets; the showing records
+                yours.
+              </p>
+            )}
         </div>
       }
     >
@@ -122,39 +141,42 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
           {error}
         </p>
       )}
-      {(viewing !== null || canUndo) && (
-        <ActionGroup>
-          {viewing !== null && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Clapperboard />}
-              label='Open the showing'
-              subtitle='See it on your calendar'
-              onClick={() => openOverlay({ kind: 'viewing', id: viewing.id })}
-            />
-          )}
-          {canUndo && (
-            <ActionRow
-              isGrouped
-              icon={<Undo2 />}
-              label='Undo'
-              subtitle={UNDO_SUBTITLES[event.outcome]}
-              isDisabled={isBusy}
-              onClick={() => void undo()}
-            />
-          )}
-        </ActionGroup>
+      {isMovedOn && (
+        <p className='text-sm' role='status'>
+          {MOVED_ON_MESSAGE}
+        </p>
       )}
-      <Button
-        type='button'
-        variant='tertiary'
-        className='text-muted-foreground w-full justify-start gap-2'
-        disabled={isBusy}
-        onClick={() => void remove()}
-      >
-        <Trash2 className='h-4 w-4' /> Remove from this list
-      </Button>
+      <ActionGroup>
+        {viewing !== null && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Clapperboard />}
+            label='Open the showing'
+            subtitle='See it on your calendar'
+            onClick={() => openOverlay({ kind: 'viewing', id: viewing.id })}
+          />
+        )}
+        {canUndo && (
+          <ActionRow
+            isGrouped
+            icon={<Undo2 />}
+            label='Undo'
+            subtitle={UNDO_SUBTITLES[event.outcome]}
+            isDisabled={isBusy}
+            onClick={() => void undo()}
+          />
+        )}
+        <ActionRow
+          isGrouped
+          isDestructive
+          icon={<Trash2 />}
+          label='Remove from this list'
+          subtitle='Only this email; your calendar stays as it is'
+          isDisabled={isBusy}
+          onClick={() => void remove()}
+        />
+      </ActionGroup>
     </EmailMessageSheet>
   );
 }

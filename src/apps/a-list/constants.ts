@@ -21,6 +21,9 @@ export const EMAIL_EVENT_KEEP_DAYS = 30;
 
 export const EMAIL_TICKETS_TITLE = 'Tickets from your AMC emails';
 
+/** The header title where the long one is cut off on a narrow phone. */
+export const EMAIL_TICKETS_SHORT_TITLE = 'AMC emails';
+
 export const EMAIL_TICKETS_WORDS: EmailForwardingWords = {
   appName: 'A-List',
   emails: 'AMC’s ticket emails',
