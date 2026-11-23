@@ -38,7 +38,7 @@ function EmailChangesNotice() {
           aria-hidden='true'
           className='bg-background grid size-10 shrink-0 place-items-center rounded-full text-xl leading-none shadow-sm'
         >
-          🍿
+          📬
         </span>
         <span className='min-w-0 flex-1'>
           <span className='block text-sm font-medium'>

@@ -105,19 +105,23 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       onClose={onClose}
       outcome={
         <div className='bg-secondary/60 space-y-3 rounded-2xl p-4 text-sm'>
-          <span
-            aria-hidden='true'
-            className='bg-background grid size-11 place-items-center rounded-full text-2xl leading-none shadow-sm'
-          >
-            🍿
-          </span>
-          <p className='font-medium'>{describeEmailOutcome(event)}</p>
-          {event.readBy === 'ai' && (
-            <p className='text-muted-foreground flex items-center gap-1.5'>
-              <Sparkles className='size-3.5' aria-hidden='true' />
-              Read by AI
-            </p>
-          )}
+          <div className='flex items-start gap-3'>
+            <span
+              aria-hidden='true'
+              className='bg-background grid size-8 shrink-0 place-items-center rounded-full text-base leading-none shadow-sm'
+            >
+              🍿
+            </span>
+            <div className='min-w-0 flex-1 space-y-1 pt-1.5'>
+              <p className='font-medium'>{describeEmailOutcome(event)}</p>
+              {event.readBy === 'ai' && (
+                <p className='text-muted-foreground flex items-center gap-1.5'>
+                  <Sparkles className='size-3.5' aria-hidden='true' />
+                  Read by AI
+                </p>
+              )}
+            </div>
+          </div>
           {ticket && (
             <div className='grid grid-cols-3 gap-2'>
               <StatTile
