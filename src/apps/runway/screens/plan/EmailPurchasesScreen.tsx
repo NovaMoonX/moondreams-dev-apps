@@ -19,6 +19,7 @@ import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useLeaveFlowGuard } from '@/hooks/useLeaveFlowGuard';
 import { useNow } from '@/hooks/useNow';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal } from '@/utils/formatUtils';
@@ -168,6 +169,8 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const [addBankIndex, setAddBankIndex] = useState<number | null>(null);
   const [openBankId, setOpenBankId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [hasActed, setHasActed] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
 
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const openBank = setup.banks.find((entry) => entry.id === openBankId) ?? null;
@@ -232,10 +235,12 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       });
       if (!isConfirmed) return;
     }
+    setHasActed(true);
     await run(() => actions.rotateAddress(), EMAIL_WORDS.addressFailed);
   };
 
   const goToStep = (index: number) => {
+    setHasActed(true);
     if (isAddingBank) {
       setAddBankIndex(index);
       return;
@@ -261,15 +266,38 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     setWalkBaseline(null);
     setViewIndex(null);
     setAddBankIndex(null);
+    setHasActed(false);
+    setHasDraft(false);
   };
 
   const isOverStatus = isReopened || isAddingBank || (isKept && setup.isDone);
+  const leaveFlow = () => {
+    if (isOverStatus) backToStatus();
+    else onClose();
+  };
+  const requestLeave = useLeaveFlowGuard({
+    hasActed: (isWalking || isAddingBank) && hasActed,
+    onLeave: leaveFlow,
+    message: [
+      isAddingBank
+        ? EMAIL_SETUP_WORDS.leaveAddKept
+        : EMAIL_SETUP_WORDS.leaveSetupKept,
+      hasDraft ? EMAIL_SETUP_WORDS.leaveDraftLost : null,
+    ]
+      .filter((line) => line !== null)
+      .join(' '),
+  });
+  const saveBanksActed: typeof actions.saveBanks = (change) => {
+    setHasActed(true);
+    return actions.saveBanks(change);
+  };
 
   const pickProvider = (
     provider: Parameters<typeof actions.chooseProvider>[0],
   ) => {
     setViewIndex(1);
     setIsKept(true);
+    setHasActed(true);
     actions
       .chooseProvider(provider)
       .catch((pickError: unknown) =>
@@ -312,13 +340,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       title={EMAIL_WORDS.title}
       isTitleWrapped
       onClose={onClose}
-      onBack={
-        isWalking || isAddingBank
-          ? isOverStatus
-            ? backToStatus
-            : onClose
-          : undefined
-      }
+      onBack={isWalking || isAddingBank ? requestLeave : undefined}
       headerAction={<ValuesEyeButton />}
     >
       {isWalking || isAddingBank ? (
@@ -352,13 +374,18 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             isBusy={isBusy}
             banks={setup.banks}
             knownBanks={knownBanks}
-            onSaveBanks={actions.saveBanks}
+            onSaveBanks={saveBanksActed}
             isAddingBank={isAddingBank}
             onPickProvider={pickProvider}
             onGetAddress={() => void getNewAddress()}
             onGo={goToStep}
             onFinish={backToStatus}
-            onClose={isOverStatus ? backToStatus : onClose}
+            onClose={leaveFlow}
+            onExit={requestLeave}
+            onActivity={(isDrafting) => {
+              setHasActed(true);
+              setHasDraft(isDrafting);
+            }}
           />
         </div>
       ) : (

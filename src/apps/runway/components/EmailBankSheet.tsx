@@ -43,13 +43,15 @@ function EmailBankSheet({
   const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [hasChanged, setHasChanged] = useState(false);
-  const saveAndMark: SaveBanks = async (change) => {
-    const isChanged = await onSaveBanks(change);
-    if (isChanged) setHasChanged(true);
-    return isChanged;
-  };
   const allAddresses = listBankAddresses(banks);
+  const [addressesAtOpen] = useState(allAddresses);
+  const added = allAddresses.filter(
+    (address) => !addressesAtOpen.includes(address),
+  );
+  const removed = addressesAtOpen.filter(
+    (address) => !allAddresses.includes(address),
+  );
+  const hasChanged = added.length > 0 || removed.length > 0;
 
   const removeBank = async () => {
     const isConfirmed = await confirm({
@@ -89,12 +91,17 @@ function EmailBankSheet({
           <BankAddresses
             bank={bank}
             allAddresses={allAddresses}
-            onSave={saveAndMark}
+            onSave={onSaveBanks}
           />
         </ActionSection>
         {hasChanged && provider !== null && provider !== 'yahoo' && (
           <ActionSection caption={WORDS.updateCaption}>
-            <ForwardingUpdate provider={provider} addresses={allAddresses} />
+            <ForwardingUpdate
+              provider={provider}
+              addresses={allAddresses}
+              added={added}
+              removed={removed}
+            />
           </ActionSection>
         )}
         {error && (

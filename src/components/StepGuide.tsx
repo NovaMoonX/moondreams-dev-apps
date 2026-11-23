@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft } from 'lucide-react';
 
 interface StepGuideProps {
@@ -12,6 +13,9 @@ interface StepGuideProps {
   /** The previous step; drawn as a smaller button left of the primary, since the header's arrow leaves the whole guide. */
   onBack?: () => void;
   backLabel?: string;
+  /** Where no step comes before, the same button leaves the guide; pass the guarded leave from `useLeaveFlowGuard`. */
+  onExit?: () => void;
+  exitLabel?: string;
 }
 
 /** One step of a guided setup; render it as the last child of an overlay Subview, whose form-footer pins its Back and primary. */
@@ -23,7 +27,14 @@ function StepGuide({
   primary,
   onBack,
   backLabel = 'Back',
+  onExit,
+  exitLabel = 'Exit',
 }: StepGuideProps) {
+  const way = onBack
+    ? { label: backLabel, onClick: onBack }
+    : onExit
+      ? { label: exitLabel, onClick: onExit }
+      : null;
   return (
     <div className='flex flex-1 flex-col'>
       <div className='space-y-5 pb-6'>
@@ -50,16 +61,16 @@ function StepGuide({
         <h2 className='text-2xl font-semibold break-words'>{title}</h2>
         {children}
       </div>
-      {(primary || onBack) && (
+      {(primary || way) && (
         <div className='form-footer flex gap-2'>
-          {onBack && (
+          {way && (
             <Button
               variant='secondary'
-              className='shrink-0 gap-1 px-4'
-              onClick={onBack}
+              className={join('gap-1 px-4', primary ? 'shrink-0' : 'flex-1')}
+              onClick={way.onClick}
             >
               <ChevronLeft className='size-4' aria-hidden='true' />
-              {backLabel}
+              {way.label}
             </Button>
           )}
           {primary && (

@@ -1,7 +1,13 @@
 import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CircleCheck, CircleHelp, Loader, Mail } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleHelp,
+  ExternalLink,
+  Loader,
+  Mail,
+} from 'lucide-react';
 
 import {
   GmailMark,
@@ -74,6 +80,10 @@ interface EmailSetupWalkthroughProps {
   onGo: (index: number) => void;
   onFinish: () => void;
   onClose: () => void;
+  /** Leaves from the first step's Exit, asking first once the person has done something. */
+  onExit: () => void;
+  /** Something was picked, typed or saved; says whether a bank is half added. */
+  onActivity: (isDrafting: boolean) => void;
 }
 
 const titled = (title: string, isTicked = false) => (
@@ -94,6 +104,8 @@ const Muted = ({ children }: { children: ReactNode }) => (
 
 interface NumberedItem {
   text: ReactNode;
+  /** A step that only opens a page is itself the link, so its words are never repeated under it. */
+  href?: string;
   control?: ReactNode;
 }
 
@@ -109,7 +121,24 @@ function NumberedSteps({ items }: { items: NumberedItem[] }) {
             {index + 1}
           </span>
           <div className='min-w-0 flex-1 space-y-2'>
-            <p className='text-sm break-words'>{item.text}</p>
+            <p className='text-sm break-words'>
+              {item.href === undefined ? (
+                item.text
+              ) : (
+                <a
+                  href={item.href}
+                  target='_blank'
+                  rel='noreferrer'
+                  className='text-primary -my-2 inline-block py-2 font-medium hover:underline'
+                >
+                  {item.text}
+                  <ExternalLink
+                    className='ml-1 inline size-3.5 align-[-2px]'
+                    aria-hidden='true'
+                  />
+                </a>
+              )}
+            </p>
             {item.control}
           </div>
         </li>
@@ -251,11 +280,14 @@ function EmailSetupWalkthrough({
   onGo,
   onFinish,
   onClose,
+  onExit,
+  onActivity,
 }: EmailSetupWalkthroughProps) {
   const [isNotArrivingShown, setIsNotArrivingShown] = useState(false);
   const [draft, setDraft] = useState<BankDraft | null>(null);
   const [isPickingBank, setIsPickingBank] = useState(isAddingBank);
   const [bankCountAtStart] = useState(banks.length);
+  const [addressesAtStart] = useState(() => listBankAddresses(banks));
   const [isSavingBank, setIsSavingBank] = useState(false);
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
@@ -270,6 +302,18 @@ function EmailSetupWalkthrough({
     return banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank;
   };
   const bankTitle = getBankTitle();
+  const changeDraft = (next: BankDraft | null) => {
+    setDraft(next);
+    onActivity(next !== null);
+  };
+  const getAddressesBefore = () => {
+    if (bankCountAtStart > 0) return addressesAtStart;
+    return banks[0]?.addresses ?? [];
+  };
+  const addressesBefore = getAddressesBefore();
+  const addedAddresses = addresses.filter(
+    (address) => !addressesBefore.includes(address),
+  );
 
   const saveDraft = async () => {
     if (draft === null) return;
@@ -283,6 +327,7 @@ function EmailSetupWalkthrough({
       await onSaveBanks(addDraftedBank(read.bank));
       setDraft(null);
       setIsPickingBank(false);
+      onActivity(false);
     } catch {
       setDraft({ ...draft, error: WORDS.banksSaveFailed });
     } finally {
@@ -356,15 +401,7 @@ function EmailSetupWalkthrough({
           <div className='space-y-4'>
             <NumberedSteps
               items={[
-                {
-                  text: WORDS.yahooForwardingOpen,
-                  control: (
-                    <ExternalLinkText
-                      href={YAHOO_MAIL_URL}
-                      label={WORDS.yahooForwardingLink}
-                    />
-                  ),
-                },
+                { text: WORDS.yahooForwardingOpen, href: YAHOO_MAIL_URL },
                 { text: WORDS.yahooForwardingGo },
                 { text: WORDS.yahooForwardingPaste },
               ]}
@@ -383,12 +420,7 @@ function EmailSetupWalkthrough({
               items={[
                 {
                   text: WORDS.gmailForwardingOpen,
-                  control: (
-                    <ExternalLinkText
-                      href={GMAIL_FORWARDING_URL}
-                      label={WORDS.gmailForwardingLink}
-                    />
-                  ),
+                  href: GMAIL_FORWARDING_URL,
                 },
                 { text: WORDS.gmailForwardingChoose },
               ]}
@@ -407,7 +439,11 @@ function EmailSetupWalkthrough({
               <Muted>
                 {isCoveredFirst ? WORDS.coveredBankLine : WORDS.bankLine}
               </Muted>
-              <BankPicker known={knownBanks} banks={banks} onPick={setDraft} />
+              <BankPicker
+                known={knownBanks}
+                banks={banks}
+                onPick={changeDraft}
+              />
             </div>
           ),
         };
@@ -419,7 +455,7 @@ function EmailSetupWalkthrough({
             <BankDraftForm
               draft={draft}
               known={knownBanks}
-              onChange={setDraft}
+              onChange={changeDraft}
             />
           ),
         };
@@ -499,15 +535,7 @@ function EmailSetupWalkthrough({
           content: (
             <NumberedSteps
               items={[
-                {
-                  text: WORDS.outlookRuleOpen,
-                  control: (
-                    <ExternalLinkText
-                      href={OUTLOOK_RULES_URL}
-                      label={WORDS.outlookRuleLink}
-                    />
-                  ),
-                },
+                { text: WORDS.outlookRuleOpen, href: OUTLOOK_RULES_URL },
                 {
                   text: WORDS.outlookRuleLine(addresses),
                   control: <RuleAddresses addresses={addresses} />,
@@ -666,26 +694,23 @@ function EmailSetupWalkthrough({
   };
 
   const goBack = () => {
-    const hasAddedBank = banks.length > bankCountAtStart;
-    if (
-      step === 'bank' &&
-      isAddingBank &&
-      draft === null &&
-      isPickingBank &&
-      !hasAddedBank
-    ) {
-      onClose();
-      return;
-    }
     if (step === 'bank' && (draft !== null || isPickingBank)) {
       setDraft(null);
       setIsPickingBank(isAddingBank && draft !== null);
+      onActivity(false);
       return;
     }
     onGo(stepIndex - 1);
   };
+  const isFirstPicker =
+    step === 'bank' &&
+    isAddingBank &&
+    draft === null &&
+    isPickingBank &&
+    banks.length === bankCountAtStart;
   const canGoBack =
-    stepIndex > 0 || (step === 'bank' && (draft !== null || isPickingBank));
+    !isFirstPicker &&
+    (stepIndex > 0 || (step === 'bank' && (draft !== null || isPickingBank)));
 
   const showBody = (): { title: ReactNode; content: ReactNode } => {
     const shown = body();
@@ -697,7 +722,14 @@ function EmailSetupWalkthrough({
       return {
         title:
           step === 'filter' ? WORDS.updateFilterTitle : WORDS.updateRuleTitle,
-        content: <ForwardingUpdate provider={provider} addresses={addresses} />,
+        content: (
+          <ForwardingUpdate
+            provider={provider}
+            addresses={addresses}
+            added={addedAddresses}
+            removed={[]}
+          />
+        ),
       };
     }
     return {
@@ -719,6 +751,8 @@ function EmailSetupWalkthrough({
       primary={getPrimary()}
       onBack={canGoBack ? goBack : undefined}
       backLabel={WORDS.backStep}
+      onExit={onExit}
+      exitLabel={WORDS.exitStep}
     >
       {content}
     </StepGuide>
