@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 
-export const EMAIL_DOMAIN = 'apps.moondreams.dev';
+export const EMAIL_DOMAIN = 'moondreamsmail.com';
 
 const RATE_KEEP_MS = 2 * 86_400_000;
 
@@ -71,8 +71,8 @@ export async function takeRateSlot(
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The token in a `<prefix>+<token>@<domain>` address, or null for any other address. */
+/** The token in a `<prefix>-<token>@<domain>` address, or null for any other address. */
 export const readAddressToken = (to: string, prefix: string, domain: string) =>
   new RegExp(
-    `^${escapeRegExp(prefix)}\\+([a-z0-9_-]{12,32})@${escapeRegExp(domain)}$`,
+    `^${escapeRegExp(prefix)}-([a-z0-9_-]{12,32})@${escapeRegExp(domain)}$`,
   ).exec(to.trim().toLowerCase())?.[1] ?? null;

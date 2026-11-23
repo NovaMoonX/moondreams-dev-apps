@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sets up the shared email intake (A-List's tickets from email today, Runway's purchases from email too): one secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
-# Each app's addresses are <prefix>+<token>@apps.moondreams.dev (runway+, amc+): Cloudflare has no catch-all on a subdomain, so one rule per prefix plus subaddressing reaches every token.
+# Each app's addresses are <prefix>-<token>@moondreamsmail.com (runway-, amc-), a receive-only domain whose catch-all sends every app's mail to the email worker.
 # The secret is generated here, never printed or written to disk. Safe to re-run.
 #   npm run email:setup                 picks up where the last run stopped
 #   npm run email:setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
@@ -110,15 +110,14 @@ if start_step 2 "the secret on the email worker"; then
 fi
 
 if start_step 3 "Cloudflare Email Routing"; then
-  if ask_yes "3. Is Email Routing on for apps.moondreams.dev, with Subaddressing on and rules sending both runway@apps.moondreams.dev and amc@apps.moondreams.dev to the worker mdd-apps-email-router?"; then
+  if ask_yes "3. Is Email Routing on for moondreamsmail.com, with its catch-all sending to the worker mdd-apps-email-router?"; then
     echo "3. ✓ Noted."
   else
-    echo "3. In the Cloudflare dashboard. moondreams.dev's own mail is on Google: if Cloudflare ever offers to change moondreams.dev's MX records, stop and cancel."
-    echo "     a. Open moondreams.dev, then Email, then Email Routing, then Settings."
-    echo "     b. If apps.moondreams.dev isn't under Subdomains yet, add it and accept the records it adds to that subdomain."
-    echo "     c. On the same Settings page, make sure Subaddressing (plus addressing) is on."
-    echo "     d. Open Routing rules. For each of runway@apps.moondreams.dev and amc@apps.moondreams.dev that isn't listed yet: Create address, custom address, action Send to a Worker, worker mdd-apps-email-router. Save it active."
-    printf '   Press Enter when both rules are active. '
+    echo "3. In the Cloudflare dashboard (this is moondreamsmail.com, never moondreams.dev, whose mail is on Google):"
+    echo "     a. Open moondreamsmail.com, then Email, then Email Routing, and Get started / Enable."
+    echo "     b. Accept the MX, SPF and DKIM records it adds."
+    echo "     c. Open Routing rules, then Catch-all address: action Send to a Worker, worker mdd-apps-email-router. Turn it on and save."
+    printf '   Press Enter when the catch-all is active. '
     read -r _ || true
   fi
   remember_step 3

@@ -403,6 +403,7 @@ export const ingestRunwayEmail = onRequest(
     prefix: EMAIL_ADDRESS_PREFIX,
     secretName: EMAIL_WEBHOOK_SECRET_NAME,
     legacySecretName: 'RUNWAY_EMAIL_WEBHOOK_SECRET',
+    legacySecretHeader: 'x-runway-email-secret',
     tokenPath: emailTokenPath,
     isOpenFor: (uid) =>
       isGateOpenForUid(uid, 'runway', EMAIL_PURCHASES_GATE_ID, 'off'),

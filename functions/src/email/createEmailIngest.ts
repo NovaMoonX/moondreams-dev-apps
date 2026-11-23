@@ -46,11 +46,13 @@ export interface EmailHandlerInput {
 interface EmailIngestConfig {
   /** Names the app in logs; never in a response. */
   app: string;
-  /** The address's local part before the token, e.g. `name` in `name+<token>@…`. */
+  /** The address's local part before the token, e.g. `name` in `name-<token>@…`. */
   prefix: string;
   secretName: string;
   /** A name the same secret was saved under before, read while `secretName` doesn't exist yet. */
   legacySecretName?: string;
+  /** A header an older email worker sent the secret in, accepted until the worker is redeployed. */
+  legacySecretHeader?: string;
   tokenPath: (token: string) => string;
   isOpenFor: (uid: string) => Promise<boolean>;
   eventPath: (uid: string, eventId: string) => string;
@@ -98,7 +100,12 @@ export function createEmailIngest(config: EmailIngestConfig) {
       response.status(503).send('Not available');
       return;
     }
-    if (!isSecretValid(request.header(SECRET_HEADER), expected)) {
+    const sent =
+      request.header(SECRET_HEADER) ??
+      (config.legacySecretHeader === undefined
+        ? undefined
+        : request.header(config.legacySecretHeader));
+    if (!isSecretValid(sent, expected)) {
       logger.warn('email.unauthorized', { app: config.app });
       response.status(401).send('Unauthorized');
       return;

@@ -8,6 +8,16 @@ const REJECTIONS = {
   413: 'Message too large',
 };
 
+const ROUTES = {
+  runway: (env) => ({ url: env.INGEST_URL, secret: env.INGEST_SECRET }),
+  amc: (env) => ({ url: env.A_LIST_INGEST_URL, secret: env.INGEST_SECRET }),
+};
+
+const routeFor = (to, env) => {
+  const prefix = /^([a-z]+)-/.exec(String(to).trim().toLowerCase())?.[1];
+  return prefix && Object.hasOwn(ROUTES, prefix) ? ROUTES[prefix](env) : null;
+};
+
 const readResult = (headers, name) => {
   const line = headers
     .filter((header) => header.key === 'authentication-results')
@@ -19,33 +29,24 @@ const readResult = (headers, name) => {
   );
 };
 
-const readTarget = (to, env) => {
-  const prefix = /^([a-z]+)\+/.exec(to.trim().toLowerCase())?.[1];
-  return prefix === 'runway'
-    ? env.INGEST_URL
-    : prefix === 'amc'
-      ? env.A_LIST_INGEST_URL
-      : null;
-};
-
 export default {
   async email(message, env) {
-    const target = readTarget(message.to, env);
-    if (!target) {
-      message.setReject('No such address');
-      return;
-    }
     if (message.rawSize > MAX_BYTES) {
       message.setReject('Message too large');
       return;
     }
+    const route = routeFor(message.to, env);
+    if (!route) {
+      message.setReject(REJECTIONS[404]);
+      return;
+    }
     try {
       const mail = await PostalMime.parse(message.raw);
-      const response = await fetch(target, {
+      const response = await fetch(route.url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-app-email-secret': env.INGEST_SECRET,
+          'x-app-email-secret': route.secret,
         },
         body: JSON.stringify({
           to: message.to,
