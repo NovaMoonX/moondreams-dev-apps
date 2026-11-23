@@ -165,14 +165,12 @@ export const EMAIL_SETUP_WORDS = {
     'Only you can see it. Your bank’s alerts forwarded here become purchases.',
   copyLabel: 'Copy address',
   gmailForwardingTitle: 'Add it as a forwarding address',
-  gmailForwardingOpen: 'Open Gmail’s forwarding settings',
   gmailForwardingChoose:
     'Choose “Add a forwarding address” and paste your address',
   gmailForwardingNote:
     'Don’t turn on forwarding of all mail; the filter does that.',
-  gmailForwardingLink: 'Open Gmail forwarding settings',
+  gmailForwardingLink: 'Open Gmail’s forwarding settings',
   yahooForwardingTitle: 'Turn on forwarding',
-  yahooForwardingOpen: 'Open Yahoo Mail',
   yahooForwardingGo:
     'Go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address',
   yahooForwardingPaste: 'Paste your address and press Verify',
@@ -180,10 +178,9 @@ export const EMAIL_SETUP_WORDS = {
     'Yahoo forwards all your mail; Runway only turns bank alerts into purchases and keeps just the subject and a few lines of anything else, for 30 days, so you can filter it out.',
   yahooForwardingLink: 'Open Yahoo Mail',
   outlookRuleTitle: 'Make a rule for your bank’s alerts',
-  outlookRuleOpen: 'Open Outlook’s rules',
   outlookRuleLine: (addresses: string[]) =>
     `Make a rule: when it’s from ${fromWhom(addresses)}, choose Forward to and paste your address`,
-  outlookRuleLink: 'Open Outlook rules',
+  outlookRuleLink: 'Open Outlook’s rules',
   icloudRuleTitle: 'Make a rule for your bank’s alerts',
   icloudRuleOpen: 'In iCloud Mail, go to Settings → Rules',
   icloudRuleLine: (addresses: string[]) =>

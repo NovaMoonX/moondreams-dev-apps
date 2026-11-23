@@ -31,9 +31,9 @@ function StepGuide({
   exitLabel = 'Exit',
 }: StepGuideProps) {
   const way = onBack
-    ? { label: backLabel, onClick: onBack }
+    ? { label: backLabel, onClick: onBack, isBack: true }
     : onExit
-      ? { label: exitLabel, onClick: onExit }
+      ? { label: exitLabel, onClick: onExit, isBack: false }
       : null;
   return (
     <div className='flex flex-1 flex-col'>
@@ -69,7 +69,9 @@ function StepGuide({
               className={join('gap-1 px-4', primary ? 'shrink-0' : 'flex-1')}
               onClick={way.onClick}
             >
-              <ChevronLeft className='size-4' aria-hidden='true' />
+              {way.isBack && (
+                <ChevronLeft className='size-4' aria-hidden='true' />
+              )}
               {way.label}
             </Button>
           )}

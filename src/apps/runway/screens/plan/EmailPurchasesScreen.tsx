@@ -225,6 +225,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     }
   };
 
+  const noteActed = () => {
+    if (isWalking || isAddingBank) setHasActed(true);
+  };
+
   const getNewAddress = async () => {
     if (intake.address !== null) {
       const isConfirmed = await confirm({
@@ -235,7 +239,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       });
       if (!isConfirmed) return;
     }
-    setHasActed(true);
+    noteActed();
     await run(() => actions.rotateAddress(), EMAIL_WORDS.addressFailed);
   };
 
@@ -289,7 +293,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     isLosingWork: hasDraft,
   });
   const saveBanksActed: typeof actions.saveBanks = (change) => {
-    setHasActed(true);
+    noteActed();
     return actions.saveBanks(change);
   };
 
@@ -576,6 +580,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       )}
       {openBank && (
         <EmailBankSheet
+          key={openBank.id}
           bank={openBank}
           banks={setup.banks}
           provider={setup.provider}
