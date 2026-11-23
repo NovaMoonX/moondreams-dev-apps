@@ -75,6 +75,8 @@ import type {
   PurchaseDoc,
   ReleasedChargeDoc,
   ReleasedChargeSealed,
+  DoneForYouDoc,
+  DoneForYouSealed,
   EmailEventDoc,
   EmailEventSealed,
   EmailFilterDoc,
@@ -800,6 +802,21 @@ const RELEASED_CHARGE_SEALED_FIELDS = {
   lines: 'notUseful',
 } satisfies Record<keyof ReleasedChargeSealed, ShareDecision>;
 
+const DONE_FOR_YOU_DOC_FIELDS = {
+  id: 'notUseful',
+  kind: 'notUseful',
+  createdAt: 'notUseful',
+  undoneAt: 'notUseful',
+  sealed: 'notUseful',
+} satisfies Record<keyof DoneForYouDoc, ShareDecision>;
+
+const DONE_FOR_YOU_SEALED_FIELDS = {
+  title: 'notUseful',
+  detail: 'notUseful',
+  why: 'notUseful',
+  undo: 'never',
+} satisfies Record<keyof DoneForYouSealed, ShareDecision>;
+
 const CLOSING_SEALED_FIELDS = {
   version: 'notUseful',
   startDay: 'notUseful',
@@ -901,6 +918,8 @@ export const SHARE_FIELDS = {
   PurchaseDoc: PURCHASE_DOC_FIELDS,
   ReleasedChargeDoc: RELEASED_CHARGE_DOC_FIELDS,
   ReleasedChargeSealed: RELEASED_CHARGE_SEALED_FIELDS,
+  DoneForYouDoc: DONE_FOR_YOU_DOC_FIELDS,
+  DoneForYouSealed: DONE_FOR_YOU_SEALED_FIELDS,
   EmailIntakeDoc: EMAIL_INTAKE_DOC_FIELDS,
   EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
   EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,
@@ -927,6 +946,7 @@ export const NOT_STORED: Record<string, string> = {
   OpenRule: 'decrypted view of RuleDoc',
   OpenReceiptImage: 'decrypted view of ReceiptImageDoc',
   OpenReleasedCharge: 'decrypted view of ReleasedChargeDoc',
+  OpenDoneForYou: 'decrypted view of DoneForYouDoc',
   OpenPurchase: 'decrypted view of PurchaseDoc',
   OpenChange: 'decrypted view of ChangeDoc',
   OpenDay: 'decrypted view of IncomeDayDoc',
