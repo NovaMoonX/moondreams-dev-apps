@@ -12,6 +12,7 @@ source scripts/lib/setupState.sh
 PROJECT=moondreams-dev-apps
 SECRET_NAME=RUNWAY_EMAIL_WEBHOOK_SECRET
 WORKER_CONFIG=workers/email-router/wrangler.toml
+INGEST_URL=https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestRunwayEmail
 LAST_STEP=4
 PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/runway-email-setup-step"
 CURRENT="starting"
@@ -50,6 +51,37 @@ start_step() {
   return 1
 }
 
+# The intake reads the secret at run time, so nothing grants the functions' account access to it on deploy.
+grant_read() {
+  if command -v gcloud >/dev/null 2>&1; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding "$SECRET_NAME" --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "1. ✓ The functions can read $SECRET_NAME."
+  else
+    echo "1. gcloud isn't installed, so give the functions read access in the browser (one time):"
+    echo "     a. Open https://console.cloud.google.com/security/secret-manager/secret/$SECRET_NAME/permissions?project=$PROJECT"
+    echo "     b. Grant access → New principal: the account ending in -compute@developer.gserviceaccount.com"
+    echo "     c. Role: Secret Manager Secret Accessor → Save"
+    printf '   Press Enter when it is saved. '
+    read -r _ || true
+  fi
+}
+
+# A call without the secret must reach the intake's own check: 401 proves it is open to the worker and can read its secret.
+check_intake() {
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$INGEST_URL" || true)
+  case "$code" in
+    401) echo "2. ✓ The intake answers the worker." ;;
+    403) echo "✗ Google Cloud refuses calls to the intake (403): it isn't open yet. Merge and deploy, or run: npm run fb:invoker -- ingestRunwayEmail" >&2; exit 1 ;;
+    503) echo "✗ The intake can't read $SECRET_NAME (503). Run this step's grant again: npm run runway:email-setup -- --restart" >&2; exit 1 ;;
+    *) echo "✗ The intake answered $code instead of 401." >&2; exit 1 ;;
+  esac
+}
+
 trap 'status=$?; (( status == 0 )) || { echo "✗ Stopped at step $CURRENT_STEP: $CURRENT." >&2; echo "  Fix that and run npm run runway:email-setup again to pick up from step $CURRENT_STEP (or add -- --restart to start over)." >&2; }' EXIT
 
 need node "Install Node 20 or later."
@@ -74,6 +106,7 @@ SHARED=$(openssl rand -hex 32)
 if start_step 1 "the secret in Firebase"; then
   if output=$(printf %s "$SHARED" | firebase functions:secrets:set "$SECRET_NAME" --project "$PROJECT" --data-file=- 2>&1); then
     echo "1. ✓ Saved $SECRET_NAME in Firebase."
+    grant_read
   else
     echo "✗ Firebase couldn't save $SECRET_NAME. It said:" >&2
     sed 's/^/     /' <<<"$output" >&2
@@ -92,6 +125,7 @@ if start_step 2 "the secret on the email worker"; then
   npx wrangler deploy -c "$WORKER_CONFIG"
   printf %s "$SHARED" | npx wrangler secret put INGEST_SECRET -c "$WORKER_CONFIG"
   echo "2. ✓ The worker has INGEST_SECRET."
+  check_intake
   remember_step 2
 fi
 
