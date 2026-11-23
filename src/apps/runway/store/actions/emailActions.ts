@@ -126,9 +126,9 @@ export async function saveEmailBanks(
   uid: string,
   encryption: RunwayEncryption,
   change: (banks: EmailBank[]) => EmailBank[],
-): Promise<void> {
+): Promise<boolean> {
   const ref = planRef(uid, 'emailSetup', 'progress');
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists()
       ? (snapshot.data() as Partial<EmailSetupDoc>)
@@ -136,7 +136,9 @@ export async function saveEmailBanks(
     const opened = current?.sealed
       ? await openJson<Partial<EmailSetupSealed>>(current.sealed, encryption)
       : null;
-    const banks = change(Array.isArray(opened?.banks) ? opened.banks : []);
+    const before = Array.isArray(opened?.banks) ? opened.banks : [];
+    const banks = change(before);
+    if (JSON.stringify(banks) === JSON.stringify(before)) return false;
     const now = Date.now();
     transaction.set(ref, {
       id: 'progress',
@@ -147,5 +149,6 @@ export async function saveEmailBanks(
       createdAt: current?.createdAt ?? now,
       updatedAt: now,
     } satisfies EmailSetupDoc);
+    return true;
   });
 }

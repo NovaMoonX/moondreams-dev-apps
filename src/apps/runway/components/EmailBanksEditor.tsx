@@ -179,7 +179,7 @@ function AddressField({ id, value, onChange, error }: AddressFieldProps) {
 
 export type SaveBanks = (
   change: (banks: EmailBank[]) => EmailBank[],
-) => Promise<void>;
+) => Promise<boolean>;
 
 interface BankAddressesProps {
   bank: EmailBank;

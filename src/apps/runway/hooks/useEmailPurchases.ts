@@ -75,7 +75,7 @@ export interface EmailActions {
   chooseProvider(provider: EmailProvider): Promise<void>;
   reachStep(stepId: EmailSetupStepId): Promise<void>;
   finishSetup(): Promise<void>;
-  saveBanks(change: (banks: EmailBank[]) => EmailBank[]): Promise<void>;
+  saveBanks(change: (banks: EmailBank[]) => EmailBank[]): Promise<boolean>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
@@ -170,7 +170,7 @@ export function useEmailActions(): EmailActions {
             ),
       saveBanks: async (change) => {
         if (uid === null) return NO_UID();
-        await saveEmailBanks(uid, await getRunwayEncryption(uid), change);
+        return saveEmailBanks(uid, await getRunwayEncryption(uid), change);
       },
     }),
     [uid],

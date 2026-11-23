@@ -255,6 +255,7 @@ function EmailSetupWalkthrough({
   const [isNotArrivingShown, setIsNotArrivingShown] = useState(false);
   const [draft, setDraft] = useState<BankDraft | null>(null);
   const [isPickingBank, setIsPickingBank] = useState(isAddingBank);
+  const [bankCountAtStart] = useState(banks.length);
   const [isSavingBank, setIsSavingBank] = useState(false);
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
@@ -263,6 +264,12 @@ function EmailSetupWalkthrough({
   const bankIndex = steps.indexOf('bank');
   const isBankChoosing =
     draft === null && (banks.length === 0 || isPickingBank);
+  const isCoveredFirst = isAddingBank && banks.length === 0;
+  const getBankTitle = () => {
+    if (isCoveredFirst) return WORDS.coveredBankTitle;
+    return banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank;
+  };
+  const bankTitle = getBankTitle();
 
   const saveDraft = async () => {
     if (draft === null) return;
@@ -394,10 +401,12 @@ function EmailSetupWalkthrough({
     if (step === 'bank') {
       if (isBankChoosing) {
         return {
-          title: banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank,
+          title: bankTitle,
           content: (
             <div className='space-y-3'>
-              <Muted>{WORDS.bankLine}</Muted>
+              <Muted>
+                {isCoveredFirst ? WORDS.coveredBankLine : WORDS.bankLine}
+              </Muted>
               <BankPicker known={knownBanks} banks={banks} onPick={setDraft} />
             </div>
           ),
@@ -405,7 +414,7 @@ function EmailSetupWalkthrough({
       }
       if (draft !== null) {
         return {
-          title: banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank,
+          title: bankTitle,
           content: (
             <BankDraftForm
               draft={draft}
@@ -657,13 +666,20 @@ function EmailSetupWalkthrough({
   };
 
   const goBack = () => {
-    if (step === 'bank' && isAddingBank && draft === null && isPickingBank) {
+    const hasAddedBank = banks.length > bankCountAtStart;
+    if (
+      step === 'bank' &&
+      isAddingBank &&
+      draft === null &&
+      isPickingBank &&
+      !hasAddedBank
+    ) {
       onClose();
       return;
     }
     if (step === 'bank' && (draft !== null || isPickingBank)) {
       setDraft(null);
-      setIsPickingBank(false);
+      setIsPickingBank(isAddingBank && draft !== null);
       return;
     }
     onGo(stepIndex - 1);
