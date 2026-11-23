@@ -82,7 +82,11 @@ function FieldValue({ value }: { value: string }) {
   return value.split(' ').map((word, index) => (
     <Fragment key={index}>
       {index > 0 && ' '}
-      <span className='whitespace-nowrap'>{word}</span>
+      {word.includes('@') ? (
+        <AddressText address={word} />
+      ) : (
+        <span className='whitespace-nowrap'>{word}</span>
+      )}
     </Fragment>
   ));
 }
