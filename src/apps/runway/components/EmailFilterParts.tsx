@@ -102,7 +102,7 @@ interface GmailFilterImportProps {
   forwardTo: string;
 }
 
-/** The filter as a file Gmail can import; offered only once the Runway address is confirmed, since Gmail refuses to forward to one that isn't. */
+/** The filter as a file Gmail can import; offered after the person confirms the address in Gmail, since Gmail won't forward to an unconfirmed one. */
 export function GmailFilterImport({
   addresses,
   forwardTo,

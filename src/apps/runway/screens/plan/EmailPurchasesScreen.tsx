@@ -210,7 +210,6 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     if (!setup.isDone || !setup.isDoneUnwritten || isWritten.current) return;
     isWritten.current = true;
     actions.finishSetup().catch((finishError: unknown) => {
-      isWritten.current = false;
       setError(getErrorMessage(finishError, EMAIL_WORDS.progressFailed));
     });
   }, [setup.isDone, setup.isDoneUnwritten, actions]);

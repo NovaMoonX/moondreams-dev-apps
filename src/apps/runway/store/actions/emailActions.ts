@@ -107,7 +107,7 @@ export type EmailSetupChange = Partial<
 
 type SetupHold = (patch: Partial<OpenEmailSetup>) => void;
 
-/** Runs a write to the setup document with its result shown at once: the change is laid over the listener's copy, goes back if the write fails, and lets go when the listener shows it. `work` returns whether it wrote anything. */
+/** A setup-document write shown at once and taken back on failure; `work` returns whether it wrote anything. */
 async function writeSetupHeld<T extends { isWritten: boolean }>(
   work: (hold: SetupHold) => Promise<T>,
 ): Promise<T> {
@@ -181,8 +181,8 @@ export async function saveEmailBanks(
 ): Promise<boolean> {
   const ref = planRef(uid, 'emailSetup', 'progress');
   const { isWritten } = await writeSetupHeld(async (hold) => {
-    const shown = store.getState().runway.emailSetup?.banks ?? [];
-    hold({ banks: toBanks(change(shown)) });
+    const shown = store.getState().runway.emailSetup;
+    if (shown !== null) hold({ banks: toBanks(change(shown.banks)) });
     const isChanged = await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(ref);
       const current = snapshot.exists()
