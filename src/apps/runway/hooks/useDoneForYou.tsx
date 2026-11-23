@@ -1,9 +1,14 @@
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ArrowUpRight, Receipt, Repeat } from 'lucide-react';
 
-import type { DoneForYouEntry } from '@/components/DoneForYouSheet';
+import type {
+  DoneForYouDoor,
+  DoneForYouEntry,
+} from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector, type RootState } from '@/store';
+import { getDoneForYouLook } from '@apps/runway/components/doneForYouLook';
 import {
   AUTO_PAY_WORDS,
   DEPOSIT_WORDS,
@@ -28,13 +33,22 @@ import {
   unlinkDeposit,
   unpairAccountPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
-import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import {
+  selectIsRulesLoaded,
+  selectIsSortingPaused,
+  selectItemLooks,
+  selectRules,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { setOpenRuleRequest } from '@apps/runway/utils/openRuleRequest';
 import type {
   DateOnly,
   DoneForYouKind,
   DoneForYouUndo,
   OpenDoneForYou,
   OpenPurchase,
+  PlanSection,
 } from '@apps/runway/types';
 import {
   describeAccountPair,
@@ -158,8 +172,26 @@ const getNoUndoNote = (kind: DoneForYouKind) => {
   }
 };
 
+/** The cents a rule's, merge's or charge's Undo sends back to waiting; a positive charge there is quiet while sorting is paused. */
+const getReturnedCents = (undo: DoneForYouUndo) => {
+  switch (undo.kind) {
+    case 'rule':
+      return undo.placed.amountCents;
+    case 'merge':
+      return undo.merged.bank.amountCents;
+    case 'charge':
+      return undo.result.purchase.amountCents;
+    default:
+      return 0;
+  }
+};
+
+const isLeftInFreeToSpend = (undo: DoneForYouUndo, isPaused: boolean) =>
+  isPaused && getReturnedCents(undo) > 0;
+
 /** The Undo button names what it puts back. */
-const getUndoLabel = (undo: DoneForYouUndo) => {
+const getUndoLabel = (undo: DoneForYouUndo, isPaused: boolean) => {
+  if (isLeftInFreeToSpend(undo, isPaused)) return DONE_FOR_YOU_WORDS.undoQuiet;
   switch (undo.kind) {
     case 'merge':
       return DONE_FOR_YOU_WORDS.undoMerge;
@@ -174,7 +206,10 @@ const getUndoLabel = (undo: DoneForYouUndo) => {
   }
 };
 
-const getUndoneWords = (undo: DoneForYouUndo) => {
+const getUndoneWords = (undo: DoneForYouUndo, isPaused: boolean) => {
+  if (undo.kind === 'rule' && isLeftInFreeToSpend(undo, isPaused)) {
+    return DONE_FOR_YOU_WORDS.undoneQuiet;
+  }
   switch (undo.kind) {
     case 'merge':
       return NEEDS_HOME_WORDS.matchUndone;
@@ -267,6 +302,13 @@ export function useDoneForYou() {
     (state) => state.runway.plan?.doneForYouSeenAt ?? null,
   );
   const isReady = useAppSelector((state) => state.runway.isDoneForYouLoaded);
+  const isPaused = useAppSelector(selectIsSortingPaused);
+  const level = useAppSelector(selectLevel);
+  const rules = useAppSelector(selectRules);
+  const isRulesLoaded = useAppSelector(selectIsRulesLoaded);
+  const planItems = useAppSelector((state) => state.runway.items);
+  const { leaveViewForTab, openPurchase, openView, closeView, showOnPlan } =
+    useRunwayUrlState();
   const known = toKnown({
     purchases,
     needsHome: waiting,
@@ -277,6 +319,109 @@ export function useDoneForYou() {
   const now = useNow(60 * 60 * 1000);
   const cutoff = now - DONE_FOR_YOU_DAYS * DAY_MS;
   const live = entries.filter((entry) => entry.createdAt >= cutoff);
+  const getDoors = (entry: OpenDoneForYou): DoneForYouDoor[] => {
+    const { subject } = entry;
+    if (subject === null) return [];
+    const purchaseId = subject.purchaseId;
+    const hasPurchase =
+      purchaseId !== null &&
+      known.purchases.some((purchase) => purchase.id === purchaseId);
+    const purchaseDoor = (): DoneForYouDoor[] =>
+      purchaseId === null || entry.kind === 'released'
+        ? []
+        : [
+            {
+              label: DONE_FOR_YOU_WORDS.openPurchase,
+              subtitle: DONE_FOR_YOU_WORDS.openPurchaseSub,
+              icon: <Receipt />,
+              unavailable: hasPurchase
+                ? undefined
+                : DONE_FOR_YOU_WORDS.purchaseGone,
+              onSelect: () => {
+                void leaveViewForTab('spend').then(() =>
+                  openPurchase(purchaseId),
+                );
+              },
+            },
+          ];
+    const getItemDoor = (
+      itemId: string | null,
+      fallbackLabel: string,
+    ): DoneForYouDoor[] => {
+      if (itemId === null) return [];
+      const item = planItems.find((entry) => entry.id === itemId);
+      const section: PlanSection | null =
+        item?.kind === 'bill'
+          ? 'bills'
+          : item?.kind === 'goal'
+            ? 'goals'
+            : item?.kind === 'envelope'
+              ? 'envelopes'
+              : null;
+      const label =
+        item?.kind === 'goal'
+          ? DONE_FOR_YOU_WORDS.openGoal
+          : item?.kind === 'envelope'
+            ? DONE_FOR_YOU_WORDS.openEnvelope
+            : fallbackLabel;
+      const isGone = item === undefined || item.archivedAt !== null;
+      return [
+        {
+          label,
+          subtitle: DONE_FOR_YOU_WORDS.openItemSub,
+          icon: <ArrowUpRight />,
+          unavailable:
+            isGone || section === null
+              ? DONE_FOR_YOU_WORDS.itemGone
+              : undefined,
+          onSelect: () => {
+            if (section === null) return;
+            closeView();
+            void showOnPlan(section, { itemId });
+          },
+        },
+      ];
+    };
+    const ruleDoor = (): DoneForYouDoor[] =>
+      level !== 'link' || subject.ruleId === null
+        ? []
+        : [
+            {
+              label: DONE_FOR_YOU_WORDS.seeRule,
+              subtitle: DONE_FOR_YOU_WORDS.seeRuleSub,
+              icon: <Repeat />,
+              unavailable:
+                isRulesLoaded &&
+                !rules.some((rule) => rule.id === subject.ruleId)
+                  ? DONE_FOR_YOU_WORDS.ruleGone
+                  : undefined,
+              onSelect: () => {
+                const { ruleId } = subject;
+                void openView('rules').then(() => setOpenRuleRequest(ruleId));
+              },
+            },
+          ];
+    switch (entry.kind) {
+      case 'rule':
+        return [...ruleDoor(), ...purchaseDoor()];
+      case 'merge':
+      case 'deposit':
+      case 'pair':
+        return purchaseDoor();
+      case 'charge':
+        return [
+          ...purchaseDoor(),
+          ...getItemDoor(subject.billId, DONE_FOR_YOU_WORDS.openBill),
+        ];
+      case 'autoMark':
+        return getItemDoor(subject.billId, DONE_FOR_YOU_WORDS.openBill);
+      case 'ended':
+        return getItemDoor(subject.itemId, DONE_FOR_YOU_WORDS.openBill);
+      default:
+        return [];
+    }
+  };
+
   const items = live.map((entry: OpenDoneForYou): DoneForYouEntry => {
     const canUndo = entry.undo !== null && isStillUndoable(entry.undo, known);
     const getNote = () => {
@@ -296,7 +441,11 @@ export function useDoneForYou() {
         entry.undo !== null && !canUndo
           ? DONE_FOR_YOU_WORDS.cannotUndoRow
           : null,
-      undoLabel: entry.undo === null ? null : getUndoLabel(entry.undo),
+      undoLabel:
+        entry.undo === null ? null : getUndoLabel(entry.undo, isPaused),
+      undoneAt: entry.undoneAt,
+      doors: getDoors(entry),
+      ...getDoneForYouLook(entry.kind, entry.subject),
     };
   });
   const hasUnseen = live.some(
@@ -322,7 +471,10 @@ export function useDoneForYou() {
     );
     addToast({
       title: DONE_FOR_YOU_WORDS.undone,
-      description: getUndoneWords(entry.undo),
+      description: getUndoneWords(
+        entry.undo,
+        selectIsSortingPaused(store.getState()),
+      ),
       type: 'success',
     });
     return null;

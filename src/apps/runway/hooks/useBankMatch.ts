@@ -70,6 +70,7 @@ import type {
   PurchasePairKind,
 } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import { toPurchaseSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   describeAccountPair,
   describeDepositLinked,
@@ -96,6 +97,12 @@ export function useMergeWithUndo() {
   const looks = useAppSelector(selectItemLooks);
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const getDestination = (typed: OpenPurchase) => {
+    const envelopeId = typed.lines.find(
+      (line) => line.envelopeId !== null,
+    )?.envelopeId;
+    return envelopeId ? (looks.get(envelopeId) ?? null) : null;
+  };
 
   const undo = async (uid: string, merged: readonly MergedPurchase[]) => {
     try {
@@ -166,6 +173,11 @@ export function useMergeWithUndo() {
               : NEEDS_HOME_WORDS.matchedOneSub,
           why: null,
           undo: { kind: 'merge' as const, merged: entry },
+          subject: toPurchaseSubject(entry.bank, {
+            merchant: entry.bank.merchant ?? entry.typed.label ?? null,
+            toName: getDestination(entry.typed)?.name ?? null,
+            toEmoji: getDestination(entry.typed)?.emoji ?? null,
+          }),
         })),
       );
       return merged.length;
@@ -480,6 +492,9 @@ export function useLinkDepositsWithUndo() {
             linked: entry.linked,
             dayOn: entry.dayOn,
           },
+          subject: toPurchaseSubject(entry.deposit, {
+            toName: describePayDay(entry.dayOn),
+          }),
         })),
       );
       return done.length;
@@ -753,6 +768,10 @@ export function usePairAccountsWithUndo() {
             names: entry.names,
             paired: { out: entry.paired.out, into: entry.paired.into },
           },
+          subject: toPurchaseSubject(entry.out, {
+            fromName: entry.names.from,
+            toName: entry.names.to,
+          }),
         })),
       );
       return done.length;

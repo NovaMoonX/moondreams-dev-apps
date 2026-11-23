@@ -53,10 +53,15 @@ import {
   selectAccounts,
   selectBillPayments,
   selectIsLinkHistory,
+  selectItemLooks,
   selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly, OpenPurchase } from '@apps/runway/types';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
+import {
+  toPurchaseSubject,
+  toSubject,
+} from '@apps/runway/utils/doneForYouSubject';
 import {
   getChargeSnoozeVersion,
   snoozeCharge,
@@ -258,6 +263,7 @@ export function useAutoPay(uid: string | null) {
           },
           Promise.resolve([] as AutoMark[]),
         );
+        const looks = selectItemLooks(store.getState());
         recordDone(
           uid,
           marked.map((mark) => ({
@@ -266,6 +272,11 @@ export function useAutoPay(uid: string | null) {
             detail: null,
             why: AUTO_PAY_WORDS.formToggle,
             undo: null,
+            subject: toSubject({
+              billId: mark.billId,
+              toName: mark.billName,
+              toEmoji: looks.get(mark.billId)?.emoji ?? null,
+            }),
           })),
         );
         const results = await matches.reduce(
@@ -307,6 +318,11 @@ export function useAutoPay(uid: string | null) {
             detail: DONE_FOR_YOU_WORDS.chargeMatched,
             why: null,
             undo: { kind: 'charge' as const, result },
+            subject: toPurchaseSubject(result.purchase, {
+              billId: result.billId,
+              toName: result.billName,
+              toEmoji: looks.get(result.billId)?.emoji ?? null,
+            }),
           })),
         );
       } catch (error) {

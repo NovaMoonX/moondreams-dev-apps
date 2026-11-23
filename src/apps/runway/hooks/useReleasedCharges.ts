@@ -13,6 +13,7 @@ import {
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenReleasedCharge, RunwayEncryption } from '@apps/runway/types';
+import { toSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   describeEnvelopes,
   describeReleasedCharge,
@@ -79,6 +80,11 @@ export function useReleasedCharges(uid: string | null) {
             ),
             why: null,
             undo: null,
+            subject: toSubject({
+              purchaseId: charge.id,
+              merchant: charge.title,
+              amountCents: charge.amountCents,
+            }),
           };
         }),
       );

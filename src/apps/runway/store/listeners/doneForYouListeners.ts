@@ -51,8 +51,10 @@ export function startDoneForYouListener(
           snapshot.docs.map(async (entry): Promise<OpenDoneForYou | null> => {
             const data = entry.data() as DoneForYouDoc;
             try {
+              const sealed = await read<DoneForYouSealed>(data.sealed);
               return {
-                ...(await read<DoneForYouSealed>(data.sealed)),
+                ...sealed,
+                subject: sealed.subject ?? null,
                 id: entry.id,
                 kind: data.kind,
                 createdAt: data.createdAt,

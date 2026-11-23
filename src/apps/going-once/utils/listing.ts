@@ -1,3 +1,4 @@
+import { formatTimeAgo } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import {
   CO_SELLER_DELETE_WINDOW_MS,
@@ -107,9 +108,7 @@ export function canDeleteItem(
 
 /** "You added it 4 minutes ago", the sub-line under a co-seller's Delete thing. */
 export function formatAddedAgo(createdAt: number, now: number): string {
-  const minutes = Math.floor((now - createdAt) / 60_000);
-  if (minutes < 1) return 'You added it just now';
-  return `You added it ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  return `You added it ${formatTimeAgo(createdAt, now, true)}`;
 }
 
 const describeAsked = ({ count, isAtLeast }: AskedCount) => {

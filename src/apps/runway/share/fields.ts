@@ -77,6 +77,7 @@ import type {
   ReleasedChargeSealed,
   DoneForYouDoc,
   DoneForYouSealed,
+  DoneForYouSubject,
   EmailEventDoc,
   EmailEventSealed,
   EmailFilterDoc,
@@ -815,7 +816,21 @@ const DONE_FOR_YOU_SEALED_FIELDS = {
   detail: 'notUseful',
   why: 'notUseful',
   undo: 'never',
+  subject: 'never',
 } satisfies Record<keyof DoneForYouSealed, ShareDecision>;
+
+const DONE_FOR_YOU_SUBJECT_FIELDS = {
+  purchaseId: 'never',
+  merchant: 'never',
+  merchantLogo: 'never',
+  amountCents: 'never',
+  ruleId: 'never',
+  billId: 'never',
+  itemId: 'never',
+  toName: 'never',
+  toEmoji: 'never',
+  fromName: 'never',
+} satisfies Record<keyof DoneForYouSubject, ShareDecision>;
 
 const CLOSING_SEALED_FIELDS = {
   version: 'notUseful',
@@ -920,6 +935,7 @@ export const SHARE_FIELDS = {
   ReleasedChargeSealed: RELEASED_CHARGE_SEALED_FIELDS,
   DoneForYouDoc: DONE_FOR_YOU_DOC_FIELDS,
   DoneForYouSealed: DONE_FOR_YOU_SEALED_FIELDS,
+  DoneForYouSubject: DONE_FOR_YOU_SUBJECT_FIELDS,
   EmailIntakeDoc: EMAIL_INTAKE_DOC_FIELDS,
   EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
   EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,

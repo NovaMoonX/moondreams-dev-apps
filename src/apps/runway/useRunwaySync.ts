@@ -16,7 +16,7 @@ import {
   toChangeWindowKey,
 } from '@apps/runway/utils/changeWindow';
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { DONE_FOR_YOU_WORDS, FORM_DRAFT_PREFIX } from '@apps/runway/constants';
@@ -51,6 +51,7 @@ import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListen
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
+import { toSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   getDayKeyMonth,
   getHistoryRange,
@@ -73,6 +74,7 @@ import {
   selectConfirmedDayIds,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectItemLooks,
   selectLinkHistoryRanges,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -682,17 +684,23 @@ export function useRunwaySync(uid: string | null, attempt: number) {
               note: null,
               heldChoice: null,
             });
-            return isWritten ? [name] : [];
+            return isWritten ? [{ itemId, name }] : [];
           }),
         );
+        const looks = selectItemLooks(store.getState());
         recordDone(
           uid,
-          written.flat().map((name) => ({
+          written.flat().map(({ itemId, name }) => ({
             kind: 'ended' as const,
             title: DONE_FOR_YOU_WORDS.ended(name),
             detail: null,
             why: DONE_FOR_YOU_WORDS.endedWhy,
             undo: null,
+            subject: toSubject({
+              itemId,
+              toName: name,
+              toEmoji: looks.get(itemId)?.emoji ?? null,
+            }),
           })),
         );
       })

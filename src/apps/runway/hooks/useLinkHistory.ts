@@ -192,6 +192,7 @@ export function useLinkHistory(uid: string | null) {
           detail: NEEDS_HOME_WORDS.historySub,
           why: null,
           undo: null,
+          subject: null,
         },
       ]);
     };

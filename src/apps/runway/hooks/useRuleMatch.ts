@@ -38,6 +38,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase, OpenRule, PurchaseLine } from '@apps/runway/types';
+import { toPurchaseSubject } from '@apps/runway/utils/doneForYouSubject';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 import { describeRulePlaced } from '@apps/runway/utils/ruleText';
 
@@ -216,19 +217,29 @@ export function usePlaceByRules(uid: string | null) {
         if (placed.length === 0) return;
         recordDone(
           uid,
-          placed.map(({ placed: entry, sentence }) => ({
-            kind: 'rule' as const,
-            title: DONE_FOR_YOU_WORDS.ruleSent(
-              getPurchaseTitle(entry, nameOf),
-              nameOf(
-                entry.lines.find((line) => line.via === 'chosen')?.envelopeId ??
-                  '',
+          placed.map(({ placed: entry, sentence }) => {
+            const envelopeId =
+              entry.lines.find((line) => line.via === 'chosen')?.envelopeId ??
+              '';
+            return {
+              kind: 'rule' as const,
+              title: DONE_FOR_YOU_WORDS.ruleSent(
+                getPurchaseTitle(entry, nameOf),
+                nameOf(
+                  entry.lines.find((line) => line.via === 'chosen')
+                    ?.envelopeId ?? '',
+                ),
               ),
-            ),
-            detail: null,
-            why: `${RULE_WORDS.yourRule}, ${sentence}`,
-            undo: { kind: 'rule' as const, placed: entry },
-          })),
+              detail: null,
+              why: `${RULE_WORDS.yourRule}, ${sentence}`,
+              undo: { kind: 'rule' as const, placed: entry },
+              subject: toPurchaseSubject(entry, {
+                ruleId: entry.ruleId,
+                toName: names.get(envelopeId)?.name ?? null,
+                toEmoji: names.get(envelopeId)?.emoji ?? null,
+              }),
+            };
+          }),
         );
       } catch (error) {
         // The vault or the network failed before any purchase was tried, so they may be tried again.

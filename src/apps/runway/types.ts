@@ -1469,11 +1469,27 @@ export type DoneForYouUndo =
   | { kind: 'rule'; placed: OpenPurchase }
   | { kind: 'charge'; result: ChargeMatchResult };
 
+/** What an entry acted on, so its item can show it and open it; each kind fills what it has. */
+export interface DoneForYouSubject {
+  purchaseId: string | null;
+  merchant: string | null;
+  merchantLogo: string | null;
+  amountCents: Cents | null;
+  ruleId: string | null;
+  billId: string | null;
+  itemId: string | null;
+  toName: string | null;
+  toEmoji: string | null;
+  fromName: string | null;
+}
+
 export interface DoneForYouSealed {
   title: string;
   detail: string | null;
   why: string | null;
   undo: DoneForYouUndo | null;
+  /** Null on an entry written before it was kept. */
+  subject: DoneForYouSubject | null;
 }
 
 /** Something the app did on its own, under `doneForYou`; only `undoneAt` and removal change it. */
