@@ -174,7 +174,7 @@ export const EMAIL_SETUP_WORDS = {
   gmailForwardingAdd:
     'On the forwarding settings page that opens, click Add a forwarding address and paste this. Gmail sends a verification to it, and the next step catches it',
   gmailForwardingNote:
-    'Leave forwarding settings on Disable forwarding. Only this filter forwards, so adding the address doesn’t forward all your mail.',
+    'Leave forwarding on Disable forwarding. Only this filter forwards.',
   settingsLinkGmail: 'Open Gmail’s forwarding settings',
   yahooForwardingTitle: 'Turn on forwarding',
   yahooForwardingGo:
@@ -299,8 +299,8 @@ export const EMAIL_SETUP_WORDS = {
       : `${EMAIL_PROVIDER_NAMES[provider]}’s email arrived`,
   confirmOpened: (provider: EmailProvider) =>
     provider === 'other'
-      ? 'Opened the confirmation. Once your email says it’s confirmed, you’re set.'
-      : `Opened ${EMAIL_PROVIDER_NAMES[provider]}’s confirmation. Once ${EMAIL_PROVIDER_NAMES[provider]} says it’s confirmed, you’re set.`,
+      ? 'Once your email says it’s confirmed, you’re set.'
+      : `Once ${EMAIL_PROVIDER_NAMES[provider]} says it’s confirmed, you’re set.`,
   confirmOpenAgain: 'Open it again',
   nextAfterConfirm: (next: EmailSetupStepId | undefined) =>
     next === 'filter'
@@ -338,9 +338,10 @@ export const EMAIL_SETUP_WORDS = {
   filterClosed: 'The filter box closed?',
   filterClosedLine:
     'Click the search options icon again and fill in the same boxes, then click Create filter and tick Forward it to.',
-  filterOr: 'Or import it',
-  filterImportLead:
-    'Import the filter from a file instead of building it by hand.',
+  filterImportInstead: 'Import it from a file instead',
+  filterByHand: 'Make it by hand instead',
+  filterImportTitle: 'Import the filter',
+  filterImportDownloadStep: 'Download the filter file',
   filterDownload: 'Download a Gmail filter',
   filterDownloadFailed: 'The file didn’t download. Try again.',
   filterImportChoose:
@@ -361,6 +362,7 @@ export const EMAIL_SETUP_WORDS = {
       : 'Nothing yet. Try sending it again.',
   finishLater: 'Finish later',
   backStep: 'Back',
+  partDone: 'Done',
   exitStep: 'Exit',
   notArriving: 'Not arriving?',
   notArrivingLines: [

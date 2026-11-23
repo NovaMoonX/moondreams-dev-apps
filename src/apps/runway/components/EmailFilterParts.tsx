@@ -1,14 +1,12 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CircleHelp, Download, ExternalLink } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronDown, ChevronRight, Download } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import { shareOrDownloadFiles } from '@/utils/fileUtils';
-import {
-  EMAIL_SETUP_WORDS,
-  GMAIL_FILTERS_URL,
-} from '@apps/runway/components/emailWords';
+import { EMAIL_SETUP_WORDS } from '@apps/runway/components/emailWords';
 import {
   GMAIL_FILTER_FILE_NAME,
   buildGmailFilterXml,
@@ -52,26 +50,30 @@ export function AddressText({ address }: { address: string }) {
   );
 }
 
-/** The quiet question that opens an answer under it and folds it away on a second tap. */
-export function DisclosureChip({
+/** A step's quiet question or second way: a muted line with a chevron and a 40px hit area. A question (`isOpen` set) opens its answer under it and folds it on a second tap; a way (no `isOpen`) swaps the step. */
+export function DisclosureLine({
   label,
   isOpen,
-  onToggle,
+  onClick,
 }: {
   label: string;
-  isOpen: boolean;
-  onToggle: () => void;
+  isOpen?: boolean;
+  onClick: () => void;
 }) {
+  const Icon = isOpen === undefined ? ChevronRight : ChevronDown;
   return (
     <Button
-      variant='tertiary'
-      size='sm'
-      className='text-primary! gap-1.5'
+      variant='base'
+      size='stripped'
+      className='text-muted-foreground relative inline-flex items-center gap-1 text-sm font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
       aria-expanded={isOpen}
-      onClick={onToggle}
+      onClick={onClick}
     >
-      <CircleHelp className='size-4' aria-hidden='true' />
       {label}
+      <Icon
+        className={join('size-4 shrink-0', isOpen === true && 'rotate-180')}
+        aria-hidden='true'
+      />
     </Button>
   );
 }
@@ -89,51 +91,6 @@ function FieldValue({ value }: { value: string }) {
       )}
     </Fragment>
   ));
-}
-
-export interface NumberedItem {
-  text: ReactNode;
-  /** A step that only opens a page is itself the link, so its words are never repeated under it. */
-  href?: string;
-  control?: ReactNode;
-}
-
-export function NumberedSteps({ items }: { items: NumberedItem[] }) {
-  return (
-    <ol className='space-y-4'>
-      {items.map((item, index) => (
-        <li key={index} className='flex items-start gap-3'>
-          <span
-            className='bg-muted text-muted-foreground mt-px grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold'
-            aria-hidden='true'
-          >
-            {index + 1}
-          </span>
-          <div className='min-w-0 flex-1 space-y-2'>
-            <p className='text-sm break-words'>
-              {item.href === undefined ? (
-                item.text
-              ) : (
-                <a
-                  href={item.href}
-                  target='_blank'
-                  rel='noreferrer'
-                  className='text-primary -my-2.5 inline-block py-2.5 font-medium hover:underline'
-                >
-                  {item.text}
-                  <ExternalLink
-                    className='ml-1 inline size-3.5 align-[-2px]'
-                    aria-hidden='true'
-                  />
-                </a>
-              )}
-            </p>
-            {item.control}
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 /** The boxes of a provider's filter or rule form, each labelled as the form labels it, with a copy on every value, since a form takes one value at a time. */
@@ -171,16 +128,16 @@ export function FilterFields({ fields }: { fields: FilterField[] }) {
   );
 }
 
-interface GmailFilterImportProps {
+interface GmailFilterDownloadProps {
   addresses: string[];
   forwardTo: string;
 }
 
 /** The filter as a file Gmail can import; offered after the person confirms the address in Gmail, since Gmail won't forward to an unconfirmed one. */
-export function GmailFilterImport({
+export function GmailFilterDownload({
   addresses,
   forwardTo,
-}: GmailFilterImportProps) {
+}: GmailFilterDownloadProps) {
   const [error, setError] = useState<string | null>(null);
 
   const download = async () => {
@@ -198,8 +155,7 @@ export function GmailFilterImport({
   };
 
   return (
-    <div className='space-y-4'>
-      <p className='text-muted-foreground text-sm'>{WORDS.filterImportLead}</p>
+    <div className='space-y-2'>
       <Button
         className='w-full gap-1.5'
         variant='secondary'
@@ -213,13 +169,6 @@ export function GmailFilterImport({
           {error}
         </p>
       )}
-      <NumberedSteps
-        items={[
-          { text: WORDS.filterImportLink, href: GMAIL_FILTERS_URL },
-          { text: WORDS.filterImportChoose },
-          { text: WORDS.filterImportCreate },
-        ]}
-      />
     </div>
   );
 }

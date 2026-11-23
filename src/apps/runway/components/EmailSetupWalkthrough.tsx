@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CircleCheck, Loader, Mail } from 'lucide-react';
+import { CircleCheck, ExternalLink, Loader, Mail } from 'lucide-react';
 
 import {
   GmailMark,
@@ -13,12 +13,15 @@ import {
 } from '@/components/BrandMarks';
 import CopyTextButton from '@/components/CopyTextButton';
 import ExternalLinkText from '@/components/ExternalLinkText';
+import InstructionSteps, {
+  type Instruction,
+} from '@/components/InstructionSteps';
 import MethodPicker from '@/components/MethodPicker';
-import SectionDivider from '@/components/SectionDivider';
 import StepGuide from '@/components/StepGuide';
 import {
   EMAIL_SETUP_WORDS,
   EMAIL_WORDS,
+  GMAIL_FILTERS_URL,
   GMAIL_FORWARDING_URL,
   GMAIL_URL,
   ICLOUD_MAIL_URL,
@@ -36,10 +39,9 @@ import {
   type SaveBanks,
 } from '@apps/runway/components/EmailBanksEditor';
 import {
-  DisclosureChip,
   FilterFields,
-  GmailFilterImport,
-  NumberedSteps,
+  GmailFilterDownload,
+  DisclosureLine,
 } from '@apps/runway/components/EmailFilterParts';
 import {
   getFilterFields,
@@ -94,6 +96,14 @@ interface EmailSetupWalkthroughProps {
   onExit: () => void;
   /** Something was picked, typed or saved; says whether a bank is half added. */
   onActivity: (isDrafting: boolean) => void;
+}
+
+interface ShownStep {
+  title: ReactNode;
+  content?: ReactNode;
+  /** Done in another app, so shown one at a time with the footer's primary moving on. */
+  instructions?: Instruction[];
+  after?: ReactNode;
 }
 
 const titled = (title: string, isTicked = false) => (
@@ -220,10 +230,10 @@ function ConfirmStep({
           >
             {WORDS.confirmWaiting(provider)}
           </Waiting>
-          <DisclosureChip
+          <DisclosureLine
             label={WORDS.didntArrive}
             isOpen={isHelpShown}
-            onToggle={() => setIsHelpShown(!isHelpShown)}
+            onClick={() => setIsHelpShown(!isHelpShown)}
           />
           {isHelpShown && (
             <div className='space-y-2'>
@@ -264,25 +274,27 @@ function ConfirmStep({
             </Button>
           )}
           {url !== null && isOpened && (
-            <div className='space-y-1'>
-              <p className='text-muted-foreground text-sm'>
-                {WORDS.confirmOpened(provider)}
-              </p>
+            <p className='text-muted-foreground text-sm'>
+              {WORDS.confirmOpened(provider)}{' '}
               <Button
-                variant='tertiary'
-                size='sm'
-                className='text-primary!'
+                variant='link'
+                size='stripped'
+                className='text-primary! relative inline gap-1 text-sm after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
                 onClick={() => openConfirm(url)}
               >
                 {WORDS.confirmOpenAgain}
+                <ExternalLink
+                  className='ml-1 inline size-3.5 align-[-2px]'
+                  aria-hidden='true'
+                />
               </Button>
-            </div>
+            </p>
           )}
           {code !== null && url !== null && (
-            <DisclosureChip
+            <DisclosureLine
               label={WORDS.linkFailed}
               isOpen={isCodeShown}
-              onToggle={() => setIsCodeShown(!isCodeShown)}
+              onClick={() => setIsCodeShown(!isCodeShown)}
             />
           )}
           {code !== null && (isCodeShown || isCodeOnly) && (
@@ -317,10 +329,10 @@ function TestWaiting() {
       <Waiting isLate={isLate} lateLine={<p>{WORDS.testStillWaiting}</p>}>
         {WORDS.testWaiting}
       </Waiting>
-      <DisclosureChip
+      <DisclosureLine
         label={WORDS.notArriving}
         isOpen={isShown}
-        onToggle={() => setIsShown(!isShown)}
+        onClick={() => setIsShown(!isShown)}
       />
       {isShown && (
         <ul className='text-muted-foreground list-disc space-y-1 pl-5 text-sm'>
@@ -337,10 +349,10 @@ function FilterClosedHelp({ fields }: { fields: FilterField[] }) {
   const [isShown, setIsShown] = useState(false);
   return (
     <div className='space-y-3'>
-      <DisclosureChip
+      <DisclosureLine
         label={WORDS.filterClosed}
         isOpen={isShown}
-        onToggle={() => setIsShown(!isShown)}
+        onClick={() => setIsShown(!isShown)}
       />
       {isShown && (
         <>
@@ -391,6 +403,15 @@ function EmailSetupWalkthrough({
   const [bankCountAtStart] = useState(banks.length);
   const [addressesAtStart] = useState(() => listBankAddresses(banks));
   const step = steps[stepIndex] ?? 'provider';
+  const [place, setPlace] = useState({
+    stepIndex,
+    part: 0,
+    isImporting: false,
+  });
+  const isHere = place.stepIndex === stepIndex;
+  const isImporting = isHere && place.isImporting;
+  const setImporting = (next: boolean) =>
+    setPlace({ stepIndex, part: 0, isImporting: next });
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const hasNext = stepIndex < steps.length - 1;
   const addresses = listBankAddresses(banks);
@@ -443,7 +464,7 @@ function EmailSetupWalkthrough({
       </div>
     ) : null;
 
-  const body = (): { title: ReactNode; content: ReactNode } => {
+  const body = (): ShownStep => {
     if (step === 'provider') {
       return {
         title: WORDS.providerTitle,
@@ -495,18 +516,14 @@ function EmailSetupWalkthrough({
     if (step === 'forwarding' && provider === 'yahoo') {
       return {
         title: WORDS.yahooForwardingTitle,
-        content: (
-          <div className='space-y-4'>
-            <NumberedSteps
-              items={[
-                { text: WORDS.yahooForwardingLink, href: YAHOO_MAIL_URL },
-                { text: WORDS.yahooForwardingGo },
-                { text: WORDS.yahooForwardingPaste },
-              ]}
-            />
-            <Muted>{WORDS.yahooForwardingNote}</Muted>
-          </div>
-        ),
+        instructions: [
+          { text: WORDS.yahooForwardingLink, href: YAHOO_MAIL_URL },
+          { text: WORDS.yahooForwardingGo },
+          {
+            text: WORDS.yahooForwardingPaste,
+            control: <Muted>{WORDS.yahooForwardingNote}</Muted>,
+          },
+        ],
       };
     }
     if (step === 'forwarding') {
@@ -515,37 +532,33 @@ function EmailSetupWalkthrough({
       }
       return {
         title: WORDS.gmailForwardingTitle,
-        content: (
-          <NumberedSteps
-            items={[
-              {
-                text: WORDS.gmailForwardingOpen,
-                control: (
-                  <ExternalLinkText
-                    href={GMAIL_URL}
-                    label={WORDS.gmailForwardingLink}
-                  />
-                ),
-              },
-              {
-                text: WORDS.gmailForwardingFill,
-                control: (
-                  <FilterFields fields={getFilterFields('gmail', addresses)} />
-                ),
-              },
-              { text: WORDS.gmailForwardingCreate },
-              {
-                text: WORDS.gmailForwardingAdd,
-                control: (
-                  <>
-                    <RuleAddresses addresses={runwayAddresses} isShownForOne />
-                    <Muted>{WORDS.gmailForwardingNote}</Muted>
-                  </>
-                ),
-              },
-            ]}
-          />
-        ),
+        instructions: [
+          {
+            text: WORDS.gmailForwardingOpen,
+            control: (
+              <ExternalLinkText
+                href={GMAIL_URL}
+                label={WORDS.gmailForwardingLink}
+              />
+            ),
+          },
+          {
+            text: WORDS.gmailForwardingFill,
+            control: (
+              <FilterFields fields={getFilterFields('gmail', addresses)} />
+            ),
+          },
+          { text: WORDS.gmailForwardingCreate },
+          {
+            text: WORDS.gmailForwardingAdd,
+            control: (
+              <>
+                <RuleAddresses addresses={runwayAddresses} isShownForOne />
+                <Muted>{WORDS.gmailForwardingNote}</Muted>
+              </>
+            ),
+          },
+        ],
       };
     }
     if (step === 'bank') {
@@ -621,104 +634,84 @@ function EmailSetupWalkthrough({
       if (provider === 'proton') {
         return {
           title: WORDS.protonRuleTitle,
-          content: (
-            <div className='space-y-4'>
-              <Muted>{WORDS.protonRuleNote}</Muted>
-              <NumberedSteps
-                items={[
-                  {
-                    text: WORDS.protonRuleGo,
-                    control: (
-                      <ExternalLinkText
-                        href={PROTON_MAIL_URL}
-                        label={WORDS.protonRuleLink}
-                      />
-                    ),
-                  },
-                  { text: WORDS.protonRulePaste },
-                  {
-                    text: WORDS.protonRuleCondition(addresses),
-                    control: <RuleAddresses addresses={addresses} />,
-                  },
-                  { text: WORDS.protonRuleSave },
-                ]}
-              />
-            </div>
-          ),
+          instructions: [
+            {
+              text: WORDS.protonRuleGo,
+              control: (
+                <>
+                  <ExternalLinkText
+                    href={PROTON_MAIL_URL}
+                    label={WORDS.protonRuleLink}
+                  />
+                  <Muted>{WORDS.protonRuleNote}</Muted>
+                </>
+              ),
+            },
+            { text: WORDS.protonRulePaste },
+            {
+              text: WORDS.protonRuleCondition(addresses),
+              control: <RuleAddresses addresses={addresses} />,
+            },
+            { text: WORDS.protonRuleSave },
+          ],
         };
       }
       if (provider === 'outlook') {
         return {
           title: WORDS.outlookRuleTitle,
-          content: (
-            <NumberedSteps
-              items={[
-                { text: WORDS.outlookRuleLink, href: OUTLOOK_RULES_URL },
-                {
-                  text: WORDS.outlookRuleConditions,
-                  control: (
-                    <FilterFields
-                      fields={getFilterFields('outlook', addresses)}
-                    />
-                  ),
-                },
-                {
-                  text: WORDS.outlookRuleForward,
-                  control: (
-                    <RuleAddresses addresses={runwayAddresses} isShownForOne />
-                  ),
-                },
-              ]}
-            />
-          ),
+          instructions: [
+            { text: WORDS.outlookRuleLink, href: OUTLOOK_RULES_URL },
+            {
+              text: WORDS.outlookRuleConditions,
+              control: (
+                <FilterFields fields={getFilterFields('outlook', addresses)} />
+              ),
+            },
+            {
+              text: WORDS.outlookRuleForward,
+              control: (
+                <RuleAddresses addresses={runwayAddresses} isShownForOne />
+              ),
+            },
+          ],
         };
       }
       if (provider === 'icloud') {
         return {
           title: WORDS.icloudRuleTitle,
-          content: (
-            <NumberedSteps
-              items={[
-                {
-                  text: WORDS.icloudRuleOpen,
-                  control: (
-                    <ExternalLinkText
-                      href={ICLOUD_MAIL_URL}
-                      label={WORDS.icloudRuleLink}
-                    />
-                  ),
-                },
-                {
-                  text: WORDS.icloudRuleConditions,
-                  control: (
-                    <FilterFields
-                      fields={getFilterFields('icloud', addresses)}
-                    />
-                  ),
-                },
-                {
-                  text: WORDS.icloudRuleForward,
-                  control: (
-                    <RuleAddresses addresses={runwayAddresses} isShownForOne />
-                  ),
-                },
-              ]}
-            />
-          ),
+          instructions: [
+            {
+              text: WORDS.icloudRuleOpen,
+              control: (
+                <ExternalLinkText
+                  href={ICLOUD_MAIL_URL}
+                  label={WORDS.icloudRuleLink}
+                />
+              ),
+            },
+            {
+              text: WORDS.icloudRuleConditions,
+              control: (
+                <FilterFields fields={getFilterFields('icloud', addresses)} />
+              ),
+            },
+            {
+              text: WORDS.icloudRuleForward,
+              control: (
+                <RuleAddresses addresses={runwayAddresses} isShownForOne />
+              ),
+            },
+          ],
         };
       }
       return {
         title: WORDS.otherRuleTitle,
-        content: (
-          <NumberedSteps
-            items={[
-              {
-                text: WORDS.otherRuleLine(addresses),
-                control: <RuleAddresses addresses={addresses} />,
-              },
-            ]}
-          />
-        ),
+        instructions: [
+          {
+            text: WORDS.otherRuleLine(addresses),
+            control: <RuleAddresses addresses={addresses} />,
+          },
+        ],
       };
     }
     if (step === 'confirm') {
@@ -739,22 +732,43 @@ function EmailSetupWalkthrough({
       if (bankFirst !== null) {
         return { title: WORDS.filterTitle, content: bankFirst };
       }
+      const canImport = isConfirmed && intake.address !== null;
+      if (isImporting && canImport) {
+        return {
+          title: WORDS.filterImportTitle,
+          instructions: [
+            {
+              text: WORDS.filterImportDownloadStep,
+              control: (
+                <GmailFilterDownload
+                  addresses={addresses}
+                  forwardTo={intake.address ?? ''}
+                />
+              ),
+            },
+            { text: WORDS.filterImportLink, href: GMAIL_FILTERS_URL },
+            { text: WORDS.filterImportChoose },
+            { text: WORDS.filterImportCreate },
+          ],
+          after: (
+            <DisclosureLine
+              label={WORDS.filterByHand}
+              onClick={() => setImporting(false)}
+            />
+          ),
+        };
+      }
       return {
         title: WORDS.filterTitle,
-        content: (
-          <div className='space-y-6'>
-            <div className='space-y-2'>
-              <p className='text-sm'>{WORDS.filterPick}</p>
-              <FilterClosedHelp fields={getFilterFields('gmail', addresses)} />
-            </div>
-            {isConfirmed && intake.address !== null && (
-              <>
-                <SectionDivider label={WORDS.filterOr} />
-                <GmailFilterImport
-                  addresses={addresses}
-                  forwardTo={intake.address}
-                />
-              </>
+        instructions: [{ text: WORDS.filterPick }],
+        after: (
+          <div className='flex flex-col items-start gap-5'>
+            <FilterClosedHelp fields={getFilterFields('gmail', addresses)} />
+            {canImport && (
+              <DisclosureLine
+                label={WORDS.filterImportInstead}
+                onClick={() => setImporting(true)}
+              />
             )}
           </div>
         ),
@@ -775,8 +789,59 @@ function EmailSetupWalkthrough({
     };
   };
 
+  const showBody = (): ShownStep => {
+    const shown = body();
+    const isForwardingStep = step === 'filter' || step === 'rule';
+    if (!isForwardingStep || bankFirst !== null || provider === null) {
+      return shown;
+    }
+    if (isAddingBank) {
+      return {
+        title:
+          step === 'filter' ? WORDS.updateFilterTitle : WORDS.updateRuleTitle,
+        content: (
+          <ForwardingUpdate
+            provider={provider}
+            addresses={addresses}
+            added={addedAddresses}
+            removed={[]}
+          />
+        ),
+      };
+    }
+    if (!isRewalk) return shown;
+    return {
+      ...shown,
+      after: (
+        <>
+          {shown.after}
+          <Muted>{WORDS.alreadyMade}</Muted>
+        </>
+      ),
+    };
+  };
+  const shown = showBody();
+  const partCount = shown.instructions?.length ?? 0;
+  const part = Math.min(isHere ? place.part : 0, Math.max(partCount - 1, 0));
+  const isMidInstructions = part < partCount - 1;
+  const content =
+    shown.instructions === undefined ? (
+      shown.content
+    ) : (
+      <div className='space-y-6'>
+        <InstructionSteps items={shown.instructions} current={part} />
+        {part === 0 && shown.after}
+      </div>
+    );
+
   const getPrimary = () => {
     if (step === 'provider') return undefined;
+    if (isMidInstructions) {
+      return {
+        label: WORDS.partDone,
+        onClick: () => setPlace({ stepIndex, part: part + 1, isImporting }),
+      };
+    }
     if (step === 'bank' && draft !== null) {
       return {
         label: WORDS.addThisBank(draft.name),
@@ -814,6 +879,15 @@ function EmailSetupWalkthrough({
       onActivity(false);
       return;
     }
+    if (part > 0) {
+      setPlace({ stepIndex, part: part - 1, isImporting });
+      return;
+    }
+    if (isImporting) {
+      setImporting(false);
+      return;
+    }
+    setPlace({ stepIndex: stepIndex - 1, part: Infinity, isImporting: false });
     onGo(stepIndex - 1);
   };
   const isFirstPicker =
@@ -824,44 +898,16 @@ function EmailSetupWalkthrough({
     banks.length === bankCountAtStart;
   const canGoBack =
     !isFirstPicker &&
-    (stepIndex > 0 || (step === 'bank' && (draft !== null || isPickingBank)));
+    (stepIndex > 0 ||
+      part > 0 ||
+      isImporting ||
+      (step === 'bank' && (draft !== null || isPickingBank)));
 
-  const showBody = (): { title: ReactNode; content: ReactNode } => {
-    const shown = body();
-    const isForwardingStep = step === 'filter' || step === 'rule';
-    if (!isForwardingStep || bankFirst !== null || provider === null) {
-      return shown;
-    }
-    if (isAddingBank) {
-      return {
-        title:
-          step === 'filter' ? WORDS.updateFilterTitle : WORDS.updateRuleTitle,
-        content: (
-          <ForwardingUpdate
-            provider={provider}
-            addresses={addresses}
-            added={addedAddresses}
-            removed={[]}
-          />
-        ),
-      };
-    }
-    return {
-      title: shown.title,
-      content: (
-        <div className='space-y-4'>
-          {shown.content}
-          {isRewalk && <Muted>{WORDS.alreadyMade}</Muted>}
-        </div>
-      ),
-    };
-  };
-  const { title, content } = showBody();
   return (
     <StepGuide
       step={provider === null ? undefined : stepIndex + 1}
       stepCount={provider === null ? undefined : steps.length}
-      title={title}
+      title={shown.title}
       primary={getPrimary()}
       onBack={canGoBack ? goBack : undefined}
       backLabel={WORDS.backStep}
