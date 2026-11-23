@@ -37,7 +37,6 @@ import {
   splitBankPurchase,
   unlinkDeposit,
   unpairAccountPurchases,
-  type MergedPurchase,
   type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
@@ -64,6 +63,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   CardPaymentCovers,
+  MergedPurchase,
   OpenPurchase,
   RunwayEncryption,
   PurchaseAssignedBy,

@@ -2,15 +2,110 @@ import { declareSealedFormDrafts } from '@lib/app/formDrafts';
 import { formatList } from '@/utils/formatUtils';
 import type { RunwayTab } from '@apps/runway/types';
 
-export const PLAN_SECTIONS = [
-  'income',
-  'bills',
-  'envelopes',
-  'goals',
-  'horizon',
-  'cards',
-  'more',
-] as const;
+import {
+  ACCOUNT_KINDS,
+  DEFAULT_CURRENCY_CODE,
+  AUTO_PAY_DAYS,
+  BILL_DRAFT_CADENCES,
+  BILL_FREQUENCIES,
+  BILL_FREQUENCY_LABELS,
+  BILL_REPEAT_KINDS,
+  CALENDAR_PERIODS,
+  CHANGE_KINDS,
+  CLOSING_LAG_MONTHS,
+  CLOSING_REBUILD_ATTEMPTS,
+  CLOSING_SETTLE_DAYS,
+  CLOSING_VERSION,
+  CLOSING_WRITE_CHUNK,
+  CUSHION_DAYS,
+  DAY_RECORD_KINDS,
+  DAY_STATUSES,
+  DRAFT_REASON_CODES,
+  DRAFT_TIE_KEYS,
+  EMAIL_MATCH_DAYS_AFTER,
+  EMAIL_MATCH_DAYS_BEFORE,
+  ENVELOPE_ORDER_STEP,
+  FUNDING_CADENCES,
+  getCostLineName,
+  GOAL_STATES,
+  HOLD_CHOICES,
+  HORIZON_DRAFT_CADENCES,
+  INCOME_END_GAP_DAYS,
+  ITEM_KINDS,
+  LEVELS,
+  LINK_STATUSES,
+  LOOKAHEAD_MONTHS,
+  MAX_OCCURRENCES,
+  MAX_PURCHASE_LINES,
+  MORE_ENTRIES,
+  MOVE_KINDS,
+  PACE_STATES,
+  PAIRING_DRAFT_CADENCES,
+  PAIRING_STATES,
+  PLAN_SECTIONS,
+  PRIORITIES,
+  PURCHASE_LINE_VIAS,
+  PURCHASE_SOURCES,
+  RECENT_DAYS_WINDOW,
+  SCHEDULE_KINDS,
+  SCHEDULE_LABELS,
+  SEALED_SCHEMA_VERSION,
+  STANCES,
+  START_DAY_KEY,
+  START_HOLDINGS,
+} from '@apps/runway/engine/engineConstants';
+
+export {
+  ACCOUNT_KINDS,
+  DEFAULT_CURRENCY_CODE,
+  AUTO_PAY_DAYS,
+  BILL_DRAFT_CADENCES,
+  BILL_FREQUENCIES,
+  BILL_FREQUENCY_LABELS,
+  BILL_REPEAT_KINDS,
+  CALENDAR_PERIODS,
+  CHANGE_KINDS,
+  CLOSING_LAG_MONTHS,
+  CLOSING_REBUILD_ATTEMPTS,
+  CLOSING_SETTLE_DAYS,
+  CLOSING_VERSION,
+  CLOSING_WRITE_CHUNK,
+  CUSHION_DAYS,
+  DAY_RECORD_KINDS,
+  DAY_STATUSES,
+  DRAFT_REASON_CODES,
+  DRAFT_TIE_KEYS,
+  EMAIL_MATCH_DAYS_AFTER,
+  EMAIL_MATCH_DAYS_BEFORE,
+  ENVELOPE_ORDER_STEP,
+  FUNDING_CADENCES,
+  GOAL_STATES,
+  HOLD_CHOICES,
+  HORIZON_DRAFT_CADENCES,
+  INCOME_END_GAP_DAYS,
+  ITEM_KINDS,
+  LEVELS,
+  LINK_STATUSES,
+  LOOKAHEAD_MONTHS,
+  MAX_OCCURRENCES,
+  MAX_PURCHASE_LINES,
+  MORE_ENTRIES,
+  MOVE_KINDS,
+  PACE_STATES,
+  PAIRING_DRAFT_CADENCES,
+  PAIRING_STATES,
+  PLAN_SECTIONS,
+  PRIORITIES,
+  PURCHASE_LINE_VIAS,
+  PURCHASE_SOURCES,
+  RECENT_DAYS_WINDOW,
+  SCHEDULE_KINDS,
+  SCHEDULE_LABELS,
+  SEALED_SCHEMA_VERSION,
+  STANCES,
+  START_DAY_KEY,
+  START_HOLDINGS,
+};
 
 export const DEFAULT_PLAN_SECTION = 'income' as const;
 
@@ -43,8 +138,6 @@ export const RUNWAY_TAB_LABELS: Record<RunwayTab, string> = {
   plan: 'Plan',
 };
 
-export const STANCES = ['conservative', 'middle', 'optimistic'] as const;
-
 export const DEFAULT_STANCE = 'conservative' as const;
 
 export const STANCE_LABELS: Record<(typeof STANCES)[number], string> = {
@@ -61,14 +154,6 @@ export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
 
 /** Who a stance applies to: the whole plan, or one pay line or bill that sets its own. */
 export const STANCE_FOLLOW_PLAN = 'plan' as const;
-
-/** Entries on Plan > More; one appears when the screen it opens exists. */
-export const MORE_ENTRIES = [
-  'priorities',
-  'accounts',
-  'settings',
-  'changeLog',
-] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = [
@@ -144,8 +229,6 @@ export const RANGE_END_WORDS = {
   middle: 'the middle',
   high: 'the high end',
 } as const;
-
-export const SEALED_SCHEMA_VERSION = 1;
 /** Every Runway form draft's key starts with it; declared sealed here, where every form gets it from, so no draft is ever kept readable. */
 export const FORM_DRAFT_PREFIX = 'runway:';
 declareSealedFormDrafts(FORM_DRAFT_PREFIX);
@@ -196,53 +279,6 @@ export const DRAFT_PICK_UP_WORDS = {
     purchase: 'purchase',
   },
 } as const;
-
-export const DEFAULT_CURRENCY_CODE = 'USD';
-
-export const ITEM_KINDS = [
-  'source',
-  'payLine',
-  'bill',
-  'envelope',
-  'goal',
-  'group',
-  'horizon',
-] as const;
-
-export const SCHEDULE_KINDS = [
-  'weekly',
-  'everyOtherWeek',
-  'twiceMonthly',
-  'monthly',
-  'everyMonths',
-  'once',
-  'irregular',
-] as const;
-
-export const CHANGE_KINDS = [
-  'planChange',
-  'start',
-  'levelMove',
-  'whatIfApplied',
-  'ended',
-  'correction',
-  'purchaseChange',
-  'cardChange',
-  'moveChange',
-  'paymentChange',
-  'accountChange',
-] as const;
-
-export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
-  {
-    weekly: 'Every week',
-    everyOtherWeek: 'Every other week',
-    twiceMonthly: 'Twice a month',
-    monthly: 'Monthly',
-    everyMonths: 'Every few months',
-    once: 'Once',
-    irregular: 'Irregular',
-  };
 
 /** The ways a pay line can repeat that the income form offers. */
 export const INCOME_FREQUENCIES = [
@@ -351,7 +387,7 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
-  costLineName: (cost: string, item: string) => `${cost}\u00A0· ${item}`,
+  costLineName: getCostLineName,
   costLineDetail: (item: string, tail: string) => `${item}\u00A0· ${tail}`,
   costFallback: 'Cost',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due\u00A0${date}`,
@@ -983,20 +1019,11 @@ export const HORIZON_END_WORDS = {
 
 export const MAX_NAME_LENGTH = 60;
 export const MAX_ENDING_COUNT = 520;
-export const LOOKAHEAD_MONTHS = 12;
 export const MAX_CHANGE_ITEM_IDS = 20;
 /** Coming income days shown before "Show more". */
 export const COMING_DAYS_PREVIEW = 3;
 /** Most coming income days the Days list can draw, however far the lookahead reaches. */
 export const COMING_DAYS_CAP = 50;
-/** Days of income and bills the stance cushion adds up. */
-export const CUSHION_DAYS = 30;
-/** A gap this long between income days, or after the last one, reads as income that has ended. */
-export const INCOME_END_GAP_DAYS = 45;
-/** Occurrences generated for one pay line before the generator stops, a guard against a runaway ending. */
-export const MAX_OCCURRENCES = 2_000;
-
-export const PRIORITIES = ['must', 'should', 'want'] as const;
 
 export const PRIORITY_LABELS: Record<(typeof PRIORITIES)[number], string> = {
   must: 'Must',
@@ -1037,14 +1064,6 @@ export const PRIORITIES_NUDGE_WORDS = {
   dismiss: "Don't ask again",
 } as const;
 
-/** Every income day, or every Nth: the cadences the envelope form offers. */
-export const FUNDING_CADENCES = [
-  'everyIncomeDay',
-  'every2',
-  'every3',
-  'chosen',
-] as const;
-
 export const FUNDING_CADENCE_LABELS: Record<
   (typeof FUNDING_CADENCES)[number],
   string
@@ -1055,38 +1074,8 @@ export const FUNDING_CADENCE_LABELS: Record<
   chosen: 'Pays I choose',
 };
 
-export const ENVELOPE_ORDER_STEP = 1;
-
 /** What "Add expected money" can add. */
 export const EXPECTED_KINDS = ['income', 'expense', 'horizon'] as const;
-
-/** The ways a bill can repeat that the bill form offers. */
-/** The repeats a budget document's bill can be read as. */
-export const BILL_REPEAT_KINDS = [
-  'once',
-  'weekly',
-  'everyOtherWeek',
-  'monthly',
-] as const satisfies readonly (typeof SCHEDULE_KINDS)[number][];
-
-/** The bill form's repeat choices: Yearly and Custom are both a schedule every few months. */
-export const BILL_FREQUENCIES = [
-  ...BILL_REPEAT_KINDS,
-  'yearly',
-  'custom',
-] as const;
-
-export const BILL_FREQUENCY_LABELS: Record<
-  (typeof BILL_FREQUENCIES)[number],
-  string
-> = {
-  once: 'Once',
-  weekly: 'Weekly',
-  everyOtherWeek: 'Every other week',
-  monthly: 'Monthly',
-  yearly: 'Yearly',
-  custom: 'Custom',
-};
 
 export const BILL_EVERY_UNITS = ['months', 'years'] as const;
 
@@ -1107,87 +1096,26 @@ export const BILL_FUNDING_LABELS: Record<
   (typeof BILL_FUNDINGS)[number],
   string
 > = { suggested: 'Spread over income days', chosen: 'Days I choose' };
-
-/** How a draft line for a bill was decided, beside the envelope cadences. */
-export const BILL_DRAFT_CADENCES = [
-  'billSuggested',
-  'billChosen',
-  'billLastBefore',
-  'billPay',
-] as const;
 export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
-
-/** Why a draft line got the money it did: funded in full, or cut short because the day's money ran out. */
-export const HOLD_CHOICES = ['topUp', 'leaveShort'] as const;
-export const DAY_STATUSES = ['draft', 'confirmed', 'notArrived'] as const;
-/** The records a confirmed day keeps: the draft as proposed and the split that was confirmed. */
-export const DAY_RECORD_KINDS = [
-  'proposed',
-  'confirmed',
-  'correction',
-] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money in an envelope or goal moved to another envelope or goal, or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
-export const MOVE_KINDS = [
-  'billPaid',
-  'start',
-  'trackingChange',
-  'cardPayment',
-  'transfer',
-  'costPaid',
-] as const;
-/** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
-export const PURCHASE_SOURCES = ['manual', 'csv', 'link', 'email'] as const;
 /** The domain a person's forwarding address lives on; the address is `${EMAIL_ADDRESS_PREFIX}-<token>@${EMAIL_DOMAIN}`. */
 export const EMAIL_DOMAIN = 'moondreamsmail.com';
 export const EMAIL_ADDRESS_PREFIX = 'runway';
 /** How long an emailed purchase waits for its bank before Home asks about it. */
 export const EMAIL_WAIT_DAYS = 5;
-/** How many days after an emailed purchase a bank charge can still be it (a hold can post days later). */
-export const EMAIL_MATCH_DAYS_AFTER = 7;
-/** How many days before the email a bank charge can be dated and still be it (the bank dates a charge by when it happened). */
-export const EMAIL_MATCH_DAYS_BEFORE = 2;
 /** How long an email's sender, subject, excerpt and (for a bank email Runway read) its text are kept. */
 export const EMAIL_EVENT_KEEP_DAYS = 30;
-/** How a purchase line got its envelope: the person chose it, it ran over from the chosen envelope's chain (a null envelope is Free to Spend taking the rest), or it is Free to Spend. */
-export const PURCHASE_LINE_VIAS = ['chosen', 'spill', 'free'] as const;
-/** Envelopes one split can name; the sealed lines are not checked by rules, so the device caps them. */
-export const MAX_PURCHASE_LINES = 12;
 /** The amount a purchase can be, in cents. */
 export const MAX_PURCHASE_CENTS = 99_999_999;
 /** Purchases the Spend tab draws before "Show more". */
 export const SPEND_PAGE_SIZE = 30;
 /** More envelope filters than this become a searchable list instead of pills. */
 export const SPEND_PILL_LIMIT = 12;
-
-/** What a `start` move holds the starting amount of. */
-export const START_HOLDINGS = [
-  'money',
-  'goal',
-  'bill',
-  'envelope',
-  'horizon',
-  'card',
-] as const;
-/** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
-export const START_DAY_KEY = 'start';
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
 /** The most checklist ticks a day keeps; the device keeps the cap, since the beta rules check no shape. */
 export const MAX_DONE_LINE_IDS = 200;
-/** How far back the recent listeners read while no closing applies (a plan too new to have one, or one that could not be rebuilt). */
-export const RECENT_DAYS_WINDOW = 180;
-/** A month is closed once it ended this many days ago, so the recent window always reaches back past the overdue days and a device a day ahead never closes a month another is still writing into. */
-export const CLOSING_SETTLE_DAYS = 15;
-/** Whole months a closing may lag behind the last closable month before the next load rebuilds them. */
-export const CLOSING_LAG_MONTHS = 2;
-/** Closings written in one transaction, so a request stays far under the size limit. */
-export const CLOSING_WRITE_CHUNK = 6;
-/** Times one rebuild is tried again after another device changed the plan under it. */
-export const CLOSING_REBUILD_ATTEMPTS = 3;
-/** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
-export const CLOSING_VERSION = 5;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
@@ -1436,32 +1364,6 @@ export const HORIZON_PRICE_REASON_CHIPS = [
   'Price went down',
 ] as const;
 
-/** What happened to a pairing that its own pay could not cover. */
-export const PAIRING_STATES = [
-  'funded',
-  'autoTopUp',
-  'held',
-  'offered',
-  'leftShort',
-  'toppedUp',
-] as const;
-
-/** A draft line funded by a pairing rather than by the target's own rule. */
-export const PAIRING_DRAFT_CADENCES = ['pairing'] as const;
-
-/** A draft line for a Horizon cost: spread over the pays before it is due, or carried by the one pay picked. */
-export const HORIZON_DRAFT_CADENCES = ['horizonPays', 'horizonOnePay'] as const;
-
-export const DRAFT_REASON_CODES = [
-  'funded',
-  'poolExhausted',
-  'nothingLeft',
-  'returns',
-] as const;
-
-/** The key that decided which of two otherwise equal demands went first. */
-export const DRAFT_TIE_KEYS = ['createdAt', 'itemId'] as const;
-
 export const DRAFT_CADENCE_WORDS: Record<
   | (typeof FUNDING_CADENCES)[number]
   | (typeof CALENDAR_PERIODS)[number]
@@ -1546,11 +1448,6 @@ export const GOAL_TRACK_WORDS = {
     `${names.length} ${names.length === 1 ? 'goal is' : 'goals are'} behind: ${joinNames(names)}`,
   openBehind: 'Change what it gets each time',
 } as const;
-
-export const GOAL_STATES = ['active', 'paused'] as const;
-
-/** The pace line's three answers for a goal with a date. */
-export const PACE_STATES = ['ahead', 'onPace', 'behind'] as const;
 
 export const PACE_STATE_LABELS: Record<(typeof PACE_STATES)[number], string> = {
   ahead: 'Ahead',
@@ -1881,16 +1778,11 @@ export const PAY_SHARE_WORDS = {
     `${name} comes out of its old pays again, but this pay's figure could not be restored.`,
 } as const;
 
-/** The levels; tracking is one switch for the whole plan, and Link is Track with a bank linked. */
-export const LEVELS = ['plan', 'track', 'link'] as const;
-
 export const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
   plan: 'Plan',
   track: 'Track',
   link: 'Link',
 };
-
-export const LINK_STATUSES = ['active', 'needsAttention', 'revoked'] as const;
 
 /** What an envelope's figure is called at each level. */
 export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
@@ -2695,21 +2587,6 @@ export const PAID_HISTORY_WORDS = {
   undoTitle: 'Take back this payment?',
 } as const;
 
-/** The windows around a due day that automatic payments use. */
-export const AUTO_PAY_DAYS = {
-  /** The most merchant names a bill keeps from charges it has matched. */
-  maxLearnedNames: 10,
-  /** A charge dated this many days either side of the due day can be the payment. */
-  matchDays: 3,
-  /** The picker looks this far before and after the due day. */
-  pickDaysBefore: 5,
-  pickDaysAfter: 10,
-  /** A question about a payment stops being asked this many days after it was due. */
-  askDays: 45,
-  /** "Not here yet" hides a payment's question for this many days, on this device. */
-  snoozeDays: 3,
-} as const;
-
 /** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
 export const AUTO_PAY_WORDS = {
   changeLabel: 'Autopay',
@@ -3305,15 +3182,6 @@ export const CHECKLIST_R3_WORDS = {
   restNeedsConnection: 'The rest need a connection.',
   restNotSaved: 'The rest did not save. Try them again.',
 } as const;
-
-// Round 4: how often an envelope or goal gets money, calendar first and paycheck second.
-export const CALENDAR_PERIODS = [
-  'weekly',
-  'every2Weeks',
-  'twiceMonthly',
-  'monthly',
-  'yearly',
-] as const;
 
 export const CALENDAR_PERIOD_LABELS: Record<
   (typeof CALENDAR_PERIODS)[number],
@@ -4429,14 +4297,6 @@ export const CARD_ISSUERS = [
   'Bank of America',
   'Wells Fargo',
   'Apple Card',
-] as const;
-
-export const ACCOUNT_KINDS = [
-  'checking',
-  'savings',
-  'cashManagement',
-  'investment',
-  'other',
 ] as const;
 
 export const ACCOUNT_KIND_LABELS: Record<

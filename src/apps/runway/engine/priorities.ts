@@ -1,6 +1,6 @@
 import type { Priority, PriorityExtra } from '@apps/runway/types';
 
-import { ENVELOPE_ORDER_STEP } from '@apps/runway/constants';
+import { ENVELOPE_ORDER_STEP, PRIORITIES } from './engineConstants';
 
 import { compareText, TIER_RANK } from './demands';
 import type { Draft } from './draft';
@@ -10,6 +10,10 @@ import {
   type VersionStretch,
   type Versioned,
 } from './resolve';
+
+/** Whether a priority is at or above the dial: Must before Should before Want. */
+export const isCountedAt = (priority: Priority, dial: Priority) =>
+  PRIORITIES.indexOf(priority) <= PRIORITIES.indexOf(dial);
 
 export type PriorityKind = 'bill' | 'envelope' | 'goal' | 'horizon';
 

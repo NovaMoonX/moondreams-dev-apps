@@ -4,7 +4,7 @@ import {
   CLOSING_VERSION,
   RECENT_DAYS_WINDOW,
   START_DAY_KEY,
-} from '@apps/runway/constants';
+} from './engineConstants';
 import type {
   Cents,
   ClosingSealed,

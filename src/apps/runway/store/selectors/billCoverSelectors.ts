@@ -2,10 +2,10 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import {
-  computeBillCover,
-  type BillCover,
-} from '@apps/runway/engine/billCover';
-import type { Balances } from '@apps/runway/engine/balances';
+  coverBalances,
+  getBillCover,
+  type CoveredBalances,
+} from '@apps/runway/engine/figures';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectLedgerOnlyBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -14,12 +14,7 @@ import {
   selectComingDays,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
-/** The balances with the bills Free to Spend covers taken out of it and counted as held for bills. */
-export interface CoveredBalances extends Balances {
-  /** What the ledger alone holds for bills, before the cover. */
-  ledgerBillsCents: number;
-  billCover: BillCover;
-}
+export type { CoveredBalances };
 
 const selectToday = () => todayAsUtcDate();
 
@@ -32,32 +27,13 @@ export const selectBillCover = createSelector(
     (state: RootState) => selectComingDays(state, todayAsUtcDate()),
     selectToday,
   ],
-  (balances, bills, payments, comingDays, today): BillCover =>
-    computeBillCover({
-      today,
-      bills: bills.map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-        isDated: version.payload.timing.schedule.anchor !== null,
-      })),
-      payments,
-      nextPayOn: comingDays.find((day) => day.on >= today)?.on ?? null,
-      freeToSpendCents:
-        balances.isStarted && balances.hasMoney ? balances.freeToSpendCents : 0,
-    }),
+  getBillCover,
 );
 
 /** Every balance summed from the ledger and never stored, with the bills Free to Spend covers held for them. */
 export const selectBalances = createSelector(
   [selectLedgerOnlyBalances, selectBillCover],
-  (balances, billCover): CoveredBalances => ({
-    ...balances,
-    ledgerBillsCents: balances.assignedToBillsCents,
-    assignedToBillsCents:
-      balances.assignedToBillsCents + billCover.coveredCents,
-    freeToSpendCents: balances.freeToSpendCents - billCover.coveredCents,
-    billCover,
-  }),
+  coverBalances,
 );
 
 export const selectFreeToSpend = (state: RootState) =>

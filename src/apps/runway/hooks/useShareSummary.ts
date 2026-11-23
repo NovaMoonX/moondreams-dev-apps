@@ -6,11 +6,13 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
-import { toDateInputValue } from '@/utils/dateInputUtils';
 import { db } from '@lib/firebase/config';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
-import { isSelfPaying } from '@apps/runway/engine/autoPay';
-import { startOfUtcDay, todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  buildShareSummary,
+  type SummaryFigures,
+} from '@apps/runway/engine/shareSummary';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   getRunwayEncryption,
   isKeptKey,
@@ -33,20 +35,11 @@ import {
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Sealed, ShareSummary } from '@apps/runway/types';
-import { describeBillRepeat } from '@apps/runway/utils/billText';
-import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
-const LIST_LIMIT = 20;
-const BILLS_WITHIN_DAYS = 30;
-const BILLS_NEXT_WITHIN_DAYS = 365;
-const PAID_LIMIT = 10;
-const DAY_MS = 86_400_000;
 const WRITE_DELAY_MS = 2000;
 const HOUR_MS = 3_600_000;
 const FRESH_MS = 6 * HOUR_MS;
 const CLEARED = 'cleared';
-
-type SummaryFigures = Omit<ShareSummary, 'computedAt'>;
 
 /** Keeps the sealed totals-and-names summary a connected app reads current on the plan; the plan opens without it when this never runs. */
 export function useShareSummary(uid: string | null) {
@@ -81,131 +74,44 @@ export function useShareSummary(uid: string | null) {
   const isOffline =
     networkStatus === 'offline' || networkStatus === 'reconnecting';
 
-  const figures = useMemo((): SummaryFigures | null => {
-    const free = getFreeToSpendFigure(balances);
-    if (!isReady || currency === null || free.kind === 'unknown') return null;
-    const soon = today + BILLS_WITHIN_DAYS * DAY_MS;
-    const through = today + BILLS_NEXT_WITHIN_DAYS * DAY_MS;
-    const thisMonth = toDateInputValue(today).slice(0, 7);
-    const describe = ({ version }: (typeof bills)[number]) => ({
-      name: version.payload.name,
-      repeats: describeBillRepeat(version.payload.timing.schedule),
-      endsOn:
-        toDateInputValue(version.payload.ending.onDate ?? undefined) || null,
-      endsAfter: version.payload.ending.afterCount,
-    });
-    const upcomingBills = bills
-      .flatMap((bill) => {
-        const since = Math.max(
-          startOfUtcDay(bill.item.createdAt),
-          startDate ?? 0,
-          recentFrom ?? 0,
-        );
-        const unpaid = (payments[bill.item.id] ?? []).filter(
-          ({ paid, dueOn }) =>
-            paid === null && dueOn >= since && dueOn <= through,
-        );
-        const chosen = unpaid.some(({ dueOn }) => dueOn <= soon)
-          ? unpaid.filter(({ dueOn }) => dueOn <= soon)
-          : unpaid.slice(0, 1);
-        const own = selfPaying[bill.item.id];
-        return chosen.map(({ dueOn, totalCents }, rank) => ({
-          ...describe(bill),
-          amountCents: totalCents,
-          dueOn,
-          paidOn: null,
-          paysItself: own !== undefined && isSelfPaying(own, dueOn, today),
-          rank,
-        }));
-      })
-      // Each bill's next payment is kept before any bill's later ones, so a weekly bill can't crowd out the rest.
-      .sort((a, b) => a.rank - b.rank || a.dueOn - b.dueOn)
-      .slice(0, LIST_LIMIT)
-      .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
-      .map(
-        ({
-          name,
-          repeats,
-          endsOn,
-          endsAfter,
-          amountCents,
-          dueOn,
-          paysItself,
-        }) => ({
-          name,
-          paysItself,
-          repeats,
-          endsOn,
-          endsAfter,
-          amountCents,
-          dueOn: toDateInputValue(dueOn),
-          paidOn: null,
-        }),
-      );
-    const paidBills = bills
-      .flatMap((bill) =>
-        (progress[bill.item.id]?.paid ?? [])
-          .filter(
-            ({ dueOn, paidOn }) =>
-              toDateInputValue(paidOn).startsWith(thisMonth) ||
-              toDateInputValue(dueOn).startsWith(thisMonth),
-          )
-          .map(({ dueOn, paidOn, amountCents }) => ({
-            ...describe(bill),
-            amountCents,
-            dueOn,
-            paidOn,
-            paysItself: false,
-          })),
-      )
-      .sort((a, b) => b.paidOn - a.paidOn || a.name.localeCompare(b.name))
-      .slice(0, PAID_LIMIT)
-      .map(({ dueOn, paidOn, ...rest }) => ({
-        ...rest,
-        dueOn: toDateInputValue(dueOn),
-        paidOn: toDateInputValue(paidOn),
-      }));
-    return {
+  const figures = useMemo(
+    (): SummaryFigures | null =>
+      isReady
+        ? buildShareSummary({
+            today,
+            currency,
+            startDate,
+            recentFrom,
+            stance,
+            balances,
+            comingDays,
+            dueBeforePay,
+            bills,
+            payments,
+            progress,
+            horizon,
+            costPaid,
+            selfPaying,
+          })
+        : null,
+    [
+      isReady,
       currency,
-      freeToSpendCents: balances.freeToSpendCents,
-      nextIncomeOn: comingDays[0] ? toDateInputValue(comingDays[0].on) : null,
-      dueBeforeIncomeCents: dueBeforePay?.cents ?? 0,
-      bills: [...paidBills, ...upcomingBills],
-      horizon: horizon.slice(0, LIST_LIMIT).map(({ item, version }) => {
-        const status = getHorizonStatus(
-          version.payload,
-          balances.assignedByItem[item.id] ?? 0,
-          today,
-          stance,
-          costPaid[item.id],
-          balances.costPaidByItem[item.id] ?? 0,
-          balances.costFromFreeByItem[item.id] ?? 0,
-        );
-        return {
-          name: version.payload.name,
-          targetCents: status.plannedCents,
-          setAsideCents: status.figures.setAsideCents,
-          targetOn: toDateInputValue(version.payload.happensOn) || null,
-        };
-      }),
-    };
-  }, [
-    isReady,
-    currency,
-    today,
-    stance,
-    balances,
-    costPaid,
-    comingDays,
-    dueBeforePay,
-    bills,
-    payments,
-    progress,
-    horizon,
-    selfPaying,
-    recentFrom,
-    startDate,
-  ]);
+      today,
+      stance,
+      balances,
+      costPaid,
+      comingDays,
+      dueBeforePay,
+      bills,
+      payments,
+      progress,
+      horizon,
+      selfPaying,
+      recentFrom,
+      startDate,
+    ],
+  );
   const isUnknown = useMemo(
     () =>
       isReady &&

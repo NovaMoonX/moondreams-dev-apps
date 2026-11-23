@@ -75,10 +75,6 @@ function makeRandom(seed: number) {
   return next;
 }
 
-const random = makeRandom(20_260_425);
-const pickOne = <T>(list: readonly T[]) =>
-  list[Math.floor(random() * list.length)];
-
 const ENVELOPE_NAMES = [
   'Groceries',
   'Gas',
@@ -203,43 +199,50 @@ interface PlanItem {
   priority?: Priority;
 }
 
-/** Five years of one plan, sealed as the app seals it, for judging performance. Emulators only, and only when asked for (`npm run seed:runway-scale`); `seed:reset` brings the baseline back. The plan is shaped like one written before closings existed (no `dirtyFrom`, no closings), so the first open builds them: sixty months, once. `RUNWAY_SCALE_CLOSINGS=1` writes them as well, for judging every open after that. */
-export async function seedRunwayScale(
-  context: SeedContext,
-): Promise<SeedResult> {
-  const keyring = readEmulatorKeyring();
-  const owner = FIXTURE_USERS.runwayScale;
-  const data = deriveSeedDataKey(keyring, owner.uid);
-  const encryption: Encryption = {
-    appId: 'runway',
-    keyId: data.keyId,
-    keyVersion: 1,
-    key: data.key.toString('hex'),
-  };
-  const today = startOfUtcDay(context.now);
-  const startDate = today - 365 * YEARS * DAY_MS - 1 * DAY_MS;
-  const plan = `apps/runway/plans/${owner.uid}`;
-  const pending: { path: string; value: object }[] = [];
-  const written = { count: 0 };
+export interface ScaleDocsOptions {
+  uid: string;
+  encryption: Encryption;
+  now: number;
+  /** Defaults to the five years the seed writes. */
+  years?: number;
+  /** Defaults to the seed's 25,000. */
+  purchaseCount?: number;
+}
+
+export interface ScaleDoc {
+  path: string;
+  value: object;
+}
+
+/** The documents of a long plan, sealed as the app seals them, built in memory and written by nothing: the seed writes them to the emulator, and a check opens them. */
+export async function buildRunwayScaleDocs(
+  options: ScaleDocsOptions,
+): Promise<{ docs: ScaleDoc[]; startDate: number }> {
+  const { uid, encryption, now } = options;
+  const years = options.years ?? YEARS;
+  const purchaseCount = options.purchaseCount ?? PURCHASE_COUNT;
+  const random = makeRandom(20_260_425);
+  const pickOne = <T>(list: readonly T[]) =>
+    list[Math.floor(random() * list.length)];
+  const today = startOfUtcDay(now);
+  const startDate = today - 365 * years * DAY_MS - 1 * DAY_MS;
+  const plan = `apps/runway/plans/${uid}`;
+  const pending: ScaleDoc[] = [];
   const put = (path: string, value: object) => {
-    written.count += 1;
     pending.push({ path, value });
   };
 
   const planCreatedAt = startDate - DAY_MS;
-  put(`apps/runway/server/${owner.uid}/keys/data`, {
-    ...wrapDataKey(keyring, owner.uid, data, planCreatedAt),
-  });
   put(plan, {
-    uid: owner.uid,
+    uid,
     createdAt: planCreatedAt,
-    updatedAt: context.now,
+    updatedAt: now,
     stance: 'conservative',
     startDate,
     trackingPeriods: [{ from: startDate, to: null }],
     notify: { needsHome: false },
     sorting: null,
-    keyId: data.keyId,
+    keyId: encryption.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
 
@@ -842,7 +845,7 @@ export async function seedRunwayScale(
   const totalWeight = funded.reduce((sum, entry) => sum + entry.weight, 0);
   const averageCents = Math.max(
     300,
-    Math.round((0.9 * totalWeight) / PURCHASE_COUNT),
+    Math.round((0.9 * totalWeight) / purchaseCount),
   );
   const pickEnvelope = () => {
     const target = random() * totalWeight;
@@ -858,9 +861,9 @@ export async function seedRunwayScale(
     return found.id ?? funded[0].item.id;
   };
   const span = today - startDate;
-  const purchases = Array.from({ length: PURCHASE_COUNT }, (_, index) => {
+  const purchases = Array.from({ length: purchaseCount }, (_, index) => {
     const date = startOfUtcDay(
-      startDate + Math.floor((index * span) / PURCHASE_COUNT),
+      startDate + Math.floor((index * span) / purchaseCount),
     );
     const createdAt = date + 8 * HOUR_MS + Math.floor(random() * 12 * HOUR_MS);
     const amountCents = Math.max(
@@ -949,6 +952,35 @@ export async function seedRunwayScale(
     );
   });
 
+  return { docs: pending, startDate };
+}
+
+/** Five years of one plan, sealed as the app seals it, for judging performance. Emulators only, and only when asked for (`npm run seed:runway-scale`); `seed:reset` brings the baseline back. The plan is shaped like one written before closings existed (no `dirtyFrom`, no closings), so the first open builds them: sixty months, once. `RUNWAY_SCALE_CLOSINGS=1` writes them as well, for judging every open after that. */
+export async function seedRunwayScale(
+  context: SeedContext,
+): Promise<SeedResult> {
+  const keyring = readEmulatorKeyring();
+  const owner = FIXTURE_USERS.runwayScale;
+  const data = deriveSeedDataKey(keyring, owner.uid);
+  const encryption: Encryption = {
+    appId: 'runway',
+    keyId: data.keyId,
+    keyVersion: 1,
+    key: data.key.toString('hex'),
+  };
+  const { docs, startDate } = await buildRunwayScaleDocs({
+    uid: owner.uid,
+    encryption,
+    now: context.now,
+  });
+  const pending: ScaleDoc[] = [
+    {
+      path: `apps/runway/server/${owner.uid}/keys/data`,
+      value: { ...wrapDataKey(keyring, owner.uid, data, startDate - DAY_MS) },
+    },
+    ...docs,
+  ];
+
   // The emulator commits one batch at a time and takes seconds over a few hundred sealed documents. A bulk writer sends many at once, so the first one waits behind the rest and its 60 second deadline expires; writing the batches one after another, once everything is built, never queues a batch behind another.
   const BATCH_SIZE = 200;
   await Array.from(
@@ -967,6 +999,6 @@ export async function seedRunwayScale(
     : 0;
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: written.count + closingDocuments,
+    firestoreDocuments: pending.length + closingDocuments,
   };
 }

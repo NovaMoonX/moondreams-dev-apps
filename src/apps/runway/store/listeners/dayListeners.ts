@@ -8,11 +8,11 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader, type SealedReader } from '@lib/security';
+import { createSealedReader } from '@lib/security';
 import { openJson } from '@apps/runway/security';
+import { openDay } from '@apps/runway/engine/openDocs';
 import { openRecord } from '@apps/runway/store/listeners/openLedger';
 import type {
-  DayOverrideSealed,
   DayRecordDoc,
   IncomeDayDoc,
   OpenDay,
@@ -23,31 +23,7 @@ import type {
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
-export async function openDay(
-  entry: IncomeDayDoc,
-  read: SealedReader,
-): Promise<OpenDay> {
-  const opened = entry.sealed
-    ? await read<Partial<DayOverrideSealed>>(entry.sealed)
-    : null;
-  const result: OpenDay = {
-    id: entry.id,
-    payLineId: entry.payLineId,
-    sourceId: entry.sourceId ?? null,
-    expectedOn: entry.expectedOn,
-    arrivedOn: entry.arrivedOn ?? null,
-    confirmedAt: entry.confirmedAt ?? null,
-    status: entry.status,
-    doneLineIds: entry.doneLineIds ?? [],
-    override: {
-      pairings: opened?.pairings ?? null,
-      holdResolutions: opened?.holdResolutions ?? {},
-      payloads: opened?.payloads ?? {},
-      billCents: opened?.billCents ?? {},
-    },
-  };
-  return result;
-}
+export { openDay };
 
 /** The days from `from` on (before `to` when it is given) that the person has changed. Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startDaysListener(

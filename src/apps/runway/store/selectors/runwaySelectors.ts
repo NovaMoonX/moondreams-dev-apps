@@ -11,6 +11,20 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectTwinMergingIds } from '@apps/runway/store/selectors/emailSelectors';
 import {
+  getBillProgress,
+  getCostPaid,
+  getRecordsSinceStart,
+  getSettledKey,
+  isListed,
+  planAllBillPayments,
+  resolveAllHorizonItems,
+  resolveBills,
+  resolveComingDays,
+  resolveHorizonItems,
+  type ResolvedBill,
+  type ResolvedHorizon,
+} from '@apps/runway/engine/figures';
+import {
   findHistoryDuplicates,
   makeIsLinkHistory,
 } from '@apps/runway/engine/linkHistory';
@@ -19,10 +33,7 @@ import {
   getHolderById,
 } from '@apps/runway/engine/accounts';
 import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import {
-  deriveBillProgress,
-  deriveHeldByItem,
-} from '@apps/runway/engine/closings';
+import { deriveHeldByItem } from '@apps/runway/engine/closings';
 import {
   selectClosingBase,
   selectIsWindowLoaded,
@@ -39,11 +50,7 @@ import {
   NO_PROGRESS,
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
-import {
-  compareDays,
-  planBillPayments,
-  type BillPayment,
-} from '@apps/runway/engine/demands';
+import { compareDays, planBillPayments } from '@apps/runway/engine/demands';
 import { getCostNameKey, getCostShareKey } from '@apps/runway/engine/parts';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
@@ -54,7 +61,6 @@ import {
 } from '@apps/runway/engine/billStretches';
 import {
   listHorizonPayments,
-  type CostPaidEntry,
   type CostPayment,
 } from '@apps/runway/engine/horizon';
 import {
@@ -123,10 +129,6 @@ import type {
 
 const selectItems = (state: RootState) => state.runway.items;
 
-/** On the lists on `on`: not archived and not ended before it. An older day still resolves what has since gone. */
-const isListed = (item: PlanItemDoc, on: number) =>
-  (item.archivedAt === null || on < item.archivedAt) &&
-  (item.endedAt === null || on <= item.endedAt);
 const selectVersions = (state: RootState) => state.runway.versions;
 const selectOn = (_state: RootState, on: number) => on;
 
@@ -243,24 +245,14 @@ export const selectPairedBy = createSelector(
 );
 
 export const selectSettledKey = (state: RootState) =>
-  state.runway.days
-    .filter((day) => day.status !== 'draft')
-    .map((day) => day.id)
-    .sort()
-    .join(',');
+  getSettledKey(state.runway.days);
 
 const toSet = (key: string) => new Set(key === '' ? [] : key.split(','));
 
 /** The income days ahead, computed from schedules each time the plan changes and never stored. A day that is confirmed or marked not arrived is no longer coming. */
 export const selectComingDays = createSelector(
   [selectItems, selectVersions, selectOn, selectSettledKey],
-  (items, versions, today, settledKey) => {
-    const settled = toSet(settledKey);
-    const result = buildComingDays(items, versions, today).filter(
-      (day) => !settled.has(day.dayKey),
-    );
-    return result;
-  },
+  resolveComingDays,
 );
 
 /** Days from the last weeks that passed without being confirmed or marked, still waiting for the person. */
@@ -392,15 +384,7 @@ const selectOpenDays = (state: RootState) => state.runway.days;
 /** The records a starting amount does not already include: those of days whose money arrived on or after the starting day. */
 const selectRecordsSinceStart = createSelector(
   [selectRecords, selectOpenDays, selectStartDate],
-  (records, days, startDate) => {
-    if (startDate === null) return records;
-    const arrivedOn = new Map(
-      days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
-    );
-    return records.filter(
-      (record) => (arrivedOn.get(record.dayId) ?? 0) >= startDate,
-    );
-  },
+  getRecordsSinceStart,
 );
 
 /** What each plan item holds from the ledger: its starting amount plus what confirmed days gave it; a goal's held money. */
@@ -417,20 +401,7 @@ export const selectBillProgress = createSelector(
     selectStartDate,
     selectClosingBase,
   ],
-  (
-    records,
-    days,
-    moves,
-    startDate,
-    closing,
-  ): Record<string, BillProgressInput> =>
-    deriveBillProgress(
-      records,
-      new Map(days.map((day) => [day.id, day.expectedOn])),
-      moves,
-      startDate,
-      closing,
-    ),
+  getBillProgress,
 );
 
 /** The ledger the balances are summed from is read: the moves and the purchases of the window that follows the closing, and the cards that say which starting amounts are debts. */
@@ -608,10 +579,7 @@ export const selectHomePins = createSelector(
     ),
 );
 
-export interface ResolvedBill {
-  item: PlanItemDoc;
-  version: BillVersion;
-}
+export type { ResolvedBill };
 
 const isBill = (version: OpenVersion): version is BillVersion =>
   version.kind === 'bill';
@@ -619,24 +587,7 @@ const isBill = (version: OpenVersion): version is BillVersion =>
 /** The bills in the plan on a date, in plan order: Must before Should before Want, then rank, then creation. */
 export const selectBills = createSelector(
   [selectItems, selectVersions, selectOn],
-  (items, versions, on): ResolvedBill[] => {
-    const billVersions = versions.filter(isBill);
-    const result = items
-      .filter((item) => item.kind === 'bill' && isListed(item, on))
-      .flatMap((item) => {
-        const version = resolveCurrentOrNext(billVersions, item.id, on);
-        return version ? [{ item, version }] : [];
-      })
-      .sort(
-        (a, b) =>
-          PRIORITIES.indexOf(a.version.payload.priority) -
-            PRIORITIES.indexOf(b.version.payload.priority) ||
-          a.version.payload.orderIndex - b.version.payload.orderIndex ||
-          a.item.createdAt - b.item.createdAt ||
-          a.item.id.localeCompare(b.item.id),
-      );
-    return result;
-  },
+  resolveBills,
 );
 
 export interface ResolvedGroup {
@@ -698,46 +649,15 @@ export const selectGoals = createSelector(
   },
 );
 
-export interface ResolvedHorizon {
-  item: PlanItemDoc;
-  version: HorizonVersion;
-}
+export type { ResolvedHorizon };
 
 const isHorizon = (version: OpenVersion): version is HorizonVersion =>
   version.kind === 'horizon';
 
-const getNextCostOn = (version: HorizonVersion, on: number) =>
-  Math.min(
-    Number.MAX_SAFE_INTEGER,
-    ...version.payload.costs.flatMap(({ schedule, endsAfter }) =>
-      schedule.anchor !== null &&
-      schedule.anchor >= on &&
-      (endsAfter === null || schedule.anchor <= endsAfter)
-        ? [schedule.anchor]
-        : [],
-    ),
-  );
-
 /** Every Horizon item listed on a date, open or done, soonest next cost first, then the event's own date. */
 export const selectAllHorizonItems = createSelector(
   [selectItems, selectVersions, selectOn],
-  (items, versions, on): ResolvedHorizon[] => {
-    const horizonVersions = versions.filter(isHorizon);
-    const result = items
-      .filter((item) => item.kind === 'horizon' && isListed(item, on))
-      .flatMap((item) => {
-        const version = resolveCurrentOrNext(horizonVersions, item.id, on);
-        return version ? [{ item, version }] : [];
-      })
-      .sort(
-        (a, b) =>
-          getNextCostOn(a.version, on) - getNextCostOn(b.version, on) ||
-          a.version.payload.happensOn - b.version.payload.happensOn ||
-          a.item.createdAt - b.item.createdAt ||
-          a.item.id.localeCompare(b.item.id),
-      );
-    return result;
-  },
+  resolveAllHorizonItems,
 );
 
 /** The id of the version of an event in force on a date, which an edit of it is named after; undefined when it is not listed. */
@@ -764,13 +684,7 @@ export const selectHorizonItems = createSelector(
     selectItemStops,
     selectItemEnds,
   ],
-  (all, versions, on, stops, ends): ResolvedHorizon[] =>
-    all.filter(
-      ({ version }) =>
-        version.payload.state === 'open' &&
-        getChangesOnlyDoneOn(version.payload, versions, on, stops, ends) ===
-          null,
-    ),
+  resolveHorizonItems,
 );
 
 /** Every event still open, a finished-by-its-changes one included, which a change can still be linked to. */
@@ -846,15 +760,7 @@ export const selectCostPayments = createSelector(
 );
 
 /** Each Horizon item's payments marked paid and not undone, by item id. */
-export const selectCostPaid = createSelector(
-  [selectBillProgress],
-  (progress): Record<string, CostPaidEntry[]> =>
-    Object.fromEntries(
-      Object.entries(progress).flatMap(([id, entry]) =>
-        entry.costPaid ? [[id, entry.costPaid]] : [],
-      ),
-    ),
-);
+export const selectCostPaid = createSelector([selectBillProgress], getCostPaid);
 
 /** Each item's payments of costs paid outside the plan that nobody has marked: until they are, the item cannot finish, whatever the date. */
 export const selectUnmarkedOutside = createSelector(
@@ -1372,58 +1278,7 @@ export const selectBillPayments = createSelector(
     selectOpenDays,
     selectVersions,
   ],
-  (
-    bills,
-    comingDays,
-    stance,
-    progress,
-    today,
-    startDate,
-    openDays,
-    versions,
-  ): Record<string, BillPayment[]> => {
-    const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
-    const fixedByBill = getFixedByBill(openDays);
-    const pairedByBill = getPairedByBill(
-      versions,
-      openDays,
-      comingDays,
-      stance,
-    );
-    const oneTimePayLineIds = getOneTimePayLineIds(versions);
-    const result = Object.fromEntries(
-      bills.map(({ item, version }) => {
-        const { payload } = version;
-        return [
-          item.id,
-          planBillPayments(
-            {
-              itemId: item.id,
-              createdAt: item.createdAt,
-              priority: payload.priority,
-              orderIndex: payload.orderIndex,
-              amount: payload.amount,
-              stanceOverride: payload.stanceOverride ?? null,
-              schedule: payload.timing.schedule,
-              ending: capEnding(payload.ending, item.endedAt),
-              fundedBy: payload.fundedBy,
-              payOnDay: payload.payOnDay ?? null,
-              stretches: getStretchesOf(versions, item),
-              fixed: fixedByBill.get(item.id),
-              paired: pairedByBill.get(item.id),
-              oneTimePayLineIds,
-              progress: progress[item.id] ?? NO_PROGRESS,
-            },
-            comingDays,
-            horizon,
-            stance,
-            { today, startDate },
-          ),
-        ];
-      }),
-    );
-    return result;
-  },
+  planAllBillPayments,
 );
 
 const CHANGEABLE_KINDS = new Set(['envelope', 'goal', 'bill']);

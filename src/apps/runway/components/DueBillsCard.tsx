@@ -47,7 +47,7 @@ import type { HorizonCost } from '@apps/runway/types';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { undoPaymentPaid, useBillPaid } from '@apps/runway/hooks/useBillPaid';
-import type { WrittenPaidMark } from '@apps/runway/store/actions/moveActions';
+import type { WrittenPaidMark } from '@apps/runway/types';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,

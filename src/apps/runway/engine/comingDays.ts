@@ -1,4 +1,4 @@
-import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import { LOOKAHEAD_MONTHS } from './engineConstants';
 import type {
   BillVersion,
   DayOverrideSealed,

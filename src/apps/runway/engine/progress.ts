@@ -6,7 +6,7 @@ import type {
   OpenRecord,
 } from '@apps/runway/types';
 
-import { START_DAY_KEY } from '@apps/runway/constants';
+import { START_DAY_KEY } from './engineConstants';
 
 import { getEffectiveSplit, getEffectiveSplits } from './correct';
 import { toDayStamp } from './dates';

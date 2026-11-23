@@ -180,6 +180,7 @@
     "check:yearly-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/yearlyDates.ts",
     "check:batch-jobs": "tsx scripts/checks/batchJobs.ts",
     "check:server-copies": "tsx scripts/checks/serverCopies.ts",
+    "check:runway-server-parity": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayServerParity.ts",
     "connections:vendor": "tsx scripts/checks/serverCopies.ts --write",
     "check:connections-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/connections/rulesMatrix.py\"",
     "check:adapters": "firebase emulators:exec --only firestore --project demo-adapters \"tsx scripts/connections/adapterMatrix.ts\"",

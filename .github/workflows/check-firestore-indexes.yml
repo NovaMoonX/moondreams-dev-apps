@@ -30,6 +30,7 @@ jobs:
       - run: npm ci
       - run: npm run check:indexes
       - run: npm run check:server-copies
+      - run: npm run check:runway-server-parity
       - run: npm run check:connection-boundaries
       - run: npm run check:share-fields
       - run: npm run check:rules-size

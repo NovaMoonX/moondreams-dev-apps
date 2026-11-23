@@ -1,8 +1,5 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
-import type { ChargeMatchResult } from '@apps/runway/store/actions/autoPayActions';
-import type { MergedPurchase } from '@apps/runway/store/actions/purchaseActions';
-
 import type {
   ACCOUNT_KINDS,
   CALENDAR_PERIODS,
@@ -23,7 +20,7 @@ import type {
   PRIORITIES,
   SCHEDULE_KINDS,
   STANCES,
-} from '@apps/runway/constants';
+} from '@apps/runway/engine/engineConstants';
 
 export type RunwayTab = 'home' | 'days' | 'spend' | 'plan';
 
@@ -1506,4 +1503,34 @@ export interface OpenDoneForYou extends DoneForYouSealed {
   kind: DoneForYouKind;
   createdAt: number;
   undoneAt: number | null;
+}
+
+/** A bill payment mark as the ledger holds it. */
+export type WrittenPaidMark = {
+  moveId: string;
+  billId: string;
+  dueOn: DateOnly;
+} & BillPaidSealed;
+
+/** What an Undo of a match needs. */
+export interface ChargeMatchResult {
+  /** The charge as it was before the match. */
+  purchase: OpenPurchase;
+  billId: string;
+  billName: string;
+  dueOn: DateOnly;
+  /** The charge's `updatedAt` after the match, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+  written: WrittenPaidMark | null;
+  replaced: WrittenPaidMark | null;
+  keysBefore: string[] | null;
+  keysAfter: string[] | null;
+}
+
+export interface MergedPurchase {
+  bank: OpenPurchase;
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
 }

@@ -21,6 +21,7 @@ import {
 } from '@apps/runway/engine/horizon';
 import { getGoalCostId, type GoalCover } from '@apps/runway/engine/horizonGoal';
 import { isSavingFor } from '@apps/runway/engine/pace';
+import { getBillsDueBeforePay } from '@apps/runway/engine/figures';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { Priority } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
@@ -145,21 +146,7 @@ export const selectHorizonMonthCents = createSelector(
 /** What the bills still unpaid at or above `dial` ask before the next pay arrives, a bill due on the pay day itself left to that pay; null when no pay is coming; `payOn` is that pay's day. */
 export const selectBillsDueBeforePay = createSelector(
   [selectBillPayments, selectComingDays, selectBills, selectDial],
-  (
-    payments,
-    comingDays,
-    bills,
-    dial,
-  ): { cents: number; payOn: number } | null => {
-    const nextPay = comingDays[0];
-    if (!nextPay) return null;
-    const cents = bills
-      .filter(({ version }) => isCountedAt(version.payload.priority, dial))
-      .flatMap(({ item }) => payments[item.id] ?? [])
-      .filter(({ paid, payOn }) => paid === null && payOn < nextPay.on)
-      .reduce((sum, { totalCents }) => sum + totalCents, 0);
-    return { cents, payOn: nextPay.on };
-  },
+  getBillsDueBeforePay,
 );
 
 /** What the Horizon costs at or above `dial`, each at its own priority, together fall short of what they ask, each as its row and sheet work it out. */

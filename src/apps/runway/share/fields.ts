@@ -967,4 +967,6 @@ export const NOT_STORED: Record<string, string> = {
   OpenChange: 'decrypted view of ChangeDoc',
   OpenDay: 'decrypted view of IncomeDayDoc',
   NormalizedAccount: 'provider account reading',
+  ChargeMatchResult: 'in-memory result of matching a bank charge',
+  MergedPurchase: 'in-memory result of merging two purchases',
 };

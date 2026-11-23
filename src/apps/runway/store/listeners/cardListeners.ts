@@ -4,13 +4,8 @@ import { db } from '@lib/firebase/config';
 
 import { createSealedReader } from '@lib/security';
 import { openJson } from '@apps/runway/security';
-import type {
-  CardDoc,
-  CardSealed,
-  OpenCard,
-  RunwayEncryption,
-} from '@apps/runway/types';
-import { cleanBankName } from '@apps/runway/utils/accountText';
+import { openCard } from '@apps/runway/engine/openDocs';
+import type { CardDoc, OpenCard, RunwayEncryption } from '@apps/runway/types';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -33,23 +28,9 @@ export function startCardsListener(
       const current = sequence.latest;
       try {
         const opened = await Promise.all(
-          snapshot.docs.map(async (entry): Promise<OpenCard> => {
-            const data = entry.data() as CardDoc;
-            const payload = await read<CardSealed>(data.sealed);
-            return {
-              id: entry.id,
-              createdAt: data.createdAt,
-              updatedAt: data.updatedAt,
-              archivedAt: data.archivedAt ?? null,
-              linkId: data.linkId ?? null,
-              issuer: payload.issuer,
-              name: payload.name ? cleanBankName(payload.name) : null,
-              dueDay: payload.dueDay ?? null,
-              lastFour: payload.lastFour ?? null,
-              payFromAccountId: payload.payFromAccountId ?? null,
-              annualFee: payload.annualFee ?? null,
-            };
-          }),
+          snapshot.docs.map((entry) =>
+            openCard({ ...(entry.data() as CardDoc), id: entry.id }, read),
+          ),
         );
         if (current !== sequence.latest || run.isStopped) return;
         onChange(opened);

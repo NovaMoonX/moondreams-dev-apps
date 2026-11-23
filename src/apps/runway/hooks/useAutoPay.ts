@@ -37,12 +37,8 @@ import {
   matchChargeToBill,
   undoChargeMatch,
   unmatchBillCharge,
-  type ChargeMatchResult,
 } from '@apps/runway/store/actions/autoPayActions';
-import {
-  markBillPaid,
-  type WrittenPaidMark,
-} from '@apps/runway/store/actions/moveActions';
+import { markBillPaid } from '@apps/runway/store/actions/moveActions';
 import {
   selectAutoBills,
   selectAutoChecks,
@@ -56,7 +52,12 @@ import {
   selectItemLooks,
   selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { DateOnly, OpenPurchase } from '@apps/runway/types';
+import type {
+  ChargeMatchResult,
+  DateOnly,
+  OpenPurchase,
+  WrittenPaidMark,
+} from '@apps/runway/types';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
 import {
   toPurchaseSubject,

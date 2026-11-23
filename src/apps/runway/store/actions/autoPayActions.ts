@@ -15,7 +15,6 @@ import {
   findOpenMarkId,
   getPaymentChange,
   moveRef,
-  type WrittenPaidMark,
 } from '@apps/runway/store/actions/moveActions';
 import {
   getWaitingLines,
@@ -23,6 +22,7 @@ import {
 } from '@apps/runway/store/actions/purchaseActions';
 import type {
   BillPaidSealed,
+  ChargeMatchResult,
   Cents,
   DateOnly,
   MatchSealed,
@@ -33,6 +33,7 @@ import type {
   PurchaseDoc,
   PurchaseSealed,
   RunwayEncryption,
+  WrittenPaidMark,
 } from '@apps/runway/types';
 
 const planRef = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);
@@ -225,21 +226,6 @@ export interface MatchChargeInput {
   learn: boolean;
   /** False when the app matched it: no pass changes a charge the person picked. */
   isPicked: boolean;
-}
-
-/** What an Undo of a match needs. */
-export interface ChargeMatchResult {
-  /** The charge as it was before the match. */
-  purchase: OpenPurchase;
-  billId: string;
-  billName: string;
-  dueOn: DateOnly;
-  /** The charge's `updatedAt` after the match, which an Undo checks nothing has changed since. */
-  updatedAt: number;
-  written: WrittenPaidMark | null;
-  replaced: WrittenPaidMark | null;
-  keysBefore: string[] | null;
-  keysAfter: string[] | null;
 }
 
 const toMatchSealed = (keys: readonly string[]) =>

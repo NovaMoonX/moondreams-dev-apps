@@ -83,6 +83,7 @@ import type {
   ExpenseDoc,
   ExpenseSealed,
   IncomeDayDoc,
+  MergedPurchase,
   PurchaseAssignedBy,
   PurchasePairKind,
   ReceiptImageDoc,
@@ -1381,14 +1382,6 @@ function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
     );
   }
   return lines;
-}
-
-export interface MergedPurchase {
-  bank: OpenPurchase;
-  typed: OpenPurchase;
-  images: ReceiptImageDoc[];
-  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
-  updatedAt: number;
 }
 
 /** Makes a bank purchase and the one typed by hand for it one purchase: the bank's keeps its day, amount, status and id and takes the typed one's envelopes, name, note, receipt and photos, and the typed one is removed. Refused when another device changed either first. */
