@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs';
 
-/**
- * Posts one sample email to the local Functions emulator, as the email worker would.
- *   EMAIL_WEBHOOK_SECRET=local-secret npm run a-list:email-send -- tickets-<token>@apps.moondreams.dev scripts/a-list/emailFixtures/reservation.txt
- * A fixture is a `From:` and `Subject:` line, a blank line and the email's text. Start the emulator with the same EMAIL_WEBHOOK_SECRET in its environment. Emulators only.
- */
+// Posts one fixture (From:, Subject:, a blank line, the text) to the Functions emulator, as the email worker would.
+// EMAIL_WEBHOOK_SECRET=local-secret npm run a-list:email-send -- tickets-<token>@apps.moondreams.dev <fixture>; emulators only.
 const [address, fixture] = process.argv.slice(2);
 const secret = process.env.EMAIL_WEBHOOK_SECRET;
 if (!address || !fixture || !secret) {

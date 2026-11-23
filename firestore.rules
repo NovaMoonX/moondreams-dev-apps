@@ -218,10 +218,8 @@ service cloud.firestore {
 
     // --- App: a-list ---
 
-    // Everything of a member's is private to them and nests under their uid. `emailIntake` (the forwarding address and what the server caught of a provider's confirmation)
-    // and `emailEvents` (what became of each forwarded email) are written only by Functions: the member reads both and deletes an event, never an intake document.
-    // `emailSetup/progress` (the walkthrough's provider and furthest step, nothing sensitive) is created and updated by the app, never deleted.
-    // `apps/a-list/emailTokens` and `apps/a-list/server` match no rule, so they stay Functions-only.
+    // Email intake and events are written only by Functions; the member reads them and may delete an event.
+    // Setup progress holds nothing sensitive and is never deleted. Email tokens and server state match no rule.
     match /apps/a-list/memberships/{uid} {
       allow read, write: if isUser(uid);
     }
