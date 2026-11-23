@@ -6,12 +6,12 @@ import type { AListEmailEvent, AListEmailOutcome } from '@apps/a-list/types';
 export const EMAIL_OUTCOME_EMOJIS: Record<AListEmailOutcome, string> = {
   added: '🎬',
   attached: '🎟️',
-  canceled: '👋',
+  canceled: '🚫',
   partlyCanceled: '✂️',
   cancelNotFound: '🔍',
   alreadyHandled: '♻️',
   confirm: '📬',
-  notTicket: '📰',
+  notTicket: '📭',
   unread: '🤔',
 };
 

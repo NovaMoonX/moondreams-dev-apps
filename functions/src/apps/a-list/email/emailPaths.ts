@@ -1,5 +1,5 @@
-export const EMAIL_ADDRESS_PREFIX = 'tickets';
-export const EMAIL_TICKETS_GATE_ID = 'email-tickets';
+export const EMAIL_ADDRESS_PREFIX = 'amc';
+export const EMAIL_TICKETS_GATE_ID = 'amc-emails';
 export const EMAIL_EVENT_KEEP_DAYS = 30;
 export const MAX_EMAILS_PER_HOUR = 30;
 

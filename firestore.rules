@@ -228,7 +228,7 @@ service cloud.firestore {
       allow read: if isUser(uid);
       allow create, update: if isUser(uid)
         && !(document[0] in ['emailIntake', 'emailEvents'])
-        && (document[0] != 'emailSetup' || (document[1] == 'progress' && isGateOpen('a-list', 'email-tickets', 'off')));
+        && (document[0] != 'emailSetup' || (document[1] == 'progress' && isGateOpen('a-list', 'amc-emails', 'off')));
       // Undo marks an email's change as taken back; everything else on the event is the server's.
       allow update: if isUser(uid) && document[0] == 'emailEvents'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['undoneAt']);

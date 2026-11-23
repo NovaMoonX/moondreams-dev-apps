@@ -33,7 +33,7 @@ export const rotateAListEmailAddress = onCall(
       'a-list',
       EMAIL_TICKETS_GATE_ID,
       'off',
-      'Tickets from email are not open for you yet.',
+      'AMC emails aren’t open for you yet.',
     );
     const uid = request.auth?.uid as string;
     const firestore = getFirestore();

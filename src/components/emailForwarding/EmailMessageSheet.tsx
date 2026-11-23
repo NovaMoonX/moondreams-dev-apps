@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 
-import { FileText } from 'lucide-react';
+import { Mail } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -9,16 +9,14 @@ import FormSheet from '@/components/FormSheet';
 import Subview from '@/components/Subview';
 import { formatDateTime } from '@/utils/formatUtils';
 
-const LONG_TEXT_LENGTH = 280;
-
 interface EmailMessageSheetProps {
   from: string;
   subject: string;
   /** When it reached the address, an instant shown in local time. */
   receivedAt: number;
-  /** The few lines the server kept as an excerpt; the quote is left out when empty. */
+  /** The few lines the server kept as an excerpt, shown behind "View the email"; the row is left out when empty and no whole text was kept. */
   text: string;
-  /** The whole email's readable text when the server kept it, offered as "Read the whole email" when it says more than the excerpt; null or omitted when none was kept. */
+  /** The whole email's readable text when the server kept it, shown in place of the excerpt; null or omitted when none was kept. */
   wholeText?: string | null;
   onClose: () => void;
   /** What the app did with it ("Added to your list"), with its reason when there is one. */
@@ -64,7 +62,7 @@ function EmailHeader({
   );
 }
 
-/** A drawer that looks like an email: From, Subject and Received, what the app did with it, the kept excerpt in a quoted box (six lines at most) with "Read the whole email" when more was kept, then the app's actions. */
+/** A drawer that looks like an email: From, Subject and Received, what the app did with it, then "View the email" (the kept text on its own screen) and the app's actions. */
 function EmailMessageSheet({
   from,
   subject,
@@ -78,18 +76,15 @@ function EmailMessageSheet({
   renderText = (value) => value,
   title = EMAIL_FORWARDING_WORDS.emailTitle,
 }: EmailMessageSheetProps) {
-  const [isWholeShown, setIsWholeShown] = useState(false);
-  const hasWholeEmail =
-    wholeText !== null &&
-    (wholeText.replace(/\n\s*\n/g, '\n').trim() !== text.trim() ||
-      text.length > LONG_TEXT_LENGTH);
+  const [isEmailShown, setIsEmailShown] = useState(false);
+  const shownText = (wholeText ?? text).trim();
 
-  if (isWholeShown && wholeText !== null) {
+  if (isEmailShown && shownText !== '') {
     return (
       <Subview
         overlay
         title={title}
-        onClose={() => setIsWholeShown(false)}
+        onClose={() => setIsEmailShown(false)}
         headerAction={headerActions}
       >
         <div className='space-y-4'>
@@ -100,7 +95,7 @@ function EmailMessageSheet({
             renderText={renderText}
           />
           <p className='text-sm break-words whitespace-pre-line'>
-            {renderText(wholeText)}
+            {renderText(shownText)}
           </p>
         </div>
       </Subview>
@@ -123,22 +118,15 @@ function EmailMessageSheet({
           renderText={renderText}
         />
         {outcome}
-        {text && (
-          <blockquote className='border-border bg-muted/60 border-l-4 px-3 py-2 text-sm'>
-            <p className='line-clamp-6 break-words whitespace-pre-line'>
-              {renderText(text)}
-            </p>
-          </blockquote>
-        )}
-        {hasWholeEmail && (
-          <ActionGroup isRoomy>
+        {shownText !== '' && (
+          <ActionGroup>
             <ActionRow
               isGrouped
-              isRoomy
               hasChevron
-              icon={<FileText />}
+              icon={<Mail />}
               label={EMAIL_FORWARDING_WORDS.showWholeEmail}
-              onClick={() => setIsWholeShown(true)}
+              subtitle={EMAIL_FORWARDING_WORDS.showWholeEmailSubtitle}
+              onClick={() => setIsEmailShown(true)}
             />
           </ActionGroup>
         )}

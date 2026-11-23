@@ -119,7 +119,7 @@ if start_step 3 "Cloudflare Email Routing"; then
 fi
 
 if start_step 4 "the feature switch"; then
-  echo "4. Open https://apps.moondreams.dev/admin, then Features, and turn on \"Tickets from email\" for yourself (testing) or for everyone."
+  echo "4. Open https://apps.moondreams.dev/admin, then Features, and turn on \"AMC emails\" for yourself (testing) or for everyone."
   printf '   Press Enter when it is on. '
   read -r _ || true
   remember_step 4

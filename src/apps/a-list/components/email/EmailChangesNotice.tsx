@@ -1,7 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Mail } from 'lucide-react';
+import { X } from 'lucide-react';
 
-import InlineNotice from '@/components/InlineNotice';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -15,7 +14,7 @@ import {
 } from '@apps/a-list/store/selectors';
 import { getUnseenChanges } from '@apps/a-list/utils/emailEvents';
 
-/** A quiet line on the calendar when AMC emails changed showings since the member last looked; nothing while the switch is closed or setup isn't done. */
+/** A small card on the calendar when AMC emails changed showings since the member last looked; nothing while the switch is closed or setup isn't done. */
 function EmailChangesNotice() {
   const { user } = useAuth();
   const isOpen = useIsGateOpen('a-list', EMAIL_TICKETS_GATE_ID);
@@ -33,31 +32,43 @@ function EmailChangesNotice() {
   };
 
   return (
-    <InlineNotice
-      tone='info'
-      icon={Mail}
-      onDismiss={dismiss}
-      dismissLabel='Dismiss email changes'
-    >
-      <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
-        <p>
+    <div className='bg-secondary/60 flex items-center gap-3 rounded-2xl py-3 pr-2 pl-3'>
+      <span
+        aria-hidden='true'
+        className='bg-card grid size-10 shrink-0 place-items-center rounded-full text-xl leading-none shadow-sm'
+      >
+        🍿
+      </span>
+      <div className='min-w-0 flex-1'>
+        <p className='text-sm font-medium'>
           {unseen.length === 1
             ? '1 showing changed'
-            : `${unseen.length} showings changed`}{' '}
-          from your AMC emails
+            : `${unseen.length} showings changed`}
         </p>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          rounded='full'
-          className="relative min-h-7 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
-          onClick={() => openOverlay({ kind: 'emailTickets' })}
-        >
-          See
-        </Button>
+        <p className='text-muted-foreground text-xs'>From your AMC emails</p>
       </div>
-    </InlineNotice>
+      <Button
+        type='button'
+        variant='primary'
+        size='sm'
+        rounded='full'
+        className="relative shrink-0 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+        onClick={() => openOverlay({ kind: 'emailTickets' })}
+      >
+        See them
+      </Button>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        rounded='full'
+        aria-label='Dismiss email changes'
+        className="relative size-8 shrink-0 p-0 before:absolute before:-inset-1 before:content-['']"
+        onClick={dismiss}
+      >
+        <X className='size-4' aria-hidden='true' />
+      </Button>
+    </div>
   );
 }
 

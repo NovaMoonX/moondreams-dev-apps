@@ -71,9 +71,9 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
       "Runway is on Plaid's Trial plan: 10 bank sign-ins in total for everyone, and one removed never frees its slot. Give this to its one tester only, until full production access is set up.",
   },
   {
-    id: 'email-tickets',
+    id: 'amc-emails',
     appId: 'a-list',
-    label: 'Tickets from email',
+    label: 'AMC emails',
     description:
       "Someone without it never sees a forwarding address, and anything sent to an old one is dropped. Someone with it gets a private address to forward AMC's emails to: each reservation goes on the calendar with its ticket, and each cancellation takes its showing off.",
     defaultRollout: 'off',

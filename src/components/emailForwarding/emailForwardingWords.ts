@@ -189,5 +189,6 @@ export const EMAIL_FORWARDING_WORDS = {
   subject: 'Subject',
   received: 'Received',
   noSubject: 'No subject',
-  showWholeEmail: 'Read the whole email',
+  showWholeEmail: 'View the email',
+  showWholeEmailSubtitle: 'The part of it that was kept',
 } as const;

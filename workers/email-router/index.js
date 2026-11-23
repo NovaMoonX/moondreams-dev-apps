@@ -23,8 +23,8 @@ const readTarget = (to, env) => {
   const prefix = /^([a-z]+)-/.exec(to.trim().toLowerCase())?.[1];
   return prefix === 'finance'
     ? env.INGEST_URL
-    : prefix === 'tickets'
-      ? env.TICKETS_INGEST_URL
+    : prefix === 'amc'
+      ? env.A_LIST_INGEST_URL
       : null;
 };
 

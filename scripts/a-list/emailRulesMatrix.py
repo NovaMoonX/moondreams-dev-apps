@@ -115,7 +115,7 @@ def main():
         check(f'membership delete [{a}]', commit(tok, [rm(base)]), a == 'o')
     admin([put(base, member)])
     check('emailSetup/progress create with the switch closed [o]', commit(o_tok, [put_new(f'{base}/emailSetup/progress', dict(id='progress', createdAt=NOW))]), False)
-    admin([put('featureGates/a-list', dict(gates={'email-tickets': dict(rollout='off', alwaysOnUids=[uid], alwaysOffUids=[])}))])
+    admin([put('featureGates/a-list', dict(gates={'amc-emails': dict(rollout='off', alwaysOnUids=[uid], alwaysOffUids=[])}))])
     check('membership create at another uid [o]', commit(o_tok, [put_new(f'apps/a-list/memberships/{x_uid}', member)]), False)
 
     for path, ops in PATHS.items():
