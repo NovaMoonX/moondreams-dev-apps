@@ -298,6 +298,8 @@ export type AListEmailOutcome =
   | 'attached'
   /** A cancellation that took its showing off the calendar. */
   | 'canceled'
+  /** A refund of some of a reservation's tickets; the showing stays. */
+  | 'partlyCanceled'
   /** A cancellation whose showing wasn't on the calendar. */
   | 'cancelNotFound'
   /** A reservation or cancellation for a showing already handled. */
@@ -333,6 +335,10 @@ export interface AListEmailEvent {
   ticketCount: number | null;
   /** The showing as it was before a cancellation removed it, so Undo can put it back; null otherwise. */
   removedViewing: Viewing | null;
+  /** The planned showing as it was before this email put its ticket on it, so Undo can restore it; null otherwise. */
+  priorViewing: Viewing | null;
+  /** The watchlist entry this email created for the movie, so Undo of an added showing can remove it; null otherwise. */
+  watchlistKey: string | null;
   /** When the member undid what this email did; null otherwise. */
   undoneAt: number | null;
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */

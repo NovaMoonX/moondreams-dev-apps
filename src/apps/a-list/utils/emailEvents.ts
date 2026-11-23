@@ -6,6 +6,7 @@ export const EMAIL_OUTCOME_EMOJIS: Record<AListEmailOutcome, string> = {
   added: '🎬',
   attached: '🎟️',
   canceled: '👋',
+  partlyCanceled: '✂️',
   cancelNotFound: '🔍',
   alreadyHandled: '♻️',
   confirm: '📬',
@@ -18,6 +19,7 @@ const USEFUL_OUTCOMES: AListEmailOutcome[] = [
   'added',
   'attached',
   'canceled',
+  'partlyCanceled',
   'cancelNotFound',
   'alreadyHandled',
 ];
@@ -48,6 +50,7 @@ export function describeEmailEvent(
     added: `Added ${named}${when ? ` · ${when}` : ''}`,
     attached: `Ticket added to ${named}`,
     canceled: `Took ${named} off your calendar`,
+    partlyCanceled: `Part of the ${named} order was refunded`,
     alreadyHandled: 'Already on your calendar',
     cancelNotFound: `Couldn’t find ${named} on your calendar`,
     notTicket: 'Not an AMC ticket email',
@@ -65,6 +68,8 @@ export function describeEmailOutcome(event: AListEmailEvent) {
       'That showing was already on your calendar, so its ticket went onto it.',
     canceled:
       'AMC cancelled this reservation, so the showing came off your calendar.',
+    partlyCanceled:
+      'AMC refunded some of this order’s tickets, so the showing stays on your calendar.',
     cancelNotFound:
       'AMC cancelled a reservation that wasn’t on your calendar, so nothing changed.',
     alreadyHandled: 'You’d already forwarded this one, so nothing changed.',

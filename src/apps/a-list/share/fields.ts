@@ -10,6 +10,7 @@ import type {
   SharedViewing,
   CalendarShare,
   PurchasePlan,
+  AListEmailEvent,
 } from '@apps/a-list/types';
 
 const MEMBERSHIP_PROFILE_FIELDS = {
@@ -132,6 +133,27 @@ const PURCHASE_PLAN_FIELDS = {
   startedAt: 'never',
 } satisfies Record<keyof PurchasePlan, ShareDecision>;
 
+const EMAIL_EVENT_FIELDS = {
+  id: 'never',
+  receivedAt: 'never',
+  outcome: 'never',
+  from: 'never',
+  subject: 'never',
+  snippet: 'never',
+  readBy: 'never',
+  viewingId: 'never',
+  movieTitle: 'never',
+  showtimeAt: 'never',
+  theatreName: 'never',
+  confirmation: 'never',
+  ticketCount: 'never',
+  removedViewing: 'never',
+  priorViewing: 'never',
+  watchlistKey: 'never',
+  undoneAt: 'never',
+  expiresAt: 'never',
+} satisfies Record<keyof AListEmailEvent, ShareDecision>;
+
 /** What a-list lets Helm read, per stored field; an added, removed or renamed field fails the typecheck until it is decided here. */
 export const SHARE_FIELDS = {
   MembershipProfile: MEMBERSHIP_PROFILE_FIELDS,
@@ -144,6 +166,7 @@ export const SHARE_FIELDS = {
   SharedViewing: SHARED_VIEWING_FIELDS,
   CalendarShare: CALENDAR_SHARE_FIELDS,
   PurchasePlan: PURCHASE_PLAN_FIELDS,
+  AListEmailEvent: EMAIL_EVENT_FIELDS,
 };
 
 /** Exported types that are not stored, so have no fields to decide. */
