@@ -256,6 +256,22 @@ export const EMAIL_SETUP_WORDS = {
     'Add the banks your filter or rule covers, so you can see when each one’s alerts arrive.',
   updateRule: (addresses: string[]) =>
     `In your forwarding rule, make sure it forwards mail from ${fromWhom(addresses)}`,
+  updateRuleAdd: (provider: EmailProvider, added: string[]) => {
+    const which = added.length === 1 ? 'this address' : 'these addresses';
+    if (provider === 'proton') {
+      return added.length === 1
+        ? 'In your forwarding rule, add a Sender condition for this address'
+        : 'In your forwarding rule, add a Sender condition for each of these addresses';
+    }
+    return `Add ${which} to your forwarding rule’s senders`;
+  },
+  updateRuleRemove: (removed: string[]) =>
+    removed.length === 1
+      ? 'Take this address out of your forwarding rule'
+      : 'Take these addresses out of your forwarding rule',
+  leaveSetupKept: 'You’ll pick up where you left off.',
+  leaveAddKept: 'Banks you’ve added stay.',
+  leaveDraftLost: 'The bank you were adding isn’t saved yet.',
   removeBank: 'Stop forwarding this bank',
   removeBankSub: 'Then take its addresses out of your filter or rule.',
   removeBankTitle: (name: string) => `Stop forwarding ${name}?`,
@@ -299,6 +315,7 @@ export const EMAIL_SETUP_WORDS = {
   testWaiting: 'Waiting for your first alert…',
   finishLater: 'Finish later',
   backStep: 'Back',
+  exitStep: 'Exit',
   notArriving: 'Not arriving?',
   notArrivingLines: [
     'Forwarding is confirmed.',

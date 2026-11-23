@@ -161,6 +161,7 @@ export const EMAIL_FORWARDING_WORDS = {
   testTitle: 'Try it with one email',
   testWaiting: 'Waiting for your first email…',
   finishLater: 'Finish later',
+  leaveKept: 'You’ll pick up where you left off.',
   notArriving: 'Not arriving?',
   notArrivingLines: (words: EmailForwardingWords) => [
     'Forwarding is confirmed.',

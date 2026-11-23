@@ -29,6 +29,7 @@ import InlineNotice from '@/components/InlineNotice';
 import MethodPicker from '@/components/MethodPicker';
 import StepGuide from '@/components/StepGuide';
 import Subview from '@/components/Subview';
+import { useLeaveFlowGuard } from '@/hooks/useLeaveFlowGuard';
 import {
   buildGmailFilterText,
   readSenderAddress,
@@ -290,6 +291,7 @@ function EmailSetupWalkthrough({
   const [isNotArrivingShown, setIsNotArrivingShown] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasActed, setHasActed] = useState(false);
 
   const startedAt = progress?.startedAt ?? null;
   const liveView =
@@ -333,12 +335,14 @@ function EmailSetupWalkthrough({
   };
 
   const goTo = (index: number) => {
+    setHasActed(true);
     const stepId = steps[index] ?? 'provider';
     setView({ provider, stepId, startedAt });
     if (index > furthestIndex) save({ provider, stepId });
   };
 
   const pickProvider = (id: EmailProvider) => {
+    setHasActed(true);
     setView({ provider: id, stepId: 'copy', startedAt });
     save({ provider: id, stepId: 'copy' });
   };
@@ -348,6 +352,7 @@ function EmailSetupWalkthrough({
     setError(null);
     try {
       await onGetAddress();
+      setHasActed(true);
     } catch (addressError) {
       setError(getErrorMessage(addressError, WORDS.addressFailed));
     } finally {
@@ -356,7 +361,14 @@ function EmailSetupWalkthrough({
   };
 
   const senderField = (
-    <SenderField words={words} value={senderText} onChange={setSenderText} />
+    <SenderField
+      words={words}
+      value={senderText}
+      onChange={(text) => {
+        setHasActed(true);
+        setSenderText(text);
+      }}
+    />
   );
   const typed = { text: WORDS.senderLead(words), control: senderField };
 
@@ -626,7 +638,11 @@ function EmailSetupWalkthrough({
     };
   };
 
-  const leave = onBackToStatus ?? onFinishLater;
+  const requestLeave = useLeaveFlowGuard({
+    hasActed,
+    onLeave: onBackToStatus ?? onFinishLater,
+    message: WORDS.leaveKept,
+  });
 
   const { title: stepTitle, content } = body();
   return (
@@ -634,8 +650,8 @@ function EmailSetupWalkthrough({
       overlay
       title={title}
       isTitleWrapped
-      onClose={leave}
-      onBack={leave}
+      onClose={requestLeave}
+      onBack={requestLeave}
       headerAction={headerAction}
     >
       <div className='flex flex-1 flex-col space-y-4'>
@@ -663,6 +679,7 @@ function EmailSetupWalkthrough({
           title={stepTitle}
           primary={getPrimary()}
           onBack={stepIndex > 0 ? () => goTo(stepIndex - 1) : undefined}
+          onExit={requestLeave}
         >
           {content}
         </StepGuide>

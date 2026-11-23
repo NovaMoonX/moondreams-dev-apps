@@ -56,8 +56,15 @@ function AddressText({ address }: { address: string }) {
   ));
 }
 
-export function RuleAddresses({ addresses }: { addresses: string[] }) {
-  if (addresses.length < 2) return null;
+export function RuleAddresses({
+  addresses,
+  isShownForOne = false,
+}: {
+  addresses: string[];
+  /** One address usually sits in the sentence; an update names it on its own line to copy. */
+  isShownForOne?: boolean;
+}) {
+  if (addresses.length < (isShownForOne ? 1 : 2)) return null;
   return (
     <ul className='border-border divide-border divide-y rounded-xl border'>
       {addresses.map((address) => (
@@ -90,13 +97,17 @@ const RULE_LINKS: Partial<
   proton: { href: PROTON_MAIL_URL, label: WORDS.protonRuleLink },
 };
 
-/** What to change in a filter or rule the person already made, so it covers every bank's addresses; never a second one. */
+/** What to change in a filter or rule the person already made, so it covers every bank's addresses; never a second one. A rule editor takes senders one by one, so it is shown only what was added or removed. */
 export function ForwardingUpdate({
   provider,
   addresses,
+  added,
+  removed,
 }: {
   provider: EmailProvider;
   addresses: string[];
+  added: string[];
+  removed: string[];
 }) {
   if (provider === 'gmail') {
     const filterText = buildGmailFilterText(addresses);
@@ -118,6 +129,41 @@ export function ForwardingUpdate({
     );
   }
   const ruleLink = RULE_LINKS[provider];
+  const link = ruleLink && (
+    <ExternalLinkText href={ruleLink.href} label={ruleLink.label} />
+  );
+  if (added.length > 0 || removed.length > 0) {
+    return (
+      <div className='space-y-4'>
+        {added.length > 0 && (
+          <div className='space-y-2'>
+            <p className='text-sm break-words'>
+              {WORDS.updateRuleAdd(provider, added)}
+            </p>
+            <RuleAddresses addresses={added} isShownForOne />
+          </div>
+        )}
+        {removed.length > 0 && (
+          <div className='space-y-2'>
+            <p className='text-sm break-words'>
+              {WORDS.updateRuleRemove(removed)}
+            </p>
+            <ul className='space-y-1'>
+              {removed.map((address) => (
+                <li
+                  key={address}
+                  className='font-mono text-xs [overflow-wrap:anywhere]'
+                >
+                  <AddressText address={address} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {link}
+      </div>
+    );
+  }
   return (
     <div className='space-y-2'>
       <p className='text-sm break-words'>
@@ -126,9 +172,7 @@ export function ForwardingUpdate({
           : WORDS.updateRule(addresses)}
       </p>
       <RuleAddresses addresses={addresses} />
-      {ruleLink && (
-        <ExternalLinkText href={ruleLink.href} label={ruleLink.label} />
-      )}
+      {link}
     </div>
   );
 }
