@@ -1,5 +1,6 @@
 export { getCalendarShare } from './apps/a-list/getCalendarShare.js';
-export { retireAListShareFeed, syncAListLiveFeeds } from './apps/a-list/shareFeed/syncShareFeeds.js';
+export { retireAListShareFeed } from './apps/a-list/shareFeed/syncShareFeeds.js';
+export { syncAListLiveFeeds } from './apps/a-list/shareFeed/syncShareFeeds.js';
 export { findShowtimes } from './apps/a-list/findShowtimes.js';
 export { findTheatres } from './apps/a-list/findTheatres.js';
 export { getMovie } from './apps/a-list/getMovie.js';
