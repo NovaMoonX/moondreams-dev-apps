@@ -94,7 +94,7 @@ export function useEmailIntake(): EmailIntakeRead {
     const hasConfirm =
       intake.confirmUrl !== null || intake.confirmCode !== null;
     return {
-      address: `${EMAIL_ADDRESS_PREFIX}+${intake.token}@${EMAIL_DOMAIN}`,
+      address: `${EMAIL_ADDRESS_PREFIX}-${intake.token}@${EMAIL_DOMAIN}`,
       lastReceivedAt: intake.lastReceivedAt,
       confirm: hasConfirm
         ? {
