@@ -7,7 +7,12 @@ import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import { formatDateTime } from '@/utils/formatUtils';
 import type { CalendarShare } from '@apps/a-list/types';
-import { formatShareRange, getShareUrl } from '@apps/a-list/utils/sharing';
+import {
+  getShareRangeLabel,
+  getShareTitle,
+  getShareUrl,
+  isLiveShare,
+} from '@apps/a-list/utils/sharing';
 
 interface PinDetailsProps {
   pin: string;
@@ -28,7 +33,7 @@ function PinDetails({ pin, onCopyPin }: PinDetailsProps) {
         >
           {isShown ? pin : '••••'}
         </code>
-        . Turning it off and on again makes a new one.
+        . Turning it off and on again makes a new one. Changing it removes it from calendars it was added to.
       </p>
       <div className='flex flex-wrap items-center gap-2'>
         <Button
@@ -79,6 +84,7 @@ function ShareRow({
   onDelete,
 }: ShareRowProps) {
   const url = getShareUrl(share.id);
+  const isLive = isLiveShare(share);
   const movieCount = share.viewings.length;
 
   return (
@@ -86,15 +92,20 @@ function ShareRow({
       <div className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
           <p className='font-medium'>
-            {formatShareRange(share.startDate, share.endDate)}
+            {getShareTitle(share)}
           </p>
           <p className='text-muted-foreground text-xs'>
-            {movieCount === 1 ? '1 movie' : `${movieCount} movies`} · made{' '}
+            {isLive
+              ? 'Always up to date'
+              : movieCount === 1
+                ? '1 movie'
+                : `${movieCount} movies`}{' '}
+            · made{' '}
             {formatDateTime(share.createdAt)}
           </p>
         </div>
         <DeleteIconButton
-          label={`Delete the link for ${formatShareRange(share.startDate, share.endDate)}`}
+          label={isLive ? 'Delete the live link' : `Delete the link for ${getShareRangeLabel(share)}`}
           disabled={isDisabled}
           onClick={() => onDelete(share)}
         />
@@ -135,7 +146,8 @@ function ShareRow({
             />
           ) : (
             <p className='text-muted-foreground text-xs'>
-              Anyone with the link can open it.
+              Anyone with the link can open it. Adding a PIN removes it from
+              calendars it was added to.
             </p>
           )}
         </div>

@@ -28,7 +28,7 @@ const PIN_OPTIONS = [
 
 interface ShareCreateFormProps {
   /** Resolves true once the link exists; the form stays as typed when it fails. */
-  onCreate: (range: DayKeyRange, hasPin: boolean) => Promise<boolean>;
+  onCreate: (range: DayKeyRange | null, hasPin: boolean) => Promise<boolean>;
   onCancel: () => void;
   isDisabled: boolean;
 }
@@ -40,12 +40,12 @@ function ShareCreateForm({
 }: ShareCreateFormProps) {
   const now = useNow();
   const viewings = useAppSelector((state) => state.aList.viewings.items);
-  const [kind, setKind] = useState<ShareRangeKind>('THIS_MONTH');
+  const [kind, setKind] = useState<ShareRangeKind>('LIVE');
   const [hasPin, setHasPin] = useState(false);
   const [custom, setCustom] = useState<DayKeyRange>({ startKey: '', endKey: '' });
 
-  const range: DayKeyRange =
-    getQuickShareRange(kind, now) ?? custom;
+  const isLive = kind === 'LIVE';
+  const range: DayKeyRange = getQuickShareRange(kind, now) ?? custom;
   const { startKey, endKey } = range;
   const dayCount = getRangeDayCount(range);
   const movieCount = useMemo(
@@ -55,6 +55,9 @@ function ShareCreateForm({
   );
 
   const getSummary = () => {
+    if (isLive) {
+      return { isReady: true, text: '📡 Everything on your calendar, kept up to date' };
+    }
     if (startKey === '') {
       return { isReady: false, text: 'Tap the first and last day on the calendar.' };
     }
@@ -109,6 +112,12 @@ function ShareCreateForm({
             like AMC&apos;s.
           </p>
         )}
+        {isLive && (
+          <p className='text-muted-foreground text-sm'>
+            Your whole calendar, past and upcoming. Anyone with the link sees
+            changes as you make them.
+          </p>
+        )}
         {kind === 'CUSTOM' && (
           <Calendar
             mode='range'
@@ -147,12 +156,16 @@ function ShareCreateForm({
       </div>
 
       <p className='bg-muted/50 text-muted-foreground rounded-2xl p-3 text-sm'>
-        <strong className='text-foreground'>A snapshot, not a live view.</strong>{' '}
+        <strong className='text-foreground'>
+          {isLive ? 'A live view.' : 'A snapshot, not a live view.'}
+        </strong>{' '}
         Friends see each movie&apos;s poster, title, time, rating (like PG-13),
         theater, whether you&apos;ve seen it, and its format once a ticket is
         recorded. Never your name, what you paid, or your star ratings. Titles
-        and theater names show as you typed them. Changes you make later
-        won&apos;t show up.
+        and theater names show as you typed them.{' '}
+        {isLive
+          ? 'Changes you make show up for them as you make them; delete the link to stop it.'
+          : "Changes you make later won't show up."}
       </p>
 
       <ModalFooterActions
@@ -172,7 +185,7 @@ function ShareCreateForm({
             type='button'
             rounded='full'
             disabled={!isReady || isDisabled}
-            onClick={() => void onCreate(range, hasPin)}
+            onClick={() => void onCreate(isLive ? null : range, hasPin)}
           >
             Create link
           </Button>

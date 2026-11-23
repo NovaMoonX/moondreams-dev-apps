@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -6,19 +6,30 @@ import { Badge, Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 
 import LazyMount from '@/components/LazyMount';
+import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
+import { useAuth } from '@/hooks/useAuth';
 import { useNoIndex } from '@/hooks/useNoIndex';
+import { useNow } from '@/hooks/useNow';
 import { formatDate, formatDuration, formatTime } from '@/utils/formatUtils';
 import { fromLocalDateAndTimeInputValues } from '@/utils/dateInputUtils';
 import Loading from '@/ui/Loading';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
+import ShowOnMyCalendar from '@apps/a-list/components/share/ShowOnMyCalendar';
 import { SHARE_PIN_LENGTH } from '@apps/a-list/constants';
 import { useAListTheme } from '@apps/a-list/hooks/useAListTheme';
 import { sharedCalendarQueryOptions } from '@apps/a-list/queries/shareQueries';
-import type { SharedCalendar as SharedCalendarData, SharedViewing } from '@apps/a-list/types';
+import { startShareFeedListener } from '@apps/a-list/store/listeners/addedCalendarListeners';
+import type {
+  ShareFeed,
+  SharedCalendar as SharedCalendarData,
+  SharedCalendarResult,
+  SharedViewing,
+} from '@apps/a-list/types';
+import { getDayKey } from '@apps/a-list/utils/dayKeys';
 import {
-  formatShareRange,
+  getShareRangeLabel,
   groupSharedViewingsByDay,
 } from '@apps/a-list/utils/sharing';
 
@@ -172,11 +183,48 @@ function SharedViewingRow({ viewing }: { viewing: SharedViewing }) {
   );
 }
 
-function CalendarView({ calendar }: { calendar: SharedCalendarData }) {
+type SharedDay = ReturnType<typeof groupSharedViewingsByDay>[number];
+
+function DaySections({ days, eagerDays }: { days: SharedDay[]; eagerDays: number }) {
+  return days.map(({ dayKey, viewings }, dayPosition) => {
+    const estimatedHeight = 28 + viewings.length * 101;
+    return (
+      <section
+        key={dayKey}
+        className='defer-offscreen space-y-1'
+        style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
+      >
+        <SectionDivider
+          label={dayFormatter.format(fromLocalDateAndTimeInputValues(dayKey, '12:00') ?? 0)}
+        />
+        <LazyMount eager={dayPosition < eagerDays} estimatedHeight={estimatedHeight - 28}>
+          <ul className='divide-border divide-y'>
+            {viewings.map((viewing, index) => (
+              <SharedViewingRow key={`${viewing.showtimeAt}-${index}`} viewing={viewing} />
+            ))}
+          </ul>
+        </LazyMount>
+      </section>
+    );
+  });
+}
+
+function countMovies(count: number) {
+  return count === 1 ? '1 movie' : `${count} movies`;
+}
+
+function CalendarView({ calendar, extra }: { calendar: SharedCalendarData; extra: ReactNode }) {
+  const now = useNow();
+  const [isPastShown, setIsPastShown] = useState(false);
+  const isLive = calendar.kind === 'LIVE';
   const days = useMemo(
     () => groupSharedViewingsByDay(calendar.viewings),
     [calendar.viewings],
   );
+  const todayKey = getDayKey(now);
+  const upcomingDays = isLive ? days.filter((day) => day.dayKey >= todayKey) : days;
+  const pastDays = isLive ? days.filter((day) => day.dayKey < todayKey).reverse() : [];
+  const pastCount = pastDays.reduce((total, day) => total + day.viewings.length, 0);
   const movieCount = calendar.viewings.length;
 
   return (
@@ -184,36 +232,32 @@ function CalendarView({ calendar }: { calendar: SharedCalendarData }) {
       <div className='space-y-1'>
         <h1 className='text-2xl font-semibold tracking-tight'>🎬 Movie calendar</h1>
         <p className='text-muted-foreground text-sm'>
-          {formatShareRange(calendar.startDate, calendar.endDate)}
-          {movieCount > 0 && ` · ${movieCount === 1 ? '1 movie' : `${movieCount} movies`}`}
+          {isLive
+            ? '📡 Live · updates as plans change'
+            : `Snapshot from ${formatDate(calendar.createdAt)} · ${getShareRangeLabel(calendar)}`}
+          {!isLive && movieCount > 0 && ` · ${countMovies(movieCount)}`}
         </p>
       </div>
+      {extra}
       {days.length === 0 && (
         <p className='text-muted-foreground py-6 text-center text-sm'>🍿 Nothing on this calendar.</p>
       )}
-      {days.map(({ dayKey, viewings }, dayPosition) => {
-        const estimatedHeight = 28 + viewings.length * 101;
-        return (
-          <section
-            key={dayKey}
-            className='defer-offscreen space-y-1'
-            style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
-          >
-            <SectionDivider
-              label={dayFormatter.format(fromLocalDateAndTimeInputValues(dayKey, '12:00') ?? 0)}
-            />
-            <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={estimatedHeight - 28}>
-              <ul className='divide-border divide-y'>
-                {viewings.map((viewing, index) => (
-                  <SharedViewingRow key={`${viewing.showtimeAt}-${index}`} viewing={viewing} />
-                ))}
-              </ul>
-            </LazyMount>
-          </section>
-        );
-      })}
+      {isLive && days.length > 0 && upcomingDays.length === 0 && (
+        <p className='text-muted-foreground py-6 text-center text-sm'>🍿 Nothing coming up yet.</p>
+      )}
+      <DaySections days={upcomingDays} eagerDays={EAGER_DAYS} />
+      {pastCount > 0 && !isPastShown && (
+        <div className='flex justify-center'>
+          <RevealChip icon={<span aria-hidden='true'>🎞️</span>} onClick={() => setIsPastShown(true)}>
+            Show {pastCount === 1 ? '1 past movie' : `${pastCount} past movies`}
+          </RevealChip>
+        </div>
+      )}
+      {isPastShown && <DaySections days={pastDays} eagerDays={0} />}
       <p className='text-muted-foreground text-center text-xs'>
-        A snapshot from {formatDate(calendar.createdAt)}, so it won&apos;t change if the plans do. Times are shown in your time zone.
+        {isLive
+          ? 'This calendar changes as the plans do. Times are shown in your time zone.'
+          : "A snapshot, so it won't change if the plans do. Times are shown in your time zone."}
       </p>
       <div className='text-center'>
         <p className='text-muted-foreground text-xs'>No account needed to look.</p>
@@ -222,6 +266,55 @@ function CalendarView({ calendar }: { calendar: SharedCalendarData }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function useShareFeed(feedId: string | null) {
+  const [latest, setLatest] = useState<{ feedId: string; feed: ShareFeed | null } | null>(null);
+
+  useEffect(() => {
+    if (feedId === null) return;
+    return startShareFeedListener(feedId, (feed) => setLatest({ feedId, feed }));
+  }, [feedId]);
+
+  if (feedId === null || latest?.feedId !== feedId) return undefined;
+  return latest.feed;
+}
+
+function OkView({
+  shareId,
+  result,
+}: {
+  shareId: string;
+  result: Extract<SharedCalendarResult, { status: 'ok' }>;
+}) {
+  const { user } = useAuth();
+  const feed = useShareFeed(result.feedId);
+
+  if (feed === null) {
+    return (
+      <Message emoji='🎞️' title='This link has ended'>
+        The person who shared it deleted it or changed its PIN. Ask them for a new link.
+      </Message>
+    );
+  }
+
+  const calendar = feed ?? result.calendar;
+  return (
+    <CalendarView
+      calendar={calendar}
+      extra={
+        user && result.feedId !== null ? (
+          <ShowOnMyCalendar
+            key={user.uid}
+            uid={user.uid}
+            shareId={shareId}
+            feedId={result.feedId}
+            kind={calendar.kind}
+          />
+        ) : null
+      }
+    />
   );
 }
 
@@ -253,7 +346,7 @@ function SharedCalendar() {
       return <PinGate isWrong={false} isChecking onSubmit={setSubmittedPin} />;
     }
     if (query.data.status === 'ok') {
-      return <CalendarView calendar={query.data.calendar} />;
+      return <OkView shareId={shareId} result={query.data} />;
     }
     if (query.data.status === 'not_found') {
       return (

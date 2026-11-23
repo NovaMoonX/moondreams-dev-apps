@@ -24,7 +24,11 @@ import {
   selectCalendarSharesLoadError,
 } from '@apps/a-list/store/selectors';
 import type { CalendarShare } from '@apps/a-list/types';
-import { formatShareRange, type DayKeyRange } from '@apps/a-list/utils/sharing';
+import {
+  getShareRangeLabel,
+  isLiveShare,
+  type DayKeyRange,
+} from '@apps/a-list/utils/sharing';
 
 interface ShareSubviewProps {
   onClose: () => void;
@@ -64,7 +68,7 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
     }
   };
 
-  const handleCreate = async (range: DayKeyRange, hasPin: boolean) => {
+  const handleCreate = async (range: DayKeyRange | null, hasPin: boolean) => {
     const didCreate = await run(
       () =>
         dispatch(
@@ -106,9 +110,10 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
     );
 
   const handleDelete = async (share: CalendarShare) => {
+    const isLive = isLiveShare(share);
     const confirmed = await confirm({
       title: 'Delete link',
-      message: `Delete the link for ${formatShareRange(share.startDate, share.endDate)}${share.pin ? ' (with a PIN)' : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away, and this can't be undone.`,
+      message: `Delete ${isLive ? 'the live link' : `the link for ${getShareRangeLabel(share)}`}${share.pin ? ' (with a PIN)' : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away${isLive ? ', and it will leave the calendars it was added to' : ''}, and this can't be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });
