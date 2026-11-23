@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { CircleCheck, Loader, Mail } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { CircleCheck, CircleHelp, Loader, Mail } from 'lucide-react';
 
 import {
   GmailMark,
@@ -12,7 +12,6 @@ import {
 } from '@/components/BrandMarks';
 import CopyTextButton from '@/components/CopyTextButton';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import ClearOfFooter from '@/components/ClearOfFooter';
 import MethodPicker from '@/components/MethodPicker';
 import StepGuide from '@/components/StepGuide';
 import {
@@ -26,8 +25,23 @@ import {
   buildGmailFilterText,
   YAHOO_MAIL_URL,
 } from '@apps/runway/components/emailWords';
+import {
+  BankAddresses,
+  BankDraftForm,
+  BankMark,
+  BankPicker,
+  RuleAddresses,
+  type SaveBanks,
+} from '@apps/runway/components/EmailBanksEditor';
+import {
+  addDraftedBank,
+  findBankLogo,
+  readBankDraft,
+  type BankDraft,
+} from '@apps/runway/utils/emailBanks';
 import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
-import type { EmailProvider } from '@apps/runway/types';
+import type { KnownBank } from '@apps/runway/store/selectors/emailSelectors';
+import type { EmailBank, EmailProvider } from '@apps/runway/types';
 import type { EmailSetupStepId } from '@apps/runway/utils/emailSetupSteps';
 
 const WORDS = EMAIL_SETUP_WORDS;
@@ -48,6 +62,11 @@ interface EmailSetupWalkthroughProps {
   isConfirmed: boolean;
   hasPurchase: boolean;
   isBusy: boolean;
+  banks: EmailBank[];
+  knownBanks: KnownBank[];
+  onSaveBanks: SaveBanks;
+  /** Opens the bank step on its choices, for adding one more bank. */
+  isAddingBank?: boolean;
   onPickProvider: (provider: EmailProvider) => void;
   onGetAddress: () => void;
   onGo: (index: number) => void;
@@ -213,33 +232,6 @@ const PROVIDER_ICONS: Record<EmailProvider, ReactNode> = {
   other: <Mail className='size-5' />,
 };
 
-const readAlertAddress = (text: string) =>
-  /[^\s<>,;"']+@[^\s<>,;"']+/.exec(text)?.[0] ?? null;
-
-interface AlertAddressFieldProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-function AlertAddressField({ value, onChange }: AlertAddressFieldProps) {
-  return (
-    <ClearOfFooter>
-      <Input
-        variant='outline'
-        type='email'
-        inputMode='email'
-        autoCapitalize='none'
-        autoCorrect='off'
-        spellCheck={false}
-        aria-label={WORDS.alertAddressLabel}
-        placeholder={WORDS.alertAddressPlaceholder}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </ClearOfFooter>
-  );
-}
-
 function EmailSetupWalkthrough({
   provider,
   steps,
@@ -248,21 +240,56 @@ function EmailSetupWalkthrough({
   isConfirmed,
   hasPurchase,
   isBusy,
+  banks,
+  knownBanks,
+  onSaveBanks,
+  isAddingBank = false,
   onPickProvider,
   onGetAddress,
   onGo,
   onFinish,
   onClose,
 }: EmailSetupWalkthroughProps) {
-  const [alertText, setAlertText] = useState('');
   const [isNotArrivingShown, setIsNotArrivingShown] = useState(false);
-  const alertAddress = readAlertAddress(alertText);
+  const [draft, setDraft] = useState<BankDraft | null>(null);
+  const [isPickingBank, setIsPickingBank] = useState(isAddingBank);
+  const [isSavingBank, setIsSavingBank] = useState(false);
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const hasNext = stepIndex < steps.length - 1;
-  const alertField = (
-    <AlertAddressField value={alertText} onChange={setAlertText} />
-  );
+  const addresses = banks.flatMap((bank) => bank.addresses);
+  const bankIndex = steps.indexOf('bank');
+  const isBankChoosing =
+    draft === null && (banks.length === 0 || isPickingBank);
+
+  const saveDraft = async () => {
+    if (draft === null) return;
+    const read = readBankDraft(draft, banks);
+    if (read.bank === null) {
+      setDraft({ ...draft, error: read.error });
+      return;
+    }
+    setIsSavingBank(true);
+    try {
+      await onSaveBanks(addDraftedBank(read.bank));
+      setDraft(null);
+      setIsPickingBank(false);
+    } catch {
+      setDraft({ ...draft, error: WORDS.banksSaveFailed });
+    } finally {
+      setIsSavingBank(false);
+    }
+  };
+
+  const bankFirst =
+    addresses.length === 0 && bankIndex >= 0 ? (
+      <div className='space-y-2'>
+        <Muted>{WORDS.bankFirst}</Muted>
+        <Button variant='secondary' size='sm' onClick={() => onGo(bankIndex)}>
+          {WORDS.bankFirstButton}
+        </Button>
+      </div>
+    ) : null;
 
   const body = (): { title: ReactNode; content: ReactNode } => {
     if (step === 'provider') {
@@ -362,8 +389,70 @@ function EmailSetupWalkthrough({
         ),
       };
     }
+    if (step === 'bank') {
+      if (isBankChoosing) {
+        return {
+          title: banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank,
+          content: (
+            <div className='space-y-3'>
+              <Muted>{WORDS.bankLine}</Muted>
+              <BankPicker known={knownBanks} banks={banks} onPick={setDraft} />
+            </div>
+          ),
+        };
+      }
+      if (draft !== null) {
+        return {
+          title: banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank,
+          content: (
+            <BankDraftForm
+              draft={draft}
+              known={knownBanks}
+              onChange={setDraft}
+            />
+          ),
+        };
+      }
+      return {
+        title: WORDS.banksTitle,
+        content: (
+          <div className='space-y-4'>
+            {banks.map((bank) => (
+              <div
+                key={bank.id}
+                className='border-border bg-card space-y-3 rounded-2xl border p-3'
+              >
+                <div className='flex items-center gap-3'>
+                  <BankMark
+                    name={bank.name}
+                    logo={findBankLogo(knownBanks, bank.name)}
+                  />
+                  <p className='min-w-0 flex-1 font-semibold break-words'>
+                    {bank.name}
+                  </p>
+                </div>
+                <BankAddresses
+                  bank={bank}
+                  allAddresses={addresses}
+                  onSave={onSaveBanks}
+                />
+              </div>
+            ))}
+            <Button
+              variant='secondary'
+              className='w-full gap-1.5'
+              onClick={() => setIsPickingBank(true)}
+            >
+              {WORDS.addAnotherBank}
+            </Button>
+          </div>
+        ),
+      };
+    }
     if (step === 'rule') {
-      const typed = { text: WORDS.alertAddressLead, control: alertField };
+      if (bankFirst !== null) {
+        return { title: WORDS.otherRuleTitle, content: bankFirst };
+      }
       if (provider === 'proton') {
         return {
           title: WORDS.protonRuleTitle,
@@ -372,7 +461,6 @@ function EmailSetupWalkthrough({
               <Muted>{WORDS.protonRuleNote}</Muted>
               <NumberedSteps
                 items={[
-                  typed,
                   {
                     text: WORDS.protonRuleGo,
                     control: (
@@ -383,7 +471,10 @@ function EmailSetupWalkthrough({
                     ),
                   },
                   { text: WORDS.protonRulePaste },
-                  { text: WORDS.protonRuleCondition(alertAddress) },
+                  {
+                    text: WORDS.protonRuleCondition(addresses),
+                    control: <RuleAddresses addresses={addresses} />,
+                  },
                   { text: WORDS.protonRuleSave },
                 ]}
               />
@@ -397,7 +488,6 @@ function EmailSetupWalkthrough({
           content: (
             <NumberedSteps
               items={[
-                typed,
                 {
                   text: WORDS.outlookRuleOpen,
                   control: (
@@ -407,7 +497,10 @@ function EmailSetupWalkthrough({
                     />
                   ),
                 },
-                { text: WORDS.outlookRuleLine(alertAddress) },
+                {
+                  text: WORDS.outlookRuleLine(addresses),
+                  control: <RuleAddresses addresses={addresses} />,
+                },
               ]}
             />
           ),
@@ -419,7 +512,6 @@ function EmailSetupWalkthrough({
           content: (
             <NumberedSteps
               items={[
-                typed,
                 {
                   text: WORDS.icloudRuleOpen,
                   control: (
@@ -429,7 +521,10 @@ function EmailSetupWalkthrough({
                     />
                   ),
                 },
-                { text: WORDS.icloudRuleLine(alertAddress) },
+                {
+                  text: WORDS.icloudRuleLine(addresses),
+                  control: <RuleAddresses addresses={addresses} />,
+                },
               ]}
             />
           ),
@@ -439,7 +534,12 @@ function EmailSetupWalkthrough({
         title: WORDS.otherRuleTitle,
         content: (
           <NumberedSteps
-            items={[typed, { text: WORDS.otherRuleLine(alertAddress) }]}
+            items={[
+              {
+                text: WORDS.otherRuleLine(addresses),
+                control: <RuleAddresses addresses={addresses} />,
+              },
+            ]}
           />
         ),
       };
@@ -457,32 +557,30 @@ function EmailSetupWalkthrough({
       };
     }
     if (step === 'filter') {
-      const filterText =
-        alertAddress === null ? null : buildGmailFilterText(alertAddress);
+      if (bankFirst !== null) {
+        return { title: WORDS.filterTitle, content: bankFirst };
+      }
+      const filterText = buildGmailFilterText(addresses);
       return {
         title: WORDS.filterTitle,
         content: (
           <NumberedSteps
             items={[
-              { text: WORDS.alertAddressLead, control: alertField },
               {
                 text: WORDS.filterCopy,
-                control:
-                  filterText === null ? (
-                    <Muted>{WORDS.filterNeedAddress}</Muted>
-                  ) : (
-                    <>
-                      <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
-                        {filterText}
-                      </code>
-                      <CopyTextButton
-                        text={filterText}
-                        label={WORDS.filterLabel}
-                        variant='secondary'
-                        isCompact
-                      />
-                    </>
-                  ),
+                control: (
+                  <>
+                    <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
+                      {filterText}
+                    </code>
+                    <CopyTextButton
+                      text={filterText}
+                      label={WORDS.filterLabel}
+                      variant='secondary'
+                      isCompact
+                    />
+                  </>
+                ),
               },
               {
                 text: WORDS.filterPaste,
@@ -512,8 +610,11 @@ function EmailSetupWalkthrough({
                 <Button
                   variant='tertiary'
                   size='sm'
+                  className='text-primary -ml-2 gap-1.5'
+                  aria-expanded={false}
                   onClick={() => setIsNotArrivingShown(true)}
                 >
+                  <CircleHelp className='size-4' aria-hidden='true' />
                   {WORDS.notArriving}
                 </Button>
               ) : (
@@ -532,12 +633,18 @@ function EmailSetupWalkthrough({
 
   const getPrimary = () => {
     if (step === 'provider') return undefined;
-    if (step === 'test') {
+    if (step === 'bank' && draft !== null) {
       return {
-        label: WORDS.done,
-        onClick: onFinish,
-        isDisabled: !hasPurchase,
+        label: WORDS.addThisBank(draft.name),
+        onClick: () => void saveDraft(),
+        isDisabled: isSavingBank,
       };
+    }
+    if (step === 'bank' && isBankChoosing) return undefined;
+    if (step === 'test') {
+      return hasPurchase
+        ? { label: WORDS.done, onClick: onFinish }
+        : { label: WORDS.finishLater, onClick: onClose };
     }
     if (!hasNext) return undefined;
     return {
@@ -547,6 +654,17 @@ function EmailSetupWalkthrough({
     };
   };
 
+  const goBack = () => {
+    if (step === 'bank' && (draft !== null || isPickingBank)) {
+      setDraft(null);
+      setIsPickingBank(false);
+      return;
+    }
+    onGo(stepIndex - 1);
+  };
+  const canGoBack =
+    stepIndex > 0 || (step === 'bank' && (draft !== null || isPickingBank));
+
   const { title, content } = body();
   return (
     <StepGuide
@@ -554,13 +672,8 @@ function EmailSetupWalkthrough({
       stepCount={provider === null ? undefined : steps.length}
       title={title}
       primary={getPrimary()}
-      secondary={
-        step === 'test' && !hasPurchase ? (
-          <Button variant='tertiary' size='sm' onClick={onClose}>
-            {WORDS.finishLater}
-          </Button>
-        ) : undefined
-      }
+      onBack={canGoBack ? goBack : undefined}
+      backLabel={WORDS.backStep}
     >
       {content}
     </StepGuide>

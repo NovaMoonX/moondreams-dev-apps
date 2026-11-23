@@ -5,6 +5,7 @@ import {
   createEmailFilter,
   deleteEmailFilter,
   rotateEmailAddress,
+  saveEmailBanks,
   saveEmailSetup,
   setEmailWaiting,
   suggestEmailFilters,
@@ -16,9 +17,12 @@ import {
   selectEmailOverdue,
   selectEmailSetup,
   selectIsEmailEventsLoaded,
+  selectKnownBanks,
+  type KnownBank,
 } from '@apps/runway/store/selectors/emailSelectors';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
+  EmailBank,
   EmailEventSealed,
   EmailFilterSealed,
   EmailOutcome,
@@ -29,7 +33,12 @@ import {
   getEmailSetupSteps,
   type EmailSetupStepId,
 } from '@apps/runway/utils/emailSetupSteps';
-import { EMAIL_ADDRESS_PREFIX, EMAIL_DOMAIN } from '@apps/runway/constants';
+import {
+  EMAIL_ADDRESS_PREFIX,
+  EMAIL_DOMAIN,
+  EMAIL_EVENT_KEEP_DAYS,
+} from '@apps/runway/constants';
+import { DAY_MS } from '@apps/runway/engine/dates';
 
 export interface EmailIntakeRead {
   address: string | null;
@@ -66,6 +75,7 @@ export interface EmailActions {
   chooseProvider(provider: EmailProvider): Promise<void>;
   reachStep(stepId: EmailSetupStepId): Promise<void>;
   finishSetup(): Promise<void>;
+  saveBanks(change: (banks: EmailBank[]) => EmailBank[]): Promise<void>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
@@ -158,6 +168,10 @@ export function useEmailActions(): EmailActions {
           : saveEmailSetup(uid, (current) =>
               current?.doneAt != null ? null : { doneAt: Date.now() },
             ),
+      saveBanks: async (change) => {
+        if (uid === null) return NO_UID();
+        await saveEmailBanks(uid, await getRunwayEncryption(uid), change);
+      },
     }),
     [uid],
   );
@@ -165,6 +179,8 @@ export function useEmailActions(): EmailActions {
 
 export interface EmailSetupRead {
   provider: EmailProvider | null;
+  /** The banks whose alerts are forwarded, in the order they were added. */
+  banks: EmailBank[];
   steps: EmailSetupStepId[];
   /** Index of the furthest step reached in this provider's list; 0 when it is unknown. */
   step: number;
@@ -200,6 +216,7 @@ export function useEmailSetup(): EmailSetupRead {
     const doneAt = setup?.doneAt ?? null;
     return {
       provider,
+      banks: setup?.banks ?? [],
       steps,
       step: findShownStep(steps, provider, setup?.stepId ?? null),
       isDone:
@@ -209,4 +226,28 @@ export function useEmailSetup(): EmailSetupRead {
       isDoneUnwritten: doneAt === null,
     };
   }, [setup, intake.confirm?.url, events, isEventsLoaded]);
+}
+
+/** The banks Runway knows from cards, accounts and links, to offer before typing one. */
+export function useKnownBanks(): KnownBank[] {
+  return useAppSelector(selectKnownBanks);
+}
+
+export type BankArrival = 'arriving' | 'waiting' | 'quiet';
+
+/** Whether a bank's alerts reach Runway: an alert from one of its addresses became a purchase, it was added too recently to tell, or none has come in the days emails are kept. */
+export function getBankArrival(
+  bank: EmailBank,
+  events: EmailEventRead[],
+  now: number,
+): BankArrival {
+  const isArriving = events.some(
+    (event) =>
+      event.outcome === 'purchase' &&
+      bank.addresses.includes(event.from.toLowerCase()),
+  );
+  if (isArriving) return 'arriving';
+  return now - bank.addedAt < EMAIL_EVENT_KEEP_DAYS * DAY_MS
+    ? 'waiting'
+    : 'quiet';
 }

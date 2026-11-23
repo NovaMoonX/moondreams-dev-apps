@@ -39,6 +39,8 @@ import {
   useEmailFilters,
   useEmailIntake,
   useEmailSetup,
+  useKnownBanks,
+  getBankArrival,
 } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailEventRead,
@@ -46,7 +48,13 @@ import type {
 } from '@apps/runway/hooks/useEmailPurchases';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
-import { getFilterStepIndex } from '@apps/runway/utils/emailSetupSteps';
+import {
+  getAddBankSteps,
+  getFilterStepIndex,
+} from '@apps/runway/utils/emailSetupSteps';
+import { BankMark } from '@apps/runway/components/EmailBanksEditor';
+import { findBankLogo } from '@apps/runway/utils/emailBanks';
+import EmailBankSheet from '@apps/runway/components/EmailBankSheet';
 
 const ROWS_SHOWN = 5;
 
@@ -141,6 +149,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const filters = useEmailFilters();
   const actions = useEmailActions();
   const setup = useEmailSetup();
+  const knownBanks = useKnownBanks();
   const now = useNow(60_000);
   const isWritten = useRef(false);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
@@ -155,9 +164,14 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [openFilterId, setOpenFilterId] = useState<string | null>(null);
   const [allList, setAllList] = useState<AllList | null>(null);
+  const [addBankIndex, setAddBankIndex] = useState<number | null>(null);
+  const [openBankId, setOpenBankId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
+  const openBank = setup.banks.find((entry) => entry.id === openBankId) ?? null;
+  const addBankSteps = getAddBankSteps(setup.provider);
+  const isAddingBank = addBankIndex !== null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
   const hasPurchase = events.some(
     (entry) =>
@@ -169,7 +183,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     confirmAt !== null &&
     (walkBaseline === null || confirmAt !== walkBaseline.confirmAt);
   const isWalking = !setup.isDone || isReopened || isKept;
-  const stepIndex = Math.min(viewIndex ?? setup.step, setup.steps.length - 1);
+  const walkSteps = isAddingBank ? addBankSteps : setup.steps;
+  const stepIndex = isAddingBank
+    ? Math.min(addBankIndex, addBankSteps.length - 1)
+    : Math.min(viewIndex ?? setup.step, setup.steps.length - 1);
   const filterIndex = getFilterStepIndex(setup.steps);
   const hasStrayEmail = events.some(
     (entry) => entry.outcome === 'notPurchase' || entry.outcome === 'unread',
@@ -218,6 +235,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   };
 
   const goToStep = (index: number) => {
+    if (isAddingBank) {
+      setAddBankIndex(index);
+      return;
+    }
     setViewIndex(index);
     setIsKept(true);
     actions
@@ -227,20 +248,21 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       );
   };
 
-  const goBackInWalk = () => {
-    if (stepIndex > 0) {
-      goToStep(stepIndex - 1);
-      return;
-    }
-    if (!isReopened) {
-      onClose();
-      return;
-    }
+  const keepBaseline = () =>
+    setWalkBaseline({
+      eventIds: new Set(events.map((entry) => entry.id)),
+      confirmAt,
+    });
+
+  const backToStatus = () => {
     setIsReopened(false);
     setIsKept(false);
     setWalkBaseline(null);
     setViewIndex(null);
+    setAddBankIndex(null);
   };
+
+  const isOverStatus = isReopened || isAddingBank || (isKept && setup.isDone);
 
   const pickProvider = (
     provider: Parameters<typeof actions.chooseProvider>[0],
@@ -289,12 +311,18 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       title={EMAIL_WORDS.title}
       isTitleWrapped
       onClose={onClose}
-      onBack={isWalking ? goBackInWalk : undefined}
+      onBack={
+        isWalking || isAddingBank
+          ? isOverStatus
+            ? backToStatus
+            : onClose
+          : undefined
+      }
       headerAction={<ValuesEyeButton />}
     >
-      {isWalking ? (
+      {isWalking || isAddingBank ? (
         <div className='space-y-4'>
-          {isFilterMissing && (
+          {isFilterMissing && !isAddingBank && (
             <InlineNotice tone='warning'>
               <p>{EMAIL_SETUP_WORDS.noFilterNotice}</p>
               <Button
@@ -313,23 +341,23 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             </p>
           )}
           <EmailSetupWalkthrough
+            key={isAddingBank ? 'add-bank' : 'setup'}
             provider={setup.provider}
-            steps={setup.steps}
+            steps={walkSteps}
             stepIndex={stepIndex}
             intake={intake}
             isConfirmed={isConfirmed}
             hasPurchase={hasPurchase}
             isBusy={isBusy}
+            banks={setup.banks}
+            knownBanks={knownBanks}
+            onSaveBanks={actions.saveBanks}
+            isAddingBank={isAddingBank}
             onPickProvider={pickProvider}
             onGetAddress={() => void getNewAddress()}
             onGo={goToStep}
-            onFinish={() => {
-              setIsReopened(false);
-              setIsKept(false);
-              setWalkBaseline(null);
-              setViewIndex(null);
-            }}
-            onClose={onClose}
+            onFinish={backToStatus}
+            onClose={isOverStatus ? backToStatus : onClose}
           />
         </div>
       ) : (
@@ -341,6 +369,45 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                   formatUpdatedAgo(intake.lastReceivedAt, now),
                 )}
           </p>
+          {addBankSteps.length > 0 && (
+            <ActionSection caption={EMAIL_SETUP_WORDS.banksTitle}>
+              <div className='space-y-3'>
+                {setup.banks.length > 0 && (
+                  <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                    {setup.banks.map((bank) => {
+                      const detail = `${EMAIL_SETUP_WORDS.arrival[getBankArrival(bank, events, now)]} · ${EMAIL_SETUP_WORDS.addressCount(bank.addresses.length)}`;
+                      return (
+                        <ItemRow
+                          key={bank.id}
+                          name={bank.name}
+                          leading={
+                            <BankMark
+                              name={bank.name}
+                              logo={findBankLogo(knownBanks, bank.name)}
+                            />
+                          }
+                          detail={detail}
+                          isPrivate={false}
+                          ariaLabel={`${bank.name}, ${detail}. Open`}
+                          onOpen={() => setOpenBankId(bank.id)}
+                        />
+                      );
+                    })}
+                  </ul>
+                )}
+                <Button
+                  variant='secondary'
+                  className='w-full'
+                  onClick={() => {
+                    keepBaseline();
+                    setAddBankIndex(0);
+                  }}
+                >
+                  {EMAIL_SETUP_WORDS.addBank}
+                </Button>
+              </div>
+            </ActionSection>
+          )}
           {filters.length > 0 && (
             <ActionSection
               caption={EMAIL_WORDS.filtersCaption}
@@ -419,10 +486,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 subtitle={EMAIL_SETUP_WORDS.setUpAgainSub}
                 onClick={() => {
                   setIsReopened(true);
-                  setWalkBaseline({
-                    eventIds: new Set(events.map((entry) => entry.id)),
-                    confirmAt,
-                  });
+                  keepBaseline();
                   setViewIndex(0);
                 }}
               />
@@ -473,6 +537,17 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         <EmailEventSheet
           event={openEvent}
           onClose={() => setOpenEventId(null)}
+        />
+      )}
+      {openBank && (
+        <EmailBankSheet
+          bank={openBank}
+          banks={setup.banks}
+          provider={setup.provider}
+          knownBanks={knownBanks}
+          arrival={getBankArrival(openBank, events, now)}
+          onSaveBanks={actions.saveBanks}
+          onClose={() => setOpenBankId(null)}
         />
       )}
       {openFilter && (

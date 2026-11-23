@@ -269,7 +269,7 @@ interface WalkView {
   startedAt: number | null;
 }
 
-/** The forwarding setup as an overlay subview of `StepGuide` steps: a progress bar, the step's title and content, one pinned primary and Back as the header arrow. The same walk for every app; the app's words come in `words`. Render it as the screen, not inside a card. */
+/** The forwarding setup as an overlay subview of `StepGuide` steps: a progress bar, the step's title and content, Back and the primary pinned in the footer, and the header arrow leaving the whole setup with its place kept. The same walk for every app; the app's words come in `words`. Render it as the screen, not inside a card. */
 function EmailSetupWalkthrough({
   words,
   intake,
@@ -614,11 +614,9 @@ function EmailSetupWalkthrough({
   const getPrimary = () => {
     if (step === 'provider') return undefined;
     if (step === 'test') {
-      return {
-        label: WORDS.done,
-        onClick: onFinish,
-        isDisabled: !isTestReceived,
-      };
+      return isTestReceived
+        ? { label: WORDS.done, onClick: onFinish }
+        : { label: WORDS.finishLater, onClick: onFinishLater };
     }
     if (!hasNext) return undefined;
     return {
@@ -629,7 +627,6 @@ function EmailSetupWalkthrough({
   };
 
   const leave = onBackToStatus ?? onFinishLater;
-  const goBack = () => (stepIndex > 0 ? goTo(stepIndex - 1) : leave());
 
   const { title: stepTitle, content } = body();
   return (
@@ -638,7 +635,7 @@ function EmailSetupWalkthrough({
       title={title}
       isTitleWrapped
       onClose={leave}
-      onBack={goBack}
+      onBack={leave}
       headerAction={headerAction}
     >
       <div className='flex flex-1 flex-col space-y-4'>
@@ -665,13 +662,7 @@ function EmailSetupWalkthrough({
           stepCount={provider === null ? undefined : steps.length}
           title={stepTitle}
           primary={getPrimary()}
-          secondary={
-            step === 'test' && !isTestReceived ? (
-              <Button variant='tertiary' size='sm' onClick={onFinishLater}>
-                {WORDS.finishLater}
-              </Button>
-            ) : undefined
-          }
+          onBack={stepIndex > 0 ? () => goTo(stepIndex - 1) : undefined}
         >
           {content}
         </StepGuide>

@@ -20,7 +20,9 @@ import type {
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
+  EmailBank,
   EmailSetupDoc,
+  EmailSetupSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -217,30 +219,67 @@ export interface OpenEmailSetup {
   provider: EmailSetupDoc['provider'];
   stepId: EmailSetupDoc['stepId'];
   doneAt: number | null;
+  banks: EmailBank[];
 }
 
-/** How far the person got setting up forwarding; null until they start. */
+const toBanks = (value: unknown): EmailBank[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry: Partial<EmailBank> | null) =>
+        entry && typeof entry.id === 'string' && Array.isArray(entry.addresses)
+          ? [
+              {
+                id: entry.id,
+                name: String(entry.name ?? ''),
+                addresses: entry.addresses.map(String),
+                addedAt: Number(entry.addedAt ?? 0),
+              },
+            ]
+          : [],
+      )
+    : [];
+
+/** How far the person got setting up forwarding, with the banks they forward; null until they start. */
 export function startEmailSetupListener(
   uid: string,
+  encryption: RunwayEncryption,
   onChange: (setup: OpenEmailSetup | null) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(
+  const sequence = { latest: 0 };
+  const run = { isStopped: false };
+  const read = createSealedReader(encryption, openJson);
+  const stop = onSnapshot(
     doc(db, 'apps', 'runway', 'plans', uid, 'emailSetup', 'progress'),
-    (snapshot) => {
-      const data = snapshot.exists()
-        ? (snapshot.data() as Partial<EmailSetupDoc>)
-        : null;
-      onChange(
-        data === null
-          ? null
-          : {
-              provider: data.provider ?? null,
-              stepId: data.stepId ?? null,
-              doneAt: data.doneAt ?? null,
-            },
-      );
+    async (snapshot) => {
+      sequence.latest += 1;
+      const current = sequence.latest;
+      try {
+        const data = snapshot.exists()
+          ? (snapshot.data() as Partial<EmailSetupDoc>)
+          : null;
+        const payload = data?.sealed
+          ? await read<Partial<EmailSetupSealed>>(data.sealed)
+          : null;
+        if (current !== sequence.latest || run.isStopped) return;
+        onChange(
+          data === null
+            ? null
+            : {
+                provider: data.provider ?? null,
+                stepId: data.stepId ?? null,
+                doneAt: data.doneAt ?? null,
+                banks: toBanks(payload?.banks),
+              },
+        );
+      } catch (error) {
+        if (current === sequence.latest) onError(toError(error));
+      }
     },
     (error) => onError(toError(error)),
   );
+
+  return () => {
+    run.isStopped = true;
+    stop();
+  };
 }

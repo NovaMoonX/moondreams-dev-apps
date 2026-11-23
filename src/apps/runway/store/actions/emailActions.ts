@@ -10,11 +10,13 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
-import { sealJson } from '@apps/runway/security';
+import { openJson, sealJson } from '@apps/runway/security';
 import type {
   EmailFilterDoc,
+  EmailBank,
   EmailFilterSealed,
   EmailSetupDoc,
+  EmailSetupSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -111,8 +113,38 @@ export async function saveEmailSetup(
       provider: current?.provider ?? null,
       stepId: current?.stepId ?? null,
       doneAt: current?.doneAt ?? null,
+      sealed: current?.sealed ?? null,
       createdAt: current?.createdAt ?? now,
       ...change,
+      updatedAt: now,
+    } satisfies EmailSetupDoc);
+  });
+}
+
+/** Rewrites the banks whose alerts are forwarded from what is stored now, so an edit on another device is kept; `change` returns the new list. */
+export async function saveEmailBanks(
+  uid: string,
+  encryption: RunwayEncryption,
+  change: (banks: EmailBank[]) => EmailBank[],
+): Promise<void> {
+  const ref = planRef(uid, 'emailSetup', 'progress');
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const current = snapshot.exists()
+      ? (snapshot.data() as Partial<EmailSetupDoc>)
+      : null;
+    const opened = current?.sealed
+      ? await openJson<Partial<EmailSetupSealed>>(current.sealed, encryption)
+      : null;
+    const banks = change(Array.isArray(opened?.banks) ? opened.banks : []);
+    const now = Date.now();
+    transaction.set(ref, {
+      id: 'progress',
+      provider: current?.provider ?? null,
+      stepId: current?.stepId ?? null,
+      doneAt: current?.doneAt ?? null,
+      sealed: await sealJson({ banks } satisfies EmailSetupSealed, encryption),
+      createdAt: current?.createdAt ?? now,
       updatedAt: now,
     } satisfies EmailSetupDoc);
   });

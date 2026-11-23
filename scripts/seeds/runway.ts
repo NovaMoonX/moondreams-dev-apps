@@ -95,6 +95,7 @@ import type {
   EmailEventSealed,
   EmailFilterDoc,
   EmailSetupDoc,
+  EmailSetupSealed,
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
@@ -4978,6 +4979,28 @@ async function writeSeedEmail(
     provider: 'gmail',
     stepId: 'test',
     doneAt: context.now - DAY_MS,
+    sealed: await sealJson(
+      {
+        banks: [
+          {
+            id: 'seed-email-bank-capital-one',
+            name: 'Capital One',
+            addresses: [
+              'alerts@capitalone.com',
+              'capitalone@notification.capitalone.com',
+            ],
+            addedAt: context.now - 12 * DAY_MS,
+          },
+          {
+            id: 'seed-email-bank-discover',
+            name: 'Discover',
+            addresses: ['discover@services.discover.com'],
+            addedAt: context.now - 2 * DAY_MS,
+          },
+        ],
+      } satisfies EmailSetupSealed,
+      encryption,
+    ),
     createdAt: context.now - 12 * DAY_MS,
     updatedAt: context.now - DAY_MS,
   } satisfies EmailSetupDoc);
