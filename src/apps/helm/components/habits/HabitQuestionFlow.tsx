@@ -8,6 +8,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
+import SayWhenField from '@/components/SayWhenField';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
@@ -36,6 +37,7 @@ import {
   readWhenBlocker,
   type WhenDraft,
 } from '@apps/helm/utils/habitDraft';
+import { readHabitWords } from '@apps/helm/utils/sayWhen';
 
 interface HabitQuestionFlowProps {
   isOpen: boolean;
@@ -159,7 +161,29 @@ function HabitFlowForm({
         answers.when.often !== 'onWeekdays' || answers.when.weekdays.length > 0,
       blocker: HELM_COPY.habitWhenNeedsDay,
       render: () => (
-        <OftenFields draft={answers.when} onChange={(when) => set({ when })} />
+        <div className='space-y-4'>
+          <SayWhenField
+            label={HELM_COPY.sayWhenLabel}
+            placeholder={HELM_COPY.sayWhenHabitPlaceholder}
+            unreadLine={HELM_COPY.sayWhenHabitUnread}
+            className='helm-field'
+            currentKey={JSON.stringify(answers.when)}
+            onRead={(text) => {
+              const read = readHabitWords(text, answers.when, {
+                now: Date.now(),
+                zone: profile?.timeZone ?? 'UTC',
+                profile: dayWindow,
+              });
+              if (!read) return null;
+              set({ when: read.draft });
+              return { words: read.words, key: JSON.stringify(read.draft) };
+            }}
+          />
+          <OftenFields
+            draft={answers.when}
+            onChange={(when) => set({ when })}
+          />
+        </div>
       ),
     },
     {

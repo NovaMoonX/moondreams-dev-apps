@@ -549,13 +549,17 @@ service cloud.firestore {
     // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
     // neither and never changes either. `releasedCharges` notes (a pending charge the bank dropped) are made only by
     // Functions; the app deletes one once it has told the person. A `startedPayments` note (a card payment the person
-    // started at their bank) is created and deleted by the app, never changed.
+    // started at their bank) is created and deleted by the app, never changed. A purchase read from an email
+    // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
+    // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
+    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and furthest step, with the forwarded banks sealed) is created and updated by the app, never deleted.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'recurringCharges', 'releasedCharges'])
+        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'recurringCharges', 'releasedCharges', 'emailIntake', 'emailEvents'])
+        && (document[0] != 'emailFilters' || isGateOpen('runway', 'email-purchases', 'off'))
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
-        && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link'));
+        && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link' && request.resource.data.get('source', null) != 'email' && request.resource.data.get('emailEventId', null) == null));
     }
 
     match /apps/runway/plans/{uid} {
@@ -564,10 +568,10 @@ service cloud.firestore {
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
       allow update: if isUser(uid)
-        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
+        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules', 'emailSetup']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
-        && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments'];
+        && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null) && request.resource.data.get('emailEventId', null) == resource.data.get('emailEventId', null)));
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

@@ -284,6 +284,8 @@ const syncCats = (firestore: Firestore, uid: string) =>
     };
   });
 
+const hasPlainName = (doctor: { name: string }) => !doctor.name.includes('@');
+
 const syncClinics = (firestore: Firestore, uid: string) =>
   inEveryHousehold(firestore, uid, async (household) => {
     const [clinicRead, doctorRead] = await Promise.all([
@@ -293,7 +295,9 @@ const syncClinics = (firestore: Firestore, uid: string) =>
     return {
       records: clinicRead.clinics.map((clinic) => {
         const doctors = doctorRead.doctors
-          .filter((doctor) => doctor.clinicId === clinic.id)
+          .filter(
+            (doctor) => doctor.clinicId === clinic.id && hasPlainName(doctor),
+          )
           .slice(0, DOCTOR_LIMIT)
           .map((doctor) => doctor.name);
         return toRecord({
@@ -306,6 +310,33 @@ const syncClinics = (firestore: Firestore, uid: string) =>
           ]),
           sourceUpdatedAt: clinic.updatedAt,
           extra: { phone: clinic.phone, address: clinic.address },
+        });
+      }),
+      isFull: clinicRead.isFull && doctorRead.isFull,
+    };
+  });
+
+const syncVets = (firestore: Firestore, uid: string) =>
+  inEveryHousehold(firestore, uid, async (household) => {
+    const [clinicRead, doctorRead] = await Promise.all([
+      readClinics(household),
+      readDoctors(household),
+    ]);
+    const clinicNames = new Map(
+      clinicRead.clinics.map((clinic) => [clinic.id, clinic.name]),
+    );
+    return {
+      records: doctorRead.doctors.filter(hasPlainName).map((doctor) => {
+        const clinic =
+          doctor.clinicId === null
+            ? undefined
+            : clinicNames.get(doctor.clinicId);
+        return toRecord({
+          sourceRef: `households/${household.id}/doctors/${doctor.id}`,
+          kind: 'person',
+          title: doctor.name,
+          detail: clinic === undefined ? 'Veterinarian' : `Vet at ${clinic}`,
+          placeLabel: clinic ?? null,
         });
       }),
       isFull: clinicRead.isFull && doctorRead.isFull,
@@ -1057,6 +1088,8 @@ export function createNineLivesAdapter(
         return syncDueCare(firestore, uid, req.windowStart);
       case 'clinics':
         return syncClinics(firestore, uid);
+      case 'vets':
+        return syncVets(firestore, uid);
       case 'conditions':
         return syncConditions(firestore, uid);
       case 'symptoms':

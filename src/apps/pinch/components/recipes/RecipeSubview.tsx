@@ -163,7 +163,12 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const confirmDiscardTyped = async (action: string) => {
     if (!isTypedRef.current) return true;
     const startedOn = stage;
-    const what = startedOn === 'link' ? 'link' : 'text';
+    const getWhat = () => {
+      if (startedOn === 'link') return 'link';
+      if (startedOn === 'file') return 'file';
+      return 'text';
+    };
+    const what = getWhat();
     const confirmed = await askToDiscard(
       `Discard this ${what}?`,
       `Nothing has been read or saved yet. If you ${action}, the ${what} is lost.`,

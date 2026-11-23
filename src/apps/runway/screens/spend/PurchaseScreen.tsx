@@ -15,6 +15,10 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import {
+  EmailPurchaseNotice,
+  EmailPurchaseRows,
+} from '@apps/runway/components/EmailPurchaseParts';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -696,6 +700,7 @@ function PurchaseScreen({
               bankName === null ? null : SPEND_WORDS.bankName(bankName)
             }
           />
+          <EmailPurchaseNotice purchase={purchase} />
           {billRef !== null && (
             <ActionGroup isRoomy>
               <ActionRow
@@ -863,6 +868,7 @@ function PurchaseScreen({
                 }}
               />
             )}
+            <EmailPurchaseRows purchase={purchase} onFailed={setError} />
             {heldRule !== null && (
               <ActionRow
                 isGrouped

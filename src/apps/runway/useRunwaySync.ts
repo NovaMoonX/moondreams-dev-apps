@@ -1,6 +1,14 @@
 import { useEffect } from 'react';
 
 import { useNow } from '@/hooks/useNow';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
+import { EMAIL_PURCHASES_GATE_ID } from '@apps/runway/constants';
+import {
+  startEmailEventsListener,
+  startEmailFiltersListener,
+  startEmailIntakeListener,
+  startEmailSetupListener,
+} from '@apps/runway/store/listeners/emailListeners';
 
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
@@ -83,6 +91,10 @@ import {
   setExpenses,
   setRules,
   setMemories,
+  setEmailIntake,
+  setEmailSetup,
+  setEmailEvents,
+  setEmailFilters,
   setClosing,
   setDays,
   setItems,
@@ -257,6 +269,63 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stops.current.forEach((stop) => stop());
     };
   }, [uid, keyStatus, dispatch]);
+
+  const isEmailGateOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
+  const emailLevel = useAppSelector(selectLevel);
+  const isEmailOpen = isEmailGateOpen && emailLevel !== 'plan';
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isEmailOpen) return;
+
+    const stops: { current: (() => void)[] } = { current: [] };
+    const run = { isCurrent: true };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        // Email is optional, so a failure here never closes the plan.
+        const skip = (error: Error) =>
+          console.error('Purchases from email did not open', error);
+        stops.current = [
+          startEmailIntakeListener(
+            uid,
+            encryption,
+            (intake) => dispatch(setEmailIntake(intake)),
+            skip,
+          ),
+          startEmailSetupListener(
+            uid,
+            encryption,
+            (setup) => dispatch(setEmailSetup(setup)),
+            skip,
+          ),
+          startEmailEventsListener(
+            uid,
+            encryption,
+            (events) => dispatch(setEmailEvents(events)),
+            skip,
+          ),
+          startEmailFiltersListener(
+            uid,
+            encryption,
+            (filters) => dispatch(setEmailFilters(filters)),
+            skip,
+          ),
+        ];
+      })
+      .catch((error: unknown) =>
+        console.error('Purchases from email did not open', error),
+      );
+
+    return () => {
+      run.isCurrent = false;
+      stops.current.forEach((stop) => stop());
+      dispatch(setEmailIntake(null));
+      dispatch(setEmailSetup(null));
+      dispatch(setEmailEvents(null));
+      dispatch(setEmailFilters([]));
+    };
+  }, [uid, keyStatus, isEmailOpen, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready') return;

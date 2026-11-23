@@ -1,0 +1,6 @@
+name = "mdd-apps-email-router"
+main = "index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+INGEST_URL = "https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestRunwayEmail"

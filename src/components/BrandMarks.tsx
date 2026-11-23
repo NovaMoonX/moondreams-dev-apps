@@ -659,3 +659,294 @@ export function ChatGptMark({ className = 'size-4' }: BrandMarkProps) {
     </svg>
   );
 }
+
+export function GoogleContactsMark({ className = 'size-5' }: BrandMarkProps) {
+  return (
+    <svg viewBox='0 0 512 512' aria-hidden='true' className={className}>
+      <path
+        fill='#86a9ff'
+        d='M203.5 249.4c-90.7 0-164.1 73.4-164.1 164.1v68.9c0 16.3 13.2 29.5 29.5 29.5h78.8l78.8-262.6h-23z'
+      />
+      <path
+        fill='#578cff'
+        d='M472.6 357.7c0-59.9-48.4-108.3-108.3-108.3h-78.8V512h78.8c59.9 0 108.3-48.4 108.3-108.3'
+      />
+      <path
+        fill='#0057cc'
+        d='M118.2 357.7c0-59.9 48.4-108.3 108.3-108.3h59.1c59.9 0 108.3 48.4 108.3 108.3v45.9c0 59.9-48.4 108.3-108.3 108.3H147.7c-16.3 0-29.5-13.2-29.5-29.5zM256 0c56.2 0 101.7 45.6 101.7 101.7S312.2 203.5 256 203.5s-101.7-45.6-101.7-101.7S199.8 0 256 0'
+      />
+    </svg>
+  );
+}
+
+export function OutlookMark({ className = 'size-5' }: BrandMarkProps) {
+  const id = useId().replace(/[^\w-]/g, '');
+  return (
+    <svg
+      viewBox='60 75.37 570.02 570.02'
+      aria-hidden='true'
+      className={className}
+    >
+      <defs>
+        <linearGradient
+          id={`${id}a`}
+          x1='9.989'
+          x2='30.932'
+          y1='22.365'
+          y2='9.375'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='0' stopColor='#20a7fa' />
+          <stop offset='.4' stopColor='#3bd5ff' />
+          <stop offset='1' stopColor='#c4b0ff' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}b`}
+          x1='17.197'
+          x2='28.856'
+          y1='26.794'
+          y2='8.126'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='0' stopColor='#165ad9' />
+          <stop offset='.501' stopColor='#1880e5' />
+          <stop offset='1' stopColor='#8587ff' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}c`}
+          x1='25.701'
+          x2='12.756'
+          y1='27.048'
+          y2='16.501'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.237' stopColor='#448aff' stopOpacity='0' />
+          <stop offset='.792' stopColor='#0032b1' stopOpacity='.2' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}d`}
+          x1='24.053'
+          x2='44.51'
+          y1='31.11'
+          y2='18.018'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='0' stopColor='#1a43a6' />
+          <stop offset='.492' stopColor='#2052cb' />
+          <stop offset='1' stopColor='#5f20cb' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}e`}
+          x1='29.828'
+          x2='17.397'
+          y1='30.327'
+          y2='19.571'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='0' stopColor='#0045b9' stopOpacity='0' />
+          <stop offset='.67' stopColor='#0d1f69' stopOpacity='.2' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}f`}
+          x1='41.998'
+          x2='23.852'
+          y1='29.943'
+          y2='29.943'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='0' stopColor='#4dc4ff' />
+          <stop offset='.196' stopColor='#0fafff' />
+        </linearGradient>
+        <linearGradient
+          id={`${id}g`}
+          x1='3.458'
+          x2='20.929'
+          y1='37.872'
+          y2='37.86'
+          gradientTransform='scale(15)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.206' stopColor='#6ce0ff' />
+          <stop offset='.535' stopColor='#50d5ff' stopOpacity='0' />
+        </linearGradient>
+        <radialGradient
+          id={`${id}h`}
+          cx='0'
+          cy='0'
+          r='1'
+          fx='0'
+          fy='0'
+          gradientTransform='matrix(0 -405.04051 438.393 0 360.027 102.268)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.568' stopColor='#275ff0' stopOpacity='0' />
+          <stop offset='.992' stopColor='#002177' />
+        </radialGradient>
+        <radialGradient
+          id={`${id}i`}
+          cx='0'
+          cy='0'
+          r='1'
+          fx='0'
+          fy='0'
+          gradientTransform='rotate(-45 897.061 -224.265)scale(173.58)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.259' stopColor='#0060d1' stopOpacity='.4' />
+          <stop offset='.908' stopColor='#0383f1' stopOpacity='0' />
+        </radialGradient>
+        <radialGradient
+          id={`${id}j`}
+          cx='0'
+          cy='0'
+          r='1'
+          fx='0'
+          fy='0'
+          gradientTransform='rotate(-52.658 784.06 187.412)scale(589.22098 532.80602)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.732' stopColor='#f4a7f7' stopOpacity='0' />
+          <stop offset='1' stopColor='#f4a7f7' stopOpacity='.502' />
+        </radialGradient>
+        <radialGradient
+          id={`${id}k`}
+          cx='0'
+          cy='0'
+          r='1'
+          fx='0'
+          fy='0'
+          gradientTransform='rotate(123.339 27.956 281.58)scale(310.88699 806.7885)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='0' stopColor='#49deff' />
+          <stop offset='.724' stopColor='#29c3ff' />
+        </radialGradient>
+        <radialGradient
+          id={`${id}l`}
+          cx='0'
+          cy='0'
+          r='1'
+          fx='0'
+          fy='0'
+          gradientTransform='rotate(46.924 -378.504 245.25)scale(315.927)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.039' stopColor='#0091ff' />
+          <stop offset='.919' stopColor='#183dad' />
+        </radialGradient>
+        <radialGradient
+          id={`${id}m`}
+          cx='0'
+          cy='0'
+          r='1'
+          fx='0'
+          fy='0'
+          gradientTransform='matrix(0 168 -193.782 0 180 491.159)'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop offset='.558' stopColor='#0fa5f7' stopOpacity='0' />
+          <stop offset='1' stopColor='#74c6ff' stopOpacity='.502' />
+        </radialGradient>
+      </defs>
+      <path
+        fill={`url(#${id}a)`}
+        d='m463.984 140.145l-344.347 218.27l-29.614-46.72v-40.257a43.26 43.26 0 0 1 19.72-36.293L309.91 105.258c30.496-19.79 69.777-19.793 100.277-.008Zm0 0'
+      />
+      <path
+        fill={`url(#${id}b)`}
+        d='M407.102 103.34a91 91 0 0 1 3.082 1.914l156.214 101.332l-387.336 245.52l-59.437-93.77L403.895 177.8c26.925-17.102 28.105-55.57 3.207-74.461Zm0 0'
+      />
+      <path
+        fill={`url(#${id}c)`}
+        d='M407.102 103.34a91 91 0 0 1 3.082 1.914l156.214 101.332l-387.336 245.52l-59.437-93.77L403.895 177.8c26.925-17.102 28.105-55.57 3.207-74.461Zm0 0'
+      />
+      <path
+        fill={`url(#${id}d)`}
+        d='M333.602 498.988L179.066 452.11L507.63 243.836c27.672-17.54 27.601-57.938-.133-75.379l-1.48-.93l4.261 2.649l99.996 64.867a43.26 43.26 0 0 1 19.723 36.3v38.962Zm0 0'
+      />
+      <path
+        fill={`url(#${id}e)`}
+        d='M333.602 498.988L179.066 452.11L507.63 243.836c27.672-17.54 27.601-57.938-.133-75.379l-1.48-.93l4.261 2.649l99.996 64.867a43.26 43.26 0 0 1 19.723 36.3v38.962Zm0 0'
+      />
+      <path
+        fill={`url(#${id}h)`}
+        d='M410.188 105.25c-30.5-19.785-69.782-19.781-100.282.008L109.742 235.145a43.26 43.26 0 0 0-19.719 36.292v1.97a44.48 44.48 0 0 0 20.735 36.16l248.887 156.91L609.16 309.805a44.47 44.47 0 0 0 20.824-37.664v38.168l.008-38.965a43.28 43.28 0 0 0-19.722-36.301Zm0 0'
+      />
+      <path
+        fill={`url(#${id}f)`}
+        d='M315.77 630.05h220.449c51.777 0 93.75-41.972 93.75-93.75V272.14a44.48 44.48 0 0 1-20.82 37.665l-327.907 205.89a60.71 60.71 0 0 0-28.422 51.414c.004 34.762 28.184 62.942 62.95 62.942Zm0 0'
+      />
+      <path
+        fill={`url(#${id}i)`}
+        d='M315.77 630.05h220.449c51.777 0 93.75-41.972 93.75-93.75V272.14a44.48 44.48 0 0 1-20.82 37.665l-327.907 205.89a60.71 60.71 0 0 0-28.422 51.414c.004 34.762 28.184 62.942 62.95 62.942Zm0 0'
+      />
+      <path
+        fill={`url(#${id}j)`}
+        d='M315.77 630.05h220.449c51.777 0 93.75-41.972 93.75-93.75V272.14a44.48 44.48 0 0 1-20.82 37.665l-327.907 205.89a60.71 60.71 0 0 0-28.422 51.414c.004 34.762 28.184 62.942 62.95 62.942Zm0 0'
+      />
+      <path
+        fill={`url(#${id}k)`}
+        d='M405.402 630.035H183.738c-51.777 0-93.75-41.972-93.75-93.75v-264.34a44.47 44.47 0 0 0 20.754 37.621l327.582 206.52a61.74 61.74 0 0 1 28.809 52.226c-.004 34.09-27.64 61.723-61.73 61.723Zm0 0'
+      />
+      <path
+        fill={`url(#${id}g)`}
+        d='M405.402 630.035H183.738c-51.777 0-93.75-41.972-93.75-93.75v-264.34a44.47 44.47 0 0 0 20.754 37.621l327.582 206.52a61.74 61.74 0 0 1 28.809 52.226c-.004 34.09-27.64 61.723-61.73 61.723Zm0 0'
+      />
+      <path
+        fill={`url(#${id}l)`}
+        d='M108.75 345h142.5c26.926 0 48.75 21.824 48.75 48.75v142.5c0 26.926-21.824 48.75-48.75 48.75h-142.5C81.824 585 60 563.176 60 536.25v-142.5C60 366.824 81.824 345 108.75 345m0 0'
+      />
+      <path
+        fill={`url(#${id}m)`}
+        d='M108.75 345h142.5c26.926 0 48.75 21.824 48.75 48.75v142.5c0 26.926-21.824 48.75-48.75 48.75h-142.5C81.824 585 60 563.176 60 536.25v-142.5C60 366.824 81.824 345 108.75 345m0 0'
+      />
+      <path
+        fill='#fff'
+        d='M179.387 534c-19.848 0-36.137-6.21-48.875-18.625q-19.11-18.622-19.11-48.605c0-21.11 6.465-38.18 19.395-51.22Q150.195 396 181.594 396q29.67 0 48.297 18.715c12.484 12.476 18.726 28.93 18.726 49.351c0 20.985-6.469 37.899-19.398 50.75Q209.919 534 179.387 534m.574-26.352q16.225 0 26.117-11.082c6.594-7.386 9.89-17.664 9.89-30.824q-.002-20.577-9.6-32.031q-9.605-11.454-25.638-11.453q-16.517 0-26.597 11.824q-10.083 11.736-10.082 31.102q0 19.652 10.082 31.101q10.078 11.362 25.828 11.363m0 0'
+      />
+      <path
+        fill='#fff'
+        d='M179.332 535.848q-29.655.001-48.691-19.13c-12.688-12.753-19.036-29.398-19.036-49.929q0-32.525 19.325-52.61q19.324-20.09 50.601-20.09q29.555.002 48.114 19.227q18.654 19.23 18.652 50.7c0 21.55-6.442 38.93-19.32 52.129q-19.23 19.703-49.645 19.703m.57-27.067c10.778 0 19.453-3.797 26.02-11.383q9.853-11.384 9.851-31.664q0-21.138-9.562-32.902q-9.567-11.766-25.54-11.766q-16.457-.002-26.5 12.149c-6.694 8.031-10.042 18.683-10.042 31.945q0 20.185 10.043 31.95q10.043 11.67 25.73 11.671m0 0'
+      />
+    </svg>
+  );
+}
+
+export function ICloudMark({ className = 'size-5' }: BrandMarkProps) {
+  return (
+    <svg viewBox='0 0 24 24' aria-hidden='true' className={className}>
+      <path
+        fill='#3693f3'
+        d='M13.762 4.29a6.51 6.51 0 0 0-5.669 3.332a3.6 3.6 0 0 0-1.558-.36a3.57 3.57 0 0 0-3.516 3A4.92 4.92 0 0 0 0 14.796a4.92 4.92 0 0 0 4.92 4.914a5 5 0 0 0 .617-.045h14.42c2.305-.272 4.041-2.258 4.043-4.589v-.009a4.594 4.594 0 0 0-3.727-4.508a6.51 6.51 0 0 0-6.511-6.27z'
+      />
+    </svg>
+  );
+}
+
+export function YahooMark({ className = 'size-5' }: BrandMarkProps) {
+  return (
+    <svg viewBox='0 0 512 512' aria-hidden='true' className={className}>
+      <path
+        fill='#7d2eff'
+        d='m0 140.9l106 249.5l-38.6 90h94.3l141.1-339.5h-93.7l-56.8 143.4l-56-143.4zM407.4 31.6l-93.2 223.8h105L512 31.6zm-65.6 245.3c-32.2 0-58.3 26.1-58.3 58.3s26.1 58.3 58.3 58.3s58.3-26.1 58.3-58.3s-26.1-58.3-58.3-58.3'
+      />
+    </svg>
+  );
+}
+
+export function ProtonMark({ className = 'size-5' }: BrandMarkProps) {
+  return (
+    <svg viewBox='0 0 24 24' aria-hidden='true' className={className}>
+      <path
+        fill='#6d4aff'
+        d='M2.474 17.75V24h4.401v-5.979c0-.582.232-1.14.645-1.551a2.2 2.2 0 0 1 1.556-.643h4.513a7.96 7.96 0 0 0 5.612-2.318a7.9 7.9 0 0 0 2.325-5.595a7.9 7.9 0 0 0-2.325-5.596A7.96 7.96 0 0 0 13.587 0H2.474v7.812h4.401V4.129h6.416c.995 0 1.951.394 2.656 1.097c.704.7 1.1 1.653 1.101 2.646a3.74 3.74 0 0 1-1.101 2.648a3.77 3.77 0 0 1-2.656 1.097H8.627a6.16 6.16 0 0 0-4.352 1.795a6.13 6.13 0 0 0-1.801 4.338'
+      />
+    </svg>
+  );
+}

@@ -30,6 +30,10 @@ export const toHeardText = (parts: string[]) => {
 };
 
 const FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.listen;
+// 20 ms frames: what a listen holds while the model loads, and what the wake listener keeps for the turn it hands over.
+const HELD_FRAMES = 750;
+// The model ends a phrase after 0.8 s of quiet, so a shorter tail never repeats the phrase's own last word.
+const HANDOVER_FRAMES = 30;
 
 // A model that failed to load is already reported under its own key, so the listen it ended isn't reported twice.
 const reportListenFailed = (stage: string, raw: string) => {
@@ -130,6 +134,8 @@ export const createOnDeviceStt = ({
         partial: '',
         isHeard: false,
         microphone: null as FrameSource | null,
+        held: [] as ArrayBuffer[],
+        isFinishing: false,
       };
       const read = () => toHeardText([...state.segments, state.partial]);
       const hear = () => {
@@ -157,13 +163,14 @@ export const createOnDeviceStt = ({
       };
       const stop = () => {
         if (state.isDone) return;
-        if (recognition.current === null) {
+        if (recognition.current === null && state.held.length === 0) {
           deliver(read());
           return;
         }
         state.microphone?.stop();
         source?.stop();
-        recognition.current.finish();
+        if (recognition.current === null) state.isFinishing = true;
+        else recognition.current.finish();
       };
       const cancel = () => {
         recognition.current?.close();
@@ -182,9 +189,6 @@ export const createOnDeviceStt = ({
       run.drop = drop;
       document.addEventListener('visibilitychange', handleVisibility);
       try {
-        // The model loads before the microphone opens, so a failed load never leaves a microphone running.
-        await loadRecognizer();
-        if (state.isDone) return;
         const microphone =
           source ?? (await openMicrophone({ isEchoCancelled: true }));
         if (source === null) state.microphone = microphone;
@@ -192,6 +196,15 @@ export const createOnDeviceStt = ({
           microphone.stop();
           return;
         }
+        const hold = (frame: ArrayBuffer) => {
+          if (recognition.current) recognition.current.push(frame);
+          else state.held = [...state.held, frame].slice(-HELD_FRAMES);
+        };
+        microphone.preRoll.forEach(hold);
+        microphone.subscribe(hold);
+        options.onListening?.();
+        await loadRecognizer();
+        if (state.isDone) return;
         recognition.current = openRecognition({
           onPartial: (text) => {
             state.partial = text;
@@ -216,10 +229,11 @@ export const createOnDeviceStt = ({
           },
         });
         if (recognition.current === null) throw new Error('Not loaded');
-        microphone.preRoll.forEach((frame) => recognition.current?.push(frame));
-        microphone.subscribe((frame) => recognition.current?.push(frame));
+        state.held.forEach((frame) => recognition.current?.push(frame));
+        state.held = [];
+        if (state.isFinishing) recognition.current.finish();
         clearFallback(FALLBACK_KEY);
-        options.onListening?.();
+        options.onReady?.();
       } catch (error) {
         if (state.isDone) return;
         state.isDone = true;
@@ -248,6 +262,7 @@ export const listenOnDevice = ({
     isClosed: false,
     microphone: null as FrameSource | null,
     recognition: null as ReturnType<typeof openRecognition>,
+    recent: [] as ArrayBuffer[],
   };
   const close = () => {
     state.isClosed = true;
@@ -263,7 +278,7 @@ export const listenOnDevice = ({
     state.recognition?.close();
     state.recognition = null;
     state.microphone = null;
-    const buffered: ArrayBuffer[] = [];
+    const buffered = [...state.recent];
     microphone.subscribe((frame) => buffered.push(frame));
     return { ...microphone, preRoll: buffered };
   };
@@ -290,7 +305,10 @@ export const listenOnDevice = ({
         },
       });
       clearFallback(FALLBACK_KEY);
-      microphone.subscribe((frame) => state.recognition?.push(frame));
+      microphone.subscribe((frame) => {
+        state.recent = [...state.recent, frame].slice(-HANDOVER_FRAMES);
+        state.recognition?.push(frame);
+      });
     })
     .catch((error: unknown) => {
       if (state.isClosed) return;

@@ -91,7 +91,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           label: 'Your trip to-dos',
           detail: 'Before the Road tasks assigned to you or private to you',
           meaning:
-            "Before the Road is a trip's checklist of things to do before leaving; these are the items assigned to the person or private to them.",
+            "Before the Road is a trip's checklist of things to do before leaving; these are the items still to do that are assigned to the person or private to them, on trips that have not ended.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -104,6 +104,30 @@ export const WAYPOINT_SHARES: SourceShares = {
             },
             { label: 'The trip it belongs to', sinceVersion: 1, addedOn: null },
             { label: 'The day it is due', sinceVersion: 1, addedOn: null },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'travelers',
+          kind: 'person',
+          label: 'People you travel with',
+          detail: 'The other members of your trips and which trips they are on',
+          meaning:
+            'The other people on the same trips as the person, by name, with the trips they share.',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each fellow traveller's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
+            {
+              label: 'The trips you share',
+              sinceVersion: 1,
+              addedOn: '2026-11-18',
+            },
           ],
           scopeVersion: 1,
         },

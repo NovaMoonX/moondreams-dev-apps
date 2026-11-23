@@ -300,7 +300,7 @@ async function commitWrites(firestore: Firestore, writes: readonly Write[]) {
 }
 
 /** A write into a month a closing may already hold marks the plan, as the app does, so that month is summed again. */
-async function markClosedMonths(
+export async function markClosedMonths(
   firestore: Firestore,
   uid: string,
   dates: readonly number[],
