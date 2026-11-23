@@ -71,6 +71,17 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
       "Runway is on Plaid's Trial plan: 10 bank sign-ins in total for everyone, and one removed never frees its slot. Give this to its one tester only, until full production access is set up.",
   },
   {
+    id: 'email-purchases',
+    appId: 'runway',
+    label: 'Purchases from email',
+    description:
+      "Someone without it never sees a forwarding address, and anything sent to an old one is dropped. Someone with it gets a private address to forward their bank's purchase alerts to, and each alert becomes a purchase in Runway within seconds.",
+    defaultRollout: 'off',
+    isServerEnforced: true,
+    warning:
+      'Each alert the patterns cannot read is sent to Gemini to read. Give it to people who track purchases in Runway.',
+  },
+  {
     id: 'google-mail-and-drive',
     appId: 'helm',
     label: 'Gmail and Drive',

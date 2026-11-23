@@ -3,6 +3,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { getBankOwedByCard, type BankOwed } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectTwinnedEmailIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { Cents } from '@apps/runway/types';
 
@@ -15,6 +16,7 @@ export const selectBankOwedByCard = createSelector(
     (state: RootState) => state.runway.purchases,
     (state: RootState) => state.runway.needsHome,
     (state: RootState) => state.runway.startedPayments,
+    selectTwinnedEmailIds,
     () => todayAsUtcDate(),
   ],
   (
@@ -24,6 +26,7 @@ export const selectBankOwedByCard = createSelector(
     purchases,
     needsHome,
     started,
+    twinnedEmailIds,
     today,
   ): Record<string, BankOwed> => {
     if (level !== 'link') return {};
@@ -47,6 +50,7 @@ export const selectBankOwedByCard = createSelector(
       ],
       started,
       today,
+      twinnedEmailIds,
     });
   },
 );

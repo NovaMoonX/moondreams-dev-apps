@@ -75,6 +75,15 @@ import type {
   PurchaseDoc,
   ReleasedChargeDoc,
   ReleasedChargeSealed,
+  EmailEventDoc,
+  EmailEventSealed,
+  EmailFilterDoc,
+  EmailFilterSealed,
+  EmailIntakeDoc,
+  EmailIntakeSealed,
+  EmailSetupDoc,
+  EmailBank,
+  EmailSetupSealed,
   ClosingSealed,
   ClosingDoc,
 } from '@apps/runway/types';
@@ -704,10 +713,79 @@ const PURCHASE_DOC_FIELDS = {
   accountId: 'never',
   dedupeKey: 'notUseful',
   expenseId: 'notUseful',
+  emailEventId: 'notUseful',
+  emailWaiting: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
   sealed: 'shared',
 } satisfies Record<keyof PurchaseDoc, ShareDecision>;
+
+const EMAIL_INTAKE_DOC_FIELDS = {
+  id: 'notUseful',
+  token: 'never',
+  createdAt: 'notUseful',
+  updatedAt: 'notUseful',
+  lastReceivedAt: 'notUseful',
+  confirmAt: 'notUseful',
+  sealed: 'never',
+} satisfies Record<keyof EmailIntakeDoc, ShareDecision>;
+
+const EMAIL_SETUP_DOC_FIELDS = {
+  id: 'notUseful',
+  provider: 'notUseful',
+  stepId: 'notUseful',
+  doneAt: 'notUseful',
+  sealed: 'never',
+  createdAt: 'notUseful',
+  updatedAt: 'notUseful',
+} satisfies Record<keyof EmailSetupDoc, ShareDecision>;
+
+const EMAIL_SETUP_SEALED_FIELDS = {
+  banks: 'never',
+} satisfies Record<keyof EmailSetupSealed, ShareDecision>;
+
+const EMAIL_BANK_FIELDS = {
+  id: 'never',
+  name: 'never',
+  addresses: 'never',
+  addedAt: 'never',
+} satisfies Record<keyof EmailBank, ShareDecision>;
+
+const EMAIL_INTAKE_SEALED_FIELDS = {
+  confirmUrl: 'never',
+  confirmCode: 'never',
+} satisfies Record<keyof EmailIntakeSealed, ShareDecision>;
+
+const EMAIL_EVENT_DOC_FIELDS = {
+  id: 'notUseful',
+  receivedAt: 'notUseful',
+  outcome: 'notUseful',
+  purchaseId: 'notUseful',
+  expiresAt: 'notUseful',
+  sealed: 'never',
+} satisfies Record<keyof EmailEventDoc, ShareDecision>;
+
+const EMAIL_EVENT_SEALED_FIELDS = {
+  from: 'never',
+  subject: 'never',
+  subjectTemplate: 'never',
+  snippet: 'never',
+  bodyText: 'never',
+  readBy: 'notUseful',
+} satisfies Record<keyof EmailEventSealed, ShareDecision>;
+
+const EMAIL_FILTER_DOC_FIELDS = {
+  id: 'notUseful',
+  createdAt: 'notUseful',
+  sealed: 'notUseful',
+} satisfies Record<keyof EmailFilterDoc, ShareDecision>;
+
+const EMAIL_FILTER_SEALED_FIELDS = {
+  fromAddress: 'never',
+  subjectTemplate: 'notUseful',
+  subjectContains: 'notUseful',
+  bodyContains: 'notUseful',
+} satisfies Record<keyof EmailFilterSealed, ShareDecision>;
 
 const RELEASED_CHARGE_DOC_FIELDS = {
   id: 'notUseful',
@@ -823,6 +901,15 @@ export const SHARE_FIELDS = {
   PurchaseDoc: PURCHASE_DOC_FIELDS,
   ReleasedChargeDoc: RELEASED_CHARGE_DOC_FIELDS,
   ReleasedChargeSealed: RELEASED_CHARGE_SEALED_FIELDS,
+  EmailIntakeDoc: EMAIL_INTAKE_DOC_FIELDS,
+  EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
+  EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,
+  EmailSetupSealed: EMAIL_SETUP_SEALED_FIELDS,
+  EmailBank: EMAIL_BANK_FIELDS,
+  EmailEventDoc: EMAIL_EVENT_DOC_FIELDS,
+  EmailEventSealed: EMAIL_EVENT_SEALED_FIELDS,
+  EmailFilterDoc: EMAIL_FILTER_DOC_FIELDS,
+  EmailFilterSealed: EMAIL_FILTER_SEALED_FIELDS,
   ClosingSealed: CLOSING_SEALED_FIELDS,
   ClosingDoc: CLOSING_DOC_FIELDS,
 };

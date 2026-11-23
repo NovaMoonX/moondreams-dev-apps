@@ -37,6 +37,8 @@ COLLECTIONS = {
     'rules': {'update', 'delete'},
     'memories': {'delete'},
     'startedPayments': {'delete'},
+    'emailFilters': {'delete'},
+    'emailSetup': {'update'},
 }
 
 
@@ -124,6 +126,7 @@ def main():
     check('plan create at another uid [o]', commit(o_tok, [put_new(f'apps/runway/plans/{x_uid}', dict(plan, uid=x_uid))]), False)
 
     admin([put(base, plan)])
+    admin([put('featureGates/runway', dict(appId='runway', gates={'email-purchases': {'rollout': 'everyone'}}))])
     for c, ops in COLLECTIONS.items():
         path = f'{base}/{c}/{c}-1'
         doc = dict(id=f'{c}-1', createdAt=NOW, sealed=SEAL)
@@ -137,6 +140,18 @@ def main():
             check(f'{c} delete [{a}]', commit(tok, [rm(path)]), a == 'o' and 'delete' in ops)
             admin([put(path, doc)])
             check(f'{c} write twice by id [{a}]', commit(tok, [put(path, doc)]), a == 'o' and 'update' in ops)
+
+    # An email filter is created only while the email-purchases switch is open for the person.
+    filt = f'{base}/emailFilters/filter-gate'
+    fdoc = dict(id='filter-gate', createdAt=NOW, sealed=SEAL)
+    for setting, label in (({'rollout': 'off'}, 'closed'), ({'rollout': 'off', 'alwaysOnUids': [uid]}, 'on for them'), ({'rollout': 'everyone', 'alwaysOffUids': [uid]}, 'off for them')):
+        admin([put('featureGates/runway', dict(appId='runway', gates={'email-purchases': setting}))])
+        for a, tok in actors.items():
+            admin([rm(filt)])
+            check(f'emailFilters create, switch {label} [{a}]', commit(tok, [put_new(filt, fdoc)]), a == 'o' and label == 'on for them')
+    admin([rm(filt), rm('featureGates/runway')])
+    check('emailFilters create, no switch stored [o]', commit(o_tok, [put_new(filt, fdoc)]), False)
+    admin([rm(filt)])
 
     # A rule written before conditions and `updatedAt` existed is only `{ id, createdAt, sealed }`; it reads, rewrites and goes like a new one.
     old = f'{base}/rules/rule-old'
@@ -189,6 +204,40 @@ def main():
         check(f'legacy purchase update adding a dedupeKey [{a}]', commit(tok, [put(bank, dict(pdoc2, dedupeKey='abc'))]), False)
     admin([rm(bank)])
 
+    # A purchase read from an email is made only by Functions: a client creates none and never changes its source or
+    # emailEventId, but may update emailWaiting. emailIntake and emailEvents are written by Functions; the app deletes an event.
+    mail = f'{base}/purchases/mail-1'
+    mdoc = dict(pdoc2, id='mail-1', source='email', status=None, emailEventId='ev-1', emailWaiting=True)
+    for a, tok in actors.items():
+        admin([rm(mail)])
+        check(f'email purchase create [{a}]', commit(tok, [put_new(mail, mdoc)]), False)
+        check(f'manual purchase create naming an email event [{a}]', commit(tok, [put_new(mail, dict(pdoc2, id='mail-1', emailEventId='ev-1'))]), False)
+        admin([put(mail, mdoc)])
+        check(f'email purchase read [{a}]', get(mail, tok), a == 'o')
+        check(f'email purchase update emailWaiting [{a}]', commit(tok, [put(mail, dict(mdoc, emailWaiting=False))]), a == 'o')
+        check(f'email purchase update changing emailEventId [{a}]', commit(tok, [put(mail, dict(mdoc, emailEventId='ev-2'))]), False)
+        check(f'email purchase update dropping emailEventId [{a}]', commit(tok, [put(mail, {k: v for k, v in mdoc.items() if k != 'emailEventId'})]), False)
+        check(f'email purchase update changing source [{a}]', commit(tok, [put(mail, dict(mdoc, source='manual'))]), False)
+        check(f'email purchase delete [{a}]', commit(tok, [rm(mail)]), a == 'o')
+    admin([rm(mail)])
+
+    intake = f'{base}/emailIntake/address'
+    idoc2 = dict(id='address', token='abcdefghijkl', createdAt=NOW, updatedAt=NOW, lastReceivedAt=None, confirmAt=None, sealed=None)
+    event = f'{base}/emailEvents/ev-1'
+    edoc = dict(id='ev-1', receivedAt=NOW, outcome='purchase', purchaseId=None, expiresAt=NOW, sealed=SEAL)
+    for a, tok in actors.items():
+        admin([rm(intake), rm(event)])
+        check(f'emailIntake create [{a}]', commit(tok, [put_new(intake, idoc2)]), False)
+        check(f'emailEvents create [{a}]', commit(tok, [put_new(event, edoc)]), False)
+        admin([put(intake, idoc2), put(event, edoc)])
+        check(f'emailIntake read [{a}]', get(intake, tok), a == 'o')
+        check(f'emailEvents read [{a}]', get(event, tok), a == 'o')
+        check(f'emailIntake update [{a}]', commit(tok, [put(intake, dict(idoc2, token='zzzzzzzzzzzz'))]), False)
+        check(f'emailEvents update [{a}]', commit(tok, [put(event, dict(edoc, outcome='filtered'))]), False)
+        check(f'emailIntake delete [{a}]', commit(tok, [rm(intake)]), False)
+        check(f'emailEvents delete [{a}]', commit(tok, [rm(event)]), a == 'o')
+    admin([rm(intake), rm(event)])
+
     admin([put(f'{base}/purchases/purchases-1', dict(id='purchases-1', createdAt=NOW, sealed=SEAL))])
     img = f'{base}/purchases/purchases-1/receiptImages/img-1'
     idoc = dict(id='img-1', purchaseId='purchases-1', createdAt=NOW, bytes=10, sealed=SEAL)
@@ -210,7 +259,7 @@ def main():
         check(f'record update [{a}]', commit(tok, [put(rec, dict(rdoc, kind='proposed'))]), False)
         check(f'record delete [{a}]', commit(tok, [rm(rec)]), False)
 
-    for p in ('apps/runway/server/keyring', 'apps/runway/keyChecks/latest'):
+    for p in ('apps/runway/server/keyring', 'apps/runway/keyChecks/latest', 'apps/runway/emailTokens/abcdefghijkl', f'apps/runway/server/{uid}/emailRate/2026112221'):
         admin([put(p, {'x': 1})])
         for a, tok in actors.items():
             check(f'{p} read [{a}]', get(p, tok), False)

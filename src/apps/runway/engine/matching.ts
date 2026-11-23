@@ -39,6 +39,7 @@ const getTypedCandidates = (purchases: readonly OpenPurchase[]) => {
   return purchases.filter(
     (purchase) =>
       purchase.source !== 'link' &&
+      purchase.source !== 'email' &&
       !purchase.needsHome &&
       purchase.amountCents > 0 &&
       purchase.refundOfId === null &&
