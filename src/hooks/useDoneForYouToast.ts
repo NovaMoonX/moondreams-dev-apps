@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 const BATCH_MS = 1500;
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const TOAST_ID = 'done-for-you';
+const SHOWN_MS = 10_000;
 
 const readToasted = (key: string): number | null => {
   try {
@@ -43,15 +44,30 @@ export function useDoneForYouToast({
   viewLabel,
   onView,
 }: DoneForYouToastOptions) {
-  const { addToast } = useToast();
-  const latest = useRef({ items, addToast, buildTitle, viewLabel, onView });
+  const { addToast, removeToast } = useToast();
+  const latest = useRef({
+    items,
+    addToast,
+    removeToast,
+    buildTitle,
+    viewLabel,
+    onView,
+  });
+  const shown = useRef<{ floor: number; at: number } | null>(null);
   const newest = items.reduce(
     (time, item) => Math.max(time, item.createdAt),
     0,
   );
 
   useEffect(() => {
-    latest.current = { items, addToast, buildTitle, viewLabel, onView };
+    latest.current = {
+      items,
+      addToast,
+      removeToast,
+      buildTitle,
+      viewLabel,
+      onView,
+    };
   });
 
   useEffect(() => {
@@ -64,11 +80,20 @@ export function useDoneForYouToast({
     if (newest <= toasted) return undefined;
     const timer = window.setTimeout(() => {
       const since = Math.max(readToasted(storageKey) ?? toasted, toasted);
-      const floor = Math.max(since, Date.now() - MAX_AGE_MS);
+      const now = Date.now();
+      const previous = shown.current;
+      const isShowing = previous !== null && now - previous.at < SHOWN_MS;
+      const floor = Math.max(
+        isShowing ? previous.floor : since,
+        now - MAX_AGE_MS,
+      );
       const current = latest.current;
       const fresh = current.items.filter((item) => item.createdAt > floor);
       keepToasted(storageKey, newest);
       if (fresh.length === 0) return;
+      shown.current = { floor, at: now };
+      // Adding under a shown id stacks a second toast rather than replacing it.
+      current.removeToast(TOAST_ID);
       current.addToast({
         id: TOAST_ID,
         title: current.buildTitle(fresh.length),

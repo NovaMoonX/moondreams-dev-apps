@@ -187,7 +187,7 @@ function RunwayTabs({
           <h1 className='text-2xl font-semibold'>
             {RUNWAY_TAB_LABELS[activeTab]}
           </h1>
-          <div className='flex shrink-0 items-center gap-2.5'>
+          <div className='flex shrink-0 items-center gap-3'>
             {activeTab === 'plan' && <PriorityDial />}
             {activeTab === 'home' && (
               <DoneForYouButton

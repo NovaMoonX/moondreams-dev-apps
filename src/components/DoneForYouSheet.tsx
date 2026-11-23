@@ -137,6 +137,7 @@ function DoneForYouSheet({
           </p>
         )}
         <p className='text-muted-foreground text-xs'>
+          {getDayLabel(startOfDay(entry.createdAt))},{' '}
           {formatTime(entry.createdAt)}
         </p>
       </div>
