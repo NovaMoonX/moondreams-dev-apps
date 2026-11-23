@@ -16,9 +16,6 @@ export const listBankAddresses = (banks: EmailBank[]) => [
   ...new Set(banks.flatMap((bank) => bank.addresses)),
 ];
 
-/** An address with break chances after its @ and dots, so a narrow screen wraps it where it reads cleanly. */
-export const splitAddress = (address: string) => address.split(/(?<=[@.])/);
-
 export const findBankLogo = (known: KnownBank[], name: string) =>
   known.find((bank) => bank.name.toLowerCase() === name.trim().toLowerCase())
     ?.logo ?? null;

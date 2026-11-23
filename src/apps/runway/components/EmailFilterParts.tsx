@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Download, ExternalLink } from 'lucide-react';
+import { CircleHelp, Download, ExternalLink } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import { shareOrDownloadFiles } from '@/utils/fileUtils';
@@ -16,6 +16,62 @@ import {
 } from '@apps/runway/utils/emailFilterFields';
 
 const WORDS = EMAIL_SETUP_WORDS;
+
+/** An address that wraps before a dot in its name and keeps its domain whole, so a narrow screen never leaves ".com" alone. */
+export function AddressText({ address }: { address: string }) {
+  const at = address.lastIndexOf('@');
+  if (at < 0) return address;
+  return (
+    <>
+      {address
+        .slice(0, at)
+        .split(/(?=\.)/)
+        .map((part, index) => (
+          <Fragment key={index}>
+            {part}
+            <wbr />
+          </Fragment>
+        ))}
+      @<wbr />
+      <span className='whitespace-nowrap'>{address.slice(at + 1)}</span>
+    </>
+  );
+}
+
+/** The quiet question that opens an answer under it and folds it away on a second tap. */
+export function DisclosureChip({
+  label,
+  isOpen,
+  onToggle,
+}: {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Button
+      variant='tertiary'
+      size='sm'
+      className='text-primary! gap-1.5'
+      aria-expanded={isOpen}
+      onClick={onToggle}
+    >
+      <CircleHelp className='size-4' aria-hidden='true' />
+      {label}
+    </Button>
+  );
+}
+
+/** A value to copy: several words break only at their spaces, one address before a dot in its name. */
+function FieldValue({ value }: { value: string }) {
+  if (!value.includes(' ')) return <AddressText address={value} />;
+  return value.split(' ').map((word, index) => (
+    <Fragment key={index}>
+      {index > 0 && ' '}
+      <span className='whitespace-nowrap'>{word}</span>
+    </Fragment>
+  ));
+}
 
 export interface NumberedItem {
   text: ReactNode;
@@ -78,7 +134,7 @@ export function FilterFields({ fields }: { fields: FilterField[] }) {
                 className='flex min-h-11 items-center gap-2 py-1 pr-2 pl-3'
               >
                 <span className='min-w-0 flex-1 font-mono text-xs [overflow-wrap:anywhere]'>
-                  {value}
+                  <FieldValue value={value} />
                 </span>
                 <CopyTextButton
                   text={value}

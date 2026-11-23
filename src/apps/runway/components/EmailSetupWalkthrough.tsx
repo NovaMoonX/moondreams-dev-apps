@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CircleCheck, CircleHelp, Loader, Mail } from 'lucide-react';
+import { CircleCheck, Loader, Mail } from 'lucide-react';
 
 import {
   GmailMark,
@@ -35,6 +35,7 @@ import {
   type SaveBanks,
 } from '@apps/runway/components/EmailBanksEditor';
 import {
+  DisclosureChip,
   FilterFields,
   GmailFilterImport,
   NumberedSteps,
@@ -78,6 +79,8 @@ interface EmailSetupWalkthroughProps {
   onSaveBanks: SaveBanks;
   /** Opens the bank step on its choices, for adding one more bank. */
   isAddingBank?: boolean;
+  /** Walked again from "Set it up again", so a filter or rule may already exist. */
+  isRewalk?: boolean;
   onPickProvider: (provider: EmailProvider) => void;
   onGetAddress: () => void;
   onGo: (index: number) => void;
@@ -107,24 +110,30 @@ const Muted = ({ children }: { children: ReactNode }) => (
 
 const LATE_AFTER_MS = 120_000;
 
-/** A spinner that lives only while its step is on screen: leaving ends it, coming back starts it fresh, and after a while it gives way to what to try. */
-function Waiting({
-  children,
-  lateLine,
-}: {
-  children: ReactNode;
-  lateLine: ReactNode;
-}) {
+const useIsLate = () => {
   const [isLate, setIsLate] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => setIsLate(true), LATE_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, []);
+  return isLate;
+};
+
+/** A spinner that lives only while its step is on screen: leaving ends it, coming back starts it fresh, and after a while it gives way to what to try. */
+function Waiting({
+  children,
+  isLate,
+  lateLine,
+}: {
+  children: ReactNode;
+  isLate: boolean;
+  lateLine: ReactNode;
+}) {
   if (isLate) {
     return (
-      <p className='text-muted-foreground text-sm' role='status'>
+      <div className='text-muted-foreground space-y-1 text-sm' role='status'>
         {lateLine}
-      </p>
+      </div>
     );
   }
   return (
@@ -155,6 +164,7 @@ const PROVIDER_SETTINGS_LINKS: Partial<
 function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
   const [isCodeShown, setIsCodeShown] = useState(false);
   const [isHelpShown, setIsHelpShown] = useState(false);
+  const isLate = useIsLate();
   const settingsLink = PROVIDER_SETTINGS_LINKS[provider];
   const url =
     intake.confirm?.url?.startsWith('https://') === true
@@ -167,25 +177,35 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
       {!isConfirmed && <Muted>{WORDS.confirmFirst(provider)}</Muted>}
       {url === null && code === null ? (
         <div className='space-y-2'>
-          <Waiting lateLine={WORDS.confirmStillWaiting(provider)}>
+          <Waiting
+            isLate={isLate}
+            lateLine={
+              <>
+                <p>{WORDS.confirmStillWaiting(provider)}</p>
+                {settingsLink && (
+                  <ExternalLinkText
+                    href={settingsLink.href}
+                    label={settingsLink.label}
+                  />
+                )}
+              </>
+            }
+          >
             {WORDS.confirmWaiting(provider)}
           </Waiting>
-          {!isHelpShown ? (
-            <Button
-              variant='tertiary'
-              size='sm'
-              onClick={() => setIsHelpShown(true)}
-            >
-              {WORDS.didntArrive}
-            </Button>
-          ) : (
+          <DisclosureChip
+            label={WORDS.didntArrive}
+            isOpen={isHelpShown}
+            onToggle={() => setIsHelpShown(!isHelpShown)}
+          />
+          {isHelpShown && (
             <div className='space-y-2'>
-              {WORDS.didntArriveLines(provider).map((line) => (
+              {WORDS.didntArriveLines(provider, isLate).map((line) => (
                 <p key={line} className='text-muted-foreground text-sm'>
                   {line}
                 </p>
               ))}
-              {settingsLink && (
+              {!isLate && settingsLink && (
                 <ExternalLinkText
                   href={settingsLink.href}
                   label={settingsLink.label}
@@ -205,14 +225,12 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
               {WORDS.confirmButton(provider)}
             </Button>
           )}
-          {code !== null && url !== null && !isCodeShown && (
-            <Button
-              variant='tertiary'
-              size='sm'
-              onClick={() => setIsCodeShown(true)}
-            >
-              {WORDS.linkFailed}
-            </Button>
+          {code !== null && url !== null && (
+            <DisclosureChip
+              label={WORDS.linkFailed}
+              isOpen={isCodeShown}
+              onToggle={() => setIsCodeShown(!isCodeShown)}
+            />
           )}
           {code !== null && (isCodeShown || isCodeOnly) && (
             <div className='space-y-1'>
@@ -238,26 +256,47 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
   );
 }
 
+function TestWaiting() {
+  const [isShown, setIsShown] = useState(false);
+  const isLate = useIsLate();
+  return (
+    <div className='space-y-2'>
+      <Waiting isLate={isLate} lateLine={<p>{WORDS.testStillWaiting}</p>}>
+        {WORDS.testWaiting}
+      </Waiting>
+      <DisclosureChip
+        label={WORDS.notArriving}
+        isOpen={isShown}
+        onToggle={() => setIsShown(!isShown)}
+      />
+      {isShown && (
+        <ul className='text-muted-foreground list-disc space-y-1 pl-5 text-sm'>
+          {WORDS.notArrivingLines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function FilterClosedHelp({ fields }: { fields: FilterField[] }) {
   const [isShown, setIsShown] = useState(false);
-  if (!isShown) {
-    return (
-      <Button
-        variant='tertiary'
-        size='sm'
-        className='text-primary! -ml-2 gap-1.5'
-        aria-expanded={false}
-        onClick={() => setIsShown(true)}
-      >
-        <CircleHelp className='size-4' aria-hidden='true' />
-        {WORDS.filterClosed}
-      </Button>
-    );
-  }
   return (
     <div className='space-y-3'>
-      <p className='text-muted-foreground text-sm'>{WORDS.filterClosedLine}</p>
-      <FilterFields fields={fields} />
+      <DisclosureChip
+        label={WORDS.filterClosed}
+        isOpen={isShown}
+        onToggle={() => setIsShown(!isShown)}
+      />
+      {isShown && (
+        <>
+          <p className='text-muted-foreground text-sm'>
+            {WORDS.filterClosedLine}
+          </p>
+          <FilterFields fields={fields} />
+        </>
+      )}
     </div>
   );
 }
@@ -283,6 +322,7 @@ function EmailSetupWalkthrough({
   knownBanks,
   onSaveBanks,
   isAddingBank = false,
+  isRewalk = false,
   onPickProvider,
   onGetAddress,
   onGo,
@@ -291,7 +331,6 @@ function EmailSetupWalkthrough({
   onExit,
   onActivity,
 }: EmailSetupWalkthroughProps) {
-  const [isNotArrivingShown, setIsNotArrivingShown] = useState(false);
   const [draft, setDraft] = useState<BankDraft | null>(null);
   const [isPickingBank, setIsPickingBank] = useState(isAddingBank);
   const [bankCountAtStart] = useState(banks.length);
@@ -672,29 +711,7 @@ function EmailSetupWalkthrough({
           {hasPurchase ? (
             <p className='text-sm'>{WORDS.testDone}</p>
           ) : (
-            <div className='space-y-2'>
-              <Waiting lateLine={WORDS.testStillWaiting}>
-                {WORDS.testWaiting}
-              </Waiting>
-              {!isNotArrivingShown ? (
-                <Button
-                  variant='tertiary'
-                  size='sm'
-                  className='text-primary! -ml-2 gap-1.5'
-                  aria-expanded={false}
-                  onClick={() => setIsNotArrivingShown(true)}
-                >
-                  <CircleHelp className='size-4' aria-hidden='true' />
-                  {WORDS.notArriving}
-                </Button>
-              ) : (
-                <ul className='text-muted-foreground list-disc space-y-1 pl-5 text-sm'>
-                  {WORDS.notArrivingLines.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <TestWaiting />
           )}
         </div>
       ),
@@ -766,8 +783,8 @@ function EmailSetupWalkthrough({
       title: shown.title,
       content: (
         <div className='space-y-4'>
-          <Muted>{WORDS.alreadyMade}</Muted>
           {shown.content}
+          {isRewalk && <Muted>{WORDS.alreadyMade}</Muted>}
         </div>
       ),
     };

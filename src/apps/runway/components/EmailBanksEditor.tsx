@@ -14,7 +14,10 @@ import {
   OUTLOOK_RULES_URL,
   PROTON_MAIL_URL,
 } from '@apps/runway/components/emailWords';
-import { FilterFields } from '@apps/runway/components/EmailFilterParts';
+import {
+  AddressText,
+  FilterFields,
+} from '@apps/runway/components/EmailFilterParts';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import type { KnownBank } from '@apps/runway/store/selectors/emailSelectors';
 import type { EmailBank, EmailProvider } from '@apps/runway/types';
@@ -22,7 +25,6 @@ import { getFilterFields } from '@apps/runway/utils/emailFilterFields';
 import {
   checkAddress,
   findBankLogo,
-  splitAddress,
   type BankDraft,
 } from '@apps/runway/utils/emailBanks';
 
@@ -45,16 +47,6 @@ export function BankMark({
       className='border-border size-10 shrink-0 rounded-xl border bg-white object-contain p-1'
     />
   );
-}
-
-/** Several alert addresses to type into a rule, one per line with its own copy; one address stays in the sentence. */
-function AddressText({ address }: { address: string }) {
-  return splitAddress(address).map((part, index) => (
-    <span key={index}>
-      {part}
-      <wbr />
-    </span>
-  ));
 }
 
 export function RuleAddresses({
@@ -174,12 +166,19 @@ export function ForwardingUpdate({
 
 interface AddressFieldProps {
   id: string;
+  placeholder?: string;
   value: string;
   onChange: (value: string) => void;
   error: string | null;
 }
 
-function AddressField({ id, value, onChange, error }: AddressFieldProps) {
+function AddressField({
+  id,
+  placeholder = WORDS.addressPlaceholder,
+  value,
+  onChange,
+  error,
+}: AddressFieldProps) {
   return (
     <div className='space-y-1.5'>
       <label htmlFor={id} className='block text-sm font-medium'>
@@ -194,7 +193,7 @@ function AddressField({ id, value, onChange, error }: AddressFieldProps) {
           autoCapitalize='none'
           autoCorrect='off'
           spellCheck={false}
-          placeholder={WORDS.addressPlaceholder}
+          placeholder={placeholder}
           value={value}
           aria-describedby={`${id}-hint`}
           aria-invalid={error !== null}
@@ -287,12 +286,9 @@ export function BankAddresses({
 
   return (
     <div className='space-y-2'>
-      <ul className='border-border divide-border divide-y rounded-xl border'>
+      <ul className='divide-border divide-y'>
         {bank.addresses.map((address) => (
-          <li
-            key={address}
-            className='flex min-h-12 items-center gap-2 py-1 pr-1 pl-3'
-          >
+          <li key={address} className='flex min-h-11 items-center gap-2 py-1'>
             <span className='min-w-0 flex-1 text-sm [overflow-wrap:anywhere]'>
               <AddressText address={address} />
             </span>
@@ -300,7 +296,7 @@ export function BankAddresses({
               <Button
                 variant='tertiary'
                 size='sm'
-                className='size-10 shrink-0 p-0'
+                className="text-muted-foreground relative h-7 w-7 shrink-0 p-0! after:absolute after:-inset-1.5 after:content-['']"
                 aria-label={WORDS.removeAddress(address)}
                 onClick={() => remove(address)}
               >
@@ -314,6 +310,7 @@ export function BankAddresses({
         <div className='space-y-2'>
           <AddressField
             id={`bank-address-${bank.id}`}
+            placeholder={WORDS.moreAddressPlaceholder}
             value={text}
             onChange={(value) => {
               setText(value);
@@ -334,7 +331,7 @@ export function BankAddresses({
                 setError(null);
               }}
             >
-              Cancel
+              {WORDS.cancel}
             </Button>
           </div>
         </div>
@@ -343,7 +340,7 @@ export function BankAddresses({
           <Button
             variant='tertiary'
             size='sm'
-            className='text-primary! -ml-2 gap-1.5'
+            className='text-primary! gap-1.5'
             onClick={() => setIsAdding(true)}
           >
             <Plus className='size-4' aria-hidden='true' />
@@ -443,7 +440,7 @@ export function BankDraftForm({ draft, known, onChange }: BankDraftFormProps) {
       <Button
         variant='tertiary'
         size='sm'
-        className='text-primary! -ml-2 gap-1.5'
+        className='text-primary! gap-1.5'
         onClick={() => onChange(null)}
       >
         <ArrowLeftRight className='size-4' aria-hidden='true' />

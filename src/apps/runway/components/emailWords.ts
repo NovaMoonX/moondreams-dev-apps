@@ -166,11 +166,12 @@ export const EMAIL_SETUP_WORDS = {
   gmailForwardingOpen:
     'In the Gmail where your bank’s alerts arrive, click the search options icon (the sliders) in the search bar',
   gmailForwardingLink: 'Open Gmail',
-  gmailForwardingFill: 'Fill in these two boxes',
+  gmailForwardingFill:
+    'Fill in these two boxes, so only your bank’s alerts match',
   gmailForwardingCreate:
     'Click Create filter, tick Forward it to, then click add forwarding address',
   gmailForwardingAdd:
-    'In forwarding settings, click Add a forwarding address and paste your Runway address. Gmail sends a verification to it, and the next step catches it',
+    'On the forwarding settings page that opens, click Add a forwarding address and paste this. Gmail sends a verification to it, and the next step catches it',
   gmailForwardingNote:
     'Leave forwarding settings on Disable forwarding. Only this filter forwards, so adding the address doesn’t forward all your mail.',
   settingsLinkGmail: 'Open Gmail’s forwarding settings',
@@ -224,6 +225,8 @@ export const EMAIL_SETUP_WORDS = {
   addressLabel: 'Its alert email’s From address',
   addressHint: 'Open one of its alerts and copy the address next to From.',
   addressPlaceholder: 'alerts@chase.com',
+  moreAddressPlaceholder: 'alerts@example.com',
+  cancel: 'Cancel',
   addAddress: 'Add',
   addressInvalid: 'That isn’t an email address yet.',
   addressTaken: 'That address is already on the list.',
@@ -293,13 +296,19 @@ export const EMAIL_SETUP_WORDS = {
   confirmFirst: (provider: EmailProvider) =>
     `${EMAIL_PROVIDER_NAMES[provider]} won’t forward until you confirm.`,
   didntArrive: 'Didn’t arrive?',
-  didntArriveLines: (provider: EmailProvider) => [
+  didntArriveLines: (provider: EmailProvider, isLate = false) => [
     'Check that you pasted the address exactly.',
-    provider === 'other'
-      ? 'Send the confirmation again from your email’s forwarding settings.'
-      : provider === 'proton'
-        ? 'In Forward and auto-reply, check the rule isn’t marked pending, then save it again.'
-        : `Send it again from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
+    ...(provider === 'proton'
+      ? [
+          'In Forward and auto-reply, check the rule isn’t marked pending, then save it again.',
+        ]
+      : isLate
+        ? []
+        : [
+            provider === 'other'
+              ? 'Send the confirmation again from your email’s forwarding settings.'
+              : `Send it again from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
+          ]),
   ],
   linkFailed: 'Link didn’t work?',
   codeLine: (provider: EmailProvider) =>
@@ -333,7 +342,7 @@ export const EMAIL_SETUP_WORDS = {
   confirmStillWaiting: (provider: EmailProvider) =>
     provider === 'other'
       ? 'Nothing yet. Resend the confirmation from your email’s forwarding settings.'
-      : `Nothing yet. Resend it from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
+      : 'Nothing yet. Try sending it again.',
   finishLater: 'Finish later',
   backStep: 'Back',
   exitStep: 'Exit',

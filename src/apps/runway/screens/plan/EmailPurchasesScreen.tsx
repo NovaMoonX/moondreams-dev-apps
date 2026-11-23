@@ -383,6 +383,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             knownBanks={knownBanks}
             onSaveBanks={saveBanksActed}
             isAddingBank={isAddingBank}
+            isRewalk={walkBaseline !== null}
             onPickProvider={pickProvider}
             onGetAddress={() => void getNewAddress()}
             onGo={goToStep}
