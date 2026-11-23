@@ -167,33 +167,35 @@ assert.equal(
 const partialRead = parseAmcEmail(partial.text) as AmcCancellation;
 const duplicate = readFixture('cancellation-partial-duplicate');
 const duplicateRead = parseAmcEmail(duplicate.text) as AmcCancellation;
-assert.equal(refundKey(partialRead, 1), '1275187999', 'the order number');
+assert.equal(refundKey(partialRead), '1275187999', 'the order number');
 assert.equal(
-  refundKey(duplicateRead, 2),
-  refundKey(partialRead, 1),
+  refundKey(duplicateRead),
+  refundKey(partialRead),
   'a second copy of the same refund email counts under the same key',
 );
 assert.equal(
-  refundKey({ ...partialRead, orderNumber: null }, 1),
+  refundKey({ ...partialRead, orderNumber: null }),
   '0188120457-1-11/23/2026',
   'no order number: confirmation, count and refund date',
 );
 assert.equal(
-  refundKey(
-    { ...partialRead, orderNumber: null, refundDate: null },
-    Date.UTC(2026, 10, 23, 12),
-  ),
-  '0188120457-1-2026-11-23',
-  'no refund date: the day it arrived',
+  refundKey({ ...partialRead, orderNumber: null, refundDate: null }),
+  '0188120457-1',
+  'no refund date: confirmation and count, so a re-sent copy matches',
+);
+assert.equal(
+  ticketsLeftAfterRefund(2, 0),
+  null,
+  'nothing refunded is not a partial refund',
 );
 // A viewing holding 2 tickets keeps 1 after the first copy; the copy finds its key already counted.
 const afterFirst = {
   amcTicketCount: ticketsLeftAfterRefund(2, partialRead.refundedCount),
-  amcRefundedOrders: [refundKey(partialRead, 1)],
+  amcRefundedOrders: [refundKey(partialRead)],
 };
 assert.equal(afterFirst.amcTicketCount, 1, 'a partial refund keeps one');
 assert.ok(
-  afterFirst.amcRefundedOrders.includes(refundKey(duplicateRead, 2)),
+  afterFirst.amcRefundedOrders.includes(refundKey(duplicateRead)),
   'a duplicate partial refund is already handled',
 );
 assert.equal(
@@ -254,6 +256,20 @@ assert.ok(
     'Focker In-Law',
   ),
 );
+assert.ok(
+  withoutMemberDetails('Hi Sam,\nThe Wild Robot\nSam Doe\n').includes(
+    'The Wild Robot',
+  ),
+  'a title line only in the body stays',
+);
+assert.ok(
+  !withoutMemberDetails('Hi Sam,\nThe Wild Robot\nSam Doe\n').includes('Doe'),
+  'a line holding the found name goes',
+);
+assert.ok(
+  withoutMemberDetails('Hello AMC,\nYour AMC order').includes('Your AMC order'),
+  'a greeting to AMC never strips AMC',
+);
 
 [readFixture('reservation'), cancellation].forEach(({ subject, text }) => {
   const prompt = prepareAiPrompt(`${subject} Stephon <s@example.com>`, text);
@@ -291,7 +307,7 @@ const subjectTitle = prepareAiPrompt(
 assert.ok(
   subjectTitle.includes('Wicked Wonders\n') &&
     !subjectTitle.includes('Pat Jones'),
-  'a title line the subject holds is kept, a name line is not',
+  'no name found: a title line the subject holds is kept, a name line is not',
 );
 
 const chicago = 'America/Chicago';

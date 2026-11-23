@@ -391,7 +391,7 @@ async function handleCancellation(
           showtimeAt: place.showtimeAt,
         },
       );
-      const key = refundKey(reading, input.mail.receivedAt);
+      const key = refundKey(reading);
       const counted = target?.amcRefundedOrders ?? [];
       if (target !== null && counted.includes(key)) {
         transaction.create(

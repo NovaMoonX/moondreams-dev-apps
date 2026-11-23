@@ -204,26 +204,24 @@ export const ticketsLeftAfterRefund = (
   heldCount: number | null,
   refundedCount: number | null,
 ) =>
-  heldCount !== null && refundedCount !== null && heldCount > refundedCount
+  heldCount !== null &&
+  refundedCount !== null &&
+  refundedCount > 0 &&
+  heldCount > refundedCount
     ? heldCount - refundedCount
     : null;
 
-/** The key a refund email is counted under once: AMC's order number, else the confirmation with the count and refund date. */
-export const refundKey = (
-  refund: {
-    orderNumber: string | null;
-    confirmation: string;
-    refundedCount: number | null;
-    refundDate: string | null;
-  },
-  receivedAt: number,
-) =>
+/** The key a refund email is counted under once: AMC's order number, else the confirmation with the count and the refund date when printed; a repeat is never counted twice, at the cost of two unnumbered same-size refunds counting once. */
+export const refundKey = (refund: {
+  orderNumber: string | null;
+  confirmation: string;
+  refundedCount: number | null;
+  refundDate: string | null;
+}) =>
   refund.orderNumber ??
-  [
-    refund.confirmation,
-    refund.refundedCount ?? 'all',
-    refund.refundDate ?? new Date(receivedAt).toISOString().slice(0, 10),
-  ].join('-');
+  [refund.confirmation, refund.refundedCount ?? 'all', refund.refundDate ?? '']
+    .filter((part) => part !== '')
+    .join('-');
 
 /** An itemized ticket whose parts add up to its total; null when nothing prices it. */
 export function buildTicket({

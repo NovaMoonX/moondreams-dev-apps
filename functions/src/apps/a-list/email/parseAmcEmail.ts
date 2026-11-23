@@ -225,6 +225,8 @@ export function parseAmcEmail(text: string): AmcReading | null {
   return isCancellation ? readCancellation(text) : readReservation(text);
 }
 
+const NOT_A_NAME = ['amc', 'team', 'there', 'friend', 'member', 'guest'];
+
 const names = (text: string) =>
   Array.from(
     new Set(
@@ -240,7 +242,8 @@ const names = (text: string) =>
         name === undefined
           ? []
           : [name.trim(), ...name.trim().split(/\s+/)].filter(
-              (part) => part.length >= 3,
+              (part) =>
+                part.length >= 3 && !NOT_A_NAME.includes(part.toLowerCase()),
             ),
       ),
     ),
@@ -253,17 +256,23 @@ const STANDALONE_NAME_LINE =
   /^[ \t]*[A-Z][a-z'’-]+(?: [A-Z][a-z'’-]+){1,2}[ \t]*$/gm;
 const GROUPED_DIGITS = /\b\d{3,}(?:[ -]\d{3,})+\b/g;
 
+const isNameLine = (line: string, found: string[], subject: string) =>
+  found.length > 0
+    ? line.split(' ').some((word) => found.includes(word))
+    : !subject.includes(line);
+
 /**
  * The email's text without the membership block, the member's name or any long number, for the short excerpt an event keeps and the prompt the AI gets.
- * It does not rely on AMC's layout: any name line, greeting or line that is only two or three capitalised words goes, except a line the subject also holds (a title), and so does any run of twelve or more digits, grouped or not.
+ * It does not rely on AMC's layout: a name line or greeting gives the name, and a line of two or three capitalised words holding it goes; with no name found, every such line goes except one the subject holds (a title).
  */
 export function withoutMemberDetails(text: string, subject = '') {
+  const found = names(text).map((name) => name.toLowerCase());
   const keptSubject = subject.toLowerCase();
   const stripped = text
     .replace(/AMC Stubs Details[\s\S]*?(?=\bSummary\b|$)/i, ' ')
     .replace(/^[ \t>]*(?:(?:member|full|guest) )?name\s*:[^\n]*/gim, ' ')
     .replace(STANDALONE_NAME_LINE, (line) =>
-      keptSubject.includes(line.trim().toLowerCase()) ? line : ' ',
+      isNameLine(line.trim().toLowerCase(), found, keptSubject) ? ' ' : line,
     )
     .replace(GROUPED_DIGITS, (run) =>
       run.replace(/\D/g, '').length >= 12 ? ' ' : run,
