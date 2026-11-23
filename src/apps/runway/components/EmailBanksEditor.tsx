@@ -294,7 +294,7 @@ export function BankAddresses({
             </span>
             {bank.addresses.length > 1 && (
               <Button
-                variant='tertiary'
+                variant='base'
                 size='sm'
                 className="text-muted-foreground relative h-7 w-7 shrink-0 p-0! after:absolute after:-inset-1.5 after:content-['']"
                 aria-label={WORDS.removeAddress(address)}

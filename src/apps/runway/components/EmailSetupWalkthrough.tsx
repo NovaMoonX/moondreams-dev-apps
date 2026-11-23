@@ -723,7 +723,7 @@ function EmailSetupWalkthrough({
     }
     if (step === 'confirm') {
       return {
-        title: titled(WORDS.confirmTitle, isConfirmed),
+        title: WORDS.confirmTitle,
         content: (
           <ConfirmStep
             provider={provider ?? 'other'}

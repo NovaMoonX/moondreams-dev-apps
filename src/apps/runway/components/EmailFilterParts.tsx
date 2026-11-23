@@ -18,6 +18,15 @@ import {
 const WORDS = EMAIL_SETUP_WORDS;
 
 /** An address that wraps before a dot in its name and keeps its domain whole, so a narrow screen never leaves ".com" alone. */
+const domainParts = (domain: string) => {
+  const labels = domain.split('.');
+  if (labels.length <= 2) return [domain];
+  return [
+    ...labels.slice(0, -2).map((label) => `${label}.`),
+    labels.slice(-2).join('.'),
+  ];
+};
+
 export function AddressText({ address }: { address: string }) {
   const at = address.lastIndexOf('@');
   if (at < 0) return address;
@@ -33,7 +42,12 @@ export function AddressText({ address }: { address: string }) {
           </Fragment>
         ))}
       @<wbr />
-      <span className='whitespace-nowrap'>{address.slice(at + 1)}</span>
+      {domainParts(address.slice(at + 1)).map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && <wbr />}
+          <span className='whitespace-nowrap'>{part}</span>
+        </Fragment>
+      ))}
     </>
   );
 }
