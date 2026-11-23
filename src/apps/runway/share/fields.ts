@@ -755,6 +755,7 @@ const EMAIL_EVENT_SEALED_FIELDS = {
   subject: 'never',
   subjectTemplate: 'never',
   snippet: 'never',
+  bodyText: 'never',
   readBy: 'notUseful',
 } satisfies Record<keyof EmailEventSealed, ShareDecision>;
 

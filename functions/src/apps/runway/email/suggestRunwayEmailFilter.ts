@@ -127,7 +127,7 @@ export const suggestRunwayEmailFilter = onCall(
         from: event.from,
         subject: event.subject,
         subjectTemplate: event.subjectTemplate,
-        start: event.snippet,
+        start: String(event.snippet ?? '').slice(0, 600),
       }),
       SCHEMA,
     );

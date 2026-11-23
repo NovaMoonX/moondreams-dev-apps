@@ -142,6 +142,7 @@ export function startEmailEventsListener(
               subject: payload.subject ?? '',
               subjectTemplate: payload.subjectTemplate ?? '',
               snippet: payload.snippet ?? '',
+              bodyText: payload.bodyText ?? null,
               readBy: payload.readBy ?? null,
             };
           }),

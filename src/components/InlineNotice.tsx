@@ -2,7 +2,13 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
+import {
+  CircleCheck,
+  Info,
+  TriangleAlert,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 
 interface InlineNoticeProps {
   /** A fact about how something is set up (info), a consequence that needs a look (warning), or good news (success). */
@@ -10,6 +16,8 @@ interface InlineNoticeProps {
   children: ReactNode;
   /** A short bold lead above the text. */
   title?: ReactNode;
+  /** Replaces the tone's icon; it keeps the tone's icon colour. */
+  icon?: LucideIcon;
   /** Draws a close button that calls it. */
   onDismiss?: () => void;
   dismissLabel?: string;
@@ -39,11 +47,13 @@ function InlineNotice({
   tone,
   children,
   title,
+  icon,
   onDismiss,
   dismissLabel = 'Dismiss',
   className,
 }: InlineNoticeProps) {
-  const { Icon, box, icon } = TONES[tone];
+  const { Icon: toneIcon, box, icon: iconColour } = TONES[tone];
+  const Icon = icon ?? toneIcon;
 
   return (
     <div
@@ -54,7 +64,7 @@ function InlineNotice({
       )}
     >
       <Icon
-        className={join('mt-0.5 h-4 w-4 shrink-0', icon)}
+        className={join('mt-0.5 h-4 w-4 shrink-0', iconColour)}
         aria-hidden='true'
       />
       <div className='min-w-0 flex-1 text-pretty break-words'>

@@ -1142,7 +1142,7 @@ export const EMAIL_WAIT_DAYS = 5;
 export const EMAIL_MATCH_DAYS_AFTER = 7;
 /** How many days before the email a bank charge can be dated and still be it (the bank dates a charge by when it happened). */
 export const EMAIL_MATCH_DAYS_BEFORE = 2;
-/** How long an email's sender, subject and snippet are kept for building filters. */
+/** How long an email's sender, subject, excerpt and (for a bank email Runway read) its text are kept. */
 export const EMAIL_EVENT_KEEP_DAYS = 30;
 /** How a purchase line got its envelope: the person chose it, it ran over from the chosen envelope's chain (a null envelope is Free to Spend taking the rest), or it is Free to Spend. */
 export const PURCHASE_LINE_VIAS = ['chosen', 'spill', 'free'] as const;

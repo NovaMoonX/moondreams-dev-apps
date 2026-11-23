@@ -16,3 +16,4 @@ Fetched with `npm run icon:get` from the Iconify API (https://api.iconify.design
 | `OutlookMark`        | `thesvg-color:microsoft-outlook` | theSVG Color   | [MIT](https://github.com/glincker/thesvg/blob/main/LICENSE)                      | [thesvg.org](https://github.com/glincker/thesvg)        |
 | `ICloudMark`         | `thesvg-color:icloud`            | theSVG Color   | [MIT](https://github.com/glincker/thesvg/blob/main/LICENSE)                      | [thesvg.org](https://github.com/glincker/thesvg)        |
 | `YahooMark`          | `selfhst:yahoo`                  | selfh.st/icons | [CC-BY-4.0](https://github.com/selfhst/icons/blob/main/LICENSE)                  | [selfh.st](https://github.com/selfhst/icons)            |
+| `ProtonMark`         | `thesvg-color:proton`            | theSVG Color   | [MIT](https://github.com/glincker/thesvg/blob/main/LICENSE)                      | [thesvg.org](https://github.com/glincker/thesvg)        |
