@@ -82,6 +82,7 @@ import type {
   EmailIntakeDoc,
   EmailIntakeSealed,
   EmailSetupDoc,
+  EmailBank,
   EmailSetupSealed,
   ClosingSealed,
   ClosingDoc,
@@ -742,6 +743,13 @@ const EMAIL_SETUP_SEALED_FIELDS = {
   banks: 'never',
 } satisfies Record<keyof EmailSetupSealed, ShareDecision>;
 
+const EMAIL_BANK_FIELDS = {
+  id: 'never',
+  name: 'never',
+  addresses: 'never',
+  addedAt: 'never',
+} satisfies Record<keyof EmailBank, ShareDecision>;
+
 const EMAIL_INTAKE_SEALED_FIELDS = {
   confirmUrl: 'never',
   confirmCode: 'never',
@@ -896,6 +904,7 @@ export const SHARE_FIELDS = {
   EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
   EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,
   EmailSetupSealed: EMAIL_SETUP_SEALED_FIELDS,
+  EmailBank: EMAIL_BANK_FIELDS,
   EmailEventDoc: EMAIL_EVENT_DOC_FIELDS,
   EmailEventSealed: EMAIL_EVENT_SEALED_FIELDS,
   EmailFilterDoc: EMAIL_FILTER_DOC_FIELDS,

@@ -81,7 +81,12 @@ export function getPurchaseFacts(
 ): string[] {
   const label = purchase.label?.trim() || null;
   const merchant = purchase.merchant?.trim() || null;
-  const where = describePurchaseWhere(purchase, envelopes, isHidden, emptyWhere);
+  const where = describePurchaseWhere(
+    purchase,
+    envelopes,
+    isHidden,
+    emptyWhere,
+  );
   if (label === null && merchant === null)
     return purchase.lines.length === 0 ? [where] : [];
   return [label !== null ? merchant : null, where].filter(

@@ -1274,7 +1274,7 @@ export type EmailSetupStepId =
   | 'filter'
   | 'test';
 
-/** How far the person got setting up forwarding, written by the app so a walkthrough resumes on any device; one per plan, at `emailSetup/progress`. Holds no amounts or merchants, so it is not sealed. */
+/** How far the person got setting up forwarding, written by the app so a walkthrough resumes on any device; one per plan, at `emailSetup/progress`. The banks whose alerts are forwarded are sealed; the provider and step are not sensitive. */
 export interface EmailSetupDoc {
   id: 'progress';
   provider: EmailProvider | null;

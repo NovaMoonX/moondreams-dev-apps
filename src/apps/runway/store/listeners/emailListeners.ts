@@ -230,7 +230,9 @@ const toBanks = (value: unknown): EmailBank[] =>
               {
                 id: entry.id,
                 name: String(entry.name ?? ''),
-                addresses: entry.addresses.map(String),
+                addresses: entry.addresses.map((address) =>
+                  String(address).toLowerCase(),
+                ),
                 addedAt: Number(entry.addedAt ?? 0),
               },
             ]

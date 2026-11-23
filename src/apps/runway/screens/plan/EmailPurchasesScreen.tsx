@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Filter,
   KeyRound,
+  Plus,
   RotateCcw,
   Trash2,
 } from 'lucide-react';
@@ -372,6 +373,11 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           {addBankSteps.length > 0 && (
             <ActionSection caption={EMAIL_SETUP_WORDS.banksTitle}>
               <div className='space-y-3'>
+                {setup.banks.length === 0 && (
+                  <p className='text-muted-foreground text-sm'>
+                    {EMAIL_SETUP_WORDS.noBanksYet}
+                  </p>
+                )}
                 {setup.banks.length > 0 && (
                   <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                     {setup.banks.map((bank) => {
@@ -397,12 +403,13 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 )}
                 <Button
                   variant='secondary'
-                  className='w-full'
+                  className='w-full gap-1.5'
                   onClick={() => {
                     keepBaseline();
                     setAddBankIndex(0);
                   }}
                 >
+                  <Plus className='size-4' aria-hidden='true' />
                   {EMAIL_SETUP_WORDS.addBank}
                 </Button>
               </div>
