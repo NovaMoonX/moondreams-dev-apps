@@ -36,7 +36,7 @@ export default {
       return;
     }
     const route = routeFor(message.to, env);
-    if (!route) {
+    if (!route?.url) {
       message.setReject(REJECTIONS[404]);
       return;
     }
