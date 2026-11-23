@@ -45,13 +45,29 @@ function EmailBankSheet({
   const [isBusy, setIsBusy] = useState(false);
   const allAddresses = listBankAddresses(banks);
   const [addressesAtOpen] = useState(allAddresses);
+  const [touched, setTouched] = useState<string[]>([]);
   const added = allAddresses.filter(
-    (address) => !addressesAtOpen.includes(address),
+    (address) =>
+      !addressesAtOpen.includes(address) || touched.includes(address),
   );
-  const removed = addressesAtOpen.filter(
+  const removed = [...new Set([...addressesAtOpen, ...touched])].filter(
     (address) => !allAddresses.includes(address),
   );
-  const hasChanged = added.length > 0 || removed.length > 0;
+  const hasChanged = touched.length > 0;
+
+  const saveAndNote: SaveBanks = async (change) => {
+    const before = listBankAddresses(banks);
+    const after = listBankAddresses(change(banks));
+    const isSaved = await onSaveBanks(change);
+    if (isSaved) {
+      const moved = [
+        ...after.filter((address) => !before.includes(address)),
+        ...before.filter((address) => !after.includes(address)),
+      ];
+      setTouched((current) => [...new Set([...current, ...moved])]);
+    }
+    return isSaved;
+  };
 
   const removeBank = async () => {
     const isConfirmed = await confirm({
@@ -91,7 +107,7 @@ function EmailBankSheet({
           <BankAddresses
             bank={bank}
             allAddresses={allAddresses}
-            onSave={onSaveBanks}
+            onSave={saveAndNote}
           />
         </ActionSection>
         {hasChanged && provider !== null && provider !== 'yahoo' && (
