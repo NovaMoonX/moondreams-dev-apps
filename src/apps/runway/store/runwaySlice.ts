@@ -25,6 +25,7 @@ import type {
   OpenEmailSetup,
 } from '@apps/runway/store/listeners/emailListeners';
 import type { ClosingState } from '@apps/runway/engine/closings';
+import type { OpenFiguresSnapshot } from '@apps/runway/utils/figuresSnapshot';
 import type {
   DateOnly,
   OpenAccount,
@@ -53,6 +54,10 @@ export interface RunwayState {
   keyStatus: RunwayKeyStatus;
   plan: OpenPlan | null;
   isLoaded: boolean;
+  /** The server's stored figures, a head start for Home until the ledger is read; null when there are none. */
+  figuresSnapshot: OpenFiguresSnapshot | null;
+  /** Epoch ms of the latest write this phone made that the server may not have seen; null when none is known. */
+  lastWriteAt: number | null;
   items: PlanItemDoc[];
   versions: OpenVersion[];
   isItemsLoaded: boolean;
@@ -207,6 +212,8 @@ const initialState: RunwayState = {
   keyStatus: 'idle',
   plan: null,
   isLoaded: false,
+  figuresSnapshot: null,
+  lastWriteAt: null,
   items: [],
   versions: [],
   isItemsLoaded: false,
@@ -293,6 +300,16 @@ export const runwaySlice = createSlice({
     setPlan: (state, action: PayloadAction<OpenPlan | null>) => {
       state.plan = action.payload;
       state.isLoaded = true;
+    },
+    setFiguresSnapshot: (
+      state,
+      action: PayloadAction<OpenFiguresSnapshot | null>,
+    ) => {
+      state.figuresSnapshot = action.payload;
+    },
+    setLastWriteAt: (state, action: PayloadAction<number | null>) => {
+      state.lastWriteAt =
+        Math.max(state.lastWriteAt ?? 0, action.payload ?? 0) || null;
     },
     setItems: (state, action: PayloadAction<PlanItemDoc[]>) => {
       state.items = action.payload;
@@ -534,6 +551,8 @@ export const {
   setKeyStatus,
   clearRunway,
   setPlan,
+  setFiguresSnapshot,
+  setLastWriteAt,
   setItems,
   setMatchKeys,
   setVersions,

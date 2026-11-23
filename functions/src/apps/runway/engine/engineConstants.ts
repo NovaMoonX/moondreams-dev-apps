@@ -271,6 +271,19 @@ export const BILL_COVER_DAYS = 30;
 /** The version of the figures the engine works out; a stored snapshot from another version is never shown. */
 export const ENGINE_VERSION = 1;
 
+/** The collections under a plan that the figures read; a write to any other never makes stored figures stale. */
+export const FIGURE_INPUT_COLLECTIONS: readonly string[] = [
+  'items',
+  'versions',
+  'days',
+  'moves',
+  'purchases',
+  'cards',
+  'accounts',
+  'accountBalances',
+  'startedPayments',
+];
+
 /** The line a cost makes in a payment list: "Flights · Spain trip". */
 export const getCostLineName = (cost: string, item: string) =>
   `${cost}\u00A0· ${item}`;

@@ -157,7 +157,11 @@ export async function setNotify(
 type SealedPatch = Partial<
   Pick<
     PlanSealedFields,
-    'holdsPrompt' | 'bankBackedSeenAt' | 'horizonNudgeDismissed' | 'homePins'
+    | 'holdsPrompt'
+    | 'bankBackedSeenAt'
+    | 'horizonNudgeDismissed'
+    | 'homePins'
+    | 'timeZone'
   >
 >;
 
@@ -216,6 +220,15 @@ export async function setBankBackedSeen(
   encryption: RunwayEncryption,
 ) {
   await patchSealedFields(uid, encryption, { bankBackedSeenAt: Date.now() });
+}
+
+/** Tells the server which zone the phone is in, so it reads a day's start where the person is. */
+export async function setPlanTimeZone(
+  uid: string,
+  encryption: RunwayEncryption,
+  timeZone: string,
+) {
+  await patchSealedFields(uid, encryption, { timeZone });
 }
 
 /** Stops asking about Horizon for one goal at its current target date; a changed date asks again. Reads the plan fresh so another goal's answer is kept. */

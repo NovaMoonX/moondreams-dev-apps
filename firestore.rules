@@ -541,7 +541,7 @@ service cloud.firestore {
     // --- App: runway ---
 
     // A plan is private to one person and nests under their uid. The server-only paths
-    // (apps/runway/server, apps/runway/keyChecks, apps/runway/merchantNames) have no match, so only Functions reach them.
+    // (apps/runway/server, apps/runway/keyChecks, apps/runway/merchantNames, apps/runway/reworks) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
     // `links`, `accountBalances` and `cardStatements` are written only by Functions (bank data), and a card's or account's `linkId`
@@ -553,11 +553,11 @@ service cloud.firestore {
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
     // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
     // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and furthest step, with the forwarded banks sealed) is created and updated by the app, never deleted. `doneForYou` is what the app did on its
-    // own: the app marks one undone and removes the ones older than 30 days.
+    // own: the app marks one undone and removes the ones older than 30 days. `figures` (the figures the server worked out) is written only by Functions.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges', 'emailIntake', 'emailEvents'])
+        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges', 'emailIntake', 'emailEvents', 'figures'])
         && (document[0] != 'emailFilters' || isGateOpen('runway', 'email-purchases', 'off'))
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
         && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link' && request.resource.data.get('source', null) != 'email' && request.resource.data.get('emailEventId', null) == null));

@@ -25,6 +25,7 @@ import type {
   OpenStartedPayment,
   StartedPaymentDoc,
 } from '@apps/runway/types';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -43,6 +44,7 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
   const stop = onSnapshot(
     collection(db, 'apps', 'runway', 'plans', uid, collectionName),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const current = sequence.latest;
       /* Bank data is optional: a document that won't open is left out rather than closing the plan. */

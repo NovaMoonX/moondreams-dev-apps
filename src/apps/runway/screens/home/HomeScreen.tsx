@@ -46,6 +46,7 @@ import TrackInviteCard from '@apps/runway/components/TrackInviteCard';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
 import { selectHomeMoves } from '@apps/runway/store/selectors/moveSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { selectUsableSnapshot } from '@apps/runway/store/selectors/figuresSnapshotSelectors';
 import { getListedCards } from '@apps/runway/utils/cardText';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
@@ -54,9 +55,8 @@ import {
   selectHasIncome,
   selectEnvelopes,
   selectIsDaysLoaded,
-  selectIsMovesLoaded,
+  selectIsLedgerReady,
   selectIsPlanItemsLoaded,
-  selectIsRecordsReady,
   selectListedDays,
   selectPairedBy,
   selectStance,
@@ -73,8 +73,9 @@ function HomeScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
-  const isLedgerReady = useAppSelector(
-    (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
+  const isLedgerReady = useAppSelector(selectIsLedgerReady);
+  const hasHeadStart = useAppSelector(
+    (state) => selectUsableSnapshot(state, today) !== null,
   );
   const isLoaded = isItemsLoaded && isDaysLoaded;
   const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
@@ -89,7 +90,9 @@ function HomeScreen() {
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const bankDueCards = useAppSelector(selectCardsWithBankDue);
   const bankDue = useAppSelector(selectBankDueByCard);
-  const homeMoves = useAppSelector((state) => selectHomeMoves(state, today));
+  const homeMoves = useAppSelector((state) =>
+    selectIsLedgerReady(state) ? selectHomeMoves(state, today) : null,
+  );
   const isTrack = useAppSelector((state) =>
     isTrackingLevel(selectLevel(state)),
   );
@@ -106,7 +109,7 @@ function HomeScreen() {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
   }
 
-  if (hasIncome && !isLedgerReady) {
+  if (hasIncome && !isLedgerReady && !hasHeadStart) {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
   }
 
@@ -129,17 +132,18 @@ function HomeScreen() {
   const hasMoney = ({ item }: (typeof envelopes)[number]) =>
     (balances.assignedByItem[item.id] ?? 0) !== 0;
   const shown = orderHomeTiles(envelopes, pins, hasMoney, HOME_TILE_COUNT);
-  const dueCards = isTrack
-    ? getDueCards(
-        getListedCards(bankDueCards, balances.reserveByCard),
-        balances.reserveByCard,
-        moves,
-        today,
-        CARD_DUE_WARN_DAYS,
-        startDate,
-        bankDue,
-      )
-    : [];
+  const dueCards =
+    isTrack && isLedgerReady
+      ? getDueCards(
+          getListedCards(bankDueCards, balances.reserveByCard),
+          balances.reserveByCard,
+          moves,
+          today,
+          CARD_DUE_WARN_DAYS,
+          startDate,
+          bankDue,
+        )
+      : [];
   const hasRanges = rangeSides.income || rangeSides.expense;
   const hasWarnings =
     dueCards.length > 0 ||
@@ -171,33 +175,37 @@ function HomeScreen() {
           onOpen={() => openView('freeToSpend')}
         />
       </div>
-      <ReconnectLinkRows />
       <BankBackedRow />
-      <HoldsPromptRow />
-      {!hasWarnings && <EmailOverdueRow />}
-      <LevelGate level='track'>
-        <NeedsHomeDoor />
-      </LevelGate>
-      <DueBillsCard lookahead={lookahead} today={today} overflow='door' />
-      {!isAddingPurchase && (
-        <DraftPickUpRow
-          isTrack={isTrack}
-          onPickUpPurchase={() => setIsAddingPurchase(true)}
-        />
+      {isLedgerReady && (
+        <>
+          <ReconnectLinkRows />
+          <HoldsPromptRow />
+          {!hasWarnings && <EmailOverdueRow />}
+          <LevelGate level='track'>
+            <NeedsHomeDoor />
+          </LevelGate>
+          <DueBillsCard lookahead={lookahead} today={today} overflow='door' />
+          {!isAddingPurchase && (
+            <DraftPickUpRow
+              isTrack={isTrack}
+              onPickUpPurchase={() => setIsAddingPurchase(true)}
+            />
+          )}
+          <PrioritiesNudge
+            isHeldBack={
+              lookahead === null ||
+              hasWarnings ||
+              lookahead.due.length > 0 ||
+              dueCosts.length > 0 ||
+              checks.length > 0
+            }
+            otherwise={<HorizonNudge otherwise={<TrackInviteCard />} />}
+          />
+          <LevelGate level='track'>
+            <HomeCards today={today} />
+          </LevelGate>
+        </>
       )}
-      <PrioritiesNudge
-        isHeldBack={
-          lookahead === null ||
-          hasWarnings ||
-          lookahead.due.length > 0 ||
-          dueCosts.length > 0 ||
-          checks.length > 0
-        }
-        otherwise={<HorizonNudge otherwise={<TrackInviteCard />} />}
-      />
-      <LevelGate level='track'>
-        <HomeCards today={today} />
-      </LevelGate>
       {envelopes.length > 0 && (
         <div className='space-y-2'>
           <SectionHeader
@@ -258,7 +266,7 @@ function HomeScreen() {
           </div>
         </FormSheet>
       )}
-      {nextDay && (
+      {isLedgerReady && nextDay && (
         <div className='space-y-2'>
           <SectionHeader title={HOME_WORDS.nextIncome} />
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -269,7 +277,7 @@ function HomeScreen() {
           </ul>
         </div>
       )}
-      {envelopes.length > 0 && (
+      {isLedgerReady && envelopes.length > 0 && (
         <LevelGate level='track'>
           <FloatingAction
             label={SPEND_WORDS.newPurchase}

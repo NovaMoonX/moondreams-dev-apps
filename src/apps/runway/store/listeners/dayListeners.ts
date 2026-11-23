@@ -19,6 +19,7 @@ import type {
   OpenRecord,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -44,6 +45,7 @@ export function startDaysListener(
       ...(to === null ? [] : [where('expectedOn', '<', to)]),
     ),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const mine = sequence.latest;
       try {
@@ -85,6 +87,7 @@ export function startRecordsListener(
     onSnapshot(
       collection(db, 'apps', 'runway', 'plans', uid, 'days', dayId, 'records'),
       async (snapshot) => {
+        noteLocalWrite(uid, snapshot);
         const mine = (sequences.get(dayId) ?? 0) + 1;
         sequences.set(dayId, mine);
         try {

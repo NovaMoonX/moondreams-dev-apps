@@ -408,6 +408,10 @@ export const selectBillProgress = createSelector(
 export const selectIsMovesLoaded = (state: RootState) =>
   selectIsWindowLoaded(state) && state.runway.isCardsLoaded;
 
+/** The moves and records the figures are summed from have all been read. */
+export const selectIsLedgerReady = (state: RootState) =>
+  selectIsMovesLoaded(state) && selectIsRecordsReady(state);
+
 const selectHistoryRecords = (state: RootState) => state.runway.historyRecords;
 
 /** A day's records are found in the recent window first, then in the older month Days has open; the balances never read the older ones. */

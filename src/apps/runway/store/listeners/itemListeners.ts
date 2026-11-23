@@ -12,6 +12,7 @@ import type {
   RunwayEncryption,
 } from '@apps/runway/types';
 import { openItem, openVersion } from '@apps/runway/engine/openDocs';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const planPath = (uid: string, name: string) =>
   collection(db, 'apps', 'runway', 'plans', uid, name);
@@ -52,6 +53,7 @@ export function startItemsListener(
   const stop = onSnapshot(
     planPath(uid, 'items'),
     (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       const headers = snapshot.docs.map((entry) => ({
         ...(entry.data() as Partial<PlanItemDoc>),
         id: entry.id,
@@ -84,6 +86,7 @@ export function startVersionsListener(
   const stop = onSnapshot(
     planPath(uid, 'versions'),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const mine = sequence.latest;
       try {

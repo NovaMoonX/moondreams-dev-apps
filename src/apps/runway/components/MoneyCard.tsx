@@ -24,6 +24,7 @@ import type { Lookahead } from '@apps/runway/engine/lookahead';
 import type { MoneyPoint, MoneyRange } from '@apps/runway/engine/moneyHistory';
 import { useMoneySeries } from '@apps/runway/hooks/useMoneySeries';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectIsLedgerReady } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
 
@@ -75,6 +76,7 @@ interface MoneyCardProps {
 /** Home's hero: Free to Spend or all money, with where it has been and where the plan takes it; a finger on the line reads that day into the figure. */
 function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
   const balances = useAppSelector(selectBalances);
+  const isLedgerReady = useAppSelector(selectIsLedgerReady);
   const [isAll, setIsAll] = useLocalStoragePreference(FIGURE_KEY, false);
   const [isChartHidden, setIsChartHidden] = useLocalStoragePreference(
     CHART_HIDDEN_KEY,
@@ -104,7 +106,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
 
   const history = series.history ?? [];
   const isYoung = series.spanDays < MONEY_CHART_MIN_DAYS;
-  const hasChart = isKnown && !isYoung && history.length >= 2;
+  const hasChart = isLedgerReady && isKnown && !isYoung && history.length >= 2;
   const now = history.at(-1) ?? null;
   const ahead = series.ahead.slice(1);
   const data: TrendPoint[] = [
