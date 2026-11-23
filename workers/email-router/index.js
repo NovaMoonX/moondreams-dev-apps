@@ -8,7 +8,6 @@ const REJECTIONS = {
   413: 'Message too large',
 };
 
-// An address starts with its app's prefix and reaches only that app's intake.
 const ROUTES = {
   runway: (env) => ({
     url: env.INGEST_URL,
