@@ -286,6 +286,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     ]
       .filter((line) => line !== null)
       .join(' '),
+    isLosingWork: hasDraft,
   });
   const saveBanksActed: typeof actions.saveBanks = (change) => {
     setHasActed(true);
