@@ -638,13 +638,14 @@ function EmailSetupWalkthrough({
     };
   };
 
+  const isSenderUnsaved = senderText !== (words.senderAddress ?? '');
   const requestLeave = useLeaveFlowGuard({
     hasActed,
     onLeave: onBackToStatus ?? onFinishLater,
-    message:
-      senderText === (words.senderAddress ?? '')
-        ? WORDS.leaveKept
-        : `${WORDS.leaveKept} ${WORDS.leaveSenderLost}`,
+    message: isSenderUnsaved
+      ? `${WORDS.leaveKept} ${WORDS.leaveSenderLost}`
+      : WORDS.leaveKept,
+    isLosingWork: isSenderUnsaved,
   });
 
   const { title: stepTitle, content } = body();

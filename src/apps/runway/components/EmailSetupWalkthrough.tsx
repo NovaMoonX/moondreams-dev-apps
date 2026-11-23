@@ -129,7 +129,7 @@ function NumberedSteps({ items }: { items: NumberedItem[] }) {
                   href={item.href}
                   target='_blank'
                   rel='noreferrer'
-                  className='text-primary -my-2 inline-block py-2 font-medium hover:underline'
+                  className='text-primary -my-2.5 inline-block py-2.5 font-medium hover:underline'
                 >
                   {item.text}
                   <ExternalLink
@@ -401,7 +401,7 @@ function EmailSetupWalkthrough({
           <div className='space-y-4'>
             <NumberedSteps
               items={[
-                { text: WORDS.yahooForwardingOpen, href: YAHOO_MAIL_URL },
+                { text: WORDS.yahooForwardingLink, href: YAHOO_MAIL_URL },
                 { text: WORDS.yahooForwardingGo },
                 { text: WORDS.yahooForwardingPaste },
               ]}
@@ -419,7 +419,7 @@ function EmailSetupWalkthrough({
             <NumberedSteps
               items={[
                 {
-                  text: WORDS.gmailForwardingOpen,
+                  text: WORDS.gmailForwardingLink,
                   href: GMAIL_FORWARDING_URL,
                 },
                 { text: WORDS.gmailForwardingChoose },
@@ -535,7 +535,7 @@ function EmailSetupWalkthrough({
           content: (
             <NumberedSteps
               items={[
-                { text: WORDS.outlookRuleOpen, href: OUTLOOK_RULES_URL },
+                { text: WORDS.outlookRuleLink, href: OUTLOOK_RULES_URL },
                 {
                   text: WORDS.outlookRuleLine(addresses),
                   control: <RuleAddresses addresses={addresses} />,
