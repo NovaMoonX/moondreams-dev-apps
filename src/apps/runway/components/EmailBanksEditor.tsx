@@ -1,18 +1,27 @@
 import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { Plus, X } from 'lucide-react';
+import { ArrowLeftRight, Plus, X } from 'lucide-react';
 
 import ClearOfFooter from '@/components/ClearOfFooter';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import CopyTextButton from '@/components/CopyTextButton';
 import MethodPicker from '@/components/MethodPicker';
-import { EMAIL_SETUP_WORDS } from '@apps/runway/components/emailWords';
+import {
+  EMAIL_SETUP_WORDS,
+  GMAIL_FILTERS_URL,
+  ICLOUD_MAIL_URL,
+  OUTLOOK_RULES_URL,
+  PROTON_MAIL_URL,
+  buildGmailFilterText,
+} from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import type { KnownBank } from '@apps/runway/store/selectors/emailSelectors';
-import type { EmailBank } from '@apps/runway/types';
+import type { EmailBank, EmailProvider } from '@apps/runway/types';
 import {
   checkAddress,
   findBankLogo,
+  splitAddress,
   type BankDraft,
 } from '@apps/runway/utils/emailBanks';
 
@@ -38,6 +47,15 @@ export function BankMark({
 }
 
 /** Several alert addresses to type into a rule, one per line with its own copy; one address stays in the sentence. */
+function AddressText({ address }: { address: string }) {
+  return splitAddress(address).map((part, index) => (
+    <span key={index}>
+      {part}
+      <wbr />
+    </span>
+  ));
+}
+
 export function RuleAddresses({ addresses }: { addresses: string[] }) {
   if (addresses.length < 2) return null;
   return (
@@ -47,8 +65,8 @@ export function RuleAddresses({ addresses }: { addresses: string[] }) {
           key={address}
           className='flex min-h-11 items-center gap-2 py-1 pr-2 pl-3'
         >
-          <span className='min-w-0 flex-1 font-mono text-xs break-all'>
-            {address}
+          <span className='min-w-0 flex-1 font-mono text-xs [overflow-wrap:anywhere]'>
+            <AddressText address={address} />
           </span>
           <CopyTextButton
             text={address}
@@ -61,6 +79,57 @@ export function RuleAddresses({ addresses }: { addresses: string[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+const RULE_LINKS: Partial<
+  Record<EmailProvider, { href: string; label: string }>
+> = {
+  outlook: { href: OUTLOOK_RULES_URL, label: WORDS.outlookRuleLink },
+  icloud: { href: ICLOUD_MAIL_URL, label: WORDS.icloudRuleLink },
+  proton: { href: PROTON_MAIL_URL, label: WORDS.protonRuleLink },
+};
+
+/** What to change in a filter or rule the person already made, so it covers every bank's addresses; never a second one. */
+export function ForwardingUpdate({
+  provider,
+  addresses,
+}: {
+  provider: EmailProvider;
+  addresses: string[];
+}) {
+  if (provider === 'gmail') {
+    const filterText = buildGmailFilterText(addresses);
+    return (
+      <div className='space-y-2'>
+        <p className='text-sm'>{WORDS.updateGmailCopy}</p>
+        <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
+          {filterText}
+        </code>
+        <CopyTextButton
+          text={filterText}
+          label={WORDS.filterLabel}
+          variant='secondary'
+          isCompact
+        />
+        <p className='text-sm'>{WORDS.updateGmailPaste}</p>
+        <ExternalLinkText href={GMAIL_FILTERS_URL} label={WORDS.filterLink} />
+      </div>
+    );
+  }
+  const ruleLink = RULE_LINKS[provider];
+  return (
+    <div className='space-y-2'>
+      <p className='text-sm break-words'>
+        {provider === 'proton'
+          ? WORDS.protonRuleCondition(addresses)
+          : WORDS.updateRule(addresses)}
+      </p>
+      <RuleAddresses addresses={addresses} />
+      {ruleLink && (
+        <ExternalLinkText href={ruleLink.href} label={ruleLink.label} />
+      )}
+    </div>
   );
 }
 
@@ -151,11 +220,13 @@ export function BankAddresses({
     }
     const address = checked.address;
     const isSaved = await save((banks) =>
-      banks.map((entry) =>
-        entry.id === bank.id && !entry.addresses.includes(address)
-          ? { ...entry, addresses: [...entry.addresses, address] }
-          : entry,
-      ),
+      banks.some((entry) => entry.addresses.includes(address))
+        ? banks
+        : banks.map((entry) =>
+            entry.id === bank.id
+              ? { ...entry, addresses: [...entry.addresses, address] }
+              : entry,
+          ),
     );
     if (!isSaved) return;
     setText('');
@@ -182,7 +253,9 @@ export function BankAddresses({
             key={address}
             className='flex min-h-12 items-center gap-2 py-1 pr-1 pl-3'
           >
-            <span className='min-w-0 flex-1 text-sm break-all'>{address}</span>
+            <span className='min-w-0 flex-1 text-sm [overflow-wrap:anywhere]'>
+              <AddressText address={address} />
+            </span>
             {bank.addresses.length > 1 && (
               <Button
                 variant='tertiary'
@@ -211,7 +284,6 @@ export function BankAddresses({
           />
           <div className='flex gap-2'>
             <Button
-              variant='secondary'
               size='sm'
               disabled={isBusy || text.trim() === ''}
               onClick={() => void add()}
@@ -219,7 +291,7 @@ export function BankAddresses({
               {WORDS.addAddress}
             </Button>
             <Button
-              variant='tertiary'
+              variant='secondary'
               size='sm'
               onClick={() => {
                 setIsAdding(false);
@@ -236,7 +308,7 @@ export function BankAddresses({
           <Button
             variant='tertiary'
             size='sm'
-            className='text-primary -ml-2 gap-1.5'
+            className='text-primary! -ml-2 gap-1.5'
             onClick={() => setIsAdding(true)}
           >
             <Plus className='size-4' aria-hidden='true' />
@@ -336,9 +408,10 @@ export function BankDraftForm({ draft, known, onChange }: BankDraftFormProps) {
       <Button
         variant='tertiary'
         size='sm'
-        className='-ml-2'
+        className='text-primary! -ml-2 gap-1.5'
         onClick={() => onChange(null)}
       >
+        <ArrowLeftRight className='size-4' aria-hidden='true' />
         {WORDS.chooseOtherBank}
       </Button>
     </div>

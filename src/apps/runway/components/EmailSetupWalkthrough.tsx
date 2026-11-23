@@ -30,12 +30,14 @@ import {
   BankDraftForm,
   BankMark,
   BankPicker,
+  ForwardingUpdate,
   RuleAddresses,
   type SaveBanks,
 } from '@apps/runway/components/EmailBanksEditor';
 import {
   addDraftedBank,
   findBankLogo,
+  listBankAddresses,
   readBankDraft,
   type BankDraft,
 } from '@apps/runway/utils/emailBanks';
@@ -257,7 +259,7 @@ function EmailSetupWalkthrough({
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const hasNext = stepIndex < steps.length - 1;
-  const addresses = banks.flatMap((bank) => bank.addresses);
+  const addresses = listBankAddresses(banks);
   const bankIndex = steps.indexOf('bank');
   const isBankChoosing =
     draft === null && (banks.length === 0 || isPickingBank);
@@ -610,7 +612,7 @@ function EmailSetupWalkthrough({
                 <Button
                   variant='tertiary'
                   size='sm'
-                  className='text-primary -ml-2 gap-1.5'
+                  className='text-primary! -ml-2 gap-1.5'
                   aria-expanded={false}
                   onClick={() => setIsNotArrivingShown(true)}
                 >
@@ -655,6 +657,10 @@ function EmailSetupWalkthrough({
   };
 
   const goBack = () => {
+    if (step === 'bank' && isAddingBank && draft === null && isPickingBank) {
+      onClose();
+      return;
+    }
     if (step === 'bank' && (draft !== null || isPickingBank)) {
       setDraft(null);
       setIsPickingBank(false);
@@ -665,7 +671,30 @@ function EmailSetupWalkthrough({
   const canGoBack =
     stepIndex > 0 || (step === 'bank' && (draft !== null || isPickingBank));
 
-  const { title, content } = body();
+  const showBody = (): { title: ReactNode; content: ReactNode } => {
+    const shown = body();
+    const isForwardingStep = step === 'filter' || step === 'rule';
+    if (!isForwardingStep || bankFirst !== null || provider === null) {
+      return shown;
+    }
+    if (isAddingBank) {
+      return {
+        title:
+          step === 'filter' ? WORDS.updateFilterTitle : WORDS.updateRuleTitle,
+        content: <ForwardingUpdate provider={provider} addresses={addresses} />,
+      };
+    }
+    return {
+      title: shown.title,
+      content: (
+        <div className='space-y-4'>
+          <Muted>{WORDS.alreadyMade}</Muted>
+          {shown.content}
+        </div>
+      ),
+    };
+  };
+  const { title, content } = showBody();
   return (
     <StepGuide
       step={provider === null ? undefined : stepIndex + 1}

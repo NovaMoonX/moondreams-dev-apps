@@ -2,7 +2,7 @@ import type { EmailProvider, EmailSetupStepId } from '@apps/runway/types';
 
 export type { EmailSetupStepId };
 
-/** The walkthrough's steps for a provider, in order; the first is always the provider question. A provider that caught no confirmation (Other) has no confirm step until one arrives. The bank step comes right before the filter or rule that names its addresses. */
+/** The walkthrough's steps for a provider, in order; Other has no confirm step until a confirmation arrives. */
 export function getEmailSetupSteps(
   provider: EmailProvider | null,
   hasConfirmation: boolean,

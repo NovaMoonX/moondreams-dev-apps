@@ -11,6 +11,14 @@ export const readAlertAddress = (text: string) => {
   return found ? found.toLowerCase() : null;
 };
 
+/** Every bank's alert addresses, each once, in the order they were added. */
+export const listBankAddresses = (banks: EmailBank[]) => [
+  ...new Set(banks.flatMap((bank) => bank.addresses)),
+];
+
+/** An address with break chances after its @ and dots, so a narrow screen wraps it where it reads cleanly. */
+export const splitAddress = (address: string) => address.split(/(?<=[@.])/);
+
 export const findBankLogo = (known: KnownBank[], name: string) =>
   known.find((bank) => bank.name.toLowerCase() === name.trim().toLowerCase())
     ?.logo ?? null;
@@ -61,12 +69,19 @@ export const addDraftedBank =
     const same = banks.find(
       (entry) => entry.name.toLowerCase() === bank.name.toLowerCase(),
     );
-    if (same === undefined) return [...banks, bank];
+    const taken = new Set(
+      banks
+        .filter((entry) => entry.id !== same?.id)
+        .flatMap((entry) => entry.addresses),
+    );
+    const addresses = bank.addresses.filter((address) => !taken.has(address));
+    if (addresses.length === 0) return banks;
+    if (same === undefined) return [...banks, { ...bank, addresses }];
     return banks.map((entry) =>
       entry.id === same.id
         ? {
             ...entry,
-            addresses: [...new Set([...entry.addresses, ...bank.addresses])],
+            addresses: [...new Set([...entry.addresses, ...addresses])],
           }
         : entry,
     );

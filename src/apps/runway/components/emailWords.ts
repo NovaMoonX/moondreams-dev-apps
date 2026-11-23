@@ -245,6 +245,12 @@ export const EMAIL_SETUP_WORDS = {
   updateGmailCopy: 'Copy the new filter',
   updateGmailPaste:
     'In Gmail filters, delete your old Runway filter, paste this in the search box, then choose Create filter → Forward it to → your Runway address',
+  updateFilterTitle: 'Update your Runway filter',
+  updateRuleTitle: 'Update your forwarding rule',
+  alreadyMade:
+    'Already made one for Runway? Change it to match this instead of making a second.',
+  noBanksYet:
+    'Add the banks your filter or rule covers, so you can see when each one’s alerts arrive.',
   updateRule: (addresses: string[]) =>
     `In your forwarding rule, make sure it forwards mail from ${fromWhom(addresses)}`,
   removeBank: 'Stop forwarding this bank',
