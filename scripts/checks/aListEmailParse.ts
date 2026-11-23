@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { htmlToText } from '../../functions/src/email/emailUtils.ts';
+import {
+  htmlToText,
+  snippetOf,
+  withoutEmailAddresses,
+} from '../../functions/src/email/emailUtils.ts';
+import {
+  isForwardingConfirmation,
+  readConfirmation,
+} from '../../functions/src/email/forwardingConfirmation.ts';
 import {
   buildTicket,
   findAttachTarget,
@@ -433,6 +441,39 @@ assert.equal(
   ),
   null,
   'another theater',
+);
+
+const proton = {
+  from: 'Proton Mail <no-reply@notify.proton.me>',
+  subject: 'Forwarding request from someone@proton.me',
+  text: 'Learn more https://proton.me/support/email-forwarding or accept: https://account.proton.me/u/0/mail/forwarding/accept?token=abc',
+  isDkimPassed: true,
+};
+assert.equal(isForwardingConfirmation(proton), true, 'Proton invitation');
+assert.equal(
+  readConfirmation(proton).confirmUrl,
+  'https://account.proton.me/u/0/mail/forwarding/accept?token=abc',
+  'the accept link, not the support page',
+);
+assert.equal(
+  isForwardingConfirmation({ ...proton, isDkimPassed: false }),
+  false,
+  'unsigned Proton mail',
+);
+assert.equal(
+  isForwardingConfirmation({ ...proton, from: 'x@evil.example' }),
+  false,
+  'a look-alike sender',
+);
+assert.equal(
+  isForwardingConfirmation({ ...proton, text: 'https://proton.me/blog/news' }),
+  false,
+  'no invitation link',
+);
+assert.equal(
+  snippetOf(withoutEmailAddresses('To: <a.b@mail.com> Dear x; c@d.org ok'), 99),
+  'To: Dear x; ok',
+  'addresses are not kept',
 );
 
 console.log(

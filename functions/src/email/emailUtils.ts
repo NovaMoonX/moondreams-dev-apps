@@ -38,6 +38,10 @@ export function htmlToText(html: string): string {
 export const snippetOf = (text: string, max = 200) =>
   text.replace(/\s+/g, ' ').trim().slice(0, max);
 
+/** The text with every email address taken out, so a forwarded header's To: line leaves no one's address behind. */
+export const withoutEmailAddresses = (text: string) =>
+  text.replace(/<?[^\s<>(),;:"'[\]]+@[^\s<>(),;:"'[\]]+>?/g, ' ');
+
 /** A stable document id for one message to one person, so a redelivery finds its first handling. */
 export const eventIdFor = (uid: string, messageId: string) =>
   createHash('sha256').update(`${uid}:${messageId}`).digest('hex').slice(0, 32);

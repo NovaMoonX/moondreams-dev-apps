@@ -1,5 +1,6 @@
 /** The email services a forwarding walkthrough knows how to set up; `other` gets generic steps. */
-export type EmailProvider = 'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'other';
+export type EmailProvider =
+  'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'proton' | 'other';
 
 export type EmailSetupStepId =
   'provider' | 'copy' | 'forwarding' | 'rule' | 'confirm' | 'filter' | 'test';

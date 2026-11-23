@@ -127,6 +127,10 @@ export interface Viewing {
   rating: number | null;
   /** The pending push that nudges them to add trailers once the showing starts. Documents written before it existed lack the key. */
   trailerReminderId: string | null;
+  /** AMC's ticket confirmation number, from a forwarded reservation email; a cancellation email finds the showing by it. null when typed in; documents written before it lack the key. */
+  amcConfirmation: string | null;
+  /** The forwarded email that added or priced this showing; null otherwise, and missing on older documents. */
+  emailEventId: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
@@ -284,4 +288,53 @@ export interface TheatrePlace {
   longitude: number | null;
   /** AMC's name for the state, like "washington", for kind "state". */
   state: string | null;
+}
+
+/** What became of one email that reached the member's forwarding address. */
+export type AListEmailOutcome =
+  /** A reservation that became a new showing. */
+  | 'added'
+  /** A reservation whose ticket went onto a showing already planned. */
+  | 'attached'
+  /** A cancellation that took its showing off the calendar. */
+  | 'canceled'
+  /** A cancellation whose showing wasn't on the calendar. */
+  | 'cancelNotFound'
+  /** A reservation or cancellation for a showing already handled. */
+  | 'alreadyHandled'
+  /** A provider's forwarding confirmation. */
+  | 'confirm'
+  /** An email that isn't an AMC reservation or cancellation. */
+  | 'notTicket'
+  /** An AMC email that couldn't be read. */
+  | 'unread';
+
+/** One email that reached the address, written only by Functions at `emailEvents/{id}` and removed on its own after `EMAIL_EVENT_KEEP_DAYS` (Firestore TTL on `expiresAt`). */
+export interface AListEmailEvent {
+  id: string;
+  /** Instant the email arrived. */
+  receivedAt: number;
+  outcome: AListEmailOutcome;
+  /** The sender's address, lowercase. */
+  from: string;
+  subject: string;
+  /** The start of the email's text with email addresses and member details removed, at most 300 characters (200 for an email that was skipped); empty for a forwarding confirmation. */
+  snippet: string;
+  /** How it was read: AMC's known layout, or Gemini when the layout didn't match; null when nothing was read. */
+  readBy: 'pattern' | 'ai' | null;
+  /** The showing it added, priced or removed; null for any other outcome. */
+  viewingId: string | null;
+  movieTitle: string | null;
+  /** Instant the showing starts; null when unknown. */
+  showtimeAt: number | null;
+  theatreName: string | null;
+  confirmation: string | null;
+  /** How many tickets the reservation was for; the showing records one. null when not a reservation. */
+  ticketCount: number | null;
+  /** The showing as it was before a cancellation removed it, so Undo can put it back; null otherwise. */
+  removedViewing: Viewing | null;
+  /** When the member undid what this email did; null otherwise. */
+  undoneAt: number | null;
+  /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
+  expiresAt: number;
 }

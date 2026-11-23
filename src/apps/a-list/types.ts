@@ -317,7 +317,7 @@ export interface AListEmailEvent {
   /** The sender's address, lowercase. */
   from: string;
   subject: string;
-  /** The start of the email's text, whitespace collapsed, at most 300 characters. */
+  /** The start of the email's text with email addresses and member details removed, at most 300 characters (200 for an email that was skipped); empty for a forwarding confirmation. */
   snippet: string;
   /** How it was read: AMC's known layout, or Gemini when the layout didn't match; null when nothing was read. */
   readBy: 'pattern' | 'ai' | null;

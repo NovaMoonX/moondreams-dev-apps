@@ -38,6 +38,9 @@ export function getEmailSetupSteps(
   if (provider === 'yahoo') {
     return ['provider', 'copy', 'forwarding', 'confirm', 'test'];
   }
+  if (provider === 'proton') {
+    return ['provider', 'copy', 'rule', 'confirm', 'test'];
+  }
   if (provider === 'other') {
     return [
       'provider',

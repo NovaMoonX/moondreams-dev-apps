@@ -15,7 +15,11 @@ import {
   type EmailHandlerInput,
   type EmailMail,
 } from '../../../email/createEmailIngest.js';
-import { snippetOf, toAddress } from '../../../email/emailUtils.js';
+import {
+  snippetOf,
+  toAddress,
+  withoutEmailAddresses,
+} from '../../../email/emailUtils.js';
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
 import { AMC_API_KEY } from '../amc.js';
 import { OMDB_API_KEY, TMDB_API_KEY } from '../movieProvider.js';
@@ -81,15 +85,26 @@ interface Written {
   removedViewing?: Viewing | null;
 }
 
-/** The event document for one email, with everything a handler didn't set left null and nothing of the member's name or membership number in what it keeps. */
+const SKIPPED_EXCERPT_MAX = 200;
+const READ_EXCERPT_MAX = 300;
+
+const keptText = (text: string, max: number) =>
+  snippetOf(withoutEmailAddresses(withoutMemberDetails(text)), max);
+
+/** The event document for one email, with everything a handler didn't set left null. It keeps no member name, membership number or email address; a forwarding confirmation keeps no subject or text (its code and link live only on the intake document), and an email that was skipped keeps a subject and a short excerpt. */
 function toEvent({ mail, eventId, now }: EmailHandlerInput, written: Written) {
+  const isConfirmation = written.outcome === 'confirm';
+  const isSkipped =
+    written.outcome === 'notTicket' || written.outcome === 'unread';
   const event: EmailEvent = {
     id: eventId,
     receivedAt: mail.receivedAt,
     outcome: written.outcome,
     from: toAddress(mail.from),
-    subject: snippetOf(withoutMemberDetails(mail.subject), 300),
-    snippet: snippetOf(withoutMemberDetails(mail.text), 300),
+    subject: isConfirmation ? '' : keptText(mail.subject, 300),
+    snippet: isConfirmation
+      ? ''
+      : keptText(mail.text, isSkipped ? SKIPPED_EXCERPT_MAX : READ_EXCERPT_MAX),
     readBy: written.readBy,
     viewingId: written.viewingId ?? null,
     movieTitle: written.movieTitle ?? null,
