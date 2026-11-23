@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Sets up Runway's purchases-from-email intake: one shared secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
+# Each person's address is runway-<token>@moondreamsmail.com, a receive-only domain whose catch-all sends every app's mail to the email worker.
 # The secret is generated here, never printed or written to disk. Safe to re-run.
 #   npm run runway:email-setup                 picks up where the last run stopped
 #   npm run runway:email-setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
@@ -11,12 +12,13 @@ source scripts/lib/setupState.sh
 PROJECT=moondreams-dev-apps
 SECRET_NAME=RUNWAY_EMAIL_WEBHOOK_SECRET
 WORKER_CONFIG=workers/email-router/wrangler.toml
+INGEST_URL=https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestRunwayEmail
 LAST_STEP=4
 PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/runway-email-setup-step"
 CURRENT="starting"
 CURRENT_STEP=1
 
-usage() { sed -n '4,6p' "$0" | sed 's/^# *//'; }
+usage() { sed -n '5,7p' "$0" | sed 's/^# *//'; }
 from=""
 case "${1:-}" in
   "") ;;
@@ -49,6 +51,37 @@ start_step() {
   return 1
 }
 
+# The intake reads the secret at run time, so nothing grants the functions' account access to it on deploy.
+grant_read() {
+  if command -v gcloud >/dev/null 2>&1; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding "$SECRET_NAME" --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "1. ✓ The functions can read $SECRET_NAME."
+  else
+    echo "1. gcloud isn't installed, so give the functions read access in the browser (one time):"
+    echo "     a. Open https://console.cloud.google.com/security/secret-manager/secret/$SECRET_NAME/permissions?project=$PROJECT"
+    echo "     b. Grant access → New principal: the account ending in -compute@developer.gserviceaccount.com"
+    echo "     c. Role: Secret Manager Secret Accessor → Save"
+    printf '   Press Enter when it is saved. '
+    read -r _ || true
+  fi
+}
+
+# A call without the secret must reach the intake's own check: 401 proves it is open to the worker and can read its secret.
+check_intake() {
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$INGEST_URL" || true)
+  case "$code" in
+    401) echo "2. ✓ The intake answers the worker." ;;
+    403) echo "✗ Google Cloud refuses calls to the intake (403): it isn't open yet. Merge and deploy, or run: npm run fb:invoker -- ingestRunwayEmail" >&2; exit 1 ;;
+    503) echo "✗ The intake can't read $SECRET_NAME (503). Run this step's grant again: npm run runway:email-setup -- --restart" >&2; exit 1 ;;
+    *) echo "✗ The intake answered $code instead of 401." >&2; exit 1 ;;
+  esac
+}
+
 trap 'status=$?; (( status == 0 )) || { echo "✗ Stopped at step $CURRENT_STEP: $CURRENT." >&2; echo "  Fix that and run npm run runway:email-setup again to pick up from step $CURRENT_STEP (or add -- --restart to start over)." >&2; }' EXIT
 
 need node "Install Node 20 or later."
@@ -73,6 +106,7 @@ SHARED=$(openssl rand -hex 32)
 if start_step 1 "the secret in Firebase"; then
   if output=$(printf %s "$SHARED" | firebase functions:secrets:set "$SECRET_NAME" --project "$PROJECT" --data-file=- 2>&1); then
     echo "1. ✓ Saved $SECRET_NAME in Firebase."
+    grant_read
   else
     echo "✗ Firebase couldn't save $SECRET_NAME. It said:" >&2
     sed 's/^/     /' <<<"$output" >&2
@@ -84,20 +118,25 @@ fi
 if start_step 2 "the secret on the email worker"; then
   # The worker must exist before a secret can be set on it, so the first deploy happens here; the merge workflow redeploys it on later changes.
   echo "2. Deploying the email worker and giving it the same secret (a Cloudflare login opens if you aren't signed in)."
+  if [[ ! -d node_modules/postal-mime ]]; then
+    echo "   Installing the packages the worker is built from (this checkout's were installed before it needed them)."
+    npm ci --no-audit --no-fund
+  fi
   npx wrangler deploy -c "$WORKER_CONFIG"
   printf %s "$SHARED" | npx wrangler secret put INGEST_SECRET -c "$WORKER_CONFIG"
   echo "2. ✓ The worker has INGEST_SECRET."
+  check_intake
   remember_step 2
 fi
 
 if start_step 3 "Cloudflare Email Routing"; then
-  if ask_yes "3. Is Email Routing already on for apps.moondreams.dev, with a catch-all that sends to the worker mdd-apps-email-router?"; then
+  if ask_yes "3. Is Email Routing on for moondreamsmail.com, with its catch-all sending to the worker mdd-apps-email-router?"; then
     echo "3. ✓ Noted."
   else
-    echo "3. In the Cloudflare dashboard:"
-    echo "     a. Open moondreams.dev, then Email, then Email Routing."
-    echo "     b. Enable it for the subdomain apps.moondreams.dev and accept the MX and SPF records it adds."
-    echo "     c. Open Routing rules, then Catch-all address, choose Send to a Worker, pick mdd-apps-email-router, and save with the rule active."
+    echo "3. In the Cloudflare dashboard (this is moondreamsmail.com, never moondreams.dev, whose mail is on Google):"
+    echo "     a. Open moondreamsmail.com, then Email, then Email Routing, and Get started / Enable."
+    echo "     b. Accept the MX, SPF and DKIM records it adds."
+    echo "     c. Open Routing rules, then Catch-all address: action Send to a Worker, worker mdd-apps-email-router. Turn it on and save."
     printf '   Press Enter when the catch-all is active. '
     read -r _ || true
   fi

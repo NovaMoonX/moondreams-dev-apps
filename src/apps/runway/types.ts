@@ -1289,7 +1289,7 @@ export interface PurchaseDoc {
   sealed: Sealed;
 }
 
-/** The person's forwarding address for bank alert emails, written only by Functions; one per plan, at `emailIntake/address`. The address is `finance-<token>@apps.moondreams.dev`. */
+/** The person's forwarding address for bank alert emails, written only by Functions; one per plan, at `emailIntake/address`. The address is `runway-<token>@moondreamsmail.com`. */
 export interface EmailIntakeDoc {
   id: 'address';
   /** Lowercase letters and digits; changes when the person asks for a new address, and the old one stops working at once. */
