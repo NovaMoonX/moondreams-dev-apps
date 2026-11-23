@@ -32,6 +32,10 @@ import {
 } from '@apps/runway/utils/cardText';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { AccountMove } from '@apps/runway/engine/moves';
+import { EmailWarningRow } from '@apps/runway/components/EmailOverdueRow';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import { useEmailOverduePurchases } from '@apps/runway/hooks/useEmailPurchases';
+import EmailOverdueScreen from '@apps/runway/screens/home/EmailOverdueScreen';
 import { getMinimumDue, type DueCard } from '@apps/runway/engine/cards';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import CardSheets, {
@@ -67,9 +71,11 @@ interface LookaheadWarningsProps {
 type WarningRow =
   | { kind: 'plan'; group: ProblemGroup }
   | { kind: 'card'; due: DueCard }
-  | { kind: 'move'; dayKey: string; move: AccountMove };
+  | { kind: 'move'; dayKey: string; move: AccountMove }
+  | { kind: 'email'; count: number };
 
 const getRowKey = (row: WarningRow) => {
+  if (row.kind === 'email') return 'email';
   if (row.kind === 'card') return `card:${row.due.card.id}`;
   if (row.kind === 'move') return `move:${row.dayKey}:${row.move.accountId}`;
   const { group } = row;
@@ -126,6 +132,8 @@ function LookaheadWarnings({
   const accounts = useAppSelector(selectAccounts);
   const undated = lookahead?.undated ?? [];
   const today = todayAsUtcDate(useNow(60_000));
+  const emailOverdue = useEmailOverduePurchases();
+  const [isEmailOpen, setIsEmailOpen] = useState(false);
   const rows: WarningRow[] = [
     ...[
       ...groupProblems(lookahead?.problems ?? []).map((group) => ({
@@ -162,6 +170,9 @@ function LookaheadWarnings({
             group: { kind: 'undated', bills: undated },
           } satisfies WarningRow,
         ]),
+    ...(emailOverdue.length === 0
+      ? []
+      : [{ kind: 'email', count: emailOverdue.length } satisfies WarningRow]),
   ];
   const first = rows[0] ?? null;
   // A card coming due is not a gap in the plan, so a list of only cards is not "things to fix".
@@ -207,13 +218,19 @@ function LookaheadWarnings({
     ? { before: endsText ?? '', figure: null, after: '' }
     : first.kind === 'plan'
       ? describeGroupShort(first.group, isHidden)
-      : first.kind === 'move'
+      : first.kind === 'email'
         ? {
-            before: describeMoveSummary(first.move, accounts),
+            before: EMAIL_WORDS.homeSentence(first.count),
             figure: null,
             after: '',
           }
-        : { before: describeDue(first.due), figure: null, after: '' };
+        : first.kind === 'move'
+          ? {
+              before: describeMoveSummary(first.move, accounts),
+              figure: null,
+              after: '',
+            }
+          : { before: describeDue(first.due), figure: null, after: '' };
   const more = rows.length - 1;
   const moreText = rows.every(
     (row) => row.kind === 'plan' && row.group.kind === 'day',
@@ -295,6 +312,14 @@ function LookaheadWarnings({
                     note={describeDueNote(row.due)}
                     onOpen={() => openPay(row.due)}
                   />
+                ) : row.kind === 'email' ? (
+                  <EmailWarningRow
+                    count={row.count}
+                    onOpen={() => {
+                      closeFixes();
+                      setIsEmailOpen(true);
+                    }}
+                  />
                 ) : row.kind === 'move' ? (
                   <MoveWarningRow
                     sentence={describeMoveShort(row.move, accounts)}
@@ -323,6 +348,14 @@ function LookaheadWarnings({
         {isFixesOpen && endsText !== null && <IncomeEndRow text={endsText} />}
       </DetailSheet>
       <CardSheets cards={allCards} open={paying} onChange={setPaying} />
+      {isEmailOpen && (
+        <EmailOverdueScreen
+          onClose={() => {
+            setIsEmailOpen(false);
+            openFixes();
+          }}
+        />
+      )}
     </>
   );
 }

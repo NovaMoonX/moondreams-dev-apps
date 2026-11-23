@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Banknote, Mail, Receipt, Sparkles, Target } from 'lucide-react';
+import { Banknote, Mail, Plus, Receipt, Target } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -275,7 +275,7 @@ function PlanChangePickerView({
         <ActionRow
           isGrouped
           hasChevron
-          icon={<Sparkles />}
+          icon={<Plus />}
           label={COMING_WORDS.somethingNew}
           subtitle={COMING_WORDS.somethingNewSub}
           onClick={() => setStep('kind')}

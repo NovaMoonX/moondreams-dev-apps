@@ -1,7 +1,10 @@
+import { Mail } from 'lucide-react';
+
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import FallbackImage from '@/components/FallbackImage';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import type { OpenPurchase } from '@apps/runway/types';
@@ -19,6 +22,8 @@ interface PurchaseRowProps {
   paidWith?: string | null;
   /** What a row with no envelopes says instead of "Not counted". */
   emptyWhere?: string;
+  /** Only the day and the card or account: the screen's own title says the rest. */
+  isBrief?: boolean;
   onOpen: () => void;
 }
 
@@ -28,6 +33,7 @@ function PurchaseRow({
   looks,
   paidWith = null,
   emptyWhere,
+  isBrief = false,
   onOpen,
 }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
@@ -49,11 +55,12 @@ function PurchaseRow({
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateOrdinalUTC(purchase.date);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
-  const detail = [
-    date,
-    ...(paidWith ? [paidWith] : []),
-    ...getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere),
-  ].join(' · ');
+  const facts = isBrief
+    ? []
+    : purchase.emailWaiting === true
+      ? [EMAIL_WORDS.waitingShort]
+      : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
+  const detail = [date, ...(paidWith ? [paidWith] : []), ...facts].join(' · ');
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`
     : formatCents(purchase.amountCents);
@@ -64,6 +71,17 @@ function PurchaseRow({
   return (
     <ItemRow
       name={title}
+      nameMark={
+        purchase.source === 'email' && (
+          <>
+            <Mail
+              className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
+              aria-hidden='true'
+            />
+            <span className='sr-only'>{EMAIL_WORDS.fromEmail}</span>
+          </>
+        )
+      }
       leading={
         purchase.merchantLogo ? (
           <FallbackImage

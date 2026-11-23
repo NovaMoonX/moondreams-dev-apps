@@ -11,14 +11,27 @@ export function ActionTitle({ children }: ActionTitleProps) {
 
 interface ActionSectionProps {
   caption: string;
+  /** A small control on the caption's line, right-aligned ("See all"). */
+  action?: ReactNode;
   children: ReactNode;
 }
 
 /** A section of an action view: one muted caption over its control, card or chips, the same in every view an action leads to. */
-export function ActionSection({ caption, children }: ActionSectionProps) {
+export function ActionSection({
+  caption,
+  action,
+  children,
+}: ActionSectionProps) {
   return (
     <section aria-label={caption} className='space-y-1.5'>
-      <p className='text-muted-foreground text-xs font-medium'>{caption}</p>
+      {action ? (
+        <div className='flex items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-xs font-medium'>{caption}</p>
+          {action}
+        </div>
+      ) : (
+        <p className='text-muted-foreground text-xs font-medium'>{caption}</p>
+      )}
       {children}
     </section>
   );

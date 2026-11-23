@@ -11,6 +11,7 @@ import {
   PAIR_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { findEmailTwins } from '@apps/runway/engine/emailTwins';
 import { toMerchantKey } from '@apps/runway/engine/rules';
 import {
   findAccountPairs,
@@ -28,6 +29,7 @@ import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import {
   linkDepositToDay,
   mergeBankPurchase,
+  mergeEmailPurchase,
   pairAccountPurchases,
   recordPairTick,
   splitBankPurchase,
@@ -55,6 +57,7 @@ import {
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
   selectItemLooks,
+  selectIsLinkHistory,
   selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
@@ -79,6 +82,12 @@ interface MatchPair {
   bank: OpenPurchase;
   typed: OpenPurchase;
 }
+
+const EMAIL_MATCH_WORDS = {
+  one: 'Matched a purchase from your email with your bank',
+  many: (count: number) =>
+    `Matched ${count} purchases from your email with your bank`,
+};
 
 /** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again. Resolves with how many merged; a pair another device changed first is skipped. */
 export function useMergeWithUndo() {
@@ -119,7 +128,9 @@ export function useMergeWithUndo() {
       async (done, { bank, typed }) => {
         const list = await done;
         try {
-          const entry = await mergeBankPurchase(
+          const merge =
+            typed.source === 'email' ? mergeEmailPurchase : mergeBankPurchase;
+          const entry = await merge(
             uid,
             encryption,
             bank,
@@ -136,15 +147,20 @@ export function useMergeWithUndo() {
       Promise.resolve([] as MergedPurchase[]),
     );
     if (merged.length === 0) return 0;
+    const isEmail = merged.every((entry) => entry.typed.source === 'email');
     addToast({
-      title:
-        merged.length === 1
+      title: isEmail
+        ? merged.length === 1
+          ? EMAIL_MATCH_WORDS.one
+          : EMAIL_MATCH_WORDS.many(merged.length)
+        : merged.length === 1
           ? NEEDS_HOME_WORDS.matchedOne(
               getPurchaseTitle(merged[0].typed, nameOf),
             )
           : NEEDS_HOME_WORDS.matchedMany(merged.length),
-      description:
-        merged.length === 1
+      description: isEmail
+        ? undefined
+        : merged.length === 1
           ? NEEDS_HOME_WORDS.matchedOneSub
           : NEEDS_HOME_WORDS.matchedManySub,
       type: 'success',
@@ -219,6 +235,66 @@ export function useMatchBankPurchases(uid: string | null) {
     };
     void run();
   }, [uid, waiting, purchases, isWaitingLoaded, isPurchasesLoaded, runs]);
+}
+
+/** Once both lists are read, merges each bank charge with the purchase read from its email that it clearly is, however old the charge is, unless it is from before the bank was linked. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
+export function useMatchEmailPurchases(uid: string | null) {
+  const needsHome = useAppSelector((state) => state.runway.needsHome);
+  const purchases = useAppSelector((state) => state.runway.purchases);
+  const isLinkHistory = useAppSelector(selectIsLinkHistory);
+  const isReady = useAppSelector(
+    (state) =>
+      selectIsNeedsHomeLoaded(state) && state.runway.purchasesFrom !== null,
+  );
+  const merge = useMergeWithUndo();
+  const mergeRef = useRef(merge);
+  const tried = useRef(new Set<string>());
+  const isRunning = useRef(false);
+  const isWaitingToRun = useRef(false);
+  const [runs, setRuns] = useState(0);
+
+  useEffect(() => {
+    mergeRef.current = merge;
+  });
+
+  useEffect(() => {
+    if (uid === null || !isReady) return;
+    if (isRunning.current) {
+      isWaitingToRun.current = true;
+      return;
+    }
+    const byId = new Map(
+      [...needsHome, ...purchases].map((purchase) => [purchase.id, purchase]),
+    );
+    const pairs = [...findEmailTwins([...byId.values()]).clear].flatMap(
+      ([emailId, bankId]) => {
+        const typed = byId.get(emailId);
+        const bank = byId.get(bankId);
+        if (!bank || !typed || isLinkHistory(bank)) return [];
+        const key = `${bank.id}:${bank.updatedAt}:${typed.id}:${typed.updatedAt}`;
+        return tried.current.has(key) ? [] : [{ bank, typed, key }];
+      },
+    );
+    if (pairs.length === 0) return;
+    pairs.forEach(({ key }) => tried.current.add(key));
+    isRunning.current = true;
+    const run = async () => {
+      try {
+        await mergeRef.current(uid, pairs);
+      } catch (error) {
+        // The vault or the network failed before any pair was tried, so they may be tried again.
+        pairs.forEach(({ key }) => tried.current.delete(key));
+        console.error('Purchases from email were not matched', error);
+      } finally {
+        isRunning.current = false;
+        if (isWaitingToRun.current) {
+          isWaitingToRun.current = false;
+          setRuns((count) => count + 1);
+        }
+      }
+    };
+    void run();
+  }, [uid, needsHome, purchases, isLinkHistory, isReady, runs]);
 }
 
 /** Once the link-history range is read, merges each history purchase the person placed by hand with the one typed purchase it clearly is, at any age. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */

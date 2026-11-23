@@ -1132,7 +1132,18 @@ export const MOVE_KINDS = [
   'costPaid',
 ] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
-export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
+export const PURCHASE_SOURCES = ['manual', 'csv', 'link', 'email'] as const;
+/** The domain a person's forwarding address lives on; the address is `${EMAIL_ADDRESS_PREFIX}-<token>@${EMAIL_DOMAIN}`. */
+export const EMAIL_DOMAIN = 'apps.moondreams.dev';
+export const EMAIL_ADDRESS_PREFIX = 'finance';
+/** How long an emailed purchase waits for its bank before Home asks about it. */
+export const EMAIL_WAIT_DAYS = 5;
+/** How many days after an emailed purchase a bank charge can still be it (a hold can post days later). */
+export const EMAIL_MATCH_DAYS_AFTER = 7;
+/** How many days before the email a bank charge can be dated and still be it (the bank dates a charge by when it happened). */
+export const EMAIL_MATCH_DAYS_BEFORE = 2;
+/** How long an email's sender, subject, excerpt and (for a bank email Runway read) its text are kept. */
+export const EMAIL_EVENT_KEEP_DAYS = 30;
 /** How a purchase line got its envelope: the person chose it, it ran over from the chosen envelope's chain (a null envelope is Free to Spend taking the rest), or it is Free to Spend. */
 export const PURCHASE_LINE_VIAS = ['chosen', 'spill', 'free'] as const;
 /** Envelopes one split can name; the sealed lines are not checked by rules, so the device caps them. */
@@ -4875,6 +4886,7 @@ export const CARD_WORDS = {
 
 /** The feature switch for linking a bank (`FEATURE_GATES`). */
 export const LINK_BANKS_GATE_ID = 'link-banks';
+export const EMAIL_PURCHASES_GATE_ID = 'email-purchases';
 
 /** Days "Ask me later" hides Home's "where are they kept" row. */
 export const HOLDS_ASK_LATER_DAYS = 3;

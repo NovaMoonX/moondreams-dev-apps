@@ -3105,6 +3105,7 @@ await Promise.all([
 const waypointAdapter = createWaypointAdapter({
   firestore: () => firestore,
   canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 9, 2),
 });
 const waypointDefaults = waypointAdapter.manifest.categories.filter(
   (category) => category.isOnAtConnect,
@@ -3270,6 +3271,35 @@ assert.equal(oldStyle?.endAt, TODAY + 2 * DAY + 17 * 3_600_000);
 assert.equal(oldStyle?.timeZone, null);
 assert.equal(oldStyle?.isAllDay, false);
 
+const afterTrip = await createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 10, 5),
+}).syncPage(waypointCtx(OWNER), {
+  category: 'myTasks',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.deepEqual(
+  refs(afterTrip.records),
+  [],
+  'a trip that has ended sends none of its to-dos, not even an undated one',
+);
+const withinSlack = await createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 10, 4, 12),
+}).syncPage(waypointCtx(OWNER), {
+  category: 'myTasks',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.ok(
+  withinSlack.records.length > 0,
+  'the day after a trip ends its to-dos still show, whatever the zone',
+);
 const tasks = await runWaypoint(OWNER, 'myTasks');
 assert.deepEqual(refs(tasks).sort(), [
   'trips/nyc/checklist/passports',
@@ -3880,7 +3910,12 @@ const runwaySummary = {
   dueBeforeIncomeCents: 45_000,
   bills: [
     { name: 'Overdue', amountCents: 9_000, dueOn: '2026-11-09' },
-    { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
+    {
+      name: 'Rent',
+      amountCents: 150_000,
+      dueOn: '2026-11-14',
+      paysItself: true,
+    },
     {
       name: 'Phone',
       amountCents: 6_000,
@@ -3970,6 +4005,18 @@ await Promise.all([
   runwayPlans.doc('runway-legacy').set({ uid: 'runway-legacy' }),
 ]);
 
+// Written 10 days before NOW (Oct 31): one bill past due by then, one due that day, one paid, one ahead.
+const staleBills = [
+  { name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' },
+  { name: 'Due that day', amountCents: 2_000, dueOn: '2026-10-31' },
+  {
+    name: 'Paid then',
+    amountCents: 5_000,
+    dueOn: '2026-10-25',
+    paidOn: '2026-10-26',
+  },
+  { name: 'Ahead', amountCents: 6_000, dueOn: '2026-11-20' },
+];
 const runwayPlanWith = (uid: string, shareSummary: unknown) =>
   Promise.all([
     runwayWrapped(uid).set(wrapDataKey(DEV_KEYRING, uid, runwayKey, NOW)),
@@ -3982,6 +4029,18 @@ await Promise.all([
   runwayPlanWith(
     'runway-bad-total',
     sealRunway({ ...runwaySummary, freeToSpendCents: '123456' }),
+  ),
+  runwayPlanWith(
+    'runway-stale',
+    sealRunway({
+      ...runwaySummary,
+      computedAt: NOW - 10 * DAY,
+      bills: staleBills,
+    }),
+  ),
+  runwayPlanWith(
+    'runway-fresh',
+    sealRunway({ ...runwaySummary, bills: staleBills }),
   ),
   runwayPlanWith(
     'runway-twins',
@@ -4077,9 +4136,33 @@ assert.deepEqual(summaryRecord.extra, {
 assert.match(summaryRecord.detail ?? '', /\$450\.00.*2026-11-15/);
 assert.deepEqual(
   titles(runwayBills),
-  ['Car insurance', 'Gym', 'Phone', 'Rent'],
-  'an unpaid bill already past is dropped, a paid one this month and a yearly one stay',
+  ['Car insurance', 'Gym', 'Overdue', 'Phone', 'Rent'],
+  'an unpaid bill already past stays as overdue, a paid one this month and a yearly one stay',
 );
+const staleRecords = await runRunway('runway-stale', 'upcomingBills');
+const freshRecords = await runRunway('runway-fresh', 'upcomingBills');
+assert.ok(
+  !titles(staleRecords).includes('Long past') &&
+    titles(staleRecords).includes('Due that day') &&
+    titles(staleRecords).includes('Ahead'),
+  'a summary older than a week drops a bill already past due when written, keeps one due that day and one ahead',
+);
+assert.ok(
+  titles(freshRecords).includes('Long past'),
+  'a fresh summary keeps its past-due bill as overdue',
+);
+const refOf = (records: SharedRecord[], title: string) =>
+  records.find((record) => record.title === title)?.sourceRef;
+assert.equal(
+  refOf(staleRecords, 'Ahead'),
+  refOf(freshRecords, 'Ahead'),
+  'dropping a stale bill leaves the other bills on the same refs',
+);
+const billExtra = (title: string) =>
+  runwayBills.find((record) => record.title === title)?.extra;
+assert.deepEqual(billExtra('Rent'), { isDone: false, isAutomatic: true });
+assert.deepEqual(billExtra('Gym'), { isDone: true, isAutomatic: false });
+assert.deepEqual(billExtra('Overdue'), { isDone: false, isAutomatic: false });
 const billDetail = (title: string) =>
   runwayBills.find((record) => record.title === title)?.detail ?? null;
 assert.equal(billDetail('Phone'), 'Every other week');
