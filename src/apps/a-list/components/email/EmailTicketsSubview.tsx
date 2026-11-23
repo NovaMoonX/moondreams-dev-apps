@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Sparkles } from 'lucide-react';
-
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import EmailAddressRow from '@/components/emailForwarding/EmailAddressRow';
@@ -68,17 +66,6 @@ function EmailRows({ events, onOpen }: EmailRowsProps) {
           icon={EMAIL_OUTCOME_EMOJIS[event.outcome]}
           label={describeEmailEvent(event, getZone(event.viewingId))}
           subtitle={formatDateTime(event.receivedAt)}
-          trailing={
-            event.readBy === 'ai' && (
-              <>
-                <Sparkles
-                  className='text-muted-foreground size-3.5'
-                  aria-hidden='true'
-                />
-                <span className='sr-only'>Read with AI</span>
-              </>
-            )
-          }
           onClick={() => onOpen(event.id)}
         />
       ))}

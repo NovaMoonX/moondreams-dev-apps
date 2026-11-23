@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Clapperboard, Trash2, Undo2 } from 'lucide-react';
+import { Clapperboard, Sparkles, Trash2, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -106,6 +106,12 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       outcome={
         <div className='bg-secondary/60 space-y-3 rounded-2xl px-4 py-3 text-sm'>
           <p className='font-medium'>{describeEmailOutcome(event)}</p>
+          {event.readBy === 'ai' && (
+            <p className='text-muted-foreground flex items-center gap-1.5'>
+              <Sparkles className='size-3.5' aria-hidden='true' />
+              Read by AI
+            </p>
+          )}
           {ticket && (
             <div className='grid grid-cols-3 gap-2'>
               <StatTile
