@@ -104,8 +104,11 @@ const NOTHING_WRITTEN = {
 const SKIPPED_EXCERPT_MAX = 200;
 const READ_EXCERPT_MAX = 300;
 
-const keptText = (text: string, max: number, subject = '') =>
-  snippetOf(withoutEmailAddresses(withoutMemberDetails(text, subject)), max);
+const keptText = (text: string, max: number, subject: string, context = '') =>
+  snippetOf(
+    withoutEmailAddresses(withoutMemberDetails(text, subject, context)),
+    max,
+  );
 
 const AMC_DOMAIN = /(?:^|\.)amctheatres\.com$/;
 
@@ -130,7 +133,9 @@ function toEvent(
     receivedAt: mail.receivedAt,
     outcome: written.outcome,
     from: keptSender(mail.from),
-    subject: isConfirmation ? '' : keptText(mail.subject, 300),
+    subject: isConfirmation
+      ? ''
+      : keptText(mail.subject, 300, mail.subject, mail.text),
     snippet: isConfirmation
       ? ''
       : keptText(

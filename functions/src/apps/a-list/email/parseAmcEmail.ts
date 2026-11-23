@@ -238,6 +238,9 @@ const names = (text: string) =>
           text,
         )?.[1],
         /^\s*([A-Z][A-Za-z'’-]+),\s+below/m.exec(text)?.[1],
+        /^\s*(?:Subject:\s*)?([A-Z][A-Za-z'’-]+(?: [A-Z][A-Za-z'’-]+){0,2}),\s+(?:[Yy]ou|[Yy]our|[Hh]ere|[Tt]hanks|[Ee]njoy)\b/m.exec(
+          text,
+        )?.[1],
       ].flatMap((name) =>
         name === undefined
           ? []
@@ -253,7 +256,7 @@ const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const STANDALONE_NAME_LINE =
-  /^[ \t]*[A-Z][a-z'’-]+(?: [A-Z][a-z'’-]+){1,2}[ \t]*$/gm;
+  /^[ \t]*[A-Z][A-Za-z'’-]+(?: (?:[A-Z]\.|[A-Z][A-Za-z'’-]+)){1,3}[ \t]*$/gm;
 const GROUPED_DIGITS = /\b\d{3,}(?:[ -]\d{3,})+\b/g;
 
 const isNameLine = (line: string, found: string[], subject: string) =>
@@ -262,10 +265,11 @@ const isNameLine = (line: string, found: string[], subject: string) =>
 
 /**
  * The email's text without the membership block, the member's name or any long number, for the short excerpt an event keeps and the prompt the AI gets.
- * It does not rely on AMC's layout: a line of two or three capitalised words goes unless the subject holds it (a title), and always when it holds the name a name line or greeting gives, since a nickname greeting can sit above a legal name.
+ * Names come from `text` and `context` (the subject and body read together), so a name in either is removed from both; a line of two to four capitalised words goes unless the subject holds it (a title) and holds no found name.
  */
-export function withoutMemberDetails(text: string, subject = '') {
-  const found = names(text).map((name) => name.toLowerCase());
+export function withoutMemberDetails(text: string, subject = '', context = '') {
+  const known = names(`${subject}\n${text}\n${context}`);
+  const found = known.map((name) => name.toLowerCase());
   const keptSubject = subject.toLowerCase();
   const stripped = text
     .replace(/AMC Stubs Details[\s\S]*?(?=\bSummary\b|$)/i, ' ')
@@ -277,7 +281,7 @@ export function withoutMemberDetails(text: string, subject = '') {
       run.replace(/\D/g, '').length >= 12 ? ' ' : run,
     )
     .replace(/\b\d{12,}\b/g, ' ');
-  return names(text).reduce(
+  return known.reduce(
     (kept, name) =>
       kept.replace(new RegExp(`\\b${escapeRegExp(name)}\\b`, 'gi'), ' '),
     stripped,

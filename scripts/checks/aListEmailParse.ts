@@ -270,6 +270,31 @@ assert.ok(
     `a nickname greeting still strips: ${secret}`,
   ),
 );
+const nameSubject = 'Alexander Hamilton, your AMC tickets';
+const nameBody =
+  'Hi Alex,\nAlexander Hamilton\nALEXANDER J. HAMILTON\nThe Wild Robot\n';
+const keptSubjectLine = withoutMemberDetails(
+  nameSubject,
+  nameSubject,
+  nameBody,
+);
+const keptBody = withoutMemberDetails(nameBody, nameSubject);
+['Alexander', 'Hamilton', 'Alex,'].forEach((secret) =>
+  assert.ok(
+    !keptSubjectLine.includes(secret) && !keptBody.includes(secret),
+    `a name in the subject is removed from both: ${secret}`,
+  ),
+);
+assert.ok(
+  keptSubjectLine.includes('your AMC tickets'),
+  'the rest of the subject stays',
+);
+assert.ok(
+  !withoutMemberDetails('Hi Sam,\nALEXANDER J. HAMILTON\n').includes(
+    'HAMILTON',
+  ),
+  'an all-caps name with an initial goes',
+);
 assert.ok(
   withoutMemberDetails('Hello AMC,\nYour AMC order').includes('Your AMC order'),
   'a greeting to AMC never strips AMC',
