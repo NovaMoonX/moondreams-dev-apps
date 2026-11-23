@@ -5,13 +5,16 @@ import StarRating from '@/components/StarRating';
 import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import type { Viewing } from '@apps/a-list/types';
 import { formatCents } from '@/utils/moneyUtils';
+import { joinNames } from '@apps/a-list/utils/friendShowings';
 
 interface ViewingRowProps {
   viewing: Viewing;
   now: number;
+  /** Friends seeing the same movie this day. */
+  alsoGoing?: string[];
 }
 
-function ViewingRow({ viewing, now }: ViewingRowProps) {
+function ViewingRow({ viewing, now, alsoGoing = [] }: ViewingRowProps) {
   return (
     <div className='flex w-full items-center gap-3 py-2.5'>
       <span className='h-16 w-11 shrink-0 overflow-hidden rounded-lg shadow-sm'>
@@ -34,6 +37,11 @@ function ViewingRow({ viewing, now }: ViewingRowProps) {
             <StarRating value={viewing.rating} />
           ) : null}
         </div>
+        {alsoGoing.length > 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {joinNames(alsoGoing)} {alsoGoing.length === 1 ? 'is' : 'are'} going too
+          </p>
+        )}
       </div>
     </div>
   );

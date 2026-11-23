@@ -3,7 +3,12 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DayHoverCard from '@apps/a-list/components/calendar/DayHoverCard';
 import PosterSplit from '@apps/a-list/components/calendar/PosterSplit';
+import FriendsOnDayMarker from '@apps/a-list/components/friends/FriendsOnDayMarker';
 import type { Viewing } from '@apps/a-list/types';
+import {
+  countFriendsOnDay,
+  type FriendMovieGroup,
+} from '@apps/a-list/utils/friendShowings';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 interface PosterCellProps {
@@ -11,6 +16,8 @@ interface PosterCellProps {
   viewings: Viewing[];
   /** Watchlist movies released this day that aren't planned yet. */
   openings: WatchlistRowData[];
+  /** What shown friends have this day, by movie. */
+  friendGroups: FriendMovieGroup[];
   isSelected: boolean;
   isToday: boolean;
   now: number;
@@ -29,6 +36,7 @@ function PosterCell({
   date,
   viewings,
   openings,
+  friendGroups,
   isSelected,
   isToday,
   now,
@@ -37,6 +45,8 @@ function PosterCell({
 }: PosterCellProps) {
   const hasCovers = viewings.length > 0;
   const hasOpenings = openings.length > 0;
+  const friendCount = countFriendsOnDay(friendGroups);
+  const hasFriends = friendCount > 0;
 
   const face = (
     <span className='relative block h-full w-full overflow-hidden rounded-xl'>
@@ -64,6 +74,7 @@ function PosterCell({
       >
         {date.getDate()}
       </span>
+      {hasFriends && <FriendsOnDayMarker count={friendCount} />}
       {isSelected && (
         <span className='ring-primary pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset' />
       )}
@@ -73,7 +84,7 @@ function PosterCell({
   // Popover's wrapper is an inline-block, so it is stretched to fill the cell.
   return (
     <span className='absolute inset-0 block [&>div]:block [&>div]:h-full [&>div]:w-full'>
-      {hasCovers || hasOpenings ? (
+      {hasCovers || hasOpenings || hasFriends ? (
         <Popover
           hoverable
           isOpen={isPeekOpen}
@@ -88,6 +99,7 @@ function PosterCell({
             date={date}
             viewings={viewings}
             openings={openings}
+            friendGroups={friendGroups}
             now={now}
           />
         </Popover>

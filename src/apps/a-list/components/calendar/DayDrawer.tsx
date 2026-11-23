@@ -9,14 +9,17 @@ import { fromLocalDateAndTimeInputValues } from '@/utils/dateInputUtils';
 import { formatDate } from '@/utils/formatUtils';
 import RevealChip from '@/components/RevealChip';
 import { AddFlow } from '@apps/a-list/components/add/AddFlow';
+import FriendsDaySection from '@apps/a-list/components/friends/FriendsDaySection';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import ViewingRow from '@apps/a-list/components/calendar/ViewingRow';
 import { ViewingPanel } from '@apps/a-list/components/viewing/ViewingDrawer';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
+  selectFriendShowingsByDay,
   selectOpeningsByDay,
   selectViewingsByDay,
 } from '@apps/a-list/store/selectors';
+import { getFriendsAlsoGoing } from '@apps/a-list/utils/friendShowings';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 interface DayDrawerProps {
@@ -31,6 +34,8 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
   const viewings = useAppSelector(selectViewingsByDay)[dayKey] ?? [];
   const openings =
     useAppSelector((state) => selectOpeningsByDay(state, now))[dayKey] ?? [];
+  const friendsByDay = useAppSelector(selectFriendShowingsByDay);
+  const friendGroups = friendsByDay.get(dayKey) ?? [];
   const [viewingId, setViewingId] = useState<string | null>(null);
   // Held, not looked up: saving the plan drops the movie from the day's openings while the form is still open.
   const [planRow, setPlanRow] = useState<WatchlistRowData | null>(null);
@@ -79,7 +84,9 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
   return (
     <Drawer isOpen onClose={onClose} title={formatDate(dayStart)}>
       <div className='space-y-4'>
-        {viewings.length === 0 && openings.length === 0 && (
+        {viewings.length === 0 &&
+          openings.length === 0 &&
+          friendGroups.length === 0 && (
           <p className='text-muted-foreground py-2 text-center text-sm'>
             🍿 Nothing on this day yet.
           </p>
@@ -96,7 +103,11 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
                   className='text-foreground! hover:bg-muted/60 h-auto w-full justify-start rounded-2xl px-2 py-0 text-left font-normal'
                   onClick={() => setViewingId(viewing.id)}
                 >
-                  <ViewingRow viewing={viewing} now={now} />
+                  <ViewingRow
+                    viewing={viewing}
+                    now={now}
+                    alsoGoing={getFriendsAlsoGoing(viewing, friendsByDay)}
+                  />
                 </Button>
               </li>
             ))}
@@ -159,6 +170,7 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
             </ul>
           </section>
         )}
+        <FriendsDaySection groups={friendGroups} />
         <Button
           type='button'
           rounded='full'
