@@ -21,7 +21,6 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue } from '@/utils/moneyUtils';
-import WeekResetHelp from '@apps/a-list/components/shared/WeekResetHelp';
 import { MAX_MONTHLY_GOAL, MAX_WEEKLY_GOAL } from '@apps/a-list/constants';
 import {
   updateMembership,
@@ -225,8 +224,9 @@ export function CostSheet({ membership, onClose }: SheetProps) {
           </p>
           <Button
             type='button'
-            variant='link'
+            variant='tertiary'
             size='sm'
+            rounded='full'
             className='shrink-0'
             onClick={() => {
               setValues({ ...values, billTotal: '', showBillTotal: false });
@@ -319,7 +319,7 @@ export function GoalsSheet({ membership, onClose }: SheetProps) {
     input({
       name: 'weeklyGoal',
       label: 'Movies a week',
-      description: 'Counted Friday to Friday, like AMC.',
+      description: 'Weeks run Friday to Thursday, like AMC’s.',
       type: 'number',
       placeholder: membership.weeklyGoal?.toString() ?? '2',
       variant: 'outline',
@@ -359,9 +359,6 @@ export function GoalsSheet({ membership, onClose }: SheetProps) {
       isValid={isValid}
       fields={fields}
     >
-      <div className='flex justify-end'>
-        <WeekResetHelp />
-      </div>
       <Form
         id='a-list-settings-goals'
         form={form}

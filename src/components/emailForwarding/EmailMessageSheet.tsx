@@ -4,6 +4,7 @@ import { Mail } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import { EmailAddressText } from '@/components/emailForwarding/EmailAddressRow';
 import { EMAIL_FORWARDING_WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import FormSheet from '@/components/FormSheet';
 import Subview from '@/components/Subview';
@@ -47,7 +48,13 @@ function EmailHeader({
   return (
     <dl className='border-border bg-card grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-2xl border p-4 text-sm'>
       <dt className='text-muted-foreground'>{EMAIL_FORWARDING_WORDS.from}</dt>
-      <dd className='min-w-0 break-words'>{from}</dd>
+      <dd className='min-w-0 break-words'>
+        {/^[^\s<>@]+@[^\s<>@]+$/.test(from) ? (
+          <EmailAddressText address={from} />
+        ) : (
+          from
+        )}
+      </dd>
       <dt className='text-muted-foreground'>
         {EMAIL_FORWARDING_WORDS.subject}
       </dt>

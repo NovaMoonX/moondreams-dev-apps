@@ -86,17 +86,6 @@ function MembershipSettingsSubview({
   return (
     <Subview title='Membership' onClose={onClose}>
       <div className='space-y-4'>
-        <div className='bg-secondary/60 flex items-center gap-3 rounded-2xl px-4 py-3'>
-          <span className='text-3xl' aria-hidden='true'>
-            🎟️
-          </span>
-          <div className='min-w-0'>
-            <p className='font-semibold'>AMC A-List</p>
-            <p className='text-muted-foreground text-sm'>
-              Member since {formatDateUTC(membership.startDate)}
-            </p>
-          </div>
-        </div>
         <SettingsGroup title='Your membership'>
           <SettingsRow
             icon='💳'
@@ -132,7 +121,7 @@ function MembershipSettingsSubview({
           />
           {canShowReleases && (
             <SettingsRow
-              icon='📅'
+              icon='🎬'
               title='Release days'
               description={
                 isReleasesShown ? 'Shown on your calendar' : 'Hidden'

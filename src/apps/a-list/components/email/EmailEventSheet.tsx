@@ -107,7 +107,7 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
         <div className='bg-secondary/60 space-y-3 rounded-2xl p-4 text-sm'>
           <span
             aria-hidden='true'
-            className='bg-card grid size-11 place-items-center rounded-full text-2xl leading-none shadow-sm'
+            className='bg-background grid size-11 place-items-center rounded-full text-2xl leading-none shadow-sm'
           >
             🍿
           </span>
