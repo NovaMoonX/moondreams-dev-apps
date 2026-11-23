@@ -641,7 +641,10 @@ function EmailSetupWalkthrough({
   const requestLeave = useLeaveFlowGuard({
     hasActed,
     onLeave: onBackToStatus ?? onFinishLater,
-    message: WORDS.leaveKept,
+    message:
+      senderText === (words.senderAddress ?? '')
+        ? WORDS.leaveKept
+        : `${WORDS.leaveKept} ${WORDS.leaveSenderLost}`,
   });
 
   const { title: stepTitle, content } = body();
