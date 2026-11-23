@@ -4979,6 +4979,7 @@ async function writeSeedEmail(
     provider: 'gmail',
     stepId: 'test',
     doneAt: context.now - DAY_MS,
+    confirmOpenedAt: null,
     sealed: await sealJson(
       {
         banks: [

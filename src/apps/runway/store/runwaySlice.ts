@@ -210,6 +210,7 @@ const EMPTY_EMAIL_SETUP: OpenEmailSetup = {
   provider: null,
   stepId: null,
   doneAt: null,
+  confirmOpenedAt: null,
   banks: [],
 };
 

@@ -219,6 +219,7 @@ export interface OpenEmailSetup {
   provider: EmailSetupDoc['provider'];
   stepId: EmailSetupDoc['stepId'];
   doneAt: number | null;
+  confirmOpenedAt: number | null;
   banks: EmailBank[];
 }
 
@@ -270,6 +271,7 @@ export function startEmailSetupListener(
                 provider: data.provider ?? null,
                 stepId: data.stepId ?? null,
                 doneAt: data.doneAt ?? null,
+                confirmOpenedAt: data.confirmOpenedAt ?? null,
                 banks: toBanks(payload?.banks),
               },
         );

@@ -102,7 +102,7 @@ export async function setEmailWaiting(
 }
 
 export type EmailSetupChange = Partial<
-  Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt'>
+  Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt' | 'confirmOpenedAt'>
 >;
 
 type SetupHold = (patch: Partial<OpenEmailSetup>) => void;
@@ -136,7 +136,10 @@ async function writeSetupHeld<T extends { isWritten: boolean }>(
   }
 }
 
-type SetupProgress = Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt'>;
+type SetupProgress = Pick<
+  EmailSetupDoc,
+  'provider' | 'stepId' | 'doneAt' | 'confirmOpenedAt'
+>;
 
 /** Writes the walkthrough's progress from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
 export async function saveEmailSetup(
@@ -162,6 +165,7 @@ export async function saveEmailSetup(
         provider: current?.provider ?? null,
         stepId: current?.stepId ?? null,
         doneAt: current?.doneAt ?? null,
+        confirmOpenedAt: current?.confirmOpenedAt ?? null,
         sealed: current?.sealed ?? null,
         createdAt: current?.createdAt ?? now,
         ...change,
@@ -201,6 +205,7 @@ export async function saveEmailBanks(
         provider: current?.provider ?? null,
         stepId: current?.stepId ?? null,
         doneAt: current?.doneAt ?? null,
+        confirmOpenedAt: current?.confirmOpenedAt ?? null,
         sealed: await sealJson(
           { banks } satisfies EmailSetupSealed,
           encryption,

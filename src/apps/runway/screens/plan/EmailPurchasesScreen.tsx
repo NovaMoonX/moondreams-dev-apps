@@ -384,6 +384,12 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             onSaveBanks={saveBanksActed}
             isAddingBank={isAddingBank}
             isRewalk={walkBaseline !== null}
+            confirmOpenedAt={setup.confirmOpenedAt}
+            onConfirmOpened={() => {
+              actions
+                .noteConfirmOpened()
+                .catch(() => setError(EMAIL_WORDS.progressFailed));
+            }}
             onPickProvider={pickProvider}
             onGetAddress={() => void getNewAddress()}
             onGo={goToStep}

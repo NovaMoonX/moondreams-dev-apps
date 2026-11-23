@@ -1282,6 +1282,8 @@ export interface EmailSetupDoc {
   stepId: EmailSetupStepId | null;
   /** When setup was finished (the first purchase arrived, or the person completed it); null while unfinished. */
   doneAt: number | null;
+  /** When the person last tapped the confirmation link, which opens the provider's page where Runway can't see it; null until then (and missing on an older doc). */
+  confirmOpenedAt: number | null;
   /** `EmailSetupSealed`: the banks whose alerts the person forwards; null until one is added (and missing on an older doc). */
   sealed: Sealed | null;
   createdAt: number;

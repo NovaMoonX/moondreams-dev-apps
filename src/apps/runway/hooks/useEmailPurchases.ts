@@ -75,6 +75,7 @@ export interface EmailActions {
   chooseProvider(provider: EmailProvider): Promise<void>;
   reachStep(stepId: EmailSetupStepId): Promise<void>;
   finishSetup(): Promise<void>;
+  noteConfirmOpened(): Promise<void>;
   saveBanks(change: (banks: EmailBank[]) => EmailBank[]): Promise<boolean>;
 }
 
@@ -168,6 +169,10 @@ export function useEmailActions(): EmailActions {
           : saveEmailSetup(uid, (current) =>
               current?.doneAt != null ? null : { doneAt: Date.now() },
             ),
+      noteConfirmOpened: () =>
+        uid === null
+          ? NO_UID()
+          : saveEmailSetup(uid, () => ({ confirmOpenedAt: Date.now() })),
       saveBanks: async (change) => {
         if (uid === null) return NO_UID();
         return saveEmailBanks(uid, await getRunwayEncryption(uid), change);
@@ -182,6 +187,8 @@ export interface EmailSetupRead {
   /** The banks whose alerts are forwarded, in the order they were added. */
   banks: EmailBank[];
   steps: EmailSetupStepId[];
+  /** When the confirmation link was last tapped; null until then. */
+  confirmOpenedAt: number | null;
   /** Index of the furthest step reached in this provider's list; 0 when it is unknown. */
   step: number;
   /** Written once, or any purchase has already come from email (known only once the emails have loaded). */
@@ -218,6 +225,7 @@ export function useEmailSetup(): EmailSetupRead {
       provider,
       banks: setup?.banks ?? [],
       steps,
+      confirmOpenedAt: setup?.confirmOpenedAt ?? null,
       step: findShownStep(steps, provider, setup?.stepId ?? null),
       isDone:
         doneAt !== null ||

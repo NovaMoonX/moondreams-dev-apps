@@ -734,6 +734,7 @@ const EMAIL_SETUP_DOC_FIELDS = {
   provider: 'notUseful',
   stepId: 'notUseful',
   doneAt: 'notUseful',
+  confirmOpenedAt: 'notUseful',
   sealed: 'never',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',

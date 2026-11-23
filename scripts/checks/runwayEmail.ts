@@ -275,6 +275,7 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     provider: 'gmail' as const,
     stepId: 'copy' as const,
     doneAt: null,
+    confirmOpenedAt: null,
     banks: [bank('chase')],
   };
   const start = runwayReducer(undefined, setEmailSetup(delivered));
@@ -310,6 +311,26 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     holdEmailSetup({ token: 'p', patch: { provider: 'outlook' } }),
   );
   assert.equal(first.emailSetup?.provider, 'outlook', 'the first write shows');
+  assert.equal(
+    first.emailSetup?.confirmOpenedAt,
+    null,
+    'a first write opens as not tapped',
+  );
+  const tapped = runwayReducer(
+    start,
+    holdEmailSetup({ token: 'c', patch: { confirmOpenedAt: 500 } }),
+  );
+  assert.equal(
+    tapped.emailSetup?.confirmOpenedAt,
+    500,
+    'a tap on the link shows at once',
+  );
+  assert.equal(tapped.emailSetup?.banks.length, 1, 'a tap keeps the banks');
+  assert.equal(
+    runwayReducer(tapped, dropWrites('c')).emailSetup?.confirmOpenedAt,
+    null,
+    'a failed tap goes back',
+  );
 }
 
 console.log('runway email: ok');

@@ -2,6 +2,7 @@ import type {
   EmailFilterSealed,
   EmailOutcome,
   EmailProvider,
+  EmailSetupStepId,
 } from '@apps/runway/types';
 
 const fromWhom = (addresses: string[]) => {
@@ -292,6 +293,21 @@ export const EMAIL_SETUP_WORDS = {
     provider === 'other'
       ? 'Confirm forwarding'
       : `Confirm with ${EMAIL_PROVIDER_NAMES[provider]}`,
+  confirmArrived: (provider: EmailProvider) =>
+    provider === 'other'
+      ? 'The confirmation email arrived'
+      : `${EMAIL_PROVIDER_NAMES[provider]}’s email arrived`,
+  confirmOpened: (provider: EmailProvider) =>
+    provider === 'other'
+      ? 'Opened the confirmation. Once your email says it’s confirmed, you’re set.'
+      : `Opened ${EMAIL_PROVIDER_NAMES[provider]}’s confirmation. Once ${EMAIL_PROVIDER_NAMES[provider]} says it’s confirmed, you’re set.`,
+  confirmOpenAgain: 'Open it again',
+  nextAfterConfirm: (next: EmailSetupStepId | undefined) =>
+    next === 'filter'
+      ? 'Next: finish the filter'
+      : next === 'test'
+        ? 'Next: try one alert'
+        : 'Next',
   confirmed: 'Confirmed',
   confirmFirst: (provider: EmailProvider) =>
     `${EMAIL_PROVIDER_NAMES[provider]} won’t forward until you confirm.`,

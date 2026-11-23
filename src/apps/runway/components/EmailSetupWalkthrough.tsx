@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CircleCheck, Loader, Mail } from 'lucide-react';
 
 import {
@@ -79,6 +80,9 @@ interface EmailSetupWalkthroughProps {
   onSaveBanks: SaveBanks;
   /** Opens the bank step on its choices, for adding one more bank. */
   isAddingBank?: boolean;
+  /** When the confirmation link was last tapped; null until then. */
+  confirmOpenedAt: number | null;
+  onConfirmOpened: () => void;
   /** Walked again from "Set it up again", so a filter or rule may already exist. */
   isRewalk?: boolean;
   onPickProvider: (provider: EmailProvider) => void;
@@ -151,7 +155,17 @@ interface ConfirmStepProps {
   provider: EmailProvider;
   intake: EmailIntakeRead;
   isConfirmed: boolean;
+  confirmOpenedAt: number | null;
+  onOpened: () => void;
 }
+
+/** The link was tapped for the email that is here now; a newer email asks for the tap again. */
+const isConfirmOpened = (
+  confirmOpenedAt: number | null,
+  confirmAt: number | null,
+) =>
+  confirmOpenedAt !== null &&
+  (confirmAt === null || confirmOpenedAt >= confirmAt);
 
 const PROVIDER_SETTINGS_LINKS: Partial<
   Record<EmailProvider, { href: string; label: string }>
@@ -161,7 +175,13 @@ const PROVIDER_SETTINGS_LINKS: Partial<
   proton: { href: PROTON_MAIL_URL, label: WORDS.protonRuleLink },
 };
 
-function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
+function ConfirmStep({
+  provider,
+  intake,
+  isConfirmed,
+  confirmOpenedAt,
+  onOpened,
+}: ConfirmStepProps) {
   const [isCodeShown, setIsCodeShown] = useState(false);
   const [isHelpShown, setIsHelpShown] = useState(false);
   const isLate = useIsLate();
@@ -172,6 +192,12 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
       : null;
   const code = intake.confirm?.code ?? null;
   const isCodeOnly = url === null && code !== null;
+  const [isLanding] = useState(() => url === null && code === null);
+  const isOpened = isConfirmOpened(confirmOpenedAt, intake.confirm?.at ?? null);
+  const openConfirm = (href: string) => {
+    window.open(href, '_blank', 'noopener,noreferrer');
+    onOpened();
+  };
   return (
     <div className='space-y-3'>
       {!isConfirmed && <Muted>{WORDS.confirmFirst(provider)}</Muted>}
@@ -215,15 +241,41 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
           )}
         </div>
       ) : (
-        <div className='space-y-2'>
-          {url !== null && (
-            <Button
-              className='w-full'
-              variant='secondary'
-              onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-            >
+        <div
+          className={join(
+            'space-y-3',
+            isLanding && 'motion-safe:animate-[snackbar-in_200ms_ease-out]',
+          )}
+        >
+          <p
+            className='flex items-center gap-2 text-sm font-medium'
+            role='status'
+          >
+            <CircleCheck
+              className='text-success size-5 shrink-0'
+              aria-hidden='true'
+            />
+            {WORDS.confirmArrived(provider)}
+          </p>
+          {url !== null && !isOpened && (
+            <Button className='w-full' onClick={() => openConfirm(url)}>
               {WORDS.confirmButton(provider)}
             </Button>
+          )}
+          {url !== null && isOpened && (
+            <div className='space-y-1'>
+              <p className='text-muted-foreground text-sm'>
+                {WORDS.confirmOpened(provider)}
+              </p>
+              <Button
+                variant='tertiary'
+                size='sm'
+                className='text-primary!'
+                onClick={() => openConfirm(url)}
+              >
+                {WORDS.confirmOpenAgain}
+              </Button>
+            </div>
           )}
           {code !== null && url !== null && (
             <DisclosureChip
@@ -322,6 +374,8 @@ function EmailSetupWalkthrough({
   knownBanks,
   onSaveBanks,
   isAddingBank = false,
+  confirmOpenedAt,
+  onConfirmOpened,
   isRewalk = false,
   onPickProvider,
   onGetAddress,
@@ -674,6 +728,8 @@ function EmailSetupWalkthrough({
             provider={provider ?? 'other'}
             intake={intake}
             isConfirmed={isConfirmed}
+            confirmOpenedAt={confirmOpenedAt}
+            onOpened={onConfirmOpened}
           />
         ),
       };
@@ -733,8 +789,13 @@ function EmailSetupWalkthrough({
         : { label: WORDS.finishLater, onClick: onClose };
     }
     if (!hasNext) return undefined;
+    const isConfirmDone =
+      step === 'confirm' &&
+      isConfirmOpened(confirmOpenedAt, intake.confirm?.at ?? null);
     return {
-      label: WORDS.next,
+      label: isConfirmDone
+        ? WORDS.nextAfterConfirm(steps[stepIndex + 1])
+        : WORDS.next,
       onClick: () => onGo(stepIndex + 1),
       isDisabled: step === 'copy' && intake.address === null,
     };
