@@ -13,11 +13,12 @@ import {
   ICLOUD_MAIL_URL,
   OUTLOOK_RULES_URL,
   PROTON_MAIL_URL,
-  buildGmailFilterText,
 } from '@apps/runway/components/emailWords';
+import { FilterFields } from '@apps/runway/components/EmailFilterParts';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import type { KnownBank } from '@apps/runway/store/selectors/emailSelectors';
 import type { EmailBank, EmailProvider } from '@apps/runway/types';
+import { getFilterFields } from '@apps/runway/utils/emailFilterFields';
 import {
   checkAddress,
   findBankLogo,
@@ -110,21 +111,15 @@ export function ForwardingUpdate({
   removed: string[];
 }) {
   if (provider === 'gmail') {
-    const filterText = buildGmailFilterText(addresses);
     return (
-      <div className='space-y-2'>
+      <div className='space-y-3'>
         <p className='text-sm'>{WORDS.updateGmailCopy}</p>
-        <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
-          {filterText}
-        </code>
-        <CopyTextButton
-          text={filterText}
-          label={WORDS.filterLabel}
-          variant='secondary'
-          isCompact
-        />
+        <FilterFields fields={getFilterFields('gmail', addresses)} />
         <p className='text-sm'>{WORDS.updateGmailPaste}</p>
-        <ExternalLinkText href={GMAIL_FILTERS_URL} label={WORDS.filterLink} />
+        <ExternalLinkText
+          href={GMAIL_FILTERS_URL}
+          label={WORDS.filterImportLink}
+        />
       </div>
     );
   }

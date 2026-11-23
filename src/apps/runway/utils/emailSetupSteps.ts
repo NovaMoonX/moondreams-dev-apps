@@ -11,9 +11,9 @@ export function getEmailSetupSteps(
     return [
       'provider',
       'copy',
+      'bank',
       'forwarding',
       'confirm',
-      'bank',
       'filter',
       'test',
     ];

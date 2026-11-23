@@ -4,6 +4,10 @@ import { getBankOwedByCard } from '../../src/apps/runway/engine/cards.ts';
 import { getCashPosition } from '../../src/apps/runway/engine/cash.ts';
 import { findEmailTwins } from '../../src/apps/runway/engine/emailTwins.ts';
 import { findPurchaseMatches } from '../../src/apps/runway/engine/matching.ts';
+import {
+  buildGmailFilterXml,
+  getFilterFields,
+} from '../../src/apps/runway/utils/emailFilterFields.ts';
 import type { OpenPurchase } from '../../src/apps/runway/types.ts';
 
 // A purchase read from a bank's alert email waits for the bank's charge: one to one, same side, within -2/+7 days.
@@ -216,6 +220,40 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     10_000,
     'one no longer waiting is not owed',
   );
+}
+
+// A provider's filter is offered as the boxes its form has: Gmail joins words in one box, Outlook and iCloud take one value each.
+{
+  const addresses = ['alerts@chase.com', 'no-reply@amex.com'];
+  const gmail = getFilterFields('gmail', addresses);
+  assert.deepEqual(
+    gmail.map((field) => field.label),
+    ['From', 'Subject'],
+  );
+  assert.deepEqual(gmail[0].values, ['alerts@chase.com OR no-reply@amex.com']);
+  assert.equal(gmail[1].values.length, 1);
+  const outlook = getFilterFields('outlook', addresses);
+  assert.deepEqual(outlook[0].values, addresses, 'one From value per address');
+  assert.equal(outlook[1].label, 'Subject includes');
+  assert.equal(
+    getFilterFields('icloud', addresses)[1].label,
+    'Subject contains',
+  );
+  assert.deepEqual(getFilterFields('gmail', []), [], 'no bank, no filter');
+  assert.deepEqual(getFilterFields('proton', addresses), []);
+
+  const xml = buildGmailFilterXml(
+    ["o'neil&co@bank.com"],
+    'runway-abc@moondreamsmail.com',
+    Date.UTC(2026, 10, 4),
+  );
+  assert.ok(xml.includes("xmlns:apps='http://schemas.google.com/apps/2006'"));
+  assert.ok(xml.includes("<category term='filter'></category>"));
+  assert.ok(xml.includes("name='from' value='o&apos;neil&amp;co@bank.com'"));
+  assert.ok(
+    xml.includes("name='forwardTo' value='runway-abc@moondreamsmail.com'"),
+  );
+  assert.ok(xml.includes("name='subject' value='purchase OR charge"));
 }
 
 console.log('runway email: ok');

@@ -1,13 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import {
-  CircleCheck,
-  CircleHelp,
-  ExternalLink,
-  Loader,
-  Mail,
-} from 'lucide-react';
+import { CircleCheck, CircleHelp, Loader, Mail } from 'lucide-react';
 
 import {
   GmailMark,
@@ -19,16 +13,16 @@ import {
 import CopyTextButton from '@/components/CopyTextButton';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import MethodPicker from '@/components/MethodPicker';
+import SectionDivider from '@/components/SectionDivider';
 import StepGuide from '@/components/StepGuide';
 import {
   EMAIL_SETUP_WORDS,
   EMAIL_WORDS,
-  GMAIL_FILTERS_URL,
   GMAIL_FORWARDING_URL,
+  GMAIL_URL,
   ICLOUD_MAIL_URL,
   OUTLOOK_RULES_URL,
   PROTON_MAIL_URL,
-  buildGmailFilterText,
   YAHOO_MAIL_URL,
 } from '@apps/runway/components/emailWords';
 import {
@@ -40,6 +34,15 @@ import {
   RuleAddresses,
   type SaveBanks,
 } from '@apps/runway/components/EmailBanksEditor';
+import {
+  FilterFields,
+  GmailFilterImport,
+  NumberedSteps,
+} from '@apps/runway/components/EmailFilterParts';
+import {
+  getFilterFields,
+  type FilterField,
+} from '@apps/runway/utils/emailFilterFields';
 import {
   addDraftedBank,
   findBankLogo,
@@ -102,52 +105,28 @@ const Muted = ({ children }: { children: ReactNode }) => (
   <p className='text-muted-foreground text-sm'>{children}</p>
 );
 
-interface NumberedItem {
-  text: ReactNode;
-  /** A step that only opens a page is itself the link, so its words are never repeated under it. */
-  href?: string;
-  control?: ReactNode;
-}
+const LATE_AFTER_MS = 120_000;
 
-function NumberedSteps({ items }: { items: NumberedItem[] }) {
-  return (
-    <ol className='space-y-4'>
-      {items.map((item, index) => (
-        <li key={index} className='flex items-start gap-3'>
-          <span
-            className='bg-muted text-muted-foreground mt-px grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold'
-            aria-hidden='true'
-          >
-            {index + 1}
-          </span>
-          <div className='min-w-0 flex-1 space-y-2'>
-            <p className='text-sm break-words'>
-              {item.href === undefined ? (
-                item.text
-              ) : (
-                <a
-                  href={item.href}
-                  target='_blank'
-                  rel='noreferrer'
-                  className='text-primary -my-2.5 inline-block py-2.5 font-medium hover:underline'
-                >
-                  {item.text}
-                  <ExternalLink
-                    className='ml-1 inline size-3.5 align-[-2px]'
-                    aria-hidden='true'
-                  />
-                </a>
-              )}
-            </p>
-            {item.control}
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Waiting({ children }: { children: ReactNode }) {
+/** A spinner that lives only while its step is on screen: leaving ends it, coming back starts it fresh, and after a while it gives way to what to try. */
+function Waiting({
+  children,
+  lateLine,
+}: {
+  children: ReactNode;
+  lateLine: ReactNode;
+}) {
+  const [isLate, setIsLate] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIsLate(true), LATE_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+  if (isLate) {
+    return (
+      <p className='text-muted-foreground text-sm' role='status'>
+        {lateLine}
+      </p>
+    );
+  }
   return (
     <p
       className='text-muted-foreground flex items-center gap-2 text-sm'
@@ -168,7 +147,7 @@ interface ConfirmStepProps {
 const PROVIDER_SETTINGS_LINKS: Partial<
   Record<EmailProvider, { href: string; label: string }>
 > = {
-  gmail: { href: GMAIL_FORWARDING_URL, label: WORDS.gmailForwardingLink },
+  gmail: { href: GMAIL_FORWARDING_URL, label: WORDS.settingsLinkGmail },
   yahoo: { href: YAHOO_MAIL_URL, label: WORDS.yahooForwardingLink },
   proton: { href: PROTON_MAIL_URL, label: WORDS.protonRuleLink },
 };
@@ -182,12 +161,15 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
       ? intake.confirm.url
       : null;
   const code = intake.confirm?.code ?? null;
+  const isCodeOnly = url === null && code !== null;
   return (
     <div className='space-y-3'>
       {!isConfirmed && <Muted>{WORDS.confirmFirst(provider)}</Muted>}
-      {url === null ? (
+      {url === null && code === null ? (
         <div className='space-y-2'>
-          <Waiting>{WORDS.confirmWaiting(provider)}</Waiting>
+          <Waiting lateLine={WORDS.confirmStillWaiting(provider)}>
+            {WORDS.confirmWaiting(provider)}
+          </Waiting>
           {!isHelpShown ? (
             <Button
               variant='tertiary'
@@ -214,14 +196,16 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
         </div>
       ) : (
         <div className='space-y-2'>
-          <Button
-            className='w-full'
-            variant='secondary'
-            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-          >
-            {WORDS.confirmButton(provider)}
-          </Button>
-          {code !== null && !isCodeShown && (
+          {url !== null && (
+            <Button
+              className='w-full'
+              variant='secondary'
+              onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+            >
+              {WORDS.confirmButton(provider)}
+            </Button>
+          )}
+          {code !== null && url !== null && !isCodeShown && (
             <Button
               variant='tertiary'
               size='sm'
@@ -230,7 +214,7 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
               {WORDS.linkFailed}
             </Button>
           )}
-          {code !== null && isCodeShown && (
+          {code !== null && (isCodeShown || isCodeOnly) && (
             <div className='space-y-1'>
               <p className='text-muted-foreground text-sm'>
                 {WORDS.codeLine(provider)}
@@ -250,6 +234,30 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function FilterClosedHelp({ fields }: { fields: FilterField[] }) {
+  const [isShown, setIsShown] = useState(false);
+  if (!isShown) {
+    return (
+      <Button
+        variant='tertiary'
+        size='sm'
+        className='text-primary! -ml-2 gap-1.5'
+        aria-expanded={false}
+        onClick={() => setIsShown(true)}
+      >
+        <CircleHelp className='size-4' aria-hidden='true' />
+        {WORDS.filterClosed}
+      </Button>
+    );
+  }
+  return (
+    <div className='space-y-3'>
+      <p className='text-muted-foreground text-sm'>{WORDS.filterClosedLine}</p>
+      <FilterFields fields={fields} />
     </div>
   );
 }
@@ -288,11 +296,11 @@ function EmailSetupWalkthrough({
   const [isPickingBank, setIsPickingBank] = useState(isAddingBank);
   const [bankCountAtStart] = useState(banks.length);
   const [addressesAtStart] = useState(() => listBankAddresses(banks));
-  const [isSavingBank, setIsSavingBank] = useState(false);
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const hasNext = stepIndex < steps.length - 1;
   const addresses = listBankAddresses(banks);
+  const runwayAddresses = intake.address === null ? [] : [intake.address];
   const bankIndex = steps.indexOf('bank');
   const isBankChoosing =
     draft === null && (banks.length === 0 || isPickingBank);
@@ -315,24 +323,20 @@ function EmailSetupWalkthrough({
     (address) => !addressesBefore.includes(address),
   );
 
-  const saveDraft = async () => {
+  const saveDraft = () => {
     if (draft === null) return;
     const read = readBankDraft(draft, banks);
     if (read.bank === null) {
       setDraft({ ...draft, error: read.error });
       return;
     }
-    setIsSavingBank(true);
-    try {
-      await onSaveBanks(addDraftedBank(read.bank));
-      setDraft(null);
-      setIsPickingBank(false);
-      onActivity(false);
-    } catch {
+    onSaveBanks(addDraftedBank(read.bank)).catch(() => {
       setDraft({ ...draft, error: WORDS.banksSaveFailed });
-    } finally {
-      setIsSavingBank(false);
-    }
+      onActivity(true);
+    });
+    setDraft(null);
+    setIsPickingBank(false);
+    onActivity(false);
   };
 
   const bankFirst =
@@ -412,21 +416,41 @@ function EmailSetupWalkthrough({
       };
     }
     if (step === 'forwarding') {
+      if (bankFirst !== null) {
+        return { title: WORDS.gmailForwardingTitle, content: bankFirst };
+      }
       return {
         title: WORDS.gmailForwardingTitle,
         content: (
-          <div className='space-y-4'>
-            <NumberedSteps
-              items={[
-                {
-                  text: WORDS.gmailForwardingLink,
-                  href: GMAIL_FORWARDING_URL,
-                },
-                { text: WORDS.gmailForwardingChoose },
-              ]}
-            />
-            <Muted>{WORDS.gmailForwardingNote}</Muted>
-          </div>
+          <NumberedSteps
+            items={[
+              {
+                text: WORDS.gmailForwardingOpen,
+                control: (
+                  <ExternalLinkText
+                    href={GMAIL_URL}
+                    label={WORDS.gmailForwardingLink}
+                  />
+                ),
+              },
+              {
+                text: WORDS.gmailForwardingFill,
+                control: (
+                  <FilterFields fields={getFilterFields('gmail', addresses)} />
+                ),
+              },
+              { text: WORDS.gmailForwardingCreate },
+              {
+                text: WORDS.gmailForwardingAdd,
+                control: (
+                  <>
+                    <RuleAddresses addresses={runwayAddresses} isShownForOne />
+                    <Muted>{WORDS.gmailForwardingNote}</Muted>
+                  </>
+                ),
+              },
+            ]}
+          />
         ),
       };
     }
@@ -537,8 +561,18 @@ function EmailSetupWalkthrough({
               items={[
                 { text: WORDS.outlookRuleLink, href: OUTLOOK_RULES_URL },
                 {
-                  text: WORDS.outlookRuleLine(addresses),
-                  control: <RuleAddresses addresses={addresses} />,
+                  text: WORDS.outlookRuleConditions,
+                  control: (
+                    <FilterFields
+                      fields={getFilterFields('outlook', addresses)}
+                    />
+                  ),
+                },
+                {
+                  text: WORDS.outlookRuleForward,
+                  control: (
+                    <RuleAddresses addresses={runwayAddresses} isShownForOne />
+                  ),
                 },
               ]}
             />
@@ -561,8 +595,18 @@ function EmailSetupWalkthrough({
                   ),
                 },
                 {
-                  text: WORDS.icloudRuleLine(addresses),
-                  control: <RuleAddresses addresses={addresses} />,
+                  text: WORDS.icloudRuleConditions,
+                  control: (
+                    <FilterFields
+                      fields={getFilterFields('icloud', addresses)}
+                    />
+                  ),
+                },
+                {
+                  text: WORDS.icloudRuleForward,
+                  control: (
+                    <RuleAddresses addresses={runwayAddresses} isShownForOne />
+                  ),
                 },
               ]}
             />
@@ -599,39 +643,24 @@ function EmailSetupWalkthrough({
       if (bankFirst !== null) {
         return { title: WORDS.filterTitle, content: bankFirst };
       }
-      const filterText = buildGmailFilterText(addresses);
       return {
         title: WORDS.filterTitle,
         content: (
-          <NumberedSteps
-            items={[
-              {
-                text: WORDS.filterCopy,
-                control: (
-                  <>
-                    <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
-                      {filterText}
-                    </code>
-                    <CopyTextButton
-                      text={filterText}
-                      label={WORDS.filterLabel}
-                      variant='secondary'
-                      isCompact
-                    />
-                  </>
-                ),
-              },
-              {
-                text: WORDS.filterPaste,
-                control: (
-                  <ExternalLinkText
-                    href={GMAIL_FILTERS_URL}
-                    label={WORDS.filterLink}
-                  />
-                ),
-              },
-            ]}
-          />
+          <div className='space-y-6'>
+            <div className='space-y-2'>
+              <p className='text-sm'>{WORDS.filterPick}</p>
+              <FilterClosedHelp fields={getFilterFields('gmail', addresses)} />
+            </div>
+            {isConfirmed && intake.address !== null && (
+              <>
+                <SectionDivider label={WORDS.filterOr} />
+                <GmailFilterImport
+                  addresses={addresses}
+                  forwardTo={intake.address}
+                />
+              </>
+            )}
+          </div>
         ),
       };
     }
@@ -644,7 +673,9 @@ function EmailSetupWalkthrough({
             <p className='text-sm'>{WORDS.testDone}</p>
           ) : (
             <div className='space-y-2'>
-              <Waiting>{WORDS.testWaiting}</Waiting>
+              <Waiting lateLine={WORDS.testStillWaiting}>
+                {WORDS.testWaiting}
+              </Waiting>
               {!isNotArrivingShown ? (
                 <Button
                   variant='tertiary'
@@ -675,8 +706,7 @@ function EmailSetupWalkthrough({
     if (step === 'bank' && draft !== null) {
       return {
         label: WORDS.addThisBank(draft.name),
-        onClick: () => void saveDraft(),
-        isDisabled: isSavingBank,
+        onClick: saveDraft,
       };
     }
     if (step === 'bank' && isBankChoosing) return undefined;

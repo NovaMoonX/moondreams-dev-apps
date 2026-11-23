@@ -4,18 +4,16 @@ import type {
   EmailProvider,
 } from '@apps/runway/types';
 
-export const buildGmailFilterText = (addresses: string[]) =>
-  `from:(${addresses.join(' OR ')}) subject:(purchase OR charge OR transaction OR spent OR alert)`;
-
 const fromWhom = (addresses: string[]) => {
   if (addresses.length === 0) return 'your bank’s alert address';
   if (addresses.length === 1) return addresses[0];
   return 'any of the addresses below';
 };
+export const GMAIL_URL = 'https://mail.google.com/mail/';
 export const GMAIL_FILTERS_URL =
-  'https://mail.google.com/mail/u/0/#settings/filters';
+  'https://mail.google.com/mail/#settings/filters';
 export const GMAIL_FORWARDING_URL =
-  'https://mail.google.com/mail/u/0/#settings/fwdandpop';
+  'https://mail.google.com/mail/#settings/fwdandpop';
 
 export const EMAIL_WORDS = {
   rowLabel: 'Purchases from email',
@@ -164,12 +162,18 @@ export const EMAIL_SETUP_WORDS = {
   copyLine:
     'Only you can see it. Your bank’s alerts forwarded here become purchases.',
   copyLabel: 'Copy address',
-  gmailForwardingTitle: 'Add it as a forwarding address',
-  gmailForwardingChoose:
-    'Choose “Add a forwarding address” and paste your address',
+  gmailForwardingTitle: 'Add your address to Gmail',
+  gmailForwardingOpen:
+    'In the Gmail where your bank’s alerts arrive, click the search options icon (the sliders) in the search bar',
+  gmailForwardingLink: 'Open Gmail',
+  gmailForwardingFill: 'Fill in these two boxes',
+  gmailForwardingCreate:
+    'Click Create filter, tick Forward it to, then click add forwarding address',
+  gmailForwardingAdd:
+    'In forwarding settings, click Add a forwarding address and paste your Runway address. Gmail sends a verification to it, and the next step catches it',
   gmailForwardingNote:
-    'Don’t turn on forwarding of all mail; the filter does that.',
-  gmailForwardingLink: 'Open Gmail’s forwarding settings',
+    'Leave forwarding settings on Disable forwarding. Only this filter forwards, so adding the address doesn’t forward all your mail.',
+  settingsLinkGmail: 'Open Gmail’s forwarding settings',
   yahooForwardingTitle: 'Turn on forwarding',
   yahooForwardingGo:
     'Go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address',
@@ -178,13 +182,15 @@ export const EMAIL_SETUP_WORDS = {
     'Yahoo forwards all your mail; Runway only turns bank alerts into purchases and keeps just the subject and a few lines of anything else, for 30 days, so you can filter it out.',
   yahooForwardingLink: 'Open Yahoo Mail',
   outlookRuleTitle: 'Make a rule for your bank’s alerts',
-  outlookRuleLine: (addresses: string[]) =>
-    `Make a rule: when it’s from ${fromWhom(addresses)}, choose Forward to and paste your address`,
+  outlookRuleConditions:
+    'Make a rule with these two conditions, so only your bank’s alerts match',
+  outlookRuleForward: 'Choose Forward to and paste your Runway address',
   outlookRuleLink: 'Open Outlook’s rules',
   icloudRuleTitle: 'Make a rule for your bank’s alerts',
   icloudRuleOpen: 'In iCloud Mail, go to Settings → Rules',
-  icloudRuleLine: (addresses: string[]) =>
-    `Make a rule: when it’s from ${fromWhom(addresses)}, forward it to your address`,
+  icloudRuleConditions:
+    'Make a rule with these two conditions, so only your bank’s alerts match',
+  icloudRuleForward: 'Choose Forward to and enter your Runway address',
   icloudRuleLink: 'Open iCloud Mail',
   protonRuleTitle: 'Make a forwarding rule for your bank’s alerts',
   protonRuleGo:
@@ -242,9 +248,9 @@ export const EMAIL_SETUP_WORDS = {
     count === 1 ? '1 address' : `${count} addresses`,
   bankSheetAddresses: 'Its alert addresses',
   updateCaption: 'Then update your forwarding',
-  updateGmailCopy: 'Copy the new filter',
+  updateGmailCopy: 'Change your Runway filter to these two boxes',
   updateGmailPaste:
-    'In Gmail filters, delete your old Runway filter, paste this in the search box, then choose Create filter → Forward it to → your Runway address',
+    'In Gmail’s filter settings, click edit on your Runway filter, replace From and Subject with these, then click Continue and Update filter',
   updateFilterTitle: 'Update your Runway filter',
   updateRuleTitle: 'Update your forwarding rule',
   alreadyMade:
@@ -301,15 +307,33 @@ export const EMAIL_SETUP_WORDS = {
       ? 'Enter this code where you set up forwarding'
       : `Enter this code in ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings`,
   copyCode: 'Copy code',
-  filterTitle: 'Only forward your bank’s alerts',
-  filterCopy: 'Copy this filter',
-  filterPaste:
-    'In Gmail filters, paste it in the search box, then choose Create filter → Forward it to → your Runway address',
-  filterLabel: 'Copy filter text',
-  filterLink: 'Open Gmail filters',
+  filterTitle: 'Finish the filter',
+  filterPick:
+    'Back in your filter, pick your Runway address in Forward it to, then click Create filter',
+  filterClosed: 'The filter box closed?',
+  filterClosedLine:
+    'Click the search options icon again and fill in the same boxes, then click Create filter and tick Forward it to.',
+  filterOr: 'Or import it',
+  filterImportLead:
+    'Import the filter from a file instead of building it by hand.',
+  filterDownload: 'Download a Gmail filter',
+  filterDownloadFailed: 'The file didn’t download. Try again.',
+  filterImportChoose:
+    'Click Import filters, then Choose file and pick mailFilters.xml',
+  filterImportCreate: 'Click Open file, then Create filters',
+  filterImportLink: 'Open Gmail’s filter settings',
+  copyField: (label: string, value: string) => `Copy ${label}: ${value}`,
+  addressForwardTo: 'Your Runway address',
   testTitle: 'Try it with one alert',
   testLine: 'Forward one bank alert to your address.',
   testWaiting: 'Waiting for your first alert…',
+  stillWaiting: 'Nothing yet. It can take a few minutes.',
+  testStillWaiting:
+    'Nothing yet. Check the filter or rule forwards to your Runway address, then forward another alert.',
+  confirmStillWaiting: (provider: EmailProvider) =>
+    provider === 'other'
+      ? 'Nothing yet. Resend the confirmation from your email’s forwarding settings.'
+      : `Nothing yet. Resend it from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
   finishLater: 'Finish later',
   backStep: 'Back',
   exitStep: 'Exit',
