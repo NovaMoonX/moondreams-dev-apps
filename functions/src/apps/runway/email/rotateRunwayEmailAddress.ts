@@ -61,6 +61,6 @@ export const rotateRunwayEmailAddress = onCall(
         sealed: null,
       });
     });
-    return { address: `${EMAIL_ADDRESS_PREFIX}-${token}@${EMAIL_DOMAIN}` };
+    return { address: `${EMAIL_ADDRESS_PREFIX}+${token}@${EMAIL_DOMAIN}` };
   },
 );
