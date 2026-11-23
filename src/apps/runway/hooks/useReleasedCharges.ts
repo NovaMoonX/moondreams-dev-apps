@@ -66,7 +66,7 @@ export function useReleasedCharges(uid: string | null) {
         Promise.resolve([] as OpenReleasedCharge[]),
       );
       if (cleared.length === 0) return;
-      await recordDone(
+      recordDone(
         uid,
         cleared.map((charge) => {
           const isRefund = charge.amountCents < 0;

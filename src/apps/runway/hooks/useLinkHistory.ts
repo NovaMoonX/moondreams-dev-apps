@@ -182,7 +182,7 @@ export function useLinkHistory(uid: string | null) {
         toSweep.forEach((link) => tried.current.delete(`swept:${link.id}`));
       }
       if (outcomes.turned === 0) return;
-      await recordDone(uid, [
+      recordDone(uid, [
         {
           kind: 'history',
           title:

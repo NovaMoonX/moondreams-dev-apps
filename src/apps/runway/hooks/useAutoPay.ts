@@ -258,7 +258,7 @@ export function useAutoPay(uid: string | null) {
           },
           Promise.resolve([] as AutoMark[]),
         );
-        await recordDone(
+        recordDone(
           uid,
           marked.map((mark) => ({
             kind: 'autoMark' as const,
@@ -299,7 +299,7 @@ export function useAutoPay(uid: string | null) {
           },
           Promise.resolve([] as ChargeMatchResult[]),
         );
-        await recordDone(
+        recordDone(
           uid,
           results.map((result) => ({
             kind: 'charge' as const,

@@ -214,7 +214,7 @@ export function usePlaceByRules(uid: string | null) {
           Promise.resolve([] as RulePlaced[]),
         );
         if (placed.length === 0) return;
-        await recordDone(
+        recordDone(
           uid,
           placed.map(({ placed: entry, sentence }) => ({
             kind: 'rule' as const,

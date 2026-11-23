@@ -26,7 +26,11 @@ fi
 if echo "$plan" | grep -qE '^ {2,}[-*] '; then
   problems+=("has nested bullets")
 fi
-words=$(echo "$plan" | wc -w)
+if ! echo "$plan" | grep -qiE "^#+ *How we.ll catch this next time" && (( $(echo "$plan" | wc -l) > 2 )); then
+  problems+=("has no closing \"How we'll catch this next time\" section (the miss review: for each thing the owner raised, could a step have caught it, which, and what now does; or one line saying nothing changes)")
+fi
+# The closing "How we'll catch this next time" section is required and doesn't count toward the limit.
+words=$(echo "$plan" | sed -n "/^#\+ *How we'll catch this next time/q;p" | wc -w)
 if (( words > 350 )); then
   problems+=("runs ${words} words (keep it under 350, readable in a minute)")
 fi

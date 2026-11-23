@@ -15,6 +15,7 @@ import {
 } from '@apps/runway/engine/balances';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { getCashPosition } from '@apps/runway/engine/cash';
+import { selectTwinnedEmailIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectBankHeldByCard } from '@apps/runway/store/selectors/cardBankSelectors';
 
 const toBalanceInputs =
@@ -120,10 +121,21 @@ export const selectCashPosition = createSelector(
     (state: RootState) => state.runway.items,
     (state: RootState) => state.runway.needsHome,
     (state: RootState) => state.runway.purchases,
+    selectTwinnedEmailIds,
     () => todayAsUtcDate(),
   ],
-  (balances, accounts, accountBalances, items, needsHome, purchases, today) =>
+  (
+    balances,
+    accounts,
+    accountBalances,
+    items,
+    needsHome,
+    purchases,
+    twinnedEmailIds,
+    today,
+  ) =>
     getCashPosition({
+      twinnedEmailIds,
       accounts: [...accounts].sort(
         (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
       ),

@@ -2,15 +2,18 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import type { DoneForYouEntry } from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
 import {
   AUTO_PAY_WORDS,
   DEPOSIT_WORDS,
+  DONE_FOR_YOU_DAYS,
   DONE_FOR_YOU_WORDS,
   NEEDS_HOME_WORDS,
   PAIR_WORDS,
   RULE_WORDS,
 } from '@apps/runway/constants';
+import { DAY_MS } from '@apps/runway/engine/dates';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoChargeMatch } from '@apps/runway/store/actions/autoPayActions';
@@ -40,17 +43,29 @@ import {
 
 export type { DoneForYouInput };
 
-/** Records what a pass did on its own. A failure is logged and never stops the pass. */
-export async function recordDone(
+const unrecorded: { uid: string; entries: DoneForYouInput[] }[] = [];
+
+/** Records what a pass did on its own without holding the pass up. One that fails (the vault or a seal, not the network, which Firestore queues) waits here and goes with the next record or reconnect, so a moved purchase never loses its entry for the session. */
+export function recordDone(
   uid: string,
   entries: readonly DoneForYouInput[],
-): Promise<void> {
-  if (entries.length === 0) return;
-  try {
-    await recordDoneForYou(uid, await getRunwayEncryption(uid), entries);
-  } catch (error) {
-    console.error('What was done for you was not recorded', error);
-  }
+): void {
+  const waiting = unrecorded.splice(0).filter((batch) => batch.uid === uid);
+  const all = [...waiting.flatMap((batch) => batch.entries), ...entries];
+  if (all.length === 0) return;
+  void getRunwayEncryption(uid)
+    .then((encryption) => recordDoneForYou(uid, encryption, all))
+    .catch((error: unknown) => {
+      unrecorded.push({ uid, entries: all });
+      console.error('What was done for you was not recorded', error);
+    });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    const [first] = unrecorded;
+    if (first) recordDone(first.uid, []);
+  });
 }
 
 /** The purchases an entry's Undo would write, with the `updatedAt` each should still have. */
@@ -173,7 +188,10 @@ export function useDoneForYou() {
   );
   const isReady = useAppSelector((state) => state.runway.isDoneForYouLoaded);
 
-  const items = entries.map((entry: OpenDoneForYou): DoneForYouEntry => ({
+  const now = useNow(60 * 60 * 1000);
+  const cutoff = now - DONE_FOR_YOU_DAYS * DAY_MS;
+  const live = entries.filter((entry) => entry.createdAt >= cutoff);
+  const items = live.map((entry: OpenDoneForYou): DoneForYouEntry => ({
     id: entry.id,
     createdAt: entry.createdAt,
     title: entry.title,
@@ -187,7 +205,7 @@ export function useDoneForYou() {
         ? DONE_FOR_YOU_WORDS.cannotUndo
         : null,
   }));
-  const hasUnseen = entries.some(
+  const hasUnseen = live.some(
     (entry) => seenAt === null || entry.createdAt > seenAt,
   );
 
@@ -197,8 +215,8 @@ export function useDoneForYou() {
     if (!uid || !entry || entry.undo === null || entry.undoneAt !== null) {
       return DONE_FOR_YOU_WORDS.cannotUndo;
     }
-    const { purchases: now, needsHome } = store.getState().runway;
-    if (!isStillUndoable(entry.undo, now, needsHome)) {
+    const { purchases: current, needsHome } = store.getState().runway;
+    if (!isStillUndoable(entry.undo, current, needsHome)) {
       return DONE_FOR_YOU_WORDS.cannotUndo;
     }
     try {

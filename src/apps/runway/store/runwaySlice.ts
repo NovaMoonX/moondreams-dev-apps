@@ -18,6 +18,12 @@ import {
   type PurchaseList,
 } from '@apps/runway/utils/purchaseHolds';
 import { withBankBalances } from '@apps/runway/engine/accounts';
+import type {
+  OpenEmailEvent,
+  OpenEmailFilter,
+  OpenEmailIntake,
+  OpenEmailSetup,
+} from '@apps/runway/store/listeners/emailListeners';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
   DateOnly,
@@ -88,6 +94,12 @@ export interface RunwayState {
   /** What the app did on its own in the last 30 days, newest first, and whether it has been read once. */
   doneForYou: OpenDoneForYou[];
   isDoneForYouLoaded: boolean;
+  /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
+  emailIntake: OpenEmailIntake | null;
+  emailSetup: OpenEmailSetup | null;
+  emailEvents: OpenEmailEvent[];
+  isEmailEventsLoaded: boolean;
+  emailFilters: OpenEmailFilter[];
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
   /** Every purchase waiting for a home, whatever its date, and whether they have been read once. */
@@ -222,6 +234,11 @@ const initialState: RunwayState = {
   isMemoriesLoaded: false,
   doneForYou: [],
   isDoneForYouLoaded: false,
+  emailIntake: null,
+  emailSetup: null,
+  emailEvents: [],
+  isEmailEventsLoaded: false,
+  emailFilters: [],
   purchases: [],
   needsHome: [],
   isNeedsHomeLoaded: false,
@@ -332,6 +349,19 @@ export const runwaySlice = createSlice({
     setDoneForYou: (state, action: PayloadAction<OpenDoneForYou[]>) => {
       state.doneForYou = action.payload;
       state.isDoneForYouLoaded = true;
+    },
+    setEmailIntake: (state, action: PayloadAction<OpenEmailIntake | null>) => {
+      state.emailIntake = action.payload;
+    },
+    setEmailSetup: (state, action: PayloadAction<OpenEmailSetup | null>) => {
+      state.emailSetup = action.payload;
+    },
+    setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[] | null>) => {
+      state.emailEvents = action.payload ?? [];
+      state.isEmailEventsLoaded = action.payload !== null;
+    },
+    setEmailFilters: (state, action: PayloadAction<OpenEmailFilter[]>) => {
+      state.emailFilters = action.payload;
     },
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
@@ -520,6 +550,10 @@ export const {
   setRules,
   setMemories,
   setDoneForYou,
+  setEmailIntake,
+  setEmailEvents,
+  setEmailFilters,
+  setEmailSetup,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

@@ -1,6 +1,14 @@
 import { useEffect } from 'react';
 
 import { useNow } from '@/hooks/useNow';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
+import { EMAIL_PURCHASES_GATE_ID } from '@apps/runway/constants';
+import {
+  startEmailEventsListener,
+  startEmailFiltersListener,
+  startEmailIntakeListener,
+  startEmailSetupListener,
+} from '@apps/runway/store/listeners/emailListeners';
 
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
@@ -54,7 +62,7 @@ import {
 } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
-import { recordDoneForYou } from '@apps/runway/store/actions/doneForYouActions';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
   selectRecentFrom,
@@ -84,6 +92,10 @@ import {
   setRules,
   setMemories,
   setDoneForYou,
+  setEmailIntake,
+  setEmailSetup,
+  setEmailEvents,
+  setEmailFilters,
   setClosing,
   setDays,
   setItems,
@@ -258,6 +270,63 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stops.current.forEach((stop) => stop());
     };
   }, [uid, keyStatus, dispatch]);
+
+  const isEmailGateOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
+  const emailLevel = useAppSelector(selectLevel);
+  const isEmailOpen = isEmailGateOpen && emailLevel !== 'plan';
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isEmailOpen) return;
+
+    const stops: { current: (() => void)[] } = { current: [] };
+    const run = { isCurrent: true };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        // Email is optional, so a failure here never closes the plan.
+        const skip = (error: Error) =>
+          console.error('Purchases from email did not open', error);
+        stops.current = [
+          startEmailIntakeListener(
+            uid,
+            encryption,
+            (intake) => dispatch(setEmailIntake(intake)),
+            skip,
+          ),
+          startEmailSetupListener(
+            uid,
+            encryption,
+            (setup) => dispatch(setEmailSetup(setup)),
+            skip,
+          ),
+          startEmailEventsListener(
+            uid,
+            encryption,
+            (events) => dispatch(setEmailEvents(events)),
+            skip,
+          ),
+          startEmailFiltersListener(
+            uid,
+            encryption,
+            (filters) => dispatch(setEmailFilters(filters)),
+            skip,
+          ),
+        ];
+      })
+      .catch((error: unknown) =>
+        console.error('Purchases from email did not open', error),
+      );
+
+    return () => {
+      run.isCurrent = false;
+      stops.current.forEach((stop) => stop());
+      dispatch(setEmailIntake(null));
+      dispatch(setEmailSetup(null));
+      dispatch(setEmailEvents(null));
+      dispatch(setEmailFilters([]));
+    };
+  }, [uid, keyStatus, isEmailOpen, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready') return;
@@ -616,9 +685,8 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             return isWritten ? [name] : [];
           }),
         );
-        await recordDoneForYou(
+        recordDone(
           uid,
-          encryption,
           written.flat().map((name) => ({
             kind: 'ended' as const,
             title: DONE_FOR_YOU_WORDS.ended(name),
@@ -626,8 +694,6 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             why: null,
             undo: null,
           })),
-        ).catch((error: unknown) =>
-          console.error('An ending was not recorded', error),
         );
       })
       .catch((error) => console.error('Marking an ending did not save', error));
