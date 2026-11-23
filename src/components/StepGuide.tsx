@@ -9,7 +9,13 @@ interface StepGuideProps {
   stepCount?: number;
   title: ReactNode;
   children: ReactNode;
-  primary?: { label: string; onClick: () => void; isDisabled?: boolean };
+  primary?: {
+    label: string;
+    onClick: () => void;
+    isDisabled?: boolean;
+    /** `secondary` when the step's own body holds the action that matters most. */
+    variant?: 'primary' | 'secondary';
+  };
   /** The previous step; drawn as a smaller button left of the primary, since the header's arrow leaves the whole guide. */
   onBack?: () => void;
   backLabel?: string;
@@ -77,6 +83,7 @@ function StepGuide({
           )}
           {primary && (
             <Button
+              variant={primary.variant ?? 'primary'}
               className='min-w-0 flex-1'
               disabled={primary.isDisabled}
               onClick={primary.onClick}

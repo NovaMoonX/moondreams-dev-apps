@@ -789,13 +789,18 @@ function EmailSetupWalkthrough({
         : { label: WORDS.finishLater, onClick: onClose };
     }
     if (!hasNext) return undefined;
-    const isConfirmDone =
+    const isConfirmOpenedNow =
       step === 'confirm' &&
       isConfirmOpened(confirmOpenedAt, intake.confirm?.at ?? null);
+    const isConfirmShown =
+      step === 'confirm' &&
+      !isConfirmOpenedNow &&
+      intake.confirm?.url?.startsWith('https://') === true;
     return {
-      label: isConfirmDone
+      label: isConfirmOpenedNow
         ? WORDS.nextAfterConfirm(steps[stepIndex + 1])
         : WORDS.next,
+      variant: isConfirmShown ? ('secondary' as const) : undefined,
       onClick: () => onGo(stepIndex + 1),
       isDisabled: step === 'copy' && intake.address === null,
     };
