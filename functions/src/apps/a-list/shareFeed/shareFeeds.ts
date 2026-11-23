@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type DocumentData } from 'firebase-admin/firestore';
@@ -31,37 +32,77 @@ function toFeed(share: DocumentData, liveViewings: Awaited<ReturnType<typeof rea
   return { ...toSharedCalendar(share, liveViewings), updatedAt: Date.now() };
 }
 
-/**
- * The feed id for a share, making the feed on first use. The id is a secret of its own: changing the PIN or deleting the share retires it,
- * so everyone listening loses access at once.
- */
-export async function ensureShareFeed(shareId: string): Promise<string | null> {
-  const db = getFirestore();
-  const result = await db.runTransaction(async (transaction) => {
-    const shareSnapshot = await transaction.get(getShareRef(shareId));
-    const share = shareSnapshot.data();
-    if (share === undefined) return null;
-    if (typeof share.feedId === 'string' && share.feedId !== '') return share.feedId as string;
+const readText = (value: unknown) => (typeof value === 'string' && value !== '' ? value : null);
 
-    const ownerUid = typeof share.ownerUid === 'string' ? share.ownerUid : '';
-    const liveViewings = getShareKind(share) === 'LIVE' && ownerUid !== '' ? await readLiveViewings(ownerUid) : [];
+/** Whether a share's feed was made under the PIN it has now; a feed made under an older PIN is retired, never handed out. */
+export const isFeedCurrent = (share: DocumentData) =>
+  readText(share.feedId) !== null && readText(share.feedPin) === readText(share.pin);
+
+/**
+ * The feed id for a share, making the feed on first use, or null when the share is gone or its PIN is no longer the one the caller passed.
+ * The id is a secret of its own: changing the PIN or deleting the share retires it, so everyone listening loses access at once.
+ */
+export async function ensureShareFeed(shareId: string, checkedPin: string | null): Promise<string | null> {
+  return getFirestore().runTransaction(async (transaction) => {
+    const shareRef = getShareRef(shareId);
+    const share = (await transaction.get(shareRef)).data();
+    if (share === undefined || readText(share.pin) !== checkedPin) return null;
+
+    const oldFeedId = readText(share.feedId);
+    if (oldFeedId !== null && isFeedCurrent(share)) {
+      const feed = await transaction.get(getFeedRef(oldFeedId));
+      if (feed.exists) return oldFeedId;
+    }
+
+    const ownerUid = readText(share.ownerUid);
+    const liveViewings = getShareKind(share) === 'LIVE' && ownerUid !== null ? await readLiveViewings(ownerUid) : [];
     const feedId = newFeedId();
+    if (oldFeedId !== null) transaction.delete(getFeedRef(oldFeedId));
     transaction.set(getFeedRef(feedId), toFeed(share, liveViewings));
-    transaction.update(getShareRef(shareId), { feedId });
+    transaction.update(shareRef, { feedId, feedPin: readText(share.pin) });
     return feedId;
   });
-  return result;
 }
 
-/** Rewrites every live feed of one member from their calendar as it is now, so runs that arrive out of order still end current. */
+/**
+ * Takes a share's feed away: clears the share's pointer and deletes the feed in one transaction, so an id is never handed out after
+ * the feed it names is gone. Skips a share whose feed was already replaced or still matches its PIN.
+ */
+export async function retireShareFeed(shareId: string, feedId: string) {
+  await getFirestore().runTransaction(async (transaction) => {
+    const shareRef = getShareRef(shareId);
+    const share = (await transaction.get(shareRef)).data();
+    if (share !== undefined) {
+      if (readText(share.feedId) !== feedId || isFeedCurrent(share)) return;
+      transaction.update(shareRef, { feedId: null, feedPin: null });
+    }
+    transaction.delete(getFeedRef(feedId));
+  });
+}
+
+/**
+ * Rewrites the live feeds of one member from their calendar as it is now, so runs that arrive out of order still end current.
+ * Each write re-reads its share and feed in a transaction, so a feed retired meanwhile is never brought back, and an unchanged feed is left alone.
+ */
 export async function refreshLiveFeeds(ownerUid: string) {
-  const shares = await getFirestore().collection('apps/a-list/calendarShares').where('ownerUid', '==', ownerUid).get();
-  const liveShares = shares.docs
-    .map((share) => share.data())
-    .filter((share) => getShareKind(share) === 'LIVE' && typeof share.feedId === 'string' && share.feedId !== '');
+  const db = getFirestore();
+  const shares = await db.collection('apps/a-list/calendarShares').where('ownerUid', '==', ownerUid).get();
+  const liveShares = shares.docs.filter((share) => getShareKind(share.data()) === 'LIVE' && isFeedCurrent(share.data()));
   if (liveShares.length === 0) return 0;
 
   const liveViewings = await readLiveViewings(ownerUid);
-  await Promise.all(liveShares.map((share) => getFeedRef(share.feedId as string).set(toFeed(share, liveViewings))));
-  return liveShares.length;
+  const written = await Promise.all(
+    liveShares.map((shareSnapshot) =>
+      db.runTransaction(async (transaction) => {
+        const share = (await transaction.get(shareSnapshot.ref)).data();
+        const feedId = share === undefined || !isFeedCurrent(share) ? null : readText(share.feedId);
+        if (feedId === null) return false;
+        const feed = await transaction.get(getFeedRef(feedId));
+        if (!feed.exists || isDeepStrictEqual(feed.data()?.viewings, liveViewings)) return false;
+        transaction.update(getFeedRef(feedId), { viewings: liveViewings, updatedAt: Date.now() });
+        return true;
+      }),
+    ),
+  );
+  return written.filter(Boolean).length;
 }

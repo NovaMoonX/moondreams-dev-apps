@@ -80,7 +80,7 @@ function toViewings(rawViewings: unknown[]) {
 }
 
 /** One stored showing trimmed to the share's allowlist; a field added to a showing later never reaches a visitor. */
-function fromStoredViewing(raw: Record<string, unknown>) {
+export function fromStoredViewing(raw: Record<string, unknown>) {
   const movie = (raw.movie ?? {}) as Record<string, unknown>;
   const ticket = (raw.ticket ?? {}) as Record<string, unknown>;
   const theatre = (raw.theatre ?? {}) as Record<string, unknown>;

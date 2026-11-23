@@ -122,6 +122,7 @@ const CALENDAR_SHARE_FIELDS = {
   startDate: 'never',
   endDate: 'never',
   feedId: 'never',
+  feedPin: 'never',
   pin: 'never',
   viewings: 'never',
   createdAt: 'never',

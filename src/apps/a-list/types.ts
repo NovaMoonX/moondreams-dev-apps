@@ -227,6 +227,8 @@ export interface CalendarShare {
   endDate: number | null;
   /** Set only by the server once someone signed in adds the share; changing the PIN or deleting the share retires it. */
   feedId: string | null;
+  /** Server-only: the PIN the feed was made under, so a feed from before a PIN change is never handed out. */
+  feedPin: string | null;
   /** Four characters a visitor must enter; null when the link is open to anyone who has it. */
   pin: string | null;
   /** The frozen copy for a snapshot; always empty for a live share. */

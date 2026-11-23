@@ -33,7 +33,7 @@ function PinDetails({ pin, onCopyPin }: PinDetailsProps) {
         >
           {isShown ? pin : '••••'}
         </code>
-        . Turning it off and on again makes a new one. Changing it removes it from calendars it was added to.
+        . Turning it off and on again makes a new one.
       </p>
       <div className='flex flex-wrap items-center gap-2'>
         <Button
@@ -42,7 +42,7 @@ function PinDetails({ pin, onCopyPin }: PinDetailsProps) {
           size='sm'
           rounded='full'
           aria-pressed={isShown}
-          className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']"
+          className="relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           onClick={() => setIsShown((current) => !current)}
         >
           {isShown ? (
@@ -57,7 +57,7 @@ function PinDetails({ pin, onCopyPin }: PinDetailsProps) {
           variant='tertiary'
           size='sm'
           rounded='full'
-          className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']"
+          className="relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           onClick={onCopyPin}
         >
           <Copy className='h-4 w-4' aria-hidden='true' />
@@ -91,21 +91,22 @@ function ShareRow({
     <li className='space-y-3 py-4'>
       <div className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
-          <p className='font-medium'>
-            {getShareTitle(share)}
-          </p>
+          <p className='font-medium'>{getShareTitle(share)}</p>
           <p className='text-muted-foreground text-xs'>
             {isLive
               ? 'Always up to date'
               : movieCount === 1
                 ? '1 movie'
                 : `${movieCount} movies`}{' '}
-            · made{' '}
-            {formatDateTime(share.createdAt)}
+            · made {formatDateTime(share.createdAt)}
           </p>
         </div>
         <DeleteIconButton
-          label={isLive ? 'Delete the live link' : `Delete the link for ${getShareRangeLabel(share)}`}
+          label={
+            isLive
+              ? 'Delete the live link'
+              : `Delete the link for ${getShareRangeLabel(share)}`
+          }
           disabled={isDisabled}
           onClick={() => onDelete(share)}
         />
@@ -146,8 +147,7 @@ function ShareRow({
             />
           ) : (
             <p className='text-muted-foreground text-xs'>
-              Anyone with the link can open it. Adding a PIN removes it from
-              calendars it was added to.
+              Anyone with the link can open it.
             </p>
           )}
         </div>

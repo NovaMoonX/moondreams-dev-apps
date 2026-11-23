@@ -100,20 +100,27 @@ function ShareSubview({ onClose }: ShareSubviewProps) {
     );
   };
 
-  const handleTogglePin = (share: CalendarShare, isLocked: boolean) =>
-    run(
+  const handleTogglePin = async (share: CalendarShare, isLocked: boolean) => {
+    if (share.feedId !== null) {
+      const confirmed = await confirm({
+        title: isLocked ? 'Add a PIN?' : 'Remove the PIN?',
+        message: `Someone added this link to their own calendar. ${isLocked ? 'Adding a PIN' : 'Removing the PIN'} takes it off their calendar until they open the link again${isLocked ? ' with the PIN' : ''}.`,
+        confirmText: isLocked ? 'Add a PIN' : 'Remove the PIN',
+      });
+      if (!confirmed) return;
+    }
+    await run(
       () =>
-        dispatch(
-          setCalendarSharePin({ shareId: share.id, isLocked }),
-        ).unwrap(),
+        dispatch(setCalendarSharePin({ shareId: share.id, isLocked })).unwrap(),
       'Unable to change this PIN.',
     );
+  };
 
   const handleDelete = async (share: CalendarShare) => {
     const isLive = isLiveShare(share);
     const confirmed = await confirm({
       title: 'Delete link',
-      message: `Delete ${isLive ? 'the live link' : `the link for ${getShareRangeLabel(share)}`}${share.pin ? ' (with a PIN)' : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away${isLive ? ', and it will leave the calendars it was added to' : ''}, and this can't be undone.`,
+      message: `Delete ${isLive ? 'the live link' : `the link for ${getShareRangeLabel(share)}`}${share.pin ? ' (with a PIN)' : ''}, made ${formatDateTime(share.createdAt)}? Anyone who has it will lose access right away${share.feedId !== null ? ', and it will leave the calendars it was added to' : ''}, and this can't be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });

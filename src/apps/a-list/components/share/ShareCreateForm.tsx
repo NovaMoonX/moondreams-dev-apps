@@ -6,7 +6,10 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { fromDateInputValue, toLocalDateInputValue } from '@/utils/dateInputUtils';
+import {
+  fromDateInputValue,
+  toLocalDateInputValue,
+} from '@/utils/dateInputUtils';
 import {
   MAX_SHARE_RANGE_DAYS,
   MAX_SHARED_VIEWINGS,
@@ -42,7 +45,10 @@ function ShareCreateForm({
   const viewings = useAppSelector((state) => state.aList.viewings.items);
   const [kind, setKind] = useState<ShareRangeKind>('LIVE');
   const [hasPin, setHasPin] = useState(false);
-  const [custom, setCustom] = useState<DayKeyRange>({ startKey: '', endKey: '' });
+  const [custom, setCustom] = useState<DayKeyRange>({
+    startKey: '',
+    endKey: '',
+  });
 
   const isLive = kind === 'LIVE';
   const range: DayKeyRange = getQuickShareRange(kind, now) ?? custom;
@@ -50,16 +56,21 @@ function ShareCreateForm({
   const dayCount = getRangeDayCount(range);
   const movieCount = useMemo(
     () =>
-      dayCount > 0 ? pickSharedViewings(viewings, { startKey, endKey }).length : 0,
+      dayCount > 0
+        ? pickSharedViewings(viewings, { startKey, endKey }).length
+        : 0,
     [viewings, startKey, endKey, dayCount],
   );
 
   const getSummary = () => {
     if (isLive) {
-      return { isReady: true, text: '📡 Everything on your calendar, kept up to date' };
+      return { isReady: true, text: '' };
     }
     if (startKey === '') {
-      return { isReady: false, text: 'Tap the first and last day on the calendar.' };
+      return {
+        isReady: false,
+        text: 'Tap the first and last day on the calendar.',
+      };
     }
     if (endKey === '') {
       return {
@@ -108,7 +119,8 @@ function ShareCreateForm({
         />
         {(kind === 'THIS_WEEK' || kind === 'NEXT_WEEK') && (
           <p className='text-muted-foreground text-sm'>
-            Weeks run <strong className='text-foreground'>Friday to Thursday</strong>,
+            Weeks run{' '}
+            <strong className='text-foreground'>Friday to Thursday</strong>,
             like AMC&apos;s.
           </p>
         )}
@@ -132,12 +144,16 @@ function ShareCreateForm({
             }
           />
         )}
-        <p
-          className={isReady ? 'text-sm font-medium' : 'text-muted-foreground text-sm'}
-          aria-live='polite'
-        >
-          {text}
-        </p>
+        {text !== '' && (
+          <p
+            className={
+              isReady ? 'text-sm font-medium' : 'text-muted-foreground text-sm'
+            }
+            aria-live='polite'
+          >
+            {text}
+          </p>
+        )}
       </div>
 
       <div className='space-y-3'>
@@ -164,7 +180,7 @@ function ShareCreateForm({
         recorded. Never your name, what you paid, or your star ratings. Titles
         and theater names show as you typed them.{' '}
         {isLive
-          ? 'Changes you make show up for them as you make them; delete the link to stop it.'
+          ? 'Delete the link to stop sharing.'
           : "Changes you make later won't show up."}
       </p>
 

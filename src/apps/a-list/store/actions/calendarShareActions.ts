@@ -72,6 +72,7 @@ export const createCalendarShare = createAsyncThunk<
           startDate: null,
           endDate: null,
           feedId: null,
+          feedPin: null,
           pin: hasPin ? newPin() : null,
           viewings: [],
           createdAt: now,
@@ -81,7 +82,10 @@ export const createCalendarShare = createAsyncThunk<
         return share.id;
       } catch (error) {
         return rejectWithValue(
-          getErrorMessage(error, 'Unable to create this link. Check your connection and try again.'),
+          getErrorMessage(
+            error,
+            'Unable to create this link. Check your connection and try again.',
+          ),
         );
       }
     }
@@ -101,7 +105,9 @@ export const createCalendarShare = createAsyncThunk<
       return rejectWithValue('Nothing is planned in these dates yet.');
     }
     if (sharedViewings.length > MAX_SHARED_VIEWINGS) {
-      return rejectWithValue('That is too many movies for one link. Try a shorter range.');
+      return rejectWithValue(
+        'That is too many movies for one link. Try a shorter range.',
+      );
     }
 
     try {
@@ -116,6 +122,7 @@ export const createCalendarShare = createAsyncThunk<
         startDate,
         endDate,
         feedId: null,
+        feedPin: null,
         pin: hasPin ? newPin() : null,
         viewings: sharedViewings,
         createdAt: now,
@@ -125,7 +132,10 @@ export const createCalendarShare = createAsyncThunk<
       return share.id;
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to create this link. Check your connection and try again.'),
+        getErrorMessage(
+          error,
+          'Unable to create this link. Check your connection and try again.',
+        ),
       );
     }
   },

@@ -247,6 +247,7 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && shareId.matches('^[2-9a-hj-np-z]{26}$')
         && request.resource.data.get('feedId', null) == null
+        && request.resource.data.get('feedPin', null) == null
         && request.resource.data.get('kind', 'SNAPSHOT') in ['SNAPSHOT', 'LIVE']
         && (request.resource.data.get('kind', 'SNAPSHOT') == 'SNAPSHOT' || request.resource.data.viewings.size() == 0)
         && exists(/databases/$(database)/documents/apps/a-list/memberships/$(request.auth.uid));

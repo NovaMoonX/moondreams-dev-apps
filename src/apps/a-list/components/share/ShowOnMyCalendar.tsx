@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import AppToggle from '@/components/AppToggle';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -96,12 +95,27 @@ function ShowOnMyCalendar({
   const [isSaving, setIsSaving] = useState(false);
 
   const { hasMembership, added, ownShareIds } = viewer;
-  if (
-    viewer.hasFailed ||
-    hasMembership !== true ||
-    added === null ||
-    ownShareIds === null
-  ) {
+  if (viewer.hasFailed) {
+    return (
+      <p className='text-muted-foreground text-center text-sm'>
+        Couldn&apos;t check your own calendar, so this can&apos;t be added right
+        now. Reload the page to try again.
+      </p>
+    );
+  }
+  if (hasMembership === false) {
+    return (
+      <div className='bg-muted/50 flex items-center justify-between gap-3 rounded-2xl px-3 py-2'>
+        <p className='min-w-0 text-sm'>
+          📅 Track your own movies to see theirs beside them
+        </p>
+        <Button href='/a-list' variant='secondary' size='sm' rounded='full'>
+          Start A-List
+        </Button>
+      </div>
+    );
+  }
+  if (hasMembership !== true || added === null || ownShareIds === null) {
     return null;
   }
 
@@ -197,11 +211,15 @@ function ShowOnMyCalendar({
             Their movies appear quietly on your calendar
           </p>
         </div>
-        <AppToggle
-          checked={false}
-          aria-label='Show on my calendar'
-          onCheckedChange={() => setIsSheetOpen(true)}
-        />
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          rounded='full'
+          onClick={() => setIsSheetOpen(true)}
+        >
+          Add
+        </Button>
       </div>
       <FormSheet
         isOpen={isSheetOpen}

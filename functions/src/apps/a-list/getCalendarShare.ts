@@ -5,7 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { onCall } from 'firebase-functions/v2/https';
 
 import { getShareKind, toSharedCalendar, type SharedCalendar } from './calendarShareView.js';
-import { ensureShareFeed, readLiveViewings } from './shareFeed/shareFeeds.js';
+import { ensureShareFeed, getFeedRef, readLiveViewings } from './shareFeed/shareFeeds.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -19,6 +19,14 @@ function isPinMatch(expected: string, entered: string) {
   const expectedBytes = Buffer.from(expected);
   const enteredBytes = Buffer.from(entered);
   return expectedBytes.length === enteredBytes.length && timingSafeEqual(expectedBytes, enteredBytes);
+}
+
+async function readShownCalendar(data: Record<string, unknown>, feedId: string | null): Promise<SharedCalendar> {
+  if (getShareKind(data) !== 'LIVE') return toSharedCalendar(data);
+  const feed = feedId === null ? undefined : (await getFeedRef(feedId).get()).data();
+  if (feed !== undefined) return toSharedCalendar(data, feed.viewings as SharedCalendar['viewings']);
+  const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
+  return toSharedCalendar(data, ownerUid === '' ? [] : await readLiveViewings(ownerUid));
 }
 
 export const getCalendarShare = onCall(
@@ -55,10 +63,10 @@ export const getCalendarShare = onCall(
       }
     }
 
-    const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
-    const liveViewings = getShareKind(data) === 'LIVE' && ownerUid !== '' ? await readLiveViewings(ownerUid) : [];
-    // Only a signed-in visitor can listen to the feed, so only they get its id.
-    const feedId = request.auth ? await ensureShareFeed(shareId) : null;
-    return { status: 'ok', calendar: toSharedCalendar(data, liveViewings), feedId };
+    // Only a signed-in visitor can listen to the feed, so only they get its id; a live share's showings then come from the feed.
+    const checkedPin = typeof data.pin === 'string' && data.pin !== '' ? data.pin : null;
+    const feedId = request.auth ? await ensureShareFeed(shareId, checkedPin) : null;
+    const calendar = await readShownCalendar(data, feedId);
+    return { status: 'ok', calendar, feedId };
   },
 );
