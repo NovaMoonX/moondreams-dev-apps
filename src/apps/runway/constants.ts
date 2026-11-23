@@ -1134,8 +1134,8 @@ export const MOVE_KINDS = [
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link', 'email'] as const;
 /** The domain a person's forwarding address lives on; the address is `${EMAIL_ADDRESS_PREFIX}-<token>@${EMAIL_DOMAIN}`. */
-export const EMAIL_DOMAIN = 'apps.moondreams.dev';
-export const EMAIL_ADDRESS_PREFIX = 'finance';
+export const EMAIL_DOMAIN = 'moondreamsmail.com';
+export const EMAIL_ADDRESS_PREFIX = 'runway';
 /** How long an emailed purchase waits for its bank before Home asks about it. */
 export const EMAIL_WAIT_DAYS = 5;
 /** How many days after an emailed purchase a bank charge can still be it (a hold can post days later). */

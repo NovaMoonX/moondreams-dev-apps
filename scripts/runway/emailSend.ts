@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Posts one sample email to the local Functions emulator, as the email worker would.
- *   RUNWAY_EMAIL_WEBHOOK_SECRET=local-secret npm run runway:email-send -- finance-<token>@apps.moondreams.dev scripts/runway/emailFixtures/chase.json
+ *   RUNWAY_EMAIL_WEBHOOK_SECRET=local-secret npm run runway:email-send -- runway-<token>@moondreamsmail.com scripts/runway/emailFixtures/chase.json
  * Start the emulator with the same RUNWAY_EMAIL_WEBHOOK_SECRET in its environment. Emulators only.
  */
 const [address, fixture] = process.argv.slice(2);
