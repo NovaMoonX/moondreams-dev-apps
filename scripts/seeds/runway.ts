@@ -69,6 +69,7 @@ import {
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
+import { toSubject } from '../../src/apps/runway/utils/doneForYouSubject.ts';
 import {
   CARD_FEE_GROUP_ID,
   buildFeeBill,
@@ -5079,21 +5080,6 @@ async function seedDoneForYou(
     cardPaymentMoveId: null,
     tickedDayKey: null,
   };
-  const subject = (
-    known: Partial<NonNullable<DoneForYouSealed['subject']>>,
-  ): NonNullable<DoneForYouSealed['subject']> => ({
-    purchaseId: null,
-    merchant: null,
-    merchantLogo: null,
-    amountCents: null,
-    ruleId: null,
-    billId: null,
-    itemId: null,
-    toName: null,
-    toEmoji: null,
-    fromName: null,
-    ...known,
-  });
   const entries: {
     id: string;
     kind: DoneForYouKind;
@@ -5111,11 +5097,12 @@ async function seedDoneForYou(
         detail: null,
         why: 'Your rule, Safeway goes to Groceries',
         undo: { kind: 'rule', placed },
-        subject: subject({
+        subject: toSubject({
           purchaseId: placed.id,
           merchant: 'Safeway',
           amountCents: 4_725,
           ruleId: 'seed-rule-safeway',
+          itemId: 'seed-envelope-groceries',
           toName: 'Groceries',
           toEmoji: '🛒',
         }),
@@ -5131,7 +5118,7 @@ async function seedDoneForYou(
         detail: null,
         why: 'Your rule, everything on the Discover goes to Everyday spending',
         undo: null,
-        subject: subject({
+        subject: toSubject({
           purchaseId: 'seed-link-purchase-sprouts-1',
           merchant: 'Sprouts',
           amountCents: 3_180,
@@ -5151,12 +5138,13 @@ async function seedDoneForYou(
         detail: NEEDS_HOME_WORDS.matchedOneSub,
         why: null,
         undo: null,
-        subject: subject({
-          purchaseId: 'seed-link-purchase-sprouts-2',
+        subject: toSubject({
+          purchaseId: 'seed-purchase-target',
           merchant: 'Target',
           merchantLogo:
             'https://plaid-merchant-logos.plaid.com/target_1100.png',
-          amountCents: 6_418,
+          amountCents: 4_500,
+          itemId: 'seed-envelope-everyday',
           toName: 'Everyday spending',
           toEmoji: '💰',
         }),
@@ -5172,7 +5160,7 @@ async function seedDoneForYou(
         detail: null,
         why: 'It is on autopay.',
         undo: null,
-        subject: subject({
+        subject: toSubject({
           billId: 'seed-bill-jamie-cloud',
           toName: 'Cloud storage',
           toEmoji: '☁️',
@@ -5189,7 +5177,7 @@ async function seedDoneForYou(
         detail: DONE_FOR_YOU_WORDS.moved,
         why: null,
         undo: null,
-        subject: subject({
+        subject: toSubject({
           amountCents: 25_000,
           fromName: 'Checking A',
           toName: 'Checking B',
@@ -5206,7 +5194,7 @@ async function seedDoneForYou(
         detail: null,
         why: DONE_FOR_YOU_WORDS.endedWhy,
         undo: null,
-        subject: subject({
+        subject: toSubject({
           itemId: 'seed-goal-concert',
           toName: 'Concert tickets',
           toEmoji: '🎟️',

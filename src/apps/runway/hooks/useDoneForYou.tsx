@@ -1,5 +1,5 @@
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowUpRight, Receipt, Repeat } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpRight, Receipt, Repeat } from 'lucide-react';
 
 import type {
   DoneForYouDoor,
@@ -36,9 +36,10 @@ import {
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsRulesLoaded,
-  selectIsSortingPaused,
   selectItemLooks,
   selectRules,
+  selectSorting,
+  isQuietBySorting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setOpenRuleRequest } from '@apps/runway/utils/openRuleRequest';
@@ -49,6 +50,7 @@ import type {
   OpenDoneForYou,
   OpenPurchase,
   PlanSection,
+  SortingState,
 } from '@apps/runway/types';
 import {
   describeAccountPair,
@@ -168,30 +170,19 @@ const getNoUndoNote = (kind: DoneForYouKind) => {
     case 'released':
       return DONE_FOR_YOU_WORDS.nothingToUndo;
     default:
-      return null;
+      return DONE_FOR_YOU_WORDS.noUndo;
   }
 };
 
-/** The cents a rule's, merge's or charge's Undo sends back to waiting; a positive charge there is quiet while sorting is paused. */
-const getReturnedCents = (undo: DoneForYouUndo) => {
-  switch (undo.kind) {
-    case 'rule':
-      return undo.placed.amountCents;
-    case 'merge':
-      return undo.merged.bank.amountCents;
-    case 'charge':
-      return undo.result.purchase.amountCents;
-    default:
-      return 0;
-  }
-};
-
-const isLeftInFreeToSpend = (undo: DoneForYouUndo, isPaused: boolean) =>
-  isPaused && getReturnedCents(undo) > 0;
+/** A rule's Undo whose charge would not wait in Needs a home, by the same test that list uses; other kinds keep naming what they take apart. */
+const isLeftInFreeToSpend = (
+  undo: DoneForYouUndo,
+  sorting: SortingState | null,
+) => undo.kind === 'rule' && isQuietBySorting(undo.placed, sorting);
 
 /** The Undo button names what it puts back. */
-const getUndoLabel = (undo: DoneForYouUndo, isPaused: boolean) => {
-  if (isLeftInFreeToSpend(undo, isPaused)) return DONE_FOR_YOU_WORDS.undoQuiet;
+const getUndoLabel = (undo: DoneForYouUndo, sorting: SortingState | null) => {
+  if (isLeftInFreeToSpend(undo, sorting)) return DONE_FOR_YOU_WORDS.undoQuiet;
   switch (undo.kind) {
     case 'merge':
       return DONE_FOR_YOU_WORDS.undoMerge;
@@ -206,10 +197,8 @@ const getUndoLabel = (undo: DoneForYouUndo, isPaused: boolean) => {
   }
 };
 
-const getUndoneWords = (undo: DoneForYouUndo, isPaused: boolean) => {
-  if (undo.kind === 'rule' && isLeftInFreeToSpend(undo, isPaused)) {
-    return DONE_FOR_YOU_WORDS.undoneQuiet;
-  }
+const getUndoneWords = (undo: DoneForYouUndo, sorting: SortingState | null) => {
+  if (isLeftInFreeToSpend(undo, sorting)) return DONE_FOR_YOU_WORDS.undoneQuiet;
   switch (undo.kind) {
     case 'merge':
       return NEEDS_HOME_WORDS.matchUndone;
@@ -302,7 +291,7 @@ export function useDoneForYou() {
     (state) => state.runway.plan?.doneForYouSeenAt ?? null,
   );
   const isReady = useAppSelector((state) => state.runway.isDoneForYouLoaded);
-  const isPaused = useAppSelector(selectIsSortingPaused);
+  const sorting = useAppSelector(selectSorting);
   const level = useAppSelector(selectLevel);
   const rules = useAppSelector(selectRules);
   const isRulesLoaded = useAppSelector(selectIsRulesLoaded);
@@ -364,6 +353,7 @@ export function useDoneForYou() {
           : item?.kind === 'envelope'
             ? DONE_FOR_YOU_WORDS.openEnvelope
             : fallbackLabel;
+      if (item !== undefined && section === null) return [];
       const isGone = item === undefined || item.archivedAt !== null;
       return [
         {
@@ -401,13 +391,25 @@ export function useDoneForYou() {
               },
             },
           ];
+    const movesDoor: DoneForYouDoor = {
+      label: DONE_FOR_YOU_WORDS.openMoves,
+      subtitle: DONE_FOR_YOU_WORDS.openMovesSub,
+      icon: <ArrowLeftRight />,
+      onSelect: () => {
+        void openView('accountMoves');
+      },
+    };
+    const envelopeDoor = () =>
+      getItemDoor(subject.itemId, DONE_FOR_YOU_WORDS.openEnvelope);
     switch (entry.kind) {
       case 'rule':
-        return [...ruleDoor(), ...purchaseDoor()];
+        return [...ruleDoor(), ...envelopeDoor(), ...purchaseDoor()];
       case 'merge':
+        return [...envelopeDoor(), ...purchaseDoor()];
       case 'deposit':
-      case 'pair':
         return purchaseDoor();
+      case 'pair':
+        return [movesDoor];
       case 'charge':
         return [
           ...purchaseDoor(),
@@ -441,8 +443,7 @@ export function useDoneForYou() {
         entry.undo !== null && !canUndo
           ? DONE_FOR_YOU_WORDS.cannotUndoRow
           : null,
-      undoLabel:
-        entry.undo === null ? null : getUndoLabel(entry.undo, isPaused),
+      undoLabel: entry.undo === null ? null : getUndoLabel(entry.undo, sorting),
       undoneAt: entry.undoneAt,
       doors: getDoors(entry),
       ...getDoneForYouLook(entry.kind, entry.subject),
@@ -471,10 +472,7 @@ export function useDoneForYou() {
     );
     addToast({
       title: DONE_FOR_YOU_WORDS.undone,
-      description: getUndoneWords(
-        entry.undo,
-        selectIsSortingPaused(store.getState()),
-      ),
+      description: getUndoneWords(entry.undo, selectSorting(store.getState())),
       type: 'success',
     });
     return null;

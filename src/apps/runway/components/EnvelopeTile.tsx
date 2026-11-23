@@ -95,8 +95,7 @@ function EnvelopeTile({
     look === 'row' &&
     figureKind === 'monthly' &&
     !isPart &&
-    openItem?.itemId === itemId &&
-    openItem.eventId !== null
+    openItem?.itemId === itemId
       ? openItem
       : null;
   const { isHidden } = useValuesHidden();

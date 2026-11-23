@@ -97,10 +97,10 @@ export function useMergeWithUndo() {
   const looks = useAppSelector(selectItemLooks);
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const getDestinationId = (typed: OpenPurchase) =>
+    typed.lines.find((line) => line.envelopeId !== null)?.envelopeId ?? null;
   const getDestination = (typed: OpenPurchase) => {
-    const envelopeId = typed.lines.find(
-      (line) => line.envelopeId !== null,
-    )?.envelopeId;
+    const envelopeId = getDestinationId(typed);
     return envelopeId ? (looks.get(envelopeId) ?? null) : null;
   };
 
@@ -175,6 +175,7 @@ export function useMergeWithUndo() {
           undo: { kind: 'merge' as const, merged: entry },
           subject: toPurchaseSubject(entry.bank, {
             merchant: entry.bank.merchant ?? entry.typed.label ?? null,
+            itemId: getDestinationId(entry.typed),
             toName: getDestination(entry.typed)?.name ?? null,
             toEmoji: getDestination(entry.typed)?.emoji ?? null,
           }),

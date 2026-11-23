@@ -248,7 +248,7 @@ function DoneForYouSheet({
             </span>
           )}
           {hasMark && entry.kindIcon !== undefined && (
-            <span className='bg-background border-border text-muted-foreground absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full border [&_svg]:size-3'>
+            <span className='bg-background border-background text-foreground absolute -right-1.5 -bottom-1.5 grid size-6 place-items-center rounded-full border-2 shadow-sm [&_svg]:size-3.5'>
               {entry.kindIcon}
               {entry.kindLabel !== undefined && (
                 <span className='sr-only'>{entry.kindLabel}</span>

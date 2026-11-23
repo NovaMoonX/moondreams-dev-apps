@@ -225,16 +225,14 @@ export function usePlaceByRules(uid: string | null) {
               kind: 'rule' as const,
               title: DONE_FOR_YOU_WORDS.ruleSent(
                 getPurchaseTitle(entry, nameOf),
-                nameOf(
-                  entry.lines.find((line) => line.via === 'chosen')
-                    ?.envelopeId ?? '',
-                ),
+                nameOf(envelopeId),
               ),
               detail: null,
               why: `${RULE_WORDS.yourRule}, ${sentence}`,
               undo: { kind: 'rule' as const, placed: entry },
               subject: toPurchaseSubject(entry, {
                 ruleId: entry.ruleId,
+                itemId: envelopeId === '' ? null : envelopeId,
                 toName: names.get(envelopeId)?.name ?? null,
                 toEmoji: names.get(envelopeId)?.emoji ?? null,
               }),

@@ -27,7 +27,9 @@ function Side({
 }) {
   return (
     <span className='flex min-w-0 flex-1 items-center gap-2'>
-      {mark}
+      {mark !== null && (
+        <span className='shrink-0 max-[359px]:hidden'>{mark}</span>
+      )}
       <span className='min-w-0'>
         <span className='block text-sm font-medium break-words'>{name}</span>
         {line !== undefined && (
