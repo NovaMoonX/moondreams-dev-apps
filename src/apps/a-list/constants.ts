@@ -15,6 +15,8 @@ export const ARCHIVE_GATE_ID = 'archive';
 
 /** The feature switch for release days on the calendar (`FEATURE_GATES`). */
 export const CALENDAR_RELEASES_GATE_ID = 'calendar-releases';
+export const EMAIL_TICKETS_GATE_ID = 'email-tickets';
+export const EMAIL_EVENT_KEEP_DAYS = 30;
 
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';

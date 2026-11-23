@@ -59,6 +59,8 @@ const VIEWING_FIELDS = {
   purchase: 'never',
   rating: 'shared',
   trailerReminderId: 'notUseful',
+  amcConfirmation: 'never',
+  emailEventId: 'notUseful',
   createdAt: 'notUseful',
   lastEditedAt: 'shared',
 } satisfies Record<keyof Viewing, ShareDecision>;
