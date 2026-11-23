@@ -257,13 +257,12 @@ const STANDALONE_NAME_LINE =
 const GROUPED_DIGITS = /\b\d{3,}(?:[ -]\d{3,})+\b/g;
 
 const isNameLine = (line: string, found: string[], subject: string) =>
-  found.length > 0
-    ? line.split(' ').some((word) => found.includes(word))
-    : !subject.includes(line);
+  line.split(' ').some((word) => found.includes(word)) ||
+  !subject.includes(line);
 
 /**
  * The email's text without the membership block, the member's name or any long number, for the short excerpt an event keeps and the prompt the AI gets.
- * It does not rely on AMC's layout: a name line or greeting gives the name, and a line of two or three capitalised words holding it goes; with no name found, every such line goes except one the subject holds (a title).
+ * It does not rely on AMC's layout: a line of two or three capitalised words goes unless the subject holds it (a title), and always when it holds the name a name line or greeting gives, since a nickname greeting can sit above a legal name.
  */
 export function withoutMemberDetails(text: string, subject = '') {
   const found = names(text).map((name) => name.toLowerCase());

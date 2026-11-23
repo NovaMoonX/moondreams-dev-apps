@@ -256,15 +256,19 @@ assert.ok(
     'Focker In-Law',
   ),
 );
-assert.ok(
-  withoutMemberDetails('Hi Sam,\nThe Wild Robot\nSam Doe\n').includes(
-    'The Wild Robot',
-  ),
-  'a title line only in the body stays',
+const bodyTitle = withoutMemberDetails(
+  'Hi Alex,\nThe Wild Robot\nAlexander Hamilton\nSam Doe\n',
+  'Your tickets for The Wild Robot',
 );
 assert.ok(
-  !withoutMemberDetails('Hi Sam,\nThe Wild Robot\nSam Doe\n').includes('Doe'),
-  'a line holding the found name goes',
+  bodyTitle.includes('The Wild Robot\n'),
+  'a title the subject holds stays',
+);
+['Alexander', 'Hamilton', 'Doe'].forEach((secret) =>
+  assert.ok(
+    !bodyTitle.includes(secret),
+    `a nickname greeting still strips: ${secret}`,
+  ),
 );
 assert.ok(
   withoutMemberDetails('Hello AMC,\nYour AMC order').includes('Your AMC order'),
@@ -307,7 +311,7 @@ const subjectTitle = prepareAiPrompt(
 assert.ok(
   subjectTitle.includes('Wicked Wonders\n') &&
     !subjectTitle.includes('Pat Jones'),
-  'no name found: a title line the subject holds is kept, a name line is not',
+  'a title line the subject holds is kept, a name line is not',
 );
 
 const chicago = 'America/Chicago';

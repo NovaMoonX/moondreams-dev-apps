@@ -104,8 +104,8 @@ const NOTHING_WRITTEN = {
 const SKIPPED_EXCERPT_MAX = 200;
 const READ_EXCERPT_MAX = 300;
 
-const keptText = (text: string, max: number) =>
-  snippetOf(withoutEmailAddresses(withoutMemberDetails(text)), max);
+const keptText = (text: string, max: number, subject = '') =>
+  snippetOf(withoutEmailAddresses(withoutMemberDetails(text, subject)), max);
 
 const AMC_DOMAIN = /(?:^|\.)amctheatres\.com$/;
 
@@ -133,7 +133,11 @@ function toEvent(
     subject: isConfirmation ? '' : keptText(mail.subject, 300),
     snippet: isConfirmation
       ? ''
-      : keptText(mail.text, isSkipped ? SKIPPED_EXCERPT_MAX : READ_EXCERPT_MAX),
+      : keptText(
+          mail.text,
+          isSkipped ? SKIPPED_EXCERPT_MAX : READ_EXCERPT_MAX,
+          mail.subject,
+        ),
     readBy: written.readBy,
     viewingId: written.viewingId,
     movieTitle: written.movieTitle,
