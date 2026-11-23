@@ -22,6 +22,7 @@ import type {
   OpenEmailEvent,
   OpenEmailFilter,
   OpenEmailIntake,
+  OpenEmailSetup,
 } from '@apps/runway/store/listeners/emailListeners';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -91,6 +92,7 @@ export interface RunwayState {
   isMemoriesLoaded: boolean;
   /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
   emailIntake: OpenEmailIntake | null;
+  emailSetup: OpenEmailSetup | null;
   emailEvents: OpenEmailEvent[];
   emailFilters: OpenEmailFilter[];
   /** The purchases of the recent window. */
@@ -226,6 +228,7 @@ const initialState: RunwayState = {
   startedPayments: [],
   isMemoriesLoaded: false,
   emailIntake: null,
+  emailSetup: null,
   emailEvents: [],
   emailFilters: [],
   purchases: [],
@@ -337,6 +340,9 @@ export const runwaySlice = createSlice({
     },
     setEmailIntake: (state, action: PayloadAction<OpenEmailIntake | null>) => {
       state.emailIntake = action.payload;
+    },
+    setEmailSetup: (state, action: PayloadAction<OpenEmailSetup | null>) => {
+      state.emailSetup = action.payload;
     },
     setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[]>) => {
       state.emailEvents = action.payload;
@@ -533,6 +539,7 @@ export const {
   setEmailIntake,
   setEmailEvents,
   setEmailFilters,
+  setEmailSetup,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

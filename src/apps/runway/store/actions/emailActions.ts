@@ -1,4 +1,10 @@
-import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  deleteDoc,
+  doc,
+  runTransaction,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@lib/firebase/config';
@@ -8,6 +14,7 @@ import { sealJson } from '@apps/runway/security';
 import type {
   EmailFilterDoc,
   EmailFilterSealed,
+  EmailSetupDoc,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -78,5 +85,35 @@ export async function setEmailWaiting(
   await updateDoc(planRef(uid, 'purchases', purchaseId), {
     emailWaiting: isWaiting,
     updatedAt: Date.now(),
+  });
+}
+
+export type EmailSetupChange = Partial<
+  Pick<EmailSetupDoc, 'provider' | 'step' | 'doneAt'>
+>;
+
+/** Writes the walkthrough's progress from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
+export async function saveEmailSetup(
+  uid: string,
+  decide: (current: EmailSetupDoc | null) => EmailSetupChange | null,
+): Promise<void> {
+  const ref = planRef(uid, 'emailSetup', 'progress');
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const current = snapshot.exists()
+      ? (snapshot.data() as EmailSetupDoc)
+      : null;
+    const change = decide(current);
+    if (change === null) return;
+    const now = Date.now();
+    transaction.set(ref, {
+      id: 'progress',
+      provider: current?.provider ?? null,
+      step: current?.step ?? 0,
+      doneAt: current?.doneAt ?? null,
+      createdAt: current?.createdAt ?? now,
+      ...change,
+      updatedAt: now,
+    } satisfies EmailSetupDoc);
   });
 }

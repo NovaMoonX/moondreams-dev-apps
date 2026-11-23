@@ -7,6 +7,7 @@ import {
   startEmailEventsListener,
   startEmailFiltersListener,
   startEmailIntakeListener,
+  startEmailSetupListener,
 } from '@apps/runway/store/listeners/emailListeners';
 
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -89,6 +90,7 @@ import {
   setRules,
   setMemories,
   setEmailIntake,
+  setEmailSetup,
   setEmailEvents,
   setEmailFilters,
   setClosing,
@@ -283,6 +285,11 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             (intake) => dispatch(setEmailIntake(intake)),
             skip,
           ),
+          startEmailSetupListener(
+            uid,
+            (setup) => dispatch(setEmailSetup(setup)),
+            skip,
+          ),
           startEmailEventsListener(
             uid,
             encryption,
@@ -305,6 +312,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       run.isCurrent = false;
       stops.current.forEach((stop) => stop());
       dispatch(setEmailIntake(null));
+      dispatch(setEmailSetup(null));
       dispatch(setEmailEvents([]));
       dispatch(setEmailFilters([]));
     };

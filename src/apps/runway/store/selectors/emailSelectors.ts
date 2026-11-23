@@ -61,6 +61,8 @@ export const selectEmailOverdue = createSelector(
 export const selectEmailIntake = (state: RootState) => state.runway.emailIntake;
 
 /** Newest first. */
+export const selectEmailSetup = (state: RootState) => state.runway.emailSetup;
+
 export const selectEmailEvents = (state: RootState) => state.runway.emailEvents;
 
 export const selectEmailFilters = (state: RootState) =>

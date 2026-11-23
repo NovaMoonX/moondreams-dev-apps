@@ -50,6 +50,7 @@ const RATE_KEEP_MS = 2 * 86_400_000;
 const DAY_MS = 86_400_000;
 const SECRET_NAME = 'RUNWAY_EMAIL_WEBHOOK_SECRET';
 const GMAIL_SENDER = 'forwarding-noreply@google.com';
+const YAHOO_DOMAINS = ['yahoo.com', 'yahoo-inc.com', 'yahoomail.com'];
 
 const readSecret = createOptionalSecretReader({ fetch: globalThis.fetch });
 
@@ -190,14 +191,25 @@ async function loadFilters(
   });
 }
 
+const isYahooSender = (from: string) => {
+  const domain = toAddress(from).split('@')[1] ?? '';
+  return YAHOO_DOMAINS.some(
+    (known) => domain === known || domain.endsWith(`.${known}`),
+  );
+};
+
 const isForwardingConfirmation = (mail: Mail) =>
-  toAddress(mail.from) === GMAIL_SENDER &&
-  /forwarding confirmation/i.test(mail.subject);
+  (toAddress(mail.from) === GMAIL_SENDER &&
+    /forwarding confirmation/i.test(mail.subject)) ||
+  (isYahooSender(mail.from) &&
+    /forward/i.test(mail.subject) &&
+    /verif|confirm/i.test(mail.subject));
 
 function readConfirmation(mail: Mail) {
-  const url = /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i.exec(
-    mail.text,
-  )?.[0];
+  const link = isYahooSender(mail.from)
+    ? /https:\/\/(?:[a-z0-9-]+\.)*yahoo\.com\/[^\s"'<>)\]]+/i
+    : /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i;
+  const url = link.exec(mail.text)?.[0];
   const code = /code[^0-9]{0,60}(\d{6,9})\b/i.exec(mail.text)?.[1];
   return {
     confirmUrl: url?.replace(/[.,;]+$/, '').slice(0, 2000) ?? null,

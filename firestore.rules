@@ -552,7 +552,7 @@ service cloud.firestore {
     // started at their bank) is created and deleted by the app, never changed. A purchase read from an email
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
     // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
-    // `emailWaiting` is the one email field the app updates.
+    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and step, nothing sensitive) is created and updated by the app, never deleted.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
@@ -568,7 +568,7 @@ service cloud.firestore {
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
       allow update: if isUser(uid)
-        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
+        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules', 'emailSetup']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null) && request.resource.data.get('emailEventId', null) == resource.data.get('emailEventId', null)));
       allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters'];

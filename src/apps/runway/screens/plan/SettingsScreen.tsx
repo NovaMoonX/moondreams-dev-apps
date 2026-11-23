@@ -48,11 +48,14 @@ import {
   TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
-import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import {
+  EMAIL_SETUP_WORDS,
+  EMAIL_WORDS,
+} from '@apps/runway/components/emailWords';
 import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
-import { useEmailIntake } from '@apps/runway/hooks/useEmailPurchases';
+import { useEmailIntake, useEmailSetup } from '@apps/runway/hooks/useEmailPurchases';
 import EmailPurchasesScreen from '@apps/runway/screens/plan/EmailPurchasesScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
@@ -160,6 +163,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const canEmail =
     useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID) && level !== 'plan';
   const emailIntake = useEmailIntake();
+  const emailSetup = useEmailSetup();
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const deviceState = useQuery({
     ...devicePushQueryOptions(user?.uid ?? ''),
@@ -302,9 +306,16 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               icon={<Mail />}
               label={EMAIL_WORDS.rowAction}
               value={
-                emailIntake.address === null
-                  ? EMAIL_WORDS.rowNotSetUp
-                  : EMAIL_WORDS.rowSetUp
+                emailSetup.isDone
+                  ? EMAIL_WORDS.rowSetUp
+                  : emailSetup.provider !== null
+                    ? EMAIL_SETUP_WORDS.rowStep(
+                        emailSetup.step + 1,
+                        emailSetup.steps.length,
+                      )
+                    : emailIntake.address === null
+                      ? EMAIL_WORDS.rowNotSetUp
+                      : EMAIL_WORDS.rowSetUp
               }
               onOpen={() => setIsEmailOpen(true)}
             />

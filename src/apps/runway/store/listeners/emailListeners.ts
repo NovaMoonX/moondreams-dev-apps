@@ -20,6 +20,7 @@ import type {
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
+  EmailSetupDoc,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -209,4 +210,36 @@ export function startEmailFiltersListener(
     run.isStopped = true;
     stop();
   };
+}
+
+export interface OpenEmailSetup {
+  provider: EmailSetupDoc['provider'];
+  step: number;
+  doneAt: number | null;
+}
+
+/** How far the person got setting up forwarding; null until they start. */
+export function startEmailSetupListener(
+  uid: string,
+  onChange: (setup: OpenEmailSetup | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'apps', 'runway', 'plans', uid, 'emailSetup', 'progress'),
+    (snapshot) => {
+      const data = snapshot.exists()
+        ? (snapshot.data() as Partial<EmailSetupDoc>)
+        : null;
+      onChange(
+        data === null
+          ? null
+          : {
+              provider: data.provider ?? null,
+              step: typeof data.step === 'number' ? data.step : 0,
+              doneAt: data.doneAt ?? null,
+            },
+      );
+    },
+    (error) => onError(toError(error)),
+  );
 }

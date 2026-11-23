@@ -1,4 +1,8 @@
-import type { EmailFilterSealed, EmailOutcome } from '@apps/runway/types';
+import type {
+  EmailFilterSealed,
+  EmailOutcome,
+  EmailProvider,
+} from '@apps/runway/types';
 
 export const EMAIL_FILTER_TEXT =
   'from:(alerts@yourbank.com) subject:(purchase OR charge OR transaction OR spent OR alert)';
@@ -13,7 +17,6 @@ export const EMAIL_WORDS = {
   rowSetUp: 'Each alert becomes a purchase',
   rowAction: 'Forward your bank’s alerts',
   title: 'Purchases from email',
-  addressCaption: 'Your address',
   getAddress: 'Get your address',
   newAddress: 'Get a new address',
   newAddressSub: 'Your old address stops working',
@@ -21,18 +24,6 @@ export const EMAIL_WORDS = {
   newAddressMessage:
     'Your old address stops working. Anything still forwarding to it will be lost.',
   addressFailed: 'The address did not change. Try again in a moment.',
-  stepsCaption: 'How to set it up',
-  steps: [
-    'Copy the address.',
-    'In Gmail, add it as a forwarding address, then come back to confirm.',
-    'Make a filter for your bank’s alert address, so only its alerts come here.',
-  ],
-  filterHint: 'Swap in the address your bank’s alerts come from.',
-  filterLabel: 'Copy filter text',
-  gmailForwarding: 'Open Gmail forwarding',
-  gmailFilters: 'Open Gmail filters',
-  confirmForwarding: 'Confirm forwarding',
-  confirmCode: 'Code',
   filtersCaption: 'Filtered out',
   filterTitle: 'Filter',
   removeFilter: 'Remove this filter',
@@ -64,6 +55,7 @@ export const EMAIL_WORDS = {
   pickOne: 'Pick at least one',
   saveFailed: 'The filter did not save. Try again.',
   removeFailed: 'That did not go through. Try again.',
+  progressFailed: "Couldn't save your place. Forwarding still works.",
   waitingShort: 'Waiting for your bank',
   drawerWaiting:
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
@@ -92,7 +84,7 @@ const OUTCOME_WORDS: Record<EmailOutcome, string> = {
   purchase: 'Added as a purchase',
   notPurchase: 'Not a purchase',
   filtered: 'Filtered out',
-  confirm: 'Gmail confirmation',
+  confirm: 'Forwarding confirmation',
   unread: 'Couldn’t read it',
   notTracking: 'Not tracking that day',
 };
@@ -125,3 +117,107 @@ export function describeEmailFilter(filter: EmailFilterSealed): {
     detail: parts.length > 1 ? parts.slice(1).join(' · ') : null,
   };
 }
+
+export const YAHOO_MAIL_URL = 'https://mail.yahoo.com/';
+export const OUTLOOK_RULES_URL =
+  'https://outlook.live.com/mail/0/options/mail/rules';
+export const ICLOUD_MAIL_URL = 'https://www.icloud.com/mail/';
+
+export const EMAIL_PROVIDER_NAMES: Record<EmailProvider, string> = {
+  gmail: 'Gmail',
+  outlook: 'Outlook',
+  icloud: 'iCloud',
+  yahoo: 'Yahoo',
+  other: 'your email',
+};
+
+export const EMAIL_SETUP_WORDS = {
+  progress: (step: number, total: number) => `Step ${step} of ${total}`,
+  next: 'Next',
+  back: 'Back',
+  done: 'Done',
+  providerTitle: 'Which email do your bank alerts go to?',
+  providerSubs: {
+    gmail: 'Also Google Workspace',
+    outlook: 'Also Hotmail and Live',
+    icloud: 'Apple Mail',
+    yahoo: 'Yahoo Mail',
+    other: 'Any email that can forward',
+  } satisfies Record<EmailProvider, string>,
+  providerLabels: {
+    gmail: 'Gmail',
+    outlook: 'Outlook',
+    icloud: 'iCloud',
+    yahoo: 'Yahoo',
+    other: 'Other',
+  } satisfies Record<EmailProvider, string>,
+  copyTitle: 'Copy your Runway address',
+  copyLine:
+    'Only you can see it. Your bank’s alerts forwarded here become purchases.',
+  copyLabel: 'Copy address',
+  yahooNote:
+    'Yahoo forwards all your mail; Runway skips anything that isn’t a bank alert without reading it.',
+  gmailForwardingTitle: 'Add it as a forwarding address',
+  gmailForwardingLines: [
+    'In Gmail’s forwarding settings, choose “Add a forwarding address” and paste your address.',
+    'Don’t turn on forwarding of all mail; the filter does that.',
+  ],
+  gmailForwardingLink: 'Open Gmail forwarding settings',
+  yahooForwardingTitle: 'Turn on auto-forwarding',
+  yahooForwardingLines: [
+    'In Yahoo Mail, go to Settings → More settings → Mailboxes → your mailbox → Auto-forwarding.',
+    'Paste your address and press Verify.',
+  ],
+  yahooForwardingLink: 'Open Yahoo Mail',
+  outlookRuleTitle: 'Make a rule for your bank’s alerts',
+  outlookRuleLines: [
+    'When it’s from your bank’s alert address, choose Forward to and paste your address.',
+  ],
+  outlookRuleLink: 'Open Outlook rules',
+  icloudRuleTitle: 'Make a rule for your bank’s alerts',
+  icloudRuleLines: [
+    'In iCloud Mail, go to Settings → Rules. When it’s from your bank’s alert address, forward it to your address.',
+  ],
+  icloudRuleLink: 'Open iCloud Mail',
+  otherRuleTitle: 'Set up forwarding',
+  otherRuleLines: [
+    'In your email’s settings, forward to your Runway address.',
+    'A rule or filter for only your bank’s alerts works best.',
+  ],
+  confirmTitle: 'Confirm the forwarding address',
+  confirmWaiting: (provider: EmailProvider) =>
+    provider === 'other'
+      ? 'Waiting for the confirmation email…'
+      : `Waiting for ${EMAIL_PROVIDER_NAMES[provider]}’s confirmation email…`,
+  confirmButton: (provider: EmailProvider) =>
+    provider === 'other'
+      ? 'Confirm forwarding'
+      : `Confirm with ${EMAIL_PROVIDER_NAMES[provider]}`,
+  confirmed: 'Confirmed',
+  linkFailed: 'Link didn’t work?',
+  codeLine: (provider: EmailProvider) =>
+    provider === 'other'
+      ? 'Enter this code where you set up forwarding'
+      : `Enter this code in ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings`,
+  copyCode: 'Copy code',
+  filterTitle: 'Only forward your bank’s alerts',
+  filterLines: [
+    'Make a filter with this text, then choose “Forward it to” and pick your address.',
+  ],
+  filterHint: 'Swap in the address your bank’s alerts come from.',
+  filterLabel: 'Copy filter text',
+  filterLink: 'Open Gmail filters',
+  testTitle: 'Try it with one alert',
+  testLine: 'Forward one bank alert to your address.',
+  testWaiting: 'Waiting for your first alert…',
+  testDone: 'It worked. Your first purchase is in.',
+  noFilterNotice:
+    'Other emails are reaching Runway and are skipped unread. Finish the filter step so only your bank’s alerts come here.',
+  noFilterButton: 'Go to that step',
+  working: 'Working',
+  workingSince: (when: string) => `Working · last email ${when}`,
+  addressRow: 'Your address',
+  setUpAgain: 'Set it up again',
+  setUpAgainSub: 'Walk through the steps again',
+  rowStep: (step: number, total: number) => `Step ${step} of ${total}`,
+} as const;

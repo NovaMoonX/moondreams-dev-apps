@@ -90,6 +90,7 @@ import type {
   EmailEventDoc,
   EmailEventSealed,
   EmailFilterDoc,
+  EmailSetupDoc,
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
@@ -4683,7 +4684,7 @@ async function writeSeedPurchases(
 }
 
 /**
- * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome and a filter. No bank charge of the same amount sits on the Venture X, so none merges.
+ * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome and a filter, and a finished Gmail walkthrough. No bank charge of the same amount sits on the Venture X, so none merges.
  */
 async function writeSeedEmail(
   context: SeedContext,
@@ -4897,6 +4898,15 @@ async function writeSeedEmail(
     }),
   );
 
+  batch.set(context.firestore.doc(`${plan}/emailSetup/progress`), {
+    id: 'progress',
+    provider: 'gmail',
+    step: 5,
+    doneAt: context.now - DAY_MS,
+    createdAt: context.now - 12 * DAY_MS,
+    updatedAt: context.now - DAY_MS,
+  } satisfies EmailSetupDoc);
+
   const filterId = 'seed-email-filter-chase-marketing';
   batch.set(context.firestore.doc(`${plan}/emailFilters/${filterId}`), {
     id: filterId,
@@ -4911,7 +4921,7 @@ async function writeSeedEmail(
       encryption,
     ),
   } satisfies EmailFilterDoc);
-  return 1 + purchases.length + events.length + 1;
+  return 1 + purchases.length + events.length + 2;
 }
 
 /**

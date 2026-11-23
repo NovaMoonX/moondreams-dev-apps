@@ -5,6 +5,7 @@ import {
   createEmailFilter,
   deleteEmailFilter,
   rotateEmailAddress,
+  saveEmailSetup,
   setEmailWaiting,
   suggestEmailFilters,
 } from '@apps/runway/store/actions/emailActions';
@@ -13,14 +14,20 @@ import {
   selectEmailFilters,
   selectEmailIntake,
   selectEmailOverdue,
+  selectEmailSetup,
 } from '@apps/runway/store/selectors/emailSelectors';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
   EmailEventSealed,
   EmailFilterSealed,
   EmailOutcome,
+  EmailProvider,
   OpenPurchase,
 } from '@apps/runway/types';
+import {
+  getEmailSetupSteps,
+  type EmailSetupStepId,
+} from '@apps/runway/utils/emailSetupSteps';
 import { EMAIL_ADDRESS_PREFIX, EMAIL_DOMAIN } from '@apps/runway/constants';
 
 export interface EmailIntakeRead {
@@ -55,6 +62,9 @@ export interface EmailActions {
   suggestFilters(eventId: string): Promise<EmailFilterSuggestion[]>;
   stopWaiting(purchaseId: string): Promise<void>;
   resumeWaiting(purchaseId: string): Promise<void>;
+  chooseProvider(provider: EmailProvider): Promise<void>;
+  reachStep(step: number): Promise<void>;
+  finishSetup(): Promise<void>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
@@ -118,7 +128,58 @@ export function useEmailActions(): EmailActions {
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, false),
       resumeWaiting: (purchaseId) =>
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, true),
+      chooseProvider: (provider) =>
+        uid === null
+          ? NO_UID()
+          : saveEmailSetup(uid, (current) => ({
+              provider,
+              step:
+                current?.provider === provider ? Math.max(current.step, 1) : 1,
+            })),
+      reachStep: (step) =>
+        uid === null
+          ? NO_UID()
+          : saveEmailSetup(uid, (current) =>
+              step > (current?.step ?? 0) ? { step } : null,
+            ),
+      finishSetup: () =>
+        uid === null
+          ? NO_UID()
+          : saveEmailSetup(uid, (current) =>
+              current?.doneAt != null ? null : { doneAt: Date.now() },
+            ),
     }),
     [uid],
   );
+}
+
+export interface EmailSetupRead {
+  provider: EmailProvider | null;
+  steps: EmailSetupStepId[];
+  /** Index of the furthest step reached, never past the last step. */
+  step: number;
+  /** Written once, or any purchase has already come from email. */
+  isDone: boolean;
+  /** Whether the stored doneAt is still empty. */
+  isDoneUnwritten: boolean;
+}
+
+/** Where the person is in setting up forwarding, with the steps their provider needs. */
+export function useEmailSetup(): EmailSetupRead {
+  const setup = useAppSelector(selectEmailSetup);
+  const intake = useEmailIntake();
+  const events = useEmailEvents();
+  return useMemo(() => {
+    const provider = setup?.provider ?? null;
+    const steps = getEmailSetupSteps(provider, intake.confirm?.url != null);
+    const doneAt = setup?.doneAt ?? null;
+    return {
+      provider,
+      steps,
+      step: Math.min(setup?.step ?? 0, steps.length - 1),
+      isDone:
+        doneAt !== null || events.some((entry) => entry.outcome === 'purchase'),
+      isDoneUnwritten: doneAt === null,
+    };
+  }, [setup, intake.confirm?.url, events]);
 }

@@ -38,6 +38,7 @@ COLLECTIONS = {
     'memories': {'delete'},
     'startedPayments': {'delete'},
     'emailFilters': {'delete'},
+    'emailSetup': {'update'},
 }
 
 
