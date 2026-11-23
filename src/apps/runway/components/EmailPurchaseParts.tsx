@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Filter, Hourglass, Mail, Sparkles } from 'lucide-react';
+import { Filter, Hourglass, Mail } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
@@ -28,11 +28,7 @@ interface EmailPurchaseProps {
 export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   const today = todayAsUtcDate();
   const twinned = useAppSelector(selectTwinnedEmailIds);
-  const events = useEmailEvents();
   if (purchase.source !== 'email') return null;
-  const isByAi =
-    purchase.emailEventId !== null &&
-    events.find((entry) => entry.id === purchase.emailEventId)?.readBy === 'ai';
   if (isOverdueEmail(purchase, twinned, today)) {
     return (
       <InlineNotice tone='warning'>
@@ -49,12 +45,6 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
           ? EMAIL_WORDS.drawerWaiting
           : EMAIL_WORDS.drawerFromEmail}
       </p>
-      {isByAi && (
-        <p className='text-muted-foreground mt-1 flex items-center gap-1.5'>
-          <Sparkles className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-          {EMAIL_WORDS.readByAi}
-        </p>
-      )}
     </InlineNotice>
   );
 }

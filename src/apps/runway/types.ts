@@ -1265,7 +1265,14 @@ export type EmailProvider =
   | 'other';
 
 export type EmailSetupStepId =
-  'provider' | 'copy' | 'forwarding' | 'rule' | 'confirm' | 'filter' | 'test';
+  | 'provider'
+  | 'copy'
+  | 'forwarding'
+  | 'bank'
+  | 'rule'
+  | 'confirm'
+  | 'filter'
+  | 'test';
 
 /** How far the person got setting up forwarding, written by the app so a walkthrough resumes on any device; one per plan, at `emailSetup/progress`. Holds no amounts or merchants, so it is not sealed. */
 export interface EmailSetupDoc {
@@ -1275,8 +1282,23 @@ export interface EmailSetupDoc {
   stepId: EmailSetupStepId | null;
   /** When setup was finished (the first purchase arrived, or the person completed it); null while unfinished. */
   doneAt: number | null;
+  /** `EmailSetupSealed`: the banks whose alerts the person forwards; null until one is added (and missing on an older doc). */
+  sealed: Sealed | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** One bank whose alerts are forwarded, with every From address its alerts come from. */
+export interface EmailBank {
+  id: string;
+  name: string;
+  /** Lowercase; at least one. */
+  addresses: string[];
+  addedAt: number;
+}
+
+export interface EmailSetupSealed {
+  banks: EmailBank[];
 }
 
 /** What became of one email that reached the address. */

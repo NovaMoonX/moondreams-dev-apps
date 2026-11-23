@@ -4,8 +4,14 @@ import type {
   EmailProvider,
 } from '@apps/runway/types';
 
-export const buildGmailFilterText = (address: string) =>
-  `from:(${address}) subject:(purchase OR charge OR transaction OR spent OR alert)`;
+export const buildGmailFilterText = (addresses: string[]) =>
+  `from:(${addresses.join(' OR ')}) subject:(purchase OR charge OR transaction OR spent OR alert)`;
+
+const fromWhom = (addresses: string[]) => {
+  if (addresses.length === 0) return 'your bank’s alert address';
+  if (addresses.length === 1) return addresses[0];
+  return 'any of the addresses below';
+};
 export const GMAIL_FILTERS_URL =
   'https://mail.google.com/mail/u/0/#settings/filters';
 export const GMAIL_FORWARDING_URL =
@@ -48,7 +54,6 @@ export const EMAIL_WORDS = {
   searchFilters: 'Search filters',
   openPurchase: 'Open the purchase',
   readOnPattern: 'Read from a known layout',
-  readByAi: 'Read by AI',
   fromEmail: 'From email',
   fromSender: 'From this sender',
   withSubject: 'With this subject',
@@ -176,33 +181,77 @@ export const EMAIL_SETUP_WORDS = {
   yahooForwardingLink: 'Open Yahoo Mail',
   outlookRuleTitle: 'Make a rule for your bank’s alerts',
   outlookRuleOpen: 'Open Outlook’s rules',
-  outlookRuleLine: (address: string | null) =>
-    `Make a rule: when it’s from ${address ?? 'your bank’s alert address'}, choose Forward to and paste your address`,
+  outlookRuleLine: (addresses: string[]) =>
+    `Make a rule: when it’s from ${fromWhom(addresses)}, choose Forward to and paste your address`,
   outlookRuleLink: 'Open Outlook rules',
   icloudRuleTitle: 'Make a rule for your bank’s alerts',
   icloudRuleOpen: 'In iCloud Mail, go to Settings → Rules',
-  icloudRuleLine: (address: string | null) =>
-    `Make a rule: when it’s from ${address ?? 'your bank’s alert address'}, forward it to your address`,
+  icloudRuleLine: (addresses: string[]) =>
+    `Make a rule: when it’s from ${fromWhom(addresses)}, forward it to your address`,
   icloudRuleLink: 'Open iCloud Mail',
   protonRuleTitle: 'Make a forwarding rule for your bank’s alerts',
   protonRuleGo:
     'In Proton Mail, go to Settings → All settings → Forward and auto-reply → Add forwarding rule',
   protonRulePaste: 'Paste your Runway address in Forward to',
-  protonRuleCondition: (address: string | null) =>
-    `Choose Add condition → If → Sender → is, and enter ${address ?? 'your bank’s alert address'}`,
+  protonRuleCondition: (addresses: string[]) =>
+    addresses.length > 1
+      ? 'Choose Add condition → If → Sender → is, and enter the first address below; add one more Sender condition for each of the others'
+      : `Choose Add condition → If → Sender → is, and enter ${fromWhom(addresses)}`,
   protonRuleSave:
     'Click Save. Proton sends an invitation to your Runway address, and the next step catches it',
   protonRuleNote:
     'Forwarding to another provider turns off end-to-end encryption for all mail on the Proton address you forward from. Your other Proton addresses aren’t affected.',
   protonRuleLink: 'Open Proton Mail',
   otherRuleTitle: 'Set up forwarding',
-  otherRuleLine: (address: string | null) =>
-    address === null
+  otherRuleLine: (addresses: string[]) =>
+    addresses.length === 0
       ? 'In your email’s settings, forward to your Runway address. A rule or filter for only your bank’s alerts works best'
-      : `In your email’s settings, make a rule that forwards mail from ${address} to your Runway address`,
-  alertAddressLead: 'Open one of your bank’s alerts and type its From address',
-  alertAddressLabel: 'Your bank’s alert address',
-  alertAddressPlaceholder: 'alerts@yourbank.com',
+      : `In your email’s settings, make a rule that forwards mail from ${fromWhom(addresses)} to your Runway address`,
+  bankTitle: 'Which bank’s alerts?',
+  bankLine: 'The bank that emails you each time a card is used.',
+  banksTitle: 'Your banks',
+  knownBankSub: 'From your cards and accounts',
+  anotherBank: 'Another bank',
+  anotherBankSub: 'Type its name',
+  bankNameLabel: 'Bank name',
+  bankNamePlaceholder: 'Chase',
+  addressLabel: 'Its alert email’s From address',
+  addressHint: 'Open one of its alerts and copy the address next to From.',
+  addressPlaceholder: 'alerts@chase.com',
+  addAddress: 'Add',
+  addressInvalid: 'That isn’t an email address yet.',
+  addressTaken: 'That address is already on the list.',
+  addAnotherAddress: 'Add another address',
+  addAnotherBank: 'Add another bank',
+  removeAddress: (address: string) => `Remove ${address}`,
+  bankNameNeeded: 'Type the bank’s name.',
+  chooseOtherBank: 'Choose a different bank',
+  addThisBank: (name: string) =>
+    name.trim() ? `Add ${name.trim()}` : 'Add this bank',
+  bankFirst: 'Pick your bank first, so the filter knows its alerts.',
+  bankFirstButton: 'Back to your bank',
+  banksSaveFailed: 'That didn’t save. Try again.',
+  addBank: 'Add a bank',
+  arrival: {
+    arriving: 'Alerts arriving',
+    waiting: 'Waiting for its first alert',
+    quiet: 'No alerts in the last 30 days',
+  },
+  copyAddress: (address: string) => `Copy ${address}`,
+  addressCount: (count: number) =>
+    count === 1 ? '1 address' : `${count} addresses`,
+  bankSheetAddresses: 'Its alert addresses',
+  updateCaption: 'Then update your forwarding',
+  updateGmailCopy: 'Copy the new filter',
+  updateGmailPaste:
+    'In Gmail filters, delete your old Runway filter, paste this in the search box, then choose Create filter → Forward it to → your Runway address',
+  updateRule: (addresses: string[]) =>
+    `In your forwarding rule, make sure it forwards mail from ${fromWhom(addresses)}`,
+  removeBank: 'Stop forwarding this bank',
+  removeBankSub: 'Then take its addresses out of your filter or rule.',
+  removeBankTitle: (name: string) => `Stop forwarding ${name}?`,
+  removeBankMessage:
+    'Runway forgets its addresses. Its alerts keep arriving until you take them out of your filter or rule.',
   confirmTitle: 'Confirm the forwarding address',
   confirmWaiting: (provider: EmailProvider) =>
     provider === 'other'
@@ -234,18 +283,18 @@ export const EMAIL_SETUP_WORDS = {
   filterCopy: 'Copy this filter',
   filterPaste:
     'In Gmail filters, paste it in the search box, then choose Create filter → Forward it to → your Runway address',
-  filterNeedAddress: 'Type the address first',
   filterLabel: 'Copy filter text',
   filterLink: 'Open Gmail filters',
   testTitle: 'Try it with one alert',
   testLine: 'Forward one bank alert to your address.',
   testWaiting: 'Waiting for your first alert…',
   finishLater: 'Finish later',
+  backStep: 'Back',
   notArriving: 'Not arriving?',
   notArrivingLines: [
     'Forwarding is confirmed.',
     'The filter or rule forwards to your Runway address.',
-    'The alert’s From address matches the one you typed.',
+    'The alert’s From address is one you added for your bank.',
     'It can take a minute.',
   ],
   testDone: 'It worked. Your first purchase is in.',

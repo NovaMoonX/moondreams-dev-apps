@@ -8,7 +8,6 @@ import {
   MailCheck,
   Receipt,
   ShoppingBag,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -120,12 +119,6 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
               {describeEmailOutcome(event.outcome)}
             </span>
           </p>
-          {event.readBy === 'ai' && (
-            <p className='text-muted-foreground flex items-center gap-1.5 pl-6 text-sm'>
-              <Sparkles className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-              {EMAIL_WORDS.readByAi}
-            </p>
-          )}
           {(event.outcome === 'unread' || event.outcome === 'notPurchase') && (
             <p className='text-muted-foreground pl-6 text-sm'>
               {event.outcome === 'unread'

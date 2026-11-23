@@ -82,6 +82,7 @@ import type {
   EmailIntakeDoc,
   EmailIntakeSealed,
   EmailSetupDoc,
+  EmailSetupSealed,
   ClosingSealed,
   ClosingDoc,
 } from '@apps/runway/types';
@@ -732,9 +733,14 @@ const EMAIL_SETUP_DOC_FIELDS = {
   provider: 'notUseful',
   stepId: 'notUseful',
   doneAt: 'notUseful',
+  sealed: 'never',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
 } satisfies Record<keyof EmailSetupDoc, ShareDecision>;
+
+const EMAIL_SETUP_SEALED_FIELDS = {
+  banks: 'never',
+} satisfies Record<keyof EmailSetupSealed, ShareDecision>;
 
 const EMAIL_INTAKE_SEALED_FIELDS = {
   confirmUrl: 'never',
@@ -889,6 +895,7 @@ export const SHARE_FIELDS = {
   EmailIntakeDoc: EMAIL_INTAKE_DOC_FIELDS,
   EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
   EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,
+  EmailSetupSealed: EMAIL_SETUP_SEALED_FIELDS,
   EmailEventDoc: EMAIL_EVENT_DOC_FIELDS,
   EmailEventSealed: EMAIL_EVENT_SEALED_FIELDS,
   EmailFilterDoc: EMAIL_FILTER_DOC_FIELDS,

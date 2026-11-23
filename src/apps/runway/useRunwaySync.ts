@@ -287,6 +287,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           ),
           startEmailSetupListener(
             uid,
+            encryption,
             (setup) => dispatch(setEmailSetup(setup)),
             skip,
           ),
