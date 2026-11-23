@@ -295,6 +295,26 @@ assert.ok(
   ),
   'an all-caps name with an initial goes',
 );
+const fwdSubject = 'Fwd: Alexander Hamilton, your AMC tickets';
+assert.ok(
+  !withoutMemberDetails(fwdSubject, fwdSubject, 'Body only').includes(
+    'Hamilton',
+  ),
+  'a forwarded subject still gives the name',
+);
+assert.ok(
+  withoutMemberDetails('Hello, your tickets for Hello Dolly', '').includes(
+    'Hello Dolly',
+  ),
+  'a greeting word is never taken for a name',
+);
+assert.ok(
+  withoutMemberDetails(
+    'Seats\nAMC Lincoln Square 13\n',
+    'Your tickets',
+  ).includes('AMC Lincoln Square'),
+  'a theater line stays',
+);
 assert.ok(
   withoutMemberDetails('Hello AMC,\nYour AMC order').includes('Your AMC order'),
   'a greeting to AMC never strips AMC',

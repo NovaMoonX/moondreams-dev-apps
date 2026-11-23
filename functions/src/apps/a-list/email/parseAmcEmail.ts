@@ -225,7 +225,28 @@ export function parseAmcEmail(text: string): AmcReading | null {
   return isCancellation ? readCancellation(text) : readReservation(text);
 }
 
-const NOT_A_NAME = ['amc', 'team', 'there', 'friend', 'member', 'guest'];
+const NOT_A_NAME = [
+  'amc',
+  'team',
+  'there',
+  'friend',
+  'member',
+  'guest',
+  'hello',
+  'thanks',
+  'thank',
+  'enjoy',
+  'here',
+  'your',
+  'order',
+  'confirmed',
+  'tickets',
+  'reminder',
+  'important',
+  'reservation',
+  'great',
+  'congrats',
+];
 
 const names = (text: string) =>
   Array.from(
@@ -238,7 +259,7 @@ const names = (text: string) =>
           text,
         )?.[1],
         /^\s*([A-Z][A-Za-z'’-]+),\s+below/m.exec(text)?.[1],
-        /^\s*(?:Subject:\s*)?([A-Z][A-Za-z'’-]+(?: [A-Z][A-Za-z'’-]+){0,2}),\s+(?:[Yy]ou|[Yy]our|[Hh]ere|[Tt]hanks|[Ee]njoy)\b/m.exec(
+        /^\s*(?:(?:Subject|Fwd?|Fw|Re):\s*)*([A-Z][A-Za-z'’-]+(?: [A-Z][A-Za-z'’-]+){0,2}),\s+(?:[Yy]ou|[Yy]our|[Hh]ere|[Tt]hanks|[Ee]njoy)\b/m.exec(
           text,
         )?.[1],
       ].flatMap((name) =>
@@ -261,7 +282,7 @@ const GROUPED_DIGITS = /\b\d{3,}(?:[ -]\d{3,})+\b/g;
 
 const isNameLine = (line: string, found: string[], subject: string) =>
   line.split(' ').some((word) => found.includes(word)) ||
-  !subject.includes(line);
+  (!line.startsWith('amc ') && !subject.includes(line));
 
 /**
  * The email's text without the membership block, the member's name or any long number, for the short excerpt an event keeps and the prompt the AI gets.
