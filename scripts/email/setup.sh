@@ -11,7 +11,7 @@ source scripts/lib/setupState.sh
 
 PROJECT=moondreams-dev-apps
 SECRET_NAME=EMAIL_WEBHOOK_SECRET
-# Runway's own function still reads this name until it moves onto the shared one; it gets the same value so the worker's one secret keeps working for it.
+# Runway used to read this name; its value is still reused so the worker's one secret keeps working.
 LEGACY_SECRET_NAME=RUNWAY_EMAIL_WEBHOOK_SECRET
 WORKER_CONFIG=workers/email-router/wrangler.toml
 LAST_STEP=4

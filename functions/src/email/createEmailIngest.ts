@@ -58,6 +58,11 @@ interface EmailIngestConfig {
   /** Does every write for one email (the event record included, created so a redelivery fails) and says what became of it. */
   handle: (input: EmailHandlerInput) => Promise<{ outcome: string }>;
   /** Records a forwarding confirmation (the intake document already holds its link); without it nothing but the intake changes. */
+  /** The intake fields that hold a confirmation's link and code, when they are kept some other way than plain; the default is `confirmUrl` and `confirmCode`. */
+  confirmationFields?: (
+    input: EmailHandlerInput,
+    confirmation: { confirmUrl: string | null; confirmCode: string | null },
+  ) => Promise<Record<string, unknown>>;
   onConfirmation?: (input: EmailHandlerInput) => Promise<{ outcome: string }>;
 }
 
@@ -172,8 +177,10 @@ export function createEmailIngest(config: EmailIngestConfig) {
     try {
       const isConfirmation = isForwardingConfirmation(mail);
       if (isConfirmation) {
+        const confirmation = readConfirmation(mail);
         await intakeRef.update({
-          ...readConfirmation(mail),
+          ...((await config.confirmationFields?.(input, confirmation)) ??
+            confirmation),
           confirmAt: now,
           updatedAt: now,
         });

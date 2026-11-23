@@ -1,13 +1,11 @@
-import { randomBytes } from 'node:crypto';
-
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { onCall } from 'firebase-functions/v2/https';
 
+import { mintEmailAddress } from '../../../email/mintEmailAddress.js';
 import { assertGateOpen } from '../../../gates/assertGateOpen.js';
 import {
   EMAIL_ADDRESS_PREFIX,
-  EMAIL_DOMAIN,
   EMAIL_PURCHASES_GATE_ID,
   emailTokenPath,
   intakePath,
@@ -37,30 +35,23 @@ export const rotateRunwayEmailAddress = onCall(
       'Purchases from email are not open for you yet.',
     );
     const uid = request.auth?.uid as string;
-    const firestore = getFirestore();
-    const token = randomBytes(16).toString('hex');
-    const intakeRef = firestore.doc(intakePath(uid));
-    const now = Date.now();
-    await firestore.runTransaction(async (transaction) => {
-      const current = await transaction.get(intakeRef);
-      const old = current.data();
-      if (typeof old?.token === 'string') {
-        transaction.delete(firestore.doc(emailTokenPath(old.token)));
-      }
-      transaction.set(firestore.doc(emailTokenPath(token)), {
-        uid,
-        createdAt: now,
-      });
-      transaction.set(intakeRef, {
+    const address = await mintEmailAddress({
+      firestore: getFirestore(),
+      uid,
+      tokenPath: emailTokenPath,
+      intakePath: intakePath(uid),
+      prefix: EMAIL_ADDRESS_PREFIX,
+      oldTokenOf: (old) => (typeof old?.token === 'string' ? old.token : null),
+      intakeDocument: ({ token, now, createdAt }) => ({
         id: 'address',
         token,
-        createdAt: typeof old?.createdAt === 'number' ? old.createdAt : now,
+        createdAt,
         updatedAt: now,
         lastReceivedAt: null,
         confirmAt: null,
         sealed: null,
-      });
+      }),
     });
-    return { address: `${EMAIL_ADDRESS_PREFIX}+${token}@${EMAIL_DOMAIN}` };
+    return { address };
   },
 );

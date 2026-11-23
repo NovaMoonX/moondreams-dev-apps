@@ -48,7 +48,7 @@
     "predeploy": "npm run build && npm run preview",
     "cf:worker": "npx wrangler deploy",
     "cf:email-worker": "npx wrangler deploy -c workers/email-router/wrangler.toml",
-    "runway:email-setup": "bash scripts/runway/email-setup.sh",
+    "runway:email-setup": "bash scripts/email/setup.sh",
     "runway:email-send": "tsx scripts/runway/emailSend.ts",
     "email:setup": "bash scripts/email/setup.sh",
     "a-list:email-send": "tsx scripts/a-list/emailSend.ts",

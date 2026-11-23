@@ -45,7 +45,6 @@ export default {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-runway-email-secret': env.INGEST_SECRET,
           'x-app-email-secret': env.INGEST_SECRET,
         },
         body: JSON.stringify({
