@@ -4,7 +4,8 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { onCall } from 'firebase-functions/v2/https';
 
-import { toSharedCalendar, type SharedCalendar } from './calendarShareView.js';
+import { getShareKind, toSharedCalendar, type SharedCalendar } from './calendarShareView.js';
+import { ensureShareFeed, readLiveViewings } from './shareFeed/shareFeeds.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -12,7 +13,7 @@ if (getApps().length === 0) {
 
 const SHARE_ID_PATTERN = /^[2-9a-hj-np-z]{26}$/;
 
-type ShareResult = { status: 'ok'; calendar: SharedCalendar } | { status: 'pin_required' | 'wrong_pin' | 'not_found' };
+type ShareResult = { status: 'ok'; calendar: SharedCalendar; feedId: string | null } | { status: 'pin_required' | 'wrong_pin' | 'not_found' };
 
 function isPinMatch(expected: string, entered: string) {
   const expectedBytes = Buffer.from(expected);
@@ -54,6 +55,10 @@ export const getCalendarShare = onCall(
       }
     }
 
-    return { status: 'ok', calendar: toSharedCalendar(data) };
+    const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
+    const liveViewings = getShareKind(data) === 'LIVE' && ownerUid !== '' ? await readLiveViewings(ownerUid) : [];
+    // Only a signed-in visitor can listen to the feed, so only they get its id.
+    const feedId = request.auth ? await ensureShareFeed(shareId) : null;
+    return { status: 'ok', calendar: toSharedCalendar(data, liveViewings), feedId };
   },
 );

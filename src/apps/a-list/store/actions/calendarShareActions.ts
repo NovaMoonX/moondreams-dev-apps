@@ -36,12 +36,22 @@ const newPin = () => generateToken(SHARE_PIN_LENGTH).toUpperCase();
 
 interface CreateCalendarShareInput {
   uid: string;
-  range: DayKeyRange;
+  /** null for a live share, which covers the whole calendar and keeps itself up to date. */
+  range: DayKeyRange | null;
   viewings: Viewing[];
   hasPin: boolean;
 }
 
-/** Freezes the range's showings into a new share; the cap is counted on the server so a second tab can't slip past it. */
+async function rejectIfFull(uid: string) {
+  const existing = await getCountFromServer(
+    query(getSharesRef(), where('ownerUid', '==', uid)),
+  );
+  if (existing.data().count < MAX_CALENDAR_SHARES) return null;
+
+  return `You already have ${MAX_CALENDAR_SHARES} shared calendars. Delete one to make another.`;
+}
+
+/** Makes a live share, or freezes the range's showings into a snapshot; the cap is counted on the server so a second tab can't slip past it. */
 export const createCalendarShare = createAsyncThunk<
   string,
   CreateCalendarShareInput,
@@ -49,6 +59,33 @@ export const createCalendarShare = createAsyncThunk<
 >(
   'aList/calendarShares/create',
   async ({ uid, range, viewings, hasPin }, { rejectWithValue }) => {
+    if (range === null) {
+      try {
+        const fullMessage = await rejectIfFull(uid);
+        if (fullMessage !== null) return rejectWithValue(fullMessage);
+
+        const now = Date.now();
+        const share: CalendarShare = {
+          id: generateToken(SHARE_ID_LENGTH),
+          ownerUid: uid,
+          kind: 'LIVE',
+          startDate: null,
+          endDate: null,
+          feedId: null,
+          pin: hasPin ? newPin() : null,
+          viewings: [],
+          createdAt: now,
+          lastEditedAt: now,
+        };
+        await setDoc(getShareRef(share.id), share);
+        return share.id;
+      } catch (error) {
+        return rejectWithValue(
+          getErrorMessage(error, 'Unable to create this link. Check your connection and try again.'),
+        );
+      }
+    }
+
     const startDate = fromDateInputValue(range.startKey);
     const endDate = fromDateInputValue(range.endKey);
     const dayCount = getRangeDayCount(range);
@@ -68,21 +105,17 @@ export const createCalendarShare = createAsyncThunk<
     }
 
     try {
-      const existing = await getCountFromServer(
-        query(getSharesRef(), where('ownerUid', '==', uid)),
-      );
-      if (existing.data().count >= MAX_CALENDAR_SHARES) {
-        return rejectWithValue(
-          `You already have ${MAX_CALENDAR_SHARES} shared calendars. Delete one to make another.`,
-        );
-      }
+      const fullMessage = await rejectIfFull(uid);
+      if (fullMessage !== null) return rejectWithValue(fullMessage);
 
       const now = Date.now();
       const share: CalendarShare = {
         id: generateToken(SHARE_ID_LENGTH),
         ownerUid: uid,
+        kind: 'SNAPSHOT',
         startDate,
         endDate,
+        feedId: null,
         pin: hasPin ? newPin() : null,
         viewings: sharedViewings,
         createdAt: now,

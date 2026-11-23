@@ -9,6 +9,8 @@ import type {
   AListTheatre,
   SharedViewing,
   CalendarShare,
+  AddedCalendar,
+  ShareFeed,
   PurchasePlan,
   AListEmailEvent,
 } from '@apps/a-list/types';
@@ -116,13 +118,34 @@ const SHARED_VIEWING_FIELDS = {
 const CALENDAR_SHARE_FIELDS = {
   id: 'never',
   ownerUid: 'never',
+  kind: 'never',
   startDate: 'never',
   endDate: 'never',
+  feedId: 'never',
   pin: 'never',
   viewings: 'never',
   createdAt: 'never',
   lastEditedAt: 'never',
 } satisfies Record<keyof CalendarShare, ShareDecision>;
+
+const SHARE_FEED_FIELDS = {
+  kind: 'never',
+  startDate: 'never',
+  endDate: 'never',
+  createdAt: 'never',
+  viewings: 'never',
+  updatedAt: 'never',
+} satisfies Record<keyof ShareFeed, ShareDecision>;
+
+const ADDED_CALENDAR_FIELDS = {
+  id: 'never',
+  feedId: 'never',
+  personName: 'never',
+  kind: 'never',
+  isShown: 'never',
+  createdAt: 'never',
+  lastEditedAt: 'never',
+} satisfies Record<keyof AddedCalendar, ShareDecision>;
 
 const PURCHASE_PLAN_FIELDS = {
   showtimeId: 'never',
@@ -167,6 +190,8 @@ export const SHARE_FIELDS = {
   AListTheatre: ALIST_THEATRE_FIELDS,
   SharedViewing: SHARED_VIEWING_FIELDS,
   CalendarShare: CALENDAR_SHARE_FIELDS,
+  ShareFeed: SHARE_FEED_FIELDS,
+  AddedCalendar: ADDED_CALENDAR_FIELDS,
   PurchasePlan: PURCHASE_PLAN_FIELDS,
   AListEmailEvent: EMAIL_EVENT_FIELDS,
 };

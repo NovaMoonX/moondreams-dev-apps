@@ -208,12 +208,15 @@ export const MAX_SHARE_RANGE_DAYS = 366;
 export const MAX_SHARED_VIEWINGS = 400;
 export const SHARE_PIN_LENGTH = 4;
 export const SHARE_ID_LENGTH = 26;
+/** Longest name a member can give the person a shared calendar is from. */
+export const MAX_PERSON_NAME_LENGTH = 40;
 
 export const SHARE_RANGE_OPTIONS: {
   value: ShareRangeKind;
   label: string;
   emoji: string;
 }[] = [
+  { value: 'LIVE', label: 'Everything, kept up to date', emoji: '📡' },
   { value: 'THIS_MONTH', label: 'This month', emoji: '🗓️' },
   { value: 'NEXT_MONTH', label: 'Next month', emoji: '➡️' },
   { value: 'THIS_WEEK', label: 'This week', emoji: '⭐' },
