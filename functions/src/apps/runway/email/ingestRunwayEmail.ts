@@ -209,14 +209,21 @@ const isForwardingConfirmation = (mail: Mail) =>
     /verif|confirm/i.test(mail.subject));
 
 function readYahooLink(text: string) {
-  const links =
-    text.match(/https:\/\/(?:[a-z0-9-]+\.)*yahoo\.com\/[^\s"'<>)\]]+/gi) ?? [];
+  const links = Array.from(
+    text.matchAll(
+      /(?:^|[\s"'<(])(https:\/\/((?:[a-z0-9-]+\.)*yahoo\.com)\/[^\s"'<>)\]]+)/gi,
+    ),
+  )
+    .filter(([, , host]) => !/^(?:help|legal|policies)\./i.test(host))
+    .map(([, link]) => link);
+  const isVerifyPath = (link: string) =>
+    /verif|confirm/i.test(
+      link.replace(/^https:\/\/[^/]+/i, '').split(/[?#]/)[0],
+    );
   return (
-    links.find((link) =>
-      /verif|confirm/i.test(
-        link.replace(/^https:\/\/[^/]+/i, '').split(/[?#]/)[0],
-      ),
-    ) ?? links[0]
+    links.find((link) => isVerifyPath(link) && link.includes('?')) ??
+    links.find(isVerifyPath) ??
+    links[0]
   );
 }
 

@@ -56,7 +56,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const isWritten = useRef(false);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   const [isReopened, setIsReopened] = useState(false);
-  const [walkStartedAt, setWalkStartedAt] = useState<number | null>(null);
+  const [walkBaseline, setWalkBaseline] = useState<{
+    eventIds: Set<string>;
+    confirmAt: number | null;
+  } | null>(null);
   const [isKept, setIsKept] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,12 +73,12 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const hasPurchase = events.some(
     (entry) =>
       entry.outcome === 'purchase' &&
-      (walkStartedAt === null || entry.receivedAt >= walkStartedAt),
+      (walkBaseline === null || !walkBaseline.eventIds.has(entry.id)),
   );
   const confirmAt = intake.confirm?.at ?? null;
   const isConfirmed =
     confirmAt !== null &&
-    (walkStartedAt === null || confirmAt >= walkStartedAt);
+    (walkBaseline === null || confirmAt !== walkBaseline.confirmAt);
   const isWalking = !setup.isDone || isReopened || isKept;
   const stepIndex = Math.min(viewIndex ?? setup.step, setup.steps.length - 1);
   const filterIndex = getFilterStepIndex(setup.steps);
@@ -201,7 +204,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 ? () => {
                     setIsReopened(false);
                     setIsKept(false);
-                    setWalkStartedAt(null);
+                    setWalkBaseline(null);
                     setViewIndex(null);
                   }
                 : null
@@ -212,7 +215,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             onFinish={() => {
               setIsReopened(false);
               setIsKept(false);
-              setWalkStartedAt(null);
+              setWalkBaseline(null);
               setViewIndex(null);
             }}
             onClose={onClose}
@@ -341,7 +344,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 subtitle={EMAIL_SETUP_WORDS.setUpAgainSub}
                 onClick={() => {
                   setIsReopened(true);
-                  setWalkStartedAt(Date.now());
+                  setWalkBaseline({
+                    eventIds: new Set(events.map((entry) => entry.id)),
+                    confirmAt,
+                  });
                   setViewIndex(0);
                 }}
               />

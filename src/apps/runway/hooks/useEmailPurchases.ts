@@ -175,6 +175,20 @@ export interface EmailSetupRead {
 }
 
 /** Where the person is in setting up forwarding, with the steps their provider needs. */
+/** The shown step for a stored one; a stored step that is hidden now (a confirm step whose email is gone) falls back to the shown step before it, never to the start. */
+function findShownStep(
+  steps: EmailSetupStepId[],
+  provider: EmailProvider | null,
+  stepId: EmailSetupStepId | null,
+) {
+  const order = getEmailSetupSteps(provider, true);
+  const reached = order.indexOf(stepId ?? 'provider');
+  return steps.reduce(
+    (found, step, index) => (order.indexOf(step) <= reached ? index : found),
+    0,
+  );
+}
+
 export function useEmailSetup(): EmailSetupRead {
   const setup = useAppSelector(selectEmailSetup);
   const intake = useEmailIntake();
@@ -187,7 +201,7 @@ export function useEmailSetup(): EmailSetupRead {
     return {
       provider,
       steps,
-      step: Math.max(0, steps.indexOf(setup?.stepId ?? 'provider')),
+      step: findShownStep(steps, provider, setup?.stepId ?? null),
       isDone:
         doneAt !== null ||
         (isEventsLoaded &&
