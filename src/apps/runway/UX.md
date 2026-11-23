@@ -449,9 +449,9 @@ Where it lives: a clock (`DoneForYouButton`) on Home's title line before the eye
 
 ## Home's head start
 
-Home opens on the figures the server worked out ahead of time, so Free to Spend and the envelope tiles show at once instead of after the phone has read a year of ledger.
+Home opens on the figures the server worked out ahead of time, so Free to Spend shows at once instead of after the phone has read a year of ledger.
 
-- While the phone's own ledger loads, Home draws only Free to Spend (with its card switch and the bank-backed line) and the envelope tiles, from the server's figures. Everything that needs the ledger (the warning row, "To pay now", Next income, the Priorities nudge, kept drafts, Reconnect, held and email notices, Home's cards and the floating add) waits, and the chart stays folded to its row until then.
+- While the phone's own ledger loads, Home draws only Free to Spend (with its card switch and the bank-backed line) from the server's figures, and the line under it stays blank rather than reading "Today" and then changing. Everything else (the warning row, "To pay now", the envelope tiles, Next income, the Priorities nudge, kept drafts, Reconnect, held and email notices, Home's cards and the floating add) waits, so when the ledger arrives it only appends below the figure and never pushes down a row the person was reading. A chart opened in that moment holds its height until it can draw.
 - When the phone's figures are ready they replace the server's in place, with no flash: they are the same figures unless something changed in the last minute.
 - The server's figures are used only when they are today's, from the same version of the app's maths, for the plan as it now stands, and newer than this phone's own last change; otherwise Home waits as before. Hidden and made-up amounts apply to them exactly as to the phone's own.
 

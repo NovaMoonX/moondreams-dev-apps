@@ -147,6 +147,7 @@ function HomeScreen() {
         )
       : [];
   const hasRanges = rangeSides.income || rangeSides.expense;
+  const isSettled = isLedgerReady && lookahead !== null;
   const hasWarnings =
     dueCards.length > 0 ||
     homeMoves !== null ||
@@ -208,7 +209,7 @@ function HomeScreen() {
           </LevelGate>
         </>
       )}
-      {envelopes.length > 0 && (
+      {isSettled && envelopes.length > 0 && (
         <div className='space-y-2'>
           <SectionHeader
             title={HOME_WORDS.envelopes}
@@ -268,7 +269,7 @@ function HomeScreen() {
           </div>
         </FormSheet>
       )}
-      {isLedgerReady && nextDay && (
+      {isSettled && nextDay && (
         <div className='space-y-2'>
           <SectionHeader title={HOME_WORDS.nextIncome} />
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -279,7 +280,7 @@ function HomeScreen() {
           </ul>
         </div>
       )}
-      {isLedgerReady && envelopes.length > 0 && (
+      {isSettled && envelopes.length > 0 && (
         <LevelGate level='track'>
           <FloatingAction
             label={SPEND_WORDS.newPurchase}

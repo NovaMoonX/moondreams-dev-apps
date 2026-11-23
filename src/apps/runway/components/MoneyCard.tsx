@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChartLine, ChevronRight, Eye } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import HelpTip from '@/components/HelpTip';
 import { PillGroup } from '@/components/PillGroup';
@@ -328,7 +329,13 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
           />
         </Button>
         {!isHidden && (
-          <div className='mt-1.5 flex items-center gap-1'>
+          <div
+            className={join(
+              'mt-1.5 flex items-center gap-1',
+              !isLedgerReady && 'invisible',
+            )}
+            aria-hidden={!isLedgerReady}
+          >
             <p className='text-muted-foreground text-sm'>{getNote()}</p>
             {help.length > 0 && (
               <HelpTip title={label}>
