@@ -5031,10 +5031,7 @@ async function writeSeedEmail(
   return 1 + purchases.length + events.length + 2;
 }
 
-/**
- * Jamie's Done for you: a rule's placement of the Safeway charge (with its Undo), a rule's Sprouts charge already undone five minutes ago, a matched Target charge with a logo, a bill that paid itself, a card payment pair, an ended goal, and an older entry written before subjects were kept.
- * Entries from an earlier run go first.
- */
+/** Jamie's Done for you, one entry per kind a row can show, including one written before subjects were kept. */
 async function seedDoneForYou(
   context: SeedContext,
   plan: string,
