@@ -105,7 +105,17 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       onClose={onClose}
       outcome={
         <div className='bg-secondary/60 space-y-3 rounded-2xl px-4 py-3 text-sm'>
-          <p className='font-medium'>{describeEmailOutcome(event)}</p>
+          <div className='flex items-start gap-3'>
+            <span
+              aria-hidden='true'
+              className='bg-background flex size-9 shrink-0 items-center justify-center rounded-full text-lg'
+            >
+              🍿
+            </span>
+            <p className='self-center font-medium'>
+              {describeEmailOutcome(event)}
+            </p>
+          </div>
           {event.readBy === 'ai' && (
             <p className='text-muted-foreground flex items-center gap-1.5'>
               <Sparkles className='size-3.5' aria-hidden='true' />
