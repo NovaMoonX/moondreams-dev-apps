@@ -45,8 +45,9 @@ function EmailBankSheet({
   const [isBusy, setIsBusy] = useState(false);
   const [hasChanged, setHasChanged] = useState(false);
   const saveAndMark: SaveBanks = async (change) => {
-    await onSaveBanks(change);
-    setHasChanged(true);
+    const isChanged = await onSaveBanks(change);
+    if (isChanged) setHasChanged(true);
+    return isChanged;
   };
   const allAddresses = listBankAddresses(banks);
 

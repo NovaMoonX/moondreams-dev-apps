@@ -208,6 +208,9 @@ export const EMAIL_SETUP_WORDS = {
       ? 'In your email’s settings, forward to your Runway address. A rule or filter for only your bank’s alerts works best'
       : `In your email’s settings, make a rule that forwards mail from ${fromWhom(addresses)} to your Runway address`,
   bankTitle: 'Which bank’s alerts?',
+  coveredBankTitle: 'Which bank does your filter already cover?',
+  coveredBankLine:
+    'Add it first, so the updated filter or rule keeps it. Then add the new bank.',
   bankLine: 'The bank that emails you each time a card is used.',
   banksTitle: 'Your banks',
   knownBankSub: 'From your cards and accounts',

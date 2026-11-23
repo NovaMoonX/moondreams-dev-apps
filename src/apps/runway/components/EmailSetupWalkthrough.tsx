@@ -263,6 +263,12 @@ function EmailSetupWalkthrough({
   const bankIndex = steps.indexOf('bank');
   const isBankChoosing =
     draft === null && (banks.length === 0 || isPickingBank);
+  const isCoveredFirst = isAddingBank && banks.length === 0;
+  const getBankTitle = () => {
+    if (isCoveredFirst) return WORDS.coveredBankTitle;
+    return banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank;
+  };
+  const bankTitle = getBankTitle();
 
   const saveDraft = async () => {
     if (draft === null) return;
@@ -394,10 +400,12 @@ function EmailSetupWalkthrough({
     if (step === 'bank') {
       if (isBankChoosing) {
         return {
-          title: banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank,
+          title: bankTitle,
           content: (
             <div className='space-y-3'>
-              <Muted>{WORDS.bankLine}</Muted>
+              <Muted>
+                {isCoveredFirst ? WORDS.coveredBankLine : WORDS.bankLine}
+              </Muted>
               <BankPicker known={knownBanks} banks={banks} onPick={setDraft} />
             </div>
           ),
@@ -405,7 +413,7 @@ function EmailSetupWalkthrough({
       }
       if (draft !== null) {
         return {
-          title: banks.length === 0 ? WORDS.bankTitle : WORDS.addAnotherBank,
+          title: bankTitle,
           content: (
             <BankDraftForm
               draft={draft}
@@ -663,7 +671,7 @@ function EmailSetupWalkthrough({
     }
     if (step === 'bank' && (draft !== null || isPickingBank)) {
       setDraft(null);
-      setIsPickingBank(false);
+      setIsPickingBank(isAddingBank && draft !== null);
       return;
     }
     onGo(stepIndex - 1);
