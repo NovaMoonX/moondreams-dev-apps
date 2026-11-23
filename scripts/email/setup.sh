@@ -64,18 +64,19 @@ if (( START > LAST_STEP )); then
   echo "Every step was done on an earlier run. To redo one: npm run email:setup -- --from <step>"
 fi
 
-# One value is shared by both sides, so it is made once, kept only in this process, and saved in steps 1 and 2 of the same run.
-# A run that starts at step 2 cannot know the secret, so it restarts at step 1.
-if (( START == 2 && REUSED == 0 )); then
-  echo "Step 2 needs the secret made in step 1, and that secret exists only while one run lasts, so this run starts again at step 1."
-  START=1
-fi
 # Runway's live function already checks the worker's secret; reusing its value means nothing that works today has to be redeployed.
 REUSED=0
 if SHARED=$(firebase functions:secrets:access "$LEGACY_SECRET_NAME" --project "$PROJECT" 2>/dev/null) && [[ -n "$SHARED" ]]; then
   REUSED=1
 else
   SHARED=$(openssl rand -hex 32)
+fi
+
+# One value is shared by both sides, so it is made once, kept only in this process, and saved in steps 1 and 2 of the same run.
+# A run that starts at step 2 cannot know the secret, so it restarts at step 1.
+if (( START == 2 && REUSED == 0 )); then
+  echo "Step 2 needs the secret made in step 1, and that secret exists only while one run lasts, so this run starts again at step 1."
+  START=1
 fi
 
 if start_step 1 "the secret in Firebase"; then
