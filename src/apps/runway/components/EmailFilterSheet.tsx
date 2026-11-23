@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Sparkles } from 'lucide-react';
 
 import AppCheckbox from '@/components/AppCheckbox';
@@ -54,11 +55,10 @@ const combine = (filters: readonly EmailFilterSealed[]): EmailFilterSealed =>
 function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
   const actions = useEmailActions();
   const mask = useMaskedText();
+  const { addToast } = useToast();
   const [suggestions, setSuggestions] = useState<EmailFilterSuggestion[]>([]);
   const [isLooking, setIsLooking] = useState(true);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -122,22 +122,22 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
       return next;
     });
 
-  const save = async () => {
-    setIsSaving(true);
-    setError(null);
-    try {
-      await actions.createFilter(
+  const save = () => {
+    actions
+      .createFilter(
         combine(
           [...presets, ...extras]
             .filter((choice) => picked.has(choice.key))
             .map((choice) => choice.filter),
         ),
+      )
+      .catch((saveError: unknown) =>
+        addToast({
+          title: getErrorMessage(saveError, EMAIL_WORDS.saveFailed),
+          type: 'error',
+        }),
       );
-      onClose();
-    } catch (saveError) {
-      setError(getErrorMessage(saveError, EMAIL_WORDS.saveFailed));
-      setIsSaving(false);
-    }
+    onClose();
   };
 
   const row = (choice: Choice) => (
@@ -191,11 +191,6 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
             </ul>
           </div>
         )}
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
         <ModalFooterActions
           note={picked.size === 0 ? EMAIL_WORDS.pickOne : undefined}
           cancelAction={
@@ -204,10 +199,7 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
             </Button>
           }
           rightActions={
-            <Button
-              disabled={picked.size === 0 || isSaving}
-              onClick={() => void save()}
-            >
+            <Button disabled={picked.size === 0} onClick={save}>
               {EMAIL_WORDS.saveFilter}
             </Button>
           }

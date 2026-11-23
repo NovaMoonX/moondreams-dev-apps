@@ -235,45 +235,46 @@ export function BankAddresses({
   const [isAdding, setIsAdding] = useState(false);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
 
-  const save = async (change: (banks: EmailBank[]) => EmailBank[]) => {
-    setIsBusy(true);
+  const save = (
+    change: (banks: EmailBank[]) => EmailBank[],
+    onFailed?: () => void,
+  ) => {
     setError(null);
-    try {
-      await onSave(change);
-      return true;
-    } catch {
+    onSave(change).catch(() => {
       setError(WORDS.banksSaveFailed);
-      return false;
-    } finally {
-      setIsBusy(false);
-    }
+      onFailed?.();
+    });
   };
 
-  const add = async () => {
+  const add = () => {
     const checked = checkAddress(text, allAddresses);
     if (checked.address === null) {
       setError(checked.error);
       return;
     }
     const address = checked.address;
-    const isSaved = await save((banks) =>
-      banks.some((entry) => entry.addresses.includes(address))
-        ? banks
-        : banks.map((entry) =>
-            entry.id === bank.id
-              ? { ...entry, addresses: [...entry.addresses, address] }
-              : entry,
-          ),
+    const typed = text;
+    save(
+      (banks) =>
+        banks.some((entry) => entry.addresses.includes(address))
+          ? banks
+          : banks.map((entry) =>
+              entry.id === bank.id
+                ? { ...entry, addresses: [...entry.addresses, address] }
+                : entry,
+            ),
+      () => {
+        setText(typed);
+        setIsAdding(true);
+      },
     );
-    if (!isSaved) return;
     setText('');
     setIsAdding(false);
   };
 
   const remove = (address: string) =>
-    void save((banks) =>
+    save((banks) =>
       banks.map((entry) =>
         entry.id === bank.id && entry.addresses.length > 1
           ? {
@@ -301,7 +302,6 @@ export function BankAddresses({
                 size='sm'
                 className='size-10 shrink-0 p-0'
                 aria-label={WORDS.removeAddress(address)}
-                disabled={isBusy}
                 onClick={() => remove(address)}
               >
                 <X className='size-4' aria-hidden='true' />
@@ -322,11 +322,7 @@ export function BankAddresses({
             error={error}
           />
           <div className='flex gap-2'>
-            <Button
-              size='sm'
-              disabled={isBusy || text.trim() === ''}
-              onClick={() => void add()}
-            >
+            <Button size='sm' disabled={text.trim() === ''} onClick={add}>
               {WORDS.addAddress}
             </Button>
             <Button

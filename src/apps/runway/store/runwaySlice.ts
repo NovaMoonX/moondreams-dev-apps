@@ -11,6 +11,7 @@ import {
   dropHeldWrites,
   patchHeldWrite,
   settleHeldWrites,
+  toHeldWrite,
   type HeldWrite,
 } from '@/utils/heldWrites';
 import {
@@ -92,7 +93,11 @@ export interface RunwayState {
   isMemoriesLoaded: boolean;
   /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
   emailIntake: OpenEmailIntake | null;
+  /** What the person sees: the listener's copy with this device's unconfirmed changes laid over it. */
   emailSetup: OpenEmailSetup | null;
+  emailSetupIncoming: OpenEmailSetup | null;
+  emailSetupHeld: HeldWrite<OpenEmailSetup>[];
+  emailSetupDeliveredAt: number | null;
   emailEvents: OpenEmailEvent[];
   isEmailEventsLoaded: boolean;
   emailFilters: OpenEmailFilter[];
@@ -199,6 +204,26 @@ const layHeld = (state: RunwayState, kind: HeldKind) => {
   (state.held[kind] as HeldWrite<HeldLists[typeof kind][number]>[]) = held;
 };
 
+const EMAIL_SETUP_ID = 'progress';
+
+const EMPTY_EMAIL_SETUP: OpenEmailSetup = {
+  provider: null,
+  stepId: null,
+  doneAt: null,
+  banks: [],
+};
+
+const layEmailSetup = (state: RunwayState) => {
+  const { list, held } = applyHeldWrites<OpenEmailSetup>(
+    state.emailSetupIncoming === null ? [] : [state.emailSetupIncoming],
+    state.emailSetupHeld,
+    () => EMAIL_SETUP_ID,
+    { deliveredAt: state.emailSetupDeliveredAt },
+  );
+  state.emailSetup = list[0] ?? null;
+  state.emailSetupHeld = held;
+};
+
 const initialState: RunwayState = {
   keyStatus: 'idle',
   plan: null,
@@ -230,6 +255,9 @@ const initialState: RunwayState = {
   isMemoriesLoaded: false,
   emailIntake: null,
   emailSetup: null,
+  emailSetupIncoming: null,
+  emailSetupHeld: [],
+  emailSetupDeliveredAt: null,
   emailEvents: [],
   isEmailEventsLoaded: false,
   emailFilters: [],
@@ -267,6 +295,11 @@ const initialState: RunwayState = {
 };
 
 export const holdWrites = createAction<HeldWritesInput>('runway/holdWrites');
+// The email setup is one document the listener reads whole, so its changes are held apart from the record lists.
+export const holdEmailSetup = createAction<{
+  token: string;
+  patch: Partial<OpenEmailSetup>;
+}>('runway/holdEmailSetup');
 export const settleWrites = createAction<string>('runway/settleWrites');
 export const dropWrites = createAction<string>('runway/dropWrites');
 // A plain write to a held record shows through the hold, which would otherwise hide Firestore's own local copy.
@@ -344,12 +377,11 @@ export const runwaySlice = createSlice({
       state.emailIntake = action.payload;
     },
     setEmailSetup: (state, action: PayloadAction<OpenEmailSetup | null>) => {
-      state.emailSetup = action.payload;
+      state.emailSetupIncoming = action.payload;
+      state.emailSetupDeliveredAt = Date.now();
+      layEmailSetup(state);
     },
-    setEmailEvents: (
-      state,
-      action: PayloadAction<OpenEmailEvent[] | null>,
-    ) => {
+    setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[] | null>) => {
       state.emailEvents = action.payload ?? [];
       state.isEmailEventsLoaded = action.payload !== null;
     },
@@ -489,7 +521,21 @@ export const runwaySlice = createSlice({
         layHeld(state, kind);
       });
     });
+    builder.addCase(holdEmailSetup, (state, action) => {
+      const { token, patch } = action.payload;
+      const item = { ...(state.emailSetup ?? EMPTY_EMAIL_SETUP), ...patch };
+      state.emailSetupHeld = addHeldWrites<OpenEmailSetup>(
+        dropHeldWrites<OpenEmailSetup>(state.emailSetupHeld, token),
+        [toHeldWrite(EMAIL_SETUP_ID, item, Object.keys(patch), token)],
+      );
+      layEmailSetup(state);
+    });
     builder.addCase(settleWrites, (state, action) => {
+      state.emailSetupHeld = settleHeldWrites<OpenEmailSetup>(
+        state.emailSetupHeld,
+        action.payload,
+      );
+      layEmailSetup(state);
       HELD_KINDS.forEach((kind) => {
         if (state.held[kind].length === 0) return;
         (state.held[kind] as HeldWrite<unknown>[]) = settleHeldWrites<unknown>(
@@ -500,6 +546,11 @@ export const runwaySlice = createSlice({
       });
     });
     builder.addCase(dropWrites, (state, action) => {
+      state.emailSetupHeld = dropHeldWrites<OpenEmailSetup>(
+        state.emailSetupHeld,
+        action.payload,
+      );
+      layEmailSetup(state);
       HELD_KINDS.forEach((kind) => {
         if (state.held[kind].length === 0) return;
         (state.held[kind] as HeldWrite<unknown>[]) = dropHeldWrites<unknown>(

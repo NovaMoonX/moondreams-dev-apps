@@ -21,6 +21,7 @@ import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useLeaveFlowGuard } from '@/hooks/useLeaveFlowGuard';
 import { useNow } from '@/hooks/useNow';
+import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
@@ -153,6 +154,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const setup = useEmailSetup();
   const knownBanks = useKnownBanks();
   const now = useNow(60_000);
+  const waitForAddress = useWaitUntilShown(intake.address);
   const isWritten = useRef(false);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   const [isReopened, setIsReopened] = useState(false);
@@ -240,7 +242,11 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       if (!isConfirmed) return;
     }
     noteActed();
-    await run(() => actions.rotateAddress(), EMAIL_WORDS.addressFailed);
+    const before = intake.address;
+    await run(async () => {
+      await actions.rotateAddress();
+      await waitForAddress((current) => current !== before);
+    }, EMAIL_WORDS.addressFailed);
   };
 
   const goToStep = (index: number) => {
@@ -326,17 +332,14 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     return `${words.name} ${words.detail ?? ''}`.toLowerCase().includes(needle);
   });
 
-  const removeFilter = async (id: string) => {
-    setIsBusy(true);
+  const removeFilter = (id: string) => {
     setError(null);
-    try {
-      await actions.deleteFilter(id);
-      setOpenFilterId(null);
-    } catch (removeError) {
-      setError(getErrorMessage(removeError, EMAIL_WORDS.removeFailed));
-    } finally {
-      setIsBusy(false);
-    }
+    actions
+      .deleteFilter(id)
+      .catch((removeError: unknown) =>
+        setError(getErrorMessage(removeError, EMAIL_WORDS.removeFailed)),
+      );
+    setOpenFilterId(null);
   };
 
   return (
@@ -587,6 +590,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           knownBanks={knownBanks}
           arrival={getBankArrival(openBank, events, now)}
           onSaveBanks={actions.saveBanks}
+          onFailed={setError}
           onClose={() => setOpenBankId(null)}
         />
       )}
@@ -608,19 +612,13 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 </p>
               )}
             </div>
-            {error && (
-              <p className='text-destructive text-sm' role='alert'>
-                {error}
-              </p>
-            )}
             <ActionRow
               isRoomy
               isDestructive
               icon={<Trash2 />}
               label={EMAIL_WORDS.removeFilter}
               subtitle={EMAIL_WORDS.removeFilterSub}
-              isDisabled={isBusy}
-              onClick={() => void removeFilter(openFilter.id)}
+              onClick={() => removeFilter(openFilter.id)}
             />
           </div>
         </FormSheet>

@@ -27,6 +27,8 @@ interface EmailBankSheetProps {
   knownBanks: KnownBank[];
   arrival: BankArrival;
   onSaveBanks: SaveBanks;
+  /** Shows a failure after the sheet has closed on its own. */
+  onFailed: (message: string) => void;
   onClose: () => void;
 }
 
@@ -38,11 +40,10 @@ function EmailBankSheet({
   knownBanks,
   arrival,
   onSaveBanks,
+  onFailed,
   onClose,
 }: EmailBankSheetProps) {
   const { confirm } = useActionModal();
-  const [error, setError] = useState<string | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
   const allAddresses = listBankAddresses(banks);
   const [addressesAtOpen] = useState(allAddresses);
   const [touched, setTouched] = useState<string[]>([]);
@@ -58,15 +59,23 @@ function EmailBankSheet({
   const saveAndNote: SaveBanks = async (change) => {
     const before = listBankAddresses(banks);
     const after = listBankAddresses(change(banks));
-    const isSaved = await onSaveBanks(change);
-    if (isSaved) {
-      const moved = [
-        ...after.filter((address) => !before.includes(address)),
-        ...before.filter((address) => !after.includes(address)),
-      ];
-      setTouched((current) => [...new Set([...current, ...moved])]);
+    const moved = [
+      ...after.filter((address) => !before.includes(address)),
+      ...before.filter((address) => !after.includes(address)),
+    ];
+    setTouched((current) => [...new Set([...current, ...moved])]);
+    const takeBack = () =>
+      setTouched((current) =>
+        current.filter((address) => !moved.includes(address)),
+      );
+    try {
+      const isSaved = await onSaveBanks(change);
+      if (!isSaved) takeBack();
+      return isSaved;
+    } catch (error) {
+      takeBack();
+      throw error;
     }
-    return isSaved;
   };
 
   const removeBank = async () => {
@@ -77,18 +86,10 @@ function EmailBankSheet({
       destructive: true,
     });
     if (!isConfirmed) return;
-    setIsBusy(true);
-    setError(null);
-    try {
-      await onSaveBanks((current) =>
-        current.filter((entry) => entry.id !== bank.id),
-      );
-      onClose();
-    } catch {
-      setError(WORDS.banksSaveFailed);
-    } finally {
-      setIsBusy(false);
-    }
+    onSaveBanks((current) =>
+      current.filter((entry) => entry.id !== bank.id),
+    ).catch(() => onFailed(WORDS.banksSaveFailed));
+    onClose();
   };
 
   return (
@@ -120,17 +121,11 @@ function EmailBankSheet({
             />
           </ActionSection>
         )}
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
         <ActionRow
           isDestructive
           icon={<Trash2 />}
           label={WORDS.removeBank}
           subtitle={WORDS.removeBankSub}
-          isDisabled={isBusy}
           onClick={() => void removeBank()}
         />
       </div>

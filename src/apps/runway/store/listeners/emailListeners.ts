@@ -222,7 +222,7 @@ export interface OpenEmailSetup {
   banks: EmailBank[];
 }
 
-const toBanks = (value: unknown): EmailBank[] =>
+export const toBanks = (value: unknown): EmailBank[] =>
   Array.isArray(value)
     ? value.flatMap((entry: Partial<EmailBank> | null) =>
         entry && typeof entry.id === 'string' && Array.isArray(entry.addresses)

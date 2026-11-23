@@ -8,6 +8,13 @@ import {
   buildGmailFilterXml,
   getFilterFields,
 } from '../../src/apps/runway/utils/emailFilterFields.ts';
+import {
+  dropWrites,
+  holdEmailSetup,
+  runwayReducer,
+  setEmailSetup,
+  settleWrites,
+} from '../../src/apps/runway/store/runwaySlice.ts';
 import type { OpenPurchase } from '../../src/apps/runway/types.ts';
 
 // A purchase read from a bank's alert email waits for the bank's charge: one to one, same side, within -2/+7 days.
@@ -254,6 +261,55 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     xml.includes("name='forwardTo' value='runway-abc@moondreamsmail.com'"),
   );
   assert.ok(xml.includes("name='subject' value='purchase OR charge"));
+}
+
+// A change to the setup shows at once, lets go when the listener shows it as written, and goes back when the write fails.
+{
+  const bank = (id: string) => ({
+    id,
+    name: id,
+    addresses: [`${id}@bank.com`],
+    addedAt: 1,
+  });
+  const delivered = {
+    provider: 'gmail' as const,
+    stepId: 'copy' as const,
+    doneAt: null,
+    banks: [bank('chase')],
+  };
+  const start = runwayReducer(undefined, setEmailSetup(delivered));
+  const held = runwayReducer(
+    start,
+    holdEmailSetup({
+      token: 't',
+      patch: { banks: [bank('chase'), bank('amex')] },
+    }),
+  );
+  assert.equal(held.emailSetup?.banks.length, 2, 'a new bank shows at once');
+  assert.equal(held.emailSetup?.provider, 'gmail', 'other fields stay');
+  assert.equal(
+    runwayReducer(held, dropWrites('t')).emailSetup?.banks.length,
+    1,
+    'a failed save goes back',
+  );
+  const settled = runwayReducer(held, settleWrites('t'));
+  assert.equal(settled.emailSetup?.banks.length, 2, 'settling alone keeps it');
+  const landed = runwayReducer(
+    settled,
+    setEmailSetup({ ...delivered, banks: [bank('chase'), bank('amex')] }),
+  );
+  assert.equal(landed.emailSetupHeld.length, 0, 'it lets go once shown');
+  const other = runwayReducer(
+    settled,
+    setEmailSetup({ ...delivered, stepId: 'bank' }),
+  );
+  assert.equal(other.emailSetup?.stepId, 'bank', 'another field shows through');
+  assert.equal(other.emailSetup?.banks.length, 2, 'the hold keeps its field');
+  const first = runwayReducer(
+    undefined,
+    holdEmailSetup({ token: 'p', patch: { provider: 'outlook' } }),
+  );
+  assert.equal(first.emailSetup?.provider, 'outlook', 'the first write shows');
 }
 
 console.log('runway email: ok');

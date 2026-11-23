@@ -9,8 +9,19 @@ import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@lib/firebase/config';
 
+import { store } from '@/store';
+import { watchWriteLanded } from '@/lib/firebase/syncWatchdog';
 import { generateUuid } from '@/utils/idUtils';
 import { openJson, sealJson } from '@apps/runway/security';
+import {
+  toBanks,
+  type OpenEmailSetup,
+} from '@apps/runway/store/listeners/emailListeners';
+import {
+  dropWrites,
+  holdEmailSetup,
+  settleWrites,
+} from '@apps/runway/store/runwaySlice';
 import type {
   EmailFilterDoc,
   EmailBank,
@@ -94,30 +105,71 @@ export type EmailSetupChange = Partial<
   Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt'>
 >;
 
+type SetupHold = (patch: Partial<OpenEmailSetup>) => void;
+
+/** Runs a write to the setup document with its result shown at once: the change is laid over the listener's copy, goes back if the write fails, and lets go when the listener shows it. `work` returns whether it wrote anything. */
+async function writeSetupHeld<T extends { isWritten: boolean }>(
+  work: (hold: SetupHold) => Promise<T>,
+): Promise<T> {
+  const token = generateUuid();
+  try {
+    const result = await work((patch) =>
+      store.dispatch(holdEmailSetup({ token, patch })),
+    );
+    if (!result.isWritten) {
+      store.dispatch(dropWrites(token));
+      return result;
+    }
+    store.dispatch(settleWrites(token));
+    void watchWriteLanded({
+      feature: 'Runway',
+      what: 'your email setup',
+      hasLanded: () =>
+        store
+          .getState()
+          .runway.emailSetupHeld.every((hold) => hold.token !== token),
+    });
+    return result;
+  } catch (error) {
+    store.dispatch(dropWrites(token));
+    throw error;
+  }
+}
+
+type SetupProgress = Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt'>;
+
 /** Writes the walkthrough's progress from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
 export async function saveEmailSetup(
   uid: string,
-  decide: (current: EmailSetupDoc | null) => EmailSetupChange | null,
+  decide: (current: SetupProgress | null) => EmailSetupChange | null,
 ): Promise<void> {
   const ref = planRef(uid, 'emailSetup', 'progress');
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const current = snapshot.exists()
-      ? (snapshot.data() as EmailSetupDoc)
-      : null;
-    const change = decide(current);
-    if (change === null) return;
-    const now = Date.now();
-    transaction.set(ref, {
-      id: 'progress',
-      provider: current?.provider ?? null,
-      stepId: current?.stepId ?? null,
-      doneAt: current?.doneAt ?? null,
-      sealed: current?.sealed ?? null,
-      createdAt: current?.createdAt ?? now,
-      ...change,
-      updatedAt: now,
-    } satisfies EmailSetupDoc);
+  await writeSetupHeld(async (hold) => {
+    const shown = store.getState().runway.emailSetup;
+    const early = decide(shown);
+    if (early !== null) hold(early);
+    const isWritten = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      const current = snapshot.exists()
+        ? (snapshot.data() as EmailSetupDoc)
+        : null;
+      const change = decide(current);
+      if (change === null) return false;
+      hold(change);
+      const now = Date.now();
+      transaction.set(ref, {
+        id: 'progress',
+        provider: current?.provider ?? null,
+        stepId: current?.stepId ?? null,
+        doneAt: current?.doneAt ?? null,
+        sealed: current?.sealed ?? null,
+        createdAt: current?.createdAt ?? now,
+        ...change,
+        updatedAt: now,
+      } satisfies EmailSetupDoc);
+      return true;
+    });
+    return { isWritten };
   });
 }
 
@@ -128,27 +180,37 @@ export async function saveEmailBanks(
   change: (banks: EmailBank[]) => EmailBank[],
 ): Promise<boolean> {
   const ref = planRef(uid, 'emailSetup', 'progress');
-  return runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const current = snapshot.exists()
-      ? (snapshot.data() as Partial<EmailSetupDoc>)
-      : null;
-    const opened = current?.sealed
-      ? await openJson<Partial<EmailSetupSealed>>(current.sealed, encryption)
-      : null;
-    const before = Array.isArray(opened?.banks) ? opened.banks : [];
-    const banks = change(before);
-    if (JSON.stringify(banks) === JSON.stringify(before)) return false;
-    const now = Date.now();
-    transaction.set(ref, {
-      id: 'progress',
-      provider: current?.provider ?? null,
-      stepId: current?.stepId ?? null,
-      doneAt: current?.doneAt ?? null,
-      sealed: await sealJson({ banks } satisfies EmailSetupSealed, encryption),
-      createdAt: current?.createdAt ?? now,
-      updatedAt: now,
-    } satisfies EmailSetupDoc);
-    return true;
+  const { isWritten } = await writeSetupHeld(async (hold) => {
+    const shown = store.getState().runway.emailSetup?.banks ?? [];
+    hold({ banks: toBanks(change(shown)) });
+    const isChanged = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      const current = snapshot.exists()
+        ? (snapshot.data() as Partial<EmailSetupDoc>)
+        : null;
+      const opened = current?.sealed
+        ? await openJson<Partial<EmailSetupSealed>>(current.sealed, encryption)
+        : null;
+      const before = Array.isArray(opened?.banks) ? opened.banks : [];
+      const banks = change(before);
+      if (JSON.stringify(banks) === JSON.stringify(before)) return false;
+      hold({ banks: toBanks(banks) });
+      const now = Date.now();
+      transaction.set(ref, {
+        id: 'progress',
+        provider: current?.provider ?? null,
+        stepId: current?.stepId ?? null,
+        doneAt: current?.doneAt ?? null,
+        sealed: await sealJson(
+          { banks } satisfies EmailSetupSealed,
+          encryption,
+        ),
+        createdAt: current?.createdAt ?? now,
+        updatedAt: now,
+      } satisfies EmailSetupDoc);
+      return true;
+    });
+    return { isWritten: isChanged };
   });
+  return isWritten;
 }
