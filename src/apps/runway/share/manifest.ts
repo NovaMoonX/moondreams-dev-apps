@@ -38,9 +38,9 @@ export const RUNWAY_SHARES: SourceShares = {
           kind: 'task',
           label: 'Bills',
           detail:
-            "Each bill: its name, amount, day, how often it repeats, when it ends and whether it's paid this month",
+            "Each bill: its name, amount, day, how often it repeats, when it ends, whether it's paid this month and whether it pays itself",
           meaning:
-            'Bills the person pays: what is due in the next 30 days, the next payment of each other bill within a year, and what was already paid this month, each with its amount, due day, how often it repeats, when it ends and the day it was paid.',
+            'Bills the person pays: overdue or due in 30 days, the next payment of each other bill within a year, and what was paid this month, each with amount, due day, repeat, end, day paid and whether it pays itself (autopay).',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -59,8 +59,14 @@ export const RUNWAY_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label:
+                'Whether the bill pays itself (autopay), and bills past due',
+              sinceVersion: 3,
+              addedOn: '2026-11-18',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'horizon',

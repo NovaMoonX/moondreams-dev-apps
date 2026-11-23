@@ -168,7 +168,7 @@ function RecipeReader({
   const [link, setLink] = useState(initialUrl ?? initialLink);
   const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
   const linkRef = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const guidanceRef = useRef<HTMLTextAreaElement>(null);
@@ -176,7 +176,12 @@ function RecipeReader({
   const isMounted = useIsMounted();
   const isReading = state.status === 'reading';
   const canPasteText = initialUrl === undefined;
-  const typed = method === 'text' ? text : link;
+  const getTyped = () => {
+    if (method === 'text') return text;
+    if (method === 'file') return file === null ? '' : 'picked';
+    return link;
+  };
+  const typed = getTyped();
   const copy = READER_COPY[method];
   const guidance = guidanceText.trim() || null;
   useGrowingTextarea(guidanceRef, guidanceText, GUIDANCE_MAX_LINES);
@@ -247,6 +252,7 @@ function RecipeReader({
 
   const rejectFile = (message: string) => {
     setFile(null);
+    reportTyped('', guidanceText);
     setState(failed(message));
     setFileKey((current) => current + 1);
   };
@@ -264,8 +270,17 @@ function RecipeReader({
     }
 
     setFile(next);
-    void run(next.name, 'AI_FILE', async () =>
-      toReading(await extractRecipeFromFile(next, guidance)),
+    reportTyped('picked', guidanceText);
+    setState({ status: 'idle' });
+    setFileKey((current) => current + 1);
+  };
+
+  const chooseFile = () => openFileChooser(fileInput);
+
+  const readFile = () => {
+    if (file === null) return;
+    void run(file.name, 'AI_FILE', async () =>
+      toReading(await extractRecipeFromFile(file, guidance)),
     );
   };
 
@@ -308,12 +323,6 @@ function RecipeReader({
     }
     setLink(url);
     handleTyped(url);
-  };
-
-  const handleRetryFile = () => {
-    if (file !== null) {
-      void handleFile(file);
-    }
   };
 
   const handleText = () =>
@@ -446,7 +455,9 @@ function RecipeReader({
 
   const getHint = () => {
     if (method === 'file') {
-      return 'Clear, straight-on photos read best.';
+      return file === null
+        ? 'Clear, straight-on photos read best.'
+        : 'Add guidance below if you like, then tap Fill in the recipe.';
     }
     if (method === 'text') {
       return `Up to ${MAX_PASTE_CHARS.toLocaleString()} characters.`;
@@ -462,13 +473,14 @@ function RecipeReader({
 
   const getChips = (): ActionChip[] => {
     if (method === 'file') {
-      return file !== null && state.status === 'failed'
+      return file !== null
         ? [
             {
-              key: 'retry',
+              key: 'another',
               icon: <RefreshCw className='h-4 w-4' />,
-              label: 'Try this file again',
-              onClick: handleRetryFile,
+              label: 'Choose another file',
+              isDisabled: isReading,
+              onClick: chooseFile,
             },
           ]
         : [];
@@ -523,17 +535,22 @@ function RecipeReader({
 
   const getPrimary = () => {
     if (method === 'file' && isTouch && file === null) return null;
+    if (method === 'file' && file === null) {
+      return (
+        <Button type='button' onClick={() => openFileChooser(fileInput)}>
+          Choose a file
+        </Button>
+      );
+    }
     if (method === 'file') {
       return (
         <Button
           type='button'
           loading={isReading}
           disabled={isReading}
-          onClick={() => openFileChooser(fileRef.current)}
+          onClick={readFile}
         >
-          {file !== null && state.status === 'failed'
-            ? 'Choose another file'
-            : 'Choose a file'}
+          Fill in the recipe
         </Button>
       );
     }
@@ -575,7 +592,10 @@ function RecipeReader({
       <IntroCard icon={getMethodEmoji(method)} lead={intro.lead}>
         {intro.rest}
       </IntroCard>
-      <FormSection title={copy.caption} isFilling={method !== 'text'}>
+      <FormSection
+        title={copy.caption}
+        isFilling={method === 'link' || (method === 'file' && file === null)}
+      >
         {method === 'file' ? (
           <FilePickCard
             title='Tap to choose a file'
@@ -590,11 +610,9 @@ function RecipeReader({
             }
             status={getStatusLine()}
             isDisabled={isReading}
-            isFilling
-            onPick={() => openFileChooser(fileRef.current)}
-            onTakePhoto={() =>
-              openFileChooser(fileRef.current, { isCamera: true })
-            }
+            isFilling={file === null}
+            onPick={() => openFileChooser(fileInput)}
+            onTakePhoto={() => openFileChooser(fileInput, { isCamera: true })}
             onDropFile={(dropped) => void handleFile(dropped)}
           />
         ) : (
@@ -639,7 +657,7 @@ function RecipeReader({
       {method === 'file' && (
         <Input
           key={fileKey}
-          ref={fileRef}
+          ref={setFileInput}
           type='file'
           accept='application/pdf,image/*'
           aria-label='Upload a recipe'

@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import PhotoGrid from '@/components/PhotoGrid';
+import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import KeptMediaViewer from '@apps/helm/components/media/KeptMediaViewer';
 import { MediaKindIcon } from '@apps/helm/components/media/MediaKindIcon';
@@ -14,7 +16,7 @@ import { shortenFileName } from '@apps/helm/utils/fileNames';
 
 interface KeptMediaSectionProps {
   record: MediaAttachment;
-  /** Draws only the photo strip or only the file rows, for a sheet that places them apart. */
+  /** Draws only the photo grid or only the file rows, for a sheet that places them apart. */
   part?: 'photos' | 'files' | 'all';
 }
 
@@ -30,6 +32,7 @@ const META: Record<OpenMedia['kind'], (media: OpenMedia) => string> = {
 function KeptMediaSection({ record, part = 'all' }: KeptMediaSectionProps) {
   const items = useAppSelector((state) => state.helm.media.items);
   const [viewedId, setViewedId] = useState<string | null>(null);
+  const [isAllOpen, setIsAllOpen] = useState(false);
   const shown = items.filter(
     (entry) =>
       entry.status === 'kept' &&
@@ -44,36 +47,55 @@ function KeptMediaSection({ record, part = 'all' }: KeptMediaSectionProps) {
   const viewed = shown.find((entry) => entry.id === viewedId) ?? null;
   if (photos.length + files.length === 0) return null;
 
+  const tiles = photos.map((media, index) => ({
+    id: media.id,
+    label: HELM_COPY.mediaViewOnRecord(index + 1, photos.length),
+  }));
+
+  const renderTile = (_item: { id: string }, index: number) => {
+    const media = photos[index];
+    return media ? (
+      <MediaThumb
+        media={media}
+        alt=''
+        className='size-full'
+        fallback={
+          <span className='text-muted-foreground grid size-full place-items-center p-1 text-center text-[11px]'>
+            {HELM_COPY.mediaUnreadable}
+          </span>
+        }
+      />
+    ) : null;
+  };
+
   return (
     <div>
       {photos.length > 0 && (
-        <ul className='-mx-4 flex gap-2 overflow-x-auto px-4'>
-          {photos.map((media, index) => (
-            <li key={media.id} className='shrink-0'>
-              <Button
-                type='button'
-                variant='tertiary'
-                className="relative block size-16 rounded-xl p-0! before:absolute before:-inset-1 before:content-['']"
-                aria-label={HELM_COPY.mediaViewOnRecord(
-                  index + 1,
-                  photos.length,
-                )}
-                onClick={() => setViewedId(media.id)}
-              >
-                <MediaThumb
-                  media={media}
-                  alt=''
-                  className='size-full rounded-xl'
-                  fallback={
-                    <span className='text-muted-foreground grid size-full place-items-center p-1 text-center text-[11px]'>
-                      {HELM_COPY.mediaUnreadable}
-                    </span>
-                  }
-                />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <PhotoGrid
+          items={tiles}
+          renderTile={renderTile}
+          onOpen={setViewedId}
+          onShowAll={() => setIsAllOpen(true)}
+          showAllLabel={HELM_COPY.photosShowAll(photos.length)}
+        />
+      )}
+      {isAllOpen && (
+        <Subview
+          overlay
+          title={HELM_COPY.photosTitle}
+          onClose={() => setIsAllOpen(false)}
+        >
+          <div>
+            <PhotoGrid
+              items={tiles}
+              renderTile={renderTile}
+              onOpen={setViewedId}
+              onShowAll={() => undefined}
+              showAllLabel=''
+              limit={photos.length}
+            />
+          </div>
+        </Subview>
       )}
       {files.length > 0 && (
         <ul className={photos.length > 0 ? 'mt-2 space-y-1' : 'space-y-1'}>

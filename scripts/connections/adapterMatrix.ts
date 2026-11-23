@@ -3105,6 +3105,7 @@ await Promise.all([
 const waypointAdapter = createWaypointAdapter({
   firestore: () => firestore,
   canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 9, 2),
 });
 const waypointDefaults = waypointAdapter.manifest.categories.filter(
   (category) => category.isOnAtConnect,
@@ -3270,6 +3271,35 @@ assert.equal(oldStyle?.endAt, TODAY + 2 * DAY + 17 * 3_600_000);
 assert.equal(oldStyle?.timeZone, null);
 assert.equal(oldStyle?.isAllDay, false);
 
+const afterTrip = await createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 10, 5),
+}).syncPage(waypointCtx(OWNER), {
+  category: 'myTasks',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.deepEqual(
+  refs(afterTrip.records),
+  [],
+  'a trip that has ended sends none of its to-dos, not even an undated one',
+);
+const withinSlack = await createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  now: () => utc(2026, 10, 4, 12),
+}).syncPage(waypointCtx(OWNER), {
+  category: 'myTasks',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.ok(
+  withinSlack.records.length > 0,
+  'the day after a trip ends its to-dos still show, whatever the zone',
+);
 const tasks = await runWaypoint(OWNER, 'myTasks');
 assert.deepEqual(refs(tasks).sort(), [
   'trips/nyc/checklist/passports',
@@ -3880,7 +3910,12 @@ const runwaySummary = {
   dueBeforeIncomeCents: 45_000,
   bills: [
     { name: 'Overdue', amountCents: 9_000, dueOn: '2026-11-09' },
-    { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
+    {
+      name: 'Rent',
+      amountCents: 150_000,
+      dueOn: '2026-11-14',
+      paysItself: true,
+    },
     {
       name: 'Phone',
       amountCents: 6_000,
@@ -3970,6 +4005,18 @@ await Promise.all([
   runwayPlans.doc('runway-legacy').set({ uid: 'runway-legacy' }),
 ]);
 
+// Written 10 days before NOW (Oct 31): one bill past due by then, one due that day, one paid, one ahead.
+const staleBills = [
+  { name: 'Long past', amountCents: 9_000, dueOn: '2026-10-20' },
+  { name: 'Due that day', amountCents: 2_000, dueOn: '2026-10-31' },
+  {
+    name: 'Paid then',
+    amountCents: 5_000,
+    dueOn: '2026-10-25',
+    paidOn: '2026-10-26',
+  },
+  { name: 'Ahead', amountCents: 6_000, dueOn: '2026-11-20' },
+];
 const runwayPlanWith = (uid: string, shareSummary: unknown) =>
   Promise.all([
     runwayWrapped(uid).set(wrapDataKey(DEV_KEYRING, uid, runwayKey, NOW)),
@@ -3982,6 +4029,18 @@ await Promise.all([
   runwayPlanWith(
     'runway-bad-total',
     sealRunway({ ...runwaySummary, freeToSpendCents: '123456' }),
+  ),
+  runwayPlanWith(
+    'runway-stale',
+    sealRunway({
+      ...runwaySummary,
+      computedAt: NOW - 10 * DAY,
+      bills: staleBills,
+    }),
+  ),
+  runwayPlanWith(
+    'runway-fresh',
+    sealRunway({ ...runwaySummary, bills: staleBills }),
   ),
   runwayPlanWith(
     'runway-twins',
@@ -4077,9 +4136,33 @@ assert.deepEqual(summaryRecord.extra, {
 assert.match(summaryRecord.detail ?? '', /\$450\.00.*2026-11-15/);
 assert.deepEqual(
   titles(runwayBills),
-  ['Car insurance', 'Gym', 'Phone', 'Rent'],
-  'an unpaid bill already past is dropped, a paid one this month and a yearly one stay',
+  ['Car insurance', 'Gym', 'Overdue', 'Phone', 'Rent'],
+  'an unpaid bill already past stays as overdue, a paid one this month and a yearly one stay',
 );
+const staleRecords = await runRunway('runway-stale', 'upcomingBills');
+const freshRecords = await runRunway('runway-fresh', 'upcomingBills');
+assert.ok(
+  !titles(staleRecords).includes('Long past') &&
+    titles(staleRecords).includes('Due that day') &&
+    titles(staleRecords).includes('Ahead'),
+  'a summary older than a week drops a bill already past due when written, keeps one due that day and one ahead',
+);
+assert.ok(
+  titles(freshRecords).includes('Long past'),
+  'a fresh summary keeps its past-due bill as overdue',
+);
+const refOf = (records: SharedRecord[], title: string) =>
+  records.find((record) => record.title === title)?.sourceRef;
+assert.equal(
+  refOf(staleRecords, 'Ahead'),
+  refOf(freshRecords, 'Ahead'),
+  'dropping a stale bill leaves the other bills on the same refs',
+);
+const billExtra = (title: string) =>
+  runwayBills.find((record) => record.title === title)?.extra;
+assert.deepEqual(billExtra('Rent'), { isDone: false, isAutomatic: true });
+assert.deepEqual(billExtra('Gym'), { isDone: true, isAutomatic: false });
+assert.deepEqual(billExtra('Overdue'), { isDone: false, isAutomatic: false });
 const billDetail = (title: string) =>
   runwayBills.find((record) => record.title === title)?.detail ?? null;
 assert.equal(billDetail('Phone'), 'Every other week');
@@ -5183,5 +5266,142 @@ assert.ok(isGooglePhotoUrl('https://lh3.googleusercontent.com/a/photo=s100'));
   'https://169.254.169.254/latest',
   'not a url',
 ].forEach((url) => assert.equal(isGooglePhotoUrl(url), false, url));
+
+// People categories: vets, travellers, buyers and co-sellers.
+const peopleGrant = (
+  adapter: {
+    manifest: Parameters<typeof buildNewGrant>[1];
+  },
+  connectorId: Parameters<typeof buildNewGrant>[0]['connectorId'],
+  categoryId: string,
+) =>
+  buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId,
+      accountId: 'site',
+      categoryIds: [categoryId],
+      options: null,
+    },
+    adapter.manifest,
+    NOW,
+  );
+
+const peopleRead = async (
+  adapter:
+    typeof nineLivesAdapter | typeof waypointAdapter | typeof goingOnceAdapter,
+  connectorId: Parameters<typeof buildNewGrant>[0]['connectorId'],
+  uid: string,
+  category: string,
+) => {
+  const page = await adapter
+    .syncPage(
+      {
+        uid,
+        accountId: 'site',
+        grant: peopleGrant(adapter, connectorId, category),
+      },
+      {
+        category,
+        cursor: null,
+        resumeState: null,
+        windowStart: WINDOW_START,
+      },
+    )
+    .catch(() => null);
+  return page === null ? [] : page.records;
+};
+
+const PEOPLE_SECRETS = [
+  BUYER_CONTACT,
+  BUYER_PHONE,
+  'Is it still free this weekend?',
+  'maya@example.test',
+  'buyer@example.test',
+  CARE_SECRET,
+];
+
+await Promise.all([
+  firestore.doc(`users/${CO_SELLER}`).set({ displayName: 'Casey Jones' }),
+  firestore.doc(`users/${HOUSEMATE}`).set({ displayName: 'Maya Lopez' }),
+]);
+const peopleRuns = [
+  ['nine-lives', nineLivesAdapter, 'vets'],
+  ['waypoint', waypointAdapter, 'travelers'],
+  ['going-once', goingOnceAdapter, 'people'],
+] as const;
+for (const [appId, adapter, category] of peopleRuns) {
+  const connectorId = `app:${appId}` as const;
+  const label = `${appId}/${category}`;
+  const owner = await peopleRead(adapter, connectorId, OWNER, category);
+  assert.ok(owner.length > 0, `${label}: the owner has people`);
+  const text = JSON.stringify(owner);
+  PEOPLE_SECRETS.forEach((secret) =>
+    assert.ok(!text.includes(secret), `${label}: ${secret} never leaves`),
+  );
+  owner.forEach((record) => {
+    assert.equal(record.kind, 'person', label);
+    assert.ok(!record.title.includes('@'), `${label}: no email as a name`);
+    assert.deepEqual(record.extra, {}, `${label}: a person carries no extras`);
+  });
+  assert.deepEqual(
+    refs(await peopleRead(adapter, connectorId, OWNER, category)),
+    refs(owner),
+    `${label}: the same refs on a second run`,
+  );
+  assert.deepEqual(
+    await peopleRead(adapter, connectorId, 'not-a-member-uid', category),
+    [],
+    `${label}: a non-member gets nothing`,
+  );
+}
+assert.deepEqual(
+  refs(
+    await peopleRead(nineLivesAdapter, 'app:nine-lives', OWNER, 'vets'),
+  ).sort(),
+  ['households/home/doctors/lee', 'households/home/doctors/ray'],
+  'both vets, no email-shaped names',
+);
+assert.ok(
+  (await peopleRead(nineLivesAdapter, 'app:nine-lives', HOUSEMATE, 'vets'))
+    .length > 0,
+  'a household member reads the vets too',
+);
+const travelers = await peopleRead(
+  waypointAdapter,
+  'app:waypoint',
+  OWNER,
+  'travelers',
+);
+assert.deepEqual(
+  travelers.map((record) => record.title),
+  ['Maya Lopez'],
+);
+await firestore
+  .doc(`users/${HOUSEMATE}`)
+  .set({ displayName: 'maya@example.test' });
+assert.deepEqual(
+  await peopleRead(waypointAdapter, 'app:waypoint', OWNER, 'travelers'),
+  [],
+  'a profile named by its email gives no record',
+);
+const buyers = await peopleRead(
+  goingOnceAdapter,
+  'app:going-once',
+  OWNER,
+  'people',
+);
+assert.ok(
+  buyers.some((record) => record.title === 'Pat'),
+  'a buyer by first name',
+);
+assert.ok(
+  buyers.some((record) => record.title === 'Casey'),
+  'a co-seller by first name',
+);
+assert.ok(
+  !buyers.some((record) => record.title.includes('Surname')),
+  'no buyer surname',
+);
 
 console.log('Adapter matrix passed.');

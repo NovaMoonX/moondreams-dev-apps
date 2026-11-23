@@ -16,6 +16,8 @@ interface UseDiscardGuardOptions {
   confirmText?: string;
   /** The staying button. */
   cancelText?: string;
+  /** Leaving loses something; false when it only steps away from work that is kept. */
+  isDestructive?: boolean;
 }
 
 /** The one way out of a form holding typed work: asks Keep editing / Discard once, and leaves at once when nothing was typed. Pass it to every route out (the close button, Escape, the back gesture, Cancel). */
@@ -27,6 +29,7 @@ export function useDiscardGuard({
   message = 'It will not be saved.',
   confirmText = 'Discard',
   cancelText = 'Keep editing',
+  isDestructive = true,
 }: UseDiscardGuardOptions) {
   const { confirm } = useActionModal();
   const isAskingRef = useRef(false);
@@ -48,7 +51,7 @@ export function useDiscardGuard({
       message,
       confirmText,
       cancelText,
-      destructive: true,
+      destructive: isDestructive,
     });
     isAskingRef.current = false;
     if (isDiscarded) onClose();

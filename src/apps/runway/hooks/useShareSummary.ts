@@ -9,14 +9,19 @@ import { useAppSelector } from '@/store';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { db } from '@lib/firebase/config';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isSelfPaying } from '@apps/runway/engine/autoPay';
+import { startOfUtcDay, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   getRunwayEncryption,
   isKeptKey,
 } from '@apps/runway/queries/runwayKeyQueries';
 import { openJson, sealJson } from '@apps/runway/security';
-import { selectIsAutoPayReady } from '@apps/runway/store/selectors/autoPaySelectors';
+import {
+  selectIsAutoPayReady,
+  selectSelfPayingBills,
+} from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import { selectBillsDueBeforePay } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectBillPayments,
@@ -63,6 +68,13 @@ export function useShareSummary(uid: string | null) {
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const progress = useAppSelector(selectBillProgress);
   const horizon = useAppSelector((state) => selectHorizonItems(state, today));
+  const selfPaying = useAppSelector((state) =>
+    selectSelfPayingBills(state, today),
+  );
+  const recentFrom = useAppSelector(selectRecentFrom);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
   const networkStatus = useNetworkStatus();
   const { isScrambled } = useValuesHidden();
   const lastWritten = useRef<string | null>(null);
@@ -84,18 +96,25 @@ export function useShareSummary(uid: string | null) {
     });
     const upcomingBills = bills
       .flatMap((bill) => {
+        const since = Math.max(
+          startOfUtcDay(bill.item.createdAt),
+          startDate ?? 0,
+          recentFrom ?? 0,
+        );
         const unpaid = (payments[bill.item.id] ?? []).filter(
           ({ paid, dueOn }) =>
-            paid === null && dueOn >= today && dueOn <= through,
+            paid === null && dueOn >= since && dueOn <= through,
         );
         const chosen = unpaid.some(({ dueOn }) => dueOn <= soon)
           ? unpaid.filter(({ dueOn }) => dueOn <= soon)
           : unpaid.slice(0, 1);
+        const own = selfPaying[bill.item.id];
         return chosen.map(({ dueOn, totalCents }, rank) => ({
           ...describe(bill),
           amountCents: totalCents,
           dueOn,
           paidOn: null,
+          paysItself: own !== undefined && isSelfPaying(own, dueOn, today),
           rank,
         }));
       })
@@ -103,15 +122,26 @@ export function useShareSummary(uid: string | null) {
       .sort((a, b) => a.rank - b.rank || a.dueOn - b.dueOn)
       .slice(0, LIST_LIMIT)
       .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
-      .map(({ name, repeats, endsOn, endsAfter, amountCents, dueOn }) => ({
-        name,
-        repeats,
-        endsOn,
-        endsAfter,
-        amountCents,
-        dueOn: toDateInputValue(dueOn),
-        paidOn: null,
-      }));
+      .map(
+        ({
+          name,
+          repeats,
+          endsOn,
+          endsAfter,
+          amountCents,
+          dueOn,
+          paysItself,
+        }) => ({
+          name,
+          paysItself,
+          repeats,
+          endsOn,
+          endsAfter,
+          amountCents,
+          dueOn: toDateInputValue(dueOn),
+          paidOn: null,
+        }),
+      );
     const paidBills = bills
       .flatMap((bill) =>
         (progress[bill.item.id]?.paid ?? [])
@@ -125,6 +155,7 @@ export function useShareSummary(uid: string | null) {
             amountCents,
             dueOn,
             paidOn,
+            paysItself: false,
           })),
       )
       .sort((a, b) => b.paidOn - a.paidOn || a.name.localeCompare(b.name))
@@ -171,6 +202,9 @@ export function useShareSummary(uid: string | null) {
     payments,
     progress,
     horizon,
+    selfPaying,
+    recentFrom,
+    startDate,
   ]);
   const isUnknown = useMemo(
     () =>

@@ -12,28 +12,18 @@ import {
   type Occurrence,
 } from '@apps/helm/engine/scheduledActions';
 import { toActionState } from '@apps/helm/store/actions/scheduledActionWrites';
+import { formatClockWords, formatRunDay } from '@apps/helm/utils/runWords';
 import type {
   OpenScheduledAction,
   ScheduledFailReason,
 } from '@apps/helm/types';
 
-const dayFormat = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-});
+export { formatClockWords, formatRunDay };
 
 const shortDayFormat = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
   month: 'short',
   day: 'numeric',
-});
-
-const clockFormat = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
-  hour: 'numeric',
-  minute: '2-digit',
 });
 
 const zoneFormats = new Map<string, Intl.DateTimeFormat>();
@@ -58,17 +48,9 @@ const zoneClock = (zone: string, is24Hour: boolean) => {
   return made;
 };
 
-/** "Sun, Nov 29" from a day key. */
-export const formatRunDay = (dayKey: string) =>
-  dayFormat.format(dayKeyToMs(dayKey));
-
 /** "Nov 29" from a day key. */
 export const formatShortDay = (dayKey: string) =>
   shortDayFormat.format(dayKeyToMs(dayKey));
-
-/** "6:00 PM" from a floating "HH:mm". */
-export const formatClockWords = (time: string) =>
-  clockFormat.format(Date.parse(`1970-01-01T${time}:00Z`));
 
 /** The zone's short name after a time, only when this phone's zone is not the action's. */
 export const readZoneSuffix = (zone: string, at: number) => {

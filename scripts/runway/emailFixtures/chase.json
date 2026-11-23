@@ -1,0 +1,5 @@
+{
+  "from": "no.reply.alerts@chase.com",
+  "subject": "You made a $24.50 transaction with CHIPOTLE 2041",
+  "text": "Account ending in 1234\nMerchant: CHIPOTLE 2041\nAmount: $24.50"
+}

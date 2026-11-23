@@ -383,7 +383,11 @@ export interface BankOwed {
 type BankPurchase = Pick<
   OpenPurchase,
   'id' | 'date' | 'source' | 'status' | 'amountCents' | 'accountId'
-> & { paidByCardId?: string | null; category?: string | null };
+> & {
+  paidByCardId?: string | null;
+  category?: string | null;
+  emailWaiting?: boolean | null;
+};
 
 /** Each linked card's figure from its bank: the posted balance, the pending charges on it, and the payments the person started that the card hasn't shown yet. A started payment is matched one to one by amount, within its window, to the card's own credit (it has landed) or to money out of an account (it has left); one bank transaction settles one payment across every card, a card payment by the bank's category before any other. A payment not seen within 14 days of its day is no longer waited for. */
 export function getBankOwedByCard(input: {
@@ -391,7 +395,10 @@ export function getBankOwedByCard(input: {
   purchases: readonly BankPurchase[];
   started: readonly OpenStartedPayment[];
   today: DateOnly;
+  /** Emailed purchases whose bank charge is already here (`findEmailTwins`): the charge counts, so the emailed one does not. */
+  twinnedEmailIds?: ReadonlySet<string>;
 }): Record<string, BankOwed> {
+  const twinned = input.twinnedEmailIds ?? new Set<string>();
   const fromBank = input.purchases.filter(
     (purchase) => purchase.source === 'link',
   );
@@ -465,9 +472,20 @@ export function getBankOwedByCard(input: {
   );
   return Object.fromEntries(
     input.cards.map((card) => {
-      const pendingCents = onCard(card.id)
-        .filter((purchase) => purchase.status === 'pending')
-        .reduce((sum, purchase) => sum + purchase.amountCents, 0);
+      const pendingCents =
+        onCard(card.id)
+          .filter((purchase) => purchase.status === 'pending')
+          .reduce((sum, purchase) => sum + purchase.amountCents, 0) +
+        input.purchases
+          .filter(
+            (purchase) =>
+              purchase.source === 'email' &&
+              purchase.emailWaiting === true &&
+              purchase.amountCents > 0 &&
+              (purchase.paidByCardId ?? null) === card.id &&
+              !twinned.has(purchase.id),
+          )
+          .reduce((sum, purchase) => sum + purchase.amountCents, 0);
       const mine = waiting.filter((entry) => entry.payment.cardId === card.id);
       const leftCents = mine
         .filter((entry) => entry.hasLeft)

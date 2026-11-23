@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+import { Timestamp } from 'firebase-admin/firestore';
+
 import {
   DEV_KEYRING,
   deriveSeedDataKey,
@@ -8,6 +10,10 @@ import {
   readKeyring,
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
+import {
+  excerptOf,
+  readableBody,
+} from '../../functions/src/apps/runway/email/parseAlert.ts';
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
   AUTO_PAY_WORDS,
@@ -15,6 +21,8 @@ import {
   DEFAULT_CURRENCY_CODE,
   PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
+  EMAIL_EVENT_KEEP_DAYS,
+  EMAIL_PURCHASES_GATE_ID,
   LINK_BANKS_GATE_ID,
 } from '../../src/apps/runway/constants.ts';
 import { formatCents } from '../../src/utils/moneyUtils.ts';
@@ -83,6 +91,14 @@ import type {
   ShareSummary,
   ChangeSealed,
   ClosingDoc,
+  EmailEventDoc,
+  EmailEventSealed,
+  EmailFilterDoc,
+  EmailSetupDoc,
+  EmailSetupSealed,
+  EmailFilterSealed,
+  EmailIntakeDoc,
+  EmailIntakeSealed,
   BillPaidSealed,
   CostPaidSealed,
   BillSealed,
@@ -203,6 +219,7 @@ export function buildSampleShareSummary(now: number): ShareSummary {
     endsOn: null,
     endsAfter: null,
     paidOn: null,
+    paysItself: false,
   };
   const isRentSoon = firstOfNextMonth - today <= 30 * DAY_MS;
   return {
@@ -318,6 +335,13 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
           ],
           alwaysOffUids: [],
           reason: 'Seeded: Alex, Jamie and Taylor test linking',
+          updatedAt: context.now,
+        },
+        [EMAIL_PURCHASES_GATE_ID]: {
+          rollout: 'off',
+          alwaysOnUids: [FIXTURE_USERS.partnerTwo.uid],
+          alwaysOffUids: [],
+          reason: 'Seeded: Jamie tests purchases from email',
           updatedAt: context.now,
         },
       },
@@ -3551,6 +3575,8 @@ async function writeSeedSelfPaying(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4109,6 +4135,8 @@ async function seedUnlinkedPlan(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4327,6 +4355,8 @@ async function writeSeedPurchases(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4615,10 +4645,19 @@ async function writeSeedPurchases(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
   const ruled = await seedRules(context, plan, encryption, today);
+  const emailDocuments = await writeSeedEmail(
+    context,
+    plan,
+    encryption,
+    today,
+    batch,
+  );
   const safewayDate = today - 3 * DAY_MS;
   const removedDate = today - 8 * DAY_MS;
   const changes = [
@@ -4662,7 +4701,348 @@ async function writeSeedPurchases(
     } satisfies ExpenseDoc,
   );
   await batch.commit();
-  return purchases.length + waiting.length + changes.length + 1 + ruled;
+  return (
+    purchases.length +
+    waiting.length +
+    changes.length +
+    1 +
+    ruled +
+    emailDocuments
+  );
+}
+
+/**
+ * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome and a filter, and a finished Gmail walkthrough. No bank charge of the same amount sits on the Venture X, so none merges.
+ */
+async function writeSeedEmail(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+) {
+  const hour = 3_600_000;
+  const expiresAt = (receivedAt: number) =>
+    Timestamp.fromMillis(receivedAt + EMAIL_EVENT_KEEP_DAYS * DAY_MS);
+  batch.set(context.firestore.doc(`${plan}/emailIntake/address`), {
+    id: 'address',
+    token: '3f9a1c7e5b2d48a6906de1f4b7c8a253',
+    createdAt: context.now - 12 * DAY_MS,
+    updatedAt: context.now - DAY_MS,
+    lastReceivedAt: context.now - 2 * hour,
+    confirmAt: context.now - DAY_MS,
+    sealed: await sealJson(
+      {
+        confirmUrl:
+          'https://mail.google.com/mail/vf-%5BANGjdJ8x2kQ%5D-seeded-confirmation',
+        confirmCode: '123456789',
+      } satisfies EmailIntakeSealed,
+      encryption,
+    ),
+  } satisfies EmailIntakeDoc);
+
+  const purchases: {
+    id: string;
+    eventId: string;
+    daysAgo: number;
+    receivedAt: number;
+    merchant: string;
+    cents: number;
+    subject: string;
+    readBy: 'pattern' | 'ai';
+  }[] = [
+    {
+      id: 'seed-email-purchase-coffee',
+      eventId: 'seed-email-event-coffee',
+      daysAgo: 0,
+      receivedAt: context.now - 2 * hour,
+      merchant: 'Blue Bottle Coffee',
+      cents: 675,
+      subject: 'Transaction alert: $6.75 at Blue Bottle Coffee',
+      readBy: 'pattern',
+    },
+    {
+      id: 'seed-email-purchase-target',
+      eventId: 'seed-email-event-target',
+      daysAgo: 9,
+      receivedAt: today - 9 * DAY_MS + 15 * hour,
+      merchant: 'Target',
+      cents: 4_218,
+      subject: 'A charge of $42.18 on your Venture X',
+      readBy: 'pattern',
+    },
+    {
+      id: 'seed-email-purchase-shell',
+      eventId: 'seed-email-event-shell',
+      daysAgo: 10,
+      receivedAt: today - 10 * DAY_MS + 17 * hour,
+      merchant: 'Shell',
+      cents: 3_840,
+      subject: 'Transaction alert: $38.40 at Shell',
+      readBy: 'ai',
+    },
+    {
+      id: 'seed-email-purchase-trader-joes',
+      eventId: 'seed-email-event-trader-joes',
+      daysAgo: 3,
+      receivedAt: today - 3 * DAY_MS + 16 * hour,
+      merchant: "Trader Joe's",
+      cents: 2_764,
+      subject: 'A charge of $27.64 on your Venture X',
+      readBy: 'pattern',
+    },
+  ];
+  await Promise.all(
+    purchases.map(async (entry) => {
+      const date = today - entry.daysAgo * DAY_MS;
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date,
+        source: 'email',
+        status: null,
+        needsHome: false,
+        accountId: null,
+        dedupeKey: null,
+        expenseId: null,
+        emailEventId: entry.eventId,
+        emailWaiting: true,
+        createdAt: entry.receivedAt,
+        updatedAt: entry.receivedAt,
+        sealed: await sealJson(
+          {
+            amountCents: entry.cents,
+            merchant: entry.merchant,
+            label: null,
+            note: null,
+            lines: [{ envelopeId: null, cents: entry.cents, via: 'free' }],
+            refundOfId: null,
+            paidByCardId: SEED_VENTURE_CARD,
+            link: null,
+            receiptText: null,
+            costRef: null,
+            notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
+            tickedDayKey: null,
+            category: null,
+            ruleId: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
+
+  const readEmail = (
+    text: string,
+    found: { amountCents: number | null; merchant: string | null } = {
+      amountCents: null,
+      merchant: null,
+    },
+    keeps: 'all' | 'excerpt' | 'none' = 'all',
+  ) => {
+    const readText = readableBody(text);
+    return {
+      snippet: keeps === 'none' ? '' : excerptOf(readText, found),
+      bodyText: keeps === 'all' ? readText : null,
+    };
+  };
+  const cluttered = (alert: string, brand: string, bank: string) =>
+    [
+      'View this email in your browser',
+      `[${brand} logo]`,
+      brand,
+      '',
+      'Account alert',
+      '',
+      alert,
+      '',
+      `Questions? Visit ${bank}/help or call the number on the back of your card.`,
+      `https://www.${bank}/alerts/manage?cid=8c1f2b7e&utm_source=alert&utm_medium=email&utm_campaign=txn-2026`,
+      '',
+      `Manage alerts | Privacy | Security`,
+      `${brand}, Member FDIC. Equal Housing Lender. This message was sent to you because you chose to receive account alerts. Please do not reply to this email.`,
+      '',
+      `Unsubscribe from alerts https://www.${bank}/unsub?t=9f3a77c0d1`,
+    ].join('\n');
+  const purchaseBody = (
+    entry: { cents: number; merchant: string },
+    index: number,
+  ) => {
+    const amount = formatCents(entry.cents);
+    const templates = [
+      `A purchase of ${amount} was made at ${entry.merchant} with your Venture X card ending in 4821.\n\nView your activity at https://www.capitalone.com/activity`,
+      cluttered(
+        `You made a ${amount} transaction with ${entry.merchant}.\nVenture X card ending in 4821`,
+        'Capital One',
+        'capitalone.com',
+      ),
+      `Hi Jamie,\n\nHeads up: your Venture X card ending in 4821 was charged ${amount} at ${entry.merchant}.\n\nThanks,\nCapital One`,
+      cluttered(
+        `Transaction alert\nMerchant: ${entry.merchant}\nAmount: ${amount}\nCard ending in 4821`,
+        'Capital One',
+        'capitalone.com',
+      ),
+    ];
+    return templates[index % templates.length];
+  };
+  const events: (Pick<EmailEventDoc, 'id' | 'receivedAt' | 'outcome'> & {
+    purchaseId: string | null;
+    sealed: EmailEventSealed;
+  })[] = [
+    ...purchases.map((entry, index) => ({
+      id: entry.eventId,
+      receivedAt: entry.receivedAt,
+      outcome: 'purchase' as const,
+      purchaseId: entry.id,
+      sealed: {
+        from: 'alerts@capitalone.com',
+        subject: entry.subject,
+        subjectTemplate: entry.subject
+          .toLowerCase()
+          .replace(/\$\d[\d,]*\.\d{2}/, '{amount}'),
+        ...readEmail(purchaseBody(entry, index), {
+          amountCents: entry.cents,
+          merchant: entry.merchant,
+        }),
+        readBy: entry.readBy,
+      },
+    })),
+    {
+      id: 'seed-email-event-deposit',
+      receivedAt: context.now - 5 * hour,
+      outcome: 'notPurchase',
+      purchaseId: null,
+      sealed: {
+        from: 'alerts@capitalone.com',
+        subject: 'A payment was received on your Venture X',
+        subjectTemplate: 'a payment was received on your venture x',
+        ...readEmail(
+          'Thanks, we got your payment of $480.00 on your Venture X card ending in 4821.',
+        ),
+        readBy: 'ai',
+      },
+    },
+    {
+      id: 'seed-email-event-filtered',
+      receivedAt: context.now - DAY_MS - 3 * hour,
+      outcome: 'filtered',
+      purchaseId: null,
+      sealed: {
+        from: 'marketing@chase.com',
+        subject: 'Your card could earn 5x points this season',
+        subjectTemplate: 'your card could earn 5x points this season',
+        ...readEmail(
+          cluttered(
+            'Activate your quarterly bonus categories and earn more on gas, groceries and dining.',
+            'Chase',
+            'chase.com',
+          ),
+          undefined,
+          'excerpt',
+        ),
+        readBy: null,
+      },
+    },
+    {
+      id: 'seed-email-event-confirm',
+      receivedAt: context.now - DAY_MS,
+      outcome: 'confirm',
+      purchaseId: null,
+      sealed: {
+        from: 'forwarding-noreply@google.com',
+        subject:
+          'Gmail Forwarding Confirmation - Receive Mail from jamie@example.com',
+        subjectTemplate:
+          'gmail forwarding confirmation - receive mail from jamie@example.com',
+        ...readEmail(
+          'jamie@example.com has requested to automatically forward mail to your email address. Confirmation code: 123456789\n\nTo allow this, open https://mail-settings.google.com/mail/vf-abc123',
+          undefined,
+          'none',
+        ),
+        readBy: null,
+      },
+    },
+    {
+      id: 'seed-email-event-unread',
+      receivedAt: context.now - 3 * DAY_MS,
+      outcome: 'unread',
+      purchaseId: null,
+      sealed: {
+        from: 'statements@discover.com',
+        subject: 'Your Discover statement is ready',
+        subjectTemplate: 'your discover statement is ready',
+        ...readEmail(
+          'Your latest statement is now available. Sign in to view it.',
+          undefined,
+          'excerpt',
+        ),
+        readBy: null,
+      },
+    },
+  ];
+  await Promise.all(
+    events.map(async (entry) => {
+      batch.set(context.firestore.doc(`${plan}/emailEvents/${entry.id}`), {
+        id: entry.id,
+        receivedAt: entry.receivedAt,
+        outcome: entry.outcome,
+        purchaseId: entry.purchaseId,
+        expiresAt: expiresAt(entry.receivedAt),
+        sealed: await sealJson(entry.sealed, encryption),
+      });
+    }),
+  );
+
+  batch.set(context.firestore.doc(`${plan}/emailSetup/progress`), {
+    id: 'progress',
+    provider: 'gmail',
+    stepId: 'test',
+    doneAt: context.now - DAY_MS,
+    sealed: await sealJson(
+      {
+        banks: [
+          {
+            id: 'seed-email-bank-capital-one',
+            name: 'Capital One',
+            addresses: [
+              'alerts@capitalone.com',
+              'capitalone@notification.capitalone.com',
+            ],
+            addedAt: context.now - 12 * DAY_MS,
+          },
+          {
+            id: 'seed-email-bank-discover',
+            name: 'Discover',
+            addresses: ['discover@services.discover.com'],
+            addedAt: context.now - 2 * DAY_MS,
+          },
+        ],
+      } satisfies EmailSetupSealed,
+      encryption,
+    ),
+    createdAt: context.now - 12 * DAY_MS,
+    updatedAt: context.now - DAY_MS,
+  } satisfies EmailSetupDoc);
+
+  const filterId = 'seed-email-filter-chase-marketing';
+  batch.set(context.firestore.doc(`${plan}/emailFilters/${filterId}`), {
+    id: filterId,
+    createdAt: context.now - 4 * DAY_MS,
+    sealed: await sealJson(
+      {
+        fromAddress: 'marketing@chase.com',
+        subjectTemplate: null,
+        subjectContains: [],
+        bodyContains: [],
+      } satisfies EmailFilterSealed,
+      encryption,
+    ),
+  } satisfies EmailFilterDoc);
+  return 1 + purchases.length + events.length + 2;
 }
 
 /**
@@ -4776,6 +5156,8 @@ async function seedRules(
         } satisfies PurchaseSealed,
         encryption,
       ),
+      emailEventId: null,
+      emailWaiting: null,
     } satisfies PurchaseDoc,
   );
   await Promise.all(
@@ -4824,6 +5206,8 @@ async function seedRules(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4839,14 +5223,14 @@ async function seedRules(
       source: 'link',
       daysAgo: 16,
       amountCents: 6_210,
-      merchant: 'Trader Joe’s',
+      merchant: "Trader Joe's",
     },
     {
       id: 'seed-typed-before-link',
       source: 'manual',
       daysAgo: 17,
       amountCents: 5_400,
-      merchant: 'Trader Joe’s',
+      merchant: "Trader Joe's",
     },
   ];
   await Promise.all(
@@ -4898,6 +5282,8 @@ async function seedRules(
           } satisfies PurchaseSealed,
           encryption,
         ),
+        emailEventId: null,
+        emailWaiting: null,
       } satisfies PurchaseDoc);
     }),
   );
