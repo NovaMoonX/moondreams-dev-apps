@@ -255,6 +255,7 @@ function EmailSetupWalkthrough({
   const [isNotArrivingShown, setIsNotArrivingShown] = useState(false);
   const [draft, setDraft] = useState<BankDraft | null>(null);
   const [isPickingBank, setIsPickingBank] = useState(isAddingBank);
+  const [bankCountAtStart] = useState(banks.length);
   const [isSavingBank, setIsSavingBank] = useState(false);
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
@@ -665,7 +666,14 @@ function EmailSetupWalkthrough({
   };
 
   const goBack = () => {
-    if (step === 'bank' && isAddingBank && draft === null && isPickingBank) {
+    const hasAddedBank = banks.length > bankCountAtStart;
+    if (
+      step === 'bank' &&
+      isAddingBank &&
+      draft === null &&
+      isPickingBank &&
+      !hasAddedBank
+    ) {
       onClose();
       return;
     }
