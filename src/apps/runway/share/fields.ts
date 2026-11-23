@@ -119,6 +119,7 @@ const PLAN_DOC_FIELDS = {
   dirtyFrom: 'notUseful',
   notify: 'notUseful',
   sorting: 'notUseful',
+  doneForYouSeenAt: 'notUseful',
   keyId: 'notUseful',
   sealed: 'shared',
   shareSummary: 'shared',

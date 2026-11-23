@@ -115,6 +115,11 @@ export const CHANGE_LOG_SPAN_LABELS: Record<
 > = { '30': '30 days', '90': '3 months', '365': 'A year' };
 /** The newest entries one window reads; a busier window says so and a shorter span shows the rest. */
 export const MAX_WINDOW_CHANGES = 500;
+
+/** How long Done for you keeps an item, and the most the listener reads or one tidy-up removes. */
+export const DONE_FOR_YOU_DAYS = 30;
+export const MAX_DONE_FOR_YOU = 200;
+export const MAX_DONE_FOR_YOU_PRUNE = 100;
 /** Entries drawn before "Show more". */
 export const CHANGE_LOG_PAGE_SIZE = 30;
 /** How many windows back the log goes. */
@@ -5643,4 +5648,25 @@ export const PLAN_SELECT_WORDS = {
   archivedPartly: (done: number, total: number, failed: readonly string[]) =>
     `Archived ${done} of ${total}. ${listNames(failed)} did not archive and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
   hint: 'Press and hold to select several',
+} as const;
+
+/** Words for Done for you, the list of what Runway did on its own. */
+export const DONE_FOR_YOU_WORDS = {
+  title: 'Done for you',
+  summary: (count: number) =>
+    count === 1 ? '1 thing done for you' : `${count} things done for you`,
+  view: 'View',
+  empty: 'Nothing done for you yet',
+  emptyBody:
+    'When Runway sorts or matches something on its own, it shows here for 30 days.',
+  undo: 'Undo',
+  undone: 'Undone',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  cannotUndo: 'It changed after this, so it can no longer be undone here.',
+  undoFailed: 'That was not undone. Nothing was changed.',
+  ruleSent: (purchase: string, envelope: string) =>
+    `${purchase} went to ${envelope}`,
+  autoMarked: (name: string) => `Marked ${name} paid`,
+  ended: (name: string) => `Ended ${name} after its last day`,
 } as const;

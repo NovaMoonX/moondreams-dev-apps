@@ -27,6 +27,7 @@ import type {
   OpenLink,
   OpenCard,
   OpenExpense,
+  OpenDoneForYou,
   OpenMemory,
   OpenStartedPayment,
   OpenRule,
@@ -84,6 +85,9 @@ export interface RunwayState {
   memories: OpenMemory[];
   startedPayments: OpenStartedPayment[];
   isMemoriesLoaded: boolean;
+  /** What the app did on its own in the last 30 days, newest first, and whether it has been read once. */
+  doneForYou: OpenDoneForYou[];
+  isDoneForYouLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
   /** Every purchase waiting for a home, whatever its date, and whether they have been read once. */
@@ -216,6 +220,8 @@ const initialState: RunwayState = {
   memories: [],
   startedPayments: [],
   isMemoriesLoaded: false,
+  doneForYou: [],
+  isDoneForYouLoaded: false,
   purchases: [],
   needsHome: [],
   isNeedsHomeLoaded: false,
@@ -322,6 +328,10 @@ export const runwaySlice = createSlice({
     setMemories: (state, action: PayloadAction<OpenMemory[]>) => {
       state.memories = action.payload;
       state.isMemoriesLoaded = true;
+    },
+    setDoneForYou: (state, action: PayloadAction<OpenDoneForYou[]>) => {
+      state.doneForYou = action.payload;
+      state.isDoneForYouLoaded = true;
     },
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
@@ -509,6 +519,7 @@ export const {
   setExpenses,
   setRules,
   setMemories,
+  setDoneForYou,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

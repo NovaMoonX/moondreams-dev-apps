@@ -17,6 +17,7 @@ import {
   findDepositDays,
   findPurchaseMatches,
 } from '@apps/runway/engine/matching';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -79,7 +80,7 @@ interface MatchPair {
   typed: OpenPurchase;
 }
 
-/** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again. Resolves with how many merged; a pair another device changed first is skipped. */
+/** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again; an automatic pass records each one in Done for you instead and shows no toast. Resolves with how many merged; a pair another device changed first is skipped. */
 export function useMergeWithUndo() {
   const { addToast } = useToast();
   const looks = useAppSelector(selectItemLooks);
@@ -112,6 +113,7 @@ export function useMergeWithUndo() {
     uid: string,
     pairs: readonly MatchPair[],
     shouldThrow = false,
+    isAutomatic = false,
   ): Promise<number> => {
     const encryption = await getRunwayEncryption(uid);
     const merged = await pairs.reduce(
@@ -135,6 +137,21 @@ export function useMergeWithUndo() {
       Promise.resolve([] as MergedPurchase[]),
     );
     if (merged.length === 0) return 0;
+    if (isAutomatic) {
+      await recordDone(
+        uid,
+        merged.map((entry) => ({
+          kind: 'merge' as const,
+          title: NEEDS_HOME_WORDS.matchedOne(
+            getPurchaseTitle(entry.typed, nameOf),
+          ),
+          detail: NEEDS_HOME_WORDS.matchedOneSub,
+          why: null,
+          undo: { kind: 'merge' as const, merged: entry },
+        })),
+      );
+      return merged.length;
+    }
     addToast({
       title:
         merged.length === 1
@@ -202,7 +219,7 @@ export function useMatchBankPurchases(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await mergeRef.current(uid, pairs);
+        await mergeRef.current(uid, pairs, false, true);
       } catch (error) {
         // The vault or the network failed before any pair was tried, so they may be tried again.
         pairs.forEach(({ key }) => tried.current.delete(key));
@@ -261,7 +278,7 @@ export function useMatchLinkHistory(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await mergeRef.current(uid, pairs);
+        await mergeRef.current(uid, pairs, false, true);
       } catch (error) {
         // The vault or the network failed before any pair was tried, so they may be tried again.
         pairs.forEach(({ key }) => tried.current.delete(key));
@@ -286,7 +303,7 @@ interface DepositPair {
   payLineId?: string;
 }
 
-/** Links deposits to their income days, one after another, and says so in one toast with an Undo that sends them all back to Needs a home. Resolves with how many linked; a deposit another device changed first is skipped, or throws when `shouldThrow`. */
+/** Links deposits to their income days, one after another, and says so in one toast with an Undo that sends them all back to Needs a home; the automatic pass records each one in Done for you instead and shows no toast. Resolves with how many linked; a deposit another device changed first is skipped, or throws when `shouldThrow`. */
 export function useLinkDepositsWithUndo() {
   const { addToast } = useToast();
 
@@ -363,6 +380,27 @@ export function useLinkDepositsWithUndo() {
       Promise.resolve([] as (DepositPair & { linked: OpenPurchase })[]),
     );
     if (done.length === 0) return 0;
+    if (assignedBy === 'auto') {
+      await recordDone(
+        uid,
+        done.map((entry) => ({
+          kind: 'deposit' as const,
+          title: DEPOSIT_WORDS.linkedOne(
+            formatCents(-entry.deposit.amountCents),
+            describePayDay(entry.dayOn),
+          ),
+          detail: DEPOSIT_WORDS.linkedSub,
+          why: null,
+          undo: {
+            kind: 'deposit' as const,
+            deposit: entry.deposit,
+            linked: entry.linked,
+            dayOn: entry.dayOn,
+          },
+        })),
+      );
+      return done.length;
+    }
     const handPayLine = done.length === 1 ? (done[0].payLineId ?? null) : null;
     const memoryId =
       assignedBy === 'person' && handPayLine !== null
@@ -516,7 +554,7 @@ async function tickMove(
   }
 }
 
-/** Pairs money out with the money in it is the other side of, one after another, and says so in one toast with an Undo that sends them all back to Needs a home. Resolves with how many paired; a pair another device changed first is skipped, or throws when `shouldThrow`. */
+/** Pairs money out with the money in it is the other side of, one after another, and says so in one toast with an Undo that sends them all back to Needs a home; the automatic pass records each one in Done for you instead and shows no toast. Resolves with how many paired; a pair another device changed first is skipped, or throws when `shouldThrow`. */
 export function usePairAccountsWithUndo() {
   const { addToast } = useToast();
   const mask = useMaskedText();
@@ -613,6 +651,29 @@ export function usePairAccountsWithUndo() {
       Promise.resolve([] as DonePair[]),
     );
     if (done.length === 0) return 0;
+    if (assignedBy === 'auto') {
+      await recordDone(
+        uid,
+        done.map((entry) => ({
+          kind: 'pair' as const,
+          title: getTitle(entry),
+          detail:
+            entry.kind === 'cardPayment'
+              ? PAIR_WORDS.paidCardSub
+              : PAIR_WORDS.transferredSub,
+          why: null,
+          undo: {
+            kind: 'pair' as const,
+            out: entry.out,
+            into: entry.into,
+            pairKind: entry.kind,
+            names: entry.names,
+            paired: { out: entry.paired.out, into: entry.paired.into },
+          },
+        })),
+      );
+      return done.length;
+    }
     const memoryId =
       assignedBy === 'person' && done.length === 1
         ? await rememberHandPair(uid, done[0].out, done[0].into)

@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
 
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-
 import { useAppSelector } from '@/store';
 import { RELEASED_WORDS } from '@apps/runway/constants';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { clearReleasedCharge } from '@apps/runway/store/actions/purchaseActions';
 import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
@@ -24,15 +23,14 @@ import {
  * says where its money went back, writes the History line and clears the note. Each note is handled once across devices.
  */
 export function useReleasedCharges(uid: string | null) {
-  const { addToast } = useToast();
   const level = useAppSelector(selectLevel);
   const looks = useAppSelector(selectItemLooks);
   const isReady = useAppSelector(selectIsPlanItemsLoaded);
   const tried = useRef(new Set<string>());
-  const latest = useRef({ addToast, looks });
+  const latest = useRef({ looks });
 
   useEffect(() => {
-    latest.current = { addToast, looks };
+    latest.current = { looks };
   });
 
   useEffect(() => {
@@ -68,26 +66,21 @@ export function useReleasedCharges(uid: string | null) {
         Promise.resolve([] as OpenReleasedCharge[]),
       );
       if (cleared.length === 0) return;
-      const [first] = cleared;
-      const isRefund = first.amountCents < 0;
-      latest.current.addToast(
-        cleared.length === 1
-          ? {
-              title: RELEASED_WORDS.one(first.title, isRefund),
-              description: RELEASED_WORDS.oneSub(
-                describeEnvelopes(first.lines, nameOf) || 'Free to Spend',
-                isRefund,
-              ),
-              type: 'info',
-            }
-          : {
-              title: RELEASED_WORDS.many(
-                cleared.length,
-                cleared.some((charge) => charge.amountCents < 0),
-              ),
-              description: RELEASED_WORDS.manySub,
-              type: 'info',
-            },
+      await recordDone(
+        uid,
+        cleared.map((charge) => {
+          const isRefund = charge.amountCents < 0;
+          return {
+            kind: 'released' as const,
+            title: RELEASED_WORDS.one(charge.title, isRefund),
+            detail: RELEASED_WORDS.oneSub(
+              describeEnvelopes(charge.lines, nameOf) || 'Free to Spend',
+              isRefund,
+            ),
+            why: null,
+            undo: null,
+          };
+        }),
       );
     };
     const run = { stop: null as (() => void) | null, isStopped: false };

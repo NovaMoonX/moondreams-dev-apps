@@ -11,7 +11,7 @@ import { startChangesListener } from '@apps/runway/store/listeners/changeListene
 import { useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
-import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
+import { DONE_FOR_YOU_WORDS, FORM_DRAFT_PREFIX } from '@apps/runway/constants';
 import {
   getRunwayEncryption,
   isKeptKey,
@@ -38,6 +38,7 @@ import {
 } from '@apps/runway/store/listeners/linkListeners';
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
+import { startDoneForYouListener } from '@apps/runway/store/listeners/doneForYouListeners';
 import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListeners';
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
@@ -53,6 +54,7 @@ import {
 } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
+import { recordDoneForYou } from '@apps/runway/store/actions/doneForYouActions';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
   selectRecentFrom,
@@ -81,6 +83,7 @@ import {
   setExpenses,
   setRules,
   setMemories,
+  setDoneForYou,
   setClosing,
   setDays,
   setItems,
@@ -233,6 +236,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (memories) => dispatch(setMemories(memories)),
+          fail,
+        ),
+        startDoneForYouListener(
+          uid,
+          encryption,
+          (entries) => dispatch(setDoneForYou(entries)),
           fail,
         ),
         startNeedsHomeListener(
@@ -594,19 +603,33 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       return;
     const rows = JSON.parse(reachedEndings) as [string, number, string][];
     getRunwayEncryption(uid)
-      .then((encryption) =>
-        Promise.all(
-          rows.map(([itemId, endedOn, name]) =>
-            endItem(uid, encryption, {
+      .then(async (encryption) => {
+        const written = await Promise.all(
+          rows.map(async ([itemId, endedOn, name]) => {
+            const isWritten = await endItem(uid, encryption, {
               itemId,
               endedOn,
               summary: `${name}: ended after its last payday, ${formatDateOrdinalUTC(endedOn)}.`,
               note: null,
               heldChoice: null,
-            }),
-          ),
-        ),
-      )
+            });
+            return isWritten ? [name] : [];
+          }),
+        );
+        await recordDoneForYou(
+          uid,
+          encryption,
+          written.flat().map((name) => ({
+            kind: 'ended' as const,
+            title: DONE_FOR_YOU_WORDS.ended(name),
+            detail: null,
+            why: null,
+            undo: null,
+          })),
+        ).catch((error: unknown) =>
+          console.error('An ending was not recorded', error),
+        );
+      })
       .catch((error) => console.error('Marking an ending did not save', error));
   }, [uid, keyStatus, isPlanLoaded, reachedEndings]);
 }

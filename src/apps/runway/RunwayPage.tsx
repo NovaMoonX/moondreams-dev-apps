@@ -6,15 +6,24 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useDoneForYouToast } from '@/hooks/useDoneForYouToast';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
+import DoneForYouButton from '@/components/DoneForYouButton';
+import DoneForYouSheet from '@/components/DoneForYouSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
 import Loading from '@/ui/Loading';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useDoneForYou } from '@apps/runway/hooks/useDoneForYou';
+import {
+  pruneDoneForYou,
+  setDoneForYouSeen,
+} from '@apps/runway/store/actions/doneForYouActions';
 import PriorityDial from '@apps/runway/components/PriorityDial';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
@@ -42,6 +51,7 @@ import { getDayKeyMonth } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import {
+  DONE_FOR_YOU_WORDS,
   HISTORY_WORDS,
   RUNWAY_TAB_LABELS,
   TRUSTED_BROWSER_WORDS,
@@ -104,10 +114,21 @@ const getScreen = (tab: RunwayTab) => {
 interface RunwayTabsProps {
   activeTab: RunwayTab;
   onChange: (tab: RunwayTab) => void;
+  doneForYou: ReturnType<typeof useDoneForYou>;
+  isDoneForYouOpen: boolean;
+  onOpenDoneForYou: () => void;
+  onCloseDoneForYou: () => void;
 }
 
 /** A tab opens where it was left (the top on a first visit), and tapping the open tab again goes to its top. */
-function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
+function RunwayTabs({
+  activeTab,
+  onChange,
+  doneForYou,
+  isDoneForYouOpen,
+  onOpenDoneForYou,
+  onCloseDoneForYou,
+}: RunwayTabsProps) {
   const hasItems = useAppSelector((state) => state.runway.items.length > 0);
   const hasPurchases = useAppSelector(
     (state) => selectSpendPurchases(state).length > 0,
@@ -167,12 +188,29 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
           </h1>
           <div className='flex shrink-0 items-center gap-2.5'>
             {activeTab === 'plan' && <PriorityDial />}
+            {activeTab === 'home' && (
+              <DoneForYouButton
+                hasUnseen={doneForYou.hasUnseen}
+                onClick={onOpenDoneForYou}
+                label={DONE_FOR_YOU_WORDS.title}
+              />
+            )}
             {hasFigures && <ValuesEyeButton />}
           </div>
         </div>
         {getScreen(activeTab)}
       </div>
       <RunwayBottomNav value={activeTab} onChange={handleChange} />
+      <DoneForYouSheet
+        isOpen={isDoneForYouOpen}
+        onClose={onCloseDoneForYou}
+        title={DONE_FOR_YOU_WORDS.title}
+        items={doneForYou.items}
+        onUndo={doneForYou.undo}
+        words={DONE_FOR_YOU_WORDS}
+        renderText={(text) => <MaskedText>{text}</MaskedText>}
+        titleTrailing={<ValuesEyeButton />}
+      />
     </div>
   );
 }
@@ -265,6 +303,35 @@ function RunwayContent() {
   useLinkHistory(user?.uid ?? null);
   useReleasedCharges(user?.uid ?? null);
   useMatchLinkHistory(user?.uid ?? null);
+  const doneForYou = useDoneForYou();
+  const [isDoneForYouOpen, setIsDoneForYouOpen] = useState(false);
+  const openDoneForYou = () => {
+    setIsDoneForYouOpen(true);
+    if (!user) return;
+    setDoneForYouSeen(user.uid).catch((error: unknown) =>
+      console.error('Done for you was not marked seen', error),
+    );
+    void pruneDoneForYou(user.uid);
+  };
+  const closeDoneForYou = () => {
+    setIsDoneForYouOpen(false);
+    if (!user) return;
+    setDoneForYouSeen(user.uid).catch((error: unknown) =>
+      console.error('Done for you was not marked seen', error),
+    );
+  };
+  useDoneForYouToast({
+    items: doneForYou.items,
+    isReady:
+      user !== null &&
+      keyStatus === 'ready' &&
+      isPlanLoaded &&
+      doneForYou.isReady,
+    storageKey: `runway.doneForYouToasted.${user?.uid ?? ''}`,
+    buildTitle: DONE_FOR_YOU_WORDS.summary,
+    viewLabel: DONE_FOR_YOU_WORDS.view,
+    onView: openDoneForYou,
+  });
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
     isDeletingPlan ? null : (user?.uid ?? null),
@@ -503,7 +570,16 @@ function RunwayContent() {
       return <SetupLanding isStarted={setupState === 'started'} />;
     }
 
-    return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
+    return (
+      <RunwayTabs
+        activeTab={activeTab}
+        onChange={showTab}
+        doneForYou={doneForYou}
+        isDoneForYouOpen={isDoneForYouOpen}
+        onOpenDoneForYou={openDoneForYou}
+        onCloseDoneForYou={closeDoneForYou}
+      />
+    );
   };
 
   return (
