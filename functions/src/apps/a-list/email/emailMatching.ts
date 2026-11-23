@@ -45,7 +45,7 @@ export const localDayOf = (local: LocalShowtime) =>
 type MatchableViewing = Pick<
   Viewing,
   'id' | 'movieKey' | 'showtimeAt' | 'status' | 'ticket' | 'theatre'
-> & { movie: { title: string }; amcConfirmation?: string | null };
+> & { movie: { title: string }; amcConfirmation: string | null };
 
 const isSameTheatre = (
   viewing: Pick<Viewing, 'theatre'>,
@@ -93,7 +93,7 @@ export function findAttachTarget<T extends MatchableViewing>(
   );
 }
 
-/** The showing a cancellation is for: the one that holds its confirmation number, else one with a ticket, the same exact title and theater name within five minutes. */
+/** The planned showing a cancellation is for: the one that holds its confirmation number, else one with a ticket and no other confirmation, the same exact title and theater name within five minutes. A seen showing is never removed. */
 export function findCancelTarget<T extends MatchableViewing>(
   viewings: T[],
   cancellation: {
@@ -103,16 +103,19 @@ export function findCancelTarget<T extends MatchableViewing>(
     showtimeAt: number;
   },
 ): T | null {
-  const byConfirmation = viewings.find(
+  const planned = viewings.filter((viewing) => viewing.status === 'PLANNED');
+  const byConfirmation = planned.find(
     (viewing) => viewing.amcConfirmation === cancellation.confirmation,
   );
   if (byConfirmation !== undefined) return byConfirmation;
   const title = normalizeTitle(cancellation.title);
   const theatre = normalizeTheatreName(cancellation.theatreName);
   return nearest(
-    viewings.filter(
+    planned.filter(
       (viewing) =>
         viewing.ticket !== null &&
+        (viewing.amcConfirmation === null ||
+          viewing.amcConfirmation === cancellation.confirmation) &&
         normalizeTitle(viewing.movie.title) === title &&
         viewing.theatre !== null &&
         normalizeTheatreName(viewing.theatre.name) === theatre &&
@@ -161,19 +164,36 @@ export function reconcileAmounts({
   return { priceCents: emailPriceCents, taxCents: usual(emailPriceCents) };
 }
 
-/** The usual tax rate at a theater: the most recent ticket there that has one. */
+/** The usual tax rate at a theater: the most recent ticket there that has one, else the most recent ticket anywhere. */
 export function findUsualTaxRate(
   viewings: Pick<Viewing, 'showtimeAt' | 'ticket' | 'theatre'>[],
   theatre: { theatreId: string; name: string },
 ): number | null {
-  const recent = viewings
-    .filter(
-      (viewing) =>
-        typeof viewing.ticket?.taxRate === 'number' &&
-        isSameTheatre(viewing, theatre),
-    )
-    .sort((left, right) => right.showtimeAt - left.showtimeAt)[0];
+  const taxed = viewings
+    .filter((viewing) => typeof viewing.ticket?.taxRate === 'number')
+    .sort((left, right) => right.showtimeAt - left.showtimeAt);
+  const recent =
+    taxed.find((viewing) => isSameTheatre(viewing, theatre)) ?? taxed[0];
   return recent?.ticket?.taxRate ?? null;
+}
+
+/** Whether a refund covers only part of what the member still holds: the tickets the reservations recorded, less those already refunded in part. */
+export function isPartialRefund(
+  events: { outcome: string; ticketCount: number | null }[],
+  refundedCount: number | null,
+): boolean {
+  if (refundedCount === null) return false;
+  const total = (outcomes: string[]) =>
+    events
+      .filter((event) => outcomes.includes(event.outcome))
+      .reduce((sum, event) => sum + (event.ticketCount ?? 0), 0);
+  const held = Math.max(
+    ...events
+      .filter((event) => ['added', 'attached'].includes(event.outcome))
+      .map((event) => event.ticketCount ?? 0),
+    0,
+  );
+  return held - total(['partlyCanceled']) > refundedCount;
 }
 
 /** An itemized ticket whose parts add up to its total; null when nothing prices it. */

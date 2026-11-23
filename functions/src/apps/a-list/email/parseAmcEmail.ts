@@ -35,6 +35,8 @@ export interface AmcCancellation {
   title: string;
   showtimeLocal: LocalShowtime;
   theatreName: string;
+  /** The tickets the email says were refunded; null when it gives no count. */
+  refundedCount: number | null;
 }
 
 export type AmcReading = AmcReservation | AmcCancellation;
@@ -193,6 +195,9 @@ function readCancellation(text: string): AmcCancellation | null {
   );
   const showing = readShowing(segment);
   if (showing === null) return null;
+  const refunded = Array.from(
+    text.matchAll(/Refunded Tickets:\s*(\d{1,2})\s+[A-Za-z ]{3,20}?;/gi),
+  );
   return {
     kind: 'cancellation',
     confirmation: found.digits,
@@ -200,6 +205,10 @@ function readCancellation(text: string): AmcCancellation | null {
     title: showing.title,
     showtimeLocal: showing.showtimeLocal,
     theatreName: showing.theatreName,
+    refundedCount:
+      refunded.length === 0
+        ? null
+        : refunded.reduce((sum, line) => sum + Number(line[1]), 0),
   };
 }
 

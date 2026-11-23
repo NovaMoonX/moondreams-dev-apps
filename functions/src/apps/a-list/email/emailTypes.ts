@@ -44,6 +44,7 @@ export type EmailOutcome =
   | 'added'
   | 'attached'
   | 'canceled'
+  | 'partlyCanceled'
   | 'cancelNotFound'
   | 'alreadyHandled'
   | 'confirm'
@@ -65,5 +66,7 @@ export interface EmailEvent {
   confirmation: string | null;
   ticketCount: number | null;
   removedViewing: Viewing | null;
+  priorViewing: Viewing | null;
+  watchlistKey: string | null;
   undoneAt: number | null;
 }

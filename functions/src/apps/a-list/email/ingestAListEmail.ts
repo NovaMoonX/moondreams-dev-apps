@@ -29,6 +29,7 @@ import {
   computeEndsAt,
   findAttachTarget,
   findCancelTarget,
+  isPartialRefund,
 } from './emailMatching.js';
 import {
   EMAIL_EVENT_KEEP_DAYS,
@@ -76,14 +77,28 @@ interface Result {
 interface Written {
   outcome: EmailOutcome;
   readBy: 'pattern' | 'ai' | null;
-  viewingId?: string | null;
-  movieTitle?: string | null;
-  showtimeAt?: number | null;
-  theatreName?: string | null;
-  confirmation?: string | null;
-  ticketCount?: number | null;
-  removedViewing?: Viewing | null;
+  viewingId: string | null;
+  movieTitle: string | null;
+  showtimeAt: number | null;
+  theatreName: string | null;
+  confirmation: string | null;
+  ticketCount: number | null;
+  removedViewing: Viewing | null;
+  priorViewing: Viewing | null;
+  watchlistKey: string | null;
 }
+
+const NOTHING_WRITTEN = {
+  viewingId: null,
+  movieTitle: null,
+  showtimeAt: null,
+  theatreName: null,
+  confirmation: null,
+  ticketCount: null,
+  removedViewing: null,
+  priorViewing: null,
+  watchlistKey: null,
+} satisfies Omit<Written, 'outcome' | 'readBy'>;
 
 const SKIPPED_EXCERPT_MAX = 200;
 const READ_EXCERPT_MAX = 300;
@@ -92,7 +107,11 @@ const keptText = (text: string, max: number) =>
   snippetOf(withoutEmailAddresses(withoutMemberDetails(text)), max);
 
 /** The event document for one email, with everything a handler didn't set left null. It keeps no member name, membership number or email address; a forwarding confirmation keeps no subject or text (its code and link live only on the intake document), and an email that was skipped keeps a subject and a short excerpt. */
-function toEvent({ mail, eventId, now }: EmailHandlerInput, written: Written) {
+function toEvent(
+  { mail, eventId, now }: EmailHandlerInput,
+  given: Pick<Written, 'outcome' | 'readBy'> & Partial<Written>,
+) {
+  const written: Written = { ...NOTHING_WRITTEN, ...given };
   const isConfirmation = written.outcome === 'confirm';
   const isSkipped =
     written.outcome === 'notTicket' || written.outcome === 'unread';
@@ -106,13 +125,15 @@ function toEvent({ mail, eventId, now }: EmailHandlerInput, written: Written) {
       ? ''
       : keptText(mail.text, isSkipped ? SKIPPED_EXCERPT_MAX : READ_EXCERPT_MAX),
     readBy: written.readBy,
-    viewingId: written.viewingId ?? null,
-    movieTitle: written.movieTitle ?? null,
-    showtimeAt: written.showtimeAt ?? null,
-    theatreName: written.theatreName ?? null,
-    confirmation: written.confirmation ?? null,
-    ticketCount: written.ticketCount ?? null,
-    removedViewing: written.removedViewing ?? null,
+    viewingId: written.viewingId,
+    movieTitle: written.movieTitle,
+    showtimeAt: written.showtimeAt,
+    theatreName: written.theatreName,
+    confirmation: written.confirmation,
+    ticketCount: written.ticketCount,
+    removedViewing: written.removedViewing,
+    priorViewing: written.priorViewing,
+    watchlistKey: written.watchlistKey,
     undoneAt: null,
   };
   return {
@@ -240,7 +261,6 @@ async function handleReservation(
           showtimeAt: place.showtimeAt,
           endsAt: computeEndsAt(place.showtimeAt, target.movie.runtimeMinutes),
           ...(isMoved ? { trailerReminderId: null } : {}),
-          purchase: null,
           amcConfirmation: reading.confirmation,
           emailEventId: input.eventId,
           lastEditedAt: now,
@@ -251,6 +271,7 @@ async function handleReservation(
             ...base,
             outcome: 'attached',
             viewingId: target.id,
+            priorViewing: target,
           }),
         );
         return {
@@ -280,7 +301,8 @@ async function handleReservation(
         createdAt: now,
         lastEditedAt: now,
       };
-      if (!watch.exists) {
+      const isNewWatch = !watch.exists;
+      if (isNewWatch) {
         transaction.set(watchRef, {
           movieKey: resolved.movieKey,
           movie: resolved.movie,
@@ -291,17 +313,16 @@ async function handleReservation(
           createdAt: now,
           lastEditedAt: now,
         });
-      } else if (watch.get('archivedAt') != null) {
-        transaction.update(watchRef, {
-          archivedAt: null,
-          archiveReason: null,
-          lastEditedAt: now,
-        });
       }
       transaction.set(viewingRef, viewing);
       transaction.create(
         eventRef,
-        toEvent(input, { ...base, outcome: 'added', viewingId: viewingRef.id }),
+        toEvent(input, {
+          ...base,
+          outcome: 'added',
+          viewingId: viewingRef.id,
+          watchlistKey: isNewWatch ? resolved.movieKey : null,
+        }),
       );
       return { outcome: 'added', reminderId: null };
     },
@@ -331,7 +352,7 @@ async function handleCancellation(
 
   const result = await firestore.runTransaction(
     async (transaction: Transaction): Promise<Result> => {
-      const [held, nearby, canceled] = await Promise.all([
+      const [held, nearby, confirmed] = await Promise.all([
         transaction.get(
           viewings.where('amcConfirmation', '==', reading.confirmation),
         ),
@@ -341,12 +362,13 @@ async function handleCancellation(
             .where('showtimeAt', '<=', place.showtimeAt + CANCEL_WINDOW_MS),
         ),
         transaction.get(
-          events
-            .where('confirmation', '==', reading.confirmation)
-            .where('outcome', '==', 'canceled')
-            .limit(1),
+          events.where('confirmation', '==', reading.confirmation).limit(50),
         ),
       ]);
+      const earlier = confirmed.docs.map((entry) => ({
+        outcome: entry.get('outcome') as string,
+        ticketCount: (entry.get('ticketCount') as number | null) ?? null,
+      }));
       const target = findCancelTarget(
         uniqueById([...held.docs, ...nearby.docs].map(toViewing)),
         {
@@ -356,10 +378,24 @@ async function handleCancellation(
           showtimeAt: place.showtimeAt,
         },
       );
+      if (isPartialRefund(earlier, reading.refundedCount)) {
+        transaction.create(
+          eventRef,
+          toEvent(input, {
+            ...base,
+            outcome: 'partlyCanceled',
+            viewingId: target?.id ?? null,
+            ticketCount: reading.refundedCount,
+          }),
+        );
+        return { outcome: 'partlyCanceled', reminderId: null };
+      }
       if (target === null) {
-        const outcomeWhenGone: EmailOutcome = canceled.empty
-          ? 'cancelNotFound'
-          : 'alreadyHandled';
+        const outcomeWhenGone: EmailOutcome = earlier.some(
+          (event) => event.outcome === 'canceled',
+        )
+          ? 'alreadyHandled'
+          : 'cancelNotFound';
         transaction.create(
           eventRef,
           toEvent(input, { ...base, outcome: outcomeWhenGone }),

@@ -15,10 +15,12 @@ import {
   findAttachTarget,
   findCancelTarget,
   findUsualTaxRate,
+  isPartialRefund,
   localShowtimeToEpoch,
   normalizeTheatreName,
   reconcileAmounts,
 } from '../../functions/src/apps/a-list/email/emailMatching.ts';
+import { prepareAiPrompt } from '../../functions/src/apps/a-list/email/readAmcEmailWithAi.ts';
 import {
   isFromAmc,
   looksLikeAmcOrder,
@@ -131,7 +133,32 @@ assert.deepEqual(parseAmcEmail(cancellation.text), {
   title: 'How to Rob a Bank',
   showtimeLocal: local(2026, 11, 13, 18, 50),
   theatreName: 'AMC Chattanooga 18',
+  refundedCount: 1,
 });
+
+const partial = readFixture('cancellation-partial');
+assert.deepEqual(parseAmcEmail(partial.text), {
+  kind: 'cancellation',
+  confirmation: '0188120457',
+  orderNumber: '1275187999',
+  title: 'Wicked: For Good',
+  showtimeLocal: local(2026, 12, 6, 11, 5),
+  theatreName: 'AMC Southlake 24',
+  refundedCount: 1,
+});
+const twoTickets = [{ outcome: 'added', ticketCount: 2 }];
+assert.equal(isPartialRefund(twoTickets, 1), true, 'one of two refunded');
+assert.equal(isPartialRefund(twoTickets, 2), false, 'both refunded');
+assert.equal(isPartialRefund(twoTickets, null), false, 'no count given');
+assert.equal(isPartialRefund([], 1), false, 'no reservation recorded');
+assert.equal(
+  isPartialRefund(
+    [...twoTickets, { outcome: 'partlyCanceled', ticketCount: 1 }],
+    1,
+  ),
+  false,
+  'the last ticket of a part-refunded order',
+);
 
 const marketing = readFixture('marketing');
 assert.ok(isFromAmc(marketing.from, marketing.text));
@@ -185,6 +212,13 @@ assert.ok(
     'Focker In-Law',
   ),
 );
+
+[readFixture('reservation'), cancellation].forEach(({ subject, text }) => {
+  const prompt = prepareAiPrompt(`${subject} Stephon <s@example.com>`, text);
+  ['Stephon', 'Ricks', '1101000550808436', 's@example.com'].forEach((secret) =>
+    assert.ok(!prompt.includes(secret), `private detail sent to AI: ${secret}`),
+  );
+});
 
 const chicago = 'America/Chicago';
 assert.equal(
@@ -418,9 +452,17 @@ assert.equal(
   'a showing with no ticket is not canceled by a guess',
 );
 assert.equal(
-  findCancelTarget([{ ...paid, amcConfirmation: '0999999999' }], cancel)?.id,
-  'v1',
-  'another confirmation does not block the title match',
+  findCancelTarget([{ ...paid, amcConfirmation: '0999999999' }], cancel),
+  null,
+  'a showing that holds another confirmation is not canceled by a guess',
+);
+assert.equal(
+  findCancelTarget(
+    [{ ...paid, status: 'SEEN', amcConfirmation: '0195443676' }],
+    cancel,
+  ),
+  null,
+  'a seen showing is left alone',
 );
 
 const tax = (rate: number | null, showtimeAt: number, theatre = park) => ({
@@ -439,9 +481,10 @@ assert.equal(
     [tax(0.07, 1, { ...park, theatreId: '9', name: 'AMC Elsewhere 8' })],
     park,
   ),
-  null,
-  'another theater',
+  0.07,
+  'another theater: the most recent rate anywhere',
 );
+assert.equal(findUsualTaxRate([], park), null, 'no ticket at all');
 
 const proton = {
   from: 'Proton Mail <no-reply@notify.proton.me>',
@@ -477,5 +520,5 @@ assert.equal(
 );
 
 console.log(
-  `a-list email parse: ${reservations.length + 4} fixtures and the pricing and matching rules ok`,
+  `a-list email parse: ${reservations.length + 5} fixtures and the pricing and matching rules ok`,
 );
