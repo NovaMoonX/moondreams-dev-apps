@@ -220,7 +220,6 @@ async function handleMail(
 ): Promise<{ outcome: Outcome }> {
   const planKey = await readPlanKey(firestore, uid);
   const eventRef = firestore.doc(`${emailEventsPath(uid)}/${eventId}`);
-  const intakeRef = firestore.doc(intakePath(uid));
   const template = subjectTemplate(mail.subject);
 
   const decide = async (): Promise<Handled> => {
@@ -385,7 +384,6 @@ async function handleMail(
   if (result.date !== null) {
     await markWithRetry(firestore, uid, result.date, now);
   }
-  await intakeRef.update({ lastReceivedAt: now }).catch(() => undefined);
   return { outcome: result.outcome };
 }
 
@@ -404,6 +402,7 @@ export const ingestRunwayEmail = onRequest(
     app: 'runway',
     prefix: EMAIL_ADDRESS_PREFIX,
     secretName: EMAIL_WEBHOOK_SECRET_NAME,
+    legacySecretName: 'RUNWAY_EMAIL_WEBHOOK_SECRET',
     tokenPath: emailTokenPath,
     isOpenFor: (uid) =>
       isGateOpenForUid(uid, 'runway', EMAIL_PURCHASES_GATE_ID, 'off'),

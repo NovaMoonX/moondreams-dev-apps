@@ -49,6 +49,8 @@ interface EmailIngestConfig {
   /** The address's local part before the token, e.g. `name` in `name+<token>@…`. */
   prefix: string;
   secretName: string;
+  /** A name the same secret was saved under before, read while `secretName` doesn't exist yet. */
+  legacySecretName?: string;
   tokenPath: (token: string) => string;
   isOpenFor: (uid: string) => Promise<boolean>;
   eventPath: (uid: string, eventId: string) => string;
@@ -57,12 +59,12 @@ interface EmailIngestConfig {
   maxPerHour: number;
   /** Does every write for one email (the event record included, created so a redelivery fails) and says what became of it. */
   handle: (input: EmailHandlerInput) => Promise<{ outcome: string }>;
-  /** Records a forwarding confirmation (the intake document already holds its link); without it nothing but the intake changes. */
   /** The intake fields that hold a confirmation's link and code, when they are kept some other way than plain; the default is `confirmUrl` and `confirmCode`. */
   confirmationFields?: (
     input: EmailHandlerInput,
     confirmation: { confirmUrl: string | null; confirmCode: string | null },
   ) => Promise<Record<string, unknown>>;
+  /** Records a forwarding confirmation (the intake document already holds its link); without it nothing but the intake changes. */
   onConfirmation?: (input: EmailHandlerInput) => Promise<{ outcome: string }>;
 }
 
@@ -84,10 +86,14 @@ export function createEmailIngest(config: EmailIngestConfig) {
       response.status(405).send('Method not allowed');
       return;
     }
-    const expected = await readSecret(
-      config.secretName,
-      AbortSignal.timeout(4_000),
-    );
+    const expected =
+      (await readSecret(config.secretName, AbortSignal.timeout(4_000))) ??
+      (config.legacySecretName === undefined
+        ? null
+        : await readSecret(
+            config.legacySecretName,
+            AbortSignal.timeout(4_000),
+          ));
     if (expected === null) {
       response.status(503).send('Not available');
       return;

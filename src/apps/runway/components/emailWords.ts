@@ -306,10 +306,5 @@ export const EMAIL_SETUP_WORDS = {
   noFilterNotice:
     'Other emails might be reaching Runway; they’re skipped unread. Finish the filter step so only your bank’s alerts come here.',
   noFilterButton: 'Go to that step',
-  noEmailsYet: 'No emails yet',
-  workingSince: (when: string) => `Working · last email ${when}`,
-  addressRow: 'Your address',
-  setUpAgain: 'Set it up again',
-  setUpAgainSub: 'Walk through the steps again',
   rowStep: (step: number, total: number) => `Step ${step} of ${total}`,
 } as const;

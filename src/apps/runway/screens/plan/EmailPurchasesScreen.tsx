@@ -491,6 +491,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               }}
               onGetNewAddress={async () => {
                 noteActed();
+                setError(null);
                 await actions.rotateAddress();
               }}
               onFailed={setError}
