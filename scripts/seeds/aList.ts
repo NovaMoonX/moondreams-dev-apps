@@ -508,7 +508,7 @@ function toSharedViewing(
 }
 
 const SEED_EMAIL_ADDRESS =
-  'amc-3f9a1c7e5b2d48a6906de1f4b7c8a253@apps.moondreams.dev';
+  'amc+3f9a1c7e5b2d48a6906de1f4b7c8a253@apps.moondreams.dev';
 const HOUR_MS = 3_600_000;
 
 type SeedEmailEvent = Omit<AListEmailEvent, 'expiresAt'>;

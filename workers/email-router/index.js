@@ -20,8 +20,8 @@ const readResult = (headers, name) => {
 };
 
 const readTarget = (to, env) => {
-  const prefix = /^([a-z]+)-/.exec(to.trim().toLowerCase())?.[1];
-  return prefix === 'finance'
+  const prefix = /^([a-z]+)\+/.exec(to.trim().toLowerCase())?.[1];
+  return prefix === 'runway'
     ? env.INGEST_URL
     : prefix === 'amc'
       ? env.A_LIST_INGEST_URL

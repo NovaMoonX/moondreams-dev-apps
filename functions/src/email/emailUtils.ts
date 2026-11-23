@@ -71,8 +71,8 @@ export async function takeRateSlot(
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The token in a `<prefix>-<token>@<domain>` address, or null for any other address. */
+/** The token in a `<prefix>+<token>@<domain>` address, or null for any other address. */
 export const readAddressToken = (to: string, prefix: string, domain: string) =>
   new RegExp(
-    `^${escapeRegExp(prefix)}-([a-z0-9_-]{12,32})@${escapeRegExp(domain)}$`,
+    `^${escapeRegExp(prefix)}\\+([a-z0-9_-]{12,32})@${escapeRegExp(domain)}$`,
   ).exec(to.trim().toLowerCase())?.[1] ?? null;

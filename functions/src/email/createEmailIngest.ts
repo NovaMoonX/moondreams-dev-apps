@@ -46,7 +46,7 @@ export interface EmailHandlerInput {
 interface EmailIngestConfig {
   /** Names the app in logs; never in a response. */
   app: string;
-  /** The address's local part before the token, e.g. `name` in `name-<token>@…`. */
+  /** The address's local part before the token, e.g. `name` in `name+<token>@…`. */
   prefix: string;
   secretName: string;
   tokenPath: (token: string) => string;

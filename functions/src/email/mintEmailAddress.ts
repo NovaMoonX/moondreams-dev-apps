@@ -21,7 +21,7 @@ export async function mintEmailAddress({
   prefix,
 }: MintInput): Promise<string> {
   const token = randomBytes(16).toString('hex');
-  const address = `${prefix}-${token}@${EMAIL_DOMAIN}`;
+  const address = `${prefix}+${token}@${EMAIL_DOMAIN}`;
   const intakeRef = firestore.doc(intakePath);
   const now = Date.now();
   await firestore.runTransaction(async (transaction) => {

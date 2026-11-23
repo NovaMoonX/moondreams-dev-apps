@@ -23,7 +23,7 @@ export interface EmailSetupProgress {
 
 /** The forwarding address and what the server caught of the provider's confirmation email, written only by Functions. */
 export interface EmailIntakeState {
-  /** The full private address, e.g. `<prefix>-<token>@apps.moondreams.dev`. */
+  /** The full private address, e.g. `<prefix>+<token>@apps.moondreams.dev`. */
   address: string;
   /** The https link from the provider's forwarding confirmation; null until one arrives. */
   confirmUrl: string | null;

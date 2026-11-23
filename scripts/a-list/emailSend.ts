@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 // Posts one fixture (From:, Subject:, a blank line, the text) to the Functions emulator, as the email worker would.
-// EMAIL_WEBHOOK_SECRET=local-secret npm run a-list:email-send -- amc-<token>@apps.moondreams.dev <fixture>; emulators only.
+// EMAIL_WEBHOOK_SECRET=local-secret npm run a-list:email-send -- amc+<token>@apps.moondreams.dev <fixture>; emulators only.
 const [address, fixture] = process.argv.slice(2);
 const secret = process.env.EMAIL_WEBHOOK_SECRET;
 if (!address || !fixture || !secret) {

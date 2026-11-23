@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Sets up the shared email intake (A-List's tickets from email today, Runway's purchases from email too): one secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
+# Each app's addresses are <prefix>+<token>@apps.moondreams.dev (runway+, amc+): Cloudflare has no catch-all on a subdomain, so one rule per prefix plus subaddressing reaches every token.
 # The secret is generated here, never printed or written to disk. Safe to re-run.
 #   npm run email:setup                 picks up where the last run stopped
 #   npm run email:setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
@@ -18,7 +19,7 @@ PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/email-setup-step
 CURRENT="starting"
 CURRENT_STEP=1
 
-usage() { sed -n '4,6p' "$0" | sed 's/^# *//'; }
+usage() { sed -n '5,7p' "$0" | sed 's/^# *//'; }
 from=""
 case "${1:-}" in
   "") ;;
@@ -98,6 +99,10 @@ fi
 if start_step 2 "the secret on the email worker"; then
   # The worker must exist before a secret can be set on it, so the first deploy happens here; the merge workflow redeploys it on later changes.
   echo "2. Deploying the email worker and giving it the same secret (a Cloudflare login opens if you aren't signed in)."
+  if [[ ! -d node_modules/postal-mime ]]; then
+    echo "   Installing the packages the worker is built from (this checkout's were installed before it needed them)."
+    npm ci --no-audit --no-fund
+  fi
   npx wrangler deploy -c "$WORKER_CONFIG"
   printf %s "$SHARED" | npx wrangler secret put INGEST_SECRET -c "$WORKER_CONFIG"
   echo "2. ✓ The worker has INGEST_SECRET."
@@ -105,14 +110,15 @@ if start_step 2 "the secret on the email worker"; then
 fi
 
 if start_step 3 "Cloudflare Email Routing"; then
-  if ask_yes "3. Is Email Routing already on for apps.moondreams.dev, with a catch-all that sends to the worker mdd-apps-email-router?"; then
+  if ask_yes "3. Is Email Routing on for apps.moondreams.dev, with Subaddressing on and rules sending both runway@apps.moondreams.dev and amc@apps.moondreams.dev to the worker mdd-apps-email-router?"; then
     echo "3. ✓ Noted."
   else
-    echo "3. In the Cloudflare dashboard:"
-    echo "     a. Open moondreams.dev, then Email, then Email Routing."
-    echo "     b. Enable it for the subdomain apps.moondreams.dev and accept the MX and SPF records it adds."
-    echo "     c. Open Routing rules, then Catch-all address, choose Send to a Worker, pick mdd-apps-email-router, and save with the rule active."
-    printf '   Press Enter when the catch-all is active. '
+    echo "3. In the Cloudflare dashboard. moondreams.dev's own mail is on Google: if Cloudflare ever offers to change moondreams.dev's MX records, stop and cancel."
+    echo "     a. Open moondreams.dev, then Email, then Email Routing, then Settings."
+    echo "     b. If apps.moondreams.dev isn't under Subdomains yet, add it and accept the records it adds to that subdomain."
+    echo "     c. On the same Settings page, make sure Subaddressing (plus addressing) is on."
+    echo "     d. Open Routing rules. For each of runway@apps.moondreams.dev and amc@apps.moondreams.dev that isn't listed yet: Create address, custom address, action Send to a Worker, worker mdd-apps-email-router. Save it active."
+    printf '   Press Enter when both rules are active. '
     read -r _ || true
   fi
   remember_step 3
