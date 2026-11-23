@@ -534,6 +534,8 @@ async function writeSeedEmail(
     confirmation: null,
     ticketCount: null,
     removedViewing: null,
+    priorViewing: null,
+    watchlistKey: null,
     undoneAt: null,
   };
   const events: SeedEmailEvent[] = [
