@@ -165,7 +165,8 @@ const isConfirmOpened = (
   confirmAt: number | null,
 ) =>
   confirmOpenedAt !== null &&
-  (confirmAt === null || confirmOpenedAt >= confirmAt);
+  confirmAt !== null &&
+  confirmOpenedAt >= confirmAt;
 
 const PROVIDER_SETTINGS_LINKS: Partial<
   Record<EmailProvider, { href: string; label: string }>
