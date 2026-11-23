@@ -10,6 +10,10 @@ import {
   readKeyring,
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
+import {
+  excerptOf,
+  readableBody,
+} from '../../functions/src/apps/runway/email/parseAlert.ts';
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
   AUTO_PAY_WORDS,
@@ -4808,11 +4812,60 @@ async function writeSeedEmail(
     }),
   );
 
+  const readEmail = (
+    text: string,
+    found: { amountCents: number | null; merchant: string | null } = {
+      amountCents: null,
+      merchant: null,
+    },
+  ) => {
+    const bodyText = readableBody(text);
+    return { snippet: excerptOf(bodyText, found), bodyText };
+  };
+  const cluttered = (alert: string, brand: string, bank: string) =>
+    [
+      'View this email in your browser',
+      `[${brand} logo]`,
+      brand,
+      '',
+      'Account alert',
+      '',
+      alert,
+      '',
+      `Questions? Visit ${bank}/help or call the number on the back of your card.`,
+      `https://www.${bank}/alerts/manage?cid=8c1f2b7e&utm_source=alert&utm_medium=email&utm_campaign=txn-2026`,
+      '',
+      `Manage alerts | Privacy | Security`,
+      `${brand}, Member FDIC. Equal Housing Lender. This message was sent to you because you chose to receive account alerts. Please do not reply to this email.`,
+      '',
+      `Unsubscribe from alerts https://www.${bank}/unsub?t=9f3a77c0d1`,
+    ].join('\n');
+  const purchaseBody = (
+    entry: { cents: number; merchant: string },
+    index: number,
+  ) => {
+    const amount = formatCents(entry.cents);
+    const templates = [
+      `A purchase of ${amount} was made at ${entry.merchant} with your Venture X card ending in 4821.\n\nView your activity at https://www.capitalone.com/activity`,
+      cluttered(
+        `You made a ${amount} transaction with ${entry.merchant}.\nVenture X card ending in 4821`,
+        'Capital One',
+        'capitalone.com',
+      ),
+      `Hi Jamie,\n\nHeads up: your Venture X card ending in 4821 was charged ${amount} at ${entry.merchant}.\n\nThanks,\nCapital One`,
+      cluttered(
+        `Transaction alert\nMerchant: ${entry.merchant}\nAmount: ${amount}\nCard ending in 4821`,
+        'Capital One',
+        'capitalone.com',
+      ),
+    ];
+    return templates[index % templates.length];
+  };
   const events: (Pick<EmailEventDoc, 'id' | 'receivedAt' | 'outcome'> & {
     purchaseId: string | null;
     sealed: EmailEventSealed;
   })[] = [
-    ...purchases.map((entry) => ({
+    ...purchases.map((entry, index) => ({
       id: entry.eventId,
       receivedAt: entry.receivedAt,
       outcome: 'purchase' as const,
@@ -4823,7 +4876,10 @@ async function writeSeedEmail(
         subjectTemplate: entry.subject
           .toLowerCase()
           .replace(/\$\d[\d,]*\.\d{2}/, '{amount}'),
-        snippet: `Hi Jamie, a purchase of ${formatCents(entry.cents)} was made at ${entry.merchant} with your Venture X card ending in 4821.`,
+        ...readEmail(purchaseBody(entry, index), {
+          amountCents: entry.cents,
+          merchant: entry.merchant,
+        }),
         readBy: entry.readBy,
       },
     })),
@@ -4836,8 +4892,9 @@ async function writeSeedEmail(
         from: 'alerts@capitalone.com',
         subject: 'A payment was received on your Venture X',
         subjectTemplate: 'a payment was received on your venture x',
-        snippet:
+        ...readEmail(
           'Thanks, we got your payment of $480.00 on your Venture X card ending in 4821.',
+        ),
         readBy: 'ai',
       },
     },
@@ -4850,8 +4907,13 @@ async function writeSeedEmail(
         from: 'marketing@chase.com',
         subject: 'Your card could earn 5x points this season',
         subjectTemplate: 'your card could earn 5x points this season',
-        snippet:
-          'Activate your quarterly bonus categories and earn more on gas, groceries and dining.',
+        ...readEmail(
+          cluttered(
+            'Activate your quarterly bonus categories and earn more on gas, groceries and dining.',
+            'Chase',
+            'chase.com',
+          ),
+        ),
         readBy: null,
       },
     },
@@ -4866,8 +4928,9 @@ async function writeSeedEmail(
           'Gmail Forwarding Confirmation - Receive Mail from jamie@example.com',
         subjectTemplate:
           'gmail forwarding confirmation - receive mail from jamie@example.com',
-        snippet:
-          'jamie@example.com has requested to automatically forward mail to your email address. Confirmation code: 123456789',
+        ...readEmail(
+          'jamie@example.com has requested to automatically forward mail to your email address. Confirmation code: 123456789\n\nTo allow this, open https://mail-settings.google.com/mail/vf-abc123',
+        ),
         readBy: null,
       },
     },
@@ -4880,7 +4943,9 @@ async function writeSeedEmail(
         from: 'statements@discover.com',
         subject: 'Your Discover statement is ready',
         subjectTemplate: 'your discover statement is ready',
-        snippet: 'Your latest statement is now available. Sign in to view it.',
+        ...readEmail(
+          'Your latest statement is now available. Sign in to view it.',
+        ),
         readBy: null,
       },
     },

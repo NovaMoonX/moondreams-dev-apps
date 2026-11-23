@@ -33,43 +33,28 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   const isByAi =
     purchase.emailEventId !== null &&
     events.find((entry) => entry.id === purchase.emailEventId)?.readBy === 'ai';
-  const sparkle = isByAi && (
-    <Sparkles
-      className='text-muted-foreground mr-1.5 inline h-3.5 w-3.5 align-[-2px]'
-      aria-hidden='true'
-    />
-  );
-  const marks = (
-    <>
-      <Mail
-        className='text-muted-foreground mr-1.5 inline h-3.5 w-3.5 align-[-2px]'
-        aria-hidden='true'
-      />
-      {sparkle}
-    </>
-  );
   if (isOverdueEmail(purchase, twinned, today)) {
     return (
       <InlineNotice tone='warning'>
-        {sparkle}
         {EMAIL_WORDS.overdueNotice(
           Math.floor((today - purchase.date) / DAY_MS),
         )}
       </InlineNotice>
     );
   }
-  const words =
-    purchase.emailWaiting === true
-      ? isByAi
-        ? EMAIL_WORDS.drawerWaitingByAi
-        : EMAIL_WORDS.drawerWaiting
-      : isByAi
-        ? EMAIL_WORDS.drawerFromEmailByAi
-        : EMAIL_WORDS.drawerFromEmail;
   return (
-    <InlineNotice tone='info'>
-      {marks}
-      {words}
+    <InlineNotice tone='info' icon={Mail}>
+      <p>
+        {purchase.emailWaiting === true
+          ? EMAIL_WORDS.drawerWaiting
+          : EMAIL_WORDS.drawerFromEmail}
+      </p>
+      {isByAi && (
+        <p className='text-muted-foreground mt-1 flex items-center gap-1.5'>
+          <Sparkles className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+          {EMAIL_WORDS.readByAi}
+        </p>
+      )}
     </InlineNotice>
   );
 }

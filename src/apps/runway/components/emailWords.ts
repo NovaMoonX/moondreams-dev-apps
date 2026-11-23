@@ -42,8 +42,10 @@ export const EMAIL_WORDS = {
   from: 'From',
   subject: 'Subject',
   received: 'Received',
-  showMore: 'Show more',
-  showLess: 'Show less',
+  showWholeEmail: 'Read the whole email',
+  seeAll: 'See all',
+  searchEmails: 'Search emails',
+  searchFilters: 'Search filters',
   openPurchase: 'Open the purchase',
   readOnPattern: 'Read from a known layout',
   readByAi: 'Read by AI',
@@ -61,9 +63,6 @@ export const EMAIL_WORDS = {
   drawerWaiting:
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
   drawerFromEmail: 'Read from your bank’s alert email.',
-  drawerWaitingByAi:
-    'Read by AI from your bank’s alert email. It merges on its own when your bank sends the same charge.',
-  drawerFromEmailByAi: 'Read by AI from your bank’s alert email.',
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
     `Your bank hasn’t sent this charge in ${days} days. Stop waiting to keep it as it is, or remove it.`,
@@ -123,12 +122,14 @@ export const YAHOO_MAIL_URL = 'https://mail.yahoo.com/';
 export const OUTLOOK_RULES_URL =
   'https://outlook.live.com/mail/0/options/mail/rules';
 export const ICLOUD_MAIL_URL = 'https://www.icloud.com/mail/';
+export const PROTON_MAIL_URL = 'https://mail.proton.me/';
 
 export const EMAIL_PROVIDER_NAMES: Record<EmailProvider, string> = {
   gmail: 'Gmail',
   outlook: 'Outlook',
   icloud: 'iCloud',
   yahoo: 'Yahoo',
+  proton: 'Proton Mail',
   other: 'your email',
 };
 
@@ -143,6 +144,7 @@ export const EMAIL_SETUP_WORDS = {
     outlook: 'Also Hotmail and Live',
     icloud: 'Apple Mail',
     yahoo: 'Needs Yahoo Mail Plus',
+    proton: 'Needs a paid Proton plan',
     other: 'Any email that can forward',
   } satisfies Record<EmailProvider, string>,
   providerLabels: {
@@ -150,6 +152,7 @@ export const EMAIL_SETUP_WORDS = {
     outlook: 'Outlook',
     icloud: 'iCloud',
     yahoo: 'Yahoo',
+    proton: 'Proton Mail',
     other: 'Other',
   } satisfies Record<EmailProvider, string>,
   copyTitle: 'Copy your Runway address',
@@ -157,32 +160,46 @@ export const EMAIL_SETUP_WORDS = {
     'Only you can see it. Your bank’s alerts forwarded here become purchases.',
   copyLabel: 'Copy address',
   gmailForwardingTitle: 'Add it as a forwarding address',
-  gmailForwardingLines: [
-    'In Gmail’s forwarding settings, choose “Add a forwarding address” and paste your address.',
+  gmailForwardingOpen: 'Open Gmail’s forwarding settings',
+  gmailForwardingChoose:
+    'Choose “Add a forwarding address” and paste your address',
+  gmailForwardingNote:
     'Don’t turn on forwarding of all mail; the filter does that.',
-  ],
   gmailForwardingLink: 'Open Gmail forwarding settings',
   yahooForwardingTitle: 'Turn on forwarding',
-  yahooForwardingLines: [
-    'In Yahoo Mail, go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address.',
-    'Paste your address and press Verify.',
+  yahooForwardingOpen: 'Open Yahoo Mail',
+  yahooForwardingGo:
+    'Go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address',
+  yahooForwardingPaste: 'Paste your address and press Verify',
+  yahooForwardingNote:
     'Yahoo forwards all your mail; Runway skips anything that isn’t a bank alert without reading it.',
-  ],
   yahooForwardingLink: 'Open Yahoo Mail',
   outlookRuleTitle: 'Make a rule for your bank’s alerts',
+  outlookRuleOpen: 'Open Outlook’s rules',
   outlookRuleLine: (address: string | null) =>
-    `When it’s from ${address ?? 'your bank’s alert address'}, choose Forward to and paste your address.`,
+    `Make a rule: when it’s from ${address ?? 'your bank’s alert address'}, choose Forward to and paste your address`,
   outlookRuleLink: 'Open Outlook rules',
   icloudRuleTitle: 'Make a rule for your bank’s alerts',
+  icloudRuleOpen: 'In iCloud Mail, go to Settings → Rules',
   icloudRuleLine: (address: string | null) =>
-    `In iCloud Mail, go to Settings → Rules. When it’s from ${address ?? 'your bank’s alert address'}, forward it to your address.`,
+    `Make a rule: when it’s from ${address ?? 'your bank’s alert address'}, forward it to your address`,
   icloudRuleLink: 'Open iCloud Mail',
+  protonRuleTitle: 'Make a forwarding rule for your bank’s alerts',
+  protonRuleGo:
+    'In Proton Mail, go to Settings → All settings → Forward and auto-reply → Add forwarding rule',
+  protonRulePaste: 'Paste your Runway address in Forward to',
+  protonRuleCondition: (address: string | null) =>
+    `Add a condition: the sender is ${address ?? 'your bank’s alert address'}`,
+  protonRuleSave: 'Then Save and Send confirmation email',
+  protonRuleNote:
+    'Proton doesn’t end-to-end encrypt the mail it forwards to another provider.',
+  protonRuleLink: 'Open Proton Mail',
   otherRuleTitle: 'Set up forwarding',
   otherRuleLine: (address: string | null) =>
     address === null
-      ? 'In your email’s settings, forward to your Runway address. A rule or filter for only your bank’s alerts works best.'
-      : `In your email’s settings, make a rule that forwards mail from ${address} to your Runway address.`,
-  alertAddressLead: 'Open one of your bank’s alerts and copy its From address.',
+      ? 'In your email’s settings, forward to your Runway address. A rule or filter for only your bank’s alerts works best'
+      : `In your email’s settings, make a rule that forwards mail from ${address} to your Runway address`,
+  alertAddressLead: 'Open one of your bank’s alerts and type its From address',
   alertAddressLabel: 'Your bank’s alert address',
   alertAddressPlaceholder: 'alerts@yourbank.com',
   confirmTitle: 'Confirm the forwarding address',
@@ -211,8 +228,9 @@ export const EMAIL_SETUP_WORDS = {
       : `Enter this code in ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings`,
   copyCode: 'Copy code',
   filterTitle: 'Only forward your bank’s alerts',
+  filterCopy: 'Copy this filter',
   filterPaste:
-    'Paste it in Gmail’s search box, then choose Create filter → Forward it to → your Runway address.',
+    'In Gmail filters, paste it in the search box, then choose Create filter → Forward it to → your Runway address',
   filterNeedAddress: 'Type the address first',
   filterLabel: 'Copy filter text',
   filterLink: 'Open Gmail filters',

@@ -140,7 +140,7 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
     }
   };
 
-  const row = (choice: Choice, isByAi = false) => (
+  const row = (choice: Choice) => (
     <li key={choice.key}>
       <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
         <AppCheckbox
@@ -148,15 +148,7 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
           onCheckedChange={(next) => toggle(choice.key, next)}
         />
         <span className='block min-w-0 flex-1 text-sm'>
-          <span className='block font-medium break-words'>
-            {isByAi && (
-              <Sparkles
-                className='text-muted-foreground mr-1.5 inline h-3.5 w-3.5 align-[-2px]'
-                aria-hidden='true'
-              />
-            )}
-            {choice.title}
-          </span>
+          <span className='block font-medium break-words'>{choice.title}</span>
           {choice.detail && (
             <span className='text-muted-foreground block break-words'>
               {mask(choice.detail)}
@@ -185,17 +177,17 @@ function EmailFilterSheet({ event, onClose }: EmailFilterSheetProps) {
               className='size-4 animate-spin rounded-full border-2 border-current/20 border-t-current motion-reduce:[animation-duration:2.5s]'
               aria-hidden='true'
             />
-            <Sparkles className='h-3.5 w-3.5' aria-hidden='true' />
             {EMAIL_WORDS.suggestionsCaption}
           </p>
         )}
         {extras.length > 0 && (
           <div className='space-y-2'>
-            <p className='text-muted-foreground text-sm'>
+            <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+              <Sparkles className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
               {EMAIL_WORDS.suggestedByAi}
             </p>
             <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {extras.map((choice) => row(choice, true))}
+              {extras.map((choice) => row(choice))}
             </ul>
           </div>
         )}

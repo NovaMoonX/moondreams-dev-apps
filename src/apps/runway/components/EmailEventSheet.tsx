@@ -1,9 +1,8 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   CircleSlash,
+  FileText,
   Filter,
   Info,
   MailCheck,
@@ -16,6 +15,7 @@ import {
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
+import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinal } from '@/utils/formatUtils';
@@ -39,6 +39,23 @@ const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   notTracking: CircleSlash,
 };
 
+function EmailHeader({ event }: { event: EmailEventRead }) {
+  return (
+    <dl className='border-border bg-card grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-2xl border p-4 text-sm'>
+      <dt className='text-muted-foreground'>{EMAIL_WORDS.from}</dt>
+      <dd className='min-w-0 break-words'>{event.from}</dd>
+      <dt className='text-muted-foreground'>{EMAIL_WORDS.subject}</dt>
+      <dd className='min-w-0 font-medium break-words'>
+        <MaskedText>{event.subject || EMAIL_WORDS.noSubject}</MaskedText>
+      </dd>
+      <dt className='text-muted-foreground'>{EMAIL_WORDS.received}</dt>
+      <dd className='min-w-0 break-words'>
+        {formatDateOrdinal(event.receivedAt)}
+      </dd>
+    </dl>
+  );
+}
+
 interface EmailEventSheetProps {
   event: EmailEventRead;
   onClose: () => void;
@@ -47,7 +64,7 @@ interface EmailEventSheetProps {
 /** One email that reached the address: what it said, what became of it and, unless it was already filtered out, a way to filter out more like it. */
 function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   const [isFiltering, setIsFiltering] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isWholeShown, setIsWholeShown] = useState(false);
   const { closeMoreEntry, showTab, openPurchase } = useRunwayUrlState();
   const purchaseIds = useAppSelector(selectPurchaseIds);
 
@@ -57,8 +74,28 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
     );
   }
 
+  if (isWholeShown && event.bodyText !== null) {
+    return (
+      <Subview
+        overlay
+        title={EMAIL_WORDS.emailTitle}
+        onClose={() => setIsWholeShown(false)}
+        headerAction={<ValuesEyeButton />}
+      >
+        <div className='space-y-4'>
+          <EmailHeader event={event} />
+          <p className='text-sm break-words whitespace-pre-line'>
+            <MaskedText>{event.bodyText}</MaskedText>
+          </p>
+        </div>
+      </Subview>
+    );
+  }
+
   const OutcomeIcon = OUTCOME_ICONS[event.outcome];
-  const isLong = event.snippet.length > 240;
+  const hasWholeEmail =
+    event.bodyText !== null &&
+    event.bodyText.replace(/\n\s*\n/g, '\n').trim() !== event.snippet.trim();
   const hasPurchase =
     event.purchaseId !== null && purchaseIds.has(event.purchaseId);
 
@@ -71,18 +108,7 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-4 pb-4'>
-        <dl className='border-border bg-card grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-2xl border p-4 text-sm'>
-          <dt className='text-muted-foreground'>{EMAIL_WORDS.from}</dt>
-          <dd className='min-w-0 break-words'>{event.from}</dd>
-          <dt className='text-muted-foreground'>{EMAIL_WORDS.subject}</dt>
-          <dd className='min-w-0 font-medium break-words'>
-            <MaskedText>{event.subject || EMAIL_WORDS.noSubject}</MaskedText>
-          </dd>
-          <dt className='text-muted-foreground'>{EMAIL_WORDS.received}</dt>
-          <dd className='min-w-0 break-words'>
-            {formatDateOrdinal(event.receivedAt)}
-          </dd>
-        </dl>
+        <EmailHeader event={event} />
         <div className='space-y-1'>
           <p className='flex items-start gap-2 text-sm font-medium'>
             <OutcomeIcon
@@ -91,17 +117,14 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
             />
             <span className='min-w-0 break-words'>
               {describeEmailOutcome(event.outcome)}
-              {event.readBy === 'ai' && (
-                <>
-                  <Sparkles
-                    className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
-                    aria-hidden='true'
-                  />
-                  <span className='sr-only'>{EMAIL_WORDS.readByAi}</span>
-                </>
-              )}
             </span>
           </p>
+          {event.readBy === 'ai' && (
+            <p className='text-muted-foreground flex items-center gap-1.5 pl-6 text-sm'>
+              <Sparkles className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+              {EMAIL_WORDS.readByAi}
+            </p>
+          )}
           {(event.outcome === 'unread' || event.outcome === 'notPurchase') && (
             <p className='text-muted-foreground pl-6 text-sm'>
               {event.outcome === 'unread'
@@ -111,31 +134,24 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
           )}
         </div>
         {event.snippet && (
-          <div className='space-y-1'>
-            <blockquote className='border-border bg-muted/60 border-l-4 px-3 py-2 text-sm'>
-              <p
-                className={join(
-                  'break-words whitespace-pre-line',
-                  isLong && !isExpanded && 'line-clamp-6',
-                )}
-              >
-                <MaskedText>{event.snippet}</MaskedText>
-              </p>
-            </blockquote>
-            {isLong && (
-              <Button
-                variant='tertiary'
-                size='sm'
-                aria-expanded={isExpanded}
-                onClick={() => setIsExpanded((current) => !current)}
-              >
-                {isExpanded ? EMAIL_WORDS.showLess : EMAIL_WORDS.showMore}
-              </Button>
-            )}
-          </div>
+          <blockquote className='border-border bg-muted/60 border-l-4 px-3 py-2 text-sm'>
+            <p className='line-clamp-6 break-words whitespace-pre-line'>
+              <MaskedText>{event.snippet}</MaskedText>
+            </p>
+          </blockquote>
         )}
-        {(hasPurchase || event.outcome !== 'filtered') && (
+        {(hasPurchase || hasWholeEmail || event.outcome !== 'filtered') && (
           <ActionGroup isRoomy>
+            {hasWholeEmail && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<FileText />}
+                label={EMAIL_WORDS.showWholeEmail}
+                onClick={() => setIsWholeShown(true)}
+              />
+            )}
             {hasPurchase && (
               <ActionRow
                 isGrouped

@@ -7,12 +7,14 @@ import {
   GmailMark,
   ICloudMark,
   OutlookMark,
+  ProtonMark,
   YahooMark,
 } from '@/components/BrandMarks';
 import CopyTextButton from '@/components/CopyTextButton';
 import ExternalLinkText from '@/components/ExternalLinkText';
+import ClearOfFooter from '@/components/ClearOfFooter';
 import MethodPicker from '@/components/MethodPicker';
-import { ActionTitle } from '@apps/runway/components/ActionSection';
+import StepGuide from '@/components/StepGuide';
 import {
   EMAIL_SETUP_WORDS,
   EMAIL_WORDS,
@@ -20,6 +22,7 @@ import {
   GMAIL_FORWARDING_URL,
   ICLOUD_MAIL_URL,
   OUTLOOK_RULES_URL,
+  PROTON_MAIL_URL,
   buildGmailFilterText,
   YAHOO_MAIL_URL,
 } from '@apps/runway/components/emailWords';
@@ -33,6 +36,7 @@ const PROVIDERS: EmailProvider[] = [
   'outlook',
   'icloud',
   'yahoo',
+  'proton',
   'other',
 ];
 
@@ -44,8 +48,6 @@ interface EmailSetupWalkthroughProps {
   isConfirmed: boolean;
   hasPurchase: boolean;
   isBusy: boolean;
-  /** Set on a re-walk, so Back from the first step returns to the status screen. */
-  onBackToStatus: (() => void) | null;
   onPickProvider: (provider: EmailProvider) => void;
   onGetAddress: () => void;
   onGo: (index: number) => void;
@@ -53,37 +55,45 @@ interface EmailSetupWalkthroughProps {
   onClose: () => void;
 }
 
-interface StepBodyProps {
-  title: string;
-  lines?: readonly string[];
-  isTicked?: boolean;
-  children?: ReactNode;
+const titled = (title: string, isTicked = false) => (
+  <>
+    {title}
+    {isTicked && (
+      <CircleCheck
+        className='text-success ml-2 inline size-5 align-[-2px]'
+        aria-label='Done'
+      />
+    )}
+  </>
+);
+
+const Muted = ({ children }: { children: ReactNode }) => (
+  <p className='text-muted-foreground text-sm'>{children}</p>
+);
+
+interface NumberedItem {
+  text: ReactNode;
+  control?: ReactNode;
 }
 
-function StepBody({
-  title,
-  lines = [],
-  isTicked = false,
-  children,
-}: StepBodyProps) {
+function NumberedSteps({ items }: { items: NumberedItem[] }) {
   return (
-    <div className='space-y-3'>
-      <div className='flex items-start gap-2'>
-        <ActionTitle>{title}</ActionTitle>
-        {isTicked && (
-          <CircleCheck
-            className='text-success mt-1.5 size-5 shrink-0'
-            aria-label='Done'
-          />
-        )}
-      </div>
-      {lines.map((line) => (
-        <p key={line} className='text-muted-foreground text-sm'>
-          {line}
-        </p>
+    <ol className='space-y-4'>
+      {items.map((item, index) => (
+        <li key={index} className='flex items-start gap-3'>
+          <span
+            className='bg-muted text-muted-foreground mt-px grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold'
+            aria-hidden='true'
+          >
+            {index + 1}
+          </span>
+          <div className='min-w-0 flex-1 space-y-2'>
+            <p className='text-sm break-words'>{item.text}</p>
+            {item.control}
+          </div>
+        </li>
       ))}
-      {children}
-    </div>
+    </ol>
   );
 }
 
@@ -110,6 +120,7 @@ const PROVIDER_SETTINGS_LINKS: Partial<
 > = {
   gmail: { href: GMAIL_FORWARDING_URL, label: WORDS.gmailForwardingLink },
   yahoo: { href: YAHOO_MAIL_URL, label: WORDS.yahooForwardingLink },
+  proton: { href: PROTON_MAIL_URL, label: WORDS.protonRuleLink },
 };
 
 function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
@@ -122,11 +133,8 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
       : null;
   const code = intake.confirm?.code ?? null;
   return (
-    <StepBody
-      title={WORDS.confirmTitle}
-      lines={isConfirmed ? [] : [WORDS.confirmFirst(provider)]}
-      isTicked={isConfirmed}
-    >
+    <div className='space-y-3'>
+      {!isConfirmed && <Muted>{WORDS.confirmFirst(provider)}</Muted>}
       {url === null ? (
         <div className='space-y-2'>
           <Waiting>{WORDS.confirmWaiting(provider)}</Waiting>
@@ -192,7 +200,7 @@ function ConfirmStep({ provider, intake, isConfirmed }: ConfirmStepProps) {
           )}
         </div>
       )}
-    </StepBody>
+    </div>
   );
 }
 
@@ -201,6 +209,7 @@ const PROVIDER_ICONS: Record<EmailProvider, ReactNode> = {
   outlook: <OutlookMark />,
   icloud: <ICloudMark />,
   yahoo: <YahooMark />,
+  proton: <ProtonMark />,
   other: <Mail className='size-5' />,
 };
 
@@ -210,12 +219,13 @@ const readAlertAddress = (text: string) =>
 interface AlertAddressFieldProps {
   value: string;
   onChange: (value: string) => void;
+  lead?: string;
 }
 
-function AlertAddressField({ value, onChange }: AlertAddressFieldProps) {
+function AlertAddressField({ value, onChange, lead }: AlertAddressFieldProps) {
   return (
-    <div className='space-y-2'>
-      <p className='text-muted-foreground text-sm'>{WORDS.alertAddressLead}</p>
+    <ClearOfFooter>
+      {lead && <Muted>{lead}</Muted>}
       <Input
         variant='outline'
         type='email'
@@ -228,11 +238,10 @@ function AlertAddressField({ value, onChange }: AlertAddressFieldProps) {
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-    </div>
+    </ClearOfFooter>
   );
 }
 
-/** One step of the forwarding setup as a card: its title, a line or two, its one action and Next and Back. */
 function EmailSetupWalkthrough({
   provider,
   steps,
@@ -241,7 +250,6 @@ function EmailSetupWalkthrough({
   isConfirmed,
   hasPurchase,
   isBusy,
-  onBackToStatus,
   onPickProvider,
   onGetAddress,
   onGo,
@@ -254,17 +262,15 @@ function EmailSetupWalkthrough({
   const step = steps[stepIndex] ?? 'provider';
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const hasNext = stepIndex < steps.length - 1;
-  const canNext =
-    step === 'provider'
-      ? false
-      : step === 'copy'
-        ? intake.address !== null
-        : hasNext;
+  const alertField = (
+    <AlertAddressField value={alertText} onChange={setAlertText} />
+  );
 
-  const body = () => {
+  const body = (): { title: ReactNode; content: ReactNode } => {
     if (step === 'provider') {
-      return (
-        <StepBody title={WORDS.providerTitle}>
+      return {
+        title: WORDS.providerTitle,
+        content: (
           <MethodPicker
             methods={PROVIDERS.map((id) => ({
               id,
@@ -274,203 +280,300 @@ function EmailSetupWalkthrough({
               onPick: () => onPickProvider(id),
             }))}
           />
-        </StepBody>
-      );
+        ),
+      };
     }
     if (step === 'copy') {
-      return (
-        <StepBody title={WORDS.copyTitle} lines={[WORDS.copyLine]}>
-          {intake.address === null ? (
-            <Button
-              className='w-full'
-              disabled={isBusy || intake.isLoading}
-              onClick={onGetAddress}
-            >
-              {EMAIL_WORDS.getAddress}
-            </Button>
-          ) : (
-            <div className='border-border space-y-3 rounded-2xl border p-3'>
-              <p className='text-base font-semibold select-all'>
-                <span className='break-all'>{addressParts[0]}@</span>
-                <wbr />
-                <span className='whitespace-nowrap'>{addressParts[1]}</span>
-              </p>
-              <CopyTextButton
-                text={intake.address}
-                label={WORDS.copyLabel}
-                variant='secondary'
-              />
-            </div>
-          )}
-        </StepBody>
-      );
-    }
-    if (step === 'forwarding' && provider === 'yahoo') {
-      return (
-        <StepBody
-          title={WORDS.yahooForwardingTitle}
-          lines={WORDS.yahooForwardingLines}
-        >
-          <ExternalLinkText
-            href={YAHOO_MAIL_URL}
-            label={WORDS.yahooForwardingLink}
-          />
-        </StepBody>
-      );
-    }
-    if (step === 'forwarding') {
-      return (
-        <StepBody
-          title={WORDS.gmailForwardingTitle}
-          lines={WORDS.gmailForwardingLines}
-        >
-          <ExternalLinkText
-            href={GMAIL_FORWARDING_URL}
-            label={WORDS.gmailForwardingLink}
-          />
-        </StepBody>
-      );
-    }
-    if (step === 'rule') {
-      const rule =
-        provider === 'outlook'
-          ? {
-              title: WORDS.outlookRuleTitle,
-              line: WORDS.outlookRuleLine(alertAddress),
-              href: OUTLOOK_RULES_URL,
-              label: WORDS.outlookRuleLink,
-            }
-          : provider === 'icloud'
-            ? {
-                title: WORDS.icloudRuleTitle,
-                line: WORDS.icloudRuleLine(alertAddress),
-                href: ICLOUD_MAIL_URL,
-                label: WORDS.icloudRuleLink,
-              }
-            : {
-                title: WORDS.otherRuleTitle,
-                line: WORDS.otherRuleLine(alertAddress),
-                href: null,
-                label: '',
-              };
-      return (
-        <StepBody title={rule.title}>
-          <AlertAddressField value={alertText} onChange={setAlertText} />
-          <p className='text-muted-foreground text-sm'>{rule.line}</p>
-          {rule.href !== null && (
-            <ExternalLinkText href={rule.href} label={rule.label} />
-          )}
-        </StepBody>
-      );
-    }
-    if (step === 'confirm') {
-      return (
-        <ConfirmStep
-          provider={provider ?? 'other'}
-          intake={intake}
-          isConfirmed={isConfirmed}
-        />
-      );
-    }
-    if (step === 'filter') {
-      return (
-        <StepBody title={WORDS.filterTitle}>
-          <AlertAddressField value={alertText} onChange={setAlertText} />
-          {alertAddress === null ? (
-            <p className='text-muted-foreground text-sm'>
-              {WORDS.filterNeedAddress}
-            </p>
-          ) : (
-            <>
-              <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
-                {buildGmailFilterText(alertAddress)}
-              </code>
-              <p className='text-muted-foreground text-sm'>
-                {WORDS.filterPaste}
-              </p>
-              <div className='flex flex-wrap items-center gap-3'>
-                <CopyTextButton
-                  text={buildGmailFilterText(alertAddress)}
-                  label={WORDS.filterLabel}
-                  variant='secondary'
-                  isCompact
-                />
-                <ExternalLinkText
-                  href={GMAIL_FILTERS_URL}
-                  label={WORDS.filterLink}
-                />
-              </div>
-            </>
-          )}
-        </StepBody>
-      );
-    }
-    return (
-      <StepBody
-        title={WORDS.testTitle}
-        lines={[WORDS.testLine]}
-        isTicked={hasPurchase}
-      >
-        {hasPurchase ? (
-          <p className='text-sm'>{WORDS.testDone}</p>
-        ) : (
-          <div className='space-y-2'>
-            <Waiting>{WORDS.testWaiting}</Waiting>
-            {!isNotArrivingShown ? (
+      return {
+        title: WORDS.copyTitle,
+        content: (
+          <div className='space-y-3'>
+            <Muted>{WORDS.copyLine}</Muted>
+            {intake.address === null ? (
               <Button
-                variant='tertiary'
-                size='sm'
-                onClick={() => setIsNotArrivingShown(true)}
+                className='w-full'
+                disabled={isBusy || intake.isLoading}
+                onClick={onGetAddress}
               >
-                {WORDS.notArriving}
+                {EMAIL_WORDS.getAddress}
               </Button>
             ) : (
-              <ul className='text-muted-foreground list-disc space-y-1 pl-5 text-sm'>
-                {WORDS.notArrivingLines.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
+              <div className='border-border space-y-3 rounded-2xl border p-3'>
+                <p className='text-base font-semibold select-all'>
+                  <span className='break-all'>{addressParts[0]}@</span>
+                  <wbr />
+                  <span className='whitespace-nowrap'>{addressParts[1]}</span>
+                </p>
+                <CopyTextButton
+                  text={intake.address}
+                  label={WORDS.copyLabel}
+                  variant='secondary'
+                />
+              </div>
             )}
           </div>
-        )}
-      </StepBody>
-    );
+        ),
+      };
+    }
+    if (step === 'forwarding' && provider === 'yahoo') {
+      return {
+        title: WORDS.yahooForwardingTitle,
+        content: (
+          <div className='space-y-4'>
+            <NumberedSteps
+              items={[
+                {
+                  text: WORDS.yahooForwardingOpen,
+                  control: (
+                    <ExternalLinkText
+                      href={YAHOO_MAIL_URL}
+                      label={WORDS.yahooForwardingLink}
+                    />
+                  ),
+                },
+                { text: WORDS.yahooForwardingGo },
+                { text: WORDS.yahooForwardingPaste },
+              ]}
+            />
+            <Muted>{WORDS.yahooForwardingNote}</Muted>
+          </div>
+        ),
+      };
+    }
+    if (step === 'forwarding') {
+      return {
+        title: WORDS.gmailForwardingTitle,
+        content: (
+          <div className='space-y-4'>
+            <NumberedSteps
+              items={[
+                {
+                  text: WORDS.gmailForwardingOpen,
+                  control: (
+                    <ExternalLinkText
+                      href={GMAIL_FORWARDING_URL}
+                      label={WORDS.gmailForwardingLink}
+                    />
+                  ),
+                },
+                { text: WORDS.gmailForwardingChoose },
+              ]}
+            />
+            <Muted>{WORDS.gmailForwardingNote}</Muted>
+          </div>
+        ),
+      };
+    }
+    if (step === 'rule') {
+      const typed = { text: WORDS.alertAddressLead, control: alertField };
+      if (provider === 'proton') {
+        return {
+          title: WORDS.protonRuleTitle,
+          content: (
+            <div className='space-y-4'>
+              <NumberedSteps
+                items={[
+                  {
+                    text: WORDS.protonRuleGo,
+                    control: (
+                      <ExternalLinkText
+                        href={PROTON_MAIL_URL}
+                        label={WORDS.protonRuleLink}
+                      />
+                    ),
+                  },
+                  { text: WORDS.protonRulePaste },
+                  {
+                    text: WORDS.protonRuleCondition(alertAddress),
+                    control: (
+                      <AlertAddressField
+                        value={alertText}
+                        onChange={setAlertText}
+                        lead={WORDS.alertAddressLead}
+                      />
+                    ),
+                  },
+                  { text: WORDS.protonRuleSave },
+                ]}
+              />
+              <Muted>{WORDS.protonRuleNote}</Muted>
+            </div>
+          ),
+        };
+      }
+      if (provider === 'outlook') {
+        return {
+          title: WORDS.outlookRuleTitle,
+          content: (
+            <NumberedSteps
+              items={[
+                typed,
+                {
+                  text: WORDS.outlookRuleOpen,
+                  control: (
+                    <ExternalLinkText
+                      href={OUTLOOK_RULES_URL}
+                      label={WORDS.outlookRuleLink}
+                    />
+                  ),
+                },
+                { text: WORDS.outlookRuleLine(alertAddress) },
+              ]}
+            />
+          ),
+        };
+      }
+      if (provider === 'icloud') {
+        return {
+          title: WORDS.icloudRuleTitle,
+          content: (
+            <NumberedSteps
+              items={[
+                typed,
+                {
+                  text: WORDS.icloudRuleOpen,
+                  control: (
+                    <ExternalLinkText
+                      href={ICLOUD_MAIL_URL}
+                      label={WORDS.icloudRuleLink}
+                    />
+                  ),
+                },
+                { text: WORDS.icloudRuleLine(alertAddress) },
+              ]}
+            />
+          ),
+        };
+      }
+      return {
+        title: WORDS.otherRuleTitle,
+        content: (
+          <NumberedSteps
+            items={[typed, { text: WORDS.otherRuleLine(alertAddress) }]}
+          />
+        ),
+      };
+    }
+    if (step === 'confirm') {
+      return {
+        title: titled(WORDS.confirmTitle, isConfirmed),
+        content: (
+          <ConfirmStep
+            provider={provider ?? 'other'}
+            intake={intake}
+            isConfirmed={isConfirmed}
+          />
+        ),
+      };
+    }
+    if (step === 'filter') {
+      const filterText =
+        alertAddress === null ? null : buildGmailFilterText(alertAddress);
+      return {
+        title: WORDS.filterTitle,
+        content: (
+          <NumberedSteps
+            items={[
+              { text: WORDS.alertAddressLead, control: alertField },
+              {
+                text: WORDS.filterCopy,
+                control:
+                  filterText === null ? (
+                    <Muted>{WORDS.filterNeedAddress}</Muted>
+                  ) : (
+                    <>
+                      <code className='bg-muted block rounded-lg px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'>
+                        {filterText}
+                      </code>
+                      <CopyTextButton
+                        text={filterText}
+                        label={WORDS.filterLabel}
+                        variant='secondary'
+                        isCompact
+                      />
+                    </>
+                  ),
+              },
+              {
+                text: WORDS.filterPaste,
+                control: (
+                  <ExternalLinkText
+                    href={GMAIL_FILTERS_URL}
+                    label={WORDS.filterLink}
+                  />
+                ),
+              },
+            ]}
+          />
+        ),
+      };
+    }
+    return {
+      title: titled(WORDS.testTitle, hasPurchase),
+      content: (
+        <div className='space-y-3'>
+          <Muted>{WORDS.testLine}</Muted>
+          {hasPurchase ? (
+            <p className='text-sm'>{WORDS.testDone}</p>
+          ) : (
+            <div className='space-y-2'>
+              <Waiting>{WORDS.testWaiting}</Waiting>
+              {!isNotArrivingShown ? (
+                <Button
+                  variant='tertiary'
+                  size='sm'
+                  onClick={() => setIsNotArrivingShown(true)}
+                >
+                  {WORDS.notArriving}
+                </Button>
+              ) : (
+                <ul className='text-muted-foreground list-disc space-y-1 pl-5 text-sm'>
+                  {WORDS.notArrivingLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      ),
+    };
   };
 
+  const getPrimary = () => {
+    if (step === 'provider') return undefined;
+    if (step === 'test') {
+      return {
+        label: WORDS.done,
+        onClick: onFinish,
+        isDisabled: !hasPurchase,
+      };
+    }
+    if (!hasNext) return undefined;
+    return {
+      label: WORDS.next,
+      onClick: () => onGo(stepIndex + 1),
+      isDisabled: step === 'copy' && intake.address === null,
+    };
+  };
+
+  const { title, content } = body();
   return (
-    <div className='border-border bg-card space-y-4 rounded-2xl border p-4'>
-      {provider !== null && (
-        <p className='text-muted-foreground text-sm'>
-          {WORDS.progress(stepIndex + 1, steps.length)}
-        </p>
-      )}
-      {body()}
-      {step === 'provider' && onBackToStatus !== null && (
-        <div>
-          <Button variant='tertiary' onClick={onBackToStatus}>
-            {WORDS.back}
+    <StepGuide
+      step={provider === null ? undefined : stepIndex + 1}
+      stepCount={provider === null ? undefined : steps.length}
+      title={title}
+      primary={getPrimary()}
+      secondary={
+        step === 'test' && !hasPurchase ? (
+          <Button variant='tertiary' size='sm' onClick={onClose}>
+            {WORDS.finishLater}
           </Button>
-        </div>
-      )}
-      {step !== 'provider' && (
-        <div className='flex items-center justify-between gap-3'>
-          <Button variant='tertiary' onClick={() => onGo(stepIndex - 1)}>
-            {WORDS.back}
-          </Button>
-          {canNext && (
-            <Button onClick={() => onGo(stepIndex + 1)}>{WORDS.next}</Button>
-          )}
-          {step === 'test' && !hasPurchase && (
-            <Button variant='tertiary' onClick={onClose}>
-              {WORDS.finishLater}
-            </Button>
-          )}
-          {step === 'test' && hasPurchase && (
-            <Button onClick={onFinish}>{WORDS.done}</Button>
-          )}
-        </div>
-      )}
-    </div>
+        ) : undefined
+      }
+    >
+      {content}
+    </StepGuide>
   );
 }
 

@@ -1256,7 +1256,13 @@ export interface EmailIntakeSealed {
   confirmCode: string | null;
 }
 
-export type EmailProvider = 'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'other';
+export type EmailProvider =
+  | 'gmail'
+  | 'outlook'
+  | 'icloud'
+  | 'yahoo'
+  | 'proton'
+  | 'other';
 
 export type EmailSetupStepId =
   'provider' | 'copy' | 'forwarding' | 'rule' | 'confirm' | 'filter' | 'test';
@@ -1300,8 +1306,10 @@ export interface EmailEventSealed {
   subject: string;
   /** The subject with amounts, card numbers and dates replaced (`toSubjectTemplate`), lowercase. */
   subjectTemplate: string;
-  /** The start of the email's text, for building a filter. */
+  /** An excerpt of the email's text, up to 6 lines joined with a line break, for building a filter; older events hold one line. */
   snippet: string;
+  /** The whole readable text with its line breaks and links reduced to host names (up to 4000 characters); null on older events. */
+  bodyText: string | null;
   /** How the purchase was read: a known pattern or the AI; null when nothing was read. */
   readBy: 'pattern' | 'ai' | null;
 }

@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 
 import {
+  excerptOf,
   htmlToText,
+  isProtonInvitation,
   parseAlertEmail,
+  readableBody,
+  readProtonLink,
   subjectTemplate,
 } from '../../functions/src/apps/runway/email/parseAlert.ts';
 
@@ -265,6 +269,87 @@ assert.equal(
 assert.equal(
   subjectTemplate('Large Purchase Approved'),
   'large purchase approved',
+);
+
+// Fabricated: Proton's exact sender and subject are unconfirmed, so this only follows what proton.me/support/email-forwarding describes.
+const protonInvite = {
+  from: 'Proton <no-reply@account.proton.me>',
+  subject: 'Accept email forwarding from jamie@example.com',
+  text: [
+    'jamie@example.com wants to forward emails to you.',
+    'Accept forwarding: https://account.proton.me/u/0/forwarding/accept?token=abc123',
+    'Learn more: https://proton.me/support/email-forwarding',
+  ].join('\n'),
+};
+assert.ok(isProtonInvitation({ ...protonInvite, isDkimPassed: true }));
+assert.ok(!isProtonInvitation({ ...protonInvite, isDkimPassed: false }));
+assert.ok(
+  !isProtonInvitation({
+    ...protonInvite,
+    from: 'no-reply@proton.me.evil.example',
+    isDkimPassed: true,
+  }),
+);
+assert.ok(
+  !isProtonInvitation({
+    ...protonInvite,
+    subject: 'Welcome to Proton',
+    isDkimPassed: true,
+  }),
+);
+assert.equal(
+  readProtonLink(protonInvite.text),
+  'https://account.proton.me/u/0/forwarding/accept?token=abc123',
+);
+assert.equal(
+  readProtonLink('Help: https://proton.me/support/email-forwarding'),
+  undefined,
+);
+
+// Fabricated bank HTML shaped like real alert mail: browser link, logo, nav, tracking URLs, legal footer.
+const clutteredHtml = (
+  alert: string,
+) => `<html><head><style>a{color:#117aca}</style></head><body>
+<p><a href="https://click.mail.example-bank.com/v?u=9f8e7d6c5b4a39281706f5e4d3c2b1a0&amp;t=view">View this email in your browser</a></p>
+<img src="https://img.example-bank.com/logo.png" width="120">
+<table><tr><td><a href="https://www.example-bank.com/accounts?cid=abc123def456&utm_source=email">Accounts</a></td>
+<td><a href="https://www.example-bank.com/pay?cid=abc123def456&utm_source=email">Pay &amp; transfer</a></td></tr></table>
+<p>${alert}</p>
+<p>Questions? Visit example-bank.com/help</p>
+<p>Example Bank, N.A. Member FDIC. Equal Housing Lender. You received this because you set up account alerts. Do not reply.</p>
+<p><a href="https://click.mail.example-bank.com/unsub?t=0a1b2c3d4e5f60718293a4b5c6d7e8f9">Unsubscribe</a></p>
+</body></html>`;
+[
+  {
+    alert:
+      'You made a $52.30 transaction with TRADER JOES 553.<br>Card ending in 4417',
+    cents: 5230,
+    amount: '$52.30',
+    merchant: 'TRADER JOES 553',
+  },
+  {
+    alert:
+      '<b>Transaction alert</b><br>Merchant: SHELL OIL 5712<br>Amount: $1,203.99<br>Card ending in 8841',
+    cents: 120399,
+    amount: '$1,203.99',
+    merchant: 'SHELL OIL 5712',
+  },
+].forEach(({ alert, cents, amount, merchant }) => {
+  const text = `${htmlToText(clutteredHtml(alert))}\nhttps://www.example-bank.com/x?${'a=b&'.repeat(1500)}`;
+  const body = readableBody(text);
+  assert.ok(body.length <= 4000, 'body cap');
+  assert.ok(!/https?:\/\//.test(body), 'body holds no raw URL');
+  assert.ok(body.includes('www.example-bank.com'), 'body keeps hosts');
+  const excerpt = excerptOf(body, { amountCents: cents, merchant });
+  assert.ok(excerpt.includes(amount), `excerpt holds ${amount}`);
+  assert.ok(!/https?:\/\//.test(excerpt), 'excerpt holds no raw URL');
+  assert.ok(excerpt.split('\n').length <= 6, 'excerpt lines');
+  assert.ok(excerpt.length <= 600, 'excerpt size');
+  assert.ok(!/View this email|Unsubscribe/i.test(excerpt), 'no boilerplate');
+});
+assert.equal(
+  readableBody('a\n\n\n  b  \nsee https://secure.chase.com/x?y'),
+  'a\n\nb\nsee secure.chase.com',
 );
 
 console.log(`runway email parse: ${samples.length} samples ok`);

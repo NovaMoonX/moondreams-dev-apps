@@ -131,6 +131,99 @@ export function htmlToText(html: string): string {
     .replace(/[ \t\r\f\v]+/g, ' ');
 }
 
+const BODY_MAX = 4000;
+const EXCERPT_LINES = 6;
+const EXCERPT_MAX = 600;
+const BOILERPLATE_LINE =
+  /^(?:\[[^\]]*\]|[\W_]+|(?:view|open|read)\b.{0,40}\b(?:browser|online)\b.*|.{0,60}\bunsubscribe\b.{0,60})$/i;
+
+/** The email's readable text: line breaks kept, runs of blank lines collapsed, every web link shortened to its host name, capped at 4,000 characters. */
+export function readableBody(text: string): string {
+  return text
+    .replace(
+      /<?https?:\/\/([^\s/?#"'<>)\]]+)[^\s"'<>)\]]*>?/gi,
+      (_whole, host: string) => host,
+    )
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .reduce<string[]>(
+      (lines, line) =>
+        line === '' && (lines.length === 0 || lines.at(-1) === '')
+          ? lines
+          : [...lines, line],
+      [],
+    )
+    .join('\n')
+    .trim()
+    .slice(0, BODY_MAX);
+}
+
+/** Up to six lines of the readable text centred on the line holding the amount (or the merchant), else the first lines after the header clutter. */
+export function excerptOf(
+  body: string,
+  found: { amountCents: number | null; merchant: string | null },
+): string {
+  const lines = body
+    .split('\n')
+    .filter((line) => line !== '' && !BOILERPLATE_LINE.test(line));
+  const hasAmount = (line: string) =>
+    found.amountCents !== null &&
+    [...line.matchAll(AMOUNT_ANYWHERE)].some(
+      (match) => toCents(match[1]) === found.amountCents,
+    );
+  const merchant = found.merchant?.toLowerCase() ?? null;
+  const hasMerchant = (line: string) =>
+    merchant !== null && line.toLowerCase().includes(merchant);
+  const firstProse = lines.findIndex((line) => line.split(' ').length >= 4);
+  const hit = [hasAmount, hasMerchant]
+    .map((test) => lines.findIndex(test))
+    .find((index) => index >= 0);
+  const center = hit !== undefined ? hit - 2 : Math.max(0, firstProse);
+  const start = Math.max(0, Math.min(center, lines.length - EXCERPT_LINES));
+  return lines
+    .slice(start, start + EXCERPT_LINES)
+    .join('\n')
+    .slice(0, EXCERPT_MAX);
+}
+
+const PROTON_DOMAINS = ['proton.me', 'protonmail.com', 'pm.me'];
+
+export function isProtonSender(from: string): boolean {
+  const address = (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
+  const domain = address.split('@')[1] ?? '';
+  return PROTON_DOMAINS.some(
+    (known) => domain === known || domain.endsWith(`.${known}`),
+  );
+}
+
+/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject. */
+export const isProtonInvitation = (mail: {
+  from: string;
+  subject: string;
+  isDkimPassed: boolean;
+}): boolean =>
+  isProtonSender(mail.from) &&
+  mail.isDkimPassed &&
+  /forward/i.test(mail.subject);
+
+/** The invitation's accept link: a proton.me https link, preferring one that mentions forwarding, accepting or an invite; support, legal and blog pages are never it. */
+export function readProtonLink(text: string) {
+  const links = Array.from(
+    text.matchAll(
+      /(?:^|[\s"'<(])(https:\/\/((?:[a-z0-9-]+\.)*proton\.me)(?=[/?#\s"'<>)\]]|$)(\/[^\s"'<>)\]]*)?)/gi,
+    ),
+  )
+    .filter(
+      ([, , host, path = '']) =>
+        !/^(?:help|legal|policies)\./i.test(host) &&
+        !/^\/(?:support|legal|blog)(?:[/?#]|$)/i.test(path),
+    )
+    .map(([, link]) => link);
+  const isInvitePath = (link: string) =>
+    /forward|accept|invite/i.test(link.replace(/^https:\/\/[^/]+/i, ''));
+  return links.find(isInvitePath) ?? links[0];
+}
+
 export function toCents(value: string): number | null {
   const [whole, fraction = ''] = value.replace(/[,\s]/g, '').split('.');
   if (!/^\d+$/.test(whole) || !/^\d{0,2}$/.test(fraction)) return null;

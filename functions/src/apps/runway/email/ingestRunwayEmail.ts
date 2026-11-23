@@ -33,8 +33,13 @@ import {
   readAddressToken,
 } from './emailShared.js';
 import {
+  excerptOf,
   htmlToText,
+  isProtonInvitation,
+  isProtonSender,
   parseAlertEmail,
+  readableBody,
+  readProtonLink,
   subjectTemplate,
   type ParsedAlert,
 } from './parseAlert.js';
@@ -88,6 +93,7 @@ interface Handled {
   purchase: PurchaseWrite | null;
   date: number | null;
   readBy: 'pattern' | 'ai' | null;
+  found: ParsedAlert | null;
 }
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
@@ -206,7 +212,8 @@ const isForwardingConfirmation = (mail: Mail) =>
   (isYahooSender(mail.from) &&
     mail.isDkimPassed &&
     /forward/i.test(mail.subject) &&
-    /verif|confirm/i.test(mail.subject));
+    /verif|confirm/i.test(mail.subject)) ||
+  isProtonInvitation(mail);
 
 function readYahooLink(text: string) {
   const links = Array.from(
@@ -228,11 +235,15 @@ function readYahooLink(text: string) {
 }
 
 function readConfirmation(mail: Mail) {
+  const readGoogleLink = () =>
+    /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i.exec(
+      mail.text,
+    )?.[0];
   const url = isYahooSender(mail.from)
     ? readYahooLink(mail.text)
-    : /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i.exec(
-        mail.text,
-      )?.[0];
+    : isProtonSender(mail.from)
+      ? readProtonLink(mail.text)
+      : readGoogleLink();
   const code = /code[^0-9]{0,60}(\d{6,9})\b/i.exec(mail.text)?.[1];
   return {
     confirmUrl: url?.replace(/[.,;]+$/, '').slice(0, 2000) ?? null,
@@ -300,9 +311,6 @@ const isInsideTracking = (
   return open !== undefined && open.to === null && date >= open.from;
 };
 
-const snippetOf = (text: string) =>
-  text.replace(/\s+/g, ' ').trim().slice(0, 200);
-
 async function handleMail(
   firestore: Firestore,
   uid: string,
@@ -328,11 +336,23 @@ async function handleMail(
           SEALED_SCHEMA_VERSION,
         ),
       });
-      return { outcome: 'confirm', purchase: null, date: null, readBy: null };
+      return {
+        outcome: 'confirm',
+        purchase: null,
+        date: null,
+        readBy: null,
+        found: null,
+      };
     }
     const filters = await loadFilters(firestore, uid, planKey.key);
     if (filters.some((filter) => isFiltered(filter, mail))) {
-      return { outcome: 'filtered', purchase: null, date: null, readBy: null };
+      return {
+        outcome: 'filtered',
+        purchase: null,
+        date: null,
+        readBy: null,
+        found: null,
+      };
     }
     const byPattern = parseAlertEmail(mail);
     const read: { alert: ParsedAlert | null; readBy: 'pattern' | 'ai' } =
@@ -341,7 +361,13 @@ async function handleMail(
         : { alert: await readAlertWithAi(mail), readBy: 'ai' };
     const { alert } = read;
     if (alert === null) {
-      return { outcome: 'unread', purchase: null, date: null, readBy: null };
+      return {
+        outcome: 'unread',
+        purchase: null,
+        date: null,
+        readBy: null,
+        found: null,
+      };
     }
     if (!alert.isPurchase) {
       return {
@@ -349,6 +375,7 @@ async function handleMail(
         purchase: null,
         date: null,
         readBy: read.readBy,
+        found: alert,
       };
     }
     const plan = (await firestore.doc(planPath(uid)).get()).data();
@@ -364,6 +391,7 @@ async function handleMail(
         purchase: null,
         date: null,
         readBy: read.readBy,
+        found: alert,
       };
     }
     const targets = await findTargets(
@@ -423,10 +451,12 @@ async function handleMail(
       purchase: { ref: purchaseRef, data },
       date,
       readBy: read.readBy,
+      found: alert,
     };
   };
 
   const result = await decide();
+  const bodyText = readableBody(mail.text);
   const batch = firestore.batch();
   if (result.purchase !== null) {
     batch.create(result.purchase.ref, result.purchase.data);
@@ -443,7 +473,11 @@ async function handleMail(
         from: toAddress(mail.from),
         subject: mail.subject.slice(0, 300),
         subjectTemplate: template,
-        snippet: snippetOf(mail.text),
+        snippet: excerptOf(
+          bodyText,
+          result.found ?? { amountCents: null, merchant: null },
+        ),
+        bodyText,
         readBy: result.readBy,
       },
       SEALED_SCHEMA_VERSION,

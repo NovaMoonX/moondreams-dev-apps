@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Filter, KeyRound, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ChevronRight,
+  Filter,
+  KeyRound,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -9,7 +15,7 @@ import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
 import FormSheet from '@/components/FormSheet';
-import ShowMoreButton from '@/components/ShowMoreButton';
+import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useNow } from '@/hooks/useNow';
@@ -26,6 +32,7 @@ import {
 } from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import {
   useEmailActions,
   useEmailEvents,
@@ -33,11 +40,94 @@ import {
   useEmailIntake,
   useEmailSetup,
 } from '@apps/runway/hooks/useEmailPurchases';
+import type {
+  EmailEventRead,
+  EmailFilterRead,
+} from '@apps/runway/hooks/useEmailPurchases';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 import { getFilterStepIndex } from '@apps/runway/utils/emailSetupSteps';
 
-const EVENTS_SHOWN = 8;
+const ROWS_SHOWN = 5;
+
+type AllList = 'events' | 'filters';
+
+interface SeeAllButtonProps {
+  label: string;
+  onClick: () => void;
+}
+
+function SeeAllButton({ label, onClick }: SeeAllButtonProps) {
+  return (
+    <Button
+      variant='tertiary'
+      size='sm'
+      className='text-muted-foreground -mr-2 gap-0.5 text-xs'
+      onClick={onClick}
+    >
+      {label}
+      <ChevronRight className='size-3.5' aria-hidden='true' />
+    </Button>
+  );
+}
+
+interface EventRowsProps {
+  events: EmailEventRead[];
+  onOpen: (id: string) => void;
+}
+
+function EventRows({ events, onOpen }: EventRowsProps) {
+  const mask = useMaskedText();
+  return (
+    <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+      {events.map((event) => {
+        const subject = mask(event.subject || EMAIL_WORDS.noSubject);
+        const detail = `${describeEmailOutcome(event.outcome)} · ${formatDateOrdinal(event.receivedAt)}`;
+        return (
+          <ItemRow
+            key={event.id}
+            name={subject}
+            leading={<ItemBadge name={subject} emoji={null} />}
+            detail={detail}
+            isPrivate={false}
+            ariaLabel={`${subject}, ${detail}. Open`}
+            onOpen={() => onOpen(event.id)}
+          />
+        );
+      })}
+    </ul>
+  );
+}
+
+interface FilterRowsProps {
+  filters: EmailFilterRead[];
+  onOpen: (id: string) => void;
+}
+
+function FilterRows({ filters, onOpen }: FilterRowsProps) {
+  return (
+    <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+      {filters.map((filter) => {
+        const words = describeEmailFilter(filter);
+        return (
+          <ItemRow
+            key={filter.id}
+            name={words.name}
+            leading={
+              <span className='border-border bg-accent grid size-10 shrink-0 place-items-center rounded-xl border'>
+                <Filter className='size-5' aria-hidden='true' />
+              </span>
+            }
+            detail={words.detail}
+            isPrivate={false}
+            ariaLabel={`${words.name}. Open`}
+            onOpen={() => onOpen(filter.id)}
+          />
+        );
+      })}
+    </ul>
+  );
+}
 
 interface EmailPurchasesScreenProps {
   onClose: () => void;
@@ -46,7 +136,6 @@ interface EmailPurchasesScreenProps {
 /** Where the person sets up forwarding, one step at a time, and where they come back to see it working: the emails that arrived and the filters they made. */
 function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const { confirm } = useActionModal();
-  const mask = useMaskedText();
   const intake = useEmailIntake();
   const events = useEmailEvents();
   const filters = useEmailFilters();
@@ -65,11 +154,11 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [openFilterId, setOpenFilterId] = useState<string | null>(null);
-  const [isAllShown, setIsAllShown] = useState(false);
+  const [allList, setAllList] = useState<AllList | null>(null);
+  const [query, setQuery] = useState('');
 
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
-  const shownEvents = isAllShown ? events : events.slice(0, EVENTS_SHOWN);
   const hasPurchase = events.some(
     (entry) =>
       entry.outcome === 'purchase' &&
@@ -138,6 +227,21 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       );
   };
 
+  const goBackInWalk = () => {
+    if (stepIndex > 0) {
+      goToStep(stepIndex - 1);
+      return;
+    }
+    if (!isReopened) {
+      onClose();
+      return;
+    }
+    setIsReopened(false);
+    setIsKept(false);
+    setWalkBaseline(null);
+    setViewIndex(null);
+  };
+
   const pickProvider = (
     provider: Parameters<typeof actions.chooseProvider>[0],
   ) => {
@@ -149,6 +253,22 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         setError(getErrorMessage(pickError, EMAIL_WORDS.progressFailed)),
       );
   };
+
+  const openAll = (list: AllList) => {
+    setQuery('');
+    setAllList(list);
+  };
+
+  const allCount = allList === 'events' ? events.length : filters.length;
+  const needle =
+    allCount >= RUNWAY_SEARCH_THRESHOLD ? query.trim().toLowerCase() : '';
+  const matchedEvents = events.filter((entry) =>
+    (entry.subject + ' ' + entry.from).toLowerCase().includes(needle),
+  );
+  const matchedFilters = filters.filter((entry) => {
+    const words = describeEmailFilter(entry);
+    return `${words.name} ${words.detail ?? ''}`.toLowerCase().includes(needle);
+  });
 
   const removeFilter = async (id: string) => {
     setIsBusy(true);
@@ -169,6 +289,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       title={EMAIL_WORDS.title}
       isTitleWrapped
       onClose={onClose}
+      onBack={isWalking ? goBackInWalk : undefined}
       headerAction={<ValuesEyeButton />}
     >
       {isWalking ? (
@@ -199,16 +320,6 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             isConfirmed={isConfirmed}
             hasPurchase={hasPurchase}
             isBusy={isBusy}
-            onBackToStatus={
-              isReopened
-                ? () => {
-                    setIsReopened(false);
-                    setIsKept(false);
-                    setWalkBaseline(null);
-                    setViewIndex(null);
-                  }
-                : null
-            }
             onPickProvider={pickProvider}
             onGetAddress={() => void getNewAddress()}
             onGo={goToStep}
@@ -231,79 +342,43 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 )}
           </p>
           {filters.length > 0 && (
-            <ActionSection caption={EMAIL_WORDS.filtersCaption}>
-              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                {filters.map((filter) => {
-                  const words = describeEmailFilter(filter);
-                  return (
-                    <ItemRow
-                      key={filter.id}
-                      name={words.name}
-                      leading={
-                        <span className='border-border bg-accent grid size-10 shrink-0 place-items-center rounded-xl border'>
-                          <Filter className='size-5' aria-hidden='true' />
-                        </span>
-                      }
-                      detail={words.detail}
-                      isPrivate={false}
-                      ariaLabel={`${words.name}. Open`}
-                      onOpen={() => setOpenFilterId(filter.id)}
-                    />
-                  );
-                })}
-              </ul>
+            <ActionSection
+              caption={EMAIL_WORDS.filtersCaption}
+              action={
+                filters.length > ROWS_SHOWN && (
+                  <SeeAllButton
+                    label={EMAIL_WORDS.seeAll}
+                    onClick={() => openAll('filters')}
+                  />
+                )
+              }
+            >
+              <FilterRows
+                filters={filters.slice(0, ROWS_SHOWN)}
+                onOpen={setOpenFilterId}
+              />
             </ActionSection>
           )}
-          <ActionSection caption={EMAIL_WORDS.eventsCaption}>
+          <ActionSection
+            caption={EMAIL_WORDS.eventsCaption}
+            action={
+              events.length > ROWS_SHOWN && (
+                <SeeAllButton
+                  label={EMAIL_WORDS.seeAll}
+                  onClick={() => openAll('events')}
+                />
+              )
+            }
+          >
             {events.length === 0 ? (
               <p className='text-muted-foreground text-sm'>
                 {EMAIL_WORDS.noEvents}
               </p>
             ) : (
-              <>
-                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                  {shownEvents.map((event) => {
-                    const subject = mask(
-                      event.subject || EMAIL_WORDS.noSubject,
-                    );
-                    const detail = `${describeEmailOutcome(event.outcome)} · ${formatDateOrdinal(event.receivedAt)}`;
-                    return (
-                      <ItemRow
-                        key={event.id}
-                        name={subject}
-                        nameMark={
-                          event.readBy === 'ai' && (
-                            <>
-                              <Sparkles
-                                className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
-                                aria-hidden='true'
-                              />
-                              <span className='sr-only'>
-                                {EMAIL_WORDS.readByAi}
-                              </span>
-                            </>
-                          )
-                        }
-                        leading={<ItemBadge name={subject} emoji={null} />}
-                        detail={detail}
-                        isPrivate={false}
-                        ariaLabel={`${subject}, ${detail}. Open`}
-                        onOpen={() => setOpenEventId(event.id)}
-                      />
-                    );
-                  })}
-                </ul>
-                {events.length > EVENTS_SHOWN && (
-                  <ShowMoreButton
-                    isOpen={isAllShown}
-                    onClick={() => setIsAllShown((current) => !current)}
-                  >
-                    {isAllShown
-                      ? 'Show fewer'
-                      : `Show ${events.length - EVENTS_SHOWN} more`}
-                  </ShowMoreButton>
-                )}
-              </>
+              <EventRows
+                events={events.slice(0, ROWS_SHOWN)}
+                onOpen={setOpenEventId}
+              />
             )}
           </ActionSection>
           {intake.address !== null && (
@@ -362,6 +437,37 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             </ActionGroup>
           )}
         </div>
+      )}
+      {allList !== null && (
+        <Subview
+          overlay
+          title={
+            allList === 'events'
+              ? EMAIL_WORDS.eventsCaption
+              : EMAIL_WORDS.filtersCaption
+          }
+          onClose={() => setAllList(null)}
+          headerAction={<ValuesEyeButton />}
+        >
+          <div className='space-y-3'>
+            {allCount >= RUNWAY_SEARCH_THRESHOLD && (
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder={
+                  allList === 'events'
+                    ? EMAIL_WORDS.searchEmails
+                    : EMAIL_WORDS.searchFilters
+                }
+              />
+            )}
+            {allList === 'events' ? (
+              <EventRows events={matchedEvents} onOpen={setOpenEventId} />
+            ) : (
+              <FilterRows filters={matchedFilters} onOpen={setOpenFilterId} />
+            )}
+          </div>
+        </Subview>
       )}
       {openEvent && (
         <EmailEventSheet
