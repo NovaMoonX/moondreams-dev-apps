@@ -509,7 +509,7 @@ function toSharedViewing(
 
 // Friends' calendars: a live link from Jamie (added as Sam), a snapshot from Taylor (added as Anna),
 // and a second snapshot from Jamie not yet added, to show "Add to Sam" when it is opened.
-const SEED_FRIEND_LIVE_SHARE_ID = `seedpalslive${'4'.repeat(14)}`;
+const SEED_FRIEND_LIVE_SHARE_ID = `seedpalsfeed${'4'.repeat(14)}`;
 const SEED_FRIEND_SNAPSHOT_SHARE_ID = `seedpalssnap${'5'.repeat(14)}`;
 const SEED_FRIEND_SECOND_SHARE_ID = `seedpalsmany${'6'.repeat(14)}`;
 const SEED_FRIEND_LIVE_FEED_ID = `seedfeedwarm${'7'.repeat(20)}`;

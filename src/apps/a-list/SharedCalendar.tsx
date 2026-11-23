@@ -417,6 +417,7 @@ function OkView({
               variant='secondary'
               size='sm'
               rounded='full'
+              className='shrink-0 whitespace-nowrap'
               onClick={() => void signInWithGoogle()}
             >
               Sign in

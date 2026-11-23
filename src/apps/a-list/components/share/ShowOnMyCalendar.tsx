@@ -109,7 +109,13 @@ function ShowOnMyCalendar({
         <p className='min-w-0 text-sm'>
           📅 Track your own movies to see theirs beside them
         </p>
-        <Button href='/a-list' variant='secondary' size='sm' rounded='full'>
+        <Button
+          href='/a-list'
+          variant='secondary'
+          size='sm'
+          rounded='full'
+          className='shrink-0 whitespace-nowrap'
+        >
           Start A-List
         </Button>
       </div>
@@ -155,6 +161,7 @@ function ShowOnMyCalendar({
           variant='tertiary'
           size='sm'
           rounded='full'
+          className='shrink-0 whitespace-nowrap'
           disabled={isSaving}
           onClick={() => void handleRemove()}
         >
@@ -216,6 +223,7 @@ function ShowOnMyCalendar({
           variant='secondary'
           size='sm'
           rounded='full'
+          className='shrink-0 whitespace-nowrap'
           onClick={() => setIsSheetOpen(true)}
         >
           Add
