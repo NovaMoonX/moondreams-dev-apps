@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sets up Runway's purchases-from-email intake: one shared secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
-# Each person's address is runway+<token>@apps.moondreams.dev: Cloudflare has no catch-all on a subdomain, so one rule plus plus addressing reaches every token.
+# Each person's address is runway-<token>@moondreamsmail.com, a receive-only domain whose catch-all sends every app's mail to the email worker.
 # The secret is generated here, never printed or written to disk. Safe to re-run.
 #   npm run runway:email-setup                 picks up where the last run stopped
 #   npm run runway:email-setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
@@ -96,15 +96,14 @@ if start_step 2 "the secret on the email worker"; then
 fi
 
 if start_step 3 "Cloudflare Email Routing"; then
-  if ask_yes "3. Is Email Routing on for apps.moondreams.dev, with plus addressing on and a rule sending runway@apps.moondreams.dev to the worker mdd-apps-email-router?"; then
+  if ask_yes "3. Is Email Routing on for moondreamsmail.com, with its catch-all sending to the worker mdd-apps-email-router?"; then
     echo "3. ✓ Noted."
   else
-    echo "3. In the Cloudflare dashboard. moondreams.dev's own mail is on Google: if Cloudflare ever offers to change moondreams.dev's MX records, stop and cancel."
-    echo "     a. Open moondreams.dev, then Email, then Email Routing, then Settings."
-    echo "     b. Under Subdomains, add apps.moondreams.dev and accept the records it adds to that subdomain."
-    echo "     c. On the same Settings page, turn on Subaddressing (plus addressing)."
-    echo "     d. Open Routing rules, Create address: custom address runway@apps.moondreams.dev, action Send to a Worker, worker mdd-apps-email-router. Save it active."
-    printf '   Press Enter when the rule is active. '
+    echo "3. In the Cloudflare dashboard (this is moondreamsmail.com, never moondreams.dev, whose mail is on Google):"
+    echo "     a. Open moondreamsmail.com, then Email, then Email Routing, and Get started / Enable."
+    echo "     b. Accept the MX, SPF and DKIM records it adds."
+    echo "     c. Open Routing rules, then Catch-all address: action Send to a Worker, worker mdd-apps-email-router. Turn it on and save."
+    printf '   Press Enter when the catch-all is active. '
     read -r _ || true
   fi
   remember_step 3
