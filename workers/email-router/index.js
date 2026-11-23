@@ -8,6 +8,20 @@ const REJECTIONS = {
   413: 'Message too large',
 };
 
+// An address starts with its app's prefix and reaches only that app's intake.
+const ROUTES = {
+  runway: (env) => ({
+    url: env.INGEST_URL,
+    secret: env.INGEST_SECRET,
+    header: 'x-runway-email-secret',
+  }),
+};
+
+const routeFor = (to, env) => {
+  const prefix = /^([a-z]+)-/.exec(String(to).trim().toLowerCase())?.[1];
+  return prefix && Object.hasOwn(ROUTES, prefix) ? ROUTES[prefix](env) : null;
+};
+
 const readResult = (headers, name) => {
   const line = headers
     .filter((header) => header.key === 'authentication-results')
@@ -25,13 +39,18 @@ export default {
       message.setReject('Message too large');
       return;
     }
+    const route = routeFor(message.to, env);
+    if (!route) {
+      message.setReject(REJECTIONS[404]);
+      return;
+    }
     try {
       const mail = await PostalMime.parse(message.raw);
-      const response = await fetch(env.INGEST_URL, {
+      const response = await fetch(route.url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-runway-email-secret': env.INGEST_SECRET,
+          [route.header]: route.secret,
         },
         body: JSON.stringify({
           to: message.to,

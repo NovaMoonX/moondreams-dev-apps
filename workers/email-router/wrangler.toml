@@ -3,4 +3,5 @@ main = "index.js"
 compatibility_date = "2026-11-01"
 
 [vars]
+# Runway's intake; a new app adds its own URL and secret beside it and a route in index.js.
 INGEST_URL = "https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestRunwayEmail"
