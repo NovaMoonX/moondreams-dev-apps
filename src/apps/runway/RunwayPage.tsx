@@ -569,8 +569,8 @@ function RunwayContent() {
   };
 
   return (
-    <Fragment key={isScrambled ? 'made-up' : 'real'}>
-      {getView()}
+    <>
+      <Fragment key={isScrambled ? 'made-up' : 'real'}>{getView()}</Fragment>
       <DoneForYouSheet
         isOpen={isDoneForYouOpen}
         onClose={closeDoneForYou}
@@ -581,7 +581,7 @@ function RunwayContent() {
         renderText={(text) => <MaskedText>{text}</MaskedText>}
         titleTrailing={<ValuesEyeButton />}
       />
-    </Fragment>
+    </>
   );
 }
 

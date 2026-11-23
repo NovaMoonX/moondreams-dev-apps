@@ -130,13 +130,17 @@ const isStillUndoable = (undo: DoneForYouUndo, known: KnownPurchases) =>
     return known.from === null || date < known.from;
   });
 
-const getKnown = (state: RootState['runway']): KnownPurchases => ({
-  purchases: [
-    ...state.purchases,
-    ...state.needsHome,
-    ...(state.linkHistoryPurchases ?? []),
-  ],
-  from: state.purchasesFrom,
+const toKnown = ({
+  purchases,
+  needsHome,
+  linkHistoryPurchases,
+  purchasesFrom,
+}: Pick<
+  RootState['runway'],
+  'purchases' | 'needsHome' | 'linkHistoryPurchases' | 'purchasesFrom'
+>): KnownPurchases => ({
+  purchases: [...purchases, ...needsHome, ...(linkHistoryPurchases ?? [])],
+  from: purchasesFrom,
 });
 
 /** The line an entry with no Undo shows, naming its own way back where there is one. */
@@ -263,10 +267,12 @@ export function useDoneForYou() {
     (state) => state.runway.plan?.doneForYouSeenAt ?? null,
   );
   const isReady = useAppSelector((state) => state.runway.isDoneForYouLoaded);
-  const known: KnownPurchases = {
-    purchases: [...purchases, ...waiting, ...(linkHistory ?? [])],
-    from: purchasesFrom,
-  };
+  const known = toKnown({
+    purchases,
+    needsHome: waiting,
+    linkHistoryPurchases: linkHistory,
+    purchasesFrom,
+  });
 
   const now = useNow(60 * 60 * 1000);
   const cutoff = now - DONE_FOR_YOU_DAYS * DAY_MS;
@@ -303,7 +309,7 @@ export function useDoneForYou() {
     if (!uid || !entry || entry.undo === null || entry.undoneAt !== null) {
       return DONE_FOR_YOU_WORDS.cannotUndo;
     }
-    if (!isStillUndoable(entry.undo, getKnown(store.getState().runway))) {
+    if (!isStillUndoable(entry.undo, toKnown(store.getState().runway))) {
       return DONE_FOR_YOU_WORDS.cannotUndo;
     }
     try {
