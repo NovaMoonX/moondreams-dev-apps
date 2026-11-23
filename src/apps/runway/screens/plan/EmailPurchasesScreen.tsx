@@ -1,19 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import {
-  ChevronRight,
-  Filter,
-  KeyRound,
-  Plus,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react';
+import { ChevronRight, Filter, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
@@ -24,6 +15,9 @@ import { useNow } from '@/hooks/useNow';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import EmailAddressRow from '@/components/emailForwarding/EmailAddressRow';
+import EmailForwardingStatusLine from '@/components/emailForwarding/EmailForwardingStatusLine';
+import EmailSetupAgainRows from '@/components/emailForwarding/EmailSetupAgainRows';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
 import EmailSetupWalkthrough from '@apps/runway/components/EmailSetupWalkthrough';
 import {
@@ -49,7 +43,6 @@ import type {
   EmailFilterRead,
 } from '@apps/runway/hooks/useEmailPurchases';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 import {
   getAddBankSteps,
   getFilterStepIndex,
@@ -395,13 +388,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         </div>
       ) : (
         <div className='space-y-6'>
-          <p className='text-sm font-medium' role='status'>
-            {intake.lastReceivedAt === null
-              ? EMAIL_SETUP_WORDS.noEmailsYet
-              : EMAIL_SETUP_WORDS.workingSince(
-                  formatUpdatedAgo(intake.lastReceivedAt, now),
-                )}
-          </p>
+          <EmailForwardingStatusLine lastReceivedAt={intake.lastReceivedAt} />
           {addBankSteps.length > 0 && (
             <ActionSection caption={EMAIL_SETUP_WORDS.banksTitle}>
               <div className='space-y-3'>
@@ -488,28 +475,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             )}
           </ActionSection>
           {intake.address !== null && (
-            <div className='border-border flex items-center justify-between gap-3 rounded-2xl border p-3'>
-              <div className='min-w-0'>
-                <p className='text-muted-foreground text-xs'>
-                  {EMAIL_SETUP_WORDS.addressRow}
-                </p>
-                <p className='text-sm select-all'>
-                  <span className='break-all'>
-                    {intake.address.split('@')[0]}@
-                  </span>
-                  <wbr />
-                  <span className='whitespace-nowrap'>
-                    {intake.address.split('@').slice(1).join('@')}
-                  </span>
-                </p>
-              </div>
-              <CopyTextButton
-                text={intake.address}
-                label='Copy'
-                variant='tertiary'
-                isCompact
-              />
-            </div>
+            <EmailAddressRow address={intake.address} />
           )}
           {error && (
             <p className='text-destructive text-sm' role='alert'>
@@ -517,27 +483,18 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             </p>
           )}
           {intake.address !== null && (
-            <ActionGroup>
-              <ActionRow
-                isGrouped
-                icon={<RotateCcw />}
-                label={EMAIL_SETUP_WORDS.setUpAgain}
-                subtitle={EMAIL_SETUP_WORDS.setUpAgainSub}
-                onClick={() => {
-                  setIsReopened(true);
-                  keepBaseline();
-                  setViewIndex(0);
-                }}
-              />
-              <ActionRow
-                isGrouped
-                icon={<KeyRound />}
-                label={EMAIL_WORDS.newAddress}
-                subtitle={EMAIL_WORDS.newAddressSub}
-                isDisabled={isBusy}
-                onClick={() => void getNewAddress()}
-              />
-            </ActionGroup>
+            <EmailSetupAgainRows
+              onSetUpAgain={() => {
+                setIsReopened(true);
+                keepBaseline();
+                setViewIndex(0);
+              }}
+              onGetNewAddress={async () => {
+                noteActed();
+                await actions.rotateAddress();
+              }}
+              onFailed={setError}
+            />
           )}
         </div>
       )}

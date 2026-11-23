@@ -17,19 +17,23 @@ import {
   YahooMark,
 } from '@/components/BrandMarks';
 import CopyTextButton from '@/components/CopyTextButton';
+import { EmailAddressText } from '@/components/emailForwarding/EmailAddressRow';
+import {
+  EMAIL_PROVIDERS,
+  GMAIL_FILTERS_URL,
+  GMAIL_FORWARDING_URL,
+  ICLOUD_MAIL_URL,
+  OUTLOOK_RULES_URL,
+  PROTON_MAIL_URL,
+  YAHOO_MAIL_URL,
+} from '@/components/emailForwarding/emailForwardingWords';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import MethodPicker from '@/components/MethodPicker';
 import StepGuide from '@/components/StepGuide';
 import {
   EMAIL_SETUP_WORDS,
   EMAIL_WORDS,
-  GMAIL_FILTERS_URL,
-  GMAIL_FORWARDING_URL,
-  ICLOUD_MAIL_URL,
-  OUTLOOK_RULES_URL,
-  PROTON_MAIL_URL,
   buildGmailFilterText,
-  YAHOO_MAIL_URL,
 } from '@apps/runway/components/emailWords';
 import {
   BankAddresses,
@@ -53,14 +57,6 @@ import type { EmailBank, EmailProvider } from '@apps/runway/types';
 import type { EmailSetupStepId } from '@apps/runway/utils/emailSetupSteps';
 
 const WORDS = EMAIL_SETUP_WORDS;
-const PROVIDERS: EmailProvider[] = [
-  'gmail',
-  'outlook',
-  'icloud',
-  'yahoo',
-  'proton',
-  'other',
-];
 
 interface EmailSetupWalkthroughProps {
   provider: EmailProvider | null;
@@ -290,7 +286,6 @@ function EmailSetupWalkthrough({
   const [addressesAtStart] = useState(() => listBankAddresses(banks));
   const [isSavingBank, setIsSavingBank] = useState(false);
   const step = steps[stepIndex] ?? 'provider';
-  const addressParts = (intake.address ?? '').split(/@(.*)/s);
   const hasNext = stepIndex < steps.length - 1;
   const addresses = listBankAddresses(banks);
   const bankIndex = steps.indexOf('bank');
@@ -351,7 +346,7 @@ function EmailSetupWalkthrough({
         title: WORDS.providerTitle,
         content: (
           <MethodPicker
-            methods={PROVIDERS.map((id) => ({
+            methods={EMAIL_PROVIDERS.map((id) => ({
               id,
               emoji: PROVIDER_ICONS[id],
               title: WORDS.providerLabels[id],
@@ -378,11 +373,10 @@ function EmailSetupWalkthrough({
               </Button>
             ) : (
               <div className='border-border space-y-3 rounded-2xl border p-3'>
-                <p className='text-base font-semibold select-all'>
-                  <span className='break-all'>{addressParts[0]}@</span>
-                  <wbr />
-                  <span className='whitespace-nowrap'>{addressParts[1]}</span>
-                </p>
+                <EmailAddressText
+                  address={intake.address}
+                  className='text-base font-semibold'
+                />
                 <CopyTextButton
                   text={intake.address}
                   label={WORDS.copyLabel}

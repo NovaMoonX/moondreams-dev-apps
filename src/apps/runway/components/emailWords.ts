@@ -1,3 +1,4 @@
+import { EMAIL_PROVIDER_NAMES } from '@/components/emailForwarding/emailForwardingWords';
 import type {
   EmailFilterSealed,
   EmailOutcome,
@@ -12,10 +13,6 @@ const fromWhom = (addresses: string[]) => {
   if (addresses.length === 1) return addresses[0];
   return 'any of the addresses below';
 };
-export const GMAIL_FILTERS_URL =
-  'https://mail.google.com/mail/u/0/#settings/filters';
-export const GMAIL_FORWARDING_URL =
-  'https://mail.google.com/mail/u/0/#settings/fwdandpop';
 
 export const EMAIL_WORDS = {
   rowLabel: 'Purchases from email',
@@ -122,21 +119,6 @@ export function describeEmailFilter(filter: EmailFilterSealed): {
     detail: parts.length > 1 ? parts.slice(1).join(' · ') : null,
   };
 }
-
-export const YAHOO_MAIL_URL = 'https://mail.yahoo.com/';
-export const OUTLOOK_RULES_URL =
-  'https://outlook.live.com/mail/0/options/mail/rules';
-export const ICLOUD_MAIL_URL = 'https://www.icloud.com/mail/';
-export const PROTON_MAIL_URL = 'https://mail.proton.me/';
-
-export const EMAIL_PROVIDER_NAMES: Record<EmailProvider, string> = {
-  gmail: 'Gmail',
-  outlook: 'Outlook',
-  icloud: 'iCloud',
-  yahoo: 'Yahoo',
-  proton: 'Proton Mail',
-  other: 'your email',
-};
 
 export const EMAIL_SETUP_WORDS = {
   progress: (step: number, total: number) => `Step ${step} of ${total}`,

@@ -6,13 +6,15 @@ import { ArrowLeftRight, Plus, X } from 'lucide-react';
 import ClearOfFooter from '@/components/ClearOfFooter';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import CopyTextButton from '@/components/CopyTextButton';
-import MethodPicker from '@/components/MethodPicker';
 import {
-  EMAIL_SETUP_WORDS,
   GMAIL_FILTERS_URL,
   ICLOUD_MAIL_URL,
   OUTLOOK_RULES_URL,
   PROTON_MAIL_URL,
+} from '@/components/emailForwarding/emailForwardingWords';
+import MethodPicker from '@/components/MethodPicker';
+import {
+  EMAIL_SETUP_WORDS,
   buildGmailFilterText,
 } from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
