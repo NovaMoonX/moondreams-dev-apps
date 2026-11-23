@@ -65,6 +65,7 @@ import { useClosings } from '@apps/runway/hooks/useClosings';
 import {
   useMatchBankPurchases,
   useMatchLinkHistory,
+  useMatchEmailPurchases,
   useMatchAccountPairs,
   useMatchDeposits,
 } from '@apps/runway/hooks/useBankMatch';
@@ -265,6 +266,7 @@ function RunwayContent() {
   useLinkHistory(user?.uid ?? null);
   useReleasedCharges(user?.uid ?? null);
   useMatchLinkHistory(user?.uid ?? null);
+  useMatchEmailPurchases(user?.uid ?? null);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
     isDeletingPlan ? null : (user?.uid ?? null),

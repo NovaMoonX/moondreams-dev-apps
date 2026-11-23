@@ -24,10 +24,12 @@ export interface CashPositionInput {
   goalIds: readonly string[];
   /** Every envelope, so one held by an account left out is not taken off the cash that counts. */
   envelopeIds: readonly string[];
-  purchases: readonly Pick<
+  purchases: readonly (Pick<
     OpenPurchase,
     'source' | 'status' | 'amountCents' | 'accountId'
-  >[];
+  > & { id?: string; emailWaiting?: boolean | null })[];
+  /** Emailed purchases whose bank charge is already here (`findEmailTwins`): the charge counts, so the emailed one does not. */
+  twinnedEmailIds?: ReadonlySet<string>;
 }
 
 export interface CashAccount {
@@ -93,11 +95,17 @@ export function getCashPosition(input: CashPositionInput): CashPosition {
     );
   const envelopesCents =
     input.balances.assignedToEnvelopesCents - envelopesOutsideCents;
+  const twinned = input.twinnedEmailIds ?? new Set<string>();
+  const isPendingAtBank = (purchase: CashPositionInput['purchases'][number]) =>
+    purchase.source === 'link'
+      ? purchase.status === 'pending'
+      : purchase.source === 'email' &&
+        purchase.emailWaiting === true &&
+        !twinned.has(purchase.id ?? '');
   const pendingCents = input.purchases
     .filter(
       (purchase) =>
-        purchase.source === 'link' &&
-        purchase.status === 'pending' &&
+        isPendingAtBank(purchase) &&
         purchase.amountCents > 0 &&
         purchase.accountId !== null &&
         countedIds.has(purchase.accountId),

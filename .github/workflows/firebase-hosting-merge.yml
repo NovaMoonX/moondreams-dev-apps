@@ -102,6 +102,27 @@ jobs:
         run: |
           git tag -f worker-deployed ${{ github.sha }}
           git push -f origin refs/tags/worker-deployed
+      - name: Check for email worker changes
+        id: email_worker_changes
+        run: |
+          base=$(git rev-parse -q --verify refs/tags/email-worker-deployed || true)
+          if [ -n "$base" ] && git diff --quiet "$base" ${{ github.sha }} -- workers/email-router; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy email worker
+        id: email_worker_deploy
+        if: steps.email_worker_changes.outputs.changed == 'true'
+        continue-on-error: true
+        run: npm run cf:email-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Mark the deployed email worker
+        if: steps.email_worker_deploy.outcome == 'success'
+        run: |
+          git tag -f email-worker-deployed ${{ github.sha }}
+          git push -f origin refs/tags/email-worker-deployed
       # A missing build file must be a 404 nothing keeps, or phones keep failing to open a screen after a deploy.
       - name: Check the live site's serving
         run: npm run check:serving -- --live https://apps.moondreams.dev
