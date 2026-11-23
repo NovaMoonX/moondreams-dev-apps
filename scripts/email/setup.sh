@@ -14,6 +14,7 @@ SECRET_NAME=EMAIL_WEBHOOK_SECRET
 # Runway used to read this name; its value is still reused so the worker's one secret keeps working.
 LEGACY_SECRET_NAME=RUNWAY_EMAIL_WEBHOOK_SECRET
 WORKER_CONFIG=workers/email-router/wrangler.toml
+FUNCTIONS_URL=https://us-central1-moondreams-dev-apps.cloudfunctions.net
 LAST_STEP=4
 PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/email-setup-step"
 CURRENT="starting"
@@ -50,6 +51,40 @@ start_step() {
   (( $1 >= START )) && return 0
   echo "$1. ✓ $2: done on an earlier run, so it is skipped."
   return 1
+}
+
+# The intakes read their secrets at run time, so nothing grants the functions' account access on deploy.
+grant_read() {
+  local name=$1
+  if command -v gcloud >/dev/null 2>&1; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding "$name" --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "1. ✓ The functions can read $name."
+  else
+    echo "1. gcloud isn't installed, so give the functions read access to $name in the browser (one time):"
+    echo "     a. Open https://console.cloud.google.com/security/secret-manager/secret/$name/permissions?project=$PROJECT"
+    echo "     b. Grant access → New principal: the account ending in -compute@developer.gserviceaccount.com"
+    echo "     c. Role: Secret Manager Secret Accessor → Save"
+    printf '   Press Enter when it is saved. '
+    read -r _ || true
+  fi
+}
+
+# A call without the secret must reach the intake's own check: 401 proves it is open to the worker and can read its secret.
+# An intake that ships with an unmerged change isn't deployed yet (404), so it is checked on a re-run after the merge.
+check_intake() {
+  local fn=$1 code
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$FUNCTIONS_URL/$fn" || true)
+  case "$code" in
+    401) echo "2. ✓ $fn answers the worker." ;;
+    404) echo "2. $fn isn't deployed yet. After the merge deploys it, check it with: npm run email:setup -- --from 2" ;;
+    403) echo "✗ Google Cloud refuses calls to $fn (403): it isn't open yet. Merge and deploy, or run: npm run fb:invoker -- $fn" >&2; exit 1 ;;
+    503) echo "✗ $fn can't read $SECRET_NAME (503). Run the grant again: npm run email:setup -- --restart" >&2; exit 1 ;;
+    *) echo "✗ $fn answered $code instead of 401." >&2; exit 1 ;;
+  esac
 }
 
 trap 'status=$?; (( status == 0 )) || { echo "✗ Stopped at step $CURRENT_STEP: $CURRENT." >&2; echo "  Fix that and run npm run email:setup again to pick up from step $CURRENT_STEP (or add -- --restart to start over)." >&2; }' EXIT
@@ -93,6 +128,8 @@ if start_step 1 "the secret in Firebase"; then
       exit 1
     fi
   done
+  grant_read "$SECRET_NAME"
+  grant_read "$LEGACY_SECRET_NAME"
   remember_step 1
 fi
 
@@ -106,6 +143,8 @@ if start_step 2 "the secret on the email worker"; then
   npx wrangler deploy -c "$WORKER_CONFIG"
   printf %s "$SHARED" | npx wrangler secret put INGEST_SECRET -c "$WORKER_CONFIG"
   echo "2. ✓ The worker has INGEST_SECRET."
+  check_intake ingestRunwayEmail
+  check_intake ingestAListEmail
   remember_step 2
 fi
 
