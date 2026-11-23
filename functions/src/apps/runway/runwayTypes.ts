@@ -54,6 +54,23 @@ export interface PlanSealedFields {
   horizonNudgeDismissed: Record<string, number> | null;
   /** Envelope ids pinned to Home's first tiles, in the person's order. Null until one is pinned; a plan sealed before it existed lacks the key. */
   homePins: string[] | null;
+  /** IANA zone of the person's device, which the server reads a day's start in; the phone writes it when it differs. Null until then; a plan sealed before it existed lacks the key. */
+  timeZone: string | null;
+}
+
+/** `figures/current`: the figures the server last worked out for the plan, so the app can draw Home before its own sums finish. Written only by Functions. */
+export interface FiguresSnapshotDoc {
+  id: 'current';
+  /** The engine version that worked it out; a snapshot from another version is never shown. */
+  engineVersion: number;
+  /** The plan day (UTC midnight, in the plan's zone) the figures are for. */
+  asOf: DateOnly;
+  /** Server epoch ms the figures were worked out. */
+  computedAt: number;
+  /** The plan's `updatedAt` the figures were worked out from. */
+  planStamp: number;
+  /** `FiguresSnapshotSealed`. */
+  sealed: Sealed;
 }
 
 export interface HoldsPromptChoice {

@@ -64,6 +64,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       bankBackedSeenAt: null,
       horizonNudgeDismissed: null,
       homePins: null,
+      timeZone: null,
     } satisfies PlanSealedFields,
     encryption,
   );
@@ -141,6 +142,7 @@ export async function setNotify(
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
         horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
         homePins: current.homePins ?? null,
+        timeZone: current.timeZone ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -182,6 +184,7 @@ async function patchSealedFields(
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
         horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
         homePins: current.homePins ?? null,
+        timeZone: current.timeZone ?? null,
         ...(typeof patch === 'function' ? patch(current) : patch),
       } satisfies PlanSealedFields,
       encryption,
@@ -242,6 +245,7 @@ export async function dismissHorizonNudge(
           [goalId]: targetDate,
         },
         homePins: current.homePins ?? null,
+        timeZone: current.timeZone ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );

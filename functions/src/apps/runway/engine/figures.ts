@@ -612,6 +612,17 @@ export interface Figures {
   };
 }
 
+/** What a stored snapshot seals: the headline figures, without the detail the share summary reads. */
+export interface FiguresSnapshotSealed {
+  timeZone: string | null;
+  level: Level;
+  balances: CoveredBalances;
+  billCover: BillCover;
+  bankBacking: BankBacking;
+  nextPayOn: DateOnly | null;
+  dueBeforePay: { cents: number; payOn: number } | null;
+}
+
 /** Every figure the plan's screens read, worked out from the opened documents alone, in the same order and with the same functions the app's selectors chain. */
 export function computeFigures(input: FiguresInput): Figures {
   const { today, plan } = input;
