@@ -466,6 +466,7 @@ Many people pay a bill on a day that suits their pay, not on its due date (the o
 - **A plan without a bank link stores no bank data.** Linking is optional and is the only time bank data enters the app.
 - **Provider access is read-only and revocable.** You can end it from your bank or from Runway.
 - **Matching on the server.** With notifications on, Runway's servers open new purchases, your bills and your merchant rules to match them, using the same key that seals bank data. They log counts and ids, never names or amounts.
+- **Figures on the server.** So the app opens on your figures at once, Runway's servers open your plan (income, bills, envelopes, goals, days, purchases, cards and accounts) within a minute of any change and again after your midnight, work out the figures the app shows, and store them encrypted with your plan's own key, whether or not notifications are on. They log only a scrambled id and counts, never names or amounts.
 
 ## How It Feels
 

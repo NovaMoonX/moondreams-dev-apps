@@ -1,5 +1,7 @@
 // `npm run check:runway-server-parity` runs the app's figures engine and its server copy on the same plans, 60 days in a row across month ends, and fails on any difference. Only ids and paths are printed, never amounts.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import {
   computeFigures as appComputeFigures,
@@ -23,6 +25,7 @@ import {
   type ReadSealed,
 } from '../../src/apps/runway/engine/openDocs.ts';
 import { DAY_MS, todayAsUtcDate } from '../../src/apps/runway/engine/dates.ts';
+import { ENGINE_VERSION } from '../../src/apps/runway/engine/engineConstants.ts';
 import {
   computeFigures as serverComputeFigures,
   toFiguresInput as serverToFiguresInput,
@@ -416,6 +419,59 @@ const selectorDiffs = async (): Promise<string[]> => {
   });
 };
 
+const FINGERPRINT_PATH = new URL(
+  './runwayEngineFingerprint.json',
+  import.meta.url,
+);
+
+const sortKeys = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, sortKeys((value as Record<string, unknown>)[key])]),
+  );
+};
+
+/** What the figures come to on the fixed fixture: a change to it without a new `ENGINE_VERSION` would let phones accept figures from the old maths. */
+const checkEngineVersion = (scenarios: Scenario[], firstDay: number) => {
+  process.env.TZ = 'UTC';
+  const figures = scenarios.map(({ name, input }) => [
+    name,
+    [0, 11, 29, 59].map((offset) =>
+      appComputeFigures({
+        ...input,
+        today: firstDay + offset * DAY_MS,
+        zone: null,
+      }),
+    ),
+  ]);
+  const hash = createHash('sha256')
+    .update(JSON.stringify(sortKeys(figures)))
+    .digest('hex');
+  if (process.argv.includes('--update')) {
+    writeFileSync(
+      FINGERPRINT_PATH,
+      `${JSON.stringify({ engineVersion: ENGINE_VERSION, hash }, null, 2)}\n`,
+    );
+    console.log(`Recorded the figures for engine version ${ENGINE_VERSION}.`);
+    return;
+  }
+  const saved = JSON.parse(readFileSync(FINGERPRINT_PATH, 'utf8')) as {
+    engineVersion: number;
+    hash: string;
+  };
+  assert.ok(
+    saved.engineVersion !== ENGINE_VERSION || saved.hash === hash,
+    'The figures changed without a new ENGINE_VERSION: raise it in engine/engineConstants.ts, then run `npm run check:runway-server-parity -- --update`.',
+  );
+  assert.ok(
+    saved.engineVersion === ENGINE_VERSION,
+    `ENGINE_VERSION is ${ENGINE_VERSION} but the recorded figures are for ${saved.engineVersion}: run \`npm run check:runway-server-parity -- --update\`.`,
+  );
+};
+
 const main = async () => {
   const firstDay = Date.UTC(2026, 0, 20);
   const { docs } = await buildRunwayScaleDocs({
@@ -439,6 +495,7 @@ const main = async () => {
   };
   const track: Scenario = { name: 'track', input: base, zones: [null] };
   const zones = ['America/Los_Angeles', 'Pacific/Auckland', 'UTC'];
+  checkEngineVersion([plan, track], firstDay);
   const diffs = [
     ...(await selectorDiffs()),
     ...runScenario(plan, firstDay),

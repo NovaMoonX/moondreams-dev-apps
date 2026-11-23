@@ -170,6 +170,7 @@ async function patchSealedFields(
   uid: string,
   encryption: RunwayEncryption,
   patch: SealedPatch | ((current: Partial<PlanSealedFields>) => SealedPatch),
+  isStamped = true,
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
   await runHeldTransaction(uid, async (transaction) => {
@@ -193,7 +194,10 @@ async function patchSealedFields(
       } satisfies PlanSealedFields,
       encryption,
     );
-    transaction.update(ref, { sealed, updatedAt: Date.now() });
+    transaction.update(
+      ref,
+      isStamped ? { sealed, updatedAt: Date.now() } : { sealed },
+    );
   });
 }
 
@@ -228,7 +232,9 @@ export async function setPlanTimeZone(
   encryption: RunwayEncryption,
   timeZone: string,
 ) {
-  await patchSealedFields(uid, encryption, { timeZone });
+  // Unstamped: the server's figures are checked against `updatedAt`, and a zone changes only which day is
+  // today, which they carry themselves, so two devices in different zones never void each other's.
+  await patchSealedFields(uid, encryption, { timeZone }, false);
 }
 
 /** Stops asking about Horizon for one goal at its current target date; a changed date asks again. Reads the plan fresh so another goal's answer is kept. */

@@ -24,7 +24,11 @@ if (getApps().length === 0) {
 
 const BATCH_LIMIT = 100;
 const PARALLEL = 10;
-const LEASE_MS = 5 * MINUTE_MS;
+const TIMEOUT_SECONDS = 300;
+// A lease lasts the whole timeout, so a run can only lose its lease once it is dead and two runs never hold one plan.
+const LEASE_MS = TIMEOUT_SECONDS * 1000;
+/** No new batch starts after this, so a batch never runs into the timeout and charges its plans a failure. */
+const START_BUDGET_MS = 4 * MINUTE_MS;
 
 const hashOf = (uid: string) =>
   createHash('sha256').update(uid).digest('hex').slice(0, 12);
@@ -75,10 +79,12 @@ async function sweepOnNewEngine(firestore: Firestore, now: number) {
   states.forEach((state, index) => {
     const uid = plans.docs[index].id;
     if (state.exists) {
-      void writer.update(state.ref, { dueAt: now });
+      writer.update(state.ref, { dueAt: now }).catch(() => undefined);
       return;
     }
-    void writer.set(state.ref, { ...newReworkState(uid), dueAt: now });
+    writer
+      .set(state.ref, { ...newReworkState(uid), dueAt: now })
+      .catch(() => undefined);
   });
   await writer.close();
   await marker.set({ engineVersion: ENGINE_VERSION, at: now });
@@ -124,7 +130,7 @@ export const drainRunwayReworks = onSchedule(
     region: 'us-central1',
     schedule: 'every 1 minutes',
     timeZone: 'UTC',
-    timeoutSeconds: 300,
+    timeoutSeconds: TIMEOUT_SECONDS,
     memory: '512MiB',
     maxInstances: 1,
     secrets: [RUNWAY_MASTER_KEYS],
@@ -146,17 +152,19 @@ export const drainRunwayReworks = onSchedule(
     const outcomes = await Array.from(
       { length: Math.ceil(uids.length / PARALLEL) },
       (_, index) => uids.slice(index * PARALLEL, (index + 1) * PARALLEL),
-    ).reduce<Promise<Outcome[]>>(
-      async (done, batch) => [
-        ...(await done),
+    ).reduce<Promise<Outcome[]>>(async (done, batch) => {
+      const before = await done;
+      if (Date.now() - now > START_BUDGET_MS) return before;
+      return [
+        ...before,
         ...(await Promise.all(
           batch.map((uid) => drainOne(firestore, keyring, uid)),
         )),
-      ],
-      Promise.resolve([]),
-    );
+      ];
+    }, Promise.resolve([]));
     logger.info('runway.rework.drained', {
       due: uids.length,
+      unstarted: uids.length - outcomes.length,
       ...Object.fromEntries(
         [...new Set(outcomes)].map((outcome) => [
           outcome,
