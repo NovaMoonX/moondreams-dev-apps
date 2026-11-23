@@ -29,7 +29,8 @@ import {
   computeEndsAt,
   findAttachTarget,
   findCancelTarget,
-  isPartialRefund,
+  ticketsLeftAfterRefund,
+  refundKey,
 } from './emailMatching.js';
 import {
   EMAIL_EVENT_KEEP_DAYS,
@@ -106,7 +107,16 @@ const READ_EXCERPT_MAX = 300;
 const keptText = (text: string, max: number) =>
   snippetOf(withoutEmailAddresses(withoutMemberDetails(text)), max);
 
-/** The event document for one email, with everything a handler didn't set left null. It keeps no member name, membership number or email address; a forwarding confirmation keeps no subject or text (its code and link live only on the intake document), and an email that was skipped keeps a subject and a short excerpt. */
+const AMC_DOMAIN = /(?:^|\.)amctheatres\.com$/;
+
+/** AMC's own sender address, or only the domain of anyone else's, so a forwarder's address is never kept. */
+const keptSender = (from: string) => {
+  const address = toAddress(from);
+  const domain = address.slice(address.lastIndexOf('@') + 1);
+  return AMC_DOMAIN.test(domain) ? address : domain;
+};
+
+/** The event document for one email, with everything a handler didn't set left null. It keeps no member name, membership number or email address (a sender other than AMC is kept as its domain); a forwarding confirmation keeps no subject or text (its code and link live only on the intake document), and an email that was skipped keeps a subject and a short excerpt. */
 function toEvent(
   { mail, eventId, now }: EmailHandlerInput,
   given: Pick<Written, 'outcome' | 'readBy'> & Partial<Written>,
@@ -119,7 +129,7 @@ function toEvent(
     id: eventId,
     receivedAt: mail.receivedAt,
     outcome: written.outcome,
-    from: toAddress(mail.from),
+    from: keptSender(mail.from),
     subject: isConfirmation ? '' : keptText(mail.subject, 300),
     snippet: isConfirmation
       ? ''
@@ -262,6 +272,8 @@ async function handleReservation(
           endsAt: computeEndsAt(place.showtimeAt, target.movie.runtimeMinutes),
           ...(isMoved ? { trailerReminderId: null } : {}),
           amcConfirmation: reading.confirmation,
+          amcTicketCount: reading.ticketCount,
+          amcRefundedOrders: null,
           emailEventId: input.eventId,
           lastEditedAt: now,
         });
@@ -297,6 +309,8 @@ async function handleReservation(
         rating: null,
         trailerReminderId: null,
         amcConfirmation: reading.confirmation,
+        amcTicketCount: reading.ticketCount,
+        amcRefundedOrders: null,
         emailEventId: input.eventId,
         createdAt: now,
         lastEditedAt: now,
@@ -365,10 +379,9 @@ async function handleCancellation(
           events.where('confirmation', '==', reading.confirmation).limit(50),
         ),
       ]);
-      const earlier = confirmed.docs.map((entry) => ({
-        outcome: entry.get('outcome') as string,
-        ticketCount: (entry.get('ticketCount') as number | null) ?? null,
-      }));
+      const isCanceledBefore = confirmed.docs.some(
+        (entry) => entry.get('outcome') === 'canceled',
+      );
       const target = findCancelTarget(
         uniqueById([...held.docs, ...nearby.docs].map(toViewing)),
         {
@@ -378,22 +391,41 @@ async function handleCancellation(
           showtimeAt: place.showtimeAt,
         },
       );
-      if (isPartialRefund(earlier, reading.refundedCount)) {
+      const key = refundKey(reading, input.mail.receivedAt);
+      const counted = target?.amcRefundedOrders ?? [];
+      if (target !== null && counted.includes(key)) {
+        transaction.create(
+          eventRef,
+          toEvent(input, {
+            ...base,
+            outcome: 'alreadyHandled',
+            viewingId: target.id,
+          }),
+        );
+        return { outcome: 'alreadyHandled', reminderId: null };
+      }
+      const left = ticketsLeftAfterRefund(
+        target?.amcTicketCount ?? null,
+        reading.refundedCount,
+      );
+      if (target !== null && left !== null) {
+        transaction.update(viewings.doc(target.id), {
+          amcTicketCount: left,
+          amcRefundedOrders: [...counted, key],
+        });
         transaction.create(
           eventRef,
           toEvent(input, {
             ...base,
             outcome: 'partlyCanceled',
-            viewingId: target?.id ?? null,
+            viewingId: target.id,
             ticketCount: reading.refundedCount,
           }),
         );
         return { outcome: 'partlyCanceled', reminderId: null };
       }
       if (target === null) {
-        const outcomeWhenGone: EmailOutcome = earlier.some(
-          (event) => event.outcome === 'canceled',
-        )
+        const outcomeWhenGone: EmailOutcome = isCanceledBefore
           ? 'alreadyHandled'
           : 'cancelNotFound';
         transaction.create(

@@ -22,6 +22,7 @@ Built:
 - [x] Saved AMC theaters, trailer picks around a showing, and a prototype for finding showtimes and buying tickets
 - [x] Savings summary, break-even status and a what-if projection
 - [x] Share links for a frozen copy of your calendar, with an optional PIN
+- [x] Tickets from forwarded AMC emails: reservations add showings and tickets, cancellations take them off, each undoable
 
 Next:
 - [ ] Dashboard views for formats, activity over time, ratings and spend, and premium formats

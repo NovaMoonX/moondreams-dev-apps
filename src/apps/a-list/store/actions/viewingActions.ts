@@ -105,6 +105,8 @@ export const addViewing = createAsyncThunk<
           rating: null,
           trailerReminderId,
           amcConfirmation: null,
+          amcTicketCount: null,
+          amcRefundedOrders: null,
           emailEventId: null,
           createdAt: now,
           lastEditedAt: now,

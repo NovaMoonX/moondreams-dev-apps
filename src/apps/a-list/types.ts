@@ -129,6 +129,10 @@ export interface Viewing {
   trailerReminderId: string | null;
   /** AMC's ticket confirmation number, from a forwarded reservation email; a cancellation email finds the showing by it. null when typed in; documents written before it lack the key. */
   amcConfirmation: string | null;
+  /** The tickets AMC's order still holds, from the reservation email and less each partial refund; null when typed in or written before it existed (a cancellation then takes the whole showing). */
+  amcTicketCount: number | null;
+  /** The refund emails already counted (an order number, else a key of confirmation, count and date), so a repeated email changes nothing. null when none, and on older documents. */
+  amcRefundedOrders: string[] | null;
   /** The forwarded email that added or priced this showing; null otherwise, and missing on older documents. */
   emailEventId: string | null;
   createdAt: number;
@@ -317,7 +321,7 @@ export interface AListEmailEvent {
   /** Instant the email arrived. */
   receivedAt: number;
   outcome: AListEmailOutcome;
-  /** The sender's address, lowercase. */
+  /** The sender's address, lowercase, when it is AMC's (amctheatres.com or a subdomain); otherwise only its domain, so a forwarder's own address is never kept. */
   from: string;
   subject: string;
   /** The start of the email's text with email addresses and member details removed, at most 300 characters (200 for an email that was skipped); empty for a forwarding confirmation. */

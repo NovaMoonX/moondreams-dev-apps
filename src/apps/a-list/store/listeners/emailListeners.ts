@@ -16,7 +16,7 @@ import type {
 } from '@/lib/emailForwarding/types';
 import type { AListEmailEvent } from '@apps/a-list/types';
 
-const EVENT_LIMIT = 30;
+const EVENT_LIMIT = 100;
 
 const memberPath = (uid: string) =>
   ['apps', 'a-list', 'memberships', uid] as const;

@@ -15,7 +15,8 @@ import {
   findAttachTarget,
   findCancelTarget,
   findUsualTaxRate,
-  isPartialRefund,
+  refundKey,
+  ticketsLeftAfterRefund,
   localShowtimeToEpoch,
   normalizeTheatreName,
   reconcileAmounts,
@@ -26,6 +27,7 @@ import {
   looksLikeAmcOrder,
   parseAmcEmail,
   withoutMemberDetails,
+  type AmcCancellation,
 } from '../../functions/src/apps/a-list/email/parseAmcEmail.ts';
 
 const readFixture = (name: string) => {
@@ -130,6 +132,7 @@ assert.deepEqual(parseAmcEmail(cancellation.text), {
   kind: 'cancellation',
   confirmation: '0134540696',
   orderNumber: '1275187838',
+  refundDate: '11/13/2026',
   title: 'How to Rob a Bank',
   showtimeLocal: local(2026, 11, 13, 18, 50),
   theatreName: 'AMC Chattanooga 18',
@@ -141,23 +144,62 @@ assert.deepEqual(parseAmcEmail(partial.text), {
   kind: 'cancellation',
   confirmation: '0188120457',
   orderNumber: '1275187999',
+  refundDate: '11/23/2026',
   title: 'Wicked: For Good',
   showtimeLocal: local(2026, 12, 6, 11, 5),
   theatreName: 'AMC Southlake 24',
   refundedCount: 1,
 });
-const twoTickets = [{ outcome: 'added', ticketCount: 2 }];
-assert.equal(isPartialRefund(twoTickets, 1), true, 'one of two refunded');
-assert.equal(isPartialRefund(twoTickets, 2), false, 'both refunded');
-assert.equal(isPartialRefund(twoTickets, null), false, 'no count given');
-assert.equal(isPartialRefund([], 1), false, 'no reservation recorded');
+assert.equal(ticketsLeftAfterRefund(2, 1), 1, 'one of two refunded');
+assert.equal(ticketsLeftAfterRefund(2, 2), null, 'both refunded');
 assert.equal(
-  isPartialRefund(
-    [...twoTickets, { outcome: 'partlyCanceled', ticketCount: 1 }],
-    1,
+  ticketsLeftAfterRefund(1, 1),
+  null,
+  'the last ticket is a full refund',
+);
+assert.equal(ticketsLeftAfterRefund(2, null), null, 'no count given');
+assert.equal(
+  ticketsLeftAfterRefund(null, 1),
+  null,
+  'no count held: the whole reservation',
+);
+
+const partialRead = parseAmcEmail(partial.text) as AmcCancellation;
+const duplicate = readFixture('cancellation-partial-duplicate');
+const duplicateRead = parseAmcEmail(duplicate.text) as AmcCancellation;
+assert.equal(refundKey(partialRead, 1), '1275187999', 'the order number');
+assert.equal(
+  refundKey(duplicateRead, 2),
+  refundKey(partialRead, 1),
+  'a second copy of the same refund email counts under the same key',
+);
+assert.equal(
+  refundKey({ ...partialRead, orderNumber: null }, 1),
+  '0188120457-1-11/23/2026',
+  'no order number: confirmation, count and refund date',
+);
+assert.equal(
+  refundKey(
+    { ...partialRead, orderNumber: null, refundDate: null },
+    Date.UTC(2026, 10, 23, 12),
   ),
-  false,
-  'the last ticket of a part-refunded order',
+  '0188120457-1-2026-11-23',
+  'no refund date: the day it arrived',
+);
+// A viewing holding 2 tickets keeps 1 after the first copy; the copy finds its key already counted.
+const afterFirst = {
+  amcTicketCount: ticketsLeftAfterRefund(2, partialRead.refundedCount),
+  amcRefundedOrders: [refundKey(partialRead, 1)],
+};
+assert.equal(afterFirst.amcTicketCount, 1, 'a partial refund keeps one');
+assert.ok(
+  afterFirst.amcRefundedOrders.includes(refundKey(duplicateRead, 2)),
+  'a duplicate partial refund is already handled',
+);
+assert.equal(
+  ticketsLeftAfterRefund(afterFirst.amcTicketCount, partialRead.refundedCount),
+  null,
+  'a different refund of the last ticket removes the showing',
 );
 
 const marketing = readFixture('marketing');
@@ -219,6 +261,38 @@ assert.ok(
     assert.ok(!prompt.includes(secret), `private detail sent to AI: ${secret}`),
   );
 });
+
+const unknown = readFixture('unknown-layout');
+assert.equal(
+  parseAmcEmail(unknown.text),
+  null,
+  'an unknown layout is not read by pattern',
+);
+const unknownPrompt = prepareAiPrompt(unknown.subject, unknown.text);
+['Stephon', 'Ricks', '1101 0005 5080 8436', '1101000550808436'].forEach(
+  (secret) =>
+    assert.ok(
+      !unknownPrompt.includes(secret),
+      `unknown layout: private detail sent to AI: ${secret}`,
+    ),
+);
+assert.ok(
+  unknownPrompt.includes('Focker In-Law'),
+  'unknown layout: the title stays',
+);
+assert.ok(
+  unknownPrompt.includes('0195443676'),
+  'unknown layout: the confirmation stays',
+);
+const subjectTitle = prepareAiPrompt(
+  'Wicked Wonders',
+  'Wicked Wonders\nPat Jones\nAMC Park Place 16',
+);
+assert.ok(
+  subjectTitle.includes('Wicked Wonders\n') &&
+    !subjectTitle.includes('Pat Jones'),
+  'a title line the subject holds is kept, a name line is not',
+);
 
 const chicago = 'America/Chicago';
 assert.equal(
@@ -484,6 +558,23 @@ assert.equal(
   0.07,
   'another theater: the most recent rate anywhere',
 );
+assert.equal(
+  findUsualTaxRate([tax(0.07, 1), tax(0.07, 2), tax(0.08, 9)], park),
+  0.07,
+  'the most-used rate beats the most recent',
+);
+assert.equal(
+  findUsualTaxRate(
+    [
+      tax(0.07, 1, { ...park, theatreId: '9', name: 'AMC Elsewhere 8' }),
+      tax(0.07, 2, { ...park, theatreId: '9', name: 'AMC Elsewhere 8' }),
+      tax(0.09, 3, { ...park, theatreId: '8', name: 'AMC Other 4' }),
+    ],
+    park,
+  ),
+  0.07,
+  'another theater: the most-used rate anywhere',
+);
 assert.equal(findUsualTaxRate([], park), null, 'no ticket at all');
 
 const proton = {
@@ -520,5 +611,5 @@ assert.equal(
 );
 
 console.log(
-  `a-list email parse: ${reservations.length + 5} fixtures and the pricing and matching rules ok`,
+  `a-list email parse: ${reservations.length + 7} fixtures and the pricing and matching rules ok`,
 );

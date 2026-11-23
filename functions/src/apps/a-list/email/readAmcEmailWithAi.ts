@@ -92,7 +92,10 @@ const KINDS: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
 /** The prompt handed to the AI: the subject and text without the member's name, membership number or any email address. */
 export const prepareAiPrompt = (subject: string, text: string) =>
   withoutEmailAddresses(
-    withoutMemberDetails(`Subject: ${subject.slice(0, 300)}\n\n${text}`),
+    withoutMemberDetails(
+      `Subject: ${subject.slice(0, 300)}\n\n${text}`,
+      subject,
+    ),
   ).slice(0, MAX_TEXT);
 
 /**
@@ -133,6 +136,7 @@ export async function readAmcEmailWithAi({
         kind: 'cancellation',
         confirmation,
         orderNumber: asDigits(answer.orderNumber),
+        refundDate: null,
         title,
         showtimeLocal,
         theatreName,

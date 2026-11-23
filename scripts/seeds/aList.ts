@@ -324,15 +324,25 @@ const SEED_TICKETS: Record<string, Ticket> = {
 // Showings that came from a forwarded AMC email: a new one (added) and a ticket put on one already planned (attached).
 const SEED_EMAIL_VIEWINGS: Record<
   string,
-  { amcConfirmation: string; emailEventId: string }
+  {
+    amcConfirmation: string;
+    amcTicketCount: number;
+    emailEventId: string;
+    /** When the server handled the email, which is also the showing's last edit, so Undo is still open. */
+    handledHoursAgo: number;
+  }
 > = {
   'seed-viewing-galaxy': {
     amcConfirmation: '0195443676',
+    amcTicketCount: 1,
     emailEventId: 'seed-email-added',
+    handledHoursAgo: 2,
   },
   'seed-viewing-dayahead8-1': {
     amcConfirmation: '0195443701',
+    amcTicketCount: 2,
     emailEventId: 'seed-email-attached',
+    handledHoursAgo: 5,
   },
 };
 
@@ -440,6 +450,12 @@ function getViewingFixtures(now: number) {
           60_000;
       // An ended showing marked `awaiting` stays planned, so the Seen prompt has something to ask about.
       const status = endsAt <= now && !awaiting ? 'SEEN' : 'PLANNED';
+      const { handledHoursAgo, ...emailed } = SEED_EMAIL_VIEWINGS[id] ?? {
+        handledHoursAgo: null,
+        amcConfirmation: null,
+        amcTicketCount: null,
+        emailEventId: null,
+      };
       return {
         id,
         movieKey,
@@ -451,7 +467,8 @@ function getViewingFixtures(now: number) {
         trailerReminderId:
           id === PREVIEWS_VIEWING_ID ? PREVIEWS_REMINDER_ID : null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
-        ...(SEED_EMAIL_VIEWINGS[id] ?? {}),
+        amcRefundedOrders: null,
+        ...emailed,
         ...(SEED_PURCHASES[id] ? { purchase: SEED_PURCHASES[id] } : {}),
         ...(SEED_VIEWING_THEATRES[id] === undefined
           ? {}
@@ -461,7 +478,10 @@ function getViewingFixtures(now: number) {
               ),
             }),
         createdAt: Math.min(now, showtimeAt),
-        lastEditedAt: Math.min(now, showtimeAt),
+        lastEditedAt:
+          handledHoursAgo === null
+            ? Math.min(now, showtimeAt)
+            : now - handledHoursAgo * HOUR_MS,
       };
     },
   );
@@ -520,9 +540,23 @@ async function writeSeedEmail(
     rating: null,
     trailerReminderId: null,
     amcConfirmation: '0195443512',
+    amcTicketCount: 1,
+    amcRefundedOrders: null,
     emailEventId: 'seed-email-canceled',
     createdAt: at(30),
     lastEditedAt: at(30),
+  };
+  const priorMatrix: Viewing = {
+    ...matrix,
+    status: 'PLANNED',
+    theatre: matrix.theatre ?? null,
+    purchase: null,
+    ticket: null,
+    amcConfirmation: null,
+    amcTicketCount: null,
+    amcRefundedOrders: null,
+    emailEventId: null,
+    lastEditedAt: matrix.createdAt,
   };
   const base = {
     from: 'receipts@amctheatres.com',
@@ -569,6 +603,7 @@ async function writeSeedEmail(
       theatreName: 'AMC Town Center 20',
       confirmation: '0195443701',
       ticketCount: 2,
+      priorViewing: priorMatrix,
     },
     {
       ...base,
@@ -623,7 +658,7 @@ async function writeSeedEmail(
       receivedAt: at(24 * 12),
       outcome: 'confirm',
       readBy: null,
-      from: 'forwarding-noreply@google.com',
+      from: 'google.com',
       subject: 'Gmail Forwarding Confirmation',
       snippet:
         'alex@example.test has requested to automatically forward mail to your email address.',

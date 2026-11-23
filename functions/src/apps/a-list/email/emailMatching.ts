@@ -164,37 +164,66 @@ export function reconcileAmounts({
   return { priceCents: emailPriceCents, taxCents: usual(emailPriceCents) };
 }
 
-/** The usual tax rate at a theater: the most recent ticket there that has one, else the most recent ticket anywhere. */
+/** The most-used rate among tickets, a tie going to the most recent one; null when none has a rate. */
+const mostUsedRate = (
+  viewings: Pick<Viewing, 'showtimeAt' | 'ticket'>[],
+): number | null => {
+  const taxed = viewings
+    .filter((viewing) => typeof viewing.ticket?.taxRate === 'number')
+    .sort((left, right) => right.showtimeAt - left.showtimeAt);
+  const counts = taxed.reduce(
+    (tally, viewing) =>
+      tally.set(
+        viewing.ticket?.taxRate as number,
+        (tally.get(viewing.ticket?.taxRate as number) ?? 0) + 1,
+      ),
+    new Map<number, number>(),
+  );
+  const most = Math.max(0, ...counts.values());
+  return (
+    taxed.find(
+      (viewing) => counts.get(viewing.ticket?.taxRate as number) === most,
+    )?.ticket?.taxRate ?? null
+  );
+};
+
+/** The usual tax rate at a theater: the rate most used there, else the rate most used anywhere; a tie goes to the most recent ticket. */
 export function findUsualTaxRate(
   viewings: Pick<Viewing, 'showtimeAt' | 'ticket' | 'theatre'>[],
   theatre: { theatreId: string; name: string },
 ): number | null {
-  const taxed = viewings
-    .filter((viewing) => typeof viewing.ticket?.taxRate === 'number')
-    .sort((left, right) => right.showtimeAt - left.showtimeAt);
-  const recent =
-    taxed.find((viewing) => isSameTheatre(viewing, theatre)) ?? taxed[0];
-  return recent?.ticket?.taxRate ?? null;
+  return (
+    mostUsedRate(
+      viewings.filter((viewing) => isSameTheatre(viewing, theatre)),
+    ) ?? mostUsedRate(viewings)
+  );
 }
 
-/** Whether a refund covers only part of what the member still holds: the tickets the reservations recorded, less those already refunded in part. */
-export function isPartialRefund(
-  events: { outcome: string; ticketCount: number | null }[],
+/** The tickets an order still holds after a refund that covers only part of them; null when the refund is the whole order, or the count is unknown (a showing typed in, or older: the cancellation then takes the whole reservation). */
+export const ticketsLeftAfterRefund = (
+  heldCount: number | null,
   refundedCount: number | null,
-): boolean {
-  if (refundedCount === null) return false;
-  const total = (outcomes: string[]) =>
-    events
-      .filter((event) => outcomes.includes(event.outcome))
-      .reduce((sum, event) => sum + (event.ticketCount ?? 0), 0);
-  const held = Math.max(
-    ...events
-      .filter((event) => ['added', 'attached'].includes(event.outcome))
-      .map((event) => event.ticketCount ?? 0),
-    0,
-  );
-  return held - total(['partlyCanceled']) > refundedCount;
-}
+) =>
+  heldCount !== null && refundedCount !== null && heldCount > refundedCount
+    ? heldCount - refundedCount
+    : null;
+
+/** The key a refund email is counted under once: AMC's order number, else the confirmation with the count and refund date. */
+export const refundKey = (
+  refund: {
+    orderNumber: string | null;
+    confirmation: string;
+    refundedCount: number | null;
+    refundDate: string | null;
+  },
+  receivedAt: number,
+) =>
+  refund.orderNumber ??
+  [
+    refund.confirmation,
+    refund.refundedCount ?? 'all',
+    refund.refundDate ?? new Date(receivedAt).toISOString().slice(0, 10),
+  ].join('-');
 
 /** An itemized ticket whose parts add up to its total; null when nothing prices it. */
 export function buildTicket({

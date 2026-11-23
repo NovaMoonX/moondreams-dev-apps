@@ -32,6 +32,8 @@ export interface AmcCancellation {
   kind: 'cancellation';
   confirmation: string;
   orderNumber: string | null;
+  /** The refund date as the email prints it ("11/23/2026"); null when it prints none. */
+  refundDate: string | null;
   title: string;
   showtimeLocal: LocalShowtime;
   theatreName: string;
@@ -202,6 +204,8 @@ function readCancellation(text: string): AmcCancellation | null {
     kind: 'cancellation',
     confirmation: found.digits,
     orderNumber: /Order Number:\s*(\d{6,12})/i.exec(text)?.[1] ?? null,
+    refundDate:
+      /Refund Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i.exec(text)?.[1] ?? null,
     title: showing.title,
     showtimeLocal: showing.showtimeLocal,
     theatreName: showing.theatreName,
@@ -225,8 +229,13 @@ const names = (text: string) =>
   Array.from(
     new Set(
       [
-        /Member Name:\s*([^\n]+)/i.exec(text)?.[1],
-        /^\s*([A-Z][A-Za-z'-]+),\s+below/m.exec(text)?.[1],
+        /^[ \t>]*(?:(?:member|full|guest) )?name\s*:\s*([^\n]+)/im.exec(
+          text,
+        )?.[1],
+        /^\s*(?:Hi|Hello|Hey|Dear)\s+([A-Z][A-Za-z'’-]+)\s*[,!:]/m.exec(
+          text,
+        )?.[1],
+        /^\s*([A-Z][A-Za-z'’-]+),\s+below/m.exec(text)?.[1],
       ].flatMap((name) =>
         name === undefined
           ? []
@@ -240,11 +249,25 @@ const names = (text: string) =>
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The email's text without the membership block, the member's name or any long number, for the short excerpt an event keeps. */
-export function withoutMemberDetails(text: string) {
+const STANDALONE_NAME_LINE =
+  /^[ \t]*[A-Z][a-z'’-]+(?: [A-Z][a-z'’-]+){1,2}[ \t]*$/gm;
+const GROUPED_DIGITS = /\b\d{3,}(?:[ -]\d{3,})+\b/g;
+
+/**
+ * The email's text without the membership block, the member's name or any long number, for the short excerpt an event keeps and the prompt the AI gets.
+ * It does not rely on AMC's layout: any name line, greeting or line that is only two or three capitalised words goes, except a line the subject also holds (a title), and so does any run of twelve or more digits, grouped or not.
+ */
+export function withoutMemberDetails(text: string, subject = '') {
+  const keptSubject = subject.toLowerCase();
   const stripped = text
     .replace(/AMC Stubs Details[\s\S]*?(?=\bSummary\b|$)/i, ' ')
-    .replace(/Member Name:[^\n]*/gi, ' ')
+    .replace(/^[ \t>]*(?:(?:member|full|guest) )?name\s*:[^\n]*/gim, ' ')
+    .replace(STANDALONE_NAME_LINE, (line) =>
+      keptSubject.includes(line.trim().toLowerCase()) ? line : ' ',
+    )
+    .replace(GROUPED_DIGITS, (run) =>
+      run.replace(/\D/g, '').length >= 12 ? ' ' : run,
+    )
     .replace(/\b\d{12,}\b/g, ' ');
   return names(text).reduce(
     (kept, name) =>

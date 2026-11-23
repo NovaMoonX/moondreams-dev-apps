@@ -167,6 +167,7 @@ export const undoEmailEvent = createAsyncThunk<
         result: UndoResult;
         reminder: string | null;
         showtimeAt: number;
+        priorReminderId?: string | null;
       }> => {
         const eventSnapshot = await transaction.get(eventSnapshotRef);
         if (!eventSnapshot.exists()) throw new Error('This email is gone.');
@@ -240,20 +241,33 @@ export const undoEmailEvent = createAsyncThunk<
         }
         const prior = event.priorViewing;
         if (prior !== null) {
+          const needsFreshReminder =
+            prior.trailerReminderId != null &&
+            stored.trailerReminderId == null &&
+            isTrailerReminderAhead(prior.showtimeAt);
+          const priorReminderId = needsFreshReminder
+            ? newTrailerReminderId(prior.showtimeAt)
+            : null;
           transaction.set(viewingRef, {
             ...prior,
-            trailerReminderId: stored.trailerReminderId ?? null,
+            amcTicketCount: prior.amcTicketCount ?? null,
+            amcRefundedOrders: prior.amcRefundedOrders ?? null,
+            trailerReminderId:
+              priorReminderId ?? stored.trailerReminderId ?? null,
             lastEditedAt: Date.now(),
           });
           return {
             result: 'cleared',
             reminder: null,
             showtimeAt: prior.showtimeAt,
+            priorReminderId,
           };
         }
         transaction.update(viewingRef, {
           ticket: null,
           amcConfirmation: null,
+          amcTicketCount: null,
+          amcRefundedOrders: null,
           emailEventId: null,
           lastEditedAt: Date.now(),
         });
@@ -272,16 +286,21 @@ export const undoEmailEvent = createAsyncThunk<
       void cancelTrailerReminder(outcome.reminder);
     }
     const removed = event.removedViewing;
-    if (outcome.result === 'restored' && removed !== null) {
-      if (restoredReminderId) {
-        void scheduleTrailerReminder({
-          uid,
-          reminderId: restoredReminderId,
-          viewingId: removed.id,
-          movieTitle: removed.movie.title,
-          showtimeAt: removed.showtimeAt,
-        });
-      }
+    const reinstated = outcome.result === 'restored' ? removed : null;
+    const restoredPrior =
+      outcome.result === 'cleared' ? event.priorViewing : null;
+    const reminded = reinstated ?? restoredPrior;
+    const reminderId = reinstated
+      ? restoredReminderId
+      : (outcome.priorReminderId ?? null);
+    if (reminded !== null && reminderId) {
+      void scheduleTrailerReminder({
+        uid,
+        reminderId,
+        viewingId: reminded.id,
+        movieTitle: reminded.movie.title,
+        showtimeAt: reminded.showtimeAt,
+      });
     }
     return outcome.result;
   } catch (error) {

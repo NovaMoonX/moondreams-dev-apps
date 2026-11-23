@@ -31,7 +31,7 @@ export const EMAIL_TICKETS_WORDS: EmailForwardingWords = {
   senderAddressPlaceholder: 'name@amctheatres.com',
   gmailSubjectWords: [],
   otherMailLine:
-    'A-List only reads AMC’s ticket emails and keeps just the subject and a few lines of anything else, for 30 days, so you can filter it out.',
+    'A-List only reads AMC’s ticket emails. For anything else it keeps the sender’s domain, the subject and a few lines, for 30 days, so you can filter it out.',
   copyLine:
     'Forward AMC’s reservation and cancellation emails here and your calendar keeps up. AMC’s offers and other mail are skipped, so a filter on the sender alone is enough.',
   testLine:

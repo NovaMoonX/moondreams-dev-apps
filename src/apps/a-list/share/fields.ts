@@ -61,6 +61,8 @@ const VIEWING_FIELDS = {
   rating: 'shared',
   trailerReminderId: 'notUseful',
   amcConfirmation: 'never',
+  amcTicketCount: 'never',
+  amcRefundedOrders: 'never',
   emailEventId: 'notUseful',
   createdAt: 'notUseful',
   lastEditedAt: 'shared',

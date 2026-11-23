@@ -35,6 +35,8 @@ export interface Viewing {
   rating: number | null;
   trailerReminderId: string | null;
   amcConfirmation: string | null;
+  amcTicketCount: number | null;
+  amcRefundedOrders: string[] | null;
   emailEventId: string | null;
   createdAt: number;
   lastEditedAt: number;

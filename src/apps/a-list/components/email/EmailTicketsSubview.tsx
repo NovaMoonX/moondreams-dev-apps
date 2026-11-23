@@ -125,6 +125,7 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
   const intake = useAppSelector(selectEmailIntake);
   const progress = useAppSelector(selectEmailProgress);
   const events = useAppSelector(selectEmailEvents);
+  const loadError = useAppSelector(selectEmailLoadError);
   const isFinishWritten = useRef(false);
   // Stays in the walk until the member presses Done, even once setup is written as done on its own.
   const [isWalking, setIsWalking] = useState(progress?.doneAt == null);
@@ -144,7 +145,8 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
       ?.receivedAt ?? null;
   const hasStrayEmail = events.some(
     (entry) =>
-      entry.outcome === 'notTicket' && !entry.from.endsWith('amctheatres.com'),
+      entry.outcome === 'notTicket' &&
+      !/(^|[@.])amctheatres\.com$/.test(entry.from),
   );
 
   useEffect(() => {
@@ -247,6 +249,11 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
               )}
             </div>
             {intake !== null && <EmailAddressRow address={intake.address} />}
+            {loadError !== null && (
+              <p className='text-destructive text-sm' role='alert'>
+                Couldn’t load your emails. Try again in a moment.
+              </p>
+            )}
             {error && (
               <p className='text-destructive text-sm' role='alert'>
                 {error}
