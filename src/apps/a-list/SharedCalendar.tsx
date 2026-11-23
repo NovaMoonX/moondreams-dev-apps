@@ -234,7 +234,7 @@ function CalendarView({ calendar, extra }: { calendar: SharedCalendarData; extra
         <p className='text-muted-foreground text-sm'>
           {isLive
             ? '📡 Live · updates as plans change'
-            : `Snapshot from ${formatDate(calendar.createdAt)} · ${getShareRangeLabel(calendar)}`}
+            : `Snapshot taken ${formatDate(calendar.createdAt)} · ${getShareRangeLabel(calendar)}`}
           {!isLive && movieCount > 0 && ` · ${countMovies(movieCount)}`}
         </p>
       </div>

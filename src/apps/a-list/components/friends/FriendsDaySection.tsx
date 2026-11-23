@@ -55,7 +55,7 @@ function getSourceTags(showings: FriendShowing[]) {
     .map(({ name, snapshotAt }) =>
       snapshotAt === null
         ? `${name}: Live`
-        : `${name}: Snapshot from ${formatDate(snapshotAt)}`,
+        : `${name}: Snapshot taken ${formatDate(snapshotAt)}`,
     )
     .join(' · ');
   return result;
