@@ -130,6 +130,15 @@ def main():
             check(f'{path} delete [{a}]', commit(tok, [rm(full)]), is_o and 'delete' in ops)
     admin([rm(f'{base}/emailSetup/progress'), rm(f'{base}/emailSetup/other')])
 
+    # Undo may set undoneAt and nothing else on an event.
+    ev = f'{base}/emailEvents/ev-1'
+    ev_doc = dict(id='ev-1', outcome='added', undoneAt=None)
+    for a, tok in actors.items():
+        admin([put(ev, ev_doc)])
+        check(f'emailEvents undoneAt only [{a}]', commit(tok, [put(ev, dict(ev_doc, undoneAt=NOW))]), a == 'o')
+        check(f'emailEvents undoneAt and outcome [{a}]', commit(tok, [put(ev, dict(ev_doc, undoneAt=NOW, outcome='canceled'))]), False)
+    admin([rm(ev)])
+
     # Another member's data is never the owner's to touch.
     theirs = f'apps/a-list/memberships/{x_uid}/emailEvents/ev-1'
     admin([put(theirs, dict(id='ev-1'))])
