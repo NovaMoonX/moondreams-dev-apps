@@ -36,7 +36,7 @@ export interface ItemRowReorder {
 
 interface ItemRowProps {
   name: string;
-  /** A small mark after the name, inside its line clamp (an envelope on an emailed purchase). */
+  /** A small mark after the name, inside its line clamp (an envelope on an emailed purchase), kept on the last word so it never wraps alone. */
   nameMark?: ReactNode;
   emoji?: string | null;
   /** Replaces the badge (a date chip on an income day). */
@@ -204,8 +204,17 @@ function ItemRow({
   const nameLine = (
     <span className='block min-w-0 font-medium break-words'>
       <span className='line-clamp-2'>
-        {name}
-        {nameMark}
+        {nameMark ? (
+          <>
+            {name.slice(0, name.lastIndexOf(' ') + 1)}
+            <span className='whitespace-nowrap'>
+              {name.slice(name.lastIndexOf(' ') + 1)}
+              {nameMark}
+            </span>
+          </>
+        ) : (
+          name
+        )}
       </span>
     </span>
   );

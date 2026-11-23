@@ -60,10 +60,20 @@ export const selectEmailOverdue = createSelector(
 
 export const selectEmailIntake = (state: RootState) => state.runway.emailIntake;
 
-/** Newest first. */
 export const selectEmailSetup = (state: RootState) => state.runway.emailSetup;
 
+/** Newest first. */
 export const selectEmailEvents = (state: RootState) => state.runway.emailEvents;
+
+export const selectIsEmailEventsLoaded = (state: RootState) =>
+  state.runway.isEmailEventsLoaded;
+
+/** The ids of every purchase the plan has open, for a link that must not point at one that is gone. */
+export const selectPurchaseIds = createSelector(
+  [selectAllPurchases],
+  (purchases): ReadonlySet<string> =>
+    new Set(purchases.map((purchase) => purchase.id)),
+);
 
 export const selectEmailFilters = (state: RootState) =>
   state.runway.emailFilters;

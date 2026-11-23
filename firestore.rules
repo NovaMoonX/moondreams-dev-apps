@@ -552,7 +552,7 @@ service cloud.firestore {
     // started at their bank) is created and deleted by the app, never changed. A purchase read from an email
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
     // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
-    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and step, nothing sensitive) is created and updated by the app, never deleted.
+    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and furthest step, nothing sensitive) is created and updated by the app, never deleted.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)

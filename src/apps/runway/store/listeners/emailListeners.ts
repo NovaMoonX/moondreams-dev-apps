@@ -214,7 +214,7 @@ export function startEmailFiltersListener(
 
 export interface OpenEmailSetup {
   provider: EmailSetupDoc['provider'];
-  step: number;
+  stepId: EmailSetupDoc['stepId'];
   doneAt: number | null;
 }
 
@@ -235,7 +235,7 @@ export function startEmailSetupListener(
           ? null
           : {
               provider: data.provider ?? null,
-              step: typeof data.step === 'number' ? data.step : 0,
+              stepId: data.stepId ?? null,
               doneAt: data.doneAt ?? null,
             },
       );

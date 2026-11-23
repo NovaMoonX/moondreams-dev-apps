@@ -89,7 +89,7 @@ export async function setEmailWaiting(
 }
 
 export type EmailSetupChange = Partial<
-  Pick<EmailSetupDoc, 'provider' | 'step' | 'doneAt'>
+  Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt'>
 >;
 
 /** Writes the walkthrough's progress from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
@@ -109,7 +109,7 @@ export async function saveEmailSetup(
     transaction.set(ref, {
       id: 'progress',
       provider: current?.provider ?? null,
-      step: current?.step ?? 0,
+      stepId: current?.stepId ?? null,
       doneAt: current?.doneAt ?? null,
       createdAt: current?.createdAt ?? now,
       ...change,

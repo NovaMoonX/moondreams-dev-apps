@@ -1,7 +1,6 @@
-import type { EmailProvider } from '@apps/runway/types';
+import type { EmailProvider, EmailSetupStepId } from '@apps/runway/types';
 
-export type EmailSetupStepId =
-  'provider' | 'copy' | 'forwarding' | 'rule' | 'confirm' | 'filter' | 'test';
+export type { EmailSetupStepId };
 
 /** The walkthrough's steps for a provider, in order; the first is always the provider question. A provider that caught no confirmation (Other) has no confirm step until one arrives. */
 export function getEmailSetupSteps(

@@ -4901,7 +4901,7 @@ async function writeSeedEmail(
   batch.set(context.firestore.doc(`${plan}/emailSetup/progress`), {
     id: 'progress',
     provider: 'gmail',
-    step: 5,
+    stepId: 'test',
     doneAt: context.now - DAY_MS,
     createdAt: context.now - 12 * DAY_MS,
     updatedAt: context.now - DAY_MS,

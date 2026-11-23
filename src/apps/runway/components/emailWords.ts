@@ -4,8 +4,8 @@ import type {
   EmailProvider,
 } from '@apps/runway/types';
 
-export const EMAIL_FILTER_TEXT =
-  'from:(alerts@yourbank.com) subject:(purchase OR charge OR transaction OR spent OR alert)';
+export const buildGmailFilterText = (address: string) =>
+  `from:(${address}) subject:(purchase OR charge OR transaction OR spent OR alert)`;
 export const GMAIL_FILTERS_URL =
   'https://mail.google.com/mail/u/0/#settings/filters';
 export const GMAIL_FORWARDING_URL =
@@ -47,6 +47,7 @@ export const EMAIL_WORDS = {
   openPurchase: 'Open the purchase',
   readOnPattern: 'Read from a known layout',
   readByAi: 'Read by AI',
+  fromEmail: 'From email',
   fromSender: 'From this sender',
   withSubject: 'With this subject',
   suggestionsCaption: 'Suggestions',
@@ -141,7 +142,7 @@ export const EMAIL_SETUP_WORDS = {
     gmail: 'Also Google Workspace',
     outlook: 'Also Hotmail and Live',
     icloud: 'Apple Mail',
-    yahoo: 'Yahoo Mail',
+    yahoo: 'Needs Yahoo Mail Plus',
     other: 'Any email that can forward',
   } satisfies Record<EmailProvider, string>,
   providerLabels: {
@@ -155,35 +156,35 @@ export const EMAIL_SETUP_WORDS = {
   copyLine:
     'Only you can see it. Your bank’s alerts forwarded here become purchases.',
   copyLabel: 'Copy address',
-  yahooNote:
-    'Yahoo forwards all your mail; Runway skips anything that isn’t a bank alert without reading it.',
   gmailForwardingTitle: 'Add it as a forwarding address',
   gmailForwardingLines: [
     'In Gmail’s forwarding settings, choose “Add a forwarding address” and paste your address.',
     'Don’t turn on forwarding of all mail; the filter does that.',
   ],
   gmailForwardingLink: 'Open Gmail forwarding settings',
-  yahooForwardingTitle: 'Turn on auto-forwarding',
+  yahooForwardingTitle: 'Turn on forwarding',
   yahooForwardingLines: [
-    'In Yahoo Mail, go to Settings → More settings → Mailboxes → your mailbox → Auto-forwarding.',
+    'In Yahoo Mail, go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address.',
     'Paste your address and press Verify.',
+    'Yahoo forwards all your mail; Runway skips anything that isn’t a bank alert without reading it.',
   ],
   yahooForwardingLink: 'Open Yahoo Mail',
   outlookRuleTitle: 'Make a rule for your bank’s alerts',
-  outlookRuleLines: [
-    'When it’s from your bank’s alert address, choose Forward to and paste your address.',
-  ],
+  outlookRuleLine: (address: string | null) =>
+    `When it’s from ${address ?? 'your bank’s alert address'}, choose Forward to and paste your address.`,
   outlookRuleLink: 'Open Outlook rules',
   icloudRuleTitle: 'Make a rule for your bank’s alerts',
-  icloudRuleLines: [
-    'In iCloud Mail, go to Settings → Rules. When it’s from your bank’s alert address, forward it to your address.',
-  ],
+  icloudRuleLine: (address: string | null) =>
+    `In iCloud Mail, go to Settings → Rules. When it’s from ${address ?? 'your bank’s alert address'}, forward it to your address.`,
   icloudRuleLink: 'Open iCloud Mail',
   otherRuleTitle: 'Set up forwarding',
-  otherRuleLines: [
-    'In your email’s settings, forward to your Runway address.',
-    'A rule or filter for only your bank’s alerts works best.',
-  ],
+  otherRuleLine: (address: string | null) =>
+    address === null
+      ? 'In your email’s settings, forward to your Runway address. A rule or filter for only your bank’s alerts works best.'
+      : `In your email’s settings, make a rule that forwards mail from ${address} to your Runway address.`,
+  alertAddressLead: 'Open one of your bank’s alerts and copy its From address.',
+  alertAddressLabel: 'Your bank’s alert address',
+  alertAddressPlaceholder: 'alerts@yourbank.com',
   confirmTitle: 'Confirm the forwarding address',
   confirmWaiting: (provider: EmailProvider) =>
     provider === 'other'
@@ -194,6 +195,15 @@ export const EMAIL_SETUP_WORDS = {
       ? 'Confirm forwarding'
       : `Confirm with ${EMAIL_PROVIDER_NAMES[provider]}`,
   confirmed: 'Confirmed',
+  confirmFirst: (provider: EmailProvider) =>
+    `${EMAIL_PROVIDER_NAMES[provider]} won’t forward until you confirm.`,
+  didntArrive: 'Didn’t arrive?',
+  didntArriveLines: (provider: EmailProvider) => [
+    'Check that you pasted the address exactly.',
+    provider === 'other'
+      ? 'Send the confirmation again from your email’s forwarding settings.'
+      : `Send it again from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
+  ],
   linkFailed: 'Link didn’t work?',
   codeLine: (provider: EmailProvider) =>
     provider === 'other'
@@ -201,20 +211,27 @@ export const EMAIL_SETUP_WORDS = {
       : `Enter this code in ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings`,
   copyCode: 'Copy code',
   filterTitle: 'Only forward your bank’s alerts',
-  filterLines: [
-    'Make a filter with this text, then choose “Forward it to” and pick your address.',
-  ],
-  filterHint: 'Swap in the address your bank’s alerts come from.',
+  filterPaste:
+    'Paste it in Gmail’s search box, then choose Create filter → Forward it to → your Runway address.',
+  filterNeedAddress: 'Type the address first',
   filterLabel: 'Copy filter text',
   filterLink: 'Open Gmail filters',
   testTitle: 'Try it with one alert',
   testLine: 'Forward one bank alert to your address.',
   testWaiting: 'Waiting for your first alert…',
+  finishLater: 'Finish later',
+  notArriving: 'Not arriving?',
+  notArrivingLines: [
+    'Forwarding is confirmed.',
+    'The filter or rule forwards to your Runway address.',
+    'The alert’s From address matches the one you typed.',
+    'It can take a minute.',
+  ],
   testDone: 'It worked. Your first purchase is in.',
   noFilterNotice:
-    'Other emails are reaching Runway and are skipped unread. Finish the filter step so only your bank’s alerts come here.',
+    'Other emails might be reaching Runway; they’re skipped unread. Finish the filter step so only your bank’s alerts come here.',
   noFilterButton: 'Go to that step',
-  working: 'Working',
+  noEmailsYet: 'No emails yet',
   workingSince: (when: string) => `Working · last email ${when}`,
   addressRow: 'Your address',
   setUpAgain: 'Set it up again',

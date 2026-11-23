@@ -17,6 +17,7 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useAppSelector } from '@/store';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
 import {
@@ -24,6 +25,7 @@ import {
   describeEmailOutcome,
 } from '@apps/runway/components/emailWords';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import { selectPurchaseIds } from '@apps/runway/store/selectors/emailSelectors';
 import type { EmailEventRead } from '@apps/runway/hooks/useEmailPurchases';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { EmailOutcome } from '@apps/runway/types';
@@ -47,6 +49,7 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { closeMoreEntry, showTab, openPurchase } = useRunwayUrlState();
+  const purchaseIds = useAppSelector(selectPurchaseIds);
 
   if (isFiltering) {
     return (
@@ -56,6 +59,8 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
 
   const OutcomeIcon = OUTCOME_ICONS[event.outcome];
   const isLong = event.snippet.length > 240;
+  const hasPurchase =
+    event.purchaseId !== null && purchaseIds.has(event.purchaseId);
 
   return (
     <FormSheet
@@ -110,7 +115,7 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
             <blockquote className='border-border bg-muted/60 border-l-4 px-3 py-2 text-sm'>
               <p
                 className={join(
-                  'text-muted-foreground break-words whitespace-pre-line',
+                  'break-words whitespace-pre-line',
                   isLong && !isExpanded && 'line-clamp-6',
                 )}
               >
@@ -129,9 +134,9 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
             )}
           </div>
         )}
-        {(event.purchaseId !== null || event.outcome !== 'filtered') && (
+        {(hasPurchase || event.outcome !== 'filtered') && (
           <ActionGroup isRoomy>
-            {event.purchaseId !== null && (
+            {hasPurchase && (
               <ActionRow
                 isGrouped
                 isRoomy

@@ -1258,12 +1258,15 @@ export interface EmailIntakeSealed {
 
 export type EmailProvider = 'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'other';
 
+export type EmailSetupStepId =
+  'provider' | 'copy' | 'forwarding' | 'rule' | 'confirm' | 'filter' | 'test';
+
 /** How far the person got setting up forwarding, written by the app so a walkthrough resumes on any device; one per plan, at `emailSetup/progress`. Holds no amounts or merchants, so it is not sealed. */
 export interface EmailSetupDoc {
   id: 'progress';
   provider: EmailProvider | null;
-  /** Index of the furthest step reached; 0 is the provider question. */
-  step: number;
+  /** The furthest step reached, by id so a provider's list can change without moving it; null before a provider is chosen. */
+  stepId: EmailSetupStepId | null;
   /** When setup was finished (the first purchase arrived, or the person completed it); null while unfinished. */
   doneAt: number | null;
   createdAt: number;

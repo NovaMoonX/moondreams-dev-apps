@@ -33,24 +33,25 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   const isByAi =
     purchase.emailEventId !== null &&
     events.find((entry) => entry.id === purchase.emailEventId)?.readBy === 'ai';
+  const sparkle = isByAi && (
+    <Sparkles
+      className='text-muted-foreground mr-1.5 inline h-3.5 w-3.5 align-[-2px]'
+      aria-hidden='true'
+    />
+  );
   const marks = (
     <>
       <Mail
         className='text-muted-foreground mr-1.5 inline h-3.5 w-3.5 align-[-2px]'
         aria-hidden='true'
       />
-      {isByAi && (
-        <Sparkles
-          className='text-muted-foreground mr-1.5 inline h-3.5 w-3.5 align-[-2px]'
-          aria-hidden='true'
-        />
-      )}
+      {sparkle}
     </>
   );
   if (isOverdueEmail(purchase, twinned, today)) {
     return (
       <InlineNotice tone='warning'>
-        {marks}
+        {sparkle}
         {EMAIL_WORDS.overdueNotice(
           Math.floor((today - purchase.date) / DAY_MS),
         )}

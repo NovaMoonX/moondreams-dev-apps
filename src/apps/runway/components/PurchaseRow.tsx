@@ -73,10 +73,13 @@ function PurchaseRow({
       name={title}
       nameMark={
         purchase.source === 'email' && (
-          <Mail
-            className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
-            aria-hidden='true'
-          />
+          <>
+            <Mail
+              className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
+              aria-hidden='true'
+            />
+            <span className='sr-only'>{EMAIL_WORDS.fromEmail}</span>
+          </>
         )
       }
       leading={

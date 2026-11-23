@@ -730,7 +730,7 @@ const EMAIL_INTAKE_DOC_FIELDS = {
 const EMAIL_SETUP_DOC_FIELDS = {
   id: 'notUseful',
   provider: 'notUseful',
-  step: 'notUseful',
+  stepId: 'notUseful',
   doneAt: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',

@@ -68,6 +68,7 @@ interface Mail {
   subject: string;
   text: string;
   receivedAt: number;
+  isDkimPassed: boolean;
 }
 
 interface Filter {
@@ -200,16 +201,31 @@ const isYahooSender = (from: string) => {
 
 const isForwardingConfirmation = (mail: Mail) =>
   (toAddress(mail.from) === GMAIL_SENDER &&
+    mail.isDkimPassed &&
     /forwarding confirmation/i.test(mail.subject)) ||
   (isYahooSender(mail.from) &&
+    mail.isDkimPassed &&
     /forward/i.test(mail.subject) &&
     /verif|confirm/i.test(mail.subject));
 
+function readYahooLink(text: string) {
+  const links =
+    text.match(/https:\/\/(?:[a-z0-9-]+\.)*yahoo\.com\/[^\s"'<>)\]]+/gi) ?? [];
+  return (
+    links.find((link) =>
+      /verif|confirm/i.test(
+        link.replace(/^https:\/\/[^/]+/i, '').split(/[?#]/)[0],
+      ),
+    ) ?? links[0]
+  );
+}
+
 function readConfirmation(mail: Mail) {
-  const link = isYahooSender(mail.from)
-    ? /https:\/\/(?:[a-z0-9-]+\.)*yahoo\.com\/[^\s"'<>)\]]+/i
-    : /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i;
-  const url = link.exec(mail.text)?.[0];
+  const url = isYahooSender(mail.from)
+    ? readYahooLink(mail.text)
+    : /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i.exec(
+        mail.text,
+      )?.[0];
   const code = /code[^0-9]{0,60}(\d{6,9})\b/i.exec(mail.text)?.[1];
   return {
     confirmUrl: url?.replace(/[.,;]+$/, '').slice(0, 2000) ?? null,
@@ -530,6 +546,7 @@ export const ingestRunwayEmail = onRequest(
           subject: asString(body.subject, 1000),
           text: text.trim() !== '' ? text : htmlToText(html),
           receivedAt,
+          isDkimPassed: dkim === 'pass',
         },
         messageId,
         now,

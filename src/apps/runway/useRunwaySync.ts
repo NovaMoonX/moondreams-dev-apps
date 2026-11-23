@@ -313,7 +313,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stops.current.forEach((stop) => stop());
       dispatch(setEmailIntake(null));
       dispatch(setEmailSetup(null));
-      dispatch(setEmailEvents([]));
+      dispatch(setEmailEvents(null));
       dispatch(setEmailFilters([]));
     };
   }, [uid, keyStatus, isEmailOpen, dispatch]);

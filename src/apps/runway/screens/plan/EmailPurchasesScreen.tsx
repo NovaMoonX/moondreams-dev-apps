@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Filter, KeyRound, RotateCcw, Trash2 } from 'lucide-react';
+import { Filter, KeyRound, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -56,6 +56,8 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const isWritten = useRef(false);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   const [isReopened, setIsReopened] = useState(false);
+  const [walkStartedAt, setWalkStartedAt] = useState<number | null>(null);
+  const [isKept, setIsKept] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
@@ -65,8 +67,16 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
   const shownEvents = isAllShown ? events : events.slice(0, EVENTS_SHOWN);
-  const hasPurchase = events.some((entry) => entry.outcome === 'purchase');
-  const isWalking = !setup.isDone || isReopened;
+  const hasPurchase = events.some(
+    (entry) =>
+      entry.outcome === 'purchase' &&
+      (walkStartedAt === null || entry.receivedAt >= walkStartedAt),
+  );
+  const confirmAt = intake.confirm?.at ?? null;
+  const isConfirmed =
+    confirmAt !== null &&
+    (walkStartedAt === null || confirmAt >= walkStartedAt);
+  const isWalking = !setup.isDone || isReopened || isKept;
   const stepIndex = Math.min(viewIndex ?? setup.step, setup.steps.length - 1);
   const filterIndex = getFilterStepIndex(setup.steps);
   const hasStrayEmail = events.some(
@@ -84,8 +94,9 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   useEffect(() => {
     if (!setup.isDone || !setup.isDoneUnwritten || isWritten.current) return;
     isWritten.current = true;
-    actions.finishSetup().catch(() => {
+    actions.finishSetup().catch((finishError: unknown) => {
       isWritten.current = false;
+      setError(getErrorMessage(finishError, EMAIL_WORDS.progressFailed));
     });
   }, [setup.isDone, setup.isDoneUnwritten, actions]);
 
@@ -116,8 +127,9 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
 
   const goToStep = (index: number) => {
     setViewIndex(index);
+    setIsKept(true);
     actions
-      .reachStep(index)
+      .reachStep(setup.steps[index] ?? 'provider')
       .catch((reachError: unknown) =>
         setError(getErrorMessage(reachError, EMAIL_WORDS.progressFailed)),
       );
@@ -127,6 +139,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     provider: Parameters<typeof actions.chooseProvider>[0],
   ) => {
     setViewIndex(1);
+    setIsKept(true);
     actions
       .chooseProvider(provider)
       .catch((pickError: unknown) =>
@@ -180,22 +193,36 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             steps={setup.steps}
             stepIndex={stepIndex}
             intake={intake}
+            isConfirmed={isConfirmed}
             hasPurchase={hasPurchase}
             isBusy={isBusy}
+            onBackToStatus={
+              isReopened
+                ? () => {
+                    setIsReopened(false);
+                    setIsKept(false);
+                    setWalkStartedAt(null);
+                    setViewIndex(null);
+                  }
+                : null
+            }
             onPickProvider={pickProvider}
             onGetAddress={() => void getNewAddress()}
             onGo={goToStep}
             onFinish={() => {
               setIsReopened(false);
+              setIsKept(false);
+              setWalkStartedAt(null);
               setViewIndex(null);
             }}
+            onClose={onClose}
           />
         </div>
       ) : (
         <div className='space-y-6'>
           <p className='text-sm font-medium' role='status'>
             {intake.lastReceivedAt === null
-              ? EMAIL_SETUP_WORDS.working
+              ? EMAIL_SETUP_WORDS.noEmailsYet
               : EMAIL_SETUP_WORDS.workingSince(
                   formatUpdatedAgo(intake.lastReceivedAt, now),
                 )}
@@ -241,6 +268,19 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                       <ItemRow
                         key={event.id}
                         name={subject}
+                        nameMark={
+                          event.readBy === 'ai' && (
+                            <>
+                              <Sparkles
+                                className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
+                                aria-hidden='true'
+                              />
+                              <span className='sr-only'>
+                                {EMAIL_WORDS.readByAi}
+                              </span>
+                            </>
+                          )
+                        }
                         leading={<ItemBadge name={subject} emoji={null} />}
                         detail={detail}
                         isPrivate={false}
@@ -301,6 +341,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 subtitle={EMAIL_SETUP_WORDS.setUpAgainSub}
                 onClick={() => {
                   setIsReopened(true);
+                  setWalkStartedAt(Date.now());
                   setViewIndex(0);
                 }}
               />

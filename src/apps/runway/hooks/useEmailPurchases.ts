@@ -15,6 +15,7 @@ import {
   selectEmailIntake,
   selectEmailOverdue,
   selectEmailSetup,
+  selectIsEmailEventsLoaded,
 } from '@apps/runway/store/selectors/emailSelectors';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
@@ -63,7 +64,7 @@ export interface EmailActions {
   stopWaiting(purchaseId: string): Promise<void>;
   resumeWaiting(purchaseId: string): Promise<void>;
   chooseProvider(provider: EmailProvider): Promise<void>;
-  reachStep(step: number): Promise<void>;
+  reachStep(stepId: EmailSetupStepId): Promise<void>;
   finishSetup(): Promise<void>;
 }
 
@@ -80,7 +81,8 @@ export function useEmailIntake(): EmailIntakeRead {
         isLoading: false,
       };
     }
-    const hasConfirm = intake.confirmUrl !== null || intake.confirmCode !== null;
+    const hasConfirm =
+      intake.confirmUrl !== null || intake.confirmCode !== null;
     return {
       address: `${EMAIL_ADDRESS_PREFIX}-${intake.token}@${EMAIL_DOMAIN}`,
       lastReceivedAt: intake.lastReceivedAt,
@@ -133,15 +135,23 @@ export function useEmailActions(): EmailActions {
           ? NO_UID()
           : saveEmailSetup(uid, (current) => ({
               provider,
-              step:
-                current?.provider === provider ? Math.max(current.step, 1) : 1,
+              stepId:
+                current?.provider === provider &&
+                current.stepId !== null &&
+                current.stepId !== 'provider'
+                  ? current.stepId
+                  : 'copy',
             })),
-      reachStep: (step) =>
+      reachStep: (stepId) =>
         uid === null
           ? NO_UID()
-          : saveEmailSetup(uid, (current) =>
-              step > (current?.step ?? 0) ? { step } : null,
-            ),
+          : saveEmailSetup(uid, (current) => {
+              const order = getEmailSetupSteps(current?.provider ?? null, true);
+              return order.indexOf(stepId) >
+                order.indexOf(current?.stepId ?? 'provider')
+                ? { stepId }
+                : null;
+            }),
       finishSetup: () =>
         uid === null
           ? NO_UID()
@@ -156,9 +166,9 @@ export function useEmailActions(): EmailActions {
 export interface EmailSetupRead {
   provider: EmailProvider | null;
   steps: EmailSetupStepId[];
-  /** Index of the furthest step reached, never past the last step. */
+  /** Index of the furthest step reached in this provider's list; 0 when it is unknown. */
   step: number;
-  /** Written once, or any purchase has already come from email. */
+  /** Written once, or any purchase has already come from email (known only once the emails have loaded). */
   isDone: boolean;
   /** Whether the stored doneAt is still empty. */
   isDoneUnwritten: boolean;
@@ -169,6 +179,7 @@ export function useEmailSetup(): EmailSetupRead {
   const setup = useAppSelector(selectEmailSetup);
   const intake = useEmailIntake();
   const events = useEmailEvents();
+  const isEventsLoaded = useAppSelector(selectIsEmailEventsLoaded);
   return useMemo(() => {
     const provider = setup?.provider ?? null;
     const steps = getEmailSetupSteps(provider, intake.confirm?.url != null);
@@ -176,10 +187,12 @@ export function useEmailSetup(): EmailSetupRead {
     return {
       provider,
       steps,
-      step: Math.min(setup?.step ?? 0, steps.length - 1),
+      step: Math.max(0, steps.indexOf(setup?.stepId ?? 'provider')),
       isDone:
-        doneAt !== null || events.some((entry) => entry.outcome === 'purchase'),
+        doneAt !== null ||
+        (isEventsLoaded &&
+          events.some((entry) => entry.outcome === 'purchase')),
       isDoneUnwritten: doneAt === null,
     };
-  }, [setup, intake.confirm?.url, events]);
+  }, [setup, intake.confirm?.url, events, isEventsLoaded]);
 }

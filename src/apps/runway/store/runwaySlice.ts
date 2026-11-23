@@ -94,6 +94,7 @@ export interface RunwayState {
   emailIntake: OpenEmailIntake | null;
   emailSetup: OpenEmailSetup | null;
   emailEvents: OpenEmailEvent[];
+  isEmailEventsLoaded: boolean;
   emailFilters: OpenEmailFilter[];
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
@@ -230,6 +231,7 @@ const initialState: RunwayState = {
   emailIntake: null,
   emailSetup: null,
   emailEvents: [],
+  isEmailEventsLoaded: false,
   emailFilters: [],
   purchases: [],
   needsHome: [],
@@ -344,8 +346,12 @@ export const runwaySlice = createSlice({
     setEmailSetup: (state, action: PayloadAction<OpenEmailSetup | null>) => {
       state.emailSetup = action.payload;
     },
-    setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[]>) => {
-      state.emailEvents = action.payload;
+    setEmailEvents: (
+      state,
+      action: PayloadAction<OpenEmailEvent[] | null>,
+    ) => {
+      state.emailEvents = action.payload ?? [];
+      state.isEmailEventsLoaded = action.payload !== null;
     },
     setEmailFilters: (state, action: PayloadAction<OpenEmailFilter[]>) => {
       state.emailFilters = action.payload;
