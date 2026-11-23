@@ -19,8 +19,12 @@ export interface DoneForYouEntry {
   whyLine: string | null;
   canUndo: boolean;
   isUndone: boolean;
-  /** A muted line in the item, such as why its Undo is gone. */
+  /** A muted line in the item, such as why its Undo is gone or the way back when there is none. */
   note: string | null;
+  /** A short line on the row, such as that its Undo is gone. */
+  rowNote: string | null;
+  /** What the item's Undo button says; the sheet's `undo` word when null. */
+  undoLabel: string | null;
 }
 
 interface DoneForYouSheetProps {
@@ -126,7 +130,7 @@ function DoneForYouSheet({
         <p className='text-2xl font-semibold text-pretty'>
           {renderText(entry.title)}
         </p>
-        {entry.detail !== null && (
+        {entry.detail !== null && !entry.isUndone && (
           <p className='text-muted-foreground text-sm'>
             {renderText(entry.detail)}
           </p>
@@ -149,12 +153,10 @@ function DoneForYouSheet({
           loading={isUndoing}
           onClick={() => void undo(entry.id)}
         >
-          {words.undo}
+          {entry.undoLabel ?? words.undo}
         </Button>
       )}
-      {entry.isUndone && (
-        <p className='text-muted-foreground text-sm'>{words.undone}</p>
-      )}
+      {entry.isUndone && <p className='text-sm'>{words.undone}</p>}
       {!entry.isUndone && entry.note !== null && (
         <p className='text-muted-foreground text-sm'>{entry.note}</p>
       )}
@@ -163,6 +165,12 @@ function DoneForYouSheet({
       )}
     </div>
   );
+
+  const getRowDetail = (entry: DoneForYouEntry) => {
+    if (entry.isUndone) return words.undone;
+    if (entry.rowNote !== null) return entry.rowNote;
+    return entry.detail === null ? undefined : renderText(entry.detail);
+  };
 
   const renderList = () => {
     if (days.length === 0) {
@@ -182,13 +190,7 @@ function DoneForYouSheet({
               <SummaryRow
                 key={entry.id}
                 label={formatTime(entry.createdAt)}
-                detail={
-                  entry.isUndone
-                    ? words.undone
-                    : entry.detail === null
-                      ? undefined
-                      : renderText(entry.detail)
-                }
+                detail={getRowDetail(entry)}
                 onClick={() => setOpenId(entry.id)}
               >
                 {renderText(entry.title)}

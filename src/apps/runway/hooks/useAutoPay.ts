@@ -304,7 +304,7 @@ export function useAutoPay(uid: string | null) {
           results.map((result) => ({
             kind: 'charge' as const,
             title: AUTO_PAY_WORDS.matchedOne(result.billName),
-            detail: AUTO_PAY_WORDS.matchedSub,
+            detail: DONE_FOR_YOU_WORDS.chargeMatched,
             why: null,
             undo: { kind: 'charge' as const, result },
           })),

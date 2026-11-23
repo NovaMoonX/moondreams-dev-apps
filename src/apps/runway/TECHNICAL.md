@@ -538,6 +538,12 @@ interface MoveDoc {
 ```ts
 interface ExpenseDoc { id: string; createdAt: number; updatedAt: number; sealed: Sealed /* { name, note } */ }
 
+interface DoneForYouDoc {                   // apps/runway/plans/{uid}/doneForYou/{id}
+  id: string; kind: DoneForYouKind;         // 'merge' | 'deposit' | 'pair' | 'rule' | 'charge' | 'autoMark' | 'history' | 'released' | 'ended'
+  createdAt: number; undoneAt: number | null;
+  sealed: Sealed;                           // DoneForYouSealed { title, detail, why, undo: DoneForYouUndo | null }
+}
+
 interface RuleDoc {                         // apps/runway/plans/{uid}/rules/{ruleId}
   id: string; createdAt: number; updatedAt: number;
   sealed: Sealed;                           // RuleSealed
@@ -1716,3 +1722,8 @@ interface MoneyLink {                       // contract v1
 - Forwarding confirmations (`ingestRunwayEmail.ts`): Gmail's is the one from `forwarding-noreply@google.com`. Yahoo's counts only when the DKIM result is `pass`, the sender is a Yahoo domain exactly or a subdomain of one (`YAHOO_DOMAINS`), and the subject has "forward" with "verif" or "confirm"; the link is the first `https` `yahoo.com` link whose path contains `verif` or `confirm`, else the first such link. Proton's counts only with a DKIM `pass`, a sender at `proton.me`, `protonmail.com` or `pm.me` (or a subdomain) and "forward" in the subject; and a `proton.me` link (not help, legal, policies, `/support`, `/legal` or `/blog`) that mentions forward, accept or invite; without that link the email is read like any other.
 - A bank email Runway read (a purchase, not a purchase, outside tracking) seals `bodyText` (`readableBody`: the readable text with line breaks, every link reduced to its host, at most 4,000 characters; never shared); a filtered or unread email keeps only `snippet`, and a forwarding confirmation keeps neither (its link and code live only in the intake document). `snippet` is `excerptOf`'s up to 6 lines from 2 before the line holding the read amount, or the merchant, at most 600 characters). Events written before hold `bodyText: null` and a one-line snippet. Both go with the event at 30 days. Remote pictures and the bank's layout are never kept or shown.
 - `EMAIL_WAIT_DAYS` (5, when Home asks about a waiting purchase) is shorter than `EMAIL_MATCH_DAYS_AFTER` (7, the window a bank charge can still pair with it) on purpose: a charge can still merge after the notice shows.
+
+## Done for you
+
+- **Done for you** (`doneForYou`): an automatic pass records one sealed entry per record it changed through `recordDone` (`hooks/useDoneForYou.ts`), after its own writes succeed and without awaiting it; a failed record waits in memory and goes with the next record or reconnect. The listener (`doneForYouListeners.ts`) reads the last 30 days, newest first, at most 200. An entry's `undo` holds exactly what the old toast's Undo passed to its action; it is offered while every purchase it would write still has the `updatedAt` the pass left, a purchase missing from the loaded window counting as changed and one dated before it left to the tap's transaction. The plan's readable `doneForYouSeenAt` drives the dot; opening the list stamps it and prunes up to 100 entries past 30 days. Rules: the owner may update (mark undone) and delete (prune) entries.
+

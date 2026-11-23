@@ -115,20 +115,16 @@ const getScreen = (tab: RunwayTab) => {
 interface RunwayTabsProps {
   activeTab: RunwayTab;
   onChange: (tab: RunwayTab) => void;
-  doneForYou: ReturnType<typeof useDoneForYou>;
-  isDoneForYouOpen: boolean;
+  hasUnseenDoneForYou: boolean;
   onOpenDoneForYou: () => void;
-  onCloseDoneForYou: () => void;
 }
 
 /** A tab opens where it was left (the top on a first visit), and tapping the open tab again goes to its top. */
 function RunwayTabs({
   activeTab,
   onChange,
-  doneForYou,
-  isDoneForYouOpen,
+  hasUnseenDoneForYou,
   onOpenDoneForYou,
-  onCloseDoneForYou,
 }: RunwayTabsProps) {
   const hasItems = useAppSelector((state) => state.runway.items.length > 0);
   const hasPurchases = useAppSelector(
@@ -191,7 +187,7 @@ function RunwayTabs({
             {activeTab === 'plan' && <PriorityDial />}
             {activeTab === 'home' && (
               <DoneForYouButton
-                hasUnseen={doneForYou.hasUnseen}
+                hasUnseen={hasUnseenDoneForYou}
                 onClick={onOpenDoneForYou}
                 label={DONE_FOR_YOU_WORDS.title}
               />
@@ -202,16 +198,6 @@ function RunwayTabs({
         {getScreen(activeTab)}
       </div>
       <RunwayBottomNav value={activeTab} onChange={handleChange} />
-      <DoneForYouSheet
-        isOpen={isDoneForYouOpen}
-        onClose={onCloseDoneForYou}
-        title={DONE_FOR_YOU_WORDS.title}
-        items={doneForYou.items}
-        onUndo={doneForYou.undo}
-        words={DONE_FOR_YOU_WORDS}
-        renderText={(text) => <MaskedText>{text}</MaskedText>}
-        titleTrailing={<ValuesEyeButton />}
-      />
     </div>
   );
 }
@@ -576,16 +562,26 @@ function RunwayContent() {
       <RunwayTabs
         activeTab={activeTab}
         onChange={showTab}
-        doneForYou={doneForYou}
-        isDoneForYouOpen={isDoneForYouOpen}
+        hasUnseenDoneForYou={doneForYou.hasUnseen}
         onOpenDoneForYou={openDoneForYou}
-        onCloseDoneForYou={closeDoneForYou}
       />
     );
   };
 
   return (
-    <Fragment key={isScrambled ? 'made-up' : 'real'}>{getView()}</Fragment>
+    <Fragment key={isScrambled ? 'made-up' : 'real'}>
+      {getView()}
+      <DoneForYouSheet
+        isOpen={isDoneForYouOpen}
+        onClose={closeDoneForYou}
+        title={DONE_FOR_YOU_WORDS.title}
+        items={doneForYou.items}
+        onUndo={doneForYou.undo}
+        words={DONE_FOR_YOU_WORDS}
+        renderText={(text) => <MaskedText>{text}</MaskedText>}
+        titleTrailing={<ValuesEyeButton />}
+      />
+    </Fragment>
   );
 }
 

@@ -3,7 +3,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import type { DoneForYouEntry } from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
-import { store, useAppSelector } from '@/store';
+import { store, useAppSelector, type RootState } from '@/store';
 import {
   AUTO_PAY_WORDS,
   DEPOSIT_WORDS,
@@ -30,6 +30,8 @@ import {
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
+  DateOnly,
+  DoneForYouKind,
   DoneForYouUndo,
   OpenDoneForYou,
   OpenPurchase,
@@ -68,35 +70,105 @@ if (typeof window !== 'undefined') {
   });
 }
 
-/** The purchases an entry's Undo would write, with the `updatedAt` each should still have. */
-const getExpected = (undo: DoneForYouUndo): [string, number][] => {
+/** The purchases an entry's Undo would write, each with the `updatedAt` it should still have and its day. */
+const getExpected = (
+  undo: DoneForYouUndo,
+): { id: string; updatedAt: number; date: DateOnly }[] => {
   switch (undo.kind) {
     case 'merge':
-      return [[undo.merged.bank.id, undo.merged.updatedAt]];
-    case 'deposit':
-      return [[undo.linked.id, undo.linked.updatedAt]];
-    case 'pair':
       return [
-        [undo.paired.out.id, undo.paired.out.updatedAt],
-        [undo.paired.into.id, undo.paired.into.updatedAt],
+        {
+          id: undo.merged.bank.id,
+          updatedAt: undo.merged.updatedAt,
+          date: undo.merged.bank.date,
+        },
       ];
+    case 'deposit':
+      return [
+        {
+          id: undo.linked.id,
+          updatedAt: undo.linked.updatedAt,
+          date: undo.linked.date,
+        },
+      ];
+    case 'pair':
+      return [undo.paired.out, undo.paired.into].map((side) => ({
+        id: side.id,
+        updatedAt: side.updatedAt,
+        date: side.date,
+      }));
     case 'rule':
-      return [[undo.placed.id, undo.placed.updatedAt]];
+      return [
+        {
+          id: undo.placed.id,
+          updatedAt: undo.placed.updatedAt,
+          date: undo.placed.date,
+        },
+      ];
     case 'charge':
-      return [[undo.result.purchase.id, undo.result.updatedAt]];
+      return [
+        {
+          id: undo.result.purchase.id,
+          updatedAt: undo.result.updatedAt,
+          date: undo.result.purchase.date,
+        },
+      ];
   }
 };
 
-/** An Undo is offered while every purchase it would write is as the pass left it; one that is not loaded cannot be judged, so the tap checks it. */
-const isStillUndoable = (
-  undo: DoneForYouUndo,
-  purchases: readonly OpenPurchase[],
-  waiting: readonly OpenPurchase[],
-) =>
-  getExpected(undo).every(([id, updatedAt]) => {
-    const current = [...purchases, ...waiting].find((entry) => entry.id === id);
-    return current === undefined || current.updatedAt === updatedAt;
+interface KnownPurchases {
+  purchases: readonly OpenPurchase[];
+  /** Where the loaded window of purchases starts; a missing purchase dated in it was removed. */
+  from: DateOnly | null;
+}
+
+/** An Undo is offered while every purchase it would write is as the pass left it; one dated before the loaded window cannot be judged, so the tap checks it. */
+const isStillUndoable = (undo: DoneForYouUndo, known: KnownPurchases) =>
+  getExpected(undo).every(({ id, updatedAt, date }) => {
+    const current = known.purchases.find((entry) => entry.id === id);
+    if (current) return current.updatedAt === updatedAt;
+    return known.from === null || date < known.from;
   });
+
+const getKnown = (state: RootState['runway']): KnownPurchases => ({
+  purchases: [
+    ...state.purchases,
+    ...state.needsHome,
+    ...(state.linkHistoryPurchases ?? []),
+  ],
+  from: state.purchasesFrom,
+});
+
+/** The line an entry with no Undo shows, naming its own way back where there is one. */
+const getNoUndoNote = (kind: DoneForYouKind) => {
+  switch (kind) {
+    case 'autoMark':
+      return DONE_FOR_YOU_WORDS.autoMarkedNote;
+    case 'ended':
+      return DONE_FOR_YOU_WORDS.endedNote;
+    case 'history':
+    case 'released':
+      return DONE_FOR_YOU_WORDS.nothingToUndo;
+    default:
+      return null;
+  }
+};
+
+/** The Undo button names what it puts back. */
+const getUndoLabel = (undo: DoneForYouUndo) => {
+  switch (undo.kind) {
+    case 'merge':
+      return DONE_FOR_YOU_WORDS.undoMerge;
+    case 'deposit':
+      return DONE_FOR_YOU_WORDS.undoDeposit;
+    case 'pair':
+      return DONE_FOR_YOU_WORDS.undoPair;
+    case 'rule':
+      return DONE_FOR_YOU_WORDS.undoRule;
+    case 'charge':
+      return DONE_FOR_YOU_WORDS.undoCharge;
+  }
+};
 
 const getUndoneWords = (undo: DoneForYouUndo) => {
   switch (undo.kind) {
@@ -183,28 +255,44 @@ export function useDoneForYou() {
   const entries = useAppSelector((state) => state.runway.doneForYou);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const waiting = useAppSelector((state) => state.runway.needsHome);
+  const linkHistory = useAppSelector(
+    (state) => state.runway.linkHistoryPurchases,
+  );
+  const purchasesFrom = useAppSelector((state) => state.runway.purchasesFrom);
   const seenAt = useAppSelector(
     (state) => state.runway.plan?.doneForYouSeenAt ?? null,
   );
   const isReady = useAppSelector((state) => state.runway.isDoneForYouLoaded);
+  const known: KnownPurchases = {
+    purchases: [...purchases, ...waiting, ...(linkHistory ?? [])],
+    from: purchasesFrom,
+  };
 
   const now = useNow(60 * 60 * 1000);
   const cutoff = now - DONE_FOR_YOU_DAYS * DAY_MS;
   const live = entries.filter((entry) => entry.createdAt >= cutoff);
-  const items = live.map((entry: OpenDoneForYou): DoneForYouEntry => ({
-    id: entry.id,
-    createdAt: entry.createdAt,
-    title: entry.title,
-    detail: entry.detail,
-    whyLine: entry.why,
-    canUndo:
-      entry.undo !== null && isStillUndoable(entry.undo, purchases, waiting),
-    isUndone: entry.undoneAt !== null,
-    note:
-      entry.undo !== null && !isStillUndoable(entry.undo, purchases, waiting)
-        ? DONE_FOR_YOU_WORDS.cannotUndo
-        : null,
-  }));
+  const items = live.map((entry: OpenDoneForYou): DoneForYouEntry => {
+    const canUndo = entry.undo !== null && isStillUndoable(entry.undo, known);
+    const getNote = () => {
+      if (entry.undo === null) return getNoUndoNote(entry.kind);
+      return canUndo ? null : DONE_FOR_YOU_WORDS.cannotUndo;
+    };
+    return {
+      id: entry.id,
+      createdAt: entry.createdAt,
+      title: entry.title,
+      detail: entry.detail,
+      whyLine: entry.why,
+      canUndo,
+      isUndone: entry.undoneAt !== null,
+      note: getNote(),
+      rowNote:
+        entry.undo !== null && !canUndo
+          ? DONE_FOR_YOU_WORDS.cannotUndoRow
+          : null,
+      undoLabel: entry.undo === null ? null : getUndoLabel(entry.undo),
+    };
+  });
   const hasUnseen = live.some(
     (entry) => seenAt === null || entry.createdAt > seenAt,
   );
@@ -215,8 +303,7 @@ export function useDoneForYou() {
     if (!uid || !entry || entry.undo === null || entry.undoneAt !== null) {
       return DONE_FOR_YOU_WORDS.cannotUndo;
     }
-    const { purchases: current, needsHome } = store.getState().runway;
-    if (!isStillUndoable(entry.undo, current, needsHome)) {
+    if (!isStillUndoable(entry.undo, getKnown(store.getState().runway))) {
       return DONE_FOR_YOU_WORDS.cannotUndo;
     }
     try {

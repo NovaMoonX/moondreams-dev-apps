@@ -436,3 +436,13 @@ Where it lives: Settings, "Purchases from email" beside "Your bank" (only when t
 - **Filter out emails like this** shows "From this sender" and "With this subject" at once as ticks (an email that became a purchase offers only the subject, since filtering the bank's own address would stop every future purchase); suggestions from the AI join them if they arrive, and nothing is shown when none do. Save writes one filter from the ticked parts.
 - **On Spend** an emailed purchase reads "Nov 22nd · Venture X · Waiting for your bank" until it is matched; its sheet says where it came from (past 5 days it warns the bank hasn't sent the charge), offers "Filter out emails like this" and, while it waits, "Stop waiting for your bank". The list Home opens shows the day and card only.
 - **On Home** one warning-toned row counts every emailed purchase still not matched after 5 days ("3 purchases from email" over "Not from your bank yet" on a phone). While a plan warning shows it is one row inside that warning's "Things to fix" list instead, so Home keeps one warning surface. It opens a list, and each purchase's sheet has Remove purchase and "Stop waiting for your bank"; closing the list opened from Things to fix returns to Things to fix. Never a row per purchase.
+
+## Done for you
+
+Where it lives: a clock (`DoneForYouButton`) on Home's title line before the eye, with a 6px primary dot while an entry is newer than the plan's `doneForYouSeenAt`; the sheet (`DoneForYouSheet`) is mounted once for the whole app, so the summary toast's View opens it from any screen.
+
+- **The list:** newest first under "Today", "Yesterday" or a short date (`SectionDivider`); each row is the time, the title and one muted line (the detail, "Undone" or "Can't be undone now"), opening its item. Amounts mask through `MaskedText`, and the eye sits on the sheet's title line while a row holds one.
+- **An item:** a Back chip, the title, the detail (dropped once undone), the why ("Your rule, Safeway goes to Groceries"), the day and time, then a full-width secondary Undo named for what it puts back ("Undo and send it to Needs a home"), or "Undone", or a muted line: why the Undo is gone, the way back when there is no Undo, or that there is nothing to undo. A refused Undo shows its sentence in a warning `InlineNotice` and stays open. The item keeps the list's height (the shared `DetailSheet` rule).
+- **The toast:** one info toast with View, a moment after the last entry of a batch, replacing a toast already showing; never for entries older than a day and never on a device's first visit.
+- **Empty:** `EmptyCard` with the clock, "Nothing done for you yet" over "When Runway sorts or matches something on its own, it shows here for 30 days."
+

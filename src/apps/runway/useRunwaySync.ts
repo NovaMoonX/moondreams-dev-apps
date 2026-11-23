@@ -691,7 +691,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             kind: 'ended' as const,
             title: DONE_FOR_YOU_WORDS.ended(name),
             detail: null,
-            why: null,
+            why: DONE_FOR_YOU_WORDS.endedWhy,
             undo: null,
           })),
         );

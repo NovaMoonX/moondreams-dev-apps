@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   DEPOSIT_WORDS,
+  DONE_FOR_YOU_WORDS,
   NEEDS_HOME_WORDS,
   PAIR_WORDS,
 } from '@apps/runway/constants';
@@ -471,7 +472,7 @@ export function useLinkDepositsWithUndo() {
             formatCents(-entry.deposit.amountCents),
             describePayDay(entry.dayOn),
           ),
-          detail: DEPOSIT_WORDS.linkedSub,
+          detail: DONE_FOR_YOU_WORDS.depositLinked,
           why: null,
           undo: {
             kind: 'deposit' as const,
@@ -741,8 +742,8 @@ export function usePairAccountsWithUndo() {
           title: getTitle(entry),
           detail:
             entry.kind === 'cardPayment'
-              ? PAIR_WORDS.paidCardSub
-              : PAIR_WORDS.transferredSub,
+              ? DONE_FOR_YOU_WORDS.cardPaid
+              : DONE_FOR_YOU_WORDS.moved,
           why: null,
           undo: {
             kind: 'pair' as const,
