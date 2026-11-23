@@ -48,23 +48,26 @@ export function groupSharedPeople(
   calendars: AddedCalendar[],
   feeds: Record<string, AddedFeedState>,
 ): SharedPerson[] {
-  const byPerson = calendars.reduce<Map<string, SharedPerson>>((people, calendar) => {
-    const key = toPersonKey(calendar.personName);
-    const feedState = feeds[calendar.id] ?? { status: 'loading' };
-    const current = people.get(key) ?? {
-      personName: calendar.personName,
-      links: [],
-      isShown: false,
-      hasEnded: false,
-    };
-    people.set(key, {
-      ...current,
-      links: [...current.links, { calendar, feedState }],
-      isShown: current.isShown || calendar.isShown,
-      hasEnded: current.hasEnded || feedState.status === 'ended',
-    });
-    return people;
-  }, new Map());
+  const byPerson = calendars.reduce<Map<string, SharedPerson>>(
+    (people, calendar) => {
+      const key = toPersonKey(calendar.personName);
+      const feedState = feeds[calendar.id] ?? { status: 'loading' };
+      const current = people.get(key) ?? {
+        personName: calendar.personName,
+        links: [],
+        isShown: false,
+        hasEnded: false,
+      };
+      people.set(key, {
+        ...current,
+        links: [...current.links, { calendar, feedState }],
+        isShown: current.isShown || calendar.isShown,
+        hasEnded: current.hasEnded || feedState.status === 'ended',
+      });
+      return people;
+    },
+    new Map(),
+  );
 
   const result = Array.from(byPerson.values()).sort((left, right) =>
     left.personName.localeCompare(right.personName),
@@ -75,12 +78,18 @@ export function groupSharedPeople(
 /** The person already using this name, matched without case or extra spaces; null when the name is free. */
 export function findPersonByName(people: SharedPerson[], name: string) {
   const key = toPersonKey(name);
-  const result = people.find((person) => toPersonKey(person.personName) === key) ?? null;
+  const result =
+    people.find((person) => toPersonKey(person.personName) === key) ?? null;
   return result;
 }
 
 const toShowingKey = (personName: string, viewing: SharedViewing) =>
-  [toPersonKey(personName), normalizeString(viewing.title), viewing.showtimeAt, normalizeString(viewing.theatreName ?? '')].join('|');
+  [
+    toPersonKey(personName),
+    normalizeString(viewing.title),
+    viewing.showtimeAt,
+    normalizeString(viewing.theatreName ?? ''),
+  ].join('|');
 
 /** Every shown friend's showings, with the same showing reached through two of one person's links counted once. */
 export function collectFriendShowings(people: SharedPerson[]): FriendShowing[] {
@@ -103,42 +112,70 @@ export function collectFriendShowings(people: SharedPerson[]): FriendShowing[] {
     }),
   );
 
-  const byKey = entries.reduce<Map<string, FriendShowing>>((kept, { key, showing }) => {
-    const current = kept.get(key);
-    if (current === undefined || (current.kind === 'SNAPSHOT' && showing.kind === 'LIVE')) {
-      kept.set(key, showing);
-    }
-    return kept;
-  }, new Map());
+  const byKey = entries.reduce<Map<string, FriendShowing>>(
+    (kept, { key, showing }) => {
+      const current = kept.get(key);
+      if (
+        current === undefined ||
+        (current.kind === 'SNAPSHOT' && showing.kind === 'LIVE')
+      ) {
+        kept.set(key, showing);
+      }
+      return kept;
+    },
+    new Map(),
+  );
 
-  const result = Array.from(byKey.values()).sort((left, right) => left.showtimeAt - right.showtimeAt);
+  const result = Array.from(byKey.values()).sort(
+    (left, right) => left.showtimeAt - right.showtimeAt,
+  );
   return result;
 }
 
 /** Friends' showings on each local day, grouped by movie so everyone seeing it that day reads as one line. */
 export function groupFriendShowingsByDay(showings: FriendShowing[]) {
-  const result = showings.reduce<Map<string, FriendMovieGroup[]>>((days, showing) => {
-    const dayKey = getDayKey(showing.showtimeAt);
-    const groups = days.get(dayKey) ?? [];
-    const titleKey = normalizeString(showing.title);
-    const match = groups.find((group) => normalizeString(group.title) === titleKey);
-    const nextGroups = match
-      ? groups.map((group) =>
-          group === match
-            ? { ...group, posterUrl: group.posterUrl ?? showing.posterUrl, showings: [...group.showings, showing] }
-            : group,
-        )
-      : [...groups, { title: showing.title, posterUrl: showing.posterUrl, showings: [showing] }];
-    days.set(dayKey, nextGroups);
-    return days;
-  }, new Map());
+  const result = showings.reduce<Map<string, FriendMovieGroup[]>>(
+    (days, showing) => {
+      const dayKey = getDayKey(showing.showtimeAt);
+      const groups = days.get(dayKey) ?? [];
+      const titleKey = normalizeString(showing.title);
+      const match = groups.find(
+        (group) => normalizeString(group.title) === titleKey,
+      );
+      const nextGroups = match
+        ? groups.map((group) =>
+            group === match
+              ? {
+                  ...group,
+                  posterUrl: group.posterUrl ?? showing.posterUrl,
+                  showings: [...group.showings, showing],
+                }
+              : group,
+          )
+        : [
+            ...groups,
+            {
+              title: showing.title,
+              posterUrl: showing.posterUrl,
+              showings: [showing],
+            },
+          ];
+      days.set(dayKey, nextGroups);
+      return days;
+    },
+    new Map(),
+  );
   return result;
 }
 
 /** How many different friends have something on a day. */
 export function countFriendsOnDay(groups: FriendMovieGroup[] | undefined) {
   if (!groups) return 0;
-  const names = new Set(groups.flatMap((group) => group.showings.map((showing) => toPersonKey(showing.personName))));
+  const names = new Set(
+    groups.flatMap((group) =>
+      group.showings.map((showing) => toPersonKey(showing.personName)),
+    ),
+  );
   return names.size;
 }
 
@@ -152,7 +189,23 @@ export function getFriendsAlsoGoing(
   const group = groups.find((item) => normalizeString(item.title) === titleKey);
   if (!group) return [];
 
-  const result = Array.from(new Set(group.showings.map((showing) => showing.personName)));
+  const result = Array.from(
+    new Set(group.showings.map((showing) => showing.personName)),
+  );
+  return result;
+}
+
+/** A day's friend groups less the movies the member is seeing that day, which their own row already names as "going too". */
+export function withoutOwnMovies(
+  groups: FriendMovieGroup[],
+  viewings: Viewing[],
+) {
+  const ownTitles = new Set(
+    viewings.map((viewing) => normalizeString(viewing.movie.title)),
+  );
+  const result = groups.filter(
+    (group) => !ownTitles.has(normalizeString(group.title)),
+  );
   return result;
 }
 

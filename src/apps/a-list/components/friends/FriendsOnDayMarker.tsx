@@ -4,13 +4,13 @@ interface FriendsOnDayMarkerProps {
   count: number;
 }
 
-/** A quiet mark in a cell's top-right corner: a dot on a phone, where the date chip leaves no room for more, and a small pill with the count from `sm`. */
+/** A quiet mark on a cell: a ring in the bottom-left corner on a phone, where a narrow cell's date chip leaves the top no room, and a small pill with the count in the top-right from `sm`. */
 function FriendsOnDayMarker({ count }: FriendsOnDayMarkerProps) {
   const label =
     count === 1 ? '1 friend has plans' : `${count} friends have plans`;
 
   return (
-    <span className='pointer-events-none absolute top-1 right-1'>
+    <span className='pointer-events-none absolute bottom-1 left-1 sm:top-1 sm:right-1 sm:bottom-auto sm:left-auto'>
       <span className='sr-only'>{label}</span>
       <span
         aria-hidden='true'

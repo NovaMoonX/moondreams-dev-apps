@@ -19,7 +19,10 @@ import {
   selectOpeningsByDay,
   selectViewingsByDay,
 } from '@apps/a-list/store/selectors';
-import { getFriendsAlsoGoing } from '@apps/a-list/utils/friendShowings';
+import {
+  getFriendsAlsoGoing,
+  withoutOwnMovies,
+} from '@apps/a-list/utils/friendShowings';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 interface DayDrawerProps {
@@ -87,10 +90,10 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
         {viewings.length === 0 &&
           openings.length === 0 &&
           friendGroups.length === 0 && (
-          <p className='text-muted-foreground py-2 text-center text-sm'>
-            🍿 Nothing on this day yet.
-          </p>
-        )}
+            <p className='text-muted-foreground py-2 text-center text-sm'>
+              🍿 Nothing on this day yet.
+            </p>
+          )}
         {viewings.length > 0 && (
           <ul className='divide-border divide-y'>
             {viewings.map((viewing) => (
@@ -170,7 +173,7 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
             </ul>
           </section>
         )}
-        <FriendsDaySection groups={friendGroups} />
+        <FriendsDaySection groups={withoutOwnMovies(friendGroups, viewings)} />
         <Button
           type='button'
           rounded='full'

@@ -138,6 +138,7 @@ function PersonView({ uid, person, otherNames, onBack }: PersonViewProps) {
             <Input
               variant='outline'
               rounded='full'
+              className='h-10'
               aria-label='Friend’s name'
               maxLength={MAX_PERSON_NAME_LENGTH}
               value={name}
@@ -165,23 +166,31 @@ function PersonView({ uid, person, otherNames, onBack }: PersonViewProps) {
       </div>
       <SettingsGroup title='Links'>
         {person.links.map((link) => (
-          <SettingsRow
-            key={link.calendar.id}
-            icon={link.calendar.kind === 'LIVE' ? '📡' : '📸'}
-            title={getLinkLabel(link)}
-            description={
-              link.feedState.status === 'ended'
-                ? 'This link was deleted or its PIN changed'
-                : `Added ${formatDate(link.calendar.createdAt)}`
-            }
-            control={
+          <li key={link.calendar.id} className='flex items-start gap-3 py-3'>
+            <span
+              className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-lg leading-none'
+              aria-hidden='true'
+            >
+              {link.calendar.kind === 'LIVE' ? '📡' : '📸'}
+            </span>
+            <span className='flex min-h-10 min-w-0 flex-1 flex-col justify-center'>
+              <span className='text-foreground font-medium text-pretty'>
+                {getLinkLabel(link)}
+              </span>
+              <span className='text-muted-foreground text-sm text-pretty'>
+                {link.feedState.status === 'ended'
+                  ? 'This link was deleted or its PIN changed'
+                  : `Added ${formatDate(link.calendar.createdAt)}`}
+              </span>
+            </span>
+            <span className='flex h-10 shrink-0 items-center'>
               <DeleteIconButton
                 label={`Remove ${getLinkLabel(link)}`}
                 disabled={removingId === link.calendar.id}
                 onClick={() => void remove(link)}
               />
-            }
-          />
+            </span>
+          </li>
         ))}
       </SettingsGroup>
     </div>
