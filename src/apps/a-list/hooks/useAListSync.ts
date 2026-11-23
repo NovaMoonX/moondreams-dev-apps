@@ -117,7 +117,10 @@ export function useAListSync(uid: string | null) {
       (error) =>
         dispatch(
           setAddedCalendarsLoadError(
-            getErrorMessage(error, 'Unable to load the calendars shared with you.'),
+            getErrorMessage(
+              error,
+              'Unable to load the calendars shared with you.',
+            ),
           ),
         ),
     );

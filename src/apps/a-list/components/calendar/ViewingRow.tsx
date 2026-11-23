@@ -39,7 +39,8 @@ function ViewingRow({ viewing, now, alsoGoing = [] }: ViewingRowProps) {
         </div>
         {alsoGoing.length > 0 && (
           <p className='text-muted-foreground text-xs'>
-            {joinNames(alsoGoing)} {alsoGoing.length === 1 ? 'is' : 'are'} going too
+            {joinNames(alsoGoing)} {alsoGoing.length === 1 ? 'is' : 'are'} going
+            too
           </p>
         )}
       </div>

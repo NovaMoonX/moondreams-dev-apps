@@ -4,7 +4,12 @@ import { isDeepStrictEqual } from 'node:util';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type DocumentData } from 'firebase-admin/firestore';
 
-import { getShareKind, toLiveViewings, toSharedCalendar, type SharedCalendar } from '../calendarShareView.js';
+import {
+  getShareKind,
+  toLiveViewings,
+  toSharedCalendar,
+  type SharedCalendar,
+} from '../calendarShareView.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -18,31 +23,47 @@ export interface ShareFeed extends SharedCalendar {
   updatedAt: number;
 }
 
-export const getShareRef = (shareId: string) => getFirestore().doc(`apps/a-list/calendarShares/${shareId}`);
-export const getFeedRef = (feedId: string) => getFirestore().doc(`apps/a-list/shareFeeds/${feedId}`);
+export const getShareRef = (shareId: string) =>
+  getFirestore().doc(`apps/a-list/calendarShares/${shareId}`);
+export const getFeedRef = (feedId: string) =>
+  getFirestore().doc(`apps/a-list/shareFeeds/${feedId}`);
 
-const newFeedId = () => Array.from({ length: FEED_ID_LENGTH }, () => TOKEN_ALPHABET[randomInt(TOKEN_ALPHABET.length)]).join('');
+const newFeedId = () =>
+  Array.from(
+    { length: FEED_ID_LENGTH },
+    () => TOKEN_ALPHABET[randomInt(TOKEN_ALPHABET.length)],
+  ).join('');
 
 export async function readLiveViewings(ownerUid: string) {
-  const snapshot = await getFirestore().collection(`apps/a-list/memberships/${ownerUid}/viewings`).get();
+  const snapshot = await getFirestore()
+    .collection(`apps/a-list/memberships/${ownerUid}/viewings`)
+    .get();
   return toLiveViewings(snapshot.docs.map((viewing) => viewing.data()));
 }
 
-function toFeed(share: DocumentData, liveViewings: Awaited<ReturnType<typeof readLiveViewings>>): ShareFeed {
+function toFeed(
+  share: DocumentData,
+  liveViewings: Awaited<ReturnType<typeof readLiveViewings>>,
+): ShareFeed {
   return { ...toSharedCalendar(share, liveViewings), updatedAt: Date.now() };
 }
 
-const readText = (value: unknown) => (typeof value === 'string' && value !== '' ? value : null);
+const readText = (value: unknown) =>
+  typeof value === 'string' && value !== '' ? value : null;
 
 /** Whether a share's feed was made under the PIN it has now; a feed made under an older PIN is retired, never handed out. */
 export const isFeedCurrent = (share: DocumentData) =>
-  readText(share.feedId) !== null && readText(share.feedPin) === readText(share.pin);
+  readText(share.feedId) !== null &&
+  readText(share.feedPin) === readText(share.pin);
 
 /**
  * The feed id for a share, making the feed on first use, or null when the share is gone or its PIN is no longer the one the caller passed.
  * The id is a secret of its own: changing the PIN or deleting the share retires it, so everyone listening loses access at once.
  */
-export async function ensureShareFeed(shareId: string, checkedPin: string | null): Promise<string | null> {
+export async function ensureShareFeed(
+  shareId: string,
+  checkedPin: string | null,
+): Promise<string | null> {
   return getFirestore().runTransaction(async (transaction) => {
     const shareRef = getShareRef(shareId);
     const share = (await transaction.get(shareRef)).data();
@@ -55,7 +76,10 @@ export async function ensureShareFeed(shareId: string, checkedPin: string | null
     }
 
     const ownerUid = readText(share.ownerUid);
-    const liveViewings = getShareKind(share) === 'LIVE' && ownerUid !== null ? await readLiveViewings(ownerUid) : [];
+    const liveViewings =
+      getShareKind(share) === 'LIVE' && ownerUid !== null
+        ? await readLiveViewings(ownerUid)
+        : [];
     const feedId = newFeedId();
     if (oldFeedId !== null) transaction.delete(getFeedRef(oldFeedId));
     transaction.set(getFeedRef(feedId), toFeed(share, liveViewings));
@@ -86,8 +110,14 @@ export async function retireShareFeed(shareId: string, feedId: string) {
  */
 export async function refreshLiveFeeds(ownerUid: string) {
   const db = getFirestore();
-  const shares = await db.collection('apps/a-list/calendarShares').where('ownerUid', '==', ownerUid).get();
-  const liveShares = shares.docs.filter((share) => getShareKind(share.data()) === 'LIVE' && isFeedCurrent(share.data()));
+  const shares = await db
+    .collection('apps/a-list/calendarShares')
+    .where('ownerUid', '==', ownerUid)
+    .get();
+  const liveShares = shares.docs.filter(
+    (share) =>
+      getShareKind(share.data()) === 'LIVE' && isFeedCurrent(share.data()),
+  );
   if (liveShares.length === 0) return 0;
 
   const liveViewings = await readLiveViewings(ownerUid);
@@ -95,11 +125,21 @@ export async function refreshLiveFeeds(ownerUid: string) {
     liveShares.map((shareSnapshot) =>
       db.runTransaction(async (transaction) => {
         const share = (await transaction.get(shareSnapshot.ref)).data();
-        const feedId = share === undefined || !isFeedCurrent(share) ? null : readText(share.feedId);
+        const feedId =
+          share === undefined || !isFeedCurrent(share)
+            ? null
+            : readText(share.feedId);
         if (feedId === null) return false;
         const feed = await transaction.get(getFeedRef(feedId));
-        if (!feed.exists || isDeepStrictEqual(feed.data()?.viewings, liveViewings)) return false;
-        transaction.update(getFeedRef(feedId), { viewings: liveViewings, updatedAt: Date.now() });
+        if (
+          !feed.exists ||
+          isDeepStrictEqual(feed.data()?.viewings, liveViewings)
+        )
+          return false;
+        transaction.update(getFeedRef(feedId), {
+          viewings: liveViewings,
+          updatedAt: Date.now(),
+        });
         return true;
       }),
     ),

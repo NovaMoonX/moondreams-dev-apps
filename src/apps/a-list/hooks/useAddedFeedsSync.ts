@@ -19,7 +19,9 @@ export function useAddedFeedsSync() {
 
     const unsubscribes = feedKey.split(',').map((entry) => {
       const [id, feedId] = entry.split(':');
-      return startShareFeedListener(feedId, (feed) => dispatch(setAddedFeed({ id, feed })));
+      return startShareFeedListener(feedId, (feed) =>
+        dispatch(setAddedFeed({ id, feed })),
+      );
     });
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
   }, [dispatch, feedKey]);
