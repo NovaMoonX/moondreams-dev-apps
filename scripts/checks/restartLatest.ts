@@ -7,7 +7,9 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-// Several deploys land in a row: the strip's one Restart tap must load the newest build, not the one the worker took over with. Three real builds (1.0.0 to 1.0.2) served the way Hosting serves them, the worker taking over as the trigger, in a page that reports itself installed (a tab is only told of a worker that waits, and this one never does); it needs Playwright's Chromium.
+// Several deploys land in a row, and one Restart tap must load the newest, not the build the worker took over with.
+// Real builds served as Hosting serves them, each version published to the database emulator as a deploy publishes it,
+// in a page that reports itself installed (a tab only hears of a worker that waits, and this one never does).
 interface Page {
   goto: (url: string) => Promise<unknown>;
   getByRole: (
@@ -94,6 +96,24 @@ const types: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
 };
 let served = builds['1.0.0'];
+
+const databaseHost = process.env.FIREBASE_DATABASE_EMULATOR_HOST;
+assert.ok(
+  databaseHost,
+  'Run this through `npm run check:restart-latest`, which starts the database emulator.',
+);
+const publish = async (version: string) => {
+  const response = await fetch(
+    `http://${databaseHost}/appVersion.json?ns=demo-restart-latest`,
+    {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer owner' },
+      body: JSON.stringify(version),
+    },
+  );
+  assert.ok(response.ok, `Publishing ${version} failed: ${response.status}`);
+};
+await publish('1.0.0');
 // Like Hosting: a missing build file is a 404, any other path is the page; the worker's script is never cached.
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://local').pathname;
@@ -161,6 +181,7 @@ const run = async () => {
 
   // Deploy 1.0.1: the worker installs and takes over, which raises the strip.
   served = builds['1.0.1'];
+  await publish('1.0.1');
   await page.evaluate(async () => {
     const registration = await navigator.serviceWorker.getRegistration();
     await registration?.update();
@@ -173,6 +194,7 @@ const run = async () => {
 
   // Deploy 1.0.2 lands before the person taps.
   served = builds['1.0.2'];
+  await publish('1.0.2');
   logged.length = 0;
   await page
     .getByRole('button', { name: 'Restart', exact: true })

@@ -144,7 +144,7 @@ const NOTES: SeedNote[] = [
 
 const SEEN: Record<string, string> = { runway: '1.150.0', pinch: '1.160.0' };
 
-/** A local feed of "What's new" notes, and seen marks that leave Runway with news and Pinch with only fixes. */
+/** A local feed of "What's new" notes, and seen marks that leave one app with news and another with only fixes. */
 export async function seedWhatsNew(context: SeedContext): Promise<SeedResult> {
   const notes = Object.fromEntries(
     NOTES.map(({ daysAgo, ...rest }, index) => {

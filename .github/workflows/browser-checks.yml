@@ -58,5 +58,11 @@ jobs:
         if: steps.pick.outputs.history == 'true'
       - run: npm run check:stale-chunk
         if: steps.pick.outputs.stale == 'true'
+      # The restart check reads the published version from the database emulator, which needs Java.
+      - uses: actions/setup-java@v4
+        if: steps.pick.outputs.restart == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
       - run: npm run check:restart-latest
         if: steps.pick.outputs.restart == 'true'
