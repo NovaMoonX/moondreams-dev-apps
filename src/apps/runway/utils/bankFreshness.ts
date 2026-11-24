@@ -1,10 +1,10 @@
+import { formatTimeAgo } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { ACCOUNT_WORDS, FRESH_DOT_MS } from '@apps/runway/constants';
 import { getPendingCents } from '@apps/runway/engine/accounts';
 import type { OpenAccountBalance } from '@apps/runway/types';
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
+const HOUR_MS = 3_600_000;
 
 /** How long ago the bank updated a figure ("Updated 4 min ago", or "4 min ago" for a row) and whether it is new enough for the dot; null from a day on, where the date reads better. */
 export function describeBankUpdated(
@@ -13,30 +13,12 @@ export function describeBankUpdated(
   isShort = false,
 ) {
   const elapsed = Math.max(0, now - asOf);
-  const isFresh = elapsed < FRESH_DOT_MS;
-  if (elapsed < MINUTE_MS) {
-    return {
-      text: isShort ? ACCOUNT_WORDS.rowJustNow : ACCOUNT_WORDS.updatedJustNow,
-      isFresh,
-    };
-  }
-  if (elapsed < HOUR_MS) {
-    return {
-      text: (isShort ? ACCOUNT_WORDS.rowMinutes : ACCOUNT_WORDS.updatedMinutes)(
-        Math.floor(elapsed / MINUTE_MS),
-      ),
-      isFresh,
-    };
-  }
-  if (elapsed < 24 * HOUR_MS) {
-    return {
-      text: (isShort ? ACCOUNT_WORDS.rowHours : ACCOUNT_WORDS.updatedHours)(
-        Math.floor(elapsed / HOUR_MS),
-      ),
-      isFresh,
-    };
-  }
-  return null;
+  if (elapsed >= 24 * HOUR_MS) return null;
+  const ago = formatTimeAgo(asOf, now, !isShort);
+  return {
+    text: isShort ? ago : ACCOUNT_WORDS.updated(ago),
+    isFresh: elapsed < FRESH_DOT_MS,
+  };
 }
 
 /** "4 min ago · $150 pending" for a linked account's row, money written short: each part left out when it has nothing to say. */
