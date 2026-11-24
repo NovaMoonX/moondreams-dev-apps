@@ -1,22 +1,13 @@
-import {
-  deleteDoc,
-  doc,
-  runTransaction,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
+import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
-import { openJson, sealJson } from '@apps/runway/security';
+import { sealJson } from '@apps/runway/security';
 import type {
   EmailFilterDoc,
-  EmailBank,
   EmailFilterSealed,
-  EmailSetupDoc,
-  EmailSetupSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -87,68 +78,5 @@ export async function setEmailWaiting(
   await updateDoc(planRef(uid, 'purchases', purchaseId), {
     emailWaiting: isWaiting,
     updatedAt: Date.now(),
-  });
-}
-
-export type EmailSetupChange = Partial<
-  Pick<EmailSetupDoc, 'provider' | 'stepId' | 'doneAt'>
->;
-
-/** Writes the walkthrough's progress from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
-export async function saveEmailSetup(
-  uid: string,
-  decide: (current: EmailSetupDoc | null) => EmailSetupChange | null,
-): Promise<void> {
-  const ref = planRef(uid, 'emailSetup', 'progress');
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const current = snapshot.exists()
-      ? (snapshot.data() as EmailSetupDoc)
-      : null;
-    const change = decide(current);
-    if (change === null) return;
-    const now = Date.now();
-    transaction.set(ref, {
-      id: 'progress',
-      provider: current?.provider ?? null,
-      stepId: current?.stepId ?? null,
-      doneAt: current?.doneAt ?? null,
-      sealed: current?.sealed ?? null,
-      createdAt: current?.createdAt ?? now,
-      ...change,
-      updatedAt: now,
-    } satisfies EmailSetupDoc);
-  });
-}
-
-/** Rewrites the banks whose alerts are forwarded from what is stored now, so an edit on another device is kept; `change` returns the new list. */
-export async function saveEmailBanks(
-  uid: string,
-  encryption: RunwayEncryption,
-  change: (banks: EmailBank[]) => EmailBank[],
-): Promise<boolean> {
-  const ref = planRef(uid, 'emailSetup', 'progress');
-  return runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const current = snapshot.exists()
-      ? (snapshot.data() as Partial<EmailSetupDoc>)
-      : null;
-    const opened = current?.sealed
-      ? await openJson<Partial<EmailSetupSealed>>(current.sealed, encryption)
-      : null;
-    const before = Array.isArray(opened?.banks) ? opened.banks : [];
-    const banks = change(before);
-    if (JSON.stringify(banks) === JSON.stringify(before)) return false;
-    const now = Date.now();
-    transaction.set(ref, {
-      id: 'progress',
-      provider: current?.provider ?? null,
-      stepId: current?.stepId ?? null,
-      doneAt: current?.doneAt ?? null,
-      sealed: await sealJson({ banks } satisfies EmailSetupSealed, encryption),
-      createdAt: current?.createdAt ?? now,
-      updatedAt: now,
-    } satisfies EmailSetupDoc);
-    return true;
   });
 }

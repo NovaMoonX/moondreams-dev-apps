@@ -7,7 +7,6 @@ import {
   startEmailEventsListener,
   startEmailFiltersListener,
   startEmailIntakeListener,
-  startEmailSetupListener,
 } from '@apps/runway/store/listeners/emailListeners';
 
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -69,6 +68,7 @@ import {
   selectRecentFrom,
   toClosingKey,
 } from '@apps/runway/store/selectors/historySelectors';
+import { selectEmailIntakeAttempt } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectConfirmedDayIds,
@@ -95,7 +95,8 @@ import {
   setMemories,
   setDoneForYou,
   setEmailIntake,
-  setEmailSetup,
+  setIsEmailIntakeLoaded,
+  setIsEmailIntakeFailed,
   setEmailEvents,
   setEmailFilters,
   setClosing,
@@ -275,6 +276,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
 
   const isEmailGateOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
   const emailLevel = useAppSelector(selectLevel);
+  const emailAttempt = useAppSelector(selectEmailIntakeAttempt);
   const isEmailOpen = isEmailGateOpen && emailLevel !== 'plan';
 
   useEffect(() => {
@@ -293,14 +295,14 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           startEmailIntakeListener(
             uid,
             encryption,
-            (intake) => dispatch(setEmailIntake(intake)),
-            skip,
-          ),
-          startEmailSetupListener(
-            uid,
-            encryption,
-            (setup) => dispatch(setEmailSetup(setup)),
-            skip,
+            (intake) => {
+              dispatch(setEmailIntake(intake));
+              dispatch(setIsEmailIntakeLoaded(true));
+            },
+            (error) => {
+              skip(error);
+              dispatch(setIsEmailIntakeFailed(true));
+            },
           ),
           startEmailEventsListener(
             uid,
@@ -316,19 +318,21 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           ),
         ];
       })
-      .catch((error: unknown) =>
-        console.error('Purchases from email did not open', error),
-      );
+      .catch((error: unknown) => {
+        console.error('Purchases from email did not open', error);
+        if (run.isCurrent) dispatch(setIsEmailIntakeFailed(true));
+      });
 
     return () => {
       run.isCurrent = false;
       stops.current.forEach((stop) => stop());
       dispatch(setEmailIntake(null));
-      dispatch(setEmailSetup(null));
+      dispatch(setIsEmailIntakeLoaded(false));
+      dispatch(setIsEmailIntakeFailed(false));
       dispatch(setEmailEvents(null));
       dispatch(setEmailFilters([]));
     };
-  }, [uid, keyStatus, isEmailOpen, dispatch]);
+  }, [uid, keyStatus, isEmailOpen, emailAttempt, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready') return;
