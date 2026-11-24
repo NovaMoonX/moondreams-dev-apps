@@ -22,7 +22,7 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useLeaveFlowGuard } from '@/hooks/useLeaveFlowGuard';
 import { useNow } from '@/hooks/useNow';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateOrdinal } from '@/utils/formatUtils';
+import { formatDateOrdinal, formatTimeAgo } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
 import EmailSetupWalkthrough from '@apps/runway/components/EmailSetupWalkthrough';
@@ -49,7 +49,6 @@ import type {
   EmailFilterRead,
 } from '@apps/runway/hooks/useEmailPurchases';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 import {
   getAddBankSteps,
   getFilterStepIndex,
@@ -399,7 +398,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
             {intake.lastReceivedAt === null
               ? EMAIL_SETUP_WORDS.noEmailsYet
               : EMAIL_SETUP_WORDS.workingSince(
-                  formatUpdatedAgo(intake.lastReceivedAt, now),
+                  formatTimeAgo(intake.lastReceivedAt, now, true),
                 )}
           </p>
           {addBankSteps.length > 0 && (

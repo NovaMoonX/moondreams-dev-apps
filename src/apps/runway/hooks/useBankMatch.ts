@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   DEPOSIT_WORDS,
+  DONE_FOR_YOU_WORDS,
   NEEDS_HOME_WORDS,
   PAIR_WORDS,
 } from '@apps/runway/constants';
@@ -18,6 +19,7 @@ import {
   findDepositDays,
   findPurchaseMatches,
 } from '@apps/runway/engine/matching';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -68,6 +70,7 @@ import type {
   PurchasePairKind,
 } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import { toPurchaseSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   describeAccountPair,
   describeDepositLinked,
@@ -88,12 +91,18 @@ const EMAIL_MATCH_WORDS = {
     `Matched ${count} purchases from your email with your bank`,
 };
 
-/** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again. Resolves with how many merged; a pair another device changed first is skipped. */
+/** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again; an automatic pass records each one in Done for you instead and shows no toast. Resolves with how many merged; a pair another device changed first is skipped. */
 export function useMergeWithUndo() {
   const { addToast } = useToast();
   const looks = useAppSelector(selectItemLooks);
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const getDestinationId = (typed: OpenPurchase) =>
+    typed.lines.find((line) => line.envelopeId !== null)?.envelopeId ?? null;
+  const getDestination = (typed: OpenPurchase) => {
+    const envelopeId = getDestinationId(typed);
+    return envelopeId ? (looks.get(envelopeId) ?? null) : null;
+  };
 
   const undo = async (uid: string, merged: readonly MergedPurchase[]) => {
     try {
@@ -121,6 +130,7 @@ export function useMergeWithUndo() {
     uid: string,
     pairs: readonly MatchPair[],
     shouldThrow = false,
+    isAutomatic = false,
   ): Promise<number> => {
     const encryption = await getRunwayEncryption(uid);
     const merged = await pairs.reduce(
@@ -146,6 +156,33 @@ export function useMergeWithUndo() {
       Promise.resolve([] as MergedPurchase[]),
     );
     if (merged.length === 0) return 0;
+    if (isAutomatic) {
+      recordDone(
+        uid,
+        merged.map((entry) => ({
+          kind: 'merge' as const,
+          title:
+            entry.typed.source === 'email'
+              ? EMAIL_MATCH_WORDS.one
+              : NEEDS_HOME_WORDS.matchedOne(
+                  getPurchaseTitle(entry.typed, nameOf),
+                ),
+          detail:
+            entry.typed.source === 'email'
+              ? getPurchaseTitle(entry.typed, nameOf)
+              : NEEDS_HOME_WORDS.matchedOneSub,
+          why: null,
+          undo: { kind: 'merge' as const, merged: entry },
+          subject: toPurchaseSubject(entry.bank, {
+            merchant: entry.bank.merchant ?? entry.typed.label ?? null,
+            itemId: getDestinationId(entry.typed),
+            toName: getDestination(entry.typed)?.name ?? null,
+            toEmoji: getDestination(entry.typed)?.emoji ?? null,
+          }),
+        })),
+      );
+      return merged.length;
+    }
     const isEmail = merged.every((entry) => entry.typed.source === 'email');
     addToast({
       title: isEmail
@@ -218,7 +255,7 @@ export function useMatchBankPurchases(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await mergeRef.current(uid, pairs);
+        await mergeRef.current(uid, pairs, false, true);
       } catch (error) {
         // The vault or the network failed before any pair was tried, so they may be tried again.
         pairs.forEach(({ key }) => tried.current.delete(key));
@@ -278,7 +315,7 @@ export function useMatchEmailPurchases(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await mergeRef.current(uid, pairs);
+        await mergeRef.current(uid, pairs, false, true);
       } catch (error) {
         // The vault or the network failed before any pair was tried, so they may be tried again.
         pairs.forEach(({ key }) => tried.current.delete(key));
@@ -337,7 +374,7 @@ export function useMatchLinkHistory(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await mergeRef.current(uid, pairs);
+        await mergeRef.current(uid, pairs, false, true);
       } catch (error) {
         // The vault or the network failed before any pair was tried, so they may be tried again.
         pairs.forEach(({ key }) => tried.current.delete(key));
@@ -362,7 +399,7 @@ interface DepositPair {
   payLineId?: string;
 }
 
-/** Links deposits to their income days, one after another, and says so in one toast with an Undo that sends them all back to Needs a home. Resolves with how many linked; a deposit another device changed first is skipped, or throws when `shouldThrow`. */
+/** Links deposits to their income days, one after another, and says so in one toast with an Undo that sends them all back to Needs a home; the automatic pass records each one in Done for you instead and shows no toast. Resolves with how many linked; a deposit another device changed first is skipped, or throws when `shouldThrow`. */
 export function useLinkDepositsWithUndo() {
   const { addToast } = useToast();
 
@@ -439,6 +476,30 @@ export function useLinkDepositsWithUndo() {
       Promise.resolve([] as (DepositPair & { linked: OpenPurchase })[]),
     );
     if (done.length === 0) return 0;
+    if (assignedBy === 'auto') {
+      recordDone(
+        uid,
+        done.map((entry) => ({
+          kind: 'deposit' as const,
+          title: DEPOSIT_WORDS.linkedOne(
+            formatCents(-entry.deposit.amountCents),
+            describePayDay(entry.dayOn),
+          ),
+          detail: DONE_FOR_YOU_WORDS.depositLinked,
+          why: null,
+          undo: {
+            kind: 'deposit' as const,
+            deposit: entry.deposit,
+            linked: entry.linked,
+            dayOn: entry.dayOn,
+          },
+          subject: toPurchaseSubject(entry.deposit, {
+            toName: describePayDay(entry.dayOn),
+          }),
+        })),
+      );
+      return done.length;
+    }
     const handPayLine = done.length === 1 ? (done[0].payLineId ?? null) : null;
     const memoryId =
       assignedBy === 'person' && handPayLine !== null
@@ -592,7 +653,7 @@ async function tickMove(
   }
 }
 
-/** Pairs money out with the money in it is the other side of, one after another, and says so in one toast with an Undo that sends them all back to Needs a home. Resolves with how many paired; a pair another device changed first is skipped, or throws when `shouldThrow`. */
+/** Pairs money out with the money in it is the other side of, one after another, and says so in one toast with an Undo that sends them all back to Needs a home; the automatic pass records each one in Done for you instead and shows no toast. Resolves with how many paired; a pair another device changed first is skipped, or throws when `shouldThrow`. */
 export function usePairAccountsWithUndo() {
   const { addToast } = useToast();
   const mask = useMaskedText();
@@ -689,6 +750,33 @@ export function usePairAccountsWithUndo() {
       Promise.resolve([] as DonePair[]),
     );
     if (done.length === 0) return 0;
+    if (assignedBy === 'auto') {
+      recordDone(
+        uid,
+        done.map((entry) => ({
+          kind: 'pair' as const,
+          title: getTitle(entry),
+          detail:
+            entry.kind === 'cardPayment'
+              ? DONE_FOR_YOU_WORDS.cardPaid
+              : DONE_FOR_YOU_WORDS.moved,
+          why: null,
+          undo: {
+            kind: 'pair' as const,
+            out: entry.out,
+            into: entry.into,
+            pairKind: entry.kind,
+            names: entry.names,
+            paired: { out: entry.paired.out, into: entry.paired.into },
+          },
+          subject: toPurchaseSubject(entry.out, {
+            fromName: entry.names.from,
+            toName: entry.names.to,
+          }),
+        })),
+      );
+      return done.length;
+    }
     const memoryId =
       assignedBy === 'person' && done.length === 1
         ? await rememberHandPair(uid, done[0].out, done[0].into)

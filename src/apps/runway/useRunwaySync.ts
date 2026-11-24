@@ -16,10 +16,10 @@ import {
   toChangeWindowKey,
 } from '@apps/runway/utils/changeWindow';
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
-import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
+import { DONE_FOR_YOU_WORDS, FORM_DRAFT_PREFIX } from '@apps/runway/constants';
 import {
   getRunwayEncryption,
   isKeptKey,
@@ -46,10 +46,12 @@ import {
 } from '@apps/runway/store/listeners/linkListeners';
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
+import { startDoneForYouListener } from '@apps/runway/store/listeners/doneForYouListeners';
 import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListeners';
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
+import { toSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   getDayKeyMonth,
   getHistoryRange,
@@ -61,6 +63,7 @@ import {
 } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
   selectRecentFrom,
@@ -71,6 +74,7 @@ import {
   selectConfirmedDayIds,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectItemLooks,
   selectLinkHistoryRanges,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -89,6 +93,7 @@ import {
   setExpenses,
   setRules,
   setMemories,
+  setDoneForYou,
   setEmailIntake,
   setEmailSetup,
   setEmailEvents,
@@ -245,6 +250,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (memories) => dispatch(setMemories(memories)),
+          fail,
+        ),
+        startDoneForYouListener(
+          uid,
+          encryption,
+          (entries) => dispatch(setDoneForYou(entries)),
           fail,
         ),
         startNeedsHomeListener(
@@ -663,19 +674,36 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       return;
     const rows = JSON.parse(reachedEndings) as [string, number, string][];
     getRunwayEncryption(uid)
-      .then((encryption) =>
-        Promise.all(
-          rows.map(([itemId, endedOn, name]) =>
-            endItem(uid, encryption, {
+      .then(async (encryption) => {
+        const written = await Promise.all(
+          rows.map(async ([itemId, endedOn, name]) => {
+            const isWritten = await endItem(uid, encryption, {
               itemId,
               endedOn,
               summary: `${name}: ended after its last payday, ${formatDateOrdinalUTC(endedOn)}.`,
               note: null,
               heldChoice: null,
+            });
+            return isWritten ? [{ itemId, name }] : [];
+          }),
+        );
+        const looks = selectItemLooks(store.getState());
+        recordDone(
+          uid,
+          written.flat().map(({ itemId, name }) => ({
+            kind: 'ended' as const,
+            title: DONE_FOR_YOU_WORDS.ended(name),
+            detail: null,
+            why: DONE_FOR_YOU_WORDS.endedWhy,
+            undo: null,
+            subject: toSubject({
+              itemId,
+              toName: name,
+              toEmoji: looks.get(itemId)?.emoji ?? null,
             }),
-          ),
-        ),
-      )
+          })),
+        );
+      })
       .catch((error) => console.error('Marking an ending did not save', error));
   }, [uid, keyStatus, isPlanLoaded, reachedEndings]);
 }

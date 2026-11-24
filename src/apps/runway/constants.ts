@@ -115,6 +115,11 @@ export const CHANGE_LOG_SPAN_LABELS: Record<
 > = { '30': '30 days', '90': '3 months', '365': 'A year' };
 /** The newest entries one window reads; a busier window says so and a shorter span shows the rest. */
 export const MAX_WINDOW_CHANGES = 500;
+
+/** How long Done for you keeps an item, and the most the listener reads or one tidy-up removes. */
+export const DONE_FOR_YOU_DAYS = 30;
+export const MAX_DONE_FOR_YOU = 200;
+export const MAX_DONE_FOR_YOU_PRUNE = 100;
 /** Entries drawn before "Show more". */
 export const CHANGE_LOG_PAGE_SIZE = 30;
 /** How many windows back the log goes. */
@@ -4506,12 +4511,7 @@ export const ACCOUNT_WORDS = {
   leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
   bankBalanceOn: (day: string) => `From your bank, ${day}`,
-  updatedJustNow: 'Updated just now',
-  updatedMinutes: (minutes: number) => `Updated ${minutes}\u00a0min ago`,
-  updatedHours: (hours: number) => `Updated ${hours}\u00a0hr ago`,
-  rowJustNow: 'Just now',
-  rowMinutes: (minutes: number) => `${minutes}\u00a0min ago`,
-  rowHours: (hours: number) => `${hours}\u00a0hr ago`,
+  updated: (ago: string) => `Updated ${ago}`,
   autoCheckChip: 'Checks every 5\u00a0min',
   autoCheckTitle: 'Kept up to date',
   autoCheck: (bank: string) =>
@@ -5693,4 +5693,66 @@ export const PLAN_SELECT_WORDS = {
   archivedPartly: (done: number, total: number, failed: readonly string[]) =>
     `Archived ${done} of ${total}. ${listNames(failed)} did not archive and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
   hint: 'Press and hold to select several',
+} as const;
+
+/** Words for Done for you, the list of what Runway did on its own. */
+export const DONE_FOR_YOU_WORDS = {
+  title: 'Done for you',
+  summary: (count: number) =>
+    count === 1 ? '1 thing done for you' : `${count} things done for you`,
+  view: 'View',
+  empty: 'Nothing done for you yet',
+  emptyBody:
+    'When Runway sorts or matches something on its own, it shows here for 30 days.',
+  undo: 'Undo',
+  undone: 'Undone',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  cannotUndo: 'It changed after this, so it can no longer be undone here.',
+  undoFailed: 'That was not undone. Nothing was changed.',
+  ruleSent: (purchase: string, envelope: string) =>
+    `${purchase} went to ${envelope}`,
+  autoMarked: (name: string) => `Marked ${name} paid`,
+  autoMarkedNote: 'To take it back, open the bill and tap Mark not paid.',
+  ended: (name: string) => `Ended ${name} after its last day`,
+  endedWhy: 'Its last day has passed.',
+  endedNote: 'Its history stays as it was.',
+  nothingToUndo: 'Nothing to undo: it never counted.',
+  depositLinked: 'It will not count as spending.',
+  chargeMatched: 'It no longer counts as spending.',
+  moved: 'It will not count as spending or income.',
+  cardPaid: 'The card shows it as paid.',
+  cannotUndoRow: "Can't be undone now",
+  undoMerge: 'Undo and keep them apart',
+  undoDeposit: 'Undo and unlink it',
+  undoPair: 'Undo and send both to Needs a home',
+  undoRule: 'Undo and send it to Needs a home',
+  undoCharge: 'Undo and unmatch it',
+  undoQuiet: 'Undo and leave it in Free to Spend',
+  undoneQuiet: 'Left in Free to Spend',
+  undoneAgo: (ago: string) => `Undone ${ago}`,
+  undoneNotice: (ago: string) => `You undid this ${ago}.`,
+  seeRule: 'See the rule',
+  seeRuleSub: 'Change or remove it',
+  openPurchase: 'Open the purchase',
+  openPurchaseSub: 'See where it went',
+  openBill: 'Open the bill',
+  openEnvelope: 'Open the envelope',
+  openGoal: 'Open the goal',
+  openItemSub: 'See it on your plan',
+  openMoves: 'See your account moves',
+  openMovesSub: 'Where moves between your accounts are kept',
+  noUndo: "This one can't be undone here.",
+  ruleGone: 'That rule has been removed.',
+  purchaseGone: 'That purchase is no longer in your list.',
+  itemGone: 'That one has been archived or removed.',
+  kindRule: 'Rule',
+  kindMerge: 'Matched',
+  kindCharge: 'Matched to a bill',
+  kindDeposit: 'Linked to a pay',
+  kindPair: 'Moved between accounts',
+  kindAutoMark: 'Marked paid',
+  kindEnded: 'Ended',
+  kindHistory: 'History',
+  kindReleased: 'Dropped charge',
 } as const;

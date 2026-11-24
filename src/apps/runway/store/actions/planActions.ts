@@ -83,6 +83,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       dirtyFrom: null,
       notify: { needsHome: false },
       sorting: null,
+      doneForYouSeenAt: null,
       keyId: encryption.keyId,
       sealed,
       shareSummary: null,

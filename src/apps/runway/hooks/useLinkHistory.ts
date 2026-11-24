@@ -6,8 +6,6 @@ import {
   where,
 } from 'firebase/firestore';
 
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-
 import { db } from '@lib/firebase/config';
 import { useAppSelector } from '@/store';
 import { NEEDS_HOME_WORDS, SPEND_WORDS } from '@apps/runway/constants';
@@ -16,6 +14,7 @@ import {
   getPairSideIds,
   isStillCounted,
 } from '@apps/runway/engine/linkHistory';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { AUTO_MATCH_DAYS } from '@apps/runway/hooks/useBankMatch';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createSealedReader } from '@lib/security';
@@ -60,7 +59,6 @@ const keepSwept = (key: string) => {
  * Waiting ones are turned as they arrive; ones already placed in spending are found once per link on this device.
  */
 export function useLinkHistory(uid: string | null) {
-  const { addToast } = useToast();
   const level = useAppSelector(selectLevel);
   const isReady = useAppSelector(selectIsNeedsHomeLoaded);
   const waiting = useAppSelector((state) => state.runway.needsHome);
@@ -72,12 +70,6 @@ export function useLinkHistory(uid: string | null) {
   const isMemoriesLoaded = useAppSelector(selectIsMemoriesLoaded);
   const routes = useAppSelector(selectRouteMemories);
   const tried = useRef(new Set<string>());
-  const latest = useRef({ addToast });
-
-  useEffect(() => {
-    latest.current = { addToast };
-  });
-
   useEffect(() => {
     if (uid === null || !isReady || !isMemoriesLoaded || level !== 'link') {
       return;
@@ -190,14 +182,19 @@ export function useLinkHistory(uid: string | null) {
         toSweep.forEach((link) => tried.current.delete(`swept:${link.id}`));
       }
       if (outcomes.turned === 0) return;
-      latest.current.addToast({
-        title:
-          outcomes.turned === 1
-            ? NEEDS_HOME_WORDS.historyOne
-            : NEEDS_HOME_WORDS.historyMany(outcomes.turned),
-        description: NEEDS_HOME_WORDS.historySub,
-        type: 'info',
-      });
+      recordDone(uid, [
+        {
+          kind: 'history',
+          title:
+            outcomes.turned === 1
+              ? NEEDS_HOME_WORDS.historyOne
+              : NEEDS_HOME_WORDS.historyMany(outcomes.turned),
+          detail: NEEDS_HOME_WORDS.historySub,
+          why: null,
+          undo: null,
+          subject: null,
+        },
+      ]);
     };
 
     void run();
