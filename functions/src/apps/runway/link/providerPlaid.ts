@@ -58,10 +58,14 @@ interface PlaidFailure {
   request_id?: string;
 }
 
-/** Plaid's own sentence for a failure, clipped, with anything shaped like a token masked. */
-const asProviderDetail = (value: unknown): string | null =>
+const asProviderDetail = (
+  value: unknown,
+  secrets: readonly string[],
+): string | null =>
   typeof value === 'string' && value.trim() !== ''
-    ? value
+    ? secrets
+        .filter((known) => known !== '')
+        .reduce((text, known) => text.split(known).join('[secret]'), value)
         .replace(/\b(access|link|public|processor)-[A-Za-z0-9-]+/g, '[token]')
         .slice(0, 300)
     : null;
@@ -180,7 +184,7 @@ export async function call<T>(
     failure.trace = {
       requestId: asRequestId(json.request_id),
       path,
-      detail: asProviderDetail(json.error_message),
+      detail: asProviderDetail(json.error_message, [clientId, secret]),
     };
     throw failure;
   }
