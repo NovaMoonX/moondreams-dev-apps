@@ -335,6 +335,8 @@ export const toTwinnedEmailIds = (
   new Set([...twins.clear.keys(), ...twins.ambiguous, ...twins.split.keys()]);
 
 /** At Link, each linked card with a balance from its bank, read from the bank (`getBankOwedByCard`); empty at every other level, where a card's figure is what Runway counted. */
+const NO_OWED: Record<string, BankOwed> = {};
+
 export const getBankOwed = (
   level: Level,
   cards: readonly OpenCard[],
@@ -345,13 +347,13 @@ export const getBankOwed = (
   twinnedEmailIds: ReadonlySet<string>,
   today: DateOnly,
 ): Record<string, BankOwed> => {
-  if (level !== 'link') return {};
+  if (level !== 'link') return NO_OWED;
   const bankById = new Map(accountBalances.map((entry) => [entry.id, entry]));
   const linked = cards.flatMap((card) => {
     const bank = card.linkId === null ? undefined : bankById.get(card.id);
     return bank === undefined ? [] : [{ id: card.id, postedCents: bank.cents }];
   });
-  if (linked.length === 0) return {};
+  if (linked.length === 0) return NO_OWED;
   return getBankOwedByCard({
     cards: linked,
     purchases: mergePurchases(needsHome, purchases),
