@@ -51,7 +51,7 @@ import {
   type SenderKind,
 } from './parseAlert.js';
 import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
-import { unwrapForwarded } from './unwrapForwarded.js';
+import { unwrapForwarded } from '../../../email/unwrapForwarded.js';
 
 if (getApps().length === 0) {
   initializeApp();
