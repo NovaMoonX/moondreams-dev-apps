@@ -24,7 +24,7 @@ function NextFillRow({ itemId, today }: NextFillRowProps) {
   const fill = lookahead === null ? null : getNextFill(lookahead.steps, itemId);
   if (fill === null) return null;
   const text = NEXT_FILL_WORDS.row(
-    `+${formatCents(fill.cents)}`,
+    formatCents(fill.cents),
     formatDateOrdinalUTC(fill.on),
   );
 

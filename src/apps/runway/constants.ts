@@ -2910,7 +2910,7 @@ export const PURCHASE_COST_WORDS = {
 /** An envelope's next income day that gives it money, as a door under its sheet's figure. */
 export const NEXT_FILL_WORDS = {
   row: (amount: string, date: string) => `Gets ${amount} on ${date}`,
-  sub: 'Next money in · See that income day',
+  sub: 'See that income day',
 } as const;
 
 /** An envelope below zero, as a card under its sheet's figure with a one-tap way back to $0. */

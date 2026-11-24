@@ -132,7 +132,7 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
         <div className='space-y-1'>
           <Button
             type='button'
-            variant='secondary'
+            variant='primary'
             className='w-full'
             disabled={isSaving}
             onClick={() => void bringBack()}
