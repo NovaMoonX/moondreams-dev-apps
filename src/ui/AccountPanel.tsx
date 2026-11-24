@@ -6,7 +6,7 @@ import {
   ChevronDown,
   LogOut,
   Plus,
-  Sparkles,
+  Megaphone,
   ShieldCheck,
   UserRoundCog,
   X,
@@ -218,13 +218,13 @@ function AccountPanel({
           <PanelRow
             icon={
               <IconTile>
-                <Sparkles className='size-5' />
+                <Megaphone className='size-5' />
               </IconTile>
             }
             title="What's new"
             subtitle={
               whatsNewScope === 'site'
-                ? 'What changed on the site lately'
+                ? 'What changed across the site lately'
                 : `What changed in ${getScopeName(whatsNewScope)} lately`
             }
             onClick={() => onOpenWhatsNew(whatsNewScope)}

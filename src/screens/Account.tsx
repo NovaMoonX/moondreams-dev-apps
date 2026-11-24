@@ -1,7 +1,7 @@
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Camera, Pencil, RefreshCw } from 'lucide-react';
+import { Camera, Megaphone, Pencil, RefreshCw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -53,7 +53,7 @@ function UpdatesGroup({ uid }: { uid: string }) {
   if (!canSee) return null;
 
   const handleChange = (isChecked: boolean) => {
-    writeShowFixOnly(uid, isChecked, seen.doesExist).catch(() =>
+    writeShowFixOnly(uid, isChecked).catch(() =>
       addToast({
         title: "Couldn't save that",
         description: 'Check your connection and try again.',
@@ -65,7 +65,7 @@ function UpdatesGroup({ uid }: { uid: string }) {
   return (
     <SettingsGroup isCard title='Updates'>
       <SettingsRow
-        icon='✨'
+        icon={<Megaphone className='size-5' />}
         title='Show fix-only updates'
         description='When an update only fixed things, still show what changed.'
         control={

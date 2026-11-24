@@ -92,11 +92,18 @@ assert.deepEqual(ids(getUnseenNotes(visible, '1.181.0')), [current.id]);
 assert.deepEqual(ids(getUnseenNotes(visible, '1.182.0')), []);
 assert.deepEqual(getUnseenNotes(visible, null), []);
 
-// First encounter marks the newest visible release, or the running one when there are no notes.
-assert.equal(getFirstEncounterMark(visible, '1.182.0'), '1.182.0');
-assert.equal(getFirstEncounterMark([older], '1.182.0'), '1.9.0');
-assert.equal(getFirstEncounterMark([], '1.182.0'), '1.182.0');
-assert.equal(getFirstEncounterMark([], 'dev'), null);
+// First encounter marks the newest release of the scope the person has, or the running one when there are none,
+// whatever a note's audience or gate: those load after the feed, so a debug viewer must not get a pop-up on a first run.
+const mark = (notes: WhatsNewNote[], extra: Partial<WhatsNewContext> = {}) =>
+  getFirstEncounterMark(notes, { ...context(), ...extra });
+assert.equal(mark([future, current, older, debugNote]), '1.182.0');
+assert.equal(mark([older]), '1.9.0');
+assert.equal(mark([]), '1.182.0');
+assert.equal(mark([], { runningVersion: 'dev' }), null);
+assert.equal(mark([siteNote]), '1.182.0');
+assert.equal(mark([debugNote, older]), '1.181.0');
+assert.equal(mark([gated, older]), '1.181.0');
+assert.equal(mark([future, current], { runningVersion: '1.9.0' }), '1.9.0');
 
 // A fix-only update pops up only for a debug viewer who hasn't switched it off.
 const fixes = [note('1.182.0', 'fixed'), note('1.181.0', 'fixed')];

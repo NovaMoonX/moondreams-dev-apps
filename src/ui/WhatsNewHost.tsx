@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react';
+import { Megaphone } from 'lucide-react';
 
+import SideTab from '@/components/SideTab';
 import { SITE_VERSION } from '@/lib/app';
 import { hasUnsavedWork } from '@/lib/app/unsavedWork';
 import {
@@ -23,6 +23,7 @@ import {
 } from '@/lib/whatsNew/whatsNewHistoryStore';
 import { whatsNewQueryOptions } from '@/lib/whatsNew/whatsNewQueries';
 import type { WhatsNewNote, WhatsNewScope } from '@/lib/whatsNew/whatsNewTypes';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { useAuth } from '@hooks/useAuth';
 import {
   useWhatsNewSeen,
@@ -36,9 +37,10 @@ import WhatsNewSheet from '@ui/WhatsNewSheet';
 
 const SETTLE_MS = 1500;
 const RETRY_MS = 2000;
+const MAX_OPEN_TRIES = 15;
 
 /** Scopes whose pop-up already opened since this page loaded: a refresh brings it back, navigating inside the site doesn't. */
-const poppedScopes = new Set<WhatsNewScope>();
+const poppedScopes = new Set<string>();
 
 const collapsedKey = (scope: WhatsNewScope) => `whatsNew.collapsed.${scope}`;
 
@@ -59,32 +61,21 @@ const writeCollapsed = (scope: WhatsNewScope, version: string | null) => {
   }
 };
 
-/** A closed menu can stay in the page, faded out and hidden from assistive tech; only one the person can see counts. */
-const isDialogShown = () =>
-  Array.from(document.querySelectorAll('[role="dialog"]')).some(
-    (dialog) =>
-      !dialog.closest('[aria-hidden="true"]') &&
-      getComputedStyle(dialog).opacity !== '0',
-  );
-
 const isGateOpen = (app: string, gate: string) =>
   selectIsGateOpen(store.getState(), app, gate);
 
-/** The small tab a debug viewer's collapsed update log leaves at the screen's edge. */
+/** The small tab a debug viewer's collapsed update log leaves at the screen's edge: an icon on a phone, with its words from `sm`. */
 function CollapsedTab({ onOpen }: { onOpen: () => void }) {
   return (
-    <Button
-      type='button'
-      variant='base'
-      aria-label="What's new"
-      className='bg-primary text-primary-foreground fixed top-[55%] right-0 z-40 h-10 min-w-10 gap-1.5 rounded-l-full rounded-r-none px-3 shadow-md'
+    <SideTab
+      side='right'
+      label="What's new"
+      icon={<Megaphone className='size-4' aria-hidden='true' />}
+      className='bg-primary text-primary-foreground border-primary top-[55%] w-10 gap-1.5 sm:w-auto sm:min-w-10 sm:px-3'
       onClick={onOpen}
     >
-      <Sparkles className='size-4' aria-hidden='true' />
-      <span className='text-sm font-medium max-[359px]:hidden'>
-        What&apos;s new
-      </span>
-    </Button>
+      <span className='text-sm font-medium max-sm:hidden'>What&apos;s new</span>
+    </SideTab>
   );
 }
 
@@ -103,7 +94,11 @@ function WhatsNewHost() {
   const seen = useWhatsNewSeen(uid);
   const gates = useAppSelector((state) => state.featureGates);
   const historyScope = useOpenWhatsNewHistory();
-  const [popupScope, setPopupScope] = useState<WhatsNewScope | null>(null);
+  const [popup, setPopup] = useState<{
+    scope: WhatsNewScope;
+    notes: WhatsNewNote[];
+    isOpen: boolean;
+  } | null>(null);
   const [now] = useState(Date.now);
   const [, refresh] = useReducer((count: number) => count + 1, 0);
   const markedKeys = useRef(new Set<string>());
@@ -130,8 +125,12 @@ function WhatsNewHost() {
     showFixOnly: seen.showFixOnly,
   });
   const isCollapsed =
-    scope !== null && newest !== null && readCollapsed(scope) === newest;
-  const isPopupOpen = scope !== null && popupScope === scope;
+    isDebug &&
+    scope !== null &&
+    newest !== null &&
+    readCollapsed(scope) === newest;
+  const shownPopup = scope !== null && popup?.scope === scope ? popup : null;
+  const isPopupOpen = shownPopup?.isOpen === true;
   const isHistoryOpen = scope !== null && historyScope === scope;
   const historyNotes = useMemo(
     () => getHistoryNotes(visible, now),
@@ -141,31 +140,37 @@ function WhatsNewHost() {
   // First time in this scope (or right after this shipped): remember what is already here, show nothing.
   useEffect(() => {
     if (!uid || !scope || !seen.isLoaded || !feed.data || mark !== null) return;
-    const firstMark = getFirstEncounterMark(visible, SITE_VERSION);
+    const firstMark = getFirstEncounterMark(feed.data, {
+      scope,
+      runningVersion: SITE_VERSION,
+    });
     const key = `${uid}:${scope}`;
     if (firstMark === null || markedKeys.current.has(key)) return;
     markedKeys.current.add(key);
-    writeWhatsNewSeen(uid, scope, firstMark, seen.doesExist).catch((error) => {
+    writeWhatsNewSeen(uid, scope, firstMark).catch((error) => {
       markedKeys.current.delete(key);
       console.error("Failed to save what's new mark:", error);
     });
-  }, [uid, scope, seen.isLoaded, seen.doesExist, feed.data, mark, visible]);
+  }, [uid, scope, seen.isLoaded, feed.data, mark]);
 
   // Opens once the page has settled, never over typed work or another dialog; waits and tries again.
   useEffect(() => {
-    if (!scope || !isPopUpWarranted || isCollapsed || poppedScopes.has(scope))
-      return;
+    if (!uid || !scope || !isPopUpWarranted || isCollapsed) return;
+    const poppedKey = `${uid}:${scope}`;
+    if (poppedScopes.has(poppedKey)) return;
     const tryOpen = () => {
-      if (hasUnsavedWork() || isDialogShown()) return false;
-      poppedScopes.add(scope);
-      setPopupScope(scope);
+      if (hasUnsavedWork() || hasDialogOnTop()) return false;
+      poppedScopes.add(poppedKey);
+      setPopup({ scope, notes: unseen, isOpen: true });
       return true;
     };
     let retry: ReturnType<typeof setInterval> | undefined;
     const settle = setTimeout(() => {
       if (!tryOpen()) {
+        let tries = 0;
         retry = setInterval(() => {
-          if (tryOpen()) clearInterval(retry);
+          tries += 1;
+          if (tryOpen() || tries >= MAX_OPEN_TRIES) clearInterval(retry);
         }, RETRY_MS);
       }
     }, SETTLE_MS);
@@ -173,26 +178,29 @@ function WhatsNewHost() {
       clearTimeout(settle);
       clearInterval(retry);
     };
-  }, [scope, isPopUpWarranted, isCollapsed, newest]);
+  }, [uid, scope, isPopUpWarranted, isCollapsed, unseen]);
 
   if (!uid || !scope) return null;
 
   const name = getScopeName(scope);
   const title =
-    scope === 'site' ? `What's new on ${name}` : `What's new in ${name}`;
+    scope === 'site' ? "What's new across the site" : `What's new in ${name}`;
+  const poppedKey = `${uid}:${scope}`;
 
+  const closePopup = () =>
+    setPopup((held) => (held ? { ...held, isOpen: false } : held));
   const collapse = () => {
     writeCollapsed(scope, newest);
-    setPopupScope(null);
+    closePopup();
     refresh();
   };
   const gotIt = () => {
-    poppedScopes.add(scope);
+    poppedScopes.add(poppedKey);
     writeCollapsed(scope, null);
-    setPopupScope(null);
+    closePopup();
     refresh();
     if (newest === null) return;
-    writeWhatsNewSeen(uid, scope, newest, seen.doesExist).catch((error) =>
+    writeWhatsNewSeen(uid, scope, newest).catch((error) =>
       console.error("Failed to save what's new mark:", error),
     );
   };
@@ -200,53 +208,49 @@ function WhatsNewHost() {
     if (note.path?.startsWith('/')) navigate(note.path);
     if (isHistory) closeWhatsNewHistory();
     else if (isDebug) collapse();
-    else setPopupScope(null);
+    else closePopup();
   };
   const stopFixOnly = () => {
-    setPopupScope(null);
-    writeShowFixOnly(uid, false, seen.doesExist).catch((error) =>
+    closePopup();
+    writeShowFixOnly(uid, false).catch((error) =>
       console.error('Failed to save the fix-only setting:', error),
     );
   };
 
   return (
     <>
-      {isPopUpWarranted ? (
+      {shownPopup ? (
         <WhatsNewSheet
-          key={`${scope}:${newest}`}
-          isOpen={isPopupOpen}
+          key={`${scope}:${getNewestVersion(shownPopup.notes)}`}
+          isOpen={shownPopup.isOpen}
           title={title}
+          scopeName={name}
           mode='popup'
-          notes={unseen}
+          notes={shownPopup.notes}
           isDebug={isDebug}
-          onClose={() => setPopupScope(null)}
+          onClose={closePopup}
           onGotIt={gotIt}
           onCollapse={collapse}
           onShowMe={(note) => showMe(note, false)}
           onStopFixOnly={stopFixOnly}
         />
       ) : null}
-      {isHistoryOpen ? (
-        <WhatsNewSheet
-          key={`history:${scope}`}
-          isOpen
-          title={title}
-          mode='history'
-          notes={historyNotes}
-          isDebug={isDebug}
-          onClose={closeWhatsNewHistory}
-          onShowMe={(note) => showMe(note, true)}
-        />
-      ) : null}
-      {isDebug &&
-      isPopUpWarranted &&
-      isCollapsed &&
-      !isPopupOpen &&
-      !isHistoryOpen ? (
+      <WhatsNewSheet
+        key={`history:${scope}`}
+        isOpen={isHistoryOpen}
+        title={title}
+        scopeName={name}
+        mode='history'
+        notes={historyNotes}
+        isDebug={isDebug}
+        onClose={closeWhatsNewHistory}
+        onShowMe={(note) => showMe(note, true)}
+      />
+      {isPopUpWarranted && isCollapsed && !isPopupOpen && !isHistoryOpen ? (
         <CollapsedTab
           onOpen={() => {
-            poppedScopes.add(scope);
-            setPopupScope(scope);
+            poppedScopes.add(poppedKey);
+            setPopup({ scope, notes: unseen, isOpen: true });
           }}
         />
       ) : null}

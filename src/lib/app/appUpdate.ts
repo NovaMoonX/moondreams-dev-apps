@@ -37,11 +37,16 @@ const raiseStrip = (reason: UpdateReason) => {
 };
 
 // The version is published a few seconds after Hosting deploys, so a worker can arrive before it: look again a few times before dropping it.
-const raiseOnceNewerIsPublished = async (reason: UpdateReason) => {
+const raiseOnceNewerIsPublished = async (
+  reason: UpdateReason,
+  isLastChance: boolean,
+) => {
   const hasNewer = async () => {
     const latest = await fetchLatestVersion().catch(() => null);
-    const status = getVersionStatus(SITE_VERSION, latest);
-    return status === 'outdated' || status === 'unknown' || SITE_VERSION === 'dev';
+    return (
+      getVersionStatus(SITE_VERSION, latest) === 'outdated' ||
+      SITE_VERSION === 'dev'
+    );
   };
   const checkFrom = async (attempt: number): Promise<void> => {
     if (isUpdateReady || isUpdatingOnRequest) return;
@@ -49,20 +54,47 @@ const raiseOnceNewerIsPublished = async (reason: UpdateReason) => {
       raiseStrip(reason);
       return;
     }
-    if (attempt >= PUBLISH_RECHECKS) return;
+    if (attempt >= PUBLISH_RECHECKS) {
+      if (!isLastChance) checkAgainOnReturn(reason);
+      return;
+    }
     await new Promise((resolve) => window.setTimeout(resolve, PUBLISH_RECHECK_MS));
     await checkFrom(attempt + 1);
   };
   await checkFrom(1);
 };
 
-/** Raises the top strip's "New version ready · Restart" once a newer version is published; the page itself never reloads on its own. */
-export function markUpdateReady(reason: UpdateReason) {
+const startPublishedCheck = (reason: UpdateReason, isLastChance: boolean) => {
   if (isUpdateReady || isUpdatingOnRequest || isCheckingPublished) return;
   isCheckingPublished = true;
-  void raiseOnceNewerIsPublished(reason).finally(() => {
+  void raiseOnceNewerIsPublished(reason, isLastChance).finally(() => {
     isCheckingPublished = false;
   });
+};
+
+// A phone asleep or offline through the tries would otherwise never look again.
+let isWaitingForReturn = false;
+const checkAgainOnReturn = (reason: UpdateReason) => {
+  if (isWaitingForReturn) return;
+  isWaitingForReturn = true;
+  const again = () => {
+    if (document.visibilityState === 'hidden') return;
+    isWaitingForReturn = false;
+    document.removeEventListener('visibilitychange', again);
+    window.removeEventListener('online', again);
+    startPublishedCheck(reason, true);
+  };
+  document.addEventListener('visibilitychange', again);
+  window.addEventListener('online', again);
+};
+
+/** Raises the top strip's "New version ready · Restart": at once for a missing file, and for a new worker once a newer version is published; the page itself never reloads on its own. */
+export function markUpdateReady(reason: UpdateReason) {
+  if (reason === 'stale-files') {
+    raiseStrip(reason);
+    return;
+  }
+  startPublishedCheck(reason, false);
 }
 
 /**
@@ -188,10 +220,10 @@ const waitForNewWorker = async () => {
   const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
   if (!registration) return false;
 
-  const took = { over: false };
+  const took = { over: false, timer: 0 };
   const controller = new AbortController();
   const tookOver = new Promise<boolean>((resolve) => {
-    const timer = window.setTimeout(() => {
+    took.timer = window.setTimeout(() => {
       controller.abort();
       resolve(took.over);
     }, NEW_WORKER_WAIT_MS);
@@ -199,7 +231,7 @@ const waitForNewWorker = async () => {
       'controllerchange',
       () => {
         took.over = true;
-        window.clearTimeout(timer);
+        window.clearTimeout(took.timer);
         controller.abort();
         resolve(true);
       },
@@ -208,6 +240,7 @@ const waitForNewWorker = async () => {
   });
   await registration.update().catch(() => undefined);
   if (!registration.installing && !registration.waiting) {
+    window.clearTimeout(took.timer);
     if (!took.over) controller.abort();
     return took.over;
   }

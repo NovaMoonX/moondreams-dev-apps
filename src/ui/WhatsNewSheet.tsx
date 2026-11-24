@@ -2,7 +2,14 @@ import { useCallback, useRef, useState, type ComponentType } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronDown, CircleArrowUp, Sparkles, Wrench } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleArrowUp,
+  Megaphone,
+  Wrench,
+} from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -21,8 +28,8 @@ const KIND_LOOK: Record<
   WhatsNewKind,
   { word: string; Icon: ComponentType<{ className?: string }> }
 > = {
-  new: { word: 'New', Icon: Sparkles },
-  improved: { word: 'Better', Icon: CircleArrowUp },
+  new: { word: 'New', Icon: Megaphone },
+  improved: { word: 'Improved', Icon: CircleArrowUp },
   fixed: { word: 'Fixed', Icon: Wrench },
 };
 
@@ -36,6 +43,7 @@ type HistoryView = (typeof HISTORY_VIEWS)[number]['value'];
 interface WhatsNewSheetProps {
   isOpen: boolean;
   title: string;
+  scopeName: string;
   /** A pop-up holds what is unseen and ends in Got it; history holds everything and just closes. */
   mode: 'popup' | 'history';
   notes: WhatsNewNote[];
@@ -55,27 +63,41 @@ function NoteRow({
   onShowMe: (note: WhatsNewNote) => void;
 }) {
   const { word, Icon } = KIND_LOOK[note.kind];
+  const icon = (
+    <Icon className='text-primary mt-0.5 size-4 shrink-0' aria-hidden='true' />
+  );
+  const text = (
+    <span className='block min-w-0 flex-1'>
+      <span className='text-muted-foreground block text-xs'>{word}</span>
+      <span className='text-foreground block text-sm text-pretty'>
+        {note.text}
+      </span>
+    </span>
+  );
+  if (!note.path) {
+    return (
+      <li className='flex items-start gap-3 py-2'>
+        {icon}
+        {text}
+      </li>
+    );
+  }
   return (
-    <li className='flex items-start gap-3 py-2'>
-      <Icon
-        className='text-primary mt-0.5 size-4 shrink-0'
-        aria-hidden='true'
-      />
-      <div className='min-w-0 flex-1'>
-        <p className='text-muted-foreground text-xs'>{word}</p>
-        <p className='text-foreground text-sm text-pretty'>{note.text}</p>
-      </div>
-      {note.path ? (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className="relative shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-          onClick={() => onShowMe(note)}
-        >
-          Show me
-        </Button>
-      ) : null}
+    <li>
+      <Button
+        type='button'
+        variant='tertiary'
+        aria-label={`${note.text}, show me`}
+        className='h-auto min-h-10 w-full items-start justify-start gap-3 px-0 py-2 text-left font-normal'
+        onClick={() => onShowMe(note)}
+      >
+        {icon}
+        {text}
+        <ChevronRight
+          className='text-muted-foreground mt-0.5 size-4 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
     </li>
   );
 }
@@ -96,16 +118,27 @@ function NoteList({
   );
 }
 
-function FoldRow({ label, onOpen }: { label: string; onOpen: () => void }) {
+function FoldRow({
+  label,
+  isOpen,
+  onToggle,
+}: {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
   return (
     <Button
       type='button'
       variant='tertiary'
       className='text-muted-foreground relative w-full justify-center gap-1.5 text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-1 before:content-[""]'
-      onClick={onOpen}
+      onClick={onToggle}
     >
-      {label}
-      <ChevronDown className='size-4' aria-hidden='true' />
+      {isOpen ? 'Show less' : label}
+      <ChevronDown
+        className={join('size-4', isOpen && 'rotate-180')}
+        aria-hidden='true'
+      />
     </Button>
   );
 }
@@ -144,12 +177,12 @@ const formatMonth = (at: number) =>
 function MonthList({
   notes,
   openFixMonths,
-  onOpenFixes,
+  onToggleFixes,
   onShowMe,
 }: {
   notes: WhatsNewNote[];
   openFixMonths: string[];
-  onOpenFixes: (key: string) => void;
+  onToggleFixes: (key: string) => void;
   onShowMe: (note: WhatsNewNote) => void;
 }) {
   return (
@@ -158,15 +191,17 @@ function MonthList({
         <section key={month.key}>
           <SectionDivider label={formatMonth(month.at)} />
           <NoteList notes={month.highlights} onShowMe={onShowMe} />
-          {month.fixes.length === 0 ? null : openFixMonths.includes(
-              month.key,
-            ) ? (
-            <NoteList notes={month.fixes} onShowMe={onShowMe} />
-          ) : (
-            <FoldRow
-              label={countFixes(month.fixes.length)}
-              onOpen={() => onOpenFixes(month.key)}
-            />
+          {month.fixes.length === 0 ? null : (
+            <>
+              {openFixMonths.includes(month.key) ? (
+                <NoteList notes={month.fixes} onShowMe={onShowMe} />
+              ) : null}
+              <FoldRow
+                label={countFixes(month.fixes.length)}
+                isOpen={openFixMonths.includes(month.key)}
+                onToggle={() => onToggleFixes(month.key)}
+              />
+            </>
           )}
         </section>
       ))}
@@ -189,6 +224,7 @@ const findScroller = (node: HTMLElement) => {
 function WhatsNewSheet({
   isOpen,
   title,
+  scopeName,
   mode,
   notes,
   isDebug,
@@ -226,7 +262,7 @@ function WhatsNewSheet({
     const isConfirmed = await confirm({
       title: 'Stop showing fix-only updates?',
       message:
-        "You'll still see new things and improvements. Turn them back on from your account page.",
+        "You won't see a pop-up for updates that only fix things. Turn them back on in Manage your account, under Updates.",
       confirmText: 'Stop showing',
       cancelText: 'Keep showing',
     });
@@ -239,7 +275,11 @@ function WhatsNewSheet({
   const body = () => {
     if (notes.length === 0) {
       return (
-        <p className='text-muted-foreground text-sm'>Nothing new here yet.</p>
+        <p className='text-muted-foreground text-sm'>
+          {mode === 'history'
+            ? `Nothing new in ${scopeName} yet. Changes show up here after an update.`
+            : 'Nothing new here yet.'}
+        </p>
       );
     }
     if (isLog) return <VersionLog notes={notes} onShowMe={onShowMe} />;
@@ -248,16 +288,19 @@ function WhatsNewSheet({
         <MonthList
           notes={notes}
           openFixMonths={openFixMonths}
-          onOpenFixes={(key) => setOpenFixMonths((open) => [...open, key])}
+          onToggleFixes={(key) =>
+            setOpenFixMonths((open) =>
+              open.includes(key)
+                ? open.filter((openKey) => openKey !== key)
+                : [...open, key],
+            )
+          }
           onShowMe={onShowMe}
         />
       );
     }
     return (
       <div className='space-y-2'>
-        <p className='text-muted-foreground text-sm'>
-          Here is what has changed since you were last here.
-        </p>
         <NoteList
           notes={
             isMoreOpen
@@ -266,19 +309,24 @@ function WhatsNewSheet({
           }
           onShowMe={onShowMe}
         />
-        {rolled.moreHighlights.length > 0 && !isMoreOpen ? (
+        {rolled.moreHighlights.length > 0 ? (
           <FoldRow
             label={`and ${rolled.moreHighlights.length} more since ${formatDateShort(rolled.sinceAt ?? 0)}`}
-            onOpen={() => setIsMoreOpen(true)}
+            isOpen={isMoreOpen}
+            onToggle={() => setIsMoreOpen((isOpen) => !isOpen)}
           />
         ) : null}
-        {rolled.fixes.length === 0 ? null : isFixesOpen ? (
-          <NoteList notes={rolled.fixes} onShowMe={onShowMe} />
-        ) : (
-          <FoldRow
-            label={countFixes(rolled.fixes.length)}
-            onOpen={() => setIsFixesOpen(true)}
-          />
+        {rolled.fixes.length === 0 ? null : (
+          <>
+            {isFixesOpen ? (
+              <NoteList notes={rolled.fixes} onShowMe={onShowMe} />
+            ) : null}
+            <FoldRow
+              label={countFixes(rolled.fixes.length)}
+              isOpen={isFixesOpen}
+              onToggle={() => setIsFixesOpen((isOpen) => !isOpen)}
+            />
+          </>
         )}
       </div>
     );
@@ -327,7 +375,10 @@ function WhatsNewSheet({
       footer={footer()}
       viewKey={mode === 'history' ? view : undefined}
     >
-      <div ref={keepScroll} className='space-y-4'>
+      <div
+        ref={keepScroll}
+        className={join('space-y-4', mode === 'history' && 'min-h-[55dvh]')}
+      >
         {mode === 'history' && isDebug ? (
           <SegmentedControl
             label='What to show'
@@ -339,17 +390,15 @@ function WhatsNewSheet({
         ) : null}
         {body()}
         {mode === 'popup' && isDebug && isFixOnly(notes) && onStopFixOnly ? (
-          <div className='flex justify-center'>
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className="text-muted-foreground relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-              onClick={() => void stopFixOnly()}
-            >
-              Stop showing fix-only updates
-            </Button>
-          </div>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-muted-foreground w-full justify-between px-0 text-sm font-normal'
+            onClick={() => void stopFixOnly()}
+          >
+            Stop showing fix-only updates
+            <ChevronRight className='size-4' aria-hidden='true' />
+          </Button>
         ) : null}
       </div>
     </DetailSheet>

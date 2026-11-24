@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom';
 import CopyTextButton from '@/components/CopyTextButton';
 import DebugDetails from '@/components/DebugDetails';
 import DetailSheet from '@/components/DetailSheet';
+import SideTab from '@/components/SideTab';
 import { useFallbacks } from '@/hooks/useFallbacks';
 import { SITE_VERSION } from '@/lib/app';
 import { useCanSeeDebugDetails } from '@/lib/debugProfiles/useCanSeeDebugDetails';
@@ -93,14 +94,16 @@ function FallbackTab({
 
   return (
     <>
-      <Button
-        type='button'
-        variant='base'
-        size='sm'
+      <SideTab
+        side='left'
+        isAboveSheets
         data-fallback-tab
-        aria-label={pill === null ? label : `${label}: ${toShort(pill)}`}
+        label={pill === null ? label : `${label}: ${toShort(pill)}`}
+        icon={
+          <TriangleAlert className='size-3.5 shrink-0' aria-hidden='true' />
+        }
         className={join(
-          "fixed top-1/2 left-0 z-[125] flex h-10 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-l-0 p-0 shadow-md before:absolute before:inset-y-0 before:-right-2 before:left-0 before:content-['']",
+          'top-1/2 -translate-y-1/2',
           active.length > 0
             ? 'border-warning/60 dark:text-warning bg-[color-mix(in_srgb,var(--color-warning)_30%,var(--color-background))] text-amber-900'
             : 'border-border bg-muted text-muted-foreground',
@@ -113,7 +116,6 @@ function FallbackTab({
           setIsOpen(true);
         }}
       >
-        <TriangleAlert className='size-3.5 shrink-0' aria-hidden='true' />
         {pill === null ? (
           ordered.length > 1 && (
             <span className='text-[10px] leading-none font-semibold'>
@@ -125,7 +127,7 @@ function FallbackTab({
             {toShort(pill)}
           </span>
         )}
-      </Button>
+      </SideTab>
       <DetailSheet
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}

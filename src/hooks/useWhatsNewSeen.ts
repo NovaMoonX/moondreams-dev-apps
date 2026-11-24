@@ -1,5 +1,5 @@
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
+import { useCallback, useSyncExternalStore } from 'react';
 
 import { db } from '@lib/firebase/config';
 import type { WhatsNewScope } from '@lib/whatsNew/whatsNewTypes';
@@ -14,90 +14,113 @@ export interface WhatsNewSeenDoc {
 }
 
 export interface WhatsNewSeenState {
-  /** False until the account's own copy has been read, so nothing is written over what the server holds. */
+  /** False until a server answer has arrived, so nothing is written over what the server holds. */
   isLoaded: boolean;
-  doesExist: boolean;
   seen: Record<string, string>;
   showFixOnly: boolean | null;
 }
 
 const NOT_LOADED: WhatsNewSeenState = {
   isLoaded: false,
-  doesExist: false,
   seen: {},
   showFixOnly: null,
 };
 
-export function useWhatsNewSeen(uid: string | null): WhatsNewSeenState {
-  const [loaded, setLoaded] = useState<{
-    uid: string;
-    state: WhatsNewSeenState;
-  } | null>(null);
-
-  useEffect(() => {
-    if (uid === null) return;
-    return onSnapshot(
-      doc(db, 'whatsNewSeen', uid),
-      { includeMetadataChanges: true },
-      (snapshot) => {
-        // An empty cache answer while offline says nothing about the account's own copy.
-        if (!snapshot.exists() && snapshot.metadata.fromCache) return;
-        const data = snapshot.data() as Partial<WhatsNewSeenDoc> | undefined;
-        setLoaded({
-          uid,
-          state: {
-            isLoaded: true,
-            doesExist: snapshot.exists(),
-            seen: data?.seen && typeof data.seen === 'object' ? data.seen : {},
-            showFixOnly:
-              typeof data?.showFixOnly === 'boolean' ? data.showFixOnly : null,
-          },
-        });
-      },
-      (error) => console.error("Failed to load what's new marks:", error),
-    );
-  }, [uid]);
-
-  return loaded && loaded.uid === uid ? loaded.state : NOT_LOADED;
+interface SeenEntry {
+  state: WhatsNewSeenState;
+  watchers: Set<() => void>;
+  stop: () => void;
 }
 
+// One listener per account, shared by the host and the account page.
+const entries = new Map<string, SeenEntry>();
+
+const startEntry = (uid: string): SeenEntry => {
+  const entry: SeenEntry = {
+    state: NOT_LOADED,
+    watchers: new Set(),
+    stop: () => undefined,
+  };
+  entry.stop = onSnapshot(
+    doc(db, 'whatsNewSeen', uid),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      // An empty cache answer while offline says nothing about the account's own copy.
+      if (!snapshot.exists() && snapshot.metadata.fromCache) return;
+      const data = snapshot.data() as Partial<WhatsNewSeenDoc> | undefined;
+      entry.state = {
+        isLoaded: true,
+        seen: data?.seen && typeof data.seen === 'object' ? data.seen : {},
+        showFixOnly:
+          typeof data?.showFixOnly === 'boolean' ? data.showFixOnly : null,
+      };
+      entry.watchers.forEach((watcher) => watcher());
+    },
+    (error) => console.error("Failed to load what's new marks:", error),
+  );
+  return entry;
+};
+
+const watchSeen = (uid: string, onChange: () => void) => {
+  const entry = entries.get(uid) ?? startEntry(uid);
+  entries.set(uid, entry);
+  entry.watchers.add(onChange);
+  return () => {
+    entry.watchers.delete(onChange);
+    if (entry.watchers.size > 0) return;
+    entry.stop();
+    entries.delete(uid);
+  };
+};
+
+export function useWhatsNewSeen(uid: string | null): WhatsNewSeenState {
+  const subscribe = useCallback(
+    (onChange: () => void) =>
+      uid === null ? () => undefined : watchSeen(uid, onChange),
+    [uid],
+  );
+  const getSnapshot = useCallback(
+    () => (uid === null ? NOT_LOADED : (entries.get(uid)?.state ?? NOT_LOADED)),
+    [uid],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot);
+}
+
+/** Changes one field of the account's marks, or creates the whole document when it isn't there yet; never resets another field. */
+const writeField = (
+  uid: string,
+  updates: Record<string, unknown>,
+  created: Partial<WhatsNewSeenDoc>,
+) => {
+  const ref = doc(db, 'whatsNewSeen', uid);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const updatedAt = Date.now();
+    if (snapshot.exists()) {
+      transaction.update(ref, { ...updates, updatedAt });
+      return;
+    }
+    transaction.set(ref, {
+      uid,
+      seen: {},
+      showFixOnly: null,
+      ...created,
+      updatedAt,
+    });
+  });
+};
+
 /** Remembers that the person has seen a scope's notes up to a version. */
-export async function writeWhatsNewSeen(
+export const writeWhatsNewSeen = (
   uid: string,
   scope: WhatsNewScope,
   version: string,
-  doesExist: boolean,
-) {
-  const ref = doc(db, 'whatsNewSeen', uid);
-  if (doesExist) {
-    await updateDoc(ref, { [`seen.${scope}`]: version, updatedAt: Date.now() });
-    return;
-  }
-  await setDoc(
-    ref,
-    {
-      uid,
-      seen: { [scope]: version },
-      showFixOnly: null,
-      updatedAt: Date.now(),
-    },
-    { merge: true },
+) =>
+  writeField(
+    uid,
+    { [`seen.${scope}`]: version },
+    { seen: { [scope]: version } },
   );
-}
 
-export async function writeShowFixOnly(
-  uid: string,
-  showFixOnly: boolean,
-  doesExist: boolean,
-) {
-  const ref = doc(db, 'whatsNewSeen', uid);
-  if (doesExist) {
-    await updateDoc(ref, { showFixOnly, updatedAt: Date.now() });
-    return;
-  }
-  await setDoc(
-    ref,
-    { uid, seen: {}, showFixOnly, updatedAt: Date.now() },
-    { merge: true },
-  );
-}
+export const writeShowFixOnly = (uid: string, showFixOnly: boolean) =>
+  writeField(uid, { showFixOnly }, { showFixOnly });
