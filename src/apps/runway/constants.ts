@@ -5036,6 +5036,11 @@ const getBulkCount = (written: number, total: number) => {
 export const COVER_WORDS = {
   leftToAfter: (left: string, after: string) => `${left} → ${after}`,
   runsOutTo: (names: string) => `Runs out, so the rest comes from ${names}`,
+  asksHow: 'It asks how to cover the rest',
+  alreadyOver: (name: string, over: string, short: string) =>
+    `${name} is already ${over} over, so this would add ${short} more.`,
+  furtherOver: (name: string, short: string) =>
+    `Let ${name} go ${short} further over`,
   title: (name: string) => `${name} can’t cover all of it`,
   body: (name: string, left: string, short: string) =>
     `${name} has ${left} left, so this would take it ${short} over. How should the rest be covered?`,
@@ -5048,6 +5053,8 @@ export const COVER_WORDS = {
   allFreeSub: (name: string) => `${name} stays as it is`,
   moveIn: (short: string, name: string) => `Move ${short} into ${name} first`,
   moveInSub: 'From Free to Spend, then all of it comes out of the envelope',
+  moveInSubOver: (name: string, over: string) =>
+    `Covers this purchase; ${name} stays ${over} over`,
   goOver: (name: string, short: string) => `Let ${name} go ${short} over`,
   goOverSub: 'It shows as over until you top it up',
   moveFailed: 'The money wasn’t moved, so nothing was sent.',
@@ -5531,9 +5538,11 @@ export const RULE_WORDS = {
   pickKindSub: 'Like groceries or gas, wherever you buy it',
   stores: 'Stores you’ve bought from',
   searchStores: 'Search stores',
-  noStores: 'No stores to suggest yet. They show up as your bank and email bring in purchases.',
+  noStores:
+    'No stores to suggest yet. They show up as your bank and email bring in purchases.',
   noStoreMatch: 'No store matches that.',
-  allStoresHaveRules: 'Every store you’ve bought from lately already has a rule.',
+  allStoresHaveRules:
+    'Every store you’ve bought from lately already has a rule.',
   storeTimes: (count: number) => (count === 1 ? 'Once' : `${count} times`),
   cardTitle: 'Which card?',
   kindTitle: 'Which kind of purchase?',

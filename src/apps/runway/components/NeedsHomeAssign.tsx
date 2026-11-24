@@ -7,6 +7,7 @@ import CoverShortfallSheet, {
   type CoverChoice,
 } from '@apps/runway/components/CoverShortfallSheet';
 import EnvelopePickSheet from '@apps/runway/components/EnvelopePickSheet';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
@@ -47,7 +48,7 @@ import { isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import {
   describePickEffect,
   describePurchaseAssigned,
-  describeRunsOut,
+  describePickDetail,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
@@ -74,6 +75,7 @@ function NeedsHomeAssign({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const history = useAppSelector((state) => state.runway.purchases);
   const looks = useAppSelector(selectItemLooks);
+  const { isHidden } = useValuesHidden();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
@@ -282,7 +284,7 @@ function NeedsHomeAssign({
             emoji={looks.get(id)?.emoji ?? null}
             detailLead={describePickEffect(effectOf(id))}
             detail={
-              describeRunsOut(effectOf(id).spillTo, nameOf) ??
+              describePickDetail(effectOf(id), nameOf, isHidden) ??
               NEEDS_HOME_WORDS.sendHere
             }
             hiddenAriaLabel={`${nameOf(id)}, ${NEEDS_HOME_WORDS.sendHere}`}

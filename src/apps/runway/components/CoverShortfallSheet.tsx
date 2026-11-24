@@ -42,6 +42,23 @@ function CoverShortfallSheet({
   const usable = Math.max(0, leftCents);
   const left = formatCents(usable);
   const short = formatCents(shortCents);
+  const isAlreadyOver = leftCents < 0 && !isPlaced && !isMany;
+  const getBody = () => {
+    if (isPlaced) return COVER_WORDS.bodyPlaced(name, short);
+    if (isAlreadyOver) {
+      return COVER_WORDS.alreadyOver(name, formatCents(-leftCents), short);
+    }
+    return (isMany ? COVER_WORDS.bodyMany : COVER_WORDS.body)(
+      name,
+      left,
+      short,
+    );
+  };
+  const getOverLabel = () => {
+    if (isPlaced) return COVER_WORDS.keepOver(name, short);
+    if (leftCents < 0) return COVER_WORDS.furtherOver(name, short);
+    return COVER_WORDS.goOver(name, short);
+  };
   return (
     <FormSheet
       isOpen
@@ -51,16 +68,8 @@ function CoverShortfallSheet({
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-3 pb-4'>
-        <p className='text-muted-foreground text-sm'>
-          {mask(
-            isPlaced
-              ? COVER_WORDS.bodyPlaced(name, short)
-              : (isMany ? COVER_WORDS.bodyMany : COVER_WORDS.body)(
-                  name,
-                  left,
-                  short,
-                ),
-          )}
+        <p className='text-muted-foreground text-sm' data-sensitive=''>
+          {mask(getBody())}
         </p>
         <ActionGroup isRoomy>
           <ActionRow
@@ -89,16 +98,18 @@ function CoverShortfallSheet({
             isRoomy
             icon={<ArrowDownToLine />}
             label={mask(COVER_WORDS.moveIn(short, name))}
-            subtitle={COVER_WORDS.moveInSub}
+            subtitle={mask(
+              leftCents < 0
+                ? COVER_WORDS.moveInSubOver(name, formatCents(-leftCents))
+                : COVER_WORDS.moveInSub,
+            )}
             isDisabled={isBusy}
             onClick={() => onChoose('moveIn')}
           />
         </ActionGroup>
         <ActionRow
           icon={<TriangleAlert />}
-          label={mask(
-            (isPlaced ? COVER_WORDS.keepOver : COVER_WORDS.goOver)(name, short),
-          )}
+          label={mask(getOverLabel())}
           subtitle={COVER_WORDS.goOverSub}
           isDisabled={isBusy}
           onClick={() => onChoose('goOver')}

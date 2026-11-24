@@ -72,6 +72,8 @@ interface DoneForYouSheetProps {
   renderText?: (text: string) => ReactNode;
   /** Icon buttons on the title's line. */
   titleTrailing?: ReactNode;
+  /** The entry to open on, such as the one a door's question came back from; it is read when the sheet mounts. */
+  startId?: string | null;
 }
 
 const startOfDay = (time: number) => {
@@ -89,8 +91,9 @@ function DoneForYouSheet({
   words,
   renderText = (text) => text,
   titleTrailing,
+  startId = null,
 }: DoneForYouSheetProps) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(startId);
   const [isUndoing, setIsUndoing] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const now = useNow(60_000);

@@ -43,7 +43,7 @@ export function describePickEffect(effect: {
       formatSigned(effect.leftCents),
       formatSigned(effect.afterCents),
     ),
-    isOver: effect.afterCents < 0,
+    isOver: effect.afterCents < 0 && effect.afterCents < effect.leftCents,
   };
 }
 
@@ -57,6 +57,19 @@ export function describeRunsOut(
     formatList([
       ...new Set(spillTo.map((id) => (id === null ? FREE_NAME : nameOf(id)))),
     ]),
+  );
+}
+
+/** A pick row's line under its figure: where the rest goes, or that it will ask; nothing while amounts are hidden, so no row stands out. */
+export function describePickDetail(
+  effect: { afterCents: number; spillTo: readonly (string | null)[] },
+  nameOf: (envelopeId: string) => string,
+  isHidden: boolean,
+): string | null {
+  if (isHidden) return null;
+  return (
+    describeRunsOut(effect.spillTo, nameOf) ??
+    (effect.afterCents < 0 ? COVER_WORDS.asksHow : null)
   );
 }
 

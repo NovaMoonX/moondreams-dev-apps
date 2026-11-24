@@ -3,6 +3,7 @@ import { useState } from 'react';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
 import { useAppSelector } from '@/store';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import ItemRow from '@apps/runway/components/ItemRow';
 import {
   NEEDS_HOME_WORDS,
@@ -40,6 +41,7 @@ function EnvelopePickSheet({
   const today = todayAsUtcDate();
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const looks = useAppSelector(selectItemLooks);
+  const { isHidden } = useValuesHidden();
   const [query, setQuery] = useState('');
   const shown = envelopes.filter(({ item }) =>
     (looks.get(item.id)?.name ?? '')
@@ -84,7 +86,7 @@ function EnvelopePickSheet({
                   emoji={looks.get(item.id)?.emoji ?? null}
                   detailLead={lead}
                   detail={
-                    effect
+                    effect && !isHidden
                       ? describeRunsOut(
                           effect.spillTo,
                           (id) => looks.get(id)?.name ?? 'An envelope',

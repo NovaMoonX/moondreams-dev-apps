@@ -105,7 +105,7 @@ export function getPlacedOver(
   );
   const nowLeft = selectBalances(state).assignedByItem[envelopeId] ?? 0;
   const shortCents = Math.min(taken, Math.max(0, -nowLeft));
-  return shortCents > 0
+  return shortCents > 0 && nowLeft + taken > 0
     ? { envelopeId, leftCents: nowLeft + taken, shortCents }
     : null;
 }

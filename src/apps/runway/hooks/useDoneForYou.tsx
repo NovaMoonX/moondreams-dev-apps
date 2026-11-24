@@ -390,7 +390,10 @@ export function useDoneForYou() {
   const looks = useAppSelector(selectItemLooks);
   useAppSelector(selectLedgerOnlyBalances);
   const { isHidden, toggle: toggleHidden } = useValuesHidden();
-  const [coverId, setCoverId] = useState<string | null>(null);
+  const [cover, setCover] = useState<{
+    purchaseId: string;
+    entryId: string;
+  } | null>(null);
   const { leaveViewForTab, openPurchase, openView, closeView, showOnPlan } =
     useRunwayUrlState();
   const known = toKnown({
@@ -519,7 +522,7 @@ export function useDoneForYou() {
           icon: <TriangleAlert />,
           onSelect: () => {
             if (isHidden) toggleHidden();
-            setCoverId(purchaseId);
+            setCover({ purchaseId, entryId: entry.id });
           },
         },
       ];
@@ -614,7 +617,8 @@ export function useDoneForYou() {
     hasUnseen,
     isReady,
     undo,
-    coverId,
-    closeCover: () => setCoverId(null),
+    coverId: cover?.purchaseId ?? null,
+    coverEntryId: cover?.entryId ?? null,
+    closeCover: () => setCover(null),
   };
 }
