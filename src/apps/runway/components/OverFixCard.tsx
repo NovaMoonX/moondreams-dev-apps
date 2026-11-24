@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 
-import { TriangleAlert } from 'lucide-react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
@@ -118,46 +118,39 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
   };
 
   return (
-    <div className='space-y-2.5 rounded-2xl border border-(--runway-warning-edge) bg-(--runway-warning-soft) p-3'>
-      <p className='flex items-center gap-2 text-[15px] font-medium'>
-        <TriangleAlert
-          className='h-4 w-4 shrink-0 text-(--runway-warning-ink)'
-          aria-hidden='true'
-        />
-        <span className='min-w-0'>
-          {mask(OVER_FIX_WORDS.title(name, over))}
-        </span>
-      </p>
+    <InlineNotice tone='warning' title={mask(OVER_FIX_WORDS.title(name, over))}>
       {canCover ? (
-        <div className='space-y-1'>
+        <div className='mt-2 space-y-1.5'>
           <Button
             type='button'
             variant='primary'
-            className='w-full'
+            size='sm'
+            className={NOTICE_ACTION_CLASSES.warning}
             disabled={isSaving}
             onClick={() => void bringBack()}
           >
             {OVER_FIX_WORDS.action}
           </Button>
-          <p className='text-muted-foreground text-center text-[13px]'>
-            {mask(OVER_FIX_WORDS.sub(over))}
-          </p>
+          <p className='text-[13px]'>{mask(OVER_FIX_WORDS.sub(over))}</p>
         </div>
       ) : (
-        <LockedButton
-          label={OVER_FIX_WORDS.action}
-          title={OVER_FIX_WORDS.lockedTitle}
-          className='w-full'
-        >
-          <p>{mask(lockedText)}</p>
-        </LockedButton>
+        <div className='mt-2'>
+          <LockedButton
+            label={OVER_FIX_WORDS.action}
+            title={OVER_FIX_WORDS.lockedTitle}
+            size='sm'
+            className='border-warning/70! text-warning-foreground! dark:text-warning! bg-transparent!'
+          >
+            <p>{mask(lockedText)}</p>
+          </LockedButton>
+        </div>
       )}
       {error !== null && (
-        <p className='text-destructive text-sm' role='alert'>
+        <p className='text-destructive mt-2 text-sm' role='alert'>
           {error}
         </p>
       )}
-    </div>
+    </InlineNotice>
   );
 }
 

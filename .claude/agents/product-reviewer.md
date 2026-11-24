@@ -71,7 +71,7 @@ The app runs at http://127.0.0.1:5173/<route> against local emulators that are a
 - `severity`: blocker, major, minor or polish;
 - `problem`: concrete and observable;
 - `evidence`: the screenshot path, plus the element or text;
-- `suggestedFix`.
+- `suggestedFix`. A fix that changes how a control looks (its variant, colour, size or width) names the `design-ux.md` or `app-look.md` rule it follows, and never proposes a look a written rule forbids (owner, Runway next fill: "make it the filled primary" put the app's blue inside a warning card, against the notice rule).
 
 Then add:
 - a per-flow coverage table (flow → verified, or issue ids);
