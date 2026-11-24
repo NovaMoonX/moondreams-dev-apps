@@ -4845,6 +4845,8 @@ export const CARD_WORDS = {
   offerDone: (bank: string) =>
     `Done. The minimum shows here as soon as ${bank} sends it`,
   offerFailed: (bank: string) => `Couldn\u2019t reach ${bank}. Try again`,
+  offerUnsupported: (bank: string) =>
+    `${bank} doesn\u2019t share card minimums with Runway, so this card shows none`,
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
   totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,
