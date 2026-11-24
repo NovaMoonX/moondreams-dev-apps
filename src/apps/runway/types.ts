@@ -1301,6 +1301,8 @@ export interface EmailIntakeDoc {
   lastReceivedAt: number | null;
   /** When a mail provider's forwarding confirmation last arrived; null until one does. */
   confirmAt: number | null;
+  /** When an email a provider forwarded on its own (not by hand) last arrived; null until one does (missing on an older document, read as null). */
+  forwardedAt: number | null;
   /** Whether Functions followed the confirmation link themselves: 'confirmed', 'failed' or 'skipped' (a provider they don't follow); null until a confirmation arrives (and on an older document, which the person confirms by hand). */
   autoConfirm: 'confirmed' | 'failed' | 'skipped' | null;
   /** Whose confirmation arrived; null until one does, or when the provider is not one of these. */

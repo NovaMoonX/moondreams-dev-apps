@@ -756,6 +756,7 @@ const EMAIL_INTAKE_DOC_FIELDS = {
   updatedAt: 'notUseful',
   lastReceivedAt: 'notUseful',
   confirmAt: 'notUseful',
+  forwardedAt: 'notUseful',
   autoConfirm: 'notUseful',
   confirmProvider: 'notUseful',
   sealed: 'never',

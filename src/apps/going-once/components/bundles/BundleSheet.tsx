@@ -7,6 +7,7 @@ import { ChevronRight, Ellipsis, History, Pencil, Split } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackHeading from '@/components/BackHeading';
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import InlineNotice from '@/components/InlineNotice';
@@ -525,7 +526,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
       )}
       {view === 'history' && (
         <div className='space-y-5'>
-          <BackLink onBack={back} label='History' />
+          <BackHeading onBack={back} title='History' />
           <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
             {history.map((change, index) => (
               <li

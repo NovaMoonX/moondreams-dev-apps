@@ -55,6 +55,7 @@ export async function mintEmailAddress({
         confirmCode: null,
         confirmAt: null,
         lastReceivedAt: null,
+        forwardedAt: null,
         createdAt,
         updatedAt: now,
       },

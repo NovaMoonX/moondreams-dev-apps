@@ -6,7 +6,16 @@ export const EMAIL_FORWARDING_WORDS = {
   copyAddress: 'Copy address',
   copyFailed: 'Couldn’t copy it. Press and hold the address to copy it.',
   done: 'Done',
+  filterTitle: 'A filter to start from',
+  filterLine: (sender: string, phrase: string) =>
+    `Emails from ${sender} that contain “${phrase}”. In Gmail this search finds them:`,
+  filterCheck:
+    'It’s a suggestion: search it first and check that every result is an email you want to send here.',
+  copySearch: 'Copy search',
+  searchCopyFailed: 'Couldn’t copy it. Press and hold the search to copy it.',
   noEmailsYet: 'No emails yet',
+  waitingForFirst:
+    'Waiting for your first email. This updates on its own once one arrives.',
   workingSince: (when: string) => `Working · last email ${when}`,
   addressRow: 'Your address',
   newAddress: 'Get a new address',
@@ -25,8 +34,10 @@ export const EMAIL_FORWARDING_WORDS = {
   copyCode: 'Copy code',
   confirmedBy: (appName: string, provider: string) =>
     `${appName} confirmed ${provider}’s forwarding`,
-  confirmStillNeeded: (provider: string | null) =>
-    `${provider ?? 'Your email'} still needs your OK`,
+  confirmWaiting: (provider: string | null) =>
+    provider === null
+      ? 'Once you’ve confirmed it, this clears when the next forwarded email comes through.'
+      : `Once you’ve confirmed it in ${provider}, this clears when ${provider} forwards its next email.`,
   confirmAgain: 'Confirm again',
   emailTitle: 'Email',
   from: 'From',

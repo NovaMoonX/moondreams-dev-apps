@@ -57,6 +57,10 @@ const createSessionCallable = httpsCallable<
   { linkId?: string; forCardDetails?: true },
   { linkToken: string }
 >(functions, 'createRunwayLinkSession');
+const cardSessionCallable = httpsCallable<
+  { linkId: string; forCardDetails: true },
+  { linkToken: string | null }
+>(functions, 'createRunwayLinkSession');
 const reconnectCallable = httpsCallable<
   { linkId: string },
   LinkReconnectResult
@@ -82,7 +86,7 @@ const unlinkCallable = httpsCallable<
 
 const combineCallable = httpsCallable<
   { linkId: string; otherLinkId: string },
-  { keptLinkId: string; moved: number }
+  { keptLinkId: string; moved: number; needsSignIn: boolean }
 >(functions, 'combineRunwayLinks');
 
 /** Asks for a one-time token for the bank's window. */
@@ -105,13 +109,13 @@ export async function discardLink(linkId: string): Promise<void> {
   await discardCallable({ linkId });
 }
 
-/** Folds two sign-ins that hold the same accounts at one bank into one: every placed account stays where it is, and the other sign-in is removed at the bank. */
+/** Folds two sign-ins that hold the same accounts at one bank into one: every placed account stays where it is, and the other sign-in is removed at the bank. `needsSignIn` when removing it signed the kept one out too (an older function leaves it out). */
 export async function combineLinks(
   linkId: string,
   otherLinkId: string,
-): Promise<{ keptLinkId: string; moved: number }> {
+): Promise<{ keptLinkId: string; moved: number; needsSignIn: boolean }> {
   const response = await combineCallable({ linkId, otherLinkId });
-  return response.data;
+  return { ...response.data, needsSignIn: response.data.needsSignIn === true };
 }
 
 /** Stops a finished link on the server and at the bank; what already came in stays. Whether the bank confirmed (a refresh retries it when not). Safe to repeat. */
@@ -142,16 +146,16 @@ export async function reconnectLink(
   return response.data;
 }
 
-/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window; a failure is a `LinkStepError` naming the step. */
+/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window, `unsupported` when the bank can't share them (the link now says so); a failure is a `LinkStepError` naming the step. */
 export async function agreeToCardDetails(
   linkId: string,
-): Promise<LinkReconnectResult | null> {
+): Promise<LinkReconnectResult | 'unsupported' | null> {
   const session = await inLinkStep('Ask the bank for a window', () =>
-    createSessionCallable({ linkId, forCardDetails: true }),
+    cardSessionCallable({ linkId, forCardDetails: true }),
   );
-  const opened = await inLinkStep('Bank window', () =>
-    openBankLink(session.data.linkToken),
-  );
+  const { linkToken } = session.data;
+  if (linkToken === null) return 'unsupported';
+  const opened = await inLinkStep('Bank window', () => openBankLink(linkToken));
   if (opened === null) return null;
   const response = await inLinkStep('Sync after agreeing', () =>
     reconnectCallable({ linkId }),

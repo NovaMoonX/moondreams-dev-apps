@@ -1,5 +1,9 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+  getFirestore,
+  type DocumentReference,
+  type Firestore,
+} from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -46,7 +50,32 @@ const readRequest = (
   return { linkId, isForCardDetails: forCardDetails === true };
 };
 
-/** `{}` → `{ linkToken }`: a short-lived token the bank window opens with. `{ linkId }` of the caller's `needsAttention` or `active` link opens that connection again so the person can sign in and pick accounts; `forCardDetails` on an active link asks only for agreement to share card details, with no account picking. */
+type SessionResult = { linkToken: string | null };
+
+/** Records that the bank can't share card details, so the offer becomes "not shared" and no later reconnect asks again. */
+const markCardConsentUnsupported = (
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  grantRef: DocumentReference,
+) =>
+  firestore.runTransaction(async (transaction) => {
+    const link = await transaction.get(linkRef);
+    const status = link.data()?.status;
+    if (status === 'revoked' || link.data()?.cardDetails === 'unsupported') {
+      return;
+    }
+    transaction.update(grantRef, {
+      isCardConsentUnsupported: true,
+      isStatementsUnsupported: true,
+      statementsCheckedAt: Date.now(),
+    });
+    transaction.update(linkRef, {
+      cardDetails: 'unsupported',
+      needsCardConsent: null,
+    });
+  });
+
+/** `{}` → `{ linkToken }`: a short-lived token the bank window opens with. `{ linkId }` of the caller's `needsAttention` or `active` link opens that connection again so the person can sign in and pick accounts; `forCardDetails` on an active link asks only for agreement to share card details, with no account picking, and returns a null token when the bank can't share them. */
 export const createRunwayLinkSession = onCall(
   {
     region: 'us-central1',
@@ -63,7 +92,7 @@ export const createRunwayLinkSession = onCall(
         provider.createLinkSession(uid),
       );
       logger.info('runway.link.sessionCreated');
-      const result = { linkToken };
+      const result: SessionResult = { linkToken };
       return result;
     }
     const firestore = getFirestore();
@@ -90,24 +119,55 @@ export const createRunwayLinkSession = onCall(
         'That bank cannot be reconnected. Link it again.',
       );
     }
-    const grant = openGrant(
-      loadKeyringOrFail(),
-      uid,
-      grantSnapshot.data() as ProviderGrantDoc,
-    );
-    const { linkToken } = await withProvider(() =>
+    const grantDoc = grantSnapshot.data() as ProviderGrantDoc;
+    const isKnownUnsupported = grantDoc.isCardConsentUnsupported === true;
+    if (isForCardDetails && isKnownUnsupported) {
+      await markCardConsentUnsupported(
+        firestore,
+        linkSnapshot.ref,
+        grantSnapshot.ref,
+      );
+      const result: SessionResult = { linkToken: null };
+      return result;
+    }
+    const grant = openGrant(loadKeyringOrFail(), uid, grantDoc);
+    const session = await withProvider(() =>
       provider.createLinkSession(uid, {
         accessToken: grant.credential,
         // Picking accounts again here would add accounts another sign-in at the same bank already shares.
         accountSelection: !isForCardDetails,
         askCardConsent:
-          isForCardDetails ||
-          linkSnapshot.data()?.cardDetails === 'needsConsent' ||
-          linkSnapshot.data()?.needsCardConsent === true,
+          !isKnownUnsupported &&
+          (isForCardDetails ||
+            linkSnapshot.data()?.cardDetails === 'needsConsent' ||
+            linkSnapshot.data()?.needsCardConsent === true),
       }),
     );
+    if (session.isCardConsentUnsupported && !isForCardDetails) {
+      // The reconnect's token is good either way, so a failed mark only waits for the next ask.
+      await markCardConsentUnsupported(
+        firestore,
+        linkSnapshot.ref,
+        grantSnapshot.ref,
+      ).catch((error: unknown) =>
+        logger.warn('runway.link.cardDetailsMarkFailed', {
+          message: error instanceof Error ? error.message : 'unknown',
+        }),
+      );
+    }
+    if (isForCardDetails && session.isCardConsentUnsupported) {
+      await markCardConsentUnsupported(
+        firestore,
+        linkSnapshot.ref,
+        grantSnapshot.ref,
+      );
+      logger.info('runway.link.cardDetailsUnsupported');
+      const result: SessionResult = { linkToken: null };
+      return result;
+    }
+    const { linkToken } = session;
     logger.info('runway.link.reconnectSessionCreated');
-    const result = { linkToken };
+    const result: SessionResult = { linkToken };
     return result;
   },
 );

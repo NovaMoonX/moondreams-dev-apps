@@ -149,7 +149,10 @@ const statementFor = (providerAccountId: string): NormalizedCardStatement => ({
 
 /** A bank that answers without a network, for the Functions emulator when no provider keys are set. Emulators only. */
 export const standInProvider: BankDataProvider = {
-  createLinkSession: async () => ({ linkToken: STAND_IN_LINK_TOKEN }),
+  createLinkSession: async () => ({
+    linkToken: STAND_IN_LINK_TOKEN,
+    isCardConsentUnsupported: false,
+  }),
   exchange: async () => ({
     credential: 'stand-in',
     providerItemId: `stand-in-${randomUUID()}`,

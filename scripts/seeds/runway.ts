@@ -2048,6 +2048,19 @@ async function writeSeedStart(
       {
         summary: 'Moved $42.00 from Groceries to Vacation fund.',
         note: null,
+        move: {
+          moveId: transferId,
+          bill: null,
+          cost: null,
+          date: movedOn,
+          fromId: transfer.fromId,
+          toId: transfer.toId,
+          cents: transfer.cents,
+          note: null,
+          isOutside: false,
+          undoText: 'Put $42.00 back in Groceries from Vacation fund',
+          isUndo: false,
+        },
       } satisfies ChangeSealed,
       encryption,
     ),
@@ -4739,6 +4752,7 @@ async function writeSeedEmail(
     updatedAt: context.now - DAY_MS,
     lastReceivedAt: context.now - 2 * hour,
     confirmAt: context.now - DAY_MS,
+    forwardedAt: null,
     autoConfirm: 'failed',
     confirmProvider: 'gmail',
     sealed: await sealJson(

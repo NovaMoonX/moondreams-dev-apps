@@ -49,7 +49,9 @@ export const EMAIL_WORDS = {
   senderHadPurchases: 'Some of these became purchases. This stops that.',
   workingSince: (when: string) => `Working · last email ${when}`,
   lastEmail: (when: string) => `Last email ${when}`,
-  addressRow: 'Your address',
+  addAnother: (hasEmails: boolean) =>
+    hasEmails ? 'Add another bank or store' : 'Forward a bank or store',
+  addAnotherSub: 'Send its emails to Runway',
   setupLine:
     'Forward your bank alerts and store receipts here, by hand or with your email’s own rules.',
   copyAddress: 'Copy address',

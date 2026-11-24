@@ -19,6 +19,7 @@ import {
   followConfirmLink,
   readConfirmation,
 } from './forwardingConfirmation.js';
+import { isHandForwarded } from './unwrapForwarded.js';
 
 /** The one secret every app's address shares, set as a Functions secret and on the email worker. */
 export const EMAIL_WEBHOOK_SECRET_NAME = 'EMAIL_WEBHOOK_SECRET';
@@ -227,7 +228,19 @@ export function createEmailIngest(config: EmailIngestConfig) {
       const { outcome } = isConfirmation
         ? ((await config.onConfirmation?.(input)) ?? { outcome: 'confirm' })
         : await config.handle(input);
-      await intakeRef.update({ lastReceivedAt: now }).catch(() => undefined);
+      // The providers that ask to confirm (Gmail, Yahoo, Proton) forward with the subject untouched, so such an email shows the confirm went through.
+      const isAutoForwarded = !isConfirmation && !isHandForwarded(mail);
+      await intakeRef
+        .update({
+          lastReceivedAt: now,
+          ...(isAutoForwarded ? { forwardedAt: now } : {}),
+        })
+        .catch((error: unknown) =>
+          logger.warn('email.intakeUpdateFailed', {
+            app: config.app,
+            name: error instanceof Error ? error.name : 'unknown',
+          }),
+        );
       log('handled', { outcome });
       response.status(200).json({ outcome });
     } catch (error) {
