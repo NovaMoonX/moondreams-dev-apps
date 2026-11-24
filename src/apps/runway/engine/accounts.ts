@@ -1,4 +1,4 @@
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { dayInZone } from '@apps/runway/engine/dates';
 import type {
   Cents,
   OpenAccount,
@@ -25,6 +25,7 @@ export const getPendingCents = (
 export const withBankBalances = (
   accounts: readonly OpenAccount[],
   balances: readonly OpenAccountBalance[],
+  zone: string | null = null,
 ): OpenAccount[] => {
   const byId = new Map(balances.map((entry) => [entry.id, entry]));
   return accounts.map((account) => {
@@ -33,7 +34,7 @@ export const withBankBalances = (
     return {
       ...account,
       balanceCents: bank.cents,
-      balanceOn: todayAsUtcDate(bank.asOf),
+      balanceOn: dayInZone(bank.asOf, zone),
     };
   });
 };

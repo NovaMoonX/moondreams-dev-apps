@@ -1,4 +1,4 @@
-import { MAX_PURCHASE_LINES } from '@apps/runway/constants';
+import { MAX_PURCHASE_LINES } from './engineConstants';
 import type { Cents, PurchaseLine } from '@apps/runway/types';
 
 /** Each envelope's ordered chain of envelopes that pay when it runs out. */

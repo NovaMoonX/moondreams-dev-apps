@@ -1,23 +1,12 @@
+import type { AppEncryption, EncryptedFieldPayload } from './types';
 import type { AppId } from '../types/appCatalog';
 import { generateUuid } from '@/utils/idUtils';
 
-export type EncryptionAlgorithm = 'AES-256-GCM';
-
-export type AppEncryption<TAppId extends AppId> = {
-  appId: TAppId;
-  keyId: string;
-  keyVersion: number;
-  key: string;
-};
-
-export type EncryptedFieldPayload = {
-  value: string;
-  ciphertext?: string;
-  nonce: string;
-  keyId: string;
-  keyVersion: number;
-  algorithm: EncryptionAlgorithm;
-};
+export type {
+  AppEncryption,
+  EncryptedFieldPayload,
+  EncryptionAlgorithm,
+} from './types';
 
 const KEY_BYTES = 32;
 const IV_BYTES = 12;

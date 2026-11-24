@@ -78,6 +78,7 @@ import type {
   ReleasedChargeDoc,
   ReleasedChargeSealed,
   DoneForYouDoc,
+  FiguresSnapshotDoc,
   DoneForYouSealed,
   DoneForYouSubject,
   EmailEventDoc,
@@ -101,6 +102,7 @@ const PLAN_SEALED_FIELDS_FIELDS = {
   bankBackedSeenAt: 'notUseful',
   horizonNudgeDismissed: 'notUseful',
   homePins: 'notUseful',
+  timeZone: 'notUseful',
 } satisfies Record<keyof PlanSealedFields, ShareDecision>;
 
 const HOLDS_PROMPT_CHOICE_FIELDS = {
@@ -842,6 +844,16 @@ const DONE_FOR_YOU_DOC_FIELDS = {
   sealed: 'notUseful',
 } satisfies Record<keyof DoneForYouDoc, ShareDecision>;
 
+/** The server's copy of the plan's figures: the summary already shares what an app may read of them. */
+const FIGURES_SNAPSHOT_DOC_FIELDS = {
+  id: 'notUseful',
+  engineVersion: 'notUseful',
+  asOf: 'notUseful',
+  computedAt: 'notUseful',
+  planStamp: 'notUseful',
+  sealed: 'notUseful',
+} satisfies Record<keyof FiguresSnapshotDoc, ShareDecision>;
+
 const DONE_FOR_YOU_SEALED_FIELDS = {
   title: 'notUseful',
   detail: 'notUseful',
@@ -969,6 +981,7 @@ export const SHARE_FIELDS = {
   DoneForYouDoc: DONE_FOR_YOU_DOC_FIELDS,
   DoneForYouSealed: DONE_FOR_YOU_SEALED_FIELDS,
   DoneForYouSubject: DONE_FOR_YOU_SUBJECT_FIELDS,
+  FiguresSnapshotDoc: FIGURES_SNAPSHOT_DOC_FIELDS,
   EmailIntakeDoc: EMAIL_INTAKE_DOC_FIELDS,
   EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
   EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,
@@ -1000,4 +1013,7 @@ export const NOT_STORED: Record<string, string> = {
   OpenChange: 'decrypted view of ChangeDoc',
   OpenDay: 'decrypted view of IncomeDayDoc',
   NormalizedAccount: 'provider account reading',
+  ChargeMatchResult: 'in-memory result of matching a bank charge',
+  MergedPurchase: 'in-memory result of merging two purchases',
+  MergedSplit: 'in-memory result of merging an order with the charges it posted as',
 };

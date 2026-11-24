@@ -1,4 +1,4 @@
-import { MAX_OCCURRENCES } from '@apps/runway/constants';
+import { MAX_OCCURRENCES } from './engineConstants';
 import type { Ending, FundingRule, Schedule } from '@apps/runway/types';
 
 import { scopeToSource } from './calendar';

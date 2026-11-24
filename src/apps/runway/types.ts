@@ -1,11 +1,5 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
-import type { ChargeMatchResult } from '@apps/runway/store/actions/autoPayActions';
-import type {
-  MergedPurchase,
-  MergedSplit,
-} from '@apps/runway/store/actions/purchaseActions';
-
 import type {
   ACCOUNT_KINDS,
   CALENDAR_PERIODS,
@@ -26,7 +20,7 @@ import type {
   PRIORITIES,
   SCHEDULE_KINDS,
   STANCES,
-} from '@apps/runway/constants';
+} from '@apps/runway/engine/engineConstants';
 
 export type RunwayTab = 'home' | 'days' | 'spend' | 'plan';
 
@@ -59,6 +53,23 @@ export interface PlanSealedFields {
   horizonNudgeDismissed: Record<string, number> | null;
   /** Envelope ids pinned to Home's first tiles, in the person's order. Null until one is pinned; a plan sealed before it existed lacks the key. */
   homePins: string[] | null;
+  /** IANA zone of the person's device, which the server reads a day's start in; the phone writes it when it differs. Null until then; a plan sealed before it existed lacks the key. */
+  timeZone: string | null;
+}
+
+/** `figures/current`: the figures the server last worked out for the plan, so the app can draw Home before its own sums finish. Written only by Functions. */
+export interface FiguresSnapshotDoc {
+  id: 'current';
+  /** The engine version that worked it out; a snapshot from another version is never shown. */
+  engineVersion: number;
+  /** The plan day (UTC midnight, in the plan's zone) the figures are for. */
+  asOf: DateOnly;
+  /** Server epoch ms the figures were worked out. */
+  computedAt: number;
+  /** The plan's `updatedAt` the figures were worked out from. */
+  planStamp: number;
+  /** `FiguresSnapshotSealed`. */
+  sealed: Sealed;
 }
 
 export interface HoldsPromptChoice {
@@ -1581,4 +1592,43 @@ export interface OpenDoneForYou extends DoneForYouSealed {
   kind: DoneForYouKind;
   createdAt: number;
   undoneAt: number | null;
+}
+
+/** A bill payment mark as the ledger holds it. */
+export type WrittenPaidMark = {
+  moveId: string;
+  billId: string;
+  dueOn: DateOnly;
+} & BillPaidSealed;
+
+/** What an Undo of a match needs. */
+export interface ChargeMatchResult {
+  /** The charge as it was before the match. */
+  purchase: OpenPurchase;
+  billId: string;
+  billName: string;
+  dueOn: DateOnly;
+  /** The charge's `updatedAt` after the match, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+  written: WrittenPaidMark | null;
+  replaced: WrittenPaidMark | null;
+  keysBefore: string[] | null;
+  keysAfter: string[] | null;
+}
+
+export interface MergedPurchase {
+  bank: OpenPurchase;
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+export interface MergedSplit {
+  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
 }

@@ -100,6 +100,8 @@ jobs:
       - run: npm run check:helm-task-edits
       - run: npm ci --prefix functions
       - run: npm run check:runway-email
+      - run: npm run check:runway-server-parity
+      - run: npm run check:runway-rework
       - run: npm run check:helm-undo
       - run: npm run check:batch-jobs
       - run: npm run check:helm-sort

@@ -1,5 +1,5 @@
 import { toComparable } from '@/utils/optionMatchUtils';
-import { AUTO_PAY_DAYS } from '@apps/runway/constants';
+import { AUTO_PAY_DAYS } from './engineConstants';
 import type {
   Cents,
   DateOnly,

@@ -4,13 +4,13 @@ import { db } from '@lib/firebase/config';
 
 import { createSealedReader } from '@lib/security';
 import { openJson } from '@apps/runway/security';
+import { openAccount } from '@apps/runway/engine/openDocs';
 import type {
   AccountDoc,
-  AccountSealed,
   OpenAccount,
   RunwayEncryption,
 } from '@apps/runway/types';
-import { cleanBankName } from '@apps/runway/utils/accountText';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -29,32 +29,17 @@ export function startAccountsListener(
   const stop = onSnapshot(
     collection(db, 'apps', 'runway', 'plans', uid, 'accounts'),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const current = sequence.latest;
       try {
         const opened = await Promise.all(
-          snapshot.docs.map(async (entry): Promise<OpenAccount> => {
-            const data = entry.data() as AccountDoc;
-            const payload = await read<Partial<AccountSealed>>(data.sealed);
-            return {
-              id: entry.id,
-              createdAt: data.createdAt,
-              updatedAt: data.updatedAt,
-              archivedAt: data.archivedAt ?? null,
-              linkId: data.linkId ?? null,
-              name: cleanBankName(payload.name ?? ''),
-              institution: payload.institution ?? '',
-              kind: payload.kind ?? 'checking',
-              countedTowardTotal: payload.countedTowardTotal ?? false,
-              isPullAccount: payload.isPullAccount ?? false,
-              lastFour: payload.lastFour ?? null,
-              balanceCents: payload.balanceCents ?? null,
-              balanceOn: payload.balanceOn ?? null,
-              holds: payload.holds ?? [],
-              apyBps: payload.apyBps ?? null,
-              interestDay: payload.interestDay ?? null,
-            };
-          }),
+          snapshot.docs.map((entry) =>
+            openAccount(
+              { ...(entry.data() as AccountDoc), id: entry.id },
+              read,
+            ),
+          ),
         );
         if (current !== sequence.latest || run.isStopped) return;
         onChange(opened);

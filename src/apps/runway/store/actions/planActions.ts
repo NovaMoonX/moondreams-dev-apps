@@ -64,6 +64,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       bankBackedSeenAt: null,
       horizonNudgeDismissed: null,
       homePins: null,
+      timeZone: null,
     } satisfies PlanSealedFields,
     encryption,
   );
@@ -141,6 +142,7 @@ export async function setNotify(
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
         horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
         homePins: current.homePins ?? null,
+        timeZone: current.timeZone ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -155,7 +157,11 @@ export async function setNotify(
 type SealedPatch = Partial<
   Pick<
     PlanSealedFields,
-    'holdsPrompt' | 'bankBackedSeenAt' | 'horizonNudgeDismissed' | 'homePins'
+    | 'holdsPrompt'
+    | 'bankBackedSeenAt'
+    | 'horizonNudgeDismissed'
+    | 'homePins'
+    | 'timeZone'
   >
 >;
 
@@ -164,6 +170,7 @@ async function patchSealedFields(
   uid: string,
   encryption: RunwayEncryption,
   patch: SealedPatch | ((current: Partial<PlanSealedFields>) => SealedPatch),
+  isStamped = true,
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
   await runHeldTransaction(uid, async (transaction) => {
@@ -182,11 +189,15 @@ async function patchSealedFields(
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
         horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
         homePins: current.homePins ?? null,
+        timeZone: current.timeZone ?? null,
         ...(typeof patch === 'function' ? patch(current) : patch),
       } satisfies PlanSealedFields,
       encryption,
     );
-    transaction.update(ref, { sealed, updatedAt: Date.now() });
+    transaction.update(
+      ref,
+      isStamped ? { sealed, updatedAt: Date.now() } : { sealed },
+    );
   });
 }
 
@@ -213,6 +224,17 @@ export async function setBankBackedSeen(
   encryption: RunwayEncryption,
 ) {
   await patchSealedFields(uid, encryption, { bankBackedSeenAt: Date.now() });
+}
+
+/** Tells the server which zone the phone is in, so it reads a day's start where the person is. */
+export async function setPlanTimeZone(
+  uid: string,
+  encryption: RunwayEncryption,
+  timeZone: string,
+) {
+  // Unstamped: the server's figures are checked against `updatedAt`, and a zone changes only which day is
+  // today, which they carry themselves, so two devices in different zones never void each other's.
+  await patchSealedFields(uid, encryption, { timeZone }, false);
 }
 
 /** Stops asking about Horizon for one goal at its current target date; a changed date asks again. Reads the plan fresh so another goal's answer is kept. */
@@ -242,6 +264,7 @@ export async function dismissHorizonNudge(
           [goalId]: targetDate,
         },
         homePins: current.homePins ?? null,
+        timeZone: current.timeZone ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );

@@ -2,8 +2,7 @@ import { doc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { DEFAULT_CURRENCY_CODE } from '@apps/runway/constants';
-import { readStance } from '@apps/runway/engine/stance';
+import { openPlan } from '@apps/runway/engine/openDocs';
 import { openJson } from '@apps/runway/security';
 import type {
   OpenPlan,
@@ -12,45 +11,14 @@ import type {
   RunwayEncryption,
 } from '@apps/runway/types';
 
-async function openPlan(
+async function readPlan(
   plan: PlanDoc,
   encryption: RunwayEncryption,
 ): Promise<OpenPlan> {
   const fields = plan.sealed
     ? await openJson<PlanSealedFields>(plan.sealed, encryption)
-    : {
-        currencyCode: DEFAULT_CURRENCY_CODE,
-        notifyHour: null,
-        notifyTimeZone: null,
-        holdsPrompt: null,
-        bankBackedSeenAt: null,
-        horizonNudgeDismissed: null,
-        homePins: null,
-      };
-  const result: OpenPlan = {
-    uid: plan.uid,
-    createdAt: plan.createdAt,
-    updatedAt: plan.updatedAt,
-    stance: readStance(plan.stance),
-    startDate: plan.startDate ?? null,
-    trackingPeriods: (plan.trackingPeriods ?? []).map((period) => ({
-      ...period,
-      linkedFrom: period.linkedFrom ?? null,
-    })),
-    dirtyFrom: plan.dirtyFrom ?? null,
-    notify: plan.notify ?? null,
-    sorting: plan.sorting ?? null,
-    doneForYouSeenAt: plan.doneForYouSeenAt ?? null,
-    keyId: plan.keyId ?? null,
-    currencyCode: fields.currencyCode,
-    notifyHour: fields.notifyHour ?? null,
-    notifyTimeZone: fields.notifyTimeZone ?? null,
-    holdsPrompt: fields.holdsPrompt ?? null,
-    bankBackedSeenAt: fields.bankBackedSeenAt ?? null,
-    horizonNudgeDismissed: fields.horizonNudgeDismissed ?? null,
-    homePins: fields.homePins ?? null,
-  };
-  return result;
+    : null;
+  return openPlan(plan, fields);
 }
 
 /** Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot or lands after the listener stopped. */
@@ -69,7 +37,7 @@ export function startPlanListener(
       const mine = sequence.latest;
       try {
         const plan = snapshot.exists()
-          ? await openPlan(snapshot.data() as PlanDoc, encryption)
+          ? await readPlan(snapshot.data() as PlanDoc, encryption)
           : null;
         if (mine === sequence.latest) onChange(plan);
       } catch (error) {

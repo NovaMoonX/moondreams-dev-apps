@@ -84,6 +84,8 @@ import type {
   ExpenseDoc,
   ExpenseSealed,
   IncomeDayDoc,
+  MergedPurchase,
+  MergedSplit,
   PurchaseAssignedBy,
   PurchasePairKind,
   ReceiptImageDoc,
@@ -1397,14 +1399,6 @@ function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
   return lines;
 }
 
-export interface MergedPurchase {
-  bank: OpenPurchase;
-  typed: OpenPurchase;
-  images: ReceiptImageDoc[];
-  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
-  updatedAt: number;
-}
-
 /** Makes a bank purchase and the one typed by hand for it one purchase: the bank's keeps its day, amount, status and id and takes the typed one's envelopes, name, note, receipt and photos, and the typed one is removed. Refused when another device changed either first. */
 export async function mergeBankPurchase(
   uid: string,
@@ -1619,15 +1613,6 @@ export async function splitBankPurchase(
       } satisfies ChangeDoc,
     );
   });
-}
-
-export interface MergedSplit {
-  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
-  banks: OpenPurchase[];
-  typed: OpenPurchase;
-  images: ReceiptImageDoc[];
-  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
-  updatedAt: number;
 }
 
 /** Makes a store order's email and the several bank charges it posted as one set of purchases: each charge takes its share of the order's lines (when the email was answered and no charge was settled by the person, and the carry is allowed), its name and link; every one takes the store's email (so a refund by order number finds several and waits for the person); the first also takes the note, receipt text, order log and photos; the email is removed. All in one transaction, refused when another device changed any of them first. Undo with `splitBankPurchases`. */

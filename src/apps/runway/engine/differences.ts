@@ -1,4 +1,4 @@
-import { PRIORITIES } from '@apps/runway/constants';
+import { PRIORITIES } from './engineConstants';
 import type { Cents, RecordDifference, RecordLine } from '@apps/runway/types';
 
 import { allocate } from './money';

@@ -1,7 +1,4 @@
-import type {
-  DRAFT_REASON_CODES,
-  PAIRING_STATES,
-} from '@apps/runway/constants';
+import type { DRAFT_REASON_CODES, PAIRING_STATES } from './engineConstants';
 import type {
   Cents,
   HoldChoice,

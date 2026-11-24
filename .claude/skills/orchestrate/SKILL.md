@@ -25,7 +25,7 @@ You are the one who knows everything: the request, the plan, the conventions, wh
 
 ## Briefing an agent
 
-Every brief has: the goal in one line; the files to touch (and not to touch); what is already decided or ruled out; the `docs/conventions/` files and the app rules file that apply; "done when" as checks it can run; the report shape. Independent chunks go out together in one message, each implementer with `isolation: "worktree"` when two might touch nearby code. Then:
+Every brief has: the goal in one line; the files to touch (and not to touch); what is already decided or ruled out; the `docs/conventions/` files and the app rules file that apply; "done when" as checks it can run; the report shape. Independent chunks go out together in one message, each implementer with `isolation: "worktree"` when two might touch nearby code. That worktree starts from `main`, not your branch, so work that builds on unmerged commits (a stacked PR, a PR waiting to merge) gets a `git worktree add <path> -b <local> <your head>` you make first, named in the brief, instead. Then:
 
 1. Read every diff an agent returns (`git diff` in its worktree) before it lands. You own each line; an agent's "done" is a claim.
 2. Bring it into the branch, run `validator`, fix or send back what fails.

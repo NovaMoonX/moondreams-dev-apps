@@ -12,9 +12,9 @@ import {
   PAIRING_BILL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { normalizeFunding } from '@apps/runway/engine/openDocs';
 import type { ResolvedSource } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
-  FundingAmount,
   FundingRule,
   PairingAmount,
   PriorityExtra,
@@ -52,17 +52,6 @@ const describeCadence = (cadence: FundingRule['cadence']) => {
   const count = cadence.dayKeys.length;
   return count === 1 ? 'on 1 chosen day' : `on ${count} chosen days`;
 };
-
-/** A funding rule read from a document written before amounts had a `kind`: a bare `{ cents }` is exact. */
-export function normalizeFunding(funding: FundingRule): FundingRule {
-  const amount = funding.amount as FundingAmount | { cents: number };
-  if ('kind' in amount) return funding;
-  const result: FundingRule = {
-    ...funding,
-    amount: { kind: 'exact', cents: amount.cents },
-  };
-  return result;
-}
 
 /** What a line asks for: "$50.00", "10% of Main job" (or "of the day's money" when no day is named), "the rest", "half the bill". */
 export function describeAmount(amount: PairingAmount, of?: string) {
@@ -167,3 +156,5 @@ export function describeFundingPayFact(
   const result = words.charAt(0).toUpperCase() + words.slice(1);
   return result;
 }
+
+export { normalizeFunding };

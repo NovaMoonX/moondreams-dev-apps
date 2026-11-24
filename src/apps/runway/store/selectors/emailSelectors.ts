@@ -10,6 +10,7 @@ import {
   getTwinHeldIds,
   isWaitingEmail,
 } from '@apps/runway/engine/emailTwins';
+import { mergePurchases, toTwinnedEmailIds } from '@apps/runway/engine/figures';
 import { makeIsLinkHistory } from '@apps/runway/engine/linkHistory';
 import type { OpenPurchase } from '@apps/runway/types';
 import { cleanBankName } from '@apps/runway/utils/accountText';
@@ -20,11 +21,7 @@ export const selectAllPurchases = createSelector(
     (state: RootState) => state.runway.needsHome,
     (state: RootState) => state.runway.purchases,
   ],
-  (needsHome, purchases): OpenPurchase[] => [
-    ...new Map(
-      [...needsHome, ...purchases].map((purchase) => [purchase.id, purchase]),
-    ).values(),
-  ],
+  mergePurchases,
 );
 
 /** Each emailed purchase still waiting and the bank charge it clearly is, and those that could be more than one. */
@@ -42,8 +39,7 @@ export const selectTwinHeldIds = createSelector(
 /** The ids of emailed purchases whose bank charge is here, or could be one of several here: the charge counts, so Free to Spend and a card's balance leave them out rather than count one purchase twice. */
 export const selectTwinnedEmailIds = createSelector(
   [selectEmailTwins],
-  (twins): ReadonlySet<string> =>
-    new Set([...twins.clear.keys(), ...twins.ambiguous, ...twins.split.keys()]),
+  toTwinnedEmailIds,
 );
 
 /** The cards and accounts whose bank has sent posted charges (not a link's history) and never a pending one, so an emailed purchase on them waits for the charge to post. */

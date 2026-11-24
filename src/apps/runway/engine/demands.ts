@@ -5,8 +5,8 @@ import type {
   FUNDING_CADENCES,
   HORIZON_DRAFT_CADENCES,
   PAIRING_DRAFT_CADENCES,
-} from '@apps/runway/constants';
-import { START_DAY_KEY } from '@apps/runway/constants';
+} from './engineConstants';
+import { START_DAY_KEY } from './engineConstants';
 import type {
   BillFundedBy,
   Cents,

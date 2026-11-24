@@ -1,9 +1,9 @@
 import { addUtcDays } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
+import { BILL_COVER_DAYS } from './engineConstants';
 import type { Cents, DateOnly } from '@apps/runway/types';
 
-/** How many days ahead a bill's gap is covered from Free to Spend, at the least; a pay further off than this stretches it to that pay. */
-export const BILL_COVER_DAYS = 30;
+export { BILL_COVER_DAYS };
 
 export interface BillCoverBill {
   id: string;
