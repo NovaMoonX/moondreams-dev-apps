@@ -62,7 +62,8 @@ export default {
         },
         body: JSON.stringify({
           to: message.to,
-          from: message.from,
+          // The envelope sender is the forwarder's (a Gmail rule sends as postmaster@…google.com); the header From is the bank or store.
+          from: mail.from?.address || message.from,
           subject: mail.subject ?? '',
           text: (mail.text ?? '').slice(0, MAX_FIELD),
           html: mail.text?.trim() ? '' : (mail.html ?? '').slice(0, MAX_FIELD),
