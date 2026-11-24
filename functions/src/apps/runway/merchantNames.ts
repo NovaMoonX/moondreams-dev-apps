@@ -66,6 +66,31 @@ export interface MerchantEntry {
   category: string | null;
 }
 
+const GENERIC_WORDS = new Set([
+  'pos',
+  'debit',
+  'credit',
+  'card',
+  'checkcard',
+  'purchase',
+  'payment',
+  'ach',
+  'online',
+  'recurring',
+  'visa',
+  'mastercard',
+  'transfer',
+  'withdrawal',
+]);
+
+/** A bank descriptor teaches the list only when it names the shop: it holds the clean name (or the reverse), or it is two or more words with no generic banking word, so a bare "SQ *COFFEE" or "POS DEBIT" never renames another shop for everyone. */
+const isNamedAlias = (aliasKey: string, nameKey: string | null) => {
+  if (nameKey === null || aliasKey === nameKey) return false;
+  if (aliasKey.includes(nameKey) || nameKey.includes(aliasKey)) return true;
+  const words = aliasKey.split(' ').filter(Boolean);
+  return words.length >= 2 && !words.some((word) => GENERIC_WORDS.has(word));
+};
+
 /** One entry per distinct key: the clean name and the bank's own descriptor as an alias, both carrying the same display fields. The first of a key keeps its place, but one with a logo wins. */
 export function toMerchantEntries(
   transactions: readonly Pick<
@@ -76,9 +101,10 @@ export function toMerchantEntries(
   const entries = transactions
     .filter(({ isKnownBusiness: isKnown, merchant }) => isKnown && merchant)
     .flatMap(({ merchant, merchantLogo, bankName, category }) =>
-      [merchant, bankName].flatMap((text): MerchantEntry[] => {
+      [merchant, bankName].flatMap((text, index): MerchantEntry[] => {
         const key = toMerchantKey(text);
-        return key === null
+        return key === null ||
+          (index === 1 && !isNamedAlias(key, toMerchantKey(merchant)))
           ? []
           : [
               {
@@ -186,7 +212,7 @@ export async function findMerchant(
   }
 }
 
-/** The list's entries for several texts at once (one read), keyed by the text given; a text with no entry, or any failure, is left out. */
+/** The list's entries for several texts at once (one read), keyed by the text given; a text with no entry is left out. Null when the list can't be read, so a caller never takes an outage for a miss. */
 export async function findMerchants(
   firestore: Firestore,
   texts: readonly (string | null)[],
@@ -215,7 +241,7 @@ export async function findMerchants(
     );
   } catch {
     logger.warn('runway.merchantNames.lookupFailed');
-    return new Map<string, Known>();
+    return null;
   }
 }
 

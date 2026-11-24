@@ -118,6 +118,27 @@ assert.deepEqual(
   new Set(entries.map(({ id }) => id)),
   new Set([merchantDocId('amazon'), merchantDocId('amzn mktp us')]),
 );
+// A generic or one-word descriptor that doesn't hold the name never becomes an alias for everyone.
+const aliasCount = (merchantName: string, name: string) => {
+  const one = tx({ merchantName, name });
+  return toMerchantEntries(one ? [one] : []).length;
+};
+assert.equal(
+  aliasCount('Blue Bottle', 'SQ *COFFEE 1234'),
+  1,
+  'one generic word',
+);
+assert.equal(aliasCount('Blue Bottle', 'POS DEBIT 4411'), 1, 'banking words');
+assert.equal(
+  aliasCount('Blue Bottle', 'SQ *BLUE BOTTLE OAK'),
+  2,
+  'holds the name',
+);
+assert.equal(
+  aliasCount('Amazon', 'AMZN Mktp US*2K3AB1'),
+  2,
+  'a named descriptor',
+);
 // A name that equals the descriptor makes one entry; a charge with a logo wins over one without.
 const plain = tx({ merchantName: 'Shell', name: 'Shell', logoUrl: null });
 assert.equal(toMerchantEntries(plain ? [plain] : []).length, 1);

@@ -107,7 +107,11 @@ export const isAnsweredEmail = (
     purchase.assignedBy !== null ||
     purchase.ruleId !== null);
 
-/** A bank charge the person already settled (placed, kept, left out) rather than one waiting or placed by a rule: its answer wins over an email's. */
+/** A bank charge already settled by the person (placed, kept, left out) or matched to a bill or a pair, rather than one waiting or placed by a rule: its own state wins over an email's. */
 export const isSettledByPerson = (
-  purchase: Pick<OpenPurchase, 'needsHome' | 'assignedBy'>,
-) => !purchase.needsHome && purchase.assignedBy !== 'auto';
+  purchase: Pick<OpenPurchase, 'needsHome' | 'assignedBy' | 'billRef' | 'pairedWithId'>,
+) =>
+  !purchase.needsHome &&
+  (purchase.assignedBy !== 'auto' ||
+    (purchase.billRef ?? null) !== null ||
+    purchase.pairedWithId !== null);

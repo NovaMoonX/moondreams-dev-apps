@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "purchases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "research",
       "queryScope": "COLLECTION",
       "fields": [

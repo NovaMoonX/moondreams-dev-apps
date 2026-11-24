@@ -1434,7 +1434,7 @@ export async function mergeBankPurchase(
   return { bank, typed, images, updatedAt: now };
 }
 
-/** Makes a bank charge and the purchase read from its email one purchase. An email that was answered (an envelope, a rule or the person's own say) gives the charge its answer: its envelopes, rule and who placed it, unless the person already settled the charge, whose answer wins. Otherwise the charge keeps its own state, in Needs a home or wherever it is, and only takes the email's name, note, link, receipt and group. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
+/** Makes a bank charge and the purchase read from its email one purchase. An email that was answered (an envelope, a rule or the person's own say) gives the charge its answer: its envelopes, rule and who placed it, unless the person already settled the charge, whose answer wins. Otherwise, or when the email's answer can't be carried (its envelope archived, its day closed), the charge keeps its own state, in Needs a home or wherever it is, and only takes the email's name, note, link, receipt and group. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
 export async function mergeEmailPurchase(
   uid: string,
   encryption: RunwayEncryption,
@@ -1443,7 +1443,16 @@ export async function mergeEmailPurchase(
   summary: string,
 ): Promise<MergedPurchase> {
   if (isAnsweredEmail(email) && !isSettledByPerson(bank)) {
-    return mergeBankPurchase(uid, encryption, bank, email, summary);
+    try {
+      return await mergeBankPurchase(uid, encryption, bank, email, summary);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === SPEND_WORDS.changedElsewhere
+      ) {
+        throw error;
+      }
+    }
   }
   const [sealed, changeSealed, images] = await Promise.all([
     sealJson(

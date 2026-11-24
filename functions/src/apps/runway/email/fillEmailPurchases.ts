@@ -5,6 +5,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
+import { markClosedMonths } from '../link/syncRunwayLink.js';
 import { findMerchants, type MerchantNameDoc } from '../merchantNames.js';
 import {
   openWithKey,
@@ -105,6 +106,8 @@ async function fillPlan(
   const found = await firestore
     .collection(`apps/runway/plans/${uid}/purchases`)
     .where('source', '==', 'email')
+    .where('date', '>=', from)
+    .orderBy('date', 'desc')
     .limit(PURCHASES_PER_PLAN)
     .get();
   if (found.size === PURCHASES_PER_PLAN) {
@@ -112,7 +115,7 @@ async function fillPlan(
   }
   const views = found.docs.flatMap((doc) => {
     const data = doc.data();
-    if (typeof data.date !== 'number' || data.date < from) return [];
+    if (typeof data.date !== 'number') return [];
     try {
       return [
         {
@@ -139,6 +142,7 @@ async function fillPlan(
       typeof view.payload.merchant === 'string' ? view.payload.merchant : null,
     ),
   );
+  if (list === null) return { checked: 0, written: 0 };
   const writes = views.flatMap(({ doc, view }) => {
     const text =
       typeof view.payload.merchant === 'string' ? view.payload.merchant : null;
@@ -177,13 +181,19 @@ async function fillPlan(
         .catch(() => false),
     ),
   );
+  const movedDates = writes.flatMap(({ doc, plan }, index) =>
+    results[index] && plan.needsHome ? [Number(doc.get('date'))] : [],
+  );
+  if (movedDates.length > 0) {
+    await markClosedMonths(firestore, uid, movedDates, now);
+  }
   return {
     checked: views.length,
     written: results.filter(Boolean).length,
   };
 }
 
-/** Brings emailed purchases made before the shared merchant list or the Needs a home rule into line, a capped read per plan and a retry of a miss only weekly. Changes no line, amount or date, so no closing is marked. */
+/** Brings emailed purchases made before the shared merchant list or the Needs a home rule into line, newest first in a capped read per plan, retrying a miss only weekly. A closed month whose purchase moves into Needs a home is marked for a fresh closing. */
 export const fillRunwayEmailPurchases = onSchedule(
   {
     region: 'us-central1',

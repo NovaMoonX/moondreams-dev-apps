@@ -86,6 +86,7 @@ jobs:
       - run: npm run check:a-list-held-lists
       - run: npm run check:going-once-held-lists
       - run: npm run check:runway-notify-text
+      - run: npm run check:runway-email
       - run: npm run check:waypoint-pushes
       - run: npm run check:waypoint-balances
       - run: npm run check:a-list

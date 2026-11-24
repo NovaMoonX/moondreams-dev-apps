@@ -63,7 +63,7 @@ import {
 } from '@apps/runway/engine/rules';
 import { declineRule, isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
-import { selectEmailTwins } from '@apps/runway/store/selectors/emailSelectors';
+import { selectTwinHeldIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
@@ -93,7 +93,6 @@ import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getEmailOffers } from '@apps/runway/engine/emailTwins';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import {
   selectCostPaid,
@@ -188,7 +187,7 @@ function PurchaseScreen({
   );
   const recentPurchases = useAppSelector((state) => state.runway.purchases);
   const waitingPurchases = useAppSelector((state) => state.runway.needsHome);
-  const emailTwins = useAppSelector(selectEmailTwins);
+  const twinHeldIds = useAppSelector(selectTwinHeldIds);
   const { describe: describeRuleSentence } = useRuleNames();
   const [ruleStep, setRuleStep] = useState<{
     view: 'make' | 'suggest' | 'edit';
@@ -316,9 +315,6 @@ function PurchaseScreen({
         )
       : null;
   const merchantKey = toMerchantKey(purchase.merchant);
-  const emailOfferedIds = new Set(
-    getEmailOffers(emailTwins, purchase.id).length > 0 ? [purchase.id] : [],
-  );
   const suggestion =
     run !== null &&
     run.purchaseIds.includes(purchase.id) &&
@@ -341,7 +337,7 @@ function PurchaseScreen({
       purchase.id,
       waitingPurchases,
       recentPurchases,
-      emailOfferedIds,
+      twinHeldIds,
     )
       ? wouldRulePlace(
           purchase,

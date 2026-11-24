@@ -159,6 +159,29 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     false,
     'a charge a rule placed takes the email answer',
   );
+  assert.equal(
+    isSettledByPerson(
+      make('b', 'link', 4_000, 0, {
+        needsHome: false,
+        assignedBy: 'auto',
+        lines: [],
+        billRef: { billId: 'bill', moveId: 'move' } as never,
+      }),
+    ),
+    true,
+    'a charge autopay matched to a bill keeps its own state',
+  );
+  assert.equal(
+    isSettledByPerson(
+      make('b', 'link', 4_000, 0, {
+        needsHome: false,
+        assignedBy: 'auto',
+        pairedWithId: 'p',
+      }),
+    ),
+    true,
+    'so does a paired charge',
+  );
 
   const twoEmails = findEmailTwins([
     make('e1', 'email', 4_000, 0),
