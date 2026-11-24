@@ -9,7 +9,6 @@ import FormSheet from '@/components/FormSheet';
 interface PhotoActionRowProps {
   label: string;
   subtitle?: string;
-  /** A touch screen offers the camera beside the chooser; elsewhere the row opens the chooser. */
   canTakePhoto: boolean;
   isDisabled?: boolean;
   isRoomy?: boolean;
@@ -46,7 +45,7 @@ function PhotoTile({ icon, label, onClick }: PhotoTileProps) {
   );
 }
 
-/** One drawer row that adds a photo: on a touch screen a tap opens a sheet with a camera tile and a gallery tile. */
+/** A drawer row that adds a photo; with `canTakePhoto`, its tap asks camera or gallery. */
 function PhotoActionRow({
   label,
   subtitle,

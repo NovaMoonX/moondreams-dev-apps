@@ -345,7 +345,6 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
   );
 }
 
-// A charge sitting in Free to Spend that nobody chose for it can still be given an envelope or a rule from its sheet.
 {
   const open: OpenPurchase = {
     id: 'p1',

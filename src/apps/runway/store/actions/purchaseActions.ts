@@ -717,7 +717,7 @@ export const returnPurchaseToWaiting = (
     placement,
   );
 
-/** Takes back a placement made from a purchase's sheet: one that was waiting goes back to Needs a home, one that sat unplaced in Free to Spend goes back there as it was. */
+/** Takes back a placement made from a purchase's sheet, to wherever it sat before. */
 export const undoPlacement = (
   uid: string,
   encryption: RunwayEncryption,

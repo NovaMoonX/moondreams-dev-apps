@@ -199,7 +199,7 @@ export function getPurchaseEffect(
   return result;
 }
 
-/** A charge from the bank or an email sitting in Free to Spend that nobody chose for it (it came in while sorting was paused, or before it could wait): it can still be given an envelope or a rule. */
+/** Whether an email or bank charge sits in Free to Spend with nobody having placed it. */
 export function isOpenToPlace(purchase: OpenPurchase): boolean {
   const result =
     !purchase.needsHome &&

@@ -39,7 +39,7 @@ interface NeedsHomeAssignProps {
   onSuggestRule?: (placed: OpenPurchase) => void;
 }
 
-/** The likeliest envelopes for a purchase nobody placed, each one tap away, then every envelope behind one more row; a split goes through the purchase's own edit. */
+/** The likeliest envelopes for an unplaced purchase, then every envelope; never a split. */
 function NeedsHomeAssign({
   purchase,
   onDone,

@@ -701,9 +701,9 @@ function PurchaseScreen({
           }}
         />
       )}
-      <EmailPurchaseRows purchase={purchase} onFailed={setError} />
     </>
   );
+  const isEmail = purchase.source === 'email';
 
   return (
     <>
@@ -894,7 +894,10 @@ function PurchaseScreen({
               onSuggestRule={onSuggestRule}
             />
           )}
-          <ActionGroup isRoomy>
+          <ActionGroup
+            isRoomy
+            caption={isEmail ? SPEND_WORDS.purchaseActionsCaption : undefined}
+          >
             {!isPlaceable && editRows}
             {heldRule !== null && (
               <ActionRow
@@ -1046,6 +1049,11 @@ function PurchaseScreen({
               />
             )}
           </ActionGroup>
+          {isEmail && (
+            <ActionGroup isRoomy caption={EMAIL_WORDS.emailActionsCaption}>
+              <EmailPurchaseRows purchase={purchase} onFailed={setError} />
+            </ActionGroup>
+          )}
           {error && (
             <p className='text-destructive text-sm' role='alert'>
               {error}

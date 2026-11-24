@@ -2135,6 +2135,7 @@ export const SPEND_WORDS = {
   itemsHint: 'One item to a line, with its price after two spaces.',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
+  purchaseActionsCaption: 'This purchase',
   addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
