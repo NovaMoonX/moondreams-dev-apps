@@ -446,7 +446,9 @@ function LinkBankScreen({
                               hasChevron
                               icon={<Landmark />}
                               label={LINK_WORDS.addToLinkedRow(bank)}
-                              subtitle={LINK_WORDS.addToLinkedHelp}
+                              subtitle={
+                                twin ? undefined : LINK_WORDS.addToLinkedHelp
+                              }
                               isDisabled={isWorking}
                               onClick={() => void addAccounts(link)}
                             />

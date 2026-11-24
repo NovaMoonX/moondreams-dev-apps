@@ -17,7 +17,8 @@ export const isUnfinishedLink = (link: LinkSealed) =>
       entry.accountId === null && entry.cardId === null && !entry.isSkipped,
   );
 
-export const toBankKey = (value: string) => value.toLowerCase().replace(/\s+/g, '');
+export const toBankKey = (value: string) =>
+  value.toLowerCase().replace(/\s+/g, '');
 
 const openLink = (planKey: Buffer, sealed: unknown) =>
   openWithKey(planKey, sealed as SealedPayload) as unknown as LinkSealed;

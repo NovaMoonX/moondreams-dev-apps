@@ -67,7 +67,9 @@ async function findTwinLinkId(
         planKey,
         data.sealed as SealedPayload,
       ) as unknown as LinkSealed;
-      return !isUnfinishedLink(link) && isTwinLink(link, institutionName, accounts);
+      return (
+        !isUnfinishedLink(link) && isTwinLink(link, institutionName, accounts)
+      );
     } catch {
       return false;
     }

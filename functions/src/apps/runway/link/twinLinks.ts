@@ -33,10 +33,7 @@ export interface CombineMove {
 const isPlaced = (entry: ProviderAccountSealed) =>
   entry.accountId !== null || entry.cardId !== null;
 
-/**
- * Folds `drop`'s placed accounts onto the matching accounts of `keep`: each must match exactly one of `keep`'s accounts
- * that is not placed elsewhere. Null when one cannot move, so nothing is combined that would lose a placed account.
- */
+/** Folds `drop`'s placed accounts onto `keep`'s matching unplaced ones; null when any cannot move, so no placed account is lost. */
 export function planCombine(
   keep: Pick<LinkSealed, 'providerAccounts'>,
   drop: Pick<LinkSealed, 'providerAccounts'>,
@@ -71,11 +68,10 @@ export function planCombine(
         }
       : row;
   });
-  const moves = placed.map(
-    (entry): CombineMove =>
-      entry.cardId !== null
-        ? { collection: 'cards', targetId: entry.cardId }
-        : { collection: 'accounts', targetId: entry.accountId as string },
+  const moves = placed.map((entry): CombineMove =>
+    entry.cardId !== null
+      ? { collection: 'cards', targetId: entry.cardId }
+      : { collection: 'accounts', targetId: entry.accountId as string },
   );
   return { providerAccounts, moves };
 }

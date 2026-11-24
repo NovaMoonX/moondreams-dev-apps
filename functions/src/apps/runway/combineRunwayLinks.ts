@@ -34,11 +34,16 @@ if (getApps().length === 0) {
 }
 
 const isId = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  /^[A-Za-z0-9_-]{1,128}$/.test(value);
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 
 const NOT_COMBINABLE =
   'These two sign-ins can no longer be combined. Nothing was changed.';
+const NEEDS_SIGN_IN =
+  'One of these links needs a new sign-in first, so nothing waiting at the bank is missed. Sign in again, then combine. Nothing was changed.';
+const BANK_DOWN =
+  'The bank isn\u2019t answering right now. Try again in a little while. Nothing was changed.';
+const BUSY =
+  'Your bank was sending new purchases just then. Try again in a moment. Nothing was changed.';
 
 interface LinkRead {
   id: string;
@@ -52,11 +57,7 @@ const byKeepOrder = (a: LinkRead, b: LinkRead) =>
   Number(a.status !== 'active') - Number(b.status !== 'active') ||
   a.createdAt - b.createdAt;
 
-/**
- * `{ linkId, otherLinkId }` → `{ keptLinkId, moved }`: two live sign-ins that hold the same accounts at one bank become one.
- * Both are synced first so nothing waiting is missed, then the kept one takes over every placed account and the other is
- * removed and revoked at the bank; purchases already brought in stay as they are.
- */
+/** `{ linkId, otherLinkId }` → `{ keptLinkId, moved }`: two live sign-ins holding the same accounts at one bank become one; both catch up first, the other is revoked at the bank, purchases stay. */
 export const combineRunwayLinks = onCall(
   {
     region: 'us-central1',
@@ -82,114 +83,177 @@ export const combineRunwayLinks = onCall(
       );
     });
 
-    // The kept link's next sync reads from where it left off, so both catch up first: a charge only the other one has seen yet would otherwise arrive twice.
-    const ids = [linkId, otherLinkId];
-    await ids.reduce(
-      (previous, id) =>
-        previous.then(() =>
-          syncRunwayLink(firestore, keyring, uid, id).then(() => undefined),
-        ),
-      Promise.resolve(),
-    );
-
     const linkRef = (id: string) =>
       firestore.doc(planDocPath(uid, 'links', id));
     const grantRef = (id: string) => firestore.doc(`${grantsPath(uid)}/${id}`);
+    const ids = [linkId, otherLinkId];
 
-    const outcome = await firestore.runTransaction(async (transaction) => {
-      const snapshots = await transaction.getAll(...ids.map(linkRef));
-      const links = snapshots.flatMap((snapshot): LinkRead[] => {
-        const data = snapshot.data();
-        if (!snapshot.exists || !data || data.status === 'revoked') return [];
-        return [
-          {
-            id: snapshot.id,
-            status: data.status as string,
-            createdAt: data.createdAt as number,
-            sealed: openWithKey(
-              planKey.key,
-              data.sealed as SealedPayload,
-            ) as unknown as LinkSealed,
-          },
-        ];
-      });
-      if (
-        links.length !== 2 ||
-        !isTwinLink(
-          links[0].sealed,
-          links[1].sealed.institutionName,
-          links[1].sealed.providerAccounts,
-        )
-      ) {
-        throw new HttpsError('failed-precondition', NOT_COMBINABLE);
-      }
-      const ordered = [...links].sort(byKeepOrder);
-      const choice = [ordered, [...ordered].reverse()]
-        .map(([keep, drop]) => ({
-          keep,
-          drop,
-          plan: planCombine(keep.sealed, drop.sealed),
-        }))
-        .find(({ plan }) => plan !== null);
-      if (!choice || !choice.plan) {
-        throw new HttpsError('failed-precondition', NOT_COMBINABLE);
-      }
-      const { keep, drop, plan } = choice;
-      const targetRefs = plan.moves.map((move) =>
-        firestore.doc(planDocPath(uid, move.collection, move.targetId)),
+    // The kept link's next sync reads from where it left off, so both catch up first: a charge only the other one has seen yet would otherwise arrive twice, or never.
+    const catchUp = async () => {
+      const results = await ids.reduce(
+        (previous, id) =>
+          previous.then(async (done) => [
+            ...done,
+            await syncRunwayLink(firestore, keyring, uid, id),
+          ]),
+        Promise.resolve([] as Awaited<ReturnType<typeof syncRunwayLink>>[]),
       );
-      const [dropGrant, ...targets] = await transaction.getAll(
-        grantRef(drop.id),
-        ...targetRefs,
-      );
-      const isTargetHeld = targets.every(
-        (target) => target.exists && target.data()?.linkId === drop.id,
-      );
-      if (!isTargetHeld) {
-        throw new HttpsError('failed-precondition', NOT_COMBINABLE);
+      if (results.some((result) => result.state === 'needsAttention')) {
+        throw new HttpsError('failed-precondition', NEEDS_SIGN_IN, {
+          reason: 'needsSignIn',
+        });
       }
+      if (results.some((result) => result.state === 'failed')) {
+        throw new HttpsError('unavailable', BANK_DOWN);
+      }
+      const grants = await Promise.all(ids.map((id) => grantRef(id).get()));
+      return grants.map((grant) =>
+        grant.exists ? ((grant.data()?.cursor as string | null) ?? null) : null,
+      );
+    };
 
-      const nextKeep: LinkSealed = {
-        institutionName: keep.sealed.institutionName,
-        institutionLogo:
-          keep.sealed.institutionLogo ?? drop.sealed.institutionLogo ?? null,
-        ...(keep.sealed.institutionDomain === undefined
-          ? {}
-          : { institutionDomain: keep.sealed.institutionDomain }),
-        ...(keep.sealed.institutionCheckedAt === undefined
-          ? {}
-          : { institutionCheckedAt: keep.sealed.institutionCheckedAt }),
-        providerAccounts: plan.providerAccounts,
-      };
-      transaction.update(linkRef(keep.id), {
-        sealed: sealWithKey(planKey, { ...nextKeep }, SEALED_SCHEMA_VERSION),
-      });
-      plan.moves.forEach((move, index) => {
-        transaction.update(targetRefs[index], { linkId: keep.id });
-        // A statement read through the other sign-in would read as this one's until the next read replaces it.
-        if (move.collection === 'cards') {
+    const combineOnce = (cursors: (string | null)[]) =>
+      firestore.runTransaction(async (transaction) => {
+        const snapshots = await transaction.getAll(
+          ...ids.map(linkRef),
+          ...ids.map(grantRef),
+        );
+        const grantSnapshots = snapshots.slice(ids.length);
+        if (grantSnapshots.some((grant) => !grant.exists)) {
+          throw new HttpsError('failed-precondition', NOT_COMBINABLE, {
+            reason: 'notCombinable',
+          });
+        }
+        // A sync that finished since the catch-up moved a cursor past charges the plan below has not seen.
+        const isCaughtUp = grantSnapshots.every(
+          (grant, index) =>
+            ((grant.data()?.cursor as string | null) ?? null) ===
+            cursors[index],
+        );
+        if (!isCaughtUp) return null;
+        const links = snapshots
+          .slice(0, ids.length)
+          .flatMap((snapshot): LinkRead[] => {
+            const data = snapshot.data();
+            if (!snapshot.exists || !data || data.status === 'revoked')
+              return [];
+            return [
+              {
+                id: snapshot.id,
+                status: data.status as string,
+                createdAt: data.createdAt as number,
+                sealed: openWithKey(
+                  planKey.key,
+                  data.sealed as SealedPayload,
+                ) as unknown as LinkSealed,
+              },
+            ];
+          });
+        if (
+          links.length !== 2 ||
+          !isTwinLink(
+            links[0].sealed,
+            links[1].sealed.institutionName,
+            links[1].sealed.providerAccounts,
+          )
+        ) {
+          throw new HttpsError('failed-precondition', NOT_COMBINABLE, {
+            reason: 'notCombinable',
+          });
+        }
+        const ordered = [...links].sort(byKeepOrder);
+        const choice = [ordered, [...ordered].reverse()]
+          .map(([keep, drop]) => ({
+            keep,
+            drop,
+            plan: planCombine(keep.sealed, drop.sealed),
+          }))
+          .find(({ plan }) => plan !== null);
+        if (!choice || !choice.plan) {
+          throw new HttpsError('failed-precondition', NOT_COMBINABLE, {
+            reason: 'notCombinable',
+          });
+        }
+        const { keep, drop, plan } = choice;
+        const targetRefs = plan.moves.map((move) =>
+          firestore.doc(planDocPath(uid, move.collection, move.targetId)),
+        );
+        const dropGrant = grantSnapshots[ids.indexOf(drop.id)];
+        const targets =
+          targetRefs.length === 0
+            ? []
+            : await transaction.getAll(...targetRefs);
+        const isTargetHeld = targets.every(
+          (target) => target.exists && target.data()?.linkId === drop.id,
+        );
+        if (!isTargetHeld) {
+          throw new HttpsError('failed-precondition', NOT_COMBINABLE, {
+            reason: 'notCombinable',
+          });
+        }
+
+        const nextKeep: LinkSealed = {
+          institutionName: keep.sealed.institutionName,
+          institutionLogo:
+            keep.sealed.institutionLogo ?? drop.sealed.institutionLogo ?? null,
+          ...(keep.sealed.institutionDomain === undefined &&
+          drop.sealed.institutionDomain === undefined
+            ? {}
+            : {
+                institutionDomain:
+                  keep.sealed.institutionDomain ??
+                  drop.sealed.institutionDomain ??
+                  null,
+              }),
+          ...(keep.sealed.institutionCheckedAt === undefined
+            ? {}
+            : { institutionCheckedAt: keep.sealed.institutionCheckedAt }),
+          providerAccounts: plan.providerAccounts,
+        };
+        transaction.update(linkRef(keep.id), {
+          sealed: sealWithKey(planKey, { ...nextKeep }, SEALED_SCHEMA_VERSION),
+        });
+        plan.moves.forEach((move, index) => {
+          transaction.update(targetRefs[index], { linkId: keep.id });
+          // A statement read through the other sign-in would read as this one's until the next read replaces it.
+          if (move.collection === 'cards') {
+            transaction.delete(
+              firestore.doc(planDocPath(uid, 'cardStatements', move.targetId)),
+            );
+          }
+        });
+        if (plan.moves.some((move) => move.collection === 'cards')) {
+          transaction.update(grantRef(keep.id), { statementsCheckedAt: null });
+        }
+        transaction.delete(linkRef(drop.id));
+        transaction.delete(grantRef(drop.id));
+        const grantDoc = dropGrant.exists
+          ? (dropGrant.data() as ProviderGrantDoc)
+          : null;
+        if (grantDoc !== null) {
           transaction.delete(
-            firestore.doc(planDocPath(uid, 'cardStatements', move.targetId)),
+            firestore.doc(itemIndexPath(grantDoc.providerItemId)),
           );
         }
+        return {
+          keptLinkId: keep.id,
+          moved: plan.moves.length,
+          grantDoc,
+        };
       });
-      if (plan.moves.some((move) => move.collection === 'cards')) {
-        transaction.update(grantRef(keep.id), { statementsCheckedAt: null });
-      }
-      transaction.delete(linkRef(drop.id));
-      transaction.delete(grantRef(drop.id));
-      const grantDoc = dropGrant.exists
-        ? (dropGrant.data() as ProviderGrantDoc)
-        : null;
-      if (grantDoc !== null) {
-        transaction.delete(firestore.doc(itemIndexPath(grantDoc.providerItemId)));
-      }
-      return {
-        keptLinkId: keep.id,
-        moved: plan.moves.length,
-        grantDoc,
-      };
-    });
+
+    const outcome = await [1, 2, 3].reduce<
+      Promise<Awaited<ReturnType<typeof combineOnce>>>
+    >(
+      (previous) =>
+        previous.then(async (done) =>
+          done === null ? combineOnce(await catchUp()) : done,
+        ),
+      Promise.resolve(null),
+    );
+    if (outcome === null) {
+      throw new HttpsError('aborted', BUSY);
+    }
 
     if (outcome.grantDoc !== null) {
       await provider

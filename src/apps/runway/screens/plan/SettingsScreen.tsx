@@ -61,6 +61,7 @@ import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { isStandInLogo } from '@apps/runway/utils/bankLogo';
+import { findTwinOf } from '@apps/runway/engine/twinLinks';
 import { formatNotifyHour } from '@apps/runway/utils/notifyTime';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
@@ -171,6 +172,17 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const links = useAppSelector((state) => state.runway.links);
   const unfinished = links.filter(isUnfinishedLink);
   const finished = links.filter((link) => !isUnfinishedLink(link));
+  const describeBankRow = (link: OpenLink) => {
+    const since = formatTimeAgo(link.lastSyncAt ?? link.createdAt, now, true);
+    if (link.status === 'revoked') {
+      return LINK_WORDS.unlinkedRowValue(countBroughtIn(link));
+    }
+    if (findTwinOf(link, links) !== null) return LINK_WORDS.twinRowValue;
+    if (link.status === 'needsAttention') {
+      return LINK_WORDS.needsSignInRowValue(since);
+    }
+    return LINK_WORDS.linkedRowValue(countBroughtIn(link), since);
+  };
   const now = useNow(60_000);
   const { isScrambled, setScrambled } = useValuesHidden();
   const [openBankId, setOpenBankId] = useState<string | null>(null);
@@ -262,26 +274,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                     />
                   }
                   label={link.institutionName}
-                  value={
-                    link.status === 'revoked'
-                      ? LINK_WORDS.unlinkedRowValue(countBroughtIn(link))
-                      : link.status === 'needsAttention'
-                        ? LINK_WORDS.needsSignInRowValue(
-                            formatTimeAgo(
-                              link.lastSyncAt ?? link.createdAt,
-                              now,
-                              true,
-                            ),
-                          )
-                        : LINK_WORDS.linkedRowValue(
-                            countBroughtIn(link),
-                            formatTimeAgo(
-                              link.lastSyncAt ?? link.createdAt,
-                              now,
-                              true,
-                            ),
-                          )
-                  }
+                  value={describeBankRow(link)}
                   onOpen={() => setOpenBankId(link.id)}
                 />
               ))}

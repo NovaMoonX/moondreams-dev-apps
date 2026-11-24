@@ -91,7 +91,7 @@ function BankSheet({
       addToast({ title: LINK_WORDS.combinedToast(bank), type: 'success' });
       onClose();
     } catch (combineError) {
-      setError(getErrorMessage(combineError, LINK_WORDS.combineFailed));
+      setError(toCombineError(combineError, bank));
       setIsBusy(false);
     }
   };
@@ -255,6 +255,20 @@ function BankSheet({
       </div>
     </DetailSheet>
   );
+}
+
+function toCombineError(error: unknown, bank: string) {
+  const { code, details } = (error ?? {}) as {
+    code?: unknown;
+    details?: { reason?: unknown };
+  };
+  if (code === 'functions/unavailable') return LINK_WORDS.combineBankDown(bank);
+  if (code === 'functions/aborted') return LINK_WORDS.combineBusy(bank);
+  if (details?.reason === 'needsSignIn') {
+    return LINK_WORDS.combineNeedsSignIn(bank);
+  }
+  if (details?.reason === 'notCombinable') return LINK_WORDS.combineNoLonger;
+  return LINK_WORDS.combineFailed;
 }
 
 export default BankSheet;
