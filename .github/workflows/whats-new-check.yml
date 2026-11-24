@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   whats-new:
+    name: What's new note
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

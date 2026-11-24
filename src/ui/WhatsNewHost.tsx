@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Megaphone } from 'lucide-react';
 
 import SideTab from '@/components/SideTab';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { SITE_VERSION } from '@/lib/app';
 import { hasUnsavedWork } from '@/lib/app/unsavedWork';
 import {
@@ -199,16 +200,18 @@ function WhatsNewHost() {
     writeCollapsed(scope, null);
     closePopup();
     refresh();
-    if (newest === null) return;
-    writeWhatsNewSeen(uid, scope, newest).catch((error) =>
+    const shownNewest = shownPopup && getNewestVersion(shownPopup.notes);
+    if (!shownNewest) return;
+    writeWhatsNewSeen(uid, scope, shownNewest).catch((error) =>
       console.error("Failed to save what's new mark:", error),
     );
   };
   const showMe = (note: WhatsNewNote, isHistory: boolean) => {
-    if (note.path?.startsWith('/')) navigate(note.path);
     if (isHistory) closeWhatsNewHistory();
     else if (isDebug) collapse();
     else closePopup();
+    const path = note.path;
+    if (path?.startsWith('/')) afterBackLayersClose(() => navigate(path));
   };
   const stopFixOnly = () => {
     closePopup();
@@ -242,6 +245,10 @@ function WhatsNewHost() {
         scopeName={name}
         mode='history'
         notes={historyNotes}
+        feedState={
+          feed.isPending ? 'loading' : feed.isError ? 'failed' : 'ready'
+        }
+        onRetry={() => void feed.refetch()}
         isDebug={isDebug}
         onClose={closeWhatsNewHistory}
         onShowMe={(note) => showMe(note, true)}

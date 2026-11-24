@@ -16,7 +16,7 @@ interface SideTabProps {
   children?: ReactNode;
 }
 
-/** A small tab pinned to a screen edge, 40px tall with a 40px hit area reaching into the page. */
+/** A small tab pinned to a screen edge, 40px tall, its hit area reaching 8px further into the page. */
 function SideTab({
   side,
   label,

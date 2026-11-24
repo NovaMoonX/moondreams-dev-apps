@@ -104,17 +104,14 @@ export const getUnseenNotes = (
     ? []
     : visible.filter((note) => compareVersions(note.version, seenVersion) > 0);
 
-/** The mark written on a first encounter: the newest release of the scope the person already has, whatever a note's audience or gate (those load after the feed), or null for a `dev` build with no notes. */
+/** The mark written on a first encounter: the release the person is running, so its notes count as seen even if they publish late; a `dev` build takes the scope's newest note, or null with none. */
 export const getFirstEncounterMark = (
   notes: WhatsNewNote[],
   { scope, runningVersion }: Pick<WhatsNewContext, 'scope' | 'runningVersion'>,
 ) =>
-  getNewestVersion(
-    notes.filter(
-      (note) =>
-        note.app === scope && isVersionAvailable(note.version, runningVersion),
-    ),
-  ) ?? (runningVersion === 'dev' ? null : runningVersion);
+  runningVersion === 'dev'
+    ? getNewestVersion(notes.filter((note) => note.app === scope))
+    : runningVersion;
 
 /** Fix-only updates pop up only for a debug viewer who hasn't turned them off. */
 export const shouldPopUp = (

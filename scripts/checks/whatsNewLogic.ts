@@ -97,12 +97,13 @@ assert.deepEqual(getUnseenNotes(visible, null), []);
 const mark = (notes: WhatsNewNote[], extra: Partial<WhatsNewContext> = {}) =>
   getFirstEncounterMark(notes, { ...context(), ...extra });
 assert.equal(mark([future, current, older, debugNote]), '1.182.0');
-assert.equal(mark([older]), '1.9.0');
+assert.equal(mark([older]), '1.182.0');
 assert.equal(mark([]), '1.182.0');
 assert.equal(mark([], { runningVersion: 'dev' }), null);
 assert.equal(mark([siteNote]), '1.182.0');
-assert.equal(mark([debugNote, older]), '1.181.0');
-assert.equal(mark([gated, older]), '1.181.0');
+assert.equal(mark([debugNote, older]), '1.182.0');
+assert.equal(mark([gated, older]), '1.182.0');
+assert.equal(mark([older, siteNote], { runningVersion: 'dev' }), '1.9.0');
 assert.equal(mark([future, current], { runningVersion: '1.9.0' }), '1.9.0');
 
 // A fix-only update pops up only for a debug viewer who hasn't switched it off.

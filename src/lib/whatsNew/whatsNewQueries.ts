@@ -60,8 +60,11 @@ export const fetchWhatsNewNotes = async () => {
     import('firebase/database'),
     import('@lib/firebase/config'),
   ]);
-  const timeout = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), FETCH_TIMEOUT_MS),
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(
+      () => reject(new Error("What's new took too long to load.")),
+      FETCH_TIMEOUT_MS,
+    ),
   );
   const snapshot = await Promise.race([
     get(ref(realtimeDb, WHATS_NEW_FEED_PATH)),

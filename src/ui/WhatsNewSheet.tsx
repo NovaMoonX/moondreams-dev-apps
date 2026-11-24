@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleArrowUp,
+  Loader2,
   Megaphone,
   Wrench,
 } from 'lucide-react';
@@ -47,6 +48,9 @@ interface WhatsNewSheetProps {
   /** A pop-up holds what is unseen and ends in Got it; history holds everything and just closes. */
   mode: 'popup' | 'history';
   notes: WhatsNewNote[];
+  /** History only: whether the feed is still loading or failed, so neither reads as "nothing new". */
+  feedState?: 'loading' | 'failed' | 'ready';
+  onRetry?: () => void;
   isDebug: boolean;
   onClose: () => void;
   onGotIt?: () => void;
@@ -210,11 +214,12 @@ function MonthList({
 }
 
 /** The scrolling ancestor of the sheet's content: the drawer's body on a phone, the modal's from `sm`. */
-const findScroller = (node: HTMLElement) => {
-  for (let el = node.parentElement; el; el = el.parentElement) {
-    if (/auto|scroll/.test(getComputedStyle(el).overflowY)) return el;
-  }
-  return null;
+const findScroller = (node: HTMLElement | null): HTMLElement | null => {
+  const parent = node?.parentElement ?? null;
+  if (!parent) return null;
+  return /auto|scroll/.test(getComputedStyle(parent).overflowY)
+    ? parent
+    : findScroller(parent);
 };
 
 /**
@@ -227,6 +232,8 @@ function WhatsNewSheet({
   scopeName,
   mode,
   notes,
+  feedState = 'ready',
+  onRetry,
   isDebug,
   onClose,
   onGotIt,
@@ -273,6 +280,26 @@ function WhatsNewSheet({
   const rolled = rollUp(notes);
 
   const body = () => {
+    if (mode === 'history' && feedState === 'loading') {
+      return (
+        <p className='text-muted-foreground flex items-center gap-2 text-sm'>
+          <Loader2 className='size-4 animate-spin' aria-hidden='true' />
+          Looking for what changed…
+        </p>
+      );
+    }
+    if (mode === 'history' && feedState === 'failed') {
+      return (
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-sm'>
+            Couldn't load what changed. Check your connection, then try again.
+          </p>
+          <Button type='button' variant='secondary' size='sm' onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
+      );
+    }
     if (notes.length === 0) {
       return (
         <p className='text-muted-foreground text-sm'>

@@ -1,4 +1,4 @@
-import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot, runTransaction, updateDoc } from 'firebase/firestore';
 import { useCallback, useSyncExternalStore } from 'react';
 
 import { db } from '@lib/firebase/config';
@@ -16,12 +16,15 @@ export interface WhatsNewSeenDoc {
 export interface WhatsNewSeenState {
   /** False until a server answer has arrived, so nothing is written over what the server holds. */
   isLoaded: boolean;
+  /** Whether the server holds the account's document, so a change can be a plain update that shows at once and queues offline. */
+  doesExist: boolean;
   seen: Record<string, string>;
   showFixOnly: boolean | null;
 }
 
 const NOT_LOADED: WhatsNewSeenState = {
   isLoaded: false,
+  doesExist: false,
   seen: {},
   showFixOnly: null,
 };
@@ -50,13 +53,19 @@ const startEntry = (uid: string): SeenEntry => {
       const data = snapshot.data() as Partial<WhatsNewSeenDoc> | undefined;
       entry.state = {
         isLoaded: true,
+        doesExist: snapshot.exists(),
         seen: data?.seen && typeof data.seen === 'object' ? data.seen : {},
         showFixOnly:
           typeof data?.showFixOnly === 'boolean' ? data.showFixOnly : null,
       };
       entry.watchers.forEach((watcher) => watcher());
     },
-    (error) => console.error("Failed to load what's new marks:", error),
+    (error) => {
+      console.error("Failed to load what's new marks:", error);
+      // A failed listener is dropped so the next watcher starts a fresh one.
+      if (entries.get(uid) === entry) entries.delete(uid);
+      entry.watchers.forEach((watcher) => watcher());
+    },
   );
   return entry;
 };
@@ -69,7 +78,7 @@ const watchSeen = (uid: string, onChange: () => void) => {
     entry.watchers.delete(onChange);
     if (entry.watchers.size > 0) return;
     entry.stop();
-    entries.delete(uid);
+    if (entries.get(uid) === entry) entries.delete(uid);
   };
 };
 
@@ -93,6 +102,9 @@ const writeField = (
   created: Partial<WhatsNewSeenDoc>,
 ) => {
   const ref = doc(db, 'whatsNewSeen', uid);
+  if (entries.get(uid)?.state.doesExist) {
+    return updateDoc(ref, { ...updates, updatedAt: Date.now() });
+  }
   return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const updatedAt = Date.now();
