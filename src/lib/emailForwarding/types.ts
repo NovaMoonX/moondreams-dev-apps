@@ -20,6 +20,8 @@ export interface EmailIntakeState {
   confirmProvider: ConfirmProvider | null;
   /** When any email last reached the address; null until one does. */
   lastReceivedAt: number | null;
+  /** When an email the provider forwarded on its own (not by hand) last arrived; null until one does, and on an older document. */
+  forwardedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
