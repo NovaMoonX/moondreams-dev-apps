@@ -11,6 +11,8 @@ export interface EmailTwins {
   clear: Map<string, string>;
   /** Emailed purchases with a candidate but no clear one: several candidates, or a candidate another emailed purchase also fits. */
   ambiguous: Set<string>;
+  /** Emailed purchase id → every bank charge it could be, clear or not. */
+  candidates: Map<string, string[]>;
 }
 
 type TwinPurchase = Pick<
@@ -76,5 +78,44 @@ export function findEmailTwins(purchases: readonly TwinPurchase[]): EmailTwins {
       .filter(([emailId, ids]) => ids.length > 0 && !clear.has(emailId))
       .map(([emailId]) => emailId),
   );
-  return { clear, ambiguous };
+  return { clear, ambiguous, candidates };
 }
+
+/** Every bank charge a waiting emailed purchase is or may be, and every emailed purchase that has one: a rule leaves both alone until they merge or the person answers, so an envelope is never charged twice. */
+export const getTwinHeldIds = (twins: EmailTwins): Set<string> =>
+  new Set(
+    [...twins.candidates].flatMap(([emailId, bankIds]) =>
+      bankIds.length > 0 ? [emailId, ...bankIds] : [],
+    ),
+  );
+
+/** The bank charges that merge on their own with an email, so Needs a home never lists them. */
+export const getTwinMergingIds = (twins: EmailTwins): Set<string> =>
+  new Set(twins.clear.values());
+
+/** The waiting emailed purchases a bank charge may be, when none of them is clearly it. */
+export const getEmailOffers = (twins: EmailTwins, bankId: string): string[] =>
+  [...twins.ambiguous]
+    .filter((emailId) => twins.candidates.get(emailId)?.includes(bankId))
+    .sort();
+
+/** An emailed purchase the person or a rule has answered: it left Needs a home with an envelope, a rule or the person's own say. A legacy one (free lines, nobody's answer) is not, and a merge keeps the bank charge's own state. */
+export const isAnsweredEmail = (
+  purchase: Pick<OpenPurchase, 'needsHome' | 'lines' | 'assignedBy' | 'ruleId'>,
+) =>
+  !purchase.needsHome &&
+  (purchase.lines.some((line) => line.envelopeId !== null) ||
+    purchase.assignedBy !== null ||
+    purchase.ruleId !== null);
+
+/** A bank charge already settled by the person (placed, kept, left out) or matched to a bill or a pair, rather than one waiting or placed by a rule: its own state wins over an email's. */
+export const isSettledByPerson = (
+  purchase: Pick<
+    OpenPurchase,
+    'needsHome' | 'assignedBy' | 'billRef' | 'pairedWithId'
+  >,
+) =>
+  !purchase.needsHome &&
+  (purchase.assignedBy !== 'auto' ||
+    (purchase.billRef ?? null) !== null ||
+    purchase.pairedWithId !== null);

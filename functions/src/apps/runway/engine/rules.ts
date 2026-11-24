@@ -107,10 +107,12 @@ export interface RulePlacement {
 const getAskedIds = (
   waiting: readonly OpenPurchase[],
   purchases: readonly OpenPurchase[],
+  emailHeld: ReadonlySet<string>,
 ) => {
   const merges = findPurchaseMatches(waiting, purchases);
   const pairs = findAccountPairs(waiting, true);
   return new Set([
+    ...emailHeld,
     ...merges.clear.keys(),
     ...merges.offers.keys(),
     ...pairs.clear.keys(),
@@ -119,12 +121,13 @@ const getAskedIds = (
   ]);
 };
 
-/** Whether a merge or pair offer is waiting on this charge, so a rule leaves it until the person answers. */
+/** Whether a merge or pair offer is waiting on this charge, so a rule leaves it until the person answers; `emailHeld` holds the charges a waiting emailed purchase is or may be (`getTwinHeldIds`). */
 export const isHeldByOffer = (
   purchaseId: string,
   waiting: readonly OpenPurchase[],
   purchases: readonly OpenPurchase[],
-) => getAskedIds(waiting, purchases).has(purchaseId);
+  emailHeld: ReadonlySet<string> = new Set(),
+) => getAskedIds(waiting, purchases, emailHeld).has(purchaseId);
 
 /** The rule that would send this waiting charge on its own, or null; `asked` holds the charges a merge or pair offer is waiting on (pass an empty set to ignore offers). */
 export function wouldRulePlace(
@@ -134,7 +137,7 @@ export function wouldRulePlace(
   asked: ReadonlySet<string>,
 ): OpenRule | null {
   if (
-    purchase.source !== 'link' ||
+    (purchase.source !== 'link' && purchase.source !== 'email') ||
     !purchase.needsHome ||
     purchase.amountCents <= 0 ||
     purchase.assignedBy !== null ||
@@ -158,7 +161,7 @@ export function wouldRulePlace(
 }
 
 /**
- * The waiting bank charges a rule sends on its own: money out, never placed or sent back by the person, unpaired, and with no merge or pair offer (those ask first).
+ * The waiting bank charges and emailed purchases a rule sends on its own: money out, never placed or sent back by the person, unpaired, and with no merge or pair offer (those ask first).
  * A rule that asks every time, or whose envelope is not in `envelopeIds`, places nothing.
  */
 export function findRulePlacements(
@@ -166,9 +169,10 @@ export function findRulePlacements(
   purchases: readonly OpenPurchase[],
   rules: readonly OpenRule[],
   envelopeIds: ReadonlySet<string>,
+  emailHeld: ReadonlySet<string> = new Set(),
 ): RulePlacement[] {
   if (rules.length === 0) return [];
-  const asked = getAskedIds(waiting, purchases);
+  const asked = getAskedIds(waiting, purchases, emailHeld);
   return waiting.flatMap((purchase): RulePlacement[] => {
     const rule = wouldRulePlace(purchase, rules, envelopeIds, asked);
     return rule ? [{ purchase, rule }] : [];

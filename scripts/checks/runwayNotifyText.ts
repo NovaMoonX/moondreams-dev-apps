@@ -122,7 +122,7 @@ assert.equal(countWaiting([row(100, 0, 0)], paused), 1);
 
 // An email and its bank charge count once; the window mirrors the app's constants.
 const appConstants = readFileSync(
-  new URL('../../src/apps/runway/constants.ts', import.meta.url),
+  new URL('../../src/apps/runway/engine/engineConstants.ts', import.meta.url),
   'utf8',
 );
 assert.equal(
