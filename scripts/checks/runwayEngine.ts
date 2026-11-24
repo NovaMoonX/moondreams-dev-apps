@@ -348,6 +348,7 @@ import {
 } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { describeCostGivesBack } from '../../src/apps/runway/utils/changeText.ts';
 import {
+  getNextFill,
   getStanceCushion,
   lookahead,
   type LookaheadCarry,
@@ -16613,6 +16614,42 @@ const version = (
     ).length,
     0,
     'a stop that has happened is not ahead',
+  );
+}
+
+{
+  // An envelope's next fill is the first walked day that gives it anything, its parts added together.
+  const steps: Lookahead['steps'] = [
+    {
+      dayKey: 'pay:1',
+      on: utc(2027, 0, 1),
+      moneyCents: 100_000,
+      freeCents: 0,
+      lines: [
+        { itemId: 'food', cents: 0 },
+        { itemId: 'rent', cents: 50_000 },
+      ],
+    },
+    {
+      dayKey: 'pay:2',
+      on: utc(2027, 0, 15),
+      moneyCents: 100_000,
+      freeCents: 0,
+      lines: [
+        { itemId: 'food', cents: 15_000 },
+        { itemId: 'food', cents: 5_000 },
+      ],
+    },
+  ];
+  assert.deepEqual(
+    getNextFill(steps, 'food'),
+    { dayKey: 'pay:2', on: utc(2027, 0, 15), cents: 20_000 },
+    'a day that gives an envelope nothing is skipped, and its must and want parts count as one fill',
+  );
+  assert.equal(
+    getNextFill(steps, 'gym'),
+    null,
+    'an envelope no walked day gives money to has no next fill',
   );
 }
 

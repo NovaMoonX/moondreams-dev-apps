@@ -2907,6 +2907,27 @@ export const PURCHASE_COST_WORDS = {
   aPurchase: 'A purchase in Spend',
 } as const;
 
+/** An envelope's next income day that gives it money, as a door under its sheet's figure. */
+export const NEXT_FILL_WORDS = {
+  row: (amount: string, date: string) => `Gets ${amount} on ${date}`,
+  sub: 'Next money in · See that income day',
+} as const;
+
+/** An envelope below zero, as a card under its sheet's figure with a one-tap way back to $0. */
+export const OVER_FIX_WORDS = {
+  title: (name: string, amount: string) => `${name} is ${amount} over`,
+  action: 'Bring it back to $0',
+  sub: (amount: string) => `${amount} comes out of Free\u00a0to\u00a0Spend`,
+  lockedTitle: "Free to Spend can't cover it",
+  lockedShort: (free: string, amount: string) =>
+    `Free to Spend has ${free}, and this needs ${amount}. Set what it holds now can bring money in from somewhere else.`,
+  lockedOver: (over: string) =>
+    `Free to Spend is already ${over} over. Set what it holds now can bring money in from somewhere else.`,
+  lockedUnknown:
+    "Free to Spend isn't set up yet, so there's nothing to take from. Set what it holds now can bring money in from somewhere else.",
+  done: (name: string) => `${name} is back to $0`,
+} as const;
+
 /** Moving money out of an envelope or goal to another envelope or goal, or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
@@ -2946,6 +2967,7 @@ export const MOVE_WORDS = {
 
 export const SET_HELD_WORDS = {
   open: 'Set what it holds now',
+  toZero: 'Set it to $0',
   title: (name: string) => `What ${name} holds now`,
   amount: 'Holds now',
   needsAmount: 'Enter what it holds.',

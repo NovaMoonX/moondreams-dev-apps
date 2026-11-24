@@ -9,6 +9,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import RevealChip from '@/components/RevealChip';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
@@ -371,6 +372,18 @@ function SetHeldView({
         onChange={setAmount}
         disabled={isSaving}
       />
+      {!isBill && heldCents < 0 && target !== 0 && (
+        <div className='flex justify-center'>
+          <RevealChip
+            onClick={() => {
+              setAmount(centsToInputValue(0));
+              setPicked({ choice: 'free', isRaising: true });
+            }}
+          >
+            {SET_HELD_WORDS.toZero}
+          </RevealChip>
+        </div>
+      )}
       {amountBlocker === null && (
         <p className='text-foreground text-[15px] font-medium'>
           {getSourceQuestion()}
