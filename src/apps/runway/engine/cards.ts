@@ -360,11 +360,7 @@ const STARTED_PAYMENT_LEAD_DAYS = 3;
 export const STARTED_PAYMENT_WINDOW_DAYS = 14;
 const CARD_PAYMENT_CATEGORY = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
 
-/** Whether a started payment is still waited for on `today`: within its window after the day it was started. */
-export const isStillWaitedFor = (
-  payment: OpenStartedPayment,
-  today: DateOnly,
-) =>
+const isStillWaitedFor = (payment: OpenStartedPayment, today: DateOnly) =>
   today <= payment.startedOn + STARTED_PAYMENT_WINDOW_DAYS * DAY_MS;
 
 export interface StartedPaymentState {
@@ -521,6 +517,8 @@ export function getBankDueState(input: {
   today: DateOnly;
   days: number;
   since: DateOnly;
+  /** The day a started payment is judged still waited for on, when the window starts on another day than today. */
+  waitedOn?: DateOnly;
 }): DueCard | null {
   const { statement } = input;
   if (statement === null || input.owedCents <= 0) return null;
@@ -531,7 +529,7 @@ export function getBankDueState(input: {
   const isStartedCovering = input.started.some(
     (payment) =>
       payment.cardId === input.card.id &&
-      isStillWaitedFor(payment, input.today) &&
+      isStillWaitedFor(payment, input.waitedOn ?? input.today) &&
       payment.amountCents >= minimumCents &&
       (statementOn === null || payment.startedOn >= statementOn),
   );

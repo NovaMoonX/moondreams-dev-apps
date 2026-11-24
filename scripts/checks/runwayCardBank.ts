@@ -429,10 +429,7 @@ const started = (
   );
 
   // Account moves read the same bank answer over their own window: a started payment that covers the minimum takes the card off "Money to move".
-  const forMoves = (
-    payments: OpenStartedPayment[],
-    waitedOn = base.today,
-  ) =>
+  const forMoves = (payments: OpenStartedPayment[], waitedOn = base.today) =>
     getDueCards(
       [card],
       reserve,
@@ -472,20 +469,40 @@ const started = (
     'a started payment that covers the minimum is not a move to do',
   );
   assert.equal(
-    forMoves(
-      [started('s', 'chase', 41_200, d(2026, 10, 28))],
-      d(2026, 11, 10),
-    ).length,
+    forMoves([started('s', 'chase', 41_200, d(2026, 10, 28))], d(2026, 11, 10))
+      .length,
     0,
     'still waited for on the real today, so it still covers',
   );
   assert.equal(
-    forMoves(
-      [started('s', 'chase', 41_200, d(2026, 10, 28))],
-      d(2026, 11, 12),
-    ).length,
+    forMoves([started('s', 'chase', 41_200, d(2026, 10, 28))], d(2026, 11, 12))
+      .length,
     1,
     'no longer waited for on the real today, though it was when the window began',
+  );
+  assert.equal(
+    getBankDueByCard({
+      owed: {
+        chase: {
+          postedCents: 41_200,
+          pendingCents: 0,
+          waiting: [],
+          heldCents: 41_200,
+        },
+      },
+      cards: [card],
+      runway: {
+        cardStatements: [statement({ dueOn: d(2026, 11, 30) })],
+        links: [{ id: 'link', status: 'active' }] as never,
+      },
+      started: [started('s', 'chase', 41_200, d(2026, 11, 2))],
+      startDate: 0,
+      today: d(2026, 11, 20),
+      days: 14,
+      waitedOn: d(2026, 11, 10),
+    }).chase,
+    null,
+    'a window that starts later than today still judges the payment on today',
   );
 }
 

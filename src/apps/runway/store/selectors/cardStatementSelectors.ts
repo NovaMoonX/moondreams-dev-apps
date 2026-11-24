@@ -5,7 +5,6 @@ import { CARD_DUE_WARN_DAYS } from '@apps/runway/constants';
 import {
   getBankDueDay,
   getBankDueState,
-  isStillWaitedFor,
   type BankOwed,
   type DueCard,
 } from '@apps/runway/engine/cards';
@@ -57,11 +56,8 @@ export const getBankDueByCard = (input: {
   today: DateOnly;
   days: number;
   waitedOn: DateOnly;
-}): Record<string, DueCard | null> => {
-  const started = input.started.filter((payment) =>
-    isStillWaitedFor(payment, input.waitedOn),
-  );
-  return Object.fromEntries(
+}): Record<string, DueCard | null> =>
+  Object.fromEntries(
     input.cards.flatMap((card) => {
       const entry = input.owed[card.id];
       if (entry === undefined) return [];
@@ -71,17 +67,17 @@ export const getBankDueByCard = (input: {
           getBankDueState({
             card,
             statement: getLinkedStatement(input.runway, card),
-            started,
+            started: input.started,
             owedCents: entry.heldCents,
             today: input.today,
             days: input.days,
             since: Math.max(input.startDate, todayAsUtcDate(card.createdAt)),
+            waitedOn: input.waitedOn,
           }),
         ],
       ];
     }),
   );
-};
 
 /** At Link, each card read from its bank and what warns about it today. */
 export const selectBankDueByCard = createSelector(
