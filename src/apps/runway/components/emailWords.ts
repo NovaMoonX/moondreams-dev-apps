@@ -66,6 +66,7 @@ export const EMAIL_WORDS = {
   sameRow: (date: string) => `Email from ${date} · Counted once`,
   drawerWaiting:
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
+  emailActionsCaption: 'The email',
   drawerFromEmail: 'Read from your bank’s alert email.',
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
