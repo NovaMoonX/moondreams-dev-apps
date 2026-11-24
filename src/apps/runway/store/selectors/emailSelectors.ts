@@ -10,6 +10,7 @@ import {
   getTwinHeldIds,
   isWaitingEmail,
 } from '@apps/runway/engine/emailTwins';
+import { makeIsLinkHistory } from '@apps/runway/engine/linkHistory';
 import type { OpenPurchase } from '@apps/runway/types';
 import { cleanBankName } from '@apps/runway/utils/accountText';
 
@@ -45,10 +46,16 @@ export const selectTwinnedEmailIds = createSelector(
     new Set([...twins.clear.keys(), ...twins.ambiguous, ...twins.split.keys()]),
 );
 
-/** The cards and accounts whose bank has sent posted charges and never a pending one, so an emailed purchase on them waits for the charge to post. */
+/** The cards and accounts whose bank has sent posted charges (not a link's history) and never a pending one, so an emailed purchase on them waits for the charge to post. */
 export const selectPostedOnlySides = createSelector(
-  [selectAllPurchases],
-  (purchases): ReadonlySet<string> => findPostedOnlySides(purchases),
+  [
+    selectAllPurchases,
+    (state: RootState) => state.runway.links,
+    (state: RootState) => state.runway.accounts,
+    (state: RootState) => state.runway.cards,
+  ],
+  (purchases, links, accounts, cards): ReadonlySet<string> =>
+    findPostedOnlySides(purchases, makeIsLinkHistory(links, accounts, cards)),
 );
 
 /** Each card's and account's bank as a person says it, by `getSideKey`; one with no name is left out. */

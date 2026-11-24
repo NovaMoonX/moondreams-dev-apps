@@ -56,6 +56,7 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     tickedDayKey: null,
     emailEventId: source === 'email' ? 'ev' : null,
     emailWaiting: source === 'email' ? true : null,
+    wasPending: null,
     category: null,
     ruleId: null,
     ...extra,
@@ -443,6 +444,7 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
       notSameAs: null,
       pairedWithId: null,
       emailWaiting: source === 'email' ? true : null,
+      wasPending: null,
       storeEmail: null,
       ...extra,
     }) as unknown as OpenPurchase;
@@ -481,6 +483,16 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     [...sides].sort(),
     ['account:chk', 'card:capital'],
     'posted only needs three charges that never were pending and none that was; fewer, older ones or an email prove nothing',
+  );
+  assert.deepEqual(
+    [
+      ...findPostedOnlySides(
+        ['h1', 'h2', 'h3'].map((id) => never(id, { paidByCardId: 'backfill' })),
+        () => true,
+      ),
+    ],
+    [],
+    'a link’s history proves nothing, so a first sync’s backfill is not posted only',
   );
   assert.equal(getSideKey(make('x', 'link', 1, 0)), 'card:card');
   assert.equal(

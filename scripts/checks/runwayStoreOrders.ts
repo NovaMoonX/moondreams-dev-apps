@@ -47,6 +47,7 @@ const make = (
   tickedDayKey: null,
   emailEventId: null,
   emailWaiting: null,
+  wasPending: null,
   category: null,
   ruleId: null,
   storeEmail: null,
@@ -244,6 +245,7 @@ assert.equal(toOrderKey('ORDER'), null);
     source: 'email',
     status: null,
     emailWaiting: true,
+    wasPending: null,
     storeEmail: order('order', '77001'),
   });
   const refund = make('r', -1000, 2, {

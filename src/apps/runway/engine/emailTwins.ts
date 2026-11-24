@@ -249,15 +249,18 @@ export const getSideKey = (
 /** How many charges on a card or account must have arrived only ever posted before its bank is read as sharing no pending charges. */
 export const POSTED_ONLY_MIN_CHARGES = 3;
 
-/** The cards and accounts whose bank shares no pending charges: at least `POSTED_ONLY_MIN_CHARGES` of its charges arrived only ever posted (`wasPending` false) and none is pending now or was. A side with fewer, or only older charges with no record, is unknown, not in the set. */
-export function findPostedOnlySides(
-  purchases: readonly Pick<
+/** The cards and accounts whose bank shares no pending charges: at least `POSTED_ONLY_MIN_CHARGES` of its charges arrived only ever posted (`wasPending` false) and none is pending now or was. A side with fewer, or only older charges with no record, is unknown, not in the set. A charge `isIgnored` says to skip (a link's history, which a first sync brings in posted) proves nothing either way. */
+export function findPostedOnlySides<
+  T extends Pick<
     OpenPurchase,
     'source' | 'status' | 'wasPending' | 'accountId' | 'paidByCardId'
-  >[],
+  >,
+>(
+  purchases: readonly T[],
+  isIgnored: (purchase: T) => boolean = () => false,
 ): Set<string> {
   const sides = purchases
-    .filter((purchase) => purchase.source === 'link')
+    .filter((purchase) => purchase.source === 'link' && !isIgnored(purchase))
     .reduce((found, purchase) => {
       const key = getSideKey(purchase);
       if (key === null) return found;
