@@ -20437,7 +20437,7 @@ checkHorizonMoves();
   );
 }
 
-{
+const checkRulePlacements = () => {
   const rule = (id: string, over: Partial<OpenRule>): OpenRule => ({
     id,
     createdAt: 1,
@@ -20606,6 +20606,37 @@ checkHorizonMoves();
   );
   assert.deepEqual(
     findRulePlacements(
+      [
+        waitingCharge('mail', { source: 'email' as const }),
+        waitingCharge('mail-hand', {
+          source: 'email' as const,
+          assignedBy: 'person',
+        }),
+        waitingCharge('mail-placed', {
+          source: 'email' as const,
+          needsHome: false,
+        }),
+      ],
+      [],
+      [merchantRule],
+      ids,
+    ).map((entry) => entry.purchase.id),
+    ['mail'],
+    'a rule places a purchase read from email like a bank charge',
+  );
+  assert.deepEqual(
+    findRulePlacements(
+      [waitingCharge('ok', {}), waitingCharge('other', {})],
+      [],
+      [merchantRule],
+      ids,
+      new Set(['ok']),
+    ).map((entry) => entry.purchase.id),
+    ['other'],
+    'a bank charge a waiting email is or may be is left to the pair',
+  );
+  assert.deepEqual(
+    findRulePlacements(
       [waitingCharge('ok', {})],
       [],
       [merchantRule],
@@ -20685,7 +20716,8 @@ checkHorizonMoves();
     'and the split still adds up',
   );
   assert.equal(rulePlaced.length, 2, 'the chain pays what the envelope cannot');
-}
+};
+checkRulePlacements();
 
 // A goal linked to a Horizon event: the walk covers each cost from the goal first, a payment takes from the goal then the event, and the nudge asks as the date nears.
 {

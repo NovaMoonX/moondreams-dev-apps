@@ -36,6 +36,8 @@ export interface NormalizedTransaction {
   bankName: string | null;
   /** The provider's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null when it gives none. */
   category: string | null;
+  /** Plaid recognised the charge as a known business under a clean name (`isKnownBusiness`); only these teach the shared merchant list. */
+  isKnownBusiness: boolean;
   isPending: boolean;
 }
 
