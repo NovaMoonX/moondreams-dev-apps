@@ -65,11 +65,19 @@ async function readPage(
     return NOT_FOUND_RESULT;
   }
 
-  const items = await getFirestore()
-    .collection(`apps/going-once/sales/${saleId}/items`)
-    .orderBy('createdAt', 'desc')
-    .limit(SALE_PAGE_LIMITS.MAX_PAGE_THINGS)
-    .get();
+  const firestore = getFirestore();
+  const [items, bundles] = await Promise.all([
+    firestore
+      .collection(`apps/going-once/sales/${saleId}/items`)
+      .orderBy('createdAt', 'desc')
+      .limit(SALE_PAGE_LIMITS.MAX_PAGE_THINGS)
+      .get(),
+    firestore
+      .collection(`apps/going-once/sales/${saleId}/bundles`)
+      .orderBy('createdAt', 'desc')
+      .limit(SALE_PAGE_LIMITS.MAX_PAGE_BUNDLES)
+      .get(),
+  ]);
   const paths = await listCopyPaths(linkId);
   const members: unknown = sale.get('members');
   const isMember =
@@ -79,6 +87,7 @@ async function readPage(
     items.docs.map((item) => item.data()),
     isMember,
     { saleId, linkId, paths },
+    bundles.docs.map((bundle) => bundle.data()),
   );
 }
 

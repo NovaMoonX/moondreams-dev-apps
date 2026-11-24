@@ -63,6 +63,8 @@ export function toItem(id: string, saleId: string, data: DocumentData): Item {
     statusHistory: Array.isArray(item.statusHistory)
       ? item.statusHistory.map(toStatusChange)
       : [],
+    bundleId: item.bundleId ?? null,
+    isBundleOnly: item.isBundleOnly ?? false,
     listingCopiedAt: item.listingCopiedAt ?? null,
     listingCopiedBy: item.listingCopiedBy ?? null,
     createdBy: item.createdBy ?? '',

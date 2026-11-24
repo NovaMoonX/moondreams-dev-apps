@@ -66,6 +66,7 @@ import {
   type PlanSources,
 } from '@apps/helm/utils/planInput';
 import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const FREE_GAP_MINUTES = 45;
 const FULL_GAP_MINUTES = 30;
@@ -354,6 +355,7 @@ function DayPlan({
     keepOverlappingSlot(user.uid, dayKey, slotId, eventRef)
       .then((change) =>
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.planKeptOverlap,
           type: 'info',
           action: {
@@ -395,6 +397,7 @@ function DayPlan({
       )
       .then(({ executionId, committed }) => {
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: isThere ? HELM_COPY.homeToast : HELM_COPY.notHomeToast,
           type: 'success',
           action: {

@@ -22,6 +22,7 @@ import {
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createProject } from '@apps/helm/store/actions/projectActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { selectOpenProjects } from '@apps/helm/store/selectors/projectSelectors';
 
 interface ProjectQuestionFlowProps {
@@ -182,6 +183,7 @@ function ProjectFlowForm({
         addToast({ title: HELM_COPY.projectCreateFailed, type: 'error' });
       });
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.projectCreatedToast(name),
         type: 'success',
         action: {

@@ -26,6 +26,8 @@ export function toInquiry(
     saleId,
     itemId: inquiry.itemId ?? '',
     itemTitleAtSend: inquiry.itemTitleAtSend ?? '',
+    bundleId: inquiry.bundleId ?? null,
+    bundleLabelAtSend: inquiry.bundleLabelAtSend ?? null,
     name: inquiry.name ?? null,
     email: inquiry.email ?? null,
     phone: inquiry.phone ?? null,

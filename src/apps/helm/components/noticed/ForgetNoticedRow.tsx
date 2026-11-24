@@ -10,8 +10,7 @@ import {
   forgetAllNoticed,
   undoForgetAll,
 } from '@apps/helm/store/actions/patternActions';
-
-const FORGET_TOAST_MS = 8000;
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** "Forget what you've noticed": hides everything at once with an Undo in the toast; the deletion follows when the toast has closed, unless Undo put the old stamp back (and at the next daily check if the app closed first). */
 function ForgetNoticedRow() {
@@ -27,7 +26,7 @@ function ForgetNoticedRow() {
     forgetAllNoticed(uid, previous)
       .then((stamp) => {
         addToast({
-          duration: FORGET_TOAST_MS,
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.noticedForgotten,
           type: 'success',
           action: {
@@ -55,7 +54,7 @@ function ForgetNoticedRow() {
             void finishForget(uid, stamp).catch((error: unknown) =>
               console.error('Helm forget was not finished', error),
             ),
-          FORGET_TOAST_MS,
+          UNDO_WINDOW_MS,
         );
       })
       .catch((error: unknown) => {

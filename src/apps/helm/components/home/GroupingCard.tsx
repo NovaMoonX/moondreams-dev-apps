@@ -16,6 +16,7 @@ import {
 } from '@apps/helm/store/actions/groupingActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import type { OpenGrouping } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const SHOWN_SOURCES = 4;
 
@@ -46,6 +47,7 @@ function GroupingCard({ grouping }: GroupingCardProps) {
   };
   const withUndo = (title: string, undo: () => Promise<unknown>) =>
     addToast({
+      duration: UNDO_WINDOW_MS,
       title,
       type: 'info',
       action: {

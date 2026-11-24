@@ -67,6 +67,7 @@ import {
   snoozeCharge,
   subscribeChargeSnoozes,
 } from '@apps/runway/utils/chargeSnooze';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const toWritten = (billId: string, paid: PaidPayment): WrittenPaidMark => ({
   moveId: paid.moveId,
@@ -181,6 +182,7 @@ function useMatchedToast() {
       title,
       description: AUTO_PAY_WORDS.matchedSub,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: AUTO_PAY_WORDS.undo,
         onClick: () => void undo(uid, results),

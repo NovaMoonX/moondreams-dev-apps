@@ -37,6 +37,7 @@ import {
   readWhenBlocker,
   type WhenDraft,
 } from '@apps/helm/utils/habitDraft';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { readHabitWords } from '@apps/helm/utils/sayWhen';
 
 interface HabitQuestionFlowProps {
@@ -315,6 +316,7 @@ function HabitFlowForm({
         addToast({ title: HELM_COPY.habitCreateFailed, type: 'error' });
       });
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.habitCreatedToast(name),
         type: 'success',
         action: {

@@ -43,6 +43,7 @@ import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard, OpenCardStatement } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface StartPaymentSheetProps {
   card: OpenCard;
@@ -231,6 +232,7 @@ function StartPaymentSheet({
         ),
         description: STARTED_PAYMENT_WORDS.savedDetail(bankName),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: CARD_WORDS.undo,
           onClick: () => void undo(id),

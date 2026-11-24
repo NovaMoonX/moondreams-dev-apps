@@ -58,6 +58,7 @@ import {
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const { option } = DropdownMenuFactories;
 
@@ -233,6 +234,7 @@ function TopicScreen({
         return;
       }
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.topicMoveToast(
           topic.name,
           parentId === null
@@ -288,6 +290,7 @@ function TopicScreen({
       );
       leave();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.topicDeletedToast(topic.name),
         type: 'success',
         action: {
