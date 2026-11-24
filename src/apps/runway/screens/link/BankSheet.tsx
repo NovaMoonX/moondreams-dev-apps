@@ -87,8 +87,13 @@ function BankSheet({
     setIsBusy(true);
     setError(null);
     try {
-      await combineLinks(link.id, twin.id);
-      addToast({ title: LINK_WORDS.combinedToast(bank), type: 'success' });
+      const { keptLinkId, needsSignIn } = await combineLinks(link.id, twin.id);
+      if (needsSignIn) {
+        addToast({ title: LINK_WORDS.combinedSignInToast(bank), type: 'info' });
+        await reconnect(keptLinkId, bank);
+      } else {
+        addToast({ title: LINK_WORDS.combinedToast(bank), type: 'success' });
+      }
       onClose();
     } catch (combineError) {
       setError(toCombineError(combineError, bank));

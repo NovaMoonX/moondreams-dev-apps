@@ -5357,7 +5357,7 @@ export const LINK_WORDS = {
   combineHelp: 'Same accounts, signed in twice',
   combineTitle: (bank: string) => `Combine your ${bank} links?`,
   combineMessage: (bank: string) =>
-    `${bank} shows up twice because you signed in there twice. Runway keeps one link and disconnects the other at ${bank}. Your accounts and purchases stay where they are. This can't be undone.`,
+    `${bank} shows up twice because you signed in there twice. Runway keeps one link and disconnects the other at ${bank}, which may ask you to sign in once more right after. Your accounts and purchases stay where they are. This can't be undone.`,
   combineConfirm: 'Combine',
   twinNote: (bank: string) =>
     `${bank} shows up twice, and each sign-in brought in its own copy of your accounts, so the two can't be combined. If this one's accounts are the copies you don't use, unlink it below.`,
@@ -5371,6 +5371,8 @@ export const LINK_WORDS = {
   combineNoLonger:
     'These two links can no longer be combined. Nothing was changed.',
   combinedToast: (bank: string) => `Combined your ${bank} links`,
+  combinedSignInToast: (bank: string) =>
+    `Combined your ${bank} links. ${bank} signed you out when the other one was removed, so sign in once more to keep it syncing.`,
   addMoreRow: (bank: string) => `Add more accounts from ${bank}`,
   addMoreHelp: 'Sign in again and pick the new ones',
   pickNewRow: (count: number) =>
