@@ -67,7 +67,7 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
       return;
     }
     const moveId = newTransferMoveId();
-    const undoText = MOVE_WORDS.undone(over, name, MOVE_WORDS.freeToSpend);
+    const undoText = MOVE_WORDS.undone(over, MOVE_WORDS.freeToSpend, name);
     isSavingRef.current = true;
     setError(null);
     setIsSaving(true);
