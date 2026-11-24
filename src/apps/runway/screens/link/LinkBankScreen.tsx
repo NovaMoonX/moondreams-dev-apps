@@ -159,7 +159,10 @@ function LinkBankScreen({
   const isWorking = isBusy || busyId !== null;
   const [message, setMessage] = useState<string | null>(null);
   const [twinId, setTwinId] = useState<string | null>(null);
-  const twin = links.find((link) => link.id === twinId) ?? null;
+  const twin = joinable.find((link) => link.id === twinId) ?? null;
+  const offered = twin
+    ? [twin, ...joinable.filter((link) => link.id !== twin.id)]
+    : joinable;
   const [isLevelStuck, setIsLevelStuck] = useState(false);
   const [isAskingHeld, setIsAskingHeld] = useState(false);
   const { isAfterLink } = useHoldsPrompt();
@@ -407,12 +410,22 @@ function LinkBankScreen({
                     ))}
                   </ul>
                 </div>
-                <InlineNotice tone='warning'>
-                  {LINK_WORDS.pickEveryAccount}
-                </InlineNotice>
+                {twin ? (
+                  <div role='status'>
+                    <InlineNotice tone='info'>
+                      {LINK_WORDS.alreadyLinked(
+                        twin.institutionName || LINK_WORDS.yourBank,
+                      )}
+                    </InlineNotice>
+                  </div>
+                ) : (
+                  <InlineNotice tone='warning'>
+                    {LINK_WORDS.pickEveryAccount}
+                  </InlineNotice>
+                )}
                 {joinable.length > 0 && (
                   <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
-                    {joinable.map((link) => {
+                    {offered.map((link) => {
                       const bank = link.institutionName || LINK_WORDS.yourBank;
                       return (
                         <li key={link.id}>
@@ -444,35 +457,6 @@ function LinkBankScreen({
                   </ul>
                 )}
               </>
-            )}
-            {twin && (
-              <div className='space-y-2' role='status'>
-                <InlineNotice tone='info'>
-                  {LINK_WORDS.alreadyLinked(
-                    twin.institutionName || LINK_WORDS.yourBank,
-                  )}
-                </InlineNotice>
-                {twin.status === 'needsAttention' ? (
-                  <ReconnectRow
-                    busyId={busyId}
-                    isDisabled={isBusy}
-                    onReconnect={(id, name) => void reconnect(id, name)}
-                    linkId={twin.id}
-                    bank={twin.institutionName || LINK_WORDS.yourBank}
-                  />
-                ) : (
-                  <ActionRow
-                    hasChevron
-                    icon={<Landmark />}
-                    label={LINK_WORDS.addToLinkedRow(
-                      twin.institutionName || LINK_WORDS.yourBank,
-                    )}
-                    subtitle={LINK_WORDS.addMoreHelp}
-                    isDisabled={isWorking}
-                    onClick={() => void addAccounts(twin)}
-                  />
-                )}
-              </div>
             )}
             {message && (
               <p className='text-muted-foreground text-sm' role='status'>
