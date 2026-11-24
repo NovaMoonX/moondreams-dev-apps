@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@lib/firebase/config';
 
 import { openBankLink } from '@apps/runway/lib/bankLink';
+import { inLinkStep } from '@apps/runway/lib/linkFailure';
 import { LINK_WORDS } from '@apps/runway/constants';
 import type { LinkChoice } from '@apps/runway/engine/linkMatch';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -131,10 +132,16 @@ export async function reconnectLink(
 export async function agreeToCardDetails(
   linkId: string,
 ): Promise<LinkReconnectResult | null> {
-  const session = await createSessionCallable({ linkId, forCardDetails: true });
-  const opened = await openBankLink(session.data.linkToken);
+  const session = await inLinkStep('Ask the bank for a window', () =>
+    createSessionCallable({ linkId, forCardDetails: true }),
+  );
+  const opened = await inLinkStep('Bank window', () =>
+    openBankLink(session.data.linkToken),
+  );
   if (opened === null) return null;
-  const response = await reconnectCallable({ linkId });
+  const response = await inLinkStep('Sync after agreeing', () =>
+    reconnectCallable({ linkId }),
+  );
   return response.data;
 }
 

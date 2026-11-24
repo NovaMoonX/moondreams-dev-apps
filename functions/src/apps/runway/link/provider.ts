@@ -88,6 +88,11 @@ export const asProviderCode = (value: unknown): string | null =>
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
   readonly code: string | null;
+  /** The provider's request id and the call that failed, for a support ticket; never a secret. */
+  trace: { requestId: string | null; path: string | null } = {
+    requestId: null,
+    path: null,
+  };
   constructor(
     kind: ProviderErrorKind,
     message: string,
