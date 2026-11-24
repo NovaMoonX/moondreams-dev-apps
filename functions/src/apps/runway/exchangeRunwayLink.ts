@@ -113,13 +113,14 @@ export const exchangeRunwayLink = onCall(
         lastSyncAt: null,
         createdAt: now,
         needsCardConsent: null,
+        logoShared: institution === null ? null : true,
         cardDetails: null,
         sealed: sealWithKey(planKey, { ...linkSealed }, SEALED_SCHEMA_VERSION),
       });
       await batch.commit();
       await learnInstitutionLogo(
         firestore,
-        [institutionName, institution?.name],
+        [institution?.name],
         institution?.logo,
         now,
       );

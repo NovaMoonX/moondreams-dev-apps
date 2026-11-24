@@ -16,6 +16,8 @@ import {
 import {
   excerptOf,
   htmlToText,
+  isInstitutionHost,
+  isMerchantHost,
   isProtonInvitation,
   parseAlertEmail,
   readableBody,
@@ -881,55 +883,89 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
   );
   assert.equal(senderOf(logos, 'orders@shop.com')?.company, 'Shop');
   assert.equal(senderOf([storeMail('a', 1)], 'orders@shop.com')?.logo, null);
-  const bankMail = (id: string, at: number, purchaseId: string | null) =>
+  const bankMail = (
+    id: string,
+    at: number,
+    purchaseId: string | null,
+    company: string | null = 'Capital One',
+  ) =>
     withLogo(
       event(id, 'alerts@bank.com', at, 'purchase', 'bank'),
       null,
-      null,
+      company,
       purchaseId,
     );
   const linkOf =
-    (links: Record<string, string | null | undefined>) => (id: string) =>
+    (links: Record<string, string | null | undefined>, name = 'Capital One') =>
+    (id: string) =>
       links[id] === undefined
         ? undefined
         : links[id] === null
           ? null
-          : { linkId: links[id], logo: `logo-of-${links[id]}` };
+          : { linkId: links[id], name, logo: `logo-of-${links[id]}` };
   const bankEvents = [bankMail('a', 1, 'p1'), bankMail('b', 2, 'p2')];
+  const bankLogo = (
+    events: EmailEventRead[],
+    links?: Parameters<typeof linkOf>[0],
+    name?: string,
+  ) =>
+    senderOf(
+      events,
+      'alerts@bank.com',
+      links === undefined ? undefined : linkOf(links, name),
+    )?.logo;
   assert.equal(
-    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1', p2: 'L1' }))
-      ?.logo,
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }),
     'logo-of-L1',
     'a bank with no logo takes the one link its purchases sit on',
   );
   assert.equal(
-    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1', p2: 'L2' }))
-      ?.logo,
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }, 'Capital One, N.A.'),
+    'logo-of-L1',
+    'the link name may carry a legal ending',
+  );
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L2' }),
     null,
     'two links is not confident',
   );
   assert.equal(
-    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1', p2: null }))
-      ?.logo,
+    bankLogo(bankEvents, { p1: 'L1', p2: null }),
     null,
     'a purchase on no link is not confident',
   );
   assert.equal(
-    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1' }))?.logo,
-    'logo-of-L1',
-    'a purchase not loaded says nothing',
+    bankLogo(bankEvents, { p1: 'L1' }),
+    null,
+    'one loaded purchase is not enough',
   );
   assert.equal(
-    senderOf(bankEvents, 'alerts@bank.com', linkOf({}))?.logo,
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }, 'Chase'),
     null,
-    'no loaded purchase, no logo',
+    'a link at another bank is not this sender',
   );
-  assert.equal(senderOf(bankEvents, 'alerts@bank.com')?.logo, null);
+  assert.equal(
+    bankLogo([bankMail('a', 1, 'p1', null), bankMail('b', 2, 'p2', null)], {
+      p1: 'L1',
+      p2: 'L1',
+    }),
+    null,
+    'a sender whose address never named its bank gets no link logo',
+  );
+  assert.equal(bankLogo(bankEvents, {}), null, 'no loaded purchase, no logo');
+  assert.equal(bankLogo(bankEvents), null);
   assert.equal(
     senderOf(
-      [withLogo(bankMail('a', 1, 'p1'), 'data:image/png;base64,AA==', 'Bank')],
+      [
+        withLogo(
+          bankMail('a', 1, 'p1'),
+          'data:image/png;base64,AA==',
+          'Capital One',
+        ),
+        bankMail('b', 2, 'p2'),
+      ],
       'alerts@bank.com',
-      linkOf({ p1: 'L1' }),
+      linkOf({ p1: 'L1', p2: 'L1' }),
     )?.logo,
     'data:image/png;base64,AA==',
     'its own logo comes before the link',
@@ -939,6 +975,24 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
   ];
   assert.equal(groupEmailSenders(confirmOnly).length, 0, 'setup is no sender');
 }
+
+// A company is claimed only by the sender's own host, never by a name in the subject, body or display name.
+assert.ok(isInstitutionHost('alerts@capitalone.com', 'Capital One'));
+assert.ok(isInstitutionHost('no-reply@email.chase.com', 'Chase'));
+assert.ok(isInstitutionHost('alerts@welcome.aexp.com', 'American Express'));
+assert.ok(isInstitutionHost('alerts@apple.com', 'Apple Card'));
+assert.equal(isInstitutionHost('promo@evil.example', 'Chase'), false);
+assert.equal(isInstitutionHost('chase@evil.example', 'Chase'), false);
+assert.equal(isInstitutionHost('promo@chase-offers.com', 'Chase'), false);
+assert.equal(isInstitutionHost('promo@evil.example', 'toString'), false);
+assert.equal(isInstitutionHost('nobody', 'Chase'), false);
+assert.ok(isMerchantHost('orders@target.com', 'Target'));
+assert.ok(isMerchantHost('orders@m.target.com', 'Target'));
+assert.ok(isMerchantHost('hi@bluebottle.com', 'Blue Bottle Coffee'));
+assert.ok(isMerchantHost('x@traderjoes.com', "Trader Joe's"));
+assert.equal(isMerchantHost('orders@evil.example', 'Target'), false);
+assert.equal(isMerchantHost('orders@tar.com', 'Target'), false);
+assert.equal(isMerchantHost('gmail.shop@gmail.com', 'Gmail Shop'), false);
 
 assert.deepEqual(
   splitAddressForWrap('runway-token@moondreamsmail.com', 'runway-'),

@@ -11,7 +11,6 @@ import { toHttpsUrl } from './link/normalize.js';
  */
 export const INSTITUTION_LOGOS_PATH = 'apps/runway/institutionLogos';
 
-const REFRESH_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_KEY_LENGTH = 3;
 const MAX_LOGO_LENGTH = 200_000;
 
@@ -21,13 +20,21 @@ export interface InstitutionLogoDoc {
   seenAt: number;
 }
 
-const COMPANY_SUFFIX = /(?:(?:^| )(?:n a|na|bank|inc|llc|corp|corporation))+$/;
+const COMPANY_ENDING = / (?:n a|na|bank|inc|llc|corp|corporation)$/;
 
-/** The text a bank is looked up by: compared like a shop's, with a legal ending ("N.A.", "Inc", "Bank") dropped so "Capital One, N.A." and "Capital One" meet. Null when too little is left to mean one bank. */
+const hasLetters = (key: string) =>
+  key.replace(/ /g, '').length >= MIN_KEY_LENGTH;
+
+const withoutEndings = (key: string): string => {
+  const next = key.replace(COMPANY_ENDING, '');
+  return next !== key && hasLetters(next) ? withoutEndings(next) : key;
+};
+
+/** The text a bank is looked up by: compared like a shop's, with trailing legal endings ("N.A.", "Inc", "Bank") dropped while three or more letters remain, so "Capital One, N.A." and "Capital One" meet while "US Bank" and "TD Bank" stay whole. Null when too little is left to mean one bank. */
 export function toInstitutionKey(text: string | null | undefined) {
   if (typeof text !== 'string') return null;
-  const key = toComparable(text).replace(COMPANY_SUFFIX, '');
-  return key.length >= MIN_KEY_LENGTH ? key : null;
+  const key = withoutEndings(toComparable(text));
+  return hasLetters(key) ? key : null;
 }
 
 /** A logo worth keeping: an https address or a base64 image, nothing else. */
@@ -67,14 +74,9 @@ export async function learnInstitutionLogo(
         const ref = firestore.doc(`${INSTITUTION_LOGOS_PATH}/${id}`);
         const stored = (await ref.get()).data() as
           Partial<InstitutionLogoDoc> | undefined;
-        const isSame =
-          stored?.name === name &&
-          stored.logo === safeLogo &&
-          typeof stored.seenAt === 'number' &&
-          now - stored.seenAt < REFRESH_AFTER_MS;
-        if (isSame) return;
+        if (stored?.logo === safeLogo) return;
         await ref.set({
-          name,
+          name: typeof stored?.name === 'string' ? stored.name : name,
           logo: safeLogo,
           seenAt: now,
         } satisfies InstitutionLogoDoc);

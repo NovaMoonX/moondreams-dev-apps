@@ -143,7 +143,11 @@ export function usePurchaseBankLink(): PurchaseBankLink {
       const link = links.find((entry) => entry.id === linkId);
       return link === undefined
         ? null
-        : { linkId: link.id, logo: link.institutionLogo };
+        : {
+            linkId: link.id,
+            name: link.institutionName,
+            logo: link.institutionLogo,
+          };
     };
   }, [purchases, waiting, cards, accounts, links]);
 }

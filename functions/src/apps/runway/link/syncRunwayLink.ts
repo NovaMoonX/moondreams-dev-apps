@@ -712,14 +712,14 @@ async function keepLogo(
 ) {
   const institution = await provider.getInstitution(grant);
   if (!institution) return;
-  const linkName = await firestore.runTransaction(async (transaction) => {
+  const isKept = await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(linkRef);
-    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return null;
+    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return false;
     const link = openWithKey(
       planKey.key,
       snapshot.data()?.sealed as SealedPayload,
     ) as unknown as Partial<LinkSealed>;
-    if (link.institutionLogo !== undefined) return null;
+    if (link.institutionLogo !== undefined) return false;
     const nextLink: LinkSealed = {
       institutionName: link.institutionName ?? '',
       institutionLogo: institution.logo,
@@ -727,17 +727,36 @@ async function keepLogo(
     };
     transaction.update(linkRef, {
       sealed: sealWithKey(planKey, { ...nextLink }, SEALED_SCHEMA_VERSION),
+      logoShared: true,
     });
-    return nextLink.institutionName;
+    return true;
   });
-  if (linkName !== null) {
+  if (isKept) {
     await learnInstitutionLogo(
       firestore,
-      [linkName, institution.name],
+      [institution.name],
       institution.logo,
       Date.now(),
     );
   }
+}
+
+/** Teaches the shared bank list from a link that kept its logo before the list existed, once, under the name the provider gives the bank and never the one the device sent. */
+async function shareLogo(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  grant: ProviderGrant,
+) {
+  const institution = await provider.getInstitution(grant);
+  await learnInstitutionLogo(
+    firestore,
+    [institution?.name],
+    institution?.logo,
+    Date.now(),
+  );
+  await writeUnlessRevoked(firestore, linkRef, (transaction) =>
+    transaction.update(linkRef, { logoShared: true }),
+  );
 }
 
 const DETAILS_HISTORY_DAYS = 90;
@@ -863,13 +882,10 @@ export async function syncRunwayLink(
       await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
         logger.warn('runway.sync.logoFailed', { linkId });
       });
-    } else {
-      await learnInstitutionLogo(
-        firestore,
-        [link.institutionName],
-        link.institutionLogo,
-        Date.now(),
-      );
+    } else if (linkSnapshot.data()?.logoShared !== true) {
+      await shareLogo(firestore, linkRef, grant).catch(() => {
+        logger.warn('runway.sync.logoShareFailed', { linkId });
+      });
     }
     const targets = targetsByProviderAccount(link.providerAccounts);
     if (targets.size === 0) return { ...empty, state: 'skipped' };

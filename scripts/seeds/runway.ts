@@ -1668,6 +1668,7 @@ async function writeSeedCards(
     createdAt,
     needsCardConsent: null,
     cardDetails: 'shared',
+    logoShared: null,
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1921,6 +1922,7 @@ async function writeSeedAccounts(
     createdAt,
     needsCardConsent: null,
     cardDetails: null,
+    logoShared: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -4025,6 +4027,7 @@ async function seedUnlinkedPlan(
     status: 'revoked',
     needsCardConsent: null,
     cardDetails: null,
+    logoShared: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(

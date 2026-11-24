@@ -334,6 +334,14 @@ assert.equal(
   toInstitutionKey('capital one'),
 );
 assert.equal(toInstitutionKey('Chase Bank'), 'chase');
+assert.equal(toInstitutionKey('US Bank'), 'us bank', 'too short without Bank');
+assert.equal(toInstitutionKey('TD Bank, N.A.'), 'td bank');
+assert.equal(toInstitutionKey('Citibank Online'), 'citibank online');
+assert.notEqual(
+  toInstitutionKey('Citibank Online'),
+  toInstitutionKey('Citibank'),
+  'an unlisted ending is not guessed away',
+);
 assert.equal(toInstitutionKey('Bank of America, N.A.'), 'bank of america');
 assert.equal(toInstitutionKey('Wells Fargo & Company'), 'wells fargo company');
 assert.equal(toInstitutionKey('N A'), null);
@@ -375,6 +383,34 @@ assert.equal(
     .join(),
   'logo,name,seenAt',
   'a document holds nothing about a person',
+);
+await learnInstitutionLogo(
+  bankStore(false),
+  ['Capital One Financial'],
+  'https://logos.example/co.png',
+  NOW,
+);
+assert.equal(bankDocs.size, 2);
+await learnInstitutionLogo(
+  bankStore(false),
+  ['capital one, n.a.'],
+  'https://logos.example/co-new.png',
+  NOW,
+);
+assert.equal(bankDocs.size, 2, 'the same bank keeps its one document');
+assert.equal(
+  [...bankDocs.values()].find(
+    (doc) => doc.logo === 'https://logos.example/co-new.png',
+  )?.name,
+  'Capital One',
+  'a new logo keeps the name already stored',
+);
+bankDocs.clear();
+await learnInstitutionLogo(
+  bankStore(false),
+  ['Capital One', 'Capital One, N.A.', null],
+  'data:image/png;base64,iVBOR==',
+  NOW,
 );
 await learnInstitutionLogo(bankStore(false), ['Chase'], 'not a logo', NOW);
 assert.equal(bankDocs.size, 1, 'a bad logo teaches nothing');

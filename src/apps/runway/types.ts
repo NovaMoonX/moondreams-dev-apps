@@ -706,6 +706,8 @@ export interface LinkDoc {
   needsCardConsent: boolean | null;
   /** The bank's last answer about card details: shared, waiting for the person's agreement, or not offered for this sign-in; null until first asked, and missing on a link written before it was kept. */
   cardDetails: CardDetailsAnswer | null;
+  /** Whether the provider's own name and logo for this bank were added to the shared bank list; null until then, and missing on a link written before it was kept. */
+  logoShared: boolean | null;
   sealed: Sealed;
 }
 

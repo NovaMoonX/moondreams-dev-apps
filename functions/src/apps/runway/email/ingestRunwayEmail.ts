@@ -43,7 +43,9 @@ import {
 import {
   excerptOf,
   htmlToText,
+  isInstitutionHost,
   isKnownInstitutionSender,
+  isMerchantHost,
   parseAlertEmail,
   readableBody,
   subjectTemplate,
@@ -299,27 +301,41 @@ interface SenderCompany {
   logo: string | null;
 }
 
-/** The company an email is confidently from: a store the shop list knows by name, or a bank the alert names that is either a known issuer's own sender or has a logo on the bank list. Nothing guessed from an unfamiliar host. */
+// Sealed into every event the list shows, so a long picture can't weigh on 50 of them.
+const MAX_SENDER_LOGO = 30_000;
+
+const toSenderLogo = (logo: string | null) =>
+  logo !== null && logo.length <= MAX_SENDER_LOGO ? toSafeLogo(logo) : null;
+
+/** The company an email is from, only when the sender's own address says so: a store the shop list knows whose name the host carries, or a bank whose own host sent the alert. A name in a subject, body or display name proves nothing. */
 async function readSenderCompany(
   firestore: Firestore,
   senderKind: SenderKind | null,
   found: ParsedAlert | null,
-  from: string,
+  address: string,
 ): Promise<SenderCompany> {
   const none = { company: null, logo: null };
   if (found === null) return none;
   if (senderKind === 'store') {
+    if (found.merchant === null || !isMerchantHost(address, found.merchant)) {
+      return none;
+    }
     const store = await findMerchant(firestore, found.merchant);
     return store === null
       ? none
-      : { company: store.name, logo: toSafeLogo(store.logo) };
+      : { company: store.name, logo: toSenderLogo(store.logo) };
   }
-  if (senderKind !== 'bank' || found.institution === null) return none;
+  if (
+    senderKind !== 'bank' ||
+    found.institution === null ||
+    !isInstitutionHost(address, found.institution)
+  ) {
+    return none;
+  }
   const bank = await findInstitutionLogo(firestore, found.institution);
-  if (bank !== null) return { company: bank.name, logo: bank.logo };
-  return isKnownInstitutionSender(from)
+  return bank === null
     ? { company: found.institution, logo: null }
-    : none;
+    : { company: bank.name, logo: toSenderLogo(bank.logo) };
 }
 
 async function handleMail(
@@ -543,7 +559,7 @@ async function handleMail(
     firestore,
     result.senderKind,
     result.found,
-    mail.from,
+    toAddress(mail.from),
   );
   const readText = readableBody(mail.text);
   const isBankEmail =

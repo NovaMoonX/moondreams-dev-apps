@@ -454,6 +454,7 @@ const LINK_DOC_FIELDS = {
   createdAt: 'never',
   needsCardConsent: 'never',
   cardDetails: 'never',
+  logoShared: 'never',
   sealed: 'never',
 } satisfies Record<keyof LinkDoc, ShareDecision>;
 

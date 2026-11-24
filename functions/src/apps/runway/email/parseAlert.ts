@@ -325,6 +325,46 @@ function readDate(text: string, receivedAt: number): number {
   return plausible ?? arrivedOn;
 }
 
+const INSTITUTION_HOST_LABELS: Record<string, string[]> = {
+  'American Express': ['americanexpress', 'aexp', 'amex'],
+  'Bank of America': ['bankofamerica', 'bofa'],
+  'Apple Card': ['apple'],
+  Citi: ['citi', 'citibank', 'citicards'],
+};
+
+const MAIL_PROVIDERS =
+  /^(?:gmail|googlemail|yahoo|outlook|hotmail|live|icloud|me|proton|protonmail|aol)$/;
+
+/** The registrable name of an address's host ("alerts@email.chase.com" is "chase"); empty when there is no host or it is a mailbox provider's, which names nobody. */
+const readHostLabel = (address: string) => {
+  const label = address.split('@')[1]?.split('.').slice(-2, -1)[0] ?? '';
+  return MAIL_PROVIDERS.test(label) ? '' : label;
+};
+
+/** Whether an address is the bank's own: its host's name is the bank's name (no spaces) or one it is known by. A name that only appears in a subject, body or display name proves nothing. */
+export const isInstitutionHost = (address: string, institution: string) => {
+  const label = readHostLabel(address);
+  const compact = institution.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return (
+    label !== '' &&
+    (label === compact ||
+      (Object.hasOwn(INSTITUTION_HOST_LABELS, institution) &&
+        INSTITUTION_HOST_LABELS[institution].includes(label)))
+  );
+};
+
+/** Whether an address's host names the shop: its name is the shop's (no spaces) or the start of it ("bluebottle" for Blue Bottle Coffee), at least four letters. */
+export const isMerchantHost = (address: string, merchant: string) => {
+  const label = readHostLabel(address);
+  return (
+    label.length >= 4 &&
+    merchant
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .startsWith(label)
+  );
+};
+
 /** Whether the sender's address belongs to one of the known banks or card issuers. */
 export const isKnownInstitutionSender = (from: string) =>
   INSTITUTIONS.some(([pattern]) => pattern.test(from));

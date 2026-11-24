@@ -2,6 +2,7 @@ import type {
   EmailEventRead,
   EmailFilterRead,
 } from '@apps/runway/hooks/useEmailPurchases';
+import { toComparable } from '@/utils/optionMatchUtils';
 import type { EmailSenderKind } from '@apps/runway/types';
 
 export interface EmailSender {
@@ -15,10 +16,18 @@ export interface EmailSender {
   company: string | null;
 }
 
-/** The bank link a purchase's card or account sits on and that bank's logo; null when it is on none, undefined when the purchase isn't loaded. */
+/** The bank link a purchase's card or account sits on, with that bank's name and logo; null when it is on none, undefined when the purchase isn't loaded. */
 export type PurchaseBankLink = (
   purchaseId: string,
-) => { linkId: string; logo: string | null } | null | undefined;
+) => { linkId: string; name: string; logo: string | null } | null | undefined;
+
+const MIN_LINKED_PURCHASES = 2;
+
+const isSameBank = (company: string, linkName: string) => {
+  const a = toComparable(company);
+  const b = toComparable(linkName);
+  return a !== '' && b !== '' && (a.includes(b) || b.includes(a));
+};
 
 export interface EmailSenderGroup {
   kind: EmailSenderKind;
@@ -52,25 +61,27 @@ const readKind = (newestFirst: EmailEventRead[]): EmailSenderKind =>
     ? 'bank'
     : 'other');
 
-/** A sender's newest logo, else for a bank the linked bank's, and only when every loaded purchase its emails made sits on one link. */
+/** A sender's newest logo, else for a bank with a name the sender's own address vouched for, the linked bank's: only when at least two loaded purchases from its emails all sit on one link that bank's name matches. */
 const readLogo = (
   newestFirst: EmailEventRead[],
   kind: EmailSenderKind,
+  company: string | null,
   bankLinkOf: PurchaseBankLink,
 ) => {
   const own = newestFirst.find(
     (event) => event.senderLogo !== null,
   )?.senderLogo;
   if (own !== undefined) return own;
-  if (kind !== 'bank') return null;
+  if (kind !== 'bank' || company === null) return null;
   const links = newestFirst.flatMap((event) => {
     const link =
       event.purchaseId === null ? undefined : bankLinkOf(event.purchaseId);
     return link === undefined ? [] : [link];
   });
   const first = links[0];
-  return first !== undefined &&
+  return links.length >= MIN_LINKED_PURCHASES &&
     first !== null &&
+    isSameBank(company, first.name) &&
     links.every((link) => link?.linkId === first.linkId)
     ? first.logo
     : null;
@@ -92,6 +103,9 @@ export function groupEmailSenders(
   const senders = [...byAddress.entries()].map(
     ([address, newestFirst]): EmailSender => {
       const kind = readKind(newestFirst);
+      const company =
+        newestFirst.find((event) => event.senderCompany !== null)
+          ?.senderCompany ?? null;
       return {
         address,
         name:
@@ -102,10 +116,8 @@ export function groupEmailSenders(
         count: newestFirst.length,
         lastAt: newestFirst[0].receivedAt,
         hasPurchase: newestFirst.some((event) => event.outcome === 'purchase'),
-        logo: readLogo(newestFirst, kind, bankLinkOf),
-        company:
-          newestFirst.find((event) => event.senderCompany !== null)
-            ?.senderCompany ?? null,
+        logo: readLogo(newestFirst, kind, company, bankLinkOf),
+        company,
       };
     },
   );
