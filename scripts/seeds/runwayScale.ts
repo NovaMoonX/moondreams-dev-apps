@@ -942,6 +942,7 @@ export async function seedRunwayScale(
         expenseId: null,
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
         createdAt: entry.createdAt,
         updatedAt: entry.createdAt,
         sealed: sealed[index],

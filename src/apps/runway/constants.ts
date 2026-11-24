@@ -4093,7 +4093,7 @@ export const GOAL_CHART_WORDS = {
 
 // Round 4, package G5.
 /** Changes an item's History shows before "Show all". */
-export const ITEM_HISTORY_PREVIEW = 6;
+export const ITEM_HISTORY_PREVIEW = 20;
 
 // Round 7, package B1.
 /** What a moved payday does to the income days the person changed for themselves. */
@@ -5497,6 +5497,9 @@ export const RULE_WORDS = {
   noMatch: 'No rule matches that.',
   alwaysDo: 'Always do this',
   alwaysDoSub: 'Send purchases like this one here, from now on',
+  alwaysSendTo: (merchant: string, envelope: string) =>
+    `Always send ${merchant} to ${envelope}`,
+  alwaysSendSub: 'By this store, card or kind of purchase',
   sheetTitle: 'Always do this',
   editTitle: 'Rule',
   question: 'What should it catch?',
