@@ -30,8 +30,6 @@ jobs:
       - run: npm ci
       - run: npm run check:indexes
       - run: npm run check:server-copies
-      - run: npm run check:runway-server-parity
-      - run: npm run check:runway-rework
       - run: npm run check:connection-boundaries
       - run: npm run check:share-fields
       - run: npm run check:rules-size
@@ -100,6 +98,8 @@ jobs:
       - run: npm run check:helm-task-edits
       - run: npm ci --prefix functions
       - run: npm run check:runway-email
+      - run: npm run check:runway-server-parity
+      - run: npm run check:runway-rework
       - run: npm run check:helm-undo
       - run: npm run check:batch-jobs
       - run: npm run check:helm-sort
