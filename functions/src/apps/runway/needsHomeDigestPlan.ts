@@ -82,3 +82,62 @@ export function countWaiting(
         near(amountCents, date, -1),
   ).length;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Mirror `EMAIL_MATCH_DAYS_BEFORE` and `EMAIL_MATCH_DAYS_AFTER` in the app's constants; `check:runway-notify-text` fails when they drift. */
+export const EMAIL_MATCH_DAYS_BEFORE = 2;
+export const EMAIL_MATCH_DAYS_AFTER = 7;
+
+export interface TwinRow {
+  id: string;
+  date: number;
+  source: string | null;
+  amountCents: number;
+  accountId: string | null;
+  paidByCardId: string | null;
+  emailWaiting: boolean;
+  notSameAs: string[];
+  pairedWithId: string | null;
+}
+
+const isSameSide = (email: TwinRow, bank: TwinRow) =>
+  email.paidByCardId !== null
+    ? email.paidByCardId === bank.paidByCardId
+    : email.accountId !== null &&
+      email.accountId === bank.accountId &&
+      bank.paidByCardId === null;
+
+/** Drops each waiting emailed purchase that is clearly a bank charge also waiting, so the pair counts once (the bank's side stays): the same amount on the same card (or the same account for money out of an account), the bank dated from two days before to seven days after the email, and the only candidate both ways, as `findEmailTwins` in the app decides. An ambiguous email stays counted. */
+export function withoutEmailTwins<T extends TwinRow>(rows: readonly T[]) {
+  const emails = rows.filter(
+    (row) => row.source === 'email' && row.emailWaiting,
+  );
+  const banks = rows.filter(
+    (row) => row.source === 'link' && row.pairedWithId === null,
+  );
+  const candidates = new Map(
+    emails.map((email) => [
+      email.id,
+      banks
+        .filter(
+          (bank) =>
+            bank.amountCents === email.amountCents &&
+            isSameSide(email, bank) &&
+            bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
+            bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS &&
+            !email.notSameAs.includes(bank.id),
+        )
+        .map((bank) => bank.id),
+    ]),
+  );
+  const claims = [...candidates.values()]
+    .flat()
+    .reduce(
+      (counts, id) => counts.set(id, (counts.get(id) ?? 0) + 1),
+      new Map<string, number>(),
+    );
+  return rows.filter((row) => {
+    const ids = candidates.get(row.id);
+    return !(ids?.length === 1 && claims.get(ids[0]) === 1);
+  });
+}
