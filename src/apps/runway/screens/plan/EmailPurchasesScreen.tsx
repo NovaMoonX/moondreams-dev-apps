@@ -1,15 +1,27 @@
 import { useMemo, useState } from 'react';
 
-import { ChevronRight, Filter, Forward, KeyRound, Trash2 } from 'lucide-react';
+import {
+  Ban,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  Filter,
+  KeyRound,
+  Landmark,
+  Mail,
+  Receipt,
+  Store,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
-import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useNow } from '@/hooks/useNow';
@@ -17,16 +29,18 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import EmailConfirmNotice from '@apps/runway/components/EmailConfirmNotice';
+import EmailRowBadge from '@apps/runway/components/EmailRowBadge';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
 import EmailSenderSheet from '@apps/runway/components/EmailSenderSheet';
 import EmailSetupView from '@apps/runway/components/EmailSetupView';
 import {
   EMAIL_WORDS,
   describeEmailFilter,
-  describeEmailOutcome,
+  describeEmailRowOutcome,
+  hasConfirmNotice,
+  shortenForwardingAddress,
   stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
-import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import {
@@ -43,6 +57,8 @@ import type {
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import {
   groupEmailSenders,
+  isSenderFiltered,
+  toWrappableAddress,
   type EmailSender,
 } from '@apps/runway/utils/emailSenders';
 import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
@@ -71,6 +87,21 @@ const writeConfirmTapped = (confirmAt: number) => {
   }
 };
 
+const OUTCOME_BADGES: Record<EmailEventRead['outcome'], LucideIcon> = {
+  purchase: Receipt,
+  filtered: Ban,
+  unread: CircleHelp,
+  confirm: Mail,
+  notPurchase: Mail,
+  notTracking: Mail,
+};
+
+const KIND_BADGES: Record<EmailSender['kind'], LucideIcon> = {
+  bank: Landmark,
+  store: Store,
+  other: Mail,
+};
+
 type AllList = 'events' | 'filters';
 
 interface SeeAllButtonProps {
@@ -83,7 +114,7 @@ function SeeAllButton({ label, onClick }: SeeAllButtonProps) {
     <Button
       variant='tertiary'
       size='sm'
-      className='text-muted-foreground -mr-2 gap-0.5 text-xs'
+      className='text-muted-foreground relative -mr-2 gap-0.5 text-xs after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[""]'
       onClick={onClick}
     >
       {label}
@@ -105,12 +136,12 @@ function EventRows({ events, onOpen }: EventRowsProps) {
         const subject = mask(
           stripForwardPrefix(event.subject) || EMAIL_WORDS.noSubject,
         );
-        const detail = `${describeEmailOutcome(event.outcome)} · ${formatDateOrdinal(event.receivedAt)}`;
+        const detail = `${describeEmailRowOutcome(event.outcome)} · ${formatDateOrdinal(event.receivedAt)}`;
         return (
           <ItemRow
             key={event.id}
             name={subject}
-            leading={<ItemBadge name={subject} emoji={null} />}
+            leading={<EmailRowBadge icon={OUTCOME_BADGES[event.outcome]} />}
             detail={detail}
             isPrivate={false}
             ariaLabel={`${subject}, ${detail}. Open`}
@@ -122,37 +153,35 @@ function EventRows({ events, onOpen }: EventRowsProps) {
   );
 }
 
-interface SenderGroupsProps {
+interface SenderRowsProps {
   senders: EmailSender[];
-  kind: keyof typeof EMAIL_WORDS.senderKinds;
   onOpen: (address: string) => void;
 }
 
-function SenderRows({ senders, kind, onOpen }: SenderGroupsProps) {
+function SenderRows({ senders, onOpen }: SenderRowsProps) {
   return (
-    <div className='space-y-2'>
-      <SectionDivider label={EMAIL_WORDS.senderKinds[kind]} />
-      <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {senders.map((sender) => {
-          const name = sender.name ?? sender.address;
-          const detail = EMAIL_WORDS.senderDetail(
-            sender.count,
-            formatDateOrdinal(sender.lastAt),
-          );
-          return (
-            <ItemRow
-              key={sender.address}
-              name={name}
-              leading={<ItemBadge name={name} emoji={null} />}
-              detail={detail}
-              isPrivate={false}
-              ariaLabel={`${name}, ${detail}. Open`}
-              onOpen={() => onOpen(sender.address)}
-            />
-          );
-        })}
-      </ul>
-    </div>
+    <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+      {senders.map((sender) => {
+        const name = sender.name ?? toWrappableAddress(sender.address);
+        const detail = EMAIL_WORDS.senderDetail(
+          sender.kind,
+          sender.count,
+          formatDateOrdinal(sender.lastAt),
+        );
+        return (
+          <ItemRow
+            key={sender.address}
+            name={name}
+            nameLines={3}
+            leading={<EmailRowBadge icon={KIND_BADGES[sender.kind]} />}
+            detail={detail}
+            isPrivate={false}
+            ariaLabel={`${sender.name ?? sender.address}, ${detail}. Open`}
+            onOpen={() => onOpen(sender.address)}
+          />
+        );
+      })}
+    </ul>
   );
 }
 
@@ -169,12 +198,15 @@ function FilterRows({ filters, onOpen }: FilterRowsProps) {
         return (
           <ItemRow
             key={filter.id}
-            name={words.name}
-            leading={
-              <span className='border-border bg-accent grid size-10 shrink-0 place-items-center rounded-xl border'>
-                <Filter className='size-5' aria-hidden='true' />
-              </span>
+            name={
+              filter.fromAddress === null
+                ? words.name
+                : words.name.replace(
+                    filter.fromAddress,
+                    toWrappableAddress(filter.fromAddress),
+                  )
             }
+            leading={<EmailRowBadge icon={Filter} />}
             detail={words.detail}
             isPrivate={false}
             ariaLabel={`${words.name}. Open`}
@@ -210,15 +242,22 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     null,
   );
   const [allList, setAllList] = useState<AllList | null>(null);
+  const [isAllSendersShown, setIsAllSendersShown] = useState(false);
   const [query, setQuery] = useState('');
 
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
-  const senderGroups = groupEmailSenders(events);
+  const allSenders = groupEmailSenders(events).flatMap(
+    (group) => group.senders,
+  );
+  const senders = allSenders.filter(
+    (sender) => !isSenderFiltered(filters, sender.address),
+  );
+  const shownSenders = isAllSendersShown
+    ? senders
+    : senders.slice(0, ROWS_SHOWN);
   const openSender =
-    senderGroups
-      .flatMap((group) => group.senders)
-      .find((entry) => entry.address === openSenderAddress) ?? null;
+    allSenders.find((entry) => entry.address === openSenderAddress) ?? null;
   const isOverStatus = isReopened || hasStarted;
   const isSetupShown =
     isOverStatus || (!intake.isLoading && intake.address === null);
@@ -240,17 +279,15 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         )
       );
     }
-    // A hand-forwarded email proves nothing about automatic forwarding, so only a tap or time ends the notice.
-    return (
-      !isConfirmTappedBefore &&
-      confirmTappedAt !== pendingConfirm.at &&
-      now < pendingConfirm.at + CONFIRM_NOTICE_DAYS * DAY_MS
-    );
+    // A hand-forwarded email proves nothing about automatic forwarding, so only time ends the notice, never a tap.
+    return now < pendingConfirm.at + CONFIRM_NOTICE_DAYS * DAY_MS;
   };
   const shownConfirm =
     pendingConfirm !== null && getIsConfirmShown(pendingConfirm)
       ? pendingConfirm
       : null;
+  const isConfirmDrawn =
+    shownConfirm !== null && hasConfirmNotice(shownConfirm);
 
   const run = async (work: () => Promise<void>, failure: string) => {
     setIsBusy(true);
@@ -325,7 +362,29 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       isTitleWrapped
       onClose={onClose}
       onBack={isOverStatus ? backToStatus : undefined}
-      headerAction={<ValuesEyeButton />}
+      headerAction={
+        <div className='flex items-center gap-1'>
+          {intake.address !== null && !isSetupShown && (
+            <>
+              <CopyTextButton
+                text={intake.address}
+                label={EMAIL_WORDS.copyAddress}
+                variant='tertiary'
+                isCompact
+                className='max-[389px]:hidden'
+              />
+              <CopyTextButton
+                text={intake.address}
+                label={EMAIL_WORDS.copyAddress}
+                variant='tertiary'
+                isIconOnly
+                className='min-[390px]:hidden'
+              />
+            </>
+          )}
+          <ValuesEyeButton />
+        </div>
+      }
     >
       {isSetupShown ? (
         <EmailSetupView
@@ -343,6 +402,9 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           {shownConfirm !== null && (
             <EmailConfirmNotice
               confirm={shownConfirm}
+              isTapped={
+                isConfirmTappedBefore || confirmTappedAt === shownConfirm.at
+              }
               onConfirmTapped={() => {
                 writeConfirmTapped(shownConfirm.at);
                 setConfirmTappedAt(shownConfirm.at);
@@ -351,7 +413,9 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           )}
           {intake.lastReceivedAt !== null && (
             <p className='text-sm font-medium' role='status'>
-              {EMAIL_WORDS.workingSince(
+              {(isConfirmDrawn
+                ? EMAIL_WORDS.lastEmail
+                : EMAIL_WORDS.workingSince)(
                 formatUpdatedAgo(intake.lastReceivedAt, now),
               )}
             </p>
@@ -378,67 +442,34 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               />
             )}
           </ActionSection>
-          {senderGroups.length > 0 && (
+          {senders.length > 0 && (
             <ActionSection caption={EMAIL_WORDS.sendersCaption}>
-              <div className='space-y-4'>
-                {senderGroups.map((group) => (
-                  <SenderRows
-                    key={group.kind}
-                    kind={group.kind}
-                    senders={group.senders}
-                    onOpen={setOpenSenderAddress}
-                  />
-                ))}
+              <div className='space-y-1'>
+                <SenderRows
+                  senders={shownSenders}
+                  onOpen={setOpenSenderAddress}
+                />
+                {senders.length > ROWS_SHOWN && (
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    className='text-muted-foreground! h-auto min-h-10 w-full gap-1 text-sm font-normal'
+                    onClick={() => setIsAllSendersShown((isShown) => !isShown)}
+                  >
+                    {isAllSendersShown
+                      ? EMAIL_WORDS.showFewer
+                      : EMAIL_WORDS.showMore(senders.length - ROWS_SHOWN)}
+                    <ChevronDown
+                      className={join(
+                        'size-4',
+                        isAllSendersShown && 'rotate-180',
+                      )}
+                      aria-hidden='true'
+                    />
+                  </Button>
+                )}
               </div>
             </ActionSection>
-          )}
-          {intake.address !== null && (
-            <div className='space-y-3'>
-              <div className='border-border flex items-center justify-between gap-3 rounded-2xl border p-3'>
-                <div className='min-w-0'>
-                  <p className='text-muted-foreground text-xs'>
-                    {EMAIL_WORDS.addressRow}
-                  </p>
-                  <p className='text-sm select-all'>
-                    <span className='break-all'>
-                      {intake.address.split('@')[0]}@
-                    </span>
-                    <wbr />
-                    <span className='whitespace-nowrap'>
-                      {intake.address.split('@').slice(1).join('@')}
-                    </span>
-                  </p>
-                </div>
-                <CopyTextButton
-                  text={intake.address}
-                  label='Copy'
-                  variant='tertiary'
-                  isCompact
-                />
-              </div>
-              {error && (
-                <p className='text-destructive text-sm' role='alert'>
-                  {error}
-                </p>
-              )}
-              <ActionGroup>
-                <ActionRow
-                  isGrouped
-                  icon={<Forward />}
-                  label={EMAIL_WORDS.showHow}
-                  subtitle={EMAIL_WORDS.showHowSub}
-                  onClick={() => setIsReopened(true)}
-                />
-                <ActionRow
-                  isGrouped
-                  icon={<KeyRound />}
-                  label={EMAIL_WORDS.newAddress}
-                  subtitle={EMAIL_WORDS.newAddressSub}
-                  isDisabled={isBusy}
-                  onClick={() => void getNewAddress()}
-                />
-              </ActionGroup>
-            </div>
           )}
           {filters.length > 0 && (
             <ActionSection
@@ -457,6 +488,32 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 onOpen={setOpenFilterId}
               />
             </ActionSection>
+          )}
+          {intake.address !== null && (
+            <div className='space-y-3'>
+              {error && (
+                <p className='text-destructive text-sm' role='alert'>
+                  {error}
+                </p>
+              )}
+              <ActionRow
+                icon={<Mail />}
+                label={EMAIL_WORDS.addressRow}
+                subtitle={toWrappableAddress(
+                  shortenForwardingAddress(intake.address),
+                )}
+                hasChevron
+                onClick={() => setIsReopened(true)}
+              />
+              <ActionRow
+                isDestructive
+                icon={<KeyRound />}
+                label={EMAIL_WORDS.newAddress}
+                subtitle={EMAIL_WORDS.newAddressSub}
+                isDisabled={isBusy}
+                onClick={() => void getNewAddress()}
+              />
+            </div>
           )}
         </div>
       )}

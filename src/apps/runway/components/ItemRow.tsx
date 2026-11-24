@@ -39,6 +39,8 @@ interface ItemRowProps {
   /** A small mark after the name, inside its line clamp (an envelope on an emailed purchase), kept on the last word so it never wraps alone. */
   nameMark?: ReactNode;
   emoji?: string | null;
+  /** How many lines the name may take before it is cut; three for a name that is a long address. */
+  nameLines?: 2 | 3;
   /** Replaces the badge (a date chip on an income day). */
   leading?: ReactNode;
   /** The single most useful fact, on one muted line. */
@@ -92,6 +94,7 @@ interface ItemRowProps {
 function ItemRow({
   name,
   nameMark,
+  nameLines = 2,
   emoji = null,
   leading,
   detail,
@@ -203,7 +206,7 @@ function ItemRow({
   );
   const nameLine = (
     <span className='block min-w-0 font-medium break-words'>
-      <span className='line-clamp-2'>
+      <span className={nameLines === 3 ? 'line-clamp-3' : 'line-clamp-2'}>
         {nameMark ? (
           <>
             {name.slice(0, name.lastIndexOf(' ') + 1)}

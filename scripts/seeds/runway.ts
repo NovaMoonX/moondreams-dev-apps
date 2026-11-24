@@ -4927,6 +4927,23 @@ async function writeSeedEmail(
       },
     },
     {
+      id: 'seed-email-event-forwarded-receipt',
+      receivedAt: context.now - 12 * hour,
+      outcome: 'purchase',
+      senderKind: 'store',
+      purchaseId: null,
+      sealed: {
+        from: 'Target <orders@target.com>',
+        subject: 'Fwd: Your Target receipt for $23.18',
+        subjectTemplate: 'your target receipt for {amount}',
+        ...readEmail(
+          'Thanks for shopping at Target. Your total was $23.18, paid with your Venture X card ending in 4821.',
+          { amountCents: 2_318, merchant: 'Target' },
+        ),
+        readBy: 'ai',
+      },
+    },
+    {
       id: 'seed-email-event-filtered',
       receivedAt: context.now - DAY_MS - 3 * hour,
       outcome: 'filtered',

@@ -1,6 +1,10 @@
+import { useState } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import CopyTextButton from '@/components/CopyTextButton';
+import ModalFooterActions from '@/components/ModalFooterActions';
+import { copyToClipboard } from '@/utils/clipboardUtils';
+import EmailAddressText from '@apps/runway/components/EmailAddressText';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 
 interface EmailSetupViewProps {
@@ -14,7 +18,7 @@ interface EmailSetupViewProps {
   onDone: () => void;
 }
 
-/** The whole setup: the private address to copy and one line on what to forward. */
+/** The whole setup: the private address, one line on what to forward, and one pinned button that copies it and then reads Done. */
 function EmailSetupView({
   address,
   isLoading,
@@ -25,51 +29,70 @@ function EmailSetupView({
   onRetry,
   onDone,
 }: EmailSetupViewProps) {
-  const [name, ...host] = (address ?? '').split('@');
-  return (
-    <div className='space-y-4'>
-      <p className='text-muted-foreground text-sm'>{EMAIL_WORDS.setupLine}</p>
-      {address === null && isFailed ? (
-        <div className='space-y-2'>
-          <p className='text-destructive text-sm' role='alert'>
-            {EMAIL_WORDS.addressLoadFailed}
-          </p>
-          <Button className='w-full' variant='secondary' onClick={onRetry}>
-            {EMAIL_WORDS.tryAgain}
-          </Button>
-        </div>
-      ) : address === null ? (
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [isCopyFailed, setIsCopyFailed] = useState(false);
+
+  const copyAddress = async () => {
+    if (address === null) return;
+    const didCopy = await copyToClipboard(address);
+    setIsCopyFailed(!didCopy);
+    setCopiedAddress(didCopy ? address : null);
+  };
+
+  const footerButton = () => {
+    if (address !== null) {
+      const isCopied = copiedAddress === address;
+      return (
         <Button
-          className='w-full'
-          disabled={isBusy || isLoading}
-          onClick={onGetAddress}
+          type='button'
+          onClick={isCopied ? onDone : () => void copyAddress()}
         >
-          {EMAIL_WORDS.getAddress}
+          {isCopied ? EMAIL_WORDS.done : EMAIL_WORDS.copyAddress}
         </Button>
-      ) : (
-        <div className='border-border space-y-3 rounded-2xl border p-3'>
-          <p className='text-base font-semibold select-all'>
-            <span className='break-all'>{name}@</span>
-            <wbr />
-            <span className='whitespace-nowrap'>{host.join('@')}</span>
-          </p>
-          <CopyTextButton
-            text={address}
-            label={EMAIL_WORDS.copyAddress}
-            variant='secondary'
-          />
-        </div>
+      );
+    }
+    if (isFailed) {
+      return (
+        <Button type='button' onClick={onRetry}>
+          {EMAIL_WORDS.tryAgain}
+        </Button>
+      );
+    }
+    return (
+      <Button
+        type='button'
+        disabled={isBusy || isLoading}
+        onClick={onGetAddress}
+      >
+        {EMAIL_WORDS.getAddress}
+      </Button>
+    );
+  };
+
+  return (
+    <div className='flex flex-1 flex-col gap-4'>
+      <p className='text-muted-foreground text-sm'>{EMAIL_WORDS.setupLine}</p>
+      {address !== null && (
+        <p className='border-border rounded-2xl border p-3 text-sm font-semibold select-all'>
+          <EmailAddressText address={address} />
+        </p>
+      )}
+      {address === null && isFailed && (
+        <p className='text-destructive text-sm' role='alert'>
+          {EMAIL_WORDS.addressLoadFailed}
+        </p>
+      )}
+      {isCopyFailed && (
+        <p className='text-destructive text-sm' role='alert'>
+          {EMAIL_WORDS.copyFailed}
+        </p>
       )}
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}
         </p>
       )}
-      {address !== null && (
-        <Button className='w-full' onClick={onDone}>
-          {EMAIL_WORDS.done}
-        </Button>
-      )}
+      <ModalFooterActions rightActions={footerButton()} />
     </div>
   );
 }

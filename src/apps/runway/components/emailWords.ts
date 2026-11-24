@@ -1,15 +1,20 @@
+import { EMAIL_ADDRESS_PREFIX } from '@apps/runway/constants';
+import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailFilterSealed,
   EmailOutcome,
   EmailSenderKind,
 } from '@apps/runway/types';
 
+const SENDER_KIND_WORDS = {
+  bank: 'Bank',
+  store: 'Store',
+  other: 'Not money',
+} satisfies Record<EmailSenderKind, string>;
+
 export const EMAIL_WORDS = {
-  rowLabel: 'Purchases from email',
-  rowNotSetUp: 'Not set up yet',
-  rowLoading: '…',
-  rowSetUp: 'Forwarded emails become purchases',
-  rowAction: 'Forward money emails',
+  rowCaption: 'Email',
+  rowSub: 'Forward bank alerts and store receipts',
   title: 'Purchases from email',
   getAddress: 'Get your address',
   addressLoadFailed: 'Couldn’t load your address. Try again.',
@@ -28,29 +33,27 @@ export const EMAIL_WORDS = {
   noEvents:
     'Nothing yet. Forward a recent bank alert or store receipt to see it land here.',
   sendersCaption: 'Who sends',
-  senderKinds: {
-    bank: 'Bank transactions',
-    store: 'Store receipts',
-    other: 'Not money',
-  } satisfies Record<EmailSenderKind, string>,
-  senderDetail: (count: number, lastAt: string) =>
-    `${count === 1 ? '1 recent email' : `${count} recent emails`} · last ${lastAt}`,
-  senderTitle: 'Sender',
+  senderDetail: (kind: EmailSenderKind, count: number, lastAt: string) =>
+    `${SENDER_KIND_WORDS[kind]} · ${count === 1 ? '1 email' : `${count} emails`} · ${lastAt}`,
+  showMore: (count: number) => `Show ${count} more`,
+  showFewer: 'Show fewer',
   senderFilterOut: 'Filter out emails from this sender',
-  senderStop: 'Stop emails from this sender',
-  senderStopTitle: (address: string) => `Stop reading emails from ${address}?`,
-  senderStopMessage: 'Purchases from it won’t come in anymore.',
-  senderStopConfirm: 'Stop emails',
+  senderFilterOutTitle: (address: string) =>
+    `Filter out emails from ${address}?`,
+  senderFilterOutMessage: 'Purchases from it won’t come in anymore.',
+  senderFilterOutConfirm: 'Filter out',
+  filteredOut: (address: string) => `Filtered out ${address}`,
+  filterUndoFailed: 'That filter is still on. Try again.',
   senderFilterSub: 'Future ones are skipped before anything is read.',
   senderCovered: 'A filter already covers this sender.',
   senderHadPurchases: 'Some of these became purchases. This stops that.',
   workingSince: (when: string) => `Working · last email ${when}`,
+  lastEmail: (when: string) => `Last email ${when}`,
   addressRow: 'Your address',
-  showHow: 'Show how to forward',
-  showHowSub: 'Your address and what you can send',
   setupLine:
-    'Forward any money email here, by hand or with your email’s own rules. Bank alerts, store receipts, refunds and deposits all work.',
+    'Forward your bank alerts and store receipts here, by hand or with your email’s own rules.',
   copyAddress: 'Copy address',
+  copyFailed: 'Couldn’t copy it. Press and hold the address to copy it.',
   done: 'Done',
   confirmAsked: (provider: string) => `${provider} asked to confirm forwarding`,
   confirmButton: (provider: string | null) =>
@@ -62,15 +65,16 @@ export const EMAIL_WORDS = {
   copyCode: 'Copy code',
   confirmedBy: (provider: string) =>
     `Runway confirmed ${provider}’s forwarding`,
-  confirmAgain: 'Didn’t take? Confirm it yourself',
+  confirmStillNeeded: (provider: string | null) =>
+    `${provider ?? 'Your email'} still needs your OK`,
+  confirmAgain: 'Confirm again',
   emailTitle: 'Email',
   filterOut: 'Filter out emails like this',
   filterOutSub: 'Future ones are skipped before anything is read.',
   filterOutRowSub: 'Emails like this won’t become purchases',
   unreadLine:
     'Runway couldn’t find an amount and a place in this email. If it was a purchase, add it from Add a purchase.',
-  notPurchaseLine:
-    'This looked like a payment, refund or notice, not a purchase.',
+  notPurchaseLine: 'Runway didn’t find a purchase in it.',
   noSubject: 'No subject',
   from: 'From',
   subject: 'Subject',
@@ -86,7 +90,7 @@ export const EMAIL_WORDS = {
   withSubject: 'With this subject',
   suggestionsCaption: 'Suggestions',
   suggestedByAi: 'Suggested by AI',
-  saveFilter: 'Save filter',
+  saveFilter: 'Filter out',
   pickOne: 'Pick at least one',
   saveFailed: 'The filter did not save. Try again.',
   removeFailed: 'That did not go through. Try again.',
@@ -114,6 +118,19 @@ export const EMAIL_WORDS = {
   overdueTitle: 'Not from your bank yet',
   overdueSub: 'Open one to remove it or stop waiting for it.',
 } as const;
+
+const OUTCOME_ROW_WORDS: Record<EmailOutcome, string> = {
+  purchase: 'Purchase',
+  notPurchase: 'Not a purchase',
+  filtered: 'Filtered out',
+  confirm: 'Forwarding confirmation',
+  unread: 'Couldn’t read it',
+  notTracking: 'Not tracking that day',
+};
+
+/** The outcome as one or two short words, for a row's line. */
+export const describeEmailRowOutcome = (outcome: EmailOutcome) =>
+  OUTCOME_ROW_WORDS[outcome];
 
 const OUTCOME_WORDS: Record<EmailOutcome, string> = {
   purchase: 'Added as a purchase',
@@ -165,3 +182,24 @@ export const CONFIRM_PROVIDER_NAMES = {
   yahoo: 'Yahoo',
   proton: 'Proton Mail',
 } as const;
+
+/** The forwarding address with only the start of its token, enough to recognise it on one line. */
+export const shortenForwardingAddress = (address: string) => {
+  const [name, ...host] = address.split('@');
+  const keep = EMAIL_ADDRESS_PREFIX.length + 1 + 4;
+  return name.length <= keep + 1
+    ? address
+    : `${name.slice(0, keep)}…@${host.join('@')}`;
+};
+
+type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
+
+/** The confirmation link when it is a safe one to open. */
+export const readConfirmLink = (confirm: EmailConfirm) =>
+  confirm.url?.startsWith('https://') ? confirm.url : null;
+
+/** Whether the confirm notice draws anything for this confirmation, so a line beside it can read differently while it does. */
+export const hasConfirmNotice = (confirm: EmailConfirm) =>
+  confirm.autoConfirm === 'confirmed' ||
+  readConfirmLink(confirm) !== null ||
+  confirm.code !== null;

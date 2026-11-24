@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Filter } from 'lucide-react';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
@@ -14,6 +14,7 @@ import {
 } from '@apps/runway/hooks/useEmailPurchases';
 import {
   isSenderFiltered,
+  toWrappableAddress,
   type EmailSender,
 } from '@apps/runway/utils/emailSenders';
 
@@ -25,6 +26,7 @@ interface EmailSenderSheetProps {
 /** One sender: its address, how much it has sent and a way to filter out everything it sends. */
 function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
   const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const actions = useEmailActions();
   const filters = useEmailFilters();
   const [isSaving, setIsSaving] = useState(false);
@@ -34,9 +36,9 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
   const filterOut = async () => {
     if (sender.hasPurchase) {
       const isAccepted = await confirm({
-        title: EMAIL_WORDS.senderStopTitle(sender.address),
-        message: EMAIL_WORDS.senderStopMessage,
-        confirmText: EMAIL_WORDS.senderStopConfirm,
+        title: EMAIL_WORDS.senderFilterOutTitle(sender.address),
+        message: EMAIL_WORDS.senderFilterOutMessage,
+        confirmText: EMAIL_WORDS.senderFilterOutConfirm,
         destructive: true,
       });
       if (!isAccepted) return;
@@ -44,11 +46,26 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
     setIsSaving(true);
     setError(null);
     try {
-      await actions.createFilter({
+      const filterId = await actions.createFilter({
         fromAddress: sender.address,
         subjectTemplate: null,
         subjectContains: [],
         bodyContains: [],
+      });
+      addToast({
+        title: EMAIL_WORDS.filteredOut(sender.address),
+        type: 'success',
+        action: {
+          label: EMAIL_WORDS.undo,
+          onClick: () =>
+            void actions.deleteFilter(filterId).catch((undoError: unknown) =>
+              addToast({
+                title: EMAIL_WORDS.filterUndoFailed,
+                description: getErrorMessage(undoError, ''),
+                type: 'error',
+              }),
+            ),
+        },
       });
       onClose();
     } catch (saveError) {
@@ -62,20 +79,18 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
       isOpen
       isDrawerWhenShort
       onClose={onClose}
-      title={EMAIL_WORDS.senderTitle}
+      title={sender.name ?? toWrappableAddress(sender.address)}
     >
       <div className='space-y-4 pb-4'>
         <div>
-          <p className='text-lg font-semibold break-words'>
-            {sender.name ?? sender.address}
-          </p>
           {sender.name !== null && (
             <p className='text-muted-foreground text-sm break-words'>
-              {sender.address}
+              {toWrappableAddress(sender.address)}
             </p>
           )}
           <p className='text-muted-foreground text-sm'>
             {EMAIL_WORDS.senderDetail(
+              sender.kind,
               sender.count,
               formatDateOrdinal(sender.lastAt),
             )}
@@ -93,12 +108,9 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
         ) : (
           <ActionRow
             isRoomy
+            isDestructive={sender.hasPurchase}
             icon={<Filter />}
-            label={
-              sender.hasPurchase
-                ? EMAIL_WORDS.senderStop
-                : EMAIL_WORDS.senderFilterOut
-            }
+            label={EMAIL_WORDS.senderFilterOut}
             subtitle={
               sender.hasPurchase
                 ? EMAIL_WORDS.senderHadPurchases

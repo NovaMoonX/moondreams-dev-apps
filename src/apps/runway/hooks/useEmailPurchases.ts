@@ -62,7 +62,7 @@ export type EmailFilterSuggestion = EmailFilterSealed & { label: string };
 
 export interface EmailActions {
   rotateAddress(): Promise<void>;
-  createFilter(filter: EmailFilterSealed): Promise<void>;
+  createFilter(filter: EmailFilterSealed): Promise<string>;
   deleteFilter(id: string): Promise<void>;
   suggestFilters(eventId: string): Promise<EmailFilterSuggestion[]>;
   stopWaiting(purchaseId: string): Promise<void>;
@@ -137,7 +137,7 @@ export function useEmailActions(): EmailActions {
       },
       createFilter: async (filter) => {
         if (uid === null) return NO_UID();
-        await createEmailFilter(uid, await getRunwayEncryption(uid), filter);
+        return createEmailFilter(uid, await getRunwayEncryption(uid), filter);
       },
       deleteFilter: (id) =>
         uid === null ? NO_UID() : deleteEmailFilter(uid, id),
