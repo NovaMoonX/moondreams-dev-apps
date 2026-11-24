@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Ban,
+  CalendarPlus,
+  ChevronRight,
   HandCoins,
   History,
   Pencil,
@@ -34,9 +36,12 @@ import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
-import CoversLine from '@apps/runway/components/CoversLine';
+import CoversLine, {
+  type CoversRest,
+} from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
+import HorizonPlanNextView from '@apps/runway/components/HorizonPlanNextView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import {
@@ -71,8 +76,10 @@ import {
 } from '@apps/runway/constants';
 import {
   changeCost,
+  findNextOf,
   getCostPriority,
   getNextVersionId,
+  listEarlierEvents,
   listEndlessCosts,
   listOpenCosts,
   type CostChange,
@@ -171,6 +178,7 @@ function HorizonSheet({
   const { addToast } = useToast();
   const mask = useMaskedText();
   const [isReleasing, setIsReleasing] = useState(false);
+  const [linkedId, setLinkedId] = useState<string | null>(null);
   const [view, setView] = useState<
     | 'main'
     | 'change'
@@ -178,6 +186,7 @@ function HorizonSheet({
     | 'finish'
     | 'callOff'
     | 'bringBack'
+    | 'planNext'
     | 'planChange'
   >('main');
   const [unlinkId, setUnlinkId] = useState<string | null>(null);
@@ -192,6 +201,7 @@ function HorizonSheet({
   const [openedChange, setOpenedChange] = useState<PlanChange | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const versions = useAppSelector((state) => state.runway.versions);
+  const moves = useAppSelector((state) => state.runway.moves);
   const stops = useAppSelector(selectItemStops);
   const ends = useAppSelector(selectItemEnds);
   const allCards = useAppSelector(selectAllCards);
@@ -225,6 +235,38 @@ function HorizonSheet({
   const isDone = horizon.state !== 'open';
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
+  const allItems = useAppSelector((state) => state.runway.items);
+  const next = isDone
+    ? findNextOf(
+        itemId,
+        horizon.stateMoney?.moveId ?? null,
+        allItems,
+        versions,
+        moves,
+      )
+    : null;
+  const nextEvent = events.find(({ item }) => item.id === next?.itemId) ?? null;
+  const earlier = listEarlierEvents(itemId, versions);
+  const fromEvent =
+    horizon.fromId === null
+      ? null
+      : (events.find(({ item }) => item.id === horizon.fromId) ?? null);
+  const linkedEvent = events.find(({ item }) => item.id === linkedId) ?? null;
+  const fromLine = fromEvent && (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      className="text-muted-foreground! relative -ml-2 h-auto gap-1 self-start py-0.5 text-sm font-normal after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+      onClick={() => setLinkedId(fromEvent.item.id)}
+    >
+      {HORIZON_END_WORDS.fromFact(
+        formatDateOrdinalUTC(fromEvent.version.payload.happensOn),
+      )}
+      <ChevronRight className='size-4' aria-hidden='true' />
+    </Button>
+  );
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -253,15 +295,29 @@ function HorizonSheet({
       isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
     );
   };
-  const getRestFromPaysNote = () => {
+  const getRestFromPays = (): CoversRest => {
     const { rest } = horizon;
     const picked =
       rest.kind === 'onePay'
         ? comingDays.find(({ dayKey }) => dayKey === rest.dayKey)
         : undefined;
-    return picked
-      ? HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on))
-      : HORIZON_WORDS.restPaysNote;
+    if (picked) {
+      return {
+        short: null,
+        note: HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on)),
+      };
+    }
+    const from =
+      rest.kind === 'pays' && rest.startsOn !== null && rest.startsOn > today
+        ? formatDateOrdinalUTC(rest.startsOn)
+        : null;
+    return from === null
+      ? { short: null, note: HORIZON_WORDS.restPaysNote }
+      : {
+          short: HORIZON_WORDS.savingStarts(from),
+          note: HORIZON_WORDS.startHelpNote,
+          title: HORIZON_WORDS.startHelpTitle,
+        };
   };
   const when =
     horizon.happensUntil === null
@@ -369,8 +425,9 @@ function HorizonSheet({
   const sent = horizon.stateMoney;
   const sentPlace =
     sent?.kind === 'place'
-      ? ([...envelopes, ...goals].find(({ item }) => item.id === sent.toId)
-          ?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
+      ? ([...envelopes, ...goals, ...events].find(
+          ({ item }) => item.id === sent.toId,
+        )?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
       : null;
   const getSentLine = () => {
     if (sent === null || sent.kind === 'held') return null;
@@ -750,6 +807,14 @@ function HorizonSheet({
           onBack={() => setView('main')}
           onClose={onClose}
         />
+      ) : view === 'planNext' ? (
+        <HorizonPlanNextView
+          itemId={itemId}
+          horizon={horizon}
+          today={today}
+          onBack={() => setView('main')}
+          onClose={onClose}
+        />
       ) : view === 'bringBack' ? (
         <HorizonBringBackView
           itemId={itemId}
@@ -789,6 +854,38 @@ function HorizonSheet({
               {ITEM_VIEW_WORDS.historyTitle}
             </p>
           </div>
+          {earlier.length > 0 && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-sm font-medium'>
+                {HORIZON_END_WORDS.earlierCaption}
+              </p>
+              <ul className='border-border divide-border bg-card divide-y overflow-hidden rounded-2xl border'>
+                {earlier.map((event) => (
+                  <li key={event.itemId}>
+                    <Button
+                      type='button'
+                      variant='base'
+                      className='flex min-h-11 w-full items-center justify-between gap-3 rounded-none px-3 py-2 text-left text-sm font-normal'
+                      onClick={() => setLinkedId(event.itemId)}
+                    >
+                      <span className='min-w-0 break-words'>{event.name}</span>
+                      <span className='text-muted-foreground flex shrink-0 items-center gap-1 text-right'>
+                        <MaskedText>
+                          {HORIZON_END_WORDS.earlierRow(
+                            formatDateOrdinalUTC(event.happensOn),
+                            formatCents(
+                              balances.costPaidByItem[event.itemId] ?? 0,
+                            ),
+                          )}
+                        </MaskedText>
+                        <ChevronRight className='size-4' aria-hidden='true' />
+                      </span>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ItemHistoryView itemId={itemId} />
         </div>
       ) : openCost && costEdit !== null && costEdit !== 'form' ? (
@@ -881,6 +978,21 @@ function HorizonSheet({
                 </MaskedText>
               </p>
             )}
+            {fromLine}
+            {next && nextEvent && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className="text-muted-foreground! relative -ml-2 h-auto gap-1 py-0.5 text-sm font-normal after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+                onClick={() => setLinkedId(next.itemId)}
+              >
+                {HORIZON_END_WORDS.nextFact(
+                  formatDateOrdinalUTC(next.happensOn),
+                )}
+                <ChevronRight className='size-4' aria-hidden='true' />
+              </Button>
+            )}
           </div>
           {goalBlock}
           {changesBlock}
@@ -920,17 +1032,24 @@ function HorizonSheet({
             </div>
           )}
           <ActionGroup isRoomy>
+            {!next && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<CalendarPlus />}
+                label={HORIZON_END_WORDS.nextTitle}
+                subtitle={HORIZON_END_WORDS.nextRowSub}
+                onClick={() => setView('planNext')}
+              />
+            )}
             <ActionRow
               isGrouped
               isRoomy
               hasChevron
               icon={<RotateCcw />}
               label={HORIZON_END_WORDS.bringBackRow}
-              subtitle={
-                figures.leftCents > 0
-                  ? HORIZON_END_WORDS.bringBackHeldSub
-                  : HORIZON_END_WORDS.bringBackSub
-              }
+              subtitle={HORIZON_END_WORDS.bringBackSub}
               onClick={() => setView('bringBack')}
             />
             {figures.leftCents > 0 && (
@@ -967,8 +1086,8 @@ function HorizonSheet({
             </InlineNotice>
           )}
           {stage === 'readyToFinish' && (
-            <InlineNotice tone='success' title={HORIZON_END_WORDS.readyTitle}>
-              <p>{HORIZON_END_WORDS.readySub}</p>
+            <InlineNotice tone='success'>
+              <p className='font-semibold'>{HORIZON_END_WORDS.readyTitle}</p>
             </InlineNotice>
           )}
           {isChangesOnly ? (
@@ -997,6 +1116,7 @@ function HorizonSheet({
               }
             />
           )}
+          {fromLine}
           {!isChangesOnly && (
             <CoversLine
               plan={plan}
@@ -1004,11 +1124,11 @@ function HorizonSheet({
               heldCents={figures.leftCents}
               stance={stance}
               isSetAsideUsed={figures.setAsideCents > 0}
-              after={
+              rest={
                 (horizon.rest.kind === 'pays' ||
                   horizon.rest.kind === 'onePay') &&
                 plan.coveredUntil !== null
-                  ? getRestFromPaysNote()
+                  ? getRestFromPays()
                   : null
               }
             />
@@ -1076,20 +1196,12 @@ function HorizonSheet({
             </p>
           )}
           <div className='text-muted-foreground space-y-0.5 text-sm'>
-            <p>
+            <p className='text-balance'>
               <MaskedText>{fact}</MaskedText>
             </p>
             {outsideLine && (
               <p>
                 <MaskedText>{outsideLine}</MaskedText>
-              </p>
-            )}
-            {stage === 'open' && waitingOn.length > 0 && (
-              <p className='pt-2'>
-                {HORIZON_END_WORDS.finishWaits(
-                  waitingOn.slice(0, 2).map(({ name }) => name),
-                  Math.max(0, waitingOn.length - 2),
-                )}
               </p>
             )}
           </div>
@@ -1098,6 +1210,9 @@ function HorizonSheet({
               <>
                 <p className='text-muted-foreground text-sm font-medium'>
                   {HORIZON_WORDS.costsCaption}
+                  {stage === 'open' &&
+                    waitingOn.length > 0 &&
+                    HORIZON_END_WORDS.finishWaits(waitingOn.length)}
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {costs.map((cost) => (
@@ -1215,6 +1330,15 @@ function HorizonSheet({
             />
           )}
         </div>
+      )}
+      {linkedEvent && (
+        <HorizonSheet
+          itemId={linkedEvent.item.id}
+          horizon={linkedEvent.version.payload}
+          today={today}
+          stance={stance}
+          onClose={() => setLinkedId(null)}
+        />
       )}
       {unlinking && (
         <FormSheet

@@ -105,7 +105,9 @@ const pairingCount = (list: readonly unknown[]) =>
 
 const describeHorizonRest = (value: HorizonSealed['rest']) =>
   value.kind === 'pays'
-    ? 'my pays before each cost'
+    ? value.startsOn === null
+      ? 'my pays before each cost'
+      : `my pays from ${formatDateOrdinalUTC(value.startsOn)}`
     : value.kind === 'onePay'
       ? 'one pay you picked'
       : value.kind === 'outside'

@@ -4,18 +4,23 @@ import type {
   DateOnly,
   HorizonCost,
   HorizonMoneyLeft,
+  HorizonRest,
   HorizonSealed,
   HorizonState,
   HorizonStored,
   MoneyRange,
+  OpenMove,
+  PlanItemDoc,
   Priority,
   Schedule,
   Stance,
 } from '@apps/runway/types';
 
+import { generateUuid } from '@/utils/idUtils';
+
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 
-import { addUtcMonths, DAY_MS } from './dates';
+import { addUtcDays, addUtcMonths, DAY_MS } from './dates';
 import { getGoalBalanceAt, getGoalCostId, type GoalCover } from './horizonGoal';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
@@ -169,13 +174,17 @@ export const getHorizonPaceCents = (
   covers: readonly HorizonCover[],
   countedIds: ReadonlySet<string>,
   today: DateOnly,
+  startsOn: DateOnly | null = null,
 ): Cents =>
   covers
     .filter(({ costId }) => countedIds.has(costId))
     .reduce<{ shortCents: Cents; paceCents: Cents }>(
       (walk, { dueOn, coveredCents, totalCents }) => {
         const shortCents = walk.shortCents + totalCents - coveredCents;
-        const months = Math.max(1, (dueOn - today) / MONTH_MS);
+        const months = Math.max(
+          1,
+          (dueOn - Math.max(today, startsOn ?? today)) / MONTH_MS,
+        );
         return {
           shortCents,
           paceCents: Math.max(walk.paceCents, Math.ceil(shortCents / months)),
@@ -198,10 +207,17 @@ export const listUnmarkedOutside = (
     paid,
   ).filter((payment) => payment.paid === null);
 
+const readRest = (rest: HorizonStored['rest']): HorizonRest =>
+  !rest
+    ? { kind: 'later' }
+    : rest.kind === 'pays'
+      ? { kind: 'pays', startsOn: 'startsOn' in rest ? rest.startsOn : null }
+      : rest;
+
 /** A stored payload with the fields later issues added filled in, so a version sealed before them reads as it always meant. */
 export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   ...stored,
-  rest: stored.rest ?? { kind: 'later' },
+  rest: readRest(stored.rest),
   costs: stored.costs.map((cost) => ({
     ...cost,
     isOutside: cost.isOutside ?? false,
@@ -217,6 +233,7 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   stateMoney: stored.stateMoney ?? null,
   links: stored.links ?? [],
   goalId: stored.goalId ?? null,
+  fromId: stored.fromId ?? null,
 });
 
 /** The due dates of a repeating payment's first occurrences from `from` that `heldCents` covers in full, soonest first. */
@@ -662,3 +679,214 @@ export const getNextVersionId = (baseVersionId: string, stretch = 0) => {
   const generation = match ? Number(match[2]) + 1 : 1;
   return `${root}~${generation}${stretch === 0 ? '' : `_${stretch}`}`;
 };
+
+/** The event planned from `itemId` that is not archived, and whether it is still as it was made: open, one version and no move but the one that carried money in. One that was ended or touched is the one reported when several exist. Null when none was planned. */
+export function findNextOf(
+  itemId: string,
+  carryMoveId: string | null,
+  items: readonly Pick<PlanItemDoc, 'id' | 'archivedAt' | 'endedAt'>[],
+  versions: readonly {
+    itemId: string;
+    id: string;
+    kind: string;
+    payload: unknown;
+  }[],
+  moves: readonly OpenMove[],
+): {
+  itemId: string;
+  versionId: string;
+  happensOn: DateOnly;
+  isUntouched: boolean;
+} | null {
+  const readMade = (made: (typeof versions)[number]) => {
+    const own = versions.filter((version) => version.itemId === made.itemId);
+    const isMoved = moves.some(
+      (move) =>
+        move.id !== carryMoveId &&
+        (move.refId === made.itemId ||
+          (move.kind === 'transfer' &&
+            (move.payload.fromId === made.itemId ||
+              move.payload.toId === made.itemId))),
+    );
+    const isEnded = items.some(
+      (item) => item.id === made.itemId && item.endedAt !== null,
+    );
+    return {
+      itemId: made.itemId,
+      versionId: made.id,
+      happensOn: (made.payload as HorizonSealed).happensOn,
+      isUntouched: own.length === 1 && !isMoved && !isEnded,
+    };
+  };
+  const found = versions
+    .filter(
+      (version) =>
+        version.kind === 'horizon' &&
+        (version.payload as HorizonSealed).fromId === itemId &&
+        items.some(
+          (item) => item.id === version.itemId && item.archivedAt === null,
+        ),
+    )
+    .map(readMade);
+  return found.find(({ isUntouched }) => !isUntouched) ?? found[0] ?? null;
+}
+
+const getNextRest = (rest: HorizonRest, startsOn: DateOnly | null) =>
+  rest.kind === 'onePay' || rest.kind === 'pays'
+    ? ({ kind: 'pays', startsOn } satisfies HorizonRest)
+    : rest;
+
+export interface NextHorizonPlan {
+  happensOn: DateOnly;
+  /** The day pays start saving; null starts today. Only read when the rest is paid from pays. */
+  startsOn: DateOnly | null;
+  /** The amounts the person changed, by the earlier event's cost id. */
+  amounts?: Readonly<Record<string, MoneyRange>>;
+  /** When given, no copied date lands before it. */
+  today?: DateOnly;
+}
+
+/** Where a date of the earlier event lands in the next one: moved by the gap between the two events, never before `plan.today`. */
+export const shiftNextDate = (
+  fromHappensOn: DateOnly,
+  plan: NextHorizonPlan,
+  date: DateOnly,
+): DateOnly => {
+  const shifted = addUtcDays(
+    date,
+    Math.round((plan.happensOn - fromHappensOn) / DAY_MS),
+  );
+  return plan.today === undefined ? shifted : Math.max(shifted, plan.today);
+};
+
+/** Where a cost's first date lands in the next event: a repeating schedule moves on to its first date on or after `plan.today`, keeping its repeat day; a one-time date takes the plain clamp. */
+export const shiftNextAnchor = (
+  fromHappensOn: DateOnly,
+  plan: NextHorizonPlan,
+  schedule: Schedule & { anchor: DateOnly },
+): DateOnly => {
+  const shifted = shiftNextDate(
+    fromHappensOn,
+    { ...plan, today: undefined },
+    schedule.anchor,
+  );
+  if (plan.today === undefined || shifted >= plan.today) return shifted;
+  if (schedule.kind === 'once' || schedule.kind === 'irregular')
+    return plan.today;
+  return (
+    occurrences(
+      { ...schedule, anchor: shifted },
+      { onDate: null, afterCount: null },
+      plan.today,
+      addUtcDays(plan.today, 3650),
+    )[0] ?? plan.today
+  );
+};
+
+/** The costs an event's next one copies, each with the amount it starts at: costs that became bills or were removed are left out, and a one-time cost that was paid starts at exactly what it came to. */
+export function listCarriedCosts(
+  horizon: HorizonSealed,
+  paid: readonly CostPaidEntry[],
+): { cost: HorizonCost; amount: MoneyRange; isGoalCost: boolean }[] {
+  return horizon.costs
+    .filter((cost) => cost.becameBillId === null && cost.endsAfter === null)
+    .map((cost) => {
+      const isGoalCost =
+        horizon.goalId !== null && cost.id === getGoalCostId(horizon.goalId);
+      const cameTo = paid
+        .filter((entry) => entry.costId === cost.id)
+        .reduce((sum, entry) => sum + entry.amountCents, 0);
+      const isSettled =
+        !isGoalCost && cost.schedule.kind === 'once' && cameTo > 0;
+      return {
+        cost,
+        isGoalCost,
+        amount: isSettled
+          ? { lowCents: cameTo, highCents: cameTo }
+          : cost.amount,
+      };
+    });
+}
+
+/** The event planned from `horizon`, open and empty of history: dates move by the gap between the two events, a linked goal's cost keeps its id, and an amount the person changed replaces the one carried. */
+export function getNextHorizon(
+  horizon: HorizonSealed,
+  paid: readonly CostPaidEntry[],
+  thisId: string,
+  plan: NextHorizonPlan,
+): HorizonSealed {
+  const shift = (date: DateOnly) =>
+    shiftNextDate(horizon.happensOn, plan, date);
+  return {
+    ...horizon,
+    happensOn: plan.happensOn,
+    happensUntil:
+      horizon.happensUntil === null ? null : shift(horizon.happensUntil),
+    rest: getNextRest(horizon.rest, plan.startsOn),
+    costs: listCarriedCosts(horizon, paid).map(
+      ({ cost, amount, isGoalCost }) => ({
+        ...cost,
+        id: isGoalCost ? cost.id : generateUuid(),
+        amount: plan.amounts?.[cost.id] ?? amount,
+        schedule: {
+          ...cost.schedule,
+          anchor:
+            cost.schedule.anchor === null
+              ? null
+              : shiftNextAnchor(horizon.happensOn, plan, {
+                  ...cost.schedule,
+                  anchor: cost.schedule.anchor,
+                }),
+        },
+        ending: {
+          ...cost.ending,
+          onDate:
+            cost.ending.onDate === null ? null : shift(cost.ending.onDate),
+        },
+        pricedOn: null,
+        endsAfter: null,
+        becameBillId: null,
+        becameBillOn: null,
+      }),
+    ),
+    state: 'open',
+    stateOn: null,
+    stateMoney: null,
+    links: [],
+    fromId: thisId,
+  };
+}
+
+/** The events `itemId` was planned from, nearest first, each with its name and day; stops at the first one planned from none. */
+export function listEarlierEvents(
+  itemId: string,
+  versions: readonly {
+    itemId: string;
+    kind: string;
+    createdAt: number;
+    payload: unknown;
+  }[],
+): { itemId: string; name: string; happensOn: DateOnly }[] {
+  const latestOf = (id: string) =>
+    versions
+      .filter((version) => version.itemId === id && version.kind === 'horizon')
+      .reduce<(typeof versions)[number] | null>(
+        (best, version) =>
+          best && best.createdAt >= version.createdAt ? best : version,
+        null,
+      );
+  const walk = (
+    id: string,
+    seen: readonly string[],
+  ): { itemId: string; name: string; happensOn: DateOnly }[] => {
+    const fromId = (latestOf(id)?.payload as HorizonSealed | undefined)?.fromId;
+    const earlier = fromId ? latestOf(fromId) : null;
+    if (!fromId || !earlier || seen.includes(fromId)) return [];
+    const payload = earlier.payload as HorizonSealed;
+    return [
+      { itemId: fromId, name: payload.name, happensOn: payload.happensOn },
+      ...walk(fromId, [...seen, fromId]),
+    ];
+  };
+  return walk(itemId, [itemId]);
+}

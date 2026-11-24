@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRightLeft, Check } from 'lucide-react';
+import { ArrowRightLeft, CalendarPlus, Check, Wallet } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -17,19 +18,24 @@ import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { generateUuid } from '@/utils/idUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   ActionSection,
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
 import EffectPreview from '@apps/runway/components/EffectPreview';
+import HorizonNextFields, {
+  HorizonNextCosts,
+} from '@apps/runway/components/HorizonNextFields';
 import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_REASON_CHIPS,
   CHANGE_WORDS,
-  HELD_WORDS,
   HORIZON_END_WORDS,
+  HORIZON_NEXT_WORDS,
   LIFECYCLE_WORDS,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
@@ -70,13 +76,18 @@ import {
   listCallOffChanges,
 } from '@apps/runway/utils/comingChangeText';
 import { describeCostWhen, describeCost } from '@apps/runway/utils/horizonText';
+import {
+  makeNextDraft,
+  readNextDraft,
+  type NextDraft,
+} from '@apps/runway/utils/horizonNextDraft';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 const MAX_STOPS_SHOWN = 3;
 
-type Choice = 'free' | 'keep' | 'place' | null;
+type Choice = 'next' | 'free' | 'keep' | 'place' | null;
 type ChangesChoice = 'cancel' | 'keep' | null;
-type Step = 'changes' | 'money' | 'details' | 'review';
+type Step = 'next' | 'changes' | 'money' | 'details' | 'review';
 
 interface HorizonEndViewProps {
   itemId: string;
@@ -112,11 +123,15 @@ function HorizonEndView({
   const allCards = useAppSelector(selectAllCards);
   const [pick, setPick] = useState<Choice>(null);
   const [changesPick, setChangesPick] = useState<ChangesChoice>(null);
+  const [nextDraft, setNextDraft] = useState<NextDraft | null>(null);
+  const [nextId] = useState(generateUuid);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [pickBeforePicker, setPickBeforePicker] = useState<Choice>(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Step | null>(null);
+  const [returnTo, setReturnTo] = useState<'review' | 'earlier'>('review');
+  const [isCostsOpen, setIsCostsOpen] = useState(false);
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -127,6 +142,14 @@ function HorizonEndView({
   const isCallOff = mode === 'callOff';
   const leftCents = Math.max(0, balances.assignedByItem[itemId] ?? 0);
   const holdsMoney = leftCents > 0;
+  const isChained = horizon.fromId !== null;
+  const makesNext =
+    !isCallOff && nextDraft !== null && (!holdsMoney || pick === 'next');
+  const nextRead =
+    makesNext && nextDraft
+      ? readNextDraft(nextDraft, horizon, paid ?? [], today)
+      : null;
+  const nextName = HORIZON_END_WORDS.nextName(horizon.name);
   const getDueOn = (cost: Parameters<typeof listCostPayments>[0]) =>
     listCostPayments(cost, today + 400 * DAY_MS, stance, paid).find(
       (payment) => payment.paid === null,
@@ -177,7 +200,8 @@ function HorizonEndView({
   const place = places.find(({ value }) => value === placeId) ?? null;
 
   const getWhere = (): HorizonWhere | null => {
-    if (!holdsMoney) return { kind: 'keep' };
+    if (!holdsMoney) return makesNext ? { kind: 'next' } : { kind: 'keep' };
+    if (pick === 'next' && makesNext) return { kind: 'next' };
     if (pick === 'free') return { kind: 'free' };
     if (pick === 'keep') return { kind: 'keep' };
     return pick === 'place' && place
@@ -186,6 +210,7 @@ function HorizonEndView({
   };
   const where = getWhere();
   const getBlocker = () => {
+    if (nextRead?.blocker) return nextRead.blocker;
     if (changeRows.length > 0 && changesPick === null)
       return HORIZON_END_WORDS.needsChangesChoice;
     if (where === null) {
@@ -203,7 +228,9 @@ function HorizonEndView({
     return `${HORIZON_END_WORDS.freeSame} ${
       to.kind === 'place'
         ? HORIZON_END_WORDS.placeGets(to.name, money)
-        : HORIZON_END_WORDS.heldStays(money, horizon.name)
+        : to.kind === 'next'
+          ? HORIZON_END_WORDS.placeGets(nextName, money)
+          : HORIZON_END_WORDS.heldStays(money, horizon.name)
     }`;
   };
   const changeJson =
@@ -224,7 +251,7 @@ function HorizonEndView({
             ),
           },
           move:
-            holdsMoney && where.kind !== 'keep'
+            holdsMoney && where.kind !== 'keep' && where.kind !== 'next'
               ? {
                   fromId: itemId,
                   toId: where.kind === 'place' ? where.toId : null,
@@ -248,6 +275,32 @@ function HorizonEndView({
       });
       return;
     }
+    if (
+      written.next &&
+      (store
+        .getState()
+        .runway.versions.some(
+          (version) =>
+            version.itemId === written.next?.itemId &&
+            version.id !== written.next.versionId,
+        ) ||
+        store
+          .getState()
+          .runway.moves.some(
+            (move) =>
+              move.id !== written.move?.moveId &&
+              (move.refId === written.next?.itemId ||
+                (move.kind === 'transfer' &&
+                  (move.payload.fromId === written.next?.itemId ||
+                    move.payload.toId === written.next?.itemId))),
+          ))
+    ) {
+      addToast({
+        title: HORIZON_END_WORDS.nextChanged(horizon.name),
+        type: 'error',
+      });
+      return;
+    }
     try {
       const encryption = await getRunwayEncryption(user.uid);
       const toId = written.move?.toId ?? null;
@@ -265,7 +318,9 @@ function HorizonEndView({
           name:
             toId === null
               ? HORIZON_END_WORDS.freeTitle
-              : (place?.name ?? HORIZON_END_WORDS.anotherPlace),
+              : toId === written.next?.itemId
+                ? nextName
+                : (place?.name ?? HORIZON_END_WORDS.anotherPlace),
         },
       );
       addToast(
@@ -334,6 +389,10 @@ function HorizonEndView({
         leftCents,
         where,
         note: why,
+        next:
+          makesNext && nextRead?.plan
+            ? { itemId: nextId, paid: paid ?? [], plan: nextRead.plan }
+            : null,
         unlinks: fresh.map(({ link }) => link),
         cancels:
           changesPick === 'cancel'
@@ -355,7 +414,10 @@ function HorizonEndView({
         ),
         description:
           [
-            holdsMoney
+            holdsMoney && where.kind === 'next'
+              ? mask(HORIZON_END_WORDS.nextLinedUpWith(live.name, money))
+              : null,
+            holdsMoney && where.kind !== 'next'
               ? mask(
                   where.kind === 'free'
                     ? HORIZON_END_WORDS.movedFree(money)
@@ -363,6 +425,9 @@ function HorizonEndView({
                       ? HORIZON_END_WORDS.movedPlace(money, where.name)
                       : HORIZON_END_WORDS.movedHeld(money),
                 )
+              : null,
+            makesNext && !(holdsMoney && where.kind === 'next')
+              ? HORIZON_END_WORDS.nextLinedUp(live.name)
               : null,
             changesPick === 'cancel' && fresh.length > 0
               ? HORIZON_END_WORDS.changesStayCancelled
@@ -415,7 +480,9 @@ function HorizonEndView({
     : HORIZON_END_WORDS.finishTitle(horizon.name);
   const primary = isCallOff
     ? HORIZON_END_WORDS.callOffConfirm
-    : HORIZON_END_WORDS.finishConfirm;
+    : makesNext
+      ? HORIZON_NEXT_WORDS.finishAndPlan
+      : HORIZON_END_WORDS.finishConfirm;
 
   if (isPickerOpen) {
     return (
@@ -484,17 +551,45 @@ function HorizonEndView({
     return holdsMoney && where === null ? 'money' : null;
   };
   const step: Step = editing ?? firstOpen() ?? 'review';
+  const choose = (choice: Exclude<Choice, null>) => {
+    if (choice === 'place') setPickBeforePicker(pick);
+    setPick(choice);
+    setIsPickerOpen(choice === 'place');
+    if (choice === 'next') {
+      setNextDraft(nextDraft ?? makeNextDraft(horizon, paid ?? [], today));
+      setEditing('next');
+    } else if (choice !== 'place') {
+      setEditing(null);
+    }
+    setError(null);
+  };
+  const openRow = (target: Step) => {
+    setReturnTo('review');
+    setEditing(target);
+  };
   const goBack = () => {
-    if (step === 'review') return onBack();
+    if (step === 'review') {
+      if (!holdsMoney && changeRows.length === 0) return onBack();
+      setReturnTo('earlier');
+      return setEditing(holdsMoney ? 'money' : 'changes');
+    }
+    if (returnTo === 'earlier' && (step === 'money' || step === 'changes')) {
+      if (step === 'money' && changeRows.length > 0)
+        return setEditing('changes');
+      return onBack();
+    }
     if (step === 'details' || (editing !== null && firstOpen() === null))
       return setEditing(null);
     if (step === 'money' && changeRows.length > 0) return setEditing('changes');
+    if (step === 'next') return setEditing(null);
     return onBack();
   };
 
   const footer = (
     <ModalFooterActions
-      note={step === 'review' ? error : null}
+      note={
+        step === 'review' ? error : step === 'next' ? nextRead?.blocker : null
+      }
       cancelAction={
         <Button
           type='button'
@@ -516,10 +611,65 @@ function HorizonEndView({
           >
             {primary}
           </Button>
+        ) : step === 'next' && isCostsOpen ? (
+          <Button type='button' onClick={() => setIsCostsOpen(false)}>
+            {HORIZON_NEXT_WORDS.costsDone}
+          </Button>
+        ) : step === 'next' ? (
+          <Button
+            type='button'
+            disabled={nextRead?.blocker != null}
+            onClick={() => setEditing(null)}
+          >
+            {HORIZON_NEXT_WORDS.nextStep}
+          </Button>
         ) : null
       }
     />
   );
+
+  if (step === 'next' && nextDraft) {
+    return (
+      <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+        {isCostsOpen ? (
+          <HorizonNextCosts
+            horizon={horizon}
+            paid={paid ?? []}
+            draft={nextDraft}
+            onChange={setNextDraft}
+            today={today}
+            onBack={() => setIsCostsOpen(false)}
+          />
+        ) : (
+          <>
+            <BackLink onBack={goBack} />
+            <ActionTitle>{HORIZON_NEXT_WORDS.title}</ActionTitle>
+            <HorizonNextFields
+              horizon={horizon}
+              paid={paid ?? []}
+              draft={nextDraft}
+              onChange={setNextDraft}
+              today={today}
+              onOpenCosts={() => setIsCostsOpen(true)}
+            />
+          </>
+        )}
+        {!holdsMoney && !isCostsOpen && (
+          <div>
+            <RevealChip
+              onClick={() => {
+                setNextDraft(null);
+                setEditing(null);
+              }}
+            >
+              {HORIZON_END_WORDS.nextDontPlan}
+            </RevealChip>
+          </div>
+        )}
+        {footer}
+      </div>
+    );
+  }
 
   if (step === 'changes') {
     return (
@@ -567,6 +717,12 @@ function HorizonEndView({
   }
 
   if (step === 'money') {
+    const nextSub = mask(HORIZON_END_WORDS.nextStarts(formatCents(leftCents)));
+    const rowClass = (value: Choice) =>
+      join(
+        pick === value &&
+          'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+      );
     return (
       <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
         <BackLink onBack={goBack} />
@@ -575,37 +731,77 @@ function HorizonEndView({
             {HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents))}
           </MaskedText>
         </ActionTitle>
-        <ChoiceCards
-          options={[
-            {
-              value: 'free' as const,
-              title: HORIZON_END_WORDS.freeTitle,
-              body: HORIZON_END_WORDS.freeBody,
-            },
-            {
-              value: 'keep' as const,
-              title: HELD_WORDS.keepTitle,
-              body: HELD_WORDS.keepBody,
-            },
-            {
-              value: 'place' as const,
-              title: HORIZON_END_WORDS.placeRow,
-              hasChevron: true,
-              body:
+        {isChained && !isCallOff && (
+          <div
+            className={join(
+              'bg-primary/10 overflow-hidden rounded-2xl shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-primary)_35%,transparent)]',
+              pick === 'next' &&
+                'shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+            )}
+            aria-current={pick === 'next'}
+          >
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<CalendarPlus />}
+              label={HORIZON_END_WORDS.nextTitle}
+              subtitle={nextSub}
+              onClick={() => choose('next')}
+            />
+          </div>
+        )}
+        <ActionGroup isRoomy>
+          <div className={rowClass('free')} aria-current={pick === 'free'}>
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<Wallet />}
+              label={HORIZON_END_WORDS.freeTitle}
+              subtitle={HORIZON_END_WORDS.freeBody}
+              onClick={() => choose('free')}
+            />
+          </div>
+          <div className={rowClass('place')} aria-current={pick === 'place'}>
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<ArrowRightLeft />}
+              label={HORIZON_END_WORDS.placeRow}
+              subtitle={
                 pick === 'place' && place
                   ? HORIZON_END_WORDS.placePicked(place.name)
-                  : HORIZON_END_WORDS.placeRowSub,
-            },
-          ]}
-          value={pick}
-          onChange={(choice) => {
-            if (choice === 'place') setPickBeforePicker(pick);
-            setPick(choice);
-            setIsPickerOpen(choice === 'place');
-            if (choice !== 'place') setEditing(null);
-            setError(null);
-          }}
-        />
+                  : HORIZON_END_WORDS.placeRowSub
+              }
+              onClick={() => choose('place')}
+            />
+          </div>
+          {!isChained && !isCallOff && (
+            <div className={rowClass('next')} aria-current={pick === 'next'}>
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<CalendarPlus />}
+                label={HORIZON_END_WORDS.nextTitle}
+                subtitle={nextSub}
+                onClick={() => choose('next')}
+              />
+            </div>
+          )}
+        </ActionGroup>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className="text-muted-foreground relative mb-6 self-center after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+          aria-pressed={pick === 'keep'}
+          onClick={() => choose('keep')}
+        >
+          {pick === 'keep' && <Check className='size-4' />}
+          {HORIZON_END_WORDS.keepQuiet}
+        </Button>
         {footer}
       </div>
     );
@@ -671,6 +867,7 @@ function HorizonEndView({
 
   const getMoneyAnswer = (to: HorizonWhere) => {
     if (to.kind === 'free') return HORIZON_END_WORDS.moneyToFree;
+    if (to.kind === 'next') return HORIZON_END_WORDS.moneyToNext;
     return to.kind === 'place'
       ? HORIZON_END_WORDS.moneyToPlace(to.name)
       : HORIZON_END_WORDS.moneyStaysHeld(horizon.name);
@@ -686,7 +883,7 @@ function HorizonEndView({
         {changeRows.length > 0 && changesPick !== null && (
           <SummaryRow
             label={HORIZON_END_WORDS.changesRowLabel(changeRows.length)}
-            onClick={() => setEditing('changes')}
+            onClick={() => openRow('changes')}
           >
             {HORIZON_END_WORDS.changesAnswer(changesPick, changeRows.length)}
           </SummaryRow>
@@ -698,15 +895,23 @@ function HorizonEndView({
                 {HORIZON_END_WORDS.moneyRowLabel(formatCents(leftCents))}
               </MaskedText>
             }
-            onClick={() => setEditing('money')}
+            onClick={() => openRow('money')}
           >
             {getMoneyAnswer(where)}
+          </SummaryRow>
+        )}
+        {nextRead?.plan && (
+          <SummaryRow
+            label={HORIZON_END_WORDS.nextRowLabel}
+            onClick={() => openRow('next')}
+          >
+            {formatDateOrdinalUTC(nextRead.plan.happensOn)}
           </SummaryRow>
         )}
         {changeJson !== null && (
           <SummaryRow
             label={HORIZON_END_WORDS.detailsTitle}
-            onClick={() => setEditing('details')}
+            onClick={() => openRow('details')}
           >
             {isCallOff && rows.length > 0
               ? HORIZON_END_WORDS.detailsStops(stopCount, billCount)
@@ -714,6 +919,18 @@ function HorizonEndView({
           </SummaryRow>
         )}
       </div>
+      {!isCallOff && !holdsMoney && nextDraft === null && (
+        <div>
+          <RevealChip
+            onClick={() => {
+              setNextDraft(makeNextDraft(horizon, paid ?? [], today));
+              openRow('next');
+            }}
+          >
+            {HORIZON_END_WORDS.nextTitle}
+          </RevealChip>
+        </div>
+      )}
       {isCallOff && isReasonOpen && (
         <>
           <SuggestionChips

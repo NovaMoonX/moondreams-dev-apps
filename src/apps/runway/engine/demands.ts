@@ -1045,7 +1045,7 @@ export interface CostSharePlan {
 
 /**
  * Every unpaid payment of an item's costs that the money it holds does not cover, and what each income day sets aside for it:
- * `pays` spreads a payment over the pays since the one before it (a repeating cost's first payment looks back one beat),
+ * `pays` spreads a payment over the pays since the one before it (a repeating cost's first payment looks back one beat) and from its `startsOn` day, pays before that give nothing,
  * `onePay` puts a one-time payment and a repeating cost's first payment on the picked pay and spreads later ones as `pays`.
  * A payment marked paid with money from Free to Spend before the picked pay is given back by that pay, whenever it fell due. A picked pay no longer coming is ignored, as if `pays` were chosen, and the first coming pay gives the fronted payment back. `outside` and `later` ask nothing.
  */
@@ -1089,11 +1089,17 @@ export function planCostShares(
             ? (getPriorBeat(cost.schedule) ?? -Infinity)
             : -Infinity;
       const needCents = cover.totalCents - cover.coveredCents;
+      const startsOn = rest.kind === 'pays' ? rest.startsOn : null;
       const eligible =
         picked && index === 0
           ? [picked]
           : chronological.filter(
-              (day) => day.on > previous && day.on <= cover.dueOn,
+              (day) =>
+                day.on > previous &&
+                day.on <= cover.dueOn &&
+                (startsOn === null ||
+                  cover.dueOn < startsOn ||
+                  day.on >= startsOn),
             );
       const shared = getCostDayShares(
         eligible,
