@@ -10,6 +10,9 @@ import { useAccountSwitch } from '@/hooks/useAccountSwitch';
 import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { getWhatsNewScope } from '@/lib/whatsNew/whatsNew';
+import { openWhatsNewHistory } from '@/lib/whatsNew/whatsNewHistoryStore';
+import type { WhatsNewScope } from '@/lib/whatsNew/whatsNewTypes';
 import AccountPanel from '@/ui/AccountPanel';
 import UserAvatar from '@/ui/UserAvatar';
 import { useAuth } from '@hooks/useAuth';
@@ -108,6 +111,11 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     onSwitch: (account: RememberedAccount | null) => {
       close();
       switchToAccount(account);
+    },
+    whatsNewScope: getWhatsNewScope(pathname),
+    onOpenWhatsNew: (scope: WhatsNewScope) => {
+      close();
+      openWhatsNewHistory(scope);
     },
     onManageAccount: () => goTo('/account'),
     onOpenAdmin: () => goTo('/admin'),

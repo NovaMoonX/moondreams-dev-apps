@@ -23,7 +23,7 @@ export const latestVersionQueryOptions = () =>
 
 export type VersionStatus = 'latest' | 'outdated' | 'ahead' | 'unknown';
 
-const compareVersions = (a: string, b: string) => {
+export const compareVersions = (a: string, b: string) => {
   const [pa, pb] = [a, b].map((v) => v.split('.').map((n) => Number.parseInt(n, 10) || 0));
   return [0, 1, 2].map((i) => (pa[i] ?? 0) - (pb[i] ?? 0)).find((d) => d !== 0) ?? 0;
 };

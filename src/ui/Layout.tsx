@@ -22,6 +22,7 @@ import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
+import WhatsNewHost from '@ui/WhatsNewHost';
 import { useSiteNotice } from '@hooks/useSiteNotice';
 
 /** Pages a visitor opens from a link: the site's menu and account button have no use there, so the header is left off. */
@@ -150,6 +151,7 @@ function Layout() {
       <OfflineBanner />
       <EmulatorStatus />
       <FallbackNotices />
+      <WhatsNewHost />
 
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       {!isPublicShare && (

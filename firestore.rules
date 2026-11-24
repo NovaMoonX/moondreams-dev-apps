@@ -1323,6 +1323,18 @@ service cloud.firestore {
         && request.resource.data.updatedAt is number;
     }
 
+    // Which "What's new" notes a person has seen, per app, and whether they want fix-only updates. Only they read and write it; no delete.
+    match /whatsNewSeen/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'seen', 'showFixOnly', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.seen is map
+        && request.resource.data.seen.size() <= 20
+        && (request.resource.data.showFixOnly == null || request.resource.data.showFixOnly is bool)
+        && request.resource.data.updatedAt is number;
+    }
+
     // What one person lets an app read from another: only they read it, from any app, and only the platform's callables write it. `connectionsServer/` has no match: server only.
     match /connections/{uid}/{document=**} {
       allow read: if isUser(uid);
