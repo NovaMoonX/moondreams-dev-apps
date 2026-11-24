@@ -67,6 +67,8 @@
     "check:going-once-share": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOnceShare.ts",
     "check:time-ago": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/timeAgo.ts",
     "check:share-fields": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/shareFields.ts",
+    "check:whats-new": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/whatsNew.ts",
+    "fb:whats-new": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/publishWhatsNew.ts",
     "check:gates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/gates.ts",
     "check:gate-rules": "firebase emulators:exec --only auth,firestore --project demo-gate-rules \"python3 scripts/checks/gateRules.py\"",
     "check:waypoint-pushes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointPushes.ts",
