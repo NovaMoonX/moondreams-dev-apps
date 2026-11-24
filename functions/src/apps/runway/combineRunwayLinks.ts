@@ -57,7 +57,7 @@ const byKeepOrder = (a: LinkRead, b: LinkRead) =>
   Number(a.status !== 'active') - Number(b.status !== 'active') ||
   a.createdAt - b.createdAt;
 
-/** `{ linkId, otherLinkId }` → `{ keptLinkId, moved }`: two live sign-ins holding the same accounts at one bank become one; both catch up first, the other is revoked at the bank, purchases stay. */
+/** `{ linkId, otherLinkId }` → `{ keptLinkId, moved, needsSignIn }`: two live sign-ins holding the same accounts at one bank become one; both catch up first, the other is revoked at the bank, purchases stay. `needsSignIn` when the bank signed the kept one out with it. */
 export const combineRunwayLinks = onCall(
   {
     region: 'us-central1',
@@ -262,16 +262,27 @@ export const combineRunwayLinks = onCall(
           logger.warn('runway.link.combineRevokeFailed');
         });
     }
-    await syncRunwayLink(firestore, keyring, uid, outcome.keptLinkId).catch(
-      () => {
-        logger.warn('runway.link.combineSyncFailed');
-      },
-    );
+    // At some OAuth banks the two sign-ins share one consent, so revoking the other one signs this one out too, though both synced a moment ago.
+    const keptSync = await syncRunwayLink(
+      firestore,
+      keyring,
+      uid,
+      outcome.keptLinkId,
+    ).catch(() => {
+      logger.warn('runway.link.combineSyncFailed');
+      return null;
+    });
+    const needsSignIn = keptSync?.state === 'needsAttention';
     logger.info('runway.link.combined', {
       keptLinkId: outcome.keptLinkId,
       moved: outcome.moved,
+      needsSignIn,
     });
-    const result = { keptLinkId: outcome.keptLinkId, moved: outcome.moved };
+    const result = {
+      keptLinkId: outcome.keptLinkId,
+      moved: outcome.moved,
+      needsSignIn,
+    };
     return result;
   },
 );
