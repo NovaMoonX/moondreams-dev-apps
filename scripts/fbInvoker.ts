@@ -35,6 +35,7 @@ const PUBLIC_WEBHOOKS = [
   'streamSpeech',
   'helmMcp',
   'ingestRunwayEmail',
+  'ingestAListEmail',
 ];
 // An HTTPS endpoint only Google identities call; it keeps Cloud Run's IAM check.
 const PRIVATE_REQUESTS: string[] = [];

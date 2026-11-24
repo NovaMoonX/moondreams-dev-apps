@@ -15,6 +15,19 @@ export const ARCHIVE_GATE_ID = 'archive';
 
 /** The feature switch for release days on the calendar (`FEATURE_GATES`). */
 export const CALENDAR_RELEASES_GATE_ID = 'calendar-releases';
+export const EMAIL_TICKETS_GATE_ID = 'amc-emails';
+export const EMAIL_EVENT_KEEP_DAYS = 30;
+
+export const EMAIL_TICKETS_TITLE = 'Tickets from your AMC emails';
+
+/** The header title where the long one is cut off on a narrow phone. */
+export const EMAIL_TICKETS_SHORT_TITLE = 'AMC emails';
+
+/** The forwarding address's local part before its token; matches the server's. */
+export const EMAIL_ADDRESS_PREFIX = 'amc';
+
+export const EMAIL_SETUP_LINE =
+  'Forward your AMC reservation and cancellation emails here, by hand or with your email’s own rules, and your calendar keeps up. Anything else is skipped.';
 
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';
@@ -74,7 +87,11 @@ export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
   LASER: 'Laser',
 };
 
-export const TICKET_PRICE_KINDS: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
+export const TICKET_PRICE_KINDS: TicketPriceKind[] = [
+  'ADULT',
+  'SENIOR',
+  'CHILD',
+];
 
 export const TICKET_PRICE_KIND_LABELS: Record<TicketPriceKind, string> = {
   ADULT: 'Adult',

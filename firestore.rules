@@ -218,9 +218,21 @@ service cloud.firestore {
 
     // --- App: a-list ---
 
-    // Everything of a member's is private to them and nests under their uid.
-    match /apps/a-list/memberships/{uid}/{document=**} {
+    // Email intake and events are written only by Functions; the member reads them and may delete an event.
+    // Setup progress holds nothing sensitive and is never deleted. Email tokens and server state match no rule.
+    match /apps/a-list/memberships/{uid} {
       allow read, write: if isUser(uid);
+    }
+
+    match /apps/a-list/memberships/{uid}/{document=**} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && !(document[0] in ['emailIntake', 'emailEvents'])
+        && (document[0] != 'emailSetup' || (document[1] == 'progress' && isGateOpen('a-list', 'amc-emails', 'off')));
+      // Undo marks an email's change as taken back; everything else on the event is the server's.
+      allow update: if isUser(uid) && document[0] == 'emailEvents'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['undoneAt']);
+      allow delete: if isUser(uid) && !(document[0] in ['emailIntake', 'emailSetup']);
     }
 
     // A share is addressed by an unguessable id; visitors never read it, a Function does.
