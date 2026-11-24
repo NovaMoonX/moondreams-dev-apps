@@ -4,7 +4,10 @@ import { getBankOwedByCard } from '../../src/apps/runway/engine/cards.ts';
 import { getCashPosition } from '../../src/apps/runway/engine/cash.ts';
 import {
   findEmailTwins,
+  findPostedOnlySides,
   getEmailOffers,
+  getEmailWaitDays,
+  getSideKey,
   getTwinHeldIds,
   getTwinMergingIds,
   isAnsweredEmail,
@@ -12,7 +15,7 @@ import {
 } from '../../src/apps/runway/engine/emailTwins.ts';
 import { findPurchaseMatches } from '../../src/apps/runway/engine/matching.ts';
 import { isOpenToPlace } from '../../src/apps/runway/engine/purchases.ts';
-import type { OpenPurchase } from '../../src/apps/runway/types.ts';
+import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
 
 // A purchase read from a bank's alert email waits for the bank's charge: one to one, same side, within -2/+7 days.
 {
@@ -411,6 +414,210 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     isOpenToPlace({ ...open, pairedWithId: 'p2' }),
     false,
     'nor a move paired with its other side',
+  );
+}
+
+// A bank that shares no pending charges is learned per card and account, and an order that posts as several charges is found.
+{
+  const day = 86_400_000;
+  const base = 20_000 * day;
+  const make = (
+    id: string,
+    source: 'email' | 'link',
+    amountCents: number,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ): OpenPurchase =>
+    ({
+      id,
+      date: base + dayOffset * day,
+      source,
+      status: source === 'link' ? 'posted' : null,
+      accountId: null,
+      paidByCardId: 'card',
+      needsHome: true,
+      amountCents,
+      merchant: 'Target',
+      label: null,
+      lines: [{ envelopeId: null, cents: amountCents, via: 'free' }],
+      notSameAs: null,
+      pairedWithId: null,
+      emailWaiting: source === 'email' ? true : null,
+      storeEmail: null,
+      ...extra,
+    }) as unknown as OpenPurchase;
+  const order: StoreEmail = {
+    kind: 'order',
+    orderNumber: null,
+    isWholeOrder: false,
+    merchant: 'Target',
+  };
+
+  const sides = findPostedOnlySides([
+    make('p1', 'link', 100, 0, { status: 'pending' }),
+    make('p2', 'link', 100, 0, { status: 'posted' }),
+    make('q1', 'link', 100, 0, { paidByCardId: 'capital' }),
+    make('a1', 'link', 100, 0, { paidByCardId: null, accountId: 'chk' }),
+    make('m1', 'email', 100, 0, { paidByCardId: 'unseen' }),
+  ]);
+  assert.deepEqual(
+    [...sides].sort(),
+    ['account:chk', 'card:capital'],
+    'posted only where charges came and none was ever pending; unseen is unknown',
+  );
+  assert.equal(getSideKey(make('x', 'link', 1, 0)), 'card:card');
+  assert.equal(
+    getSideKey(make('x', 'link', 1, 0, { paidByCardId: null })),
+    null,
+  );
+
+  const typedEmail = make('e', 'email', 100, 0, { paidByCardId: 'capital' });
+  assert.equal(
+    getEmailWaitDays(typedEmail, new Set()),
+    5,
+    'five days by default',
+  );
+  assert.equal(
+    getEmailWaitDays(typedEmail, new Set(['card:capital'])),
+    7,
+    'seven for a card that posts only',
+  );
+  assert.equal(
+    getEmailWaitDays({ ...typedEmail, storeEmail: order }, new Set()),
+    7,
+    'seven for a store order, charged when it ships',
+  );
+
+  const bankOf = (id: string, cents: number, offset = 1, extra = {}) =>
+    make(id, 'link', cents, offset, extra);
+  const email = make('o1', 'email', 10_000, 0, { storeEmail: order });
+  const split = findEmailTwins([
+    email,
+    bankOf('b1', 6_000),
+    bankOf('b2', 4_000, 3),
+    bankOf('b3', 999, 2),
+  ]);
+  assert.deepEqual(
+    [...split.split],
+    [['o1', ['b1', 'b2']]],
+    'two charges that add up are the order',
+  );
+  assert.deepEqual(split.candidates.get('o1'), ['b1', 'b2']);
+  assert.equal(split.clear.size, 0);
+  assert.equal(split.ambiguous.size, 0, 'a split order is neither');
+  assert.deepEqual([...getTwinHeldIds(split)].sort(), ['b1', 'b2', 'o1']);
+  assert.deepEqual(
+    [...getTwinMergingIds(split)].sort(),
+    ['b1', 'b2'],
+    'the charges of a split merge on their own, so Needs a home leaves them out',
+  );
+  assert.equal(
+    getEmailOffers(split, 'b1').length,
+    0,
+    'never offered one by one',
+  );
+
+  const splitOf = (purchases: OpenPurchase[]) =>
+    findEmailTwins(purchases).split.size;
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 3_000),
+      bankOf('b2', 3_000),
+      bankOf('b3', 2_000),
+      bankOf('b4', 2_000),
+    ]),
+    1,
+    'four charges are allowed',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 2_000),
+      bankOf('b2', 2_000),
+      bankOf('b3', 2_000),
+      bankOf('b4', 2_000),
+      bankOf('b5', 2_000),
+    ]),
+    0,
+    'five charges are too many',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+      bankOf('b3', 5_000),
+      bankOf('b4', 5_000),
+    ]),
+    0,
+    'two different sets are not clear',
+  );
+  assert.equal(
+    splitOf([email, bankOf('b1', 6_000), bankOf('b2', 4_000, 9)]),
+    0,
+    'a charge outside the window is not in it',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000, 1, { merchant: 'Walmart' }),
+    ]),
+    0,
+    'charges from another store are not it',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000, 1, { paidByCardId: 'other' }),
+    ]),
+    0,
+    'charges on another card are not it',
+  );
+  assert.equal(
+    splitOf([
+      { ...email, notSameAs: ['b2'] },
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'a charge the person said is not it is skipped',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      { ...email, id: 'o2' },
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'two open orders the same size could each be it',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      make('o2', 'email', 6_000, 0, { storeEmail: order }),
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'a charge another order is clearly or may be is left to that order',
+  );
+  assert.equal(
+    splitOf([
+      { ...email, storeEmail: null },
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'only a store order posts as several charges',
+  );
+  assert.equal(
+    splitOf([email, bankOf('b1', 10_000), bankOf('b2', 6_000)]),
+    0,
+    'an order with a single charge of its amount is not split',
   );
 }
 

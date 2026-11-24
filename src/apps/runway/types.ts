@@ -1,7 +1,10 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
 import type { ChargeMatchResult } from '@apps/runway/store/actions/autoPayActions';
-import type { MergedPurchase } from '@apps/runway/store/actions/purchaseActions';
+import type {
+  MergedPurchase,
+  MergedSplit,
+} from '@apps/runway/store/actions/purchaseActions';
 
 import type {
   ACCOUNT_KINDS,
@@ -1498,6 +1501,7 @@ export type DoneForYouKind =
 /** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
 export type DoneForYouUndo =
   | { kind: 'merge'; merged: MergedPurchase }
+  | { kind: 'mergeSplit'; merged: MergedSplit }
   | {
       kind: 'deposit';
       deposit: OpenPurchase;

@@ -10,6 +10,7 @@ import {
   DONE_FOR_YOU_WORDS,
   NEEDS_HOME_WORDS,
   PAIR_WORDS,
+  SPEND_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findEmailTwins } from '@apps/runway/engine/emailTwins';
@@ -32,12 +33,14 @@ import {
   linkDepositToDay,
   mergeBankPurchase,
   mergeEmailPurchase,
+  mergeEmailSplit,
   pairAccountPurchases,
   recordPairTick,
   splitBankPurchase,
   unlinkDeposit,
   unpairAccountPurchases,
   type MergedPurchase,
+  type MergedSplit,
   type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
@@ -76,6 +79,7 @@ import {
   describeDepositLinked,
   describePayDay,
   describePurchaseMatch,
+  describeSplitMatch,
   getPairSideName,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
@@ -85,13 +89,21 @@ interface MatchPair {
   typed: OpenPurchase;
 }
 
+/** An emailed store order and the several charges it posted as. */
+interface SplitPair {
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+}
+
 const EMAIL_MATCH_WORDS = {
   one: 'Matched a purchase from your email with your bank',
+  split: (count: number) =>
+    `Matched an order from your email with its ${count} charges from your bank`,
   many: (count: number) =>
     `Matched ${count} purchases from your email with your bank`,
 };
 
-/** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again; an automatic pass records each one in Done for you instead and shows no toast. Resolves with how many merged; a pair another device changed first is skipped. */
+/** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again; an automatic pass records each one in Done for you instead and shows no toast. `splits` are emailed orders that posted as several charges: each is merged the same way and always recorded in Done for you, and `onSplitFailed` hears one that did not merge. Resolves with how many merged; a pair another device changed first is skipped. */
 export function useMergeWithUndo() {
   const { addToast } = useToast();
   const looks = useAppSelector(selectItemLooks);
@@ -131,8 +143,47 @@ export function useMergeWithUndo() {
     pairs: readonly MatchPair[],
     shouldThrow = false,
     isAutomatic = false,
+    splits: readonly SplitPair[] = [],
+    onSplitFailed: (split: SplitPair, error: unknown) => void = () => {},
   ): Promise<number> => {
     const encryption = await getRunwayEncryption(uid);
+    const mergedSplits = await splits.reduce(
+      async (done, split) => {
+        const list = await done;
+        try {
+          const entry = await mergeEmailSplit(
+            uid,
+            encryption,
+            split.banks,
+            split.typed,
+            describeSplitMatch(split, nameOf, false),
+          );
+          return [...list, entry];
+        } catch (error) {
+          onSplitFailed(split, error);
+          return list;
+        }
+      },
+      Promise.resolve([] as MergedSplit[]),
+    );
+    if (mergedSplits.length > 0) {
+      recordDone(
+        uid,
+        mergedSplits.map((entry) => ({
+          kind: 'merge' as const,
+          title: EMAIL_MATCH_WORDS.split(entry.banks.length),
+          detail: getPurchaseTitle(entry.typed, nameOf),
+          why: null,
+          undo: { kind: 'mergeSplit' as const, merged: entry },
+          subject: toPurchaseSubject(entry.banks[0], {
+            merchant: entry.banks[0].merchant ?? entry.typed.label ?? null,
+            itemId: getDestinationId(entry.typed),
+            toName: getDestination(entry.typed)?.name ?? null,
+            toEmoji: getDestination(entry.typed)?.emoji ?? null,
+          }),
+        })),
+      );
+    }
     const merged = await pairs.reduce(
       async (done, { bank, typed }) => {
         const list = await done;
@@ -155,7 +206,7 @@ export function useMergeWithUndo() {
       },
       Promise.resolve([] as MergedPurchase[]),
     );
-    if (merged.length === 0) return 0;
+    if (merged.length === 0) return mergedSplits.length;
     if (isAutomatic) {
       recordDone(
         uid,
@@ -181,7 +232,7 @@ export function useMergeWithUndo() {
           }),
         })),
       );
-      return merged.length;
+      return merged.length + mergedSplits.length;
     }
     const isEmail = merged.every((entry) => entry.typed.source === 'email');
     addToast({
@@ -205,9 +256,12 @@ export function useMergeWithUndo() {
         onClick: () => void undo(uid, merged),
       },
     });
-    return merged.length;
+    return merged.length + mergedSplits.length;
   };
 }
+
+/** How many times an emailed order that posted as several charges is tried again after a failure other than another device changing it. */
+const MAX_SPLIT_ATTEMPTS = 3;
 
 /** Older charges are left to the offer on their own sheet, so a first link never merges weeks of purchases at once. */
 export const AUTO_MATCH_DAYS = 14;
@@ -274,6 +328,7 @@ export function useMatchBankPurchases(uid: string | null) {
 
 /** Once both lists are read, merges each bank charge with the purchase read from its email that it clearly is, however old the charge is, unless it is from before the bank was linked. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchEmailPurchases(uid: string | null) {
+  const attempts = useRef(new Map<string, number>());
   const needsHome = useAppSelector((state) => state.runway.needsHome);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const isLinkHistory = useAppSelector(selectIsLinkHistory);
@@ -301,24 +356,56 @@ export function useMatchEmailPurchases(uid: string | null) {
     const byId = new Map(
       [...needsHome, ...purchases].map((purchase) => [purchase.id, purchase]),
     );
-    const pairs = [...findEmailTwins([...byId.values()]).clear].flatMap(
-      ([emailId, bankId]) => {
-        const typed = byId.get(emailId);
-        const bank = byId.get(bankId);
-        if (!bank || !typed || isLinkHistory(bank)) return [];
-        const key = `${bank.id}:${bank.updatedAt}:${typed.id}:${typed.updatedAt}`;
-        return tried.current.has(key) ? [] : [{ bank, typed, key }];
-      },
-    );
-    if (pairs.length === 0) return;
-    pairs.forEach(({ key }) => tried.current.add(key));
+    const twins = findEmailTwins([...byId.values()]);
+    const pairs = [...twins.clear].flatMap(([emailId, bankId]) => {
+      const typed = byId.get(emailId);
+      const bank = byId.get(bankId);
+      if (!bank || !typed || isLinkHistory(bank)) return [];
+      const key = `${bank.id}:${bank.updatedAt}:${typed.id}:${typed.updatedAt}`;
+      return tried.current.has(key) ? [] : [{ bank, typed, key }];
+    });
+    const splits = [...twins.split].flatMap(([emailId, bankIds]) => {
+      const typed = byId.get(emailId);
+      const banks = bankIds.flatMap((id) => byId.get(id) ?? []);
+      if (!typed || banks.length !== bankIds.length) return [];
+      if (banks.some(isLinkHistory)) return [];
+      const key = `${banks.map((bank) => `${bank.id}:${bank.updatedAt}`).join(',')}:${typed.id}:${typed.updatedAt}`;
+      return tried.current.has(key) ? [] : [{ banks, typed, key }];
+    });
+    if (pairs.length === 0 && splits.length === 0) return;
+    [...pairs, ...splits].forEach(({ key }) => tried.current.add(key));
     isRunning.current = true;
+    const onSplitFailed = (key: string, error: unknown) => {
+      console.error('An order from email was not matched', error);
+      const count = (attempts.current.get(key) ?? 0) + 1;
+      attempts.current.set(key, count);
+      if (
+        count < MAX_SPLIT_ATTEMPTS &&
+        !(
+          error instanceof Error &&
+          error.message === SPEND_WORDS.changedElsewhere
+        )
+      ) {
+        tried.current.delete(key);
+        isWaitingToRun.current = true;
+      }
+    };
     const run = async () => {
       try {
-        await mergeRef.current(uid, pairs, false, true);
+        await mergeRef.current(
+          uid,
+          pairs,
+          false,
+          true,
+          splits,
+          (split, error) => {
+            const failed = splits.find((entry) => entry === split);
+            if (failed) onSplitFailed(failed.key, error);
+          },
+        );
       } catch (error) {
         // The vault or the network failed before any pair was tried, so they may be tried again.
-        pairs.forEach(({ key }) => tried.current.delete(key));
+        [...pairs, ...splits].forEach(({ key }) => tried.current.delete(key));
         console.error('Purchases from email were not matched', error);
       } finally {
         isRunning.current = false;

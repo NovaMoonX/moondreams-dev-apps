@@ -48,6 +48,7 @@ import {
   isAnsweredEmail,
   isSettledByPerson,
 } from '@apps/runway/engine/emailTwins';
+import { splitOrderLines } from '@apps/runway/engine/storeOrders';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import {
   openMove,
@@ -1608,6 +1609,235 @@ export async function splitBankPurchase(
         createdAt: now,
         effectiveFrom: null,
         itemIds: getChangeItemIds(bank.lines, typed.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+}
+
+export interface MergedSplit {
+  /** The charges as they were, the first holding the email's note, receipt text, order and photos. */
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+/** Makes a store order's email and the several bank charges it posted as one set of purchases: each charge takes its share of the order's lines (when the email was answered and no charge was settled by the person, and the carry is allowed), its name and link; the first also takes the note, receipt text, order and photos; the email is removed. All in one transaction, refused when another device changed any of them first. Undo with `splitBankPurchases`. */
+export async function mergeEmailSplit(
+  uid: string,
+  encryption: RunwayEncryption,
+  banks: readonly OpenPurchase[],
+  email: OpenPurchase,
+  summary: string,
+): Promise<MergedSplit> {
+  const shares = splitOrderLines(
+    email.lines,
+    banks.map((bank) => bank.amountCents),
+  );
+  const isCarried =
+    shares !== null && isAnsweredEmail(email) && !banks.some(isSettledByPerson);
+  try {
+    return await writeEmailSplit(
+      uid,
+      encryption,
+      banks,
+      email,
+      summary,
+      isCarried ? shares : null,
+    );
+  } catch (error) {
+    if (
+      !isCarried ||
+      (error instanceof Error && error.message === SPEND_WORDS.changedElsewhere)
+    ) {
+      throw error;
+    }
+    return writeEmailSplit(uid, encryption, banks, email, summary, null);
+  }
+}
+
+async function writeEmailSplit(
+  uid: string,
+  encryption: RunwayEncryption,
+  banks: readonly OpenPurchase[],
+  email: OpenPurchase,
+  summary: string,
+  shares: readonly PurchaseLine[][] | null,
+): Promise<MergedSplit> {
+  const [sealed, changeSealed, images] = await Promise.all([
+    Promise.all(
+      banks.map((bank, index) =>
+        sealJson(
+          {
+            ...toSealedPayload(bank),
+            label: bank.label ?? email.label,
+            link: bank.link ?? email.link,
+            ...(index === 0
+              ? {
+                  note: bank.note ?? email.note,
+                  receiptText: bank.receiptText ?? email.receiptText,
+                  storeEmail: bank.storeEmail ?? email.storeEmail ?? null,
+                  orderLog: bank.orderLog ?? email.orderLog ?? null,
+                }
+              : {}),
+            ...(shares === null
+              ? {}
+              : {
+                  lines: shares[index],
+                  assignedBy: email.assignedBy,
+                  ruleId: email.ruleId,
+                }),
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      ),
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    readImages(uid, email.id),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), ...banks.map((bank) => bank.updatedAt + 1));
+  const dates = [...banks.map((bank) => bank.date), email.date];
+
+  await runHeldTransaction(uid, async (transaction) => {
+    await Promise.all(
+      [email, ...banks].map((purchase) =>
+        readUnchanged(transaction, uid, purchase),
+      ),
+    );
+    const plan =
+      shares === null
+        ? (
+            await transaction.get(doc(db, 'apps', 'runway', 'plans', uid))
+          ).data()
+        : await checkDayAndEnvelopes(
+            transaction,
+            uid,
+            banks[0].date,
+            shares.flat(),
+            new Set(),
+            banks[0].date,
+            false,
+            true,
+          );
+    markLedgerWrite(transaction, uid, plan, dates);
+    banks.forEach((bank, index) =>
+      transaction.update(purchaseRef(uid, bank.id), {
+        ...(shares === null ? {} : { needsHome: false }),
+        expenseId: bank.expenseId ?? email.expenseId,
+        updatedAt: now,
+        sealed: sealed[index],
+      }),
+    );
+    transaction.delete(purchaseRef(uid, email.id));
+    moveImages(transaction, uid, images, email.id, banks[0].id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(email.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return { banks: [...banks], typed: email, images, updatedAt: now };
+}
+
+/** Undoes `mergeEmailSplit`: the email comes back as it was (as a typed purchase, marked as none of these charges) and every charge goes back to how it was. Refused when any merged charge changed since. */
+export async function splitBankPurchases(
+  uid: string,
+  encryption: RunwayEncryption,
+  merged: MergedSplit,
+  summary: string,
+): Promise<void> {
+  const { banks, typed, images } = merged;
+  const [typedSealed, bankSealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(typed),
+        notSameAs: [
+          ...(typed.notSameAs ?? []),
+          ...banks.map((bank) => bank.id),
+        ],
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    Promise.all(
+      banks.map((bank) => sealJson(toSealedPayload(bank), encryption)),
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+
+  await runHeldTransaction(uid, async (transaction) => {
+    const [stored, typedStored, plan] = await Promise.all([
+      Promise.all(
+        banks.map((bank) => transaction.get(purchaseRef(uid, bank.id))),
+      ),
+      transaction.get(purchaseRef(uid, typed.id)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+    ]);
+    if (
+      typedStored.exists() ||
+      stored.some(
+        (snapshot) =>
+          !snapshot.exists() ||
+          (snapshot.data() as PurchaseDoc).updatedAt !== merged.updatedAt,
+      )
+    ) {
+      throw new Error(SPEND_WORDS.changedElsewhere);
+    }
+    const kept = await Promise.all(
+      images.map((image) =>
+        transaction.get(imageRef(uid, banks[0].id, image.id)),
+      ),
+    );
+    const stillThere = images.filter((_, index) => kept[index].exists());
+    const now = Math.max(Date.now(), merged.updatedAt + 1);
+    markLedgerWrite(transaction, uid, plan.data(), [
+      ...banks.map((bank) => bank.date),
+      typed.date,
+    ]);
+    transaction.set(purchaseRef(uid, typed.id), {
+      id: typed.id,
+      date: typed.date,
+      source: typed.source === 'email' ? 'manual' : typed.source,
+      status: null,
+      needsHome: typed.needsHome,
+      accountId: typed.accountId,
+      dedupeKey: null,
+      expenseId: typed.expenseId,
+      emailEventId: null,
+      emailWaiting: null,
+      createdAt: typed.createdAt,
+      updatedAt: now,
+      sealed: typedSealed,
+    } satisfies PurchaseDoc);
+    banks.forEach((bank, index) =>
+      transaction.update(purchaseRef(uid, bank.id), {
+        needsHome: bank.needsHome,
+        expenseId: bank.expenseId,
+        updatedAt: now,
+        sealed: bankSealed[index],
+      }),
+    );
+    moveImages(transaction, uid, stillThere, banks[0].id, typed.id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(
+          typed.lines,
+          ...banks.map((bank) => bank.lines),
+        ),
         sealed: changeSealed,
       } satisfies ChangeDoc,
     );

@@ -1,8 +1,10 @@
 import {
   EMAIL_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
+  EMAIL_WAIT_DAYS,
 } from '@apps/runway/constants';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { isSameStore } from '@apps/runway/engine/matching';
 import type { OpenPurchase } from '@apps/runway/types';
 
 export interface EmailTwins {
@@ -12,7 +14,13 @@ export interface EmailTwins {
   ambiguous: Set<string>;
   /** Emailed purchase id → every bank charge it could be, clear or not. */
   candidates: Map<string, string[]>;
+  /** Emailed store order id → the 2 to 4 bank charges, sorted, that together are it. Their charges are in `candidates` too, but the order is in neither `clear` nor `ambiguous`. */
+  split: Map<string, string[]>;
 }
+
+/** The most charges one order may post as, and the most same-store charges looked through for them. */
+const MAX_SPLIT_CHARGES = 4;
+const MAX_SPLIT_POOL = 8;
 
 type TwinPurchase = Pick<
   OpenPurchase,
@@ -25,6 +33,9 @@ type TwinPurchase = Pick<
   | 'emailWaiting'
   | 'notSameAs'
   | 'pairedWithId'
+  | 'merchant'
+  | 'label'
+  | 'storeEmail'
 >;
 
 /** An emailed purchase still waiting for its bank. */
@@ -38,6 +49,49 @@ const isSameSide = (email: TwinPurchase, bank: TwinPurchase) =>
     : email.accountId !== null &&
       email.accountId === bank.accountId &&
       (bank.paidByCardId ?? null) === null;
+
+const getName = (purchase: Pick<TwinPurchase, 'merchant' | 'label'>) =>
+  purchase.merchant?.trim() || purchase.label?.trim() || null;
+
+const isWindowDay = (email: TwinPurchase, bank: TwinPurchase) =>
+  bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
+  bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS;
+
+const getCombinations = <T>(items: readonly T[], size: number): T[][] =>
+  size === 0
+    ? [[]]
+    : items.flatMap((item, index) =>
+        getCombinations(items.slice(index + 1), size - 1).map((rest) => [
+          item,
+          ...rest,
+        ]),
+      );
+
+/** The sets of 2 to 4 charges from one store, on the order's side and in its window, that add up to its amount. Empty when the pool is too big to tell. */
+function findSplitSets(
+  order: TwinPurchase,
+  banks: readonly TwinPurchase[],
+  taken: ReadonlySet<string>,
+): string[][] {
+  const pool = banks.filter(
+    (bank) =>
+      bank.amountCents > 0 &&
+      !taken.has(bank.id) &&
+      isSameSide(order, bank) &&
+      isWindowDay(order, bank) &&
+      !(order.notSameAs ?? []).includes(bank.id) &&
+      isSameStore(getName(order), getName(bank)),
+  );
+  if (order.amountCents <= 0 || pool.length > MAX_SPLIT_POOL) return [];
+  return Array.from({ length: MAX_SPLIT_CHARGES - 1 }, (_, index) => index + 2)
+    .flatMap((size) => getCombinations(pool, size))
+    .filter(
+      (set) =>
+        set.reduce((sum, bank) => sum + bank.amountCents, 0) ===
+        order.amountCents,
+    )
+    .map((set) => set.map((bank) => bank.id).sort());
+}
 
 /** Pairs each emailed purchase still waiting with the bank charge it clearly is: the same amount on the same card (or the same account for money out of an account), dated from two days before to seven days after the emailed day, and the only one either way. A charge the person said is not it, or one paired as a move between accounts, is never a candidate. The result does not depend on the order of the input. */
 export function findEmailTwins(purchases: readonly TwinPurchase[]): EmailTwins {
@@ -54,8 +108,7 @@ export function findEmailTwins(purchases: readonly TwinPurchase[]): EmailTwins {
           (bank) =>
             bank.amountCents === email.amountCents &&
             isSameSide(email, bank) &&
-            bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
-            bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS &&
+            isWindowDay(email, bank) &&
             !(email.notSameAs ?? []).includes(bank.id),
         )
         .map((bank) => bank.id),
@@ -77,7 +130,55 @@ export function findEmailTwins(purchases: readonly TwinPurchase[]): EmailTwins {
       .filter(([emailId, ids]) => ids.length > 0 && !clear.has(emailId))
       .map(([emailId]) => emailId),
   );
-  return { clear, ambiguous, candidates };
+  const split = findSplits(emails, banks, candidates);
+  return {
+    clear,
+    ambiguous,
+    candidates: new Map([
+      ...candidates,
+      ...[...split].map(([emailId, ids]): [string, string[]] => [emailId, ids]),
+    ]),
+    split,
+  };
+}
+
+/** Each waiting store order with no same-amount charge that posted as several, when exactly one set of charges is it and no other waiting email from that store could be, or could take one of the charges. */
+function findSplits(
+  emails: readonly TwinPurchase[],
+  banks: readonly TwinPurchase[],
+  candidates: ReadonlyMap<string, string[]>,
+): Map<string, string[]> {
+  const taken = new Set([...candidates.values()].flat());
+  const sets = emails
+    .filter(
+      (email) =>
+        email.storeEmail?.kind === 'order' &&
+        (candidates.get(email.id) ?? []).length === 0,
+    )
+    .map((email): [TwinPurchase, string[][]] => [
+      email,
+      findSplitSets(email, banks, taken),
+    ])
+    .filter(([, found]) => found.length > 0);
+  return new Map(
+    sets.flatMap(([email, found]): [string, string[]][] => {
+      const rivals = sets.filter(
+        ([other, otherSets]) =>
+          other.id !== email.id &&
+          otherSets.some((set) => set.some((id) => found[0].includes(id))),
+      );
+      const isRivaled = emails.some(
+        (other) =>
+          other.id !== email.id &&
+          other.amountCents === email.amountCents &&
+          isSameSide(email, other) &&
+          isSameStore(getName(email), getName(other)),
+      );
+      return found.length === 1 && rivals.length === 0 && !isRivaled
+        ? [[email.id, found[0]]]
+        : [];
+    }),
+  );
 }
 
 /** Every bank charge a waiting emailed purchase is or may be, and every emailed purchase that has one: a rule leaves both alone until they merge or the person answers, so an envelope is never charged twice. */
@@ -88,9 +189,9 @@ export const getTwinHeldIds = (twins: EmailTwins): Set<string> =>
     ),
   );
 
-/** The bank charges that merge on their own with an email, so Needs a home never lists them. */
+/** The bank charges that merge on their own with an email, alone or as the several an order posted as, so Needs a home never lists them. */
 export const getTwinMergingIds = (twins: EmailTwins): Set<string> =>
-  new Set(twins.clear.values());
+  new Set([...twins.clear.values(), ...[...twins.split.values()].flat()]);
 
 /** The waiting emailed purchases a bank charge may be, when none of them is clearly it. */
 export const getEmailOffers = (twins: EmailTwins, bankId: string): string[] =>
@@ -118,3 +219,50 @@ export const isSettledByPerson = (
   (purchase.assignedBy !== 'auto' ||
     (purchase.billRef ?? null) !== null ||
     purchase.pairedWithId !== null);
+
+/** Which card or account a purchase is on, as one key; null when it is on neither. */
+export const getSideKey = (
+  purchase: Pick<OpenPurchase, 'accountId' | 'paidByCardId'>,
+): string | null =>
+  (purchase.paidByCardId ?? null) !== null
+    ? `card:${purchase.paidByCardId}`
+    : purchase.accountId !== null
+      ? `account:${purchase.accountId}`
+      : null;
+
+/** The cards and accounts whose bank shares no pending charges: it has sent posted charges but never one still pending in these purchases, so a charge shows only once it posts. A side the bank has sent nothing on is unknown, not in the set. */
+export function findPostedOnlySides(
+  purchases: readonly Pick<
+    OpenPurchase,
+    'source' | 'status' | 'accountId' | 'paidByCardId'
+  >[],
+): Set<string> {
+  const sides = purchases
+    .filter((purchase) => purchase.source === 'link')
+    .reduce((found, purchase) => {
+      const key = getSideKey(purchase);
+      return key === null
+        ? found
+        : found.set(
+            key,
+            (found.get(key) ?? false) || purchase.status === 'pending',
+          );
+    }, new Map<string, boolean>());
+  return new Set(
+    [...sides].flatMap(([key, isPendingShared]) =>
+      isPendingShared ? [] : [key],
+    ),
+  );
+}
+
+/** How many days after its emailed day a waiting purchase may go unmatched before it is overdue: a store order is charged when it ships, and a bank that shows nothing pending sends the charge only once it posts, so both wait as long as a charge may take to match. */
+export const getEmailWaitDays = (
+  purchase: Pick<OpenPurchase, 'accountId' | 'paidByCardId' | 'storeEmail'>,
+  postedOnly: ReadonlySet<string>,
+) => {
+  const key = getSideKey(purchase);
+  return purchase.storeEmail?.kind === 'order' ||
+    (key !== null && postedOnly.has(key))
+    ? EMAIL_MATCH_DAYS_AFTER
+    : EMAIL_WAIT_DAYS;
+};

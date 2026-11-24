@@ -7,6 +7,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
+import { useWaitingBank } from '@apps/runway/hooks/useEmailPurchases';
 import type { OpenPurchase } from '@apps/runway/types';
 import {
   describeEnvelopes,
@@ -37,6 +38,7 @@ function PurchaseRow({
   onOpen,
 }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
+  const bank = useWaitingBank(purchase);
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
   const refund = isRefund(purchase);
@@ -58,7 +60,11 @@ function PurchaseRow({
   const facts = isBrief
     ? []
     : purchase.emailWaiting === true
-      ? [EMAIL_WORDS.waitingShort]
+      ? [
+          bank.name === null
+            ? EMAIL_WORDS.waitingShort
+            : EMAIL_WORDS.waitingOn(bank.name),
+        ]
       : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
   const detail = [date, ...(paidWith ? [paidWith] : []), ...facts].join(' · ');
   const amount = refund

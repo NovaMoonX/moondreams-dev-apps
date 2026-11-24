@@ -1,15 +1,18 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { EMAIL_WAIT_DAYS } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   findEmailTwins,
+  findPostedOnlySides,
+  getEmailWaitDays,
+  getSideKey,
   getTwinHeldIds,
   getTwinMergingIds,
   isWaitingEmail,
 } from '@apps/runway/engine/emailTwins';
 import type { OpenPurchase } from '@apps/runway/types';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 /** The window and Needs a home together, each purchase once. */
 const selectAllPurchases = createSelector(
@@ -46,8 +49,50 @@ export const selectTwinMergingIds = createSelector(
 export const selectTwinnedEmailIds = createSelector(
   [selectEmailTwins],
   (twins): ReadonlySet<string> =>
-    new Set([...twins.clear.keys(), ...twins.ambiguous]),
+    new Set([...twins.clear.keys(), ...twins.ambiguous, ...twins.split.keys()]),
 );
+
+/** The cards and accounts whose bank has sent posted charges and never a pending one, so an emailed purchase on them waits for the charge to post. */
+export const selectPostedOnlySides = createSelector(
+  [selectAllPurchases],
+  (purchases): ReadonlySet<string> => findPostedOnlySides(purchases),
+);
+
+/** Each card's and account's bank as a person says it, by `getSideKey`; one with no name is left out. */
+export const selectSideBankNames = createSelector(
+  [
+    (state: RootState) => state.runway.cards,
+    (state: RootState) => state.runway.accounts,
+  ],
+  (cards, accounts): ReadonlyMap<string, string> =>
+    new Map(
+      [
+        ...cards.map((card): [string, string] => [
+          `card:${card.id}`,
+          card.issuer,
+        ]),
+        ...accounts.map((account): [string, string] => [
+          `account:${account.id}`,
+          account.institution,
+        ]),
+      ].flatMap(([key, name]): [string, string][] =>
+        name.trim() === '' ? [] : [[key, cleanBankName(name)]],
+      ),
+    ),
+);
+
+/** The bank an emailed purchase waits on, when its card or account is known, and whether that bank only sends a charge once it posts. */
+export const getWaitingBank = (
+  purchase: Pick<OpenPurchase, 'accountId' | 'paidByCardId'>,
+  names: ReadonlyMap<string, string>,
+  postedOnly: ReadonlySet<string>,
+) => {
+  const key = getSideKey(purchase);
+  return {
+    name: key === null ? null : (names.get(key) ?? null),
+    isPostedOnly: key !== null && postedOnly.has(key),
+  };
+};
 
 /** The ids of every emailed purchase still waiting for its bank. */
 export const selectEmailWaitingIds = createSelector(
@@ -56,24 +101,31 @@ export const selectEmailWaitingIds = createSelector(
     new Set(purchases.filter(isWaitingEmail).map((purchase) => purchase.id)),
 );
 
-/** Whether an emailed purchase is still waiting, has no bank twin and is older than `EMAIL_WAIT_DAYS`. */
+/** Whether an emailed purchase is still waiting, has no bank twin and is older than `getEmailWaitDays` says. */
 export const isOverdueEmail = (
   purchase: OpenPurchase,
   twinned: ReadonlySet<string>,
+  postedOnly: ReadonlySet<string>,
   today: number,
 ) =>
   isWaitingEmail(purchase) &&
   !twinned.has(purchase.id) &&
-  purchase.date < today - EMAIL_WAIT_DAYS * DAY_MS;
+  purchase.date < today - getEmailWaitDays(purchase, postedOnly) * DAY_MS;
 
-/** Emailed purchases still waiting, with no clear bank twin, dated more than `EMAIL_WAIT_DAYS` before today and already answered (one still in Needs a home is asked about there), oldest first: what Home asks about once. */
+/** Emailed purchases still waiting, with no clear bank twin, dated more than their wait before today and already answered (one still in Needs a home is asked about there), oldest first: what Home asks about once. */
 export const selectEmailOverdue = createSelector(
-  [selectAllPurchases, selectTwinnedEmailIds, () => todayAsUtcDate()],
-  (purchases, twinned, today): OpenPurchase[] =>
+  [
+    selectAllPurchases,
+    selectTwinnedEmailIds,
+    selectPostedOnlySides,
+    () => todayAsUtcDate(),
+  ],
+  (purchases, twinned, postedOnly, today): OpenPurchase[] =>
     purchases
       .filter(
         (purchase) =>
-          !purchase.needsHome && isOverdueEmail(purchase, twinned, today),
+          !purchase.needsHome &&
+          isOverdueEmail(purchase, twinned, postedOnly, today),
       )
       .sort((a, b) => a.date - b.date || a.id.localeCompare(b.id)),
 );

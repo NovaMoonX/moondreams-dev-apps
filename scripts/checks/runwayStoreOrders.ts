@@ -4,6 +4,7 @@ import {
   findStoreOrder,
   isOpenStoreAction,
   planStoreAction,
+  splitOrderLines,
   takeOffLines,
   toOrderKey,
   type StoreAction,
@@ -318,6 +319,54 @@ assert.equal(toOrderKey('ORDER'), null);
   );
   assert.equal(plan?.kind, 'refund');
   assert.equal(plan?.kind === 'refund' && plan.bankId, 'b');
+}
+
+// An order that posted as several charges shares its lines among them, each charge's lines adding up to its own amount.
+{
+  const orderLines = [
+    { envelopeId: 'food', cents: 7_001, via: 'chosen' as const },
+    { envelopeId: 'home', cents: 2_999, via: 'chosen' as const },
+    { envelopeId: null, cents: 1, via: 'free' as const },
+  ];
+  const total = (lines: { cents: number }[]) =>
+    lines.reduce((sum, line) => sum + line.cents, 0);
+  const charges = [6_000, 2_500, 1_501];
+  const shares = splitOrderLines(orderLines, charges);
+  assert.ok(shares, 'a split is found');
+  assert.deepEqual(
+    shares.map(total),
+    charges,
+    'each charge’s lines add up to it',
+  );
+  assert.deepEqual(
+    ['food', 'home', null].map((envelopeId) =>
+      total(shares.flat().filter((line) => line.envelopeId === envelopeId)),
+    ),
+    [7_001, 2_999, 1],
+    'together they are the order’s lines exactly',
+  );
+  assert.ok(
+    shares.every((share) => share.every((line) => line.cents > 0)),
+    'a line that takes nothing is left out',
+  );
+  assert.deepEqual(
+    splitOrderLines(orderLines, [6_000, 2_500, 1_501]),
+    shares,
+    'the same answer every time',
+  );
+  assert.deepEqual(
+    splitOrderLines(
+      [{ envelopeId: 'food', cents: 5_000, via: 'chosen' }],
+      [2_000, 3_000],
+    )?.map(total),
+    [2_000, 3_000],
+    'one line splits across charges',
+  );
+  assert.equal(
+    splitOrderLines([], [2_000, 3_000]),
+    null,
+    'no lines cannot cover charges',
+  );
 }
 
 console.log('runwayStoreOrders: ok');

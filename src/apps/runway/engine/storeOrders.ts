@@ -110,6 +110,38 @@ export function takeOffLines(
   }));
 }
 
+/** An order's lines shared among the charges it posted as, in proportion, so each charge's lines add up to its own amount and together they are the order's lines exactly. A line that gives a charge nothing is left out of it. Null when the charges are more than the lines can cover. */
+export function splitOrderLines(
+  lines: readonly PurchaseLine[],
+  chargeCents: readonly Cents[],
+): PurchaseLine[][] | null {
+  const shared = chargeCents.slice(0, -1).reduce<{
+    left: PurchaseLine[] | null;
+    taken: PurchaseLine[][];
+  }>(
+    (state, cents) => {
+      const after = state.left && takeOffLines(state.left, cents);
+      return after === null || state.left === null
+        ? { left: null, taken: state.taken }
+        : {
+            left: after,
+            taken: [
+              ...state.taken,
+              state.left.map((line, index) => ({
+                ...line,
+                cents: line.cents - after[index].cents,
+              })),
+            ],
+          };
+    },
+    { left: [...lines], taken: [] },
+  );
+  if (shared.left === null) return null;
+  return [...shared.taken, shared.left].map((share) =>
+    share.filter((line) => line.cents !== 0),
+  );
+}
+
 export type StorePlan =
   /** Comes off the uncharged order itself. */
   | { kind: 'takeOff'; cents: Cents; amountCents: Cents; lines: PurchaseLine[] }

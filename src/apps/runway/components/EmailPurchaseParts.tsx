@@ -11,12 +11,14 @@ import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   isOverdueEmail,
+  selectPostedOnlySides,
   selectTwinnedEmailIds,
 } from '@apps/runway/store/selectors/emailSelectors';
 import { useAppSelector } from '@/store';
 import {
   useEmailActions,
   useEmailEvents,
+  useWaitingBank,
 } from '@apps/runway/hooks/useEmailPurchases';
 import type { OpenPurchase } from '@apps/runway/types';
 
@@ -28,27 +30,39 @@ interface EmailPurchaseProps {
 export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   const today = todayAsUtcDate();
   const twinned = useAppSelector(selectTwinnedEmailIds);
+  const postedOnly = useAppSelector(selectPostedOnlySides);
+  const bank = useWaitingBank(purchase);
   if (purchase.source !== 'email') return null;
-  if (isOverdueEmail(purchase, twinned, today)) {
+  if (isOverdueEmail(purchase, twinned, postedOnly, today)) {
+    const days = Math.floor((today - purchase.date) / DAY_MS);
     return (
       <InlineNotice tone='warning'>
-        {EMAIL_WORDS.overdueNotice(
-          Math.floor((today - purchase.date) / DAY_MS),
-        )}
+        {purchase.storeEmail?.kind === 'order'
+          ? EMAIL_WORDS.overdueOrderNotice(days)
+          : EMAIL_WORDS.overdueNotice(days)}
       </InlineNotice>
     );
   }
+  const isStore = purchase.storeEmail != null;
+  const isWaiting = purchase.emailWaiting === true;
   return (
     <InlineNotice tone='info' icon={Mail}>
       <p>
-        {purchase.storeEmail != null
-          ? purchase.emailWaiting === true
-            ? EMAIL_WORDS.drawerStoreWaiting
-            : EMAIL_WORDS.drawerFromStore
-          : purchase.emailWaiting === true
-            ? EMAIL_WORDS.drawerWaiting
+        {isWaiting
+          ? bank.name === null
+            ? isStore
+              ? EMAIL_WORDS.drawerStoreWaiting
+              : EMAIL_WORDS.drawerWaiting
+            : isStore
+              ? EMAIL_WORDS.drawerStoreWaitingNamed(bank.name)
+              : EMAIL_WORDS.drawerWaitingNamed(bank.name)
+          : isStore
+            ? EMAIL_WORDS.drawerFromStore
             : EMAIL_WORDS.drawerFromEmail}
       </p>
+      {isWaiting && bank.isPostedOnly && (
+        <p>{EMAIL_WORDS.postedOnlyNote(bank.name)}</p>
+      )}
     </InlineNotice>
   );
 }
