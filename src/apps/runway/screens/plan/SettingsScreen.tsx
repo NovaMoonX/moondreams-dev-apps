@@ -31,7 +31,7 @@ import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC, formatTimeAgo } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
   EMAIL_PURCHASES_GATE_ID,
@@ -65,7 +65,6 @@ import type { OpenLink, Stance } from '@apps/runway/types';
 import {
   countBroughtIn,
   describeUnfinishedLink,
-  formatUpdatedAgo,
   isUnfinishedLink,
 } from '@apps/runway/utils/linkText';
 
@@ -268,16 +267,18 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                       ? LINK_WORDS.unlinkedRowValue(countBroughtIn(link))
                       : link.status === 'needsAttention'
                         ? LINK_WORDS.needsSignInRowValue(
-                            formatUpdatedAgo(
+                            formatTimeAgo(
                               link.lastSyncAt ?? link.createdAt,
                               now,
+                              true,
                             ),
                           )
                         : LINK_WORDS.linkedRowValue(
                           countBroughtIn(link),
-                          formatUpdatedAgo(
+                          formatTimeAgo(
                             link.lastSyncAt ?? link.createdAt,
                             now,
+                            true,
                           ),
                         )
                   }

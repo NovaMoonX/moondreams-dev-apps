@@ -19,6 +19,8 @@ import {
   AUTO_PAY_WORDS,
   CARD_FEE_WORDS,
   DEFAULT_CURRENCY_CODE,
+  DONE_FOR_YOU_WORDS,
+  NEEDS_HOME_WORDS,
   PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
   EMAIL_EVENT_KEEP_DAYS,
@@ -67,6 +69,7 @@ import {
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
+import { toSubject } from '../../src/apps/runway/utils/doneForYouSubject.ts';
 import {
   CARD_FEE_GROUP_ID,
   buildFeeBill,
@@ -85,6 +88,10 @@ import type {
   CardSealed,
   ExpenseDoc,
   RuleDoc,
+  DoneForYouDoc,
+  DoneForYouKind,
+  DoneForYouSealed,
+  OpenPurchase,
   RuleSealed,
   ExpenseSealed,
   ChangeDoc,
@@ -4626,6 +4633,7 @@ async function writeSeedPurchases(
     }),
   );
   const ruled = await seedRules(context, plan, encryption, today);
+  const done = await seedDoneForYou(context, plan, encryption, today);
   const emailDocuments = await writeSeedEmail(
     context,
     plan,
@@ -4682,6 +4690,7 @@ async function writeSeedPurchases(
     changes.length +
     1 +
     ruled +
+    done +
     emailDocuments
   );
 }
@@ -5033,6 +5042,200 @@ async function writeSeedEmail(
     ),
   } satisfies EmailFilterDoc);
   return 1 + purchases.length + events.length + 1;
+}
+
+/** Jamie's Done for you, one entry per kind a row can show, including one written before subjects were kept. */
+async function seedDoneForYou(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+): Promise<number> {
+  const kept = await context.firestore.collection(`${plan}/doneForYou`).get();
+  await Promise.all(kept.docs.map((entry) => entry.ref.delete()));
+  const now = context.now;
+  const minutes = (count: number) => now - count * 60_000;
+  const placedAt = today - 4 * DAY_MS + 12 * 3_600_000;
+  const placed: OpenPurchase = {
+    id: 'seed-link-purchase-ruled',
+    date: today - 4 * DAY_MS,
+    source: 'link',
+    status: 'posted',
+    needsHome: false,
+    accountId: null,
+    expenseId: null,
+    emailEventId: null,
+    emailWaiting: null,
+    createdAt: placedAt,
+    updatedAt: placedAt,
+    amountCents: 4_725,
+    merchant: 'Safeway',
+    category: 'FOOD_AND_DRINK_GROCERIES',
+    ruleId: 'seed-rule-safeway',
+    label: null,
+    note: null,
+    lines: [
+      { envelopeId: 'seed-envelope-groceries', cents: 4_725, via: 'chosen' },
+    ],
+    refundOfId: null,
+    paidByCardId: SEED_VENTURE_CARD,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    incomeDayId: null,
+    assignedBy: 'auto',
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    tickedDayKey: null,
+  };
+  const entries: {
+    id: string;
+    kind: DoneForYouKind;
+    createdAt: number;
+    undoneAt: number | null;
+    sealed: DoneForYouSealed;
+  }[] = [
+    {
+      id: 'seed-done-rule',
+      kind: 'rule',
+      createdAt: minutes(12),
+      undoneAt: null,
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.ruleSent('Safeway', 'Groceries'),
+        detail: null,
+        why: 'Your rule, Safeway goes to Groceries',
+        undo: { kind: 'rule', placed },
+        subject: toSubject({
+          purchaseId: placed.id,
+          merchant: 'Safeway',
+          amountCents: 4_725,
+          ruleId: 'seed-rule-safeway',
+          itemId: 'seed-envelope-groceries',
+          toName: 'Groceries',
+          toEmoji: '🛒',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-rule-undone',
+      kind: 'rule',
+      createdAt: minutes(40),
+      undoneAt: minutes(5),
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.ruleSent('Sprouts', 'Everyday spending'),
+        detail: null,
+        why: 'Your rule, everything on the Discover goes to Everyday spending',
+        undo: null,
+        subject: toSubject({
+          purchaseId: 'seed-link-purchase-sprouts-1',
+          merchant: 'Sprouts',
+          amountCents: 3_180,
+          ruleId: 'seed-rule-discover',
+          toName: 'Everyday spending',
+          toEmoji: '💰',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-merge',
+      kind: 'merge',
+      createdAt: minutes(150),
+      undoneAt: null,
+      sealed: {
+        title: NEEDS_HOME_WORDS.matchedOne('Target'),
+        detail: NEEDS_HOME_WORDS.matchedOneSub,
+        why: null,
+        undo: null,
+        subject: toSubject({
+          purchaseId: 'seed-purchase-target',
+          merchant: 'Target',
+          merchantLogo:
+            'https://plaid-merchant-logos.plaid.com/target_1100.png',
+          amountCents: 4_500,
+          itemId: 'seed-envelope-everyday',
+          toName: 'Everyday spending',
+          toEmoji: '💰',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-automark',
+      kind: 'autoMark',
+      createdAt: now - 20 * 3_600_000,
+      undoneAt: null,
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.autoMarked('Cloud storage'),
+        detail: null,
+        why: 'It is on autopay.',
+        undo: null,
+        subject: toSubject({
+          billId: 'seed-bill-jamie-cloud',
+          toName: 'Cloud storage',
+          toEmoji: '☁️',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-pair',
+      kind: 'pair',
+      createdAt: now - 26 * 3_600_000,
+      undoneAt: null,
+      sealed: {
+        title: 'Moved $250.00 from Checking A to Checking B',
+        detail: DONE_FOR_YOU_WORDS.moved,
+        why: null,
+        undo: null,
+        subject: toSubject({
+          amountCents: 25_000,
+          fromName: 'Checking A',
+          toName: 'Checking B',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-ended',
+      kind: 'ended',
+      createdAt: now - 50 * 3_600_000,
+      undoneAt: null,
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.ended('Concert tickets'),
+        detail: null,
+        why: DONE_FOR_YOU_WORDS.endedWhy,
+        undo: null,
+        subject: toSubject({
+          itemId: 'seed-goal-concert',
+          toName: 'Concert tickets',
+          toEmoji: '🎟️',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-history',
+      kind: 'history',
+      createdAt: now - 4 * DAY_MS,
+      undoneAt: null,
+      sealed: {
+        title: NEEDS_HOME_WORDS.historyMany(3),
+        detail: NEEDS_HOME_WORDS.historySub,
+        why: null,
+        undo: null,
+        subject: null,
+      },
+    },
+  ];
+  const batch = context.firestore.batch();
+  await Promise.all(
+    entries.map(async ({ sealed, ...entry }) => {
+      batch.set(context.firestore.doc(`${plan}/doneForYou/${entry.id}`), {
+        ...entry,
+        sealed: await sealJson(sealed, encryption),
+      } satisfies DoneForYouDoc);
+    }),
+  );
+  await batch.commit();
+  return entries.length;
 }
 
 /**

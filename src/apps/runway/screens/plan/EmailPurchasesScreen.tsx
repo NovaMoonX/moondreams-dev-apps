@@ -26,7 +26,7 @@ import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useNow } from '@/hooks/useNow';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateOrdinal } from '@/utils/formatUtils';
+import { formatDateOrdinal, formatTimeAgo } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import EmailAddressText from '@apps/runway/components/EmailAddressText';
 import EmailConfirmNotice from '@apps/runway/components/EmailConfirmNotice';
@@ -63,7 +63,6 @@ import {
   isSenderFiltered,
   type EmailSender,
 } from '@apps/runway/utils/emailSenders';
-import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 
 const ROWS_SHOWN = 5;
 const CONFIRM_TAPPED_KEY = 'runway:email-confirm-tapped';
@@ -422,7 +421,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               {(isConfirmDrawn
                 ? EMAIL_WORDS.lastEmail
                 : EMAIL_WORDS.workingSince)(
-                formatUpdatedAgo(intake.lastReceivedAt, now),
+                formatTimeAgo(intake.lastReceivedAt, now, true),
               )}
             </p>
           )}

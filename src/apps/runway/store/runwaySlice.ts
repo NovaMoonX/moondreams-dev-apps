@@ -32,6 +32,7 @@ import type {
   OpenLink,
   OpenCard,
   OpenExpense,
+  OpenDoneForYou,
   OpenMemory,
   OpenStartedPayment,
   OpenRule,
@@ -89,6 +90,9 @@ export interface RunwayState {
   memories: OpenMemory[];
   startedPayments: OpenStartedPayment[];
   isMemoriesLoaded: boolean;
+  /** What the app did on its own in the last 30 days, newest first, and whether it has been read once. */
+  doneForYou: OpenDoneForYou[];
+  isDoneForYouLoaded: boolean;
   /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
   emailIntake: OpenEmailIntake | null;
   isEmailIntakeLoaded: boolean;
@@ -230,6 +234,8 @@ const initialState: RunwayState = {
   memories: [],
   startedPayments: [],
   isMemoriesLoaded: false,
+  doneForYou: [],
+  isDoneForYouLoaded: false,
   emailIntake: null,
   isEmailIntakeLoaded: false,
   isEmailIntakeFailed: false,
@@ -344,6 +350,10 @@ export const runwaySlice = createSlice({
       state.memories = action.payload;
       state.isMemoriesLoaded = true;
     },
+    setDoneForYou: (state, action: PayloadAction<OpenDoneForYou[]>) => {
+      state.doneForYou = action.payload;
+      state.isDoneForYouLoaded = true;
+    },
     setEmailIntake: (state, action: PayloadAction<OpenEmailIntake | null>) => {
       state.emailIntake = action.payload;
     },
@@ -358,10 +368,7 @@ export const runwaySlice = createSlice({
     retryEmailIntake: (state) => {
       state.emailIntakeAttempt += 1;
     },
-    setEmailEvents: (
-      state,
-      action: PayloadAction<OpenEmailEvent[] | null>,
-    ) => {
+    setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[] | null>) => {
       state.emailEvents = action.payload ?? [];
       state.isEmailEventsLoaded = action.payload !== null;
     },
@@ -554,6 +561,7 @@ export const {
   setExpenses,
   setRules,
   setMemories,
+  setDoneForYou,
   setEmailIntake,
   setEmailEvents,
   setEmailFilters,

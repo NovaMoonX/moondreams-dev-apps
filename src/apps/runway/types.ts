@@ -1,5 +1,8 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
+import type { ChargeMatchResult } from '@apps/runway/store/actions/autoPayActions';
+import type { MergedPurchase } from '@apps/runway/store/actions/purchaseActions';
+
 import type {
   ACCOUNT_KINDS,
   CALENDAR_PERIODS,
@@ -101,6 +104,8 @@ export interface PlanDoc {
   sealed: Sealed | null;
   /** The sealed totals-and-names summary a connected app reads; null when Free to Spend is unknown, and absent on a plan made before it existed. */
   shareSummary: Sealed | null;
+  /** Epoch ms the person last opened Done for you; null before they have, and on a plan made before it existed. */
+  doneForYouSeenAt: number | null;
 }
 
 /** What a plan shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
@@ -143,6 +148,7 @@ export interface OpenPlan extends PlanSealedFields {
   notify: PlanNotify | null;
   sorting: SortingState | null;
   keyId: string | null;
+  doneForYouSeenAt: number | null;
 }
 
 /** Integer cents. */
@@ -1262,12 +1268,7 @@ export interface EmailIntakeSealed {
 
 /** @deprecated The setup walkthrough is gone; kept for the stored progress documents, which nothing reads or writes now. */
 export type EmailProvider =
-  | 'gmail'
-  | 'outlook'
-  | 'icloud'
-  | 'yahoo'
-  | 'proton'
-  | 'other';
+  'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'proton' | 'other';
 
 /** @deprecated See `EmailProvider`. */
 export type EmailSetupStepId =
@@ -1448,3 +1449,73 @@ export interface ClosingDoc {
 
 // Round 4: funding on the calendar.
 export type CalendarPeriod = (typeof CALENDAR_PERIODS)[number];
+
+export type DoneForYouKind =
+  | 'merge'
+  | 'deposit'
+  | 'pair'
+  | 'rule'
+  | 'charge'
+  | 'autoMark'
+  | 'history'
+  | 'released'
+  | 'ended';
+
+/** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
+export type DoneForYouUndo =
+  | { kind: 'merge'; merged: MergedPurchase }
+  | {
+      kind: 'deposit';
+      deposit: OpenPurchase;
+      linked: OpenPurchase;
+      dayOn: DateOnly;
+    }
+  | {
+      kind: 'pair';
+      out: OpenPurchase;
+      into: OpenPurchase;
+      pairKind: PurchasePairKind;
+      names: { from: string; to: string };
+      paired: { out: OpenPurchase; into: OpenPurchase };
+    }
+  | { kind: 'rule'; placed: OpenPurchase }
+  | { kind: 'charge'; result: ChargeMatchResult };
+
+/** What an entry acted on, so its item can show it and open it; each kind fills what it has. */
+export interface DoneForYouSubject {
+  purchaseId: string | null;
+  merchant: string | null;
+  merchantLogo: string | null;
+  amountCents: Cents | null;
+  ruleId: string | null;
+  billId: string | null;
+  itemId: string | null;
+  toName: string | null;
+  toEmoji: string | null;
+  fromName: string | null;
+}
+
+export interface DoneForYouSealed {
+  title: string;
+  detail: string | null;
+  why: string | null;
+  undo: DoneForYouUndo | null;
+  /** Null on an entry written before it was kept. */
+  subject: DoneForYouSubject | null;
+}
+
+/** Something the app did on its own, under `doneForYou`; only `undoneAt` and removal change it. */
+export interface DoneForYouDoc {
+  id: string;
+  kind: DoneForYouKind;
+  createdAt: number;
+  undoneAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenDoneForYou extends DoneForYouSealed {
+  id: string;
+  kind: DoneForYouKind;
+  createdAt: number;
+  undoneAt: number | null;
+}

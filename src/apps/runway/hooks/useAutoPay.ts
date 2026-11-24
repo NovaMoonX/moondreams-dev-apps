@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { AUTO_PAY_WORDS } from '@apps/runway/constants';
+import { AUTO_PAY_WORDS, DONE_FOR_YOU_WORDS } from '@apps/runway/constants';
 import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
 import {
   findAutoMarks,
@@ -29,6 +29,7 @@ import { isTrackingLevel } from '@apps/runway/engine/level';
 import { countMarks, type PaidPayment } from '@apps/runway/engine/progress';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
 import { getHeldFor } from '@apps/runway/hooks/useBillPaid';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   correctPaidAmount,
@@ -52,10 +53,15 @@ import {
   selectAccounts,
   selectBillPayments,
   selectIsLinkHistory,
+  selectItemLooks,
   selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly, OpenPurchase } from '@apps/runway/types';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
+import {
+  toPurchaseSubject,
+  toSubject,
+} from '@apps/runway/utils/doneForYouSubject';
 import {
   getChargeSnoozeVersion,
   snoozeCharge,
@@ -195,16 +201,10 @@ export function useAutoPay(uid: string | null) {
   const purchases = useAppSelector((state) => state.runway.purchases);
   const accounts = useAppSelector(selectAccounts);
   const isReady = useAppSelector(selectIsAutoPayReady);
-  const showMatched = useMatchedToast();
-  const showMatchedRef = useRef(showMatched);
   const tried = useRef(new Set<string>());
   const isRunning = useRef(false);
   const isWaitingToRun = useRef(false);
   const [runs, setRuns] = useState(0);
-
-  useEffect(() => {
-    showMatchedRef.current = showMatched;
-  });
 
   useEffect(() => {
     if (uid === null || !isReady || !isTrackingLevel(level)) return;
@@ -250,14 +250,35 @@ export function useAutoPay(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await marks.reduce(async (previous, { mark }) => {
-          await previous;
-          try {
-            await writeAutoMark(uid, mark);
-          } catch (error) {
-            console.error('A bill that pays itself was not marked', error);
-          }
-        }, Promise.resolve());
+        const marked = await marks.reduce(
+          async (previous, { mark }) => {
+            const list = await previous;
+            try {
+              const written = await writeAutoMark(uid, mark);
+              return written === null ? list : [...list, mark];
+            } catch (error) {
+              console.error('A bill that pays itself was not marked', error);
+              return list;
+            }
+          },
+          Promise.resolve([] as AutoMark[]),
+        );
+        const looks = selectItemLooks(store.getState());
+        recordDone(
+          uid,
+          marked.map((mark) => ({
+            kind: 'autoMark' as const,
+            title: DONE_FOR_YOU_WORDS.autoMarked(mark.billName),
+            detail: null,
+            why: AUTO_PAY_WORDS.formToggle,
+            undo: null,
+            subject: toSubject({
+              billId: mark.billId,
+              toName: mark.billName,
+              toEmoji: looks.get(mark.billId)?.emoji ?? null,
+            }),
+          })),
+        );
         const results = await matches.reduce(
           async (done, { match, key }) => {
             const list = await done;
@@ -289,15 +310,21 @@ export function useAutoPay(uid: string | null) {
           },
           Promise.resolve([] as ChargeMatchResult[]),
         );
-        if (results.length > 0) {
-          showMatchedRef.current(
-            uid,
-            results,
-            results.length === 1
-              ? AUTO_PAY_WORDS.matchedOne(results[0].billName)
-              : AUTO_PAY_WORDS.matchedMany(results.length),
-          );
-        }
+        recordDone(
+          uid,
+          results.map((result) => ({
+            kind: 'charge' as const,
+            title: AUTO_PAY_WORDS.matchedOne(result.billName),
+            detail: DONE_FOR_YOU_WORDS.chargeMatched,
+            why: null,
+            undo: { kind: 'charge' as const, result },
+            subject: toPurchaseSubject(result.purchase, {
+              billId: result.billId,
+              toName: result.billName,
+              toEmoji: looks.get(result.billId)?.emoji ?? null,
+            }),
+          })),
+        );
       } catch (error) {
         keys.forEach((key) => tried.current.delete(key));
         console.error('Bills that pay themselves were not written', error);
