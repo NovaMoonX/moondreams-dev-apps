@@ -541,7 +541,7 @@ service cloud.firestore {
     // --- App: runway ---
 
     // A plan is private to one person and nests under their uid. The server-only paths
-    // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
+    // (apps/runway/server, apps/runway/keyChecks, apps/runway/merchantNames) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
     // `links`, `accountBalances`, `cardStatements` and `recurringCharges` are written only by Functions (bank data), and a card's or account's `linkId`

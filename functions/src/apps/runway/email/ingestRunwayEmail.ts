@@ -15,6 +15,7 @@ import { createOptionalSecretReader } from '../../../imageSearch/optionalSecret.
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
 import { markClosedMonths } from '../link/syncRunwayLink.js';
+import { findMerchant } from '../merchantNames.js';
 import {
   openWithKey,
   sealWithKey,
@@ -404,12 +405,13 @@ async function handleMail(
       .collection(`${planPath(uid)}/purchases`)
       .doc();
     const cents = alert.amountCents as number;
+    const known = await findMerchant(firestore, alert.merchant);
     const data = {
       id: purchaseRef.id,
       date,
       source: 'email',
       status: null,
-      needsHome: false,
+      needsHome: true,
       accountId: targets.accountId,
       dedupeKey: null,
       expenseId: null,
@@ -421,10 +423,10 @@ async function handleMail(
         planKey,
         {
           amountCents: cents,
-          merchant: alert.merchant,
-          merchantLogo: null,
+          merchant: known?.name ?? alert.merchant,
+          merchantLogo: known?.logo ?? null,
           bankName: alert.institution,
-          category: null,
+          category: known?.category ?? null,
           ruleId: null,
           label: null,
           note: null,

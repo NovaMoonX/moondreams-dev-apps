@@ -65,6 +65,8 @@ export const EMAIL_WORDS = {
   removeFailed: 'That did not go through. Try again.',
   progressFailed: "Couldn't save your place. Forwarding still works.",
   waitingShort: 'Waiting for your bank',
+  sameTitle: 'Is this from one of these emails?',
+  sameRow: (date: string) => `Email from ${date} · Counted once`,
   drawerWaiting:
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
   drawerFromEmail: 'Read from your bank’s alert email.',

@@ -204,9 +204,13 @@ interface PlaidTransaction {
   date: string;
   amount: number;
   merchant_name: string | null;
+  merchant_entity_id?: string | null;
   logo_url?: string | null;
   name: string | null;
-  personal_finance_category?: { detailed?: string | null } | null;
+  personal_finance_category?: {
+    primary?: string | null;
+    detailed?: string | null;
+  } | null;
   pending: boolean;
 }
 
@@ -230,6 +234,8 @@ const toTransactions = (list: PlaidTransaction[]) =>
       logoUrl: entry.logo_url ?? null,
       name: entry.name,
       category: entry.personal_finance_category?.detailed ?? null,
+      merchantEntityId: entry.merchant_entity_id ?? null,
+      categoryPrimary: entry.personal_finance_category?.primary ?? null,
       isPending: entry.pending,
     });
     return normalized ? [normalized] : [];
