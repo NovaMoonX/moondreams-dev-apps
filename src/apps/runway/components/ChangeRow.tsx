@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { ChevronRight, FileText, Undo2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -10,6 +10,7 @@ import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ActionChips from '@/components/ActionChips';
+import ItemRow from '@apps/runway/components/ItemRow';
 import {
   formatDateOrdinalUTC,
   formatDateOrdinal,
@@ -46,6 +47,8 @@ interface ChangeRowProps {
   undoneMoveIds?: ReadonlySet<string>;
   /** The item whose history this is, so a purchase row doesn't repeat that it went there. */
   itemName?: string | null;
+  /** Draws a move as a money row (its amount and what the item held after) that opens the same Take back sheet. */
+  moneyRow?: Omit<ComponentProps<typeof ItemRow>, 'onOpen'> | null;
 }
 
 /** One entry of the change log: when it was made, what it was, the day it starts from and the person's reason. */
@@ -55,6 +58,7 @@ function ChangeRow({
   onOpenRecord,
   undoneMoveIds,
   itemName = null,
+  moneyRow = null,
 }: ChangeRowProps) {
   const { confirm } = useActionModal();
   const mask = useMaskedText();
@@ -122,6 +126,57 @@ function ChangeRow({
     });
     if (isConfirmed) await undoMove(move);
   };
+  const sheet = isOpen && move !== null && (
+    <FormSheet
+      isOpen
+      isDrawerWhenShort
+      onClose={() => setIsOpen(false)}
+      title={
+        move?.bill || move?.cost
+          ? PAID_HISTORY_WORDS.title
+          : MOVE_WORDS.moveTitle
+      }
+      actions={<ValuesEyeButton />}
+    >
+      <div className='space-y-4 pb-4'>
+        <p className='text-sm break-words'>
+          <MaskedText>{change.summary}</MaskedText>
+        </p>
+        {takeBackBlock === null ? (
+          <ActionGroup>
+            <ActionRow
+              isGrouped
+              isDestructive
+              icon={<Undo2 />}
+              label={words.undoThis}
+              onClick={() => {
+                setIsOpen(false);
+                void takeBack();
+              }}
+            />
+          </ActionGroup>
+        ) : (
+          <p className='text-muted-foreground text-sm'>{mask(takeBackBlock)}</p>
+        )}
+      </div>
+    </FormSheet>
+  );
+  if (moneyRow !== null) {
+    return (
+      <>
+        <ItemRow
+          {...moneyRow}
+          detail={
+            change.note
+              ? `${moneyRow.detail ?? ''} · ${change.note}`
+              : moneyRow.detail
+          }
+          onOpen={canUndo ? () => setIsOpen(true) : undefined}
+        />
+        {sheet}
+      </>
+    );
+  }
   const headTop = (
     <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
       {change.kind !== 'planChange' && (
@@ -232,43 +287,7 @@ function ChangeRow({
           ]}
         />
       )}
-      {isOpen && move !== null && (
-        <FormSheet
-          isOpen
-          isDrawerWhenShort
-          onClose={() => setIsOpen(false)}
-          title={
-            move?.bill || move?.cost
-              ? PAID_HISTORY_WORDS.title
-              : MOVE_WORDS.moveTitle
-          }
-          actions={<ValuesEyeButton />}
-        >
-          <div className='space-y-4 pb-4'>
-            <p className='text-sm break-words'>
-              <MaskedText>{change.summary}</MaskedText>
-            </p>
-            {takeBackBlock === null ? (
-              <ActionGroup>
-                <ActionRow
-                  isGrouped
-                  isDestructive
-                  icon={<Undo2 />}
-                  label={words.undoThis}
-                  onClick={() => {
-                    setIsOpen(false);
-                    void takeBack();
-                  }}
-                />
-              </ActionGroup>
-            ) : (
-              <p className='text-muted-foreground text-sm'>
-                {mask(takeBackBlock)}
-              </p>
-            )}
-          </div>
-        </FormSheet>
-      )}
+      {sheet}
     </li>
   );
 }

@@ -3728,6 +3728,25 @@ export const ITEM_VIEW_WORDS = {
   historyFailed: 'The history did not load. Nothing was changed.',
   purchasesTitle: 'Purchases this month',
   purchasesEmpty: 'Nothing spent from it this month.',
+  moneyStart: 'Starting amount',
+  moneyPay: 'Income day',
+  moneyFrom: (name: string) => `From ${name}`,
+  moneyTo: (name: string) => `To ${name}`,
+  moneyOutsideIn: 'Added from outside the plan',
+  moneyOutsideOut: 'Taken out of the plan',
+  moneyPaid: 'Marked paid',
+  moneyWentTo: (name: string) => `Went to ${name}`,
+  moneyEdited: 'Edited',
+  moneyByRule: 'By your rule',
+  moneyEarlier: 'Brought forward',
+  purchaseRefund: 'Refund',
+  purchasesTotalsNote:
+    'Each total also counts moves and pay days, which History shows.',
+  moneyEarlierDetail: (date: string) => `Everything before ${date}`,
+  moneyEarlierRestDetail: (date: string) => `Everything else before ${date}`,
+  moneyLoading: 'Getting what moved in and out.',
+  goalFigure: 'saved',
+  horizonFigure: 'held',
 } as const;
 
 const skippedText = (skipped: readonly string[]) =>

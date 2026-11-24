@@ -1884,7 +1884,13 @@ function ItemSheet({
       {view === 'balance' && goal ? (
         <GoalBalanceView goalId={itemId} goal={goal} today={today} />
       ) : view === 'history' ? (
-        <ItemHistoryView itemId={itemId} />
+        <ItemHistoryView
+          itemId={itemId}
+          onOpenPurchase={(id) => {
+            setPurchaseId(id);
+            setPhase('purchaseDetail');
+          }}
+        />
       ) : view === 'check' ? (
         <CheckAmountBody presetEnvelopeId={itemId} />
       ) : (
