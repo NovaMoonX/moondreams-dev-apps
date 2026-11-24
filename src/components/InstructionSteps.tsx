@@ -3,14 +3,12 @@ import type { ReactNode } from 'react';
 import { Check, ExternalLink } from 'lucide-react';
 
 export interface Instruction {
-  /** What to do, in a sentence or less. */
   text: string;
-  /** An instruction that only opens a page is itself the link. */
   href?: string;
   control?: ReactNode;
 }
 
-/** Steps done somewhere else, one at a time: the open one in large type with its control, the ones done folded to a ticked line above it, the rest unseen. The caller moves `current` from its own Next and Back. */
+/** Instructions the person carries out in another app, shown one at a time; the caller owns `current` and moves it from its own Next and Back. */
 function InstructionSteps({
   items,
   current,

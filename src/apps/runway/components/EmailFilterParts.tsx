@@ -50,7 +50,7 @@ export function AddressText({ address }: { address: string }) {
   );
 }
 
-/** A step's quiet question or second way: a muted line with a chevron and a 40px hit area. A question (`isOpen` set) opens its answer under it and folds it on a second tap; a way (no `isOpen`) swaps the step. */
+/** A step's quiet question (with `isOpen`) or second way (without), drawn as a muted line with a chevron. */
 export function DisclosureLine({
   label,
   isOpen,
