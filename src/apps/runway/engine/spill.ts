@@ -107,3 +107,40 @@ export function splitAtShortfall(
       : []),
   ];
 }
+
+/** A placed purchase's lines with what its envelope can't cover taken off that envelope, latest line first, and put on a chosen Free to Spend line. */
+export function moveShortToFree(
+  lines: readonly PurchaseLine[],
+  envelopeId: string,
+  shortCents: Cents,
+): PurchaseLine[] {
+  const trimmed = lines
+    .map((line, index) => ({ line, index }))
+    .reverse()
+    .reduce<{ rest: Cents; byIndex: Map<number, Cents> }>(
+      ({ rest, byIndex }, { line, index }) => {
+        if (line.envelopeId !== envelopeId || rest <= 0)
+          return { rest, byIndex };
+        const off = Math.min(rest, line.cents);
+        return {
+          rest: rest - off,
+          byIndex: new Map(byIndex).set(index, line.cents - off),
+        };
+      },
+      { rest: shortCents, byIndex: new Map() },
+    );
+  const moved = shortCents - trimmed.rest;
+  const kept = lines.flatMap((line, index) => {
+    const cents = trimmed.byIndex.get(index) ?? line.cents;
+    return cents > 0 ? [{ ...line, cents }] : [];
+  });
+  if (moved <= 0) return kept;
+  const freeIndex = kept.findIndex(
+    (line) => line.envelopeId === null && line.via === 'chosen',
+  );
+  return freeIndex === -1
+    ? [...kept, { envelopeId: null, cents: moved, via: 'chosen' }]
+    : kept.map((line, index) =>
+        index === freeIndex ? { ...line, cents: line.cents + moved } : line,
+      );
+}

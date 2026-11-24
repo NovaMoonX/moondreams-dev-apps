@@ -38,6 +38,7 @@ import SetupLanding from '@apps/runway/screens/start/SetupLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
+import RuleOverCover from '@apps/runway/components/RuleOverCover';
 import AccountsScreen from '@apps/runway/screens/plan/AccountsScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
@@ -583,6 +584,12 @@ function RunwayContent() {
         renderText={(text) => <MaskedText>{text}</MaskedText>}
         titleTrailing={<ValuesEyeButton />}
       />
+      {doneForYou.coverId !== null && (
+        <RuleOverCover
+          purchaseId={doneForYou.coverId}
+          onClose={doneForYou.closeCover}
+        />
+      )}
     </>
   );
 }

@@ -82,3 +82,30 @@ export function getPickEffect(
     ),
   };
 }
+
+export interface PlacedOver {
+  envelopeId: string;
+  /** What the envelope had left before this purchase took from it. */
+  leftCents: number;
+  shortCents: number;
+}
+
+/** How far a placed purchase takes its chosen envelope below zero now, or null when it doesn't. */
+export function getPlacedOver(
+  state: RootState,
+  lines: readonly PurchaseLine[],
+): PlacedOver | null {
+  const envelopeId =
+    lines.find((line) => line.via === 'chosen' && line.envelopeId !== null)
+      ?.envelopeId ?? null;
+  if (envelopeId === null) return null;
+  const taken = lines.reduce(
+    (sum, line) => (line.envelopeId === envelopeId ? sum + line.cents : sum),
+    0,
+  );
+  const nowLeft = selectBalances(state).assignedByItem[envelopeId] ?? 0;
+  const shortCents = Math.min(taken, Math.max(0, -nowLeft));
+  return shortCents > 0
+    ? { envelopeId, leftCents: nowLeft + taken, shortCents }
+    : null;
+}

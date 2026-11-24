@@ -5042,7 +5042,8 @@ export const COVER_WORDS = {
   bodyMany: (name: string, left: string, short: string) =>
     `${name} has ${left} left, so these would take it ${short} over. How should the rest be covered?`,
   spendRest: (left: string, name: string) => `Use the ${left} in ${name}`,
-  spendRestSub: (short: string) => `The other ${short} comes out of Free to Spend`,
+  spendRestSub: (short: string) =>
+    `The other ${short} comes out of Free to Spend`,
   allFree: 'Take it all from Free to Spend',
   allFreeSub: (name: string) => `${name} stays as it is`,
   moveIn: (short: string, name: string) => `Move ${short} into ${name} first`,
@@ -5052,6 +5053,17 @@ export const COVER_WORDS = {
   moveFailed: 'The money wasn’t moved, so nothing was sent.',
   movedAndSent: (short: string, name: string) =>
     `Moved ${short} into ${name} and sent it there`,
+  bodyPlaced: (name: string, short: string) =>
+    `Your rule sent this to ${name}, and ${short} of it is more than ${name} has. How should that part be covered?`,
+  placedFree: (short: string) => `Take ${short} of it from Free to Spend`,
+  placedFreeSub: (name: string, short: string) => `${name} gets ${short} back`,
+  keepOver: (name: string, short: string) => `Leave ${name} ${short} over`,
+  overDoor: (name: string) => `${name} went over`,
+  overDoorSub: 'Choose how to cover the rest',
+  usedRest: (short: string) =>
+    `The other ${short} now comes out of Free to Spend`,
+  movedIn: (short: string, name: string) => `Moved ${short} into ${name}`,
+  changedSince: 'This purchase changed since, so nothing was moved.',
 };
 
 export const NEEDS_HOME_WORDS = {

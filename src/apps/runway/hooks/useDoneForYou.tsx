@@ -1,5 +1,13 @@
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowLeftRight, ArrowUpRight, Receipt, Repeat } from 'lucide-react';
+import { useState } from 'react';
+
+import {
+  ArrowLeftRight,
+  ArrowUpRight,
+  Receipt,
+  Repeat,
+  TriangleAlert,
+} from 'lucide-react';
 
 import type {
   DoneForYouDoor,
@@ -7,15 +15,18 @@ import type {
 } from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector, type RootState } from '@/store';
 import { getDoneForYouLook } from '@apps/runway/components/doneForYouLook';
 import {
   AUTO_PAY_WORDS,
+  COVER_WORDS,
   DEPOSIT_WORDS,
   DONE_FOR_YOU_DAYS,
   DONE_FOR_YOU_WORDS,
   STORE_ORDER_WORDS,
   NEEDS_HOME_WORDS,
+  NEEDS_LOOK_WORDS,
   PAIR_WORDS,
   RULE_WORDS,
 } from '@apps/runway/constants';
@@ -38,7 +49,9 @@ import {
   unlinkDeposit,
   unpairAccountPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
+import { selectLedgerOnlyBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { getPlacedOver } from '@apps/runway/store/selectors/spillSelectors';
 import {
   selectIsRulesLoaded,
   selectItemLooks,
@@ -356,6 +369,10 @@ export function useDoneForYou() {
   const rules = useAppSelector(selectRules);
   const isRulesLoaded = useAppSelector(selectIsRulesLoaded);
   const planItems = useAppSelector((state) => state.runway.items);
+  const looks = useAppSelector(selectItemLooks);
+  useAppSelector(selectLedgerOnlyBalances);
+  const { isHidden, toggle: toggleHidden } = useValuesHidden();
+  const [coverId, setCoverId] = useState<string | null>(null);
   const { leaveViewForTab, openPurchase, openView, closeView, showOnPlan } =
     useRunwayUrlState();
   const known = toKnown({
@@ -461,9 +478,42 @@ export function useDoneForYou() {
     };
     const envelopeDoor = () =>
       getItemDoor(subject.itemId, DONE_FOR_YOU_WORDS.openEnvelope);
+    const overDoor = (): DoneForYouDoor[] => {
+      const placed = known.purchases.find((p) => p.id === purchaseId);
+      if (
+        placed === undefined ||
+        purchaseId === null ||
+        entry.undoneAt !== null ||
+        entry.undo === null ||
+        !isStillUndoable(entry.undo, known)
+      )
+        return [];
+      const over = getPlacedOver(store.getState(), placed.lines);
+      if (over === null) return [];
+      return [
+        {
+          label: isHidden
+            ? NEEDS_LOOK_WORDS.title
+            : COVER_WORDS.overDoor(
+                looks.get(over.envelopeId)?.name ?? 'An envelope',
+              ),
+          subtitle: isHidden ? NEEDS_LOOK_WORDS.door : COVER_WORDS.overDoorSub,
+          icon: <TriangleAlert />,
+          onSelect: () => {
+            if (isHidden) toggleHidden();
+            setCoverId(purchaseId);
+          },
+        },
+      ];
+    };
     switch (entry.kind) {
       case 'rule':
-        return [...ruleDoor(), ...envelopeDoor(), ...purchaseDoor()];
+        return [
+          ...overDoor(),
+          ...ruleDoor(),
+          ...envelopeDoor(),
+          ...purchaseDoor(),
+        ];
       case 'merge':
         return [...envelopeDoor(), ...purchaseDoor()];
       case 'deposit':
@@ -541,5 +591,12 @@ export function useDoneForYou() {
     return null;
   };
 
-  return { items, hasUnseen, isReady, undo };
+  return {
+    items,
+    hasUnseen,
+    isReady,
+    undo,
+    coverId,
+    closeCover: () => setCoverId(null),
+  };
 }

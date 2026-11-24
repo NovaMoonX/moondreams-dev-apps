@@ -192,6 +192,7 @@ import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   resolveSpill,
   splitAtShortfall,
+  moveShortToFree,
   unspill,
 } from '../../src/apps/runway/engine/spill.ts';
 import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
@@ -7846,6 +7847,33 @@ const version = (
     assert.deepEqual(splitAtShortfall('pets', 4393, 0), [
       { envelopeId: 'pets', cents: 4393, via: 'chosen' },
     ]);
+    assert.deepEqual(
+      moveShortToFree(
+        [{ envelopeId: 'pets', cents: 4393, via: 'chosen' }],
+        'pets',
+        2393,
+      ),
+      [
+        { envelopeId: 'pets', cents: 2000, via: 'chosen' },
+        { envelopeId: null, cents: 2393, via: 'chosen' },
+      ],
+    );
+    assert.deepEqual(
+      moveShortToFree(
+        [
+          { envelopeId: 'pets', cents: 1000, via: 'chosen' },
+          { envelopeId: null, cents: 500, via: 'chosen' },
+          { envelopeId: 'pets', cents: 300, via: 'spill' },
+        ],
+        'pets',
+        800,
+      ),
+      [
+        { envelopeId: 'pets', cents: 500, via: 'chosen' },
+        { envelopeId: null, cents: 1300, via: 'chosen' },
+      ],
+      'takes from the latest line on the envelope first and joins the Free to Spend line',
+    );
     const read = (summary: string) => readPurchaseChange(summary);
     const base = {
       title: 'Petco, Inc',
