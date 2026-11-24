@@ -62,9 +62,11 @@ interface RuleSheetProps {
   onBack?: () => void;
   stayName?: string | null;
   onDecline?: () => void;
+  /** A new rule started without a purchase (a store, card or kind picked on the Rules screen); its envelope starts unanswered. */
+  seed?: Facts | null;
 }
 
-interface Facts {
+export interface Facts {
   merchantKey: string | null;
   merchantName: string | null;
   category: string | null;
@@ -81,8 +83,10 @@ const toRuleError = (error: unknown, fallback: string) => {
 const getFacts = (
   purchase: OpenPurchase | null,
   rule: OpenRule | null,
+  seed: Facts | null,
 ): Facts =>
-  purchase
+  seed ??
+  (purchase
     ? {
         merchantKey: toMerchantKey(purchase.merchant),
         merchantName: purchase.merchant?.trim() || null,
@@ -94,7 +98,7 @@ const getFacts = (
         merchantName: rule?.merchantName ?? null,
         category: rule?.category ?? null,
         cardId: rule?.cardId ?? null,
-      };
+      });
 
 /** Makes an always-do-this rule from a waiting purchase, or changes or removes one. */
 function RuleSheet({
@@ -104,6 +108,7 @@ function RuleSheet({
   onBack,
   stayName = null,
   onDecline,
+  seed = null,
 }: RuleSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -115,7 +120,7 @@ function RuleSheet({
     selectEnvelopes(state, todayAsUtcDate()),
   );
   const looks = useAppSelector(selectItemLooks);
-  const facts = getFacts(purchase, rule);
+  const facts = getFacts(purchase, rule, seed);
   const isBroad = isBroadMerchant(facts.merchantKey, rules);
   const hasMerchant = facts.merchantKey !== null;
   const hasKind = facts.category !== null && (rule !== null || !isBroad);

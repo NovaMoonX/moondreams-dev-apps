@@ -5550,6 +5550,8 @@ export const RULE_WORDS = {
   noKinds: 'No kinds of purchase to pick from yet.',
   doorLabel: 'Rules',
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
+  emptyAdd:
+    'No rules yet. Add one for a store, a card or a kind of purchase, and Runway sends those purchases to an envelope for you.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
   removedCard: 'A card that was removed',
