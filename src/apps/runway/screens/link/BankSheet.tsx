@@ -88,13 +88,13 @@ function BankSheet({
     setError(null);
     try {
       const { keptLinkId, needsSignIn } = await combineLinks(link.id, twin.id);
+      onClose();
       if (needsSignIn) {
         addToast({ title: LINK_WORDS.combinedSignInToast(bank), type: 'info' });
-        await reconnect(keptLinkId, bank);
+        void reconnect(keptLinkId, bank);
       } else {
         addToast({ title: LINK_WORDS.combinedToast(bank), type: 'success' });
       }
-      onClose();
     } catch (combineError) {
       setError(toCombineError(combineError, bank));
       setIsBusy(false);
