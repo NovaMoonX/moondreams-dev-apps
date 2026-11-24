@@ -674,6 +674,8 @@ async function writeSeedEmail(
         confirmUrl: 'https://mail.google.com/mail/vf-seeded-confirmation',
         confirmCode: '123456789',
         confirmAt: at(24 * 12),
+        autoConfirm: 'confirmed',
+        confirmProvider: 'gmail',
         lastReceivedAt: at(2),
         createdAt: at(24 * 13),
         updatedAt: at(2),
@@ -683,10 +685,7 @@ async function writeSeedEmail(
       .doc('progress')
       .set({
         id: 'progress',
-        provider: 'gmail',
-        stepId: 'test',
-        startedAt: 0,
-        doneAt: at(24 * 11),
+        noticeSeenThrough: null,
         createdAt: at(24 * 13),
         updatedAt: at(24 * 11),
       }),

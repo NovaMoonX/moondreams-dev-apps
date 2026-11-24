@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 
 import type { EmailEventRead } from '../../src/apps/runway/hooks/useEmailPurchases.ts';
+import { splitAddressForWrap } from '../../src/lib/emailForwarding/address.ts';
 import {
   groupEmailSenders,
   readSender,
-  splitAddressForWrap,
 } from '../../src/apps/runway/utils/emailSenders.ts';
 import { toAddress } from '../../functions/src/email/emailUtils.ts';
 import {

@@ -20,32 +20,37 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
+import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
+import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
+import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useNow } from '@/hooks/useNow';
+import {
+  hasConfirmNotice,
+  shortenForwardingAddress,
+} from '@/lib/emailForwarding/address';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal, formatTimeAgo } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
-import EmailAddressText from '@apps/runway/components/EmailAddressText';
-import EmailConfirmNotice from '@apps/runway/components/EmailConfirmNotice';
 import EmailRowBadge from '@apps/runway/components/EmailRowBadge';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
 import EmailSenderSheet from '@apps/runway/components/EmailSenderSheet';
-import EmailSetupView from '@apps/runway/components/EmailSetupView';
 import {
   EMAIL_WORDS,
   FILTER_FROM_WORDS,
   describeEmailFilter,
   describeEmailRowOutcome,
-  hasConfirmNotice,
-  shortenForwardingAddress,
   stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import {
+  EMAIL_ADDRESS_PREFIX,
+  RUNWAY_SEARCH_THRESHOLD,
+} from '@apps/runway/constants';
 import {
   useEmailActions,
   useEmailEvents,
@@ -393,6 +398,8 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     >
       {isSetupShown ? (
         <EmailSetupView
+          setupLine={EMAIL_WORDS.setupLine}
+          prefix={EMAIL_ADDRESS_PREFIX}
           address={intake.address}
           isLoading={intake.isLoading}
           isFailed={intake.isFailed}
@@ -406,6 +413,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         <div className='space-y-6'>
           {shownConfirm !== null && (
             <EmailConfirmNotice
+              appName='Runway'
               confirm={shownConfirm}
               isTapped={
                 isConfirmTappedBefore || confirmTappedAt === shownConfirm.at
@@ -504,7 +512,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               <ActionRow
                 icon={<Mail />}
                 label={EMAIL_WORDS.addressRow}
-                subtitle={shortenForwardingAddress(intake.address)}
+                subtitle={shortenForwardingAddress(
+                  intake.address,
+                  EMAIL_ADDRESS_PREFIX,
+                )}
                 hasChevron
                 onClick={() => setIsReopened(true)}
               />

@@ -10,11 +10,8 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type {
-  EmailIntakeState,
-  EmailSetupProgress,
-} from '@/lib/emailForwarding/types';
-import type { AListEmailEvent } from '@apps/a-list/types';
+import type { EmailIntakeState } from '@/lib/emailForwarding/types';
+import type { AListEmailEvent, AListEmailProgress } from '@apps/a-list/types';
 
 const EVENT_LIMIT = 100;
 
@@ -44,17 +41,17 @@ export function startEmailIntakeListener(
   );
 }
 
-/** How far the member got setting up forwarding; null until they start. */
+/** What the member has been told about email changes; null until the first notice is seen. */
 export function startEmailProgressListener(
   uid: string,
-  onChange: (progress: EmailSetupProgress | null) => void,
+  onChange: (progress: AListEmailProgress | null) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   return onSnapshot(
     doc(db, ...memberPath(uid), 'emailSetup', 'progress'),
     (snapshot) =>
       onChange(
-        snapshot.exists() ? (snapshot.data() as EmailSetupProgress) : null,
+        snapshot.exists() ? (snapshot.data() as AListEmailProgress) : null,
       ),
     onError,
   );

@@ -88,8 +88,3 @@ export const isSenderFiltered = (filters: EmailFilterRead[], address: string) =>
       filter.subjectContains.length === 0 &&
       filter.bodyContains.length === 0,
   );
-
-export const splitAddressForWrap = (address: string, prefix = '') =>
-  address.split(
-    new RegExp(`${prefix === '' ? '' : `(?<=^${prefix})|`}(?<=@)|(?=\\.)`),
-  );

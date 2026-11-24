@@ -1,25 +1,8 @@
-/** The email services a forwarding walkthrough knows how to set up; `other` gets generic steps. */
-export type EmailProvider =
-  'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'proton' | 'other';
+/** The providers whose forwarding confirmation the server recognises. */
+export type ConfirmProvider = 'gmail' | 'yahoo' | 'proton';
 
-export type EmailSetupStepId =
-  'provider' | 'copy' | 'forwarding' | 'rule' | 'confirm' | 'filter' | 'test';
-
-/** How far the person got setting up forwarding, written by the app so the walkthrough resumes on any device; one per person per app, at `emailSetup/progress`. */
-export interface EmailSetupProgress {
-  id: 'progress';
-  provider: EmailProvider | null;
-  /** The furthest step reached, by id so a provider's list can change without moving it; null before a provider is chosen. */
-  stepId: EmailSetupStepId | null;
-  /** When the current walk began; a re-walk ticks only what arrives after it. */
-  startedAt: number | null;
-  /** When setup was finished (the first useful email arrived, or the person completed it); null while unfinished. */
-  doneAt: number | null;
-  /** The newest email change the app has told the person about (an email's `receivedAt`, a server time); null until one has been seen. Documents written before it lack the key. */
-  noticeSeenThrough: number | null;
-  createdAt: number;
-  updatedAt: number;
-}
+/** What the server did with a confirmation link: opened it, tried and failed, or left it for the person. */
+export type AutoConfirm = 'confirmed' | 'failed' | 'skipped';
 
 /** The forwarding address and what the server caught of the provider's confirmation email, written only by Functions. */
 export interface EmailIntakeState {
@@ -31,8 +14,21 @@ export interface EmailIntakeState {
   confirmCode: string | null;
   /** When the confirmation arrived; null until it does. */
   confirmAt: number | null;
+  /** Whether the server opened the confirmation link itself; null until a confirmation arrives. */
+  autoConfirm: AutoConfirm | null;
+  /** Whose confirmation it was; null until one arrives. */
+  confirmProvider: ConfirmProvider | null;
   /** When any email last reached the address; null until one does. */
   lastReceivedAt: number | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A forwarding confirmation as the confirm notice draws it. */
+export interface EmailConfirm {
+  url: string | null;
+  code: string | null;
+  at: number;
+  autoConfirm: AutoConfirm | null;
+  provider: ConfirmProvider | null;
 }

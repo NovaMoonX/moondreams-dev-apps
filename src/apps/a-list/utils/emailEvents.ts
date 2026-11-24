@@ -1,4 +1,3 @@
-import type { EmailIntakeState } from '@/lib/emailForwarding/types';
 import { EMAIL_EVENT_KEEP_DAYS } from '@apps/a-list/constants';
 import { formatTimeInZone } from '@apps/a-list/utils/theatreTime';
 import type { AListEmailEvent, AListEmailOutcome } from '@apps/a-list/types';
@@ -14,16 +13,6 @@ export const EMAIL_OUTCOME_EMOJIS: Record<AListEmailOutcome, string> = {
   notTicket: '📭',
   unread: '🤔',
 };
-
-/** Outcomes that show the forwarding does what it is for, so a test email counts and a walk can be ticked. */
-const USEFUL_OUTCOMES: AListEmailOutcome[] = [
-  'added',
-  'attached',
-  'canceled',
-  'partlyCanceled',
-  'cancelNotFound',
-  'alreadyHandled',
-];
 
 /** "Wed, Nov 25, 4:15 PM" on the theater's wall clock (the device's when the theater has no zone). */
 export function formatShowtimeLine(epoch: number, timeZone: string | null) {
@@ -126,28 +115,3 @@ const DAY_MS = 86_400_000;
 /** The instant the server handled the email, which it stamps on what it wrote: the event's expiry less its keep time. */
 export const getEmailHandledAt = (event: AListEmailEvent) =>
   event.expiresAt - EMAIL_EVENT_KEEP_DAYS * DAY_MS;
-
-/** The instant a new walk begins, from server-written times only (never this phone's clock): one past the latest confirmation or email, so a re-walk ticks only what arrives after it. */
-export function getWalkStartedAt(
-  intake: EmailIntakeState | null,
-  events: AListEmailEvent[],
-) {
-  const known = [
-    intake?.confirmAt ?? null,
-    intake?.lastReceivedAt ?? null,
-    events[0]?.receivedAt ?? null,
-  ].filter((value): value is number => value !== null);
-  return known.length === 0 ? 0 : Math.max(...known) + 1;
-}
-
-/** Whether a useful email has arrived since `startedAt`. */
-export function hasUsefulEmailSince(
-  events: AListEmailEvent[],
-  startedAt: number | null,
-) {
-  return events.some(
-    (event) =>
-      event.receivedAt > (startedAt ?? 0) &&
-      USEFUL_OUTCOMES.includes(event.outcome),
-  );
-}
