@@ -55,12 +55,16 @@ async function writeProgress(
     const change = decide(current);
     if (change === null) return;
     const now = Date.now();
-    transaction.set(ref, {
-      id: 'progress',
-      createdAt: current?.createdAt ?? now,
-      ...change,
-      updatedAt: now,
-    } satisfies AListEmailProgress);
+    transaction.set(
+      ref,
+      {
+        id: 'progress',
+        createdAt: current?.createdAt ?? now,
+        ...change,
+        updatedAt: now,
+      } satisfies AListEmailProgress,
+      { merge: true },
+    );
   });
 }
 

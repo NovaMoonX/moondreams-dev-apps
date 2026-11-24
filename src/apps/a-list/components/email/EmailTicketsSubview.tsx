@@ -18,6 +18,11 @@ import {
   hasConfirmNotice,
   shortenForwardingAddress,
 } from '@/lib/emailForwarding/address';
+import {
+  isConfirmNoticeDue,
+  readConfirmTapped,
+  writeConfirmTapped,
+} from '@/lib/emailForwarding/confirmNotice';
 import type { EmailConfirm } from '@/lib/emailForwarding/types';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -50,27 +55,6 @@ import type { AListEmailEvent } from '@apps/a-list/types';
 const EVENTS_SHOWN = 5;
 const KEPT_LINE = `Emails are kept here for ${EMAIL_EVENT_KEEP_DAYS} days.`;
 const CONFIRM_TAPPED_KEY = 'a-list:email-confirm-tapped';
-const CONFIRM_NOTICE_DAYS = 7;
-const DAY_MS = 86_400_000;
-
-const readConfirmTapped = (confirmAt: number | null) => {
-  try {
-    return (
-      confirmAt !== null &&
-      localStorage.getItem(CONFIRM_TAPPED_KEY) === String(confirmAt)
-    );
-  } catch {
-    return false;
-  }
-};
-
-const writeConfirmTapped = (confirmAt: number) => {
-  try {
-    localStorage.setItem(CONFIRM_TAPPED_KEY, String(confirmAt));
-  } catch {
-    // The notice folds for this visit only.
-  }
-};
 
 interface EmailRowsProps {
   events: AListEmailEvent[];
@@ -179,17 +163,14 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
           provider: intake.confirmProvider ?? null,
         };
   const confirmAt = pendingConfirm?.at ?? null;
-  const isConfirmTappedBefore = readConfirmTapped(confirmAt);
-  const getIsConfirmShown = (shown: EmailConfirm) =>
-    shown.autoConfirm === 'confirmed'
-      ? !events.some(
-          (entry) => entry.outcome !== 'confirm' && entry.receivedAt > shown.at,
-        )
-      : now < shown.at + CONFIRM_NOTICE_DAYS * DAY_MS;
+  const isConfirmTappedBefore = readConfirmTapped(
+    CONFIRM_TAPPED_KEY,
+    confirmAt,
+  );
   const shownConfirm =
     pendingConfirm !== null &&
     hasConfirmNotice(pendingConfirm) &&
-    getIsConfirmShown(pendingConfirm)
+    isConfirmNoticeDue(pendingConfirm, events, now)
       ? pendingConfirm
       : null;
 
@@ -261,7 +242,7 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
                   isConfirmTappedBefore || confirmTappedAt === shownConfirm.at
                 }
                 onConfirmTapped={() => {
-                  writeConfirmTapped(shownConfirm.at);
+                  writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
                   setConfirmTappedAt(shownConfirm.at);
                 }}
               />

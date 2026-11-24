@@ -32,6 +32,11 @@ import {
   hasConfirmNotice,
   shortenForwardingAddress,
 } from '@/lib/emailForwarding/address';
+import {
+  isConfirmNoticeDue,
+  readConfirmTapped,
+  writeConfirmTapped,
+} from '@/lib/emailForwarding/confirmNotice';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal, formatTimeAgo } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
@@ -71,27 +76,6 @@ import {
 
 const ROWS_SHOWN = 5;
 const CONFIRM_TAPPED_KEY = 'runway:email-confirm-tapped';
-const CONFIRM_NOTICE_DAYS = 7;
-const DAY_MS = 86_400_000;
-
-const readConfirmTapped = (confirmAt: number | null) => {
-  try {
-    return (
-      confirmAt !== null &&
-      localStorage.getItem(CONFIRM_TAPPED_KEY) === String(confirmAt)
-    );
-  } catch {
-    return false;
-  }
-};
-
-const writeConfirmTapped = (confirmAt: number) => {
-  try {
-    localStorage.setItem(CONFIRM_TAPPED_KEY, String(confirmAt));
-  } catch {
-    // Storage can be blocked; the notice then stays its seven days.
-  }
-};
 
 const OUTCOME_BADGES: Record<EmailEventRead['outcome'], LucideIcon> = {
   purchase: Receipt,
@@ -274,26 +258,13 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const pendingConfirm = intake.confirm;
   const confirmAt = pendingConfirm?.at ?? null;
   const isConfirmTappedBefore = useMemo(
-    () => readConfirmTapped(confirmAt),
+    () => readConfirmTapped(CONFIRM_TAPPED_KEY, confirmAt),
     [confirmAt],
   );
-  const getIsConfirmShown = (
-    pendingConfirm: NonNullable<typeof intake.confirm>,
-  ) => {
-    if (pendingConfirm.autoConfirm === 'confirmed') {
-      return (
-        isEventsLoaded &&
-        !events.some(
-          (entry) =>
-            entry.outcome !== 'confirm' && entry.receivedAt > pendingConfirm.at,
-        )
-      );
-    }
-    // A hand-forwarded email proves nothing about automatic forwarding, so only time ends the notice, never a tap.
-    return now < pendingConfirm.at + CONFIRM_NOTICE_DAYS * DAY_MS;
-  };
   const shownConfirm =
-    pendingConfirm !== null && getIsConfirmShown(pendingConfirm)
+    pendingConfirm !== null &&
+    (pendingConfirm.autoConfirm !== 'confirmed' || isEventsLoaded) &&
+    isConfirmNoticeDue(pendingConfirm, events, now)
       ? pendingConfirm
       : null;
   const isConfirmDrawn =
@@ -419,7 +390,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 isConfirmTappedBefore || confirmTappedAt === shownConfirm.at
               }
               onConfirmTapped={() => {
-                writeConfirmTapped(shownConfirm.at);
+                writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
                 setConfirmTappedAt(shownConfirm.at);
               }}
             />
