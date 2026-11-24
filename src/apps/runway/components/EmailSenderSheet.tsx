@@ -8,7 +8,7 @@ import FormSheet from '@/components/FormSheet';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import EmailAddressText from '@apps/runway/components/EmailAddressText';
+import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import {
   useEmailActions,

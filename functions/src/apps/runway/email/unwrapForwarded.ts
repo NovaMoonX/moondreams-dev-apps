@@ -1,4 +1,4 @@
-import { isForwardingConfirmation } from './forwardingConfirmation.js';
+import { isForwardingConfirmation } from '../../../email/forwardingConfirmation.js';
 
 const DAY_MS = 86_400_000;
 const MAX_LINE = 400;

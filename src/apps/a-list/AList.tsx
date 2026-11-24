@@ -26,10 +26,16 @@ import SeenPromptHost from '@apps/a-list/components/viewing/SeenPromptHost';
 import ViewingDrawer from '@apps/a-list/components/viewing/ViewingDrawer';
 import WatchlistItemDrawer from '@apps/a-list/components/watchlist/WatchlistItemDrawer';
 import WatchlistScreen from '@apps/a-list/components/watchlist/WatchlistScreen';
-import { A_LIST_TABS, DEFAULT_A_LIST_TAB } from '@apps/a-list/constants';
+import {
+  A_LIST_TABS,
+  DEFAULT_A_LIST_TAB,
+  EMAIL_TICKETS_GATE_ID,
+} from '@apps/a-list/constants';
 import { AListOverlayContext } from '@apps/a-list/hooks/useAListOverlay';
-import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
+import EmailTicketsSubview from '@apps/a-list/components/email/EmailTicketsSubview';
+import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
+import { useAListEmailSync } from '@apps/a-list/hooks/useAListEmailSync';
 import { useAListSync } from '@apps/a-list/hooks/useAListSync';
 import { useAListTheme } from '@apps/a-list/hooks/useAListTheme';
 import { useRefreshUnreleasedMovies } from '@apps/a-list/hooks/useRefreshUnreleasedMovies';
@@ -69,6 +75,11 @@ function AList() {
   useAListTheme();
   useAListSync(user?.uid ?? null);
   useLoadFeatureGates('a-list', user?.uid ?? null);
+  const isEmailGateOpen = useIsGateOpen('a-list', EMAIL_TICKETS_GATE_ID);
+  useAListEmailSync(
+    user?.uid ?? null,
+    isEmailGateOpen && isLoaded && !loadError && membership !== null,
+  );
   useTrackAppUsage('a-list', user?.uid ?? null);
   useRefreshUnreleasedMovies(
     user?.uid ?? null,
@@ -143,7 +154,9 @@ function AList() {
 
   // A link to a showing deleted since it was shared opens nothing rather than an empty sheet.
   const overlay: AListOverlay | null =
-    openedOverlay ??
+    (openedOverlay?.kind === 'emailTickets' && !isEmailGateOpen
+      ? null
+      : openedOverlay) ??
     (linkedViewingId !== null && isLinkedViewingKnown
       ? { kind: 'viewing', id: linkedViewingId }
       : null);
@@ -172,6 +185,7 @@ function AList() {
   const isSubviewOpen =
     overlay?.kind === 'add' ||
     overlay?.kind === 'membership' ||
+    overlay?.kind === 'emailTickets' ||
     overlay?.kind === 'projection' ||
     overlay?.kind === 'share' ||
     overlay?.kind === 'theaters' ||
@@ -191,6 +205,15 @@ function AList() {
       )}
       {overlay?.kind === 'projection' && (
         <ProjectionSubview membership={membership} onClose={closeOverlay} />
+      )}
+      {overlay?.kind === 'emailTickets' && (
+        <EmailTicketsSubview
+          onClose={() =>
+            overlay.returnTo === 'membership'
+              ? setOverlay({ kind: 'membership' })
+              : closeOverlay()
+          }
+        />
       )}
       {overlay?.kind === 'membership' && (
         <MembershipSettingsSubview
