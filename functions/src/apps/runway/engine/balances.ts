@@ -33,7 +33,7 @@ import {
 } from './progress.js';
 
 /** What a paid mark took from the event's goal, never more than the payment came to less what Free to Spend fronted. */
-const getGoalPart = (entry: {
+export const getGoalPart = (entry: {
   amountCents: Cents;
   fromFreeCents: Cents;
   fromGoalCents: Cents;
