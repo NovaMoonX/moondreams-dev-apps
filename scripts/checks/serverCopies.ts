@@ -74,6 +74,13 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/runway/engine/storeNames.ts',
+    dest: 'functions/src/apps/runway/storeNames.ts',
+    importRewrites: {
+      '@/utils/optionMatchUtils': '../../vendor/optionMatchUtils.js',
+    },
+  },
+  {
     src: 'src/apps/runway/share/manifest.ts',
     dest: 'functions/src/apps/runway/share/manifest.ts',
     importRewrites: {

@@ -9,7 +9,11 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { selectTwinMergingIds } from '@apps/runway/store/selectors/emailSelectors';
+import { getSplitKey, getTwinMergingIds } from '@apps/runway/engine/emailTwins';
+import {
+  selectAllPurchases,
+  selectEmailTwins,
+} from '@apps/runway/store/selectors/emailSelectors';
 import {
   findHistoryDuplicates,
   makeIsLinkHistory,
@@ -1810,6 +1814,29 @@ export const selectIsLinkHistory = createSelector(
     (state: RootState) => state.runway.cards,
   ],
   makeIsLinkHistory,
+);
+
+/** The bank charges that merge with their email on their own, so Needs a home leaves them out. A split's charges count only while its merge can still run: not when any charge is link history (nothing merges history) and not once its tries are spent. */
+const selectTwinMergingIds = createSelector(
+  [
+    selectEmailTwins,
+    selectAllPurchases,
+    selectIsLinkHistory,
+    (state: RootState) => state.runway.splitGivenUp,
+  ],
+  (twins, purchases, isLinkHistory, givenUp) => {
+    const byId = new Map(purchases.map((purchase) => [purchase.id, purchase]));
+    return getTwinMergingIds(twins, (emailId, bankIds) => {
+      const email = byId.get(emailId);
+      const banks = bankIds.flatMap((id) => byId.get(id) ?? []);
+      return (
+        email !== undefined &&
+        banks.length === bankIds.length &&
+        !banks.some(isLinkHistory) &&
+        !givenUp.includes(getSplitKey(banks, email))
+      );
+    });
+  },
 );
 
 /** What waits for a home, leaving out what a link brought in from before it was made: history is never asked about or placed by a pass. */
