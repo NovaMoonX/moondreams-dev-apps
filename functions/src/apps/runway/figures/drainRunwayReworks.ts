@@ -65,10 +65,7 @@ const settle = (
 
 const SWEEP_PATH = 'apps/runway/server/_reworkSweep';
 
-/**
- * Once per engine version (the first deploy included) marks every plan due, so a plan nobody has written
- * to since gets figures, and figures from older maths, which the phone ignores, are worked out again.
- */
+/** Once per engine version, the first deploy included, marks every plan due: an untouched plan gets figures, and figures from older maths are redone. */
 async function sweepOnNewEngine(firestore: Firestore, now: number) {
   const marker = firestore.doc(SWEEP_PATH);
   if ((await marker.get()).get('engineVersion') === ENGINE_VERSION) return;

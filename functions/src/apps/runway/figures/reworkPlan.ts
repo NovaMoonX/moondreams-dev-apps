@@ -158,9 +158,8 @@ async function writeShareSummary(
 }
 
 /**
- * Works out a plan's figures from the stored documents and writes them sealed to `figures/current`, then
- * keeps the plan's share summary current. Reads what the phone's figures read for the same day and writes
- * nothing else: never a closing, never the plan's `updatedAt`.
+ * Works out a plan's figures from what the phone reads for the same day, writes them sealed and keeps the
+ * share summary current. It never writes a closing or the plan's `updatedAt`, so it can't mark itself again.
  */
 export async function reworkPlan(
   firestore: Firestore,

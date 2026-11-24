@@ -246,7 +246,7 @@ export const AUTO_PAY_DAYS = {
   snoozeDays: 3,
 } as const;
 
-// Round 4: how often an envelope or goal gets money, calendar first and paycheck second.
+// How often an envelope or goal gets money, calendar first and paycheck second.
 export const CALENDAR_PERIODS = [
   'weekly',
   'every2Weeks',

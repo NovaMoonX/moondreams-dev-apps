@@ -1,10 +1,6 @@
 import { saveLastWriteAt } from '@apps/runway/utils/figuresSnapshot';
 
-/**
- * Notes on this device that it just wrote to the plan, so on a later open the server's figures from before
- * the write are not drawn over it. The open in progress keeps its head start: a write before the ledger is
- * read would otherwise drop every figure to a half-read ledger.
- */
+/** Notes that this device just wrote to the plan, so a later open never draws server figures from before the write; the open in progress keeps its head start. */
 export function markLocalWrite(uid: string) {
   saveLastWriteAt(uid, Date.now());
 }
