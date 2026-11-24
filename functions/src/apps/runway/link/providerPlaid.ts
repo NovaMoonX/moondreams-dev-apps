@@ -322,6 +322,12 @@ const UNSUPPORTED_CODES = new Set([
   'INVALID_PRODUCT',
 ]);
 
+// Plaid answers an update-mode ask for liabilities at a bank without them with INVALID_FIELD ("liabilities not supported by <bank>").
+const isCardConsentRefusal = (error: unknown): error is ProviderError =>
+  error instanceof ProviderError &&
+  (error.code === 'INVALID_FIELD' || error.code === 'INVALID_PRODUCT') &&
+  /liabilities/i.test(error.trace.detail ?? '');
+
 const createLinkToken = (body: Record<string, unknown>) =>
   call<{ link_token: string }>('/link/token/create', body);
 
@@ -335,15 +341,34 @@ export const plaidProvider: BankDataProvider = {
       ...(isEmulator() ? {} : { webhook: webhookUrl() }),
     };
     if (update) {
-      const { link_token } = await createLinkToken({
+      const reopen = {
         ...base,
         access_token: update.accessToken,
         update: { account_selection_enabled: update.accountSelection },
-        ...(update.askCardConsent
-          ? { additional_consented_products: ['liabilities'] }
-          : {}),
-      });
-      return { linkToken: link_token };
+      };
+      if (!update.askCardConsent) {
+        const { link_token } = await createLinkToken(reopen);
+        return { linkToken: link_token, isCardConsentUnsupported: false };
+      }
+      return createLinkToken({
+        ...reopen,
+        additional_consented_products: ['liabilities'],
+      }).then(
+        ({ link_token }) => ({
+          linkToken: link_token,
+          isCardConsentUnsupported: false,
+        }),
+        async (error: unknown) => {
+          if (!isCardConsentRefusal(error)) throw error;
+          logger.warn('runway.link.cardConsentUnsupported', {
+            code: error.code,
+            requestId: error.trace.requestId,
+            detail: error.trace.detail,
+          });
+          const { link_token } = await createLinkToken(reopen);
+          return { linkToken: link_token, isCardConsentUnsupported: true };
+        },
+      );
     }
     const fresh = {
       ...base,
@@ -363,7 +388,7 @@ export const plaidProvider: BankDataProvider = {
       logger.warn('runway.link.cardDetailsUnavailable');
       return createLinkToken(fresh);
     });
-    return { linkToken: link_token };
+    return { linkToken: link_token, isCardConsentUnsupported: false };
   },
 
   async exchange(publicToken) {
