@@ -18,11 +18,20 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import CoverShortfallSheet, {
+  type CoverChoice,
+} from '@apps/runway/components/CoverShortfallSheet';
 import EnvelopePickSheet from '@apps/runway/components/EnvelopePickSheet';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import MoneyInSheet from '@apps/runway/components/MoneyInSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { NEEDS_HOME_WORDS, PAIR_WORDS } from '@apps/runway/constants';
+import {
+  COVER_WORDS,
+  NEEDS_HOME_WORDS,
+  PAIR_WORDS,
+} from '@apps/runway/constants';
+import { splitAtShortfall } from '@apps/runway/engine/spill';
+import { useShortfallMove } from '@apps/runway/hooks/useShortfallMove';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
@@ -40,7 +49,10 @@ import {
   selectNeedsHomeSections,
   type NeedsHomeMove,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
+import {
+  getPickEffect,
+  getSpilledLines,
+} from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
@@ -154,6 +166,13 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [sent, setSent] = useState<OpenPurchase | null>(null);
   const [isPicking, setIsPicking] = useState(false);
+  const [asking, setAsking] = useState<{
+    envelopeId: string;
+    leftCents: number;
+    shortCents: number;
+  } | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
+  const moveShortfall = useShortfallMove();
   const [isWriting, setIsWriting] = useState(false);
   const opened =
     [
@@ -220,6 +239,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const runBulk = async (
     entries: PurchaseAssignment[],
     getTitle: (written: number, total: number) => string,
+    afterUndo: (() => Promise<unknown>) | null = null,
   ) => {
     if (!user || isWriting || entries.length === 0) return;
     const uid = user.uid;
@@ -252,13 +272,15 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       action: {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () =>
-          void putBack(uid, written).catch((undoError: unknown) =>
-            addToast({
-              title: NEEDS_HOME_WORDS.undoFailed,
-              description: getErrorMessage(undoError, ''),
-              type: 'error',
-            }),
-          ),
+          void putBack(uid, written)
+            .then(() => afterUndo?.())
+            .catch((undoError: unknown) =>
+              addToast({
+                title: NEEDS_HOME_WORDS.undoFailed,
+                description: getErrorMessage(undoError, ''),
+                type: 'error',
+              }),
+            ),
       },
     });
     selection.exit();
@@ -280,31 +302,116 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       NEEDS_HOME_WORDS.bulkKept,
     );
 
+  const planBulk = (envelopeId: string, choice: CoverChoice | null) => {
+    const state = store.getState();
+    return selected.reduce<{
+      entries: PurchaseAssignment[];
+      leftCents: number | null;
+      shortCents: number;
+    }>(
+      (done, purchase) => {
+        const taken = done.entries
+          .flatMap((entry) => entry.lines)
+          .map((line) => ({ ...line, cents: -line.cents }));
+        const effect = getPickEffect(
+          state,
+          envelopeId,
+          purchase.amountCents,
+          taken,
+          purchase.date,
+        );
+        const lines: PurchaseLine[] =
+          effect.shortCents > 0 && choice === 'useRest'
+            ? splitAtShortfall(
+                envelopeId,
+                purchase.amountCents,
+                effect.shortCents,
+              )
+            : effect.shortCents > 0 && choice === 'moveIn'
+              ? [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }]
+              : getSpilledLines(
+                  state,
+                  [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }],
+                  taken,
+                  purchase.date,
+                );
+        return {
+          entries: [
+            ...done.entries,
+            {
+              purchase,
+              lines,
+              summary: describePurchaseAssigned(purchase, lines, nameOf),
+            },
+          ],
+          leftCents: done.leftCents ?? effect.leftCents,
+          shortCents: done.shortCents + effect.shortCents,
+        };
+      },
+      { entries: [], leftCents: null, shortCents: 0 },
+    );
+  };
+
+  const bulkEffectOf = (envelopeId: string) => {
+    const { entries, leftCents } = planBulk(envelopeId, null);
+    const left = leftCents ?? 0;
+    const taken = entries
+      .flatMap((entry) => entry.lines)
+      .reduce(
+        (sum, line) =>
+          line.envelopeId === envelopeId ? sum + line.cents : sum,
+        0,
+      );
+    const spillTo = entries.flatMap((entry) =>
+      entry.lines.flatMap((line) =>
+        line.via === 'spill' ? [line.envelopeId] : [],
+      ),
+    );
+    return { leftCents: left, afterCents: left - taken, spillTo };
+  };
+
+  const placedTitle =
+    (envelopeId: string) => (written: number, total: number) =>
+      NEEDS_HOME_WORDS.bulkPlaced(written, total, nameOf(envelopeId));
+
   const putInEnvelope = (envelopeId: string) => {
     setIsPicking(false);
-    const state = store.getState();
-    const entries = selected.reduce<PurchaseAssignment[]>((done, purchase) => {
-      const taken = done
-        .flatMap((entry) => entry.lines)
-        .map((line) => ({ ...line, cents: -line.cents }));
-      const lines: PurchaseLine[] = getSpilledLines(
-        state,
-        [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }],
-        taken,
-        purchase.date,
-      );
-      return [
-        ...done,
-        {
-          purchase,
-          lines,
-          summary: describePurchaseAssigned(purchase, lines, nameOf),
-        },
-      ];
-    }, []);
-    void runBulk(entries, (written, total) =>
-      NEEDS_HOME_WORDS.bulkPlaced(written, total, nameOf(envelopeId)),
-    );
+    const plan = planBulk(envelopeId, null);
+    if (plan.shortCents > 0) {
+      setAskError(null);
+      setAsking({
+        envelopeId,
+        leftCents: plan.leftCents ?? 0,
+        shortCents: plan.shortCents,
+      });
+      return;
+    }
+    void runBulk(plan.entries, placedTitle(envelopeId));
+  };
+
+  const cover = async (choice: CoverChoice) => {
+    if (!asking || isWriting) return;
+    const { envelopeId, shortCents } = asking;
+    const plan = planBulk(envelopeId, choice);
+    if (choice !== 'moveIn') {
+      setAsking(null);
+      void runBulk(plan.entries, placedTitle(envelopeId));
+      return;
+    }
+    setIsWriting(true);
+    setAskError(null);
+    const takeBack = await moveShortfall(
+      envelopeId,
+      shortCents,
+      nameOf(envelopeId),
+    ).catch((moveError: unknown) => {
+      setAskError(getErrorMessage(moveError, COVER_WORDS.moveFailed));
+      return null;
+    });
+    setIsWriting(false);
+    if (takeBack === null) return;
+    setAsking(null);
+    void runBulk(plan.entries, placedTitle(envelopeId), takeBack);
   };
 
   const renderRows = (rows: readonly OpenPurchase[], isPlaced = false) => (
@@ -507,8 +614,21 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       {isPicking && (
         <EnvelopePickSheet
           subtitle={NEEDS_HOME_WORDS.bulkPickSub(selected.length)}
+          effectOf={bulkEffectOf}
           onPick={putInEnvelope}
           onClose={() => setIsPicking(false)}
+        />
+      )}
+      {asking && (
+        <CoverShortfallSheet
+          name={nameOf(asking.envelopeId)}
+          leftCents={asking.leftCents}
+          shortCents={asking.shortCents}
+          isMany={selected.length > 1}
+          isBusy={isWriting}
+          error={askError}
+          onChoose={(choice) => void cover(choice)}
+          onClose={() => setAsking(null)}
         />
       )}
       {openId !== null && !isMoneyIn && (

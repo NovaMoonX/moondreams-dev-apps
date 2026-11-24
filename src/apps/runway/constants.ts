@@ -5032,6 +5032,28 @@ const getBulkCount = (written: number, total: number) => {
     : `${written} of ${total} ${noun(total)}`;
 };
 
+/** The pick an envelope can't cover: what each envelope will drop to, and the question asked before it goes below zero. */
+export const COVER_WORDS = {
+  leftToAfter: (left: string, after: string) => `${left} → ${after}`,
+  runsOutTo: (names: string) => `Runs out, so the rest comes from ${names}`,
+  title: (name: string) => `${name} can’t cover all of it`,
+  body: (name: string, left: string, short: string) =>
+    `${name} has ${left} left, so this would take it ${short} over. How should the rest be covered?`,
+  bodyMany: (name: string, left: string, short: string) =>
+    `${name} has ${left} left, so these would take it ${short} over. How should the rest be covered?`,
+  spendRest: (left: string, name: string) => `Use the ${left} in ${name}`,
+  spendRestSub: (short: string) => `The other ${short} comes out of Free to Spend`,
+  allFree: 'Take it all from Free to Spend',
+  allFreeSub: (name: string) => `${name} stays as it is`,
+  moveIn: (short: string, name: string) => `Move ${short} into ${name} first`,
+  moveInSub: 'From Free to Spend, then all of it comes out of the envelope',
+  goOver: (name: string, short: string) => `Let ${name} go ${short} over`,
+  goOverSub: 'It shows as over until you top it up',
+  moveFailed: 'The money wasn’t moved, so nothing was sent.',
+  movedAndSent: (short: string, name: string) =>
+    `Moved ${short} into ${name} and sent it there`,
+};
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank or email',

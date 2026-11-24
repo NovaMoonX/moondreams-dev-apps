@@ -3,12 +3,22 @@ import { useState } from 'react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { LayoutGrid } from 'lucide-react';
 
+import CoverShortfallSheet, {
+  type CoverChoice,
+} from '@apps/runway/components/CoverShortfallSheet';
 import EnvelopePickSheet from '@apps/runway/components/EnvelopePickSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { NEEDS_HOME_WORDS, SPEND_WORDS } from '@apps/runway/constants';
+import { formatCents } from '@/utils/moneyUtils';
+import {
+  COVER_WORDS,
+  NEEDS_HOME_WORDS,
+  SPEND_WORDS,
+} from '@apps/runway/constants';
+import { splitAtShortfall } from '@apps/runway/engine/spill';
+import { useShortfallMove } from '@apps/runway/hooks/useShortfallMove';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { toMerchantKey } from '@apps/runway/engine/rules';
 import { canOfferRule } from '@apps/runway/engine/matching';
@@ -23,13 +33,20 @@ import {
   selectEnvelopes,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
+import {
+  getPickEffect,
+  getSpilledLines,
+  type PickEffect,
+} from '@apps/runway/store/selectors/spillSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import type { OpenPurchase } from '@apps/runway/types';
+import { selectLedgerOnlyBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
 import { isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import {
+  describePickEffect,
   describePurchaseAssigned,
+  describeRunsOut,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
@@ -58,6 +75,20 @@ function NeedsHomeAssign({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
+  const [asking, setAsking] = useState<{
+    envelopeId: string;
+    effect: PickEffect;
+  } | null>(null);
+  const moveShortfall = useShortfallMove();
+  const effectOf = (envelopeId: string) =>
+    getPickEffect(
+      store.getState(),
+      envelopeId,
+      purchase.amountCents,
+      null,
+      purchase.date,
+    );
+  useAppSelector(selectLedgerOnlyBalances);
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -86,16 +117,68 @@ function NeedsHomeAssign({
     }
   };
 
-  const send = async (envelopeId: string) => {
+  const send = (envelopeId: string) => {
     if (!user || busyId !== null) return;
-    setBusyId(envelopeId);
-    setError(null);
-    const lines = getSpilledLines(
+    const effect = effectOf(envelopeId);
+    if (effect.shortCents > 0) {
+      setError(null);
+      setAsking({ envelopeId, effect });
+      return;
+    }
+    void commit(envelopeId, spilledFor(envelopeId), null);
+  };
+
+  const spilledFor = (envelopeId: string) =>
+    getSpilledLines(
       store.getState(),
       [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }],
       null,
       purchase.date,
     );
+
+  const cover = async (choice: CoverChoice) => {
+    if (!asking || busyId !== null) return;
+    const { envelopeId, effect } = asking;
+    if (choice === 'goOver') {
+      await commit(envelopeId, spilledFor(envelopeId), null);
+      return;
+    }
+    if (choice === 'useRest') {
+      await commit(
+        envelopeId,
+        splitAtShortfall(envelopeId, purchase.amountCents, effect.shortCents),
+        null,
+      );
+      return;
+    }
+    setBusyId(envelopeId);
+    setError(null);
+    const takeBack = await moveShortfall(
+      envelopeId,
+      effect.shortCents,
+      nameOf(envelopeId),
+    ).catch((moveError: unknown) => {
+      setError(getErrorMessage(moveError, COVER_WORDS.moveFailed));
+      setBusyId(null);
+      return null;
+    });
+    if (takeBack === null) return;
+    setBusyId(null);
+    await commit(
+      envelopeId,
+      [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }],
+      { takeBack, cents: effect.shortCents },
+    );
+  };
+
+  const commit = async (
+    envelopeId: string,
+    lines: PurchaseLine[],
+    moved: { takeBack: () => Promise<unknown>; cents: number } | null,
+  ) => {
+    if (!user || busyId !== null) return;
+    setBusyId(envelopeId);
+    setError(null);
     try {
       const updatedAt = await assignPurchase(
         user.uid,
@@ -105,13 +188,20 @@ function NeedsHomeAssign({
         describePurchaseAssigned(purchase, lines, nameOf),
       );
       const placed = { ...purchase, lines, needsHome: false, updatedAt };
+      setAsking(null);
       addToast({
-        title: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
+        title: moved
+          ? COVER_WORDS.movedAndSent(
+              formatCents(moved.cents),
+              nameOf(envelopeId),
+            )
+          : NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
         type: 'success',
         duration: UNDO_WINDOW_MS,
         action: {
           label: NEEDS_HOME_WORDS.undo,
-          onClick: () => void putBack(user.uid, placed),
+          onClick: () =>
+            void putBack(user.uid, placed).then(() => moved?.takeBack()),
         },
       });
       const merchantKey = toMerchantKey(purchase.merchant);
@@ -180,11 +270,15 @@ function NeedsHomeAssign({
             key={id}
             name={nameOf(id)}
             emoji={looks.get(id)?.emoji ?? null}
-            detail={NEEDS_HOME_WORDS.sendHere}
-            isPrivate={false}
-            ariaLabel={`${nameOf(id)}, ${NEEDS_HOME_WORDS.sendHere}`}
+            detailLead={describePickEffect(effectOf(id))}
+            detail={
+              describeRunsOut(effectOf(id).spillTo, nameOf) ??
+              NEEDS_HOME_WORDS.sendHere
+            }
+            hiddenAriaLabel={`${nameOf(id)}, ${NEEDS_HOME_WORDS.sendHere}`}
+            ariaLabel={`${nameOf(id)}, ${describePickEffect(effectOf(id)).text}, ${NEEDS_HOME_WORDS.sendHere}`}
             isAction
-            onOpen={() => void send(id)}
+            onOpen={() => send(id)}
           />
         ))}
         <ItemRow
@@ -213,11 +307,26 @@ function NeedsHomeAssign({
           subtitle={NEEDS_HOME_WORDS.pickFor(
             getPurchaseTitle(purchase, nameOf),
           )}
+          effectOf={effectOf}
           onPick={(envelopeId) => {
             setIsPicking(false);
-            void send(envelopeId);
+            send(envelopeId);
           }}
           onClose={() => setIsPicking(false)}
+        />
+      )}
+      {asking && (
+        <CoverShortfallSheet
+          name={nameOf(asking.envelopeId)}
+          leftCents={asking.effect.leftCents}
+          shortCents={asking.effect.shortCents}
+          isBusy={busyId !== null}
+          error={error}
+          onChoose={(choice) => void cover(choice)}
+          onClose={() => {
+            setAsking(null);
+            setError(null);
+          }}
         />
       )}
     </div>

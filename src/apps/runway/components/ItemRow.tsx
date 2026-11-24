@@ -145,7 +145,8 @@ function ItemRow({
     : null;
   const shownDetail =
     reorder?.isFixed && reorder.fixedNote ? reorder.fixedNote : detail;
-  const hasDetail = Boolean(shownDetail) || Boolean(warningLine);
+  const hasDetail =
+    Boolean(shownDetail) || Boolean(warningLine) || detailLead !== null;
   const shownBadge = leading ?? <ItemBadge name={name} emoji={emoji} />;
   const badge = tick ? null : isFaded ? (
     <span className='contents [&>*]:opacity-45'>{shownBadge}</span>
@@ -191,9 +192,13 @@ function ItemRow({
                     detailLead.isOver && 'text-destructive font-medium',
                   )}
                 >
-                  {detailLead.text}
+                  {isPrivate ? (
+                    <MaskedText>{detailLead.text}</MaskedText>
+                  ) : (
+                    detailLead.text
+                  )}
                 </span>
-                {' · '}
+                {shownDetail ? ' · ' : null}
               </>
             )}
             {isPrivate && shownDetail ? (

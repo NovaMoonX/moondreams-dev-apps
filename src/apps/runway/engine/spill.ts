@@ -92,3 +92,18 @@ export function unspill(lines: readonly PurchaseLine[]): PurchaseLine[] {
     );
   }, []);
 }
+
+/** A purchase sent to an envelope that can't cover it: what the envelope has goes there and the shortfall comes out of Free to Spend. */
+export function splitAtShortfall(
+  envelopeId: string,
+  cents: Cents,
+  shortCents: Cents,
+): PurchaseLine[] {
+  const own = cents - shortCents;
+  return [
+    ...(own > 0 ? [{ envelopeId, cents: own, via: 'chosen' as const }] : []),
+    ...(shortCents > 0
+      ? [{ envelopeId: null, cents: shortCents, via: 'chosen' as const }]
+      : []),
+  ];
+}

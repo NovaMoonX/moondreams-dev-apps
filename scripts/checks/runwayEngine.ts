@@ -189,7 +189,11 @@ import {
   previewBillShare,
 } from '../../src/apps/runway/engine/billShare.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
-import { resolveSpill, unspill } from '../../src/apps/runway/engine/spill.ts';
+import {
+  resolveSpill,
+  splitAtShortfall,
+  unspill,
+} from '../../src/apps/runway/engine/spill.ts';
 import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
 import {
   describePurchaseAssigned,
@@ -7832,6 +7836,16 @@ const version = (
       { envelopeId: 'Pet Care', cents: 4_393, via: 'chosen' as const },
     ];
     const name = (id: string) => id;
+    assert.deepEqual(splitAtShortfall('pets', 4393, 2393), [
+      { envelopeId: 'pets', cents: 2000, via: 'chosen' },
+      { envelopeId: null, cents: 2393, via: 'chosen' },
+    ]);
+    assert.deepEqual(splitAtShortfall('pets', 4393, 4393), [
+      { envelopeId: null, cents: 4393, via: 'chosen' },
+    ]);
+    assert.deepEqual(splitAtShortfall('pets', 4393, 0), [
+      { envelopeId: 'pets', cents: 4393, via: 'chosen' },
+    ]);
     const read = (summary: string) => readPurchaseChange(summary);
     const base = {
       title: 'Petco, Inc',

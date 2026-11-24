@@ -10,7 +10,7 @@ import type {
   PurchaseLine,
   PurchasePairKind,
 } from '@apps/runway/types';
-import { SPILL_WORDS } from '@apps/runway/constants';
+import { COVER_WORDS, SPILL_WORDS } from '@apps/runway/constants';
 import { getCardName } from '@apps/runway/utils/cardText';
 import { unspill } from '@apps/runway/engine/spill';
 import { getLevelWords } from '@apps/runway/utils/levelText';
@@ -28,6 +28,36 @@ export function describeEnvelopeFigure(level: Level, cents: number) {
     value: formatCents(cents),
     word: getLevelWords(level).envelopeFigure,
   };
+}
+
+const formatSigned = (cents: number) =>
+  cents < 0 ? `−${formatCents(-cents)}` : formatCents(cents);
+
+/** What a pick does to an envelope, "$20.00 → −$23.93", read as over when it ends below zero. */
+export function describePickEffect(effect: {
+  leftCents: number;
+  afterCents: number;
+}) {
+  return {
+    text: COVER_WORDS.leftToAfter(
+      formatSigned(effect.leftCents),
+      formatSigned(effect.afterCents),
+    ),
+    isOver: effect.afterCents < 0,
+  };
+}
+
+/** Where a pick's "When it runs out" chain sends the rest, or null when it doesn't run out. */
+export function describeRunsOut(
+  spillTo: readonly (string | null)[],
+  nameOf: (envelopeId: string) => string,
+): string | null {
+  if (spillTo.length === 0) return null;
+  return COVER_WORDS.runsOutTo(
+    formatList([
+      ...new Set(spillTo.map((id) => (id === null ? FREE_NAME : nameOf(id)))),
+    ]),
+  );
 }
 
 /** The names a purchase comes out of as the person chose them (a spill is not a choice): up to three, then "and N more". */
