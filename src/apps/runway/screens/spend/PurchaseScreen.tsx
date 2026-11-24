@@ -319,7 +319,10 @@ function PurchaseScreen({
     !(user && merchantKey !== null && isRuleDeclined(user.uid, merchantKey))
       ? run
       : null;
-  const isOpen = isTrackingLevel(level) && isOpenToPlace(purchase);
+  const isOpen =
+    isTrackingLevel(level) &&
+    isOpenToPlace(purchase) &&
+    !twinHeldIds.has(purchase.id);
   const isPlaceable = isWaiting || isOpen;
   const canMakeRule =
     isPlaceable &&
@@ -678,6 +681,30 @@ function PurchaseScreen({
     );
   }
 
+  const editRows = (
+    <>
+      {billRef === null && (
+        <ActionRow
+          isGrouped
+          isRoomy
+          hasChevron
+          icon={<Pencil />}
+          label={isPlaceable ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit}
+          subtitle={isPlaceable ? NEEDS_HOME_WORDS.moreOptionsSub : undefined}
+          isDisabled={isBusy}
+          onClick={() => {
+            keepEntryFor('purchase');
+            setEditTarget((current) => ({
+              key: (current?.key ?? 0) + 1,
+              purchase,
+            }));
+          }}
+        />
+      )}
+      <EmailPurchaseRows purchase={purchase} onFailed={setError} />
+    </>
+  );
+
   return (
     <>
       {isCostOpen && paysRef !== null && paysHorizon !== null && (
@@ -868,29 +895,7 @@ function PurchaseScreen({
             />
           )}
           <ActionGroup isRoomy>
-            {billRef === null && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                hasChevron
-                icon={<Pencil />}
-                label={
-                  isPlaceable ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
-                }
-                subtitle={
-                  isPlaceable ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
-                }
-                isDisabled={isBusy}
-                onClick={() => {
-                  keepEntryFor('purchase');
-                  setEditTarget((current) => ({
-                    key: (current?.key ?? 0) + 1,
-                    purchase,
-                  }));
-                }}
-              />
-            )}
-            <EmailPurchaseRows purchase={purchase} onFailed={setError} />
+            {!isPlaceable && editRows}
             {heldRule !== null && (
               <ActionRow
                 isGrouped
@@ -960,6 +965,7 @@ function PurchaseScreen({
                 onClick={() => openRuleStep('suggest', null)}
               />
             )}
+            {isPlaceable && editRows}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (

@@ -5082,7 +5082,7 @@ export const NEEDS_HOME_WORDS = {
   chooseEnvelopeSub: 'From all your envelopes',
   pickFor: (title: string) => `For ${title}`,
   moreOptions: 'Split it or change details',
-  moreOptionsSub: 'Across several envelopes, or fix the name or amount',
+  moreOptionsSub: 'Several envelopes, or fix the amount',
   undo: 'Undo',
   undoFailed: 'That was not put back. Nothing was changed.',
   sentTo: (name: string) => `Sent to ${name}`,

@@ -39,7 +39,9 @@ function PhotoTile({ icon, label, onClick }: PhotoTileProps) {
       >
         {icon}
       </span>
-      <span className='text-foreground text-base font-semibold'>{label}</span>
+      <span className='text-foreground min-h-12 text-base leading-6 font-semibold'>
+        {label}
+      </span>
     </Button>
   );
 }
@@ -60,7 +62,7 @@ function PhotoActionRow({
   const isAsking = canTakePhoto && !isDisabled;
 
   const pick = (isCamera: boolean) => {
-    onPick(isCamera);
+    if (!isDisabled) onPick(isCamera);
     setIsOpen(false);
   };
 
@@ -76,7 +78,7 @@ function PhotoActionRow({
         hasChevron={isAsking}
         onClick={() => (isAsking ? setIsOpen(true) : onPick(false))}
       />
-      {isOpen && (
+      {isOpen && !isDisabled && (
         <FormSheet
           isOpen
           isDrawerWhenShort

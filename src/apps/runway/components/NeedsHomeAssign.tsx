@@ -194,7 +194,6 @@ function NeedsHomeAssign({
           detail={NEEDS_HOME_WORDS.chooseEnvelopeSub}
           isPrivate={false}
           ariaLabel={`${otherLabel}, ${NEEDS_HOME_WORDS.chooseEnvelopeSub}`}
-          isAction
           onOpen={() => setIsPicking(true)}
         />
       </ul>
