@@ -80,7 +80,8 @@ import {
   VARIES_HINT,
 } from '@apps/runway/constants';
 import { getUsualCardId } from '@apps/runway/engine/cards';
-import { isRefundCandidate, isSameStore } from '@apps/runway/engine/matching';
+import { isRefundCandidate } from '@apps/runway/engine/matching';
+import { isSameStore } from '@apps/runway/engine/storeNames';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { needsCostAmount } from '@apps/runway/engine/horizon';
 import { countCostMarks } from '@apps/runway/engine/progress';

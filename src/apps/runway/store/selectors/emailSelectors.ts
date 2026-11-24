@@ -8,14 +8,13 @@ import {
   getEmailWaitDays,
   getSideKey,
   getTwinHeldIds,
-  getTwinMergingIds,
   isWaitingEmail,
 } from '@apps/runway/engine/emailTwins';
 import type { OpenPurchase } from '@apps/runway/types';
 import { cleanBankName } from '@apps/runway/utils/accountText';
 
 /** The window and Needs a home together, each purchase once. */
-const selectAllPurchases = createSelector(
+export const selectAllPurchases = createSelector(
   [
     (state: RootState) => state.runway.needsHome,
     (state: RootState) => state.runway.purchases,
@@ -37,12 +36,6 @@ export const selectEmailTwins = createSelector(
 export const selectTwinHeldIds = createSelector(
   [selectEmailTwins],
   getTwinHeldIds,
-);
-
-/** The bank charges that merge with their email on their own, so Needs a home leaves them out. */
-export const selectTwinMergingIds = createSelector(
-  [selectEmailTwins],
-  getTwinMergingIds,
 );
 
 /** The ids of emailed purchases whose bank charge is here, or could be one of several here: the charge counts, so Free to Spend and a card's balance leave them out rather than count one purchase twice. */

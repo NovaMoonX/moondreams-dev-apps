@@ -4,7 +4,7 @@ import {
   EMAIL_WAIT_DAYS,
 } from '@apps/runway/constants';
 import { DAY_MS } from '@apps/runway/engine/dates';
-import { isSameStore } from '@apps/runway/engine/matching';
+import { isSameStore } from '@apps/runway/engine/storeNames';
 import type { OpenPurchase } from '@apps/runway/types';
 
 export interface EmailTwins {
@@ -189,9 +189,25 @@ export const getTwinHeldIds = (twins: EmailTwins): Set<string> =>
     ),
   );
 
-/** The bank charges that merge on their own with an email, alone or as the several an order posted as, so Needs a home never lists them. */
-export const getTwinMergingIds = (twins: EmailTwins): Set<string> =>
-  new Set([...twins.clear.values(), ...[...twins.split.values()].flat()]);
+/** The bank charges that merge on their own with an email, alone or as the several an order posted as, so Needs a home never lists them. A split counts only while `canMerge` says its merge can still run. */
+export const getTwinMergingIds = (
+  twins: EmailTwins,
+  canMerge: (emailId: string, bankIds: readonly string[]) => boolean = () =>
+    true,
+): Set<string> =>
+  new Set([
+    ...twins.clear.values(),
+    ...[...twins.split].flatMap(([emailId, bankIds]) =>
+      canMerge(emailId, bankIds) ? bankIds : [],
+    ),
+  ]);
+
+/** One order and the charges it posted as, at the versions they are now, so a try is remembered only until one of them changes. */
+export const getSplitKey = (
+  banks: readonly Pick<OpenPurchase, 'id' | 'updatedAt'>[],
+  email: Pick<OpenPurchase, 'id' | 'updatedAt'>,
+) =>
+  `${banks.map((bank) => `${bank.id}:${bank.updatedAt}`).join(',')}:${email.id}:${email.updatedAt}`;
 
 /** The waiting emailed purchases a bank charge may be, when none of them is clearly it. */
 export const getEmailOffers = (twins: EmailTwins, bankId: string): string[] =>
@@ -230,27 +246,35 @@ export const getSideKey = (
       ? `account:${purchase.accountId}`
       : null;
 
-/** The cards and accounts whose bank shares no pending charges: it has sent posted charges but never one still pending in these purchases, so a charge shows only once it posts. A side the bank has sent nothing on is unknown, not in the set. */
+/** How many charges on a card or account must have arrived only ever posted before its bank is read as sharing no pending charges. */
+export const POSTED_ONLY_MIN_CHARGES = 3;
+
+/** The cards and accounts whose bank shares no pending charges: at least `POSTED_ONLY_MIN_CHARGES` of its charges arrived only ever posted (`wasPending` false) and none is pending now or was. A side with fewer, or only older charges with no record, is unknown, not in the set. */
 export function findPostedOnlySides(
   purchases: readonly Pick<
     OpenPurchase,
-    'source' | 'status' | 'accountId' | 'paidByCardId'
+    'source' | 'status' | 'wasPending' | 'accountId' | 'paidByCardId'
   >[],
 ): Set<string> {
   const sides = purchases
     .filter((purchase) => purchase.source === 'link')
     .reduce((found, purchase) => {
       const key = getSideKey(purchase);
-      return key === null
-        ? found
-        : found.set(
-            key,
-            (found.get(key) ?? false) || purchase.status === 'pending',
-          );
-    }, new Map<string, boolean>());
+      if (key === null) return found;
+      const side = found.get(key) ?? { never: 0, isPendingShared: false };
+      return found.set(key, {
+        never: side.never + (purchase.wasPending === false ? 1 : 0),
+        isPendingShared:
+          side.isPendingShared ||
+          purchase.status === 'pending' ||
+          purchase.wasPending === true,
+      });
+    }, new Map<string, { never: number; isPendingShared: boolean }>());
   return new Set(
-    [...sides].flatMap(([key, isPendingShared]) =>
-      isPendingShared ? [] : [key],
+    [...sides].flatMap(([key, side]) =>
+      !side.isPendingShared && side.never >= POSTED_ONLY_MIN_CHARGES
+        ? [key]
+        : [],
     ),
   );
 }

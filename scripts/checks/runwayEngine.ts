@@ -29,12 +29,12 @@ import {
   sortLinksByDate,
 } from '../../src/apps/runway/engine/horizonLinks.ts';
 import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
+import { isSameStore } from '../../src/apps/runway/engine/storeNames.ts';
 import {
   findAccountPairs,
   findLostPairs,
   findRefundOriginal,
   isRefundCandidate,
-  isSameStore,
   isBankMove,
   isRefundLike,
   findDepositDays,

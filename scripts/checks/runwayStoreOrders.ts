@@ -321,6 +321,31 @@ assert.equal(toOrderKey('ORDER'), null);
   assert.equal(plan?.kind === 'refund' && plan.bankId, 'b');
 }
 
+// An order that posted as several charges carries its store email on each, so a refund by number finds several and waits for the person.
+{
+  const charge = (id: string, cents: number) =>
+    make(id, cents, 3, { storeEmail: order('order', 'A-1234-5678') });
+  const refund = make('r', -1000, 8, {
+    needsHome: true,
+    storeEmail: order('refund', 'A-1234-5678'),
+    lines: [],
+  });
+  assert.equal(
+    findStoreOrder(actionOf(refund), [
+      charge('c1', 6_000),
+      charge('c2', 4_000),
+      refund,
+    ]),
+    null,
+    'two charges with the order number are never tied to one',
+  );
+  assert.equal(
+    findStoreOrder(actionOf(refund), [charge('c1', 10_000), refund])?.id,
+    'c1',
+    'one charge with the number is found',
+  );
+}
+
 // An order that posted as several charges shares its lines among them, each charge's lines adding up to its own amount.
 {
   const orderLines = [

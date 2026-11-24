@@ -86,6 +86,7 @@ function toState(
       dedupeKey: data.dedupeKey,
       date: data.date as number,
       status: data.status === 'pending' ? 'pending' : 'posted',
+      wasPending: typeof data.wasPending === 'boolean' ? data.wasPending : null,
       needsHome: data.needsHome === true,
       accountId: (data.accountId as string | null) ?? null,
       expenseId: (data.expenseId as string | null) ?? null,
@@ -181,6 +182,7 @@ function toWrites(
               date: state.date,
               source: 'link',
               status: state.status,
+              wasPending: state.wasPending,
               needsHome: state.needsHome,
               accountId: state.accountId,
               expenseId: state.expenseId,
@@ -199,6 +201,7 @@ function toWrites(
             data: {
               date: state.date,
               status: state.status,
+              wasPending: state.wasPending,
               updatedAt: now,
               sealed,
             },

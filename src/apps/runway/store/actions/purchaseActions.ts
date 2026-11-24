@@ -444,6 +444,9 @@ async function checkDayAndEnvelopes(
   return planData;
 }
 
+export const PURCHASE_REMOVED_WORDS =
+  'This purchase was already removed on another device.';
+
 /** The purchase as stored must still be the one the person was looking at, or another device got there first. */
 export async function readUnchanged(
   transaction: Transaction,
@@ -452,7 +455,7 @@ export async function readUnchanged(
 ) {
   const snapshot = await transaction.get(purchaseRef(uid, previous.id));
   if (!snapshot.exists()) {
-    throw new Error('This purchase was already removed on another device.');
+    throw new Error(PURCHASE_REMOVED_WORDS);
   }
   if ((snapshot.data() as PurchaseDoc).updatedAt !== previous.updatedAt) {
     throw new Error(SPEND_WORDS.changedElsewhere);
@@ -1616,7 +1619,7 @@ export async function splitBankPurchase(
 }
 
 export interface MergedSplit {
-  /** The charges as they were, the first holding the email's note, receipt text, order and photos. */
+  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
   banks: OpenPurchase[];
   typed: OpenPurchase;
   images: ReceiptImageDoc[];
@@ -1624,7 +1627,7 @@ export interface MergedSplit {
   updatedAt: number;
 }
 
-/** Makes a store order's email and the several bank charges it posted as one set of purchases: each charge takes its share of the order's lines (when the email was answered and no charge was settled by the person, and the carry is allowed), its name and link; the first also takes the note, receipt text, order and photos; the email is removed. All in one transaction, refused when another device changed any of them first. Undo with `splitBankPurchases`. */
+/** Makes a store order's email and the several bank charges it posted as one set of purchases: each charge takes its share of the order's lines (when the email was answered and no charge was settled by the person, and the carry is allowed), its name and link; every one takes the store's email (so a refund by order number finds several and waits for the person); the first also takes the note, receipt text, order log and photos; the email is removed. All in one transaction, refused when another device changed any of them first. Undo with `splitBankPurchases`. */
 export async function mergeEmailSplit(
   uid: string,
   encryption: RunwayEncryption,
@@ -1674,11 +1677,11 @@ async function writeEmailSplit(
             ...toSealedPayload(bank),
             label: bank.label ?? email.label,
             link: bank.link ?? email.link,
+            storeEmail: bank.storeEmail ?? email.storeEmail ?? null,
             ...(index === 0
               ? {
                   note: bank.note ?? email.note,
                   receiptText: bank.receiptText ?? email.receiptText,
-                  storeEmail: bank.storeEmail ?? email.storeEmail ?? null,
                   orderLog: bank.orderLog ?? email.orderLog ?? null,
                 }
               : {}),

@@ -1,11 +1,12 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
 import { findEmailTwins } from '@apps/runway/engine/emailTwins';
-import { isRefundCandidate, isSameStore } from '@apps/runway/engine/matching';
+import { isRefundCandidate } from '@apps/runway/engine/matching';
 import { allocate } from '@apps/runway/engine/money';
 import {
   getRefundableCents,
   getRefundLines,
 } from '@apps/runway/engine/purchases';
+import { isSameStore } from '@apps/runway/engine/storeNames';
 import type {
   Cents,
   DateOnly,

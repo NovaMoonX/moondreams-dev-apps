@@ -453,17 +453,34 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     merchant: 'Target',
   };
 
+  const never = (id: string, extra: Partial<OpenPurchase> = {}) =>
+    make(id, 'link', 100, 0, { wasPending: false, ...extra });
   const sides = findPostedOnlySides([
-    make('p1', 'link', 100, 0, { status: 'pending' }),
-    make('p2', 'link', 100, 0, { status: 'posted' }),
-    make('q1', 'link', 100, 0, { paidByCardId: 'capital' }),
-    make('a1', 'link', 100, 0, { paidByCardId: null, accountId: 'chk' }),
+    never('p1', { paidByCardId: 'shares' }),
+    never('p2', { paidByCardId: 'shares' }),
+    never('p3', { paidByCardId: 'shares', wasPending: true }),
+    never('p4', { paidByCardId: 'shares' }),
+    never('q1', { paidByCardId: 'capital' }),
+    never('q2', { paidByCardId: 'capital' }),
+    never('q3', { paidByCardId: 'capital' }),
+    never('f1', { paidByCardId: 'few' }),
+    never('f2', { paidByCardId: 'few' }),
+    never('n1', { paidByCardId: 'now' }),
+    never('n2', { paidByCardId: 'now' }),
+    never('n3', { paidByCardId: 'now' }),
+    never('n4', { paidByCardId: 'now', status: 'pending' }),
+    ...['a1', 'a2', 'a3'].map((id) =>
+      never(id, { paidByCardId: null, accountId: 'chk' }),
+    ),
+    ...['o1', 'o2', 'o3'].map((id) =>
+      never(id, { paidByCardId: 'old', wasPending: null }),
+    ),
     make('m1', 'email', 100, 0, { paidByCardId: 'unseen' }),
   ]);
   assert.deepEqual(
     [...sides].sort(),
     ['account:chk', 'card:capital'],
-    'posted only where charges came and none was ever pending; unseen is unknown',
+    'posted only needs three charges that never were pending and none that was; fewer, older ones or an email prove nothing',
   );
   assert.equal(getSideKey(make('x', 'link', 1, 0)), 'card:card');
   assert.equal(
