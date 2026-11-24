@@ -606,10 +606,7 @@ async function handleMail(
     ),
   });
   await batch.commit();
-  if (result.date !== null) {
-    await markWithRetry(firestore, uid, result.date, now);
-  }
-  // An email a provider sent on by itself is the only proof its forwarding was confirmed.
+  // The providers that ask to confirm (Gmail, Yahoo, Proton) forward with the subject untouched, so such an email shows the confirm went through.
   const isAutoForwarded =
     result.outcome !== 'confirm' && !isHandForwarded(outer);
   await intakeRef
@@ -617,7 +614,14 @@ async function handleMail(
       lastReceivedAt: now,
       ...(isAutoForwarded ? { forwardedAt: now } : {}),
     })
-    .catch(() => undefined);
+    .catch((error: unknown) =>
+      logger.warn('runway.email.intakeUpdateFailed', {
+        name: error instanceof Error ? error.name : 'unknown',
+      }),
+    );
+  if (result.date !== null) {
+    await markWithRetry(firestore, uid, result.date, now);
+  }
   return result.outcome;
 }
 
