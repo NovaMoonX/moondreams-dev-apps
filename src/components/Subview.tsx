@@ -205,7 +205,7 @@ function Subview({
                   onBack={goBack}
                   action={headerAction}
                   isTitleWrapped={isTitleWrapped}
-                  className=''
+                  className='min-h-14 py-2.5 [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
                 />
               </div>
             )}
