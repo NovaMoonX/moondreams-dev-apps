@@ -47,6 +47,7 @@ import {
 import { useImportContacts } from '@apps/helm/queries/contactsQueries';
 import { selectEveryCapture } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
@@ -197,6 +198,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
       const { counts, restore } = await forgetWho(user.uid, who.id);
       onBack();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.forgotToast(who.name, counts.tasks),
         type: 'success',
         action: {

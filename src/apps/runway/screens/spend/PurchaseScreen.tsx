@@ -1,8 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import {
   HandCoins,
-  Camera,
-  ImagePlus,
   Layers,
   Pencil,
   ReceiptText,
@@ -14,6 +12,7 @@ import {
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
+import PhotoActionRow from '@/components/PhotoActionRow';
 import ActionRow from '@/components/ActionRow';
 import {
   EmailPurchaseNotice,
@@ -63,6 +62,7 @@ import {
 } from '@apps/runway/engine/rules';
 import { declineRule, isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
+import { selectTwinHeldIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
@@ -71,6 +71,9 @@ import ReceiptFileInput, {
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
 import PairOffer from '@apps/runway/components/PairOffer';
+import OrderHistory from '@apps/runway/components/OrderHistory';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import SameAsEmailOffer from '@apps/runway/components/SameAsEmailOffer';
 import SameAsOffer from '@apps/runway/components/SameAsOffer';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
@@ -90,6 +93,9 @@ import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isTrackingLevel } from '@apps/runway/engine/level';
+import { isOpenToPlace } from '@apps/runway/engine/purchases';
+import { canOfferRule } from '@apps/runway/engine/matching';
 import {
   selectCostPaid,
   selectExpenses,
@@ -139,7 +145,7 @@ interface PurchaseScreenProps {
   fallback?: OpenPurchase | null;
   /** False when it was opened from its own group, which is already under it. */
   hasGroupLink?: boolean;
-  /** Needs a home keeps the sheet open on a purchase just sent for the third time in a row, to offer a rule; it hands over the purchase as sent. */
+  /** Keeps the sheet open on a purchase just sent by hand, to offer a rule; it hands over the purchase as sent. Without it the sheet keeps itself open. */
   onSuggestRule?: (placed: OpenPurchase) => void;
   /** The caption over the amount when the opener knows more than "Purchase" (a move, a card payment). */
   kindLabel?: string;
@@ -183,6 +189,7 @@ function PurchaseScreen({
   );
   const recentPurchases = useAppSelector((state) => state.runway.purchases);
   const waitingPurchases = useAppSelector((state) => state.runway.needsHome);
+  const twinHeldIds = useAppSelector(selectTwinHeldIds);
   const { describe: describeRuleSentence } = useRuleNames();
   const [ruleStep, setRuleStep] = useState<{
     view: 'make' | 'suggest' | 'edit';
@@ -204,6 +211,8 @@ function PurchaseScreen({
   const [openedFromGroup, setOpenedFromGroup] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justPlaced, setJustPlaced] = useState<OpenPurchase | null>(null);
+  const keepOpenToSuggest = onSuggestRule ?? setJustPlaced;
 
   const openReceipt = (imageId: string) => {
     scrollBeforeReceipt.current =
@@ -230,7 +239,8 @@ function PurchaseScreen({
   const purchase =
     purchases.find((entry) => entry.id === purchaseId) ??
     lostPair ??
-    (fallback?.id === purchaseId ? fallback : null);
+    (fallback?.id === purchaseId ? fallback : null) ??
+    (justPlaced?.id === purchaseId ? justPlaced : null);
   // The server's copy, not the held one, so a sheet's own save keeps its view (and its failure line) until the server answers.
   const isListedWaiting = useAppSelector((state) =>
     state.runway.isNeedsHomeLoaded
@@ -250,8 +260,6 @@ function PurchaseScreen({
   const receipts =
     receiptsResult.status === 'loaded' ? receiptsResult.images : [];
   const isReceiptsLoaded = receiptsResult.status === 'loaded';
-  const isCameraFirst =
-    canTakePhoto && receiptsResult.status !== 'failed' && receipts.length === 0;
   const viewedReceipt =
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
@@ -278,7 +286,11 @@ function PurchaseScreen({
   const paidWithName = purchase
     ? getPaidWithName(purchase, cards, accounts)
     : null;
-  const sourceName = paidWithName ?? NEEDS_HOME_WORDS.fromBank;
+  const sourceName =
+    paidWithName ??
+    (purchase?.source === 'email'
+      ? EMAIL_WORDS.fromEmail
+      : NEEDS_HOME_WORDS.fromBank);
 
   if (purchase === null) {
     return (
@@ -296,7 +308,9 @@ function PurchaseScreen({
       ? null
       : (rules.find((entry) => entry.id === purchase.ruleId) ?? null);
   const run =
-    level === 'link' && !isWaiting && purchase.source === 'link'
+    isTrackingLevel(level) &&
+    !isWaiting &&
+    (purchase.source === 'link' || purchase.source === 'email')
       ? findPlacementRun(
           toMerchantKey(purchase.merchant),
           recentPurchases,
@@ -310,18 +324,34 @@ function PurchaseScreen({
     !(user && merchantKey !== null && isRuleDeclined(user.uid, merchantKey))
       ? run
       : null;
+  const isOpen =
+    isTrackingLevel(level) &&
+    isOpenToPlace(purchase) &&
+    !twinHeldIds.has(purchase.id);
+  const isPlaceable = isWaiting || isOpen;
+  const chosenEnvelopeId =
+    purchase.lines.find(
+      (line) => line.via === 'chosen' && line.envelopeId !== null,
+    )?.envelopeId ?? null;
+  const isPlacedByHand =
+    !isPlaceable &&
+    chosenEnvelopeId !== null &&
+    purchase.ruleId === null &&
+    purchase.pairedWithId === null &&
+    (purchase.billRef ?? null) === null;
   const canMakeRule =
-    isWaiting &&
-    level === 'link' &&
+    (isPlaceable || isPlacedByHand) &&
+    isTrackingLevel(level) &&
     lostPair === null &&
-    purchase.source === 'link' &&
-    purchase.amountCents > 0;
+    canOfferRule(purchase);
   const merchantRule =
     canMakeRule && merchantKey !== null
       ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)
       : null;
   const heldRule =
-    canMakeRule && isHeldByOffer(purchase.id, waitingPurchases, recentPurchases)
+    canMakeRule &&
+    isPlaceable &&
+    isHeldByOffer(purchase.id, waitingPurchases, recentPurchases, twinHeldIds)
       ? wouldRulePlace(
           purchase,
           rules,
@@ -336,13 +366,18 @@ function PurchaseScreen({
   const openRuleStep = (
     view: 'make' | 'suggest' | 'edit',
     ruleId: string | null,
-  ) => setRuleStep({ view, ruleId, wasWaiting: isWaiting });
+  ) => setRuleStep({ view, ruleId, wasWaiting: isPlaceable });
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
     ? (purchases.find((entry) => entry.id === purchase.refundOfId) ?? null)
     : null;
   const refunds = purchases.filter((entry) => entry.refundOfId === purchase.id);
+  const isStoreOrder =
+    purchase.amountCents >= 0 &&
+    (purchase.storeEmail?.kind === 'order' ||
+      (purchase.orderLog ?? []).length > 0 ||
+      refunds.some((refund) => refund.storeEmail != null));
   const refundedCents = refunds.reduce(
     (sum, entry) => sum - entry.amountCents,
     0,
@@ -641,7 +676,10 @@ function PurchaseScreen({
         onBack={() => setRuleStep(null)}
         onClose={() => setRuleStep(null)}
         onDecline={
-          ruleStep.view === 'suggest' && user && merchantKey !== null
+          (ruleStep.view === 'suggest' ||
+            (ruleStep.view === 'make' && !ruleStep.wasWaiting)) &&
+          user &&
+          merchantKey !== null
             ? () => {
                 declineRule(user.uid, merchantKey);
                 setRuleStep(null);
@@ -665,6 +703,30 @@ function PurchaseScreen({
       />
     );
   }
+
+  const editRows = (
+    <>
+      {billRef === null && (
+        <ActionRow
+          isGrouped
+          isRoomy
+          hasChevron
+          icon={<Pencil />}
+          label={isPlaceable ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit}
+          subtitle={isPlaceable ? NEEDS_HOME_WORDS.moreOptionsSub : undefined}
+          isDisabled={isBusy}
+          onClick={() => {
+            keepEntryFor('purchase');
+            setEditTarget((current) => ({
+              key: (current?.key ?? 0) + 1,
+              purchase,
+            }));
+          }}
+        />
+      )}
+    </>
+  );
+  const isEmail = purchase.source === 'email';
 
   return (
     <>
@@ -836,39 +898,30 @@ function PurchaseScreen({
           {(isWaiting || isMaybeTwice) && purchase.amountCents > 0 && (
             <SameAsOffer purchase={purchase} onDone={onClose} />
           )}
+          {purchase.source === 'link' && purchase.amountCents > 0 && (
+            <SameAsEmailOffer purchase={purchase} onDone={onClose} />
+          )}
           {isWaiting && purchase.amountCents > 0 && (
             <PairOffer purchase={purchase} onDone={onClose}>
               <NeedsHomeAssign
                 purchase={purchase}
                 onDone={onClose}
-                onSuggestRule={onSuggestRule}
+                onSuggestRule={keepOpenToSuggest}
               />
             </PairOffer>
           )}
-          <ActionGroup isRoomy>
-            {billRef === null && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                hasChevron
-                icon={<Pencil />}
-                label={
-                  isWaiting ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
-                }
-                subtitle={
-                  isWaiting ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
-                }
-                isDisabled={isBusy}
-                onClick={() => {
-                  keepEntryFor('purchase');
-                  setEditTarget((current) => ({
-                    key: (current?.key ?? 0) + 1,
-                    purchase,
-                  }));
-                }}
-              />
-            )}
-            <EmailPurchaseRows purchase={purchase} onFailed={setError} />
+          {!isWaiting && isOpen && (
+            <NeedsHomeAssign
+              purchase={purchase}
+              onDone={onClose}
+              onSuggestRule={keepOpenToSuggest}
+            />
+          )}
+          <ActionGroup
+            isRoomy
+            caption={isEmail ? SPEND_WORDS.purchaseActionsCaption : undefined}
+          >
+            {!isPlaceable && editRows}
             {heldRule !== null && (
               <ActionRow
                 isGrouped
@@ -882,7 +935,7 @@ function PurchaseScreen({
             )}
             {canMakeRule &&
               (merchantRule === null
-                ? heldRule === null
+                ? heldRule === null && suggestion === null
                 : merchantRule.id !== heldRule?.id) && (
                 <ActionRow
                   isGrouped
@@ -890,14 +943,23 @@ function PurchaseScreen({
                   hasChevron
                   icon={<Repeat />}
                   label={
-                    merchantRule === null
-                      ? RULE_WORDS.alwaysDo
-                      : RULE_WORDS.yourRule
+                    merchantRule !== null
+                      ? RULE_WORDS.yourRule
+                      : isPlacedByHand &&
+                          chosenEnvelopeId !== null &&
+                          purchase.merchant?.trim()
+                        ? RULE_WORDS.alwaysSendTo(
+                            purchase.merchant.trim(),
+                            nameOf(chosenEnvelopeId),
+                          )
+                        : RULE_WORDS.alwaysDo
                   }
                   subtitle={
-                    merchantRule === null
-                      ? RULE_WORDS.alwaysDoSub
-                      : describeRuleSentence(merchantRule)
+                    merchantRule !== null
+                      ? describeRuleSentence(merchantRule)
+                      : isPlacedByHand
+                        ? RULE_WORDS.alwaysSendSub
+                        : RULE_WORDS.alwaysDoSub
                   }
                   onClick={() =>
                     merchantRule === null
@@ -938,6 +1000,7 @@ function PurchaseScreen({
                 onClick={() => openRuleStep('suggest', null)}
               />
             )}
+            {isPlaceable && editRows}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (
@@ -954,25 +1017,11 @@ function PurchaseScreen({
                   onClick={() => setIsCostOpen(true)}
                 />
               )}
-            {isCameraFirst && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                icon={<Camera />}
-                label={SPEND_WORDS.takeReceiptPhoto}
-                isDisabled={!isReceiptsLoaded || isAddingReceipt}
-                onClick={() => receiptChooser.current?.open({ isCamera: true })}
-              />
-            )}
-            <ActionRow
+            <PhotoActionRow
               isGrouped
               isRoomy
-              icon={<ImagePlus />}
-              label={
-                canTakePhoto
-                  ? SPEND_WORDS.chooseReceiptPhoto
-                  : SPEND_WORDS.addReceipt
-              }
+              label={SPEND_WORDS.addReceiptPhoto}
+              canTakePhoto={canTakePhoto}
               subtitle={
                 isAddingReceipt
                   ? SPEND_WORDS.receiptAdding
@@ -985,7 +1034,7 @@ function PurchaseScreen({
                 isAddingReceipt ||
                 receipts.length >= MAX_RECEIPTS_PER_PURCHASE
               }
-              onClick={() => receiptChooser.current?.open()}
+              onPick={(isCamera) => receiptChooser.current?.open({ isCamera })}
             />
             <ReceiptFileInput
               chooser={receiptChooser}
@@ -1018,7 +1067,7 @@ function PurchaseScreen({
                 onClick={() => openPurchase(original.id)}
               />
             )}
-            {refundedCents > 0 && (
+            {refundedCents > 0 && !isStoreOrder && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -1032,6 +1081,19 @@ function PurchaseScreen({
               />
             )}
           </ActionGroup>
+          {isStoreOrder && (
+            <OrderHistory
+              order={purchase}
+              refunds={refunds}
+              mask={mask}
+              onOpen={openPurchase}
+            />
+          )}
+          {isEmail && (
+            <ActionGroup isRoomy caption={EMAIL_WORDS.emailActionsCaption}>
+              <EmailPurchaseRows purchase={purchase} onFailed={setError} />
+            </ActionGroup>
+          )}
           {error && (
             <p className='text-destructive text-sm' role='alert'>
               {error}

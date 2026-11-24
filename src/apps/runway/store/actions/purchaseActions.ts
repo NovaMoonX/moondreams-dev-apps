@@ -44,6 +44,11 @@ import {
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  isAnsweredEmail,
+  isSettledByPerson,
+} from '@apps/runway/engine/emailTwins';
+import { splitOrderLines } from '@apps/runway/engine/storeOrders';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import {
   openMove,
@@ -54,7 +59,11 @@ import {
   getUndoCardPaymentMoveId,
 } from '@apps/runway/store/actions/cardActions';
 import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
-import { describePurchaseRemoval } from '@apps/runway/utils/purchaseText';
+import {
+  describePurchaseKeptFree,
+  describePurchaseRemoval,
+  describePurchaseReturned,
+} from '@apps/runway/utils/purchaseText';
 import type {
   Cents,
   CardPaymentCovers,
@@ -294,6 +303,7 @@ export async function addPurchase(
       expenseId: input.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      wasPending: null,
       createdAt: now,
       updatedAt: now,
       sealed,
@@ -313,6 +323,7 @@ export async function addPurchase(
       expenseId: input.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      wasPending: null,
       createdAt: written.now,
       updatedAt: written.now,
     },
@@ -435,22 +446,25 @@ async function checkDayAndEnvelopes(
   return planData;
 }
 
+export const PURCHASE_REMOVED_WORDS =
+  'This purchase was already removed on another device.';
+
 /** The purchase as stored must still be the one the person was looking at, or another device got there first. */
-async function readUnchanged(
+export async function readUnchanged(
   transaction: Transaction,
   uid: string,
   previous: OpenPurchase,
 ) {
   const snapshot = await transaction.get(purchaseRef(uid, previous.id));
   if (!snapshot.exists()) {
-    throw new Error('This purchase was already removed on another device.');
+    throw new Error(PURCHASE_REMOVED_WORDS);
   }
   if ((snapshot.data() as PurchaseDoc).updatedAt !== previous.updatedAt) {
     throw new Error(SPEND_WORDS.changedElsewhere);
   }
 }
 
-const getChangeItemIds = (...lineSets: (readonly PurchaseLine[])[]) =>
+export const getChangeItemIds = (...lineSets: (readonly PurchaseLine[])[]) =>
   [
     ...new Set(
       lineSets.flatMap((lines) =>
@@ -512,6 +526,8 @@ export async function editPurchase(
         pairKind: null,
         cardPaymentMoveId: null,
         tickedDayKey: null,
+        storeEmail: previous.storeEmail ?? null,
+        orderLog: previous.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -630,11 +646,17 @@ export async function assignPurchase(
         billRef: previous.billRef ?? null,
         notSameAs: previous.notSameAs,
         incomeDayId: null,
-        assignedBy: placement ? placement.assignedBy : previous.assignedBy,
+        assignedBy: placement
+          ? placement.assignedBy
+          : previous.source === 'email' && !needsHome
+            ? 'person'
+            : previous.assignedBy,
         pairedWithId: null,
         pairKind: null,
         cardPaymentMoveId: null,
         tickedDayKey: null,
+        storeEmail: previous.storeEmail ?? null,
+        orderLog: previous.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -704,6 +726,32 @@ export const returnPurchaseToWaiting = (
     true,
     placement,
   );
+
+/** Takes back a placement made from a purchase's sheet, to wherever it sat before. */
+export const undoPlacement = (
+  uid: string,
+  encryption: RunwayEncryption,
+  placed: OpenPurchase,
+  before: Pick<OpenPurchase, 'needsHome' | 'lines' | 'ruleId' | 'assignedBy'>,
+  nameOf: (envelopeId: string) => string,
+) =>
+  before.needsHome
+    ? returnPurchaseToWaiting(
+        uid,
+        encryption,
+        placed,
+        describePurchaseReturned(placed, nameOf),
+        { ruleId: null, assignedBy: 'person' },
+      )
+    : assignPurchase(
+        uid,
+        encryption,
+        placed,
+        before.lines,
+        describePurchaseKeptFree(placed, nameOf),
+        false,
+        { ruleId: before.ruleId, assignedBy: before.assignedBy },
+      );
 
 export interface PurchaseAssignment {
   purchase: OpenPurchase;
@@ -790,6 +838,8 @@ async function setDepositDay(
         pairKind: null,
         cardPaymentMoveId: null,
         tickedDayKey: null,
+        storeEmail: previous.storeEmail ?? null,
+        orderLog: previous.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -1321,6 +1371,8 @@ export const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   pairKind: purchase.pairKind,
   cardPaymentMoveId: purchase.cardPaymentMoveId,
   tickedDayKey: purchase.tickedDayKey,
+  storeEmail: purchase.storeEmail ?? null,
+  orderLog: purchase.orderLog ?? null,
 });
 
 // A difference (a tip added when it posted) lands on the last line the person chose, never a spill line.
@@ -1372,7 +1424,6 @@ export async function mergeBankPurchase(
         merchantLogo: bank.merchantLogo ?? null,
         bankName: bank.bankName ?? null,
         category: bank.category,
-        ruleId: null,
         label:
           typed.label ??
           (typedMerchant !== null && typedMerchant !== bank.merchant
@@ -1427,7 +1478,7 @@ export async function mergeBankPurchase(
   return { bank, typed, images, updatedAt: now };
 }
 
-/** Makes a bank charge and the purchase read from its email one purchase. One the person never placed (every line free) leaves the charge as it is, in Needs a home, and gives it the email's name, note, link and group; one they placed merges like a typed purchase. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
+/** Makes a bank charge and the purchase read from its email one purchase. An email that was answered (an envelope, a rule or the person's own say) gives the charge its answer: its envelopes, rule and who placed it, unless the person already settled the charge, whose answer wins. Otherwise, or when the email's answer can't be carried (its envelope archived, its day closed), the charge keeps its own state, in Needs a home or wherever it is, and only takes the email's name, note, link, receipt and group. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
 export async function mergeEmailPurchase(
   uid: string,
   encryption: RunwayEncryption,
@@ -1435,8 +1486,17 @@ export async function mergeEmailPurchase(
   email: OpenPurchase,
   summary: string,
 ): Promise<MergedPurchase> {
-  if (email.lines.some((line) => line.envelopeId !== null)) {
-    return mergeBankPurchase(uid, encryption, bank, email, summary);
+  if (isAnsweredEmail(email) && !isSettledByPerson(bank)) {
+    try {
+      return await mergeBankPurchase(uid, encryption, bank, email, summary);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === SPEND_WORDS.changedElsewhere
+      ) {
+        throw error;
+      }
+    }
   }
   const [sealed, changeSealed, images] = await Promise.all([
     sealJson(
@@ -1446,6 +1506,8 @@ export async function mergeEmailPurchase(
         note: bank.note ?? email.note,
         link: bank.link ?? email.link,
         receiptText: bank.receiptText ?? email.receiptText,
+        storeEmail: bank.storeEmail ?? email.storeEmail ?? null,
+        orderLog: bank.orderLog ?? email.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -1527,12 +1589,13 @@ export async function splitBankPurchase(
       date: typed.date,
       source: typed.source === 'email' ? 'manual' : typed.source,
       status: null,
-      needsHome: false,
+      needsHome: typed.needsHome,
       accountId: typed.accountId,
       dedupeKey: null,
       expenseId: typed.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      wasPending: null,
       createdAt: typed.createdAt,
       updatedAt: now,
       sealed: typedSealed,
@@ -1552,6 +1615,236 @@ export async function splitBankPurchase(
         createdAt: now,
         effectiveFrom: null,
         itemIds: getChangeItemIds(bank.lines, typed.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+}
+
+export interface MergedSplit {
+  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+/** Makes a store order's email and the several bank charges it posted as one set of purchases: each charge takes its share of the order's lines (when the email was answered and no charge was settled by the person, and the carry is allowed), its name and link; every one takes the store's email (so a refund by order number finds several and waits for the person); the first also takes the note, receipt text, order log and photos; the email is removed. All in one transaction, refused when another device changed any of them first. Undo with `splitBankPurchases`. */
+export async function mergeEmailSplit(
+  uid: string,
+  encryption: RunwayEncryption,
+  banks: readonly OpenPurchase[],
+  email: OpenPurchase,
+  summary: string,
+): Promise<MergedSplit> {
+  const shares = splitOrderLines(
+    email.lines,
+    banks.map((bank) => bank.amountCents),
+  );
+  const isCarried =
+    shares !== null && isAnsweredEmail(email) && !banks.some(isSettledByPerson);
+  try {
+    return await writeEmailSplit(
+      uid,
+      encryption,
+      banks,
+      email,
+      summary,
+      isCarried ? shares : null,
+    );
+  } catch (error) {
+    if (
+      !isCarried ||
+      (error instanceof Error && error.message === SPEND_WORDS.changedElsewhere)
+    ) {
+      throw error;
+    }
+    return writeEmailSplit(uid, encryption, banks, email, summary, null);
+  }
+}
+
+async function writeEmailSplit(
+  uid: string,
+  encryption: RunwayEncryption,
+  banks: readonly OpenPurchase[],
+  email: OpenPurchase,
+  summary: string,
+  shares: readonly PurchaseLine[][] | null,
+): Promise<MergedSplit> {
+  const [sealed, changeSealed, images] = await Promise.all([
+    Promise.all(
+      banks.map((bank, index) =>
+        sealJson(
+          {
+            ...toSealedPayload(bank),
+            label: bank.label ?? email.label,
+            link: bank.link ?? email.link,
+            storeEmail: bank.storeEmail ?? email.storeEmail ?? null,
+            ...(index === 0
+              ? {
+                  note: bank.note ?? email.note,
+                  receiptText: bank.receiptText ?? email.receiptText,
+                  orderLog: bank.orderLog ?? email.orderLog ?? null,
+                }
+              : {}),
+            ...(shares === null
+              ? {}
+              : {
+                  lines: shares[index],
+                  assignedBy: email.assignedBy,
+                  ruleId: email.ruleId,
+                }),
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      ),
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    readImages(uid, email.id),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), ...banks.map((bank) => bank.updatedAt + 1));
+  const dates = [...banks.map((bank) => bank.date), email.date];
+
+  await runHeldTransaction(uid, async (transaction) => {
+    await Promise.all(
+      [email, ...banks].map((purchase) =>
+        readUnchanged(transaction, uid, purchase),
+      ),
+    );
+    const plan =
+      shares === null
+        ? (
+            await transaction.get(doc(db, 'apps', 'runway', 'plans', uid))
+          ).data()
+        : await checkDayAndEnvelopes(
+            transaction,
+            uid,
+            banks[0].date,
+            shares.flat(),
+            new Set(),
+            banks[0].date,
+            false,
+            true,
+          );
+    markLedgerWrite(transaction, uid, plan, dates);
+    banks.forEach((bank, index) =>
+      transaction.update(purchaseRef(uid, bank.id), {
+        ...(shares === null ? {} : { needsHome: false }),
+        expenseId: bank.expenseId ?? email.expenseId,
+        updatedAt: now,
+        sealed: sealed[index],
+      }),
+    );
+    transaction.delete(purchaseRef(uid, email.id));
+    moveImages(transaction, uid, images, email.id, banks[0].id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(email.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return { banks: [...banks], typed: email, images, updatedAt: now };
+}
+
+/** Undoes `mergeEmailSplit`: the email comes back as it was (as a typed purchase, marked as none of these charges) and every charge goes back to how it was. Refused when any merged charge changed since. */
+export async function splitBankPurchases(
+  uid: string,
+  encryption: RunwayEncryption,
+  merged: MergedSplit,
+  summary: string,
+): Promise<void> {
+  const { banks, typed, images } = merged;
+  const [typedSealed, bankSealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(typed),
+        notSameAs: [
+          ...(typed.notSameAs ?? []),
+          ...banks.map((bank) => bank.id),
+        ],
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    Promise.all(
+      banks.map((bank) => sealJson(toSealedPayload(bank), encryption)),
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+
+  await runHeldTransaction(uid, async (transaction) => {
+    const [stored, typedStored, plan] = await Promise.all([
+      Promise.all(
+        banks.map((bank) => transaction.get(purchaseRef(uid, bank.id))),
+      ),
+      transaction.get(purchaseRef(uid, typed.id)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+    ]);
+    if (
+      typedStored.exists() ||
+      stored.some(
+        (snapshot) =>
+          !snapshot.exists() ||
+          (snapshot.data() as PurchaseDoc).updatedAt !== merged.updatedAt,
+      )
+    ) {
+      throw new Error(SPEND_WORDS.changedElsewhere);
+    }
+    const kept = await Promise.all(
+      images.map((image) =>
+        transaction.get(imageRef(uid, banks[0].id, image.id)),
+      ),
+    );
+    const stillThere = images.filter((_, index) => kept[index].exists());
+    const now = Math.max(Date.now(), merged.updatedAt + 1);
+    markLedgerWrite(transaction, uid, plan.data(), [
+      ...banks.map((bank) => bank.date),
+      typed.date,
+    ]);
+    transaction.set(purchaseRef(uid, typed.id), {
+      id: typed.id,
+      date: typed.date,
+      source: typed.source === 'email' ? 'manual' : typed.source,
+      status: null,
+      needsHome: typed.needsHome,
+      accountId: typed.accountId,
+      dedupeKey: null,
+      expenseId: typed.expenseId,
+      emailEventId: null,
+      emailWaiting: null,
+      wasPending: null,
+      createdAt: typed.createdAt,
+      updatedAt: now,
+      sealed: typedSealed,
+    } satisfies PurchaseDoc);
+    banks.forEach((bank, index) =>
+      transaction.update(purchaseRef(uid, bank.id), {
+        needsHome: bank.needsHome,
+        expenseId: bank.expenseId,
+        updatedAt: now,
+        sealed: bankSealed[index],
+      }),
+    );
+    moveImages(transaction, uid, stillThere, banks[0].id, typed.id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(
+          typed.lines,
+          ...banks.map((bank) => bank.lines),
+        ),
         sealed: changeSealed,
       } satisfies ChangeDoc,
     );

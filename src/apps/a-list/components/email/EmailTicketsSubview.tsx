@@ -1,31 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { KeyRound, Mail } from 'lucide-react';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import EmailAddressRow from '@/components/emailForwarding/EmailAddressRow';
+import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
 import EmailForwardingStatusLine from '@/components/emailForwarding/EmailForwardingStatusLine';
-import EmailSetupAgainRows from '@/components/emailForwarding/EmailSetupAgainRows';
-import EmailSetupWalkthrough from '@/components/emailForwarding/EmailSetupWalkthrough';
+import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
+import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import SectionDivider from '@/components/SectionDivider';
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
+import {
+  hasConfirmNotice,
+  shortenForwardingAddress,
+} from '@/lib/emailForwarding/address';
+import {
+  isConfirmNoticeDue,
+  readConfirmTapped,
+  writeConfirmTapped,
+} from '@/lib/emailForwarding/confirmNotice';
+import type { EmailConfirm } from '@/lib/emailForwarding/types';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
 import EmailEventSheet from '@apps/a-list/components/email/EmailEventSheet';
 import {
+  EMAIL_ADDRESS_PREFIX,
   EMAIL_EVENT_KEEP_DAYS,
+  EMAIL_SETUP_LINE,
   EMAIL_TICKETS_SHORT_TITLE,
-  EMAIL_TICKETS_WORDS,
 } from '@apps/a-list/constants';
 import {
-  finishEmailSetup,
   markEmailChangesSeen,
-  restartEmailSetup,
   rotateEmailAddress,
-  saveEmailProgress,
 } from '@apps/a-list/store/actions/emailActions';
 import {
   selectEmailEvents,
@@ -38,13 +49,12 @@ import {
   describeEmailEvent,
   EMAIL_OUTCOME_EMOJIS,
   getUnseenChanges,
-  getWalkStartedAt,
-  hasUsefulEmailSince,
 } from '@apps/a-list/utils/emailEvents';
 import type { AListEmailEvent } from '@apps/a-list/types';
 
 const EVENTS_SHOWN = 5;
 const KEPT_LINE = `Emails are kept here for ${EMAIL_EVENT_KEEP_DAYS} days.`;
+const CONFIRM_TAPPED_KEY = 'a-list:email-confirm-tapped';
 
 interface EmailRowsProps {
   events: AListEmailEvent[];
@@ -126,129 +136,149 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
   const progress = useAppSelector(selectEmailProgress);
   const events = useAppSelector(selectEmailEvents);
   const loadError = useAppSelector(selectEmailLoadError);
-  const isFinishWritten = useRef(false);
-  // Stays in the walk until the member presses Done, even once setup is written as done on its own.
-  const [isWalking, setIsWalking] = useState(progress?.doneAt == null);
+  const { confirm } = useActionModal();
+  const now = useNow(60_000);
   const [isReopened, setIsReopened] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [confirmTappedAt, setConfirmTappedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [isAllOpen, setIsAllOpen] = useState(false);
 
-  const isTestReceived = hasUsefulEmailSince(
-    events,
-    progress?.startedAt ?? null,
-  );
+  const isSetupShown = isReopened || hasStarted || intake === null;
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const shownEvents = events.slice(0, EVENTS_SHOWN);
   const newestUnseen =
     getUnseenChanges(events, progress?.noticeSeenThrough ?? null)[0]
       ?.receivedAt ?? null;
-  const hasStrayEmail = events.some(
-    (entry) =>
-      entry.outcome === 'notTicket' &&
-      !/(^|[@.])amctheatres\.com$/.test(entry.from),
+  const pendingConfirm: EmailConfirm | null =
+    intake?.confirmAt == null
+      ? null
+      : {
+          url: intake.confirmUrl,
+          code: intake.confirmCode,
+          at: intake.confirmAt,
+          autoConfirm: intake.autoConfirm ?? null,
+          provider: intake.confirmProvider ?? null,
+        };
+  const confirmAt = pendingConfirm?.at ?? null;
+  const isConfirmTappedBefore = readConfirmTapped(
+    CONFIRM_TAPPED_KEY,
+    confirmAt,
   );
+  const shownConfirm =
+    pendingConfirm !== null &&
+    hasConfirmNotice(pendingConfirm) &&
+    isConfirmNoticeDue(pendingConfirm, events, now)
+      ? pendingConfirm
+      : null;
 
   useEffect(() => {
-    if (progress?.doneAt != null || !isTestReceived || isFinishWritten.current)
-      return;
-    isFinishWritten.current = true;
-    finishEmailSetup(uid).catch(() => {
-      isFinishWritten.current = false;
-    });
-  }, [progress?.doneAt, isTestReceived, uid]);
-
-  useEffect(() => {
-    if (isWalking || newestUnseen === null) return;
+    if (isSetupShown || newestUnseen === null) return;
     markEmailChangesSeen(uid, newestUnseen).catch(() => undefined);
-  }, [isWalking, newestUnseen, uid]);
+  }, [isSetupShown, newestUnseen, uid]);
 
-  const fail = (failure: unknown, fallback: string) =>
-    setError(getErrorMessage(failure, fallback));
-
-  const setUpAgain = async () => {
+  const getNewAddress = async () => {
+    if (intake !== null) {
+      const isAccepted = await confirm({
+        title: WORDS.newAddressTitle,
+        message: WORDS.newAddressMessage,
+        confirmText: WORDS.newAddress,
+        destructive: true,
+      });
+      if (!isAccepted) return;
+    } else {
+      setHasStarted(true);
+    }
+    setIsBusy(true);
     setError(null);
     try {
-      await restartEmailSetup(uid, getWalkStartedAt(intake, events));
-      isFinishWritten.current = false;
-      setIsReopened(true);
-      setIsWalking(true);
-    } catch (restartError) {
-      fail(restartError, 'Couldn’t start over. Try again in a moment.');
+      await rotateEmailAddress();
+    } catch (rotateError) {
+      setError(getErrorMessage(rotateError, WORDS.addressFailed));
+    } finally {
+      setIsBusy(false);
     }
   };
 
   const backToStatus = () => {
-    finishEmailSetup(uid)
-      .then(() => {
-        setIsReopened(false);
-        setIsWalking(false);
-      })
-      .catch((finishError: unknown) =>
-        fail(finishError, 'Couldn’t save that. Try again in a moment.'),
-      );
-  };
-
-  const finish = () => {
     setIsReopened(false);
-    setIsWalking(false);
-    finishEmailSetup(uid).catch(() => undefined);
+    setHasStarted(false);
+    setError(null);
   };
 
   return (
     <>
-      {isWalking ? (
-        <EmailSetupWalkthrough
-          words={EMAIL_TICKETS_WORDS}
-          intake={intake}
-          isTestReceived={isTestReceived}
-          progress={progress}
-          hasStrayEmail={hasStrayEmail}
-          onSaveProgress={(next) =>
-            saveEmailProgress(uid, next, getWalkStartedAt(intake, events))
-          }
-          onGetAddress={async () => {
-            await rotateEmailAddress();
-          }}
-          onFinish={finish}
-          onFinishLater={onClose}
-          onBackToStatus={isReopened ? backToStatus : null}
-          title={EMAIL_TICKETS_SHORT_TITLE}
-        />
-      ) : (
-        <Subview title={EMAIL_TICKETS_SHORT_TITLE} onClose={onClose}>
+      <Subview
+        title={EMAIL_TICKETS_SHORT_TITLE}
+        onClose={onClose}
+        onBack={
+          (isReopened || hasStarted) && intake !== null
+            ? backToStatus
+            : undefined
+        }
+      >
+        {isSetupShown ? (
+          <EmailSetupView
+            setupLine={EMAIL_SETUP_LINE}
+            prefix={EMAIL_ADDRESS_PREFIX}
+            address={intake?.address ?? null}
+            isLoading={false}
+            isFailed={loadError !== null}
+            isBusy={isBusy}
+            error={error}
+            onGetAddress={() => void getNewAddress()}
+            onRetry={() => window.location.reload()}
+            onDone={backToStatus}
+          />
+        ) : (
           <div className='space-y-6'>
-            <EmailForwardingStatusLine
-              lastReceivedAt={intake?.lastReceivedAt ?? null}
-            />
-            <div className='space-y-3'>
-              <SectionDivider label='📨 Recent emails' />
-              {events.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>
-                  {intake?.lastReceivedAt == null
-                    ? 'Nothing has reached your address yet.'
-                    : `Nothing in the last ${EMAIL_EVENT_KEEP_DAYS} days.`}
-                </p>
-              ) : (
-                <>
-                  <EmailRows events={shownEvents} onOpen={setOpenEventId} />
-                  {events.length > EVENTS_SHOWN && (
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='sm'
-                      rounded='full'
-                      className='text-muted-foreground! mx-auto flex'
-                      onClick={() => setIsAllOpen(true)}
-                    >
-                      See all {events.length}
-                    </Button>
-                  )}
-                  <p className='text-muted-foreground text-xs'>{KEPT_LINE}</p>
-                </>
-              )}
-            </div>
-            {intake !== null && <EmailAddressRow address={intake.address} />}
+            {shownConfirm !== null && (
+              <EmailConfirmNotice
+                appName='A-List'
+                confirm={shownConfirm}
+                isTapped={
+                  isConfirmTappedBefore || confirmTappedAt === shownConfirm.at
+                }
+                onConfirmTapped={() => {
+                  writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
+                  setConfirmTappedAt(shownConfirm.at);
+                }}
+              />
+            )}
+            <EmailForwardingStatusLine lastReceivedAt={intake.lastReceivedAt} />
+            {events.length === 0 && intake.lastReceivedAt === null ? (
+              <p className='text-muted-foreground -mt-3 text-sm'>
+                Forward your latest AMC booking to see it land here.
+              </p>
+            ) : (
+              <div className='space-y-3'>
+                <SectionDivider
+                  label='📨 Recent emails'
+                  trailing={
+                    events.length > EVENTS_SHOWN ? (
+                      <ShowMoreButton
+                        isHeaderAction
+                        onClick={() => setIsAllOpen(true)}
+                      >
+                        See all {events.length}
+                      </ShowMoreButton>
+                    ) : undefined
+                  }
+                />
+                {events.length === 0 ? (
+                  <p className='text-muted-foreground text-sm'>
+                    {`Nothing in the last ${EMAIL_EVENT_KEEP_DAYS} days.`}
+                  </p>
+                ) : (
+                  <>
+                    <EmailRows events={shownEvents} onOpen={setOpenEventId} />
+                    <p className='text-muted-foreground text-xs'>{KEPT_LINE}</p>
+                  </>
+                )}
+              </div>
+            )}
             {loadError !== null && (
               <p className='text-destructive text-sm' role='alert'>
                 Couldn’t load your emails. Try again in a moment.
@@ -259,16 +289,29 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
                 {error}
               </p>
             )}
-            <EmailSetupAgainRows
-              onSetUpAgain={() => void setUpAgain()}
-              onGetNewAddress={async () => {
-                await rotateEmailAddress();
-              }}
-              onFailed={setError}
-            />
+            <div className='space-y-2'>
+              <ActionRow
+                icon={<Mail />}
+                label={WORDS.addressRow}
+                subtitle={shortenForwardingAddress(
+                  intake.address,
+                  EMAIL_ADDRESS_PREFIX,
+                )}
+                hasChevron
+                onClick={() => setIsReopened(true)}
+              />
+              <ActionRow
+                isDestructive
+                icon={<KeyRound />}
+                label={WORDS.newAddress}
+                subtitle={WORDS.newAddressSub}
+                isDisabled={isBusy}
+                onClick={() => void getNewAddress()}
+              />
+            </div>
           </div>
-        </Subview>
-      )}
+        )}
+      </Subview>
       {isAllOpen && (
         <AllEmailsOverlay
           events={events}
@@ -286,7 +329,7 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
   );
 }
 
-/** Where the member sets up forwarding AMC's ticket emails, one step at a time, and comes back to see what each email did. */
+/** Where the member gets the address to forward AMC's ticket emails to, and comes back to see what each email did. */
 function EmailTicketsSubview({ onClose }: EmailTicketsSubviewProps) {
   const { user } = useAuth();
   const isLoaded = useAppSelector(selectIsEmailLoaded);

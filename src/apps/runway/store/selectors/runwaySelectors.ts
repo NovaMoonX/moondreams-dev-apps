@@ -9,6 +9,11 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getSplitKey, getTwinMergingIds } from '@apps/runway/engine/emailTwins';
+import {
+  selectAllPurchases,
+  selectEmailTwins,
+} from '@apps/runway/store/selectors/emailSelectors';
 import {
   findHistoryDuplicates,
   makeIsLinkHistory,
@@ -107,6 +112,7 @@ import type {
   GoalSealed,
   MoneyRange,
   OpenPurchase,
+  SortingState,
   PurchasePairKind,
   GoalVersion,
   GroupVersion,
@@ -1810,6 +1816,29 @@ export const selectIsLinkHistory = createSelector(
   makeIsLinkHistory,
 );
 
+/** The bank charges that merge with their email on their own, so Needs a home leaves them out. A split's charges count only while its merge can still run: not when any charge is link history (nothing merges history) and not once its tries are spent. */
+const selectTwinMergingIds = createSelector(
+  [
+    selectEmailTwins,
+    selectAllPurchases,
+    selectIsLinkHistory,
+    (state: RootState) => state.runway.splitGivenUp,
+  ],
+  (twins, purchases, isLinkHistory, givenUp) => {
+    const byId = new Map(purchases.map((purchase) => [purchase.id, purchase]));
+    return getTwinMergingIds(twins, (emailId, bankIds) => {
+      const email = byId.get(emailId);
+      const banks = bankIds.flatMap((id) => byId.get(id) ?? []);
+      return (
+        email !== undefined &&
+        banks.length === bankIds.length &&
+        !banks.some(isLinkHistory) &&
+        !givenUp.includes(getSplitKey(banks, email))
+      );
+    });
+  },
+);
+
 /** What waits for a home, leaving out what a link brought in from before it was made: history is never asked about or placed by a pass. */
 export const selectLinkWaiting = createSelector(
   [
@@ -1931,7 +1960,17 @@ export const selectLostPairs = createSelector(
 export const selectIsSortingPaused = (state: RootState) =>
   state.runway.plan?.sorting?.isPaused ?? false;
 
-const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
+export const selectSorting = (state: RootState) =>
+  state.runway.plan?.sorting ?? null;
+
+/** Whether "I'm not sorting yet" keeps a charge out of Needs a home (paused, or made before sorting began); the list adds its own exceptions for pairs and lost links. */
+export const isQuietBySorting = (
+  purchase: Pick<OpenPurchase, 'amountCents' | 'createdAt'>,
+  sorting: SortingState | null,
+) =>
+  sorting !== null &&
+  purchase.amountCents > 0 &&
+  (sorting.isPaused || purchase.createdAt < sorting.from);
 
 /** The money in Needs a home has a question for: a pairing or pay link it lost, a move or a pay day it may be, or a refund of a purchase that went to an envelope or goal (`findRefundOriginal`). At Link the rest, a card refund of a Free to Spend purchase included, is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in and its Refunds. Money in still pending, and a posted side held by a pending money out, never asks: it is on its way. */
 export const selectMoneyInAsks = createSelector(
@@ -2003,6 +2042,8 @@ export const selectNeedsHome = createSelector(
     selectHistoryDuplicates,
     selectSorting,
     selectMoneyInAsks,
+    selectTwinMergingIds,
+    selectIsLinkHistory,
   ],
   (
     waitingList,
@@ -2012,10 +2053,14 @@ export const selectNeedsHome = createSelector(
     duplicates,
     sorting,
     moneyInAsks,
+    merging,
+    isLinkHistory,
   ) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
-      ...waitingList,
+      ...waitingList.filter(
+        (purchase) => !merging.has(purchase.id) || isLinkHistory(purchase),
+      ),
       ...lost.filter(
         (entry, index) =>
           !waitingList.some((other) => other.id === entry.id) &&
@@ -2032,9 +2077,7 @@ export const selectNeedsHome = createSelector(
     const alwaysShown = new Set(lost.map((entry) => entry.id));
     const pairs = sorting === null ? null : findAccountPairs(sorted, true);
     const isQuiet = (purchase: OpenPurchase) =>
-      sorting !== null &&
-      purchase.amountCents > 0 &&
-      (sorting.isPaused || purchase.createdAt < sorting.from) &&
+      isQuietBySorting(purchase, sorting) &&
       !alwaysShown.has(purchase.id) &&
       !(pairs?.offers.has(purchase.id) || pairs?.clear.has(purchase.id));
     const spending = sortable.filter(

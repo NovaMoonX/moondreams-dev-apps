@@ -36,6 +36,8 @@ export interface NormalizedTransaction {
   bankName: string | null;
   /** The provider's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null when it gives none. */
   category: string | null;
+  /** Plaid recognised the charge as a known business under a clean name (`isKnownBusiness`); only these teach the shared merchant list. */
+  isKnownBusiness: boolean;
   isPending: boolean;
 }
 
@@ -86,6 +88,11 @@ export const asProviderCode = (value: unknown): string | null =>
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
   readonly code: string | null;
+  /** The provider's request id and the path that failed; never a token or account. */
+  trace: { requestId: string | null; path: string | null } = {
+    requestId: null,
+    path: null,
+  };
   constructor(
     kind: ProviderErrorKind,
     message: string,
@@ -98,8 +105,12 @@ export class ProviderError extends Error {
 }
 
 export interface ProviderInstitution {
+  /** The provider's id for the bank, the same for every sign-in there. */
+  id: string | null;
   name: string | null;
   logo: string | null;
+  /** The bank's website host ("capitalone.com"), which a logo can be looked up by when the provider has none. */
+  domain: string | null;
 }
 
 export interface TransactionDetails {
@@ -120,7 +131,7 @@ export interface BankDataProvider {
     },
   ): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
-  /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
+  /** The institution's id, name, logo (a PNG data URL) and website host, or null when the provider cannot say. */
   getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;
   /** Every account under the grant, with the provider's latest balances (asked of the bank right now with `isLive`); throws `needsAttention` when it shares none. */
   listAccounts(

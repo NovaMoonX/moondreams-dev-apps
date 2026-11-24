@@ -6,6 +6,7 @@ import { toComparable } from '@/utils/optionMatchUtils';
 import { HELM_COPY, NOTE_BODY_MAX, NOTE_TITLE_MAX } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createNote } from '@apps/helm/store/actions/noteActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const toTitle = (text: string) =>
   (text.split('\n').find((line) => line.trim() !== '') ?? '')
@@ -66,6 +67,7 @@ export function useSaveAsNote(onOpen: (noteId: string) => void) {
       addToast({
         title: HELM_COPY.noteSavedFromText(title),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: HELM_COPY.undo,
           onClick: () =>

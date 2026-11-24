@@ -18,6 +18,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import AppToggle from '@/components/AppToggle';
 import GatesClosedNote from '@/components/GatesClosedNote';
+import LogoCredit from '@/components/LogoCredit';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SettingsRowWithSwitch from '@/components/SettingsRow';
@@ -30,8 +31,9 @@ import { canKeepDeviceSecrets } from '@/lib/security';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
+import { hasBrandLogos } from '@/utils/brandLogoUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC, formatTimeAgo } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
   EMAIL_PURCHASES_GATE_ID,
@@ -48,19 +50,18 @@ import {
   TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
-import {
-  EMAIL_SETUP_WORDS,
-  EMAIL_WORDS,
-} from '@apps/runway/components/emailWords';
+import BankLogo from '@apps/runway/components/BankLogo';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
-import { useEmailIntake, useEmailSetup } from '@apps/runway/hooks/useEmailPurchases';
 import EmailPurchasesScreen from '@apps/runway/screens/plan/EmailPurchasesScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
+import { isStandInLogo } from '@apps/runway/utils/bankLogo';
+import { findTwinOf } from '@apps/runway/engine/twinLinks';
 import { formatNotifyHour } from '@apps/runway/utils/notifyTime';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
@@ -69,7 +70,6 @@ import type { OpenLink, Stance } from '@apps/runway/types';
 import {
   countBroughtIn,
   describeUnfinishedLink,
-  formatUpdatedAgo,
   isUnfinishedLink,
 } from '@apps/runway/utils/linkText';
 
@@ -162,8 +162,6 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const level = useAppSelector(selectLevel);
   const canEmail =
     useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID) && level !== 'plan';
-  const emailIntake = useEmailIntake();
-  const emailSetup = useEmailSetup();
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const deviceState = useQuery({
     ...devicePushQueryOptions(user?.uid ?? ''),
@@ -174,6 +172,17 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const links = useAppSelector((state) => state.runway.links);
   const unfinished = links.filter(isUnfinishedLink);
   const finished = links.filter((link) => !isUnfinishedLink(link));
+  const describeBankRow = (link: OpenLink) => {
+    const since = formatTimeAgo(link.lastSyncAt ?? link.createdAt, now, true);
+    if (link.status === 'revoked') {
+      return LINK_WORDS.unlinkedRowValue(countBroughtIn(link));
+    }
+    if (findTwinOf(link, links) !== null) return LINK_WORDS.twinRowValue;
+    if (link.status === 'needsAttention') {
+      return LINK_WORDS.needsSignInRowValue(since);
+    }
+    return LINK_WORDS.linkedRowValue(countBroughtIn(link), since);
+  };
   const now = useNow(60_000);
   const { isScrambled, setScrambled } = useValuesHidden();
   const [openBankId, setOpenBankId] = useState<string | null>(null);
@@ -258,35 +267,14 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                   key={link.id}
                   isMiddle
                   icon={
-                    link.institutionLogo === null ? (
-                      <Landmark />
-                    ) : (
-                      <img
-                        src={link.institutionLogo}
-                        alt=''
-                        className='border-border size-10 rounded-full border bg-white object-contain p-1.5'
-                      />
-                    )
+                    <BankLogo
+                      link={link}
+                      className='border-border size-10 rounded-full border bg-white object-contain p-1.5'
+                      fallback={<Landmark />}
+                    />
                   }
                   label={link.institutionName}
-                  value={
-                    link.status === 'revoked'
-                      ? LINK_WORDS.unlinkedRowValue(countBroughtIn(link))
-                      : link.status === 'needsAttention'
-                        ? LINK_WORDS.needsSignInRowValue(
-                            formatUpdatedAgo(
-                              link.lastSyncAt ?? link.createdAt,
-                              now,
-                            ),
-                          )
-                        : LINK_WORDS.linkedRowValue(
-                          countBroughtIn(link),
-                          formatUpdatedAgo(
-                            link.lastSyncAt ?? link.createdAt,
-                            now,
-                          ),
-                        )
-                  }
+                  value={describeBankRow(link)}
                   onOpen={() => setOpenBankId(link.id)}
                 />
               ))}
@@ -298,25 +286,17 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                 onOpen={() => setLinking({ resume: null, addTo: null })}
               />
             </div>
+            {hasBrandLogos() && finished.some(isStandInLogo) && (
+              <LogoCredit subject='Some bank logos' className='px-1' />
+            )}
           </ActionSection>
         )}
         {canEmail && (
-          <ActionSection caption={EMAIL_WORDS.rowLabel}>
+          <ActionSection caption={EMAIL_WORDS.rowCaption}>
             <SettingsRow
               icon={<Mail />}
-              label={EMAIL_WORDS.rowAction}
-              value={
-                emailSetup.isDone
-                  ? EMAIL_WORDS.rowSetUp
-                  : emailSetup.provider !== null
-                    ? EMAIL_SETUP_WORDS.rowStep(
-                        emailSetup.step + 1,
-                        emailSetup.steps.length,
-                      )
-                    : emailIntake.address === null
-                      ? EMAIL_WORDS.rowNotSetUp
-                      : EMAIL_WORDS.rowSetUp
-              }
+              label={EMAIL_WORDS.title}
+              value={EMAIL_WORDS.rowSub}
               onOpen={() => setIsEmailOpen(true)}
             />
           </ActionSection>

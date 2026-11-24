@@ -15,7 +15,8 @@ import {
   takeRateSlot,
 } from './emailUtils.js';
 import {
-  isForwardingConfirmation,
+  confirmProviderOf,
+  followConfirmLink,
   readConfirmation,
 } from './forwardingConfirmation.js';
 
@@ -32,6 +33,8 @@ export interface EmailMail {
   text: string;
   receivedAt: number;
   isDkimPassed: boolean;
+  /** The domain that signed the email, when its signature passed. */
+  dkimDomain: string | null;
 }
 
 export interface EmailHandlerInput {
@@ -49,6 +52,10 @@ interface EmailIngestConfig {
   /** The address's local part before the token, e.g. `name` in `name-<token>@…`. */
   prefix: string;
   secretName: string;
+  /** A name the same secret was saved under before, read while `secretName` doesn't exist yet. */
+  legacySecretName?: string;
+  /** A header an older email worker sent the secret in, accepted until the worker is redeployed. */
+  legacySecretHeader?: string;
   tokenPath: (token: string) => string;
   isOpenFor: (uid: string) => Promise<boolean>;
   eventPath: (uid: string, eventId: string) => string;
@@ -57,6 +64,11 @@ interface EmailIngestConfig {
   maxPerHour: number;
   /** Does every write for one email (the event record included, created so a redelivery fails) and says what became of it. */
   handle: (input: EmailHandlerInput) => Promise<{ outcome: string }>;
+  /** The intake fields that hold a confirmation's link and code, when they are kept some other way than plain; the default is `confirmUrl` and `confirmCode`. */
+  confirmationFields?: (
+    input: EmailHandlerInput,
+    confirmation: { confirmUrl: string | null; confirmCode: string | null },
+  ) => Promise<Record<string, unknown>>;
   /** Records a forwarding confirmation (the intake document already holds its link); without it nothing but the intake changes. */
   onConfirmation?: (input: EmailHandlerInput) => Promise<{ outcome: string }>;
 }
@@ -65,6 +77,11 @@ const readSecret = createOptionalSecretReader({ fetch: globalThis.fetch });
 
 const asString = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : '';
+
+const asDomain = (value: unknown) => {
+  const domain = asString(value, 255).toLowerCase();
+  return /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(domain) ? domain : null;
+};
 
 /**
  * The request handler for the email worker's hand-over of one email. Every answer is a bare status or `{ outcome }`; nothing from the email is echoed.
@@ -79,15 +96,24 @@ export function createEmailIngest(config: EmailIngestConfig) {
       response.status(405).send('Method not allowed');
       return;
     }
-    const expected = await readSecret(
-      config.secretName,
-      AbortSignal.timeout(4_000),
-    );
+    const expected =
+      (await readSecret(config.secretName, AbortSignal.timeout(4_000))) ??
+      (config.legacySecretName === undefined
+        ? null
+        : await readSecret(
+            config.legacySecretName,
+            AbortSignal.timeout(4_000),
+          ));
     if (expected === null) {
       response.status(503).send('Not available');
       return;
     }
-    if (!isSecretValid(request.header(SECRET_HEADER), expected)) {
+    const sent =
+      request.header(SECRET_HEADER) ??
+      (config.legacySecretHeader === undefined
+        ? undefined
+        : request.header(config.legacySecretHeader));
+    if (!isSecretValid(sent, expected)) {
       logger.warn('email.unauthorized', { app: config.app });
       response.status(401).send('Unauthorized');
       return;
@@ -166,16 +192,36 @@ export function createEmailIngest(config: EmailIngestConfig) {
       text: text.trim() !== '' ? text : htmlToText(html),
       receivedAt,
       isDkimPassed: dkim === 'pass',
+      dkimDomain: dkim === 'pass' ? asDomain(body.dkimDomain) : null,
     };
     const input: EmailHandlerInput = { firestore, uid, mail, eventId, now };
     const intakeRef = firestore.doc(config.intakePath(uid));
     try {
-      const isConfirmation = isForwardingConfirmation(mail);
+      const confirmProvider = confirmProviderOf(mail);
+      const isConfirmation = confirmProvider !== null;
       if (isConfirmation) {
+        const confirmation = readConfirmation(mail);
+        const followed = await followConfirmLink(
+          confirmation.confirmUrl,
+          confirmProvider,
+        );
+        (followed.autoConfirm === 'failed' ? logger.warn : logger.info)(
+          'email.autoConfirm',
+          {
+            app: config.app,
+            provider: confirmProvider,
+            result: followed.autoConfirm,
+            status: followed.status,
+            errorName: followed.errorName,
+          },
+        );
         await intakeRef.update({
-          ...readConfirmation(mail),
+          ...((await config.confirmationFields?.(input, confirmation)) ??
+            confirmation),
           confirmAt: now,
           updatedAt: now,
+          autoConfirm: followed.autoConfirm,
+          confirmProvider,
         });
       }
       const { outcome } = isConfirmation

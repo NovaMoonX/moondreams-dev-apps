@@ -89,6 +89,9 @@ export interface ParsedAlert {
   institution: string | null;
 }
 
+/** Who an email came from: a bank or card issuer, a merchant's own receipt, order or refund, or anything else. */
+export type SenderKind = 'bank' | 'store' | 'other';
+
 export const NOT_A_PURCHASE: ParsedAlert = {
   isPurchase: false,
   amountCents: null,
@@ -112,24 +115,11 @@ export function subjectTemplate(subject: string): string {
   );
 }
 
-const ENTITIES: Record<string, string> = {
-  nbsp: ' ',
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  '#39': "'",
-};
-
-export function htmlToText(html: string): string {
-  return html
-    .replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<(?:br|\/p|\/div|\/tr|\/li|\/h\d)[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&(#?\w+);/g, (whole, name: string) => ENTITIES[name] ?? whole)
-    .replace(/[ \t\r\f\v]+/g, ' ');
-}
+export {
+  isProtonInvitation,
+  readProtonLink,
+} from '../../../email/forwardingConfirmation.js';
+export { htmlToText } from '../../../email/emailUtils.js';
 
 const BODY_MAX = 4000;
 const EXCERPT_LINES = 6;
@@ -184,46 +174,6 @@ export function excerptOf(
     .slice(start, start + EXCERPT_LINES)
     .join('\n')
     .slice(0, EXCERPT_MAX);
-}
-
-const PROTON_DOMAINS = ['proton.me', 'protonmail.com', 'pm.me'];
-
-export function isProtonSender(from: string): boolean {
-  const address = (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
-  const domain = address.split('@')[1] ?? '';
-  return PROTON_DOMAINS.some(
-    (known) => domain === known || domain.endsWith(`.${known}`),
-  );
-}
-
-/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject and an invitation link. */
-export const isProtonInvitation = (mail: {
-  from: string;
-  subject: string;
-  text: string;
-  isDkimPassed: boolean;
-}): boolean =>
-  isProtonSender(mail.from) &&
-  mail.isDkimPassed &&
-  /forward/i.test(mail.subject) &&
-  readProtonLink(mail.text) !== undefined;
-
-/** The invitation's accept link: a proton.me https link that mentions forwarding, accepting or an invite; support, legal and blog pages are never it. */
-export function readProtonLink(text: string) {
-  const links = Array.from(
-    text.matchAll(
-      /(?:^|[\s"'<(])(https:\/\/((?:[a-z0-9-]+\.)*proton\.me)(?=[/?#\s"'<>)\]]|$)(\/[^\s"'<>)\]]*)?)/gi,
-    ),
-  )
-    .filter(
-      ([, , host, path = '']) =>
-        !/^(?:help|legal|policies)\./i.test(host) &&
-        !/^\/(?:support|legal|blog)(?:[/?#]|$)/i.test(path),
-    )
-    .map(([, link]) => link);
-  const isInvitePath = (link: string) =>
-    /forward|accept|invite/i.test(link.replace(/^https:\/\/[^/]+/i, ''));
-  return links.find(isInvitePath);
 }
 
 export function toCents(value: string): number | null {
@@ -321,6 +271,68 @@ function readDate(text: string, receivedAt: number): number {
   );
   return plausible ?? arrivedOn;
 }
+
+const INSTITUTION_HOST_LABELS: Record<string, string[]> = {
+  'American Express': ['americanexpress', 'aexp', 'amex'],
+  'Bank of America': ['bankofamerica', 'bofa'],
+  'Apple Card': ['apple'],
+  Citi: ['citi', 'citibank', 'citicards'],
+};
+
+const MAIL_PROVIDERS =
+  /^(?:gmail|googlemail|yahoo|outlook|hotmail|live|icloud|me|proton|protonmail|aol)$/;
+
+const COMPANY_SUFFIXES = new Set([
+  'com',
+  'net',
+  'org',
+  'co',
+  'us',
+  'bank',
+  'io',
+]);
+
+/** The registrable name of an address's host ("alerts@email.chase.com" is "chase"); empty when there is no host, its ending is not a common company one (so `chase.xyz` and `chase.co.uk` name nobody) or it is a mailbox provider's. */
+const readHostLabel = (address: string) => {
+  const [label = '', suffix = ''] = (address.split('@')[1] ?? '')
+    .split('.')
+    .slice(-2);
+  return COMPANY_SUFFIXES.has(suffix) && !MAIL_PROVIDERS.test(label)
+    ? label
+    : '';
+};
+
+/** Whether an address is the bank's own: its host's name is the bank's name (no spaces) or one it is known by. A name that only appears in a subject, body or display name proves nothing. */
+export const isInstitutionHost = (address: string, institution: string) => {
+  const label = readHostLabel(address);
+  const compact = institution.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return (
+    label !== '' &&
+    (label === compact ||
+      (Object.hasOwn(INSTITUTION_HOST_LABELS, institution) &&
+        INSTITUTION_HOST_LABELS[institution].includes(label)))
+  );
+};
+
+/** Whether an address's host names the shop: its name is the shop's (no spaces) or the start of it ("bluebottle" for Blue Bottle Coffee), at least four letters. */
+export const isMerchantHost = (address: string, merchant: string) => {
+  const label = readHostLabel(address);
+  return (
+    label.length >= 4 &&
+    merchant
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .startsWith(label)
+  );
+};
+
+/** Whether a name is one of the known banks or card issuers the patterns read, as against a name guessed from a sender's host. */
+export const isKnownInstitution = (name: string) =>
+  INSTITUTIONS.some(([, known]) => known === name);
+
+/** Whether the sender's address belongs to one of the known banks or card issuers. */
+export const isKnownInstitutionSender = (from: string) =>
+  INSTITUTIONS.some(([pattern]) => pattern.test(from));
 
 const readInstitution = (
   from: string,

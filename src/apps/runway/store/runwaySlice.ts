@@ -22,7 +22,6 @@ import type {
   OpenEmailEvent,
   OpenEmailFilter,
   OpenEmailIntake,
-  OpenEmailSetup,
 } from '@apps/runway/store/listeners/emailListeners';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
@@ -33,6 +32,7 @@ import type {
   OpenLink,
   OpenCard,
   OpenExpense,
+  OpenDoneForYou,
   OpenMemory,
   OpenStartedPayment,
   OpenRule,
@@ -90,9 +90,17 @@ export interface RunwayState {
   memories: OpenMemory[];
   startedPayments: OpenStartedPayment[];
   isMemoriesLoaded: boolean;
+  /** What the app did on its own in the last 30 days, newest first, and whether it has been read once. */
+  doneForYou: OpenDoneForYou[];
+  isDoneForYouLoaded: boolean;
   /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
   emailIntake: OpenEmailIntake | null;
-  emailSetup: OpenEmailSetup | null;
+  isEmailIntakeLoaded: boolean;
+  /** The address could not be read, so setup never offers a new one over a real one; `emailIntakeAttempt` counts retries, which restart the email listeners. */
+  isEmailIntakeFailed: boolean;
+  emailIntakeAttempt: number;
+  /** Keys of emailed orders, posted as several charges, whose merge failed too often to try again; their charges show in Needs a home again. */
+  splitGivenUp: string[];
   emailEvents: OpenEmailEvent[];
   isEmailEventsLoaded: boolean;
   emailFilters: OpenEmailFilter[];
@@ -228,8 +236,13 @@ const initialState: RunwayState = {
   memories: [],
   startedPayments: [],
   isMemoriesLoaded: false,
+  doneForYou: [],
+  isDoneForYouLoaded: false,
   emailIntake: null,
-  emailSetup: null,
+  isEmailIntakeLoaded: false,
+  isEmailIntakeFailed: false,
+  emailIntakeAttempt: 0,
+  splitGivenUp: [],
   emailEvents: [],
   isEmailEventsLoaded: false,
   emailFilters: [],
@@ -340,16 +353,30 @@ export const runwaySlice = createSlice({
       state.memories = action.payload;
       state.isMemoriesLoaded = true;
     },
+    setDoneForYou: (state, action: PayloadAction<OpenDoneForYou[]>) => {
+      state.doneForYou = action.payload;
+      state.isDoneForYouLoaded = true;
+    },
     setEmailIntake: (state, action: PayloadAction<OpenEmailIntake | null>) => {
       state.emailIntake = action.payload;
     },
-    setEmailSetup: (state, action: PayloadAction<OpenEmailSetup | null>) => {
-      state.emailSetup = action.payload;
+    setIsEmailIntakeLoaded: (state, action: PayloadAction<boolean>) => {
+      state.isEmailIntakeLoaded = action.payload;
+      if (action.payload) state.isEmailIntakeFailed = false;
     },
-    setEmailEvents: (
-      state,
-      action: PayloadAction<OpenEmailEvent[] | null>,
-    ) => {
+    setIsEmailIntakeFailed: (state, action: PayloadAction<boolean>) => {
+      state.isEmailIntakeFailed = action.payload;
+      if (action.payload) state.isEmailIntakeLoaded = false;
+    },
+    retryEmailIntake: (state) => {
+      state.emailIntakeAttempt += 1;
+    },
+    giveUpSplit: (state, action: PayloadAction<string>) => {
+      state.splitGivenUp = [
+        ...new Set([...state.splitGivenUp, action.payload]),
+      ];
+    },
+    setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[] | null>) => {
       state.emailEvents = action.payload ?? [];
       state.isEmailEventsLoaded = action.payload !== null;
     },
@@ -542,10 +569,14 @@ export const {
   setExpenses,
   setRules,
   setMemories,
+  setDoneForYou,
   setEmailIntake,
   setEmailEvents,
   setEmailFilters,
-  setEmailSetup,
+  setIsEmailIntakeLoaded,
+  setIsEmailIntakeFailed,
+  retryEmailIntake,
+  giveUpSplit,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

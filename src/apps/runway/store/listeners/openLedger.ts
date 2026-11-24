@@ -133,6 +133,7 @@ export async function openPurchase(
     expenseId: entry.expenseId ?? null,
     emailEventId: entry.emailEventId ?? null,
     emailWaiting: entry.emailWaiting ?? null,
+    wasPending: entry.wasPending ?? null,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
     amountCents: payload.amountCents,
@@ -159,6 +160,8 @@ export async function openPurchase(
     pairKind: payload.pairKind ?? null,
     cardPaymentMoveId: payload.cardPaymentMoveId ?? null,
     tickedDayKey: payload.tickedDayKey ?? null,
+    storeEmail: payload.storeEmail ?? null,
+    orderLog: payload.orderLog ?? null,
   };
   return result;
 }

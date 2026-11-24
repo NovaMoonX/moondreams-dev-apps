@@ -1,7 +1,7 @@
-export const EMAIL_DOMAIN = 'apps.moondreams.dev';
-export const EMAIL_ADDRESS_PREFIX = 'finance';
+export const EMAIL_ADDRESS_PREFIX = 'runway';
 export const EMAIL_PURCHASES_GATE_ID = 'email-purchases';
 export const EMAIL_EVENT_KEEP_DAYS = 30;
+export const MAX_EMAILS_PER_HOUR = 30;
 
 export const emailTokenPath = (token: string) =>
   `apps/runway/emailTokens/${token}`;
@@ -14,11 +14,3 @@ export const emailEventsPath = (uid: string) =>
   `apps/runway/plans/${uid}/emailEvents`;
 export const emailFiltersPath = (uid: string) =>
   `apps/runway/plans/${uid}/emailFilters`;
-
-const ADDRESS = new RegExp(
-  `^${EMAIL_ADDRESS_PREFIX}-([a-z0-9_-]{12,32})@${EMAIL_DOMAIN.replace(/\./g, '\\.')}$`,
-);
-
-/** The token in a `finance-<token>@apps.moondreams.dev` address, or null for any other address. */
-export const readAddressToken = (to: string) =>
-  ADDRESS.exec(to.trim().toLowerCase())?.[1] ?? null;

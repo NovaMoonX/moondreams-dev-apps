@@ -13,6 +13,7 @@ import type {
   ShareFeed,
   PurchasePlan,
   AListEmailEvent,
+  AListEmailProgress,
 } from '@apps/a-list/types';
 
 const MEMBERSHIP_PROFILE_FIELDS = {
@@ -180,6 +181,13 @@ const EMAIL_EVENT_FIELDS = {
   expiresAt: 'never',
 } satisfies Record<keyof AListEmailEvent, ShareDecision>;
 
+const EMAIL_PROGRESS_FIELDS = {
+  id: 'never',
+  noticeSeenThrough: 'never',
+  createdAt: 'never',
+  updatedAt: 'never',
+} satisfies Record<keyof AListEmailProgress, ShareDecision>;
+
 /** What a-list lets Helm read, per stored field; an added, removed or renamed field fails the typecheck until it is decided here. */
 export const SHARE_FIELDS = {
   MembershipProfile: MEMBERSHIP_PROFILE_FIELDS,
@@ -195,6 +203,7 @@ export const SHARE_FIELDS = {
   AddedCalendar: ADDED_CALENDAR_FIELDS,
   PurchasePlan: PURCHASE_PLAN_FIELDS,
   AListEmailEvent: EMAIL_EVENT_FIELDS,
+  AListEmailProgress: EMAIL_PROGRESS_FIELDS,
 };
 
 /** Exported types that are not stored, so have no fields to decide. */

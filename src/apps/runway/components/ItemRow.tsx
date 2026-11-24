@@ -36,9 +36,12 @@ export interface ItemRowReorder {
 
 interface ItemRowProps {
   name: string;
+  /** What is drawn in place of `name` (its words as nodes); `name` stays for the accessible name and the mark. */
+  nameNode?: ReactNode;
   /** A small mark after the name, inside its line clamp (an envelope on an emailed purchase), kept on the last word so it never wraps alone. */
   nameMark?: ReactNode;
   emoji?: string | null;
+  nameLines?: 2 | 3;
   /** Replaces the badge (a date chip on an income day). */
   leading?: ReactNode;
   /** The single most useful fact, on one muted line. */
@@ -91,7 +94,9 @@ interface ItemRowProps {
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
 function ItemRow({
   name,
+  nameNode,
   nameMark,
+  nameLines = 2,
   emoji = null,
   leading,
   detail,
@@ -140,7 +145,8 @@ function ItemRow({
     : null;
   const shownDetail =
     reorder?.isFixed && reorder.fixedNote ? reorder.fixedNote : detail;
-  const hasDetail = Boolean(shownDetail) || Boolean(warningLine);
+  const hasDetail =
+    Boolean(shownDetail) || Boolean(warningLine) || detailLead !== null;
   const shownBadge = leading ?? <ItemBadge name={name} emoji={emoji} />;
   const badge = tick ? null : isFaded ? (
     <span className='contents [&>*]:opacity-45'>{shownBadge}</span>
@@ -186,9 +192,13 @@ function ItemRow({
                     detailLead.isOver && 'text-destructive font-medium',
                   )}
                 >
-                  {detailLead.text}
+                  {isPrivate ? (
+                    <MaskedText>{detailLead.text}</MaskedText>
+                  ) : (
+                    detailLead.text
+                  )}
                 </span>
-                {' · '}
+                {shownDetail ? ' · ' : null}
               </>
             )}
             {isPrivate && shownDetail ? (
@@ -203,7 +213,7 @@ function ItemRow({
   );
   const nameLine = (
     <span className='block min-w-0 font-medium break-words'>
-      <span className='line-clamp-2'>
+      <span className={nameLines === 3 ? 'line-clamp-3' : 'line-clamp-2'}>
         {nameMark ? (
           <>
             {name.slice(0, name.lastIndexOf(' ') + 1)}
@@ -213,7 +223,7 @@ function ItemRow({
             </span>
           </>
         ) : (
-          name
+          (nameNode ?? name)
         )}
       </span>
     </span>

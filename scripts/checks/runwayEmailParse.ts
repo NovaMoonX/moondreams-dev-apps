@@ -1,14 +1,35 @@
 import assert from 'node:assert/strict';
 
+import type { EmailEventRead } from '../../src/apps/runway/hooks/useEmailPurchases.ts';
+import { splitAddressForWrap } from '../../src/lib/emailForwarding/address.ts';
+import {
+  groupEmailSenders,
+  readSender,
+} from '../../src/apps/runway/utils/emailSenders.ts';
+import { toAddress } from '../../functions/src/email/emailUtils.ts';
+import {
+  confirmProviderOf,
+  followConfirmLink,
+  isAcceptedConfirmUrl,
+  isForwardingConfirmation,
+} from '../../functions/src/email/forwardingConfirmation.ts';
 import {
   excerptOf,
   htmlToText,
+  isInstitutionHost,
+  isKnownInstitution,
+  isMerchantHost,
   isProtonInvitation,
   parseAlertEmail,
   readableBody,
   readProtonLink,
   subjectTemplate,
 } from '../../functions/src/apps/runway/email/parseAlert.ts';
+import {
+  readForwardedDate,
+  stripForwardPrefixes,
+  unwrapForwarded,
+} from '../../functions/src/apps/runway/email/unwrapForwarded.ts';
 
 const RECEIVED = Date.UTC(2026, 10, 4, 18, 30);
 const NOV_3 = Date.UTC(2026, 10, 3);
@@ -361,4 +382,639 @@ assert.equal(
   'a\n\nb\nsee secure.chase.com',
 );
 
-console.log(`runway email parse: ${samples.length} samples ok`);
+// Hand-forwards of a Chase-style alert, each client's own block wording.
+const ALERT_BODY =
+  'Account ending in 1234\nMerchant: CHIPOTLE 2041\nAmount: $24.50\nDate: Nov 3, 2026';
+const ALERT_SUBJECT = 'You made a $24.50 transaction with CHIPOTLE 2041';
+const FORWARDER = 'Jamie Lee <jamie@gmail.com>';
+const NOV_3_EVENING = Date.UTC(2026, 10, 3, 23, 5);
+const forwards = [
+  {
+    name: 'Gmail',
+    subject: `Fwd: ${ALERT_SUBJECT}`,
+    text: `FYI\n\n---------- Forwarded message ---------\nFrom: Chase <no.reply.alerts@chase.com>\nDate: Tue, Nov 3, 2026 at 6:05 PM\nSubject: ${ALERT_SUBJECT}\nTo: <jamie@gmail.com>\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Apple Mail',
+    subject: `Fwd: ${ALERT_SUBJECT}`,
+    text: `Begin forwarded message:\n\nFrom: Chase <no.reply.alerts@chase.com>\nSubject: ${ALERT_SUBJECT}\nDate: November 3, 2026 at 6:05:41 PM EST\nTo: Jamie Lee <jamie@icloud.com>\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Outlook',
+    subject: `FW: ${ALERT_SUBJECT}`,
+    text: `\n________________________________\nFrom: Chase <no.reply.alerts@chase.com>\nSent: Tuesday, November 3, 2026 6:05 PM\nTo: Jamie Lee\nSubject: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Outlook original message',
+    subject: `FW: Fw: ${ALERT_SUBJECT}`,
+    text: `-----Original Message-----\nFrom: Chase [mailto:no.reply.alerts@chase.com]\nSent: Tuesday, November 3, 2026 6:05 PM\nTo: Jamie Lee\nSubject: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Yahoo',
+    subject: `Fwd: ${ALERT_SUBJECT}`,
+    text: `----- Forwarded Message -----\nFrom: Chase <no.reply.alerts@chase.com>\nTo: Jamie Lee <jamie@yahoo.com>\nSent: Tuesday, November 3, 2026, 6:05:12 PM EST\nSubject: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+  },
+];
+forwards.forEach(({ name, subject, text }) => {
+  const outer = {
+    to: 'runway-abc@moondreamsmail.com',
+    from: FORWARDER,
+    subject,
+    text,
+    receivedAt: NOV_3_EVENING + 3_600_000,
+    isDkimPassed: true,
+  };
+  assert.ok(!isForwardingConfirmation(outer), `${name}: not a confirmation`);
+  const mail = unwrapForwarded(outer);
+  assert.equal(mail.from.includes('no.reply.alerts@chase.com'), true, name);
+  assert.equal(mail.subject, ALERT_SUBJECT, `${name}: subject`);
+  assert.equal(mail.text, ALERT_BODY, `${name}: body`);
+  assert.ok(!mail.isDkimPassed, `${name}: unwrapped is never DKIM-verified`);
+  assert.ok(
+    mail.receivedAt >= NOV_3 && mail.receivedAt < NOV_4,
+    `${name}: original date`,
+  );
+  const read = parseAlertEmail(mail);
+  assert.ok(read?.isPurchase, `${name}: read`);
+  assert.equal(read.institution, 'Chase', `${name}: institution`);
+  assert.equal(read.amountCents, 2450, `${name}: amount`);
+  assert.equal(read.merchant, 'CHIPOTLE 2041', `${name}: merchant`);
+  assert.equal(read.date, NOV_3, `${name}: date`);
+});
+
+// A forward with no header block (an auto-forward) keeps the original sender and loses only the prefix.
+const autoForward = {
+  to: 'runway-abc@moondreamsmail.com',
+  from: 'no.reply.alerts@chase.com',
+  subject: `Fwd: ${ALERT_SUBJECT}`,
+  text: ALERT_BODY,
+  receivedAt: RECEIVED,
+  isDkimPassed: true,
+};
+assert.deepEqual(unwrapForwarded(autoForward), {
+  ...autoForward,
+  subject: ALERT_SUBJECT,
+});
+[
+  ['Fwd: Fwd: hello', 'hello'],
+  ['FWD: Fw: FW: TR: WG: hello', 'hello'],
+  ['[Fwd: Your receipt]', 'Your receipt'],
+  ['Fwd: [Fwd: Your receipt]', 'Your receipt'],
+  ['  fw:  Your receipt ', 'Your receipt'],
+  ['Forward progress report', 'Forward progress report'],
+  ['Your Fwd: receipt', 'Your Fwd: receipt'],
+].forEach(([subject, expected]) =>
+  assert.equal(stripForwardPrefixes(subject), expected, subject),
+);
+
+// A missing piece keeps the outer one.
+const partial = unwrapForwarded({
+  ...autoForward,
+  from: FORWARDER,
+  text: `---------- Forwarded message ---------\nSubject: Fwd: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+});
+assert.equal(partial.from, FORWARDER);
+assert.equal(partial.receivedAt, RECEIVED);
+assert.equal(partial.subject, ALERT_SUBJECT);
+assert.equal(
+  unwrapForwarded({
+    ...autoForward,
+    from: FORWARDER,
+    text: 'See below.\n---------- Forwarded message ---------\nFrom: Chase <a@chase.com>\n\n',
+  }).text.includes('See below'),
+  true,
+);
+assert.equal(readForwardedDate('Someday soon'), null);
+assert.equal(
+  readForwardedDate('Mon, 3 Nov 2026 18:14:22 -0500'),
+  Date.UTC(2026, 10, 3, 23, 14),
+);
+assert.equal(
+  readForwardedDate('Tue, Nov 3, 2026 at 6:05 PM'),
+  Date.UTC(2026, 10, 3, 18, 5),
+);
+
+// A forwarded block claiming to be Google's confirmation is neither one nor unwrapped into one.
+const googleConfirmation = {
+  from: 'Gmail Team <forwarding-noreply@google.com>',
+  subject: 'Gmail Forwarding Confirmation - Receive Mail from jamie@gmail.com',
+  text: 'Confirmation code: 123456789\nOr click https://mail.google.com/mail/vf-abc123-xyz',
+};
+const signed = { isDkimPassed: true, dkimDomain: 'google.com' };
+assert.equal(confirmProviderOf({ ...googleConfirmation, ...signed }), 'gmail');
+assert.equal(
+  confirmProviderOf({
+    ...googleConfirmation,
+    isDkimPassed: true,
+    dkimDomain: 'accounts.google.com',
+  }),
+  'gmail',
+);
+[
+  { isDkimPassed: false, dkimDomain: 'google.com' },
+  { isDkimPassed: true, dkimDomain: 'evil.com' },
+  { isDkimPassed: true, dkimDomain: 'notgoogle.com' },
+  { isDkimPassed: true, dkimDomain: 'google.com.evil.com' },
+  { isDkimPassed: true, dkimDomain: null },
+  { isDkimPassed: true },
+].forEach((auth) =>
+  assert.equal(
+    confirmProviderOf({ ...googleConfirmation, ...auth }),
+    null,
+    JSON.stringify(auth),
+  ),
+);
+
+// Yahoo's confirmation needs Yahoo's signature and a Yahoo link; a forwarded order mail from a Yahoo address has neither.
+const yahooConfirmation = {
+  from: 'Yahoo <no-reply@cc.yahoo-inc.com>',
+  subject: 'Verify your email forwarding address',
+  text: 'Please confirm: https://edit.yahoo.com/forwarding/verify?t=abc',
+  isDkimPassed: true,
+  dkimDomain: 'yahoo-inc.com',
+};
+assert.equal(confirmProviderOf(yahooConfirmation), 'yahoo');
+assert.equal(
+  confirmProviderOf({ ...yahooConfirmation, dkimDomain: 'evil.com' }),
+  null,
+);
+assert.equal(
+  confirmProviderOf({
+    from: 'Jamie Lee <jamie@yahoo.com>',
+    subject: 'Fwd: Please confirm your forwarded order',
+    text: 'Thanks for your order. See https://www.store.example/orders/1',
+    isDkimPassed: true,
+    dkimDomain: 'yahoo.com',
+  }),
+  null,
+);
+const fakeConfirmation = {
+  to: 'runway-abc@moondreamsmail.com',
+  from: 'Mallory <mallory@example.com>',
+  subject: 'Fwd: Gmail Forwarding Confirmation',
+  text: `---------- Forwarded message ---------\nFrom: Gmail Team <forwarding-noreply@google.com>\nDate: Tue, Nov 3, 2026 at 6:05 PM\nSubject: ${googleConfirmation.subject}\nTo: <jamie@gmail.com>\n\n${googleConfirmation.text}`,
+  receivedAt: RECEIVED,
+  isDkimPassed: true,
+  dkimDomain: 'example.com',
+};
+assert.ok(!isForwardingConfirmation(fakeConfirmation));
+const unwrappedFake = unwrapForwarded(fakeConfirmation);
+assert.equal(unwrappedFake.from, 'Gmail Team <forwarding-noreply@google.com>');
+assert.ok(!isForwardingConfirmation(unwrappedFake));
+const realConfirmation = {
+  ...googleConfirmation,
+  to: 'runway-abc@moondreamsmail.com',
+  receivedAt: RECEIVED,
+  ...signed,
+};
+assert.ok(isForwardingConfirmation(realConfirmation));
+assert.deepEqual(unwrapForwarded(realConfirmation), realConfirmation);
+
+// Which links the server may open for a confirmation.
+const accepted: [string, 'gmail' | 'yahoo'][] = [
+  ['https://mail.google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail-settings.google.com/mail/vf-abc123', 'gmail'],
+  ['https://MAIL.google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail.yahoo.com/d/verify?t=1', 'yahoo'],
+  ['https://EDIT.yahoo.com/account/verify?t=1', 'yahoo'],
+];
+accepted.forEach(([url, provider]) =>
+  assert.ok(isAcceptedConfirmUrl(url, provider), url),
+);
+const refused: [string | null, 'gmail' | 'yahoo' | 'proton' | null][] = [
+  ['http://mail.google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail.google.com.evil.com/mail/vf-abc123', 'gmail'],
+  ['https://evilmail.google.com/mail/vf-abc123', 'gmail'],
+  ['https://google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail.google.com@evil.com/mail/vf-abc123', 'gmail'],
+  ['https://user:pw@mail.google.com/x', 'gmail'],
+  ['https://mail.google.com:8443/x', 'gmail'],
+  ['https://login.yahoo.com/verify', 'gmail'],
+  ['https://mail.google.com/x', 'yahoo'],
+  ['https://notyahoo.com/verify', 'yahoo'],
+  ['https://r.search.yahoo.com/_ylt=x/RU=https%3A%2F%2Fevil.com', 'yahoo'],
+  ['https://login.yahoo.com/account/verify?t=1', 'yahoo'],
+  ['https://yahoo.com/verify?t=1', 'yahoo'],
+  ['https://yahoo.com.evil.com/verify', 'yahoo'],
+  ['https://account.proton.me/u/0/forwarding/accept?token=abc', 'proton'],
+  ['https://mail.google.com/x', null],
+  ['not a url', 'gmail'],
+  [null, 'gmail'],
+];
+refused.forEach(([url, provider]) =>
+  assert.ok(!isAcceptedConfirmUrl(url, provider), String(url)),
+);
+
+const seen: { url: string; init: RequestInit | undefined }[] = [];
+let cancelled = 0;
+const respond = (status: number, location?: string) =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers(location === undefined ? {} : { location }),
+    body: {
+      cancel: async () => {
+        cancelled += 1;
+      },
+    },
+  }) as unknown as Response;
+const routedFetch = (routes: Record<string, Response>) =>
+  (async (url: string, init?: RequestInit) => {
+    seen.push({ url, init });
+    return routes[url] ?? respond(404);
+  }) as unknown as typeof fetch;
+const fakeFetch = (status: number, location?: string) =>
+  (async (url: string, init?: RequestInit) => {
+    seen.push({ url, init });
+    return respond(status, location);
+  }) as unknown as typeof fetch;
+const gmailLink = 'https://mail.google.com/mail/vf-abc123';
+const followed = await followConfirmLink(gmailLink, 'gmail', fakeFetch(200));
+assert.deepEqual(followed, {
+  autoConfirm: 'confirmed',
+  status: 200,
+  errorName: null,
+});
+assert.equal(seen.length, 1);
+assert.equal(seen[0].init?.method, 'GET');
+assert.equal(seen[0].init?.redirect, 'manual');
+assert.equal(cancelled, 1, 'the body is cancelled');
+assert.ok(seen[0].init?.signal instanceof AbortSignal);
+assert.equal(
+  (await followConfirmLink(gmailLink, 'gmail', fakeFetch(404))).autoConfirm,
+  'failed',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({
+        [gmailLink]: respond(
+          302,
+          'https://accounts.google.com/ServiceLogin?x=1',
+        ),
+      }),
+    )
+  ).autoConfirm,
+  'failed',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({
+        [gmailLink]: respond(302, '/mail/signin?next=1'),
+      }),
+    )
+  ).autoConfirm,
+  'failed',
+);
+assert.equal(
+  (
+    await followConfirmLink(gmailLink, 'gmail', (async () => {
+      throw new DOMException('timed out', 'TimeoutError');
+    }) as unknown as typeof fetch)
+  ).errorName,
+  'TimeoutError',
+);
+
+// Redirects are walked by hand: a safe chain confirms, anything else fails without a request to the unsafe step.
+const hopTo = (path: string) => `https://mail.google.com/mail/${path}`;
+const chain = await followConfirmLink(
+  gmailLink,
+  'gmail',
+  routedFetch({
+    [gmailLink]: respond(302, '/mail/hop1'),
+    [hopTo('hop1')]: respond(301, hopTo('hop2')),
+    [hopTo('hop2')]: respond(200),
+  }),
+);
+assert.equal(chain.autoConfirm, 'confirmed');
+const seenBeforeEvil = seen.length;
+const evilChain = await followConfirmLink(
+  gmailLink,
+  'gmail',
+  routedFetch({
+    [gmailLink]: respond(302, hopTo('hop1')),
+    [hopTo('hop1')]: respond(302, 'https://evil.example.com/steal'),
+  }),
+);
+assert.equal(evilChain.autoConfirm, 'failed');
+assert.equal(seen.length - seenBeforeEvil, 2);
+assert.ok(!seen.some((call) => call.url.includes('evil.example.com')));
+const yahooLink = 'https://mail.yahoo.com/d/verify?t=1';
+const redirector = await followConfirmLink(
+  yahooLink,
+  'yahoo',
+  routedFetch({
+    [yahooLink]: respond(302, 'https://r.search.yahoo.com/_ylt=x/RU=evil'),
+  }),
+);
+assert.equal(redirector.autoConfirm, 'failed');
+assert.ok(!seen.some((call) => call.url.includes('r.search.yahoo.com')));
+const consent = await followConfirmLink(
+  yahooLink,
+  'yahoo',
+  routedFetch({
+    [yahooLink]: respond(302, 'https://guce.yahoo.com/consent?x=1'),
+  }),
+);
+assert.equal(consent.autoConfirm, 'failed');
+assert.ok(!seen.some((call) => call.url.includes('guce.yahoo.com')));
+const loop = await followConfirmLink(
+  gmailLink,
+  'gmail',
+  routedFetch({
+    [gmailLink]: respond(302, hopTo('a')),
+    [hopTo('a')]: respond(302, hopTo('b')),
+    [hopTo('b')]: respond(302, hopTo('c')),
+    [hopTo('c')]: respond(302, hopTo('d')),
+    [hopTo('d')]: respond(200),
+  }),
+);
+assert.equal(loop.autoConfirm, 'failed', 'more than 3 hops fails');
+assert.ok(!seen.some((call) => call.url === hopTo('d')));
+assert.equal(
+  (await followConfirmLink(gmailLink, 'gmail', fakeFetch(204))).autoConfirm,
+  'confirmed',
+);
+assert.equal(
+  (await followConfirmLink(gmailLink, 'gmail', fakeFetch(302))).autoConfirm,
+  'failed',
+  'a redirect with no Location fails',
+);
+assert.equal(cancelled, seen.length, 'every response body is cancelled');
+const before = seen.length;
+assert.equal(
+  (
+    await followConfirmLink(
+      'https://account.proton.me/u/0/forwarding/accept?token=abc',
+      'proton',
+      fakeFetch(200),
+    )
+  ).autoConfirm,
+  'skipped',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      'https://mail.google.com.evil.com/x',
+      'gmail',
+      fakeFetch(200),
+    )
+  ).autoConfirm,
+  'skipped',
+);
+assert.equal(seen.length, before, 'nothing unaccepted is fetched');
+
+// The client's sender address is the server's lowercase `toAddress`, so a filter built from one matches the other.
+[
+  'Chase <Alerts@Chase.com>',
+  '"Target Orders" <orders@target.com>',
+  'alerts@capitalone.com',
+  'NO.REPLY@Chase.COM',
+  ' <a@b.co> ',
+].forEach((from) =>
+  assert.equal(readSender(from).address, toAddress(from), from),
+);
+assert.deepEqual(readSender('Chase <Alerts@Chase.com>'), {
+  address: 'alerts@chase.com',
+  name: 'Chase',
+});
+assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
+  address: 'no.reply@chase.com',
+  name: null,
+});
+
+// A sender's bucket is its newest judged email's kind; unread, filtered and unjudged emails don't decide it, and an older sender falls back to purchase = bank, else not money.
+{
+  const event = (
+    id: string,
+    from: string,
+    receivedAt: number,
+    outcome: EmailEventRead['outcome'],
+    senderKind: EmailEventRead['senderKind'],
+  ): EmailEventRead => ({
+    id,
+    from,
+    receivedAt,
+    outcome,
+    senderKind,
+    purchaseId: null,
+    subject: '',
+    subjectTemplate: '',
+    snippet: '',
+    bodyText: null,
+    readBy: null,
+    senderLogo: null,
+    senderCompany: null,
+  });
+  const kindOf = (events: EmailEventRead[], address: string) =>
+    groupEmailSenders(events)
+      .flatMap((group) => group.senders)
+      .find((sender) => sender.address === address)?.kind;
+  assert.equal(
+    kindOf(
+      [
+        event('a', 'x@shop.com', 1, 'notPurchase', 'bank'),
+        event('b', 'X@shop.com', 2, 'purchase', 'store'),
+        event('c', 'x@shop.com', 3, 'unread', 'other'),
+        event('d', 'x@shop.com', 4, 'filtered', 'other'),
+        event('e', 'x@shop.com', 5, 'notPurchase', null),
+      ],
+      'x@shop.com',
+    ),
+    'store',
+    'the newest judged email decides',
+  );
+  assert.equal(
+    kindOf(
+      [
+        event('a', 'y@bank.com', 1, 'purchase', null),
+        event('b', 'y@bank.com', 2, 'notPurchase', null),
+      ],
+      'y@bank.com',
+    ),
+    'bank',
+    'an older sender that ever had a purchase is a bank',
+  );
+  assert.equal(
+    kindOf(
+      [
+        event('a', 'z@news.com', 1, 'notPurchase', null),
+        event('b', 'z@news.com', 2, 'unread', 'store'),
+      ],
+      'z@news.com',
+    ),
+    'other',
+    'no judged email and no purchase is not money',
+  );
+  const withLogo = (
+    base: EmailEventRead,
+    logo: string | null,
+    company: string | null,
+    purchaseId: string | null = null,
+  ): EmailEventRead => ({
+    ...base,
+    senderLogo: logo,
+    senderCompany: company,
+    purchaseId,
+  });
+  const senderOf = (
+    events: EmailEventRead[],
+    address: string,
+    bankLinkOf?: Parameters<typeof groupEmailSenders>[1],
+  ) =>
+    groupEmailSenders(events, bankLinkOf)
+      .flatMap((group) => group.senders)
+      .find((sender) => sender.address === address);
+  const storeMail = (id: string, at: number) =>
+    event(id, 'orders@shop.com', at, 'notPurchase', 'store');
+  const logos = [
+    withLogo(storeMail('a', 1), 'https://shop.example/old.png', 'Old Shop'),
+    withLogo(storeMail('b', 3), 'https://shop.example/new.png', 'Shop'),
+    withLogo(storeMail('c', 4), null, null),
+  ];
+  assert.equal(
+    senderOf(logos, 'orders@shop.com')?.logo,
+    'https://shop.example/new.png',
+    'the newest event that has a logo wins, a later one without is passed over',
+  );
+  assert.equal(senderOf(logos, 'orders@shop.com')?.company, 'Shop');
+  assert.equal(senderOf([storeMail('a', 1)], 'orders@shop.com')?.logo, null);
+  const bankMail = (
+    id: string,
+    at: number,
+    purchaseId: string | null,
+    company: string | null = 'Capital One',
+  ) =>
+    withLogo(
+      event(id, 'alerts@bank.com', at, 'purchase', 'bank'),
+      null,
+      company,
+      purchaseId,
+    );
+  const linkOf =
+    (links: Record<string, string | null | undefined>, name = 'Capital One') =>
+    (id: string) =>
+      links[id] === undefined
+        ? undefined
+        : links[id] === null
+          ? null
+          : { linkId: links[id], name, logo: `logo-of-${links[id]}` };
+  const bankEvents = [bankMail('a', 1, 'p1'), bankMail('b', 2, 'p2')];
+  const bankLogo = (
+    events: EmailEventRead[],
+    links?: Parameters<typeof linkOf>[0],
+    name?: string,
+  ) =>
+    senderOf(
+      events,
+      'alerts@bank.com',
+      links === undefined ? undefined : linkOf(links, name),
+    )?.logo;
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }),
+    'logo-of-L1',
+    'a bank with no logo takes the one link its purchases sit on',
+  );
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }, 'Capital One, N.A.'),
+    'logo-of-L1',
+    'the link name may carry a legal ending',
+  );
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L2' }),
+    null,
+    'two links is not confident',
+  );
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1', p2: null }),
+    null,
+    'a purchase on no link is not confident',
+  );
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1' }),
+    null,
+    'one loaded purchase is not enough',
+  );
+  assert.equal(
+    bankLogo(
+      [bankMail('a', 1, 'p1', 'Citi'), bankMail('b', 2, 'p2', 'Citi')],
+      { p1: 'L1', p2: 'L1' },
+      'Citizens Bank',
+    ),
+    null,
+    'a name that only starts like the bank is not the bank',
+  );
+  assert.equal(
+    bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }, 'Chase'),
+    null,
+    'a link at another bank is not this sender',
+  );
+  assert.equal(
+    bankLogo([bankMail('a', 1, 'p1', null), bankMail('b', 2, 'p2', null)], {
+      p1: 'L1',
+      p2: 'L1',
+    }),
+    null,
+    'a sender whose address never named its bank gets no link logo',
+  );
+  assert.equal(bankLogo(bankEvents, {}), null, 'no loaded purchase, no logo');
+  assert.equal(bankLogo(bankEvents), null);
+  assert.equal(
+    senderOf(
+      [
+        withLogo(
+          bankMail('a', 1, 'p1'),
+          'data:image/png;base64,AA==',
+          'Capital One',
+        ),
+        bankMail('b', 2, 'p2'),
+      ],
+      'alerts@bank.com',
+      linkOf({ p1: 'L1', p2: 'L1' }),
+    )?.logo,
+    'data:image/png;base64,AA==',
+    'its own logo comes before the link',
+  );
+  const confirmOnly = [
+    event('a', 'forwarding-noreply@google.com', 1, 'confirm', null),
+  ];
+  assert.equal(groupEmailSenders(confirmOnly).length, 0, 'setup is no sender');
+}
+
+// A company is claimed only by the sender's own host, never by a name in the subject, body or display name.
+assert.ok(isInstitutionHost('alerts@capitalone.com', 'Capital One'));
+assert.ok(isInstitutionHost('no-reply@email.chase.com', 'Chase'));
+assert.ok(isInstitutionHost('alerts@welcome.aexp.com', 'American Express'));
+assert.ok(isInstitutionHost('alerts@apple.com', 'Apple Card'));
+assert.equal(isInstitutionHost('promo@chase.xyz', 'Chase'), false);
+assert.equal(isInstitutionHost('promo@chase.co.uk', 'Chase'), false);
+assert.equal(isMerchantHost('hi@bluebottle.shop', 'Blue Bottle Coffee'), false);
+assert.ok(isKnownInstitution('Capital One'));
+assert.equal(isKnownInstitution('Stripe'), false);
+assert.equal(isInstitutionHost('promo@evil.example', 'Chase'), false);
+assert.equal(isInstitutionHost('chase@evil.example', 'Chase'), false);
+assert.equal(isInstitutionHost('promo@chase-offers.com', 'Chase'), false);
+assert.equal(isInstitutionHost('promo@evil.example', 'toString'), false);
+assert.equal(isInstitutionHost('nobody', 'Chase'), false);
+assert.ok(isMerchantHost('orders@target.com', 'Target'));
+assert.ok(isMerchantHost('orders@m.target.com', 'Target'));
+assert.ok(isMerchantHost('hi@bluebottle.com', 'Blue Bottle Coffee'));
+assert.ok(isMerchantHost('x@traderjoes.com', "Trader Joe's"));
+assert.equal(isMerchantHost('orders@evil.example', 'Target'), false);
+assert.equal(isMerchantHost('orders@tar.com', 'Target'), false);
+assert.equal(isMerchantHost('gmail.shop@gmail.com', 'Gmail Shop'), false);
+
+assert.deepEqual(
+  splitAddressForWrap('runway-token@moondreamsmail.com', 'runway-'),
+  ['runway-', 'token@', 'moondreamsmail', '.com'],
+  'an address breaks after the prefix, after the @ and before the dot',
+);
+
+console.log(
+  `runway email parse: ${samples.length} samples and ${forwards.length} forwards ok`,
+);

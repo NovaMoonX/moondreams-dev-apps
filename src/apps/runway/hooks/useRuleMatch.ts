@@ -1,26 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-
 import { store, useAppSelector } from '@/store';
-import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
+import {
+  DONE_FOR_YOU_WORDS,
+  RULE_WORDS,
+  SPEND_WORDS,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
 import {
   findBillCandidateIds,
   getMatchedKeys,
 } from '@apps/runway/engine/autoPay';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 import { findRulePlacements } from '@apps/runway/engine/rules';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import {
-  assignPurchase,
-  returnPurchaseToWaiting,
-} from '@apps/runway/store/actions/purchaseActions';
+import { assignPurchase } from '@apps/runway/store/actions/purchaseActions';
 import {
   selectAutoBills,
   selectIsAutoPayReady,
 } from '@apps/runway/store/selectors/autoPaySelectors';
+import { selectTwinHeldIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
@@ -38,7 +40,8 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase, OpenRule, PurchaseLine } from '@apps/runway/types';
-import { describePurchaseReturned } from '@apps/runway/utils/purchaseText';
+import { toPurchaseSubject } from '@apps/runway/utils/doneForYouSubject';
+import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 import { describeRulePlaced } from '@apps/runway/utils/ruleText';
 
 const MAX_ATTEMPTS = 3;
@@ -53,6 +56,7 @@ interface RuleWork {
 interface RulePlaced {
   placed: OpenPurchase;
   original: OpenPurchase;
+  sentence: string;
 }
 
 /** The charges a rule's own sheet is placing, which the pass leaves alone so the two never write one purchase at once. */
@@ -81,13 +85,13 @@ const getBatchLines = (works: readonly Omit<RuleWork, 'lines'>[]) => {
   }, []);
 };
 
-/** Sends the charges waiting in Needs a home that one of the person's rules fits, one transaction each, and says so in one toast whose Undo puts them all back and stops the pass from redoing them. */
+/** Sends the charges waiting in Needs a home that one of the person's rules fits, one transaction each, and records each in Done for you, whose Undo puts it back and stops the pass from redoing it. */
 export function usePlaceByRules(uid: string | null) {
-  const { addToast } = useToast();
   const level = useAppSelector(selectLevel);
   const waiting = useAppSelector(selectLinkWaiting);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const rules = useAppSelector(selectRules);
+  const twinHeld = useAppSelector(selectTwinHeldIds);
   const today = todayAsUtcDate();
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const autoBills = useAppSelector((state) => selectAutoBills(state, today));
@@ -112,14 +116,14 @@ export function usePlaceByRules(uid: string | null) {
   const isRunning = useRef(false);
   const isWaitingToRun = useRef(false);
   const [runs, setRuns] = useState(0);
-  const latest = useRef({ describe, looks, addToast });
+  const latest = useRef({ describe, looks });
 
   useEffect(() => {
-    latest.current = { describe, looks, addToast };
+    latest.current = { describe, looks };
   });
 
   useEffect(() => {
-    if (uid === null || !isReady || level !== 'link') return;
+    if (uid === null || !isReady || !isTrackingLevel(level)) return;
     if (isRunning.current) {
       isWaitingToRun.current = true;
       return;
@@ -137,6 +141,7 @@ export function usePlaceByRules(uid: string | null) {
       purchases,
       rules,
       new Set(envelopes.map(({ item }) => item.id)),
+      twinHeld,
     ).flatMap(({ purchase, rule }) => {
       const key = `${purchase.id}:${purchase.updatedAt}`;
       return tried.current.has(key) ||
@@ -161,7 +166,7 @@ export function usePlaceByRules(uid: string | null) {
     };
 
     const run = async () => {
-      const { looks: names, addToast: toast } = latest.current;
+      const { looks: names } = latest.current;
       const nameOf = (envelopeId: string) =>
         names.get(envelopeId)?.name ?? 'An envelope';
       try {
@@ -196,6 +201,7 @@ export function usePlaceByRules(uid: string | null) {
                     ruleId: rule.id,
                     updatedAt,
                   },
+                  sentence: latest.current.describe(rule),
                 } satisfies RulePlaced,
               ];
             } catch (error) {
@@ -213,49 +219,30 @@ export function usePlaceByRules(uid: string | null) {
           Promise.resolve([] as RulePlaced[]),
         );
         if (placed.length === 0) return;
-        const undo = async () => {
-          const results = await Promise.allSettled(
-            placed.map(({ placed: entry }) =>
-              returnPurchaseToWaiting(
-                uid,
-                encryption,
-                entry,
-                describePurchaseReturned(entry, nameOf),
-                { ruleId: null, assignedBy: 'person' },
+        recordDone(
+          uid,
+          placed.map(({ placed: entry, sentence }) => {
+            const envelopeId =
+              entry.lines.find((line) => line.via === 'chosen')?.envelopeId ??
+              '';
+            return {
+              kind: 'rule' as const,
+              title: DONE_FOR_YOU_WORDS.ruleSent(
+                getPurchaseTitle(entry, nameOf),
+                nameOf(envelopeId),
               ),
-            ),
-          );
-          const stayed = results.filter(
-            (result) => result.status === 'rejected',
-          );
-          if (stayed.length === 0) {
-            toast({ title: RULE_WORDS.undone, type: 'success' });
-            return;
-          }
-          toast({
-            title: RULE_WORDS.undoPartial(
-              placed.length - stayed.length,
-              placed.length,
-              stayed.length,
-            ),
-            type: 'error',
-          });
-        };
-        const [{ placed: first }] = placed;
-        toast({
-          title:
-            placed.length === 1
-              ? RULE_WORDS.placedOne(
-                  nameOf(
-                    first.lines.find((line) => line.via === 'chosen')
-                      ?.envelopeId ?? '',
-                  ),
-                )
-              : RULE_WORDS.placedMany(placed.length),
-          description: RULE_WORDS.placedSub,
-          type: 'success',
-          action: { label: RULE_WORDS.undo, onClick: () => void undo() },
-        });
+              detail: null,
+              why: `${RULE_WORDS.yourRule}, ${sentence}`,
+              undo: { kind: 'rule' as const, placed: entry },
+              subject: toPurchaseSubject(entry, {
+                ruleId: entry.ruleId,
+                itemId: envelopeId === '' ? null : envelopeId,
+                toName: names.get(envelopeId)?.name ?? null,
+                toEmoji: names.get(envelopeId)?.emoji ?? null,
+              }),
+            };
+          }),
+        );
       } catch (error) {
         // The vault or the network failed before any purchase was tried, so they may be tried again.
         found.forEach(({ key }) => allowRetry(key));
@@ -276,6 +263,7 @@ export function usePlaceByRules(uid: string | null) {
     waiting,
     purchases,
     rules,
+    twinHeld,
     envelopes,
     autoBills,
     accounts,

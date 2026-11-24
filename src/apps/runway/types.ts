@@ -1,5 +1,11 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
+import type { ChargeMatchResult } from '@apps/runway/store/actions/autoPayActions';
+import type {
+  MergedPurchase,
+  MergedSplit,
+} from '@apps/runway/store/actions/purchaseActions';
+
 import type {
   ACCOUNT_KINDS,
   CALENDAR_PERIODS,
@@ -101,6 +107,8 @@ export interface PlanDoc {
   sealed: Sealed | null;
   /** The sealed totals-and-names summary a connected app reads; null when Free to Spend is unknown, and absent on a plan made before it existed. */
   shareSummary: Sealed | null;
+  /** Epoch ms the person last opened Done for you; null before they have, and on a plan made before it existed. */
+  doneForYouSeenAt: number | null;
 }
 
 /** What a plan shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
@@ -143,6 +151,7 @@ export interface OpenPlan extends PlanSealedFields {
   notify: PlanNotify | null;
   sorting: SortingState | null;
   keyId: string | null;
+  doneForYouSeenAt: number | null;
 }
 
 /** Integer cents. */
@@ -697,6 +706,8 @@ export interface LinkDoc {
   needsCardConsent: boolean | null;
   /** The bank's last answer about card details: shared, waiting for the person's agreement, or not offered for this sign-in; null until first asked, and missing on a link written before it was kept. */
   cardDetails: CardDetailsAnswer | null;
+  /** Whether the provider's own name and logo for this bank were added to the shared bank list; null until then, and missing on a link written before it was kept. */
+  logoShared: boolean | null;
   sealed: Sealed;
 }
 
@@ -721,6 +732,10 @@ export interface LinkSealed {
   institutionName: string;
   /** The bank's logo as a PNG data URL; null when the bank sent none. */
   institutionLogo: string | null;
+  /** The bank's website (`capitalone.com`), for a stand-in logo while the bank sends none; null when unknown. */
+  institutionDomain: string | null;
+  /** When the bank's logo and website were last asked for; written by Functions, never read here. */
+  institutionCheckedAt: number | null;
   providerAccounts: LinkProviderAccount[];
 }
 
@@ -1206,6 +1221,34 @@ export interface PurchaseSealed {
   cardPaymentMoveId: string | null;
   /** On the money-in side of a transfer: the income day whose "Move to" item the pairing ticked; null when it ticked none (and read as null on an older purchase). */
   tickedDayKey: string | null;
+  /** What a store's email made of it: an order, a refund or a cancellation, with the order number; null on anything else (missing on an older purchase, read as null). */
+  storeEmail?: StoreEmail | null;
+  /** On an order: each cancellation the app took off it before it was charged, newest last; null when none (missing on an older purchase, read as null). */
+  orderLog?: OrderLogEntry[] | null;
+}
+
+/** What a store's email does to an order: places it, returns money for it, or cancels some or all of it. */
+export interface StoreEmail {
+  kind: 'order' | 'refund' | 'cancel';
+  /** As the store printed it; null when the email gave none. */
+  orderNumber: string | null;
+  /** A cancellation of the whole order; false for anything else. */
+  isWholeOrder: boolean;
+  /** The store as the email named it. */
+  merchant: string | null;
+}
+
+/** A cancellation taken off an order that had not been charged yet. */
+export interface OrderLogEntry {
+  kind: 'cancel';
+  cents: Cents;
+  /** The day the email arrived. */
+  on: DateOnly;
+  emailEventId: string | null;
+  /** The cancellation's own purchase, kept with no lines so it counts nowhere; null when the email gave no amount. */
+  purchaseId: string | null;
+  /** Set when the person undid it: the order is back to what it was, and the entry stays so the app never takes it off again. */
+  undoneAt: number | null;
 }
 
 /** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */
@@ -1229,12 +1272,14 @@ export interface PurchaseDoc {
   emailEventId: string | null;
   /** On a purchase read from an email: true while Runway waits for its bank to send the same charge, false once there is nothing to wait for (its card or account isn't linked, or the person stopped waiting); null on every other purchase (and missing on an older one). */
   emailWaiting: boolean | null;
+  /** On a purchase from a linked bank, written by Functions: true once the bank has shown it as pending (or its posted charge named a pending one), false when it only ever arrived posted; null on any other purchase, and missing on an older one (read as null). */
+  wasPending: boolean | null;
   createdAt: number;
   updatedAt: number;
   sealed: Sealed;
 }
 
-/** The person's forwarding address for bank alert emails, written only by Functions; one per plan, at `emailIntake/address`. The address is `finance-<token>@apps.moondreams.dev`. */
+/** The person's forwarding address for bank alert emails, written only by Functions; one per plan, at `emailIntake/address`. The address is `runway-<token>@moondreamsmail.com`. */
 export interface EmailIntakeDoc {
   id: 'address';
   /** Lowercase letters and digits; changes when the person asks for a new address, and the old one stops working at once. */
@@ -1245,6 +1290,10 @@ export interface EmailIntakeDoc {
   lastReceivedAt: number | null;
   /** When a mail provider's forwarding confirmation last arrived; null until one does. */
   confirmAt: number | null;
+  /** Whether Functions followed the confirmation link themselves: 'confirmed', 'failed' or 'skipped' (a provider they don't follow); null until a confirmation arrives (and on an older document, which the person confirms by hand). */
+  autoConfirm: 'confirmed' | 'failed' | 'skipped' | null;
+  /** Whose confirmation arrived; null until one does, or when the provider is not one of these. */
+  confirmProvider: 'gmail' | 'yahoo' | 'proton' | null;
   /** `EmailIntakeSealed`; null until a confirmation arrives. */
   sealed: Sealed | null;
 }
@@ -1256,14 +1305,11 @@ export interface EmailIntakeSealed {
   confirmCode: string | null;
 }
 
+/** @deprecated The setup walkthrough is gone; kept for the stored progress documents, which nothing reads or writes now. */
 export type EmailProvider =
-  | 'gmail'
-  | 'outlook'
-  | 'icloud'
-  | 'yahoo'
-  | 'proton'
-  | 'other';
+  'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'proton' | 'other';
 
+/** @deprecated See `EmailProvider`. */
 export type EmailSetupStepId =
   | 'provider'
   | 'copy'
@@ -1274,7 +1320,7 @@ export type EmailSetupStepId =
   | 'filter'
   | 'test';
 
-/** How far the person got setting up forwarding, written by the app so a walkthrough resumes on any device; one per plan, at `emailSetup/progress`. The banks whose alerts are forwarded are sealed; the provider and step are not sensitive. */
+/** @deprecated The setup walkthrough is gone and nothing reads or writes this document now; older ones stay in place. It held how far the person got setting up forwarding, at `emailSetup/progress`, with the banks whose alerts were forwarded sealed. */
 export interface EmailSetupDoc {
   id: 'progress';
   provider: EmailProvider | null;
@@ -1288,7 +1334,7 @@ export interface EmailSetupDoc {
   updatedAt: number;
 }
 
-/** One bank whose alerts are forwarded, with every From address its alerts come from. */
+/** @deprecated See `EmailSetupDoc`. */
 export interface EmailBank {
   id: string;
   name: string;
@@ -1297,6 +1343,7 @@ export interface EmailBank {
   addedAt: number;
 }
 
+/** @deprecated See `EmailSetupDoc`. */
 export interface EmailSetupSealed {
   banks: EmailBank[];
 }
@@ -1308,13 +1355,20 @@ export type EmailOutcome =
   | 'filtered'
   | 'confirm'
   | 'unread'
-  | 'notTracking';
+  | 'notTracking'
+  | 'refund'
+  | 'cancel';
+
+/** What kind of sender an email came from, as Functions judged it: a bank's alert, a store's receipt, or something that is not money. */
+export type EmailSenderKind = 'bank' | 'store' | 'other';
 
 /** One email that reached the address, written only by Functions and removed on its own after `EMAIL_EVENT_KEEP_DAYS`; kept so a filter can be built from it. */
 export interface EmailEventDoc {
   id: string;
   receivedAt: number;
   outcome: EmailOutcome;
+  /** The sender's kind; null on an older event (read as a bank when it became a purchase, else not money). */
+  senderKind: EmailSenderKind | null;
   /** The purchase it became; null for any other outcome. */
   purchaseId: string | null;
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
@@ -1334,6 +1388,12 @@ export interface EmailEventSealed {
   bodyText: string | null;
   /** How the purchase was read: a known pattern or the AI; null when nothing was read. */
   readBy: 'pattern' | 'ai' | null;
+  /** What a store's email does to an order; null for any other email (missing on an older event, read as null). */
+  storeEmail?: StoreEmail | null;
+  /** The company's logo (an https address or an image data URL) when the email is confidently from one; null when unknown (missing on an older event, read as null). */
+  senderLogo: string | null;
+  /** That company's name, a store the shared shop list knows or a bank the alert names; null when unknown (missing on an older event, read as null). */
+  senderCompany: string | null;
 }
 
 /** A filter the person made from an email: an email that matches every condition it sets is skipped before anything reads it. Created and deleted by the app, read by Functions. */
@@ -1380,6 +1440,7 @@ export interface OpenPurchase extends PurchaseSealed {
   expenseId: string | null;
   emailEventId: string | null;
   emailWaiting: boolean | null;
+  wasPending: boolean | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1436,3 +1497,86 @@ export interface ClosingDoc {
 
 // Round 4: funding on the calendar.
 export type CalendarPeriod = (typeof CALENDAR_PERIODS)[number];
+
+export type DoneForYouKind =
+  | 'merge'
+  | 'deposit'
+  | 'pair'
+  | 'rule'
+  | 'charge'
+  | 'autoMark'
+  | 'history'
+  | 'released'
+  | 'ended'
+  | 'storeRefund'
+  | 'storeCancel';
+
+/** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
+export type DoneForYouUndo =
+  | { kind: 'merge'; merged: MergedPurchase }
+  | { kind: 'mergeSplit'; merged: MergedSplit }
+  | {
+      kind: 'deposit';
+      deposit: OpenPurchase;
+      linked: OpenPurchase;
+      dayOn: DateOnly;
+    }
+  | {
+      kind: 'pair';
+      out: OpenPurchase;
+      into: OpenPurchase;
+      pairKind: PurchasePairKind;
+      names: { from: string; to: string };
+      paired: { out: OpenPurchase; into: OpenPurchase };
+    }
+  | { kind: 'rule'; placed: OpenPurchase }
+  | { kind: 'storeRefund'; applied: OpenPurchase }
+  | {
+      kind: 'storeCancel';
+      /** The order before the cancellation came off it, and as the app wrote it. */
+      before: OpenPurchase;
+      written: OpenPurchase;
+      /** The cancellation's own purchase as the app left it (no lines); null when the email gave no amount. */
+      cancel: OpenPurchase | null;
+      emailEventId: string | null;
+    }
+  | { kind: 'charge'; result: ChargeMatchResult };
+
+/** What an entry acted on, so its item can show it and open it; each kind fills what it has. */
+export interface DoneForYouSubject {
+  purchaseId: string | null;
+  merchant: string | null;
+  merchantLogo: string | null;
+  amountCents: Cents | null;
+  ruleId: string | null;
+  billId: string | null;
+  itemId: string | null;
+  toName: string | null;
+  toEmoji: string | null;
+  fromName: string | null;
+}
+
+export interface DoneForYouSealed {
+  title: string;
+  detail: string | null;
+  why: string | null;
+  undo: DoneForYouUndo | null;
+  /** Null on an entry written before it was kept. */
+  subject: DoneForYouSubject | null;
+}
+
+/** Something the app did on its own, under `doneForYou`; only `undoneAt` and removal change it. */
+export interface DoneForYouDoc {
+  id: string;
+  kind: DoneForYouKind;
+  createdAt: number;
+  undoneAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenDoneForYou extends DoneForYouSealed {
+  id: string;
+  kind: DoneForYouKind;
+  createdAt: number;
+  undoneAt: number | null;
+}

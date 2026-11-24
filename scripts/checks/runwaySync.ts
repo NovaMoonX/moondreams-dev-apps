@@ -165,6 +165,7 @@ const tx = (
   merchantLogo: null,
   bankName: null,
   category: null,
+  isKnownBusiness: false,
   isPending: false,
   ...extra,
 });
@@ -287,6 +288,44 @@ assert.equal(
   kept.dedupeKey,
   keyOf('t4-pending'),
   'it keeps the pending dedupe key',
+);
+
+assert.equal(kept.wasPending, true, 'a charge that was pending stays marked');
+assert.equal(
+  stored.get(purchaseIdFor(keyOf('t1')))?.wasPending,
+  false,
+  'a charge that only ever arrived posted is marked not pending',
+);
+assert.equal(waiting.wasPending, true, 'a pending charge is marked');
+assert.equal(
+  applyTransactions(
+    keyOf,
+    targets,
+    [tx('t9', 'card', 100, { pendingTransactionId: 'unseen' })],
+    [],
+    [],
+    new Map(),
+  ).writes.get(purchaseIdFor(keyOf('t9')))?.wasPending,
+  true,
+  'a posted charge that names a pending one is marked',
+);
+const legacy = new Map<string, PurchaseState>(stored);
+const t1Id = purchaseIdFor(keyOf('t1'));
+legacy.set(t1Id, {
+  ...(stored.get(t1Id) as PurchaseState),
+  wasPending: null,
+});
+assert.equal(
+  applyTransactions(
+    keyOf,
+    targets,
+    [tx('t1', 'card', 650)],
+    [],
+    [],
+    legacy,
+  ).writes.get(t1Id)?.wasPending,
+  null,
+  'an older purchase stays unknown until it shows a pending sign',
 );
 
 const unassigned = applyTransactions(

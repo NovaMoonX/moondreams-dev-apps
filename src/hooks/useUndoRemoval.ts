@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-const UNDO_SECONDS = 6;
+import { UNDO_WINDOW_MS } from '@/lib/undo';
+
+const UNDO_SECONDS = UNDO_WINDOW_MS / 1000;
 
 export interface PendingUndo {
   message: string;
@@ -14,9 +16,9 @@ interface Removal {
 }
 
 /** One pending "Removed X · Undo" countdown for a form; `restore` runs on Undo and must read the latest state. */
-export function useUndoRemoval(seconds = UNDO_SECONDS) {
+export function useUndoRemoval() {
   const [removal, setRemoval] = useState<Removal | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(seconds);
+  const [secondsLeft, setSecondsLeft] = useState(UNDO_SECONDS);
 
   useEffect(() => {
     if (removal === null) {
@@ -34,13 +36,10 @@ export function useUndoRemoval(seconds = UNDO_SECONDS) {
     return () => window.clearInterval(timer);
   }, [removal]);
 
-  const showUndo = useCallback(
-    (message: string, restore: () => void) => {
-      setSecondsLeft(seconds);
-      setRemoval({ message, restore, expiresAt: Date.now() + seconds * 1000 });
-    },
-    [seconds],
-  );
+  const showUndo = useCallback((message: string, restore: () => void) => {
+    setSecondsLeft(UNDO_SECONDS);
+    setRemoval({ message, restore, expiresAt: Date.now() + UNDO_WINDOW_MS });
+  }, []);
 
   const undo = useCallback(() => {
     removal?.restore();

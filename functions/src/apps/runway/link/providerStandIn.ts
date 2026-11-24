@@ -65,6 +65,7 @@ const transaction = (
   merchantLogo: null,
   bankName: null,
   category,
+  isKnownBusiness: false,
   isPending: false,
   ...extra,
 });
@@ -153,7 +154,12 @@ export const standInProvider: BankDataProvider = {
     credential: 'stand-in',
     providerItemId: `stand-in-${randomUUID()}`,
   }),
-  getInstitution: async () => ({ name: 'Chase', logo: null }),
+  getInstitution: async () => ({
+    id: 'ins_stand_in',
+    name: 'Chase',
+    logo: null,
+    domain: 'chase.com',
+  }),
   listAccounts: async () => ACCOUNTS,
   listCardStatements: async () => ({
     kind: 'ok',

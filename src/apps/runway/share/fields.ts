@@ -71,10 +71,15 @@ import type {
   PurchaseLine,
   CostRef,
   BillRef,
+  StoreEmail,
+  OrderLogEntry,
   PurchaseSealed,
   PurchaseDoc,
   ReleasedChargeDoc,
   ReleasedChargeSealed,
+  DoneForYouDoc,
+  DoneForYouSealed,
+  DoneForYouSubject,
   EmailEventDoc,
   EmailEventSealed,
   EmailFilterDoc,
@@ -128,6 +133,7 @@ const PLAN_DOC_FIELDS = {
   dirtyFrom: 'notUseful',
   notify: 'notUseful',
   sorting: 'notUseful',
+  doneForYouSeenAt: 'notUseful',
   keyId: 'notUseful',
   sealed: 'shared',
   shareSummary: 'shared',
@@ -448,6 +454,7 @@ const LINK_DOC_FIELDS = {
   createdAt: 'never',
   needsCardConsent: 'never',
   cardDetails: 'never',
+  logoShared: 'never',
   sealed: 'never',
 } satisfies Record<keyof LinkDoc, ShareDecision>;
 
@@ -465,6 +472,8 @@ const LINK_PROVIDER_ACCOUNT_FIELDS = {
 const LINK_SEALED_FIELDS = {
   institutionName: 'never',
   institutionLogo: 'never',
+  institutionDomain: 'never',
+  institutionCheckedAt: 'never',
   providerAccounts: 'never',
 } satisfies Record<keyof LinkSealed, ShareDecision>;
 
@@ -678,6 +687,22 @@ const BILL_REF_FIELDS = {
   moveId: 'notUseful',
 } satisfies Record<keyof BillRef, ShareDecision>;
 
+const STORE_EMAIL_FIELDS = {
+  kind: 'never',
+  orderNumber: 'never',
+  isWholeOrder: 'never',
+  merchant: 'never',
+} satisfies Record<keyof StoreEmail, ShareDecision>;
+
+const ORDER_LOG_FIELDS = {
+  kind: 'notUseful',
+  cents: 'notUseful',
+  on: 'notUseful',
+  emailEventId: 'notUseful',
+  purchaseId: 'notUseful',
+  undoneAt: 'notUseful',
+} satisfies Record<keyof OrderLogEntry, ShareDecision>;
+
 const PURCHASE_SEALED_FIELDS = {
   amountCents: 'shared',
   merchant: 'shared',
@@ -701,6 +726,8 @@ const PURCHASE_SEALED_FIELDS = {
   pairKind: 'notUseful',
   cardPaymentMoveId: 'notUseful',
   tickedDayKey: 'notUseful',
+  storeEmail: 'never',
+  orderLog: 'notUseful',
 } satisfies Record<keyof PurchaseSealed, ShareDecision>;
 
 const PURCHASE_DOC_FIELDS = {
@@ -714,6 +741,7 @@ const PURCHASE_DOC_FIELDS = {
   expenseId: 'notUseful',
   emailEventId: 'notUseful',
   emailWaiting: 'notUseful',
+  wasPending: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
   sealed: 'shared',
@@ -726,6 +754,8 @@ const EMAIL_INTAKE_DOC_FIELDS = {
   updatedAt: 'notUseful',
   lastReceivedAt: 'notUseful',
   confirmAt: 'notUseful',
+  autoConfirm: 'notUseful',
+  confirmProvider: 'notUseful',
   sealed: 'never',
 } satisfies Record<keyof EmailIntakeDoc, ShareDecision>;
 
@@ -759,6 +789,7 @@ const EMAIL_EVENT_DOC_FIELDS = {
   id: 'notUseful',
   receivedAt: 'notUseful',
   outcome: 'notUseful',
+  senderKind: 'notUseful',
   purchaseId: 'notUseful',
   expiresAt: 'notUseful',
   sealed: 'never',
@@ -771,6 +802,9 @@ const EMAIL_EVENT_SEALED_FIELDS = {
   snippet: 'never',
   bodyText: 'never',
   readBy: 'notUseful',
+  storeEmail: 'never',
+  senderLogo: 'never',
+  senderCompany: 'never',
 } satisfies Record<keyof EmailEventSealed, ShareDecision>;
 
 const EMAIL_FILTER_DOC_FIELDS = {
@@ -798,6 +832,35 @@ const RELEASED_CHARGE_SEALED_FIELDS = {
   amountCents: 'never',
   lines: 'notUseful',
 } satisfies Record<keyof ReleasedChargeSealed, ShareDecision>;
+
+const DONE_FOR_YOU_DOC_FIELDS = {
+  id: 'notUseful',
+  kind: 'notUseful',
+  createdAt: 'notUseful',
+  undoneAt: 'notUseful',
+  sealed: 'notUseful',
+} satisfies Record<keyof DoneForYouDoc, ShareDecision>;
+
+const DONE_FOR_YOU_SEALED_FIELDS = {
+  title: 'notUseful',
+  detail: 'notUseful',
+  why: 'notUseful',
+  undo: 'never',
+  subject: 'never',
+} satisfies Record<keyof DoneForYouSealed, ShareDecision>;
+
+const DONE_FOR_YOU_SUBJECT_FIELDS = {
+  purchaseId: 'never',
+  merchant: 'never',
+  merchantLogo: 'never',
+  amountCents: 'never',
+  ruleId: 'never',
+  billId: 'never',
+  itemId: 'never',
+  toName: 'never',
+  toEmoji: 'never',
+  fromName: 'never',
+} satisfies Record<keyof DoneForYouSubject, ShareDecision>;
 
 const CLOSING_SEALED_FIELDS = {
   version: 'notUseful',
@@ -896,10 +959,15 @@ export const SHARE_FIELDS = {
   PurchaseLine: PURCHASE_LINE_FIELDS,
   CostRef: COST_REF_FIELDS,
   BillRef: BILL_REF_FIELDS,
+  StoreEmail: STORE_EMAIL_FIELDS,
+  OrderLogEntry: ORDER_LOG_FIELDS,
   PurchaseSealed: PURCHASE_SEALED_FIELDS,
   PurchaseDoc: PURCHASE_DOC_FIELDS,
   ReleasedChargeDoc: RELEASED_CHARGE_DOC_FIELDS,
   ReleasedChargeSealed: RELEASED_CHARGE_SEALED_FIELDS,
+  DoneForYouDoc: DONE_FOR_YOU_DOC_FIELDS,
+  DoneForYouSealed: DONE_FOR_YOU_SEALED_FIELDS,
+  DoneForYouSubject: DONE_FOR_YOU_SUBJECT_FIELDS,
   EmailIntakeDoc: EMAIL_INTAKE_DOC_FIELDS,
   EmailIntakeSealed: EMAIL_INTAKE_SEALED_FIELDS,
   EmailSetupDoc: EMAIL_SETUP_DOC_FIELDS,
@@ -926,6 +994,7 @@ export const NOT_STORED: Record<string, string> = {
   OpenRule: 'decrypted view of RuleDoc',
   OpenReceiptImage: 'decrypted view of ReceiptImageDoc',
   OpenReleasedCharge: 'decrypted view of ReleasedChargeDoc',
+  OpenDoneForYou: 'decrypted view of DoneForYouDoc',
   OpenPurchase: 'decrypted view of PurchaseDoc',
   OpenChange: 'decrypted view of ChangeDoc',
   OpenDay: 'decrypted view of IncomeDayDoc',

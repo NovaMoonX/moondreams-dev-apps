@@ -19,6 +19,7 @@ import {
   removePhoto,
 } from '@apps/helm/store/actions/mediaActions';
 import type { OpenMedia } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface MediaViewerProps {
   owner: PhotoOwner;
@@ -58,6 +59,7 @@ function MediaViewer({
       } else {
         const { restore } = result;
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.photoMadeMain,
           type: 'info',
           action: {

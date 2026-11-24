@@ -64,6 +64,10 @@ export interface LinkSealed {
   institutionName: string;
   /** The bank's logo as a PNG data URL; null when the provider has none. Absent on links sealed before it was kept. */
   institutionLogo: string | null;
+  /** The bank's website host, which a logo is looked up by when the provider has none; null when unknown. Absent on links sealed before it was kept. */
+  institutionDomain?: string | null;
+  /** When the bank's details were last asked for, so a bank with no logo is asked again now and then. Absent on older links. */
+  institutionCheckedAt?: number | null;
   providerAccounts: ProviderAccountSealed[];
 }
 
@@ -92,10 +96,17 @@ export async function withProvider<T>(work: () => Promise<T>) {
       logger.warn('runway.link.providerFailed', {
         kind: error.kind,
         code: error.code,
+        requestId: error.trace.requestId,
+        path: error.trace.path,
       });
       throw new HttpsError(
         error.kind === 'unavailable' ? 'unavailable' : 'failed-precondition',
         error.message,
+        {
+          providerCode: error.code,
+          requestId: error.trace.requestId,
+          path: error.trace.path,
+        },
       );
     }
     throw error;

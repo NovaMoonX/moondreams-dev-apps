@@ -565,7 +565,7 @@ service cloud.firestore {
     // --- App: runway ---
 
     // A plan is private to one person and nests under their uid. The server-only paths
-    // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
+    // (apps/runway/server, apps/runway/keyChecks, apps/runway/merchantNames, apps/runway/institutionLogos) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
     // `links`, `accountBalances` and `cardStatements` are written only by Functions (bank data), and a card's or account's `linkId`
@@ -576,7 +576,8 @@ service cloud.firestore {
     // started at their bank) is created and deleted by the app, never changed. A purchase read from an email
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
     // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
-    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and furthest step, with the forwarded banks sealed) is created and updated by the app, never deleted.
+    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` is deprecated and no longer read or written (the walkthrough is gone); older documents stay, and the owner may still update one, never delete it. `doneForYou` is what the app did on its
+    // own: the app marks one undone and removes the ones older than 30 days.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
@@ -592,10 +593,10 @@ service cloud.firestore {
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
       allow update: if isUser(uid)
-        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules', 'emailSetup']
+        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules', 'emailSetup', 'doneForYou']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null) && request.resource.data.get('emailEventId', null) == resource.data.get('emailEventId', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters', 'doneForYou'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {
@@ -744,6 +745,31 @@ service cloud.firestore {
           && request.time.toMillis() < resource.data.createdAt + 600000
           && resource.data.get('sale', null) == null
           && resource.data.get('pending', null) == null);
+    }
+
+    // A bundle (things sold together for one price) is read and written by the sale's members, judged by the sale in
+    // its path. It starts Active with two to thirty things and a price in whole cents; who made it and when never
+    // change. Members can delete it in any status, so deleting the last thing of a held or sold bundle takes it along.
+    match /apps/going-once/sales/{saleId}/bundles/{bundleId} {
+      allow read: if isSaleMember(saleId);
+      allow create: if isSaleMember(saleId) && isCreatedByMe()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.itemIds is list
+        && request.resource.data.itemIds.size() >= 2
+        && request.resource.data.itemIds.size() <= 30
+        && request.resource.data.priceCents is int
+        && request.resource.data.priceCents >= 0
+        && request.resource.data.status == 'ACTIVE';
+      allow update: if isSaleMember(saleId) && isCreatedByKept()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'saleId', 'id'])
+        && request.resource.data.priceCents is int
+        && request.resource.data.priceCents >= 0
+        && request.resource.data.itemIds is list
+        && request.resource.data.itemIds.size() <= 30
+        && request.resource.data.status in ['ACTIVE', 'PENDING', 'SOLD'];
+      allow delete: if isSaleMember(saleId);
     }
 
     // A person's own settings (which sales' interest push they turned off) are read and written by them alone, and

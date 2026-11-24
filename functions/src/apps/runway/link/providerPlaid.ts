@@ -55,7 +55,13 @@ export const hasProviderSecrets = () =>
 interface PlaidFailure {
   error_code?: string;
   error_message?: string;
+  request_id?: string;
 }
+
+const asRequestId = (value: unknown): string | null =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)
+    ? value
+    : null;
 
 /** Codes only the person can fix at their bank, so the link waits for a reconnect instead of retrying. */
 const NEEDS_PERSON_CODES = new Set([
@@ -141,13 +147,19 @@ export async function call<T>(
     body: JSON.stringify({ client_id: clientId, secret, ...body }),
     ...(timeoutMs === null ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
   }).catch(() => {
-    throw new ProviderError(
+    const unreached = new ProviderError(
       'unavailable',
       'Could not reach the bank connection. Try again in a few minutes.',
     );
+    unreached.trace = { requestId: null, path };
+    throw unreached;
   });
   const json = (await response.json().catch(() => ({}))) as T & PlaidFailure;
-  if (!response.ok) throw toProviderError(json.error_code ?? '');
+  if (!response.ok) {
+    const failure = toProviderError(json.error_code ?? '');
+    failure.trace = { requestId: asRequestId(json.request_id), path };
+    throw failure;
+  }
   return json;
 }
 
@@ -201,9 +213,13 @@ interface PlaidTransaction {
   date: string;
   amount: number;
   merchant_name: string | null;
+  merchant_entity_id?: string | null;
   logo_url?: string | null;
   name: string | null;
-  personal_finance_category?: { detailed?: string | null } | null;
+  personal_finance_category?: {
+    primary?: string | null;
+    detailed?: string | null;
+  } | null;
   pending: boolean;
 }
 
@@ -227,6 +243,8 @@ const toTransactions = (list: PlaidTransaction[]) =>
       logoUrl: entry.logo_url ?? null,
       name: entry.name,
       category: entry.personal_finance_category?.detailed ?? null,
+      merchantEntityId: entry.merchant_entity_id ?? null,
+      categoryPrimary: entry.personal_finance_category?.primary ?? null,
       isPending: entry.pending,
     });
     return normalized ? [normalized] : [];
@@ -239,6 +257,21 @@ const toLogoUrl = (logo: string | null | undefined) =>
   logo.length < 200_000
     ? `data:image/png;base64,${logo}`
     : null;
+
+/** A website's host without "www.", only for a well-formed http(s) address. */
+const toDomain = (url: string | null | undefined) => {
+  if (typeof url !== 'string' || url.length > 2048) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    return /^https?:$/.test(parsed.protocol) &&
+      /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host)
+      ? host
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 interface PlaidCreditLiability {
   account_id: string;
@@ -324,15 +357,17 @@ export const plaidProvider: BankDataProvider = {
     );
     if (!item.institution_id) return null;
     const { institution } = await call<{
-      institution: { name: string; logo?: string | null };
+      institution: { name: string; logo?: string | null; url?: string | null };
     }>('/institutions/get_by_id', {
       institution_id: item.institution_id,
       country_codes: ['US'],
       options: { include_optional_metadata: true },
     });
     const result: ProviderInstitution = {
+      id: item.institution_id,
       name: institution.name || null,
       logo: toLogoUrl(institution.logo),
+      domain: toDomain(institution.url),
     };
     return result;
   },

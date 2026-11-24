@@ -8,22 +8,24 @@ import { EMAIL_TICKETS_GATE_ID } from '@apps/a-list/constants';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectEmailEvents,
+  selectEmailIntake,
   selectEmailProgress,
   selectIsEmailLoaded,
 } from '@apps/a-list/store/selectors';
 import { getUnseenChanges } from '@apps/a-list/utils/emailEvents';
 
-/** A small card on the calendar when AMC emails changed showings since the member last looked; nothing while the switch is closed or setup isn't done. */
+/** A small card on the calendar when AMC emails changed showings since the member last looked; nothing while the switch is closed or there is no address yet. */
 function EmailChangesNotice() {
   const { user } = useAuth();
   const isOpen = useIsGateOpen('a-list', EMAIL_TICKETS_GATE_ID);
   const { openOverlay } = useAListOverlay();
   const events = useAppSelector(selectEmailEvents);
+  const intake = useAppSelector(selectEmailIntake);
   const progress = useAppSelector(selectEmailProgress);
   const isLoaded = useAppSelector(selectIsEmailLoaded);
 
-  if (!isOpen || !isLoaded || !user || progress?.doneAt == null) return null;
-  const unseen = getUnseenChanges(events, progress.noticeSeenThrough ?? null);
+  if (!isOpen || !isLoaded || !user || intake === null) return null;
+  const unseen = getUnseenChanges(events, progress?.noticeSeenThrough ?? null);
   if (unseen.length === 0) return null;
 
   return (

@@ -6,15 +6,24 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useDoneForYouToast } from '@/hooks/useDoneForYouToast';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
+import DoneForYouButton from '@/components/DoneForYouButton';
+import DoneForYouSheet from '@/components/DoneForYouSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
 import Loading from '@/ui/Loading';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useDoneForYou } from '@apps/runway/hooks/useDoneForYou';
+import {
+  pruneDoneForYou,
+  setDoneForYouSeen,
+} from '@apps/runway/store/actions/doneForYouActions';
 import PriorityDial from '@apps/runway/components/PriorityDial';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
@@ -29,6 +38,7 @@ import SetupLanding from '@apps/runway/screens/start/SetupLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
+import RuleOverCover from '@apps/runway/components/RuleOverCover';
 import AccountsScreen from '@apps/runway/screens/plan/AccountsScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
@@ -42,6 +52,7 @@ import { getDayKeyMonth } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import {
+  DONE_FOR_YOU_WORDS,
   HISTORY_WORDS,
   RUNWAY_TAB_LABELS,
   TRUSTED_BROWSER_WORDS,
@@ -74,6 +85,7 @@ import { useShareSummary } from '@apps/runway/hooks/useShareSummary';
 import { useLinkHistory } from '@apps/runway/hooks/useLinkHistory';
 import { useReleasedCharges } from '@apps/runway/hooks/useReleasedCharges';
 import { usePlaceByRules } from '@apps/runway/hooks/useRuleMatch';
+import { useApplyStoreOrders } from '@apps/runway/hooks/useStoreOrders';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useSyncOnReturn } from '@apps/runway/hooks/useSyncOnReturn';
@@ -105,10 +117,17 @@ const getScreen = (tab: RunwayTab) => {
 interface RunwayTabsProps {
   activeTab: RunwayTab;
   onChange: (tab: RunwayTab) => void;
+  hasUnseenDoneForYou: boolean;
+  onOpenDoneForYou: () => void;
 }
 
 /** A tab opens where it was left (the top on a first visit), and tapping the open tab again goes to its top. */
-function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
+function RunwayTabs({
+  activeTab,
+  onChange,
+  hasUnseenDoneForYou,
+  onOpenDoneForYou,
+}: RunwayTabsProps) {
   const hasItems = useAppSelector((state) => state.runway.items.length > 0);
   const hasPurchases = useAppSelector(
     (state) => selectSpendPurchases(state).length > 0,
@@ -166,8 +185,15 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
           <h1 className='text-2xl font-semibold'>
             {RUNWAY_TAB_LABELS[activeTab]}
           </h1>
-          <div className='flex shrink-0 items-center gap-2.5'>
+          <div className='flex shrink-0 items-center gap-3'>
             {activeTab === 'plan' && <PriorityDial />}
+            {activeTab === 'home' && (
+              <DoneForYouButton
+                hasUnseen={hasUnseenDoneForYou}
+                onClick={onOpenDoneForYou}
+                label={DONE_FOR_YOU_WORDS.title}
+              />
+            )}
             {hasFigures && <ValuesEyeButton />}
           </div>
         </div>
@@ -267,6 +293,43 @@ function RunwayContent() {
   useReleasedCharges(user?.uid ?? null);
   useMatchLinkHistory(user?.uid ?? null);
   useMatchEmailPurchases(user?.uid ?? null);
+  useApplyStoreOrders(user?.uid ?? null);
+  const doneForYou = useDoneForYou();
+  const [isDoneForYouOpen, setIsDoneForYouOpen] = useState(false);
+  const [returnId, setReturnId] = useState<string | null>(null);
+  const closeCover = () => {
+    setReturnId(doneForYou.coverEntryId);
+    doneForYou.closeCover();
+    setIsDoneForYouOpen(true);
+  };
+  const openDoneForYou = () => {
+    setIsDoneForYouOpen(true);
+    if (!user) return;
+    setDoneForYouSeen(user.uid).catch((error: unknown) =>
+      console.error('Done for you was not marked seen', error),
+    );
+    void pruneDoneForYou(user.uid);
+  };
+  const closeDoneForYou = () => {
+    setIsDoneForYouOpen(false);
+    setReturnId(null);
+    if (!user) return;
+    setDoneForYouSeen(user.uid).catch((error: unknown) =>
+      console.error('Done for you was not marked seen', error),
+    );
+  };
+  useDoneForYouToast({
+    items: doneForYou.items,
+    isReady:
+      user !== null &&
+      keyStatus === 'ready' &&
+      isPlanLoaded &&
+      doneForYou.isReady,
+    storageKey: `runway.doneForYouToasted.${user?.uid ?? ''}`,
+    buildTitle: DONE_FOR_YOU_WORDS.summary,
+    viewLabel: DONE_FOR_YOU_WORDS.view,
+    onView: openDoneForYou,
+  });
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
     isDeletingPlan ? null : (user?.uid ?? null),
@@ -409,7 +472,7 @@ function RunwayContent() {
       );
     }
 
-    if (view === 'rules' && level === 'link') {
+    if (view === 'rules' && isTrackingLevel(level)) {
       return (
         <div>
           <RulesScreen onClose={closeView} />
@@ -505,11 +568,35 @@ function RunwayContent() {
       return <SetupLanding isStarted={setupState === 'started'} />;
     }
 
-    return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
+    return (
+      <RunwayTabs
+        activeTab={activeTab}
+        onChange={showTab}
+        hasUnseenDoneForYou={doneForYou.hasUnseen}
+        onOpenDoneForYou={openDoneForYou}
+      />
+    );
   };
 
   return (
-    <Fragment key={isScrambled ? 'made-up' : 'real'}>{getView()}</Fragment>
+    <>
+      <Fragment key={isScrambled ? 'made-up' : 'real'}>{getView()}</Fragment>
+      <DoneForYouSheet
+        key={returnId ?? 'list'}
+        startId={returnId}
+        isOpen={isDoneForYouOpen}
+        onClose={closeDoneForYou}
+        title={DONE_FOR_YOU_WORDS.title}
+        items={doneForYou.items}
+        onUndo={doneForYou.undo}
+        words={DONE_FOR_YOU_WORDS}
+        renderText={(text) => <MaskedText>{text}</MaskedText>}
+        titleTrailing={<ValuesEyeButton />}
+      />
+      {doneForYou.coverId !== null && (
+        <RuleOverCover purchaseId={doneForYou.coverId} onClose={closeCover} />
+      )}
+    </>
   );
 }
 

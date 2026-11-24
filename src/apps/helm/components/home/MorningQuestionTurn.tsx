@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import {
@@ -68,6 +69,7 @@ function MorningQuestionTurn({
       const changes: DayAimsChange[] = made.slice(0, rows.length);
       const answered = made[rows.length];
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.dayAimsAdded(changes.length),
         type: 'info',
         action: {

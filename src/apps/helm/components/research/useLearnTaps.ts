@@ -12,6 +12,7 @@ import {
 } from '@apps/helm/store/actions/learnLaterActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import type { OpenResearch } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** Remove, Done with it and Save to my knowledge on a saved question: each says what it did in a toast with an Undo that takes the whole tap back, and the surface is locked only while its own write is in flight. */
 export function useLearnTaps(onFinished?: () => void) {
@@ -23,6 +24,7 @@ export function useLearnTaps(onFinished?: () => void) {
     if (!user) return;
     const uid = user.uid;
     addToast({
+      duration: UNDO_WINDOW_MS,
       title,
       type: 'success',
       action: {

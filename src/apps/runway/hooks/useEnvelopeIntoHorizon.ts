@@ -12,6 +12,7 @@ import {
   type EnvelopeIntoHorizonWritten,
 } from '@apps/runway/store/actions/horizonGoalActions';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** Tells the person an envelope's money moved into an event, with an Undo on the toast that reopens the envelope and takes the money back while the event still holds it. */
 export function useEnvelopeIntoHorizonToast() {
@@ -58,6 +59,7 @@ export function useEnvelopeIntoHorizonToast() {
         ),
       ),
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: MOVE_WORDS.undo,
         onClick: () => void undo(written, names.event),

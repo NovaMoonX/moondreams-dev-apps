@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 
-export const EMAIL_DOMAIN = 'apps.moondreams.dev';
+export const EMAIL_DOMAIN = 'moondreamsmail.com';
 
 const RATE_KEEP_MS = 2 * 86_400_000;
 

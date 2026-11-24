@@ -40,6 +40,7 @@ async function openPlan(
     dirtyFrom: plan.dirtyFrom ?? null,
     notify: plan.notify ?? null,
     sorting: plan.sorting ?? null,
+    doneForYouSeenAt: plan.doneForYouSeenAt ?? null,
     keyId: plan.keyId ?? null,
     currencyCode: fields.currencyCode,
     notifyHour: fields.notifyHour ?? null,

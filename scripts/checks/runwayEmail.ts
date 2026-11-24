@@ -2,9 +2,20 @@ import assert from 'node:assert/strict';
 
 import { getBankOwedByCard } from '../../src/apps/runway/engine/cards.ts';
 import { getCashPosition } from '../../src/apps/runway/engine/cash.ts';
-import { findEmailTwins } from '../../src/apps/runway/engine/emailTwins.ts';
+import {
+  findEmailTwins,
+  findPostedOnlySides,
+  getEmailOffers,
+  getEmailWaitDays,
+  getSideKey,
+  getTwinHeldIds,
+  getTwinMergingIds,
+  isAnsweredEmail,
+  isSettledByPerson,
+} from '../../src/apps/runway/engine/emailTwins.ts';
 import { findPurchaseMatches } from '../../src/apps/runway/engine/matching.ts';
-import type { OpenPurchase } from '../../src/apps/runway/types.ts';
+import { isOpenToPlace } from '../../src/apps/runway/engine/purchases.ts';
+import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
 
 // A purchase read from a bank's alert email waits for the bank's charge: one to one, same side, within -2/+7 days.
 {
@@ -45,6 +56,7 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     tickedDayKey: null,
     emailEventId: source === 'email' ? 'ev' : null,
     emailWaiting: source === 'email' ? true : null,
+    wasPending: null,
     category: null,
     ruleId: null,
     ...extra,
@@ -56,6 +68,125 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
   ]);
   assert.deepEqual([...one.clear], [['e1', 'b1']], 'one to one is clear');
   assert.equal(one.ambiguous.size, 0);
+
+  const rich = findEmailTwins([
+    make('e1', 'email', 4_000, 0),
+    make('e2', 'email', 4_000, 1),
+    make('b1', 'link', 4_000, 1),
+    make('b2', 'link', 4_000, 2),
+    make('e3', 'email', 900, 0),
+    make('b3', 'link', 900, 0),
+  ]);
+  assert.deepEqual(
+    [...(rich.candidates.get('e1') ?? [])].sort(),
+    ['b1', 'b2'],
+    'every candidate is returned for an ambiguous email',
+  );
+  assert.deepEqual(getEmailOffers(rich, 'b2'), ['e1', 'e2']);
+  assert.deepEqual(
+    getEmailOffers(rich, 'b3'),
+    [],
+    'a clear twin is not offered',
+  );
+  assert.deepEqual(
+    [...getTwinHeldIds(rich)].sort(),
+    ['b1', 'b2', 'b3', 'e1', 'e2', 'e3'],
+    'an email with a candidate is held too, so a rule never places both sides',
+  );
+  assert.deepEqual([...getTwinMergingIds(rich)], ['b3']);
+  const shuffled = findEmailTwins([
+    make('b3', 'link', 900, 0),
+    make('b2', 'link', 4_000, 2),
+    make('e2', 'email', 4_000, 1),
+    make('b1', 'link', 4_000, 1),
+    make('e3', 'email', 900, 0),
+    make('e1', 'email', 4_000, 0),
+  ]);
+  assert.deepEqual(
+    [...getTwinHeldIds(shuffled)].sort(),
+    [...getTwinHeldIds(rich)].sort(),
+    'the held set does not depend on order',
+  );
+
+  const placedLine = [
+    { envelopeId: 'env', cents: 4_000, via: 'chosen' as const },
+  ];
+  assert.equal(
+    isAnsweredEmail(make('e', 'email', 4_000, 0, { needsHome: true })),
+    false,
+    'a new email waiting in Needs a home is unanswered',
+  );
+  assert.equal(
+    isAnsweredEmail(make('e', 'email', 4_000, 0, { needsHome: false })),
+    false,
+    'a legacy email (free line, nobody answered) is unanswered',
+  );
+  assert.equal(
+    isAnsweredEmail(
+      make('e', 'email', 4_000, 0, {
+        needsHome: false,
+        lines: placedLine,
+        ruleId: 'r',
+        assignedBy: 'auto',
+      }),
+    ),
+    true,
+    'placed by a rule',
+  );
+  assert.equal(
+    isAnsweredEmail(
+      make('e', 'email', 4_000, 0, { needsHome: false, lines: placedLine }),
+    ),
+    true,
+    'placed by hand in an older version',
+  );
+  assert.equal(
+    isAnsweredEmail(
+      make('e', 'email', 4_000, 0, { needsHome: false, assignedBy: 'person' }),
+    ),
+    true,
+    'kept in Free to Spend by the person',
+  );
+  assert.equal(
+    isSettledByPerson(make('b', 'link', 4_000, 0, { needsHome: false })),
+    true,
+    'a charge the person placed wins',
+  );
+  assert.equal(
+    isSettledByPerson(make('b', 'link', 4_000, 0, { needsHome: true })),
+    false,
+    'a waiting charge takes the email answer',
+  );
+  assert.equal(
+    isSettledByPerson(
+      make('b', 'link', 4_000, 0, { needsHome: false, assignedBy: 'auto' }),
+    ),
+    false,
+    'a charge a rule placed takes the email answer',
+  );
+  assert.equal(
+    isSettledByPerson(
+      make('b', 'link', 4_000, 0, {
+        needsHome: false,
+        assignedBy: 'auto',
+        lines: [],
+        billRef: { billId: 'bill', moveId: 'move' } as never,
+      }),
+    ),
+    true,
+    'a charge autopay matched to a bill keeps its own state',
+  );
+  assert.equal(
+    isSettledByPerson(
+      make('b', 'link', 4_000, 0, {
+        needsHome: false,
+        assignedBy: 'auto',
+        pairedWithId: 'p',
+      }),
+    ),
+    true,
+    'so does a paired charge',
+  );
 
   const twoEmails = findEmailTwins([
     make('e1', 'email', 4_000, 0),
@@ -215,6 +346,307 @@ import type { OpenPurchase } from '../../src/apps/runway/types.ts';
     owedOf([{ ...onCard, emailWaiting: false }]).heldCents,
     10_000,
     'one no longer waiting is not owed',
+  );
+}
+
+{
+  const open: OpenPurchase = {
+    id: 'p1',
+    date: 0,
+    source: 'email',
+    status: null,
+    accountId: null,
+    needsHome: false,
+    expenseId: null,
+    createdAt: 0,
+    updatedAt: 0,
+    amountCents: 2_500,
+    merchant: 'Petsmart',
+    label: null,
+    note: null,
+    lines: [{ envelopeId: null, cents: 2_500, via: 'free' }],
+    refundOfId: null,
+    ruleId: null,
+    assignedBy: null,
+    pairedWithId: null,
+    incomeDayId: null,
+    billRef: null,
+  } as unknown as OpenPurchase;
+  assert.equal(isOpenToPlace(open), true, 'an unplaced email charge is open');
+  assert.equal(
+    isOpenToPlace({ ...open, source: 'link' }),
+    true,
+    'so is an unplaced bank charge',
+  );
+  assert.equal(
+    isOpenToPlace({ ...open, needsHome: true }),
+    false,
+    'one waiting is placed from Needs a home instead',
+  );
+  assert.equal(
+    isOpenToPlace({ ...open, assignedBy: 'person' }),
+    false,
+    'one the person kept in Free to Spend stays kept',
+  );
+  assert.equal(
+    isOpenToPlace({ ...open, ruleId: 'r1', assignedBy: 'auto' }),
+    false,
+    'one a rule placed is the rule’s',
+  );
+  assert.equal(
+    isOpenToPlace({
+      ...open,
+      lines: [{ envelopeId: 'groceries', cents: 2_500, via: 'chosen' }],
+    }),
+    false,
+    'one already in an envelope is placed',
+  );
+  assert.equal(
+    isOpenToPlace({ ...open, source: 'manual' as OpenPurchase['source'] }),
+    false,
+    'one typed by hand was placed as it was typed',
+  );
+  assert.equal(
+    isOpenToPlace({ ...open, amountCents: -2_500 }),
+    false,
+    'money in is not',
+  );
+  assert.equal(
+    isOpenToPlace({ ...open, pairedWithId: 'p2' }),
+    false,
+    'nor a move paired with its other side',
+  );
+}
+
+// A bank that shares no pending charges is learned per card and account, and an order that posts as several charges is found.
+{
+  const day = 86_400_000;
+  const base = 20_000 * day;
+  const make = (
+    id: string,
+    source: 'email' | 'link',
+    amountCents: number,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ): OpenPurchase =>
+    ({
+      id,
+      date: base + dayOffset * day,
+      source,
+      status: source === 'link' ? 'posted' : null,
+      accountId: null,
+      paidByCardId: 'card',
+      needsHome: true,
+      amountCents,
+      merchant: 'Target',
+      label: null,
+      lines: [{ envelopeId: null, cents: amountCents, via: 'free' }],
+      notSameAs: null,
+      pairedWithId: null,
+      emailWaiting: source === 'email' ? true : null,
+      wasPending: null,
+      storeEmail: null,
+      ...extra,
+    }) as unknown as OpenPurchase;
+  const order: StoreEmail = {
+    kind: 'order',
+    orderNumber: null,
+    isWholeOrder: false,
+    merchant: 'Target',
+  };
+
+  const never = (id: string, extra: Partial<OpenPurchase> = {}) =>
+    make(id, 'link', 100, 0, { wasPending: false, ...extra });
+  const sides = findPostedOnlySides([
+    never('p1', { paidByCardId: 'shares' }),
+    never('p2', { paidByCardId: 'shares' }),
+    never('p3', { paidByCardId: 'shares', wasPending: true }),
+    never('p4', { paidByCardId: 'shares' }),
+    never('q1', { paidByCardId: 'capital' }),
+    never('q2', { paidByCardId: 'capital' }),
+    never('q3', { paidByCardId: 'capital' }),
+    never('f1', { paidByCardId: 'few' }),
+    never('f2', { paidByCardId: 'few' }),
+    never('n1', { paidByCardId: 'now' }),
+    never('n2', { paidByCardId: 'now' }),
+    never('n3', { paidByCardId: 'now' }),
+    never('n4', { paidByCardId: 'now', status: 'pending' }),
+    ...['a1', 'a2', 'a3'].map((id) =>
+      never(id, { paidByCardId: null, accountId: 'chk' }),
+    ),
+    ...['o1', 'o2', 'o3'].map((id) =>
+      never(id, { paidByCardId: 'old', wasPending: null }),
+    ),
+    make('m1', 'email', 100, 0, { paidByCardId: 'unseen' }),
+  ]);
+  assert.deepEqual(
+    [...sides].sort(),
+    ['account:chk', 'card:capital'],
+    'posted only needs three charges that never were pending and none that was; fewer, older ones or an email prove nothing',
+  );
+  assert.deepEqual(
+    [
+      ...findPostedOnlySides(
+        ['h1', 'h2', 'h3'].map((id) => never(id, { paidByCardId: 'backfill' })),
+        () => true,
+      ),
+    ],
+    [],
+    'a link’s history proves nothing, so a first sync’s backfill is not posted only',
+  );
+  assert.equal(getSideKey(make('x', 'link', 1, 0)), 'card:card');
+  assert.equal(
+    getSideKey(make('x', 'link', 1, 0, { paidByCardId: null })),
+    null,
+  );
+
+  const typedEmail = make('e', 'email', 100, 0, { paidByCardId: 'capital' });
+  assert.equal(
+    getEmailWaitDays(typedEmail, new Set()),
+    5,
+    'five days by default',
+  );
+  assert.equal(
+    getEmailWaitDays(typedEmail, new Set(['card:capital'])),
+    7,
+    'seven for a card that posts only',
+  );
+  assert.equal(
+    getEmailWaitDays({ ...typedEmail, storeEmail: order }, new Set()),
+    7,
+    'seven for a store order, charged when it ships',
+  );
+
+  const bankOf = (id: string, cents: number, offset = 1, extra = {}) =>
+    make(id, 'link', cents, offset, extra);
+  const email = make('o1', 'email', 10_000, 0, { storeEmail: order });
+  const split = findEmailTwins([
+    email,
+    bankOf('b1', 6_000),
+    bankOf('b2', 4_000, 3),
+    bankOf('b3', 999, 2),
+  ]);
+  assert.deepEqual(
+    [...split.split],
+    [['o1', ['b1', 'b2']]],
+    'two charges that add up are the order',
+  );
+  assert.deepEqual(split.candidates.get('o1'), ['b1', 'b2']);
+  assert.equal(split.clear.size, 0);
+  assert.equal(split.ambiguous.size, 0, 'a split order is neither');
+  assert.deepEqual([...getTwinHeldIds(split)].sort(), ['b1', 'b2', 'o1']);
+  assert.deepEqual(
+    [...getTwinMergingIds(split)].sort(),
+    ['b1', 'b2'],
+    'the charges of a split merge on their own, so Needs a home leaves them out',
+  );
+  assert.equal(
+    getEmailOffers(split, 'b1').length,
+    0,
+    'never offered one by one',
+  );
+
+  const splitOf = (purchases: OpenPurchase[]) =>
+    findEmailTwins(purchases).split.size;
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 3_000),
+      bankOf('b2', 3_000),
+      bankOf('b3', 2_000),
+      bankOf('b4', 2_000),
+    ]),
+    1,
+    'four charges are allowed',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 2_000),
+      bankOf('b2', 2_000),
+      bankOf('b3', 2_000),
+      bankOf('b4', 2_000),
+      bankOf('b5', 2_000),
+    ]),
+    0,
+    'five charges are too many',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+      bankOf('b3', 5_000),
+      bankOf('b4', 5_000),
+    ]),
+    0,
+    'two different sets are not clear',
+  );
+  assert.equal(
+    splitOf([email, bankOf('b1', 6_000), bankOf('b2', 4_000, 9)]),
+    0,
+    'a charge outside the window is not in it',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000, 1, { merchant: 'Walmart' }),
+    ]),
+    0,
+    'charges from another store are not it',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000, 1, { paidByCardId: 'other' }),
+    ]),
+    0,
+    'charges on another card are not it',
+  );
+  assert.equal(
+    splitOf([
+      { ...email, notSameAs: ['b2'] },
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'a charge the person said is not it is skipped',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      { ...email, id: 'o2' },
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'two open orders the same size could each be it',
+  );
+  assert.equal(
+    splitOf([
+      email,
+      make('o2', 'email', 6_000, 0, { storeEmail: order }),
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'a charge another order is clearly or may be is left to that order',
+  );
+  assert.equal(
+    splitOf([
+      { ...email, storeEmail: null },
+      bankOf('b1', 6_000),
+      bankOf('b2', 4_000),
+    ]),
+    0,
+    'only a store order posts as several charges',
+  );
+  assert.equal(
+    splitOf([email, bankOf('b1', 10_000), bankOf('b2', 6_000)]),
+    0,
+    'an order with a single charge of its amount is not split',
   );
 }
 

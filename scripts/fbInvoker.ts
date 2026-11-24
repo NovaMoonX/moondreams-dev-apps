@@ -30,7 +30,32 @@ const callables = exported
   .map(({ name }) => name);
 
 // An HTTPS endpoint called with no Google identity. Each one checks its caller itself (a provider's signature, a signed-in token) and answers 401 to anything else.
-const PUBLIC_WEBHOOKS = ['runwayPlaidWebhook', 'streamSpeech', 'helmMcp'];
+const PUBLIC_WEBHOOKS = [
+  'runwayPlaidWebhook',
+  'streamSpeech',
+  'helmMcp',
+  'ingestRunwayEmail',
+  'ingestAListEmail',
+];
+// An HTTPS endpoint only Google identities call; it keeps Cloud Run's IAM check.
+const PRIVATE_REQUESTS: string[] = [];
+
+const unlisted = exported
+  .filter(({ path }) =>
+    /\bonRequest\s*\(/.test(readFileSync(`functions/src/${path}.ts`, 'utf8')),
+  )
+  .map(({ name }) => name)
+  .filter(
+    (name) =>
+      !PUBLIC_WEBHOOKS.includes(name) && !PRIVATE_REQUESTS.includes(name),
+  );
+if (unlisted.length > 0) {
+  console.error(
+    `${unlisted.join(', ')}: an onRequest function must be in PUBLIC_WEBHOOKS (called with no Google identity, so Cloud Run refuses it until it is opened) or PRIVATE_REQUESTS.`,
+  );
+  process.exit(1);
+}
+
 const webhooks = PUBLIC_WEBHOOKS.map((name) => {
   const source = exported.find((entry) => entry.name === name);
   const isRequest =

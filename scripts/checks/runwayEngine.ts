@@ -29,12 +29,12 @@ import {
   sortLinksByDate,
 } from '../../src/apps/runway/engine/horizonLinks.ts';
 import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
+import { isSameStore } from '../../src/apps/runway/engine/storeNames.ts';
 import {
   findAccountPairs,
   findLostPairs,
   findRefundOriginal,
   isRefundCandidate,
-  isSameStore,
   isBankMove,
   isRefundLike,
   findDepositDays,
@@ -189,12 +189,23 @@ import {
   previewBillShare,
 } from '../../src/apps/runway/engine/billShare.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
-import { resolveSpill, unspill } from '../../src/apps/runway/engine/spill.ts';
+import {
+  resolveSpill,
+  splitAtShortfall,
+  moveShortToFree,
+  unspill,
+} from '../../src/apps/runway/engine/spill.ts';
 import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
 import {
+  describePurchaseAssigned,
   describePurchaseEdit,
+  describePurchaseHistory,
+  describePurchaseKeptFree,
   describePurchaseRemoval,
+  describePurchaseReturned,
+  readPurchaseChange,
 } from '../../src/apps/runway/utils/purchaseText.ts';
+import { describeRulePlaced } from '../../src/apps/runway/utils/ruleText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   describeCoverage,
@@ -7171,6 +7182,7 @@ const version = (
       tickedDayKey: null,
       emailEventId: null,
       emailWaiting: null,
+      wasPending: null,
       category: null,
       ruleId: null,
       needsHome: false,
@@ -7767,6 +7779,7 @@ const version = (
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     needsHome: false,
@@ -7813,6 +7826,109 @@ const version = (
     ),
     'Purchase changed: Safeway, taken out of Chicago trip.',
   );
+  {
+    const on = Date.UTC(2024, 10, 23);
+    const sent = {
+      ...before,
+      id: 'p',
+      date: on,
+      merchant: 'Petco, Inc',
+      amountCents: 4_393,
+    } as unknown as Parameters<typeof describePurchaseRemoval>[0];
+    const lines = [
+      { envelopeId: 'Pet Care', cents: 4_393, via: 'chosen' as const },
+    ];
+    const name = (id: string) => id;
+    assert.deepEqual(splitAtShortfall('pets', 4393, 2393), [
+      { envelopeId: 'pets', cents: 2000, via: 'chosen' },
+      { envelopeId: null, cents: 2393, via: 'chosen' },
+    ]);
+    assert.deepEqual(splitAtShortfall('pets', 4393, 4393), [
+      { envelopeId: null, cents: 4393, via: 'chosen' },
+    ]);
+    assert.deepEqual(splitAtShortfall('pets', 4393, 0), [
+      { envelopeId: 'pets', cents: 4393, via: 'chosen' },
+    ]);
+    assert.deepEqual(
+      moveShortToFree(
+        [{ envelopeId: 'pets', cents: 4393, via: 'chosen' }],
+        'pets',
+        2393,
+      ),
+      [
+        { envelopeId: 'pets', cents: 2000, via: 'chosen' },
+        { envelopeId: null, cents: 2393, via: 'chosen' },
+      ],
+    );
+    assert.deepEqual(
+      moveShortToFree(
+        [
+          { envelopeId: 'pets', cents: 1000, via: 'chosen' },
+          { envelopeId: null, cents: 500, via: 'chosen' },
+          { envelopeId: 'pets', cents: 300, via: 'spill' },
+        ],
+        'pets',
+        800,
+      ),
+      [
+        { envelopeId: 'pets', cents: 500, via: 'chosen' },
+        { envelopeId: null, cents: 1300, via: 'chosen' },
+      ],
+      'takes from the latest line on the envelope first and joins the Free to Spend line',
+    );
+    const read = (summary: string) => readPurchaseChange(summary);
+    const base = {
+      title: 'Petco, Inc',
+      amount: '$43.93',
+      date: 'Nov\u00a023rd,\u00a02024',
+      rule: null,
+      extra: '',
+    };
+    assert.deepEqual(read(describePurchaseAssigned(sent, lines, name)), {
+      ...base,
+      action: 'Sent to Pet Care',
+    });
+    assert.deepEqual(
+      read(describeRulePlaced(sent, lines, name, 'Petco goes to Pet Care')),
+      { ...base, action: 'Sent to Pet Care', rule: 'Petco goes to Pet Care' },
+    );
+    assert.deepEqual(read(describePurchaseAssigned(sent, [], name)), {
+      ...base,
+      action: 'Left out of spending',
+    });
+    assert.deepEqual(read(describePurchaseRemoval(sent, name)), {
+      ...base,
+      action: 'Removed',
+    });
+    assert.deepEqual(read(describePurchaseKeptFree(sent, name)), {
+      ...base,
+      action: 'Kept in Free to Spend',
+    });
+    assert.deepEqual(read(describePurchaseReturned(sent, name)), {
+      ...base,
+      action: 'Put back in Needs a home',
+    });
+    assert.equal(
+      read(describePurchaseHistory(sent, name))?.title,
+      'Petco, Inc',
+    );
+    assert.deepEqual(
+      read('Purchase changed: Safeway, taken out of Chicago trip.'),
+      {
+        action: 'Changed taken out of Chicago trip',
+        title: 'Safeway',
+        amount: '',
+        date: '',
+        rule: null,
+        extra: '',
+      },
+    );
+    assert.equal(
+      read('Rule made: Petco goes to Pet Care.'),
+      null,
+      'a sentence that is not a purchase reads as itself',
+    );
+  }
   assert.equal(
     describePurchaseEdit(
       before,
@@ -8171,6 +8287,7 @@ const version = (
       tickedDayKey: null,
       emailEventId: null,
       emailWaiting: null,
+      wasPending: null,
       category: null,
       ruleId: null,
       needsHome: false,
@@ -10100,6 +10217,7 @@ const version = (
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     needsHome: false,
@@ -10704,6 +10822,7 @@ const version = (
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     ...extra,
@@ -10863,6 +10982,7 @@ const version = (
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     ...extra,
@@ -11310,6 +11430,7 @@ const version = (
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     ...extra,
@@ -14191,6 +14312,7 @@ const version = (
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     needsHome: false,
@@ -14404,6 +14526,7 @@ const version = (
       expenseId: null,
       emailEventId: null,
       emailWaiting: null,
+      wasPending: null,
       createdAt: 1,
       updatedAt: 1,
       sealed: {
@@ -20427,7 +20550,7 @@ checkHorizonMoves();
   );
 }
 
-{
+const checkRulePlacements = () => {
   const rule = (id: string, over: Partial<OpenRule>): OpenRule => ({
     id,
     createdAt: 1,
@@ -20454,6 +20577,7 @@ checkHorizonMoves();
     tickedDayKey: null,
     emailEventId: null,
     emailWaiting: null,
+    wasPending: null,
     category: null,
     ruleId: null,
     needsHome: false,
@@ -20596,6 +20720,37 @@ checkHorizonMoves();
   );
   assert.deepEqual(
     findRulePlacements(
+      [
+        waitingCharge('mail', { source: 'email' as const }),
+        waitingCharge('mail-hand', {
+          source: 'email' as const,
+          assignedBy: 'person',
+        }),
+        waitingCharge('mail-placed', {
+          source: 'email' as const,
+          needsHome: false,
+        }),
+      ],
+      [],
+      [merchantRule],
+      ids,
+    ).map((entry) => entry.purchase.id),
+    ['mail'],
+    'a rule places a purchase read from email like a bank charge',
+  );
+  assert.deepEqual(
+    findRulePlacements(
+      [waitingCharge('ok', {}), waitingCharge('other', {})],
+      [],
+      [merchantRule],
+      ids,
+      new Set(['ok']),
+    ).map((entry) => entry.purchase.id),
+    ['other'],
+    'a bank charge a waiting email is or may be is left to the pair',
+  );
+  assert.deepEqual(
+    findRulePlacements(
       [waitingCharge('ok', {})],
       [],
       [merchantRule],
@@ -20675,7 +20830,8 @@ checkHorizonMoves();
     'and the split still adds up',
   );
   assert.equal(rulePlaced.length, 2, 'the chain pays what the envelope cannot');
-}
+};
+checkRulePlacements();
 
 // A goal linked to a Horizon event: the walk covers each cost from the goal first, a payment takes from the goal then the event, and the nudge asks as the date nears.
 {

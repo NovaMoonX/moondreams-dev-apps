@@ -7,7 +7,6 @@ import {
   startEmailEventsListener,
   startEmailFiltersListener,
   startEmailIntakeListener,
-  startEmailSetupListener,
 } from '@apps/runway/store/listeners/emailListeners';
 
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -16,10 +15,10 @@ import {
   toChangeWindowKey,
 } from '@apps/runway/utils/changeWindow';
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
-import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
+import { DONE_FOR_YOU_WORDS, FORM_DRAFT_PREFIX } from '@apps/runway/constants';
 import {
   getRunwayEncryption,
   isKeptKey,
@@ -46,10 +45,12 @@ import {
 } from '@apps/runway/store/listeners/linkListeners';
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
+import { startDoneForYouListener } from '@apps/runway/store/listeners/doneForYouListeners';
 import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListeners';
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
+import { toSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   getDayKeyMonth,
   getHistoryRange,
@@ -61,16 +62,19 @@ import {
 } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
+import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
   selectRecentFrom,
   toClosingKey,
 } from '@apps/runway/store/selectors/historySelectors';
+import { selectEmailIntakeAttempt } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectConfirmedDayIds,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectItemLooks,
   selectLinkHistoryRanges,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -89,8 +93,10 @@ import {
   setExpenses,
   setRules,
   setMemories,
+  setDoneForYou,
   setEmailIntake,
-  setEmailSetup,
+  setIsEmailIntakeLoaded,
+  setIsEmailIntakeFailed,
   setEmailEvents,
   setEmailFilters,
   setClosing,
@@ -247,6 +253,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           (memories) => dispatch(setMemories(memories)),
           fail,
         ),
+        startDoneForYouListener(
+          uid,
+          encryption,
+          (entries) => dispatch(setDoneForYou(entries)),
+          fail,
+        ),
         startNeedsHomeListener(
           uid,
           encryption,
@@ -264,6 +276,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
 
   const isEmailGateOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
   const emailLevel = useAppSelector(selectLevel);
+  const emailAttempt = useAppSelector(selectEmailIntakeAttempt);
   const isEmailOpen = isEmailGateOpen && emailLevel !== 'plan';
 
   useEffect(() => {
@@ -282,14 +295,14 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           startEmailIntakeListener(
             uid,
             encryption,
-            (intake) => dispatch(setEmailIntake(intake)),
-            skip,
-          ),
-          startEmailSetupListener(
-            uid,
-            encryption,
-            (setup) => dispatch(setEmailSetup(setup)),
-            skip,
+            (intake) => {
+              dispatch(setEmailIntake(intake));
+              dispatch(setIsEmailIntakeLoaded(true));
+            },
+            (error) => {
+              skip(error);
+              dispatch(setIsEmailIntakeFailed(true));
+            },
           ),
           startEmailEventsListener(
             uid,
@@ -305,19 +318,21 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           ),
         ];
       })
-      .catch((error: unknown) =>
-        console.error('Purchases from email did not open', error),
-      );
+      .catch((error: unknown) => {
+        console.error('Purchases from email did not open', error);
+        if (run.isCurrent) dispatch(setIsEmailIntakeFailed(true));
+      });
 
     return () => {
       run.isCurrent = false;
       stops.current.forEach((stop) => stop());
       dispatch(setEmailIntake(null));
-      dispatch(setEmailSetup(null));
+      dispatch(setIsEmailIntakeLoaded(false));
+      dispatch(setIsEmailIntakeFailed(false));
       dispatch(setEmailEvents(null));
       dispatch(setEmailFilters([]));
     };
-  }, [uid, keyStatus, isEmailOpen, dispatch]);
+  }, [uid, keyStatus, isEmailOpen, emailAttempt, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready') return;
@@ -663,19 +678,36 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       return;
     const rows = JSON.parse(reachedEndings) as [string, number, string][];
     getRunwayEncryption(uid)
-      .then((encryption) =>
-        Promise.all(
-          rows.map(([itemId, endedOn, name]) =>
-            endItem(uid, encryption, {
+      .then(async (encryption) => {
+        const written = await Promise.all(
+          rows.map(async ([itemId, endedOn, name]) => {
+            const isWritten = await endItem(uid, encryption, {
               itemId,
               endedOn,
               summary: `${name}: ended after its last payday, ${formatDateOrdinalUTC(endedOn)}.`,
               note: null,
               heldChoice: null,
+            });
+            return isWritten ? [{ itemId, name }] : [];
+          }),
+        );
+        const looks = selectItemLooks(store.getState());
+        recordDone(
+          uid,
+          written.flat().map(({ itemId, name }) => ({
+            kind: 'ended' as const,
+            title: DONE_FOR_YOU_WORDS.ended(name),
+            detail: null,
+            why: DONE_FOR_YOU_WORDS.endedWhy,
+            undo: null,
+            subject: toSubject({
+              itemId,
+              toName: name,
+              toEmoji: looks.get(itemId)?.emoji ?? null,
             }),
-          ),
-        ),
-      )
+          })),
+        );
+      })
       .catch((error) => console.error('Marking an ending did not save', error));
   }, [uid, keyStatus, isPlanLoaded, reachedEndings]);
 }

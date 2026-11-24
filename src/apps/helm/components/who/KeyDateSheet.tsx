@@ -46,6 +46,7 @@ import {
   describeMomentWhen,
 } from '@apps/helm/utils/keyDateText';
 import { getDecade, type WhoMoment } from '@apps/helm/utils/moments';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface KeyDateSheetProps {
   who: OpenWho;
@@ -342,6 +343,7 @@ function KeyDateForm({
       return false;
     }
     addToast({
+      duration: UNDO_WINDOW_MS,
       title,
       type: 'success',
       action: {
@@ -670,6 +672,7 @@ function KeyDateSheet({
         const title = titleOf(date, who);
         close();
         addToast({
+          duration: UNDO_WINDOW_MS,
           title:
             date.precision === null
               ? HELM_COPY.keyDateRemoved(title)

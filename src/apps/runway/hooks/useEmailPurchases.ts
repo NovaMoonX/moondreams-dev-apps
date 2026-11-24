@@ -1,12 +1,10 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import {
   createEmailFilter,
   deleteEmailFilter,
   rotateEmailAddress,
-  saveEmailBanks,
-  saveEmailSetup,
   setEmailWaiting,
   suggestEmailFilters,
 } from '@apps/runway/store/actions/emailActions';
@@ -14,31 +12,26 @@ import {
   selectEmailEvents,
   selectEmailFilters,
   selectEmailIntake,
+  getWaitingBank,
   selectEmailOverdue,
-  selectEmailSetup,
+  selectPostedOnlySides,
+  selectSideBankNames,
   selectIsEmailEventsLoaded,
-  selectKnownBanks,
-  type KnownBank,
+  selectIsEmailIntakeFailed,
+  selectIsEmailIntakeLoaded,
 } from '@apps/runway/store/selectors/emailSelectors';
+import { retryEmailIntake } from '@apps/runway/store/runwaySlice';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
-  EmailBank,
   EmailEventSealed,
   EmailFilterSealed,
+  EmailIntakeDoc,
   EmailOutcome,
-  EmailProvider,
+  EmailSenderKind,
   OpenPurchase,
 } from '@apps/runway/types';
-import {
-  getEmailSetupSteps,
-  type EmailSetupStepId,
-} from '@apps/runway/utils/emailSetupSteps';
-import {
-  EMAIL_ADDRESS_PREFIX,
-  EMAIL_DOMAIN,
-  EMAIL_EVENT_KEEP_DAYS,
-} from '@apps/runway/constants';
-import { DAY_MS } from '@apps/runway/engine/dates';
+import type { PurchaseBankLink } from '@apps/runway/utils/emailSenders';
+import { EMAIL_ADDRESS_PREFIX, EMAIL_DOMAIN } from '@apps/runway/constants';
 
 export interface EmailIntakeRead {
   address: string | null;
@@ -46,15 +39,21 @@ export interface EmailIntakeRead {
   confirm: {
     url: string | null;
     code: string | null;
-    at: number | null;
+    at: number;
+    autoConfirm: EmailIntakeDoc['autoConfirm'];
+    provider: EmailIntakeDoc['confirmProvider'];
   } | null;
   isLoading: boolean;
+  /** The address could not be read; nothing here says whether there is one. */
+  isFailed: boolean;
+  retry(): void;
 }
 
 export interface EmailEventRead extends EmailEventSealed {
   id: string;
   receivedAt: number;
   outcome: EmailOutcome;
+  senderKind: EmailSenderKind | null;
   purchaseId: string | null;
 }
 
@@ -67,58 +66,108 @@ export type EmailFilterSuggestion = EmailFilterSealed & { label: string };
 
 export interface EmailActions {
   rotateAddress(): Promise<void>;
-  createFilter(filter: EmailFilterSealed): Promise<void>;
+  createFilter(filter: EmailFilterSealed): Promise<string>;
   deleteFilter(id: string): Promise<void>;
   suggestFilters(eventId: string): Promise<EmailFilterSuggestion[]>;
   stopWaiting(purchaseId: string): Promise<void>;
   resumeWaiting(purchaseId: string): Promise<void>;
-  chooseProvider(provider: EmailProvider): Promise<void>;
-  reachStep(stepId: EmailSetupStepId): Promise<void>;
-  finishSetup(): Promise<void>;
-  saveBanks(change: (banks: EmailBank[]) => EmailBank[]): Promise<boolean>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
 
 export function useEmailIntake(): EmailIntakeRead {
   const intake = useAppSelector(selectEmailIntake);
+  const isLoaded = useAppSelector(selectIsEmailIntakeLoaded);
+  const isFailed = useAppSelector(selectIsEmailIntakeFailed);
+  const dispatch = useAppDispatch();
   return useMemo(() => {
+    const retry = () => {
+      dispatch(retryEmailIntake());
+    };
     if (intake === null) {
       return {
         address: null,
         lastReceivedAt: null,
         confirm: null,
-        isLoading: false,
+        isLoading: !isLoaded && !isFailed,
+        isFailed,
+        retry,
       };
     }
-    const hasConfirm =
-      intake.confirmUrl !== null || intake.confirmCode !== null;
     return {
       address: `${EMAIL_ADDRESS_PREFIX}-${intake.token}@${EMAIL_DOMAIN}`,
       lastReceivedAt: intake.lastReceivedAt,
-      confirm: hasConfirm
-        ? {
-            url: intake.confirmUrl,
-            code: intake.confirmCode,
-            at: intake.confirmAt,
-          }
-        : null,
+      confirm:
+        intake.confirmAt === null
+          ? null
+          : {
+              url: intake.confirmUrl,
+              code: intake.confirmCode,
+              at: intake.confirmAt,
+              autoConfirm: intake.autoConfirm,
+              provider: intake.confirmProvider,
+            },
       isLoading: false,
+      isFailed: false,
+      retry,
     };
-  }, [intake]);
+  }, [intake, isLoaded, isFailed, dispatch]);
 }
 
 export function useEmailEvents(): EmailEventRead[] {
   return useAppSelector(selectEmailEvents);
 }
 
+export function useIsEmailEventsLoaded(): boolean {
+  return useAppSelector(selectIsEmailEventsLoaded);
+}
+
+/** Where a loaded purchase's card or account sits at the bank, for the linked-bank logo a sender falls back on. */
+export function usePurchaseBankLink(): PurchaseBankLink {
+  const purchases = useAppSelector((state) => state.runway.purchases);
+  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const cards = useAppSelector((state) => state.runway.cards);
+  const accounts = useAppSelector((state) => state.runway.accounts);
+  const links = useAppSelector((state) => state.runway.links);
+  return useMemo(() => {
+    const byId = new Map(
+      [...waiting, ...purchases].map((purchase) => [purchase.id, purchase]),
+    );
+    return (purchaseId) => {
+      const purchase = byId.get(purchaseId);
+      if (purchase === undefined) return undefined;
+      const linkId =
+        cards.find((card) => card.id === purchase.paidByCardId)?.linkId ??
+        accounts.find((account) => account.id === purchase.accountId)?.linkId ??
+        null;
+      const link = links.find((entry) => entry.id === linkId);
+      return link === undefined
+        ? null
+        : {
+            linkId: link.id,
+            name: link.institutionName,
+            logo: link.institutionLogo,
+          };
+    };
+  }, [purchases, waiting, cards, accounts, links]);
+}
+
 export function useEmailFilters(): EmailFilterRead[] {
   return useAppSelector(selectEmailFilters);
 }
 
-/** Emailed purchases still waiting for their bank's charge after `EMAIL_WAIT_DAYS`. */
+/** Emailed purchases still waiting for their bank's charge past how long its card, account or order is expected to take. */
 export function useEmailOverduePurchases(): OpenPurchase[] {
   return useAppSelector(selectEmailOverdue);
+}
+
+/** The bank an emailed purchase waits on, when its card or account is known, and whether that bank sends a charge only once it posts. */
+export function useWaitingBank(
+  purchase: Pick<OpenPurchase, 'accountId' | 'paidByCardId'>,
+) {
+  const names = useAppSelector(selectSideBankNames);
+  const postedOnly = useAppSelector(selectPostedOnlySides);
+  return getWaitingBank(purchase, names, postedOnly);
 }
 
 export function useEmailActions(): EmailActions {
@@ -131,7 +180,7 @@ export function useEmailActions(): EmailActions {
       },
       createFilter: async (filter) => {
         if (uid === null) return NO_UID();
-        await createEmailFilter(uid, await getRunwayEncryption(uid), filter);
+        return createEmailFilter(uid, await getRunwayEncryption(uid), filter);
       },
       deleteFilter: (id) =>
         uid === null ? NO_UID() : deleteEmailFilter(uid, id),
@@ -140,114 +189,7 @@ export function useEmailActions(): EmailActions {
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, false),
       resumeWaiting: (purchaseId) =>
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, true),
-      chooseProvider: (provider) =>
-        uid === null
-          ? NO_UID()
-          : saveEmailSetup(uid, (current) => ({
-              provider,
-              stepId:
-                current?.provider === provider &&
-                current.stepId !== null &&
-                current.stepId !== 'provider'
-                  ? current.stepId
-                  : 'copy',
-            })),
-      reachStep: (stepId) =>
-        uid === null
-          ? NO_UID()
-          : saveEmailSetup(uid, (current) => {
-              const order = getEmailSetupSteps(current?.provider ?? null, true);
-              return order.indexOf(stepId) >
-                order.indexOf(current?.stepId ?? 'provider')
-                ? { stepId }
-                : null;
-            }),
-      finishSetup: () =>
-        uid === null
-          ? NO_UID()
-          : saveEmailSetup(uid, (current) =>
-              current?.doneAt != null ? null : { doneAt: Date.now() },
-            ),
-      saveBanks: async (change) => {
-        if (uid === null) return NO_UID();
-        return saveEmailBanks(uid, await getRunwayEncryption(uid), change);
-      },
     }),
     [uid],
   );
-}
-
-export interface EmailSetupRead {
-  provider: EmailProvider | null;
-  /** The banks whose alerts are forwarded, in the order they were added. */
-  banks: EmailBank[];
-  steps: EmailSetupStepId[];
-  /** Index of the furthest step reached in this provider's list; 0 when it is unknown. */
-  step: number;
-  /** Written once, or any purchase has already come from email (known only once the emails have loaded). */
-  isDone: boolean;
-  /** Whether the stored doneAt is still empty. */
-  isDoneUnwritten: boolean;
-}
-
-/** Where the person is in setting up forwarding, with the steps their provider needs. */
-/** The shown step for a stored one; a stored step that is hidden now (a confirm step whose email is gone) falls back to the shown step before it, never to the start. */
-function findShownStep(
-  steps: EmailSetupStepId[],
-  provider: EmailProvider | null,
-  stepId: EmailSetupStepId | null,
-) {
-  const order = getEmailSetupSteps(provider, true);
-  const reached = order.indexOf(stepId ?? 'provider');
-  return steps.reduce(
-    (found, step, index) => (order.indexOf(step) <= reached ? index : found),
-    0,
-  );
-}
-
-export function useEmailSetup(): EmailSetupRead {
-  const setup = useAppSelector(selectEmailSetup);
-  const intake = useEmailIntake();
-  const events = useEmailEvents();
-  const isEventsLoaded = useAppSelector(selectIsEmailEventsLoaded);
-  return useMemo(() => {
-    const provider = setup?.provider ?? null;
-    const steps = getEmailSetupSteps(provider, intake.confirm?.url != null);
-    const doneAt = setup?.doneAt ?? null;
-    return {
-      provider,
-      banks: setup?.banks ?? [],
-      steps,
-      step: findShownStep(steps, provider, setup?.stepId ?? null),
-      isDone:
-        doneAt !== null ||
-        (isEventsLoaded &&
-          events.some((entry) => entry.outcome === 'purchase')),
-      isDoneUnwritten: doneAt === null,
-    };
-  }, [setup, intake.confirm?.url, events, isEventsLoaded]);
-}
-
-/** The banks Runway knows from cards, accounts and links, to offer before typing one. */
-export function useKnownBanks(): KnownBank[] {
-  return useAppSelector(selectKnownBanks);
-}
-
-export type BankArrival = 'arriving' | 'waiting' | 'quiet';
-
-/** Whether a bank's alerts reach Runway: an alert from one of its addresses became a purchase, it was added too recently to tell, or none has come in the days emails are kept. */
-export function getBankArrival(
-  bank: EmailBank,
-  events: EmailEventRead[],
-  now: number,
-): BankArrival {
-  const isArriving = events.some(
-    (event) =>
-      event.outcome === 'purchase' &&
-      bank.addresses.includes(event.from.toLowerCase()),
-  );
-  if (isArriving) return 'arriving';
-  return now - bank.addedAt < EMAIL_EVENT_KEEP_DAYS * DAY_MS
-    ? 'waiting'
-    : 'quiet';
 }

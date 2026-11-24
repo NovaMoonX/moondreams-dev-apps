@@ -4,7 +4,7 @@ import { Mail } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import { EmailAddressText } from '@/components/emailForwarding/EmailAddressRow';
+import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import { EMAIL_FORWARDING_WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import FormSheet from '@/components/FormSheet';
 import Subview from '@/components/Subview';

@@ -115,6 +115,11 @@ export const CHANGE_LOG_SPAN_LABELS: Record<
 > = { '30': '30 days', '90': '3 months', '365': 'A year' };
 /** The newest entries one window reads; a busier window says so and a shorter span shows the rest. */
 export const MAX_WINDOW_CHANGES = 500;
+
+/** How long Done for you keeps an item, and the most the listener reads or one tidy-up removes. */
+export const DONE_FOR_YOU_DAYS = 30;
+export const MAX_DONE_FOR_YOU = 200;
+export const MAX_DONE_FOR_YOU_PRUNE = 100;
 /** Entries drawn before "Show more". */
 export const CHANGE_LOG_PAGE_SIZE = 30;
 /** How many windows back the log goes. */
@@ -1134,8 +1139,8 @@ export const MOVE_KINDS = [
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link', 'email'] as const;
 /** The domain a person's forwarding address lives on; the address is `${EMAIL_ADDRESS_PREFIX}-<token>@${EMAIL_DOMAIN}`. */
-export const EMAIL_DOMAIN = 'apps.moondreams.dev';
-export const EMAIL_ADDRESS_PREFIX = 'finance';
+export const EMAIL_DOMAIN = 'moondreamsmail.com';
+export const EMAIL_ADDRESS_PREFIX = 'runway';
 /** How long an emailed purchase waits for its bank before Home asks about it. */
 export const EMAIL_WAIT_DAYS = 5;
 /** How many days after an emailed purchase a bank charge can still be it (a hold can post days later). */
@@ -2119,9 +2124,9 @@ export const SPEND_WORDS = {
   receipt: 'Receipt',
   receipts: 'Receipts',
   addReceipt: 'Add a receipt',
+  addReceiptPhoto: 'Add a receipt photo',
   takeReceiptPhoto: 'Take a receipt photo',
   takeAnotherPhoto: 'Take another',
-  chooseReceiptPhoto: 'Choose a receipt photo',
   readReceipt: 'Read a receipt',
   readReceiptSends:
     "Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase. The photo is kept as the purchase's receipt.",
@@ -2135,6 +2140,7 @@ export const SPEND_WORDS = {
   itemsHint: 'One item to a line, with its price after two spaces.',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
+  purchaseActionsCaption: 'This purchase',
   addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
@@ -4087,7 +4093,7 @@ export const GOAL_CHART_WORDS = {
 
 // Round 4, package G5.
 /** Changes an item's History shows before "Show all". */
-export const ITEM_HISTORY_PREVIEW = 6;
+export const ITEM_HISTORY_PREVIEW = 20;
 
 // Round 7, package B1.
 /** What a moved payday does to the income days the person changed for themselves. */
@@ -4472,12 +4478,7 @@ export const ACCOUNT_WORDS = {
   leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
   bankBalanceOn: (day: string) => `From your bank, ${day}`,
-  updatedJustNow: 'Updated just now',
-  updatedMinutes: (minutes: number) => `Updated ${minutes}\u00a0min ago`,
-  updatedHours: (hours: number) => `Updated ${hours}\u00a0hr ago`,
-  rowJustNow: 'Just now',
-  rowMinutes: (minutes: number) => `${minutes}\u00a0min ago`,
-  rowHours: (hours: number) => `${hours}\u00a0hr ago`,
+  updated: (ago: string) => `Updated ${ago}`,
   autoCheckChip: 'Checks every 5\u00a0min',
   autoCheckTitle: 'Kept up to date',
   autoCheck: (bank: string) =>
@@ -5031,14 +5032,56 @@ const getBulkCount = (written: number, total: number) => {
     : `${written} of ${total} ${noun(total)}`;
 };
 
+/** The pick an envelope can't cover: what each envelope will drop to, and the question asked before it goes below zero. */
+export const COVER_WORDS = {
+  leftToAfter: (left: string, after: string) => `${left} → ${after}`,
+  runsOutTo: (names: string) => `Runs out, so the rest comes from ${names}`,
+  asksHow: 'It asks how to cover the rest',
+  alreadyOver: (name: string, over: string, short: string) =>
+    `${name} is already ${over} over, so this would add ${short} more.`,
+  furtherOver: (name: string, short: string) =>
+    `Let ${name} go ${short} further over`,
+  title: (name: string) => `${name} can’t cover all of it`,
+  body: (name: string, left: string, short: string) =>
+    `${name} has ${left} left, so this would take it ${short} over. How should the rest be covered?`,
+  bodyMany: (name: string, left: string, short: string) =>
+    `${name} has ${left} left, so these would take it ${short} over. How should the rest be covered?`,
+  spendRest: (left: string, name: string) => `Use the ${left} in ${name}`,
+  spendRestSub: (short: string) =>
+    `The other ${short} comes out of Free to Spend`,
+  allFree: 'Take it all from Free to Spend',
+  allFreeSub: (name: string) => `${name} stays as it is`,
+  moveIn: (short: string, name: string) => `Move ${short} into ${name} first`,
+  moveInSub: 'From Free to Spend, then all of it comes out of the envelope',
+  moveInSubOver: (name: string, over: string) =>
+    `Covers this purchase; ${name} stays ${over} over`,
+  goOver: (name: string, short: string) => `Let ${name} go ${short} over`,
+  goOverSub: 'It shows as over until you top it up',
+  moveFailed: 'The money wasn’t moved, so nothing was sent.',
+  moveStays: 'The money you moved in stays there.',
+  movedAndSent: (short: string, name: string) =>
+    `Moved ${short} into ${name} and sent it there`,
+  bodyPlaced: (name: string, short: string) =>
+    `Your rule sent this to ${name}, and ${short} of it is more than ${name} has. How should that part be covered?`,
+  placedFree: (short: string) => `Take ${short} of it from Free to Spend`,
+  placedFreeSub: (name: string, short: string) => `${name} gets ${short} back`,
+  keepOver: (name: string, short: string) => `Leave ${name} ${short} over`,
+  overDoor: (name: string) => `${name} went over`,
+  overDoorSub: 'Choose how to cover the rest',
+  usedRest: (short: string) =>
+    `The other ${short} now comes out of Free to Spend`,
+  movedIn: (short: string, name: string) => `Moved ${short} into ${name}`,
+  changedSince: 'This purchase changed since, so nothing was moved.',
+};
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
-  homeSub: 'From your bank',
+  homeSub: 'From your bank or email',
   countedChip: 'Counted in Free to Spend',
   intro:
     "You don't have to sort these. Each one already counts against Free to Spend; putting it in an envelope just makes that envelope's number exact.",
   empty:
-    'Nothing is waiting. New purchases from your bank show up here on their own.',
+    'Nothing is waiting. New purchases from your bank or email show up here on their own.',
   loading: 'Getting your purchases.',
   pending: 'Pending',
   fromBank: 'from your bank',
@@ -5077,8 +5120,12 @@ export const NEEDS_HOME_WORDS = {
   historySub: 'They are not counted in Free to Spend or your envelopes.',
   whichTitle: 'Which envelope?',
   sendHere: 'Send it here',
-  moreOptions: 'Pick an envelope',
-  moreOptionsSub: 'Or split it across several',
+  otherEnvelope: 'Another envelope',
+  chooseEnvelope: 'Choose an envelope',
+  chooseEnvelopeSub: 'From all your envelopes',
+  pickFor: (title: string) => `For ${title}`,
+  moreOptions: 'Split it or change details',
+  moreOptionsSub: 'Several envelopes, or fix the amount',
   undo: 'Undo',
   undoFailed: 'That was not put back. Nothing was changed.',
   sentTo: (name: string) => `Sent to ${name}`,
@@ -5303,6 +5350,27 @@ export const LINK_WORDS = {
     'Pick every account you have at this bank now. Linking the same bank a second time can disconnect the first link.',
   addToLinkedRow: (bank: string) => `Add accounts to ${bank}`,
   addToLinkedHelp: 'Already linked? Add them there, not as a second link.',
+  alreadyLinked: (bank: string) =>
+    `Nothing was added: ${bank} is already linked. Add accounts to it below and pick the new ones there.`,
+  twinRowValue: 'Shows up twice · open to fix',
+  combineRow: (bank: string) => `Combine your two ${bank} links`,
+  combineHelp: 'Same accounts, signed in twice',
+  combineTitle: (bank: string) => `Combine your ${bank} links?`,
+  combineMessage: (bank: string) =>
+    `${bank} shows up twice because you signed in there twice. Runway keeps one link and disconnects the other at ${bank}. Your accounts and purchases stay where they are. This can't be undone.`,
+  combineConfirm: 'Combine',
+  twinNote: (bank: string) =>
+    `${bank} shows up twice, and each sign-in brought in its own copy of your accounts, so the two can't be combined. If this one's accounts are the copies you don't use, unlink it below.`,
+  combineFailed: 'Those links were not combined. Nothing was changed.',
+  combineNeedsSignIn: (bank: string) =>
+    `One of your ${bank} links needs a new sign-in first, so nothing waiting at the bank is missed. Sign in again, then combine. Nothing was changed.`,
+  combineBankDown: (bank: string) =>
+    `${bank} isn't answering right now. Try again in a little while. Nothing was changed.`,
+  combineBusy: (bank: string) =>
+    `${bank} was sending new purchases just then. Try again in a moment. Nothing was changed.`,
+  combineNoLonger:
+    'These two links can no longer be combined. Nothing was changed.',
+  combinedToast: (bank: string) => `Combined your ${bank} links`,
   addMoreRow: (bank: string) => `Add more accounts from ${bank}`,
   addMoreHelp: 'Sign in again and pick the new ones',
   pickNewRow: (count: number) =>
@@ -5483,8 +5551,29 @@ export const CATEGORY_PRIMARIES = [
 
 export const RULE_WORDS = {
   title: 'Rules',
+  add: 'Add a rule',
+  pickTitle: 'Add a rule',
+  pickCard: 'Everything on a card',
+  pickCardSub: 'One envelope for all of a card',
+  pickKind: 'A kind of purchase',
+  pickKindSub: 'Like groceries or restaurants',
+  stores: 'Stores you’ve bought from',
+  searchStores: 'Search stores',
+  noStores:
+    'No stores to suggest yet. They show up as your bank and email bring in purchases.',
+  noStoreMatch: 'No store matches that.',
+  allStoresHaveRules:
+    'Every store you’ve bought from lately already has a rule.',
+  storeTimes: (count: number) => (count === 1 ? 'Once' : `${count} times`),
+  hasRule: (sentence: string) => `Your rule: ${sentence}`,
+  cardTitle: 'Which card?',
+  kindTitle: 'Which kind of purchase?',
+  noCards: 'No cards to pick from yet.',
+  noKinds: 'No kinds of purchase to pick from yet.',
   doorLabel: 'Rules',
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
+  emptyAdd:
+    'No rules yet. Add one for a store, a card or a kind of purchase, and Runway sends those purchases to an envelope for you.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
   removedCard: 'A card that was removed',
@@ -5492,6 +5581,9 @@ export const RULE_WORDS = {
   noMatch: 'No rule matches that.',
   alwaysDo: 'Always do this',
   alwaysDoSub: 'Send purchases like this one here, from now on',
+  alwaysSendTo: (merchant: string, envelope: string) =>
+    `Always send ${merchant} to ${envelope}`,
+  alwaysSendSub: 'By this store, card or kind of purchase',
   sheetTitle: 'Always do this',
   editTitle: 'Rule',
   question: 'What should it catch?',
@@ -5655,4 +5747,112 @@ export const PLAN_SELECT_WORDS = {
   archivedPartly: (done: number, total: number, failed: readonly string[]) =>
     `Archived ${done} of ${total}. ${listNames(failed)} did not archive and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
   hint: 'Press and hold to select several',
+} as const;
+
+/** Words for Done for you, the list of what Runway did on its own. */
+export const DONE_FOR_YOU_WORDS = {
+  title: 'Done for you',
+  summary: (count: number) =>
+    count === 1 ? '1 thing done for you' : `${count} things done for you`,
+  view: 'View',
+  empty: 'Nothing done for you yet',
+  emptyBody:
+    'When Runway sorts or matches something on its own, it shows here for 30 days.',
+  undo: 'Undo',
+  undone: 'Undone',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  cannotUndo: 'It changed after this, so it can no longer be undone here.',
+  undoFailed: 'That was not undone. Nothing was changed.',
+  ruleSent: (purchase: string, envelope: string) =>
+    `${purchase} went to ${envelope}`,
+  autoMarked: (name: string) => `Marked ${name} paid`,
+  autoMarkedNote: 'To take it back, open the bill and tap Mark not paid.',
+  ended: (name: string) => `Ended ${name} after its last day`,
+  endedWhy: 'Its last day has passed.',
+  endedNote: 'Its history stays as it was.',
+  nothingToUndo: 'Nothing to undo: it never counted.',
+  depositLinked: 'It will not count as spending.',
+  chargeMatched: 'It no longer counts as spending.',
+  moved: 'It will not count as spending or income.',
+  cardPaid: 'The card shows it as paid.',
+  cannotUndoRow: "Can't be undone now",
+  undoMerge: 'Undo and keep them apart',
+  undoDeposit: 'Undo and unlink it',
+  undoPair: 'Undo and send both to Needs a home',
+  undoRule: 'Undo and send it to Needs a home',
+  undoCharge: 'Undo and unmatch it',
+  undoQuiet: 'Undo and leave it in Free to Spend',
+  undoneQuiet: 'Left in Free to Spend',
+  undoneAgo: (ago: string) => `Undone ${ago}`,
+  undoneNotice: (ago: string) => `You undid this ${ago}.`,
+  seeRule: 'See the rule',
+  seeRuleSub: 'Change or remove it',
+  openPurchase: 'Open the purchase',
+  openPurchaseSub: 'See where it went',
+  openBill: 'Open the bill',
+  openEnvelope: 'Open the envelope',
+  openGoal: 'Open the goal',
+  openItemSub: 'See it on your plan',
+  openMoves: 'See your account moves',
+  openMovesSub: 'Where moves between your accounts are kept',
+  noUndo: "This one can't be undone here.",
+  ruleGone: 'That rule has been removed.',
+  purchaseGone: 'That purchase is no longer in your list.',
+  itemGone: 'That one has been archived or removed.',
+  kindRule: 'Rule',
+  kindMerge: 'Matched',
+  kindCharge: 'Matched to a bill',
+  kindDeposit: 'Linked to a pay',
+  kindPair: 'Moved between accounts',
+  kindAutoMark: 'Marked paid',
+  kindEnded: 'Ended',
+  kindHistory: 'History',
+  kindReleased: 'Dropped charge',
+} as const;
+
+/** What the app says when it applies a store's refund or cancellation to an order on its own. */
+export const STORE_ORDER_WORDS = {
+  refundApplied: (store: string, amount: string, place: string) =>
+    `${store} refund of ${amount} went back to ${place}`,
+  refundTied: (store: string, amount: string) =>
+    `${store} refund of ${amount} tied to its order`,
+  refundTiedWhy:
+    'Part of the order came from an envelope that is gone, so pick where the money goes.',
+  refundWhyNumber: (orderNumber: string) =>
+    `The store’s email named order ${orderNumber}.`,
+  refundWhyStore: (store: string) =>
+    `No order number came with it, and this is the only ${store} purchase from the last 60 days that fits.`,
+  cancelTakenOff: (store: string, amount: string) =>
+    `${amount} of a ${store} order was cancelled`,
+  cancelWhole: (store: string) => `${store} order cancelled`,
+  cancelWhy: 'The store cancelled it before the card was charged.',
+  cancelAfterCharge: (store: string, amount: string, place: string) =>
+    `${store} cancellation of ${amount} went back to ${place}`,
+  undoRefund: 'Undo and send it to Needs a home',
+  undoCancel: 'Undo and count the order again',
+  refundSummary: (store: string, place: string) =>
+    `A refund from ${store} went back to ${place}.`,
+  refundUndoneSummary: (store: string) =>
+    `A refund from ${store} went back to Needs a home.`,
+  cancelSummary: (store: string) =>
+    `${store} cancelled part of an order, so it was taken off the order.`,
+  cancelUndoneSummary: (store: string) =>
+    `The ${store} order counts in full again, and its cancellation counts nowhere.`,
+  freeToSpend: 'Free to Spend',
+  severalEnvelopes: 'where the order counted',
+  store: 'The store',
+  order: 'Order',
+  orderNumber: (orderNumber: string) => `Order ${orderNumber}`,
+  history: 'Order history',
+  ordered: 'Ordered',
+  refunded: 'Refunded',
+  cancelled: 'Cancelled',
+  cancelledUndone: 'Cancelled, then put back',
+  wholeOrderCancelled: 'Cancelled',
+  outcomeRefund: 'Refund',
+  outcomeCancel: 'Cancellation',
+  outcomeRefundDetail: 'A store refund',
+  outcomeCancelDetail: 'A cancelled order',
+  undoneFailed: 'That was not undone. Nothing was changed.',
 } as const;

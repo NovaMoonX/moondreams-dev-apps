@@ -1,4 +1,5 @@
 import { getLocalClock } from '../../notifications/localClock.js';
+import { isSameStore } from './storeNames.js';
 
 export const DEFAULT_NOTIFY_HOUR = 19;
 
@@ -81,4 +82,149 @@ export function countWaiting(
         (!sorting.isPaused && createdAt >= sorting.from) ||
         near(amountCents, date, -1),
   ).length;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Mirror `EMAIL_MATCH_DAYS_BEFORE` and `EMAIL_MATCH_DAYS_AFTER` in the app's constants; `check:runway-notify-text` fails when they drift. */
+export const EMAIL_MATCH_DAYS_BEFORE = 2;
+export const EMAIL_MATCH_DAYS_AFTER = 7;
+/** Mirror `MAX_SPLIT_CHARGES` and `MAX_SPLIT_POOL` in the app's `engine/emailTwins.ts`; `check:runway-notify-text` fails when they drift. */
+export const MAX_SPLIT_CHARGES = 4;
+export const MAX_SPLIT_POOL = 8;
+
+export interface TwinRow {
+  id: string;
+  date: number;
+  source: string | null;
+  amountCents: number;
+  accountId: string | null;
+  paidByCardId: string | null;
+  emailWaiting: boolean;
+  notSameAs: string[];
+  pairedWithId: string | null;
+  /** The merchant, or else the label, as the person reads it; null when it has neither. */
+  name: string | null;
+  /** The email was read from a store's order confirmation. */
+  isOrder: boolean;
+}
+
+const isSameSide = (email: TwinRow, bank: TwinRow) =>
+  email.paidByCardId !== null
+    ? email.paidByCardId === bank.paidByCardId
+    : email.accountId !== null &&
+      email.accountId === bank.accountId &&
+      bank.paidByCardId === null;
+
+const isWindowDay = (email: TwinRow, bank: TwinRow) =>
+  bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
+  bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS;
+
+const getCombinations = <T>(items: readonly T[], size: number): T[][] =>
+  size === 0
+    ? [[]]
+    : items.flatMap((item, index) =>
+        getCombinations(items.slice(index + 1), size - 1).map((rest) => [
+          item,
+          ...rest,
+        ]),
+      );
+
+/** The sets of 2 to 4 charges from one store, on the order's side and in its window, that add up to its amount; none when the pool is too big to tell. */
+function findSplitSets(
+  order: TwinRow,
+  banks: readonly TwinRow[],
+  taken: ReadonlySet<string>,
+): string[][] {
+  const pool = banks.filter(
+    (bank) =>
+      bank.amountCents > 0 &&
+      !taken.has(bank.id) &&
+      isSameSide(order, bank) &&
+      isWindowDay(order, bank) &&
+      !order.notSameAs.includes(bank.id) &&
+      isSameStore(order.name, bank.name),
+  );
+  if (order.amountCents <= 0 || pool.length > MAX_SPLIT_POOL) return [];
+  return Array.from({ length: MAX_SPLIT_CHARGES - 1 }, (_, index) => index + 2)
+    .flatMap((size) => getCombinations(pool, size))
+    .filter(
+      (set) =>
+        set.reduce((sum, bank) => sum + bank.amountCents, 0) ===
+        order.amountCents,
+    )
+    .map((set) => set.map((bank) => bank.id).sort());
+}
+
+/** The charges of each waiting store order that posted as several, as `findEmailTwins` in the app decides: exactly one set of charges adds up to it and no other waiting email from that store could be it or take one of the charges. */
+function findSplitChargeIds(
+  emails: readonly TwinRow[],
+  banks: readonly TwinRow[],
+  candidates: ReadonlyMap<string, string[]>,
+): Set<string> {
+  const taken = new Set([...candidates.values()].flat());
+  const sets = emails
+    .filter(
+      (email) => email.isOrder && (candidates.get(email.id) ?? []).length === 0,
+    )
+    .map((email): [TwinRow, string[][]] => [
+      email,
+      findSplitSets(email, banks, taken),
+    ])
+    .filter(([, found]) => found.length > 0);
+  return new Set(
+    sets.flatMap(([email, found]) => {
+      const isRivaled =
+        sets.some(
+          ([other, otherSets]) =>
+            other.id !== email.id &&
+            otherSets.some((set) => set.some((id) => found[0].includes(id))),
+        ) ||
+        emails.some(
+          (other) =>
+            other.id !== email.id &&
+            other.amountCents === email.amountCents &&
+            isSameSide(email, other) &&
+            isSameStore(email.name, other.name),
+        );
+      return found.length === 1 && !isRivaled ? found[0] : [];
+    }),
+  );
+}
+
+/** Drops each waiting emailed purchase that is clearly a bank charge also waiting, so the pair counts once (the bank's side stays): the same amount on the same card (or the same account for money out of an account), the bank dated from two days before to seven days after the email, and the only candidate both ways, as `findEmailTwins` in the app decides. An ambiguous email stays counted. A store order that posted as several charges stays and its charges are dropped, as the screen hides them; skipped: the screen shows those charges again when one is link history or the merge's tries are spent, which the push cannot see, so it drops them anyway. */
+export function withoutEmailTwins<T extends TwinRow>(rows: readonly T[]) {
+  const emails = rows.filter(
+    (row) => row.source === 'email' && row.emailWaiting,
+  );
+  const banks = rows.filter(
+    (row) => row.source === 'link' && row.pairedWithId === null,
+  );
+  const candidates = new Map(
+    emails.map((email) => [
+      email.id,
+      banks
+        .filter(
+          (bank) =>
+            bank.amountCents === email.amountCents &&
+            isSameSide(email, bank) &&
+            bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
+            bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS &&
+            !email.notSameAs.includes(bank.id),
+        )
+        .map((bank) => bank.id),
+    ]),
+  );
+  const claims = [...candidates.values()]
+    .flat()
+    .reduce(
+      (counts, id) => counts.set(id, (counts.get(id) ?? 0) + 1),
+      new Map<string, number>(),
+    );
+  const split = findSplitChargeIds(emails, banks, candidates);
+  return rows.filter((row) => {
+    const ids = candidates.get(row.id);
+    return (
+      !(ids?.length === 1 && claims.get(ids[0]) === 1) && !split.has(row.id)
+    );
+  });
 }

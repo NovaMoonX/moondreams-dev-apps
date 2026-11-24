@@ -7,12 +7,10 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
-import type { EmailSetupProgressChange } from '@/components/emailForwarding/EmailSetupWalkthrough';
 import { db, functions } from '@/lib/firebase/config';
-import type { EmailSetupProgress } from '@/lib/emailForwarding/types';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { runHeldTransaction } from '@apps/a-list/store/actions/heldTransaction';
-import type { AListEmailEvent } from '@apps/a-list/types';
+import type { AListEmailEvent, AListEmailProgress } from '@apps/a-list/types';
 import { getEmailHandledAt } from '@apps/a-list/utils/emailEvents';
 import {
   cancelTrailerReminder,
@@ -41,91 +39,39 @@ export async function deleteEmailEvent(uid: string, eventId: string) {
   await deleteDoc(memberRef(uid, 'emailEvents', eventId));
 }
 
-/** Writes progress from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
+/** Writes from what is stored now, so a second device never rewinds it; `decide` returns null to write nothing. */
 async function writeProgress(
   uid: string,
   decide: (
-    current: EmailSetupProgress | null,
-  ) => Partial<
-    Pick<
-      EmailSetupProgress,
-      'provider' | 'stepId' | 'startedAt' | 'doneAt' | 'noticeSeenThrough'
-    >
-  > | null,
+    current: AListEmailProgress | null,
+  ) => Pick<AListEmailProgress, 'noticeSeenThrough'> | null,
 ) {
   const ref = progressRef(uid);
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists()
-      ? (snapshot.data() as EmailSetupProgress)
+      ? (snapshot.data() as AListEmailProgress)
       : null;
     const change = decide(current);
     if (change === null) return;
     const now = Date.now();
-    transaction.set(ref, {
-      id: 'progress',
-      provider: current?.provider ?? null,
-      stepId: current?.stepId ?? null,
-      startedAt: current?.startedAt ?? null,
-      doneAt: current?.doneAt ?? null,
-      noticeSeenThrough: current?.noticeSeenThrough ?? null,
-      createdAt: current?.createdAt ?? now,
-      ...change,
-      updatedAt: now,
-    } satisfies EmailSetupProgress);
+    transaction.set(
+      ref,
+      {
+        id: 'progress',
+        createdAt: current?.createdAt ?? now,
+        ...change,
+        updatedAt: now,
+      } satisfies AListEmailProgress,
+      { merge: true },
+    );
   });
-}
-
-const STEP_ORDER = [
-  'provider',
-  'copy',
-  'forwarding',
-  'rule',
-  'confirm',
-  'filter',
-  'test',
-];
-
-/** Saves the provider or the furthest step reached; `startedAt` (from server-written times) is kept once a walk has one. */
-export function saveEmailProgress(
-  uid: string,
-  next: EmailSetupProgressChange,
-  startedAt: number,
-) {
-  return writeProgress(uid, (current) => {
-    const isSameProviderFurther =
-      current !== null &&
-      current.provider === next.provider &&
-      current.stepId !== null &&
-      next.stepId !== null &&
-      STEP_ORDER.indexOf(current.stepId) > STEP_ORDER.indexOf(next.stepId);
-    return {
-      provider: next.provider,
-      stepId: isSameProviderFurther ? current.stepId : next.stepId,
-      startedAt: current?.startedAt ?? startedAt,
-    };
-  });
-}
-
-/** "Set it up again": a new walk that ticks only what arrives after `startedAt`. */
-export function restartEmailSetup(uid: string, startedAt: number) {
-  return writeProgress(uid, () => ({
-    stepId: 'provider',
-    startedAt,
-    doneAt: null,
-  }));
-}
-
-export function finishEmailSetup(uid: string) {
-  return writeProgress(uid, (current) =>
-    current?.doneAt != null ? null : { doneAt: Date.now() },
-  );
 }
 
 /** Records that the person has been told about email changes up to `receivedAt` (a server time), never moving it back. */
 export function markEmailChangesSeen(uid: string, receivedAt: number) {
   return writeProgress(uid, (current) =>
-    current === null || (current.noticeSeenThrough ?? 0) >= receivedAt
+    (current?.noticeSeenThrough ?? 0) >= receivedAt
       ? null
       : { noticeSeenThrough: receivedAt },
   );

@@ -35,6 +35,9 @@ function InquiryRow({
   const line = [
     handledBy === null ? null : `Handled by ${handledBy}`,
     inquiry.contactClearedAt === null ? thing : null,
+    inquiry.bundleId === null
+      ? null
+      : `Bundle: ${inquiry.bundleLabelAtSend ?? 'a bundle'}`,
     describeBuyerDays(inquiry, true),
     formatSentAt(
       isNew ? inquiry.lastSentAt : (inquiry.handledAt ?? inquiry.lastSentAt),

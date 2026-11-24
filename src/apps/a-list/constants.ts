@@ -1,4 +1,3 @@
-import type { EmailForwardingWords } from '@/components/emailForwarding/emailForwardingWords';
 import type { PillOption } from '@/components/PillGroup';
 import type { SortOrder } from '@/components/SortControl';
 import type {
@@ -24,20 +23,11 @@ export const EMAIL_TICKETS_TITLE = 'Tickets from your AMC emails';
 /** The header title where the long one is cut off on a narrow phone. */
 export const EMAIL_TICKETS_SHORT_TITLE = 'AMC emails';
 
-export const EMAIL_TICKETS_WORDS: EmailForwardingWords = {
-  appName: 'A-List',
-  emails: 'AMC’s ticket emails',
-  senderAddress: null,
-  senderAddressPlaceholder: 'name@amctheatres.com',
-  gmailSubjectWords: [],
-  otherMailLine:
-    'A-List only reads AMC’s ticket emails. For anything else it keeps the sender’s domain, the subject and a few lines, for 30 days, so you can filter it out.',
-  copyLine:
-    'Forward AMC’s reservation and cancellation emails here and your calendar keeps up. AMC’s offers and other mail are skipped, so a filter on the sender alone is enough.',
-  testLine:
-    'Forward one AMC reservation email to your address. Your latest booking works.',
-  testDone: 'It worked. Your showing is on the calendar.',
-};
+/** The forwarding address's local part before its token; matches the server's. */
+export const EMAIL_ADDRESS_PREFIX = 'amc';
+
+export const EMAIL_SETUP_LINE =
+  'Forward your AMC reservation and cancellation emails here, by hand or with your email’s own rules, and your calendar keeps up. Anything else is skipped.';
 
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';
@@ -97,7 +87,11 @@ export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
   LASER: 'Laser',
 };
 
-export const TICKET_PRICE_KINDS: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
+export const TICKET_PRICE_KINDS: TicketPriceKind[] = [
+  'ADULT',
+  'SENIOR',
+  'CHILD',
+];
 
 export const TICKET_PRICE_KIND_LABELS: Record<TicketPriceKind, string> = {
   ADULT: 'Adult',

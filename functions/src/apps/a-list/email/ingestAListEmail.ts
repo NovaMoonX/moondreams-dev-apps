@@ -494,6 +494,7 @@ export const ingestAListEmail = onRequest(
     app: 'a-list',
     prefix: EMAIL_ADDRESS_PREFIX,
     secretName: EMAIL_WEBHOOK_SECRET_NAME,
+    legacySecretName: 'RUNWAY_EMAIL_WEBHOOK_SECRET',
     tokenPath: emailTokenPath,
     isOpenFor: (uid) =>
       isGateOpenForUid(uid, 'a-list', EMAIL_TICKETS_GATE_ID, 'off'),

@@ -71,6 +71,7 @@ import { readOutsideAdditions } from '@apps/helm/utils/outsideTurns';
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
 import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface HomeSurfaceProps {
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -274,6 +275,7 @@ function NewConversationButton({ uid }: { uid: string }) {
     setConversationFreshAt(uid, Date.now())
       .then(() =>
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.newConversationStarted,
           type: 'info',
           action: {

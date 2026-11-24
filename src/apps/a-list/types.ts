@@ -379,3 +379,12 @@ export interface AListEmailEvent {
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
   expiresAt: number;
 }
+
+/** What the member has been told about email changes, written by the app at `emailSetup/progress`; one per member. */
+export interface AListEmailProgress {
+  id: 'progress';
+  /** The newest email change shown to the member (an email's `receivedAt`, a server time); null until one has been seen. */
+  noticeSeenThrough: number | null;
+  createdAt: number;
+  updatedAt: number;
+}

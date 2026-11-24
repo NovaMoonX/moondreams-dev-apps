@@ -1,15 +1,12 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
-import type {
-  EmailIntakeState,
-  EmailSetupProgress,
-} from '@/lib/emailForwarding/types';
-import type { AListEmailEvent } from '@apps/a-list/types';
+import type { EmailIntakeState } from '@/lib/emailForwarding/types';
+import type { AListEmailEvent, AListEmailProgress } from '@apps/a-list/types';
 
 export interface EmailState {
   intake: EmailIntakeState | null;
-  progress: EmailSetupProgress | null;
+  progress: AListEmailProgress | null;
   /** Newest first. */
   events: AListEmailEvent[];
   isIntakeLoaded: boolean;
@@ -36,7 +33,7 @@ export const emailSlice = createSlice({
       state.intake = action.payload;
       state.isIntakeLoaded = true;
     },
-    setEmailProgress(state, action: PayloadAction<EmailSetupProgress | null>) {
+    setEmailProgress(state, action: PayloadAction<AListEmailProgress | null>) {
       state.progress = action.payload;
       state.isProgressLoaded = true;
     },

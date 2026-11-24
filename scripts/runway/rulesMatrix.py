@@ -37,6 +37,7 @@ COLLECTIONS = {
     'rules': {'update', 'delete'},
     'memories': {'delete'},
     'startedPayments': {'delete'},
+    'doneForYou': {'update', 'delete'},
     'emailFilters': {'delete'},
     'emailSetup': {'update'},
 }
@@ -196,6 +197,9 @@ def main():
         admin([put(bank, dict(pdoc2, source='link', status='posted', needsHome=True, dedupeKey='abc'))])
         linked = dict(pdoc2, source='link', status='posted', needsHome=True, dedupeKey='abc')
         check(f'link purchase update keeping both [{a}]', commit(tok, [put(bank, dict(linked, needsHome=False))]), a == 'o')
+        admin([put(bank, dict(linked, wasPending=False))])
+        check(f'link purchase update leaving wasPending unchanged [{a}]', commit(tok, [put(bank, dict(linked, wasPending=False, needsHome=False))]), a == 'o')
+        admin([put(bank, linked)])
         check(f'link purchase update changing dedupeKey [{a}]', commit(tok, [put(bank, dict(linked, dedupeKey='xyz'))]), False)
         check(f'link purchase update dropping dedupeKey [{a}]', commit(tok, [put(bank, {k: v for k, v in linked.items() if k != 'dedupeKey'})]), False)
         check(f'link purchase update changing source [{a}]', commit(tok, [put(bank, dict(linked, source='manual'))]), False)

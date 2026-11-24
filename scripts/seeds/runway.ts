@@ -19,6 +19,8 @@ import {
   AUTO_PAY_WORDS,
   CARD_FEE_WORDS,
   DEFAULT_CURRENCY_CODE,
+  DONE_FOR_YOU_WORDS,
+  NEEDS_HOME_WORDS,
   PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
   EMAIL_EVENT_KEEP_DAYS,
@@ -67,6 +69,7 @@ import {
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
+import { toSubject } from '../../src/apps/runway/utils/doneForYouSubject.ts';
 import {
   CARD_FEE_GROUP_ID,
   buildFeeBill,
@@ -85,6 +88,10 @@ import type {
   CardSealed,
   ExpenseDoc,
   RuleDoc,
+  DoneForYouDoc,
+  DoneForYouKind,
+  DoneForYouSealed,
+  OpenPurchase,
   RuleSealed,
   ExpenseSealed,
   ChangeDoc,
@@ -94,8 +101,6 @@ import type {
   EmailEventDoc,
   EmailEventSealed,
   EmailFilterDoc,
-  EmailSetupDoc,
-  EmailSetupSealed,
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
@@ -132,6 +137,7 @@ import {
 /** Plain placeholder marks standing in for the logos the bank sends. */
 const SEED_LOGO_RED =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwEeYkP8f3+S68eEChQ2K3bpPE6k8WorSmpAtV1nHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAe54d74r6pqBcAAAAASUVORK5CYII=';
+
 const SEED_LOGO_PURPLE =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwE+ZkP8d9+R68eEChQ2K3bpPE6k8WorSmpAtV5XHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAeNE1GEElmoxYAAAAASUVORK5CYII=';
 
@@ -1663,10 +1669,13 @@ async function writeSeedCards(
     createdAt,
     needsCardConsent: null,
     cardDetails: 'shared',
+    logoShared: null,
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
         institutionLogo: SEED_LOGO_RED,
+        institutionDomain: 'capitalone.com',
+        institutionCheckedAt: context.now - 2 * 60_000,
         providerAccounts: [
           {
             providerAccountId: 'seed-provider-venture',
@@ -1916,10 +1925,13 @@ async function writeSeedAccounts(
     createdAt,
     needsCardConsent: null,
     cardDetails: null,
+    logoShared: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
-        institutionLogo: SEED_LOGO_PURPLE,
+        institutionLogo: null,
+        institutionDomain: 'wealthfront.com',
+        institutionCheckedAt: context.now - 3 * 60 * 60_000,
         providerAccounts: [
           {
             providerAccountId: 'seed-provider-wealthfront',
@@ -3521,6 +3533,7 @@ async function writeSeedSelfPaying(
         date,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: true,
         accountId: null,
         expenseId: null,
@@ -4019,12 +4032,15 @@ async function seedUnlinkedPlan(
     status: 'revoked',
     needsCardConsent: null,
     cardDetails: null,
+    logoShared: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
         institutionLogo: SEED_LOGO_RED,
+        institutionDomain: 'capitalone.com',
+        institutionCheckedAt: context.now - 2 * 60_000,
         providerAccounts: [
           {
             providerAccountId: 'seed-taylor-provider-checking',
@@ -4080,6 +4096,7 @@ async function seedUnlinkedPlan(
         date,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: false,
         accountId,
         expenseId: null,
@@ -4334,6 +4351,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4589,6 +4607,7 @@ async function writeSeedPurchases(
         date,
         source: 'link',
         status: entry.status,
+        wasPending: entry.status === 'pending',
         needsHome: true,
         accountId: entry.accountId,
         expenseId: null,
@@ -4628,6 +4647,7 @@ async function writeSeedPurchases(
     }),
   );
   const ruled = await seedRules(context, plan, encryption, today);
+  const done = await seedDoneForYou(context, plan, encryption, today);
   const emailDocuments = await writeSeedEmail(
     context,
     plan,
@@ -4642,6 +4662,16 @@ async function writeSeedPurchases(
       id: 'seed-change-purchase-edited',
       createdAt: safewayDate + 13 * 3_600_000,
       summary: 'Purchase changed: Safeway, amount $54.18 to $64.18.',
+    },
+    {
+      id: 'seed-change-purchase-ruled',
+      createdAt: safewayDate + 9 * 3_600_000,
+      summary: `Purchase sent to Groceries: Trader Joe's, $38.20 on ${formatDateOrdinalUTC(safewayDate)}. By your rule “Trader Joe's goes to Groceries”.`,
+    },
+    {
+      id: 'seed-change-purchase-sent',
+      createdAt: safewayDate + 12 * 3_600_000,
+      summary: `Purchase sent to Groceries: Safeway, $54.18 on ${formatDateOrdinalUTC(safewayDate)}.`,
     },
     {
       id: 'seed-change-purchase-removed',
@@ -4684,12 +4714,13 @@ async function writeSeedPurchases(
     changes.length +
     1 +
     ruled +
+    done +
     emailDocuments
   );
 }
 
 /**
- * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome and a filter, and a finished Gmail walkthrough. No bank charge of the same amount sits on the Venture X, so none merges.
+ * Jamie's purchases from email: the forwarding address with a Gmail confirmation Runway couldn't follow (so the Confirm notice shows), four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome (a bank, a store and a not-money sender, each tagged) and a filter. No bank charge of the same amount sits on the Venture X, so none merges.
  */
 async function writeSeedEmail(
   context: SeedContext,
@@ -4708,6 +4739,8 @@ async function writeSeedEmail(
     updatedAt: context.now - DAY_MS,
     lastReceivedAt: context.now - 2 * hour,
     confirmAt: context.now - DAY_MS,
+    autoConfirm: 'failed',
+    confirmProvider: 'gmail',
     sealed: await sealJson(
       {
         confirmUrl:
@@ -4727,6 +4760,7 @@ async function writeSeedEmail(
     cents: number;
     subject: string;
     readBy: 'pattern' | 'ai';
+    isWaitingForHome?: true;
   }[] = [
     {
       id: 'seed-email-purchase-coffee',
@@ -4767,6 +4801,7 @@ async function writeSeedEmail(
       cents: 2_764,
       subject: 'A charge of $27.64 on your Venture X',
       readBy: 'pattern',
+      isWaitingForHome: true,
     },
   ];
   await Promise.all(
@@ -4777,12 +4812,13 @@ async function writeSeedEmail(
         date,
         source: 'email',
         status: null,
-        needsHome: false,
+        needsHome: 'isWaitingForHome' in entry,
         accountId: null,
         dedupeKey: null,
         expenseId: null,
         emailEventId: entry.eventId,
         emailWaiting: true,
+        wasPending: null,
         createdAt: entry.receivedAt,
         updatedAt: entry.receivedAt,
         sealed: await sealJson(
@@ -4811,6 +4847,113 @@ async function writeSeedEmail(
         ),
       } satisfies PurchaseDoc);
     }),
+  );
+
+  // An order a cancellation already came off, and a refund the app ties on its own at load.
+  const storeBase = {
+    status: null,
+    accountId: null,
+    dedupeKey: null,
+    expenseId: null,
+    emailWaiting: false,
+    wasPending: null,
+  } as const;
+  const storeSealed = {
+    label: null,
+    note: null,
+    paidByCardId: SEED_VENTURE_CARD,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    incomeDayId: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    tickedDayKey: null,
+    category: null,
+    ruleId: null,
+  } as const;
+  const orderOn = today - 6 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/purchases/seed-store-order-walmart`),
+    {
+      ...storeBase,
+      id: 'seed-store-order-walmart',
+      date: orderOn,
+      source: 'email',
+      needsHome: false,
+      emailEventId: 'seed-email-event-walmart-order',
+
+      createdAt: orderOn + 10 * hour,
+      updatedAt: orderOn + 30 * hour,
+      sealed: await sealJson(
+        {
+          ...storeSealed,
+          amountCents: 7_440,
+          merchant: 'Walmart',
+          lines: [
+            {
+              envelopeId: 'seed-envelope-groceries',
+              cents: 7_440,
+              via: 'chosen',
+            },
+          ],
+          refundOfId: null,
+          assignedBy: 'person',
+          storeEmail: {
+            kind: 'order',
+            orderNumber: '2000131-55180',
+            isWholeOrder: false,
+            merchant: 'Walmart',
+          },
+          orderLog: [
+            {
+              kind: 'cancel',
+              cents: 1_200,
+              on: orderOn + DAY_MS,
+              emailEventId: 'seed-email-event-walmart-cancel',
+              purchaseId: null,
+              undoneAt: null,
+            },
+          ],
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+    } satisfies PurchaseDoc,
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/purchases/seed-store-refund-walmart`),
+    {
+      ...storeBase,
+      id: 'seed-store-refund-walmart',
+      date: today - DAY_MS,
+      source: 'email',
+      needsHome: true,
+      emailEventId: 'seed-email-event-walmart-refund',
+      emailWaiting: false,
+      wasPending: null,
+      createdAt: today - DAY_MS + 9 * hour,
+      updatedAt: today - DAY_MS + 9 * hour,
+      sealed: await sealJson(
+        {
+          ...storeSealed,
+          amountCents: -1_850,
+          merchant: 'Walmart',
+          lines: [],
+          refundOfId: null,
+          assignedBy: null,
+          storeEmail: {
+            kind: 'refund',
+            orderNumber: '2000131-55180',
+            isWholeOrder: false,
+            merchant: 'Walmart',
+          },
+          orderLog: null,
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+    } satisfies PurchaseDoc,
   );
 
   const readEmail = (
@@ -4866,14 +5009,19 @@ async function writeSeedEmail(
     ];
     return templates[index % templates.length];
   };
-  const events: (Pick<EmailEventDoc, 'id' | 'receivedAt' | 'outcome'> & {
+  const events: (Pick<
+    EmailEventDoc,
+    'id' | 'receivedAt' | 'outcome' | 'senderKind'
+  > & {
     purchaseId: string | null;
-    sealed: EmailEventSealed;
+    sealed: Omit<EmailEventSealed, 'senderLogo' | 'senderCompany'> &
+      Partial<Pick<EmailEventSealed, 'senderLogo' | 'senderCompany'>>;
   })[] = [
     ...purchases.map((entry, index) => ({
       id: entry.eventId,
       receivedAt: entry.receivedAt,
       outcome: 'purchase' as const,
+      senderKind: 'bank' as const,
       purchaseId: entry.id,
       sealed: {
         from: 'alerts@capitalone.com',
@@ -4886,12 +5034,14 @@ async function writeSeedEmail(
           merchant: entry.merchant,
         }),
         readBy: entry.readBy,
+        senderCompany: 'Capital One',
       },
     })),
     {
       id: 'seed-email-event-deposit',
       receivedAt: context.now - 5 * hour,
       outcome: 'notPurchase',
+      senderKind: 'bank',
       purchaseId: null,
       sealed: {
         from: 'alerts@capitalone.com',
@@ -4901,12 +5051,51 @@ async function writeSeedEmail(
           'Thanks, we got your payment of $480.00 on your Venture X card ending in 4821.',
         ),
         readBy: 'ai',
+        senderCompany: 'Capital One',
+      },
+    },
+    {
+      id: 'seed-email-event-store-order',
+      receivedAt: context.now - 8 * hour,
+      outcome: 'notPurchase',
+      senderKind: 'store',
+      purchaseId: null,
+      sealed: {
+        from: 'orders@target.com',
+        subject: 'Your Target order has shipped',
+        subjectTemplate: 'your target order has shipped',
+        ...readEmail(
+          'Good news, your order is on its way. Track your package at https://www.target.com/orders',
+        ),
+        readBy: 'ai',
+        senderLogo: SEED_LOGO_PURPLE,
+        senderCompany: 'Target',
+      },
+    },
+    {
+      id: 'seed-email-event-forwarded-receipt',
+      receivedAt: context.now - 12 * hour,
+      outcome: 'purchase',
+      senderKind: 'store',
+      purchaseId: null,
+      sealed: {
+        from: 'Target <orders@target.com>',
+        subject: 'Fwd: Your Target receipt for $23.18',
+        subjectTemplate: 'your target receipt for {amount}',
+        ...readEmail(
+          'Thanks for shopping at Target. Your total was $23.18, paid with your Venture X card ending in 4821.',
+          { amountCents: 2_318, merchant: 'Target' },
+        ),
+        readBy: 'ai',
+        senderLogo: SEED_LOGO_PURPLE,
+        senderCompany: 'Target',
       },
     },
     {
       id: 'seed-email-event-filtered',
       receivedAt: context.now - DAY_MS - 3 * hour,
       outcome: 'filtered',
+      senderKind: 'other',
       purchaseId: null,
       sealed: {
         from: 'marketing@chase.com',
@@ -4928,6 +5117,7 @@ async function writeSeedEmail(
       id: 'seed-email-event-confirm',
       receivedAt: context.now - DAY_MS,
       outcome: 'confirm',
+      senderKind: null,
       purchaseId: null,
       sealed: {
         from: 'forwarding-noreply@google.com',
@@ -4947,6 +5137,7 @@ async function writeSeedEmail(
       id: 'seed-email-event-unread',
       receivedAt: context.now - 3 * DAY_MS,
       outcome: 'unread',
+      senderKind: 'other',
       purchaseId: null,
       sealed: {
         from: 'statements@discover.com',
@@ -4967,43 +5158,20 @@ async function writeSeedEmail(
         id: entry.id,
         receivedAt: entry.receivedAt,
         outcome: entry.outcome,
+        senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
         expiresAt: expiresAt(entry.receivedAt),
-        sealed: await sealJson(entry.sealed, encryption),
+        sealed: await sealJson(
+          {
+            senderLogo: null,
+            senderCompany: null,
+            ...entry.sealed,
+          } satisfies EmailEventSealed,
+          encryption,
+        ),
       });
     }),
   );
-
-  batch.set(context.firestore.doc(`${plan}/emailSetup/progress`), {
-    id: 'progress',
-    provider: 'gmail',
-    stepId: 'test',
-    doneAt: context.now - DAY_MS,
-    sealed: await sealJson(
-      {
-        banks: [
-          {
-            id: 'seed-email-bank-capital-one',
-            name: 'Capital One',
-            addresses: [
-              'alerts@capitalone.com',
-              'capitalone@notification.capitalone.com',
-            ],
-            addedAt: context.now - 12 * DAY_MS,
-          },
-          {
-            id: 'seed-email-bank-discover',
-            name: 'Discover',
-            addresses: ['discover@services.discover.com'],
-            addedAt: context.now - 2 * DAY_MS,
-          },
-        ],
-      } satisfies EmailSetupSealed,
-      encryption,
-    ),
-    createdAt: context.now - 12 * DAY_MS,
-    updatedAt: context.now - DAY_MS,
-  } satisfies EmailSetupDoc);
 
   const filterId = 'seed-email-filter-chase-marketing';
   batch.set(context.firestore.doc(`${plan}/emailFilters/${filterId}`), {
@@ -5019,7 +5187,202 @@ async function writeSeedEmail(
       encryption,
     ),
   } satisfies EmailFilterDoc);
-  return 1 + purchases.length + events.length + 2;
+  return 1 + purchases.length + events.length + 1;
+}
+
+/** Jamie's Done for you, one entry per kind a row can show, including one written before subjects were kept. */
+async function seedDoneForYou(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+): Promise<number> {
+  const kept = await context.firestore.collection(`${plan}/doneForYou`).get();
+  await Promise.all(kept.docs.map((entry) => entry.ref.delete()));
+  const now = context.now;
+  const minutes = (count: number) => now - count * 60_000;
+  const placedAt = today - 4 * DAY_MS + 12 * 3_600_000;
+  const placed: OpenPurchase = {
+    id: 'seed-link-purchase-ruled',
+    date: today - 4 * DAY_MS,
+    source: 'link',
+    status: 'posted',
+    wasPending: false,
+    needsHome: false,
+    accountId: null,
+    expenseId: null,
+    emailEventId: null,
+    emailWaiting: null,
+    createdAt: placedAt,
+    updatedAt: placedAt,
+    amountCents: 4_725,
+    merchant: 'Safeway',
+    category: 'FOOD_AND_DRINK_GROCERIES',
+    ruleId: 'seed-rule-safeway',
+    label: null,
+    note: null,
+    lines: [
+      { envelopeId: 'seed-envelope-groceries', cents: 4_725, via: 'chosen' },
+    ],
+    refundOfId: null,
+    paidByCardId: SEED_VENTURE_CARD,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    incomeDayId: null,
+    assignedBy: 'auto',
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    tickedDayKey: null,
+  };
+  const entries: {
+    id: string;
+    kind: DoneForYouKind;
+    createdAt: number;
+    undoneAt: number | null;
+    sealed: DoneForYouSealed;
+  }[] = [
+    {
+      id: 'seed-done-rule',
+      kind: 'rule',
+      createdAt: minutes(12),
+      undoneAt: null,
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.ruleSent('Safeway', 'Groceries'),
+        detail: null,
+        why: 'Your rule, Safeway goes to Groceries',
+        undo: { kind: 'rule', placed },
+        subject: toSubject({
+          purchaseId: placed.id,
+          merchant: 'Safeway',
+          amountCents: 4_725,
+          ruleId: 'seed-rule-safeway',
+          itemId: 'seed-envelope-groceries',
+          toName: 'Groceries',
+          toEmoji: '🛒',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-rule-undone',
+      kind: 'rule',
+      createdAt: minutes(40),
+      undoneAt: minutes(5),
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.ruleSent('Sprouts', 'Everyday spending'),
+        detail: null,
+        why: 'Your rule, everything on the Discover goes to Everyday spending',
+        undo: null,
+        subject: toSubject({
+          purchaseId: 'seed-link-purchase-sprouts-1',
+          merchant: 'Sprouts',
+          amountCents: 3_180,
+          ruleId: 'seed-rule-discover',
+          toName: 'Everyday spending',
+          toEmoji: '💰',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-merge',
+      kind: 'merge',
+      createdAt: minutes(150),
+      undoneAt: null,
+      sealed: {
+        title: NEEDS_HOME_WORDS.matchedOne('Target'),
+        detail: NEEDS_HOME_WORDS.matchedOneSub,
+        why: null,
+        undo: null,
+        subject: toSubject({
+          purchaseId: 'seed-purchase-target',
+          merchant: 'Target',
+          merchantLogo:
+            'https://plaid-merchant-logos.plaid.com/target_1100.png',
+          amountCents: 4_500,
+          itemId: 'seed-envelope-everyday',
+          toName: 'Everyday spending',
+          toEmoji: '💰',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-automark',
+      kind: 'autoMark',
+      createdAt: now - 20 * 3_600_000,
+      undoneAt: null,
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.autoMarked('Cloud storage'),
+        detail: null,
+        why: 'It is on autopay.',
+        undo: null,
+        subject: toSubject({
+          billId: 'seed-bill-jamie-cloud',
+          toName: 'Cloud storage',
+          toEmoji: '☁️',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-pair',
+      kind: 'pair',
+      createdAt: now - 26 * 3_600_000,
+      undoneAt: null,
+      sealed: {
+        title: 'Moved $250.00 from Checking A to Checking B',
+        detail: DONE_FOR_YOU_WORDS.moved,
+        why: null,
+        undo: null,
+        subject: toSubject({
+          amountCents: 25_000,
+          fromName: 'Checking A',
+          toName: 'Checking B',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-ended',
+      kind: 'ended',
+      createdAt: now - 50 * 3_600_000,
+      undoneAt: null,
+      sealed: {
+        title: DONE_FOR_YOU_WORDS.ended('Concert tickets'),
+        detail: null,
+        why: DONE_FOR_YOU_WORDS.endedWhy,
+        undo: null,
+        subject: toSubject({
+          itemId: 'seed-goal-concert',
+          toName: 'Concert tickets',
+          toEmoji: '🎟️',
+        }),
+      },
+    },
+    {
+      id: 'seed-done-history',
+      kind: 'history',
+      createdAt: now - 4 * DAY_MS,
+      undoneAt: null,
+      sealed: {
+        title: NEEDS_HOME_WORDS.historyMany(3),
+        detail: NEEDS_HOME_WORDS.historySub,
+        why: null,
+        undo: null,
+        subject: null,
+      },
+    },
+  ];
+  const batch = context.firestore.batch();
+  await Promise.all(
+    entries.map(async ({ sealed, ...entry }) => {
+      batch.set(context.firestore.doc(`${plan}/doneForYou/${entry.id}`), {
+        ...entry,
+        sealed: await sealJson(sealed, encryption),
+      } satisfies DoneForYouDoc);
+    }),
+  );
+  await batch.commit();
+  return entries.length;
 }
 
 /**
@@ -5097,6 +5460,7 @@ async function seedRules(
       date,
       source: 'link',
       status: 'posted',
+      wasPending: false,
       needsHome: false,
       accountId: null,
       expenseId: null,
@@ -5147,6 +5511,7 @@ async function seedRules(
         date: at,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: false,
         accountId: null,
         expenseId: null,
@@ -5261,6 +5626,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
       } satisfies PurchaseDoc);
     }),
   );

@@ -14,6 +14,7 @@ import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import { FACT_STATEMENT_MAX, HELM_COPY, TOPIC_MAX } from '@apps/helm/constants';
 import { addFact } from '@apps/helm/store/actions/memoryActions';
 import type { FactKind } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type SelfKind = Exclude<FactKind, 'world'>;
 
@@ -80,6 +81,7 @@ function SelfFactAddForm({
       if (result.kind === 'done') {
         onClose();
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.seesYouAddedToast,
           type: 'success',
           action: {

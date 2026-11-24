@@ -9,6 +9,8 @@ import {
 import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
+import { learnInstitutionLogo } from '../institutionLogos.js';
+import { learnMerchants } from '../merchantNames.js';
 import {
   openWithKey,
   sealWithKey,
@@ -85,6 +87,7 @@ function toState(
       dedupeKey: data.dedupeKey,
       date: data.date as number,
       status: data.status === 'pending' ? 'pending' : 'posted',
+      wasPending: typeof data.wasPending === 'boolean' ? data.wasPending : null,
       needsHome: data.needsHome === true,
       accountId: (data.accountId as string | null) ?? null,
       expenseId: (data.expenseId as string | null) ?? null,
@@ -180,6 +183,7 @@ function toWrites(
               date: state.date,
               source: 'link',
               status: state.status,
+              wasPending: state.wasPending,
               needsHome: state.needsHome,
               accountId: state.accountId,
               expenseId: state.expenseId,
@@ -198,6 +202,7 @@ function toWrites(
             data: {
               date: state.date,
               status: state.status,
+              wasPending: state.wasPending,
               updatedAt: now,
               sealed,
             },
@@ -368,6 +373,7 @@ async function syncPurchases(
       existing,
     );
     const now = Date.now();
+    await learnMerchants(firestore, changed, now);
     await markClosedMonths(firestore, uid, outcome.touchedDates, now);
     await commitWrites(firestore, [
       ...toWrites(
@@ -697,8 +703,17 @@ async function writeUnlessRevoked(
   });
 }
 
-/** Seals the bank's logo into a link made before logos were kept; the next sync retries a miss. */
-async function keepLogo(
+const BANK_RECHECK_MS = 7 * 86_400_000;
+
+/** Whether the bank's details are worth asking for: a link sealed before its logo or website was kept, or a bank with no logo not asked this week, since the provider may have one by now. */
+export const needsBankDetails = (link: Partial<LinkSealed>, now: number) =>
+  link.institutionLogo === undefined ||
+  link.institutionDomain === undefined ||
+  (link.institutionLogo === null &&
+    now - (link.institutionCheckedAt ?? 0) >= BANK_RECHECK_MS);
+
+/** Seals the bank's logo and website into the link: the provider's logo replaces a missing one, a logo already kept stays when the provider no longer sends it, and a miss is retried by the next sync. */
+async function keepBankDetails(
   firestore: Firestore,
   linkRef: DocumentReference,
   grant: ProviderGrant,
@@ -706,23 +721,56 @@ async function keepLogo(
 ) {
   const institution = await provider.getInstitution(grant);
   if (!institution) return;
-  await firestore.runTransaction(async (transaction) => {
+  const isKept = await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(linkRef);
-    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return;
+    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return false;
     const link = openWithKey(
       planKey.key,
       snapshot.data()?.sealed as SealedPayload,
     ) as unknown as Partial<LinkSealed>;
-    if (link.institutionLogo !== undefined) return;
+    const now = Date.now();
+    if (!needsBankDetails(link, now)) return false;
     const nextLink: LinkSealed = {
       institutionName: link.institutionName ?? '',
-      institutionLogo: institution.logo,
+      institutionLogo: institution.logo ?? link.institutionLogo ?? null,
+      institutionDomain: institution.domain ?? link.institutionDomain ?? null,
+      institutionCheckedAt: now,
       providerAccounts: link.providerAccounts ?? [],
     };
     transaction.update(linkRef, {
       sealed: sealWithKey(planKey, { ...nextLink }, SEALED_SCHEMA_VERSION),
     });
+    return true;
   });
+  if (!isKept) return;
+  const isShared = await learnInstitutionLogo(
+    firestore,
+    [institution.name],
+    institution.logo,
+    Date.now(),
+  );
+  if (isShared) await markLogoShared(firestore, linkRef);
+}
+
+const markLogoShared = (firestore: Firestore, linkRef: DocumentReference) =>
+  writeUnlessRevoked(firestore, linkRef, (transaction) =>
+    transaction.update(linkRef, { logoShared: true }),
+  );
+
+/** Teaches the shared bank list from a link that kept its logo before the list existed, once, under the name the provider gives the bank and never the one the device sent. */
+async function shareLogo(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  grant: ProviderGrant,
+) {
+  const institution = await provider.getInstitution(grant);
+  const isShared = await learnInstitutionLogo(
+    firestore,
+    [institution?.name],
+    institution?.logo,
+    Date.now(),
+  );
+  if (isShared) await markLogoShared(firestore, linkRef);
 }
 
 const DETAILS_HISTORY_DAYS = 90;
@@ -844,9 +892,13 @@ export async function syncRunwayLink(
       linkSnapshot.data()?.sealed as SealedPayload,
     ) as unknown as LinkSealed;
     // Before the bank is asked for anything, so a bank that is down or needs a new sign-in still gets its logo.
-    if (link.institutionLogo === undefined) {
-      await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
+    if (needsBankDetails(link, Date.now())) {
+      await keepBankDetails(firestore, linkRef, grant, planKey).catch(() => {
         logger.warn('runway.sync.logoFailed', { linkId });
+      });
+    } else if (linkSnapshot.data()?.logoShared !== true) {
+      await shareLogo(firestore, linkRef, grant).catch(() => {
+        logger.warn('runway.sync.logoShareFailed', { linkId });
       });
     }
     const targets = targetsByProviderAccount(link.providerAccounts);

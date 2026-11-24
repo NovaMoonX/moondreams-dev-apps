@@ -62,6 +62,7 @@ export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.j
 export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';
 export { attachRunwayAccounts } from './apps/runway/attachRunwayAccounts.js';
 export { discardRunwayLink } from './apps/runway/discardRunwayLink.js';
+export { combineRunwayLinks } from './apps/runway/combineRunwayLinks.js';
 export { unlinkRunwayAccount } from './apps/runway/unlinkRunwayAccount.js';
 export { reconnectRunwayLink } from './apps/runway/reconnectRunwayLink.js';
 export { syncRunwayLinks } from './apps/runway/syncRunwayLinks.js';
@@ -96,6 +97,7 @@ export { settlePipelineAsk } from './pipeline/answerPipelineQuestions.js';
 export { recordPipelineEvent } from './pipeline/recordPipelineEvent.js';
 export { claimDeviceToken } from './notifications/claimDeviceToken.js';
 export { sendScheduledReminders } from './notifications/sendScheduledReminders.js';
+export { fillRunwayEmailPurchases } from './apps/runway/email/fillEmailPurchases.js';
 export { sendRunwayNeedsHomeDigest } from './apps/runway/sendRunwayNeedsHomeDigest.js';
 export { sendDueBundledPushes } from './notifications/sendDueBundledPushes.js';
 export { completeMcpSignIn } from './mcp/callables.js';

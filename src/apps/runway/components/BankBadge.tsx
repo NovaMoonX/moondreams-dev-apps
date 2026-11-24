@@ -1,4 +1,5 @@
 import { useAppSelector } from '@/store';
+import BankLogo from '@apps/runway/components/BankLogo';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 
 interface BankBadgeProps {
@@ -8,20 +9,19 @@ interface BankBadgeProps {
 
 /** A linked account or card's badge: its bank's logo, or the bank's first letter when there is none. */
 function BankBadge({ name, linkId }: BankBadgeProps) {
-  const logo = useAppSelector((state) =>
+  const link = useAppSelector((state) =>
     linkId === null
       ? null
-      : (state.runway.links.find((link) => link.id === linkId)
-          ?.institutionLogo ?? null),
+      : (state.runway.links.find((entry) => entry.id === linkId) ?? null),
   );
-  if (logo === null) return <ItemBadge name={name} emoji={null} />;
+  const letter = <ItemBadge name={name} emoji={null} />;
+  if (link === null) return letter;
   return (
     // Bank logos are drawn for a white ground, so the tile stays white in dark mode as a bank app's would.
-    <img
-      src={logo}
-      alt=''
-      aria-hidden='true'
+    <BankLogo
+      link={link}
       className='border-border size-10 shrink-0 rounded-xl border bg-white object-contain p-1'
+      fallback={letter}
     />
   );
 }

@@ -19,6 +19,7 @@ import {
   removeMilestone,
   type MilestoneResult,
 } from '@apps/helm/store/actions/projectActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 export interface MilestoneDraft {
   id: string;
@@ -79,6 +80,7 @@ function MilestoneForm({
     toastTitle: string,
   ) =>
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: toastTitle,
       type: 'success',
       action: {
