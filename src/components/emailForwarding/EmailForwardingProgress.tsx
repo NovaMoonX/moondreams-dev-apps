@@ -8,7 +8,6 @@ import type { EmailConfirm } from '@/lib/emailForwarding/types';
 
 interface EmailForwardingProgressProps {
   appName: string;
-  /** The confirmation the caller would show now, or null. */
   confirm: EmailConfirm | null;
   isTapped: boolean;
   onConfirmTapped: () => void;
