@@ -27,11 +27,7 @@ interface PairOfferProps {
 }
 
 /** The purchases a waiting one may be the other side of as a move between the person's own accounts: tapping one pairs them, and neither counts as spending or income. While any are offered it is the only question; the usual one waits behind a quiet row. */
-function PairOffer({
-  purchase,
-  onDone,
-  children,
-}: PairOfferProps) {
+function PairOffer({ purchase, onDone, children }: PairOfferProps) {
   const { user } = useAuth();
   const waitingList = useAppSelector((state) => state.runway.needsHome);
   const lost = useAppSelector(selectLostPairs);
@@ -57,9 +53,7 @@ function PairOffer({
   const self = waiting.find((entry) => entry.id === purchase.id);
   const cardNameOf = getCardNamer(cards);
   const isOut = purchase.amountCents > 0;
-  const selfSideName = self
-    ? getPairSideName(self, accounts, cardNameOf)
-    : '';
+  const selfSideName = self ? getPairSideName(self, accounts, cardNameOf) : '';
   const offered = (
     findAccountPairs(waiting, true, routes).offers.get(purchase.id) ?? []
   )

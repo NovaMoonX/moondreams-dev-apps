@@ -9,10 +9,7 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
-import {
-  GROUP_WORDS,
-  PLAN_SELECT_WORDS,
-} from '@apps/runway/constants';
+import { GROUP_WORDS, PLAN_SELECT_WORDS } from '@apps/runway/constants';
 import type { GroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import {
   selectPurposeEmojis,

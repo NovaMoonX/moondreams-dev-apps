@@ -65,7 +65,7 @@ export function DisclosureLine({
     <Button
       variant='base'
       size='stripped'
-      className='text-muted-foreground relative inline-flex items-center gap-1 text-sm font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
+      className='text-muted-foreground focus-visible:outline-primary relative inline-flex items-center gap-1 rounded-sm text-sm font-medium after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[""] focus-visible:outline-2 focus-visible:outline-offset-2'
       aria-expanded={isOpen}
       onClick={onClick}
     >

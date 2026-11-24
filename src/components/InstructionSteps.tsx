@@ -39,6 +39,7 @@ function InstructionSteps({
       )}
       <div
         key={index}
+        aria-live='polite'
         className='space-y-3 motion-safe:animate-[snackbar-in_200ms_ease-out]'
       >
         {items.length > 1 && (

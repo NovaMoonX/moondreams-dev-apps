@@ -86,46 +86,46 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   return (
     <div className='space-y-2'>
       <p className='text-sm font-medium'>{DEPOSIT_WORDS.whichTitle}</p>
-        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {offered.map(({ day, named }) => {
-            const { lowCents, highCents } = day.amount;
-            const difference = received - lowCents;
-            const fit = isHidden
-              ? null
-              : lowCents !== highCents
-                ? received >= lowCents && received <= highCents
-                  ? DEPOSIT_WORDS.inRange
-                  : null
-                : difference === 0
-                  ? DEPOSIT_WORDS.dayRow(null)
-                  : difference > 0
-                    ? DEPOSIT_WORDS.moreThan(formatCents(difference))
-                    : DEPOSIT_WORDS.lessThan(formatCents(-difference));
-            const name = named.sourceName ?? named.payLineName;
-            const detail = [
-              named.sourceName ? named.payLineName : null,
-              formatDateOrdinalUTC(day.arrivedOn ?? day.expectedOn),
-              fit,
-            ]
-              .filter(Boolean)
-              .join(' · ');
-            return (
-              <ItemRow
-                key={day.dayKey}
-                name={name}
-                detail={detail}
-                figure={
-                  lowCents === highCents
-                    ? formatCents(lowCents)
-                    : `${formatCentsShort(lowCents)}–${formatCentsShort(highCents)}`
-                }
-                ariaLabel={`${name}, ${detail}`}
-                isAction
-                onOpen={() => void pick(day.dayKey, day.expectedOn)}
-              />
-            );
-          })}
-        </ul>
+      <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+        {offered.map(({ day, named }) => {
+          const { lowCents, highCents } = day.amount;
+          const difference = received - lowCents;
+          const fit = isHidden
+            ? null
+            : lowCents !== highCents
+              ? received >= lowCents && received <= highCents
+                ? DEPOSIT_WORDS.inRange
+                : null
+              : difference === 0
+                ? DEPOSIT_WORDS.dayRow(null)
+                : difference > 0
+                  ? DEPOSIT_WORDS.moreThan(formatCents(difference))
+                  : DEPOSIT_WORDS.lessThan(formatCents(-difference));
+          const name = named.sourceName ?? named.payLineName;
+          const detail = [
+            named.sourceName ? named.payLineName : null,
+            formatDateOrdinalUTC(day.arrivedOn ?? day.expectedOn),
+            fit,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <ItemRow
+              key={day.dayKey}
+              name={name}
+              detail={detail}
+              figure={
+                lowCents === highCents
+                  ? formatCents(lowCents)
+                  : `${formatCentsShort(lowCents)}–${formatCentsShort(highCents)}`
+              }
+              ariaLabel={`${name}, ${detail}`}
+              isAction
+              onOpen={() => void pick(day.dayKey, day.expectedOn)}
+            />
+          );
+        })}
+      </ul>
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}

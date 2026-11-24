@@ -254,7 +254,7 @@ function ConfirmStep({
       ) : (
         <div
           className={join(
-            'space-y-3',
+            'space-y-5',
             isLanding && 'motion-safe:animate-[snackbar-in_200ms_ease-out]',
           )}
         >
@@ -279,7 +279,7 @@ function ConfirmStep({
               <Button
                 variant='link'
                 size='stripped'
-                className='text-primary! relative inline gap-1 text-sm after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
+                className='text-primary! focus-visible:outline-primary relative inline gap-1 rounded-sm text-sm after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[""] focus-visible:outline-2 focus-visible:outline-offset-2'
                 onClick={() => openConfirm(url)}
               >
                 {WORDS.confirmOpenAgain}
@@ -538,15 +538,8 @@ function EmailSetupWalkthrough({
       return {
         title: WORDS.gmailForwardingTitle,
         instructions: [
-          {
-            text: WORDS.gmailForwardingOpen,
-            control: (
-              <ExternalLinkText
-                href={GMAIL_URL}
-                label={WORDS.gmailForwardingLink}
-              />
-            ),
-          },
+          { text: WORDS.gmailForwardingLink, href: GMAIL_URL },
+          { text: WORDS.gmailForwardingOpen },
           {
             text: WORDS.gmailForwardingFill,
             control: (
@@ -557,11 +550,12 @@ function EmailSetupWalkthrough({
           {
             text: WORDS.gmailForwardingAdd,
             control: (
-              <>
-                <RuleAddresses addresses={runwayAddresses} isShownForOne />
-                <Muted>{WORDS.gmailForwardingNote}</Muted>
-              </>
+              <RuleAddresses addresses={runwayAddresses} isShownForOne />
             ),
+          },
+          {
+            text: WORDS.gmailForwardingProceed,
+            control: <Muted>{WORDS.gmailForwardingNote}</Muted>,
           },
         ],
       };
@@ -641,16 +635,12 @@ function EmailSetupWalkthrough({
           title: WORDS.protonRuleTitle,
           instructions: [
             {
+              text: WORDS.protonRuleLink,
+              href: PROTON_MAIL_URL,
+              control: <Muted>{WORDS.protonRuleNote}</Muted>,
+            },
+            {
               text: WORDS.protonRuleGo,
-              control: (
-                <>
-                  <ExternalLinkText
-                    href={PROTON_MAIL_URL}
-                    label={WORDS.protonRuleLink}
-                  />
-                  <Muted>{WORDS.protonRuleNote}</Muted>
-                </>
-              ),
             },
             { text: WORDS.protonRulePaste },
             {
@@ -685,15 +675,8 @@ function EmailSetupWalkthrough({
         return {
           title: WORDS.icloudRuleTitle,
           instructions: [
-            {
-              text: WORDS.icloudRuleOpen,
-              control: (
-                <ExternalLinkText
-                  href={ICLOUD_MAIL_URL}
-                  label={WORDS.icloudRuleLink}
-                />
-              ),
-            },
+            { text: WORDS.icloudRuleLink, href: ICLOUD_MAIL_URL },
+            { text: WORDS.icloudRuleOpen },
             {
               text: WORDS.icloudRuleConditions,
               control: (
@@ -766,7 +749,7 @@ function EmailSetupWalkthrough({
         title: WORDS.filterTitle,
         instructions: [{ text: WORDS.filterPick }],
         after: (
-          <div className='flex flex-col items-start gap-5'>
+          <div className='flex flex-col items-start gap-6'>
             <FilterClosedHelp fields={getFilterFields('gmail', addresses)} />
             {canImport && (
               <DisclosureLine

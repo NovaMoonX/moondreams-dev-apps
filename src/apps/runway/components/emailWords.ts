@@ -165,16 +165,17 @@ export const EMAIL_SETUP_WORDS = {
   copyLabel: 'Copy address',
   gmailForwardingTitle: 'Add your address to Gmail',
   gmailForwardingOpen:
-    'In the Gmail where your bank’s alerts arrive, click the search options icon (the sliders) in the search bar',
-  gmailForwardingLink: 'Open Gmail',
+    'Click the search options icon (the sliders) in Gmail’s search bar',
+  gmailForwardingLink: 'Open the Gmail your bank’s alerts go to',
   gmailForwardingFill:
     'Fill in these two boxes, so only your bank’s alerts match',
   gmailForwardingCreate:
-    'Click Create filter, tick Forward it to, then click add forwarding address',
+    'Click “Create filter”, tick “Forward it to”, then click “add forwarding address”',
   gmailForwardingAdd:
-    'On the forwarding settings page that opens, click Add a forwarding address and paste this. Gmail sends a verification to it, and the next step catches it',
-  gmailForwardingNote:
-    'Leave forwarding on Disable forwarding. Only this filter forwards.',
+    'On the page that opens, click “Add a forwarding address” and paste this',
+  gmailForwardingProceed:
+    'Click “Next”, “Proceed”, then “OK”. Gmail sends a verification, and the next step catches it',
+  gmailForwardingNote: 'Leave forwarding on “Disable forwarding”. Only the filter forwards.',
   settingsLinkGmail: 'Open Gmail’s forwarding settings',
   yahooForwardingTitle: 'Turn on forwarding',
   yahooForwardingGo:
@@ -189,14 +190,14 @@ export const EMAIL_SETUP_WORDS = {
   outlookRuleForward: 'Choose Forward to and paste your Runway address',
   outlookRuleLink: 'Open Outlook’s rules',
   icloudRuleTitle: 'Make a rule for your bank’s alerts',
-  icloudRuleOpen: 'In iCloud Mail, go to Settings → Rules',
+  icloudRuleOpen: 'Go to Settings → Rules',
   icloudRuleConditions:
     'Make a rule with these two conditions, so only your bank’s alerts match',
   icloudRuleForward: 'Choose Forward to and enter your Runway address',
   icloudRuleLink: 'Open iCloud Mail',
   protonRuleTitle: 'Make a forwarding rule for your bank’s alerts',
   protonRuleGo:
-    'In Proton Mail, go to Settings → All settings → Forward and auto-reply → Add forwarding rule',
+    'Go to Settings → All settings → Forward and auto-reply → Add forwarding rule',
   protonRulePaste: 'Paste your Runway address in Forward to',
   protonRuleCondition: (addresses: string[]) =>
     addresses.length > 1
@@ -304,9 +305,9 @@ export const EMAIL_SETUP_WORDS = {
   confirmOpenAgain: 'Open it again',
   nextAfterConfirm: (next: EmailSetupStepId | undefined) =>
     next === 'filter'
-      ? 'Next: finish the filter'
+      ? 'Next: the filter'
       : next === 'test'
-        ? 'Next: try one alert'
+        ? 'Next: one alert'
         : 'Next',
   confirmed: 'Confirmed',
   confirmFirst: (provider: EmailProvider) =>
@@ -334,15 +335,15 @@ export const EMAIL_SETUP_WORDS = {
   copyCode: 'Copy code',
   filterTitle: 'Finish the filter',
   filterPick:
-    'Back in your filter, pick your Runway address in Forward it to, then click Create filter',
+    'Back in your filter, pick your Runway address under “Forward it to”, then click “Create filter”',
   filterClosed: 'The filter box closed?',
   filterClosedLine:
     'Click the search options icon again and fill in the same boxes, then click Create filter and tick Forward it to.',
   filterImportInstead: 'Import it from a file instead',
   filterByHand: 'Make it by hand instead',
   filterImportTitle: 'Import the filter',
-  filterImportDownloadStep: 'Download the filter file',
-  filterDownload: 'Download a Gmail filter',
+  filterImportDownloadStep: 'Download the filter Gmail can import',
+  filterDownload: 'Download mailFilters.xml',
   filterDownloadFailed: 'The file didn’t download. Try again.',
   filterImportChoose:
     'Click Import filters, then Choose file and pick mailFilters.xml',
