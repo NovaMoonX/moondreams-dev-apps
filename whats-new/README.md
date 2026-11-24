@@ -28,6 +28,8 @@ Each app shows people what changed for them after an update. A PR that changes s
 
 A PR with nothing a person would notice puts a line in its body: `What's new: none (reason)`.
 
+The feed is public, so the text of a `debug` or gated note must be safe for anyone to read: gating only hides it from people's screens. A PR that removes an app or a feature switch edits any older note naming it, or `check:whats-new` fails.
+
 To correct a note, edit its file; to pull one back, delete it. The next deploy republishes the feed from the files. A note's version and date come from the merge that added its file, and notes older than 6 months drop out on their own.
 
 `npm run check:whats-new` validates the files; CI also requires a file (or the `none` line) on a PR that touches what people see.

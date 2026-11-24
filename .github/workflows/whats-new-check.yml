@@ -1,4 +1,4 @@
-name: What's new check
+name: What's new note
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -16,6 +16,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check the What's new logic
+        run: npm run check:whats-new-logic
       - name: Check the What's new notes
         run: npm run check:whats-new -- --pr "origin/$BASE_REF"
         env:

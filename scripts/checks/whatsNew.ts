@@ -32,7 +32,9 @@ if (baseRef) {
   const hasNote = changed.some((file) =>
     new RegExp(`^${WHATS_NEW_DIR}/[^/]+\\.json$`).test(file),
   );
-  const hasNone = /^What's new: none\b/im.test(process.env.PR_BODY ?? '');
+  const hasNone = /^[\s>*_-]*(?:\*\*)?What['’]s new: none\b/im.test(
+    process.env.PR_BODY ?? '',
+  );
   if (visible.length > 0 && !hasNote && !hasNone) {
     problems.push(
       [

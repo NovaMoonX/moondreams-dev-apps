@@ -81,6 +81,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
           SITE_VERSION: ${{ steps.version.outputs.version }}
       - name: Publish What's new
+        continue-on-error: true
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gcp-sa.json"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp-sa.json" npm run fb:whats-new

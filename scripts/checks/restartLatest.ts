@@ -10,7 +10,10 @@ import path from 'node:path';
 // Several deploys land in a row: the strip's one Restart tap must load the newest build, not the one the worker took over with. Three real builds (1.0.0 to 1.0.2) served the way Hosting serves them, the worker taking over as the trigger, in a page that reports itself installed (a tab is only told of a worker that waits, and this one never does); it needs Playwright's Chromium.
 interface Page {
   goto: (url: string) => Promise<unknown>;
-  click: (selector: string, options: { timeout: number }) => Promise<void>;
+  getByRole: (
+    role: string,
+    options: { name: string; exact: boolean },
+  ) => { click: (options: { timeout: number }) => Promise<void> };
   on: (
     event: 'console',
     handler: (message: { text: () => string }) => void,
@@ -171,17 +174,19 @@ const run = async () => {
   // Deploy 1.0.2 lands before the person taps.
   served = builds['1.0.2'];
   logged.length = 0;
-  await page.click('button:has-text("Restart")', { timeout: 5000 });
+  await page
+    .getByRole('button', { name: 'Restart', exact: true })
+    .click({ timeout: 5000 });
   const deadline = Date.now() + 40000;
-  while (!hasLogged('1.0.2') && !hasLogged('1.0.1') && Date.now() < deadline) {
+  while (!hasLogged('1.0.2') && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const stripShown = await page.evaluate(() =>
-    document.body.innerText.includes('New version ready'),
-  );
   await context.close();
-  return { logged, stripShown, hasLogged102: hasLogged('1.0.2') };
+  return {
+    logged,
+    hasLogged102: hasLogged('1.0.2'),
+    stuckOn101: hasLogged('1.0.1'),
+  };
 };
 
 const result = await run().finally(async () => {
@@ -193,7 +198,7 @@ console.log(
 );
 assert.ok(
   result.hasLogged102,
-  `One Restart tap did not load the newest build; the page logged: ${result.logged.join(' | ')}`,
+  `One Restart tap did not load the newest build${result.stuckOn101 ? ' (it stopped on 1.0.1)' : ''}; the page logged: ${result.logged.join(' | ')}`,
 );
 console.log(
   'restart-latest: one tap on Restart loads the newest build after several deploys',

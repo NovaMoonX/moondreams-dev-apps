@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+
 import { applicationDefault, initializeApp } from 'firebase-admin/app';
 import { getDatabase } from 'firebase-admin/database';
 
@@ -12,25 +14,48 @@ import { readFileRelease, readWhatsNewFiles } from './lib/whatsNewFiles.ts';
 const PROJECT_ID = 'moondreams-dev-apps';
 const isDryRun = process.argv.includes('--dry-run');
 
-const { files, errors } = readWhatsNewFiles();
-if (errors.length > 0) {
-  console.error(errors.map((error) => `- ${error}`).join('\n'));
-  throw new Error("Fix the What's new files above (npm run check:whats-new).");
+const fail = (message: string): never => {
+  console.error(`::error::${message}`);
+  process.exit(1);
+};
+const git = (...args: string[]) =>
+  execFileSync('git', args, { encoding: 'utf8' }).trim();
+
+if (git('rev-parse', '--is-shallow-repository') === 'true') {
+  fail(
+    "The checkout is shallow, so release tags can't be read; the feed was left as it is (fetch-depth: 0).",
+  );
 }
+if (git('tag', '--list', 'v[0-9]*.[0-9]*.[0-9]*') === '') {
+  fail('No release tag exists, so the feed was left as it is.');
+}
+
+const { files, errors } = readWhatsNewFiles();
+errors.forEach((error) => console.log(`::warning::${error}`));
 
 const now = Date.now();
 const oldest = now - WHATS_NEW_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-const notes = files
-  .flatMap(({ slug, notes: drafts }) => {
-    const release = readFileRelease(slug);
-    return release && release.publishedAt >= oldest
+const released = files.flatMap((file) => {
+  const release = readFileRelease(file.slug);
+  if (!release)
+    console.log(`Skipped ${file.slug}: no release contains it yet.`);
+  return release ? [{ ...file, release }] : [];
+});
+if (files.length > 0 && released.length === 0) {
+  fail(
+    'Files exist in whats-new/ but none has a release, so the feed was left as it is.',
+  );
+}
+const notes = released
+  .flatMap(({ slug, notes: drafts, release }) =>
+    release.publishedAt >= oldest
       ? drafts.map((draft, index): WhatsNewNote => ({
           ...draft,
           id: `${slug}-${index}`,
           ...release,
         }))
-      : [];
-  })
+      : [],
+  )
   .reduce<WhatsNewFeed['notes']>(
     (byId, note) => ({ ...byId, [note.id]: note }),
     {},
