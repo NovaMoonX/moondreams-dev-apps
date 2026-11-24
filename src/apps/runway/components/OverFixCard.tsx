@@ -5,7 +5,10 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
-import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
+import {
+  NOTICE_ACTION_CLASSES,
+  NOTICE_LOCKED_CLASSES,
+} from '@/components/noticeActionClasses';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
@@ -139,7 +142,7 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
             label={OVER_FIX_WORDS.action}
             title={OVER_FIX_WORDS.lockedTitle}
             size='sm'
-            className='border-warning/70! text-warning-foreground! dark:text-warning! bg-transparent!'
+            className={NOTICE_LOCKED_CLASSES.warning}
           >
             <p>{mask(lockedText)}</p>
           </LockedButton>
