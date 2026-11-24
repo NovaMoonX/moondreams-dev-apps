@@ -135,9 +135,7 @@ export function moveShortToFree(
     return cents > 0 ? [{ ...line, cents }] : [];
   });
   if (moved <= 0) return kept;
-  const freeIndex = kept.findIndex(
-    (line) => line.envelopeId === null && line.via === 'chosen',
-  );
+  const freeIndex = kept.findIndex((line) => line.envelopeId === null);
   return freeIndex === -1
     ? [...kept, { envelopeId: null, cents: moved, via: 'chosen' }]
     : kept.map((line, index) =>

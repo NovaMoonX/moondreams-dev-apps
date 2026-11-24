@@ -11,6 +11,7 @@ import CoverShortfallSheet, {
 } from '@apps/runway/components/CoverShortfallSheet';
 import { COVER_WORDS } from '@apps/runway/constants';
 import { moveShortToFree } from '@apps/runway/engine/spill';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useShortfallMove } from '@apps/runway/hooks/useShortfallMove';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { assignPurchase } from '@apps/runway/store/actions/purchaseActions';
@@ -35,6 +36,7 @@ function RuleOverCover({ purchaseId, onClose }: RuleOverCoverProps) {
   const { addToast } = useToast();
   const looks = useAppSelector(selectItemLooks);
   const moveShortfall = useShortfallMove();
+  const mask = useMaskedText();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useAppSelector(selectLedgerOnlyBalances);
@@ -55,6 +57,7 @@ function RuleOverCover({ purchaseId, onClose }: RuleOverCoverProps) {
     if (current === null || current.updatedAt !== purchase.updatedAt) {
       throw new Error(COVER_WORDS.changedSince);
     }
+    assertStillOver();
     const lines = moveShortToFree(
       current.lines,
       over.envelopeId,
@@ -71,7 +74,7 @@ function RuleOverCover({ purchaseId, onClose }: RuleOverCoverProps) {
       { ruleId: current.ruleId, assignedBy: 'person' },
     );
     addToast({
-      title: COVER_WORDS.usedRest(short),
+      title: mask(COVER_WORDS.usedRest(short)),
       type: 'success',
       duration: UNDO_WINDOW_MS,
       action: {
@@ -98,14 +101,22 @@ function RuleOverCover({ purchaseId, onClose }: RuleOverCoverProps) {
     });
   };
 
+  const assertStillOver = () => {
+    const now = getPlacedOver(store.getState(), purchase.lines);
+    if (now?.shortCents !== over.shortCents) {
+      throw new Error(COVER_WORDS.changedSince);
+    }
+  };
+
   const moveIn = async () => {
+    assertStillOver();
     const takeBack = await moveShortfall(
       over.envelopeId,
       over.shortCents,
       name,
     );
     addToast({
-      title: COVER_WORDS.movedIn(short, name),
+      title: mask(COVER_WORDS.movedIn(short, name)),
       type: 'success',
       duration: UNDO_WINDOW_MS,
       action: { label: 'Undo', onClick: () => void takeBack() },

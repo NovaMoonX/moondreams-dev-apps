@@ -5051,6 +5051,7 @@ export const COVER_WORDS = {
   goOver: (name: string, short: string) => `Let ${name} go ${short} over`,
   goOverSub: 'It shows as over until you top it up',
   moveFailed: 'The money wasn’t moved, so nothing was sent.',
+  moveStays: 'The money you moved in stays there.',
   movedAndSent: (short: string, name: string) =>
     `Moved ${short} into ${name} and sent it there`,
   bodyPlaced: (name: string, short: string) =>
@@ -5522,6 +5523,22 @@ export const CATEGORY_PRIMARIES = [
 
 export const RULE_WORDS = {
   title: 'Rules',
+  add: 'Add a rule',
+  pickTitle: 'Add a rule',
+  pickCard: 'Everything on a card',
+  pickCardSub: 'Send all of a card’s purchases to one envelope',
+  pickKind: 'A kind of purchase',
+  pickKindSub: 'Like groceries or gas, wherever you buy it',
+  stores: 'Stores you’ve bought from',
+  searchStores: 'Search stores',
+  noStores: 'No stores to suggest yet. They show up as your bank and email bring in purchases.',
+  noStoreMatch: 'No store matches that.',
+  allStoresHaveRules: 'Every store you’ve bought from lately already has a rule.',
+  storeTimes: (count: number) => (count === 1 ? 'Once' : `${count} times`),
+  cardTitle: 'Which card?',
+  kindTitle: 'Which kind of purchase?',
+  noCards: 'No cards to pick from yet.',
+  noKinds: 'No kinds of purchase to pick from yet.',
   doorLabel: 'Rules',
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
   loading: 'Getting your rules.',

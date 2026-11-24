@@ -1101,21 +1101,28 @@ function PurchaseFormBody({
     }
     setError(null);
     setIsSaving(true);
-    const isMoved = await moveShortfall(id, shortCents, nameOf(id)).then(
-      () => true,
+    const takeBack = await moveShortfall(id, shortCents, nameOf(id)).catch(
       (moveError: unknown) => {
         setError(getErrorMessage(moveError, COVER_WORDS.moveFailed));
         setIsSaving(false);
-        return false;
+        return null;
       },
     );
-    if (!isMoved) return;
-    return handleSave([{ envelopeId: id, cents: amount, via: 'chosen' }], true);
+    if (takeBack === null) return;
+    return handleSave(
+      [{ envelopeId: id, cents: amount, via: 'chosen' }],
+      true,
+      {
+        takeBack,
+        text: COVER_WORDS.movedIn(formatCents(shortCents), nameOf(id)),
+      },
+    );
   };
 
   const handleSave = async (
     coverLines: PurchaseLine[] | null = null,
     isCovered = false,
+    moved: { takeBack: () => Promise<unknown>; text: string } | null = null,
   ) => {
     if (!user || blocker !== null || lines === null || amount === null) return;
     if (date === null) return;
@@ -1126,6 +1133,18 @@ function PurchaseFormBody({
     }
     setIsCoverAsked(false);
     const savedLines = coverLines ?? lines;
+    const announceMove = () => {
+      if (!moved) return;
+      addToast({
+        title: mask(moved.text),
+        type: 'success',
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: MOVE_WORDS.undo,
+          onClick: () => void moved.takeBack(),
+        },
+      });
+    };
     setError(null);
     setIsSaving(true);
     try {
@@ -1237,6 +1256,7 @@ function PurchaseFormBody({
           editing.id,
           !isUnchanged ? (isRefund ? 'Refund saved' : 'Purchase saved') : null,
         );
+        announceMove();
         onClose();
         return;
       }
@@ -1286,8 +1306,10 @@ function PurchaseFormBody({
             ? 'Refund added'
             : 'Purchase added',
       );
+      announceMove();
       onClose();
     } catch (saveError) {
+      if (moved) void moved.takeBack();
       if (isMounted.current) {
         setError(
           isOfflineFailure(saveError)

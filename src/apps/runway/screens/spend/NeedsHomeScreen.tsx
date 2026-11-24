@@ -234,6 +234,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           : NEEDS_HOME_WORDS.bulkUndoPartly(count, written.length),
       type: count === written.length ? 'success' : 'warning',
     });
+    return count === written.length;
   };
 
   const runBulk = async (
@@ -255,6 +256,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       );
     setIsWriting(false);
     if (outcome.written.length === 0) {
+      if (afterUndo) void afterUndo();
       addToast({
         title: NEEDS_HOME_WORDS.failed,
         description: getErrorMessage(outcome.error, ''),
@@ -273,7 +275,12 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () =>
           void putBack(uid, written)
-            .then(() => afterUndo?.())
+            .then((isAllBack) => {
+              if (!afterUndo) return null;
+              if (isAllBack) return afterUndo();
+              addToast({ title: COVER_WORDS.moveStays, type: 'info' });
+              return null;
+            })
             .catch((undoError: unknown) =>
               addToast({
                 title: NEEDS_HOME_WORDS.undoFailed,
@@ -391,9 +398,10 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
 
   const cover = async (choice: CoverChoice) => {
     if (!asking || isWriting) return;
-    const { envelopeId, shortCents } = asking;
+    const { envelopeId } = asking;
     const plan = planBulk(envelopeId, choice);
-    if (choice !== 'moveIn') {
+    const { shortCents } = planBulk(envelopeId, null);
+    if (choice !== 'moveIn' || shortCents === 0) {
       setAsking(null);
       void runBulk(plan.entries, placedTitle(envelopeId));
       return;

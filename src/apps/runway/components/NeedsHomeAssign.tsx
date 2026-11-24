@@ -18,6 +18,7 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { splitAtShortfall } from '@apps/runway/engine/spill';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useShortfallMove } from '@apps/runway/hooks/useShortfallMove';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { toMerchantKey } from '@apps/runway/engine/rules';
@@ -68,6 +69,7 @@ function NeedsHomeAssign({
 }: NeedsHomeAssignProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const mask = useMaskedText();
   const today = todayAsUtcDate();
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const history = useAppSelector((state) => state.runway.purchases);
@@ -108,12 +110,14 @@ function NeedsHomeAssign({
         purchase,
         nameOf,
       );
+      return true;
     } catch (undoError) {
       addToast({
         title: NEEDS_HOME_WORDS.undoFailed,
         description: getErrorMessage(undoError, ''),
         type: 'error',
       });
+      return false;
     }
   };
 
@@ -138,8 +142,9 @@ function NeedsHomeAssign({
 
   const cover = async (choice: CoverChoice) => {
     if (!asking || busyId !== null) return;
-    const { envelopeId, effect } = asking;
-    if (choice === 'goOver') {
+    const { envelopeId } = asking;
+    const effect = effectOf(envelopeId);
+    if (effect.shortCents === 0 || choice === 'goOver') {
       await commit(envelopeId, spilledFor(envelopeId), null);
       return;
     }
@@ -191,9 +196,11 @@ function NeedsHomeAssign({
       setAsking(null);
       addToast({
         title: moved
-          ? COVER_WORDS.movedAndSent(
-              formatCents(moved.cents),
-              nameOf(envelopeId),
+          ? mask(
+              COVER_WORDS.movedAndSent(
+                formatCents(moved.cents),
+                nameOf(envelopeId),
+              ),
             )
           : NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
         type: 'success',
@@ -201,7 +208,9 @@ function NeedsHomeAssign({
         action: {
           label: NEEDS_HOME_WORDS.undo,
           onClick: () =>
-            void putBack(user.uid, placed).then(() => moved?.takeBack()),
+            void putBack(user.uid, placed).then((isBack) =>
+              isBack && moved ? moved.takeBack() : null,
+            ),
         },
       });
       const merchantKey = toMerchantKey(purchase.merchant);
@@ -251,6 +260,7 @@ function NeedsHomeAssign({
           return;
         }
       }
+      if (moved) void moved.takeBack();
       setError(getErrorMessage(sendError, NEEDS_HOME_WORDS.failed));
       setBusyId(null);
     }
