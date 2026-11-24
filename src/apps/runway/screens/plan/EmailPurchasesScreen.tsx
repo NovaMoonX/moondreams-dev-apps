@@ -369,7 +369,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       onClose={onClose}
       onBack={isOverStatus ? backToStatus : undefined}
       headerAction={
-        <div className='flex items-center gap-1'>
+        <div className='flex items-center gap-3'>
           {intake.address !== null && !isSetupShown && (
             <>
               <CopyTextButton
@@ -384,7 +384,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 label={EMAIL_WORDS.copyAddress}
                 variant='tertiary'
                 isIconOnly
-                className='sm:hidden'
+                className='max-[359px]:hidden sm:hidden'
               />
             </>
           )}
