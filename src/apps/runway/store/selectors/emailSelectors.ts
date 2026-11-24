@@ -9,7 +9,6 @@ import {
   getTwinMergingIds,
   isWaitingEmail,
 } from '@apps/runway/engine/emailTwins';
-import { cleanBankName } from '@apps/runway/utils/accountText';
 import type { OpenPurchase } from '@apps/runway/types';
 
 /** The window and Needs a home together, each purchase once. */
@@ -81,7 +80,8 @@ export const selectEmailOverdue = createSelector(
 
 export const selectEmailIntake = (state: RootState) => state.runway.emailIntake;
 
-export const selectEmailSetup = (state: RootState) => state.runway.emailSetup;
+export const selectIsEmailIntakeLoaded = (state: RootState) =>
+  state.runway.isEmailIntakeLoaded;
 
 /** Newest first. */
 export const selectEmailEvents = (state: RootState) => state.runway.emailEvents;
@@ -98,47 +98,3 @@ export const selectPurchaseIds = createSelector(
 
 export const selectEmailFilters = (state: RootState) =>
   state.runway.emailFilters;
-
-export interface KnownBank {
-  name: string;
-  logo: string | null;
-}
-
-/** The banks Runway already knows from the person's cards, accounts and links, each once by name, with its logo when a link gave one. */
-export const selectKnownBanks = createSelector(
-  [
-    (state: RootState) => state.runway.cards,
-    (state: RootState) => state.runway.accounts,
-    (state: RootState) => state.runway.links,
-  ],
-  (cards, accounts, links): KnownBank[] => {
-    const logoOf = (linkId: string | null) =>
-      links.find((link) => link.id === linkId)?.institutionLogo ?? null;
-    const found = [
-      ...links.map((link) => ({
-        name: link.institutionName,
-        logo: link.institutionLogo,
-      })),
-      ...cards
-        .filter((card) => card.archivedAt === null)
-        .map((card) => ({ name: card.issuer, logo: logoOf(card.linkId) })),
-      ...accounts
-        .filter((account) => account.archivedAt === null)
-        .map((account) => ({
-          name: account.institution,
-          logo: logoOf(account.linkId),
-        })),
-    ];
-    const byName = found.reduce((map, bank) => {
-      const name = cleanBankName(bank.name);
-      const key = name.toLowerCase();
-      if (!name) return map;
-      const kept = map.get(key);
-      if (kept === undefined || (kept.logo === null && bank.logo !== null)) {
-        map.set(key, { name: kept?.name ?? name, logo: bank.logo });
-      }
-      return map;
-    }, new Map<string, KnownBank>());
-    return [...byName.values()];
-  },
-);

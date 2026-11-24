@@ -1,36 +1,30 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
-import {
-  ChevronRight,
-  Filter,
-  KeyRound,
-  Plus,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react';
+import { ChevronRight, Filter, Forward, KeyRound, Trash2 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
-import InlineNotice from '@/components/InlineNotice';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
+import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
-import { useLeaveFlowGuard } from '@/hooks/useLeaveFlowGuard';
 import { useNow } from '@/hooks/useNow';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import EmailConfirmNotice from '@apps/runway/components/EmailConfirmNotice';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
-import EmailSetupWalkthrough from '@apps/runway/components/EmailSetupWalkthrough';
+import EmailSenderSheet from '@apps/runway/components/EmailSenderSheet';
+import EmailSetupView from '@apps/runway/components/EmailSetupView';
 import {
-  EMAIL_SETUP_WORDS,
   EMAIL_WORDS,
   describeEmailFilter,
   describeEmailOutcome,
+  stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -40,23 +34,18 @@ import {
   useEmailEvents,
   useEmailFilters,
   useEmailIntake,
-  useEmailSetup,
-  useKnownBanks,
-  getBankArrival,
+  useIsEmailEventsLoaded,
 } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailEventRead,
   EmailFilterRead,
 } from '@apps/runway/hooks/useEmailPurchases';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 import {
-  getAddBankSteps,
-  getFilterStepIndex,
-} from '@apps/runway/utils/emailSetupSteps';
-import { BankMark } from '@apps/runway/components/EmailBanksEditor';
-import { findBankLogo } from '@apps/runway/utils/emailBanks';
-import EmailBankSheet from '@apps/runway/components/EmailBankSheet';
+  groupEmailSenders,
+  type EmailSender,
+} from '@apps/runway/utils/emailSenders';
+import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 
 const ROWS_SHOWN = 5;
 
@@ -91,7 +80,9 @@ function EventRows({ events, onOpen }: EventRowsProps) {
   return (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
       {events.map((event) => {
-        const subject = mask(event.subject || EMAIL_WORDS.noSubject);
+        const subject = mask(
+          stripForwardPrefix(event.subject) || EMAIL_WORDS.noSubject,
+        );
         const detail = `${describeEmailOutcome(event.outcome)} · ${formatDateOrdinal(event.receivedAt)}`;
         return (
           <ItemRow
@@ -106,6 +97,40 @@ function EventRows({ events, onOpen }: EventRowsProps) {
         );
       })}
     </ul>
+  );
+}
+
+interface SenderGroupsProps {
+  senders: EmailSender[];
+  kind: keyof typeof EMAIL_WORDS.senderKinds;
+  onOpen: (address: string) => void;
+}
+
+function SenderRows({ senders, kind, onOpen }: SenderGroupsProps) {
+  return (
+    <div className='space-y-2'>
+      <SectionDivider label={EMAIL_WORDS.senderKinds[kind]} />
+      <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+        {senders.map((sender) => {
+          const name = sender.name ?? sender.address;
+          const detail = EMAIL_WORDS.senderDetail(
+            sender.count,
+            formatDateOrdinal(sender.lastAt),
+          );
+          return (
+            <ItemRow
+              key={sender.address}
+              name={name}
+              leading={<ItemBadge name={name} emoji={null} />}
+              detail={detail}
+              isPrivate={false}
+              ariaLabel={`${name}, ${detail}. Open`}
+              onOpen={() => onOpen(sender.address)}
+            />
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -143,75 +168,45 @@ interface EmailPurchasesScreenProps {
   onClose: () => void;
 }
 
-/** Where the person sets up forwarding, one step at a time, and where they come back to see it working: the emails that arrived and the filters they made. */
+/** Where the person copies their private address and sees what has arrived, who sends it and the filters they made. */
 function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const { confirm } = useActionModal();
   const intake = useEmailIntake();
   const events = useEmailEvents();
+  const isEventsLoaded = useIsEmailEventsLoaded();
   const filters = useEmailFilters();
   const actions = useEmailActions();
-  const setup = useEmailSetup();
-  const knownBanks = useKnownBanks();
   const now = useNow(60_000);
-  const isWritten = useRef(false);
-  const [viewIndex, setViewIndex] = useState<number | null>(null);
   const [isReopened, setIsReopened] = useState(false);
-  const [walkBaseline, setWalkBaseline] = useState<{
-    eventIds: Set<string>;
-    confirmAt: number | null;
-  } | null>(null);
-  const [isKept, setIsKept] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [openFilterId, setOpenFilterId] = useState<string | null>(null);
+  const [openSenderAddress, setOpenSenderAddress] = useState<string | null>(
+    null,
+  );
   const [allList, setAllList] = useState<AllList | null>(null);
-  const [addBankIndex, setAddBankIndex] = useState<number | null>(null);
-  const [openBankId, setOpenBankId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [hasActed, setHasActed] = useState(false);
-  const [hasDraft, setHasDraft] = useState(false);
 
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
-  const openBank = setup.banks.find((entry) => entry.id === openBankId) ?? null;
-  const addBankSteps = getAddBankSteps(setup.provider);
-  const isAddingBank = addBankIndex !== null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
-  const hasPurchase = events.some(
-    (entry) =>
-      entry.outcome === 'purchase' &&
-      (walkBaseline === null || !walkBaseline.eventIds.has(entry.id)),
-  );
+  const senderGroups = groupEmailSenders(events);
+  const openSender =
+    senderGroups
+      .flatMap((group) => group.senders)
+      .find((entry) => entry.address === openSenderAddress) ?? null;
+  const isOverStatus = isReopened || hasStarted;
+  const isSetupShown =
+    isOverStatus || (!intake.isLoading && intake.address === null);
   const confirmAt = intake.confirm?.at ?? null;
-  const isConfirmed =
+  const isConfirmShown =
+    intake.confirm !== null &&
     confirmAt !== null &&
-    (walkBaseline === null || confirmAt !== walkBaseline.confirmAt);
-  const isWalking = !setup.isDone || isReopened || isKept;
-  const walkSteps = isAddingBank ? addBankSteps : setup.steps;
-  const stepIndex = isAddingBank
-    ? Math.min(addBankIndex, addBankSteps.length - 1)
-    : Math.min(viewIndex ?? setup.step, setup.steps.length - 1);
-  const filterIndex = getFilterStepIndex(setup.steps);
-  const hasStrayEmail = events.some(
-    (entry) => entry.outcome === 'notPurchase' || entry.outcome === 'unread',
-  );
-  const isFilterMissing =
-    !setup.isDone &&
-    setup.provider !== null &&
-    setup.provider !== 'yahoo' &&
-    filterIndex >= 0 &&
-    setup.step < filterIndex &&
-    stepIndex !== filterIndex &&
-    hasStrayEmail;
-
-  useEffect(() => {
-    if (!setup.isDone || !setup.isDoneUnwritten || isWritten.current) return;
-    isWritten.current = true;
-    actions.finishSetup().catch((finishError: unknown) => {
-      isWritten.current = false;
-      setError(getErrorMessage(finishError, EMAIL_WORDS.progressFailed));
-    });
-  }, [setup.isDone, setup.isDoneUnwritten, actions]);
+    isEventsLoaded &&
+    !events.some(
+      (entry) => entry.outcome !== 'confirm' && entry.receivedAt > confirmAt,
+    );
 
   const run = async (work: () => Promise<void>, failure: string) => {
     setIsBusy(true);
@@ -225,89 +220,25 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     }
   };
 
-  const noteActed = () => {
-    if (isWalking || isAddingBank) setHasActed(true);
-  };
-
   const getNewAddress = async () => {
     if (intake.address !== null) {
-      const isConfirmed = await confirm({
+      const isAccepted = await confirm({
         title: EMAIL_WORDS.newAddressTitle,
         message: EMAIL_WORDS.newAddressMessage,
         confirmText: EMAIL_WORDS.newAddress,
         destructive: true,
       });
-      if (!isConfirmed) return;
+      if (!isAccepted) return;
+    } else {
+      setHasStarted(true);
     }
-    noteActed();
     await run(() => actions.rotateAddress(), EMAIL_WORDS.addressFailed);
   };
 
-  const goToStep = (index: number) => {
-    setHasActed(true);
-    if (isAddingBank) {
-      setAddBankIndex(index);
-      return;
-    }
-    setViewIndex(index);
-    setIsKept(true);
-    actions
-      .reachStep(setup.steps[index] ?? 'provider')
-      .catch((reachError: unknown) =>
-        setError(getErrorMessage(reachError, EMAIL_WORDS.progressFailed)),
-      );
-  };
-
-  const keepBaseline = () =>
-    setWalkBaseline({
-      eventIds: new Set(events.map((entry) => entry.id)),
-      confirmAt,
-    });
-
   const backToStatus = () => {
     setIsReopened(false);
-    setIsKept(false);
-    setWalkBaseline(null);
-    setViewIndex(null);
-    setAddBankIndex(null);
-    setHasActed(false);
-    setHasDraft(false);
-  };
-
-  const isOverStatus = isReopened || isAddingBank || (isKept && setup.isDone);
-  const leaveFlow = () => {
-    if (isOverStatus) backToStatus();
-    else onClose();
-  };
-  const requestLeave = useLeaveFlowGuard({
-    hasActed: (isWalking || isAddingBank) && hasActed,
-    onLeave: leaveFlow,
-    message: [
-      isAddingBank
-        ? EMAIL_SETUP_WORDS.leaveAddKept
-        : EMAIL_SETUP_WORDS.leaveSetupKept,
-      hasDraft ? EMAIL_SETUP_WORDS.leaveDraftLost : null,
-    ]
-      .filter((line) => line !== null)
-      .join(' '),
-    isLosingWork: hasDraft,
-  });
-  const saveBanksActed: typeof actions.saveBanks = (change) => {
-    noteActed();
-    return actions.saveBanks(change);
-  };
-
-  const pickProvider = (
-    provider: Parameters<typeof actions.chooseProvider>[0],
-  ) => {
-    setViewIndex(1);
-    setIsKept(true);
-    setHasActed(true);
-    actions
-      .chooseProvider(provider)
-      .catch((pickError: unknown) =>
-        setError(getErrorMessage(pickError, EMAIL_WORDS.progressFailed)),
-      );
+    setHasStarted(false);
+    setError(null);
   };
 
   const openAll = (list: AllList) => {
@@ -319,7 +250,9 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const needle =
     allCount >= RUNWAY_SEARCH_THRESHOLD ? query.trim().toLowerCase() : '';
   const matchedEvents = events.filter((entry) =>
-    (entry.subject + ' ' + entry.from).toLowerCase().includes(needle),
+    (stripForwardPrefix(entry.subject) + ' ' + entry.from)
+      .toLowerCase()
+      .includes(needle),
   );
   const matchedFilters = filters.filter((entry) => {
     const words = describeEmailFilter(entry);
@@ -345,125 +278,29 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       title={EMAIL_WORDS.title}
       isTitleWrapped
       onClose={onClose}
-      onBack={isWalking || isAddingBank ? requestLeave : undefined}
+      onBack={isOverStatus ? backToStatus : undefined}
       headerAction={<ValuesEyeButton />}
     >
-      {isWalking || isAddingBank ? (
-        <div className='space-y-4'>
-          {isFilterMissing && !isAddingBank && (
-            <InlineNotice tone='warning'>
-              <p>{EMAIL_SETUP_WORDS.noFilterNotice}</p>
-              <Button
-                className='mt-2'
-                variant='secondary'
-                size='sm'
-                onClick={() => setViewIndex(filterIndex)}
-              >
-                {EMAIL_SETUP_WORDS.noFilterButton}
-              </Button>
-            </InlineNotice>
-          )}
-          {error && (
-            <p className='text-destructive text-sm' role='alert'>
-              {error}
-            </p>
-          )}
-          <EmailSetupWalkthrough
-            key={isAddingBank ? 'add-bank' : 'setup'}
-            provider={setup.provider}
-            steps={walkSteps}
-            stepIndex={stepIndex}
-            intake={intake}
-            isConfirmed={isConfirmed}
-            hasPurchase={hasPurchase}
-            isBusy={isBusy}
-            banks={setup.banks}
-            knownBanks={knownBanks}
-            onSaveBanks={saveBanksActed}
-            isAddingBank={isAddingBank}
-            onPickProvider={pickProvider}
-            onGetAddress={() => void getNewAddress()}
-            onGo={goToStep}
-            onFinish={backToStatus}
-            onClose={leaveFlow}
-            onExit={requestLeave}
-            onActivity={(isDrafting) => {
-              setHasActed(true);
-              setHasDraft(isDrafting);
-            }}
-          />
-        </div>
+      {isSetupShown ? (
+        <EmailSetupView
+          address={intake.address}
+          isLoading={intake.isLoading}
+          isBusy={isBusy}
+          error={error}
+          onGetAddress={() => void getNewAddress()}
+          onDone={isOverStatus ? backToStatus : onClose}
+        />
       ) : (
         <div className='space-y-6'>
-          <p className='text-sm font-medium' role='status'>
-            {intake.lastReceivedAt === null
-              ? EMAIL_SETUP_WORDS.noEmailsYet
-              : EMAIL_SETUP_WORDS.workingSince(
-                  formatUpdatedAgo(intake.lastReceivedAt, now),
-                )}
-          </p>
-          {addBankSteps.length > 0 && (
-            <ActionSection caption={EMAIL_SETUP_WORDS.banksTitle}>
-              <div className='space-y-3'>
-                {setup.banks.length === 0 && (
-                  <p className='text-muted-foreground text-sm'>
-                    {EMAIL_SETUP_WORDS.noBanksYet}
-                  </p>
-                )}
-                {setup.banks.length > 0 && (
-                  <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                    {setup.banks.map((bank) => {
-                      const detail = `${EMAIL_SETUP_WORDS.arrival[getBankArrival(bank, events, now)]} · ${EMAIL_SETUP_WORDS.addressCount(bank.addresses.length)}`;
-                      return (
-                        <ItemRow
-                          key={bank.id}
-                          name={bank.name}
-                          leading={
-                            <BankMark
-                              name={bank.name}
-                              logo={findBankLogo(knownBanks, bank.name)}
-                            />
-                          }
-                          detail={detail}
-                          isPrivate={false}
-                          ariaLabel={`${bank.name}, ${detail}. Open`}
-                          onOpen={() => setOpenBankId(bank.id)}
-                        />
-                      );
-                    })}
-                  </ul>
-                )}
-                <Button
-                  variant='secondary'
-                  className='w-full gap-1.5'
-                  onClick={() => {
-                    keepBaseline();
-                    setAddBankIndex(0);
-                  }}
-                >
-                  <Plus className='size-4' aria-hidden='true' />
-                  {EMAIL_SETUP_WORDS.addBank}
-                </Button>
-              </div>
-            </ActionSection>
+          {isConfirmShown && intake.confirm !== null && (
+            <EmailConfirmNotice confirm={intake.confirm} />
           )}
-          {filters.length > 0 && (
-            <ActionSection
-              caption={EMAIL_WORDS.filtersCaption}
-              action={
-                filters.length > ROWS_SHOWN && (
-                  <SeeAllButton
-                    label={EMAIL_WORDS.seeAll}
-                    onClick={() => openAll('filters')}
-                  />
-                )
-              }
-            >
-              <FilterRows
-                filters={filters.slice(0, ROWS_SHOWN)}
-                onOpen={setOpenFilterId}
-              />
-            </ActionSection>
+          {intake.lastReceivedAt !== null && (
+            <p className='text-sm font-medium' role='status'>
+              {EMAIL_WORDS.workingSince(
+                formatUpdatedAgo(intake.lastReceivedAt, now),
+              )}
+            </p>
           )}
           <ActionSection
             caption={EMAIL_WORDS.eventsCaption}
@@ -487,57 +324,85 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               />
             )}
           </ActionSection>
-          {intake.address !== null && (
-            <div className='border-border flex items-center justify-between gap-3 rounded-2xl border p-3'>
-              <div className='min-w-0'>
-                <p className='text-muted-foreground text-xs'>
-                  {EMAIL_SETUP_WORDS.addressRow}
-                </p>
-                <p className='text-sm select-all'>
-                  <span className='break-all'>
-                    {intake.address.split('@')[0]}@
-                  </span>
-                  <wbr />
-                  <span className='whitespace-nowrap'>
-                    {intake.address.split('@').slice(1).join('@')}
-                  </span>
-                </p>
+          {senderGroups.length > 0 && (
+            <ActionSection caption={EMAIL_WORDS.sendersCaption}>
+              <div className='space-y-4'>
+                {senderGroups.map((group) => (
+                  <SenderRows
+                    key={group.kind}
+                    kind={group.kind}
+                    senders={group.senders}
+                    onOpen={setOpenSenderAddress}
+                  />
+                ))}
               </div>
-              <CopyTextButton
-                text={intake.address}
-                label='Copy'
-                variant='tertiary'
-                isCompact
-              />
+            </ActionSection>
+          )}
+          {intake.address !== null && (
+            <div className='space-y-3'>
+              <div className='border-border flex items-center justify-between gap-3 rounded-2xl border p-3'>
+                <div className='min-w-0'>
+                  <p className='text-muted-foreground text-xs'>
+                    {EMAIL_WORDS.addressRow}
+                  </p>
+                  <p className='text-sm select-all'>
+                    <span className='break-all'>
+                      {intake.address.split('@')[0]}@
+                    </span>
+                    <wbr />
+                    <span className='whitespace-nowrap'>
+                      {intake.address.split('@').slice(1).join('@')}
+                    </span>
+                  </p>
+                </div>
+                <CopyTextButton
+                  text={intake.address}
+                  label='Copy'
+                  variant='tertiary'
+                  isCompact
+                />
+              </div>
+              {error && (
+                <p className='text-destructive text-sm' role='alert'>
+                  {error}
+                </p>
+              )}
+              <ActionGroup>
+                <ActionRow
+                  isGrouped
+                  icon={<Forward />}
+                  label={EMAIL_WORDS.showHow}
+                  subtitle={EMAIL_WORDS.showHowSub}
+                  onClick={() => setIsReopened(true)}
+                />
+                <ActionRow
+                  isGrouped
+                  icon={<KeyRound />}
+                  label={EMAIL_WORDS.newAddress}
+                  subtitle={EMAIL_WORDS.newAddressSub}
+                  isDisabled={isBusy}
+                  onClick={() => void getNewAddress()}
+                />
+              </ActionGroup>
             </div>
           )}
-          {error && (
-            <p className='text-destructive text-sm' role='alert'>
-              {error}
-            </p>
-          )}
-          {intake.address !== null && (
-            <ActionGroup>
-              <ActionRow
-                isGrouped
-                icon={<RotateCcw />}
-                label={EMAIL_SETUP_WORDS.setUpAgain}
-                subtitle={EMAIL_SETUP_WORDS.setUpAgainSub}
-                onClick={() => {
-                  setIsReopened(true);
-                  keepBaseline();
-                  setViewIndex(0);
-                }}
+          {filters.length > 0 && (
+            <ActionSection
+              caption={EMAIL_WORDS.filtersCaption}
+              action={
+                filters.length > ROWS_SHOWN && (
+                  <SeeAllButton
+                    label={EMAIL_WORDS.seeAll}
+                    onClick={() => openAll('filters')}
+                  />
+                )
+              }
+            >
+              <FilterRows
+                filters={filters.slice(0, ROWS_SHOWN)}
+                onOpen={setOpenFilterId}
               />
-              <ActionRow
-                isGrouped
-                icon={<KeyRound />}
-                label={EMAIL_WORDS.newAddress}
-                subtitle={EMAIL_WORDS.newAddressSub}
-                isDisabled={isBusy}
-                onClick={() => void getNewAddress()}
-              />
-            </ActionGroup>
+            </ActionSection>
           )}
         </div>
       )}
@@ -578,16 +443,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           onClose={() => setOpenEventId(null)}
         />
       )}
-      {openBank && (
-        <EmailBankSheet
-          key={openBank.id}
-          bank={openBank}
-          banks={setup.banks}
-          provider={setup.provider}
-          knownBanks={knownBanks}
-          arrival={getBankArrival(openBank, events, now)}
-          onSaveBanks={actions.saveBanks}
-          onClose={() => setOpenBankId(null)}
+      {openSender && (
+        <EmailSenderSheet
+          sender={openSender}
+          onClose={() => setOpenSenderAddress(null)}
         />
       )}
       {openFilter && (

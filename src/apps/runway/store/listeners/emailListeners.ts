@@ -20,9 +20,6 @@ import type {
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
-  EmailBank,
-  EmailSetupDoc,
-  EmailSetupSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -32,12 +29,15 @@ export interface OpenEmailIntake extends EmailIntakeSealed {
   updatedAt: number;
   lastReceivedAt: number | null;
   confirmAt: number | null;
+  autoConfirm: EmailIntakeDoc['autoConfirm'];
+  confirmProvider: EmailIntakeDoc['confirmProvider'];
 }
 
 export interface OpenEmailEvent extends EmailEventSealed {
   id: string;
   receivedAt: number;
   outcome: EmailEventDoc['outcome'];
+  senderKind: EmailEventDoc['senderKind'];
   purchaseId: string | null;
   expiresAt: number;
 }
@@ -92,6 +92,8 @@ export function startEmailIntakeListener(
                 updatedAt: data.updatedAt,
                 lastReceivedAt: data.lastReceivedAt ?? null,
                 confirmAt: data.confirmAt ?? null,
+                autoConfirm: data.autoConfirm ?? null,
+                confirmProvider: data.confirmProvider ?? null,
                 confirmUrl: payload?.confirmUrl ?? null,
                 confirmCode: payload?.confirmCode ?? null,
               },
@@ -138,6 +140,7 @@ export function startEmailEventsListener(
               id: entry.id,
               receivedAt: data.receivedAt,
               outcome: data.outcome,
+              senderKind: data.senderKind ?? null,
               purchaseId: data.purchaseId ?? null,
               expiresAt: toMillis(data.expiresAt),
               from: payload.from ?? '',
@@ -202,77 +205,6 @@ export function startEmailFiltersListener(
         );
         if (current !== sequence.latest || run.isStopped) return;
         onChange(opened.sort((a, b) => b.createdAt - a.createdAt));
-      } catch (error) {
-        if (current === sequence.latest) onError(toError(error));
-      }
-    },
-    (error) => onError(toError(error)),
-  );
-
-  return () => {
-    run.isStopped = true;
-    stop();
-  };
-}
-
-export interface OpenEmailSetup {
-  provider: EmailSetupDoc['provider'];
-  stepId: EmailSetupDoc['stepId'];
-  doneAt: number | null;
-  banks: EmailBank[];
-}
-
-const toBanks = (value: unknown): EmailBank[] =>
-  Array.isArray(value)
-    ? value.flatMap((entry: Partial<EmailBank> | null) =>
-        entry && typeof entry.id === 'string' && Array.isArray(entry.addresses)
-          ? [
-              {
-                id: entry.id,
-                name: String(entry.name ?? ''),
-                addresses: entry.addresses.map((address) =>
-                  String(address).toLowerCase(),
-                ),
-                addedAt: Number(entry.addedAt ?? 0),
-              },
-            ]
-          : [],
-      )
-    : [];
-
-/** How far the person got setting up forwarding, with the banks they forward; null until they start. */
-export function startEmailSetupListener(
-  uid: string,
-  encryption: RunwayEncryption,
-  onChange: (setup: OpenEmailSetup | null) => void,
-  onError: (error: Error) => void,
-): Unsubscribe {
-  const sequence = { latest: 0 };
-  const run = { isStopped: false };
-  const read = createSealedReader(encryption, openJson);
-  const stop = onSnapshot(
-    doc(db, 'apps', 'runway', 'plans', uid, 'emailSetup', 'progress'),
-    async (snapshot) => {
-      sequence.latest += 1;
-      const current = sequence.latest;
-      try {
-        const data = snapshot.exists()
-          ? (snapshot.data() as Partial<EmailSetupDoc>)
-          : null;
-        const payload = data?.sealed
-          ? await read<Partial<EmailSetupSealed>>(data.sealed)
-          : null;
-        if (current !== sequence.latest || run.isStopped) return;
-        onChange(
-          data === null
-            ? null
-            : {
-                provider: data.provider ?? null,
-                stepId: data.stepId ?? null,
-                doneAt: data.doneAt ?? null,
-                banks: toBanks(payload?.banks),
-              },
-        );
       } catch (error) {
         if (current === sequence.latest) onError(toError(error));
       }
