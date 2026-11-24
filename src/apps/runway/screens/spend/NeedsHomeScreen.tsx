@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { ListChecks, Mail } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -9,6 +9,7 @@ import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SelectionBar from '@/components/SelectionBar';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -66,7 +67,9 @@ const useSourceName = () => {
   return (purchase: OpenPurchase) =>
     cards.find((card) => card.id === purchase.paidByCardId)?.name ??
     accounts.find((account) => account.id === purchase.accountId)?.name ??
-    NEEDS_HOME_WORDS.fromBank;
+    (purchase.source === 'email'
+      ? EMAIL_WORDS.fromEmail
+      : NEEDS_HOME_WORDS.fromBank);
 };
 
 function NeedsHomeRow({
@@ -112,6 +115,17 @@ function NeedsHomeRow({
   return (
     <ItemRow
       name={title}
+      nameMark={
+        purchase.source === 'email' && (
+          <>
+            <Mail
+              className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
+              aria-hidden='true'
+            />
+            <span className='sr-only'>{EMAIL_WORDS.fromEmail}</span>
+          </>
+        )
+      }
       leading={<ItemBadge name={title} emoji={null} />}
       detail={detail}
       figure={amount}

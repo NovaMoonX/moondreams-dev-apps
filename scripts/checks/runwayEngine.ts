@@ -20596,6 +20596,37 @@ checkHorizonMoves();
   );
   assert.deepEqual(
     findRulePlacements(
+      [
+        waitingCharge('mail', { source: 'email' as const }),
+        waitingCharge('mail-hand', {
+          source: 'email' as const,
+          assignedBy: 'person',
+        }),
+        waitingCharge('mail-placed', {
+          source: 'email' as const,
+          needsHome: false,
+        }),
+      ],
+      [],
+      [merchantRule],
+      ids,
+    ).map((entry) => entry.purchase.id),
+    ['mail'],
+    'a rule places a purchase read from email like a bank charge',
+  );
+  assert.deepEqual(
+    findRulePlacements(
+      [waitingCharge('ok', {}), waitingCharge('other', {})],
+      [],
+      [merchantRule],
+      ids,
+      new Set(['ok']),
+    ).map((entry) => entry.purchase.id),
+    ['other'],
+    'a bank charge a waiting email is or may be is left to the pair',
+  );
+  assert.deepEqual(
+    findRulePlacements(
       [waitingCharge('ok', {})],
       [],
       [merchantRule],

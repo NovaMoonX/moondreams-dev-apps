@@ -5038,7 +5038,7 @@ export const NEEDS_HOME_WORDS = {
   intro:
     "You don't have to sort these. Each one already counts against Free to Spend; putting it in an envelope just makes that envelope's number exact.",
   empty:
-    'Nothing is waiting. New purchases from your bank show up here on their own.',
+    'Nothing is waiting. New purchases from your bank or email show up here on their own.',
   loading: 'Getting your purchases.',
   pending: 'Pending',
   fromBank: 'from your bank',
