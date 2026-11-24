@@ -1,29 +1,24 @@
+import { EMAIL_ADDRESS_PREFIX } from '@apps/runway/constants';
+import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailFilterSealed,
   EmailOutcome,
-  EmailProvider,
+  EmailSenderKind,
 } from '@apps/runway/types';
 
-export const buildGmailFilterText = (addresses: string[]) =>
-  `from:(${addresses.join(' OR ')}) subject:(purchase OR charge OR transaction OR spent OR alert)`;
-
-const fromWhom = (addresses: string[]) => {
-  if (addresses.length === 0) return 'your bank’s alert address';
-  if (addresses.length === 1) return addresses[0];
-  return 'any of the addresses below';
-};
-export const GMAIL_FILTERS_URL =
-  'https://mail.google.com/mail/u/0/#settings/filters';
-export const GMAIL_FORWARDING_URL =
-  'https://mail.google.com/mail/u/0/#settings/fwdandpop';
+const SENDER_KIND_WORDS = {
+  bank: 'Bank',
+  store: 'Store',
+  other: 'Not money',
+} satisfies Record<EmailSenderKind, string>;
 
 export const EMAIL_WORDS = {
-  rowLabel: 'Purchases from email',
-  rowNotSetUp: 'Not set up yet',
-  rowSetUp: 'Each alert becomes a purchase',
-  rowAction: 'Forward your bank’s alerts',
-  title: 'Purchases from email',
+  rowCaption: 'Email',
+  rowSub: 'Forward bank alerts and store receipts',
+  title: 'Email purchases',
   getAddress: 'Get your address',
+  addressLoadFailed: 'Couldn’t load your address. Try again.',
+  tryAgain: 'Try again',
   newAddress: 'Get a new address',
   newAddressSub: 'Your old address stops working',
   newAddressTitle: 'Get a new address?',
@@ -34,16 +29,52 @@ export const EMAIL_WORDS = {
   filterTitle: 'Filter',
   removeFilter: 'Remove this filter',
   removeFilterSub: 'Emails like this will be read again.',
-  eventsCaption: 'Recent emails',
-  noEvents: 'Nothing has reached your address yet.',
+  eventsCaption: 'What we’ve received',
+  noEvents:
+    'Nothing yet. Forward a recent bank alert or store receipt to see it land here.',
+  sendersCaption: 'Who sends',
+  senderDetail: (kind: EmailSenderKind, count: number, lastAt: string) =>
+    `${SENDER_KIND_WORDS[kind]} · ${count === 1 ? '1 email' : `${count} emails`} · ${lastAt}`,
+  showMore: (count: number) => `Show ${count} more`,
+  showFewer: 'Show fewer',
+  senderFilterOut: 'Filter out emails from this sender',
+  senderFilterOutTitle: (address: string) =>
+    `Filter out emails from ${address}?`,
+  senderFilterOutMessage: 'Purchases from it won’t come in anymore.',
+  senderFilterOutConfirm: 'Filter out',
+  filteredOut: (address: string) => `Filtered out ${address}`,
+  filterUndoFailed: 'That filter is still on. Remove it under Filtered out.',
+  senderFilterSub: 'Future ones are skipped before anything is read.',
+  senderCovered: 'A filter already covers this sender.',
+  senderHadPurchases: 'Some of these became purchases. This stops that.',
+  workingSince: (when: string) => `Working · last email ${when}`,
+  lastEmail: (when: string) => `Last email ${when}`,
+  addressRow: 'Your address',
+  setupLine:
+    'Forward your bank alerts and store receipts here, by hand or with your email’s own rules.',
+  copyAddress: 'Copy address',
+  copyFailed: 'Couldn’t copy it. Press and hold the address to copy it.',
+  done: 'Done',
+  confirmAsked: (provider: string) => `${provider} asked to confirm forwarding`,
+  confirmButton: (provider: string | null) =>
+    provider === null ? 'Confirm forwarding' : `Confirm with ${provider}`,
+  confirmCodeLine: (provider: string | null) =>
+    provider === null
+      ? 'Enter this code where you set up forwarding'
+      : `Enter this code in ${provider}’s forwarding settings`,
+  copyCode: 'Copy code',
+  confirmedBy: (provider: string) =>
+    `Runway confirmed ${provider}’s forwarding`,
+  confirmStillNeeded: (provider: string | null) =>
+    `${provider ?? 'Your email'} still needs your OK`,
+  confirmAgain: 'Confirm again',
   emailTitle: 'Email',
   filterOut: 'Filter out emails like this',
   filterOutSub: 'Future ones are skipped before anything is read.',
   filterOutRowSub: 'Emails like this won’t become purchases',
   unreadLine:
     'Runway couldn’t find an amount and a place in this email. If it was a purchase, add it from Add a purchase.',
-  notPurchaseLine:
-    'This looked like a payment, refund or notice, not a purchase.',
+  notPurchaseLine: 'Runway didn’t find a purchase in it.',
   noSubject: 'No subject',
   from: 'From',
   subject: 'Subject',
@@ -59,7 +90,7 @@ export const EMAIL_WORDS = {
   withSubject: 'With this subject',
   suggestionsCaption: 'Suggestions',
   suggestedByAi: 'Suggested by AI',
-  saveFilter: 'Save filter',
+  saveFilter: 'Filter out',
   pickOne: 'Pick at least one',
   saveFailed: 'The filter did not save. Try again.',
   removeFailed: 'That did not go through. Try again.',
@@ -88,6 +119,18 @@ export const EMAIL_WORDS = {
   overdueSub: 'Open one to remove it or stop waiting for it.',
 } as const;
 
+const OUTCOME_ROW_WORDS: Record<EmailOutcome, string> = {
+  purchase: 'Purchase',
+  notPurchase: 'No purchase',
+  filtered: 'Filtered out',
+  confirm: 'Confirmation',
+  unread: 'Couldn’t read it',
+  notTracking: 'Not tracking that day',
+};
+
+export const describeEmailRowOutcome = (outcome: EmailOutcome) =>
+  OUTCOME_ROW_WORDS[outcome];
+
 const OUTCOME_WORDS: Record<EmailOutcome, string> = {
   purchase: 'Added as a purchase',
   notPurchase: 'Not a purchase',
@@ -100,12 +143,20 @@ const OUTCOME_WORDS: Record<EmailOutcome, string> = {
 export const describeEmailOutcome = (outcome: EmailOutcome) =>
   OUTCOME_WORDS[outcome];
 
+const FORWARD_PREFIX = /^\s*(?:(?:fwd?|tr|wg)\s*:\s*)+/i;
+
+/** A subject without the "Fwd:" (or "FW:", "TR:", "WG:") a forward adds, however many times it was added. */
+export const stripForwardPrefix = (subject: string) =>
+  subject.replace(FORWARD_PREFIX, '').trim();
+
 /** A subject's shape as the person reads it: its placeholders said in words. */
 export const readSubjectTemplate = (template: string) =>
-  template
+  stripForwardPrefix(template)
     .replaceAll('{amount}', 'any amount')
     .replaceAll('{date}', 'any date')
     .replaceAll('{n}', 'any number');
+
+export const FILTER_FROM_WORDS = 'From ';
 
 /** A filter as a name and one more line, in the person's words. */
 export function describeEmailFilter(filter: EmailFilterSealed): {
@@ -113,7 +164,9 @@ export function describeEmailFilter(filter: EmailFilterSealed): {
   detail: string | null;
 } {
   const parts = [
-    ...(filter.fromAddress ? [`From ${filter.fromAddress}`] : []),
+    ...(filter.fromAddress
+      ? [`${FILTER_FROM_WORDS}${filter.fromAddress}`]
+      : []),
     ...(filter.subjectTemplate
       ? [`Subject like “${readSubjectTemplate(filter.subjectTemplate)}”`]
       : []),
@@ -126,211 +179,27 @@ export function describeEmailFilter(filter: EmailFilterSealed): {
   };
 }
 
-export const YAHOO_MAIL_URL = 'https://mail.yahoo.com/';
-export const OUTLOOK_RULES_URL =
-  'https://outlook.live.com/mail/0/options/mail/rules';
-export const ICLOUD_MAIL_URL = 'https://www.icloud.com/mail/';
-export const PROTON_MAIL_URL = 'https://mail.proton.me/';
-
-export const EMAIL_PROVIDER_NAMES: Record<EmailProvider, string> = {
+/** The providers whose forwarding confirmation Functions recognise, as the person knows them. */
+export const CONFIRM_PROVIDER_NAMES = {
   gmail: 'Gmail',
-  outlook: 'Outlook',
-  icloud: 'iCloud',
   yahoo: 'Yahoo',
   proton: 'Proton Mail',
-  other: 'your email',
+} as const;
+
+export const shortenForwardingAddress = (address: string) => {
+  const [name, ...host] = address.split('@');
+  const keep = EMAIL_ADDRESS_PREFIX.length + 1 + 4;
+  return name.length <= keep + 1
+    ? address
+    : `${name.slice(0, keep)}…@${host.join('@')}`;
 };
 
-export const EMAIL_SETUP_WORDS = {
-  progress: (step: number, total: number) => `Step ${step} of ${total}`,
-  next: 'Next',
-  back: 'Back',
-  done: 'Done',
-  providerTitle: 'Which email do your bank alerts go to?',
-  providerSubs: {
-    gmail: 'Also Google Workspace',
-    outlook: 'Also Hotmail and Live',
-    icloud: 'Apple Mail',
-    yahoo: 'Needs Yahoo Mail Plus',
-    proton: 'Needs a paid Proton plan',
-    other: 'Any email that can forward',
-  } satisfies Record<EmailProvider, string>,
-  providerLabels: {
-    gmail: 'Gmail',
-    outlook: 'Outlook',
-    icloud: 'iCloud',
-    yahoo: 'Yahoo',
-    proton: 'Proton Mail',
-    other: 'Other',
-  } satisfies Record<EmailProvider, string>,
-  copyTitle: 'Copy your Runway address',
-  copyLine:
-    'Only you can see it. Your bank’s alerts forwarded here become purchases.',
-  copyLabel: 'Copy address',
-  gmailForwardingTitle: 'Add it as a forwarding address',
-  gmailForwardingChoose:
-    'Choose “Add a forwarding address” and paste your address',
-  gmailForwardingNote:
-    'Don’t turn on forwarding of all mail; the filter does that.',
-  gmailForwardingLink: 'Open Gmail’s forwarding settings',
-  yahooForwardingTitle: 'Turn on forwarding',
-  yahooForwardingGo:
-    'Go to Settings → More Settings → Mailboxes → your primary mailbox → Forwarding address',
-  yahooForwardingPaste: 'Paste your address and press Verify',
-  yahooForwardingNote:
-    'Yahoo forwards all your mail; Runway only turns bank alerts into purchases and keeps just the subject and a few lines of anything else, for 30 days, so you can filter it out.',
-  yahooForwardingLink: 'Open Yahoo Mail',
-  outlookRuleTitle: 'Make a rule for your bank’s alerts',
-  outlookRuleLine: (addresses: string[]) =>
-    `Make a rule: when it’s from ${fromWhom(addresses)}, choose Forward to and paste your address`,
-  outlookRuleLink: 'Open Outlook’s rules',
-  icloudRuleTitle: 'Make a rule for your bank’s alerts',
-  icloudRuleOpen: 'In iCloud Mail, go to Settings → Rules',
-  icloudRuleLine: (addresses: string[]) =>
-    `Make a rule: when it’s from ${fromWhom(addresses)}, forward it to your address`,
-  icloudRuleLink: 'Open iCloud Mail',
-  protonRuleTitle: 'Make a forwarding rule for your bank’s alerts',
-  protonRuleGo:
-    'In Proton Mail, go to Settings → All settings → Forward and auto-reply → Add forwarding rule',
-  protonRulePaste: 'Paste your Runway address in Forward to',
-  protonRuleCondition: (addresses: string[]) =>
-    addresses.length > 1
-      ? 'Choose Add condition → If → Sender → is, and enter the first address below; add one more Sender condition for each of the others'
-      : `Choose Add condition → If → Sender → is, and enter ${fromWhom(addresses)}`,
-  protonRuleSave:
-    'Click Save. Proton sends an invitation to your Runway address, and the next step catches it',
-  protonRuleNote:
-    'Forwarding to another provider turns off end-to-end encryption for all mail on the Proton address you forward from. Your other Proton addresses aren’t affected.',
-  protonRuleLink: 'Open Proton Mail',
-  otherRuleTitle: 'Set up forwarding',
-  otherRuleLine: (addresses: string[]) =>
-    addresses.length === 0
-      ? 'In your email’s settings, forward to your Runway address. A rule or filter for only your bank’s alerts works best'
-      : `In your email’s settings, make a rule that forwards mail from ${fromWhom(addresses)} to your Runway address`,
-  bankTitle: 'Which bank’s alerts?',
-  coveredBankTitle: 'Which bank does your filter already cover?',
-  coveredBankLine:
-    'Add it first, so the updated filter or rule keeps it. Then add the new bank.',
-  bankLine: 'The bank that emails you each time a card is used.',
-  banksTitle: 'Your banks',
-  knownBankSub: 'From your cards and accounts',
-  anotherBank: 'Another bank',
-  anotherBankSub: 'Type its name',
-  bankNameLabel: 'Bank name',
-  bankNamePlaceholder: 'Chase',
-  addressLabel: 'Its alert email’s From address',
-  addressHint: 'Open one of its alerts and copy the address next to From.',
-  addressPlaceholder: 'alerts@chase.com',
-  addAddress: 'Add',
-  addressInvalid: 'That isn’t an email address yet.',
-  addressTaken: 'That address is already on the list.',
-  addAnotherAddress: 'Add another address',
-  addAnotherBank: 'Add another bank',
-  removeAddress: (address: string) => `Remove ${address}`,
-  bankNameNeeded: 'Type the bank’s name.',
-  chooseOtherBank: 'Choose a different bank',
-  addThisBank: (name: string) =>
-    name.trim() ? `Add ${name.trim()}` : 'Add this bank',
-  bankFirst: 'Pick your bank first, so the filter knows its alerts.',
-  bankFirstButton: 'Back to your bank',
-  banksSaveFailed: 'That didn’t save. Try again.',
-  addBank: 'Add a bank',
-  arrival: {
-    arriving: 'Alerts arriving',
-    waiting: 'Waiting for its first alert',
-    quiet: 'No alerts in the last 30 days',
-  },
-  copyAddress: (address: string) => `Copy ${address}`,
-  addressCount: (count: number) =>
-    count === 1 ? '1 address' : `${count} addresses`,
-  bankSheetAddresses: 'Its alert addresses',
-  updateCaption: 'Then update your forwarding',
-  updateGmailCopy: 'Copy the new filter',
-  updateGmailPaste:
-    'In Gmail filters, delete your old Runway filter, paste this in the search box, then choose Create filter → Forward it to → your Runway address',
-  updateFilterTitle: 'Update your Runway filter',
-  updateRuleTitle: 'Update your forwarding rule',
-  alreadyMade:
-    'Already made one for Runway? Change it to match this instead of making a second.',
-  noBanksYet:
-    'Add the banks your filter or rule covers, so you can see when each one’s alerts arrive.',
-  updateRule: (addresses: string[]) =>
-    `In your forwarding rule, make sure it forwards mail from ${fromWhom(addresses)}`,
-  updateRuleAdd: (provider: EmailProvider, added: string[]) => {
-    const which = added.length === 1 ? 'this address' : 'these addresses';
-    if (provider === 'proton') {
-      return added.length === 1
-        ? 'In your forwarding rule, add a Sender condition for this address'
-        : 'In your forwarding rule, add a Sender condition for each of these addresses';
-    }
-    return `Add ${which} to your forwarding rule’s senders`;
-  },
-  updateRuleRemove: (removed: string[]) =>
-    removed.length === 1
-      ? 'Take this address out of your forwarding rule'
-      : 'Take these addresses out of your forwarding rule',
-  leaveSetupKept: 'You’ll pick up where you left off.',
-  leaveAddKept: 'Banks you’ve added stay.',
-  leaveDraftLost: 'The bank you were adding isn’t saved yet.',
-  removeBank: 'Stop forwarding this bank',
-  removeBankSub: 'Then take its addresses out of your filter or rule.',
-  removeBankTitle: (name: string) => `Stop forwarding ${name}?`,
-  removeBankMessage:
-    'Runway forgets its addresses. Its alerts keep arriving until you take them out of your filter or rule.',
-  confirmTitle: 'Confirm the forwarding address',
-  confirmWaiting: (provider: EmailProvider) =>
-    provider === 'other'
-      ? 'Waiting for the confirmation email…'
-      : `Waiting for ${EMAIL_PROVIDER_NAMES[provider]}’s confirmation email…`,
-  confirmButton: (provider: EmailProvider) =>
-    provider === 'other'
-      ? 'Confirm forwarding'
-      : `Confirm with ${EMAIL_PROVIDER_NAMES[provider]}`,
-  confirmed: 'Confirmed',
-  confirmFirst: (provider: EmailProvider) =>
-    `${EMAIL_PROVIDER_NAMES[provider]} won’t forward until you confirm.`,
-  didntArrive: 'Didn’t arrive?',
-  didntArriveLines: (provider: EmailProvider) => [
-    'Check that you pasted the address exactly.',
-    provider === 'other'
-      ? 'Send the confirmation again from your email’s forwarding settings.'
-      : provider === 'proton'
-        ? 'In Forward and auto-reply, check the rule isn’t marked pending, then save it again.'
-        : `Send it again from ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings.`,
-  ],
-  linkFailed: 'Link didn’t work?',
-  codeLine: (provider: EmailProvider) =>
-    provider === 'other'
-      ? 'Enter this code where you set up forwarding'
-      : `Enter this code in ${EMAIL_PROVIDER_NAMES[provider]}’s forwarding settings`,
-  copyCode: 'Copy code',
-  filterTitle: 'Only forward your bank’s alerts',
-  filterCopy: 'Copy this filter',
-  filterPaste:
-    'In Gmail filters, paste it in the search box, then choose Create filter → Forward it to → your Runway address',
-  filterLabel: 'Copy filter text',
-  filterLink: 'Open Gmail filters',
-  testTitle: 'Try it with one alert',
-  testLine: 'Forward one bank alert to your address.',
-  testWaiting: 'Waiting for your first alert…',
-  finishLater: 'Finish later',
-  backStep: 'Back',
-  exitStep: 'Exit',
-  notArriving: 'Not arriving?',
-  notArrivingLines: [
-    'Forwarding is confirmed.',
-    'The filter or rule forwards to your Runway address.',
-    'The alert’s From address is one you added for your bank.',
-    'It can take a minute.',
-  ],
-  testDone: 'It worked. Your first purchase is in.',
-  noFilterNotice:
-    'Other emails might be reaching Runway; they’re skipped unread. Finish the filter step so only your bank’s alerts come here.',
-  noFilterButton: 'Go to that step',
-  noEmailsYet: 'No emails yet',
-  workingSince: (when: string) => `Working · last email ${when}`,
-  addressRow: 'Your address',
-  setUpAgain: 'Set it up again',
-  setUpAgainSub: 'Walk through the steps again',
-  rowStep: (step: number, total: number) => `Step ${step} of ${total}`,
-} as const;
+type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
+
+export const readConfirmLink = (confirm: EmailConfirm) =>
+  confirm.url?.startsWith('https://') ? confirm.url : null;
+
+export const hasConfirmNotice = (confirm: EmailConfirm) =>
+  confirm.autoConfirm === 'confirmed' ||
+  readConfirmLink(confirm) !== null ||
+  confirm.code !== null;

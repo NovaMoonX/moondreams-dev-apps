@@ -32,19 +32,25 @@ import {
   intakePath,
   planPath,
   readAddressToken,
+  toAddress,
 } from './emailShared.js';
+import {
+  confirmProviderOf,
+  followConfirmLink,
+  readConfirmation,
+} from './forwardingConfirmation.js';
 import {
   excerptOf,
   htmlToText,
-  isProtonInvitation,
-  isProtonSender,
+  isKnownInstitutionSender,
   parseAlertEmail,
   readableBody,
-  readProtonLink,
   subjectTemplate,
   type ParsedAlert,
+  type SenderKind,
 } from './parseAlert.js';
 import { readAlertWithAi } from './readAlertWithAi.js';
+import { unwrapForwarded } from './unwrapForwarded.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -55,8 +61,6 @@ const MAX_PER_HOUR = 30;
 const RATE_KEEP_MS = 2 * 86_400_000;
 const DAY_MS = 86_400_000;
 const SECRET_NAME = 'RUNWAY_EMAIL_WEBHOOK_SECRET';
-const GMAIL_SENDER = 'forwarding-noreply@google.com';
-const YAHOO_DOMAINS = ['yahoo.com', 'yahoo-inc.com', 'yahoomail.com'];
 
 const readSecret = createOptionalSecretReader({ fetch: globalThis.fetch });
 
@@ -75,6 +79,7 @@ interface Mail {
   text: string;
   receivedAt: number;
   isDkimPassed: boolean;
+  dkimDomain: string | null;
 }
 
 interface Filter {
@@ -95,6 +100,7 @@ interface Handled {
   date: number | null;
   readBy: 'pattern' | 'ai' | null;
   found: ParsedAlert | null;
+  senderKind: SenderKind | null;
 }
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
@@ -105,8 +111,10 @@ const isSecretValid = (given: string | undefined, expected: string) =>
 const asString = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : '';
 
-const toAddress = (value: string) =>
-  (/<([^>]+)>/.exec(value)?.[1] ?? value).trim().toLowerCase();
+const asDomain = (value: unknown) => {
+  const domain = asString(value, 255).toLowerCase();
+  return /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(domain) ? domain : null;
+};
 
 const eventIdFor = (uid: string, messageId: string) =>
   createHash('sha256').update(`${uid}:${messageId}`).digest('hex').slice(0, 32);
@@ -199,59 +207,6 @@ async function loadFilters(
   });
 }
 
-const isYahooSender = (from: string) => {
-  const domain = toAddress(from).split('@')[1] ?? '';
-  return YAHOO_DOMAINS.some(
-    (known) => domain === known || domain.endsWith(`.${known}`),
-  );
-};
-
-const isForwardingConfirmation = (mail: Mail) =>
-  (toAddress(mail.from) === GMAIL_SENDER &&
-    mail.isDkimPassed &&
-    /forwarding confirmation/i.test(mail.subject)) ||
-  (isYahooSender(mail.from) &&
-    mail.isDkimPassed &&
-    /forward/i.test(mail.subject) &&
-    /verif|confirm/i.test(mail.subject)) ||
-  isProtonInvitation(mail);
-
-function readYahooLink(text: string) {
-  const links = Array.from(
-    text.matchAll(
-      /(?:^|[\s"'<(])(https:\/\/((?:[a-z0-9-]+\.)*yahoo\.com)\/[^\s"'<>)\]]+)/gi,
-    ),
-  )
-    .filter(([, , host]) => !/^(?:help|legal|policies)\./i.test(host))
-    .map(([, link]) => link);
-  const isVerifyPath = (link: string) =>
-    /verif|confirm/i.test(
-      link.replace(/^https:\/\/[^/]+/i, '').split(/[?#]/)[0],
-    );
-  return (
-    links.find((link) => isVerifyPath(link) && link.includes('?')) ??
-    links.find(isVerifyPath) ??
-    links[0]
-  );
-}
-
-function readConfirmation(mail: Mail) {
-  const readGoogleLink = () =>
-    /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i.exec(
-      mail.text,
-    )?.[0];
-  const url = isYahooSender(mail.from)
-    ? readYahooLink(mail.text)
-    : isProtonSender(mail.from)
-      ? readProtonLink(mail.text)
-      : readGoogleLink();
-  const code = /code[^0-9]{0,60}(\d{6,9})\b/i.exec(mail.text)?.[1];
-  return {
-    confirmUrl: url?.replace(/[.,;]+$/, '').slice(0, 2000) ?? null,
-    confirmCode: code ?? null,
-  };
-}
-
 interface Targets {
   paidByCardId: string | null;
   accountId: string | null;
@@ -312,13 +267,29 @@ const isInsideTracking = (
   return open !== undefined && open.to === null && date >= open.from;
 };
 
+// The patterns are written for bank alerts, so what they read is a bank's.
+const senderKindOf = (
+  alert: ParsedAlert,
+  readBy: 'pattern' | 'ai',
+  aiKind: SenderKind | null,
+  from: string,
+): SenderKind =>
+  readBy === 'ai' && aiKind !== null
+    ? aiKind
+    : alert.isPurchase ||
+        alert.institution !== null ||
+        isKnownInstitutionSender(from)
+      ? 'bank'
+      : 'other';
+
 async function handleMail(
   firestore: Firestore,
   uid: string,
-  mail: Mail,
+  outer: Mail,
   messageId: string | null,
   now: number,
 ): Promise<Outcome> {
+  const mail = unwrapForwarded(outer);
   const planKey = await unwrapPlanKey(firestore, loadKeyring(), uid);
   const events = firestore.collection(emailEventsPath(uid));
   const eventRef =
@@ -327,13 +298,28 @@ async function handleMail(
   const template = subjectTemplate(mail.subject);
 
   const decide = async (): Promise<Handled> => {
-    if (isForwardingConfirmation(mail)) {
+    const confirmProvider = confirmProviderOf(outer);
+    if (confirmProvider !== null) {
+      const confirmation = readConfirmation(outer);
+      const followed = await followConfirmLink(
+        confirmation.confirmUrl,
+        confirmProvider,
+      );
+      const log = followed.autoConfirm === 'failed' ? logger.warn : logger.info;
+      log('runway.email.autoConfirm', {
+        provider: confirmProvider,
+        result: followed.autoConfirm,
+        status: followed.status,
+        errorName: followed.errorName,
+      });
       await intakeRef.update({
         confirmAt: now,
         updatedAt: now,
+        autoConfirm: followed.autoConfirm,
+        confirmProvider,
         sealed: sealWithKey(
           planKey,
-          { ...readConfirmation(mail) },
+          { ...confirmation },
           SEALED_SCHEMA_VERSION,
         ),
       });
@@ -343,6 +329,7 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
+        senderKind: null,
       };
     }
     const filters = await loadFilters(firestore, uid, planKey.key);
@@ -353,13 +340,19 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
+        senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
     const byPattern = parseAlertEmail(mail);
-    const read: { alert: ParsedAlert | null; readBy: 'pattern' | 'ai' } =
+    const byAi = byPattern === null ? await readAlertWithAi(mail) : null;
+    const read: {
+      alert: ParsedAlert | null;
+      readBy: 'pattern' | 'ai';
+      aiKind: SenderKind | null;
+    } =
       byPattern !== null
-        ? { alert: byPattern, readBy: 'pattern' }
-        : { alert: await readAlertWithAi(mail), readBy: 'ai' };
+        ? { alert: byPattern, readBy: 'pattern', aiKind: null }
+        : { alert: byAi, readBy: 'ai', aiKind: byAi?.senderKind ?? null };
     const { alert } = read;
     if (alert === null) {
       return {
@@ -368,8 +361,10 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
+        senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
+    const senderKind = senderKindOf(alert, read.readBy, read.aiKind, mail.from);
     if (!alert.isPurchase) {
       return {
         outcome: 'notPurchase',
@@ -377,6 +372,7 @@ async function handleMail(
         date: null,
         readBy: read.readBy,
         found: alert,
+        senderKind,
       };
     }
     const plan = (await firestore.doc(planPath(uid)).get()).data();
@@ -393,6 +389,7 @@ async function handleMail(
         date: null,
         readBy: read.readBy,
         found: alert,
+        senderKind,
       };
     }
     const targets = await findTargets(
@@ -454,6 +451,7 @@ async function handleMail(
       date,
       readBy: read.readBy,
       found: alert,
+      senderKind,
     };
   };
 
@@ -477,8 +475,9 @@ async function handleMail(
   }
   batch.create(eventRef, {
     id: eventRef.id,
-    receivedAt: mail.receivedAt,
+    receivedAt: outer.receivedAt,
     outcome: result.outcome,
+    senderKind: result.senderKind,
     purchaseId: result.purchase?.ref.id ?? null,
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
@@ -599,6 +598,7 @@ export const ingestRunwayEmail = onRequest(
           text: text.trim() !== '' ? text : htmlToText(html),
           receivedAt,
           isDkimPassed: dkim === 'pass',
+          dkimDomain: dkim === 'pass' ? asDomain(body.dkimDomain) : null,
         },
         messageId,
         now,

@@ -89,6 +89,9 @@ export interface ParsedAlert {
   institution: string | null;
 }
 
+/** Who an email came from: a bank or card issuer, a merchant's own receipt, order or refund, or anything else. */
+export type SenderKind = 'bank' | 'store' | 'other';
+
 export const NOT_A_PURCHASE: ParsedAlert = {
   isPurchase: false,
   amountCents: null,
@@ -321,6 +324,10 @@ function readDate(text: string, receivedAt: number): number {
   );
   return plausible ?? arrivedOn;
 }
+
+/** Whether the sender's address belongs to one of the known banks or card issuers. */
+export const isKnownInstitutionSender = (from: string) =>
+  INSTITUTIONS.some(([pattern]) => pattern.test(from));
 
 const readInstitution = (
   from: string,
