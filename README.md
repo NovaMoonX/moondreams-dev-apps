@@ -195,6 +195,13 @@ The project's consent screen (Google Cloud console, Google Auth Platform, Audien
 - **Fix:** that refusal now marks the link's card details `unsupported` and the grant `isCardConsentUnsupported`, so the card says the bank doesn't share its minimum, a later sync's "needs consent" is read as unsupported, and a reconnect opens without asking for liabilities.
 - **Telling it apart:** any other `INVALID_FIELD`, or one whose "Provider says" line names another field, is a different problem; look the request id up in the Plaid Dashboard (Activity → Logs).
 
+### Runway asks to sign in to a bank again right after "Combine your two links"
+
+- **Symptom:** Combine says it worked, then Home shows "Sign in to Capital One again" for the link that was kept.
+- **Cause (inferred, not confirmed):** both links synced fine in the combine's own catch-up, and the kept one only failed after the other was removed at Plaid. At an OAuth bank (Capital One for the owner) the two Plaid Items for one login appear to share one consent at the bank, so removing one signs the other out too. Plaid's docs describe Chase, PNC and Schwab invalidating the older Item when a new one is made, but say nothing about removal reaching a sibling; the function logs `runway.sync.needsAttention` with the provider code for the kept link right after `runway.link.combined`, which confirms it.
+- **Fix:** nothing is lost. Tap the reconnect row and sign in once; the kept link picks up from where it stopped. Combine now warns that the bank may ask for one more sign-in, reports `needsSignIn` when the kept link was signed out, and opens the bank's window on it straight away.
+- **Telling it apart:** a link that asks to sign in again weeks later is the bank's yearly consent refresh (Capital One asks after a year), not this.
+
 ### A change shows, but the rest of the screen stays old until a reload
 
 - **Symptom:** on a phone (Runway, the installed app), setting what an envelope holds showed its success toast, but the envelope kept its old figure; after a reload the old figure showed for a couple of seconds and then the new one.
