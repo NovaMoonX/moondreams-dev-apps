@@ -51,6 +51,7 @@ export function readLinkFailureFacts(error: unknown): string[] {
     ['Provider code', details?.providerCode],
     ['Provider call', details?.path],
     ['Provider request', details?.requestId],
+    ['Provider says', details?.detail],
   ];
   return pairs
     .filter(
