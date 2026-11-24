@@ -409,7 +409,12 @@ function EmailSetupWalkthrough({
     isImporting: false,
   });
   const isHere = place.stepIndex === stepIndex;
-  const isImporting = isHere && place.isImporting;
+  const canImport = isConfirmed && intake.address !== null;
+  const isImporting = isHere && place.isImporting && canImport;
+  const goTo = (index: number) => {
+    setPlace({ stepIndex: index, part: 0, isImporting: false });
+    onGo(index);
+  };
   const setImporting = (next: boolean) =>
     setPlace({ stepIndex, part: 0, isImporting: next });
   const addressParts = (intake.address ?? '').split(/@(.*)/s);
@@ -458,7 +463,7 @@ function EmailSetupWalkthrough({
     addresses.length === 0 && bankIndex >= 0 ? (
       <div className='space-y-2'>
         <Muted>{WORDS.bankFirst}</Muted>
-        <Button variant='secondary' size='sm' onClick={() => onGo(bankIndex)}>
+        <Button variant='secondary' size='sm' onClick={() => goTo(bankIndex)}>
           {WORDS.bankFirstButton}
         </Button>
       </div>
@@ -732,8 +737,7 @@ function EmailSetupWalkthrough({
       if (bankFirst !== null) {
         return { title: WORDS.filterTitle, content: bankFirst };
       }
-      const canImport = isConfirmed && intake.address !== null;
-      if (isImporting && canImport) {
+      if (isImporting) {
         return {
           title: WORDS.filterImportTitle,
           instructions: [
@@ -839,7 +843,10 @@ function EmailSetupWalkthrough({
     if (isMidInstructions) {
       return {
         label: WORDS.partDone,
-        onClick: () => setPlace({ stepIndex, part: part + 1, isImporting }),
+        onClick: () => {
+          setPlace({ stepIndex, part: part + 1, isImporting });
+          onActivity(false);
+        },
       };
     }
     if (step === 'bank' && draft !== null) {
@@ -867,7 +874,7 @@ function EmailSetupWalkthrough({
         ? WORDS.nextAfterConfirm(steps[stepIndex + 1])
         : WORDS.next,
       variant: isConfirmShown ? ('secondary' as const) : undefined,
-      onClick: () => onGo(stepIndex + 1),
+      onClick: () => goTo(stepIndex + 1),
       isDisabled: step === 'copy' && intake.address === null,
     };
   };
