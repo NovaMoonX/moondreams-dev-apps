@@ -23,35 +23,27 @@ import {
 import type { OpenPurchase } from '@apps/runway/types';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
-interface SameAsOfferProps {
+interface SameAsChoicesProps {
   purchase: OpenPurchase;
+  offered: readonly OpenPurchase[];
+  title: string;
+  toRow: (entry: OpenPurchase) => { name: string; detail: string };
   onDone: () => void;
 }
 
-/** The purchases typed by hand that a waiting bank charge (or a history one the person placed) may be, when none is clearly it: tapping one makes them one purchase, and "None of these" stops offering them. */
-function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
+/** The purchases a bank charge may be, when none is clearly it: tapping one makes them one purchase (with an Undo), and "None of these" stops offering them. */
+export function SameAsChoices({
+  purchase,
+  offered,
+  title,
+  toRow,
+  onDone,
+}: SameAsChoicesProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const waiting = useAppSelector(selectLinkWaiting);
-  const windowPurchases = useAppSelector((state) => state.runway.purchases);
-  const purchases = useAppSelector(selectHistoryPurchases);
-  const historyOffers = useAppSelector(
-    (state) => selectHistoryDuplicates(state).offers,
-  );
-  const looks = useAppSelector(selectItemLooks);
   const merge = useMergeWithUndo();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const nameOf = (envelopeId: string) =>
-    looks.get(envelopeId)?.name ?? 'An envelope';
-  const offeredIds =
-    findPurchaseMatches(waiting, windowPurchases).offers.get(purchase.id) ??
-    historyOffers.get(purchase.id) ??
-    [];
-  const offered = offeredIds.flatMap((id) =>
-    purchases.filter((entry) => entry.id === id),
-  );
 
   const pick = async (typed: OpenPurchase) => {
     if (!user || busyId !== null) return;
@@ -87,16 +79,10 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
   if (offered.length === 0) return null;
   return (
     <div className='space-y-2'>
-      <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.sameTitle}</p>
+      <p className='text-sm font-medium'>{title}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map((typed) => {
-          const name = getPurchaseTitle(typed, nameOf);
-          const difference = purchase.amountCents - typed.amountCents;
-          const detail = `${NEEDS_HOME_WORDS.sameVerb} · ${formatDateOrdinalUTC(typed.date)} · ${NEEDS_HOME_WORDS.sameRow(
-            difference === 0
-              ? null
-              : `${formatCents(Math.abs(difference))} ${difference > 0 ? 'more' : 'less'}`,
-          )}`;
+          const { name, detail } = toRow(typed);
           return (
             <ItemRow
               key={typed.id}
@@ -132,6 +118,53 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
         </p>
       )}
     </div>
+  );
+}
+
+interface SameAsOfferProps {
+  purchase: OpenPurchase;
+  onDone: () => void;
+}
+
+/** The purchases typed by hand that a waiting bank charge (or a history one the person placed) may be. */
+function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
+  const waiting = useAppSelector(selectLinkWaiting);
+  const windowPurchases = useAppSelector((state) => state.runway.purchases);
+  const purchases = useAppSelector(selectHistoryPurchases);
+  const historyOffers = useAppSelector(
+    (state) => selectHistoryDuplicates(state).offers,
+  );
+  const looks = useAppSelector(selectItemLooks);
+
+  const nameOf = (envelopeId: string) =>
+    looks.get(envelopeId)?.name ?? 'An envelope';
+  const offeredIds =
+    findPurchaseMatches(waiting, windowPurchases).offers.get(purchase.id) ??
+    historyOffers.get(purchase.id) ??
+    [];
+  const offered = offeredIds.flatMap((id) =>
+    purchases.filter((entry) => entry.id === id),
+  );
+  const toRow = (typed: OpenPurchase) => {
+    const difference = purchase.amountCents - typed.amountCents;
+    return {
+      name: getPurchaseTitle(typed, nameOf),
+      detail: `${NEEDS_HOME_WORDS.sameVerb} · ${formatDateOrdinalUTC(typed.date)} · ${NEEDS_HOME_WORDS.sameRow(
+        difference === 0
+          ? null
+          : `${formatCents(Math.abs(difference))} ${difference > 0 ? 'more' : 'less'}`,
+      )}`,
+    };
+  };
+
+  return (
+    <SameAsChoices
+      purchase={purchase}
+      offered={offered}
+      title={NEEDS_HOME_WORDS.sameTitle}
+      toRow={toRow}
+      onDone={onDone}
+    />
   );
 }
 

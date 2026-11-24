@@ -7,6 +7,7 @@ import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import { ITEM_INDEX_PATH, type ItemIndexDoc } from './link/grant.js';
 import { LINK_SECRETS, planDocPath } from './link/linkShared.js';
 import { syncRunwayLink } from './link/syncRunwayLink.js';
+import { pruneMerchants } from './merchantNames.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -64,6 +65,7 @@ export const syncRunwayAccounts = onSchedule(
       ],
       Promise.resolve([]),
     );
+    await pruneMerchants(firestore, now);
     logger.info('runway.sync.backstop', {
       checked: items.size,
       synced: states.filter((state) => state === 'ok').length,
