@@ -41,9 +41,13 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   return (
     <InlineNotice tone='info' icon={Mail}>
       <p>
-        {purchase.emailWaiting === true
-          ? EMAIL_WORDS.drawerWaiting
-          : EMAIL_WORDS.drawerFromEmail}
+        {purchase.storeEmail != null
+          ? purchase.emailWaiting === true
+            ? EMAIL_WORDS.drawerStoreWaiting
+            : EMAIL_WORDS.drawerFromStore
+          : purchase.emailWaiting === true
+            ? EMAIL_WORDS.drawerWaiting
+            : EMAIL_WORDS.drawerFromEmail}
       </p>
     </InlineNotice>
   );

@@ -49,7 +49,7 @@ import {
   type ParsedAlert,
   type SenderKind,
 } from './parseAlert.js';
-import { readAlertWithAi } from './readAlertWithAi.js';
+import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
 import { unwrapForwarded } from './unwrapForwarded.js';
 
 if (getApps().length === 0) {
@@ -70,7 +70,9 @@ type Outcome =
   | 'filtered'
   | 'confirm'
   | 'unread'
-  | 'notTracking';
+  | 'notTracking'
+  | 'refund'
+  | 'cancel';
 
 interface Mail {
   to: string;
@@ -101,6 +103,7 @@ interface Handled {
   readBy: 'pattern' | 'ai' | null;
   found: ParsedAlert | null;
   senderKind: SenderKind | null;
+  storeEmail?: StoreEmail | null;
 }
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
@@ -267,6 +270,14 @@ const isInsideTracking = (
   return open !== undefined && open.to === null && date >= open.from;
 };
 
+// A store's order, refund or cancellation reads to the patterns like a bank alert or nothing, so the AI reads it instead.
+const STORE_SIGNAL =
+  /\b(order (?:#|no\.?|number|confirm\w*|cancel\w*)|your order|refund(?:ed)?|return (?:received|processed)|cancel(?:led|ed|lation))\b/i;
+
+const isStoreLike = (mail: Mail) =>
+  !isKnownInstitutionSender(mail.from) &&
+  STORE_SIGNAL.test(`${mail.subject} ${mail.text.slice(0, 600)}`);
+
 // The patterns are written for bank alerts, so what they read is a bank's.
 const senderKindOf = (
   alert: ParsedAlert,
@@ -343,17 +354,35 @@ async function handleMail(
         senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
-    const byPattern = parseAlertEmail(mail);
-    const byAi = byPattern === null ? await readAlertWithAi(mail) : null;
+    const isStore = isStoreLike(mail);
+    const firstPattern = isStore ? null : parseAlertEmail(mail);
+    const byAi = firstPattern === null ? await readAlertWithAi(mail) : null;
+    // A bank the sender list doesn't know can still write "refund"; its alert falls back to the patterns.
+    const byPattern =
+      firstPattern ??
+      (isStore && (byAi === null || byAi.storeEmail === null)
+        ? parseAlertEmail(mail)
+        : null);
     const read: {
       alert: ParsedAlert | null;
       readBy: 'pattern' | 'ai';
       aiKind: SenderKind | null;
+      storeEmail: StoreEmail | null;
     } =
       byPattern !== null
-        ? { alert: byPattern, readBy: 'pattern', aiKind: null }
-        : { alert: byAi, readBy: 'ai', aiKind: byAi?.senderKind ?? null };
-    const { alert } = read;
+        ? {
+            alert: byPattern,
+            readBy: 'pattern',
+            aiKind: null,
+            storeEmail: null,
+          }
+        : {
+            alert: byAi,
+            readBy: 'ai',
+            aiKind: byAi?.senderKind ?? null,
+            storeEmail: byAi?.storeEmail ?? null,
+          };
+    const { alert, storeEmail } = read;
     if (alert === null) {
       return {
         outcome: 'unread',
@@ -365,7 +394,8 @@ async function handleMail(
       };
     }
     const senderKind = senderKindOf(alert, read.readBy, read.aiKind, mail.from);
-    if (!alert.isPurchase) {
+    const isStoreReturn = storeEmail !== null && storeEmail.kind !== 'order';
+    if (!alert.isPurchase && !isStoreReturn) {
       return {
         outcome: 'notPurchase',
         purchase: null,
@@ -377,6 +407,9 @@ async function handleMail(
     }
     const plan = (await firestore.doc(planPath(uid)).get()).data();
     const date = alert.date as number;
+    const returnOutcome: Outcome | null = isStoreReturn
+      ? (storeEmail.kind as 'refund' | 'cancel')
+      : null;
     if (
       !isInsideTracking(
         plan?.trackingPeriods as { from: number; to: number | null }[],
@@ -390,6 +423,18 @@ async function handleMail(
         readBy: read.readBy,
         found: alert,
         senderKind,
+        storeEmail,
+      };
+    }
+    if (returnOutcome !== null && alert.amountCents === null) {
+      return {
+        outcome: returnOutcome,
+        purchase: null,
+        date: null,
+        readBy: read.readBy,
+        found: alert,
+        senderKind,
+        storeEmail,
       };
     }
     const targets = await findTargets(
@@ -401,7 +446,10 @@ async function handleMail(
     const purchaseRef = firestore
       .collection(`${planPath(uid)}/purchases`)
       .doc();
-    const cents = alert.amountCents as number;
+    const cents =
+      returnOutcome === null
+        ? (alert.amountCents as number)
+        : -(alert.amountCents as number);
     const known = await findMerchant(firestore, alert.merchant);
     const data = {
       id: purchaseRef.id,
@@ -413,7 +461,7 @@ async function handleMail(
       dedupeKey: null,
       expenseId: null,
       emailEventId: eventRef.id,
-      emailWaiting: targets.isLinked,
+      emailWaiting: returnOutcome === null ? targets.isLinked : false,
       createdAt: now,
       updatedAt: now,
       sealed: sealWithKey(
@@ -427,7 +475,12 @@ async function handleMail(
           ruleId: null,
           label: null,
           note: null,
-          lines: [{ envelopeId: null, cents, via: 'free' }],
+          lines:
+            returnOutcome === null
+              ? [{ envelopeId: null, cents, via: 'free' }]
+              : [],
+          storeEmail,
+          orderLog: null,
           refundOfId: null,
           paidByCardId: targets.paidByCardId,
           link: null,
@@ -446,12 +499,13 @@ async function handleMail(
       ),
     };
     return {
-      outcome: 'purchase',
+      outcome: returnOutcome ?? 'purchase',
       purchase: { ref: purchaseRef, data },
       date,
       readBy: read.readBy,
       found: alert,
       senderKind,
+      storeEmail,
     };
   };
 
@@ -460,7 +514,9 @@ async function handleMail(
   const isBankEmail =
     result.outcome === 'purchase' ||
     result.outcome === 'notPurchase' ||
-    result.outcome === 'notTracking';
+    result.outcome === 'notTracking' ||
+    result.outcome === 'refund' ||
+    result.outcome === 'cancel';
   const bodyText = isBankEmail ? readText : null;
   const snippet =
     result.outcome === 'confirm'
@@ -489,6 +545,7 @@ async function handleMail(
         snippet,
         bodyText,
         readBy: result.readBy,
+        storeEmail: result.storeEmail ?? null,
       },
       SEALED_SCHEMA_VERSION,
     ),
