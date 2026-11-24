@@ -181,6 +181,13 @@ Every script here passes `--project=moondreams-dev-apps` to `gcloud` itself, so 
 
 The project's consent screen (Google Cloud console, Google Auth Platform, Audience) is in **Testing**. It is one screen for the whole project, so it blocks every app's Google sign-in for anyone not listed as a test user and expires refresh tokens after 7 days. Click "Publish app", then "Confirm", so it says "In production". An "unverified app" screen with Advanced then Continue is expected until Google verifies the scopes; the rules and the verification plan are in `docs/conventions/connections.md` ("Google's consent screen is one for the whole project").
 
+### Runway lists the same bank twice in Settings
+
+- **Symptom:** Settings → Your bank shows one bank (Capital One for the owner) on two rows, each with slightly different accounts or counts.
+- **Cause:** signing in at a bank that was already linked (through Link a bank rather than the bank's Add more accounts) makes Plaid create a second Item for the same login. Each Item has its own account and transaction ids, so Runway kept two links to one bank, and both were billed by Plaid.
+- **Fix:** a repeat sign-in is now caught before it is exchanged (the accounts Plaid's window reports, by mask and name, against links already finished) and again on the server, and the person is sent to Add accounts on the link they have. A pair made before the fix shows "Combine your two {bank} links" on the bank's sheet, which keeps one link, moves every placed account onto it and removes the other at Plaid; purchases stay as they were.
+- **Telling it apart:** two logins at one bank (a personal and a joint login) share no account mask, are not offered Combine and stay as two rows on purpose. A pair whose links each brought in their own copy of an account shows a note to unlink one instead of Combine.
+
 ### A change shows, but the rest of the screen stays old until a reload
 
 - **Symptom:** on a phone (Runway, the installed app), setting what an envelope holds showed its success toast, but the envelope kept its old figure; after a reload the old figure showed for a couple of seconds and then the new one.

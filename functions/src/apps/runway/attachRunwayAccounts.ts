@@ -208,6 +208,12 @@ export const attachRunwayAccounts = onCall(
       const nextLink: LinkSealed = {
         institutionName: link.institutionName,
         institutionLogo: link.institutionLogo ?? null,
+        ...(link.institutionDomain === undefined
+          ? {}
+          : { institutionDomain: link.institutionDomain }),
+        ...(link.institutionCheckedAt === undefined
+          ? {}
+          : { institutionCheckedAt: link.institutionCheckedAt }),
         providerAccounts: link.providerAccounts.map((entry) => {
           const choice = byProvider.get(entry.providerAccountId);
           return choice

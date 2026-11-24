@@ -137,6 +137,7 @@ import {
 /** Plain placeholder marks standing in for the logos the bank sends. */
 const SEED_LOGO_RED =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwEeYkP8f3+S68eEChQ2K3bpPE6k8WorSmpAtV1nHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAe54d74r6pqBcAAAAASUVORK5CYII=';
+
 const SEED_LOGO_PURPLE =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwE+ZkP8d9+R68eEChQ2K3bpPE6k8WorSmpAtV5XHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAeNE1GEElmoxYAAAAASUVORK5CYII=';
 
@@ -1673,6 +1674,8 @@ async function writeSeedCards(
       {
         institutionName: 'Capital One',
         institutionLogo: SEED_LOGO_RED,
+        institutionDomain: 'capitalone.com',
+        institutionCheckedAt: context.now - 2 * 60_000,
         providerAccounts: [
           {
             providerAccountId: 'seed-provider-venture',
@@ -1926,7 +1929,9 @@ async function writeSeedAccounts(
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
-        institutionLogo: SEED_LOGO_PURPLE,
+        institutionLogo: null,
+        institutionDomain: 'wealthfront.com',
+        institutionCheckedAt: context.now - 3 * 60 * 60_000,
         providerAccounts: [
           {
             providerAccountId: 'seed-provider-wealthfront',
@@ -4034,6 +4039,8 @@ async function seedUnlinkedPlan(
       {
         institutionName: 'Capital One',
         institutionLogo: SEED_LOGO_RED,
+        institutionDomain: 'capitalone.com',
+        institutionCheckedAt: context.now - 2 * 60_000,
         providerAccounts: [
           {
             providerAccountId: 'seed-taylor-provider-checking',
