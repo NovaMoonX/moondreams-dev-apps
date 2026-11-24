@@ -15,7 +15,7 @@ const SENDER_KIND_WORDS = {
 export const EMAIL_WORDS = {
   rowCaption: 'Email',
   rowSub: 'Forward bank alerts and store receipts',
-  title: 'Purchases from email',
+  title: 'Email purchases',
   getAddress: 'Get your address',
   addressLoadFailed: 'Couldn’t load your address. Try again.',
   tryAgain: 'Try again',
