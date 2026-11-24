@@ -85,8 +85,9 @@ function EnvelopePickSheet({
                   detailLead={lead}
                   detail={
                     effect
-                      ? describeRunsOut(effect.spillTo, (id) =>
-                          looks.get(id)?.name ?? 'An envelope',
+                      ? describeRunsOut(
+                          effect.spillTo,
+                          (id) => looks.get(id)?.name ?? 'An envelope',
                         )
                       : null
                   }
