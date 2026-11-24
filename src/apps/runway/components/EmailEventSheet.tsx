@@ -8,9 +8,9 @@ import {
   MailCheck,
   Receipt,
   ShoppingBag,
-  RotateCcw,
   PackageX,
   type LucideIcon,
+  Undo2,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -39,7 +39,7 @@ const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   unread: Info,
   notPurchase: CircleSlash,
   notTracking: CircleSlash,
-  refund: RotateCcw,
+  refund: Undo2,
   cancel: PackageX,
 };
 

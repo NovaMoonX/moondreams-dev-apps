@@ -10,11 +10,11 @@ import {
   Landmark,
   Mail,
   Receipt,
-  RotateCcw,
   PackageX,
   Store,
   Trash2,
   type LucideIcon,
+  Undo2,
 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -97,7 +97,7 @@ const OUTCOME_BADGES: Record<EmailEventRead['outcome'], LucideIcon> = {
   confirm: Mail,
   notPurchase: Mail,
   notTracking: Mail,
-  refund: RotateCcw,
+  refund: Undo2,
   cancel: PackageX,
 };
 

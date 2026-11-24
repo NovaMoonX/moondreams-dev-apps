@@ -8,8 +8,8 @@ import {
   History,
   Link2,
   PackageX,
-  RotateCcw,
   Wand2,
+  Undo2,
 } from 'lucide-react';
 
 import { DONE_FOR_YOU_WORDS, STORE_ORDER_WORDS } from '@apps/runway/constants';
@@ -28,7 +28,7 @@ const KIND_LOOKS = {
   ended: { icon: <Flag />, label: DONE_FOR_YOU_WORDS.kindEnded },
   history: { icon: <History />, label: DONE_FOR_YOU_WORDS.kindHistory },
   released: { icon: <Clock />, label: DONE_FOR_YOU_WORDS.kindReleased },
-  storeRefund: { icon: <RotateCcw />, label: STORE_ORDER_WORDS.outcomeRefund },
+  storeRefund: { icon: <Undo2 />, label: STORE_ORDER_WORDS.outcomeRefund },
   storeCancel: { icon: <PackageX />, label: STORE_ORDER_WORDS.outcomeCancel },
 } satisfies Record<DoneForYouKind, { icon: ReactNode; label: string }>;
 

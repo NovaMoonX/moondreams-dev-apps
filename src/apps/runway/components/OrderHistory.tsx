@@ -1,7 +1,7 @@
-import { PackageX, ShoppingBag, Undo2 } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight, PackageX, ShoppingBag, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
-import ActionRow from '@/components/ActionRow';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { STORE_ORDER_WORDS } from '@apps/runway/constants';
@@ -79,22 +79,58 @@ function OrderHistory({ order, refunds, mask, onOpen }: OrderHistoryProps) {
   return (
     <ActionGroup isRoomy caption={caption}>
       {getOrderEntries(order, refunds).map(
-        ({ key, on, icon: Icon, label, cents, opensId }) => (
-          <ActionRow
-            key={key}
-            isGrouped
-            isRoomy
-            hasChevron={opensId !== null}
-            icon={<Icon />}
-            label={
-              cents === null ? label : `${label} ${mask(formatCents(cents))}`
-            }
-            subtitle={formatDateOrdinalUTC(on)}
-            onClick={() => {
-              if (opensId !== null) onOpen(opensId);
-            }}
-          />
-        ),
+        ({ key, on, icon: Icon, label, cents, opensId }) => {
+          const mark = (
+            <span
+              className='bg-accent text-accent-foreground grid size-10 shrink-0 place-items-center rounded-full [&_svg]:size-5'
+              aria-hidden='true'
+            >
+              <Icon />
+            </span>
+          );
+          const words = (
+            <span className='min-w-0 flex-1 text-left'>
+              <span className='block font-medium'>{label}</span>
+              <span className='text-muted-foreground block text-sm'>
+                {formatDateOrdinalUTC(on)}
+              </span>
+            </span>
+          );
+          const figure =
+            cents === null ? null : (
+              <span className='shrink-0 font-medium whitespace-nowrap tabular-nums'>
+                {mask(formatCents(cents))}
+              </span>
+            );
+          if (opensId === null) {
+            return (
+              <div key={key} className='flex items-center gap-3 px-3 py-3'>
+                {mark}
+                {words}
+                {figure}
+              </div>
+            );
+          }
+          return (
+            <Button
+              key={key}
+              type='button'
+              variant='tertiary'
+              size='stripped'
+              rounded='none'
+              className='hover:bg-muted text-foreground! w-full items-center justify-start gap-3 px-3 py-3 font-normal whitespace-normal'
+              onClick={() => onOpen(opensId)}
+            >
+              {mark}
+              {words}
+              {figure}
+              <ChevronRight
+                className='text-muted-foreground size-5 shrink-0'
+                aria-hidden='true'
+              />
+            </Button>
+          );
+        },
       )}
     </ActionGroup>
   );
