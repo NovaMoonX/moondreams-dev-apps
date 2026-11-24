@@ -82,7 +82,7 @@ const unlinkCallable = httpsCallable<
 
 const combineCallable = httpsCallable<
   { linkId: string; otherLinkId: string },
-  { keptLinkId: string; moved: number }
+  { keptLinkId: string; moved: number; needsSignIn: boolean }
 >(functions, 'combineRunwayLinks');
 
 /** Asks for a one-time token for the bank's window. */
@@ -105,13 +105,13 @@ export async function discardLink(linkId: string): Promise<void> {
   await discardCallable({ linkId });
 }
 
-/** Folds two sign-ins that hold the same accounts at one bank into one: every placed account stays where it is, and the other sign-in is removed at the bank. */
+/** Folds two sign-ins that hold the same accounts at one bank into one: every placed account stays where it is, and the other sign-in is removed at the bank. `needsSignIn` when removing it signed the kept one out too (an older function leaves it out). */
 export async function combineLinks(
   linkId: string,
   otherLinkId: string,
-): Promise<{ keptLinkId: string; moved: number }> {
+): Promise<{ keptLinkId: string; moved: number; needsSignIn: boolean }> {
   const response = await combineCallable({ linkId, otherLinkId });
-  return response.data;
+  return { ...response.data, needsSignIn: response.data.needsSignIn === true };
 }
 
 /** Stops a finished link on the server and at the bank; what already came in stays. Whether the bank confirmed (a refresh retries it when not). Safe to repeat. */
