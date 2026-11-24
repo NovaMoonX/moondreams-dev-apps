@@ -5,6 +5,7 @@ import FallbackImage from '@/components/FallbackImage';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import { ITEM_VIEW_WORDS } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { useWaitingBank } from '@apps/runway/hooks/useEmailPurchases';
@@ -25,7 +26,17 @@ interface PurchaseRowProps {
   emptyWhere?: string;
   /** Only the day and the card or account: the screen's own title says the rest. */
   isBrief?: boolean;
-  onOpen: () => void;
+  /** What it did to one envelope (minus out, plus back), shown in place of the whole purchase. */
+  shareCents?: number | null;
+  /** The running total under the figure ("$412.50 left"). */
+  figureWord?: string | null;
+  isFigureWordOver?: boolean;
+  /** The envelope the screen is about: a purchase only it pays leaves its name out of the detail. */
+  subjectId?: string | null;
+  /** Facts added after the day ("By your rule"). */
+  extraFacts?: readonly string[];
+  /** Opens the purchase; a row without it draws no chevron. */
+  onOpen?: () => void;
 }
 
 /** One purchase in a list: its label, merchant or envelopes as the name, the day, the card or account and whichever of those the name left out, and the amount. A refund reads as money coming back. */
@@ -35,6 +46,11 @@ function PurchaseRow({
   paidWith = null,
   emptyWhere,
   isBrief = false,
+  shareCents = null,
+  figureWord = null,
+  isFigureWordOver = false,
+  extraFacts = [],
+  subjectId = null,
   onOpen,
 }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
@@ -56,6 +72,10 @@ function PurchaseRow({
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateOrdinalUTC(purchase.date);
+  const isOnlySubject =
+    subjectId !== null &&
+    purchase.lines.length > 0 &&
+    purchase.lines.every((line) => line.envelopeId === subjectId);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const facts = isBrief
     ? []
@@ -65,11 +85,26 @@ function PurchaseRow({
             ? EMAIL_WORDS.waitingShort
             : EMAIL_WORDS.waitingOn(bank.name),
         ]
-      : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
-  const detail = [date, ...(paidWith ? [paidWith] : []), ...facts].join(' · ');
-  const amount = refund
-    ? `+${formatCents(-purchase.amountCents)}`
-    : formatCents(purchase.amountCents);
+      : isOnlySubject
+        ? [
+            purchase.label?.trim() ? (purchase.merchant?.trim() ?? null) : null,
+            refund && !isHidden ? ITEM_VIEW_WORDS.purchaseRefund : null,
+          ].filter((fact): fact is string => Boolean(fact))
+        : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
+  const detail = [
+    date,
+    ...(paidWith ? [paidWith] : []),
+    ...facts,
+    ...extraFacts,
+  ].join(' · ');
+  const amount =
+    shareCents !== null
+      ? shareCents > 0
+        ? `+${formatCents(shareCents)}`
+        : formatCents(-shareCents)
+      : refund
+        ? `+${formatCents(-purchase.amountCents)}`
+        : formatCents(purchase.amountCents);
 
   const badge = (
     <ItemBadge name={lead?.name ?? title} emoji={lead?.emoji ?? null} />
@@ -103,7 +138,10 @@ function PurchaseRow({
       }
       detail={detail}
       figure={amount}
-      ariaLabel={`${title}, ${amount}, ${detail}. Open`}
+      figureWord={figureWord}
+      isFigureWordOver={isFigureWordOver}
+      isFigureNarrow={figureWord !== null}
+      ariaLabel={`${title}, ${amount}, ${detail}${figureWord ? `, ${figureWord}` : ''}${onOpen ? '. Open' : ''}`}
       onOpen={onOpen}
     />
   );
