@@ -5630,6 +5630,7 @@ async function seedRules(
     ),
     emailEventId: null,
     emailWaiting: null,
+    wasPending: false,
   } satisfies PurchaseDoc);
   const twice: {
     id: string;

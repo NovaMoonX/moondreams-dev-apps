@@ -60,6 +60,7 @@ const purchaseDoc = (
   dedupeKey: `${id}-dedupe`,
   emailEventId: null,
   emailWaiting: null,
+  wasPending: status === 'pending',
   createdAt: date + 3_600_000,
   updatedAt: date + 3_600_000,
   sealed: seal({
