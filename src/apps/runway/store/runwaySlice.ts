@@ -99,6 +99,8 @@ export interface RunwayState {
   /** The address could not be read, so setup never offers a new one over a real one; `emailIntakeAttempt` counts retries, which restart the email listeners. */
   isEmailIntakeFailed: boolean;
   emailIntakeAttempt: number;
+  /** Keys of emailed orders, posted as several charges, whose merge failed too often to try again; their charges show in Needs a home again. */
+  splitGivenUp: string[];
   emailEvents: OpenEmailEvent[];
   isEmailEventsLoaded: boolean;
   emailFilters: OpenEmailFilter[];
@@ -240,6 +242,7 @@ const initialState: RunwayState = {
   isEmailIntakeLoaded: false,
   isEmailIntakeFailed: false,
   emailIntakeAttempt: 0,
+  splitGivenUp: [],
   emailEvents: [],
   isEmailEventsLoaded: false,
   emailFilters: [],
@@ -367,6 +370,11 @@ export const runwaySlice = createSlice({
     },
     retryEmailIntake: (state) => {
       state.emailIntakeAttempt += 1;
+    },
+    giveUpSplit: (state, action: PayloadAction<string>) => {
+      state.splitGivenUp = [
+        ...new Set([...state.splitGivenUp, action.payload]),
+      ];
     },
     setEmailEvents: (state, action: PayloadAction<OpenEmailEvent[] | null>) => {
       state.emailEvents = action.payload ?? [];
@@ -568,6 +576,7 @@ export const {
   setIsEmailIntakeLoaded,
   setIsEmailIntakeFailed,
   retryEmailIntake,
+  giveUpSplit,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

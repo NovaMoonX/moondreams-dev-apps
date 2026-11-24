@@ -740,6 +740,7 @@ const PURCHASE_DOC_FIELDS = {
   expenseId: 'notUseful',
   emailEventId: 'notUseful',
   emailWaiting: 'notUseful',
+  wasPending: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
   sealed: 'shared',

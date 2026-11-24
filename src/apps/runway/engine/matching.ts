@@ -1,5 +1,9 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import {
+  getMerchantWords,
+  isSameMerchant,
+} from '@apps/runway/engine/storeNames';
 import { getRefundableCents } from '@apps/runway/engine/purchases';
 import type {
   Cents,
@@ -278,6 +282,13 @@ const OWN_MOVE_CATEGORIES = new Set([
   'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
 ]);
 
+/** A posted bank or email purchase that a store, card or kind rule could place: never a pending charge, money in, or a move the bank files as one. */
+export const canOfferRule = (purchase: OpenPurchase) =>
+  (purchase.source === 'link' || purchase.source === 'email') &&
+  purchase.status !== 'pending' &&
+  purchase.amountCents > 0 &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
 /** A synced purchase the bank calls a card payment or a move between the person's own accounts, still waiting and unpaired: not spending until the person says it is. */
 export const isBankMove = (purchase: OpenPurchase) =>
   purchase.source === 'link' &&
@@ -302,31 +313,8 @@ export const isRefundLike = (purchase: OpenPurchase) =>
 /** How far back a bank refund looks for the purchase it returns. */
 export const REFUND_LOOKBACK_DAYS = 120;
 
-const getMerchantWords = (name: string | null) =>
-  toComparable(name?.trim() || '')
-    .split(' ')
-    .filter((word) => word !== '' && !/^\d+$/.test(word));
-
 const getNameOf = (purchase: Pick<OpenPurchase, 'merchant' | 'label'>) =>
   purchase.merchant?.trim() || purchase.label?.trim() || null;
-
-// A bank adds store numbers and short codes ("KOHLS #1234", "TARGET T-0456"); a longer word ("Venmo cash out", "Applebees") is another merchant.
-const isSameMerchant = (a: readonly string[], b: readonly string[]) => {
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  if (Math.min(a.join('').length, b.join('').length) < 3) return false;
-  if (a.join('') === b.join('')) return true;
-  return (
-    short.length > 0 &&
-    short.every((word, index) => long[index] === word) &&
-    long
-      .slice(short.length)
-      .every((word) => word.length <= 2 || /\d/.test(word))
-  );
-};
-
-/** Whether two merchant names (or labels) name the same store, store numbers, spacing and punctuation aside. */
-export const isSameStore = (a: string | null, b: string | null) =>
-  isSameMerchant(getMerchantWords(a), getMerchantWords(b));
 
 const isIncomeOrMoveIn = (category: string | null) =>
   /^(INCOME_|TRANSFER_IN_)/.test(category ?? '');

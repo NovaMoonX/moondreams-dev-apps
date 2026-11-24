@@ -96,10 +96,17 @@ export async function withProvider<T>(work: () => Promise<T>) {
       logger.warn('runway.link.providerFailed', {
         kind: error.kind,
         code: error.code,
+        requestId: error.trace.requestId,
+        path: error.trace.path,
       });
       throw new HttpsError(
         error.kind === 'unavailable' ? 'unavailable' : 'failed-precondition',
         error.message,
+        {
+          providerCode: error.code,
+          requestId: error.trace.requestId,
+          path: error.trace.path,
+        },
       );
     }
     throw error;

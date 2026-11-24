@@ -55,7 +55,13 @@ export const hasProviderSecrets = () =>
 interface PlaidFailure {
   error_code?: string;
   error_message?: string;
+  request_id?: string;
 }
+
+const asRequestId = (value: unknown): string | null =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)
+    ? value
+    : null;
 
 /** Codes only the person can fix at their bank, so the link waits for a reconnect instead of retrying. */
 const NEEDS_PERSON_CODES = new Set([
@@ -141,13 +147,19 @@ export async function call<T>(
     body: JSON.stringify({ client_id: clientId, secret, ...body }),
     ...(timeoutMs === null ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
   }).catch(() => {
-    throw new ProviderError(
+    const unreached = new ProviderError(
       'unavailable',
       'Could not reach the bank connection. Try again in a few minutes.',
     );
+    unreached.trace = { requestId: null, path };
+    throw unreached;
   });
   const json = (await response.json().catch(() => ({}))) as T & PlaidFailure;
-  if (!response.ok) throw toProviderError(json.error_code ?? '');
+  if (!response.ok) {
+    const failure = toProviderError(json.error_code ?? '');
+    failure.trace = { requestId: asRequestId(json.request_id), path };
+    throw failure;
+  }
   return json;
 }
 

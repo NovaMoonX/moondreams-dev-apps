@@ -4,6 +4,7 @@ import { CalendarClock, Landmark, Receipt } from 'lucide-react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import DebugDetails from '@/components/DebugDetails';
 import FeatureOffer from '@/components/FeatureOffer';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAppSelector, type RootState } from '@/store';
@@ -16,6 +17,7 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS, LINK_WORDS } from '@apps/runway/constants';
 import { getStatementMinimum } from '@apps/runway/engine/cards';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import { readLinkFailureFacts } from '@apps/runway/lib/linkFailure';
 import { agreeToCardDetails } from '@apps/runway/store/actions/linkActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
@@ -36,6 +38,12 @@ interface CardStatementSectionProps {
   link: OpenLink | null;
   statement: OpenCardStatement | null;
   today: DateOnly;
+}
+
+interface OfferFailure {
+  message: string;
+  facts: string[];
+  stack: string | null;
 }
 
 const OFFER_HIDDEN_PREFIX = 'runway-card-details-offer-hidden';
@@ -120,6 +128,7 @@ function CardStatementSection({
   // At Link a card warns about its due date only from the bank's minimum, so the offer to share it is never put off.
   const isLink = useAppSelector(selectLevel) === 'link';
   const [isBusy, setIsBusy] = useState(false);
+  const [failure, setFailure] = useState<OfferFailure | null>(null);
   const [isOfferHidden, setIsOfferHidden] = useLocalStorageState(
     `${OFFER_HIDDEN_PREFIX}:${link?.id ?? 'none'}`,
     false,
@@ -133,6 +142,7 @@ function CardStatementSection({
     const agree = async () => {
       if (isBusy) return;
       setIsBusy(true);
+      setFailure(null);
       try {
         const syncedBefore = link.lastSyncAt;
         const result = await agreeToCardDetails(link.id);
@@ -157,9 +167,14 @@ function CardStatementSection({
           type: result.state === 'ok' ? 'success' : 'info',
         });
       } catch (error) {
-        addToast({
-          title: getErrorMessage(error, CARD_WORDS.offerFailed(bank)),
-          type: 'error',
+        const cause = error instanceof Error ? (error.cause ?? error) : error;
+        const message = getErrorMessage(error, CARD_WORDS.offerFailed(bank));
+        addToast({ title: message, type: 'error' });
+        setFailure({
+          message:
+            cause instanceof Error && cause.message ? cause.message : message,
+          facts: readLinkFailureFacts(error),
+          stack: cause instanceof Error ? (cause.stack ?? null) : null,
         });
       } finally {
         setIsBusy(false);
@@ -190,7 +205,7 @@ function CardStatementSection({
         : isSeparateSignIn
           ? CARD_WORDS.offerSeparate(bank)
           : null;
-    return (
+    const offer = (
       <FeatureOffer
         title={CARD_WORDS.offerTitle}
         body={
@@ -212,6 +227,21 @@ function CardStatementSection({
           subtitle: CARD_WORDS.offerRowHelp,
         }}
       />
+    );
+    if (failure === null) return offer;
+    return (
+      <div className='space-y-2'>
+        {offer}
+        <DebugDetails
+          message={failure.message}
+          facts={failure.facts}
+          trace={
+            failure.stack === null
+              ? null
+              : { label: 'Stack trace', text: failure.stack }
+          }
+        />
+      </div>
     );
   }
 

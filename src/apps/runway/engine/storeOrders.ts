@@ -1,11 +1,12 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
 import { findEmailTwins } from '@apps/runway/engine/emailTwins';
-import { isRefundCandidate, isSameStore } from '@apps/runway/engine/matching';
+import { isRefundCandidate } from '@apps/runway/engine/matching';
 import { allocate } from '@apps/runway/engine/money';
 import {
   getRefundableCents,
   getRefundLines,
 } from '@apps/runway/engine/purchases';
+import { isSameStore } from '@apps/runway/engine/storeNames';
 import type {
   Cents,
   DateOnly,
@@ -108,6 +109,38 @@ export function takeOffLines(
     ...line,
     cents: line.cents - shares[index],
   }));
+}
+
+/** An order's lines shared among the charges it posted as, in proportion, so each charge's lines add up to its own amount and together they are the order's lines exactly. A line that gives a charge nothing is left out of it. Null when the charges are more than the lines can cover. */
+export function splitOrderLines(
+  lines: readonly PurchaseLine[],
+  chargeCents: readonly Cents[],
+): PurchaseLine[][] | null {
+  const shared = chargeCents.slice(0, -1).reduce<{
+    left: PurchaseLine[] | null;
+    taken: PurchaseLine[][];
+  }>(
+    (state, cents) => {
+      const after = state.left && takeOffLines(state.left, cents);
+      return after === null || state.left === null
+        ? { left: null, taken: state.taken }
+        : {
+            left: after,
+            taken: [
+              ...state.taken,
+              state.left.map((line, index) => ({
+                ...line,
+                cents: line.cents - after[index].cents,
+              })),
+            ],
+          };
+    },
+    { left: [...lines], taken: [] },
+  );
+  if (shared.left === null) return null;
+  return [...shared.taken, shared.left].map((share) =>
+    share.filter((line) => line.cents !== 0),
+  );
 }
 
 export type StorePlan =

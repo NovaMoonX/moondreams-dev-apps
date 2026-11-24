@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@lib/firebase/config';
 
 import { openBankLink } from '@apps/runway/lib/bankLink';
+import { inLinkStep } from '@apps/runway/lib/linkFailure';
 import { LINK_WORDS } from '@apps/runway/constants';
 import type { LinkChoice } from '@apps/runway/engine/linkMatch';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -130,7 +131,7 @@ export async function syncLinks(
   return response.data.results;
 }
 
-/** Opens the bank's window on a link with account selection (to sign in again after it stopped syncing, or to add accounts to a live one), folds in what the person picked and syncs it; whatever is new comes back unbound in `added`. Null when the person closed the bank's window. Plaid's update mode hands back no new grant, so nothing is exchanged. */
+/** Opens the bank's window on a link with account selection (to sign in again after it stopped syncing, or to add accounts to a live one), folds in what the person picked and syncs it; whatever is new comes back unbound in `added`. Null when the person closed the bank's window; throws `BankWindowError` when it closed on its own error. Plaid's update mode hands back no new grant, so nothing is exchanged. */
 export async function reconnectLink(
   linkId: string,
 ): Promise<LinkReconnectResult | null> {
@@ -141,14 +142,20 @@ export async function reconnectLink(
   return response.data;
 }
 
-/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window. */
+/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window; a failure is a `LinkStepError` naming the step. */
 export async function agreeToCardDetails(
   linkId: string,
 ): Promise<LinkReconnectResult | null> {
-  const session = await createSessionCallable({ linkId, forCardDetails: true });
-  const opened = await openBankLink(session.data.linkToken);
+  const session = await inLinkStep('Ask the bank for a window', () =>
+    createSessionCallable({ linkId, forCardDetails: true }),
+  );
+  const opened = await inLinkStep('Bank window', () =>
+    openBankLink(session.data.linkToken),
+  );
   if (opened === null) return null;
-  const response = await reconnectCallable({ linkId });
+  const response = await inLinkStep('Sync after agreeing', () =>
+    reconnectCallable({ linkId }),
+  );
   return response.data;
 }
 
