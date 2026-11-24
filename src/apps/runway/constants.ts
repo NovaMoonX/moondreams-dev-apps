@@ -3728,6 +3728,25 @@ export const ITEM_VIEW_WORDS = {
   historyFailed: 'The history did not load. Nothing was changed.',
   purchasesTitle: 'Purchases this month',
   purchasesEmpty: 'Nothing spent from it this month.',
+  moneyStart: 'Starting amount',
+  moneyPay: 'Income day',
+  moneyFrom: (name: string) => `From ${name}`,
+  moneyTo: (name: string) => `To ${name}`,
+  moneyOutsideIn: 'Added from outside the plan',
+  moneyOutsideOut: 'Taken out of the plan',
+  moneyPaid: 'Marked paid',
+  moneyWentTo: (name: string) => `Went to ${name}`,
+  moneyEdited: 'Edited',
+  moneyByRule: 'By your rule',
+  moneyEarlier: 'Brought forward',
+  purchaseRefund: 'Refund',
+  purchasesTotalsNote:
+    'Each total also counts moves and pay days, which History shows.',
+  moneyEarlierDetail: (date: string) => `Everything before ${date}`,
+  moneyEarlierRestDetail: (date: string) => `Everything else before ${date}`,
+  moneyLoading: 'Getting what moved in and out.',
+  goalFigure: 'saved',
+  horizonFigure: 'held',
 } as const;
 
 const skippedText = (skipped: readonly string[]) =>
@@ -5357,7 +5376,7 @@ export const LINK_WORDS = {
   combineHelp: 'Same accounts, signed in twice',
   combineTitle: (bank: string) => `Combine your ${bank} links?`,
   combineMessage: (bank: string) =>
-    `${bank} shows up twice because you signed in there twice. Runway keeps one link and disconnects the other at ${bank}. Your accounts and purchases stay where they are. This can't be undone.`,
+    `${bank} shows up twice because you signed in there twice. Runway keeps one link and disconnects the other at ${bank}, which may ask you to sign in once more right after. Your accounts and purchases stay where they are. This can't be undone.`,
   combineConfirm: 'Combine',
   twinNote: (bank: string) =>
     `${bank} shows up twice, and each sign-in brought in its own copy of your accounts, so the two can't be combined. If this one's accounts are the copies you don't use, unlink it below.`,
@@ -5371,6 +5390,8 @@ export const LINK_WORDS = {
   combineNoLonger:
     'These two links can no longer be combined. Nothing was changed.',
   combinedToast: (bank: string) => `Combined your ${bank} links`,
+  combinedSignInToast: (bank: string) =>
+    `Combined your ${bank} links. ${bank} signed you out when the other one was removed, so sign in once more to keep it syncing.`,
   addMoreRow: (bank: string) => `Add more accounts from ${bank}`,
   addMoreHelp: 'Sign in again and pick the new ones',
   pickNewRow: (count: number) =>

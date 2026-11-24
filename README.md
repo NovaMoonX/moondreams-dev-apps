@@ -188,6 +188,13 @@ The project's consent screen (Google Cloud console, Google Auth Platform, Audien
 - **Fix:** a repeat sign-in is now caught before it is exchanged (the accounts Plaid's window reports, by mask and name, against links already finished) and again on the server, and the person is sent to Add accounts on the link they have. A pair made before the fix shows "Combine your two {bank} links" on the bank's sheet, which keeps one link, moves every placed account onto it and removes the other at Plaid; purchases stay as they were.
 - **Telling it apart:** two logins at one bank (a personal and a joint login) share no account mask, are not offered Combine and stay as two rows on purpose. A pair whose links each brought in their own copy of an account shows a note to unlink one instead of Combine.
 
+### Runway asks to sign in to a bank again right after "Combine your two links"
+
+- **Symptom:** Combine says it worked, then Home shows "Sign in to Capital One again" for the link that was kept.
+- **Cause (inferred, not confirmed):** both links synced fine in the combine's own catch-up, and the kept one only failed after the other was removed at Plaid. At an OAuth bank (Capital One for the owner) the two Plaid Items for one login appear to share one consent at the bank, so removing one signs the other out too. Plaid's docs describe Chase, PNC and Schwab invalidating the older Item when a new one is made, but say nothing about removal reaching a sibling; the function logs `runway.sync.needsAttention` with the provider code for the kept link right after `runway.link.combined`, which confirms it.
+- **Fix:** nothing is lost. Tap the reconnect row and sign in once; the kept link picks up from where it stopped. Combine now warns that the bank may ask for one more sign-in, reports `needsSignIn` when the kept link was signed out, and opens the bank's window on it straight away.
+- **Telling it apart:** a link that asks to sign in again weeks later is the bank's yearly consent refresh (Capital One asks after a year), not this.
+
 ### A change shows, but the rest of the screen stays old until a reload
 
 - **Symptom:** on a phone (Runway, the installed app), setting what an envelope holds showed its success toast, but the envelope kept its old figure; after a reload the old figure showed for a couple of seconds and then the new one.
