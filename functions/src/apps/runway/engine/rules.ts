@@ -1,11 +1,29 @@
 // Generated from src/apps/runway/engine/rules.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
 import { toComparable } from '../../../vendor/optionMatchUtils.js';
-import { unspill } from './spill.js';
+import { resolvePayFromAccountId } from './accounts.js';
+import {
+  findBillCandidateIds,
+  getMatchedKeys,
+  type AutoBill,
+} from './autoPay.js';
+import { isTrackingLevel } from './level.js';
+import {
+  getSpilledLines,
+  unspill,
+  type SpillInputs,
+} from './spill.js';
 import {
   findAccountPairs,
   findPurchaseMatches,
 } from './matching.js';
-import type { OpenPurchase, OpenRule } from '../runwayTypes.js';
+import type {
+  DateOnly,
+  Level,
+  OpenAccount,
+  OpenPurchase,
+  OpenRule,
+  PurchaseLine,
+} from '../runwayTypes.js';
 
 /** The `target` of a rule that asks every time. */
 export const RULE_VARIES = 'varies';
@@ -177,6 +195,75 @@ export function findRulePlacements(
     const rule = wouldRulePlace(purchase, rules, envelopeIds, asked);
     return rule ? [{ purchase, rule }] : [];
   });
+}
+
+export interface RulePlacementInput {
+  level: Level;
+  today: DateOnly;
+  /** Every charge waiting for a home, history included. */
+  needsHome: readonly OpenPurchase[];
+  purchases: readonly OpenPurchase[];
+  rules: readonly OpenRule[];
+  autoBills: readonly AutoBill[];
+  accounts: readonly OpenAccount[];
+  /** The envelopes a rule can place into, and the balances their lines are worked out against. */
+  spill: SpillInputs;
+  twinHeld: ReadonlySet<string>;
+  isLinkHistory: (purchase: OpenPurchase) => boolean;
+  /** A charge the caller leaves alone, so it takes no share of the batch's balances. */
+  isExcluded?: (purchase: OpenPurchase) => boolean;
+}
+
+export interface PlannedPlacement extends RulePlacement {
+  /** The lines the purchase gets, each worked out seeing what the ones before it in the batch took. */
+  lines: PurchaseLine[];
+}
+
+/**
+ * Every placement a pass makes: the waiting charges a rule fits, leaving out bank history, charges a bill that pays itself is waiting for, and the caller's own exclusions, each with its lines.
+ * `postedOnly` also leaves out charges the bank has not posted yet.
+ */
+export function planRulePlacements(
+  input: RulePlacementInput,
+  { postedOnly }: { postedOnly: boolean },
+): PlannedPlacement[] {
+  const { level, today, rules, spill } = input;
+  if (!isTrackingLevel(level)) return [];
+  const waiting = input.needsHome.filter(
+    (purchase) => !input.isLinkHistory(purchase),
+  );
+  const heldForBills = findBillCandidateIds({
+    level,
+    today,
+    bills: input.autoBills,
+    waiting,
+    pullAccountId: resolvePayFromAccountId(null, input.accounts),
+    matched: getMatchedKeys(input.purchases),
+  });
+  const found = findRulePlacements(
+    waiting,
+    input.purchases,
+    rules,
+    new Set(spill.envelopes.map(({ item }) => item.id)),
+    input.twinHeld,
+  ).filter(
+    ({ purchase }) =>
+      !heldForBills.has(purchase.id) &&
+      !(postedOnly && purchase.status === 'pending') &&
+      !input.isExcluded?.(purchase),
+  );
+  return found.reduce<PlannedPlacement[]>((done, { purchase, rule }) => {
+    const taken = done.flatMap(({ lines }) =>
+      lines.map((line) => ({ ...line, cents: -line.cents })),
+    );
+    const lines = getSpilledLines(
+      spill,
+      [{ envelopeId: rule.target, cents: purchase.amountCents, via: 'chosen' }],
+      taken,
+      purchase.date,
+    );
+    return [...done, { purchase, rule, lines }];
+  }, []);
 }
 
 const RUN_LENGTH = 3;

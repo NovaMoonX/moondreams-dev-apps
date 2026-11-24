@@ -1,6 +1,7 @@
 // Generated from src/apps/runway/engine/figures.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
 import type {
   DateOnly,
+  EnvelopeVersion,
   HorizonVersion,
   Level,
   OpenAccount,
@@ -67,6 +68,11 @@ export interface ResolvedBill {
   version: BillVersion;
 }
 
+export interface ResolvedEnvelope {
+  item: PlanItemDoc;
+  version: EnvelopeVersion;
+}
+
 export interface ResolvedHorizon {
   item: PlanItemDoc;
   version: HorizonVersion;
@@ -86,6 +92,9 @@ export const isListed = (item: PlanItemDoc, on: number) =>
 const isBill = (version: OpenVersion): version is BillVersion =>
   version.kind === 'bill';
 
+const isEnvelope = (version: OpenVersion): version is EnvelopeVersion =>
+  version.kind === 'envelope';
+
 const isHorizon = (version: OpenVersion): version is HorizonVersion =>
   version.kind === 'horizon';
 
@@ -100,6 +109,30 @@ export const resolveBills = (
     .filter((item) => item.kind === 'bill' && isListed(item, on))
     .flatMap((item) => {
       const version = resolveCurrentOrNext(billVersions, item.id, on);
+      return version ? [{ item, version }] : [];
+    })
+    .sort(
+      (a, b) =>
+        PRIORITIES.indexOf(a.version.payload.priority) -
+          PRIORITIES.indexOf(b.version.payload.priority) ||
+        a.version.payload.orderIndex - b.version.payload.orderIndex ||
+        a.item.createdAt - b.item.createdAt ||
+        a.item.id.localeCompare(b.item.id),
+    );
+  return result;
+};
+
+/** The envelopes in the plan on a date, in plan order: Must before Should before Want, then rank, then creation. */
+export const resolveEnvelopes = (
+  items: readonly PlanItemDoc[],
+  versions: readonly OpenVersion[],
+  on: number,
+): ResolvedEnvelope[] => {
+  const envelopeVersions = versions.filter(isEnvelope);
+  const result = items
+    .filter((item) => item.kind === 'envelope' && isListed(item, on))
+    .flatMap((item) => {
+      const version = resolveCurrentOrNext(envelopeVersions, item.id, on);
       return version ? [{ item, version }] : [];
     })
     .sort(
@@ -612,6 +645,8 @@ export interface Figures {
     horizon: ResolvedHorizon[];
     costPaid: Record<string, CostPaidEntry[]>;
     selfPaying: ReturnType<typeof getSelfPayingBills>;
+    /** What each envelope holds from the ledger alone, before Free to Spend covers any bill. */
+    assignedByItem: Record<string, number>;
   };
 }
 
@@ -737,6 +772,7 @@ export function computeFigures(input: FiguresInput): Figures {
         getPaysItselfFromByBill(input.versions),
         startDate,
       ),
+      assignedByItem: ledgerOnly.assignedByItem,
     },
   };
 }

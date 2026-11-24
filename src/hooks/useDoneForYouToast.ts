@@ -35,7 +35,7 @@ interface DoneForYouToastOptions {
   onView: () => void;
 }
 
-/** Says what an app did on its own in one toast with a View, a moment after the last item so a batch is one line; never for items older than a day, and never on a device's first visit. */
+/** Says what an app did on its own in one toast with a View, a moment after the last item so a batch is one line; never for items older than a day, and never on a device's first visit. An item is new when this session has not seen it and it either arrived after the page opened or is newer than the device's last stamp, so an entry another clock dated earlier is still said. */
 export function useDoneForYouToast({
   items,
   isReady,
@@ -53,11 +53,12 @@ export function useDoneForYouToast({
     viewLabel,
     onView,
   });
-  const shown = useRef<{ floor: number; at: number } | null>(null);
-  const newest = items.reduce(
-    (time, item) => Math.max(time, item.createdAt),
-    0,
-  );
+  const seen = useRef<{ key: string; ids: Set<string> } | null>(null);
+  const shown = useRef<{ ids: string[]; at: number } | null>(null);
+  const idsKey = items
+    .map(({ id }) => id)
+    .sort()
+    .join(',');
 
   useEffect(() => {
     latest.current = {
@@ -72,35 +73,53 @@ export function useDoneForYouToast({
 
   useEffect(() => {
     if (!isReady) return undefined;
-    const toasted = readToasted(storageKey);
-    if (toasted === null) {
-      keepToasted(storageKey, Date.now());
-      return undefined;
+    if (seen.current?.key !== storageKey) {
+      const toasted = readToasted(storageKey);
+      if (toasted === null) keepToasted(storageKey, Date.now());
+      seen.current = {
+        key: storageKey,
+        ids: new Set(
+          latest.current.items
+            .filter(({ createdAt }) => toasted === null || createdAt <= toasted)
+            .map(({ id }) => id),
+        ),
+      };
+      shown.current = null;
     }
-    if (newest <= toasted) return undefined;
+    const { ids } = seen.current;
+    if (latest.current.items.every(({ id }) => ids.has(id))) return undefined;
     const timer = window.setTimeout(() => {
-      const since = Math.max(readToasted(storageKey) ?? toasted, toasted);
+      const current = latest.current;
       const now = Date.now();
+      const unseen = current.items.filter(({ id }) => !ids.has(id));
+      unseen.forEach(({ id }) => ids.add(id));
+      const fresh = unseen.filter(
+        ({ createdAt }) => createdAt > now - MAX_AGE_MS,
+      );
+      keepToasted(
+        storageKey,
+        Math.max(
+          readToasted(storageKey) ?? 0,
+          ...current.items.map(({ createdAt }) => createdAt),
+        ),
+      );
+      if (fresh.length === 0) return;
       const previous = shown.current;
       const isShowing = previous !== null && now - previous.at < SHOWN_MS;
-      const floor = Math.max(
-        isShowing ? previous.floor : since,
-        now - MAX_AGE_MS,
-      );
-      const current = latest.current;
-      const fresh = current.items.filter((item) => item.createdAt > floor);
-      keepToasted(storageKey, newest);
-      if (fresh.length === 0) return;
-      shown.current = { floor, at: now };
+      const said = [
+        ...(isShowing ? previous.ids : []),
+        ...fresh.map(({ id }) => id),
+      ];
+      shown.current = { ids: said, at: now };
       // Adding under a shown id stacks a second toast rather than replacing it.
       current.removeToast(TOAST_ID);
       current.addToast({
         id: TOAST_ID,
-        title: current.buildTitle(fresh.length),
+        title: current.buildTitle(said.length),
         type: 'info',
         action: { label: current.viewLabel, onClick: current.onView },
       });
     }, BATCH_MS);
     return () => window.clearTimeout(timer);
-  }, [isReady, storageKey, newest]);
+  }, [isReady, storageKey, idsKey]);
 }

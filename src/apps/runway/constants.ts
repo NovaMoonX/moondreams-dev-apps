@@ -4,6 +4,11 @@ import type { RunwayTab } from '@apps/runway/types';
 
 import {
   ACCOUNT_KINDS,
+  CATEGORY_LABELS,
+  CATEGORY_PRIMARIES,
+  DONE_FOR_YOU_ENGINE_WORDS,
+  RULE_ENGINE_WORDS,
+  SPILL_ENGINE_WORDS,
   DEFAULT_CURRENCY_CODE,
   AUTO_PAY_DAYS,
   BILL_DRAFT_CADENCES,
@@ -3645,8 +3650,8 @@ const skippedText = (skipped: readonly string[]) =>
     : `${formatList([...skipped])} ${skipped.length === 1 ? 'has' : 'have'} nothing left, so `;
 
 export const SPILL_WORDS = {
-  ranOut: (name: string, parts: string) => `${name} ran out: ${parts}`,
-  part: (amount: string, source: string) => `${amount} from ${source}`,
+  ranOut: SPILL_ENGINE_WORDS.ranOut,
+  part: SPILL_ENGINE_WORDS.part,
   runsOut: (name: string, skipped: readonly string[], parts: string) =>
     `${name} runs out: ${skippedText(skipped)}${parts}.`,
   sheetCaption: (name: string) => `${name} ran out, so the rest came from`,
@@ -5377,82 +5382,7 @@ export const LINK_WORDS = {
   unlinkedToast: (bank: string) => `Unlinked ${bank}`,
 } as const;
 
-/** The bank's detailed kinds of place, as people say them; an unknown code reads as its last part (`getCategoryLabel`). */
-export const CATEGORY_LABELS: Record<string, string> = {
-  FOOD_AND_DRINK_RESTAURANT: 'Restaurants',
-  FOOD_AND_DRINK_FAST_FOOD: 'Fast food',
-  FOOD_AND_DRINK_COFFEE: 'Coffee shops',
-  FOOD_AND_DRINK_GROCERIES: 'Groceries',
-  FOOD_AND_DRINK_BEER_WINE_AND_LIQUOR: 'Beer, wine and liquor',
-  FOOD_AND_DRINK_VENDING_MACHINES: 'Vending machines',
-  FOOD_AND_DRINK_OTHER_FOOD_AND_DRINK: 'Food and drink',
-  TRANSPORTATION_GAS: 'Gas',
-  TRANSPORTATION_PARKING: 'Parking',
-  TRANSPORTATION_PUBLIC_TRANSIT: 'Public transit',
-  TRANSPORTATION_TAXIS_AND_RIDE_SHARES: 'Taxis and rideshares',
-  TRANSPORTATION_TOLLS: 'Tolls',
-  TRANSPORTATION_BIKES_AND_SCOOTERS: 'Bikes and scooters',
-  TRAVEL_FLIGHTS: 'Flights',
-  TRAVEL_LODGING: 'Hotels and lodging',
-  TRAVEL_RENTAL_CARS: 'Rental cars',
-  ENTERTAINMENT_TV_AND_MOVIES: 'Movies and TV',
-  ENTERTAINMENT_MUSIC_AND_AUDIO: 'Music and audio',
-  ENTERTAINMENT_VIDEO_GAMES: 'Video games',
-  ENTERTAINMENT_SPORTING_EVENTS_AMUSEMENT_PARKS_AND_MUSEUMS:
-    'Events and attractions',
-  GENERAL_MERCHANDISE_BOOKSTORES_AND_NEWSSTANDS: 'Bookstores',
-  GENERAL_MERCHANDISE_CLOTHING_AND_ACCESSORIES: 'Clothing',
-  GENERAL_MERCHANDISE_CONVENIENCE_STORES: 'Convenience stores',
-  GENERAL_MERCHANDISE_DEPARTMENT_STORES: 'Department stores',
-  GENERAL_MERCHANDISE_DISCOUNT_STORES: 'Discount stores',
-  GENERAL_MERCHANDISE_ELECTRONICS: 'Electronics',
-  GENERAL_MERCHANDISE_GIFTS_AND_NOVELTIES: 'Gifts',
-  GENERAL_MERCHANDISE_OFFICE_SUPPLIES: 'Office supplies',
-  GENERAL_MERCHANDISE_ONLINE_MARKETPLACES: 'Online marketplaces',
-  GENERAL_MERCHANDISE_PET_SUPPLIES: 'Pet supplies',
-  GENERAL_MERCHANDISE_SPORTING_GOODS: 'Sporting goods',
-  GENERAL_MERCHANDISE_SUPERSTORES: 'Superstores',
-  MEDICAL_PHARMACIES_AND_SUPPLEMENTS: 'Pharmacies',
-  MEDICAL_PRIMARY_CARE: 'Doctors',
-  MEDICAL_DENTAL_CARE: 'Dentists',
-  MEDICAL_EYE_CARE: 'Eye care',
-  PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS: 'Gyms',
-  PERSONAL_CARE_HAIR_AND_BEAUTY: 'Hair and beauty',
-  PERSONAL_CARE_LAUNDRY_AND_DRY_CLEANING: 'Laundry and dry cleaning',
-  HOME_IMPROVEMENT_HARDWARE: 'Hardware stores',
-  HOME_IMPROVEMENT_FURNITURE: 'Furniture',
-  HOME_IMPROVEMENT_REPAIR_AND_MAINTENANCE: 'Home repairs',
-  RENT_AND_UTILITIES_GAS_AND_ELECTRICITY: 'Gas and electricity',
-  RENT_AND_UTILITIES_INTERNET_AND_CABLE: 'Internet and cable',
-  RENT_AND_UTILITIES_TELEPHONE: 'Phone',
-  RENT_AND_UTILITIES_WATER: 'Water',
-  GENERAL_SERVICES_AUTOMOTIVE: 'Car services',
-  GENERAL_SERVICES_CHILDCARE: 'Childcare',
-  GENERAL_SERVICES_EDUCATION: 'Education',
-  GENERAL_SERVICES_INSURANCE: 'Insurance',
-  GENERAL_SERVICES_POSTAGE_AND_SHIPPING: 'Postage and shipping',
-};
-
-/** The bank's top-level kinds, which an unknown detailed code starts with. */
-export const CATEGORY_PRIMARIES = [
-  'FOOD_AND_DRINK',
-  'TRANSPORTATION',
-  'TRAVEL',
-  'ENTERTAINMENT',
-  'GENERAL_MERCHANDISE',
-  'GENERAL_SERVICES',
-  'MEDICAL',
-  'PERSONAL_CARE',
-  'HOME_IMPROVEMENT',
-  'RENT_AND_UTILITIES',
-  'LOAN_PAYMENTS',
-  'BANK_FEES',
-  'GOVERNMENT_AND_NON_PROFIT',
-  'INCOME',
-  'TRANSFER_IN',
-  'TRANSFER_OUT',
-  'OTHER',
-] as const;
+export { CATEGORY_LABELS, CATEGORY_PRIMARIES };
 
 export const RULE_WORDS = {
   title: 'Rules',
@@ -5500,7 +5430,7 @@ export const RULE_WORDS = {
   merchantAlone:
     'A place on its own can’t be narrowed to a kind or a card. Untick it to choose those.',
   envelope: 'Which envelope?',
-  askEvery: 'Ask me every time',
+  askEvery: RULE_ENGINE_WORDS.askEvery,
   save: 'Save',
   anEnvelope: 'an envelope',
   saveAndSend: 'Save and send',
@@ -5510,7 +5440,7 @@ export const RULE_WORDS = {
   goToNeedsHome: 'Go to Needs a home',
   changesFuture: (envelope: string) =>
     `Changes future purchases. This one stays in ${envelope}.`,
-  yourRule: 'Your rule',
+  yourRule: RULE_ENGINE_WORDS.yourRule,
   heldSub: 'Waits for your answer above',
   notNow: 'Not now',
   pickOne: 'Tick at least one thing for the rule to catch.',
@@ -5658,7 +5588,9 @@ export const PLAN_SELECT_WORDS = {
 export const DONE_FOR_YOU_WORDS = {
   title: 'Done for you',
   summary: (count: number) =>
-    count === 1 ? '1 thing done for you' : `${count} things done for you`,
+    count === 1
+      ? 'Runway sorted 1 thing for you'
+      : `Runway sorted ${count} things for you`,
   view: 'View',
   empty: 'Nothing done for you yet',
   emptyBody:
@@ -5669,8 +5601,7 @@ export const DONE_FOR_YOU_WORDS = {
   yesterday: 'Yesterday',
   cannotUndo: 'It changed after this, so it can no longer be undone here.',
   undoFailed: 'That was not undone. Nothing was changed.',
-  ruleSent: (purchase: string, envelope: string) =>
-    `${purchase} went to ${envelope}`,
+  ruleSent: DONE_FOR_YOU_ENGINE_WORDS.ruleSent,
   autoMarked: (name: string) => `Marked ${name} paid`,
   autoMarkedNote: 'To take it back, open the bill and tap Mark not paid.',
   ended: (name: string) => `Ended ${name} after its last day`,

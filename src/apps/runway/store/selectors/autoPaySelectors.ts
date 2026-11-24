@@ -1,17 +1,13 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
 import {
   findAutoChecks,
   getMatchedKeys,
   getPaymentKey,
-  getUndoneDueDays,
-  isAutoBill,
-  type AutoBill,
+  toAutoBills,
   type AutoCheck,
 } from '@apps/runway/engine/autoPay';
-import { startOfUtcDay } from '@apps/runway/engine/dates';
 import {
   getPaysItselfFromByBill,
   getSelfPayingBills,
@@ -67,46 +63,7 @@ export const selectAutoBills = createSelector(
     selectRecentFrom,
     selectPaysItselfFrom,
   ],
-  (
-    bills,
-    payments,
-    level,
-    moves,
-    accounts,
-    matchKeys,
-    startDate,
-    recentFrom,
-    paysItselfFrom,
-  ): AutoBill[] => {
-    const undone = getUndoneDueDays(moves);
-    return bills
-      .filter(({ version }) => isAutoBill(version.payload, level))
-      .map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-        since: Math.max(
-          startOfUtcDay(item.createdAt),
-          startDate ?? 0,
-          recentFrom ?? 0,
-          paysItselfFrom[item.id] ?? 0,
-        ),
-        cardId: version.payload.paidByCardId ?? null,
-        accountId: resolvePayFromAccountId(version.payload.accountId, accounts),
-        merchantKeys: matchKeys[item.id] ?? [],
-        payments: (payments[item.id] ?? []).map((payment) => ({
-          dueOn: payment.dueOn,
-          payOn: payment.payOn,
-          lowCents: payment.ranged
-            ? payment.ranged.range.lowCents
-            : payment.totalCents,
-          highCents: payment.ranged
-            ? payment.ranged.range.highCents
-            : payment.totalCents,
-          paid: payment.paid,
-        })),
-        undoneDueOn: undone[item.id] ?? [],
-      }));
-  },
+  toAutoBills,
 );
 
 /** The ledger, plan and bank charges an automatic mark or match reads are all loaded. */

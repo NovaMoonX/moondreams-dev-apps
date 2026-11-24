@@ -32,7 +32,7 @@ export interface DoneForYouInput extends DoneForYouSealed {
   kind: DoneForYouKind;
 }
 
-/** Records what the app did on its own, one entry each, in one batch. */
+/** Records what the app did on its own, one entry each. */
 export async function recordDoneForYou(
   uid: string,
   encryption: RunwayEncryption,
@@ -41,13 +41,16 @@ export async function recordDoneForYou(
   if (entries.length === 0) return;
   const now = Date.now();
   const docs = await Promise.all(
-    entries.map(async ({ kind, ...sealed }): Promise<DoneForYouDoc> => ({
-      id: generateUuid(),
-      kind,
-      createdAt: now,
-      undoneAt: null,
-      sealed: await sealJson(sealed satisfies DoneForYouSealed, encryption),
-    })),
+    entries.map(
+      async ({ kind, ...sealed }) =>
+        ({
+          id: generateUuid(),
+          kind,
+          createdAt: now,
+          undoneAt: null,
+          sealed: await sealJson(sealed satisfies DoneForYouSealed, encryption),
+        }) satisfies DoneForYouDoc,
+    ),
   );
   const batch = writeBatch(db);
   docs.forEach((entry) => batch.set(doc(listRef(uid), entry.id), entry));

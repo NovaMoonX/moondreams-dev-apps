@@ -1,0 +1,250 @@
+// Generated from src/utils/formatUtils.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
+export function formatList(names: string[]) {
+  if (names.length === 0) {
+    return '';
+  }
+
+  if (names.length === 1) {
+    return names[0];
+  }
+
+  if (names.length === 2) {
+    return `${names[0]} and ${names[1]}`;
+  }
+
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
+// Intl formatters are slow to build and cheap to reuse, and these run for every row of a long timeline.
+const timeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+const clockTimes = new Map<string, string>();
+
+export function formatTime(timestamp: number) {
+  return timeFormatter.format(new Date(timestamp));
+}
+
+export function formatClockTime(hhmm: string) {
+  const known = clockTimes.get(hhmm);
+  if (known !== undefined) {
+    return known;
+  }
+  const [hours, minutes] = hhmm.split(':').map(Number);
+  const formatted = formatTime(new Date(2000, 0, 1, hours, minutes).getTime());
+  clockTimes.set(hhmm, formatted);
+  return formatted;
+}
+
+/** The calendar day of an instant (a real moment, e.g. `createdAt`) in the viewer's timezone.
+ * A date-only picker value (`fromDateInputValue`) needs `formatDateUTC` instead. */
+export function formatDate(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+const utcDayFormatters = {
+  currentYear: new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+  otherYear: new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+};
+
+/** Like `formatDate`, but reads UTC fields — for a `fromDateInputValue` timestamp
+ * (e.g. a trip's `startDate`/`endDate`), where local fields shift the day for viewers behind UTC. */
+export function formatDateUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const formatter = isCurrentYear
+    ? utcDayFormatters.currentYear
+    : utcDayFormatters.otherYear;
+
+  return formatter.format(date);
+}
+
+const utcShortDayFormatters = {
+  currentYear: new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+  otherYear: new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+};
+
+/** "Nov 1" (with the year when it isn't this one): `formatDateUTC` with the short month, for a date-only value in a tight line. */
+export function formatDateShortUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const formatter = isCurrentYear
+    ? utcShortDayFormatters.currentYear
+    : utcShortDayFormatters.otherYear;
+  const result = formatter.format(date);
+  return result;
+}
+
+/** A date-only day as "today", "tomorrow" or "yesterday" when it is one, otherwise `formatDay` ("Sep 24" by default); `today` is a date-only value too. */
+export function formatRelativeDayUTC(
+  timestamp: number,
+  today: number,
+  formatDay: (timestamp: number) => string = formatDateShortUTC,
+) {
+  const days = Math.round((timestamp - today) / 86_400_000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days === -1) return 'yesterday';
+  const result = formatDay(timestamp);
+  return result;
+}
+
+/** A day of the month with its English suffix: 1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st, 22nd, 23rd, 31st. */
+export function toDayOrdinal(day: number) {
+  const lastTwo = day % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${day}th`;
+  const suffixes: Record<number, string> = { 1: 'st', 2: 'nd', 3: 'rd' };
+  const result = `${day}${suffixes[day % 10] ?? 'th'}`;
+  return result;
+}
+
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/** "Feb 1st" (with the year when it isn't this one, "Feb 1st, 2027"): a date-only value read from its UTC fields, joined by no-break spaces so it never wraps mid-date. */
+export function formatDateOrdinalUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const day = `${SHORT_MONTHS[date.getUTCMonth()]}\u00a0${toDayOrdinal(date.getUTCDate())}`;
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const result = isCurrentYear ? day : `${day},\u00a0${date.getUTCFullYear()}`;
+  return result;
+}
+
+/** "Feb 1st" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
+export function formatDateOrdinal(timestamp: number) {
+  const date = new Date(timestamp);
+  const day = `${SHORT_MONTHS[date.getMonth()]}\u00a0${toDayOrdinal(date.getDate())}`;
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+  const result = isCurrentYear ? day : `${day},\u00a0${date.getFullYear()}`;
+  return result;
+}
+
+/** How long ago an instant was: "Just now", "5 min ago", "2 hr ago" (same day), "Yesterday at 3:15 PM", "3 days ago" up to 6, then a short date. `isMidSentence` lowercases the leading word for text that follows other words ("updated just now"). */
+export function formatTimeAgo(
+  timestamp: number,
+  now: number,
+  isMidSentence = false,
+) {
+  const elapsed = Math.max(0, now - timestamp);
+  const at = new Date(timestamp);
+  const dayStart = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round(
+    (dayStart(new Date(now)) - dayStart(at)) / 86_400_000,
+  );
+  const lead = (word: string) =>
+    isMidSentence ? word.charAt(0).toLowerCase() + word.slice(1) : word;
+  if (elapsed < 60_000) return lead('Just now');
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)} min ago`;
+  if (days <= 0) return `${Math.floor(elapsed / 3_600_000)} hr ago`;
+  if (days === 1) {
+    const time = at.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    return `${lead('Yesterday')} at ${time}`;
+  }
+  if (days < 7) return `${days} days ago`;
+  return formatDateOrdinal(timestamp);
+}
+
+/** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
+export function formatDateShort(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+
+  return date.toLocaleDateString(undefined, {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** The short month name ("Oct") of an instant in the viewer's timezone. */
+export function formatMonthShort(timestamp: number) {
+  const result = new Date(timestamp).toLocaleDateString(undefined, {
+    month: 'short',
+  });
+  return result;
+}
+
+/** Minutes-granularity duration string, e.g. "45m" or "2h 5m", for a span of milliseconds. */
+export function formatDuration(ms: number) {
+  const totalMinutes = Math.max(0, Math.round(ms / 60_000));
+  if (totalMinutes < 1) {
+    return 'less than a minute';
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
+/** Minutes-granularity countdown to a future timestamp, e.g. "in 45m" or "in 2h 5m". Assumes targetTimestamp >= now. */
+export function formatCountdown(targetTimestamp: number, now: number) {
+  const remainingMs = targetTimestamp - now;
+  if (Math.round(remainingMs / 60_000) < 1) {
+    return 'starting now';
+  }
+
+  return `in ${formatDuration(remainingMs)}`;
+}
+
+export function formatDateTime(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+
+  const options: Intl.DateTimeFormatOptions = {
+    ...(isCurrentYear ? {} : { year: 'numeric' }),
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  };
+
+  return date.toLocaleString(undefined, options);
+}

@@ -126,6 +126,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/utils/formatUtils.ts',
+    dest: 'functions/src/vendor/formatUtils.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/lib/speech/soundAlike.ts',
     dest: 'functions/src/vendor/soundAlike.ts',
     importRewrites: { '@/utils/optionMatchUtils': './optionMatchUtils.js' },
@@ -393,6 +398,9 @@ const toEngineRewrites = (text: string): Record<string, string> =>
       if (spec === '@apps/runway/types') return [[spec, '../runwayTypes.js']];
       if (spec === '@/utils/optionMatchUtils') {
         return [[spec, '../../../vendor/optionMatchUtils.js']];
+      }
+      if (spec === '@/utils/formatUtils') {
+        return [[spec, '../../../vendor/formatUtils.js']];
       }
       return [];
     }),
