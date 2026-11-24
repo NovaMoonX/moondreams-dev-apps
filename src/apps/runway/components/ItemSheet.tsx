@@ -34,6 +34,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackHeading from '@/components/BackHeading';
 import BackLink from '@/components/BackLink';
 import HomePinsList from '@apps/runway/components/HomePinsList';
 import { useHomePins } from '@apps/runway/hooks/useHomePins';
@@ -1877,18 +1878,18 @@ function ItemSheet({
 
   const browse = (
     <div className='flex flex-1 flex-col gap-4'>
-      <div className='flex items-center gap-1'>
-        <BackLink isChevronOnly onBack={() => goTo('menu')} />
-        <p className='min-w-0 text-2xl font-semibold'>
-          {view === 'balance'
+      <BackHeading
+        onBack={() => goTo('menu')}
+        title={
+          view === 'balance'
             ? GOAL_CHART_WORDS.title
             : view === 'history'
               ? ITEM_VIEW_WORDS.historyTitle
               : view === 'check'
                 ? CHECK_WORDS.title
-                : ITEM_VIEW_WORDS.purchasesTitle}
-        </p>
-      </div>
+                : ITEM_VIEW_WORDS.purchasesTitle
+        }
+      />
       {view === 'balance' && goal ? (
         <GoalBalanceView goalId={itemId} goal={goal} today={today} />
       ) : view === 'history' ? (
