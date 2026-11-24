@@ -157,6 +157,35 @@ export function formatDateOrdinal(timestamp: number) {
   return result;
 }
 
+/** How long ago an instant was: "Just now", "5 min ago", "2 hr ago" (same day), "Yesterday at 3:15 PM", "3 days ago" up to 6, then a short date. `isMidSentence` lowercases the leading word for text that follows other words ("updated just now"). */
+export function formatTimeAgo(
+  timestamp: number,
+  now: number,
+  isMidSentence = false,
+) {
+  const elapsed = Math.max(0, now - timestamp);
+  const at = new Date(timestamp);
+  const dayStart = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round(
+    (dayStart(new Date(now)) - dayStart(at)) / 86_400_000,
+  );
+  const lead = (word: string) =>
+    isMidSentence ? word.charAt(0).toLowerCase() + word.slice(1) : word;
+  if (elapsed < 60_000) return lead('Just now');
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)} min ago`;
+  if (days <= 0) return `${Math.floor(elapsed / 3_600_000)} hr ago`;
+  if (days === 1) {
+    const time = at.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    return `${lead('Yesterday')} at ${time}`;
+  }
+  if (days < 7) return `${days} days ago`;
+  return formatDateOrdinal(timestamp);
+}
+
 /** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
 export function formatDateShort(timestamp: number) {
   const date = new Date(timestamp);
