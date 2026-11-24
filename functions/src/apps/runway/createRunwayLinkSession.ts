@@ -149,7 +149,11 @@ export const createRunwayLinkSession = onCall(
         firestore,
         linkSnapshot.ref,
         grantSnapshot.ref,
-      ).catch(() => logger.warn('runway.link.cardDetailsMarkFailed'));
+      ).catch((error: unknown) =>
+        logger.warn('runway.link.cardDetailsMarkFailed', {
+          message: error instanceof Error ? error.message : 'unknown',
+        }),
+      );
     }
     if (isForCardDetails && session.isCardConsentUnsupported) {
       await markCardConsentUnsupported(
