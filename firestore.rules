@@ -564,7 +564,7 @@ service cloud.firestore {
     // started at their bank) is created and deleted by the app, never changed. A purchase read from an email
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
     // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
-    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` (the walkthrough's provider and furthest step, with the forwarded banks sealed) is created and updated by the app, never deleted. `doneForYou` is what the app did on its
+    // `emailWaiting` is the one email field the app updates. `emailSetup/progress` is deprecated and no longer read or written (the walkthrough is gone); older documents stay, and the owner may still update one, never delete it. `doneForYou` is what the app did on its
     // own: the app marks one undone and removes the ones older than 30 days.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);

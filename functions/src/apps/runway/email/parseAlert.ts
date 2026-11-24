@@ -1,8 +1,3 @@
-import {
-  isProtonSender,
-  readProtonLink,
-} from '../../../email/forwardingConfirmation.js';
-
 const DAY_MS = 86_400_000;
 export const MAX_CENTS = 100_000_000;
 const MONTHS = [
@@ -94,6 +89,9 @@ export interface ParsedAlert {
   institution: string | null;
 }
 
+/** Who an email came from: a bank or card issuer, a merchant's own receipt, order or refund, or anything else. */
+export type SenderKind = 'bank' | 'store' | 'other';
+
 export const NOT_A_PURCHASE: ParsedAlert = {
   isPurchase: false,
   amountCents: null,
@@ -117,7 +115,10 @@ export function subjectTemplate(subject: string): string {
   );
 }
 
-export { readProtonLink } from '../../../email/forwardingConfirmation.js';
+export {
+  isProtonInvitation,
+  readProtonLink,
+} from '../../../email/forwardingConfirmation.js';
 export { htmlToText } from '../../../email/emailUtils.js';
 
 const BODY_MAX = 4000;
@@ -174,18 +175,6 @@ export function excerptOf(
     .join('\n')
     .slice(0, EXCERPT_MAX);
 }
-
-/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject and an invitation link. */
-export const isProtonInvitation = (mail: {
-  from: string;
-  subject: string;
-  text: string;
-  isDkimPassed: boolean;
-}): boolean =>
-  isProtonSender(mail.from) &&
-  mail.isDkimPassed &&
-  /forward/i.test(mail.subject) &&
-  readProtonLink(mail.text) !== undefined;
 
 export function toCents(value: string): number | null {
   const [whole, fraction = ''] = value.replace(/[,\s]/g, '').split('.');
@@ -282,6 +271,10 @@ function readDate(text: string, receivedAt: number): number {
   );
   return plausible ?? arrivedOn;
 }
+
+/** Whether the sender's address belongs to one of the known banks or card issuers. */
+export const isKnownInstitutionSender = (from: string) =>
+  INSTITUTIONS.some(([pattern]) => pattern.test(from));
 
 const readInstitution = (
   from: string,

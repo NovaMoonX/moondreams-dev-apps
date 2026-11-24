@@ -39,12 +39,15 @@ import {
 } from './emailShared.js';
 import {
   excerptOf,
+  isKnownInstitutionSender,
   parseAlertEmail,
   readableBody,
   subjectTemplate,
   type ParsedAlert,
+  type SenderKind,
 } from './parseAlert.js';
 import { readAlertWithAi } from './readAlertWithAi.js';
+import { unwrapForwarded } from './unwrapForwarded.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -78,6 +81,7 @@ interface Handled {
   date: number | null;
   readBy: 'pattern' | 'ai' | null;
   found: ParsedAlert | null;
+  senderKind: SenderKind | null;
 }
 
 const readPlanKey = (firestore: Firestore, uid: string) =>
@@ -215,10 +219,26 @@ const isInsideTracking = (
   return open !== undefined && open.to === null && date >= open.from;
 };
 
+// The patterns are written for bank alerts, so what they read is a bank's.
+const senderKindOf = (
+  alert: ParsedAlert,
+  readBy: 'pattern' | 'ai',
+  aiKind: SenderKind | null,
+  from: string,
+): SenderKind =>
+  readBy === 'ai' && aiKind !== null
+    ? aiKind
+    : alert.isPurchase ||
+        alert.institution !== null ||
+        isKnownInstitutionSender(from)
+      ? 'bank'
+      : 'other';
+
 async function handleMail(
-  { firestore, uid, mail, eventId, now }: EmailHandlerInput,
+  { firestore, uid, mail: outer, eventId, now }: EmailHandlerInput,
   isConfirmation: boolean,
 ): Promise<{ outcome: Outcome }> {
+  const mail = unwrapForwarded(outer);
   const planKey = await readPlanKey(firestore, uid);
   const eventRef = firestore.doc(`${emailEventsPath(uid)}/${eventId}`);
   const template = subjectTemplate(mail.subject);
@@ -231,6 +251,7 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
+        senderKind: null,
       };
     }
     const filters = await loadFilters(firestore, uid, planKey.key);
@@ -241,13 +262,19 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
+        senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
     const byPattern = parseAlertEmail(mail);
-    const read: { alert: ParsedAlert | null; readBy: 'pattern' | 'ai' } =
+    const byAi = byPattern === null ? await readAlertWithAi(mail) : null;
+    const read: {
+      alert: ParsedAlert | null;
+      readBy: 'pattern' | 'ai';
+      aiKind: SenderKind | null;
+    } =
       byPattern !== null
-        ? { alert: byPattern, readBy: 'pattern' }
-        : { alert: await readAlertWithAi(mail), readBy: 'ai' };
+        ? { alert: byPattern, readBy: 'pattern', aiKind: null }
+        : { alert: byAi, readBy: 'ai', aiKind: byAi?.senderKind ?? null };
     const { alert } = read;
     if (alert === null) {
       return {
@@ -256,8 +283,10 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
+        senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
+    const senderKind = senderKindOf(alert, read.readBy, read.aiKind, mail.from);
     if (!alert.isPurchase) {
       return {
         outcome: 'notPurchase',
@@ -265,6 +294,7 @@ async function handleMail(
         date: null,
         readBy: read.readBy,
         found: alert,
+        senderKind,
       };
     }
     const plan = (await firestore.doc(planPath(uid)).get()).data();
@@ -281,6 +311,7 @@ async function handleMail(
         date: null,
         readBy: read.readBy,
         found: alert,
+        senderKind,
       };
     }
     const targets = await findTargets(
@@ -342,6 +373,7 @@ async function handleMail(
       date,
       readBy: read.readBy,
       found: alert,
+      senderKind,
     };
   };
 
@@ -365,8 +397,9 @@ async function handleMail(
   }
   batch.create(eventRef, {
     id: eventRef.id,
-    receivedAt: mail.receivedAt,
+    receivedAt: outer.receivedAt,
     outcome: result.outcome,
+    senderKind: result.senderKind,
     purchaseId: result.purchase?.ref.id ?? null,
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(

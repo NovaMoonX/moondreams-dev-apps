@@ -15,7 +15,8 @@ import {
   takeRateSlot,
 } from './emailUtils.js';
 import {
-  isForwardingConfirmation,
+  confirmProviderOf,
+  followConfirmLink,
   readConfirmation,
 } from './forwardingConfirmation.js';
 
@@ -32,6 +33,8 @@ export interface EmailMail {
   text: string;
   receivedAt: number;
   isDkimPassed: boolean;
+  /** The domain that signed the email, when its signature passed. */
+  dkimDomain: string | null;
 }
 
 export interface EmailHandlerInput {
@@ -74,6 +77,11 @@ const readSecret = createOptionalSecretReader({ fetch: globalThis.fetch });
 
 const asString = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : '';
+
+const asDomain = (value: unknown) => {
+  const domain = asString(value, 255).toLowerCase();
+  return /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(domain) ? domain : null;
+};
 
 /**
  * The request handler for the email worker's hand-over of one email. Every answer is a bare status or `{ outcome }`; nothing from the email is echoed.
@@ -184,18 +192,36 @@ export function createEmailIngest(config: EmailIngestConfig) {
       text: text.trim() !== '' ? text : htmlToText(html),
       receivedAt,
       isDkimPassed: dkim === 'pass',
+      dkimDomain: dkim === 'pass' ? asDomain(body.dkimDomain) : null,
     };
     const input: EmailHandlerInput = { firestore, uid, mail, eventId, now };
     const intakeRef = firestore.doc(config.intakePath(uid));
     try {
-      const isConfirmation = isForwardingConfirmation(mail);
+      const confirmProvider = confirmProviderOf(mail);
+      const isConfirmation = confirmProvider !== null;
       if (isConfirmation) {
         const confirmation = readConfirmation(mail);
+        const followed = await followConfirmLink(
+          confirmation.confirmUrl,
+          confirmProvider,
+        );
+        (followed.autoConfirm === 'failed' ? logger.warn : logger.info)(
+          'email.autoConfirm',
+          {
+            app: config.app,
+            provider: confirmProvider,
+            result: followed.autoConfirm,
+            status: followed.status,
+            errorName: followed.errorName,
+          },
+        );
         await intakeRef.update({
           ...((await config.confirmationFields?.(input, confirmation)) ??
             confirmation),
           confirmAt: now,
           updatedAt: now,
+          autoConfirm: followed.autoConfirm,
+          confirmProvider,
         });
       }
       const { outcome } = isConfirmation
