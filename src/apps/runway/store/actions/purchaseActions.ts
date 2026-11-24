@@ -445,7 +445,7 @@ async function checkDayAndEnvelopes(
 }
 
 /** The purchase as stored must still be the one the person was looking at, or another device got there first. */
-async function readUnchanged(
+export async function readUnchanged(
   transaction: Transaction,
   uid: string,
   previous: OpenPurchase,
@@ -459,7 +459,7 @@ async function readUnchanged(
   }
 }
 
-const getChangeItemIds = (...lineSets: (readonly PurchaseLine[])[]) =>
+export const getChangeItemIds = (...lineSets: (readonly PurchaseLine[])[]) =>
   [
     ...new Set(
       lineSets.flatMap((lines) =>
@@ -521,6 +521,8 @@ export async function editPurchase(
         pairKind: null,
         cardPaymentMoveId: null,
         tickedDayKey: null,
+        storeEmail: previous.storeEmail ?? null,
+        orderLog: previous.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -648,6 +650,8 @@ export async function assignPurchase(
         pairKind: null,
         cardPaymentMoveId: null,
         tickedDayKey: null,
+        storeEmail: previous.storeEmail ?? null,
+        orderLog: previous.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -829,6 +833,8 @@ async function setDepositDay(
         pairKind: null,
         cardPaymentMoveId: null,
         tickedDayKey: null,
+        storeEmail: previous.storeEmail ?? null,
+        orderLog: previous.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -1360,6 +1366,8 @@ export const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   pairKind: purchase.pairKind,
   cardPaymentMoveId: purchase.cardPaymentMoveId,
   tickedDayKey: purchase.tickedDayKey,
+  storeEmail: purchase.storeEmail ?? null,
+  orderLog: purchase.orderLog ?? null,
 });
 
 // A difference (a tip added when it posted) lands on the last line the person chose, never a spill line.
@@ -1485,6 +1493,8 @@ export async function mergeEmailPurchase(
         note: bank.note ?? email.note,
         link: bank.link ?? email.link,
         receiptText: bank.receiptText ?? email.receiptText,
+        storeEmail: bank.storeEmail ?? email.storeEmail ?? null,
+        orderLog: bank.orderLog ?? email.orderLog ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),

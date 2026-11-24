@@ -71,6 +71,8 @@ import type {
   PurchaseLine,
   CostRef,
   BillRef,
+  StoreEmail,
+  OrderLogEntry,
   PurchaseSealed,
   PurchaseDoc,
   ReleasedChargeDoc,
@@ -684,6 +686,22 @@ const BILL_REF_FIELDS = {
   moveId: 'notUseful',
 } satisfies Record<keyof BillRef, ShareDecision>;
 
+const STORE_EMAIL_FIELDS = {
+  kind: 'never',
+  orderNumber: 'never',
+  isWholeOrder: 'never',
+  merchant: 'never',
+} satisfies Record<keyof StoreEmail, ShareDecision>;
+
+const ORDER_LOG_FIELDS = {
+  kind: 'notUseful',
+  cents: 'notUseful',
+  on: 'notUseful',
+  emailEventId: 'notUseful',
+  purchaseId: 'notUseful',
+  undoneAt: 'notUseful',
+} satisfies Record<keyof OrderLogEntry, ShareDecision>;
+
 const PURCHASE_SEALED_FIELDS = {
   amountCents: 'shared',
   merchant: 'shared',
@@ -707,6 +725,8 @@ const PURCHASE_SEALED_FIELDS = {
   pairKind: 'notUseful',
   cardPaymentMoveId: 'notUseful',
   tickedDayKey: 'notUseful',
+  storeEmail: 'never',
+  orderLog: 'notUseful',
 } satisfies Record<keyof PurchaseSealed, ShareDecision>;
 
 const PURCHASE_DOC_FIELDS = {
@@ -780,6 +800,7 @@ const EMAIL_EVENT_SEALED_FIELDS = {
   snippet: 'never',
   bodyText: 'never',
   readBy: 'notUseful',
+  storeEmail: 'never',
 } satisfies Record<keyof EmailEventSealed, ShareDecision>;
 
 const EMAIL_FILTER_DOC_FIELDS = {
@@ -944,6 +965,8 @@ export const SHARE_FIELDS = {
   PurchaseLine: PURCHASE_LINE_FIELDS,
   CostRef: COST_REF_FIELDS,
   BillRef: BILL_REF_FIELDS,
+  StoreEmail: STORE_EMAIL_FIELDS,
+  OrderLogEntry: ORDER_LOG_FIELDS,
   PurchaseSealed: PURCHASE_SEALED_FIELDS,
   PurchaseDoc: PURCHASE_DOC_FIELDS,
   ReleasedChargeDoc: RELEASED_CHARGE_DOC_FIELDS,
