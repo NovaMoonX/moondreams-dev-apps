@@ -105,8 +105,8 @@ export const EMAIL_WORDS = {
     `Read from your bank’s alert email. It merges on its own when ${bank} sends the same charge.`,
   drawerStoreWaitingNamed: (bank: string) =>
     `Read from the store’s email. It merges on its own when ${bank} sends the same charge.`,
-  postedOnlyNote: (bank: string | null) =>
-    `${bank ?? 'Your bank'} shows a charge only once it posts, so this can take a few days.`,
+  drawerPostedOnly: (bank: string, isStore: boolean) =>
+    `Read from ${isStore ? 'the store’s' : 'your bank’s alert'} email. It merges once ${bank} posts the charge, often days later.`,
   emailActionsCaption: 'The email',
   drawerFromEmail: 'Read from your bank’s alert email.',
   drawerFromStore: 'Read from the store’s email.',

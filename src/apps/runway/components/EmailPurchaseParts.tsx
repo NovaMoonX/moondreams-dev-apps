@@ -44,25 +44,26 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
     );
   }
   const isStore = purchase.storeEmail != null;
-  const isWaiting = purchase.emailWaiting === true;
+  const getText = () => {
+    if (purchase.emailWaiting !== true) {
+      return isStore
+        ? EMAIL_WORDS.drawerFromStore
+        : EMAIL_WORDS.drawerFromEmail;
+    }
+    if (bank.name === null) {
+      return isStore
+        ? EMAIL_WORDS.drawerStoreWaiting
+        : EMAIL_WORDS.drawerWaiting;
+    }
+    if (bank.isPostedOnly)
+      return EMAIL_WORDS.drawerPostedOnly(bank.name, isStore);
+    return isStore
+      ? EMAIL_WORDS.drawerStoreWaitingNamed(bank.name)
+      : EMAIL_WORDS.drawerWaitingNamed(bank.name);
+  };
   return (
     <InlineNotice tone='info' icon={Mail}>
-      <p>
-        {isWaiting
-          ? bank.name === null
-            ? isStore
-              ? EMAIL_WORDS.drawerStoreWaiting
-              : EMAIL_WORDS.drawerWaiting
-            : isStore
-              ? EMAIL_WORDS.drawerStoreWaitingNamed(bank.name)
-              : EMAIL_WORDS.drawerWaitingNamed(bank.name)
-          : isStore
-            ? EMAIL_WORDS.drawerFromStore
-            : EMAIL_WORDS.drawerFromEmail}
-      </p>
-      {isWaiting && bank.isPostedOnly && (
-        <p>{EMAIL_WORDS.postedOnlyNote(bank.name)}</p>
-      )}
+      <p>{getText()}</p>
     </InlineNotice>
   );
 }
