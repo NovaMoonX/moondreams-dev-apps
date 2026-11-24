@@ -2,6 +2,7 @@ const SCRIPT_URL = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
 
 interface ProviderMetadata {
   institution: { name: string } | null;
+  accounts?: { name?: string | null; mask?: string | null }[];
 }
 
 interface ProviderHandler {
@@ -20,6 +21,8 @@ interface ProviderWindow {
 export interface BankLinkResult {
   publicToken: string;
   institutionName: string | null;
+  /** The accounts the person shared, by name and last digits, so a repeat sign-in is caught before it becomes a second link. */
+  accounts: { name: string; mask: string | null }[];
 }
 
 const loader: { promise: Promise<ProviderWindow> | null } = { promise: null };
@@ -58,7 +61,11 @@ export async function openBankLink(
   linkToken: string,
 ): Promise<BankLinkResult | null> {
   if (import.meta.env.DEV && linkToken === STAND_IN_TOKEN) {
-    return { publicToken: 'fake-public-token', institutionName: 'Chase' };
+    return {
+      publicToken: 'fake-public-token',
+      institutionName: 'Chase',
+      accounts: [],
+    };
   }
   const provider = await loadProvider();
   return new Promise((resolve) => {
@@ -68,6 +75,10 @@ export async function openBankLink(
         resolve({
           publicToken,
           institutionName: metadata.institution?.name ?? null,
+          accounts: (metadata.accounts ?? []).map((account) => ({
+            name: account.name ?? '',
+            mask: account.mask ?? null,
+          })),
         });
         handler.destroy();
       },

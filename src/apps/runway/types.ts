@@ -727,6 +727,10 @@ export interface LinkSealed {
   institutionName: string;
   /** The bank's logo as a PNG data URL; null when the bank sent none. */
   institutionLogo: string | null;
+  /** The bank's website (`capitalone.com`), for a stand-in logo while the bank sends none; null when unknown. */
+  institutionDomain: string | null;
+  /** When the bank's logo and website were last asked for; written by Functions, never read here. */
+  institutionCheckedAt: number | null;
   providerAccounts: LinkProviderAccount[];
 }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Landmark, Link2, Unlink } from 'lucide-react';
+import { Landmark, Link2, Merge, Unlink } from 'lucide-react';
 
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
@@ -12,7 +12,11 @@ import ReconnectRow from '@apps/runway/components/ReconnectRow';
 import { LINK_WORDS } from '@apps/runway/constants';
 import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { unlinkLink } from '@apps/runway/store/actions/linkActions';
+import { canCombine, findTwinOf } from '@apps/runway/engine/twinLinks';
+import {
+  combineLinks,
+  unlinkLink,
+} from '@apps/runway/store/actions/linkActions';
 import { recordUnlink } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { OpenLink } from '@apps/runway/types';
@@ -40,6 +44,7 @@ function BankSheet({
 }: BankSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const link = useAppSelector(
     (state) => state.runway.links.find((entry) => entry.id === linkId) ?? null,
   );
@@ -49,6 +54,10 @@ function BankSheet({
       (entry) => entry.id !== linkId && isLiveLink(entry),
     ),
   );
+  const twin = useAppSelector((state) => {
+    const self = state.runway.links.find((entry) => entry.id === linkId);
+    return self ? findTwinOf(self, state.runway.links) : null;
+  });
   const { reconnect, busyId } = useReconnectLink();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +72,29 @@ function BankSheet({
     (row) => row.accountId === null && row.cardId === null && !row.isSkipped,
   );
   const leftOut = link.providerAccounts.filter((row) => row.isSkipped);
+
+  const isCombinable = twin !== null && canCombine(link, twin);
+
+  const combine = async () => {
+    if (!twin || !isCombinable || isBusy) return;
+    const bank = link.institutionName || LINK_WORDS.yourBank;
+    const isConfirmed = await confirm({
+      title: LINK_WORDS.combineTitle(bank),
+      message: LINK_WORDS.combineMessage(bank),
+      confirmText: LINK_WORDS.combineConfirm,
+    });
+    if (!isConfirmed) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      await combineLinks(link.id, twin.id);
+      addToast({ title: LINK_WORDS.combinedToast(bank), type: 'success' });
+      onClose();
+    } catch (combineError) {
+      setError(getErrorMessage(combineError, LINK_WORDS.combineFailed));
+      setIsBusy(false);
+    }
+  };
 
   const unlink = async () => {
     if (!user || isBusy) return;
@@ -143,6 +175,23 @@ function BankSheet({
             </p>
           )}
         </section>
+        {twin && !isCombinable && (
+          <p className='text-muted-foreground text-sm'>
+            {LINK_WORDS.twinNote(link.institutionName || LINK_WORDS.yourBank)}
+          </p>
+        )}
+        {isCombinable && (
+          <ActionRow
+            isRoomy
+            icon={<Merge />}
+            label={LINK_WORDS.combineRow(
+              link.institutionName || LINK_WORDS.yourBank,
+            )}
+            subtitle={LINK_WORDS.combineHelp}
+            isDisabled={isBusy}
+            onClick={() => void combine()}
+          />
+        )}
         {link.status === 'needsAttention' && (
           <ReconnectRow
             busyId={busyId}

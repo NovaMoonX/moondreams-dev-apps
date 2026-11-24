@@ -5308,6 +5308,18 @@ export const LINK_WORDS = {
     'Pick every account you have at this bank now. Linking the same bank a second time can disconnect the first link.',
   addToLinkedRow: (bank: string) => `Add accounts to ${bank}`,
   addToLinkedHelp: 'Already linked? Add them there, not as a second link.',
+  alreadyLinked: (bank: string) =>
+    `${bank} is already linked. Add accounts there, so they all come in through one link.`,
+  combineRow: (bank: string) => `Combine your two ${bank} links`,
+  combineHelp: 'They hold the same accounts. Everything stays where it is.',
+  combineTitle: (bank: string) => `Combine your ${bank} links?`,
+  combineMessage: (bank: string) =>
+    `${bank} shows up twice because you signed in there twice. Runway keeps one link and moves every account onto it. Your accounts, cards and purchases stay where they are.`,
+  combineConfirm: 'Combine',
+  twinNote: (bank: string) =>
+    `You signed in at ${bank} twice, and each link brought in its own copy of these accounts. Unlink the one you don't use, and archive its copies.`,
+  combineFailed: 'Those links were not combined. Nothing was changed.',
+  combinedToast: (bank: string) => `Combined your ${bank} links`,
   addMoreRow: (bank: string) => `Add more accounts from ${bank}`,
   addMoreHelp: 'Sign in again and pick the new ones',
   pickNewRow: (count: number) =>

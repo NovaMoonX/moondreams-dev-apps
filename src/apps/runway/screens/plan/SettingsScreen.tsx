@@ -18,6 +18,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import AppToggle from '@/components/AppToggle';
 import GatesClosedNote from '@/components/GatesClosedNote';
+import LogoCredit from '@/components/LogoCredit';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SettingsRowWithSwitch from '@/components/SettingsRow';
@@ -30,6 +31,7 @@ import { canKeepDeviceSecrets } from '@/lib/security';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
+import { hasBrandLogos } from '@/utils/brandLogoUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC, formatTimeAgo } from '@/utils/formatUtils';
 import {
@@ -48,6 +50,7 @@ import {
   TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import BankLogo from '@apps/runway/components/BankLogo';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import { getOpenPeriod } from '@apps/runway/engine/level';
@@ -57,6 +60,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
+import { isStandInLogo } from '@apps/runway/utils/bankLogo';
 import { formatNotifyHour } from '@apps/runway/utils/notifyTime';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
@@ -251,15 +255,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                   key={link.id}
                   isMiddle
                   icon={
-                    link.institutionLogo === null ? (
-                      <Landmark />
-                    ) : (
-                      <img
-                        src={link.institutionLogo}
-                        alt=''
-                        className='border-border size-10 rounded-full border bg-white object-contain p-1.5'
-                      />
-                    )
+                    <BankLogo
+                      link={link}
+                      className='border-border size-10 rounded-full border bg-white object-contain p-1.5'
+                      fallback={<Landmark />}
+                    />
                   }
                   label={link.institutionName}
                   value={
@@ -274,13 +274,13 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                             ),
                           )
                         : LINK_WORDS.linkedRowValue(
-                          countBroughtIn(link),
-                          formatTimeAgo(
-                            link.lastSyncAt ?? link.createdAt,
-                            now,
-                            true,
-                          ),
-                        )
+                            countBroughtIn(link),
+                            formatTimeAgo(
+                              link.lastSyncAt ?? link.createdAt,
+                              now,
+                              true,
+                            ),
+                          )
                   }
                   onOpen={() => setOpenBankId(link.id)}
                 />
@@ -293,6 +293,9 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                 onOpen={() => setLinking({ resume: null, addTo: null })}
               />
             </div>
+            {hasBrandLogos() && finished.some(isStandInLogo) && (
+              <LogoCredit subject='Some bank logos' className='px-1' />
+            )}
           </ActionSection>
         )}
         {canEmail && (

@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 import IntroCard from '@/components/IntroCard';
+import LogoCredit from '@/components/LogoCredit';
 import SectionHeader from '@/components/SectionHeader';
 import SettingsGroup from '@/components/SettingsGroup';
 import { useAppSelector } from '@/store';
+import { hasBrandLogos } from '@/utils/brandLogoUtils';
 import KeepingSection from '@apps/pinch/components/settings/KeepingSection';
 import NumbersRow from '@apps/pinch/components/settings/NumbersRow';
 import PhotosSection from '@apps/pinch/components/settings/PhotosSection';
@@ -65,9 +67,9 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
       </div>
       <p className='text-muted-foreground px-1 pt-1 text-xs text-pretty'>
         <span className='font-medium'>About the numbers:</span> nutrition values
-        are approximate, based on USDA FoodData Central. Store logos are
-        provided by Logo.dev and remain their owners' trademarks.
+        are approximate, based on USDA FoodData Central.
       </p>
+      {hasBrandLogos() && <LogoCredit subject='Store logos' className='px-1' />}
     </section>
   );
 }

@@ -79,6 +79,11 @@ const unlinkCallable = httpsCallable<
   { unlinked: boolean; isRevokedAtBank: boolean }
 >(functions, 'unlinkRunwayAccount');
 
+const combineCallable = httpsCallable<
+  { linkId: string; otherLinkId: string },
+  { keptLinkId: string; moved: number }
+>(functions, 'combineRunwayLinks');
+
 /** Asks for a one-time token for the bank's window. */
 export async function createLinkSession(): Promise<string> {
   const response = await createSessionCallable({});
@@ -97,6 +102,15 @@ export async function exchangeLink(
 /** Revokes a link nothing was matched on at the bank and removes it; Functions refuse a link that already has accounts in it. */
 export async function discardLink(linkId: string): Promise<void> {
   await discardCallable({ linkId });
+}
+
+/** Folds two sign-ins that hold the same accounts at one bank into one: every placed account stays where it is, and the other sign-in is removed at the bank. */
+export async function combineLinks(
+  linkId: string,
+  otherLinkId: string,
+): Promise<{ keptLinkId: string; moved: number }> {
+  const response = await combineCallable({ linkId, otherLinkId });
+  return response.data;
 }
 
 /** Stops a finished link on the server and at the bank; what already came in stays. Whether the bank confirmed (a refresh retries it when not). Safe to repeat. */
