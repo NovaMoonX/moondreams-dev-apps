@@ -13,6 +13,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
 import { createOptionalSecretReader } from '../../../imageSearch/optionalSecret.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
+import { findInstitutionLogo, toSafeLogo } from '../institutionLogos.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
 import { markClosedMonths } from '../link/syncRunwayLink.js';
 import { findMerchant } from '../merchantNames.js';
@@ -42,7 +43,10 @@ import {
 import {
   excerptOf,
   htmlToText,
+  isInstitutionHost,
+  isKnownInstitution,
   isKnownInstitutionSender,
+  isMerchantHost,
   parseAlertEmail,
   readableBody,
   subjectTemplate,
@@ -293,6 +297,49 @@ const senderKindOf = (
       ? 'bank'
       : 'other';
 
+interface SenderCompany {
+  company: string | null;
+  logo: string | null;
+}
+
+// Sealed into every event the list shows, so a long picture can't weigh on 50 of them.
+const MAX_SENDER_LOGO = 30_000;
+
+const toSenderLogo = (logo: string | null) =>
+  logo !== null && logo.length <= MAX_SENDER_LOGO ? toSafeLogo(logo) : null;
+
+/** The company an email is from, only when the sender's own address says so: a store the shop list knows whose name the host carries, or a bank whose own host sent the alert. A name in a subject, body or display name proves nothing. */
+async function readSenderCompany(
+  firestore: Firestore,
+  senderKind: SenderKind | null,
+  found: ParsedAlert | null,
+  address: string,
+): Promise<SenderCompany> {
+  const none = { company: null, logo: null };
+  if (found === null) return none;
+  if (senderKind === 'store') {
+    if (found.merchant === null || !isMerchantHost(address, found.merchant)) {
+      return none;
+    }
+    const store = await findMerchant(firestore, found.merchant);
+    return store === null
+      ? none
+      : { company: store.name, logo: toSenderLogo(store.logo) };
+  }
+  if (
+    senderKind !== 'bank' ||
+    found.institution === null ||
+    !isKnownInstitution(found.institution) ||
+    !isInstitutionHost(address, found.institution)
+  ) {
+    return none;
+  }
+  const bank = await findInstitutionLogo(firestore, found.institution);
+  return bank === null
+    ? { company: found.institution, logo: null }
+    : { company: bank.name, logo: toSenderLogo(bank.logo) };
+}
+
 async function handleMail(
   firestore: Firestore,
   uid: string,
@@ -510,6 +557,12 @@ async function handleMail(
   };
 
   const result = await decide();
+  const sender = await readSenderCompany(
+    firestore,
+    result.senderKind,
+    result.found,
+    toAddress(mail.from),
+  );
   const readText = readableBody(mail.text);
   const isBankEmail =
     result.outcome === 'purchase' ||
@@ -546,6 +599,8 @@ async function handleMail(
         bodyText,
         readBy: result.readBy,
         storeEmail: result.storeEmail ?? null,
+        senderLogo: sender.logo,
+        senderCompany: sender.company,
       },
       SEALED_SCHEMA_VERSION,
     ),
