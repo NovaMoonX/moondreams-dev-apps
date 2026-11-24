@@ -95,6 +95,7 @@ import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { isOpenToPlace } from '@apps/runway/engine/purchases';
+import { canOfferRule } from '@apps/runway/engine/matching';
 import {
   selectCostPaid,
   selectExpenses,
@@ -342,8 +343,7 @@ function PurchaseScreen({
     (isPlaceable || isPlacedByHand) &&
     isTrackingLevel(level) &&
     lostPair === null &&
-    (purchase.source === 'link' || purchase.source === 'email') &&
-    purchase.amountCents > 0;
+    canOfferRule(purchase);
   const merchantRule =
     canMakeRule && merchantKey !== null
       ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)

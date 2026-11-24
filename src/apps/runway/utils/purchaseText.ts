@@ -437,7 +437,7 @@ export interface PurchaseChangeParts {
 const PURCHASE_CHANGE =
   /^(?:Purchase|Money in|Refund) (.+?): (.+?), (\$[\d,]+\.\d{2}) on ([A-Z][a-z]{2}[\s\u00a0]\d{1,2}(?:st|nd|rd|th)(?:,[\s\u00a0]\d{4})?)\.(?: (.*))?$/s;
 const PURCHASE_EDIT =
-  /^(?:Purchase|Refund) changed: (.+?), ((?:amount|envelopes|day|paid by|merchant|label|note|link|items|saved again)\b.*)\.$/s;
+  /^(?:Purchase|Refund) changed: (.+?), ((?:amount|envelopes|day|paid by|merchant|label|note|link|items|saved again|added to|taken out of|moved from)\b.*)\.$/s;
 const RULE_TAIL = /(?:^|\s)By your rule “(.+)”\.$/s;
 
 /** Reads a purchase's change-log sentence back into its parts, or null when it isn't one of those sentences (they are sealed, so old wording stays). */

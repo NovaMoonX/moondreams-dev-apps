@@ -192,9 +192,15 @@ import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import { resolveSpill, unspill } from '../../src/apps/runway/engine/spill.ts';
 import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
 import {
+  describePurchaseAssigned,
   describePurchaseEdit,
+  describePurchaseHistory,
+  describePurchaseKeptFree,
   describePurchaseRemoval,
+  describePurchaseReturned,
+  readPurchaseChange,
 } from '../../src/apps/runway/utils/purchaseText.ts';
+import { describeRulePlaced } from '../../src/apps/runway/utils/ruleText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   describeCoverage,
@@ -7813,6 +7819,72 @@ const version = (
     ),
     'Purchase changed: Safeway, taken out of Chicago trip.',
   );
+  {
+    const on = Date.UTC(2024, 10, 23);
+    const sent = {
+      ...before,
+      id: 'p',
+      date: on,
+      merchant: 'Petco, Inc',
+      amountCents: 4_393,
+    } as unknown as Parameters<typeof describePurchaseRemoval>[0];
+    const lines = [
+      { envelopeId: 'Pet Care', cents: 4_393, via: 'chosen' as const },
+    ];
+    const name = (id: string) => id;
+    const read = (summary: string) => readPurchaseChange(summary);
+    const base = {
+      title: 'Petco, Inc',
+      amount: '$43.93',
+      date: 'Nov\u00a023rd,\u00a02024',
+      rule: null,
+      extra: '',
+    };
+    assert.deepEqual(read(describePurchaseAssigned(sent, lines, name)), {
+      ...base,
+      action: 'Sent to Pet Care',
+    });
+    assert.deepEqual(
+      read(describeRulePlaced(sent, lines, name, 'Petco goes to Pet Care')),
+      { ...base, action: 'Sent to Pet Care', rule: 'Petco goes to Pet Care' },
+    );
+    assert.deepEqual(read(describePurchaseAssigned(sent, [], name)), {
+      ...base,
+      action: 'Left out of spending',
+    });
+    assert.deepEqual(read(describePurchaseRemoval(sent, name)), {
+      ...base,
+      action: 'Removed',
+    });
+    assert.deepEqual(read(describePurchaseKeptFree(sent, name)), {
+      ...base,
+      action: 'Kept in Free to Spend',
+    });
+    assert.deepEqual(read(describePurchaseReturned(sent, name)), {
+      ...base,
+      action: 'Put back in Needs a home',
+    });
+    assert.equal(
+      read(describePurchaseHistory(sent, name))?.title,
+      'Petco, Inc',
+    );
+    assert.deepEqual(
+      read('Purchase changed: Safeway, taken out of Chicago trip.'),
+      {
+        action: 'Changed taken out of Chicago trip',
+        title: 'Safeway',
+        amount: '',
+        date: '',
+        rule: null,
+        extra: '',
+      },
+    );
+    assert.equal(
+      read('Rule made: Petco goes to Pet Care.'),
+      null,
+      'a sentence that is not a purchase reads as itself',
+    );
+  }
   assert.equal(
     describePurchaseEdit(
       before,
