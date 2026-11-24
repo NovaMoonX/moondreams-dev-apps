@@ -22,3 +22,7 @@ const ADDRESS = new RegExp(
 /** The token in a `runway-<token>@moondreamsmail.com` address, or null for any other address. */
 export const readAddressToken = (to: string) =>
   ADDRESS.exec(to.trim().toLowerCase())?.[1] ?? null;
+
+/** The bare, lower-cased address in a `Name <address>` header value. */
+export const toAddress = (value: string) =>
+  (/<([^>]+)>/.exec(value)?.[1] ?? value).trim().toLowerCase();

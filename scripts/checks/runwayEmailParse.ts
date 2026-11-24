@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 
 import {
+  confirmProviderOf,
+  followConfirmLink,
+  isAcceptedConfirmUrl,
+  isForwardingConfirmation,
+} from '../../functions/src/apps/runway/email/forwardingConfirmation.ts';
+import {
   excerptOf,
   htmlToText,
   isProtonInvitation,
@@ -9,6 +15,11 @@ import {
   readProtonLink,
   subjectTemplate,
 } from '../../functions/src/apps/runway/email/parseAlert.ts';
+import {
+  readForwardedDate,
+  stripForwardPrefixes,
+  unwrapForwarded,
+} from '../../functions/src/apps/runway/email/unwrapForwarded.ts';
 
 const RECEIVED = Date.UTC(2026, 10, 4, 18, 30);
 const NOV_3 = Date.UTC(2026, 10, 3);
@@ -361,4 +372,247 @@ assert.equal(
   'a\n\nb\nsee secure.chase.com',
 );
 
-console.log(`runway email parse: ${samples.length} samples ok`);
+// Hand-forwards of a Chase-style alert, each client's own block wording.
+const ALERT_BODY =
+  'Account ending in 1234\nMerchant: CHIPOTLE 2041\nAmount: $24.50\nDate: Nov 3, 2026';
+const ALERT_SUBJECT = 'You made a $24.50 transaction with CHIPOTLE 2041';
+const FORWARDER = 'Jamie Lee <jamie@gmail.com>';
+const NOV_3_EVENING = Date.UTC(2026, 10, 3, 23, 5);
+const forwards = [
+  {
+    name: 'Gmail',
+    subject: `Fwd: ${ALERT_SUBJECT}`,
+    text: `FYI\n\n---------- Forwarded message ---------\nFrom: Chase <no.reply.alerts@chase.com>\nDate: Tue, Nov 3, 2026 at 6:05 PM\nSubject: ${ALERT_SUBJECT}\nTo: <jamie@gmail.com>\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Apple Mail',
+    subject: `Fwd: ${ALERT_SUBJECT}`,
+    text: `Begin forwarded message:\n\nFrom: Chase <no.reply.alerts@chase.com>\nSubject: ${ALERT_SUBJECT}\nDate: November 3, 2026 at 6:05:41 PM EST\nTo: Jamie Lee <jamie@icloud.com>\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Outlook',
+    subject: `FW: ${ALERT_SUBJECT}`,
+    text: `\n________________________________\nFrom: Chase <no.reply.alerts@chase.com>\nSent: Tuesday, November 3, 2026 6:05 PM\nTo: Jamie Lee\nSubject: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Outlook original message',
+    subject: `FW: Fw: ${ALERT_SUBJECT}`,
+    text: `-----Original Message-----\nFrom: Chase [mailto:no.reply.alerts@chase.com]\nSent: Tuesday, November 3, 2026 6:05 PM\nTo: Jamie Lee\nSubject: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+  },
+  {
+    name: 'Yahoo',
+    subject: `Fwd: ${ALERT_SUBJECT}`,
+    text: `----- Forwarded Message -----\nFrom: Chase <no.reply.alerts@chase.com>\nTo: Jamie Lee <jamie@yahoo.com>\nSent: Tuesday, November 3, 2026, 6:05:12 PM EST\nSubject: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+  },
+];
+forwards.forEach(({ name, subject, text }) => {
+  const outer = {
+    to: 'runway-abc@moondreamsmail.com',
+    from: FORWARDER,
+    subject,
+    text,
+    receivedAt: NOV_3_EVENING + 3_600_000,
+    isDkimPassed: true,
+  };
+  assert.ok(!isForwardingConfirmation(outer), `${name}: not a confirmation`);
+  const mail = unwrapForwarded(outer);
+  assert.equal(mail.from.includes('no.reply.alerts@chase.com'), true, name);
+  assert.equal(mail.subject, ALERT_SUBJECT, `${name}: subject`);
+  assert.equal(mail.text, ALERT_BODY, `${name}: body`);
+  assert.ok(!mail.isDkimPassed, `${name}: unwrapped is never DKIM-verified`);
+  assert.ok(
+    mail.receivedAt >= NOV_3 && mail.receivedAt < NOV_4,
+    `${name}: original date`,
+  );
+  const read = parseAlertEmail(mail);
+  assert.ok(read?.isPurchase, `${name}: read`);
+  assert.equal(read.institution, 'Chase', `${name}: institution`);
+  assert.equal(read.amountCents, 2450, `${name}: amount`);
+  assert.equal(read.merchant, 'CHIPOTLE 2041', `${name}: merchant`);
+  assert.equal(read.date, NOV_3, `${name}: date`);
+});
+
+// A forward with no header block (an auto-forward) keeps the original sender and loses only the prefix.
+const autoForward = {
+  to: 'runway-abc@moondreamsmail.com',
+  from: 'no.reply.alerts@chase.com',
+  subject: `Fwd: ${ALERT_SUBJECT}`,
+  text: ALERT_BODY,
+  receivedAt: RECEIVED,
+  isDkimPassed: true,
+};
+assert.deepEqual(unwrapForwarded(autoForward), {
+  ...autoForward,
+  subject: ALERT_SUBJECT,
+});
+[
+  ['Fwd: Fwd: hello', 'hello'],
+  ['FWD: Fw: FW: TR: WG: hello', 'hello'],
+  ['[Fwd: Your receipt]', 'Your receipt'],
+  ['Fwd: [Fwd: Your receipt]', 'Your receipt'],
+  ['  fw:  Your receipt ', 'Your receipt'],
+  ['Forward progress report', 'Forward progress report'],
+  ['Your Fwd: receipt', 'Your Fwd: receipt'],
+].forEach(([subject, expected]) =>
+  assert.equal(stripForwardPrefixes(subject), expected, subject),
+);
+
+// A missing piece keeps the outer one.
+const partial = unwrapForwarded({
+  ...autoForward,
+  from: FORWARDER,
+  text: `---------- Forwarded message ---------\nSubject: Fwd: ${ALERT_SUBJECT}\n\n${ALERT_BODY}`,
+});
+assert.equal(partial.from, FORWARDER);
+assert.equal(partial.receivedAt, RECEIVED);
+assert.equal(partial.subject, ALERT_SUBJECT);
+assert.equal(
+  unwrapForwarded({
+    ...autoForward,
+    from: FORWARDER,
+    text: 'See below.\n---------- Forwarded message ---------\nFrom: Chase <a@chase.com>\n\n',
+  }).text.includes('See below'),
+  true,
+);
+assert.equal(readForwardedDate('Someday soon'), null);
+assert.equal(
+  readForwardedDate('Mon, 3 Nov 2026 18:14:22 -0500'),
+  Date.UTC(2026, 10, 3, 23, 14),
+);
+assert.equal(
+  readForwardedDate('Tue, Nov 3, 2026 at 6:05 PM'),
+  Date.UTC(2026, 10, 3, 18, 5),
+);
+
+// A forwarded block claiming to be Google's confirmation is neither one nor unwrapped into one.
+const googleConfirmation = {
+  from: 'Gmail Team <forwarding-noreply@google.com>',
+  subject: 'Gmail Forwarding Confirmation - Receive Mail from jamie@gmail.com',
+  text: 'Confirmation code: 123456789\nOr click https://mail.google.com/mail/vf-abc123-xyz',
+};
+assert.equal(
+  confirmProviderOf({ ...googleConfirmation, isDkimPassed: true }),
+  'gmail',
+);
+assert.equal(
+  confirmProviderOf({ ...googleConfirmation, isDkimPassed: false }),
+  null,
+);
+const fakeConfirmation = {
+  to: 'runway-abc@moondreamsmail.com',
+  from: 'Mallory <mallory@example.com>',
+  subject: 'Fwd: Gmail Forwarding Confirmation',
+  text: `---------- Forwarded message ---------\nFrom: Gmail Team <forwarding-noreply@google.com>\nDate: Tue, Nov 3, 2026 at 6:05 PM\nSubject: ${googleConfirmation.subject}\nTo: <jamie@gmail.com>\n\n${googleConfirmation.text}`,
+  receivedAt: RECEIVED,
+  isDkimPassed: true,
+};
+assert.ok(!isForwardingConfirmation(fakeConfirmation));
+const unwrappedFake = unwrapForwarded(fakeConfirmation);
+assert.equal(unwrappedFake.from, 'Gmail Team <forwarding-noreply@google.com>');
+assert.ok(!isForwardingConfirmation(unwrappedFake));
+const realConfirmation = {
+  ...googleConfirmation,
+  to: 'runway-abc@moondreamsmail.com',
+  receivedAt: RECEIVED,
+  isDkimPassed: true,
+};
+assert.ok(isForwardingConfirmation(realConfirmation));
+assert.deepEqual(unwrapForwarded(realConfirmation), realConfirmation);
+
+// Which links the server may open for a confirmation.
+const accepted: [string, 'gmail' | 'yahoo'][] = [
+  ['https://mail.google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail-settings.google.com/mail/vf-abc123', 'gmail'],
+  ['https://MAIL.google.com/mail/vf-abc123', 'gmail'],
+  ['https://login.yahoo.com/account/verify?t=1', 'yahoo'],
+  ['https://yahoo.com/verify?t=1', 'yahoo'],
+];
+accepted.forEach(([url, provider]) =>
+  assert.ok(isAcceptedConfirmUrl(url, provider), url),
+);
+const refused: [string | null, 'gmail' | 'yahoo' | 'proton' | null][] = [
+  ['http://mail.google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail.google.com.evil.com/mail/vf-abc123', 'gmail'],
+  ['https://evilmail.google.com/mail/vf-abc123', 'gmail'],
+  ['https://google.com/mail/vf-abc123', 'gmail'],
+  ['https://mail.google.com@evil.com/mail/vf-abc123', 'gmail'],
+  ['https://user:pw@mail.google.com/x', 'gmail'],
+  ['https://mail.google.com:8443/x', 'gmail'],
+  ['https://login.yahoo.com/verify', 'gmail'],
+  ['https://mail.google.com/x', 'yahoo'],
+  ['https://notyahoo.com/verify', 'yahoo'],
+  ['https://yahoo.com.evil.com/verify', 'yahoo'],
+  ['https://account.proton.me/u/0/forwarding/accept?token=abc', 'proton'],
+  ['https://mail.google.com/x', null],
+  ['not a url', 'gmail'],
+  [null, 'gmail'],
+];
+refused.forEach(([url, provider]) =>
+  assert.ok(!isAcceptedConfirmUrl(url, provider), String(url)),
+);
+
+const seen: { url: string; init: RequestInit | undefined }[] = [];
+const fakeFetch = (status: number, finalUrl = '') =>
+  (async (url: string, init?: RequestInit) => {
+    seen.push({ url, init });
+    return { ok: status < 400, status, url: finalUrl || url } as Response;
+  }) as unknown as typeof fetch;
+const gmailLink = 'https://mail.google.com/mail/vf-abc123';
+const followed = await followConfirmLink(gmailLink, 'gmail', fakeFetch(200));
+assert.deepEqual(followed, {
+  autoConfirm: 'confirmed',
+  status: 200,
+  errorName: null,
+});
+assert.equal(seen.length, 1);
+assert.equal(seen[0].init?.method, 'GET');
+assert.equal(seen[0].init?.redirect, 'follow');
+assert.ok(seen[0].init?.signal instanceof AbortSignal);
+assert.equal(
+  (await followConfirmLink(gmailLink, 'gmail', fakeFetch(404))).autoConfirm,
+  'failed',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      fakeFetch(200, 'https://accounts.google.com/ServiceLogin?x=1'),
+    )
+  ).autoConfirm,
+  'failed',
+);
+assert.equal(
+  (
+    await followConfirmLink(gmailLink, 'gmail', (async () => {
+      throw new DOMException('timed out', 'TimeoutError');
+    }) as unknown as typeof fetch)
+  ).errorName,
+  'TimeoutError',
+);
+const before = seen.length;
+assert.equal(
+  (
+    await followConfirmLink(
+      'https://account.proton.me/u/0/forwarding/accept?token=abc',
+      'proton',
+      fakeFetch(200),
+    )
+  ).autoConfirm,
+  'skipped',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      'https://mail.google.com.evil.com/x',
+      'gmail',
+      fakeFetch(200),
+    )
+  ).autoConfirm,
+  'skipped',
+);
+assert.equal(seen.length, before, 'nothing unaccepted is fetched');
+
+console.log(
+  `runway email parse: ${samples.length} samples and ${forwards.length} forwards ok`,
+);
