@@ -87,6 +87,7 @@
     "check:back-history": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/backHistory.ts",
     "check:serving": "tsx scripts/checks/serving.ts",
     "check:stale-chunk": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/staleChunk.ts",
+    "check:restart-latest": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/restartLatest.ts",
     "check:sunset-times": "TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/sunsetTimes.ts",
     "check:helm-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHeldLists.ts",
     "check:held-writes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/heldWrites.ts",

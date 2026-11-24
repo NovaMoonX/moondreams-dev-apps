@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
-import { markUpdateReady, watchForAppUpdates } from './lib/app/appUpdate';
+import { markUpdateReady, raiseIfUpdateAttemptFailed, watchForAppUpdates } from './lib/app/appUpdate';
 import { reloadOnFirestoreReset } from './lib/firebase/localData';
 import { sweepFormDrafts } from './lib/app/formDrafts';
 import { installEmptyDateInputs } from './lib/app/emptyDateInputs';
@@ -13,13 +13,14 @@ import './index.css';
 // Ensures a single Service Worker handles caching for the entire origin,
 // which installs as one app through manifest-main.json.
 // Without onNeedReload the register helper reloads the page itself when an update takes over, wiping typed work.
-registerSW({ immediate: true, onNeedReload: markUpdateReady });
+registerSW({ immediate: true, onNeedReload: () => markUpdateReady('worker') });
 document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();
+raiseIfUpdateAttemptFailed();
 
 // A tab opened before a deploy can't fetch the new build's lazy chunks: raise Restart, and the error screen reloads once into the new build. Offline is not a new version.
 window.addEventListener('vite:preloadError', () => {
-  if (navigator.onLine) markUpdateReady();
+  if (navigator.onLine) markUpdateReady('stale-files');
 });
 installVersionPeek();
 installEmptyDateInputs();

@@ -7,6 +7,7 @@ on:
       - 'scripts/checks/backHistory.ts'
       - 'scripts/checks/backHistory/**'
       - 'scripts/checks/staleChunk.ts'
+      - 'scripts/checks/restartLatest.ts'
       - 'vite.config.ts'
       - 'firebase.json'
       - 'package.json'
@@ -34,16 +35,19 @@ jobs:
           if [ -n "$callers" ] || git diff "$BASE"...HEAD -- '*.ts' '*.tsx' | grep -qE '^[-+].*(afterBackLayersClose|keepEntryFor|keptFor)'; then history=true; fi
           stale=false
           if echo "$changed" | grep -qE '^(src/screens/ErrorBoundary\.tsx|src/lib/app/|src/main\.tsx|src/App\.tsx|src/routes/|vite\.config\.ts|firebase\.json|package(-lock)?\.json|scripts/checks/staleChunk\.ts|\.github/workflows/browser-checks\.yml)'; then stale=true; fi
+          restart=false
+          if echo "$changed" | grep -qE '^(src/ui/OfflineBanner\.tsx|src/hooks/useUpdateToLatest\.ts|src/components/VersionLabel\.tsx|src/screens/ErrorBoundary\.tsx|src/lib/app/|src/main\.tsx|src/App\.tsx|src/routes/|vite\.config\.ts|firebase\.json|package(-lock)?\.json|scripts/checks/restartLatest\.ts|\.github/workflows/browser-checks\.yml)'; then restart=true; fi
           echo "history=$history" >> "$GITHUB_OUTPUT"
           echo "stale=$stale" >> "$GITHUB_OUTPUT"
-          echo "back-history: $history, stale-chunk: $stale" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "restart=$restart" >> "$GITHUB_OUTPUT"
+          echo "back-history: $history, stale-chunk: $stale, restart-latest: $restart" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@v4
-        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true'
+        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true' || steps.pick.outputs.restart == 'true'
         with:
           node-version: 22
           cache: npm
       - name: Install dependencies and Chromium
-        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true'
+        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true' || steps.pick.outputs.restart == 'true'
         run: |
           npm ci
           npm install --no-save playwright@1.63.0
@@ -53,3 +57,5 @@ jobs:
         if: steps.pick.outputs.history == 'true'
       - run: npm run check:stale-chunk
         if: steps.pick.outputs.stale == 'true'
+      - run: npm run check:restart-latest
+        if: steps.pick.outputs.restart == 'true'
