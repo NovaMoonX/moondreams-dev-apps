@@ -31,6 +31,7 @@ import {
 } from '@apps/helm/utils/planDays';
 import { getOpenings, toPlannerTask } from '@apps/helm/utils/planInput';
 import type { PlanSources } from '@apps/helm/utils/planInput';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface QuestionsReadyCardProps {
   task: OpenTask;
@@ -77,6 +78,7 @@ function QuestionsReadyCard({
     answer('ready', at)
       .then(() =>
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.questionsReadyToast(meetingDay ?? 'today'),
           type: 'success',
           action: { label: HELM_COPY.undo, onClick: () => void clearAnswer() },
@@ -127,6 +129,7 @@ function QuestionsReadyCard({
     ])
       .then(() =>
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.questionsNotYetToast(
             formatClock(found.opening.startAt, timeZone),
             formatDayName(found.dayKey, sources.todayKey),

@@ -21,6 +21,7 @@ import { useMediaUrl } from '@apps/helm/hooks/useMediaUrl';
 import { removeKeptMedia } from '@apps/helm/store/actions/mediaActions';
 import type { MediaAttachment, OpenMedia } from '@apps/helm/types';
 import { shortenFileName } from '@apps/helm/utils/fileNames';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface KeptMediaViewerProps {
   media: OpenMedia;
@@ -74,6 +75,7 @@ function KeptMediaViewer({ media, record, onClose }: KeptMediaViewerProps) {
       } else {
         forgetSealedObject(media.id);
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.mediaRemovedToast(media.kind),
           type: 'success',
           action: {

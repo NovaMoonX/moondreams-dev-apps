@@ -7,6 +7,7 @@ import type {
   ScheduledCreateRefusal,
   ScheduledWrite,
 } from '@apps/helm/store/actions/scheduledActionWrites';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type Refusal = ScheduledWrite extends infer Write
   ? Write extends { refused: infer Reason }
@@ -57,6 +58,7 @@ export function useScheduledChange() {
     if (!kept) return false;
     if (undoToastId.current) removeToast(undoToastId.current);
     undoToastId.current = addToast({
+      duration: UNDO_WINDOW_MS,
       title:
         kept.dropped > 0
           ? `${message} ${HELM_COPY.scheduledDropped(kept.dropped)}`

@@ -8,6 +8,7 @@ import {
   setQuiet,
   type QuietKind,
 } from '@apps/helm/store/actions/privacyActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** Writes one thing's quiet state and says what happened: a toast with Undo on success, the refusal's own line, or why it did not save. Answers whether it saved. */
 export function useQuietWrite(
@@ -54,6 +55,7 @@ export function useQuietWrite(
       }
       if (result.kind === 'saved') {
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: toastTitle,
           type: 'success',
           action: {

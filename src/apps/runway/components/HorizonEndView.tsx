@@ -71,6 +71,7 @@ import {
 } from '@apps/runway/utils/comingChangeText';
 import { describeCostWhen, describeCost } from '@apps/runway/utils/horizonText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const MAX_STOPS_SHOWN = 3;
 
@@ -371,6 +372,7 @@ function HorizonEndView({
             .filter(Boolean)
             .join(' ') || undefined,
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: HORIZON_END_WORDS.undo,
           onClick: () => void undo(written),

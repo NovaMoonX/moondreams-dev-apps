@@ -31,8 +31,8 @@ import {
   type StopEntry,
   type StopRowCounts,
 } from '@apps/pinch/utils/shopping';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
-const UNDO_TOAST_MS = 6000;
 const ROWS_SHOWN = 40;
 const UNDO_GUARD_MS = 600;
 
@@ -261,7 +261,7 @@ function ShoppingMealsSheet({
             : `Took ${pending.length} meals off your list`,
         description: pending.length === 1 ? pending[0].note : undefined,
         type: 'success',
-        duration: UNDO_TOAST_MS,
+        duration: UNDO_WINDOW_MS,
         action: {
           label: 'Undo',
           onClick: () => {

@@ -10,8 +10,7 @@ import {
 } from '@apps/pinch/store/actions/cookActions';
 import { selectCooksLoadError } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
-
-const UNDO_TOAST_MS = 6000;
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface MarkPlannedInput {
   plannedMealId: string;
@@ -68,7 +67,7 @@ export function useCookActions(uid: string) {
       addToast({
         title: `Marked ${recipe.title} as cooked`,
         type: 'success',
-        duration: UNDO_TOAST_MS,
+        duration: UNDO_WINDOW_MS,
         action: { label: 'Undo', onClick: () => void undoFromToast(id) },
       });
     }
@@ -101,7 +100,7 @@ export function useCookActions(uid: string) {
       addToast({
         title: `Marked ${recipe.title} as cooked`,
         type: 'success',
-        duration: UNDO_TOAST_MS,
+        duration: UNDO_WINDOW_MS,
         action: { label: 'Undo', onClick: () => void undoFromToast(id) },
       });
     }

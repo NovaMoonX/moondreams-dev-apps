@@ -26,6 +26,7 @@ import type {
   WhoKin,
 } from '@apps/helm/types';
 import { KIN_ORDER_LABELS } from '@apps/helm/utils/kinText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface WhoKinSheetProps {
   isOpen: boolean;
@@ -92,6 +93,7 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
       );
       if (result === 'saved') {
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: kin
             ? HELM_COPY.kinSavedToast(who.name)
             : HELM_COPY.kinClearedToast(who.name),

@@ -91,6 +91,7 @@ import {
   getOneTimePayIds,
   getPayMonthDay,
 } from '@apps/runway/utils/payFrom';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface BillShareViewProps {
   billId: string;
@@ -319,6 +320,7 @@ function BillShareView({
       addToastRef.current({
         title: PAY_SHARE_WORDS.savedToast(pending.billName),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: PAY_SHARE_WORDS.undo,
           onClick: () => void undoPending(pending, addToastRef.current, store),
@@ -480,6 +482,7 @@ function BillShareView({
     addToast({
       title,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: PAY_SHARE_WORDS.undo,
         onClick: () => void undoPending(pending, addToast, store),
@@ -656,6 +659,7 @@ function BillShareView({
             describePaidFrom(rule, plan, true),
           ),
           type: 'error',
+          duration: UNDO_WINDOW_MS,
           action: {
             label: PAY_SHARE_WORDS.undo,
             onClick: () => void undoPending(reached, addToast, store),

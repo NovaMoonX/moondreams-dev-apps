@@ -31,6 +31,7 @@ import {
   selectNoteById,
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import QuietRow from '@apps/helm/components/privacy/QuietRow';
 import { filterPrivateOwnPage } from '@apps/helm/utils/privacy';
@@ -106,6 +107,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
       });
       onClose();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.noteDeletedToast(title),
         type: 'success',
         action: {

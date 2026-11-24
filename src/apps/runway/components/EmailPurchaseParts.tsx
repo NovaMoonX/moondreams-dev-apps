@@ -5,6 +5,7 @@ import { Filter, Hourglass, Mail } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
@@ -82,6 +83,7 @@ export function EmailPurchaseRows({
       addToast({
         title: EMAIL_WORDS.stoppedWaiting,
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: EMAIL_WORDS.undo,
           onClick: () =>

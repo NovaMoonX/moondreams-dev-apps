@@ -19,6 +19,7 @@ import { DAY_MS, HELM_COPY } from '@apps/helm/constants';
 import { setMilestoneDone } from '@apps/helm/store/actions/projectActions';
 import type { OpenProject } from '@apps/helm/types';
 import { getDueDay } from '@apps/helm/utils/captureReading';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface MilestonesTabProps {
   project: OpenProject;
@@ -76,6 +77,7 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
     });
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: isDone
         ? project.kind === 'goal'
           ? HELM_COPY.goalMilestoneReachedToast(entry.title)
