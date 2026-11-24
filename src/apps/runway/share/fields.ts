@@ -71,6 +71,8 @@ import type {
   PurchaseLine,
   CostRef,
   BillRef,
+  StoreEmail,
+  OrderLogEntry,
   PurchaseSealed,
   PurchaseDoc,
   ReleasedChargeDoc,
@@ -682,6 +684,22 @@ const BILL_REF_FIELDS = {
   moveId: 'notUseful',
 } satisfies Record<keyof BillRef, ShareDecision>;
 
+const STORE_EMAIL_FIELDS = {
+  kind: 'never',
+  orderNumber: 'never',
+  isWholeOrder: 'never',
+  merchant: 'never',
+} satisfies Record<keyof StoreEmail, ShareDecision>;
+
+const ORDER_LOG_FIELDS = {
+  kind: 'notUseful',
+  cents: 'notUseful',
+  on: 'notUseful',
+  emailEventId: 'notUseful',
+  purchaseId: 'notUseful',
+  undoneAt: 'notUseful',
+} satisfies Record<keyof OrderLogEntry, ShareDecision>;
+
 const PURCHASE_SEALED_FIELDS = {
   amountCents: 'shared',
   merchant: 'shared',
@@ -935,6 +953,8 @@ export const SHARE_FIELDS = {
   PurchaseLine: PURCHASE_LINE_FIELDS,
   CostRef: COST_REF_FIELDS,
   BillRef: BILL_REF_FIELDS,
+  StoreEmail: STORE_EMAIL_FIELDS,
+  OrderLogEntry: ORDER_LOG_FIELDS,
   PurchaseSealed: PURCHASE_SEALED_FIELDS,
   PurchaseDoc: PURCHASE_DOC_FIELDS,
   ReleasedChargeDoc: RELEASED_CHARGE_DOC_FIELDS,

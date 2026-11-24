@@ -197,7 +197,7 @@ assert.equal(toOrderKey('ORDER'), null);
     100,
   );
   assert.equal(
-    lines.reduce((sum, line) => sum + line.cents, 0),
+    (lines ?? []).reduce((sum, line) => sum + line.cents, 0),
     900,
   );
 }
