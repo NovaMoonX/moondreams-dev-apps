@@ -79,10 +79,7 @@ const toStores = (
       .reduce((byKey, purchase) => {
         const key = toMerchantKey(purchase.merchant);
         if (key === null || namedKeys.has(key)) return byKey;
-        const rows = byKey.get(key);
-        if (rows) rows.push(purchase);
-        else byKey.set(key, [purchase]);
-        return byKey;
+        return byKey.set(key, [...(byKey.get(key) ?? []), purchase]);
       }, new Map<string, OpenPurchase[]>()),
   ]
     .map(([merchantKey, rows]) => {
