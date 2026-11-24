@@ -1405,7 +1405,11 @@ function ItemSheet({
       />
       {extra}
       {itemKind === 'envelope' && canChange && hasStarted && isArchivable && (
-        <OverFixCard itemId={itemId} name={payload.name} heldCents={heldCents} />
+        <OverFixCard
+          itemId={itemId}
+          name={payload.name}
+          heldCents={heldCents}
+        />
       )}
       {itemKind === 'envelope' && presetDayKey === undefined && (
         <NextFillRow itemId={itemId} today={today} />
