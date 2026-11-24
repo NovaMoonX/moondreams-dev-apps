@@ -60,6 +60,7 @@ const order = (
   kind,
   orderNumber,
   isWholeOrder,
+  merchant: 'Target',
 });
 const actionOf = (purchase: OpenPurchase): StoreAction => ({
   id: purchase.id,
@@ -78,7 +79,11 @@ assert.equal(toOrderKey('ORDER'), null);
 
 // A refund by order number finds its order and goes back to the envelope it counted in.
 {
-  const bought = make('o', 5000, 0, { storeEmail: order('order', '112-3344') });
+  const bought = make('o', 5000, 0, {
+    source: 'manual',
+    status: null,
+    storeEmail: order('order', '112-3344'),
+  });
   const refund = make('r', -2000, 5, {
     source: 'email',
     needsHome: true,
@@ -90,6 +95,7 @@ assert.equal(toOrderKey('ORDER'), null);
   assert.equal(findStoreOrder(actionOf(refund), all)?.id, 'o');
   const plan = planStoreAction(actionOf(refund), bought, all, live);
   assert.equal(plan?.kind, 'refund');
+  assert.equal(plan?.kind === 'refund' && plan.bankId, null);
   assert.deepEqual(plan?.kind === 'refund' && plan.lines, [
     { envelopeId: 'home', cents: -2000, via: 'chosen' },
   ]);
@@ -168,8 +174,14 @@ assert.equal(toOrderKey('ORDER'), null);
     source: 'link' as const,
     status: 'posted' as const,
   };
+  const bankBack = make('bb', -3000, 2, { needsHome: true });
   assert.equal(
-    planStoreAction(actionOf(cancel), charged, [charged, cancel], live)?.kind,
+    planStoreAction(
+      actionOf(cancel),
+      charged,
+      [charged, cancel, bankBack],
+      live,
+    )?.kind,
     'refund',
   );
 }
@@ -206,6 +218,106 @@ assert.equal(toOrderKey('ORDER'), null);
     planStoreAction(actionOf(refund), bought, [bought, earlier, refund], live),
     null,
   );
+}
+
+// The same order number from another store is not this order.
+{
+  const bought = make('o', 5000, 0, { storeEmail: order('order', '1042') });
+  const refund = make('r', -1000, 2, {
+    source: 'email',
+    needsHome: true,
+    merchant: 'Glossier',
+    storeEmail: order('refund', '1042'),
+  });
+  assert.equal(findStoreOrder(actionOf(refund), [bought, refund]), null);
+  // A cancellation with no store named is never tied by number alone.
+  assert.equal(
+    findStoreOrder({ ...actionOf(refund), merchant: null }, [bought, refund]),
+    null,
+  );
+}
+
+// An emailed order still waiting for its bank holds a refund, and holds a cancellation while a bank charge may be it.
+{
+  const waiting = make('o', 5000, 0, {
+    source: 'email',
+    status: null,
+    emailWaiting: true,
+    storeEmail: order('order', '77001'),
+  });
+  const refund = make('r', -1000, 2, {
+    source: 'email',
+    needsHome: true,
+    storeEmail: order('refund', '77001'),
+  });
+  assert.equal(
+    planStoreAction(actionOf(refund), waiting, [waiting, refund], live),
+    null,
+  );
+  const charge = make('b', 5000, 1, { paidByCardId: 'card', needsHome: true });
+  const cancel = make('x', -1000, 2, {
+    source: 'email',
+    needsHome: true,
+    storeEmail: order('cancel', '77001'),
+  });
+  assert.equal(
+    planStoreAction(actionOf(cancel), waiting, [waiting, charge, cancel], live),
+    null,
+  );
+  assert.equal(
+    planStoreAction(actionOf(cancel), waiting, [waiting, cancel], live)?.kind,
+    'takeOff',
+  );
+  // The same cancellation logged already is not taken off twice.
+  const logged = {
+    ...waiting,
+    orderLog: [
+      {
+        kind: 'cancel' as const,
+        cents: 1000,
+        on: cancel.date,
+        emailEventId: 'e1',
+        purchaseId: null,
+        undoneAt: null,
+      },
+    ],
+  };
+  assert.equal(
+    planStoreAction(actionOf(cancel), logged, [logged, cancel], live),
+    null,
+  );
+  // An order whose only envelope is gone takes nothing off.
+  assert.equal(
+    planStoreAction(actionOf(cancel), waiting, [waiting, cancel], () => false),
+    null,
+  );
+}
+
+// At Link, a refund email places the bank's own refund, and waits until that refund arrives.
+{
+  const bought = make('o', 5000, 0, { storeEmail: order('order', '88002') });
+  const email = make('r', -2000, 5, {
+    source: 'email',
+    needsHome: true,
+    lines: [],
+    storeEmail: order('refund', '88002'),
+  });
+  assert.equal(
+    planStoreAction(actionOf(email), bought, [bought, email], live),
+    null,
+  );
+  const bank = make('b', -2000, 7, {
+    needsHome: true,
+    lines: [{ envelopeId: null, cents: -2000, via: 'free' }],
+  });
+  const plan = planStoreAction(
+    actionOf(email),
+    bought,
+    [bought, email, bank],
+    live,
+  );
+  assert.equal(plan?.kind, 'refund');
+  assert.equal(plan?.kind === 'refund' && plan.bankId, 'b');
 }
 
 console.log('runwayStoreOrders: ok');

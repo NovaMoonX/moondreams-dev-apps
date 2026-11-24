@@ -35,6 +35,8 @@ import type { OpenEmailEvent } from '@apps/runway/store/listeners/emailListeners
 import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { toPurchaseSubject } from '@apps/runway/utils/doneForYouSubject';
 
+const MAX_ATTEMPTS = 3;
+
 interface Work {
   key: string;
   action: StoreAction;
@@ -42,7 +44,7 @@ interface Work {
   purchase: OpenPurchase | null;
 }
 
-/** The refunds and cancellations from stores' emails still to tie to their orders: open purchases, and whole-order cancellations with no amount that no order has logged yet. */
+/** Refunds and cancellations still to tie: open purchases, and whole-order cancellations with no amount that no order has logged. */
 export function findStoreWork(
   all: readonly OpenPurchase[],
   events: readonly OpenEmailEvent[],
@@ -80,7 +82,7 @@ export function findStoreWork(
       action: {
         id: event.id,
         storeEmail: event.storeEmail as StoreAction['storeEmail'],
-        merchant: null,
+        merchant: event.storeEmail?.merchant ?? null,
         date: todayAsUtcDate(),
         amountCents: null,
       },
@@ -109,7 +111,7 @@ const whyOf = (action: StoreAction, store: string) =>
     ? STORE_ORDER_WORDS.refundWhyNumber(action.storeEmail.orderNumber)
     : STORE_ORDER_WORDS.refundWhyStore(store);
 
-/** At Track and Link, ties each refund or cancellation a store's email brought in to its order on its own: a cancellation of an order the bank has not charged comes off the order, anything else goes back where the order counted. Each change goes in Done for you with its Undo; each piece of work is tried once per version. */
+/** At Track and Link, ties each refund or cancellation from a store's email to its order on its own, each with a Done for you entry and Undo. */
 export function useApplyStoreOrders(uid: string | null) {
   const level = useAppSelector(selectLevel);
   const needsHome = useAppSelector((state) => state.runway.needsHome);
@@ -126,6 +128,7 @@ export function useApplyStoreOrders(uid: string | null) {
       selectIsEmailEventsLoaded(state),
   );
   const tried = useRef(new Set<string>());
+  const attempts = useRef(new Map<string, number>());
   const isRunning = useRef(false);
   const isWaitingToRun = useRef(false);
   const [runs, setRuns] = useState(0);
@@ -230,21 +233,31 @@ export function useApplyStoreOrders(uid: string | null) {
               const lines = plan.kind === 'refund' ? plan.lines : null;
               const place =
                 lines === null ? null : describePlace(lines, nameOf);
-              const purchase = work.purchase as OpenPurchase;
+              const email = work.purchase as OpenPurchase;
+              const bank =
+                plan.bankId === null
+                  ? null
+                  : (all.find((entry) => entry.id === plan.bankId) ?? null);
               const applied = await applyStoreRefund(
                 uid,
                 encryption,
-                purchase,
+                bank ?? email,
                 order.id,
                 lines,
                 STORE_ORDER_WORDS.refundSummary(
                   store,
                   place ?? STORE_ORDER_WORDS.freeToSpend,
                 ),
+                bank === null ? null : email,
               );
               const isCancel = work.action.storeEmail.kind === 'cancel';
               return {
-                all: replace(applied),
+                all: replace(
+                  applied,
+                  bank === null
+                    ? null
+                    : { ...email, lines: [], needsHome: false },
+                ),
                 entries: [
                   ...entries,
                   {
@@ -266,7 +279,9 @@ export function useApplyStoreOrders(uid: string | null) {
             } catch (error) {
               const message = error instanceof Error ? error.message : '';
               if (message !== SPEND_WORDS.changedElsewhere) {
-                tried.current.delete(work.key);
+                const count = (attempts.current.get(work.key) ?? 0) + 1;
+                attempts.current.set(work.key, count);
+                if (count < MAX_ATTEMPTS) tried.current.delete(work.key);
                 console.error('A store email was not applied', error);
               }
               return state;

@@ -1225,6 +1225,8 @@ export interface StoreEmail {
   orderNumber: string | null;
   /** A cancellation of the whole order; false for anything else. */
   isWholeOrder: boolean;
+  /** The store as the email named it. */
+  merchant: string | null;
 }
 
 /** A cancellation taken off an order that had not been charged yet. */

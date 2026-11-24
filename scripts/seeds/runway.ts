@@ -4858,7 +4858,7 @@ async function writeSeedEmail(
       source: 'email',
       needsHome: false,
       emailEventId: 'seed-email-event-walmart-order',
-      emailWaiting: true,
+
       createdAt: orderOn + 10 * hour,
       updatedAt: orderOn + 30 * hour,
       sealed: await sealJson(
@@ -4879,6 +4879,7 @@ async function writeSeedEmail(
             kind: 'order',
             orderNumber: '2000131-55180',
             isWholeOrder: false,
+            merchant: 'Walmart',
           },
           orderLog: [
             {
@@ -4912,13 +4913,14 @@ async function writeSeedEmail(
           ...storeSealed,
           amountCents: -1_850,
           merchant: 'Walmart',
-          lines: [{ envelopeId: null, cents: -1_850, via: 'free' }],
+          lines: [],
           refundOfId: null,
           assignedBy: null,
           storeEmail: {
             kind: 'refund',
             orderNumber: '2000131-55180',
             isWholeOrder: false,
+            merchant: 'Walmart',
           },
           orderLog: null,
         } satisfies PurchaseSealed,

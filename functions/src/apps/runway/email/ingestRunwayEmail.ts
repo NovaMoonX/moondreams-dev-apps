@@ -354,8 +354,15 @@ async function handleMail(
         senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
-    const byPattern = isStoreLike(mail) ? null : parseAlertEmail(mail);
-    const byAi = byPattern === null ? await readAlertWithAi(mail) : null;
+    const isStore = isStoreLike(mail);
+    const firstPattern = isStore ? null : parseAlertEmail(mail);
+    const byAi = firstPattern === null ? await readAlertWithAi(mail) : null;
+    // A bank the sender list doesn't know can still write "refund"; its alert falls back to the patterns.
+    const byPattern =
+      firstPattern ??
+      (isStore && (byAi === null || byAi.storeEmail === null)
+        ? parseAlertEmail(mail)
+        : null);
     const read: {
       alert: ParsedAlert | null;
       readBy: 'pattern' | 'ai';
@@ -454,7 +461,7 @@ async function handleMail(
       dedupeKey: null,
       expenseId: null,
       emailEventId: eventRef.id,
-      emailWaiting: targets.isLinked,
+      emailWaiting: returnOutcome === null ? targets.isLinked : false,
       createdAt: now,
       updatedAt: now,
       sealed: sealWithKey(
@@ -468,7 +475,10 @@ async function handleMail(
           ruleId: null,
           label: null,
           note: null,
-          lines: [{ envelopeId: null, cents, via: 'free' }],
+          lines:
+            returnOutcome === null
+              ? [{ envelopeId: null, cents, via: 'free' }]
+              : [],
           storeEmail,
           orderLog: null,
           refundOfId: null,

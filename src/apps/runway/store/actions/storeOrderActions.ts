@@ -48,7 +48,7 @@ const writeChange = (
   } satisfies ChangeDoc);
 };
 
-/** Ties a store's refund to its order and, given lines, sends the money back where the order counted; without lines it stays in Needs a home for the person to place. Refuses when the refund changed elsewhere. Resolves with the refund as written. */
+/** Ties a refund to its order and places it, or leaves it in Needs a home without lines; a bank refund's email copy is kept with none. */
 export async function applyStoreRefund(
   uid: string,
   encryption: RunwayEncryption,
@@ -56,8 +56,23 @@ export async function applyStoreRefund(
   orderId: string,
   lines: PurchaseLine[] | null,
   summary: string,
+  emailCopy: OpenPurchase | null,
 ): Promise<OpenPurchase> {
-  const now = Math.max(Date.now(), refund.updatedAt + 1);
+  const now = Math.max(
+    Date.now(),
+    refund.updatedAt + 1,
+    (emailCopy?.updatedAt ?? 0) + 1,
+  );
+  const kept: OpenPurchase | null =
+    emailCopy === null
+      ? null
+      : {
+          ...emailCopy,
+          lines: [],
+          assignedBy: 'auto',
+          needsHome: false,
+          updatedAt: now,
+        };
   const next: OpenPurchase = {
     ...refund,
     refundOfId: orderId,
@@ -66,20 +81,32 @@ export async function applyStoreRefund(
     needsHome: lines === null,
     updatedAt: now,
   };
-  const [sealed, changeSealed] = await Promise.all([
+  const [sealed, keptSealed, changeSealed] = await Promise.all([
     sealJson(toSealedPayload(next) satisfies PurchaseSealed, encryption),
+    kept === null ? null : sealJson(toSealedPayload(kept), encryption),
     sealChange(summary, encryption),
   ]);
   await runHeldTransaction(uid, async (transaction) => {
     const plan = (await transaction.get(planRef(uid))).data() as
       Partial<PlanDoc> | undefined;
     await readUnchanged(transaction, uid, refund);
-    markLedgerWrite(transaction, uid, plan, [refund.date]);
+    if (emailCopy !== null) await readUnchanged(transaction, uid, emailCopy);
+    markLedgerWrite(transaction, uid, plan, [
+      refund.date,
+      emailCopy?.date ?? null,
+    ]);
     transaction.update(purchaseRef(uid, refund.id), {
       needsHome: next.needsHome,
       updatedAt: now,
       sealed,
     });
+    if (kept !== null && keptSealed !== null) {
+      transaction.update(purchaseRef(uid, kept.id), {
+        needsHome: false,
+        updatedAt: now,
+        sealed: keptSealed,
+      });
+    }
     writeChange(
       transaction,
       uid,
@@ -91,7 +118,7 @@ export async function applyStoreRefund(
   return next;
 }
 
-/** Undoes `applyStoreRefund`: the refund is untied and goes back to Needs a home on Free to Spend, marked as the person's so the app never ties it again. */
+/** The refund goes back untied to Needs a home, marked as the person's so the app never ties it again. */
 export async function undoStoreRefund(
   uid: string,
   encryption: RunwayEncryption,
@@ -137,7 +164,7 @@ export interface TakeOff {
   entry: OrderLogEntry;
 }
 
-/** Takes a cancellation off an order the bank has not charged: the order's amount and lines go down and the cancellation is logged on it, and the cancellation's own purchase (when the email gave an amount) keeps no lines, so it counts nowhere and waits for nothing, all in one transaction that refuses when either changed elsewhere. A fully cancelled order stops waiting for its bank. Resolves with the order and the cancellation as written. */
+/** Lowers an uncharged order by a cancellation, logs it there and keeps the cancellation with no lines; at zero it stops waiting. */
 export async function takeOffOrder(
   uid: string,
   encryption: RunwayEncryption,
@@ -168,6 +195,7 @@ export async function takeOffOrder(
     lines: takeOff.lines,
     orderLog: [...(order.orderLog ?? []), takeOff.entry],
     emailWaiting: takeOff.amountCents === 0 ? false : order.emailWaiting,
+    needsHome: takeOff.amountCents === 0 ? false : order.needsHome,
     updatedAt: now,
   };
   const [sealed, keptSealed, changeSealed] = await Promise.all([
@@ -183,6 +211,7 @@ export async function takeOffOrder(
     markLedgerWrite(transaction, uid, plan, [order.date, cancel?.date ?? null]);
     transaction.update(purchaseRef(uid, order.id), {
       emailWaiting: next.emailWaiting,
+      needsHome: next.needsHome,
       updatedAt: now,
       sealed,
     });
@@ -199,7 +228,7 @@ export async function takeOffOrder(
   return { order: next, cancel: kept };
 }
 
-/** Undoes `takeOffOrder`: the order counts as it did before, its log keeps the entry marked undone so the app never takes it off again, and the cancellation counts again as money in waiting in Needs a home, the person's to place. Refuses when either changed since. */
+/** Counts the order in full again, the entry marked undone so it never comes off again; the cancellation waits as the person's. */
 export async function undoTakeOff(
   uid: string,
   encryption: RunwayEncryption,
@@ -243,6 +272,7 @@ export async function undoTakeOff(
     markLedgerWrite(transaction, uid, plan, [before.date, back?.date ?? null]);
     transaction.update(purchaseRef(uid, before.id), {
       emailWaiting: before.emailWaiting,
+      needsHome: before.needsHome,
       updatedAt: now,
       sealed: orderSealed,
     });

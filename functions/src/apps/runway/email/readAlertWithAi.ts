@@ -46,6 +46,7 @@ export interface StoreEmail {
   orderNumber: string | null;
   /** A cancellation of the whole order; false for anything else. */
   isWholeOrder: boolean;
+  merchant: string | null;
 }
 
 export type AiReading = ParsedAlert & {
@@ -85,6 +86,7 @@ const readStoreEmail = (
     kind,
     orderNumber: asOrderNumber(answer.orderNumber),
     isWholeOrder: kind === 'cancel' && answer.isWholeOrder === true,
+    merchant: asText(answer.merchant, 80),
   };
 };
 
