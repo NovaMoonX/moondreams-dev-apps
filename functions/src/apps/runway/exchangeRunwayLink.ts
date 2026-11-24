@@ -6,6 +6,7 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
+import { learnInstitutionLogo } from './institutionLogos.js';
 import {
   grantsPath,
   itemIndexPath,
@@ -153,6 +154,14 @@ export const exchangeRunwayLink = onCall(
           isSkipped: false,
         })),
       };
+      const isLogoShared =
+        institution !== null &&
+        (await learnInstitutionLogo(
+          firestore,
+          [institution.name],
+          institution.logo,
+          now,
+        ));
       const batch = firestore.batch();
       batch.create(
         firestore.doc(`${grantsPath(uid)}/${linkId}`),
@@ -168,6 +177,7 @@ export const exchangeRunwayLink = onCall(
         lastSyncAt: null,
         createdAt: now,
         needsCardConsent: null,
+        logoShared: isLogoShared ? true : null,
         cardDetails: null,
         sealed: sealWithKey(planKey, { ...linkSealed }, SEALED_SCHEMA_VERSION),
       });

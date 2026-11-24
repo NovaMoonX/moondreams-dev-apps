@@ -1,14 +1,20 @@
 import { useState } from 'react';
-import { Repeat } from 'lucide-react';
+import { Plus, Repeat } from 'lucide-react';
 
+import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
+import AddRuleSheet, {
+  type AddRuleView,
+  type RuleSeed,
+} from '@apps/runway/components/AddRuleSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { RULE_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import {
@@ -16,6 +22,7 @@ import {
   selectIsRulesLoaded,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   setOpenRuleRequest,
@@ -45,6 +52,28 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     setOpenRuleRequest(null);
   };
   useHoldRuleRequest();
+  const canAdd = isTrackingLevel(useAppSelector(selectLevel));
+  const [isAdding, setIsAdding] = useState(false);
+  const [seed, setSeed] = useState<RuleSeed | null>(null);
+  const [addView, setAddView] = useState<AddRuleView>('start');
+  const [storeQuery, setStoreQuery] = useState('');
+  const startAdding = () => {
+    setAddView('start');
+    setStoreQuery('');
+    setIsAdding(true);
+  };
+  const openFromAdd = (ruleId: string) => {
+    setIsAdding(false);
+    setOpenId(ruleId);
+  };
+  const pickSeed = (picked: RuleSeed) => {
+    setIsAdding(false);
+    setSeed(picked);
+  };
+  const backToAdd = () => {
+    setSeed(null);
+    setIsAdding(true);
+  };
   const needle = query.trim().toLowerCase();
   const shown = rules.filter(
     (rule) => needle === '' || describe(rule).toLowerCase().includes(needle),
@@ -105,10 +134,14 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           <p className='text-muted-foreground text-sm'>{RULE_WORDS.loading}</p>
         ) : rules.length === 0 ? (
           <div className='space-y-3'>
-            <p className='text-muted-foreground text-sm'>{RULE_WORDS.empty}</p>
-            <Button type='button' onClick={() => openView('needsHome')}>
-              {RULE_WORDS.goToNeedsHome}
-            </Button>
+            <p className='text-muted-foreground text-sm'>
+              {canAdd ? RULE_WORDS.emptyAdd : RULE_WORDS.empty}
+            </p>
+            {!canAdd && (
+              <Button type='button' onClick={() => openView('needsHome')}>
+                {RULE_WORDS.goToNeedsHome}
+              </Button>
+            )}
           </div>
         ) : (
           <>
@@ -138,6 +171,34 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           </>
         )}
       </div>
+      {canAdd && isLoaded && (
+        <FloatingAction
+          isInSubview
+          label={RULE_WORDS.add}
+          icon={<Plus className='h-5 w-5' aria-hidden='true' />}
+          onClick={startAdding}
+        />
+      )}
+      {canAdd && isAdding && (
+        <AddRuleSheet
+          view={addView}
+          query={storeQuery}
+          onViewChange={setAddView}
+          onQueryChange={setStoreQuery}
+          onPick={pickSeed}
+          onOpenRule={openFromAdd}
+          onClose={() => setIsAdding(false)}
+        />
+      )}
+      {canAdd && seed !== null && (
+        <RuleSheet
+          purchase={null}
+          rule={null}
+          seed={seed}
+          onBack={backToAdd}
+          onClose={() => setSeed(null)}
+        />
+      )}
       {opened !== null && (
         <RuleSheet
           key={opened.id}

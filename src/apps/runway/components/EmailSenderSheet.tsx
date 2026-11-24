@@ -93,6 +93,9 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
           <p className='text-muted-foreground text-sm'>
             {EMAIL_WORDS.senderDetail(
               sender.kind,
+              sender.company?.toLowerCase() === sender.name?.toLowerCase()
+                ? null
+                : sender.company,
               sender.count,
               formatDateOrdinal(sender.lastAt),
             )}

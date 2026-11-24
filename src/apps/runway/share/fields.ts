@@ -454,6 +454,7 @@ const LINK_DOC_FIELDS = {
   createdAt: 'never',
   needsCardConsent: 'never',
   cardDetails: 'never',
+  logoShared: 'never',
   sealed: 'never',
 } satisfies Record<keyof LinkDoc, ShareDecision>;
 
@@ -802,6 +803,8 @@ const EMAIL_EVENT_SEALED_FIELDS = {
   bodyText: 'never',
   readBy: 'notUseful',
   storeEmail: 'never',
+  senderLogo: 'never',
+  senderCompany: 'never',
 } satisfies Record<keyof EmailEventSealed, ShareDecision>;
 
 const EMAIL_FILTER_DOC_FIELDS = {

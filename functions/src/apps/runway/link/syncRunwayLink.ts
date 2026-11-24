@@ -9,6 +9,7 @@ import {
 import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
+import { learnInstitutionLogo } from '../institutionLogos.js';
 import { learnMerchants } from '../merchantNames.js';
 import {
   openWithKey,
@@ -720,15 +721,15 @@ async function keepBankDetails(
 ) {
   const institution = await provider.getInstitution(grant);
   if (!institution) return;
-  await firestore.runTransaction(async (transaction) => {
+  const isKept = await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(linkRef);
-    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return;
+    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return false;
     const link = openWithKey(
       planKey.key,
       snapshot.data()?.sealed as SealedPayload,
     ) as unknown as Partial<LinkSealed>;
     const now = Date.now();
-    if (!needsBankDetails(link, now)) return;
+    if (!needsBankDetails(link, now)) return false;
     const nextLink: LinkSealed = {
       institutionName: link.institutionName ?? '',
       institutionLogo: institution.logo ?? link.institutionLogo ?? null,
@@ -739,7 +740,37 @@ async function keepBankDetails(
     transaction.update(linkRef, {
       sealed: sealWithKey(planKey, { ...nextLink }, SEALED_SCHEMA_VERSION),
     });
+    return true;
   });
+  if (!isKept) return;
+  const isShared = await learnInstitutionLogo(
+    firestore,
+    [institution.name],
+    institution.logo,
+    Date.now(),
+  );
+  if (isShared) await markLogoShared(firestore, linkRef);
+}
+
+const markLogoShared = (firestore: Firestore, linkRef: DocumentReference) =>
+  writeUnlessRevoked(firestore, linkRef, (transaction) =>
+    transaction.update(linkRef, { logoShared: true }),
+  );
+
+/** Teaches the shared bank list from a link that kept its logo before the list existed, once, under the name the provider gives the bank and never the one the device sent. */
+async function shareLogo(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  grant: ProviderGrant,
+) {
+  const institution = await provider.getInstitution(grant);
+  const isShared = await learnInstitutionLogo(
+    firestore,
+    [institution?.name],
+    institution?.logo,
+    Date.now(),
+  );
+  if (isShared) await markLogoShared(firestore, linkRef);
 }
 
 const DETAILS_HISTORY_DAYS = 90;
@@ -864,6 +895,10 @@ export async function syncRunwayLink(
     if (needsBankDetails(link, Date.now())) {
       await keepBankDetails(firestore, linkRef, grant, planKey).catch(() => {
         logger.warn('runway.sync.logoFailed', { linkId });
+      });
+    } else if (linkSnapshot.data()?.logoShared !== true) {
+      await shareLogo(firestore, linkRef, grant).catch(() => {
+        logger.warn('runway.sync.logoShareFailed', { linkId });
       });
     }
     const targets = targetsByProviderAccount(link.providerAccounts);

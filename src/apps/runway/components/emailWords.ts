@@ -33,8 +33,13 @@ export const EMAIL_WORDS = {
   noEvents:
     'Nothing yet. Forward a recent bank alert or store receipt to see it land here.',
   sendersCaption: 'Who sends',
-  senderDetail: (kind: EmailSenderKind, count: number, lastAt: string) =>
-    `${SENDER_KIND_WORDS[kind]} · ${count === 1 ? '1 email' : `${count} emails`} · ${lastAt}`,
+  senderDetail: (
+    kind: EmailSenderKind,
+    company: string | null,
+    count: number,
+    lastAt: string,
+  ) =>
+    `${company ?? SENDER_KIND_WORDS[kind]} · ${count === 1 ? '1 email' : `${count} emails`} · ${lastAt}`,
   showMore: (count: number) => `Show ${count} more`,
   showFewer: 'Show fewer',
   senderFilterOut: 'Filter out emails from this sender',

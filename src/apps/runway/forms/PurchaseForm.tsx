@@ -78,7 +78,13 @@ import {
   MOVE_WORDS,
   SPEND_WORDS,
   VARIES_HINT,
+  COVER_WORDS,
 } from '@apps/runway/constants';
+import CoverShortfallSheet, {
+  type CoverChoice,
+} from '@apps/runway/components/CoverShortfallSheet';
+import { splitAtShortfall } from '@apps/runway/engine/spill';
+import { useShortfallMove } from '@apps/runway/hooks/useShortfallMove';
 import { getUsualCardId } from '@apps/runway/engine/cards';
 import { isRefundCandidate } from '@apps/runway/engine/matching';
 import { isSameStore } from '@apps/runway/engine/storeNames';
@@ -529,6 +535,8 @@ function PurchaseFormBody({
     restored?.isRefund ?? start.isRefund,
   );
   const [isSplit, setIsSplit] = useState(restored?.isSplit ?? start.isSplit);
+  const [isCoverAsked, setIsCoverAsked] = useState(false);
+  const moveShortfall = useShortfallMove();
   const [envelopeId, setEnvelopeId] = useState<string | null>(
     restored ? restored.envelopeId : start.envelopeId,
   );
@@ -1068,9 +1076,76 @@ function PurchaseFormBody({
       : { expenseId: generateUuid(), newExpenseName: name };
   };
 
-  const handleSave = async () => {
+  const getShortfall = () => {
+    if (isRefund || isSplit || heldRef !== null || envelopeId === null)
+      return null;
+    const change = preview?.changes.find(
+      (entry) => entry.id === envelopeId && !entry.isHorizon,
+    );
+    if (!change || change.afterCents >= 0) return null;
+    const shortCents = Math.min(
+      change.beforeCents - change.afterCents,
+      -change.afterCents,
+    );
+    return shortCents > 0
+      ? { envelopeId, leftCents: change.beforeCents, shortCents }
+      : null;
+  };
+  const shortfall = getShortfall();
+
+  const cover = async (choice: CoverChoice) => {
+    if (shortfall === null || amount === null) return;
+    const { envelopeId: id, shortCents } = shortfall;
+    if (choice === 'goOver') return handleSave(null, true);
+    if (choice === 'useRest') {
+      return handleSave(splitAtShortfall(id, amount, shortCents), true);
+    }
+    setError(null);
+    setIsSaving(true);
+    const takeBack = await moveShortfall(id, shortCents, nameOf(id)).catch(
+      (moveError: unknown) => {
+        setError(getErrorMessage(moveError, COVER_WORDS.moveFailed));
+        setIsSaving(false);
+        return null;
+      },
+    );
+    if (takeBack === null) return;
+    return handleSave(
+      [{ envelopeId: id, cents: amount, via: 'chosen' }],
+      true,
+      {
+        takeBack,
+        text: COVER_WORDS.movedIn(formatCents(shortCents), nameOf(id)),
+      },
+    );
+  };
+
+  const handleSave = async (
+    coverLines: PurchaseLine[] | null = null,
+    isCovered = false,
+    moved: { takeBack: () => Promise<unknown>; text: string } | null = null,
+  ) => {
     if (!user || blocker !== null || lines === null || amount === null) return;
     if (date === null) return;
+    if (shortfall !== null && !isCovered) {
+      setError(null);
+      setIsCoverAsked(true);
+      return;
+    }
+    setIsCoverAsked(false);
+    const savedLines = coverLines ?? lines;
+    const announceMove = () => {
+      if (!moved) return;
+      addToast({
+        title: mask(moved.text),
+        type: 'success',
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: MOVE_WORDS.undo,
+          onClick: () => void moved.takeBack(),
+        },
+      });
+    };
     setError(null);
     setIsSaving(true);
     try {
@@ -1127,7 +1202,7 @@ function PurchaseFormBody({
         merchant,
         label,
         note,
-        lines,
+        lines: savedLines,
         refundOfId: isRefund ? originalId : null,
         paidByCardId: cardId,
         receiptText: formData.receiptText?.trim() || null,
@@ -1182,6 +1257,7 @@ function PurchaseFormBody({
           editing.id,
           !isUnchanged ? (isRefund ? 'Refund saved' : 'Purchase saved') : null,
         );
+        announceMove();
         onClose();
         return;
       }
@@ -1231,8 +1307,10 @@ function PurchaseFormBody({
             ? 'Refund added'
             : 'Purchase added',
       );
+      announceMove();
       onClose();
     } catch (saveError) {
+      if (moved) void moved.takeBack();
       if (isMounted.current) {
         setError(
           isOfflineFailure(saveError)
@@ -2245,6 +2323,17 @@ function PurchaseFormBody({
       }
       actions={<ValuesEyeButton />}
     >
+      {isCoverAsked && shortfall !== null && (
+        <CoverShortfallSheet
+          name={nameOf(shortfall.envelopeId)}
+          leftCents={shortfall.leftCents}
+          shortCents={shortfall.shortCents}
+          isBusy={isSaving}
+          error={error}
+          onChoose={(choice) => void cover(choice)}
+          onClose={() => setIsCoverAsked(false)}
+        />
+      )}
       {view === 'split' && amount !== null && (
         <div className='space-y-3'>
           <SplitEditor

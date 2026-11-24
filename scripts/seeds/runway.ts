@@ -138,6 +138,9 @@ import {
 const SEED_LOGO_RED =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwEeYkP8f3+S68eEChQ2K3bpPE6k8WorSmpAtV1nHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAe54d74r6pqBcAAAAASUVORK5CYII=';
 
+const SEED_LOGO_PURPLE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwE+ZkP8d9+R68eEChQ2K3bpPE6k8WorSmpAtV5XHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAeNE1GEElmoxYAAAAASUVORK5CYII=';
+
 const SECRET_FILE = new URL('../../functions/.secret.local', import.meta.url);
 
 /** The emulator's keyring: the named secret (an app's `<APP>_MASTER_KEYS`) in functions/.secret.local, else the built-in development one. */
@@ -1666,6 +1669,7 @@ async function writeSeedCards(
     createdAt,
     needsCardConsent: null,
     cardDetails: 'shared',
+    logoShared: null,
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1921,6 +1925,7 @@ async function writeSeedAccounts(
     createdAt,
     needsCardConsent: null,
     cardDetails: null,
+    logoShared: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -4027,6 +4032,7 @@ async function seedUnlinkedPlan(
     status: 'revoked',
     needsCardConsent: null,
     cardDetails: null,
+    logoShared: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(
@@ -5008,7 +5014,8 @@ async function writeSeedEmail(
     'id' | 'receivedAt' | 'outcome' | 'senderKind'
   > & {
     purchaseId: string | null;
-    sealed: EmailEventSealed;
+    sealed: Omit<EmailEventSealed, 'senderLogo' | 'senderCompany'> &
+      Partial<Pick<EmailEventSealed, 'senderLogo' | 'senderCompany'>>;
   })[] = [
     ...purchases.map((entry, index) => ({
       id: entry.eventId,
@@ -5027,6 +5034,7 @@ async function writeSeedEmail(
           merchant: entry.merchant,
         }),
         readBy: entry.readBy,
+        senderCompany: 'Capital One',
       },
     })),
     {
@@ -5043,6 +5051,7 @@ async function writeSeedEmail(
           'Thanks, we got your payment of $480.00 on your Venture X card ending in 4821.',
         ),
         readBy: 'ai',
+        senderCompany: 'Capital One',
       },
     },
     {
@@ -5059,6 +5068,8 @@ async function writeSeedEmail(
           'Good news, your order is on its way. Track your package at https://www.target.com/orders',
         ),
         readBy: 'ai',
+        senderLogo: SEED_LOGO_PURPLE,
+        senderCompany: 'Target',
       },
     },
     {
@@ -5076,6 +5087,8 @@ async function writeSeedEmail(
           { amountCents: 2_318, merchant: 'Target' },
         ),
         readBy: 'ai',
+        senderLogo: SEED_LOGO_PURPLE,
+        senderCompany: 'Target',
       },
     },
     {
@@ -5148,7 +5161,14 @@ async function writeSeedEmail(
         senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
         expiresAt: expiresAt(entry.receivedAt),
-        sealed: await sealJson(entry.sealed, encryption),
+        sealed: await sealJson(
+          {
+            senderLogo: null,
+            senderCompany: null,
+            ...entry.sealed,
+          } satisfies EmailEventSealed,
+          encryption,
+        ),
       });
     }),
   );

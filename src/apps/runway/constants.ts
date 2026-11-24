@@ -5032,6 +5032,48 @@ const getBulkCount = (written: number, total: number) => {
     : `${written} of ${total} ${noun(total)}`;
 };
 
+/** The pick an envelope can't cover: what each envelope will drop to, and the question asked before it goes below zero. */
+export const COVER_WORDS = {
+  leftToAfter: (left: string, after: string) => `${left} → ${after}`,
+  runsOutTo: (names: string) => `Runs out, so the rest comes from ${names}`,
+  asksHow: 'It asks how to cover the rest',
+  alreadyOver: (name: string, over: string, short: string) =>
+    `${name} is already ${over} over, so this would add ${short} more.`,
+  furtherOver: (name: string, short: string) =>
+    `Let ${name} go ${short} further over`,
+  title: (name: string) => `${name} can’t cover all of it`,
+  body: (name: string, left: string, short: string) =>
+    `${name} has ${left} left, so this would take it ${short} over. How should the rest be covered?`,
+  bodyMany: (name: string, left: string, short: string) =>
+    `${name} has ${left} left, so these would take it ${short} over. How should the rest be covered?`,
+  spendRest: (left: string, name: string) => `Use the ${left} in ${name}`,
+  spendRestSub: (short: string) =>
+    `The other ${short} comes out of Free to Spend`,
+  allFree: 'Take it all from Free to Spend',
+  allFreeSub: (name: string) => `${name} stays as it is`,
+  moveIn: (short: string, name: string) => `Move ${short} into ${name} first`,
+  moveInSub: 'From Free to Spend, then all of it comes out of the envelope',
+  moveInSubOver: (name: string, over: string) =>
+    `Covers this purchase; ${name} stays ${over} over`,
+  goOver: (name: string, short: string) => `Let ${name} go ${short} over`,
+  goOverSub: 'It shows as over until you top it up',
+  moveFailed: 'The money wasn’t moved, so nothing was sent.',
+  moveStays: 'The money you moved in stays there.',
+  movedAndSent: (short: string, name: string) =>
+    `Moved ${short} into ${name} and sent it there`,
+  bodyPlaced: (name: string, short: string) =>
+    `Your rule sent this to ${name}, and ${short} of it is more than ${name} has. How should that part be covered?`,
+  placedFree: (short: string) => `Take ${short} of it from Free to Spend`,
+  placedFreeSub: (name: string, short: string) => `${name} gets ${short} back`,
+  keepOver: (name: string, short: string) => `Leave ${name} ${short} over`,
+  overDoor: (name: string) => `${name} went over`,
+  overDoorSub: 'Choose how to cover the rest',
+  usedRest: (short: string) =>
+    `The other ${short} now comes out of Free to Spend`,
+  movedIn: (short: string, name: string) => `Moved ${short} into ${name}`,
+  changedSince: 'This purchase changed since, so nothing was moved.',
+};
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank or email',
@@ -5509,8 +5551,29 @@ export const CATEGORY_PRIMARIES = [
 
 export const RULE_WORDS = {
   title: 'Rules',
+  add: 'Add a rule',
+  pickTitle: 'Add a rule',
+  pickCard: 'Everything on a card',
+  pickCardSub: 'One envelope for all of a card',
+  pickKind: 'A kind of purchase',
+  pickKindSub: 'Like groceries or restaurants',
+  stores: 'Stores you’ve bought from',
+  searchStores: 'Search stores',
+  noStores:
+    'No stores to suggest yet. They show up as your bank and email bring in purchases.',
+  noStoreMatch: 'No store matches that.',
+  allStoresHaveRules:
+    'Every store you’ve bought from lately already has a rule.',
+  storeTimes: (count: number) => (count === 1 ? 'Once' : `${count} times`),
+  hasRule: (sentence: string) => `Your rule: ${sentence}`,
+  cardTitle: 'Which card?',
+  kindTitle: 'Which kind of purchase?',
+  noCards: 'No cards to pick from yet.',
+  noKinds: 'No kinds of purchase to pick from yet.',
   doorLabel: 'Rules',
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
+  emptyAdd:
+    'No rules yet. Add one for a store, a card or a kind of purchase, and Runway sends those purchases to an envelope for you.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
   removedCard: 'A card that was removed',
