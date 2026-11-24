@@ -65,6 +65,7 @@ const transaction = (
   merchantLogo: null,
   bankName: null,
   category,
+  isKnownBusiness: false,
   isPending: false,
   ...extra,
 });

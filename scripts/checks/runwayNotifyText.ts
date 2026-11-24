@@ -8,6 +8,9 @@ import {
   getDigestDay,
   readDigestSettings,
   readSorting,
+  EMAIL_MATCH_DAYS_AFTER,
+  EMAIL_MATCH_DAYS_BEFORE,
+  withoutEmailTwins,
 } from '../../functions/src/apps/runway/needsHomeDigestPlan.ts';
 import { needsHomeBody } from '../../functions/src/apps/runway/notificationText.ts';
 
@@ -116,5 +119,129 @@ assert.equal(
 );
 // An unreadable document reads as 0 cents and counts.
 assert.equal(countWaiting([row(100, 0, 0)], paused), 1);
+
+// An email and its bank charge count once; the window mirrors the app's constants.
+const appConstants = readFileSync(
+  new URL('../../src/apps/runway/constants.ts', import.meta.url),
+  'utf8',
+);
+assert.equal(
+  EMAIL_MATCH_DAYS_BEFORE,
+  Number(/EMAIL_MATCH_DAYS_BEFORE = (\d+)/.exec(appConstants)?.[1]),
+);
+assert.equal(
+  EMAIL_MATCH_DAYS_AFTER,
+  Number(/EMAIL_MATCH_DAYS_AFTER = (\d+)/.exec(appConstants)?.[1]),
+);
+const twin = (
+  id: string,
+  source: 'email' | 'link',
+  day: number,
+  extra: Partial<Parameters<typeof withoutEmailTwins>[0][number]> = {},
+) => ({
+  id,
+  date: day * DAY,
+  source,
+  amountCents: 1250,
+  accountId: 'acct',
+  paidByCardId: null as string | null,
+  emailWaiting: source === 'email',
+  notSameAs: [] as string[],
+  pairedWithId: null as string | null,
+  ...extra,
+});
+const ids = (list: { id: string }[]) => list.map((entry) => entry.id);
+assert.deepEqual(
+  ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 12)])),
+  ['b'],
+);
+assert.deepEqual(
+  ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 8)])),
+  ['b'],
+);
+assert.deepEqual(
+  ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 17)])),
+  ['b'],
+);
+assert.deepEqual(
+  ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 18)])),
+  ['e', 'b'],
+  'a bank charge more than seven days after is not the twin',
+);
+assert.deepEqual(
+  ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 7)])),
+  ['e', 'b'],
+  'a bank charge more than two days before is not the twin',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10, { paidByCardId: 'c1' }),
+      twin('b', 'link', 11, { paidByCardId: 'c2' }),
+    ]),
+  ),
+  ['e', 'b'],
+  'a different card is no twin',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10, { paidByCardId: 'c1' }),
+      twin('b', 'link', 11, { paidByCardId: 'c1' }),
+    ]),
+  ),
+  ['b'],
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10),
+      twin('b', 'link', 11, { paidByCardId: 'c1' }),
+    ]),
+  ),
+  ['e', 'b'],
+  'an account email never pairs a card charge',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10),
+      twin('b1', 'link', 11),
+      twin('b2', 'link', 12),
+    ]),
+  ),
+  ['e', 'b1', 'b2'],
+  'two candidates are ambiguous and both stay counted',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e1', 'email', 10),
+      twin('e2', 'email', 10),
+      twin('b', 'link', 11),
+    ]),
+  ),
+  ['e1', 'e2', 'b'],
+  'a charge two emails fit is no clear twin',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10, { notSameAs: ['b'] }),
+      twin('b', 'link', 11),
+    ]),
+  ),
+  ['e', 'b'],
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10),
+      twin('b', 'link', 11, { pairedWithId: 'm' }),
+    ]),
+  ),
+  ['e', 'b'],
+  'a charge paired as a move is never a candidate',
+);
 
 console.log('runwayNotifyText: ok');

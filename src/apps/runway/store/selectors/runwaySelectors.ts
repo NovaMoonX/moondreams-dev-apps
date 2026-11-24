@@ -9,6 +9,7 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectTwinMergingIds } from '@apps/runway/store/selectors/emailSelectors';
 import {
   findHistoryDuplicates,
   makeIsLinkHistory,
@@ -2003,6 +2004,8 @@ export const selectNeedsHome = createSelector(
     selectHistoryDuplicates,
     selectSorting,
     selectMoneyInAsks,
+    selectTwinMergingIds,
+    selectIsLinkHistory,
   ],
   (
     waitingList,
@@ -2012,10 +2015,14 @@ export const selectNeedsHome = createSelector(
     duplicates,
     sorting,
     moneyInAsks,
+    merging,
+    isLinkHistory,
   ) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
-      ...waitingList,
+      ...waitingList.filter(
+        (purchase) => !merging.has(purchase.id) || isLinkHistory(purchase),
+      ),
       ...lost.filter(
         (entry, index) =>
           !waitingList.some((other) => other.id === entry.id) &&

@@ -3,7 +3,12 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { EMAIL_WAIT_DAYS } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { findEmailTwins, isWaitingEmail } from '@apps/runway/engine/emailTwins';
+import {
+  findEmailTwins,
+  getTwinHeldIds,
+  getTwinMergingIds,
+  isWaitingEmail,
+} from '@apps/runway/engine/emailTwins';
 import { cleanBankName } from '@apps/runway/utils/accountText';
 import type { OpenPurchase } from '@apps/runway/types';
 
@@ -24,6 +29,18 @@ const selectAllPurchases = createSelector(
 export const selectEmailTwins = createSelector(
   [selectAllPurchases],
   findEmailTwins,
+);
+
+/** The bank charges a waiting emailed purchase is or may be, which a rule leaves alone. */
+export const selectTwinHeldIds = createSelector(
+  [selectEmailTwins],
+  getTwinHeldIds,
+);
+
+/** The bank charges that merge with their email on their own, so Needs a home leaves them out. */
+export const selectTwinMergingIds = createSelector(
+  [selectEmailTwins],
+  getTwinMergingIds,
 );
 
 /** The ids of emailed purchases whose bank charge is here, or could be one of several here: the charge counts, so Free to Spend and a card's balance leave them out rather than count one purchase twice. */
@@ -50,12 +67,15 @@ export const isOverdueEmail = (
   !twinned.has(purchase.id) &&
   purchase.date < today - EMAIL_WAIT_DAYS * DAY_MS;
 
-/** Emailed purchases still waiting, with no clear bank twin, dated more than `EMAIL_WAIT_DAYS` before today, oldest first: what Home asks about once. */
+/** Emailed purchases still waiting, with no clear bank twin, dated more than `EMAIL_WAIT_DAYS` before today and already answered (one still in Needs a home is asked about there), oldest first: what Home asks about once. */
 export const selectEmailOverdue = createSelector(
   [selectAllPurchases, selectTwinnedEmailIds, () => todayAsUtcDate()],
   (purchases, twinned, today): OpenPurchase[] =>
     purchases
-      .filter((purchase) => isOverdueEmail(purchase, twinned, today))
+      .filter(
+        (purchase) =>
+          !purchase.needsHome && isOverdueEmail(purchase, twinned, today),
+      )
       .sort((a, b) => a.date - b.date || a.id.localeCompare(b.id)),
 );
 

@@ -13,6 +13,7 @@ import {
   getDigestDay,
   readDigestSettings,
   readSorting,
+  withoutEmailTwins,
   type SortingState,
 } from './needsHomeDigestPlan.js';
 import {
@@ -37,14 +38,30 @@ const BATCH_SIZE = 20;
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
 
-/** A purchase's amount; 0 cents when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
+/** A purchase's sealed fields the digest needs; 0 cents when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
 const readPurchase = (key: Buffer, payload: unknown) => {
-  if (!isSealed(payload)) return { amountCents: 0 };
+  const none = {
+    amountCents: 0,
+    paidByCardId: null,
+    notSameAs: [] as string[],
+    pairedWithId: null,
+  };
+  if (!isSealed(payload)) return none;
   try {
-    const { amountCents } = openWithKey(key, payload);
-    return { amountCents: typeof amountCents === 'number' ? amountCents : 0 };
+    const opened = openWithKey(key, payload);
+    return {
+      amountCents:
+        typeof opened.amountCents === 'number' ? opened.amountCents : 0,
+      paidByCardId:
+        typeof opened.paidByCardId === 'string' ? opened.paidByCardId : null,
+      notSameAs: Array.isArray(opened.notSameAs)
+        ? opened.notSameAs.filter((id): id is string => typeof id === 'string')
+        : [],
+      pairedWithId:
+        typeof opened.pairedWithId === 'string' ? opened.pairedWithId : null,
+    };
   } catch {
-    return { amountCents: 0 };
+    return none;
   }
 };
 
@@ -86,23 +103,33 @@ async function digestForPlan(
   const waitingPurchases = firestore
     .collection(`apps/runway/plans/${uid}/purchases`)
     .where('needsHome', '==', true);
-  const waiting = countWaiting(
-    (
-      await waitingPurchases
-        .select('createdAt', 'date', 'status', 'sealed')
-        .get()
-    ).docs.map((purchase) => {
-      const { createdAt, date: day, status, sealed: payload } = purchase.data();
-      const created = typeof createdAt === 'number' ? createdAt : now;
-      return {
-        createdAt: created,
-        date: typeof day === 'number' ? day : created,
-        isPending: status === 'pending',
-        ...readPurchase(planKey.key, payload),
-      };
-    }),
-    sorting,
-  );
+  const rows = (
+    await waitingPurchases
+      .select(
+        'createdAt',
+        'date',
+        'status',
+        'source',
+        'accountId',
+        'emailWaiting',
+        'sealed',
+      )
+      .get()
+  ).docs.map((purchase) => {
+    const data = purchase.data();
+    const created = typeof data.createdAt === 'number' ? data.createdAt : now;
+    return {
+      id: purchase.id,
+      createdAt: created,
+      date: typeof data.date === 'number' ? data.date : created,
+      isPending: data.status === 'pending',
+      source: typeof data.source === 'string' ? data.source : null,
+      accountId: typeof data.accountId === 'string' ? data.accountId : null,
+      emailWaiting: data.emailWaiting === true,
+      ...readPurchase(planKey.key, data.sealed),
+    };
+  });
+  const waiting = countWaiting(withoutEmailTwins(rows), sorting);
   if (waiting === 0) return 'empty';
   if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
     return 'closed';

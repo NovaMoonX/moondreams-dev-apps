@@ -63,6 +63,7 @@ import {
 } from '@apps/runway/engine/rules';
 import { declineRule, isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
+import { selectTwinHeldIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
@@ -71,6 +72,8 @@ import ReceiptFileInput, {
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
 import PairOffer from '@apps/runway/components/PairOffer';
+import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import SameAsEmailOffer from '@apps/runway/components/SameAsEmailOffer';
 import SameAsOffer from '@apps/runway/components/SameAsOffer';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
@@ -90,6 +93,7 @@ import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 import {
   selectCostPaid,
   selectExpenses,
@@ -183,6 +187,7 @@ function PurchaseScreen({
   );
   const recentPurchases = useAppSelector((state) => state.runway.purchases);
   const waitingPurchases = useAppSelector((state) => state.runway.needsHome);
+  const twinHeldIds = useAppSelector(selectTwinHeldIds);
   const { describe: describeRuleSentence } = useRuleNames();
   const [ruleStep, setRuleStep] = useState<{
     view: 'make' | 'suggest' | 'edit';
@@ -278,7 +283,11 @@ function PurchaseScreen({
   const paidWithName = purchase
     ? getPaidWithName(purchase, cards, accounts)
     : null;
-  const sourceName = paidWithName ?? NEEDS_HOME_WORDS.fromBank;
+  const sourceName =
+    paidWithName ??
+    (purchase?.source === 'email'
+      ? EMAIL_WORDS.fromEmail
+      : NEEDS_HOME_WORDS.fromBank);
 
   if (purchase === null) {
     return (
@@ -296,7 +305,9 @@ function PurchaseScreen({
       ? null
       : (rules.find((entry) => entry.id === purchase.ruleId) ?? null);
   const run =
-    level === 'link' && !isWaiting && purchase.source === 'link'
+    isTrackingLevel(level) &&
+    !isWaiting &&
+    (purchase.source === 'link' || purchase.source === 'email')
       ? findPlacementRun(
           toMerchantKey(purchase.merchant),
           recentPurchases,
@@ -312,16 +323,17 @@ function PurchaseScreen({
       : null;
   const canMakeRule =
     isWaiting &&
-    level === 'link' &&
+    isTrackingLevel(level) &&
     lostPair === null &&
-    purchase.source === 'link' &&
+    (purchase.source === 'link' || purchase.source === 'email') &&
     purchase.amountCents > 0;
   const merchantRule =
     canMakeRule && merchantKey !== null
       ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)
       : null;
   const heldRule =
-    canMakeRule && isHeldByOffer(purchase.id, waitingPurchases, recentPurchases)
+    canMakeRule &&
+    isHeldByOffer(purchase.id, waitingPurchases, recentPurchases, twinHeldIds)
       ? wouldRulePlace(
           purchase,
           rules,
@@ -835,6 +847,9 @@ function PurchaseScreen({
           )}
           {(isWaiting || isMaybeTwice) && purchase.amountCents > 0 && (
             <SameAsOffer purchase={purchase} onDone={onClose} />
+          )}
+          {purchase.source === 'link' && purchase.amountCents > 0 && (
+            <SameAsEmailOffer purchase={purchase} onDone={onClose} />
           )}
           {isWaiting && purchase.amountCents > 0 && (
             <PairOffer purchase={purchase} onDone={onClose}>

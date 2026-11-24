@@ -44,6 +44,10 @@ import {
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  isAnsweredEmail,
+  isSettledByPerson,
+} from '@apps/runway/engine/emailTwins';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import {
   openMove,
@@ -630,7 +634,11 @@ export async function assignPurchase(
         billRef: previous.billRef ?? null,
         notSameAs: previous.notSameAs,
         incomeDayId: null,
-        assignedBy: placement ? placement.assignedBy : previous.assignedBy,
+        assignedBy: placement
+          ? placement.assignedBy
+          : previous.source === 'email' && !needsHome
+            ? 'person'
+            : previous.assignedBy,
         pairedWithId: null,
         pairKind: null,
         cardPaymentMoveId: null,
@@ -1372,7 +1380,6 @@ export async function mergeBankPurchase(
         merchantLogo: bank.merchantLogo ?? null,
         bankName: bank.bankName ?? null,
         category: bank.category,
-        ruleId: null,
         label:
           typed.label ??
           (typedMerchant !== null && typedMerchant !== bank.merchant
@@ -1427,7 +1434,7 @@ export async function mergeBankPurchase(
   return { bank, typed, images, updatedAt: now };
 }
 
-/** Makes a bank charge and the purchase read from its email one purchase. One the person never placed (every line free) leaves the charge as it is, in Needs a home, and gives it the email's name, note, link and group; one they placed merges like a typed purchase. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
+/** Makes a bank charge and the purchase read from its email one purchase. An email that was answered (an envelope, a rule or the person's own say) gives the charge its answer: its envelopes, rule and who placed it, unless the person already settled the charge, whose answer wins. Otherwise, or when the email's answer can't be carried (its envelope archived, its day closed), the charge keeps its own state, in Needs a home or wherever it is, and only takes the email's name, note, link, receipt and group. The emailed purchase is removed. Refused when another device changed either first. Undo with `splitBankPurchase`. */
 export async function mergeEmailPurchase(
   uid: string,
   encryption: RunwayEncryption,
@@ -1435,8 +1442,17 @@ export async function mergeEmailPurchase(
   email: OpenPurchase,
   summary: string,
 ): Promise<MergedPurchase> {
-  if (email.lines.some((line) => line.envelopeId !== null)) {
-    return mergeBankPurchase(uid, encryption, bank, email, summary);
+  if (isAnsweredEmail(email) && !isSettledByPerson(bank)) {
+    try {
+      return await mergeBankPurchase(uid, encryption, bank, email, summary);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === SPEND_WORDS.changedElsewhere
+      ) {
+        throw error;
+      }
+    }
   }
   const [sealed, changeSealed, images] = await Promise.all([
     sealJson(
@@ -1527,7 +1543,7 @@ export async function splitBankPurchase(
       date: typed.date,
       source: typed.source === 'email' ? 'manual' : typed.source,
       status: null,
-      needsHome: false,
+      needsHome: typed.needsHome,
       accountId: typed.accountId,
       dedupeKey: null,
       expenseId: typed.expenseId,
