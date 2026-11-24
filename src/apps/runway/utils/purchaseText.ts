@@ -10,7 +10,11 @@ import type {
   PurchaseLine,
   PurchasePairKind,
 } from '@apps/runway/types';
-import { COVER_WORDS, SPILL_WORDS } from '@apps/runway/constants';
+import {
+  COVER_WORDS,
+  ITEM_VIEW_WORDS,
+  SPILL_WORDS,
+} from '@apps/runway/constants';
 import { getCardName } from '@apps/runway/utils/cardText';
 import { unspill } from '@apps/runway/engine/spill';
 import { getLevelWords } from '@apps/runway/utils/levelText';
@@ -27,6 +31,33 @@ export function describeEnvelopeFigure(level: Level, cents: number) {
   return {
     value: formatCents(cents),
     word: getLevelWords(level).envelopeFigure,
+  };
+}
+
+/** What an envelope, goal or Horizon item held after one row of its history, in the words its own figure uses ("$412.50 left", "−$18.00 over", "$1,240.00 saved"). */
+export function describeHeldAfter(
+  kind: 'envelope' | 'goal' | 'horizon',
+  level: Level,
+  cents: number,
+): { text: string; isOver: boolean } {
+  if (kind === 'goal') {
+    return {
+      text: `${formatSigned(cents)} ${ITEM_VIEW_WORDS.goalFigure}`,
+      isOver: false,
+    };
+  }
+  if (kind === 'horizon') {
+    return cents < 0
+      ? { text: `−${formatCents(-cents)} over`, isOver: true }
+      : {
+          text: `${formatCents(cents)} ${ITEM_VIEW_WORDS.horizonFigure}`,
+          isOver: false,
+        };
+  }
+  const figure = describeEnvelopeFigure(level, cents);
+  return {
+    text: `${figure.value} ${figure.word}`,
+    isOver: figure.word === 'over',
   };
 }
 

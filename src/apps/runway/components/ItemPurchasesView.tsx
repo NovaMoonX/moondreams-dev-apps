@@ -7,6 +7,9 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useItemMoney } from '@apps/runway/hooks/useItemMoney';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { describeHeldAfter } from '@apps/runway/utils/purchaseText';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   selectIsMovesLoaded,
@@ -28,6 +31,11 @@ function ItemPurchasesView({ envelopeId, onOpen }: ItemPurchasesViewProps) {
   const all = useAppSelector(selectSpendPurchases);
   const periodFor = useAppSelector((state) => state.runway.periodFor);
   const looks = useAppSelector(selectItemLooks);
+  const level = useAppSelector(selectLevel);
+  const money = useItemMoney(envelopeId);
+  const heldAfter = new Map(
+    (money?.isReady ? money.rows : []).map((row) => [row.id, row]),
+  );
   const range = getSpendRange(DEFAULT_SPEND_PERIOD, today);
   const isReady =
     isLoaded &&
@@ -54,14 +62,24 @@ function ItemPurchasesView({ envelopeId, onOpen }: ItemPurchasesViewProps) {
   }
   return (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-      {rows.map((purchase) => (
-        <PurchaseRow
-          key={purchase.id}
-          purchase={purchase}
-          looks={looks}
-          onOpen={() => onOpen(purchase.id)}
-        />
-      ))}
+      {rows.map((purchase) => {
+        const row = heldAfter.get(purchase.id);
+        const held =
+          row === undefined
+            ? null
+            : describeHeldAfter('envelope', level, row.heldAfterCents);
+        return (
+          <PurchaseRow
+            key={purchase.id}
+            purchase={purchase}
+            looks={looks}
+            shareCents={row?.cents ?? null}
+            figureWord={held?.text ?? null}
+            isFigureWordOver={held?.isOver ?? false}
+            onOpen={() => onOpen(purchase.id)}
+          />
+        );
+      })}
     </ul>
   );
 }

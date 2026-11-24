@@ -63,6 +63,8 @@ interface ItemRowProps {
   isPrivate?: boolean;
   /** A word under the figure that says what it counts ("left", "over"). */
   figureWord?: string | null;
+  /** The word under the figure says the item went over, so it reads in the destructive colour. */
+  isFigureWordOver?: boolean;
   /** Opens the row's sheet; a row without it has nothing behind it and no chevron. */
   onOpen?: () => void;
   /** A row whose tap does the thing itself (files a purchase) opens nothing, so it draws no chevron. */
@@ -109,6 +111,7 @@ function ItemRow({
   figure,
   isPrivate = true,
   figureWord,
+  isFigureWordOver = false,
   onOpen,
   isAction = false,
   ariaLabel: givenAriaLabel,
@@ -254,7 +257,14 @@ function ItemRow({
               {hide(figureNode, isPrivate)}
             </span>
             {figureWord && (
-              <span className='text-muted-foreground block text-xs'>
+              <span
+                className={join(
+                  'block text-xs',
+                  isFigureWordOver && !(isPrivate && isHidden)
+                    ? 'text-destructive'
+                    : 'text-muted-foreground',
+                )}
+              >
                 {isPrivate && isHidden ? '\u00a0' : figureWord}
               </span>
             )}
