@@ -11,7 +11,14 @@ export interface EmailSender {
   count: number;
   lastAt: number;
   hasPurchase: boolean;
+  logo: string | null;
+  company: string | null;
 }
+
+/** The bank link a purchase's card or account sits on and that bank's logo; null when it is on none, undefined when the purchase isn't loaded. */
+export type PurchaseBankLink = (
+  purchaseId: string,
+) => { linkId: string; logo: string | null } | null | undefined;
 
 export interface EmailSenderGroup {
   kind: EmailSenderKind;
@@ -45,9 +52,34 @@ const readKind = (newestFirst: EmailEventRead[]): EmailSenderKind =>
     ? 'bank'
     : 'other');
 
+/** A sender's newest logo, else for a bank the linked bank's, and only when every loaded purchase its emails made sits on one link. */
+const readLogo = (
+  newestFirst: EmailEventRead[],
+  kind: EmailSenderKind,
+  bankLinkOf: PurchaseBankLink,
+) => {
+  const own = newestFirst.find(
+    (event) => event.senderLogo !== null,
+  )?.senderLogo;
+  if (own !== undefined) return own;
+  if (kind !== 'bank') return null;
+  const links = newestFirst.flatMap((event) => {
+    const link =
+      event.purchaseId === null ? undefined : bankLinkOf(event.purchaseId);
+    return link === undefined ? [] : [link];
+  });
+  const first = links[0];
+  return first !== undefined &&
+    first !== null &&
+    links.every((link) => link?.linkId === first.linkId)
+    ? first.logo
+    : null;
+};
+
 /** Every sender that reached the address, grouped by the kind of its newest judged email, newest sender first; a forwarding confirmation is setup, not a sender, and a kind with no senders is left out. */
 export function groupEmailSenders(
   events: EmailEventRead[],
+  bankLinkOf: PurchaseBankLink = () => undefined,
 ): EmailSenderGroup[] {
   const byAddress = events
     .filter((event) => event.from !== '' && event.outcome !== 'confirm')
@@ -58,17 +90,24 @@ export function groupEmailSenders(
       return found;
     }, new Map<string, EmailEventRead[]>());
   const senders = [...byAddress.entries()].map(
-    ([address, newestFirst]): EmailSender => ({
-      address,
-      name:
-        newestFirst
-          .map((event) => readSender(event.from).name)
-          .find((name) => name !== null) ?? null,
-      kind: readKind(newestFirst),
-      count: newestFirst.length,
-      lastAt: newestFirst[0].receivedAt,
-      hasPurchase: newestFirst.some((event) => event.outcome === 'purchase'),
-    }),
+    ([address, newestFirst]): EmailSender => {
+      const kind = readKind(newestFirst);
+      return {
+        address,
+        name:
+          newestFirst
+            .map((event) => readSender(event.from).name)
+            .find((name) => name !== null) ?? null,
+        kind,
+        count: newestFirst.length,
+        lastAt: newestFirst[0].receivedAt,
+        hasPurchase: newestFirst.some((event) => event.outcome === 'purchase'),
+        logo: readLogo(newestFirst, kind, bankLinkOf),
+        company:
+          newestFirst.find((event) => event.senderCompany !== null)
+            ?.senderCompany ?? null,
+      };
+    },
   );
   return KIND_ORDER.map((kind) => ({
     kind,

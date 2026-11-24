@@ -9,6 +9,7 @@ import {
 import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
+import { learnInstitutionLogo } from '../institutionLogos.js';
 import { learnMerchants } from '../merchantNames.js';
 import {
   openWithKey,
@@ -711,14 +712,14 @@ async function keepLogo(
 ) {
   const institution = await provider.getInstitution(grant);
   if (!institution) return;
-  await firestore.runTransaction(async (transaction) => {
+  const linkName = await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(linkRef);
-    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return;
+    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return null;
     const link = openWithKey(
       planKey.key,
       snapshot.data()?.sealed as SealedPayload,
     ) as unknown as Partial<LinkSealed>;
-    if (link.institutionLogo !== undefined) return;
+    if (link.institutionLogo !== undefined) return null;
     const nextLink: LinkSealed = {
       institutionName: link.institutionName ?? '',
       institutionLogo: institution.logo,
@@ -727,7 +728,16 @@ async function keepLogo(
     transaction.update(linkRef, {
       sealed: sealWithKey(planKey, { ...nextLink }, SEALED_SCHEMA_VERSION),
     });
+    return nextLink.institutionName;
   });
+  if (linkName !== null) {
+    await learnInstitutionLogo(
+      firestore,
+      [linkName, institution.name],
+      institution.logo,
+      Date.now(),
+    );
+  }
 }
 
 const DETAILS_HISTORY_DAYS = 90;
@@ -853,6 +863,13 @@ export async function syncRunwayLink(
       await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
         logger.warn('runway.sync.logoFailed', { linkId });
       });
+    } else {
+      await learnInstitutionLogo(
+        firestore,
+        [link.institutionName],
+        link.institutionLogo,
+        Date.now(),
+      );
     }
     const targets = targetsByProviderAccount(link.providerAccounts);
     if (targets.size === 0) return { ...empty, state: 'skipped' };

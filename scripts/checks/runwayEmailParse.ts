@@ -805,6 +805,8 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     snippet: '',
     bodyText: null,
     readBy: null,
+    senderLogo: null,
+    senderCompany: null,
   });
   const kindOf = (events: EmailEventRead[], address: string) =>
     groupEmailSenders(events)
@@ -845,6 +847,92 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     ),
     'other',
     'no judged email and no purchase is not money',
+  );
+  const withLogo = (
+    base: EmailEventRead,
+    logo: string | null,
+    company: string | null,
+    purchaseId: string | null = null,
+  ): EmailEventRead => ({
+    ...base,
+    senderLogo: logo,
+    senderCompany: company,
+    purchaseId,
+  });
+  const senderOf = (
+    events: EmailEventRead[],
+    address: string,
+    bankLinkOf?: Parameters<typeof groupEmailSenders>[1],
+  ) =>
+    groupEmailSenders(events, bankLinkOf)
+      .flatMap((group) => group.senders)
+      .find((sender) => sender.address === address);
+  const storeMail = (id: string, at: number) =>
+    event(id, 'orders@shop.com', at, 'notPurchase', 'store');
+  const logos = [
+    withLogo(storeMail('a', 1), 'https://shop.example/old.png', 'Old Shop'),
+    withLogo(storeMail('b', 3), 'https://shop.example/new.png', 'Shop'),
+    withLogo(storeMail('c', 4), null, null),
+  ];
+  assert.equal(
+    senderOf(logos, 'orders@shop.com')?.logo,
+    'https://shop.example/new.png',
+    'the newest event that has a logo wins, a later one without is passed over',
+  );
+  assert.equal(senderOf(logos, 'orders@shop.com')?.company, 'Shop');
+  assert.equal(senderOf([storeMail('a', 1)], 'orders@shop.com')?.logo, null);
+  const bankMail = (id: string, at: number, purchaseId: string | null) =>
+    withLogo(
+      event(id, 'alerts@bank.com', at, 'purchase', 'bank'),
+      null,
+      null,
+      purchaseId,
+    );
+  const linkOf =
+    (links: Record<string, string | null | undefined>) => (id: string) =>
+      links[id] === undefined
+        ? undefined
+        : links[id] === null
+          ? null
+          : { linkId: links[id], logo: `logo-of-${links[id]}` };
+  const bankEvents = [bankMail('a', 1, 'p1'), bankMail('b', 2, 'p2')];
+  assert.equal(
+    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1', p2: 'L1' }))
+      ?.logo,
+    'logo-of-L1',
+    'a bank with no logo takes the one link its purchases sit on',
+  );
+  assert.equal(
+    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1', p2: 'L2' }))
+      ?.logo,
+    null,
+    'two links is not confident',
+  );
+  assert.equal(
+    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1', p2: null }))
+      ?.logo,
+    null,
+    'a purchase on no link is not confident',
+  );
+  assert.equal(
+    senderOf(bankEvents, 'alerts@bank.com', linkOf({ p1: 'L1' }))?.logo,
+    'logo-of-L1',
+    'a purchase not loaded says nothing',
+  );
+  assert.equal(
+    senderOf(bankEvents, 'alerts@bank.com', linkOf({}))?.logo,
+    null,
+    'no loaded purchase, no logo',
+  );
+  assert.equal(senderOf(bankEvents, 'alerts@bank.com')?.logo, null);
+  assert.equal(
+    senderOf(
+      [withLogo(bankMail('a', 1, 'p1'), 'data:image/png;base64,AA==', 'Bank')],
+      'alerts@bank.com',
+      linkOf({ p1: 'L1' }),
+    )?.logo,
+    'data:image/png;base64,AA==',
+    'its own logo comes before the link',
   );
   const confirmOnly = [
     event('a', 'forwarding-noreply@google.com', 1, 'confirm', null),

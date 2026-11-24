@@ -5004,7 +5004,8 @@ async function writeSeedEmail(
     'id' | 'receivedAt' | 'outcome' | 'senderKind'
   > & {
     purchaseId: string | null;
-    sealed: EmailEventSealed;
+    sealed: Omit<EmailEventSealed, 'senderLogo' | 'senderCompany'> &
+      Partial<Pick<EmailEventSealed, 'senderLogo' | 'senderCompany'>>;
   })[] = [
     ...purchases.map((entry, index) => ({
       id: entry.eventId,
@@ -5023,6 +5024,7 @@ async function writeSeedEmail(
           merchant: entry.merchant,
         }),
         readBy: entry.readBy,
+        senderCompany: 'Capital One',
       },
     })),
     {
@@ -5039,6 +5041,7 @@ async function writeSeedEmail(
           'Thanks, we got your payment of $480.00 on your Venture X card ending in 4821.',
         ),
         readBy: 'ai',
+        senderCompany: 'Capital One',
       },
     },
     {
@@ -5055,6 +5058,8 @@ async function writeSeedEmail(
           'Good news, your order is on its way. Track your package at https://www.target.com/orders',
         ),
         readBy: 'ai',
+        senderLogo: SEED_LOGO_PURPLE,
+        senderCompany: 'Target',
       },
     },
     {
@@ -5072,6 +5077,8 @@ async function writeSeedEmail(
           { amountCents: 2_318, merchant: 'Target' },
         ),
         readBy: 'ai',
+        senderLogo: SEED_LOGO_PURPLE,
+        senderCompany: 'Target',
       },
     },
     {
@@ -5144,7 +5151,14 @@ async function writeSeedEmail(
         senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
         expiresAt: expiresAt(entry.receivedAt),
-        sealed: await sealJson(entry.sealed, encryption),
+        sealed: await sealJson(
+          {
+            senderLogo: null,
+            senderCompany: null,
+            ...entry.sealed,
+          } satisfies EmailEventSealed,
+          encryption,
+        ),
       });
     }),
   );

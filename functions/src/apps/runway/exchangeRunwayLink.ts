@@ -6,6 +6,7 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
+import { learnInstitutionLogo } from './institutionLogos.js';
 import {
   grantsPath,
   itemIndexPath,
@@ -116,6 +117,12 @@ export const exchangeRunwayLink = onCall(
         sealed: sealWithKey(planKey, { ...linkSealed }, SEALED_SCHEMA_VERSION),
       });
       await batch.commit();
+      await learnInstitutionLogo(
+        firestore,
+        [institutionName, institution?.name],
+        institution?.logo,
+        now,
+      );
 
       await discardSupersededLinks(firestore, keyring, planKey.key, uid, {
         linkId,

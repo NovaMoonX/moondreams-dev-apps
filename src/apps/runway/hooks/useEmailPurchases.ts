@@ -30,6 +30,7 @@ import type {
   EmailSenderKind,
   OpenPurchase,
 } from '@apps/runway/types';
+import type { PurchaseBankLink } from '@apps/runway/utils/emailSenders';
 import { EMAIL_ADDRESS_PREFIX, EMAIL_DOMAIN } from '@apps/runway/constants';
 
 export interface EmailIntakeRead {
@@ -119,6 +120,32 @@ export function useEmailEvents(): EmailEventRead[] {
 
 export function useIsEmailEventsLoaded(): boolean {
   return useAppSelector(selectIsEmailEventsLoaded);
+}
+
+/** Where a loaded purchase's card or account sits at the bank, for the linked-bank logo a sender falls back on. */
+export function usePurchaseBankLink(): PurchaseBankLink {
+  const purchases = useAppSelector((state) => state.runway.purchases);
+  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const cards = useAppSelector((state) => state.runway.cards);
+  const accounts = useAppSelector((state) => state.runway.accounts);
+  const links = useAppSelector((state) => state.runway.links);
+  return useMemo(() => {
+    const byId = new Map(
+      [...waiting, ...purchases].map((purchase) => [purchase.id, purchase]),
+    );
+    return (purchaseId) => {
+      const purchase = byId.get(purchaseId);
+      if (purchase === undefined) return undefined;
+      const linkId =
+        cards.find((card) => card.id === purchase.paidByCardId)?.linkId ??
+        accounts.find((account) => account.id === purchase.accountId)?.linkId ??
+        null;
+      const link = links.find((entry) => entry.id === linkId);
+      return link === undefined
+        ? null
+        : { linkId: link.id, logo: link.institutionLogo };
+    };
+  }, [purchases, waiting, cards, accounts, links]);
 }
 
 export function useEmailFilters(): EmailFilterRead[] {

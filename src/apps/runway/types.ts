@@ -1384,6 +1384,10 @@ export interface EmailEventSealed {
   readBy: 'pattern' | 'ai' | null;
   /** What a store's email does to an order; null for any other email (missing on an older event, read as null). */
   storeEmail?: StoreEmail | null;
+  /** The company's logo (an https address or an image data URL) when the email is confidently from one; null when unknown (missing on an older event, read as null). */
+  senderLogo: string | null;
+  /** That company's name, a store the shared shop list knows or a bank the alert names; null when unknown (missing on an older event, read as null). */
+  senderCompany: string | null;
 }
 
 /** A filter the person made from an email: an email that matches every condition it sets is skipped before anything reads it. Created and deleted by the app, read by Functions. */

@@ -13,6 +13,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
 import { createOptionalSecretReader } from '../../../imageSearch/optionalSecret.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
+import { findInstitutionLogo, toSafeLogo } from '../institutionLogos.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
 import { markClosedMonths } from '../link/syncRunwayLink.js';
 import { findMerchant } from '../merchantNames.js';
@@ -293,6 +294,34 @@ const senderKindOf = (
       ? 'bank'
       : 'other';
 
+interface SenderCompany {
+  company: string | null;
+  logo: string | null;
+}
+
+/** The company an email is confidently from: a store the shop list knows by name, or a bank the alert names that is either a known issuer's own sender or has a logo on the bank list. Nothing guessed from an unfamiliar host. */
+async function readSenderCompany(
+  firestore: Firestore,
+  senderKind: SenderKind | null,
+  found: ParsedAlert | null,
+  from: string,
+): Promise<SenderCompany> {
+  const none = { company: null, logo: null };
+  if (found === null) return none;
+  if (senderKind === 'store') {
+    const store = await findMerchant(firestore, found.merchant);
+    return store === null
+      ? none
+      : { company: store.name, logo: toSafeLogo(store.logo) };
+  }
+  if (senderKind !== 'bank' || found.institution === null) return none;
+  const bank = await findInstitutionLogo(firestore, found.institution);
+  if (bank !== null) return { company: bank.name, logo: bank.logo };
+  return isKnownInstitutionSender(from)
+    ? { company: found.institution, logo: null }
+    : none;
+}
+
 async function handleMail(
   firestore: Firestore,
   uid: string,
@@ -510,6 +539,12 @@ async function handleMail(
   };
 
   const result = await decide();
+  const sender = await readSenderCompany(
+    firestore,
+    result.senderKind,
+    result.found,
+    mail.from,
+  );
   const readText = readableBody(mail.text);
   const isBankEmail =
     result.outcome === 'purchase' ||
@@ -546,6 +581,8 @@ async function handleMail(
         bodyText,
         readBy: result.readBy,
         storeEmail: result.storeEmail ?? null,
+        senderLogo: sender.logo,
+        senderCompany: sender.company,
       },
       SEALED_SCHEMA_VERSION,
     ),
