@@ -43,7 +43,7 @@ export interface DoneForYouEntry {
   kindIcon?: ReactNode;
   /** The corner glyph's words for a screen reader. */
   kindLabel?: string;
-  /** A card at the top of the item, such as what changed from and to. */
+  /** A card under the title, such as what changed from and to. */
   hero?: ReactNode;
   doors?: readonly DoneForYouDoor[];
   undoneAt?: number | null;
@@ -155,7 +155,6 @@ function DoneForYouSheet({
     return (
       <div className='space-y-4'>
         <BackLink onBack={back} />
-        {entry.hero}
         <div className='space-y-1'>
           <p className='text-2xl font-semibold text-pretty'>
             {renderText(entry.title)}
@@ -172,6 +171,7 @@ function DoneForYouSheet({
           )}
           <p className='text-muted-foreground text-xs'>{ago}</p>
         </div>
+        {entry.hero}
         {entry.doors !== undefined && entry.doors.length > 0 && (
           <div className='space-y-1'>
             {entry.doors.map((door) => (
