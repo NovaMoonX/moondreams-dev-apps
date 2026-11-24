@@ -101,8 +101,6 @@ import type {
   EmailEventDoc,
   EmailEventSealed,
   EmailFilterDoc,
-  EmailSetupDoc,
-  EmailSetupSealed,
   EmailFilterSealed,
   EmailIntakeDoc,
   EmailIntakeSealed,
@@ -4698,7 +4696,7 @@ async function writeSeedPurchases(
 }
 
 /**
- * Jamie's purchases from email: the forwarding address with a caught Gmail confirmation, four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome and a filter, and a finished Gmail walkthrough. No bank charge of the same amount sits on the Venture X, so none merges.
+ * Jamie's purchases from email: the forwarding address with a Gmail confirmation Runway couldn't follow (so the Confirm notice shows), four emailed purchases on the Venture X (today's, and two waiting 9 and 10 days for their bank, so Home counts 2, and one from 3 days ago still inside the 5 days), one email of each other outcome (a bank, a store and a not-money sender, each tagged) and a filter. No bank charge of the same amount sits on the Venture X, so none merges.
  */
 async function writeSeedEmail(
   context: SeedContext,
@@ -4717,6 +4715,8 @@ async function writeSeedEmail(
     updatedAt: context.now - DAY_MS,
     lastReceivedAt: context.now - 2 * hour,
     confirmAt: context.now - DAY_MS,
+    autoConfirm: 'failed',
+    confirmProvider: 'gmail',
     sealed: await sealJson(
       {
         confirmUrl:
@@ -4877,7 +4877,10 @@ async function writeSeedEmail(
     ];
     return templates[index % templates.length];
   };
-  const events: (Pick<EmailEventDoc, 'id' | 'receivedAt' | 'outcome'> & {
+  const events: (Pick<
+    EmailEventDoc,
+    'id' | 'receivedAt' | 'outcome' | 'senderKind'
+  > & {
     purchaseId: string | null;
     sealed: EmailEventSealed;
   })[] = [
@@ -4885,6 +4888,7 @@ async function writeSeedEmail(
       id: entry.eventId,
       receivedAt: entry.receivedAt,
       outcome: 'purchase' as const,
+      senderKind: 'bank' as const,
       purchaseId: entry.id,
       sealed: {
         from: 'alerts@capitalone.com',
@@ -4903,6 +4907,7 @@ async function writeSeedEmail(
       id: 'seed-email-event-deposit',
       receivedAt: context.now - 5 * hour,
       outcome: 'notPurchase',
+      senderKind: 'bank',
       purchaseId: null,
       sealed: {
         from: 'alerts@capitalone.com',
@@ -4915,9 +4920,43 @@ async function writeSeedEmail(
       },
     },
     {
+      id: 'seed-email-event-store-order',
+      receivedAt: context.now - 8 * hour,
+      outcome: 'notPurchase',
+      senderKind: 'store',
+      purchaseId: null,
+      sealed: {
+        from: 'orders@target.com',
+        subject: 'Your Target order has shipped',
+        subjectTemplate: 'your target order has shipped',
+        ...readEmail(
+          'Good news, your order is on its way. Track your package at https://www.target.com/orders',
+        ),
+        readBy: 'ai',
+      },
+    },
+    {
+      id: 'seed-email-event-forwarded-receipt',
+      receivedAt: context.now - 12 * hour,
+      outcome: 'purchase',
+      senderKind: 'store',
+      purchaseId: null,
+      sealed: {
+        from: 'Target <orders@target.com>',
+        subject: 'Fwd: Your Target receipt for $23.18',
+        subjectTemplate: 'your target receipt for {amount}',
+        ...readEmail(
+          'Thanks for shopping at Target. Your total was $23.18, paid with your Venture X card ending in 4821.',
+          { amountCents: 2_318, merchant: 'Target' },
+        ),
+        readBy: 'ai',
+      },
+    },
+    {
       id: 'seed-email-event-filtered',
       receivedAt: context.now - DAY_MS - 3 * hour,
       outcome: 'filtered',
+      senderKind: 'other',
       purchaseId: null,
       sealed: {
         from: 'marketing@chase.com',
@@ -4939,6 +4978,7 @@ async function writeSeedEmail(
       id: 'seed-email-event-confirm',
       receivedAt: context.now - DAY_MS,
       outcome: 'confirm',
+      senderKind: null,
       purchaseId: null,
       sealed: {
         from: 'forwarding-noreply@google.com',
@@ -4958,6 +4998,7 @@ async function writeSeedEmail(
       id: 'seed-email-event-unread',
       receivedAt: context.now - 3 * DAY_MS,
       outcome: 'unread',
+      senderKind: 'other',
       purchaseId: null,
       sealed: {
         from: 'statements@discover.com',
@@ -4978,43 +5019,13 @@ async function writeSeedEmail(
         id: entry.id,
         receivedAt: entry.receivedAt,
         outcome: entry.outcome,
+        senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
         expiresAt: expiresAt(entry.receivedAt),
         sealed: await sealJson(entry.sealed, encryption),
       });
     }),
   );
-
-  batch.set(context.firestore.doc(`${plan}/emailSetup/progress`), {
-    id: 'progress',
-    provider: 'gmail',
-    stepId: 'test',
-    doneAt: context.now - DAY_MS,
-    sealed: await sealJson(
-      {
-        banks: [
-          {
-            id: 'seed-email-bank-capital-one',
-            name: 'Capital One',
-            addresses: [
-              'alerts@capitalone.com',
-              'capitalone@notification.capitalone.com',
-            ],
-            addedAt: context.now - 12 * DAY_MS,
-          },
-          {
-            id: 'seed-email-bank-discover',
-            name: 'Discover',
-            addresses: ['discover@services.discover.com'],
-            addedAt: context.now - 2 * DAY_MS,
-          },
-        ],
-      } satisfies EmailSetupSealed,
-      encryption,
-    ),
-    createdAt: context.now - 12 * DAY_MS,
-    updatedAt: context.now - DAY_MS,
-  } satisfies EmailSetupDoc);
 
   const filterId = 'seed-email-filter-chase-marketing';
   batch.set(context.firestore.doc(`${plan}/emailFilters/${filterId}`), {
@@ -5030,7 +5041,7 @@ async function writeSeedEmail(
       encryption,
     ),
   } satisfies EmailFilterDoc);
-  return 1 + purchases.length + events.length + 2;
+  return 1 + purchases.length + events.length + 1;
 }
 
 /** Jamie's Done for you, one entry per kind a row can show, including one written before subjects were kept. */

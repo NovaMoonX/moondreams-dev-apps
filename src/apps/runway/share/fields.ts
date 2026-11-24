@@ -732,6 +732,8 @@ const EMAIL_INTAKE_DOC_FIELDS = {
   updatedAt: 'notUseful',
   lastReceivedAt: 'notUseful',
   confirmAt: 'notUseful',
+  autoConfirm: 'notUseful',
+  confirmProvider: 'notUseful',
   sealed: 'never',
 } satisfies Record<keyof EmailIntakeDoc, ShareDecision>;
 
@@ -765,6 +767,7 @@ const EMAIL_EVENT_DOC_FIELDS = {
   id: 'notUseful',
   receivedAt: 'notUseful',
   outcome: 'notUseful',
+  senderKind: 'notUseful',
   purchaseId: 'notUseful',
   expiresAt: 'notUseful',
   sealed: 'never',

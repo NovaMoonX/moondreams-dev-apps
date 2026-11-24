@@ -22,6 +22,7 @@ import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
 import {
   EMAIL_WORDS,
   describeEmailOutcome,
+  stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { selectPurchaseIds } from '@apps/runway/store/selectors/emailSelectors';
@@ -45,7 +46,9 @@ function EmailHeader({ event }: { event: EmailEventRead }) {
       <dd className='min-w-0 break-words'>{event.from}</dd>
       <dt className='text-muted-foreground'>{EMAIL_WORDS.subject}</dt>
       <dd className='min-w-0 font-medium break-words'>
-        <MaskedText>{event.subject || EMAIL_WORDS.noSubject}</MaskedText>
+        <MaskedText>
+          {stripForwardPrefix(event.subject) || EMAIL_WORDS.noSubject}
+        </MaskedText>
       </dd>
       <dt className='text-muted-foreground'>{EMAIL_WORDS.received}</dt>
       <dd className='min-w-0 break-words'>

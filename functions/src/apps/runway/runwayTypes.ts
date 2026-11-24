@@ -1266,6 +1266,10 @@ export interface EmailIntakeDoc {
   lastReceivedAt: number | null;
   /** When a mail provider's forwarding confirmation last arrived; null until one does. */
   confirmAt: number | null;
+  /** Whether Functions followed the confirmation link themselves: 'confirmed', 'failed' or 'skipped' (a provider they don't follow); null until a confirmation arrives (and on an older document, which the person confirms by hand). */
+  autoConfirm: 'confirmed' | 'failed' | 'skipped' | null;
+  /** Whose confirmation arrived; null until one does, or when the provider is not one of these. */
+  confirmProvider: 'gmail' | 'yahoo' | 'proton' | null;
   /** `EmailIntakeSealed`; null until a confirmation arrives. */
   sealed: Sealed | null;
 }
@@ -1277,9 +1281,11 @@ export interface EmailIntakeSealed {
   confirmCode: string | null;
 }
 
+/** @deprecated The setup walkthrough is gone; kept for the stored progress documents, which nothing reads or writes now. */
 export type EmailProvider =
   'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'proton' | 'other';
 
+/** @deprecated See `EmailProvider`. */
 export type EmailSetupStepId =
   | 'provider'
   | 'copy'
@@ -1290,7 +1296,7 @@ export type EmailSetupStepId =
   | 'filter'
   | 'test';
 
-/** How far the person got setting up forwarding, written by the app so a walkthrough resumes on any device; one per plan, at `emailSetup/progress`. The banks whose alerts are forwarded are sealed; the provider and step are not sensitive. */
+/** @deprecated The setup walkthrough is gone and nothing reads or writes this document now; older ones stay in place. It held how far the person got setting up forwarding, at `emailSetup/progress`, with the banks whose alerts were forwarded sealed. */
 export interface EmailSetupDoc {
   id: 'progress';
   provider: EmailProvider | null;
@@ -1304,7 +1310,7 @@ export interface EmailSetupDoc {
   updatedAt: number;
 }
 
-/** One bank whose alerts are forwarded, with every From address its alerts come from. */
+/** @deprecated See `EmailSetupDoc`. */
 export interface EmailBank {
   id: string;
   name: string;
@@ -1313,6 +1319,7 @@ export interface EmailBank {
   addedAt: number;
 }
 
+/** @deprecated See `EmailSetupDoc`. */
 export interface EmailSetupSealed {
   banks: EmailBank[];
 }
@@ -1326,11 +1333,16 @@ export type EmailOutcome =
   | 'unread'
   | 'notTracking';
 
+/** What kind of sender an email came from, as Functions judged it: a bank's alert, a store's receipt, or something that is not money. */
+export type EmailSenderKind = 'bank' | 'store' | 'other';
+
 /** One email that reached the address, written only by Functions and removed on its own after `EMAIL_EVENT_KEEP_DAYS`; kept so a filter can be built from it. */
 export interface EmailEventDoc {
   id: string;
   receivedAt: number;
   outcome: EmailOutcome;
+  /** The sender's kind; null on an older event (read as a bank when it became a purchase, else not money). */
+  senderKind: EmailSenderKind | null;
   /** The purchase it became; null for any other outcome. */
   purchaseId: string | null;
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */

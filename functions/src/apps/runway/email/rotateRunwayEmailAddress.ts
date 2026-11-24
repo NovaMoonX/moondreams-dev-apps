@@ -58,6 +58,8 @@ export const rotateRunwayEmailAddress = onCall(
         updatedAt: now,
         lastReceivedAt: null,
         confirmAt: null,
+        autoConfirm: null,
+        confirmProvider: null,
         sealed: null,
       });
     });
