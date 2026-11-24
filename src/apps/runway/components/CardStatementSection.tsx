@@ -42,7 +42,6 @@ interface CardStatementSectionProps {
 
 interface OfferFailure {
   message: string;
-  rawMessage: string;
   facts: string[];
   stack: string | null;
 }
@@ -168,14 +167,12 @@ function CardStatementSection({
           type: result.state === 'ok' ? 'success' : 'info',
         });
       } catch (error) {
-        const cause =
-          error instanceof Error && error.cause instanceof Error
-            ? error.cause
-            : error;
+        const cause = error instanceof Error ? (error.cause ?? error) : error;
+        const message = getErrorMessage(error, CARD_WORDS.offerFailed(bank));
+        addToast({ title: message, type: 'error' });
         setFailure({
-          message: getErrorMessage(error, CARD_WORDS.offerFailed(bank)),
-          rawMessage:
-            cause instanceof Error ? cause.message : String(cause ?? ''),
+          message:
+            cause instanceof Error && cause.message ? cause.message : message,
           facts: readLinkFailureFacts(error),
           stack: cause instanceof Error ? (cause.stack ?? null) : null,
         });
@@ -235,11 +232,8 @@ function CardStatementSection({
     return (
       <div className='space-y-2'>
         {offer}
-        <p role='alert' className='text-destructive px-1 text-sm'>
-          {failure.message}
-        </p>
         <DebugDetails
-          message={failure.rawMessage || failure.message}
+          message={failure.message}
           facts={failure.facts}
           trace={
             failure.stack === null

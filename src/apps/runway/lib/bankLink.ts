@@ -18,7 +18,7 @@ interface ProviderExitMetadata {
   request_id?: string;
 }
 
-/** The bank's window closed on an error of its own; `facts` are its codes and ids, for debug viewers and a support ticket. */
+/** The bank's window closed on an error of its own; `facts` holds its codes and ids, never a token. */
 export class BankWindowError extends Error {
   readonly facts: string[];
   constructor(error: ProviderExitError, metadata: ProviderExitMetadata) {

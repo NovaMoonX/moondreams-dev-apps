@@ -3,12 +3,10 @@ import { BankWindowError } from '@apps/runway/lib/bankLink';
 /** A link flow's failure with the step it stopped at; the message stays the cause's sentence. */
 export class LinkStepError extends Error {
   readonly step: string;
-  readonly cause: unknown;
   constructor(step: string, cause: unknown) {
-    super(cause instanceof Error ? cause.message : String(cause));
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
     this.name = 'LinkStepError';
     this.step = step;
-    this.cause = cause;
   }
 }
 
@@ -38,7 +36,7 @@ const readCode = (error: unknown): string | null => {
   return typeof code === 'string' ? code : null;
 };
 
-/** What a debug viewer needs to tell a link failure apart: the step, the error kind, the provider's code and ids. Holds no token, amount or account. */
+/** A link failure as lines a debug viewer can copy: step, kind, the provider's code and ids. Never a token, amount or account. */
 export function readLinkFailureFacts(error: unknown): string[] {
   const step = error instanceof LinkStepError ? error.step : null;
   const cause = error instanceof LinkStepError ? error.cause : error;
@@ -53,10 +51,6 @@ export function readLinkFailureFacts(error: unknown): string[] {
     ['Provider code', details?.providerCode],
     ['Provider call', details?.path],
     ['Provider request', details?.requestId],
-    [
-      'Online',
-      typeof navigator?.onLine === 'boolean' ? String(navigator.onLine) : null,
-    ],
   ];
   return pairs
     .filter(
