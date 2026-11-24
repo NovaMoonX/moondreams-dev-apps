@@ -54,7 +54,7 @@ const asDate = (value: unknown, receivedAt: number) => {
     : null;
 };
 
-/** Asks the AI to read an alert the patterns could not, and to say what kind of sender wrote it. `null` when it cannot be read or the AI is unavailable; never throws. */
+/** Asks the AI to read an alert the patterns could not. `null` when unreadable; never throws. */
 export async function readAlertWithAi({
   subject,
   text,

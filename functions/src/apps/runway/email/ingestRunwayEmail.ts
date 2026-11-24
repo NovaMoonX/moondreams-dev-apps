@@ -79,6 +79,7 @@ interface Mail {
   text: string;
   receivedAt: number;
   isDkimPassed: boolean;
+  dkimDomain: string | null;
 }
 
 interface Filter {
@@ -109,6 +110,11 @@ const isSecretValid = (given: string | undefined, expected: string) =>
 
 const asString = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : '';
+
+const asDomain = (value: unknown) => {
+  const domain = asString(value, 255).toLowerCase();
+  return /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(domain) ? domain : null;
+};
 
 const eventIdFor = (uid: string, messageId: string) =>
   createHash('sha256').update(`${uid}:${messageId}`).digest('hex').slice(0, 32);
@@ -261,7 +267,7 @@ const isInsideTracking = (
   return open !== undefined && open.to === null && date >= open.from;
 };
 
-/** The rules are written for bank alerts, so a purchase they read is a bank's even when no institution was named. The AI's own answer decides otherwise, falling back to the same test when it gave none. */
+// The patterns are written for bank alerts, so what they read is a bank's.
 const senderKindOf = (
   alert: ParsedAlert,
   readBy: 'pattern' | 'ai',
@@ -299,7 +305,8 @@ async function handleMail(
         confirmation.confirmUrl,
         confirmProvider,
       );
-      logger.info('runway.email.autoConfirm', {
+      const log = followed.autoConfirm === 'failed' ? logger.warn : logger.info;
+      log('runway.email.autoConfirm', {
         provider: confirmProvider,
         result: followed.autoConfirm,
         status: followed.status,
@@ -333,7 +340,7 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
-        senderKind: 'other',
+        senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
     const byPattern = parseAlertEmail(mail);
@@ -354,7 +361,7 @@ async function handleMail(
         date: null,
         readBy: null,
         found: null,
-        senderKind: 'other',
+        senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
     const senderKind = senderKindOf(alert, read.readBy, read.aiKind, mail.from);
@@ -591,6 +598,7 @@ export const ingestRunwayEmail = onRequest(
           text: text.trim() !== '' ? text : htmlToText(html),
           receivedAt,
           isDkimPassed: dkim === 'pass',
+          dkimDomain: dkim === 'pass' ? asDomain(body.dkimDomain) : null,
         },
         messageId,
         now,

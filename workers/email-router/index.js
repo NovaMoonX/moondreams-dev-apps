@@ -32,6 +32,15 @@ const readResult = (headers, name) => {
   );
 };
 
+const readDkimDomain = (headers) => {
+  const passed = headers
+    .filter((header) => header.key === 'authentication-results')
+    .flatMap((header) => header.value.split(';'))
+    .find((clause) => /^\s*dkim=pass\b/i.test(clause));
+  const domain = /\bheader\.d=([a-z0-9.-]+)/i.exec(passed ?? '')?.[1];
+  return domain ? domain.toLowerCase().slice(0, 255) : '';
+};
+
 export default {
   async email(message, env) {
     if (message.rawSize > MAX_BYTES) {
@@ -60,6 +69,7 @@ export default {
           messageId: mail.messageId ?? message.headers.get('message-id') ?? '',
           spf: readResult(mail.headers, 'spf'),
           dkim: readResult(mail.headers, 'dkim'),
+          dkimDomain: readDkimDomain(mail.headers),
           receivedAt: Date.now(),
         }),
       });

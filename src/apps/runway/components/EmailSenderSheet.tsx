@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Filter } from 'lucide-react';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
@@ -23,6 +24,7 @@ interface EmailSenderSheetProps {
 
 /** One sender: its address, how much it has sent and a way to filter out everything it sends. */
 function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
+  const { confirm } = useActionModal();
   const actions = useEmailActions();
   const filters = useEmailFilters();
   const [isSaving, setIsSaving] = useState(false);
@@ -30,6 +32,15 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
   const isCovered = isSenderFiltered(filters, sender.address);
 
   const filterOut = async () => {
+    if (sender.hasPurchase) {
+      const isAccepted = await confirm({
+        title: EMAIL_WORDS.senderStopTitle(sender.address),
+        message: EMAIL_WORDS.senderStopMessage,
+        confirmText: EMAIL_WORDS.senderStopConfirm,
+        destructive: true,
+      });
+      if (!isAccepted) return;
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -83,7 +94,11 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
           <ActionRow
             isRoomy
             icon={<Filter />}
-            label={EMAIL_WORDS.senderFilterOut}
+            label={
+              sender.hasPurchase
+                ? EMAIL_WORDS.senderStop
+                : EMAIL_WORDS.senderFilterOut
+            }
             subtitle={
               sender.hasPurchase
                 ? EMAIL_WORDS.senderHadPurchases

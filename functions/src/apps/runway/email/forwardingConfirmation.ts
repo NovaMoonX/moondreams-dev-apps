@@ -6,8 +6,18 @@ import {
 } from './parseAlert.js';
 
 const GMAIL_SENDER = 'forwarding-noreply@google.com';
+const GOOGLE_DOMAINS = ['google.com'];
 const YAHOO_DOMAINS = ['yahoo.com', 'yahoo-inc.com', 'yahoomail.com'];
 const GMAIL_HOSTS = ['mail.google.com', 'mail-settings.google.com'];
+const YAHOO_HOSTS = ['mail.yahoo.com', 'edit.yahoo.com'];
+const SIGN_IN_HOSTS = [
+  'accounts.google.com',
+  'consent.google.com',
+  'guce.yahoo.com',
+  'login.yahoo.com',
+];
+const REDIRECT_STATUSES = [301, 302, 303, 307, 308];
+const MAX_HOPS = 3;
 const CONFIRM_TIMEOUT_MS = 8_000;
 
 export type ConfirmProvider = 'gmail' | 'yahoo' | 'proton';
@@ -18,27 +28,39 @@ interface ConfirmationMail {
   subject: string;
   text: string;
   isDkimPassed: boolean;
+  dkimDomain?: string | null;
 }
 
-const isYahooSender = (from: string) => {
-  const domain = toAddress(from).split('@')[1] ?? '';
-  return YAHOO_DOMAINS.some(
-    (known) => domain === known || domain.endsWith(`.${known}`),
-  );
-};
+interface FollowResult {
+  autoConfirm: AutoConfirm;
+  status: number | null;
+  errorName: string | null;
+}
+
+const isUnder = (domain: string, roots: string[]) =>
+  roots.some((root) => domain === root || domain.endsWith(`.${root}`));
+
+const isSignedBy = (mail: ConfirmationMail, roots: string[]) =>
+  mail.isDkimPassed &&
+  typeof mail.dkimDomain === 'string' &&
+  isUnder(mail.dkimDomain.toLowerCase(), roots);
+
+const isYahooSender = (from: string) =>
+  isUnder(toAddress(from).split('@')[1] ?? '', YAHOO_DOMAINS);
 
 const isGmailConfirmation = (mail: ConfirmationMail) =>
   toAddress(mail.from) === GMAIL_SENDER &&
-  mail.isDkimPassed &&
+  isSignedBy(mail, GOOGLE_DOMAINS) &&
   /forwarding confirmation/i.test(mail.subject);
 
 const isYahooConfirmation = (mail: ConfirmationMail) =>
   isYahooSender(mail.from) &&
-  mail.isDkimPassed &&
+  isSignedBy(mail, YAHOO_DOMAINS) &&
   /forward/i.test(mail.subject) &&
-  /verif|confirm/i.test(mail.subject);
+  /verif|confirm/i.test(mail.subject) &&
+  readYahooLink(mail.text) !== undefined;
 
-/** Which provider's forwarding confirmation this is, or null for any other email. Needs the sender's own DKIM pass, so a forwarded copy never counts. */
+/** Which provider's forwarding confirmation this is, or null. */
 export function confirmProviderOf(
   mail: ConfirmationMail,
 ): ConfirmProvider | null {
@@ -86,10 +108,7 @@ export function readConfirmation(mail: ConfirmationMail) {
   };
 }
 
-const isYahooHost = (host: string) =>
-  host === 'yahoo.com' || host.endsWith('.yahoo.com');
-
-/** A confirm link the server may open for this provider: https, no sign-in details or port, and exactly the provider's own host (Gmail's two, or Yahoo and its subdomains). */
+/** Whether the server may open this confirm link: https on one of the provider's confirmation hosts. */
 export function isAcceptedConfirmUrl(
   url: string | null,
   provider: ConfirmProvider | null,
@@ -99,54 +118,77 @@ export function isAcceptedConfirmUrl(
   }
   try {
     const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
     return (
       parsed.protocol === 'https:' &&
       parsed.username === '' &&
       parsed.password === '' &&
       parsed.port === '' &&
-      (provider === 'gmail' ? GMAIL_HOSTS.includes(host) : isYahooHost(host))
+      (provider === 'gmail' ? GMAIL_HOSTS : YAHOO_HOSTS).includes(
+        parsed.hostname.toLowerCase(),
+      )
     );
   } catch {
     return false;
   }
 }
 
-const isSignInPage = (finalUrl: string) => {
+const isSignInPage = (url: string) => {
+  const { hostname, pathname } = new URL(url);
+  return (
+    SIGN_IN_HOSTS.includes(hostname.toLowerCase()) ||
+    /\/(?:servicelogin|signin)/i.test(pathname)
+  );
+};
+
+const resolveHop = (location: string | null, from: string) => {
   try {
-    const { hostname } = new URL(finalUrl);
-    return hostname === 'accounts.google.com' || hostname === 'login.yahoo.com';
+    return location === null ? null : new URL(location, from).href;
   } catch {
-    return false;
+    return null;
   }
 };
 
-/** Opens the provider's confirm link once with a plain GET (no cookies, redirects followed, 8 s). Never throws; a sign-in page at the end of the redirects is a failure, not a confirmation. */
+/** Opens a confirm link, following at most 3 redirects by hand and only to accepted pages. Never throws. */
 export async function followConfirmLink(
   url: string | null,
   provider: ConfirmProvider | null,
   doFetch: typeof fetch = fetch,
-): Promise<{
-  autoConfirm: AutoConfirm;
-  status: number | null;
-  errorName: string | null;
-}> {
+): Promise<FollowResult> {
   if (url === null || !isAcceptedConfirmUrl(url, provider)) {
     return { autoConfirm: 'skipped', status: null, errorName: null };
   }
-  try {
-    const response = await doFetch(url, {
+  const signal = AbortSignal.timeout(CONFIRM_TIMEOUT_MS);
+  const failed = (status: number | null): FollowResult => ({
+    autoConfirm: 'failed',
+    status,
+    errorName: null,
+  });
+  const open = async (target: string, hops: number): Promise<FollowResult> => {
+    if (!isAcceptedConfirmUrl(target, provider) || isSignInPage(target)) {
+      return failed(null);
+    }
+    const response = await doFetch(target, {
       method: 'GET',
-      redirect: 'follow',
+      redirect: 'manual',
       credentials: 'omit',
-      signal: AbortSignal.timeout(CONFIRM_TIMEOUT_MS),
+      signal,
     });
-    return {
-      autoConfirm:
-        response.ok && !isSignInPage(response.url) ? 'confirmed' : 'failed',
-      status: response.status,
-      errorName: null,
-    };
+    await response.body?.cancel();
+    if (REDIRECT_STATUSES.includes(response.status)) {
+      const next = resolveHop(
+        response.headers?.get('location') ?? null,
+        target,
+      );
+      return next === null || hops >= MAX_HOPS
+        ? failed(response.status)
+        : open(next, hops + 1);
+    }
+    return response.status >= 200 && response.status < 300
+      ? { autoConfirm: 'confirmed', status: response.status, errorName: null }
+      : failed(response.status);
+  };
+  try {
+    return await open(url, 0);
   } catch (error) {
     return {
       autoConfirm: 'failed',

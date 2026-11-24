@@ -92,6 +92,9 @@ export interface RunwayState {
   /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
   emailIntake: OpenEmailIntake | null;
   isEmailIntakeLoaded: boolean;
+  /** The address could not be read, so setup never offers a new one over a real one; `emailIntakeAttempt` counts retries, which restart the email listeners. */
+  isEmailIntakeFailed: boolean;
+  emailIntakeAttempt: number;
   emailEvents: OpenEmailEvent[];
   isEmailEventsLoaded: boolean;
   emailFilters: OpenEmailFilter[];
@@ -229,6 +232,8 @@ const initialState: RunwayState = {
   isMemoriesLoaded: false,
   emailIntake: null,
   isEmailIntakeLoaded: false,
+  isEmailIntakeFailed: false,
+  emailIntakeAttempt: 0,
   emailEvents: [],
   isEmailEventsLoaded: false,
   emailFilters: [],
@@ -344,6 +349,14 @@ export const runwaySlice = createSlice({
     },
     setIsEmailIntakeLoaded: (state, action: PayloadAction<boolean>) => {
       state.isEmailIntakeLoaded = action.payload;
+      if (action.payload) state.isEmailIntakeFailed = false;
+    },
+    setIsEmailIntakeFailed: (state, action: PayloadAction<boolean>) => {
+      state.isEmailIntakeFailed = action.payload;
+      if (action.payload) state.isEmailIntakeLoaded = false;
+    },
+    retryEmailIntake: (state) => {
+      state.emailIntakeAttempt += 1;
     },
     setEmailEvents: (
       state,
@@ -545,6 +558,8 @@ export const {
   setEmailEvents,
   setEmailFilters,
   setIsEmailIntakeLoaded,
+  setIsEmailIntakeFailed,
+  retryEmailIntake,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

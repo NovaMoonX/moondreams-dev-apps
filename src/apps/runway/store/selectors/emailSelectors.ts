@@ -83,6 +83,12 @@ export const selectEmailIntake = (state: RootState) => state.runway.emailIntake;
 export const selectIsEmailIntakeLoaded = (state: RootState) =>
   state.runway.isEmailIntakeLoaded;
 
+export const selectIsEmailIntakeFailed = (state: RootState) =>
+  state.runway.isEmailIntakeFailed;
+
+export const selectEmailIntakeAttempt = (state: RootState) =>
+  state.runway.emailIntakeAttempt;
+
 /** Newest first. */
 export const selectEmailEvents = (state: RootState) => state.runway.emailEvents;
 

@@ -6,9 +6,11 @@ import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 interface EmailSetupViewProps {
   address: string | null;
   isLoading: boolean;
+  isFailed: boolean;
   isBusy: boolean;
   error: string | null;
   onGetAddress: () => void;
+  onRetry: () => void;
   onDone: () => void;
 }
 
@@ -16,16 +18,27 @@ interface EmailSetupViewProps {
 function EmailSetupView({
   address,
   isLoading,
+  isFailed,
   isBusy,
   error,
   onGetAddress,
+  onRetry,
   onDone,
 }: EmailSetupViewProps) {
   const [name, ...host] = (address ?? '').split('@');
   return (
     <div className='space-y-4'>
       <p className='text-muted-foreground text-sm'>{EMAIL_WORDS.setupLine}</p>
-      {address === null ? (
+      {address === null && isFailed ? (
+        <div className='space-y-2'>
+          <p className='text-destructive text-sm' role='alert'>
+            {EMAIL_WORDS.addressLoadFailed}
+          </p>
+          <Button className='w-full' variant='secondary' onClick={onRetry}>
+            {EMAIL_WORDS.tryAgain}
+          </Button>
+        </div>
+      ) : address === null ? (
         <Button
           className='w-full'
           disabled={isBusy || isLoading}

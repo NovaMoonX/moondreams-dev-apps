@@ -302,9 +302,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               icon={<Mail />}
               label={EMAIL_WORDS.rowAction}
               value={
-                emailIntake.address === null
-                  ? EMAIL_WORDS.rowNotSetUp
-                  : EMAIL_WORDS.rowSetUp
+                emailIntake.isLoading || emailIntake.isFailed
+                  ? EMAIL_WORDS.rowLoading
+                  : emailIntake.address === null
+                    ? EMAIL_WORDS.rowNotSetUp
+                    : EMAIL_WORDS.rowSetUp
               }
               onOpen={() => setIsEmailOpen(true)}
             />

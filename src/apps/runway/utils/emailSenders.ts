@@ -33,44 +33,46 @@ export function readSender(from: string): {
   };
 }
 
-/** An older event has no kind: one that became a purchase was a bank's, any other was not money. */
-const readKind = (event: EmailEventRead): EmailSenderKind =>
-  event.senderKind ?? (event.outcome === 'purchase' ? 'bank' : 'other');
+const isKindRead = (event: EmailEventRead) =>
+  event.senderKind !== null &&
+  event.outcome !== 'unread' &&
+  event.outcome !== 'filtered';
 
-/** Every sender that reached the address, grouped by the kind of its newest email, newest sender first; a forwarding confirmation is setup, not a sender, and a kind with no senders is left out. */
+/** The kind of a sender's newest email that was judged; with none (older events), a sender that ever became a purchase was a bank's and any other was not money. */
+const readKind = (newestFirst: EmailEventRead[]): EmailSenderKind =>
+  newestFirst.find(isKindRead)?.senderKind ??
+  (newestFirst.some((event) => event.outcome === 'purchase')
+    ? 'bank'
+    : 'other');
+
+/** Every sender that reached the address, grouped by the kind of its newest judged email, newest sender first; a forwarding confirmation is setup, not a sender, and a kind with no senders is left out. */
 export function groupEmailSenders(
   events: EmailEventRead[],
 ): EmailSenderGroup[] {
-  const bySender = events
+  const byAddress = events
     .filter((event) => event.from !== '' && event.outcome !== 'confirm')
+    .sort((a, b) => b.receivedAt - a.receivedAt)
     .reduce((found, event) => {
-      const { address, name } = readSender(event.from);
-      const sender = found.get(address);
-      if (sender === undefined) {
-        found.set(address, {
-          address,
-          name,
-          kind: readKind(event),
-          count: 1,
-          lastAt: event.receivedAt,
-          hasPurchase: event.outcome === 'purchase',
-        });
-        return found;
-      }
-      const isNewer = event.receivedAt > sender.lastAt;
-      found.set(address, {
-        ...sender,
-        name: isNewer ? (name ?? sender.name) : (sender.name ?? name),
-        kind: isNewer ? readKind(event) : sender.kind,
-        count: sender.count + 1,
-        lastAt: Math.max(sender.lastAt, event.receivedAt),
-        hasPurchase: sender.hasPurchase || event.outcome === 'purchase',
-      });
+      const { address } = readSender(event.from);
+      found.set(address, [...(found.get(address) ?? []), event]);
       return found;
-    }, new Map<string, EmailSender>());
+    }, new Map<string, EmailEventRead[]>());
+  const senders = [...byAddress.entries()].map(
+    ([address, newestFirst]): EmailSender => ({
+      address,
+      name:
+        newestFirst
+          .map((event) => readSender(event.from).name)
+          .find((name) => name !== null) ?? null,
+      kind: readKind(newestFirst),
+      count: newestFirst.length,
+      lastAt: newestFirst[0].receivedAt,
+      hasPurchase: newestFirst.some((event) => event.outcome === 'purchase'),
+    }),
+  );
   return KIND_ORDER.map((kind) => ({
     kind,
-    senders: [...bySender.values()]
+    senders: senders
       .filter((sender) => sender.kind === kind)
       .sort((a, b) => b.lastAt - a.lastAt),
   })).filter((group) => group.senders.length > 0);

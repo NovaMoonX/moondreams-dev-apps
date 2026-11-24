@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import {
   createEmailFilter,
   deleteEmailFilter,
@@ -14,8 +14,10 @@ import {
   selectEmailIntake,
   selectEmailOverdue,
   selectIsEmailEventsLoaded,
+  selectIsEmailIntakeFailed,
   selectIsEmailIntakeLoaded,
 } from '@apps/runway/store/selectors/emailSelectors';
+import { retryEmailIntake } from '@apps/runway/store/runwaySlice';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
   EmailEventSealed,
@@ -38,6 +40,9 @@ export interface EmailIntakeRead {
     provider: EmailIntakeDoc['confirmProvider'];
   } | null;
   isLoading: boolean;
+  /** The address could not be read; nothing here says whether there is one. */
+  isFailed: boolean;
+  retry(): void;
 }
 
 export interface EmailEventRead extends EmailEventSealed {
@@ -69,13 +74,20 @@ const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
 export function useEmailIntake(): EmailIntakeRead {
   const intake = useAppSelector(selectEmailIntake);
   const isLoaded = useAppSelector(selectIsEmailIntakeLoaded);
+  const isFailed = useAppSelector(selectIsEmailIntakeFailed);
+  const dispatch = useAppDispatch();
   return useMemo(() => {
+    const retry = () => {
+      dispatch(retryEmailIntake());
+    };
     if (intake === null) {
       return {
         address: null,
         lastReceivedAt: null,
         confirm: null,
-        isLoading: !isLoaded,
+        isLoading: !isLoaded && !isFailed,
+        isFailed,
+        retry,
       };
     }
     return {
@@ -92,8 +104,10 @@ export function useEmailIntake(): EmailIntakeRead {
               provider: intake.confirmProvider,
             },
       isLoading: false,
+      isFailed: false,
+      retry,
     };
-  }, [intake, isLoaded]);
+  }, [intake, isLoaded, isFailed, dispatch]);
 }
 
 export function useEmailEvents(): EmailEventRead[] {

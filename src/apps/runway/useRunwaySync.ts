@@ -65,6 +65,7 @@ import {
   selectRecentFrom,
   toClosingKey,
 } from '@apps/runway/store/selectors/historySelectors';
+import { selectEmailIntakeAttempt } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectConfirmedDayIds,
@@ -90,6 +91,7 @@ import {
   setMemories,
   setEmailIntake,
   setIsEmailIntakeLoaded,
+  setIsEmailIntakeFailed,
   setEmailEvents,
   setEmailFilters,
   setClosing,
@@ -263,6 +265,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
 
   const isEmailGateOpen = useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID);
   const emailLevel = useAppSelector(selectLevel);
+  const emailAttempt = useAppSelector(selectEmailIntakeAttempt);
   const isEmailOpen = isEmailGateOpen && emailLevel !== 'plan';
 
   useEffect(() => {
@@ -287,7 +290,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             },
             (error) => {
               skip(error);
-              dispatch(setIsEmailIntakeLoaded(true));
+              dispatch(setIsEmailIntakeFailed(true));
             },
           ),
           startEmailEventsListener(
@@ -304,19 +307,21 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           ),
         ];
       })
-      .catch((error: unknown) =>
-        console.error('Purchases from email did not open', error),
-      );
+      .catch((error: unknown) => {
+        console.error('Purchases from email did not open', error);
+        if (run.isCurrent) dispatch(setIsEmailIntakeFailed(true));
+      });
 
     return () => {
       run.isCurrent = false;
       stops.current.forEach((stop) => stop());
       dispatch(setEmailIntake(null));
       dispatch(setIsEmailIntakeLoaded(false));
+      dispatch(setIsEmailIntakeFailed(false));
       dispatch(setEmailEvents(null));
       dispatch(setEmailFilters([]));
     };
-  }, [uid, keyStatus, isEmailOpen, dispatch]);
+  }, [uid, keyStatus, isEmailOpen, emailAttempt, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready') return;

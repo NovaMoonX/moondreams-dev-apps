@@ -11,13 +11,17 @@ import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
 
 interface EmailConfirmNoticeProps {
   confirm: NonNullable<EmailIntakeRead['confirm']>;
+  onConfirmTapped: () => void;
 }
 
 const openLink = (url: string) =>
   window.open(url, '_blank', 'noopener,noreferrer');
 
-/** What the person still has to do, or what Runway did, about their email provider's forwarding confirmation; the screen draws it only until an email has come through. */
-function EmailConfirmNotice({ confirm }: EmailConfirmNoticeProps) {
+/** What the person still has to do, or what Runway did, about their email provider's forwarding confirmation; the screen decides how long it stays. */
+function EmailConfirmNotice({
+  confirm,
+  onConfirmTapped,
+}: EmailConfirmNoticeProps) {
   const url = confirm.url?.startsWith('https://') ? confirm.url : null;
   const name =
     confirm.provider === null ? null : CONFIRM_PROVIDER_NAMES[confirm.provider];
@@ -51,7 +55,13 @@ function EmailConfirmNotice({ confirm }: EmailConfirmNoticeProps) {
     >
       <div className='mt-2 space-y-2'>
         {url !== null ? (
-          <Button className='w-full' onClick={() => openLink(url)}>
+          <Button
+            className='w-full'
+            onClick={() => {
+              openLink(url);
+              onConfirmTapped();
+            }}
+          >
             {EMAIL_WORDS.confirmButton(name)}
           </Button>
         ) : (

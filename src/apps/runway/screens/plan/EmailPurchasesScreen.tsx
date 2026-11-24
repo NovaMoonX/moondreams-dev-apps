@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ChevronRight, Filter, Forward, KeyRound, Trash2 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -48,6 +48,28 @@ import {
 import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
 
 const ROWS_SHOWN = 5;
+const CONFIRM_TAPPED_KEY = 'runway:email-confirm-tapped';
+const CONFIRM_NOTICE_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+const readConfirmTapped = (confirmAt: number | null) => {
+  try {
+    return (
+      confirmAt !== null &&
+      localStorage.getItem(CONFIRM_TAPPED_KEY) === String(confirmAt)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const writeConfirmTapped = (confirmAt: number) => {
+  try {
+    localStorage.setItem(CONFIRM_TAPPED_KEY, String(confirmAt));
+  } catch {
+    // Storage can be blocked; the notice then stays its seven days.
+  }
+};
 
 type AllList = 'events' | 'filters';
 
@@ -179,6 +201,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const now = useNow(60_000);
   const [isReopened, setIsReopened] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [confirmTappedAt, setConfirmTappedAt] = useState<number | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
@@ -199,14 +222,35 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const isOverStatus = isReopened || hasStarted;
   const isSetupShown =
     isOverStatus || (!intake.isLoading && intake.address === null);
-  const confirmAt = intake.confirm?.at ?? null;
-  const isConfirmShown =
-    intake.confirm !== null &&
-    confirmAt !== null &&
-    isEventsLoaded &&
-    !events.some(
-      (entry) => entry.outcome !== 'confirm' && entry.receivedAt > confirmAt,
+  const pendingConfirm = intake.confirm;
+  const confirmAt = pendingConfirm?.at ?? null;
+  const isConfirmTappedBefore = useMemo(
+    () => readConfirmTapped(confirmAt),
+    [confirmAt],
+  );
+  const getIsConfirmShown = (
+    pendingConfirm: NonNullable<typeof intake.confirm>,
+  ) => {
+    if (pendingConfirm.autoConfirm === 'confirmed') {
+      return (
+        isEventsLoaded &&
+        !events.some(
+          (entry) =>
+            entry.outcome !== 'confirm' && entry.receivedAt > pendingConfirm.at,
+        )
+      );
+    }
+    // A hand-forwarded email proves nothing about automatic forwarding, so only a tap or time ends the notice.
+    return (
+      !isConfirmTappedBefore &&
+      confirmTappedAt !== pendingConfirm.at &&
+      now < pendingConfirm.at + CONFIRM_NOTICE_DAYS * DAY_MS
     );
+  };
+  const shownConfirm =
+    pendingConfirm !== null && getIsConfirmShown(pendingConfirm)
+      ? pendingConfirm
+      : null;
 
   const run = async (work: () => Promise<void>, failure: string) => {
     setIsBusy(true);
@@ -221,7 +265,9 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   };
 
   const getNewAddress = async () => {
-    if (intake.address !== null) {
+    const isKnownEmpty =
+      !intake.isLoading && !intake.isFailed && intake.address === null;
+    if (!isKnownEmpty) {
       const isAccepted = await confirm({
         title: EMAIL_WORDS.newAddressTitle,
         message: EMAIL_WORDS.newAddressMessage,
@@ -285,15 +331,23 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         <EmailSetupView
           address={intake.address}
           isLoading={intake.isLoading}
+          isFailed={intake.isFailed}
           isBusy={isBusy}
           error={error}
           onGetAddress={() => void getNewAddress()}
-          onDone={isOverStatus ? backToStatus : onClose}
+          onRetry={intake.retry}
+          onDone={backToStatus}
         />
       ) : (
         <div className='space-y-6'>
-          {isConfirmShown && intake.confirm !== null && (
-            <EmailConfirmNotice confirm={intake.confirm} />
+          {shownConfirm !== null && (
+            <EmailConfirmNotice
+              confirm={shownConfirm}
+              onConfirmTapped={() => {
+                writeConfirmTapped(shownConfirm.at);
+                setConfirmTappedAt(shownConfirm.at);
+              }}
+            />
           )}
           {intake.lastReceivedAt !== null && (
             <p className='text-sm font-medium' role='status'>

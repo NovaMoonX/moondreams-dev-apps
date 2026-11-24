@@ -30,6 +30,7 @@ interface ForwardableMail {
   text: string;
   receivedAt: number;
   isDkimPassed: boolean;
+  dkimDomain?: string | null;
 }
 
 /** The subject without any number of leading `Fwd:`, `Fw:`, `TR:`, `WG:` or `[Fwd: …]` marks. */
@@ -79,7 +80,7 @@ function readDay(text: string): [number, number, number] | null {
   return us ? [Number(us[3]), Number(us[1]) - 1, Number(us[2])] : null;
 }
 
-/** An instant from a forwarded block's Date or Sent line (Gmail, Apple Mail, Outlook, Yahoo and RFC wording), or null when it holds no clear day. A time zone it names is applied, otherwise UTC; a day with no time is noon UTC. */
+/** An instant from a forwarded block's Date or Sent line, or null when it holds no clear day. */
 export function readForwardedDate(value: string): number | null {
   const text = value
     .replace(/\bat\b/gi, ' ')
@@ -121,45 +122,52 @@ const MAX_HEADER_LINES = 40;
 const MAX_BLANK_RUN = 20;
 
 function readHeaders(lines: string[], start: number) {
-  const headers: Record<string, string> = {};
   const isHeader = (line: string) =>
     line.length <= MAX_LINE && HEADER.test(line);
   const nextFilled = (from: number) => {
     const stop = Math.min(lines.length, from + MAX_BLANK_RUN);
-    const found = lines.findIndex(
-      (line, index) => index >= from && index < stop && line.trim() !== '',
+    return (
+      Array.from({ length: stop - from }, (_, step) => from + step).find(
+        (index) => lines[index].trim() !== '',
+      ) ?? stop
     );
-    return found === -1 ? stop : found;
   };
-  const isStillHeaders = (index: number) =>
-    Object.keys(headers).length === 0 ||
-    (index < lines.length && isHeader(lines[index].trim()));
   const isAddressLine = (line: string) =>
     line.length <= MAX_LINE && /[@<>,]/.test(line);
-  let index = start;
-  let last: string | null = null;
-  for (let step = 0; step < MAX_HEADER_LINES && index < lines.length; step++) {
+  const isStillHeaders = (headers: Record<string, string>, index: number) =>
+    Object.keys(headers).length === 0 ||
+    (index < lines.length && isHeader(lines[index].trim()));
+  const read = (
+    index: number,
+    steps: number,
+    headers: Record<string, string>,
+    last: string | null,
+  ): { headers: Record<string, string>; end: number } => {
+    if (steps >= MAX_HEADER_LINES || index >= lines.length) {
+      return { headers, end: index };
+    }
     const line = lines[index].trim();
     const header = isHeader(line) ? HEADER.exec(line) : null;
     if (header) {
-      last = header[1].toLowerCase();
-      headers[last] ??= header[2];
-      index++;
-    } else if (line === '') {
-      const next = nextFilled(index);
-      if (!isStillHeaders(next)) return { headers, end: next };
-      index = next;
-    } else if (
-      last !== null &&
-      /^(?:to|cc|bcc)$/.test(last) &&
-      isAddressLine(line)
-    ) {
-      index++;
-    } else {
-      break;
+      const name = header[1].toLowerCase();
+      return read(
+        index + 1,
+        steps + 1,
+        { ...headers, [name]: headers[name] ?? header[2] },
+        name,
+      );
     }
-  }
-  return { headers, end: index };
+    if (line === '') {
+      const next = nextFilled(index);
+      return isStillHeaders(headers, next)
+        ? read(next, steps + 1, headers, last)
+        : { headers, end: next };
+    }
+    return last !== null && /^(?:to|cc|bcc)$/.test(last) && isAddressLine(line)
+      ? read(index + 1, steps + 1, headers, last)
+      : { headers, end: index };
+  };
+  return read(start, 0, {}, null);
 }
 
 const cleanFrom = (value: string) =>
@@ -198,10 +206,7 @@ function readBlock(text: string): Block | null {
   );
 }
 
-/**
- * The email as its original sender wrote it: a hand-forwarded block gives the original From, Subject, Date and the text after the block's header lines, and `Fwd:`-style prefixes are stripped either way. A piece the block lacks keeps the outer one.
- * A forwarding confirmation is returned untouched. Unwrapped mail is never `isDkimPassed`, since the original sender's signature was not checked on it.
- */
+/** The email as its original sender wrote it, read from a hand-forwarded block when there is one. A forwarding confirmation is returned untouched. */
 export function unwrapForwarded<T extends ForwardableMail>(mail: T): T {
   if (isForwardingConfirmation(mail)) return mail;
   const block = readBlock(mail.text);
@@ -219,6 +224,8 @@ export function unwrapForwarded<T extends ForwardableMail>(mail: T): T {
     subject: stripForwardPrefixes(block.subject ?? mail.subject),
     text: block.body !== '' ? block.body : mail.text,
     receivedAt: isPlausible ? original : mail.receivedAt,
+    // The original sender's signature was never checked on unwrapped mail.
     isDkimPassed: false,
+    dkimDomain: null,
   };
 }

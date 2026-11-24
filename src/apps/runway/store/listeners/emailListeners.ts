@@ -72,7 +72,11 @@ export function startEmailIntakeListener(
 
   const stop = onSnapshot(
     doc(db, 'apps', 'runway', 'plans', uid, 'emailIntake', 'address'),
+    { includeMetadataChanges: true },
     async (snapshot) => {
+      // A cold cache says "no address" before the server has answered;
+      // metadata changes bring the server's answer when it matches.
+      if (!snapshot.exists() && snapshot.metadata.fromCache) return;
       sequence.latest += 1;
       const current = sequence.latest;
       try {
