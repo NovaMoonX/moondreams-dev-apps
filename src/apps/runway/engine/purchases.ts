@@ -198,3 +198,22 @@ export function getPurchaseEffect(
   };
   return result;
 }
+
+/** Whether an email or bank charge sits in Free to Spend with nobody having placed it. */
+export function isOpenToPlace(purchase: OpenPurchase): boolean {
+  const result =
+    !purchase.needsHome &&
+    (purchase.source === 'link' || purchase.source === 'email') &&
+    purchase.amountCents > 0 &&
+    purchase.lines.length > 0 &&
+    purchase.lines.every(
+      (line) => line.envelopeId === null && line.via === 'free',
+    ) &&
+    purchase.assignedBy === null &&
+    purchase.ruleId === null &&
+    (purchase.billRef ?? null) === null &&
+    purchase.pairedWithId === null &&
+    purchase.refundOfId === null &&
+    purchase.incomeDayId === null;
+  return result;
+}

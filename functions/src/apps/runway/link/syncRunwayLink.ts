@@ -9,6 +9,7 @@ import {
 import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
+import { learnMerchants } from '../merchantNames.js';
 import {
   openWithKey,
   sealWithKey,
@@ -368,6 +369,7 @@ async function syncPurchases(
       existing,
     );
     const now = Date.now();
+    await learnMerchants(firestore, changed, now);
     await markClosedMonths(firestore, uid, outcome.touchedDates, now);
     await commitWrites(firestore, [
       ...toWrites(

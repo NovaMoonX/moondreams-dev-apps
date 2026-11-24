@@ -2119,9 +2119,9 @@ export const SPEND_WORDS = {
   receipt: 'Receipt',
   receipts: 'Receipts',
   addReceipt: 'Add a receipt',
+  addReceiptPhoto: 'Add a receipt photo',
   takeReceiptPhoto: 'Take a receipt photo',
   takeAnotherPhoto: 'Take another',
-  chooseReceiptPhoto: 'Choose a receipt photo',
   readReceipt: 'Read a receipt',
   readReceiptSends:
     "Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase. The photo is kept as the purchase's receipt.",
@@ -2135,6 +2135,7 @@ export const SPEND_WORDS = {
   itemsHint: 'One item to a line, with its price after two spaces.',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
+  purchaseActionsCaption: 'This purchase',
   addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
@@ -5033,12 +5034,12 @@ const getBulkCount = (written: number, total: number) => {
 
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
-  homeSub: 'From your bank',
+  homeSub: 'From your bank or email',
   countedChip: 'Counted in Free to Spend',
   intro:
     "You don't have to sort these. Each one already counts against Free to Spend; putting it in an envelope just makes that envelope's number exact.",
   empty:
-    'Nothing is waiting. New purchases from your bank show up here on their own.',
+    'Nothing is waiting. New purchases from your bank or email show up here on their own.',
   loading: 'Getting your purchases.',
   pending: 'Pending',
   fromBank: 'from your bank',
@@ -5077,8 +5078,12 @@ export const NEEDS_HOME_WORDS = {
   historySub: 'They are not counted in Free to Spend or your envelopes.',
   whichTitle: 'Which envelope?',
   sendHere: 'Send it here',
-  moreOptions: 'Pick an envelope',
-  moreOptionsSub: 'Or split it across several',
+  otherEnvelope: 'Another envelope',
+  chooseEnvelope: 'Choose an envelope',
+  chooseEnvelopeSub: 'From all your envelopes',
+  pickFor: (title: string) => `For ${title}`,
+  moreOptions: 'Split it or change details',
+  moreOptionsSub: 'Several envelopes, or fix the amount',
   undo: 'Undo',
   undoFailed: 'That was not put back. Nothing was changed.',
   sentTo: (name: string) => `Sent to ${name}`,
