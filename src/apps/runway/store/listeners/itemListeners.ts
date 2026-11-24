@@ -5,13 +5,16 @@ import { db } from '@lib/firebase/config';
 import { createSealedReader } from '@lib/security';
 import { openJson } from '@apps/runway/security';
 import type {
-  MatchSealed,
   OpenVersion,
   PlanItemDoc,
   PlanVersionDoc,
   RunwayEncryption,
 } from '@apps/runway/types';
-import { openItem, openVersion } from '@apps/runway/engine/openDocs';
+import {
+  openItem,
+  openMatchKeys,
+  openVersion,
+} from '@apps/runway/engine/openDocs';
 import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const planPath = (uid: string, name: string) =>
@@ -19,28 +22,6 @@ const planPath = (uid: string, name: string) =>
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
-
-/** The merchant names each bill has learned, opened from its header; a header that does not open learns nothing. */
-async function openMatchKeys(
-  headers: readonly Partial<PlanItemDoc>[],
-  encryption: RunwayEncryption,
-): Promise<Record<string, string[]>> {
-  const opened = await Promise.all(
-    headers.flatMap((header) =>
-      header.id && header.matchSealed
-        ? [
-            openJson<MatchSealed>(header.matchSealed, encryption)
-              .then((payload): [string, string[]] => [
-                header.id as string,
-                Array.isArray(payload.merchantKeys) ? payload.merchantKeys : [],
-              ])
-              .catch((): [string, string[]] => [header.id as string, []]),
-          ]
-        : [],
-    ),
-  );
-  return Object.fromEntries(opened.filter(([, keys]) => keys.length > 0));
-}
 
 export function startItemsListener(
   uid: string,
@@ -61,7 +42,9 @@ export function startItemsListener(
       onChange(headers.map(openItem));
       sequence.latest += 1;
       const mine = sequence.latest;
-      void openMatchKeys(headers, encryption).then((keys) => {
+      void openMatchKeys(headers, (sealed) =>
+        openJson(sealed, encryption),
+      ).then((keys) => {
         if (mine === sequence.latest) onMatchKeys(keys);
       });
     },

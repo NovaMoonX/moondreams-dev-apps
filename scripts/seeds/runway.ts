@@ -4168,6 +4168,7 @@ const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
 /**
  * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, a card refund, two account moves and an unclear pair. One purchase a rule already placed.
+ * Two Safeway charges wait for the rule: the posted one is placed by the server's next rework or the phone's own pass, whichever runs first; the pending one waits for the bank only on the server, since the phone places it when the app is open. A third the person already placed by hand stays where they put it.
  * The Sweetgreen lunch fits the restaurants rule and waits only because its merge offer (the typed one lacks the tip) is unanswered.
  */
 async function writeSeedPurchases(
@@ -4405,6 +4406,26 @@ async function writeSeedPurchases(
       status: 'posted',
       accountId: 'seed-account-checking-a',
       cardId: null,
+    },
+    {
+      id: 'seed-link-purchase-safeway-posted',
+      daysAgo: 1,
+      merchant: 'Safeway',
+      amountCents: 3_875,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+      category: 'FOOD_AND_DRINK_GROCERIES',
+    },
+    {
+      id: 'seed-link-purchase-safeway-pending',
+      daysAgo: 0,
+      merchant: 'Safeway',
+      amountCents: 1_260,
+      status: 'pending',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+      category: 'FOOD_AND_DRINK_GROCERIES',
     },
     {
       id: 'seed-link-purchase-lunch',
@@ -5567,6 +5588,49 @@ async function seedRules(
       } satisfies PurchaseDoc);
     }),
   );
+  const handId = 'seed-link-purchase-safeway-hand';
+  const handDate = today - 2 * DAY_MS;
+  const handAt = handDate + 12 * 3_600_000;
+  batch.set(context.firestore.doc(`${plan}/purchases/${handId}`), {
+    id: handId,
+    date: handDate,
+    source: 'link',
+    status: 'posted',
+    needsHome: false,
+    accountId: null,
+    expenseId: null,
+    dedupeKey: `${handId}-dedupe`,
+    createdAt: handAt,
+    updatedAt: handAt,
+    sealed: await sealJson(
+      {
+        amountCents: 2_260,
+        merchant: 'Safeway',
+        category: 'FOOD_AND_DRINK_GROCERIES',
+        ruleId: null,
+        label: null,
+        note: null,
+        lines: [
+          { envelopeId: 'seed-envelope-everyday', cents: 2_260, via: 'chosen' },
+        ],
+        refundOfId: null,
+        paidByCardId: SEED_VENTURE_CARD,
+        link: null,
+        receiptText: null,
+        costRef: null,
+        notSameAs: null,
+        incomeDayId: null,
+        assignedBy: 'person',
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    emailEventId: null,
+    emailWaiting: null,
+  } satisfies PurchaseDoc);
   const twice: {
     id: string;
     source: 'link' | 'manual';
@@ -5645,7 +5709,7 @@ async function seedRules(
     }),
   );
   await batch.commit();
-  return rules.length + 4 + twice.length;
+  return rules.length + 5 + twice.length;
 }
 
 /**

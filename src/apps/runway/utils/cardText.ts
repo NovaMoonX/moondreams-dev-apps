@@ -10,6 +10,11 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextFeeOn } from '@apps/runway/engine/cardFees';
 import {
+  getCardName,
+  issuerMatcher,
+  sameIssuer,
+} from '@apps/runway/engine/cardNames';
+import {
   collectCardHistory,
   getCardDueState,
   getNextDueOn,
@@ -26,15 +31,9 @@ import type {
   OpenVersion,
 } from '@apps/runway/types';
 import { resolveVersion } from '@apps/runway/engine/resolve';
-import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import type { RootState } from '@/store';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { isTrackingLevel } from '@apps/runway/engine/level';
-
-const issuerMatcher = createOptionMatcher({
-  typos: true,
-  casing: { style: 'title', keepAcronyms: true },
-});
 
 /** A typed bank as one of the known issuers, or written like them. */
 export const resolveIssuer = (typed: string) => {
@@ -48,21 +47,7 @@ export const resolveBank = (typed: string, used: readonly string[]) => {
   return resolution.kind === 'match' ? resolution.option : resolution.label;
 };
 
-const sameIssuer = (a: string, b: string) =>
-  issuerMatcher.comparable(a) === issuerMatcher.comparable(b);
-
-/** "Capital One Venture X"; "Chase" with no name, and "Chase 2" for a second unnamed card from one issuer, by creation order. */
-export function getCardName(card: OpenCard, cards: readonly OpenCard[]) {
-  const name = card.name?.trim();
-  if (name) return `${card.issuer} ${name}`;
-  const unnamed = cards
-    .filter(
-      (other) => !other.name?.trim() && sameIssuer(other.issuer, card.issuer),
-    )
-    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
-  const position = unnamed.findIndex((other) => other.id === card.id);
-  return position > 0 ? `${card.issuer} ${position + 1}` : card.issuer;
-}
+export { getCardName };
 
 /** The card's name, with its last 4 digits after it when another open card comes from the same issuer. */
 export function getCardNameWithLastFour(

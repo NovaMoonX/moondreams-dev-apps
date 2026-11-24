@@ -9,6 +9,7 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { toItemLooks } from '@apps/runway/engine/itemLooks';
 import { getSplitKey, getTwinMergingIds } from '@apps/runway/engine/emailTwins';
 import {
   selectAllPurchases,
@@ -24,8 +25,10 @@ import {
   resolveAllHorizonItems,
   resolveBills,
   resolveComingDays,
+  resolveEnvelopes,
   resolveHorizonItems,
   type ResolvedBill,
+  type ResolvedEnvelope,
   type ResolvedHorizon,
 } from '@apps/runway/engine/figures';
 import {
@@ -56,7 +59,6 @@ import {
 } from '@apps/runway/engine/progress';
 import { compareDays, planBillPayments } from '@apps/runway/engine/demands';
 import { getCostNameKey, getCostShareKey } from '@apps/runway/engine/parts';
-import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
 import {
@@ -543,10 +545,7 @@ export const selectIsDayRecordsReady = (state: RootState, dayKey: string) =>
     ? selectIsHistoryReady(state, state.runway.historyFor ?? '')
     : selectIsRecordsReady(state);
 
-export interface ResolvedEnvelope {
-  item: PlanItemDoc;
-  version: EnvelopeVersion;
-}
+export type { ResolvedEnvelope };
 
 const isEnvelope = (version: OpenVersion): version is EnvelopeVersion =>
   version.kind === 'envelope';
@@ -554,24 +553,7 @@ const isEnvelope = (version: OpenVersion): version is EnvelopeVersion =>
 /** The envelopes in the plan on a date, in plan order: Must before Should before Want, then rank, then creation. */
 export const selectEnvelopes = createSelector(
   [selectItems, selectVersions, selectOn],
-  (items, versions, on): ResolvedEnvelope[] => {
-    const envelopeVersions = versions.filter(isEnvelope);
-    const result = items
-      .filter((item) => item.kind === 'envelope' && isListed(item, on))
-      .flatMap((item) => {
-        const version = resolveCurrentOrNext(envelopeVersions, item.id, on);
-        return version ? [{ item, version }] : [];
-      })
-      .sort(
-        (a, b) =>
-          PRIORITIES.indexOf(a.version.payload.priority) -
-            PRIORITIES.indexOf(b.version.payload.priority) ||
-          a.version.payload.orderIndex - b.version.payload.orderIndex ||
-          a.item.createdAt - b.item.createdAt ||
-          a.item.id.localeCompare(b.item.id),
-      );
-    return result;
-  },
+  resolveEnvelopes,
 );
 
 const selectSavedHomePins = (state: RootState) =>
@@ -1418,28 +1400,7 @@ export const selectAllPurposeEmojis = createSelector(
 /** Every item's name and emoji by id, from its newest version (a bill's or envelope's own emoji, else its purpose's), so a purchase still names an envelope that was renamed or archived. */
 export const selectItemLooks = createSelector(
   [selectVersions, selectAllPurposeEmojis],
-  (versions, purposeEmojis) => {
-    const newest = versions.reduce<Map<string, OpenVersion>>((acc, version) => {
-      const seen = acc.get(version.itemId);
-      return seen && seen.createdAt >= version.createdAt
-        ? acc
-        : acc.set(version.itemId, version);
-    }, new Map());
-    const result = new Map(
-      [...newest.entries()].map(([id, version]) => [
-        id,
-        {
-          name: version.payload.name,
-          emoji: resolveItemEmoji(
-            'emoji' in version.payload ? version.payload.emoji : null,
-            'groupId' in version.payload ? version.payload.groupId : null,
-            purposeEmojis,
-          ),
-        },
-      ]),
-    );
-    return result;
-  },
+  (versions, purposeEmojis) => toItemLooks(versions, purposeEmojis),
 );
 
 const selectPurchases = (state: RootState) => state.runway.purchases;
