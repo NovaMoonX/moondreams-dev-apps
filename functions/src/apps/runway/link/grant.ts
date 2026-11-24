@@ -22,6 +22,8 @@ export interface ProviderGrantDoc {
   statementsCheckedAt: number | null;
   /** Set when the provider's last answer was that it cannot give this link's card details, so asks back off. */
   isStatementsUnsupported: boolean | null;
+  /** Set when the provider said this bank cannot be asked to share card details, so the ask is never offered again. */
+  isCardConsentUnsupported: boolean | null;
 }
 
 export const grantsPath = (uid: string) => `apps/runway/server/${uid}/grants`;
@@ -74,6 +76,7 @@ export function sealGrant(
     isLiveBalanceOff: null,
     statementsCheckedAt: null,
     isStatementsUnsupported: null,
+    isCardConsentUnsupported: null,
     masterKeyId: keyring.current,
     wrapped: ciphertext,
     nonce,

@@ -57,6 +57,10 @@ const createSessionCallable = httpsCallable<
   { linkId?: string; forCardDetails?: true },
   { linkToken: string }
 >(functions, 'createRunwayLinkSession');
+const cardSessionCallable = httpsCallable<
+  { linkId: string; forCardDetails: true },
+  { linkToken: string | null }
+>(functions, 'createRunwayLinkSession');
 const reconnectCallable = httpsCallable<
   { linkId: string },
   LinkReconnectResult
@@ -142,16 +146,16 @@ export async function reconnectLink(
   return response.data;
 }
 
-/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window; a failure is a `LinkStepError` naming the step. */
+/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window, `unsupported` when the bank can't share them (the link now says so); a failure is a `LinkStepError` naming the step. */
 export async function agreeToCardDetails(
   linkId: string,
-): Promise<LinkReconnectResult | null> {
+): Promise<LinkReconnectResult | 'unsupported' | null> {
   const session = await inLinkStep('Ask the bank for a window', () =>
-    createSessionCallable({ linkId, forCardDetails: true }),
+    cardSessionCallable({ linkId, forCardDetails: true }),
   );
-  const opened = await inLinkStep('Bank window', () =>
-    openBankLink(session.data.linkToken),
-  );
+  const { linkToken } = session.data;
+  if (linkToken === null) return 'unsupported';
+  const opened = await inLinkStep('Bank window', () => openBankLink(linkToken));
   if (opened === null) return null;
   const response = await inLinkStep('Sync after agreeing', () =>
     reconnectCallable({ linkId }),

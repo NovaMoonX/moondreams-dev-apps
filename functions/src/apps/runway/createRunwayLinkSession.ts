@@ -1,5 +1,9 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+  getFirestore,
+  type DocumentReference,
+  type Firestore,
+} from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -46,7 +50,29 @@ const readRequest = (
   return { linkId, isForCardDetails: forCardDetails === true };
 };
 
-/** `{}` → `{ linkToken }`: a short-lived token the bank window opens with. `{ linkId }` of the caller's `needsAttention` or `active` link opens that connection again so the person can sign in and pick accounts; `forCardDetails` on an active link asks only for agreement to share card details, with no account picking. */
+/** `{}` → `{ linkToken }`: a short-lived token the bank window opens with. `{ linkId }` of the caller's `needsAttention` or `active` link opens that connection again so the person can sign in and pick accounts; `forCardDetails` on an active link asks only for agreement to share card details, with no account picking, and returns a null token when the bank can't share them. */
+type SessionResult = { linkToken: string | null };
+
+/** Records that the bank can't share card details, so the offer becomes "not shared" and no later reconnect asks again. */
+const markCardConsentUnsupported = (
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  grantRef: DocumentReference,
+) =>
+  firestore.runTransaction(async (transaction) => {
+    const link = await transaction.get(linkRef);
+    if (link.data()?.status === 'revoked') return;
+    transaction.update(grantRef, {
+      isCardConsentUnsupported: true,
+      isStatementsUnsupported: true,
+      statementsCheckedAt: Date.now(),
+    });
+    transaction.update(linkRef, {
+      cardDetails: 'unsupported',
+      needsCardConsent: null,
+    });
+  });
+
 export const createRunwayLinkSession = onCall(
   {
     region: 'us-central1',
@@ -63,7 +89,7 @@ export const createRunwayLinkSession = onCall(
         provider.createLinkSession(uid),
       );
       logger.info('runway.link.sessionCreated');
-      const result = { linkToken };
+      const result: SessionResult = { linkToken };
       return result;
     }
     const firestore = getFirestore();
@@ -90,24 +116,45 @@ export const createRunwayLinkSession = onCall(
         'That bank cannot be reconnected. Link it again.',
       );
     }
-    const grant = openGrant(
-      loadKeyringOrFail(),
-      uid,
-      grantSnapshot.data() as ProviderGrantDoc,
-    );
-    const { linkToken } = await withProvider(() =>
+    const grantDoc = grantSnapshot.data() as ProviderGrantDoc;
+    const isKnownUnsupported = grantDoc.isCardConsentUnsupported === true;
+    if (isForCardDetails && isKnownUnsupported) {
+      await markCardConsentUnsupported(
+        firestore,
+        linkSnapshot.ref,
+        grantSnapshot.ref,
+      );
+      const result: SessionResult = { linkToken: null };
+      return result;
+    }
+    const grant = openGrant(loadKeyringOrFail(), uid, grantDoc);
+    const session = await withProvider(() =>
       provider.createLinkSession(uid, {
         accessToken: grant.credential,
         // Picking accounts again here would add accounts another sign-in at the same bank already shares.
         accountSelection: !isForCardDetails,
         askCardConsent:
-          isForCardDetails ||
-          linkSnapshot.data()?.cardDetails === 'needsConsent' ||
-          linkSnapshot.data()?.needsCardConsent === true,
+          !isKnownUnsupported &&
+          (isForCardDetails ||
+            linkSnapshot.data()?.cardDetails === 'needsConsent' ||
+            linkSnapshot.data()?.needsCardConsent === true),
       }),
     );
+    if (session.isCardConsentUnsupported) {
+      await markCardConsentUnsupported(
+        firestore,
+        linkSnapshot.ref,
+        grantSnapshot.ref,
+      );
+    }
+    if (isForCardDetails && session.isCardConsentUnsupported) {
+      logger.info('runway.link.cardDetailsUnsupported');
+      const result: SessionResult = { linkToken: null };
+      return result;
+    }
+    const { linkToken } = session;
     logger.info('runway.link.reconnectSessionCreated');
-    const result = { linkToken };
+    const result: SessionResult = { linkToken };
     return result;
   },
 );

@@ -147,6 +147,10 @@ function CardStatementSection({
         const syncedBefore = link.lastSyncAt;
         const result = await agreeToCardDetails(link.id);
         if (result === null) return;
+        if (result === 'unsupported') {
+          addToast({ title: CARD_WORDS.offerUnsupported(bank), type: 'info' });
+          return;
+        }
         if (result.state === 'ok') {
           await waitUntil(() => {
             const shown = store

@@ -32,7 +32,11 @@ import {
   type LinkSealed,
 } from './linkShared.js';
 import { toBalanceSealed } from './normalize.js';
-import { ProviderError, type ProviderGrant } from './provider.js';
+import {
+  ProviderError,
+  type CardStatementRead,
+  type ProviderGrant,
+} from './provider.js';
 import {
   applyTransactions,
   dedupeSubkey,
@@ -601,8 +605,14 @@ async function writeCardStatements(
   planKey: PlanKey,
   targets: ReadonlyMap<string, Target>,
   hadAnswer: CardDetailsAnswer | null,
+  isConsentUnsupported: boolean,
 ) {
-  const read = await provider.listCardStatements(grant);
+  const answer = await provider.listCardStatements(grant);
+  // A bank that refused the ask for consent keeps answering "needs consent", which would bring the offer back.
+  const read: CardStatementRead =
+    answer.kind === 'needsConsent' && isConsentUnsupported
+      ? { kind: 'unsupported' }
+      : answer;
   if (read.kind === 'notReady') {
     await retryStatementsSoon(grantRef);
     return;
@@ -968,6 +978,7 @@ export async function syncRunwayLink(
         planKey,
         targets,
         hadAnswer,
+        grantDoc.isCardConsentUnsupported === true,
       ).catch(async (error: unknown) => {
         logger.warn('runway.sync.statementsFailed', {
           linkId,
