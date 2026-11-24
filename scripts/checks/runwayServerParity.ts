@@ -236,6 +236,33 @@ const buildLink = async (base: FiguresInput, firstDay: number) => {
   ): OpenPurchase => ({ ...purchase, source: 'link', ...patch });
   const sample = base.purchases[base.purchases.length - 1];
   const asOf = firstDay - 30 * 60_000;
+  const onCard = (id: string, amountCents: number, daysAgo: number) =>
+    cloneBank(sample, {
+      id,
+      amountCents,
+      paidByCardId: linkedCard,
+      status: 'posted',
+      date: firstDay - daysAgo * DAY_MS,
+    });
+  const emailed = (id: string, amountCents: number, daysAgo: number) => ({
+    ...onCard(id, amountCents, daysAgo),
+    source: 'email' as const,
+    emailWaiting: true,
+    needsHome: true,
+    lines: [],
+  });
+  const emailCase = {
+    banks: [
+      onCard('parity-twin-bank', 4_218, 3),
+      onCard('parity-split-bank-a', 7_500, 4),
+      onCard('parity-split-bank-b', 7_500, 5),
+    ],
+    emails: [
+      emailed('parity-twin-email', 4_218, 3),
+      emailed('parity-split-email', 7_500, 4),
+      emailed('parity-lone-email', 1_999, 1),
+    ],
+  };
   const accounts: OpenAccount[] = [
     {
       id: linkedAccount,
@@ -333,9 +360,12 @@ const buildLink = async (base: FiguresInput, firstDay: number) => {
         paidByCardId: linkedCard,
         status: 'pending',
       }),
+      ...emailCase.emails,
     ],
     purchases: [
       ...base.purchases,
+      ...emailCase.banks,
+      ...emailCase.emails,
       cloneBank(sample, {
         id: 'parity-card-charge',
         paidByCardId: linkedCard,
