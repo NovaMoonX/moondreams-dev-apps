@@ -7,6 +7,7 @@ import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import EmailAddressText from '@apps/runway/components/EmailAddressText';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import {
   useEmailActions,
@@ -14,7 +15,6 @@ import {
 } from '@apps/runway/hooks/useEmailPurchases';
 import {
   isSenderFiltered,
-  toWrappableAddress,
   type EmailSender,
 } from '@apps/runway/utils/emailSenders';
 
@@ -79,13 +79,13 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
       isOpen
       isDrawerWhenShort
       onClose={onClose}
-      title={sender.name ?? toWrappableAddress(sender.address)}
+      title={sender.name ?? sender.address}
     >
       <div className='space-y-4 pb-4'>
         <div>
           {sender.name !== null && (
             <p className='text-muted-foreground text-sm break-words'>
-              {toWrappableAddress(sender.address)}
+              <EmailAddressText address={sender.address} />
             </p>
           )}
           <p className='text-muted-foreground text-sm'>

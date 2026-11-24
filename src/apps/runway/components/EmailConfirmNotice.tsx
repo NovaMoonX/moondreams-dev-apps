@@ -14,7 +14,6 @@ type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
 
 interface EmailConfirmNoticeProps {
   confirm: EmailConfirm;
-  /** The person has already opened the confirmation link (on this device); the notice folds to one row that opens it again. */
   isTapped: boolean;
   onConfirmTapped: () => void;
 }
@@ -41,7 +40,6 @@ function LinkRow({ label, url }: LinkRowProps) {
   );
 }
 
-/** What the person still has to do, or what Runway did, about their email provider's forwarding confirmation; the screen decides how long it stays. */
 function EmailConfirmNotice({
   confirm,
   isTapped,

@@ -4,6 +4,7 @@ import type { EmailEventRead } from '../../src/apps/runway/hooks/useEmailPurchas
 import {
   groupEmailSenders,
   readSender,
+  splitAddressForWrap,
 } from '../../src/apps/runway/utils/emailSenders.ts';
 import { toAddress } from '../../functions/src/apps/runway/email/emailShared.ts';
 import {
@@ -850,6 +851,12 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
   ];
   assert.equal(groupEmailSenders(confirmOnly).length, 0, 'setup is no sender');
 }
+
+assert.deepEqual(
+  splitAddressForWrap('runway-token@moondreamsmail.com', 'runway-'),
+  ['runway-', 'token@', 'moondreamsmail', '.com'],
+  'an address breaks after the prefix, after the @ and before the dot',
+);
 
 console.log(
   `runway email parse: ${samples.length} samples and ${forwards.length} forwards ok`,

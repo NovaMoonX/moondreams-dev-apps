@@ -43,7 +43,7 @@ export const EMAIL_WORDS = {
   senderFilterOutMessage: 'Purchases from it won’t come in anymore.',
   senderFilterOutConfirm: 'Filter out',
   filteredOut: (address: string) => `Filtered out ${address}`,
-  filterUndoFailed: 'That filter is still on. Try again.',
+  filterUndoFailed: 'That filter is still on. Remove it under Filtered out.',
   senderFilterSub: 'Future ones are skipped before anything is read.',
   senderCovered: 'A filter already covers this sender.',
   senderHadPurchases: 'Some of these became purchases. This stops that.',
@@ -121,14 +121,13 @@ export const EMAIL_WORDS = {
 
 const OUTCOME_ROW_WORDS: Record<EmailOutcome, string> = {
   purchase: 'Purchase',
-  notPurchase: 'Not a purchase',
+  notPurchase: 'No purchase',
   filtered: 'Filtered out',
-  confirm: 'Forwarding confirmation',
+  confirm: 'Confirmation',
   unread: 'Couldn’t read it',
   notTracking: 'Not tracking that day',
 };
 
-/** The outcome as one or two short words, for a row's line. */
 export const describeEmailRowOutcome = (outcome: EmailOutcome) =>
   OUTCOME_ROW_WORDS[outcome];
 
@@ -157,13 +156,17 @@ export const readSubjectTemplate = (template: string) =>
     .replaceAll('{date}', 'any date')
     .replaceAll('{n}', 'any number');
 
+export const FILTER_FROM_WORDS = 'From ';
+
 /** A filter as a name and one more line, in the person's words. */
 export function describeEmailFilter(filter: EmailFilterSealed): {
   name: string;
   detail: string | null;
 } {
   const parts = [
-    ...(filter.fromAddress ? [`From ${filter.fromAddress}`] : []),
+    ...(filter.fromAddress
+      ? [`${FILTER_FROM_WORDS}${filter.fromAddress}`]
+      : []),
     ...(filter.subjectTemplate
       ? [`Subject like “${readSubjectTemplate(filter.subjectTemplate)}”`]
       : []),
@@ -183,7 +186,6 @@ export const CONFIRM_PROVIDER_NAMES = {
   proton: 'Proton Mail',
 } as const;
 
-/** The forwarding address with only the start of its token, enough to recognise it on one line. */
 export const shortenForwardingAddress = (address: string) => {
   const [name, ...host] = address.split('@');
   const keep = EMAIL_ADDRESS_PREFIX.length + 1 + 4;
@@ -194,11 +196,9 @@ export const shortenForwardingAddress = (address: string) => {
 
 type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
 
-/** The confirmation link when it is a safe one to open. */
 export const readConfirmLink = (confirm: EmailConfirm) =>
   confirm.url?.startsWith('https://') ? confirm.url : null;
 
-/** Whether the confirm notice draws anything for this confirmation, so a line beside it can read differently while it does. */
 export const hasConfirmNotice = (confirm: EmailConfirm) =>
   confirm.autoConfirm === 'confirmed' ||
   readConfirmLink(confirm) !== null ||

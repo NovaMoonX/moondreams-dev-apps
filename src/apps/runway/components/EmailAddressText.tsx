@@ -7,7 +7,7 @@ interface EmailAddressTextProps {
   address: string;
 }
 
-/** An address that wraps only where `splitAddressForWrap` allows; the break points are not text, so selecting it copies the address whole. */
+// <wbr> is not text, so selecting the address copies it whole.
 function EmailAddressText({ address }: EmailAddressTextProps) {
   return (
     <span className='[overflow-wrap:anywhere]'>

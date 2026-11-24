@@ -89,12 +89,7 @@ export const isSenderFiltered = (filters: EmailFilterRead[], address: string) =>
       filter.bodyContains.length === 0,
   );
 
-/** An address cut where it may wrap: after `prefix` (a generated address's fixed start), after the @ and before each dot, never inside a token or a name. */
 export const splitAddressForWrap = (address: string, prefix = '') =>
   address.split(
     new RegExp(`${prefix === '' ? '' : `(?<=^${prefix})|`}(?<=@)|(?=\\.)`),
   );
-
-/** The same cuts as invisible break points, for a row that takes a plain string. */
-export const toWrappableAddress = (address: string) =>
-  splitAddressForWrap(address).join('\u200b');

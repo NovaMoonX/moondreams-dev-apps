@@ -36,10 +36,11 @@ export interface ItemRowReorder {
 
 interface ItemRowProps {
   name: string;
+  /** What is drawn in place of `name` (its words as nodes); `name` stays for the accessible name and the mark. */
+  nameNode?: ReactNode;
   /** A small mark after the name, inside its line clamp (an envelope on an emailed purchase), kept on the last word so it never wraps alone. */
   nameMark?: ReactNode;
   emoji?: string | null;
-  /** How many lines the name may take before it is cut; three for a name that is a long address. */
   nameLines?: 2 | 3;
   /** Replaces the badge (a date chip on an income day). */
   leading?: ReactNode;
@@ -93,6 +94,7 @@ interface ItemRowProps {
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
 function ItemRow({
   name,
+  nameNode,
   nameMark,
   nameLines = 2,
   emoji = null,
@@ -216,7 +218,7 @@ function ItemRow({
             </span>
           </>
         ) : (
-          name
+          (nameNode ?? name)
         )}
       </span>
     </span>

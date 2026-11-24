@@ -18,7 +18,6 @@ interface EmailSetupViewProps {
   onDone: () => void;
 }
 
-/** The whole setup: the private address, one line on what to forward, and one pinned button that copies it and then reads Done. */
 function EmailSetupView({
   address,
   isLoading,
@@ -73,7 +72,7 @@ function EmailSetupView({
     <div className='flex flex-1 flex-col gap-4'>
       <p className='text-muted-foreground text-sm'>{EMAIL_WORDS.setupLine}</p>
       {address !== null && (
-        <p className='border-border rounded-2xl border p-3 text-sm font-semibold select-all'>
+        <p className='border-border rounded-2xl border p-3 text-sm font-semibold select-all max-[359px]:p-2.5 max-[359px]:text-xs max-[359px]:tracking-tight'>
           <EmailAddressText address={address} />
         </p>
       )}

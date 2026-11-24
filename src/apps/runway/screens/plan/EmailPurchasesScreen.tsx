@@ -28,6 +28,7 @@ import { useNow } from '@/hooks/useNow';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import EmailAddressText from '@apps/runway/components/EmailAddressText';
 import EmailConfirmNotice from '@apps/runway/components/EmailConfirmNotice';
 import EmailRowBadge from '@apps/runway/components/EmailRowBadge';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
@@ -35,6 +36,7 @@ import EmailSenderSheet from '@apps/runway/components/EmailSenderSheet';
 import EmailSetupView from '@apps/runway/components/EmailSetupView';
 import {
   EMAIL_WORDS,
+  FILTER_FROM_WORDS,
   describeEmailFilter,
   describeEmailRowOutcome,
   hasConfirmNotice,
@@ -42,6 +44,7 @@ import {
   stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
 import ItemRow from '@apps/runway/components/ItemRow';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import {
   useEmailActions,
@@ -58,7 +61,6 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import {
   groupEmailSenders,
   isSenderFiltered,
-  toWrappableAddress,
   type EmailSender,
 } from '@apps/runway/utils/emailSenders';
 import { formatUpdatedAgo } from '@apps/runway/utils/linkText';
@@ -133,14 +135,15 @@ function EventRows({ events, onOpen }: EventRowsProps) {
   return (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
       {events.map((event) => {
-        const subject = mask(
-          stripForwardPrefix(event.subject) || EMAIL_WORDS.noSubject,
-        );
+        const rawSubject =
+          stripForwardPrefix(event.subject) || EMAIL_WORDS.noSubject;
+        const subject = mask(rawSubject);
         const detail = `${describeEmailRowOutcome(event.outcome)} · ${formatDateOrdinal(event.receivedAt)}`;
         return (
           <ItemRow
             key={event.id}
             name={subject}
+            nameNode={<MaskedText>{rawSubject}</MaskedText>}
             leading={<EmailRowBadge icon={OUTCOME_BADGES[event.outcome]} />}
             detail={detail}
             isPrivate={false}
@@ -162,7 +165,6 @@ function SenderRows({ senders, onOpen }: SenderRowsProps) {
   return (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
       {senders.map((sender) => {
-        const name = sender.name ?? toWrappableAddress(sender.address);
         const detail = EMAIL_WORDS.senderDetail(
           sender.kind,
           sender.count,
@@ -171,7 +173,10 @@ function SenderRows({ senders, onOpen }: SenderRowsProps) {
         return (
           <ItemRow
             key={sender.address}
-            name={name}
+            name={sender.name ?? sender.address}
+            nameNode={
+              sender.name ?? <EmailAddressText address={sender.address} />
+            }
             nameLines={3}
             leading={<EmailRowBadge icon={KIND_BADGES[sender.kind]} />}
             detail={detail}
@@ -198,13 +203,14 @@ function FilterRows({ filters, onOpen }: FilterRowsProps) {
         return (
           <ItemRow
             key={filter.id}
-            name={
-              filter.fromAddress === null
-                ? words.name
-                : words.name.replace(
-                    filter.fromAddress,
-                    toWrappableAddress(filter.fromAddress),
-                  )
+            name={words.name}
+            nameNode={
+              filter.fromAddress === null ? undefined : (
+                <>
+                  {FILTER_FROM_WORDS}
+                  <EmailAddressText address={filter.fromAddress} />
+                </>
+              )
             }
             leading={<EmailRowBadge icon={Filter} />}
             detail={words.detail}
@@ -371,14 +377,14 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 label={EMAIL_WORDS.copyAddress}
                 variant='tertiary'
                 isCompact
-                className='max-[389px]:hidden'
+                className='max-sm:hidden'
               />
               <CopyTextButton
                 text={intake.address}
                 label={EMAIL_WORDS.copyAddress}
                 variant='tertiary'
                 isIconOnly
-                className='min-[390px]:hidden'
+                className='sm:hidden'
               />
             </>
           )}
@@ -499,9 +505,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               <ActionRow
                 icon={<Mail />}
                 label={EMAIL_WORDS.addressRow}
-                subtitle={toWrappableAddress(
-                  shortenForwardingAddress(intake.address),
-                )}
+                subtitle={shortenForwardingAddress(intake.address)}
                 hasChevron
                 onClick={() => setIsReopened(true)}
               />
