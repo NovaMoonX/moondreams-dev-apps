@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { KeyRound, Mail } from 'lucide-react';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -11,6 +10,7 @@ import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/em
 import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import SectionDivider from '@/components/SectionDivider';
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -267,33 +267,37 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
               />
             )}
             <EmailForwardingStatusLine lastReceivedAt={intake.lastReceivedAt} />
-            <div className='space-y-3'>
-              <SectionDivider label='📨 Recent emails' />
-              {events.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>
-                  {intake.lastReceivedAt === null
-                    ? 'Nothing yet. Forward your latest AMC booking to see it land here.'
-                    : `Nothing in the last ${EMAIL_EVENT_KEEP_DAYS} days.`}
-                </p>
-              ) : (
-                <>
-                  <EmailRows events={shownEvents} onOpen={setOpenEventId} />
-                  {events.length > EVENTS_SHOWN && (
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='sm'
-                      rounded='full'
-                      className='text-muted-foreground! mx-auto flex'
-                      onClick={() => setIsAllOpen(true)}
-                    >
-                      See all {events.length}
-                    </Button>
-                  )}
-                  <p className='text-muted-foreground text-xs'>{KEPT_LINE}</p>
-                </>
-              )}
-            </div>
+            {events.length === 0 && intake.lastReceivedAt === null ? (
+              <p className='text-muted-foreground -mt-3 text-sm'>
+                Forward your latest AMC booking to see it land here.
+              </p>
+            ) : (
+              <div className='space-y-3'>
+                <SectionDivider
+                  label='📨 Recent emails'
+                  trailing={
+                    events.length > EVENTS_SHOWN ? (
+                      <ShowMoreButton
+                        isHeaderAction
+                        onClick={() => setIsAllOpen(true)}
+                      >
+                        See all {events.length}
+                      </ShowMoreButton>
+                    ) : undefined
+                  }
+                />
+                {events.length === 0 ? (
+                  <p className='text-muted-foreground text-sm'>
+                    {`Nothing in the last ${EMAIL_EVENT_KEEP_DAYS} days.`}
+                  </p>
+                ) : (
+                  <>
+                    <EmailRows events={shownEvents} onOpen={setOpenEventId} />
+                    <p className='text-muted-foreground text-xs'>{KEPT_LINE}</p>
+                  </>
+                )}
+              </div>
+            )}
             {loadError !== null && (
               <p className='text-destructive text-sm' role='alert'>
                 Couldn’t load your emails. Try again in a moment.
