@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useAppSelector } from '@/store';
+import { formatCents } from '@/utils/moneyUtils';
 import { SPEND_WORDS, STORE_ORDER_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isTrackingLevel } from '@apps/runway/engine/level';
@@ -149,9 +150,17 @@ export function useApplyStoreOrders(uid: string | null) {
         [...needsHome, ...purchases].map((purchase) => [purchase.id, purchase]),
       ).values(),
     ];
-    const works = findStoreWork(all, events).filter(
-      ({ key }) => !tried.current.has(key),
+    const liveNow = new Set(
+      latest.current.envelopes.map(({ item }) => item.id),
     );
+    const works = findStoreWork(all, events).filter(({ key, action }) => {
+      if (tried.current.has(key)) return false;
+      const order = findStoreOrder(action, all);
+      return (
+        order !== null &&
+        planStoreAction(action, order, all, (id) => liveNow.has(id)) !== null
+      );
+    });
     if (works.length === 0) return;
     works.forEach(({ key }) => tried.current.add(key));
     isRunning.current = true;
@@ -214,7 +223,10 @@ export function useApplyStoreOrders(uid: string | null) {
                       title:
                         plan.amountCents === 0
                           ? STORE_ORDER_WORDS.cancelWhole(store)
-                          : STORE_ORDER_WORDS.cancelTakenOff(store),
+                          : STORE_ORDER_WORDS.cancelTakenOff(
+                              store,
+                              formatCents(plan.cents),
+                            ),
                       detail: null,
                       why: STORE_ORDER_WORDS.cancelWhy,
                       undo: {
@@ -251,6 +263,7 @@ export function useApplyStoreOrders(uid: string | null) {
                 bank === null ? null : email,
               );
               const isCancel = work.action.storeEmail.kind === 'cancel';
+              const amount = formatCents(Math.abs(applied.amountCents));
               return {
                 all: replace(
                   applied,
@@ -264,10 +277,18 @@ export function useApplyStoreOrders(uid: string | null) {
                     kind: 'storeRefund',
                     title:
                       place === null
-                        ? STORE_ORDER_WORDS.refundTied(store)
+                        ? STORE_ORDER_WORDS.refundTied(store, amount)
                         : isCancel
-                          ? STORE_ORDER_WORDS.cancelAfterCharge(store, place)
-                          : STORE_ORDER_WORDS.refundApplied(store, place),
+                          ? STORE_ORDER_WORDS.cancelAfterCharge(
+                              store,
+                              amount,
+                              place,
+                            )
+                          : STORE_ORDER_WORDS.refundApplied(
+                              store,
+                              amount,
+                              place,
+                            ),
                     detail:
                       place === null ? STORE_ORDER_WORDS.refundTiedWhy : null,
                     why: whyOf(work.action, store),

@@ -5726,20 +5726,22 @@ export const DONE_FOR_YOU_WORDS = {
 
 /** What the app says when it applies a store's refund or cancellation to an order on its own. */
 export const STORE_ORDER_WORDS = {
-  refundApplied: (store: string, place: string) =>
-    `${store} refund went back to ${place}`,
-  refundTied: (store: string) => `${store} refund tied to its order`,
+  refundApplied: (store: string, amount: string, place: string) =>
+    `${store} refund of ${amount} went back to ${place}`,
+  refundTied: (store: string, amount: string) =>
+    `${store} refund of ${amount} tied to its order`,
   refundTiedWhy:
     'Part of the order came from an envelope that is gone, so pick where the money goes.',
   refundWhyNumber: (orderNumber: string) =>
-    `The store's email named order ${orderNumber}.`,
+    `The store’s email named order ${orderNumber}.`,
   refundWhyStore: (store: string) =>
-    `It is the only ${store} purchase in the last 60 days it fits.`,
-  cancelTakenOff: (store: string) => `${store} order cancelled in part`,
+    `No order number came with it, and this is the only ${store} purchase from the last 60 days that fits.`,
+  cancelTakenOff: (store: string, amount: string) =>
+    `${amount} of a ${store} order was cancelled`,
   cancelWhole: (store: string) => `${store} order cancelled`,
   cancelWhy: 'The store cancelled it before the card was charged.',
-  cancelAfterCharge: (store: string, place: string) =>
-    `${store} cancellation went back to ${place}`,
+  cancelAfterCharge: (store: string, amount: string, place: string) =>
+    `${store} cancellation of ${amount} went back to ${place}`,
   undoRefund: 'Undo and send it to Needs a home',
   undoCancel: 'Undo and count the order again',
   refundSummary: (store: string, place: string) =>
@@ -5749,7 +5751,7 @@ export const STORE_ORDER_WORDS = {
   cancelSummary: (store: string) =>
     `${store} cancelled part of an order, so it was taken off the order.`,
   cancelUndoneSummary: (store: string) =>
-    `The ${store} order counts in full again.`,
+    `The ${store} order counts in full again, and its cancellation counts nowhere.`,
   freeToSpend: 'Free to Spend',
   severalEnvelopes: 'where the order counted',
   store: 'The store',
@@ -5759,7 +5761,7 @@ export const STORE_ORDER_WORDS = {
   ordered: 'Ordered',
   refunded: 'Refunded',
   cancelled: 'Cancelled',
-  cancelledUndone: 'Cancelled, then undone',
+  cancelledUndone: 'Cancelled, then put back',
   wholeOrderCancelled: 'Cancelled',
   outcomeRefund: 'Refund',
   outcomeCancel: 'Cancellation',

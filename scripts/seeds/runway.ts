@@ -4824,7 +4824,7 @@ async function writeSeedEmail(
     }),
   );
 
-  // A store order a cancellation already came off, and a refund for it the app ties on its own when Runway opens.
+  // An order a cancellation already came off, and a refund the app ties on its own at load.
   const storeBase = {
     status: null,
     accountId: null,

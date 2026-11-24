@@ -67,11 +67,11 @@ interface OrderHistoryProps {
   onOpen: (purchaseId: string) => void;
 }
 
-/** A store order's number and what happened to it since, shown once a store's email named the order or something came back from it. */
+/** A store order's number and what happened to it since, shown once something came off or back from it. */
 function OrderHistory({ order, refunds, mask, onOpen }: OrderHistoryProps) {
   const orderNumber = order.storeEmail?.orderNumber ?? null;
   const hasHistory = (order.orderLog ?? []).length > 0 || refunds.length > 0;
-  if (orderNumber === null && !hasHistory) return null;
+  if (!hasHistory) return null;
   const caption =
     orderNumber === null
       ? STORE_ORDER_WORDS.history

@@ -228,7 +228,7 @@ export async function takeOffOrder(
   return { order: next, cancel: kept };
 }
 
-/** Counts the order in full again, the entry marked undone so it never comes off again; the cancellation waits as the person's. */
+/** Counts the order in full again, the entry marked undone so it never comes off again; the cancellation stays counted nowhere, as the person's. */
 export async function undoTakeOff(
   uid: string,
   encryption: RunwayEncryption,
@@ -254,9 +254,9 @@ export async function undoTakeOff(
       ? null
       : {
           ...cancel,
-          lines: [{ envelopeId: null, cents: cancel.amountCents, via: 'free' }],
+          lines: [],
           assignedBy: 'person',
-          needsHome: true,
+          needsHome: false,
           updatedAt: Math.max(now, cancel.updatedAt + 1),
         };
   const [orderSealed, backSealed, changeSealed] = await Promise.all([
@@ -278,7 +278,7 @@ export async function undoTakeOff(
     });
     if (back !== null && backSealed !== null) {
       transaction.update(purchaseRef(uid, back.id), {
-        needsHome: true,
+        needsHome: false,
         updatedAt: back.updatedAt,
         sealed: backSealed,
       });
