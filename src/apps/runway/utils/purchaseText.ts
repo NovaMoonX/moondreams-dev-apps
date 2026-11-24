@@ -420,3 +420,51 @@ export function describePurchaseEdit(
   const kind = isRefund(before) ? 'Refund' : 'Purchase';
   return `${kind} changed: ${getPurchaseTitle(before, nameOf)}, ${changes.join('; ') || 'saved again'}.`;
 }
+
+export interface PurchaseChangeParts {
+  /** What happened to it, said on its own ("Sent to Pet Care", "Removed"). */
+  action: string;
+  title: string;
+  /** Empty for an edit, which names what changed instead. */
+  amount: string;
+  date: string;
+  /** The rule's sentence when a rule placed it. */
+  rule: string | null;
+  /** Whatever the sentence adds after its date (where an overspend came from). */
+  extra: string;
+}
+
+const PURCHASE_CHANGE =
+  /^(?:Purchase|Money in|Refund) (.+?): (.+?), (\$[\d,]+\.\d{2}) on ([A-Z][a-z]{2}[\s\u00a0]\d{1,2}(?:st|nd|rd|th)(?:,[\s\u00a0]\d{4})?)\.(?: (.*))?$/s;
+const PURCHASE_EDIT =
+  /^(?:Purchase|Refund) changed: (.+?), ((?:amount|envelopes|day|paid by|merchant|label|note|link|items|saved again)\b.*)\.$/s;
+const RULE_TAIL = /(?:^|\s)By your rule “(.+)”\.$/s;
+
+/** Reads a purchase's change-log sentence back into its parts, or null when it isn't one of those sentences (they are sealed, so old wording stays). */
+export function readPurchaseChange(
+  summary: string,
+): PurchaseChangeParts | null {
+  const edit = PURCHASE_EDIT.exec(summary.trim());
+  if (edit !== null) {
+    return {
+      action: `Changed ${edit[2]}`,
+      title: edit[1],
+      amount: '',
+      date: '',
+      rule: null,
+      extra: '',
+    };
+  }
+  const match = PURCHASE_CHANGE.exec(summary.trim());
+  if (match === null) return null;
+  const [, what, title, amount, date, rest = ''] = match;
+  const rule = RULE_TAIL.exec(rest);
+  return {
+    action: `${what.charAt(0).toUpperCase()}${what.slice(1)}`,
+    title,
+    amount,
+    date,
+    rule: rule?.[1] ?? null,
+    extra: (rule ? rest.slice(0, rule.index) : rest).trim(),
+  };
+}

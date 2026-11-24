@@ -10,7 +10,7 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NEEDS_HOME_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { findPlacementRun, toMerchantKey } from '@apps/runway/engine/rules';
+import { toMerchantKey } from '@apps/runway/engine/rules';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   assignPurchase,
@@ -109,16 +109,14 @@ function NeedsHomeAssign({
           onClick: () => void putBack(user.uid, placed),
         },
       });
-      const run = findPlacementRun(
-        toMerchantKey(purchase.merchant),
-        [...history.filter((entry) => entry.id !== purchase.id), placed],
-        store.getState().runway.rules,
-      );
       const merchantKey = toMerchantKey(purchase.merchant);
+      const hasRule = store
+        .getState()
+        .runway.rules.some((rule) => rule.merchantKey === merchantKey);
       if (
         onSuggestRule &&
-        run?.envelopeId === envelopeId &&
         merchantKey !== null &&
+        !hasRule &&
         !isRuleDeclined(user.uid, merchantKey)
       ) {
         onSuggestRule(placed);

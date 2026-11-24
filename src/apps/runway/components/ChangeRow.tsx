@@ -17,6 +17,7 @@ import {
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { describeCostGivesBack } from '@apps/runway/utils/changeText';
+import { readPurchaseChange } from '@apps/runway/utils/purchaseText';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_KIND_LABELS,
@@ -43,6 +44,8 @@ interface ChangeRowProps {
   onOpenRecord: (dayKey: string) => void;
   /** The ids of moves of money that a later entry in the log took back. */
   undoneMoveIds?: ReadonlySet<string>;
+  /** The item whose history this is, so a purchase row doesn't repeat that it went there. */
+  itemName?: string | null;
 }
 
 /** One entry of the change log: when it was made, what it was, the day it starts from and the person's reason. */
@@ -51,6 +54,7 @@ function ChangeRow({
   confirmedDayKey,
   onOpenRecord,
   undoneMoveIds,
+  itemName = null,
 }: ChangeRowProps) {
   const { confirm } = useActionModal();
   const mask = useMaskedText();
@@ -136,7 +140,44 @@ function ChangeRow({
       )}
     </div>
   );
-  const headText = change.isUnreadable ? (
+  const purchase =
+    change.kind === 'purchaseChange' && !change.isUnreadable
+      ? readPurchaseChange(change.summary)
+      : null;
+  const purchaseFacts =
+    purchase === null
+      ? ''
+      : [
+          purchase.date,
+          itemName !== null && purchase.action === `Sent to ${itemName}`
+            ? null
+            : purchase.action,
+          purchase.rule === null ? null : 'By your rule',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+  const headText = purchase ? (
+    <div className='space-y-0.5'>
+      <div className='flex items-baseline justify-between gap-3'>
+        <p className='min-w-0 text-[15px] font-medium break-words'>
+          {purchase.title}
+        </p>
+        {purchase.amount && (
+          <p className='shrink-0 text-[15px] font-semibold whitespace-nowrap tabular-nums'>
+            <MaskedText>{purchase.amount}</MaskedText>
+          </p>
+        )}
+      </div>
+      <p className='text-muted-foreground text-sm break-words'>
+        <MaskedText>{purchaseFacts}</MaskedText>
+      </p>
+      {purchase.extra && (
+        <p className='text-muted-foreground text-sm break-words'>
+          <MaskedText>{purchase.extra}</MaskedText>
+        </p>
+      )}
+    </div>
+  ) : change.isUnreadable ? (
     <InlineNotice tone='info'>
       This entry could not be opened on this device.
     </InlineNotice>
