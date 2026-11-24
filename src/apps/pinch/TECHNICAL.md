@@ -1423,7 +1423,7 @@ src/apps/pinch/
 ├── utils/
 │   ├── quantity.ts  unitCost.ts  recipeMath.ts  mealMath.ts  nutritionMath.ts  nutrition.ts
 │   ├── dayKeys.ts  stats.ts  gaps.ts  gapOrder.ts  references.ts  resolveIngredient.ts  ingredientRecord.ts
-│   ├── ingredientMatch.ts  catalogSearch.ts  normalizeRecipe.ts  storeLogo.ts  nutritionBasis.ts  kitchenMeasure.ts  stepIngredients.ts  ingredientGroups.ts
+│   ├── ingredientMatch.ts  catalogSearch.ts  normalizeRecipe.ts  nutritionBasis.ts  kitchenMeasure.ts  stepIngredients.ts  ingredientGroups.ts
 │   └── mealFormat.ts  recipeFormat.ts  productFormat.ts  sources.ts  collections.ts  favorites.ts  shopping.ts  ideas.ts  cooks.ts  cookVoice.ts  notes.ts  recipeChanges.ts  recipeCare.ts  recipeCover.ts  containers.ts  planPicks.ts  pickerSuggestions.ts  settings.ts  sharing.ts  importShare.ts   # sharing: the copy a link carries, built by named fields, and a link's status; importShare: a link's content as the person's own recipe or saved meal, and the Undo's plan
 └── components/
     ├── shell/       PinchNav.tsx  ShoppingTabBadge.tsx  LoadingSkeleton.tsx
@@ -1497,7 +1497,7 @@ scripts/checks/pinchOrganize.ts      # run by the same script: collection labels
 
 Each has a default the design already assumes; the owner can change any of them cheaply now and expensively later.
 
-1. **Store logo source: Logo.dev is wired, its terms are still to be confirmed.** Logos load by domain in the person's browser behind `storeLogoUrl` (enabled only when `VITE_STORE_LOGO_TOKEN` is set, with a letter-tile fallback and `no-referrer`). Logo.dev's Community plan needs attribution for commercial projects and says logos remain their owners' trademarks; the plan's terms and the attribution wording were not verified from the sandbox. Gate before launch: read them, then keep or reword the attribution line already under "About the numbers" in View options, or leave the token unset. Fallback if it doesn't fit: letter tiles plus person-uploaded images only.
+1. **Store logo source: Logo.dev, terms read.** Logos load by domain in the person's browser behind the site's shared `brandLogoUrl` (`@/utils/brandLogoUtils`, enabled only when `VITE_STORE_LOGO_TOKEN` is set, with a letter-tile fallback and `no-referrer`). Logo.dev allows commercial use; on the free Community plan a commercial project shows a visible link back, which `@/components/LogoCredit` draws under View options. Images are shown from Logo.dev's CDN, never stored: keeping a file needs their paid API key.
 2. **USDA FoodData Central licence** is to be confirmed before the catalog ships (the page could not be read while planning). Defaults to FDC's public-domain/CC0 position; the generated catalog keeps a `source` note per row.
 3. **Ingredient icons: removed, approach to be decided.** The vendored Twemoji set, `IngredientIcon` and the icon picker are gone, and `IngredientRecord.iconKey` stays in the type as `@deprecated` (existing documents may carry one; new writes null). Whatever returns (a licensed set, emoji per family, or nothing) will need its own notice if vendored.
 4. **The calendar grid's first weekday: decided.** Dreamer UI's `Calendar` has no week-start option (its weekday header and `daysInView` are Sunday-first), so the month grid starts on Sunday, and the wide week's columns and `getWeekStartKey` start on Sunday to match it; below `lg` the week starts today instead, with this week's passed days folded above it. Building a Monday-first grid by hand would give up the shared `Calendar`; it is cheap to revisit if the owner wants it.

@@ -5350,6 +5350,27 @@ export const LINK_WORDS = {
     'Pick every account you have at this bank now. Linking the same bank a second time can disconnect the first link.',
   addToLinkedRow: (bank: string) => `Add accounts to ${bank}`,
   addToLinkedHelp: 'Already linked? Add them there, not as a second link.',
+  alreadyLinked: (bank: string) =>
+    `Nothing was added: ${bank} is already linked. Add accounts to it below and pick the new ones there.`,
+  twinRowValue: 'Shows up twice · open to fix',
+  combineRow: (bank: string) => `Combine your two ${bank} links`,
+  combineHelp: 'Same accounts, signed in twice',
+  combineTitle: (bank: string) => `Combine your ${bank} links?`,
+  combineMessage: (bank: string) =>
+    `${bank} shows up twice because you signed in there twice. Runway keeps one link and disconnects the other at ${bank}. Your accounts and purchases stay where they are. This can't be undone.`,
+  combineConfirm: 'Combine',
+  twinNote: (bank: string) =>
+    `${bank} shows up twice, and each sign-in brought in its own copy of your accounts, so the two can't be combined. If this one's accounts are the copies you don't use, unlink it below.`,
+  combineFailed: 'Those links were not combined. Nothing was changed.',
+  combineNeedsSignIn: (bank: string) =>
+    `One of your ${bank} links needs a new sign-in first, so nothing waiting at the bank is missed. Sign in again, then combine. Nothing was changed.`,
+  combineBankDown: (bank: string) =>
+    `${bank} isn't answering right now. Try again in a little while. Nothing was changed.`,
+  combineBusy: (bank: string) =>
+    `${bank} was sending new purchases just then. Try again in a moment. Nothing was changed.`,
+  combineNoLonger:
+    'These two links can no longer be combined. Nothing was changed.',
+  combinedToast: (bank: string) => `Combined your ${bank} links`,
   addMoreRow: (bank: string) => `Add more accounts from ${bank}`,
   addMoreHelp: 'Sign in again and pick the new ones',
   pickNewRow: (count: number) =>

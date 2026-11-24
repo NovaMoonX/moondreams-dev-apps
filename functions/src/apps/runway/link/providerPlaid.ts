@@ -258,6 +258,21 @@ const toLogoUrl = (logo: string | null | undefined) =>
     ? `data:image/png;base64,${logo}`
     : null;
 
+/** A website's host without "www.", only for a well-formed http(s) address. */
+const toDomain = (url: string | null | undefined) => {
+  if (typeof url !== 'string' || url.length > 2048) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    return /^https?:$/.test(parsed.protocol) &&
+      /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host)
+      ? host
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 interface PlaidCreditLiability {
   account_id: string;
   minimum_payment_amount?: number | null;
@@ -342,15 +357,17 @@ export const plaidProvider: BankDataProvider = {
     );
     if (!item.institution_id) return null;
     const { institution } = await call<{
-      institution: { name: string; logo?: string | null };
+      institution: { name: string; logo?: string | null; url?: string | null };
     }>('/institutions/get_by_id', {
       institution_id: item.institution_id,
       country_codes: ['US'],
       options: { include_optional_metadata: true },
     });
     const result: ProviderInstitution = {
+      id: item.institution_id,
       name: institution.name || null,
       logo: toLogoUrl(institution.logo),
+      domain: toDomain(institution.url),
     };
     return result;
   },
