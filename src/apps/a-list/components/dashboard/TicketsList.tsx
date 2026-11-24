@@ -34,42 +34,42 @@ function TicketsList({ initialView, onClose }: TicketsListProps) {
   return (
     <Subview title='Tickets' onClose={onClose}>
       <div className='space-y-4'>
-      <div className='flex flex-wrap gap-2'>
-        <Pill
-          emoji='🧾'
-          isSelected={view === 'unpriced'}
-          onClick={() => setView('unpriced')}
-        >
-          Needs a price ({unpriced.length})
-        </Pill>
-        <Pill
-          emoji='💵'
-          isSelected={view === 'paid'}
-          onClick={() => setView('paid')}
-        >
-          Paid ({paid.length})
-        </Pill>
-      </div>
-      {viewings.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>{getEmptyText()}</p>
-      ) : (
-        <ul className='divide-border divide-y'>
-          {viewings.map((viewing) => (
-            <li key={viewing.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='stripped'
-                aria-label={`Open ${viewing.movie.title}, ${formatDate(viewing.showtimeAt)}`}
-                className='text-foreground! hover:bg-muted/60 h-auto w-full justify-start rounded-2xl px-2 py-0 text-left font-normal'
-                onClick={() => setViewingId(viewing.id)}
-              >
-                <ViewingRow viewing={viewing} now={now} />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+        <div className='flex flex-wrap gap-2'>
+          <Pill
+            emoji='🧾'
+            isSelected={view === 'unpriced'}
+            onClick={() => setView('unpriced')}
+          >
+            Needs a price ({unpriced.length})
+          </Pill>
+          <Pill
+            emoji='💵'
+            isSelected={view === 'paid'}
+            onClick={() => setView('paid')}
+          >
+            Paid ({paid.length})
+          </Pill>
+        </div>
+        {viewings.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>{getEmptyText()}</p>
+        ) : (
+          <ul className='divide-border divide-y'>
+            {viewings.map((viewing) => (
+              <li key={viewing.id}>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='stripped'
+                  aria-label={`Open ${viewing.movie.title}, ${formatDate(viewing.showtimeAt)}`}
+                  className='text-foreground! hover:bg-muted/60 h-auto w-full justify-start rounded-2xl px-2 py-0 text-left font-normal'
+                  onClick={() => setViewingId(viewing.id)}
+                >
+                  <ViewingRow viewing={viewing} now={now} />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       {viewingId !== null && (
         <ViewingDrawer

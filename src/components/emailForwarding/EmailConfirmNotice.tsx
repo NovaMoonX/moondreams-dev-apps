@@ -3,16 +3,16 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
+import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import {
   CONFIRM_PROVIDER_NAMES,
-  EMAIL_WORDS,
   readConfirmLink,
-} from '@apps/runway/components/emailWords';
-import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
-
-type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
+} from '@/lib/emailForwarding/address';
+import type { EmailConfirm } from '@/lib/emailForwarding/types';
 
 interface EmailConfirmNoticeProps {
+  /** Names the app in "<app> confirmed Gmail's forwarding". */
+  appName: string;
   confirm: EmailConfirm;
   isTapped: boolean;
   onConfirmTapped: () => void;
@@ -40,7 +40,9 @@ function LinkRow({ label, url }: LinkRowProps) {
   );
 }
 
+/** The provider's forwarding confirmation: a quiet line when the server opened the link, else the link or code to act on. */
 function EmailConfirmNotice({
+  appName,
   confirm,
   isTapped,
   onConfirmTapped,
@@ -53,9 +55,9 @@ function EmailConfirmNotice({
     return (
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>
-          {EMAIL_WORDS.confirmedBy(name ?? 'your email')}
+          {WORDS.confirmedBy(appName, name ?? 'your email')}
         </p>
-        {url !== null && <LinkRow label={EMAIL_WORDS.confirmAgain} url={url} />}
+        {url !== null && <LinkRow label={WORDS.confirmAgain} url={url} />}
       </div>
     );
   }
@@ -65,9 +67,9 @@ function EmailConfirmNotice({
     return (
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>
-          {EMAIL_WORDS.confirmWaiting(name)}
+          {WORDS.confirmWaiting(name)}
         </p>
-        <LinkRow label={EMAIL_WORDS.confirmAgain} url={url} />
+        <LinkRow label={WORDS.confirmAgain} url={url} />
       </div>
     );
   }
@@ -75,7 +77,7 @@ function EmailConfirmNotice({
     <InlineNotice
       tone='info'
       icon={Mail}
-      title={EMAIL_WORDS.confirmAsked(name ?? 'Your email')}
+      title={WORDS.confirmAsked(name ?? 'Your email')}
     >
       <div className='mt-2 space-y-2'>
         {url !== null ? (
@@ -86,12 +88,12 @@ function EmailConfirmNotice({
               onConfirmTapped();
             }}
           >
-            {EMAIL_WORDS.confirmButton(name)}
+            {WORDS.confirmButton(name)}
           </Button>
         ) : (
           <>
             <p className='text-muted-foreground'>
-              {EMAIL_WORDS.confirmCodeLine(name)}
+              {WORDS.confirmCodeLine(name)}
             </p>
             <div className='flex items-center justify-between gap-3'>
               <span className='text-lg font-semibold tabular-nums'>
@@ -99,7 +101,7 @@ function EmailConfirmNotice({
               </span>
               <CopyTextButton
                 text={confirm.code ?? ''}
-                label={EMAIL_WORDS.copyCode}
+                label={WORDS.copyCode}
                 variant='tertiary'
                 isCompact
               />

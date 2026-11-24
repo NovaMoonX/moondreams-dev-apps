@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import CopyTextButton from '@/components/CopyTextButton';
 import Drawer from '@/components/Drawer';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -106,6 +107,13 @@ export function ViewingPanel({
     selectViewingById(state, viewingId),
   );
   const membership = useAppSelector(selectMembership);
+  const emailEvent = useAppSelector(
+    (state) =>
+      state.aList.email.events.find(
+        (entry) => entry.id === viewing?.emailEventId,
+      ) ?? null,
+  );
+  const emailOutcome = emailEvent?.outcome ?? null;
   const [view, setView] = useState<DrawerView>('details');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -353,6 +361,37 @@ export function ViewingPanel({
             {formatCents(ticket.feeAvoidedCents)} fee +{' '}
             {formatCents(ticket.taxCents)} tax ={' '}
             {formatCents(ticket.totalCents)}
+          </p>
+        )}
+        {viewing.emailEventId != null && (
+          <p className='text-muted-foreground flex flex-wrap items-center gap-x-1 text-xs'>
+            <span>
+              {emailOutcome === 'added'
+                ? 'Added from your AMC email'
+                : emailOutcome === 'attached'
+                  ? 'Ticket from your AMC email'
+                  : 'From your AMC email'}
+              {viewing.amcConfirmation ? ' · Confirmation ' : ''}
+            </span>
+            {viewing.amcConfirmation && (
+              <>
+                <span className='select-all'>{viewing.amcConfirmation}</span>
+                <CopyTextButton
+                  text={viewing.amcConfirmation}
+                  label='Copy'
+                  variant='tertiary'
+                  isCompact
+                />
+              </>
+            )}
+            {emailEvent !== null &&
+              emailEvent.ticketCount !== null &&
+              emailEvent.ticketCount > 1 && (
+                <span className='basis-full'>
+                  This order had {emailEvent.ticketCount} tickets; the showing
+                  records yours.
+                </span>
+              )}
           </p>
         )}
       </div>

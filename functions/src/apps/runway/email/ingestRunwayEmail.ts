@@ -1,8 +1,5 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
-  getFirestore,
   Timestamp,
   type DocumentReference,
   type Firestore,
@@ -10,8 +7,14 @@ import {
 import { logger } from 'firebase-functions';
 import { onRequest } from 'firebase-functions/v2/https';
 
+import {
+  createEmailIngest,
+  EMAIL_WEBHOOK_SECRET_NAME,
+  type EmailHandlerInput,
+  type EmailMail,
+} from '../../../email/createEmailIngest.js';
+import { toAddress } from '../../../email/emailUtils.js';
 import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
-import { createOptionalSecretReader } from '../../../imageSearch/optionalSecret.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import { findInstitutionLogo, toSafeLogo } from '../institutionLogos.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
@@ -25,24 +28,18 @@ import {
 } from '../planKey.js';
 import {
   EMAIL_EVENT_KEEP_DAYS,
+  EMAIL_ADDRESS_PREFIX,
   EMAIL_PURCHASES_GATE_ID,
+  MAX_EMAILS_PER_HOUR,
   emailEventsPath,
   emailFiltersPath,
   emailRatePath,
   emailTokenPath,
   intakePath,
   planPath,
-  readAddressToken,
-  toAddress,
 } from './emailShared.js';
 import {
-  confirmProviderOf,
-  followConfirmLink,
-  readConfirmation,
-} from './forwardingConfirmation.js';
-import {
   excerptOf,
-  htmlToText,
   isInstitutionHost,
   isKnownInstitution,
   isKnownInstitutionSender,
@@ -54,19 +51,13 @@ import {
   type SenderKind,
 } from './parseAlert.js';
 import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
-import { isHandForwarded, unwrapForwarded } from './unwrapForwarded.js';
+import { unwrapForwarded } from '../../../email/unwrapForwarded.js';
 
 if (getApps().length === 0) {
   initializeApp();
 }
 
-const MAX_BODY_BYTES = 500 * 1024;
-const MAX_PER_HOUR = 30;
-const RATE_KEEP_MS = 2 * 86_400_000;
 const DAY_MS = 86_400_000;
-const SECRET_NAME = 'RUNWAY_EMAIL_WEBHOOK_SECRET';
-
-const readSecret = createOptionalSecretReader({ fetch: globalThis.fetch });
 
 type Outcome =
   | 'purchase'
@@ -77,16 +68,6 @@ type Outcome =
   | 'notTracking'
   | 'refund'
   | 'cancel';
-
-interface Mail {
-  to: string;
-  from: string;
-  subject: string;
-  text: string;
-  receivedAt: number;
-  isDkimPassed: boolean;
-  dkimDomain: string | null;
-}
 
 interface Filter {
   fromAddress: string | null;
@@ -110,37 +91,8 @@ interface Handled {
   storeEmail?: StoreEmail | null;
 }
 
-const digest = (value: string) => createHash('sha256').update(value).digest();
-
-const isSecretValid = (given: string | undefined, expected: string) =>
-  given !== undefined && timingSafeEqual(digest(given), digest(expected));
-
-const asString = (value: unknown, max: number) =>
-  typeof value === 'string' ? value.slice(0, max) : '';
-
-const asDomain = (value: unknown) => {
-  const domain = asString(value, 255).toLowerCase();
-  return /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(domain) ? domain : null;
-};
-
-const eventIdFor = (uid: string, messageId: string) =>
-  createHash('sha256').update(`${uid}:${messageId}`).digest('hex').slice(0, 32);
-
-const hourKey = (now: number) =>
-  new Date(now).toISOString().slice(0, 13).replace(/\D/g, '');
-
-async function takeRateSlot(firestore: Firestore, uid: string, now: number) {
-  const ref = firestore.doc(emailRatePath(uid, hourKey(now)));
-  return firestore.runTransaction(async (transaction) => {
-    const count = ((await transaction.get(ref)).data()?.count as number) ?? 0;
-    if (count >= MAX_PER_HOUR) return false;
-    transaction.set(ref, {
-      count: count + 1,
-      expiresAt: Timestamp.fromMillis(now + RATE_KEEP_MS),
-    });
-    return true;
-  });
-}
+const readPlanKey = (firestore: Firestore, uid: string) =>
+  unwrapPlanKey(firestore, loadKeyring(), uid);
 
 async function markWithRetry(
   firestore: Firestore,
@@ -168,7 +120,7 @@ const isEveryTermIn = (terms: string[], haystack: string) =>
   terms.every((term) => haystack.includes(lower(term)));
 
 /** A filter matches when every condition it sets matches and it sets at least one. */
-export function isFiltered(filter: Filter, mail: Mail): boolean {
+export function isFiltered(filter: Filter, mail: EmailMail): boolean {
   const subject = lower(mail.subject);
   const checks = [
     filter.fromAddress
@@ -278,7 +230,7 @@ const isInsideTracking = (
 const STORE_SIGNAL =
   /\b(order (?:#|no\.?|number|confirm\w*|cancel\w*)|your order|refund(?:ed)?|return (?:received|processed)|cancel(?:led|ed|lation))\b/i;
 
-const isStoreLike = (mail: Mail) =>
+const isStoreLike = (mail: EmailMail) =>
   !isKnownInstitutionSender(mail.from) &&
   STORE_SIGNAL.test(`${mail.subject} ${mail.text.slice(0, 600)}`);
 
@@ -341,46 +293,16 @@ async function readSenderCompany(
 }
 
 async function handleMail(
-  firestore: Firestore,
-  uid: string,
-  outer: Mail,
-  messageId: string | null,
-  now: number,
-): Promise<Outcome> {
+  { firestore, uid, mail: outer, eventId, now }: EmailHandlerInput,
+  isConfirmation: boolean,
+): Promise<{ outcome: Outcome }> {
   const mail = unwrapForwarded(outer);
-  const planKey = await unwrapPlanKey(firestore, loadKeyring(), uid);
-  const events = firestore.collection(emailEventsPath(uid));
-  const eventRef =
-    messageId === null ? events.doc() : events.doc(eventIdFor(uid, messageId));
-  const intakeRef = firestore.doc(intakePath(uid));
+  const planKey = await readPlanKey(firestore, uid);
+  const eventRef = firestore.doc(`${emailEventsPath(uid)}/${eventId}`);
   const template = subjectTemplate(mail.subject);
 
   const decide = async (): Promise<Handled> => {
-    const confirmProvider = confirmProviderOf(outer);
-    if (confirmProvider !== null) {
-      const confirmation = readConfirmation(outer);
-      const followed = await followConfirmLink(
-        confirmation.confirmUrl,
-        confirmProvider,
-      );
-      const log = followed.autoConfirm === 'failed' ? logger.warn : logger.info;
-      log('runway.email.autoConfirm', {
-        provider: confirmProvider,
-        result: followed.autoConfirm,
-        status: followed.status,
-        errorName: followed.errorName,
-      });
-      await intakeRef.update({
-        confirmAt: now,
-        updatedAt: now,
-        autoConfirm: followed.autoConfirm,
-        confirmProvider,
-        sealed: sealWithKey(
-          planKey,
-          { ...confirmation },
-          SEALED_SCHEMA_VERSION,
-        ),
-      });
+    if (isConfirmation) {
       return {
         outcome: 'confirm',
         purchase: null,
@@ -606,27 +528,14 @@ async function handleMail(
     ),
   });
   await batch.commit();
-  // The providers that ask to confirm (Gmail, Yahoo, Proton) forward with the subject untouched, so such an email shows the confirm went through.
-  const isAutoForwarded =
-    result.outcome !== 'confirm' && !isHandForwarded(outer);
-  await intakeRef
-    .update({
-      lastReceivedAt: now,
-      ...(isAutoForwarded ? { forwardedAt: now } : {}),
-    })
-    .catch((error: unknown) =>
-      logger.warn('runway.email.intakeUpdateFailed', {
-        name: error instanceof Error ? error.name : 'unknown',
-      }),
-    );
   if (result.date !== null) {
     await markWithRetry(firestore, uid, result.date, now);
   }
-  return result.outcome;
+  return { outcome: result.outcome };
 }
 
 /**
- * Receives each email the Cloudflare email worker hands over for a Runway forwarding address. Every answer is a bare status or `{ outcome }`; nothing from the email is echoed.
+ * Receives each email the Cloudflare email worker hands over for a Runway forwarding address.
  * The shared secret is optional at deploy time and the endpoint answers 503 until it is set.
  */
 export const ingestRunwayEmail = onRequest(
@@ -636,108 +545,27 @@ export const ingestRunwayEmail = onRequest(
     timeoutSeconds: 60,
     secrets: [RUNWAY_MASTER_KEYS],
   },
-  async (request, response) => {
-    if (request.method !== 'POST') {
-      response.status(405).send('Method not allowed');
-      return;
-    }
-    const expected = await readSecret(SECRET_NAME, AbortSignal.timeout(4_000));
-    if (expected === null) {
-      response.status(503).send('Not available');
-      return;
-    }
-    if (!isSecretValid(request.header('x-runway-email-secret'), expected)) {
-      logger.warn('runway.email.unauthorized');
-      response.status(401).send('Unauthorized');
-      return;
-    }
-    if ((request.rawBody?.length ?? 0) > MAX_BODY_BYTES) {
-      response.status(413).send('Too large');
-      return;
-    }
-    const body = (request.body ?? {}) as Record<string, unknown>;
-    const token = readAddressToken(asString(body.to, 320));
-    if (token === null) {
-      response.status(404).send('No such address');
-      return;
-    }
-    const [spf, dkim] = [body.spf, body.dkim].map((value) =>
-      asString(value, 20).toLowerCase(),
-    );
-    if (dkim === 'fail') {
-      logger.warn('runway.email.authFailed', { spf, dkim });
-      response.status(403).send('Rejected');
-      return;
-    }
-    if (dkim !== 'pass') {
-      logger.info('runway.email.authUnverified', { spf, dkim });
-    }
-    const firestore = getFirestore();
-    const owner = await firestore.doc(emailTokenPath(token)).get();
-    const uid = owner.data()?.uid;
-    if (typeof uid !== 'string' || uid === '') {
-      response.status(404).send('No such address');
-      return;
-    }
-    if (
-      !(await isGateOpenForUid(uid, 'runway', EMAIL_PURCHASES_GATE_ID, 'off'))
-    ) {
-      response.status(404).send('No such address');
-      return;
-    }
-    const now = Date.now();
-    const messageId = asString(body.messageId, 998).trim() || null;
-    if (
-      messageId !== null &&
-      (
-        await firestore
-          .doc(`${emailEventsPath(uid)}/${eventIdFor(uid, messageId)}`)
-          .get()
-      ).exists
-    ) {
-      response.status(200).json({ outcome: 'duplicate' });
-      return;
-    }
-    if (!(await takeRateSlot(firestore, uid, now))) {
-      logger.warn('runway.email.rateLimited');
-      response.status(429).send('Too many');
-      return;
-    }
-    const html = asString(body.html, MAX_BODY_BYTES);
-    const text = asString(body.text, MAX_BODY_BYTES);
-    const receivedAt =
-      typeof body.receivedAt === 'number' &&
-      Number.isFinite(body.receivedAt) &&
-      Math.abs(body.receivedAt - now) < 2 * DAY_MS
-        ? body.receivedAt
-        : now;
-    try {
-      const outcome = await handleMail(
-        firestore,
-        uid,
-        {
-          to: asString(body.to, 320),
-          from: asString(body.from, 320),
-          subject: asString(body.subject, 1000),
-          text: text.trim() !== '' ? text : htmlToText(html),
-          receivedAt,
-          isDkimPassed: dkim === 'pass',
-          dkimDomain: dkim === 'pass' ? asDomain(body.dkimDomain) : null,
-        },
-        messageId,
-        now,
-      );
-      logger.info('runway.email.handled', { outcome });
-      response.status(200).json({ outcome });
-    } catch (error) {
-      if ((error as { code?: unknown })?.code === 6) {
-        response.status(200).json({ outcome: 'duplicate' });
-        return;
-      }
-      logger.error('runway.email.failed', {
-        name: (error as Error)?.name ?? 'Error',
-      });
-      response.status(500).send('Failed');
-    }
-  },
+  createEmailIngest({
+    app: 'runway',
+    prefix: EMAIL_ADDRESS_PREFIX,
+    secretName: EMAIL_WEBHOOK_SECRET_NAME,
+    legacySecretName: 'RUNWAY_EMAIL_WEBHOOK_SECRET',
+    legacySecretHeader: 'x-runway-email-secret',
+    tokenPath: emailTokenPath,
+    isOpenFor: (uid) =>
+      isGateOpenForUid(uid, 'runway', EMAIL_PURCHASES_GATE_ID, 'off'),
+    eventPath: (uid, eventId) => `${emailEventsPath(uid)}/${eventId}`,
+    ratePath: emailRatePath,
+    intakePath,
+    maxPerHour: MAX_EMAILS_PER_HOUR,
+    handle: (input) => handleMail(input, false),
+    confirmationFields: async ({ firestore, uid }, confirmation) => ({
+      sealed: sealWithKey(
+        await readPlanKey(firestore, uid),
+        { ...confirmation },
+        SEALED_SCHEMA_VERSION,
+      ),
+    }),
+    onConfirmation: (input) => handleMail(input, true),
+  }),
 );

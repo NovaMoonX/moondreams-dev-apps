@@ -9,11 +9,8 @@ const REJECTIONS = {
 };
 
 const ROUTES = {
-  runway: (env) => ({
-    url: env.INGEST_URL,
-    secret: env.INGEST_SECRET,
-    header: 'x-runway-email-secret',
-  }),
+  runway: (env) => ({ url: env.INGEST_URL, secret: env.INGEST_SECRET }),
+  amc: (env) => ({ url: env.A_LIST_INGEST_URL, secret: env.INGEST_SECRET }),
 };
 
 const routeFor = (to, env) => {
@@ -48,7 +45,7 @@ export default {
       return;
     }
     const route = routeFor(message.to, env);
-    if (!route) {
+    if (!route?.url) {
       message.setReject(REJECTIONS[404]);
       return;
     }
@@ -58,7 +55,7 @@ export default {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          [route.header]: route.secret,
+          'x-app-email-secret': route.secret,
         },
         body: JSON.stringify({
           to: message.to,

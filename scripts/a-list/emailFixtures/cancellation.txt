@@ -1,0 +1,18 @@
+From: AMC Theatres <receipts@amctheatres.com>
+Subject: Your AMC Ticket Cancellation
+
+We've canceled your reservation as requested.
+Stephon, below are the details of your refund.
+Order Number: 1275187838
+Original Order Date: 11/10/2026
+Refund Date: 11/13/2026
+Ticket Refund Details
+Confirmation #: 0134540696
+Refund Date: 11/13/2026
+How to Rob a Bank R
+11/13/2026 18:50
+AMC Chattanooga 18
+Refunded Tickets: 1 Adult; $0.00
+Refund Summary
+Reason for Refund: SelfServiceRefund
+Total Amount Refunded: $0.00

@@ -1,4 +1,14 @@
-import type { Ticket } from '../../src/apps/a-list/types.ts';
+import { Timestamp } from 'firebase-admin/firestore';
+
+import {
+  EMAIL_EVENT_KEEP_DAYS,
+  EMAIL_TICKETS_GATE_ID,
+} from '../../src/apps/a-list/constants.ts';
+import type {
+  AListEmailEvent,
+  Ticket,
+  Viewing,
+} from '../../src/apps/a-list/types.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -276,6 +286,28 @@ const SEED_TICKETS: Record<string, Ticket> = {
     taxChoice: null,
     totalCents: 2299,
   },
+  'seed-viewing-galaxy': {
+    entryMode: 'ITEMIZED',
+    format: 'STANDARD',
+    priceCents: 1549,
+    standardPriceCents: null,
+    feeAvoidedCents: 150,
+    taxRate: 0.0825,
+    taxCents: 128,
+    taxChoice: null,
+    totalCents: 1827,
+  },
+  'seed-viewing-dayahead8-1': {
+    entryMode: 'ITEMIZED',
+    format: 'STANDARD',
+    priceCents: 1549,
+    standardPriceCents: null,
+    feeAvoidedCents: 150,
+    taxRate: 0.0825,
+    taxCents: 128,
+    taxChoice: null,
+    totalCents: 1827,
+  },
   'seed-viewing-day9-3': {
     entryMode: 'ALL_IN',
     format: 'IMAX',
@@ -286,6 +318,31 @@ const SEED_TICKETS: Record<string, Ticket> = {
     taxCents: 139,
     taxChoice: null,
     totalCents: 2139,
+  },
+};
+
+// Showings that came from a forwarded AMC email: a new one (added) and a ticket put on one already planned (attached).
+const SEED_EMAIL_VIEWINGS: Record<
+  string,
+  {
+    amcConfirmation: string;
+    amcTicketCount: number;
+    emailEventId: string;
+    /** When the server handled the email, which is also the showing's last edit, so Undo is still open. */
+    handledHoursAgo: number;
+  }
+> = {
+  'seed-viewing-galaxy': {
+    amcConfirmation: '0195443676',
+    amcTicketCount: 1,
+    emailEventId: 'seed-email-added',
+    handledHoursAgo: 2,
+  },
+  'seed-viewing-dayahead8-1': {
+    amcConfirmation: '0195443701',
+    amcTicketCount: 2,
+    emailEventId: 'seed-email-attached',
+    handledHoursAgo: 5,
   },
 };
 
@@ -393,6 +450,12 @@ function getViewingFixtures(now: number) {
           60_000;
       // An ended showing marked `awaiting` stays planned, so the Seen prompt has something to ask about.
       const status = endsAt <= now && !awaiting ? 'SEEN' : 'PLANNED';
+      const { handledHoursAgo, ...emailed } = SEED_EMAIL_VIEWINGS[id] ?? {
+        handledHoursAgo: null,
+        amcConfirmation: null,
+        amcTicketCount: null,
+        emailEventId: null,
+      };
       return {
         id,
         movieKey,
@@ -404,6 +467,8 @@ function getViewingFixtures(now: number) {
         trailerReminderId:
           id === PREVIEWS_VIEWING_ID ? PREVIEWS_REMINDER_ID : null,
         rating: status === 'SEEN' ? (SEED_RATINGS[id] ?? null) : null,
+        amcRefundedOrders: null,
+        ...emailed,
         ...(SEED_PURCHASES[id] ? { purchase: SEED_PURCHASES[id] } : {}),
         ...(SEED_VIEWING_THEATRES[id] === undefined
           ? {}
@@ -413,7 +478,10 @@ function getViewingFixtures(now: number) {
               ),
             }),
         createdAt: Math.min(now, showtimeAt),
-        lastEditedAt: Math.min(now, showtimeAt),
+        lastEditedAt:
+          handledHoursAgo === null
+            ? Math.min(now, showtimeAt)
+            : now - handledHoursAgo * HOUR_MS,
       };
     },
   );
@@ -437,6 +505,219 @@ function toSharedViewing(
     format: viewing.ticket?.format ?? null,
     theatreName: viewing.theatre?.name ?? null,
   };
+}
+
+const SEED_EMAIL_ADDRESS =
+  'amc-3f9a1c7e5b2d48a6906de1f4b7c8a253@moondreamsmail.com';
+const HOUR_MS = 3_600_000;
+
+type SeedEmailEvent = Omit<AListEmailEvent, 'expiresAt'>;
+
+/** Alex's tickets from email: the address, a finished walk and one email of each outcome, with the showings the added and attached ones made. */
+async function writeSeedEmail(
+  context: SeedContext,
+  membershipRef: FirebaseFirestore.DocumentReference,
+  viewings: ReturnType<typeof getViewingFixtures>,
+) {
+  const at = (hoursAgo: number) => context.now - hoursAgo * HOUR_MS;
+  const find = (id: string) => viewings.find((viewing) => viewing.id === id)!;
+  const galaxy = find('seed-viewing-galaxy');
+  const matrix = find('seed-viewing-dayahead8-1');
+  const quietCoast = getWatchlistFixtures(context.now).find(
+    (item) => item.movieKey === 'manual-seed-0004-quiet-coast',
+  )!;
+  const canceledShowtime = getShowtime(context.now, 14, 16, 30);
+  const removedViewing: Viewing = {
+    id: 'seed-viewing-email-canceled',
+    movieKey: 'imdb-tt15239678',
+    movie: getWatchlistFixtures(context.now)[1].movie,
+    showtimeAt: canceledShowtime,
+    endsAt: canceledShowtime + (PREVIEWS_MINUTES + 166) * 60_000,
+    status: 'PLANNED',
+    ticket: null,
+    theatre: toTheatreSnapshot(SEED_THEATRES[1]),
+    purchase: null,
+    rating: null,
+    trailerReminderId: null,
+    amcConfirmation: '0195443512',
+    amcTicketCount: 1,
+    amcRefundedOrders: null,
+    emailEventId: 'seed-email-canceled',
+    createdAt: at(30),
+    lastEditedAt: at(30),
+  };
+  const priorMatrix: Viewing = {
+    ...matrix,
+    status: 'PLANNED',
+    theatre: matrix.theatre ?? null,
+    purchase: null,
+    ticket: null,
+    amcConfirmation: null,
+    amcTicketCount: null,
+    amcRefundedOrders: null,
+    emailEventId: null,
+    lastEditedAt: matrix.createdAt,
+  };
+  const base = {
+    from: 'receipts@amctheatres.com',
+    readBy: 'pattern' as const,
+    viewingId: null,
+    movieTitle: null,
+    showtimeAt: null,
+    theatreName: null,
+    confirmation: null,
+    ticketCount: null,
+    removedViewing: null,
+    priorViewing: null,
+    watchlistKey: null,
+    undoneAt: null,
+  };
+  const events: SeedEmailEvent[] = [
+    {
+      ...base,
+      id: 'seed-email-added',
+      receivedAt: at(2),
+      outcome: 'added',
+      subject: 'Your AMC Theatres reservation is confirmed',
+      snippet:
+        'You’re all set! Galaxy Drift. Confirmation 0195443676. 1 ticket, Standard. AMC Town Center 20. Convenience fee waived for A-List.',
+      viewingId: galaxy.id,
+      movieTitle: galaxy.movie.title,
+      showtimeAt: galaxy.showtimeAt,
+      theatreName: 'AMC Town Center 20',
+      confirmation: '0195443676',
+      ticketCount: 1,
+    },
+    {
+      ...base,
+      id: 'seed-email-attached',
+      receivedAt: at(5),
+      outcome: 'attached',
+      readBy: 'ai',
+      subject: 'Fwd: Your tickets for The Matrix',
+      snippet:
+        'Your tickets are ready. The Matrix. Confirmation 0195443701. 2 tickets, Standard. Sales tax included in the total.',
+      viewingId: matrix.id,
+      movieTitle: matrix.movie.title,
+      showtimeAt: matrix.showtimeAt,
+      theatreName: 'AMC Town Center 20',
+      confirmation: '0195443701',
+      ticketCount: 2,
+      priorViewing: priorMatrix,
+    },
+    {
+      ...base,
+      id: 'seed-email-canceled',
+      receivedAt: at(26),
+      outcome: 'canceled',
+      subject: 'Your AMC Theatres reservation was cancelled',
+      snippet:
+        'We’ve cancelled your reservation. Dune: Part Two. Confirmation 0195443512. Your A-List ticket for this showing was released.',
+      viewingId: removedViewing.id,
+      movieTitle: removedViewing.movie.title,
+      showtimeAt: removedViewing.showtimeAt,
+      theatreName: removedViewing.theatre?.name ?? null,
+      confirmation: '0195443512',
+      removedViewing,
+    },
+    {
+      ...base,
+      id: 'seed-email-cancel-not-found',
+      receivedAt: at(40),
+      outcome: 'cancelNotFound',
+      subject: 'Your AMC Theatres reservation was cancelled',
+      snippet:
+        'We’ve cancelled your reservation. Quiet Coast. Confirmation 0195443388.',
+      movieTitle: quietCoast.movie.title,
+      showtimeAt: getShowtime(context.now, 3, 20, 15),
+      confirmation: '0195443388',
+    },
+    {
+      ...base,
+      id: 'seed-email-not-ticket',
+      receivedAt: at(52),
+      outcome: 'notTicket',
+      readBy: null,
+      from: 'offers@email.amctheatres.com',
+      subject: 'Popcorn Tuesday is back',
+      snippet: 'Get a free size upgrade on popcorn every Tuesday this month.',
+    },
+    {
+      ...base,
+      id: 'seed-email-unread',
+      receivedAt: at(70),
+      outcome: 'unread',
+      readBy: null,
+      subject: 'Your AMC Theatres reservation',
+      snippet:
+        'Reservation details are in your account. Sign in to AMCTheatres.com to see your showing.',
+    },
+    {
+      ...base,
+      id: 'seed-email-confirm',
+      receivedAt: at(24 * 12),
+      outcome: 'confirm',
+      readBy: null,
+      from: 'google.com',
+      subject: 'Gmail Forwarding Confirmation',
+      snippet:
+        'alex@example.test has requested to automatically forward mail to your email address.',
+    },
+  ];
+
+  await Promise.all([
+    membershipRef
+      .collection('emailIntake')
+      .doc('address')
+      .set({
+        address: SEED_EMAIL_ADDRESS,
+        confirmUrl: 'https://mail.google.com/mail/vf-seeded-confirmation',
+        confirmCode: '123456789',
+        confirmAt: at(24 * 12),
+        autoConfirm: 'confirmed',
+        confirmProvider: 'gmail',
+        lastReceivedAt: at(2),
+        forwardedAt: at(2),
+        createdAt: at(24 * 13),
+        updatedAt: at(2),
+      }),
+    membershipRef
+      .collection('emailSetup')
+      .doc('progress')
+      .set({
+        id: 'progress',
+        noticeSeenThrough: null,
+        createdAt: at(24 * 13),
+        updatedAt: at(24 * 11),
+      }),
+    ...events.map((event) =>
+      membershipRef
+        .collection('emailEvents')
+        .doc(event.id)
+        .set({
+          ...event,
+          expiresAt: Timestamp.fromMillis(
+            event.receivedAt + EMAIL_EVENT_KEEP_DAYS * DAY_MS,
+          ),
+        }),
+    ),
+    context.firestore.doc('featureGates/a-list').set(
+      {
+        appId: 'a-list',
+        gates: {
+          [EMAIL_TICKETS_GATE_ID]: {
+            rollout: 'off',
+            alwaysOnUids: [FIXTURE_USERS.partnerOne.uid],
+            alwaysOffUids: [],
+            reason: 'Seeded: Alex tests tickets from email',
+            updatedAt: context.now,
+          },
+        },
+      },
+      { merge: true },
+    ),
+  ]);
+  return events.length + 3;
 }
 
 // Alex has a finished membership; every other fixture account lands on Setup.
@@ -497,6 +778,8 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     ),
   );
 
+  const emailDocuments = await writeSeedEmail(context, membershipRef, viewings);
+
   const upcoming = viewings.filter((viewing) => viewing.status === 'PLANNED');
   const seedShares = [
     { id: SEED_SHARE_OPEN_ID, pin: null, items: viewings },
@@ -554,6 +837,7 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
       SEED_THEATRES.length +
       watchlist.length +
       viewings.length +
-      seedShares.length,
+      seedShares.length +
+      emailDocuments,
   };
 }

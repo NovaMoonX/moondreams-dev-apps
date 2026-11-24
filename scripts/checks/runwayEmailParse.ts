@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 
 import type { EmailEventRead } from '../../src/apps/runway/hooks/useEmailPurchases.ts';
+import { splitAddressForWrap } from '../../src/lib/emailForwarding/address.ts';
 import {
   groupEmailSenders,
   readSender,
-  splitAddressForWrap,
 } from '../../src/apps/runway/utils/emailSenders.ts';
-import { toAddress } from '../../functions/src/apps/runway/email/emailShared.ts';
+import { toAddress } from '../../functions/src/email/emailUtils.ts';
 import {
   confirmProviderOf,
   followConfirmLink,
   isAcceptedConfirmUrl,
   isForwardingConfirmation,
-} from '../../functions/src/apps/runway/email/forwardingConfirmation.ts';
+} from '../../functions/src/email/forwardingConfirmation.ts';
 import {
   excerptOf,
   htmlToText,
@@ -30,7 +30,7 @@ import {
   readForwardedDate,
   stripForwardPrefixes,
   unwrapForwarded,
-} from '../../functions/src/apps/runway/email/unwrapForwarded.ts';
+} from '../../functions/src/email/unwrapForwarded.ts';
 
 const RECEIVED = Date.UTC(2026, 10, 4, 18, 30);
 const NOV_3 = Date.UTC(2026, 10, 3);

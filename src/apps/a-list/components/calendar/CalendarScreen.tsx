@@ -8,6 +8,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import CounterRow from '@apps/a-list/components/calendar/CounterRow';
 import PosterCell from '@apps/a-list/components/calendar/PosterCell';
+import EmailChangesNotice from '@apps/a-list/components/email/EmailChangesNotice';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectCalendarShares,
@@ -88,6 +89,7 @@ function CalendarScreen() {
           </div>
         }
       />
+      <EmailChangesNotice />
       <CounterRow now={now} />
       {!hasViewings && (
         <div className='border-primary/30 bg-primary/5 flex items-center gap-3 rounded-2xl border p-4'>
