@@ -232,8 +232,15 @@ const input = {
 
 // Older days summed away by a closing end the list on what the item held before the window.
 {
-  const rows = withHeldAfter(collectItemMoney('groceries', input), 50_000);
-  const ended = withBroughtForward(rows, 50_000, 'groceries', d(5));
+  const entries = collectItemMoney('groceries', input);
+  const whole = entries.reduce((sum, entry) => sum + entry.cents, 0);
+  const rows = withHeldAfter(entries, 50_000);
+  const ended = withBroughtForward(
+    withHeldAfter(entries, whole),
+    whole,
+    'groceries',
+    d(5),
+  );
   assert.equal(ended.length, rows.length, 'a start row already explains it');
   const noStart = rows.slice(0, 2);
   const carried = withBroughtForward(noStart, 50_000, 'groceries', d(5));
@@ -255,6 +262,18 @@ const input = {
     'an item with no loaded rows still shows what it holds',
   );
   assert.equal(withBroughtForward([], 0, 'groceries', d(5)).length, 0);
+  const summed = rows.filter((row) => row.on >= d(5) || row.kind === 'start');
+  const gapped = withBroughtForward(
+    withHeldAfter(summed, whole),
+    whole,
+    'groceries',
+    d(5),
+  );
+  const start = gapped.at(-1);
+  const earlier = gapped.at(-2);
+  assert.equal(start?.kind, 'start', 'the start stays the oldest row');
+  assert.equal(start?.heldAfterCents, start?.cents, 'the start holds itself');
+  assert.equal(earlier?.kind, 'earlier', 'the summed days sit above it');
 }
 
 // No starting point, no history.

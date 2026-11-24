@@ -134,14 +134,12 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
       return matches.length === 1 ? matches[0].id : null;
     }
     const parts = readPurchaseChange(change.summary);
-    if (parts === null) return null;
-    const named = purchaseRows.filter(
-      (row) => getPurchaseTitle(row.purchase, nameOf) === parts.title,
+    if (parts === null || parts.date === '') return null;
+    const dated = purchaseRows.filter(
+      (row) =>
+        getPurchaseTitle(row.purchase, nameOf) === parts.title &&
+        formatDateOrdinalUTC(row.on) === parts.date,
     );
-    const dated =
-      parts.date === ''
-        ? named
-        : named.filter((row) => formatDateOrdinalUTC(row.on) === parts.date);
     return dated.length === 1 ? dated[0].id : null;
   };
   const notesByRow = state.changes.reduce<Map<string, OpenChange[]>>(
@@ -154,7 +152,7 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
     new Map(),
   );
   const moneyIds = new Set(moneyRows.map((row) => row.id));
-  const moveChangeByRow = new Map(
+  const linkedMoveChanges = new Map(
     state.changes.flatMap((change): [string, OpenChange][] => {
       if (change.move === null || change.move.isUndo) return [];
       const rowId = [
@@ -164,6 +162,26 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
       return rowId === undefined ? [] : [[rowId, change]];
     }),
   );
+  const claimed = new Set(linkedMoveChanges.keys());
+  const legacyMoveChanges = state.changes.flatMap(
+    (change): [string, OpenChange][] => {
+      if (
+        change.move !== null ||
+        (change.kind !== 'moveChange' && change.kind !== 'paymentChange')
+      ) {
+        return [];
+      }
+      const matches = moneyRows.filter(
+        (row) =>
+          (row.kind === 'move' || row.kind === 'paid') &&
+          !claimed.has(row.id) &&
+          row.on === toDay(change.createdAt) &&
+          change.summary.includes(formatCents(Math.abs(row.cents))),
+      );
+      return matches.length === 1 ? [[matches[0].id, change]] : [];
+    },
+  );
+  const moveChangeByRow = new Map([...linkedMoveChanges, ...legacyMoveChanges]);
   const folded = new Set([
     ...[...notesByRow.values()].flat().map((change) => change.id),
     ...[...moveChangeByRow.values()].map((change) => change.id),
@@ -205,18 +223,19 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
         ? null
         : describeHeldAfter(moneyKind, level, row.heldAfterCents);
     const day = formatDateOrdinalUTC(row.on);
-    const common =
-      row.kind === 'earlier'
-        ? {
-            figure: held?.value ?? signed(row.cents),
-            figureWord: held?.word ?? null,
-            isFigureWordOver: held?.isOver ?? false,
-          }
-        : {
-            figure: signed(row.cents),
-            figureWord: held?.text ?? null,
-            isFigureWordOver: held?.isOver ?? false,
-          };
+    const isOpening =
+      row.kind === 'earlier' && row.cents === row.heldAfterCents;
+    const common = isOpening
+      ? {
+          figure: held?.value ?? signed(row.cents),
+          figureWord: held?.word ?? null,
+          isFigureWordOver: held?.isOver ?? false,
+        }
+      : {
+          figure: signed(row.cents),
+          figureWord: held?.text ?? null,
+          isFigureWordOver: held?.isOver ?? false,
+        };
     if (row.kind === 'purchase') {
       const parts = notes.flatMap((change) => {
         const read = readPurchaseChange(change.summary);
@@ -250,9 +269,13 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
     }
     const look = describeOther(row);
     const detail =
-      row.kind === 'earlier'
-        ? ITEM_VIEW_WORDS.moneyEarlierDetail(formatDateOrdinalUTC(row.before))
-        : day;
+      row.kind !== 'earlier'
+        ? day
+        : isOpening
+          ? ITEM_VIEW_WORDS.moneyEarlierDetail(formatDateOrdinalUTC(row.before))
+          : ITEM_VIEW_WORDS.moneyEarlierRestDetail(
+              formatDateOrdinalUTC(row.before),
+            );
     const rowLook = {
       name: look.name,
       leading: iconTile(look.icon),

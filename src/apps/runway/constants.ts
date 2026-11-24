@@ -3739,7 +3739,11 @@ export const ITEM_VIEW_WORDS = {
   moneyEdited: 'Edited',
   moneyByRule: 'By your rule',
   moneyEarlier: 'Brought forward',
+  purchaseRefund: 'Refund',
+  purchasesTotalsNote:
+    'Each total also counts moves and pay days, which History shows.',
   moneyEarlierDetail: (date: string) => `Everything before ${date}`,
+  moneyEarlierRestDetail: (date: string) => `Everything else before ${date}`,
   moneyLoading: 'Getting what moved in and out.',
   goalFigure: 'saved',
   horizonFigure: 'held',

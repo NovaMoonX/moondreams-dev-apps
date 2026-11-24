@@ -1,6 +1,6 @@
 import type { Cents, DateOnly, OpenPurchase } from '@apps/runway/types';
 
-import type { BalancesInput } from './balances';
+import { getGoalPart, type BalancesInput } from './balances';
 import { getEffectiveSplits } from './correct';
 import {
   collectCostPaid,
@@ -57,17 +57,6 @@ export type ItemMoneyRow = ItemMoneyEntry & { heldAfterCents: Cents };
 
 const newestFirst = (a: ItemMoneyEntry, b: ItemMoneyEntry) =>
   b.on - a.on || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
-
-/** What a Horizon item's own paid mark, or a goal that helped pay one, gave up. */
-const getGoalPart = (entry: {
-  amountCents: Cents;
-  fromFreeCents: Cents;
-  fromGoalCents: Cents;
-}) =>
-  Math.min(
-    Math.max(0, entry.fromGoalCents),
-    Math.max(0, entry.amountCents - Math.max(0, entry.fromFreeCents)),
-  );
 
 /** What moved one item's money in the loaded ledger, newest first, from the inputs the balances sum; a bill's payments are not in it. */
 export function collectItemMoney(
@@ -201,37 +190,39 @@ export function withHeldAfter(
   entries: readonly ItemMoneyEntry[],
   heldNowCents: Cents,
 ): ItemMoneyRow[] {
-  const result = entries.reduce<ItemMoneyRow[]>((rows, entry) => {
-    const newer = rows.at(-1);
-    const heldAfterCents =
-      newer === undefined ? heldNowCents : newer.heldAfterCents - newer.cents;
-    return [...rows, { ...entry, heldAfterCents }];
-  }, []);
-  return result;
+  return entries.reduce<{ rows: ItemMoneyRow[]; held: Cents }>(
+    (acc, entry) => {
+      acc.rows.push({ ...entry, heldAfterCents: acc.held });
+      acc.held -= entry.cents;
+      return acc;
+    },
+    { rows: [], held: heldNowCents },
+  ).rows;
 }
 
-/** The rows, ending on what the item held before the first loaded day when older days are summed away (a closing), so the oldest total never starts from nothing unexplained. */
+/** The rows with one row for whatever days summed away (a closing) did, placed where those days fall, so every total adds up to the item's figure. */
 export function withBroughtForward(
   rows: readonly ItemMoneyRow[],
   heldNowCents: Cents,
   itemId: string,
   before: DateOnly | null,
 ): ItemMoneyRow[] {
-  const oldest = rows.at(-1);
-  const carried =
-    oldest === undefined ? heldNowCents : oldest.heldAfterCents - oldest.cents;
-  if (before === null || carried === 0 || oldest?.kind === 'start') {
-    return [...rows];
-  }
-  return [
-    ...rows,
-    {
-      kind: 'earlier',
-      id: `earlier_${itemId}`,
-      on: before - 1,
-      cents: carried,
-      before,
-      heldAfterCents: carried,
-    },
-  ];
+  const gap = heldNowCents - rows.reduce((sum, row) => sum + row.cents, 0);
+  if (before === null || gap === 0) return [...rows];
+  const olderAt = rows.findIndex((row) => row.on < before);
+  const cut = olderAt === -1 ? rows.length : olderAt;
+  return withHeldAfter(
+    [
+      ...rows.slice(0, cut),
+      {
+        kind: 'earlier',
+        id: `earlier_${itemId}`,
+        on: before - 1,
+        cents: gap,
+        before,
+      },
+      ...rows.slice(cut),
+    ],
+    heldNowCents,
+  );
 }

@@ -5,6 +5,7 @@ import FallbackImage from '@/components/FallbackImage';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import { ITEM_VIEW_WORDS } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { useWaitingBank } from '@apps/runway/hooks/useEmailPurchases';
@@ -30,6 +31,8 @@ interface PurchaseRowProps {
   /** The running total under the figure ("$412.50 left"). */
   figureWord?: string | null;
   isFigureWordOver?: boolean;
+  /** The envelope the screen is about: a purchase only it pays leaves its name out of the detail. */
+  subjectId?: string | null;
   /** Facts added after the day ("By your rule"). */
   extraFacts?: readonly string[];
   /** Opens the purchase; a row without it draws no chevron. */
@@ -47,6 +50,7 @@ function PurchaseRow({
   figureWord = null,
   isFigureWordOver = false,
   extraFacts = [],
+  subjectId = null,
   onOpen,
 }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
@@ -68,6 +72,10 @@ function PurchaseRow({
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateOrdinalUTC(purchase.date);
+  const isOnlySubject =
+    subjectId !== null &&
+    purchase.lines.length > 0 &&
+    purchase.lines.every((line) => line.envelopeId === subjectId);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const facts = isBrief
     ? []
@@ -77,7 +85,12 @@ function PurchaseRow({
             ? EMAIL_WORDS.waitingShort
             : EMAIL_WORDS.waitingOn(bank.name),
         ]
-      : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
+      : isOnlySubject
+        ? [
+            purchase.label?.trim() ? (purchase.merchant?.trim() ?? null) : null,
+            refund && !isHidden ? ITEM_VIEW_WORDS.purchaseRefund : null,
+          ].filter((fact): fact is string => Boolean(fact))
+        : getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere);
   const detail = [
     date,
     ...(paidWith ? [paidWith] : []),
