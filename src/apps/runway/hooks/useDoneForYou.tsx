@@ -35,6 +35,7 @@ import {
 import {
   returnPurchaseToWaiting,
   splitBankPurchase,
+  splitBankPurchases,
   unlinkDeposit,
   unpairAccountPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
@@ -62,6 +63,7 @@ import {
   describeDepositLinked,
   describePurchaseMatch,
   describePurchaseReturned,
+  describeSplitMatch,
 } from '@apps/runway/utils/purchaseText';
 
 export type { DoneForYouInput };
@@ -104,6 +106,12 @@ const getExpected = (
           date: undo.merged.bank.date,
         },
       ];
+    case 'mergeSplit':
+      return undo.merged.banks.map((bank) => ({
+        id: bank.id,
+        updatedAt: undo.merged.updatedAt,
+        date: bank.date,
+      }));
     case 'deposit':
       return [
         {
@@ -210,6 +218,7 @@ const getUndoLabel = (undo: DoneForYouUndo, sorting: SortingState | null) => {
   if (isLeftInFreeToSpend(undo, sorting)) return DONE_FOR_YOU_WORDS.undoQuiet;
   switch (undo.kind) {
     case 'merge':
+    case 'mergeSplit':
       return DONE_FOR_YOU_WORDS.undoMerge;
     case 'deposit':
       return DONE_FOR_YOU_WORDS.undoDeposit;
@@ -230,6 +239,7 @@ const getUndoneWords = (undo: DoneForYouUndo, sorting: SortingState | null) => {
   if (isLeftInFreeToSpend(undo, sorting)) return DONE_FOR_YOU_WORDS.undoneQuiet;
   switch (undo.kind) {
     case 'merge':
+    case 'mergeSplit':
       return NEEDS_HOME_WORDS.matchUndone;
     case 'deposit':
       return DEPOSIT_WORDS.undone;
@@ -267,6 +277,14 @@ async function runUndo(uid: string, undo: DoneForYouUndo) {
           nameOf,
           true,
         ),
+      );
+      return;
+    case 'mergeSplit':
+      await splitBankPurchases(
+        uid,
+        encryption,
+        undo.merged,
+        describeSplitMatch(undo.merged, nameOf, true),
       );
       return;
     case 'deposit':

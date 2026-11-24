@@ -38,6 +38,9 @@ const BATCH_SIZE = 20;
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
 
+const readName = (value: unknown) =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+
 /** A purchase's sealed fields the digest needs; 0 cents when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
 const readPurchase = (key: Buffer, payload: unknown) => {
   const none = {
@@ -45,6 +48,8 @@ const readPurchase = (key: Buffer, payload: unknown) => {
     paidByCardId: null,
     notSameAs: [] as string[],
     pairedWithId: null,
+    name: null as string | null,
+    isOrder: false,
   };
   if (!isSealed(payload)) return none;
   try {
@@ -59,6 +64,11 @@ const readPurchase = (key: Buffer, payload: unknown) => {
         : [],
       pairedWithId:
         typeof opened.pairedWithId === 'string' ? opened.pairedWithId : null,
+      name: readName(opened.merchant) ?? readName(opened.label),
+      isOrder:
+        typeof opened.storeEmail === 'object' &&
+        opened.storeEmail !== null &&
+        (opened.storeEmail as { kind?: unknown }).kind === 'order',
     };
   } catch {
     return none;

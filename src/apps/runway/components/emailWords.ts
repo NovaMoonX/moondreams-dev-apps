@@ -96,10 +96,17 @@ export const EMAIL_WORDS = {
   removeFailed: 'That did not go through. Try again.',
   progressFailed: "Couldn't save your place. Forwarding still works.",
   waitingShort: 'Waiting for your bank',
+  waitingOn: (bank: string) => `Waiting on ${bank}`,
   sameTitle: 'Is this from one of these emails?',
   sameRow: (date: string) => `Email from ${date} · Counted once`,
   drawerWaiting:
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
+  drawerWaitingNamed: (bank: string) =>
+    `Read from your bank’s alert email. It merges on its own when ${bank} sends the same charge.`,
+  drawerStoreWaitingNamed: (bank: string) =>
+    `Read from the store’s email. It merges on its own when ${bank} sends the same charge.`,
+  drawerPostedOnly: (bank: string, isStore: boolean) =>
+    `Read from ${isStore ? 'the store’s' : 'your bank’s alert'} email. It merges once ${bank} posts the charge, often days later.`,
   emailActionsCaption: 'The email',
   drawerFromEmail: 'Read from your bank’s alert email.',
   drawerFromStore: 'Read from the store’s email.',
@@ -108,6 +115,8 @@ export const EMAIL_WORDS = {
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
     `Your bank hasn’t sent this charge in ${days} days. Stop waiting to keep it as it is, or remove it.`,
+  overdueOrderNotice: (days: number) =>
+    `Your bank hasn’t sent this charge in ${days} days. Stores often charge when an order ships. Stop waiting to keep it as it is, or remove it.`,
   stoppedWaiting: 'No longer waiting for your bank',
   undo: 'Undo',
   stopWaitingSub: 'Keep it as typed; your bank’s charge won’t merge with it.',

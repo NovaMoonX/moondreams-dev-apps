@@ -10,6 +10,8 @@ import {
   readSorting,
   EMAIL_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
+  MAX_SPLIT_CHARGES,
+  MAX_SPLIT_POOL,
   withoutEmailTwins,
 } from '../../functions/src/apps/runway/needsHomeDigestPlan.ts';
 import { needsHomeBody } from '../../functions/src/apps/runway/notificationText.ts';
@@ -133,6 +135,18 @@ assert.equal(
   EMAIL_MATCH_DAYS_AFTER,
   Number(/EMAIL_MATCH_DAYS_AFTER = (\d+)/.exec(appConstants)?.[1]),
 );
+const appTwins = readFileSync(
+  new URL('../../src/apps/runway/engine/emailTwins.ts', import.meta.url),
+  'utf8',
+);
+assert.equal(
+  MAX_SPLIT_CHARGES,
+  Number(/MAX_SPLIT_CHARGES = (\d+)/.exec(appTwins)?.[1]),
+);
+assert.equal(
+  MAX_SPLIT_POOL,
+  Number(/MAX_SPLIT_POOL = (\d+)/.exec(appTwins)?.[1]),
+);
 const twin = (
   id: string,
   source: 'email' | 'link',
@@ -148,6 +162,8 @@ const twin = (
   emailWaiting: source === 'email',
   notSameAs: [] as string[],
   pairedWithId: null as string | null,
+  name: 'Target' as string | null,
+  isOrder: false,
   ...extra,
 });
 const ids = (list: { id: string }[]) => list.map((entry) => entry.id);
@@ -242,6 +258,89 @@ assert.deepEqual(
   ),
   ['e', 'b'],
   'a charge paired as a move is never a candidate',
+);
+
+// A store order that posted as several charges stays counted once and its charges are dropped, as the screen hides them.
+const order = (extra: Partial<ReturnType<typeof twin>> = {}) =>
+  twin('o', 'email', 10, { amountCents: 10_000, isOrder: true, ...extra });
+const charge = (id: string, cents: number, extra = {}) =>
+  twin(id, 'link', 11, { amountCents: cents, ...extra });
+assert.deepEqual(
+  ids(withoutEmailTwins([order(), charge('b1', 6_000), charge('b2', 4_000)])),
+  ['o'],
+  'two charges that add up to an order are it',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      order(),
+      charge('b1', 6_000),
+      charge('b2', 4_000, { name: 'Walmart' }),
+    ]),
+  ),
+  ['o', 'b1', 'b2'],
+  'charges from another store are not it',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      order(),
+      charge('b1', 6_000),
+      charge('b2', 4_000),
+      charge('b3', 5_000),
+      charge('b4', 5_000),
+    ]),
+  ),
+  ['o', 'b1', 'b2', 'b3', 'b4'],
+  'two sets that fit are no clear split',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      order({ isOrder: false }),
+      charge('b1', 6_000),
+      charge('b2', 4_000),
+    ]),
+  ),
+  ['o', 'b1', 'b2'],
+  'only a store order is split',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      order(),
+      { ...order(), id: 'o2' },
+      charge('b1', 6_000),
+      charge('b2', 4_000),
+    ]),
+  ),
+  ['o', 'o2', 'b1', 'b2'],
+  'two orders the same size could each be it',
+);
+const crumbs = [1, 2, 3, 4, 5, 6, 7].map((n) => charge(`c${n}`, 1));
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      order(),
+      charge('b1', 6_000),
+      charge('b2', 4_000),
+      ...crumbs,
+    ]),
+  ),
+  ['o', 'b1', 'b2', ...crumbs.map((entry) => entry.id)],
+  'a pool over the cap stays separate',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      order(),
+      charge('b1', 6_000),
+      charge('b2', 4_000),
+      ...crumbs.slice(0, 6),
+    ]),
+  ),
+  ['o', ...crumbs.slice(0, 6).map((entry) => entry.id)],
+  'a pool at the cap is still read',
 );
 
 console.log('runwayNotifyText: ok');
