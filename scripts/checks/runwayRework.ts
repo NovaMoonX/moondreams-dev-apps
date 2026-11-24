@@ -15,6 +15,9 @@ import {
   pickZone,
   type ReworkState,
 } from '../../functions/src/apps/runway/figures/reworkState.ts';
+import { applyPlaced } from '../../functions/src/apps/runway/figures/sortPurchases.ts';
+import type { FiguresInput } from '../../functions/src/apps/runway/engine/figures.ts';
+import type { OpenPurchase } from '../../functions/src/apps/runway/runwayTypes.ts';
 
 const at = (iso: string) => Date.parse(iso);
 const state = (patch: Partial<ReworkState> = {}): ReworkState => ({
@@ -235,6 +238,35 @@ assert.equal(
   isCountedPlanChange(plan, undefined),
   true,
   'a deleted plan counts',
+);
+
+// What the sort wrote is patched into the lists as a fresh read would give them: out of Needs a home, replaced in the window, added only when the window reaches its day.
+const bought = (id: string, date: number) =>
+  ({ id, date, needsHome: true, updatedAt: 1 }) as OpenPurchase;
+const placedFrom = (purchase: OpenPurchase) => ({
+  before: purchase,
+  after: { ...purchase, needsHome: false, updatedAt: 2 },
+});
+const lists = {
+  needsHome: [bought('a', 10), bought('b', 10), bought('old', 1)],
+  purchases: [bought('a', 10), bought('c', 10)],
+} as unknown as FiguresInput;
+const patched = applyPlaced(
+  lists,
+  [placedFrom(bought('a', 10)), placedFrom(bought('old', 1))],
+  5,
+);
+assert.deepEqual(
+  patched.needsHome.map(({ id }) => id),
+  ['b'],
+);
+assert.deepEqual(
+  patched.purchases.map(({ id, needsHome }) => [id, needsHome]),
+  [
+    ['a', false],
+    ['c', true],
+  ],
+  'a placement older than the window is not added to it',
 );
 
 console.log('runway rework: every case passed');

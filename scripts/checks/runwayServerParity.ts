@@ -8,6 +8,12 @@ import {
   toFiguresInput as appToFiguresInput,
   type FiguresInput,
 } from '../../src/apps/runway/engine/figures.ts';
+import { toPlacementInput } from '../../functions/src/apps/runway/figures/sortPurchases.ts';
+import {
+  planRulePlacements as serverPlanRulePlacements,
+  toMerchantKey,
+} from '../../functions/src/apps/runway/engine/rules.ts';
+import { planRulePlacements as appPlanRulePlacements } from '../../src/apps/runway/engine/rules.ts';
 import {
   buildShareSummary as appBuildShareSummary,
   toShareSummaryInput as appToShareSummaryInput,
@@ -40,6 +46,16 @@ import {
   selectBalances,
   selectBillCover,
 } from '../../src/apps/runway/store/selectors/billCoverSelectors.ts';
+import { selectAutoBills } from '../../src/apps/runway/store/selectors/autoPaySelectors.ts';
+import { selectTwinHeldIds } from '../../src/apps/runway/store/selectors/emailSelectors.ts';
+import { selectLevel } from '../../src/apps/runway/store/selectors/levelSelectors.ts';
+import { selectLedgerOnlyBalances } from '../../src/apps/runway/store/selectors/balanceSelectors.ts';
+import { selectRecentFrom } from '../../src/apps/runway/store/selectors/historySelectors.ts';
+import {
+  selectAccounts,
+  selectEnvelopes,
+  selectIsLinkHistory,
+} from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
 import { selectBillsDueBeforePay } from '../../src/apps/runway/store/selectors/overviewSelectors.ts';
 import type { RootState } from '../../src/store/index.ts';
 import type {
@@ -50,6 +66,7 @@ import type {
   MoveDoc,
   OpenAccount,
   OpenPurchase,
+  OpenRule,
   PlanDoc,
   PlanItemDoc,
   PlanSealedFields,
@@ -386,8 +403,190 @@ const buildLink = async (base: FiguresInput, firstDay: number) => {
   return { link, accounts };
 };
 
+/** Charges waiting for a home that a rule can place: two posted, one pending, one another merchant's, so a batch shares its balances and a posted-only pass skips one. */
+const waitingCharges = (sample: OpenPurchase, today: number): OpenPurchase[] =>
+  [
+    ['parity-rule-posted-a', 'posted', 'Parity Merchant', 41_234],
+    ['parity-rule-posted-b', 'posted', 'Parity Merchant', 9_000_000],
+    ['parity-rule-pending', 'pending', 'Parity Merchant', 2_500],
+    ['parity-rule-other', 'posted', 'Other Merchant', 1_700],
+  ].map(([id, status, merchant, cents]) => ({
+    ...sample,
+    id: id as string,
+    source: 'link' as const,
+    status: status as 'posted' | 'pending',
+    merchant: merchant as string,
+    label: null,
+    amountCents: cents as number,
+    needsHome: true,
+    lines: [],
+    assignedBy: null,
+    ruleId: null,
+    pairedWithId: null,
+    incomeDayId: null,
+    paidByCardId: null,
+    emailWaiting: false,
+    date: today - DAY_MS,
+  }));
+
+/** Bank charges dated the day before a link's day as the device reads it, for a link made in the device's early morning, and on that day for one made in its evening: each is history on the phone and not on a server that reads the link's day in another zone, or the reverse. The device's own zone is the one `process.env.TZ` holds. */
+const buildHistoryCase = (
+  sample: OpenPurchase,
+  linked: OpenAccount,
+  now: number,
+) => {
+  const day = new Date(now);
+  const at = (hour: number) =>
+    new Date(day.getFullYear(), day.getMonth(), day.getDate() - 3, hour);
+  const linkDay = Date.UTC(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate() - 3,
+  );
+  const cases = [
+    {
+      id: 'parity-history-morning',
+      linkAt: at(2).getTime(),
+      date: linkDay - DAY_MS,
+    },
+    { id: 'parity-history-evening', linkAt: at(20).getTime(), date: linkDay },
+  ];
+  return {
+    links: cases.map(({ id, linkAt }) => ({
+      id: `${id}-link`,
+      createdAt: linkAt,
+    })),
+    accounts: cases.map(({ id }) => ({
+      ...linked,
+      id: `${id}-account`,
+      linkId: `${id}-link`,
+    })),
+    charges: cases.map(({ id, linkAt, date }) => ({
+      ...sample,
+      id,
+      source: 'link' as const,
+      status: 'posted' as const,
+      merchant: 'Parity Merchant',
+      label: null,
+      amountCents: 1_300,
+      needsHome: true,
+      lines: [],
+      assignedBy: null,
+      ruleId: null,
+      pairedWithId: null,
+      incomeDayId: null,
+      paidByCardId: null,
+      accountId: `${id}-account`,
+      emailWaiting: false,
+      createdAt: linkAt + 60_000,
+      date,
+    })),
+  };
+};
+
+/** The placements a pass makes, as ids and lines only. */
+const toPlacementKeys = (
+  placements: ReturnType<typeof appPlanRulePlacements>,
+) =>
+  placements.map(({ purchase, rule, lines }) => ({
+    purchaseId: purchase.id,
+    ruleId: rule.id,
+    lines,
+  }));
+
+/** The server reads a day in its own zone, UTC, unless the plan's zone is passed; the phone reads the device's. */
+const inServerZone = <T>(run: () => T): T => {
+  const device = process.env.TZ;
+  process.env.TZ = 'UTC';
+  try {
+    return run();
+  } finally {
+    process.env.TZ = device;
+  }
+};
+
+/** Rule placements through the app's selectors and through the server copy over the same documents: the same charges, rules and lines. */
+const placementDiffs = (
+  name: string,
+  state: RootState,
+  input: FiguresInput,
+  today: number,
+  expectsPlacement: boolean,
+  links: readonly { id: string; createdAt: number }[],
+  zone: string,
+): string[] => {
+  const envelopes = selectEnvelopes(state, today);
+  const rule: OpenRule = {
+    id: 'parity-rule',
+    createdAt: 1,
+    updatedAt: 1,
+    merchantKey: toMerchantKey('Parity Merchant'),
+    merchantName: 'Parity Merchant',
+    category: null,
+    cardId: null,
+    target: envelopes[0].item.id,
+  };
+  const serverInput = { ...input, today, zone };
+  const figures = serverComputeFigures(serverInput);
+  const recentFrom = selectRecentFrom(state);
+  const trackingPeriods = input.plan.trackingPeriods;
+  return [false, true].flatMap((postedOnly) => {
+    const app = appPlanRulePlacements(
+      {
+        level: selectLevel(state),
+        today,
+        needsHome: state.runway.needsHome,
+        purchases: state.runway.purchases,
+        rules: [rule],
+        autoBills: selectAutoBills(state, today),
+        accounts: selectAccounts(state),
+        spill: {
+          trackingPeriods,
+          envelopes,
+          assignedByItem: () => selectLedgerOnlyBalances(state).assignedByItem,
+        },
+        twinHeld: selectTwinHeldIds(state),
+        isLinkHistory: selectIsLinkHistory(state),
+      },
+      { postedOnly },
+    );
+    const server = inServerZone(() =>
+      serverPlanRulePlacements(
+        toPlacementInput(
+          {
+            input: serverInput,
+            figures,
+            dirtyFrom: null,
+            from: recentFrom ?? 0,
+            readLists: () => Promise.reject(new Error('Not read here')),
+          },
+          { rules: [rule], links, matchKeys: {} },
+          today,
+        ),
+        { postedOnly },
+      ),
+    );
+    const found: string[] = [];
+    diffValues(
+      toPlacementKeys(app),
+      toPlacementKeys(server),
+      'placements',
+      found,
+    );
+    return [
+      ...found.map(
+        (path) => `placements ${name} posted ${postedOnly}: ${path}`,
+      ),
+      ...(expectsPlacement && app.length === 0
+        ? [`placements ${name} posted ${postedOnly}: nothing was placed`]
+        : []),
+    ];
+  });
+};
+
 /** The app's own selectors, run over a store holding the same plan, against the engine's figures for today: one implementation, so they never disagree. */
-const selectorDiffs = async (): Promise<string[]> => {
+const selectorDiffs = async (zone: string): Promise<string[]> => {
+  process.env.TZ = zone;
   const now = Date.now();
   const today = todayAsUtcDate(now);
   const { docs } = await buildRunwayScaleDocs({
@@ -399,15 +598,46 @@ const selectorDiffs = async (): Promise<string[]> => {
   });
   const base = await openPlanInput(docs);
   const { link, accounts } = await buildLink(base, today);
-  const inputs: [string, FiguresInput][] = [
-    ['plan', { ...base, plan: { ...base.plan, trackingPeriods: [] } }],
-    ['track', base],
+  const sample = base.purchases[base.purchases.length - 1];
+  const extras = waitingCharges(sample, today);
+  const history = buildHistoryCase(sample, accounts[0], now);
+  const linkInput = appToFiguresInput({
+    ...link,
+    zone: null,
+    savedAccounts: accounts,
+  });
+  const inputs: [
+    string,
+    FiguresInput,
+    boolean,
+    { id: string; createdAt: number }[],
+  ][] = [
+    [
+      'plan',
+      { ...base, plan: { ...base.plan, trackingPeriods: [] } },
+      false,
+      [],
+    ],
+    ['track', base, false, []],
+    ['track-waiting', { ...base, needsHome: extras }, true, []],
     [
       'link',
-      appToFiguresInput({ ...link, zone: null, savedAccounts: accounts }),
+      { ...linkInput, needsHome: [...linkInput.needsHome, ...extras] },
+      true,
+      [],
+    ],
+    [
+      'link-history',
+      {
+        ...base,
+        accounts: [...base.accounts, ...history.accounts],
+        needsHome: history.charges,
+      },
+      true,
+      history.links,
     ],
   ];
-  return inputs.flatMap(([name, input]) => {
+  return inputs.flatMap(([name, input, expectsPlacement, links]) => {
     const state = {
       runway: {
         plan: input.plan,
@@ -423,6 +653,8 @@ const selectorDiffs = async (): Promise<string[]> => {
         startedPayments: input.startedPayments,
         purchases: input.purchases,
         needsHome: input.needsHome,
+        links,
+        matchKeys: {},
         closing: null,
         closingFor: 'none',
         loadDay: today,
@@ -445,7 +677,18 @@ const selectorDiffs = async (): Promise<string[]> => {
       'dueBeforePay',
       found,
     );
-    return found.map((path) => `selectors ${name}: ${path}`);
+    return [
+      ...found.map((path) => `selectors ${name}: ${path}`),
+      ...placementDiffs(
+        `${name} ${zone}`,
+        state,
+        input,
+        today,
+        expectsPlacement,
+        links,
+        zone,
+      ),
+    ];
   });
 };
 
@@ -464,18 +707,24 @@ const sortKeys = (value: unknown): unknown => {
   );
 };
 
-/** What the figures come to on the fixed fixture: a change to it without a new `ENGINE_VERSION` would let phones accept figures from the old maths. */
+/** What the figures come to on the fixed fixture (`detail.assignedByItem`, added after the version was recorded, is left out; the balances it sums into are in): a change to it without a new `ENGINE_VERSION` would let phones accept figures from the old maths. */
 const checkEngineVersion = (scenarios: Scenario[], firstDay: number) => {
   process.env.TZ = 'UTC';
   const figures = scenarios.map(({ name, input }) => [
     name,
-    [0, 11, 29, 59].map((offset) =>
-      appComputeFigures({
+    [0, 11, 29, 59].map((offset) => {
+      const { detail, ...figures } = appComputeFigures({
         ...input,
         today: firstDay + offset * DAY_MS,
         zone: null,
-      }),
-    ),
+      });
+      return {
+        ...figures,
+        detail: Object.fromEntries(
+          Object.entries(detail).filter(([key]) => key !== 'assignedByItem'),
+        ),
+      };
+    }),
   ]);
   const hash = createHash('sha256')
     .update(JSON.stringify(sortKeys(figures)))
@@ -502,6 +751,13 @@ const checkEngineVersion = (scenarios: Scenario[], firstDay: number) => {
   );
 };
 
+const zones = [
+  'America/Los_Angeles',
+  'Pacific/Auckland',
+  'Australia/Sydney',
+  'UTC',
+];
+
 const main = async () => {
   const firstDay = Date.UTC(2026, 0, 20);
   const { docs } = await buildRunwayScaleDocs({
@@ -524,10 +780,15 @@ const main = async () => {
     zones: [null],
   };
   const track: Scenario = { name: 'track', input: base, zones: [null] };
-  const zones = ['America/Los_Angeles', 'Pacific/Auckland', 'UTC'];
   checkEngineVersion([plan, track], firstDay);
   const diffs = [
-    ...(await selectorDiffs()),
+    ...(await zones.reduce<Promise<string[]>>(
+      async (previous, zone) => [
+        ...(await previous),
+        ...(await selectorDiffs(zone)),
+      ],
+      Promise.resolve([]),
+    )),
     ...runScenario(plan, firstDay),
     ...runScenario(track, firstDay),
     ...zones.flatMap((zone) => {
@@ -549,7 +810,7 @@ const main = async () => {
     `The engine's copies or the app's selectors differ (${diffs.length} paths, first 40):\n${diffs.slice(0, 40).join('\n')}`,
   );
   console.log(
-    `Figures match across the app's selectors and the server copy: ${SPAN_DAYS} days across month ends, plan, track and link plans, ${zones.length} time zones.`,
+    `Figures and rule placements match across the app's selectors and the server copy: ${SPAN_DAYS} days across month ends, plan, track and link plans, ${zones.length} time zones.`,
   );
 };
 

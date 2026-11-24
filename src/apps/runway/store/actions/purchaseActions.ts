@@ -22,8 +22,10 @@ import {
 } from '@apps/runway/constants';
 import {
   getCountedFrom,
+  isEnvelopeLive,
   isInTrackingPeriods,
   sumLines,
+  toAssignedSealed,
 } from '@apps/runway/engine/purchases';
 import { createSealedReader } from '@lib/security';
 import { openJson, sealJson } from '@apps/runway/security';
@@ -48,6 +50,7 @@ import {
   isAnsweredEmail,
   isSettledByPerson,
 } from '@apps/runway/engine/emailTwins';
+import { getRuleEntryId } from '@apps/runway/engine/doneText';
 import { splitOrderLines } from '@apps/runway/engine/storeOrders';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import {
@@ -71,6 +74,8 @@ import type {
   CostPaidSealed,
   CostRef,
   DateOnly,
+  DoneForYouDoc,
+  DoneForYouSealed,
   OpenPurchase,
   OpenReleasedCharge,
   ChangeDoc,
@@ -431,15 +436,9 @@ async function checkDayAndEnvelopes(
         : `Tracking started again on ${formatDateOrdinalUTC(countedFrom)}, and an earlier day is not counted. Pick that day or a later one.`,
     );
   }
-  const isGone = envelopes.some((snapshot) => {
-    const item = snapshot.data() as PlanItemDoc | undefined;
-    return (
-      !item ||
-      (item.kind !== 'envelope' && item.kind !== 'horizon') ||
-      item.archivedAt !== null ||
-      (item.kind === 'horizon' && item.endedAt !== null)
-    );
-  });
+  const isGone = envelopes.some(
+    (snapshot) => !isEnvelopeLive(snapshot.data() as PlanItemDoc | undefined),
+  );
   if (isGone) {
     throw new Error(
       'An envelope you picked was archived, finished or removed on another device. Pick again.',
@@ -619,6 +618,8 @@ export async function assignPurchase(
   needsHome = false,
   /** Who placed it and by which rule; left out, the person did, by hand. */
   placement: PurchasePlacement | null = null,
+  /** What a rule's placement records in Done for you, given the purchase's new `updatedAt`; written in the same transaction under the id the server uses too. */
+  ruleEntry: ((updatedAt: number) => DoneForYouSealed) | null = null,
 ): Promise<number> {
   if (lines.length > MAX_PURCHASE_LINES)
     throw new Error('Pick where it comes from.');
@@ -628,44 +629,27 @@ export async function assignPurchase(
   if (lines.length > 0 && sumLines(lines) !== previous.amountCents) {
     throw new Error('The parts do not add up to the amount.');
   }
-  const [sealed, changeSealed] = await Promise.all([
+  const now = Math.max(Date.now(), previous.updatedAt + 1);
+  const [sealed, changeSealed, entrySealed] = await Promise.all([
     sealJson(
-      {
-        amountCents: previous.amountCents,
-        merchant: previous.merchant,
-        merchantLogo: previous.merchantLogo ?? null,
-        bankName: previous.bankName ?? null,
-        category: previous.category,
-        ruleId: placement?.ruleId ?? null,
-        label: previous.label,
-        note: previous.note,
+      toAssignedSealed(
+        previous,
         lines,
-        refundOfId: previous.refundOfId,
-        paidByCardId: previous.paidByCardId ?? null,
-        link: previous.link,
-        receiptText: previous.receiptText,
-        costRef: previous.costRef ?? null,
-        billRef: previous.billRef ?? null,
-        notSameAs: previous.notSameAs,
-        incomeDayId: null,
-        assignedBy: placement
+        placement?.ruleId ?? null,
+        placement
           ? placement.assignedBy
           : previous.source === 'email' && !needsHome
             ? 'person'
             : previous.assignedBy,
-        pairedWithId: null,
-        pairKind: null,
-        cardPaymentMoveId: null,
-        tickedDayKey: null,
-        storeEmail: previous.storeEmail ?? null,
-        orderLog: previous.orderLog ?? null,
-      } satisfies PurchaseSealed,
+      ),
       encryption,
     ),
     sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    ruleEntry === null
+      ? Promise.resolve(null)
+      : sealJson(ruleEntry(now) satisfies DoneForYouSealed, encryption),
   ]);
   const changeId = generateUuid();
-  const now = Math.max(Date.now(), previous.updatedAt + 1);
 
   await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
@@ -704,6 +688,19 @@ export async function assignPurchase(
         sealed: changeSealed,
       } satisfies ChangeDoc,
     );
+    if (entrySealed !== null) {
+      const entryId = getRuleEntryId(previous);
+      transaction.set(
+        doc(db, 'apps', 'runway', 'plans', uid, 'doneForYou', entryId),
+        {
+          id: entryId,
+          kind: 'rule',
+          createdAt: Date.now(),
+          undoneAt: null,
+          sealed: entrySealed,
+        } satisfies DoneForYouDoc,
+      );
+    }
   });
   await untickPairMove(uid, previous);
   return now;

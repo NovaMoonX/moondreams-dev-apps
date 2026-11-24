@@ -26,6 +26,7 @@ import type {
   GroupSealed,
   HorizonStored,
   IncomeDayDoc,
+  MatchSealed,
   MoveDoc,
   OpenAccount,
   OpenAccountBalance,
@@ -35,6 +36,7 @@ import type {
   OpenPlan,
   OpenPurchase,
   OpenRecord,
+  OpenRule,
   OpenStartedPayment,
   OpenVersion,
   Pairing,
@@ -47,6 +49,8 @@ import type {
   PurchaseDoc,
   PurchaseSealed,
   RecordLine,
+  RuleDoc,
+  RuleSealed,
   SourceSealed,
   StartedPaymentDoc,
   StartedPaymentSealed,
@@ -488,4 +492,41 @@ export async function openStartedPayment(
     createdAt: data.createdAt,
     amountCents: payload.amountCents,
   };
+}
+
+/** A rule written as `{ merchantKey, target }` reads as a merchant rule: every key it lacks is null. */
+export const openRule = (
+  data: RuleDoc,
+  payload: Partial<RuleSealed>,
+): OpenRule => ({
+  id: data.id,
+  createdAt: data.createdAt,
+  updatedAt: data.updatedAt ?? data.createdAt,
+  merchantKey: payload.merchantKey ?? null,
+  merchantName: payload.merchantName ?? payload.merchantKey ?? null,
+  category: payload.category ?? null,
+  cardId: payload.cardId ?? null,
+  target: payload.target ?? 'varies',
+});
+
+/** The merchant names each bill has learned, opened from its header; a header that does not open learns nothing. */
+export async function openMatchKeys(
+  headers: readonly Partial<PlanItemDoc>[],
+  read: ReadSealed,
+): Promise<Record<string, string[]>> {
+  const opened = await Promise.all(
+    headers.flatMap((header) =>
+      header.id && header.matchSealed
+        ? [
+            read<MatchSealed>(header.matchSealed)
+              .then((payload): [string, string[]] => [
+                header.id as string,
+                Array.isArray(payload.merchantKeys) ? payload.merchantKeys : [],
+              ])
+              .catch((): [string, string[]] => [header.id as string, []]),
+          ]
+        : [],
+    ),
+  );
+  return Object.fromEntries(opened.filter(([, keys]) => keys.length > 0));
 }

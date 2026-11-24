@@ -1,5 +1,12 @@
 import { MAX_PURCHASE_LINES } from './engineConstants';
-import type { Cents, PurchaseLine } from '@apps/runway/types';
+import type { ResolvedEnvelope } from './figures';
+import { getCountedFrom } from './purchases';
+import type {
+  Cents,
+  DateOnly,
+  PurchaseLine,
+  TrackingPeriod,
+} from '@apps/runway/types';
 
 /** Each envelope's ordered chain of envelopes that pay when it runs out. */
 export type SpillChains = Readonly<Record<string, readonly string[]>>;
@@ -91,6 +98,39 @@ export function unspill(lines: readonly PurchaseLine[]): PurchaseLine[] {
       index === at ? { ...entry, cents: entry.cents + line.cents } : entry,
     );
   }, []);
+}
+
+export interface SpillInputs {
+  trackingPeriods: readonly TrackingPeriod[];
+  envelopes: readonly ResolvedEnvelope[];
+  /** What each envelope holds from the ledger alone; asked for only when a counted day needs it. */
+  assignedByItem: () => Readonly<Record<string, Cents>>;
+}
+
+/** A purchase's chosen lines with the overage each envelope's chain takes, against the balances now; a day not counted is left as chosen. */
+export function getSpilledLines(
+  { trackingPeriods, envelopes, assignedByItem }: SpillInputs,
+  lines: readonly PurchaseLine[],
+  previousLines: readonly PurchaseLine[] | null,
+  date: DateOnly,
+): PurchaseLine[] {
+  const countedFrom = getCountedFrom(trackingPeriods);
+  if (countedFrom === null || date < countedFrom) return [...lines];
+  const held = assignedByItem();
+  const left = Object.fromEntries(
+    envelopes.map(({ item }) => [
+      item.id,
+      (held[item.id] ?? 0) +
+        (previousLines ?? []).reduce(
+          (sum, line) => (line.envelopeId === item.id ? sum + line.cents : sum),
+          0,
+        ),
+    ]),
+  );
+  const chains: SpillChains = Object.fromEntries(
+    envelopes.map(({ item, version }) => [item.id, version.payload.spillTo]),
+  );
+  return resolveSpill(lines, left, chains);
 }
 
 /** A purchase sent to an envelope that can't cover it: what the envelope has goes there and the shortfall comes out of Free to Spend. */

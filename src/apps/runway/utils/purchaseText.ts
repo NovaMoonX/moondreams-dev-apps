@@ -1,7 +1,6 @@
 import { formatDateOrdinalUTC, formatList } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type {
-  Cents,
   Level,
   OpenAccount,
   OpenCard,
@@ -16,12 +15,29 @@ import {
   SPILL_WORDS,
 } from '@apps/runway/constants';
 import { getCardName } from '@apps/runway/utils/cardText';
+import {
+  describeEnvelopes,
+  describePurchaseAssigned,
+  describeSpills,
+  FREE_NAME,
+  formatSentenceMoney,
+  getPurchaseTitle,
+  getSpillGroups,
+  isRefund,
+} from '@apps/runway/engine/doneText';
 import { unspill } from '@apps/runway/engine/spill';
 import { getLevelWords } from '@apps/runway/utils/levelText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 
-const FREE_NAME = 'Free to Spend';
 const NOT_COUNTED = 'Not counted';
+
+export {
+  describeEnvelopes,
+  describePurchaseAssigned,
+  describeSpills,
+  getPurchaseTitle,
+  isRefund,
+};
 
 /** An envelope's figure with its word: assigned at Plan, and at Track what is left (safe to spend at Link) or how far over. */
 export function describeEnvelopeFigure(level: Level, cents: number) {
@@ -101,37 +117,6 @@ export function describePickDetail(
   );
 }
 
-/** The names a purchase comes out of as the person chose them (a spill is not a choice): up to three, then "and N more". */
-export function describeEnvelopes(
-  lines: readonly PurchaseLine[],
-  nameOf: (envelopeId: string) => string,
-): string {
-  const names = lines
-    .filter((line) => line.via !== 'spill')
-    .map((line) =>
-      line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId),
-    );
-  if (names.length <= 3)
-    return names.join(', ').replace(/, ([^,]*)$/, ' and $1');
-  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
-}
-
-export const isRefund = (purchase: OpenPurchase) => purchase.amountCents < 0;
-
-/** What a row calls a purchase, in ranked order: the person's label, else the merchant, else the envelopes it came from; never the note. While amounts are hidden a refund is named like any purchase, so the words never give its sign away. */
-export function getPurchaseTitle(
-  purchase: OpenPurchase,
-  nameOf: (envelopeId: string) => string,
-  isHidden = false,
-): string {
-  const named = purchase.label?.trim() || purchase.merchant?.trim();
-  if (named) return named;
-  const where = describeEnvelopes(purchase.lines, nameOf);
-  if (where === '')
-    return isRefund(purchase) && !isHidden ? 'Refund' : 'Purchase';
-  return isRefund(purchase) && !isHidden ? `Refund to ${where}` : where;
-}
-
 /** Where a purchase's money went, in a row's words: its envelopes, or `emptyWhere` ("Not counted" unless the caller knows better) when it has none. */
 export function describePurchaseWhere(
   purchase: OpenPurchase,
@@ -179,55 +164,6 @@ interface PurchaseFields {
 }
 
 const money = (cents: number) => formatCents(Math.abs(cents));
-
-interface SpillGroup {
-  fromId: string;
-  parts: { sourceId: string | null; source: string; cents: Cents }[];
-}
-
-const getSpillGroups = (
-  lines: readonly PurchaseLine[],
-  nameOf: (envelopeId: string) => string,
-) =>
-  lines
-    .reduce<{ fromId: string | null; group: SpillGroup | null }[]>(
-      (acc, line) => {
-        if (line.via !== 'spill')
-          return [...acc, { fromId: line.envelopeId, group: null }];
-        const last = acc[acc.length - 1];
-        if (!last || last.fromId === null) return acc;
-        const part = {
-          sourceId: line.envelopeId,
-          source:
-            line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId),
-          cents: line.cents,
-        };
-        const parts = [...(last.group?.parts ?? []), part];
-        return [
-          ...acc.slice(0, -1),
-          { ...last, group: { fromId: last.fromId, parts } },
-        ];
-      },
-      [],
-    )
-    .flatMap((entry) => (entry.group === null ? [] : [entry.group]));
-
-/** One change-log sentence per envelope that ran out, naming where its overage came from. */
-export function describeSpills(
-  lines: readonly PurchaseLine[],
-  nameOf: (envelopeId: string) => string,
-): string[] {
-  return getSpillGroups(lines, nameOf).map((group) =>
-    SPILL_WORDS.ranOut(
-      nameOf(group.fromId),
-      formatList(
-        group.parts.map((part) =>
-          SPILL_WORDS.part(money(part.cents), part.source),
-        ),
-      ),
-    ),
-  );
-}
 
 /** Chain steps passed over for having nothing left: those before the last one that paid, or all of them once Free to Spend took a share. */
 export function getSkippedSteps(
@@ -279,7 +215,7 @@ export function describePurchaseRemoval(
   nameOf: (envelopeId: string) => string,
 ): string {
   const kind = isRefund(purchase) ? 'Refund' : 'Purchase';
-  return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+  return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${formatSentenceMoney(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
 /** The change-log sentence for a placed pending charge the bank dropped, and what it no longer counts against. */
@@ -294,22 +230,7 @@ export function describeReleasedCharge(
   const tail = where
     ? ` It no longer ${isRefund ? 'adds to' : 'counts against'} ${where}.`
     : '';
-  return `The bank dropped a pending ${kind}: ${what}, ${money(Math.abs(charge.amountCents))} on ${formatDateOrdinalUTC(charge.date)}.${tail}`;
-}
-
-/** The change-log sentence for sending a waiting purchase to its envelopes, or leaving it out of spending. */
-export function describePurchaseAssigned(
-  purchase: OpenPurchase,
-  lines: readonly PurchaseLine[],
-  nameOf: (envelopeId: string) => string,
-): string {
-  const kind = isRefund(purchase) ? 'Money in' : 'Purchase';
-  const where =
-    lines.length === 0
-      ? 'left out of spending'
-      : `sent to ${describeEnvelopes(lines, nameOf)}`;
-  const spills = describeSpills(lines, nameOf).map((spill) => ` ${spill}.`);
-  return `${kind} ${where}: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.${spills.join('')}`;
+  return `The bank dropped a pending ${kind}: ${what}, ${formatSentenceMoney(Math.abs(charge.amountCents))} on ${formatDateOrdinalUTC(charge.date)}.${tail}`;
 }
 
 /** The change-log sentence for keeping a purchase from the bank in Free to Spend, with no envelope. */
@@ -317,7 +238,7 @@ export function describePurchaseKeptFree(
   purchase: OpenPurchase,
   nameOf: (envelopeId: string) => string,
 ): string {
-  return `Purchase kept in Free to Spend: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+  return `Purchase kept in Free to Spend: ${getPurchaseTitle(purchase, nameOf)}, ${formatSentenceMoney(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
 /** The change-log sentence for a bank purchase dated before its bank was linked, which is history and not counted. */
@@ -326,7 +247,7 @@ export function describePurchaseHistory(
   nameOf: (envelopeId: string) => string,
 ): string {
   const kind = isRefund(purchase) ? 'Money in' : 'Purchase';
-  return `${kind} from before the bank was linked, so it is not counted: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+  return `${kind} from before the bank was linked, so it is not counted: ${getPurchaseTitle(purchase, nameOf)}, ${formatSentenceMoney(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
 /** The change-log sentence for putting a sent purchase back in Needs a home. */
@@ -334,7 +255,7 @@ export function describePurchaseReturned(
   purchase: OpenPurchase,
   nameOf: (envelopeId: string) => string,
 ): string {
-  return `Purchase put back in Needs a home: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+  return `Purchase put back in Needs a home: ${getPurchaseTitle(purchase, nameOf)}, ${formatSentenceMoney(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
 /** What a deposit linked to an income day is called in a sentence: the day's pay, by its date. */
@@ -347,7 +268,7 @@ export function describeDepositLinked(
   dayOn: number,
   isUnlinked: boolean,
 ): string {
-  const deposited = `deposit of ${money(deposit.amountCents)} on ${formatDateOrdinalUTC(deposit.date)}`;
+  const deposited = `deposit of ${formatSentenceMoney(deposit.amountCents)} on ${formatDateOrdinalUTC(deposit.date)}`;
   return isUnlinked
     ? `Money in put back in Needs a home: ${deposited}, no longer linked to ${describePayDay(dayOn)}.`
     : `Money in linked to pay: ${deposited} is ${describePayDay(dayOn)}.`;
@@ -396,8 +317,8 @@ export function describeAccountPair(
 ): string {
   const what =
     kind === 'cardPayment'
-      ? `card payment of ${money(out.amountCents)} from ${names.from} to ${names.to} on ${formatDateOrdinalUTC(into.date)}`
-      : `move of ${money(out.amountCents)} from ${names.from} to ${names.to} on ${formatDateOrdinalUTC(out.date)}`;
+      ? `card payment of ${formatSentenceMoney(out.amountCents)} from ${names.from} to ${names.to} on ${formatDateOrdinalUTC(into.date)}`
+      : `move of ${formatSentenceMoney(out.amountCents)} from ${names.from} to ${names.to} on ${formatDateOrdinalUTC(out.date)}`;
   return isUnpaired
     ? `Money out and in put back in Needs a home: the ${what}, no longer paired.`
     : `Money out and in paired: the ${what}.`;
@@ -410,8 +331,8 @@ export function describePurchaseMatch(
   nameOf: (envelopeId: string) => string,
   isSplit: boolean,
 ): string {
-  const typedPart = `${getPurchaseTitle(typed, nameOf)}, ${money(typed.amountCents)} on ${formatDateOrdinalUTC(typed.date)}`;
-  const bankPart = `${getPurchaseTitle(bank, nameOf)}, ${money(bank.amountCents)} on ${formatDateOrdinalUTC(bank.date)}`;
+  const typedPart = `${getPurchaseTitle(typed, nameOf)}, ${formatSentenceMoney(typed.amountCents)} on ${formatDateOrdinalUTC(typed.date)}`;
+  const bankPart = `${getPurchaseTitle(bank, nameOf)}, ${formatSentenceMoney(bank.amountCents)} on ${formatDateOrdinalUTC(bank.date)}`;
   return isSplit
     ? `Match undone: ${typedPart} is its own purchase again, and ${bankPart} waits in Needs a home.`
     : `Matched to your bank: ${typedPart} is ${bankPart}.`;
@@ -467,7 +388,7 @@ export function describePurchaseEdit(
       .join();
   const changes = [
     after.amountCents !== before.amountCents
-      ? `amount ${money(before.amountCents)} to ${money(after.amountCents)}`
+      ? `amount ${formatSentenceMoney(before.amountCents)} to ${formatSentenceMoney(after.amountCents)}`
       : null,
     key(after.lines) !== key(before.lines)
       ? `envelopes ${shape(before.lines)} to ${shape(after.lines)}`

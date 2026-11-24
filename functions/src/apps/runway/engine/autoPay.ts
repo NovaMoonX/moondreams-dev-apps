@@ -5,12 +5,15 @@ import type {
   Cents,
   DateOnly,
   Level,
+  OpenAccount,
   OpenMove,
   OpenPurchase,
   BillSealed,
 } from '../runwayTypes.js';
 
+import { resolvePayFromAccountId } from './accounts.js';
 import { DAY_MS, addUtcDays, startOfUtcDay, toDayStamp } from './dates.js';
+import type { planAllBillPayments, ResolvedBill } from './figures.js';
 import { isTrackingLevel } from './level.js';
 import type { PaidPayment } from './progress.js';
 
@@ -457,3 +460,45 @@ export function findAutoChecks(input: {
     .sort((a, b) => a.dueOn - b.dueOn || a.billName.localeCompare(b.billName));
   return result;
 }
+
+/** The bills that pay themselves as the engine reads them, from the plan's bills and what the ledger holds. */
+export const toAutoBills = (
+  bills: readonly ResolvedBill[],
+  payments: ReturnType<typeof planAllBillPayments>,
+  level: Level,
+  moves: readonly OpenMove[],
+  accounts: readonly OpenAccount[],
+  matchKeys: Readonly<Record<string, string[]>>,
+  startDate: DateOnly | null,
+  recentFrom: DateOnly | null,
+  paysItselfFrom: Readonly<Record<string, number | null>>,
+): AutoBill[] => {
+  const undone = getUndoneDueDays(moves);
+  return bills
+    .filter(({ version }) => isAutoBill(version.payload, level))
+    .map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+      since: Math.max(
+        startOfUtcDay(item.createdAt),
+        startDate ?? 0,
+        recentFrom ?? 0,
+        paysItselfFrom[item.id] ?? 0,
+      ),
+      cardId: version.payload.paidByCardId ?? null,
+      accountId: resolvePayFromAccountId(version.payload.accountId, accounts),
+      merchantKeys: matchKeys[item.id] ?? [],
+      payments: (payments[item.id] ?? []).map((payment) => ({
+        dueOn: payment.dueOn,
+        payOn: payment.payOn,
+        lowCents: payment.ranged
+          ? payment.ranged.range.lowCents
+          : payment.totalCents,
+        highCents: payment.ranged
+          ? payment.ranged.range.highCents
+          : payment.totalCents,
+        paid: payment.paid,
+      })),
+      undoneDueOn: undone[item.id] ?? [],
+    }));
+};

@@ -15,6 +15,7 @@ import { ENGINE_VERSION, MOVE_KINDS } from '../engine/engineConstants.js';
 import {
   computeFigures,
   toFiguresInput,
+  type Figures,
   type FiguresSnapshotSealed,
 } from '../engine/figures.js';
 import {
@@ -23,10 +24,12 @@ import {
   openCard,
   openDay,
   openItem,
+  openMatchKeys,
   openMove,
   openPlan,
   openPurchase,
   openRecord,
+  openRule,
   openStartedPayment,
   openVersion,
   type ReadSealed,
@@ -58,10 +61,18 @@ import type {
   PlanSealedFields,
   PlanVersionDoc,
   PurchaseDoc,
+  RuleDoc,
+  RuleSealed,
   ShareSummary,
   StartedPaymentDoc,
 } from '../runwayTypes.js';
 import { HOUR_MS, pickZone } from './reworkState.js';
+import {
+  applyPlaced,
+  logSortFailure,
+  sortPurchases,
+  type SortContext,
+} from './sortPurchases.js';
 
 const SUMMARY_FRESH_MS = 6 * HOUR_MS;
 const KNOWN_KINDS: readonly string[] = MOVE_KINDS;
@@ -75,6 +86,8 @@ const planPath = (uid: string) => `apps/runway/plans/${uid}`;
 
 const withId = <T>(entry: { id: string; data(): DocumentData }) =>
   ({ ...entry.data(), id: entry.id }) as T;
+
+export type PlanKey = Awaited<ReturnType<typeof unwrapPlanKey>>;
 
 const asSealed = (value: unknown) => value as SealedPayload;
 
@@ -114,6 +127,23 @@ async function readClosing(
 
 const toDocs = <T>(snapshot: QuerySnapshot) =>
   snapshot.docs.map((entry) => withId<T>(entry));
+
+/** Places what the person's rules fit and works the figures again from the lists as written; a sort that fails leaves the figures as first worked out. */
+async function sortThenCompute(
+  context: SortContext,
+  shared: Parameters<typeof sortPurchases>[1],
+): Promise<Figures> {
+  try {
+    const placed = await sortPurchases(context, shared);
+    return placed.length === 0
+      ? context.figures
+      : computeFigures(applyPlaced(context.input, placed, context.from));
+  } catch (error) {
+    // A throw after some writes heals itself: the writes marked the rework again, so the next run reads them.
+    logSortFailure(error);
+    return context.figures;
+  }
+}
 
 /** The summary the phone would write, as its own decision: clear when Free to Spend is unknown, keep a current one, else seal a new one. */
 async function writeShareSummary(
@@ -158,8 +188,9 @@ async function writeShareSummary(
 }
 
 /**
- * Works out a plan's figures from what the phone reads for the same day, writes them sealed and keeps the
- * share summary current. It never writes a closing or the plan's `updatedAt`, so it can't mark itself again.
+ * Places the waiting charges the person's rules fit, works out the plan's figures from what the phone reads for
+ * the same day, writes them sealed and keeps the share summary current. It writes no closing and never touches a
+ * closed month: a charge dated in one is left for the phone, so the figures are always written after a sort.
  */
 export async function reworkPlan(
   firestore: Firestore,
@@ -259,11 +290,12 @@ export async function reworkPlan(
         .map((move) => openMove(move, read)),
     ),
   ]);
+  const itemDocs = toDocs<Partial<PlanItemDoc> & { id: string }>(items);
   const input = toFiguresInput({
     today,
     zone,
     plan,
-    items: toDocs<Partial<PlanItemDoc> & { id: string }>(items).map(openItem),
+    items: itemDocs.map(openItem),
     versions: (
       await Promise.all(
         toDocs<PlanVersionDoc>(versions).map((version) =>
@@ -310,7 +342,37 @@ export async function reworkPlan(
     ).flat(),
     closing,
   });
-  const figures = computeFigures(input);
+  const figures = await sortThenCompute(
+    {
+      input,
+      figures: computeFigures(input),
+      dirtyFrom,
+      readLists: async () => {
+        const [ruleDocs, linkDocs] = await Promise.all([
+          under('rules').get(),
+          under('links').get(),
+        ]);
+        return {
+          rules: (
+            await Promise.all(
+              toDocs<RuleDoc>(ruleDocs).map((rule) =>
+                openOrSkip(async () =>
+                  openRule(rule, await read<Partial<RuleSealed>>(rule.sealed)),
+                ),
+              ),
+            )
+          ).flat(),
+          links: linkDocs.docs.map((link) => ({
+            id: link.id,
+            createdAt: link.get('createdAt') as number,
+          })),
+          matchKeys: await openMatchKeys(itemDocs, read),
+        };
+      },
+      from,
+    },
+    { firestore, key: planKey, uid, now, today },
+  );
   const snapshot: FiguresSnapshotSealed = {
     timeZone: zone,
     level: figures.level,
