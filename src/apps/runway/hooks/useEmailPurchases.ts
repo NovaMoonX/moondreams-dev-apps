@@ -36,6 +36,8 @@ import { EMAIL_ADDRESS_PREFIX, EMAIL_DOMAIN } from '@apps/runway/constants';
 export interface EmailIntakeRead {
   address: string | null;
   lastReceivedAt: number | null;
+  /** When an email a provider forwarded on its own last arrived. */
+  forwardedAt: number | null;
   confirm: {
     url: string | null;
     code: string | null;
@@ -88,6 +90,7 @@ export function useEmailIntake(): EmailIntakeRead {
       return {
         address: null,
         lastReceivedAt: null,
+        forwardedAt: null,
         confirm: null,
         isLoading: !isLoaded && !isFailed,
         isFailed,
@@ -97,6 +100,7 @@ export function useEmailIntake(): EmailIntakeRead {
     return {
       address: `${EMAIL_ADDRESS_PREFIX}-${intake.token}@${EMAIL_DOMAIN}`,
       lastReceivedAt: intake.lastReceivedAt,
+      forwardedAt: intake.forwardedAt,
       confirm:
         intake.confirmAt === null
           ? null

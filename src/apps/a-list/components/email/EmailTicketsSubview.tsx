@@ -170,7 +170,7 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
   const shownConfirm =
     pendingConfirm !== null &&
     hasConfirmNotice(pendingConfirm) &&
-    isConfirmNoticeDue(pendingConfirm, events, now)
+    isConfirmNoticeDue(pendingConfirm, events, now, intake?.forwardedAt ?? null)
       ? pendingConfirm
       : null;
 

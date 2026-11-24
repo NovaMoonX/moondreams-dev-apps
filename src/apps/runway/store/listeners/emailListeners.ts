@@ -29,6 +29,7 @@ export interface OpenEmailIntake extends EmailIntakeSealed {
   updatedAt: number;
   lastReceivedAt: number | null;
   confirmAt: number | null;
+  forwardedAt: number | null;
   autoConfirm: EmailIntakeDoc['autoConfirm'];
   confirmProvider: EmailIntakeDoc['confirmProvider'];
 }
@@ -102,6 +103,7 @@ export function startEmailIntakeListener(
                 updatedAt: data.updatedAt,
                 lastReceivedAt: data.lastReceivedAt ?? null,
                 confirmAt: data.confirmAt ?? null,
+                forwardedAt: data.forwardedAt ?? null,
                 autoConfirm: data.autoConfirm ?? null,
                 confirmProvider: data.confirmProvider ?? null,
                 confirmUrl: payload?.confirmUrl ?? null,
