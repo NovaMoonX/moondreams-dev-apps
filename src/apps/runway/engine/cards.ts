@@ -360,7 +360,11 @@ const STARTED_PAYMENT_LEAD_DAYS = 3;
 export const STARTED_PAYMENT_WINDOW_DAYS = 14;
 const CARD_PAYMENT_CATEGORY = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
 
-const isStillWaitedFor = (payment: OpenStartedPayment, today: DateOnly) =>
+/** Whether a started payment is still waited for on `today`: within its window after the day it was started. */
+export const isStillWaitedFor = (
+  payment: OpenStartedPayment,
+  today: DateOnly,
+) =>
   today <= payment.startedOn + STARTED_PAYMENT_WINDOW_DAYS * DAY_MS;
 
 export interface StartedPaymentState {

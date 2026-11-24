@@ -10,6 +10,7 @@ import {
   getDueCards,
 } from '../../src/apps/runway/engine/cards.ts';
 import { getMoneyHistory } from '../../src/apps/runway/engine/moneyHistory.ts';
+import { getBankDueByCard } from '../../src/apps/runway/store/selectors/cardStatementSelectors.ts';
 import type {
   OpenCard,
   OpenCardStatement,
@@ -425,6 +426,66 @@ const started = (
       chase: getBankDueState(base),
     }).length,
     1,
+  );
+
+  // Account moves read the same bank answer over their own window: a started payment that covers the minimum takes the card off "Money to move".
+  const forMoves = (
+    payments: OpenStartedPayment[],
+    waitedOn = base.today,
+  ) =>
+    getDueCards(
+      [card],
+      reserve,
+      [],
+      d(2026, 11, 1),
+      20,
+      0,
+      getBankDueByCard({
+        owed: {
+          chase: {
+            postedCents: 41_200,
+            pendingCents: 0,
+            waiting: [],
+            heldCents: 41_200,
+          },
+        },
+        cards: [card],
+        runway: {
+          cardStatements: [statement()],
+          links: [{ id: 'link', status: 'active' }] as never,
+        },
+        started: payments,
+        startDate: 0,
+        today: d(2026, 11, 1),
+        days: 20,
+        waitedOn,
+      }),
+    );
+  assert.equal(
+    forMoves([]).length,
+    1,
+    'an unpaid minimum due inside the window is a move',
+  );
+  assert.deepEqual(
+    forMoves([started('s', 'chase', 41_200, d(2026, 11, 9))]),
+    [],
+    'a started payment that covers the minimum is not a move to do',
+  );
+  assert.equal(
+    forMoves(
+      [started('s', 'chase', 41_200, d(2026, 10, 28))],
+      d(2026, 11, 10),
+    ).length,
+    0,
+    'still waited for on the real today, so it still covers',
+  );
+  assert.equal(
+    forMoves(
+      [started('s', 'chase', 41_200, d(2026, 10, 28))],
+      d(2026, 11, 12),
+    ).length,
+    1,
+    'no longer waited for on the real today, though it was when the window began',
   );
 }
 

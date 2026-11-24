@@ -5,12 +5,19 @@ import { CARD_DUE_WARN_DAYS } from '@apps/runway/constants';
 import {
   getBankDueDay,
   getBankDueState,
+  isStillWaitedFor,
+  type BankOwed,
   type DueCard,
 } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectBankOwedByCard } from '@apps/runway/store/selectors/cardBankSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenCard, OpenCardStatement } from '@apps/runway/types';
+import type {
+  DateOnly,
+  OpenCard,
+  OpenCardStatement,
+  OpenStartedPayment,
+} from '@apps/runway/types';
 
 /** A card's statement, only while the card is linked and its link still works: a broken link's last statement goes stale with nothing to correct it. */
 export const getLinkedStatement = (
@@ -40,7 +47,43 @@ export const selectCardsWithBankDue = createSelector(
     }),
 );
 
-/** At Link, each card read from its bank and what warns about it today, from the bank's minimum alone (`getBankDueState`); a card here never warns from Runway's own record of payments. */
+/** At Link, each card read from its bank and what warns about it from `today` up to `days` ahead, from the bank's minimum alone (`getBankDueState`); a card here never warns from Runway's own record of payments. A payment the person started counts only while it is still waited for on `waitedOn`. */
+export const getBankDueByCard = (input: {
+  owed: Readonly<Record<string, BankOwed>>;
+  cards: readonly OpenCard[];
+  runway: Pick<RootState['runway'], 'cardStatements' | 'links'>;
+  started: readonly OpenStartedPayment[];
+  startDate: DateOnly;
+  today: DateOnly;
+  days: number;
+  waitedOn: DateOnly;
+}): Record<string, DueCard | null> => {
+  const started = input.started.filter((payment) =>
+    isStillWaitedFor(payment, input.waitedOn),
+  );
+  return Object.fromEntries(
+    input.cards.flatMap((card) => {
+      const entry = input.owed[card.id];
+      if (entry === undefined) return [];
+      return [
+        [
+          card.id,
+          getBankDueState({
+            card,
+            statement: getLinkedStatement(input.runway, card),
+            started,
+            owedCents: entry.heldCents,
+            today: input.today,
+            days: input.days,
+            since: Math.max(input.startDate, todayAsUtcDate(card.createdAt)),
+          }),
+        ],
+      ];
+    }),
+  );
+};
+
+/** At Link, each card read from its bank and what warns about it today. */
 export const selectBankDueByCard = createSelector(
   [
     selectBankOwedByCard,
@@ -60,24 +103,14 @@ export const selectBankDueByCard = createSelector(
     startDate,
     today,
   ): Record<string, DueCard | null> =>
-    Object.fromEntries(
-      cards.flatMap((card) => {
-        const entry = owed[card.id];
-        if (entry === undefined) return [];
-        return [
-          [
-            card.id,
-            getBankDueState({
-              card,
-              statement: getLinkedStatement({ cardStatements, links }, card),
-              started,
-              owedCents: entry.heldCents,
-              today,
-              days: CARD_DUE_WARN_DAYS,
-              since: Math.max(startDate, todayAsUtcDate(card.createdAt)),
-            }),
-          ],
-        ];
-      }),
-    ),
+    getBankDueByCard({
+      owed,
+      cards,
+      runway: { cardStatements, links },
+      started,
+      startDate,
+      today,
+      days: CARD_DUE_WARN_DAYS,
+      waitedOn: today,
+    }),
 );
