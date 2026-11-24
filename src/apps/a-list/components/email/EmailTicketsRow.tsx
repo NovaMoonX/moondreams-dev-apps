@@ -2,7 +2,7 @@ import SettingsRow from '@/components/SettingsRow';
 import { EMAIL_FORWARDING_WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useNow } from '@/hooks/useNow';
-import { formatTimeAgo } from '@/lib/emailForwarding/timeAgo';
+import { formatTimeAgo } from '@/utils/formatUtils';
 import {
   getEmailSetupSteps,
   resolveStepIndex,
@@ -36,7 +36,7 @@ function EmailTicketsRow() {
       return intake?.lastReceivedAt == null
         ? EMAIL_FORWARDING_WORDS.noEmailsYet
         : EMAIL_FORWARDING_WORDS.workingSince(
-            formatTimeAgo(intake.lastReceivedAt, now),
+            formatTimeAgo(intake.lastReceivedAt, now, true),
           );
     }
     if (progress?.provider == null) return 'Not set up yet';

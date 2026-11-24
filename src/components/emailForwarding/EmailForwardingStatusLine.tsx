@@ -1,6 +1,6 @@
 import { EMAIL_FORWARDING_WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import { useNow } from '@/hooks/useNow';
-import { formatTimeAgo } from '@/lib/emailForwarding/timeAgo';
+import { formatTimeAgo } from '@/utils/formatUtils';
 
 interface EmailForwardingStatusLineProps {
   /** When any email last reached the address (`EmailIntakeState.lastReceivedAt`); null until one does. */
@@ -17,7 +17,7 @@ function EmailForwardingStatusLine({
       {lastReceivedAt === null
         ? EMAIL_FORWARDING_WORDS.noEmailsYet
         : EMAIL_FORWARDING_WORDS.workingSince(
-            formatTimeAgo(lastReceivedAt, now),
+            formatTimeAgo(lastReceivedAt, now, true),
           )}
     </p>
   );

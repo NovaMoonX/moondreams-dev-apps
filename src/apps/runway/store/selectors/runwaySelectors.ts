@@ -108,6 +108,7 @@ import type {
   GoalSealed,
   MoneyRange,
   OpenPurchase,
+  SortingState,
   PurchasePairKind,
   GoalVersion,
   GroupVersion,
@@ -1932,7 +1933,17 @@ export const selectLostPairs = createSelector(
 export const selectIsSortingPaused = (state: RootState) =>
   state.runway.plan?.sorting?.isPaused ?? false;
 
-const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
+export const selectSorting = (state: RootState) =>
+  state.runway.plan?.sorting ?? null;
+
+/** Whether "I'm not sorting yet" keeps a charge out of Needs a home (paused, or made before sorting began); the list adds its own exceptions for pairs and lost links. */
+export const isQuietBySorting = (
+  purchase: Pick<OpenPurchase, 'amountCents' | 'createdAt'>,
+  sorting: SortingState | null,
+) =>
+  sorting !== null &&
+  purchase.amountCents > 0 &&
+  (sorting.isPaused || purchase.createdAt < sorting.from);
 
 /** The money in Needs a home has a question for: a pairing or pay link it lost, a move or a pay day it may be, or a refund of a purchase that went to an envelope or goal (`findRefundOriginal`). At Link the rest, a card refund of a Free to Spend purchase included, is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in and its Refunds. Money in still pending, and a posted side held by a pending money out, never asks: it is on its way. */
 export const selectMoneyInAsks = createSelector(
@@ -2039,9 +2050,7 @@ export const selectNeedsHome = createSelector(
     const alwaysShown = new Set(lost.map((entry) => entry.id));
     const pairs = sorting === null ? null : findAccountPairs(sorted, true);
     const isQuiet = (purchase: OpenPurchase) =>
-      sorting !== null &&
-      purchase.amountCents > 0 &&
-      (sorting.isPaused || purchase.createdAt < sorting.from) &&
+      isQuietBySorting(purchase, sorting) &&
       !alwaysShown.has(purchase.id) &&
       !(pairs?.offers.has(purchase.id) || pairs?.clear.has(purchase.id));
     const spending = sortable.filter(

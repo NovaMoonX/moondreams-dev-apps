@@ -17,6 +17,11 @@ import {
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import {
+  setOpenRuleRequest,
+  useHoldRuleRequest,
+  useOpenRuleRequest,
+} from '@apps/runway/utils/openRuleRequest';
 import type { OpenRule } from '@apps/runway/types';
 
 interface RulesScreenProps {
@@ -31,8 +36,15 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const { describe, isEnded, getEnvelopeName, getCardLabel } = useRuleNames();
   const { openView } = useRunwayUrlState();
   const [query, setQuery] = useState('');
+  const requestedId = useOpenRuleRequest();
   const [openId, setOpenId] = useState<string | null>(null);
-  const opened = rules.find((rule) => rule.id === openId) ?? null;
+  const opened =
+    rules.find((rule) => rule.id === (openId ?? requestedId)) ?? null;
+  const closeRule = () => {
+    setOpenId(null);
+    setOpenRuleRequest(null);
+  };
+  useHoldRuleRequest();
   const needle = query.trim().toLowerCase();
   const shown = rules.filter(
     (rule) => needle === '' || describe(rule).toLowerCase().includes(needle),
@@ -131,7 +143,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           key={opened.id}
           purchase={null}
           rule={opened}
-          onClose={() => setOpenId(null)}
+          onClose={closeRule}
         />
       )}
     </Subview>
