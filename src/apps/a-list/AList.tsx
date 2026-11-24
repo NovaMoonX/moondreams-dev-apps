@@ -216,6 +216,7 @@ function AList() {
     if (!searchParams.has('viewing')) return;
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('viewing');
+    nextSearchParams.delete('view');
     setSearchParams(nextSearchParams, { replace: true });
   };
 
