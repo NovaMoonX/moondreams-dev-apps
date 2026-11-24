@@ -3738,6 +3738,8 @@ export const ITEM_VIEW_WORDS = {
   moneyWentTo: (name: string) => `Went to ${name}`,
   moneyEdited: 'Edited',
   moneyByRule: 'By your rule',
+  moneyEarlier: 'Brought forward',
+  moneyEarlierDetail: (date: string) => `Everything before ${date}`,
   moneyLoading: 'Getting what moved in and out.',
   goalFigure: 'saved',
   horizonFigure: 'held',

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { deriveBalances } from '../../src/apps/runway/engine/balances.ts';
 import {
   collectItemMoney,
+  withBroughtForward,
   withHeldAfter,
 } from '../../src/apps/runway/engine/itemMoney.ts';
 import type {
@@ -227,6 +228,33 @@ const input = {
     savings.reduce((sum, e) => sum + e.cents, 0),
     balances.savings,
   );
+}
+
+// Older days summed away by a closing end the list on what the item held before the window.
+{
+  const rows = withHeldAfter(collectItemMoney('groceries', input), 50_000);
+  const ended = withBroughtForward(rows, 50_000, 'groceries', d(5));
+  assert.equal(ended.length, rows.length, 'a start row already explains it');
+  const noStart = rows.slice(0, 2);
+  const carried = withBroughtForward(noStart, 50_000, 'groceries', d(5));
+  const last = carried.at(-1);
+  assert.equal(last?.kind, 'earlier');
+  assert.equal(last?.heldAfterCents, 50_000 - 25_000 - 1_000);
+  assert.equal(last?.cents, last?.heldAfterCents);
+  assert.equal(
+    withBroughtForward(noStart, 50_000, 'groceries', null).length,
+    2,
+    'nothing summed away, nothing brought forward',
+  );
+  assert.deepEqual(
+    withBroughtForward([], 7_000, 'groceries', d(5)).map((row) => [
+      row.kind,
+      row.heldAfterCents,
+    ]),
+    [['earlier', 7_000]],
+    'an item with no loaded rows still shows what it holds',
+  );
+  assert.equal(withBroughtForward([], 0, 'groceries', d(5)).length, 0);
 }
 
 // No starting point, no history.

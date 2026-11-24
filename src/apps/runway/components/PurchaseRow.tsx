@@ -127,6 +127,7 @@ function PurchaseRow({
       figure={amount}
       figureWord={figureWord}
       isFigureWordOver={isFigureWordOver}
+      isFigureNarrow={figureWord !== null}
       ariaLabel={`${title}, ${amount}, ${detail}${figureWord ? `, ${figureWord}` : ''}${onOpen ? '. Open' : ''}`}
       onOpen={onOpen}
     />

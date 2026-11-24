@@ -43,6 +43,14 @@ export type ItemMoneyEntry =
       /** The Horizon item the payment was marked on: this item, or the item a goal helped pay. */
       ownerId: string;
       costId: string;
+    }
+  | {
+      kind: 'earlier';
+      id: string;
+      on: DateOnly;
+      cents: Cents;
+      /** The first day the list holds; everything before it is summed in this row. */
+      before: DateOnly;
     };
 
 export type ItemMoneyRow = ItemMoneyEntry & { heldAfterCents: Cents };
@@ -61,11 +69,7 @@ const getGoalPart = (entry: {
     Math.max(0, entry.amountCents - Math.max(0, entry.fromFreeCents)),
   );
 
-/**
- * Everything the loaded ledger holds that moved one item's money, newest first, from the same inputs
- * the balances sum: its starting amount, each confirmed day's lines for it, its purchase lines, moves
- * in and out, and paid marks it gave money to. A bill's payments are not in it.
- */
+/** What moved one item's money in the loaded ledger, newest first, from the inputs the balances sum; a bill's payments are not in it. */
 export function collectItemMoney(
   itemId: string,
   input: Pick<
@@ -204,4 +208,30 @@ export function withHeldAfter(
     return [...rows, { ...entry, heldAfterCents }];
   }, []);
   return result;
+}
+
+/** The rows, ending on what the item held before the first loaded day when older days are summed away (a closing), so the oldest total never starts from nothing unexplained. */
+export function withBroughtForward(
+  rows: readonly ItemMoneyRow[],
+  heldNowCents: Cents,
+  itemId: string,
+  before: DateOnly | null,
+): ItemMoneyRow[] {
+  const oldest = rows.at(-1);
+  const carried =
+    oldest === undefined ? heldNowCents : oldest.heldAfterCents - oldest.cents;
+  if (before === null || carried === 0 || oldest?.kind === 'start') {
+    return [...rows];
+  }
+  return [
+    ...rows,
+    {
+      kind: 'earlier',
+      id: `earlier_${itemId}`,
+      on: before - 1,
+      cents: carried,
+      before,
+      heldAfterCents: carried,
+    },
+  ];
 }

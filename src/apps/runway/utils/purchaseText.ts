@@ -39,26 +39,23 @@ export function describeHeldAfter(
   kind: 'envelope' | 'goal' | 'horizon',
   level: Level,
   cents: number,
-): { text: string; isOver: boolean } {
+): { text: string; value: string; word: string; isOver: boolean } {
+  const parts = (value: string, word: string, isOver: boolean) => ({
+    text: `${value} ${word.replaceAll(' ', '\u00a0')}`,
+    value,
+    word,
+    isOver,
+  });
   if (kind === 'goal') {
-    return {
-      text: `${formatSigned(cents)} ${ITEM_VIEW_WORDS.goalFigure}`,
-      isOver: false,
-    };
+    return parts(formatSigned(cents), ITEM_VIEW_WORDS.goalFigure, false);
   }
   if (kind === 'horizon') {
     return cents < 0
-      ? { text: `−${formatCents(-cents)} over`, isOver: true }
-      : {
-          text: `${formatCents(cents)} ${ITEM_VIEW_WORDS.horizonFigure}`,
-          isOver: false,
-        };
+      ? parts(`−${formatCents(-cents)}`, 'over', true)
+      : parts(formatCents(cents), ITEM_VIEW_WORDS.horizonFigure, false);
   }
   const figure = describeEnvelopeFigure(level, cents);
-  return {
-    text: `${figure.value} ${figure.word}`,
-    isOver: figure.word === 'over',
-  };
+  return parts(figure.value, figure.word, figure.word === 'over');
 }
 
 const formatSigned = (cents: number) =>

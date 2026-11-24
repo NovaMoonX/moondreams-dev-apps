@@ -1,5 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Flag, Receipt } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Flag,
+  History as HistoryIcon,
+  Receipt,
+} from 'lucide-react';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
@@ -15,6 +21,7 @@ import {
   ITEM_VIEW_WORDS,
   MAX_WINDOW_CHANGES,
   MOVE_WORDS,
+  STORE_ORDER_WORDS,
 } from '@apps/runway/constants';
 import type { ItemMoneyRow } from '@apps/runway/engine/itemMoney';
 import { useItemChanges } from '@apps/runway/hooks/useItemChanges';
@@ -33,7 +40,14 @@ interface ItemHistoryViewProps {
 }
 
 type Entry =
-  | { type: 'money'; day: number; row: ItemMoneyRow; notes: OpenChange[] }
+  | {
+      type: 'money';
+      day: number;
+      row: ItemMoneyRow;
+      notes: OpenChange[];
+      /** The log entry of a move or paid mark, which keeps its Take back. */
+      moveChange: OpenChange | null;
+    }
   | { type: 'change'; day: number; change: OpenChange };
 
 /** The calendar day a change was made on, as a date-only value, so it sorts beside dated money. */
@@ -49,6 +63,13 @@ const iconTile = (icon: ReactNode) => (
   >
     {icon}
   </span>
+);
+
+const STORE_REFUND = new RegExp(
+  `^${STORE_ORDER_WORDS.refundSummary('\u0001', '\u0002')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace('\u0001', '(.+)')
+    .replace('\u0002', '(.+)')}$`,
 );
 
 const signed = (cents: number) =>
@@ -102,6 +123,16 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
   );
   const findPurchaseRow = (change: OpenChange) => {
     if (change.kind !== 'purchaseChange' || change.isUnreadable) return null;
+    const refund = STORE_REFUND.exec(change.summary.trim());
+    if (refund !== null) {
+      const matches = purchaseRows.filter(
+        (row) =>
+          row.cents > 0 &&
+          refund[2] === itemName &&
+          getPurchaseTitle(row.purchase, nameOf) === refund[1],
+      );
+      return matches.length === 1 ? matches[0].id : null;
+    }
     const parts = readPurchaseChange(change.summary);
     if (parts === null) return null;
     const named = purchaseRows.filter(
@@ -122,15 +153,28 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
     },
     new Map(),
   );
-  const folded = new Set(
-    [...notesByRow.values()].flat().map((change) => change.id),
+  const moneyIds = new Set(moneyRows.map((row) => row.id));
+  const moveChangeByRow = new Map(
+    state.changes.flatMap((change): [string, OpenChange][] => {
+      if (change.move === null || change.move.isUndo) return [];
+      const rowId = [
+        change.move.moveId,
+        `${change.move.moveId}_${itemId}`,
+      ].find((id) => moneyIds.has(id));
+      return rowId === undefined ? [] : [[rowId, change]];
+    }),
   );
+  const folded = new Set([
+    ...[...notesByRow.values()].flat().map((change) => change.id),
+    ...[...moveChangeByRow.values()].map((change) => change.id),
+  ]);
   const entries: Entry[] = [
     ...moneyRows.map((row): Entry => ({
       type: 'money',
       day: row.on,
       row,
       notes: notesByRow.get(row.id) ?? [],
+      moveChange: moveChangeByRow.get(row.id) ?? null,
     })),
     ...state.changes
       .filter((change) => !folded.has(change.id))
@@ -151,17 +195,28 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
   const moneyKind =
     kind === 'envelope' || kind === 'goal' || kind === 'horizon' ? kind : null;
 
-  const renderMoney = (row: ItemMoneyRow, notes: OpenChange[]) => {
+  const renderMoney = (
+    row: ItemMoneyRow,
+    notes: OpenChange[],
+    moveChange: OpenChange | null,
+  ) => {
     const held =
       moneyKind === null
         ? null
         : describeHeldAfter(moneyKind, level, row.heldAfterCents);
     const day = formatDateOrdinalUTC(row.on);
-    const common = {
-      figure: signed(row.cents),
-      figureWord: held?.text ?? null,
-      isFigureWordOver: held?.isOver ?? false,
-    };
+    const common =
+      row.kind === 'earlier'
+        ? {
+            figure: held?.value ?? signed(row.cents),
+            figureWord: held?.word ?? null,
+            isFigureWordOver: held?.isOver ?? false,
+          }
+        : {
+            figure: signed(row.cents),
+            figureWord: held?.text ?? null,
+            isFigureWordOver: held?.isOver ?? false,
+          };
     if (row.kind === 'purchase') {
       const parts = notes.flatMap((change) => {
         const read = readPurchaseChange(change.summary);
@@ -194,14 +249,28 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
       );
     }
     const look = describeOther(row);
-    return (
-      <ItemRow
+    const detail =
+      row.kind === 'earlier'
+        ? ITEM_VIEW_WORDS.moneyEarlierDetail(formatDateOrdinalUTC(row.before))
+        : day;
+    const rowLook = {
+      name: look.name,
+      leading: iconTile(look.icon),
+      detail,
+      ...common,
+      isFigureNarrow: true,
+      ariaLabel: `${look.name}, ${common.figure}, ${detail}${common.figureWord ? `, ${common.figureWord}` : ''}`,
+    };
+    return moveChange === null ? (
+      <ItemRow key={row.id} {...rowLook} />
+    ) : (
+      <ChangeRow
         key={row.id}
-        name={look.name}
-        leading={iconTile(look.icon)}
-        detail={day}
-        {...common}
-        ariaLabel={`${look.name}, ${common.figure}, ${day}${common.figureWord ? `, ${common.figureWord}` : ''}`}
+        change={moveChange}
+        confirmedDayKey={null}
+        onOpenRecord={() => undefined}
+        undoneMoveIds={undoneMoveIds}
+        moneyRow={rowLook}
       />
     );
   };
@@ -213,6 +282,12 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
       return {
         name: ITEM_VIEW_WORDS.moneyStart,
         icon: <Flag className='h-4 w-4' />,
+      };
+    }
+    if (row.kind === 'earlier') {
+      return {
+        name: ITEM_VIEW_WORDS.moneyEarlier,
+        icon: <HistoryIcon className='h-4 w-4' />,
       };
     }
     if (row.kind === 'pay') {
@@ -264,7 +339,7 @@ function ItemHistoryView({ itemId, onOpenPurchase }: ItemHistoryViewProps) {
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {shown.map((entry) =>
           entry.type === 'money' ? (
-            renderMoney(entry.row, entry.notes)
+            renderMoney(entry.row, entry.notes, entry.moveChange)
           ) : (
             <ChangeRow
               key={entry.change.id}

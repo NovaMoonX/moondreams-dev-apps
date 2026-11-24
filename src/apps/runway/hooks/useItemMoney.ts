@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useAppSelector } from '@/store';
 import {
   collectItemMoney,
+  withBroughtForward,
   withHeldAfter,
   type ItemMoneyRow,
 } from '@apps/runway/engine/itemMoney';
@@ -10,6 +11,7 @@ import {
   selectBalanceInputs,
   selectLedgerOnlyBalances,
 } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import { selectIsMovesLoaded } from '@apps/runway/store/selectors/runwaySelectors';
 
 const RUNNING_KINDS = new Set(['envelope', 'goal', 'horizon']);
@@ -29,18 +31,21 @@ export function useItemMoney(itemId: string): {
     (state) => selectLedgerOnlyBalances(state).assignedByItem[itemId] ?? 0,
   );
   const days = useAppSelector((state) => state.runway.days);
-  const rows = useMemo(
-    () =>
-      isRunning
-        ? withHeldAfter(
-            collectItemMoney(itemId, {
-              ...inputs,
-              payLineByDay: new Map(days.map((day) => [day.id, day.payLineId])),
-            }),
-            heldNow,
-          )
-        : [],
-    [isRunning, itemId, inputs, days, heldNow],
-  );
+  const recentFrom = useAppSelector(selectRecentFrom);
+  const rows = useMemo(() => {
+    if (!isRunning) return [];
+    const held = withHeldAfter(
+      collectItemMoney(itemId, {
+        ...inputs,
+        payLineByDay: new Map(days.map((day) => [day.id, day.payLineId])),
+      }),
+      heldNow,
+    );
+    const isCut =
+      recentFrom !== null &&
+      inputs.startDate !== null &&
+      recentFrom > inputs.startDate;
+    return withBroughtForward(held, heldNow, itemId, isCut ? recentFrom : null);
+  }, [isRunning, itemId, inputs, days, heldNow, recentFrom]);
   return isRunning ? { rows, isReady } : null;
 }
