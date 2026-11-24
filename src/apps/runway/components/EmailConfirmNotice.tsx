@@ -62,7 +62,14 @@ function EmailConfirmNotice({
 
   if (url === null && confirm.code === null) return null;
   if (url !== null && isTapped) {
-    return <LinkRow label={EMAIL_WORDS.confirmStillNeeded(name)} url={url} />;
+    return (
+      <div className='space-y-2'>
+        <p className='text-muted-foreground text-sm'>
+          {EMAIL_WORDS.confirmWaiting(name)}
+        </p>
+        <LinkRow label={EMAIL_WORDS.confirmAgain} url={url} />
+      </div>
+    );
   }
   return (
     <InlineNotice

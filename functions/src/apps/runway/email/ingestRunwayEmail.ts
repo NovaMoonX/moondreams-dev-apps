@@ -54,7 +54,7 @@ import {
   type SenderKind,
 } from './parseAlert.js';
 import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
-import { unwrapForwarded } from './unwrapForwarded.js';
+import { isHandForwarded, unwrapForwarded } from './unwrapForwarded.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -609,7 +609,15 @@ async function handleMail(
   if (result.date !== null) {
     await markWithRetry(firestore, uid, result.date, now);
   }
-  await intakeRef.update({ lastReceivedAt: now }).catch(() => undefined);
+  // An email a provider sent on by itself is the only proof its forwarding was confirmed.
+  const isAutoForwarded =
+    result.outcome !== 'confirm' && !isHandForwarded(outer);
+  await intakeRef
+    .update({
+      lastReceivedAt: now,
+      ...(isAutoForwarded ? { forwardedAt: now } : {}),
+    })
+    .catch(() => undefined);
   return result.outcome;
 }
 

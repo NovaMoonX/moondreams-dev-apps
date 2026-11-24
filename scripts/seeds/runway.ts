@@ -4732,6 +4732,7 @@ async function writeSeedEmail(
     updatedAt: context.now - DAY_MS,
     lastReceivedAt: context.now - 2 * hour,
     confirmAt: context.now - DAY_MS,
+    forwardedAt: null,
     autoConfirm: 'failed',
     confirmProvider: 'gmail',
     sealed: await sealJson(

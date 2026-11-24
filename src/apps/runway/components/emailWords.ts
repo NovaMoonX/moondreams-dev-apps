@@ -1,4 +1,3 @@
-import { EMAIL_ADDRESS_PREFIX } from '@apps/runway/constants';
 import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailFilterSealed,
@@ -56,7 +55,7 @@ export const EMAIL_WORDS = {
   lastEmail: (when: string) => `Last email ${when}`,
   addAnother: (hasEmails: boolean) =>
     hasEmails ? 'Add another bank or store' : 'Forward a bank or store',
-  addAnotherSub: (address: string) => `Send its emails to ${address}`,
+  addAnotherSub: 'Send its emails to Runway',
   setupLine:
     'Forward your bank alerts and store receipts here, by hand or with your email’s own rules.',
   copyAddress: 'Copy address',
@@ -72,8 +71,10 @@ export const EMAIL_WORDS = {
   copyCode: 'Copy code',
   confirmedBy: (provider: string) =>
     `Runway confirmed ${provider}’s forwarding`,
-  confirmStillNeeded: (provider: string | null) =>
-    `${provider ?? 'Your email'} still needs your OK`,
+  confirmWaiting: (provider: string | null) =>
+    provider === null
+      ? 'Once you’ve confirmed it, this clears when the next forwarded email comes through.'
+      : `Once you’ve confirmed it in ${provider}, this clears when ${provider} forwards its next email.`,
   confirmAgain: 'Confirm again',
   emailTitle: 'Email',
   filterOut: 'Filter out emails like this',
@@ -208,14 +209,6 @@ export const CONFIRM_PROVIDER_NAMES = {
   yahoo: 'Yahoo',
   proton: 'Proton Mail',
 } as const;
-
-export const shortenForwardingAddress = (address: string) => {
-  const [name, ...host] = address.split('@');
-  const keep = EMAIL_ADDRESS_PREFIX.length + 1 + 4;
-  return name.length <= keep + 1
-    ? address
-    : `${name.slice(0, keep)}…@${host.join('@')}`;
-};
 
 type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
 

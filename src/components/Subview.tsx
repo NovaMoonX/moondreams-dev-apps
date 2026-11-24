@@ -197,15 +197,17 @@ function Subview({
           aria-label={title}
           className={join('subview-card flex max-w-2xl flex-col', className)}
         >
-          <div className='[&_.form-footer]:bg-background [&_.form-footer]:border-border flex flex-1 flex-col px-(--subview-pad) pt-3 pb-(--subview-pad) has-[.form-footer]:pb-0 [@media(max-height:499px)]:pt-1 *:last:flex *:last:flex-1 *:last:flex-col [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
+          <div className='[&_.form-footer]:bg-background [&_.form-footer]:border-border flex flex-1 flex-col px-(--subview-pad) pb-(--subview-pad) *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0 [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
             {title !== undefined && (
-              <SubviewHeader
-                title={title}
-                onBack={goBack}
-                action={headerAction}
-                isTitleWrapped={isTitleWrapped}
-                className='bg-background sticky top-0 z-20 -mx-(--subview-pad) mb-3 min-h-14 px-(--subview-pad) py-2.5 [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
-              />
+              <div className='bg-background sticky top-0 z-20 -mx-(--subview-pad) px-(--subview-pad) pt-3 pb-3 [@media(max-height:499px)]:pt-1'>
+                <SubviewHeader
+                  title={title}
+                  onBack={goBack}
+                  action={headerAction}
+                  isTitleWrapped={isTitleWrapped}
+                  className='min-h-14 py-2.5 [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
+                />
+              </div>
             )}
             <SubviewTitleContext.Provider value={title ?? null}>
               {children}

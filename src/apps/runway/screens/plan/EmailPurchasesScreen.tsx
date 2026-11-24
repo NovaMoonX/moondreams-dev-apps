@@ -43,7 +43,6 @@ import {
   describeEmailFilter,
   describeEmailRowOutcome,
   hasConfirmNotice,
-  shortenForwardingAddress,
   stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -306,6 +305,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const getIsConfirmShown = (
     pendingConfirm: NonNullable<typeof intake.confirm>,
   ) => {
+    // Only an email the provider forwarded on its own shows the forwarding works.
+    if (intake.forwardedAt !== null && intake.forwardedAt > pendingConfirm.at) {
+      return false;
+    }
     if (pendingConfirm.autoConfirm === 'confirmed') {
       return (
         isEventsLoaded &&
@@ -315,7 +318,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         )
       );
     }
-    // A hand-forwarded email proves nothing about automatic forwarding, so only time ends the notice, never a tap.
+    // A tap can't tell whether the person finished in their email, so it never ends the notice.
     return now < pendingConfirm.at + CONFIRM_NOTICE_DAYS * DAY_MS;
   };
   const shownConfirm =
@@ -439,9 +442,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               isRoomy
               icon={<Plus />}
               label={EMAIL_WORDS.addAnother(events.length > 0)}
-              subtitle={EMAIL_WORDS.addAnotherSub(
-                shortenForwardingAddress(intake.address),
-              )}
+              subtitle={EMAIL_WORDS.addAnotherSub}
               hasChevron
               onClick={() => setIsReopened(true)}
             />

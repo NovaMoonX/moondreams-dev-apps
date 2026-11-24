@@ -206,6 +206,11 @@ function readBlock(text: string): Block | null {
   );
 }
 
+/** Whether a person forwarded this by hand (a forwarded block or a `Fwd:` subject), as against a provider's rule sending it on. */
+export const isHandForwarded = (mail: { subject: string; text: string }) =>
+  readBlock(mail.text) !== null ||
+  stripForwardPrefixes(mail.subject) !== mail.subject.trim();
+
 /** The email as its original sender wrote it, read from a hand-forwarded block when there is one. A forwarding confirmation is returned untouched. */
 export function unwrapForwarded<T extends ForwardableMail>(mail: T): T {
   if (isForwardingConfirmation(mail)) return mail;
