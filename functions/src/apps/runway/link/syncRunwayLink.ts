@@ -703,8 +703,17 @@ async function writeUnlessRevoked(
   });
 }
 
-/** Seals the bank's logo into a link made before logos were kept; the next sync retries a miss. */
-async function keepLogo(
+const BANK_RECHECK_MS = 7 * 86_400_000;
+
+/** Whether the bank's details are worth asking for: a link sealed before its logo or website was kept, or a bank with no logo not asked this week, since the provider may have one by now. */
+export const needsBankDetails = (link: Partial<LinkSealed>, now: number) =>
+  link.institutionLogo === undefined ||
+  link.institutionDomain === undefined ||
+  (link.institutionLogo === null &&
+    now - (link.institutionCheckedAt ?? 0) >= BANK_RECHECK_MS);
+
+/** Seals the bank's logo and website into the link: the provider's logo replaces a missing one, a logo already kept stays when the provider no longer sends it, and a miss is retried by the next sync. */
+async function keepBankDetails(
   firestore: Firestore,
   linkRef: DocumentReference,
   grant: ProviderGrant,
@@ -719,10 +728,13 @@ async function keepLogo(
       planKey.key,
       snapshot.data()?.sealed as SealedPayload,
     ) as unknown as Partial<LinkSealed>;
-    if (link.institutionLogo !== undefined) return false;
+    const now = Date.now();
+    if (!needsBankDetails(link, now)) return false;
     const nextLink: LinkSealed = {
       institutionName: link.institutionName ?? '',
-      institutionLogo: institution.logo,
+      institutionLogo: institution.logo ?? link.institutionLogo ?? null,
+      institutionDomain: institution.domain ?? link.institutionDomain ?? null,
+      institutionCheckedAt: now,
       providerAccounts: link.providerAccounts ?? [],
     };
     transaction.update(linkRef, {
@@ -880,8 +892,8 @@ export async function syncRunwayLink(
       linkSnapshot.data()?.sealed as SealedPayload,
     ) as unknown as LinkSealed;
     // Before the bank is asked for anything, so a bank that is down or needs a new sign-in still gets its logo.
-    if (link.institutionLogo === undefined) {
-      await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
+    if (needsBankDetails(link, Date.now())) {
+      await keepBankDetails(firestore, linkRef, grant, planKey).catch(() => {
         logger.warn('runway.sync.logoFailed', { linkId });
       });
     } else if (linkSnapshot.data()?.logoShared !== true) {

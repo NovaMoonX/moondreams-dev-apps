@@ -4,10 +4,14 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { copyToClipboard } from '@/utils/clipboardUtils';
-import EmailAddressText from '@apps/runway/components/EmailAddressText';
-import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
+import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 
 interface EmailSetupViewProps {
+  /** What to forward and what the app does with it, in one line. */
+  setupLine: string;
+  /** The address's local part before the token. */
+  prefix: string;
   address: string | null;
   isLoading: boolean;
   isFailed: boolean;
@@ -18,7 +22,10 @@ interface EmailSetupViewProps {
   onDone: () => void;
 }
 
+/** The whole forwarding setup on one screen: the ask, the address, and Copy address as its one act. */
 function EmailSetupView({
+  setupLine,
+  prefix,
   address,
   isLoading,
   isFailed,
@@ -46,14 +53,14 @@ function EmailSetupView({
           type='button'
           onClick={isCopied ? onDone : () => void copyAddress()}
         >
-          {isCopied ? EMAIL_WORDS.done : EMAIL_WORDS.copyAddress}
+          {isCopied ? WORDS.done : WORDS.copyAddress}
         </Button>
       );
     }
     if (isFailed) {
       return (
         <Button type='button' onClick={onRetry}>
-          {EMAIL_WORDS.tryAgain}
+          {WORDS.tryAgain}
         </Button>
       );
     }
@@ -63,27 +70,27 @@ function EmailSetupView({
         disabled={isBusy || isLoading}
         onClick={onGetAddress}
       >
-        {EMAIL_WORDS.getAddress}
+        {WORDS.getAddress}
       </Button>
     );
   };
 
   return (
     <div className='flex flex-1 flex-col gap-4'>
-      <p className='text-muted-foreground text-sm'>{EMAIL_WORDS.setupLine}</p>
+      <p className='text-muted-foreground text-sm'>{setupLine}</p>
       {address !== null && (
         <p className='border-border rounded-2xl border p-3 text-sm font-semibold select-all max-[359px]:p-2.5 max-[359px]:text-xs max-[359px]:tracking-tight'>
-          <EmailAddressText address={address} />
+          <EmailAddressText address={address} prefix={prefix} />
         </p>
       )}
       {address === null && isFailed && (
         <p className='text-destructive text-sm' role='alert'>
-          {EMAIL_WORDS.addressLoadFailed}
+          {WORDS.addressLoadFailed}
         </p>
       )}
       {isCopyFailed && (
         <p className='text-destructive text-sm' role='alert'>
-          {EMAIL_WORDS.copyFailed}
+          {WORDS.copyFailed}
         </p>
       )}
       {error && (

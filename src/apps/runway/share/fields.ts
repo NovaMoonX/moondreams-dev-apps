@@ -474,6 +474,8 @@ const LINK_PROVIDER_ACCOUNT_FIELDS = {
 const LINK_SEALED_FIELDS = {
   institutionName: 'never',
   institutionLogo: 'never',
+  institutionDomain: 'never',
+  institutionCheckedAt: 'never',
   providerAccounts: 'never',
 } satisfies Record<keyof LinkSealed, ShareDecision>;
 

@@ -470,7 +470,7 @@ const MAX_SHOWTIME_PAGES = 3;
 const AMC_HOST = /^https:\/\/([a-z0-9-]+\.)*amctheatres\.com(\/|$)/;
 
 // A caption or format tag in parentheses is not part of the title; anything else is, so a sequel never matches its predecessor.
-function normalizeTitle(value: string | undefined) {
+export function normalizeTitle(value: string | undefined) {
   return (value ?? '')
     .toLowerCase()
     .replace(/\(.*?\)/g, ' ')

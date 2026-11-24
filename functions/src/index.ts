@@ -4,6 +4,8 @@ export { findTheatres } from './apps/a-list/findTheatres.js';
 export { getMovie } from './apps/a-list/getMovie.js';
 export { getPopularMovies } from './apps/a-list/getPopularMovies.js';
 export { searchMovies } from './apps/a-list/searchMovies.js';
+export { ingestAListEmail } from './apps/a-list/email/ingestAListEmail.js';
+export { rotateAListEmailAddress } from './apps/a-list/email/rotateAListEmailAddress.js';
 export { triggerBoxAction } from './apps/worth-the-wait/triggerBoxAction.js';
 export { sendEatSoonDigest } from './apps/pinch/sendEatSoonDigest.js';
 export { searchRecipeImages } from './apps/pinch/searchRecipeImages.js';
@@ -58,6 +60,7 @@ export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.j
 export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';
 export { attachRunwayAccounts } from './apps/runway/attachRunwayAccounts.js';
 export { discardRunwayLink } from './apps/runway/discardRunwayLink.js';
+export { combineRunwayLinks } from './apps/runway/combineRunwayLinks.js';
 export { unlinkRunwayAccount } from './apps/runway/unlinkRunwayAccount.js';
 export { reconnectRunwayLink } from './apps/runway/reconnectRunwayLink.js';
 export { syncRunwayLinks } from './apps/runway/syncRunwayLinks.js';

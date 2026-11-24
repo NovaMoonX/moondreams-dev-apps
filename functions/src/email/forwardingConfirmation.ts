@@ -1,9 +1,4 @@
-import { toAddress } from './emailShared.js';
-import {
-  isProtonInvitation,
-  isProtonSender,
-  readProtonLink,
-} from './parseAlert.js';
+import { toAddress } from './emailUtils.js';
 
 const GMAIL_SENDER = 'forwarding-noreply@google.com';
 const GOOGLE_DOMAINS = ['google.com'];
@@ -23,7 +18,7 @@ const CONFIRM_TIMEOUT_MS = 8_000;
 export type ConfirmProvider = 'gmail' | 'yahoo' | 'proton';
 export type AutoConfirm = 'confirmed' | 'failed' | 'skipped';
 
-interface ConfirmationMail {
+export interface ConfirmationMail {
   from: string;
   subject: string;
   text: string;
@@ -36,6 +31,40 @@ interface FollowResult {
   status: number | null;
   errorName: string | null;
 }
+
+const PROTON_DOMAINS = ['proton.me', 'protonmail.com', 'pm.me'];
+
+export function isProtonSender(from: string) {
+  const domain = toAddress(from).split('@')[1] ?? '';
+  return PROTON_DOMAINS.some(
+    (known) => domain === known || domain.endsWith(`.${known}`),
+  );
+}
+
+/** The invitation's accept link: a proton.me https link that mentions forwarding, accepting or an invite; support, legal and blog pages are never it. */
+export function readProtonLink(text: string) {
+  const links = Array.from(
+    text.matchAll(
+      /(?:^|[\s"'<(])(https:\/\/((?:[a-z0-9-]+\.)*proton\.me)(?=[/?#\s"'<>)\]]|$)(\/[^\s"'<>)\]]*)?)/gi,
+    ),
+  )
+    .filter(
+      ([, , host, path = '']) =>
+        !/^(?:help|legal|policies)\./i.test(host) &&
+        !/^\/(?:support|legal|blog)(?:[/?#]|$)/i.test(path),
+    )
+    .map(([, link]) => link);
+  const isInvitePath = (link: string) =>
+    /forward|accept|invite/i.test(link.replace(/^https:\/\/[^/]+/i, ''));
+  return links.find(isInvitePath);
+}
+
+/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject and an invitation link. */
+export const isProtonInvitation = (mail: ConfirmationMail): boolean =>
+  isProtonSender(mail.from) &&
+  mail.isDkimPassed &&
+  /forward/i.test(mail.subject) &&
+  readProtonLink(mail.text) !== undefined;
 
 const isUnder = (domain: string, roots: string[]) =>
   roots.some((root) => domain === root || domain.endsWith(`.${root}`));
@@ -69,6 +98,7 @@ export function confirmProviderOf(
   return isProtonInvitation(mail) ? 'proton' : null;
 }
 
+/** Gmail's, Yahoo's or Proton's "confirm this forwarding address" email; the sender's signature must have passed. */
 export const isForwardingConfirmation = (mail: ConfirmationMail) =>
   confirmProviderOf(mail) !== null;
 
@@ -91,6 +121,7 @@ function readYahooLink(text: string) {
   );
 }
 
+/** The link and the code a forwarding confirmation carries; the link is limited to Google's, Yahoo's and Proton's own hosts. */
 export function readConfirmation(mail: ConfirmationMail) {
   const readGoogleLink = () =>
     /https:\/\/mail(?:-settings)?\.google\.com\/[^\s"'<>)\]]+/i.exec(

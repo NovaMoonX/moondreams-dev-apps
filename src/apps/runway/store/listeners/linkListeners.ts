@@ -71,6 +71,11 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
 }
 
 /** Every link the bank sign-ins made; Functions write them, this only reads. */
+const DOMAIN_PATTERN = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/;
+
+const toDomain = (value: unknown) =>
+  typeof value === 'string' && DOMAIN_PATTERN.test(value) ? value : null;
+
 const toCardDetails = (
   data: Pick<LinkDoc, 'cardDetails' | 'needsCardConsent'>,
 ): CardDetailsAnswer | null => {
@@ -105,6 +110,8 @@ export function startLinksListener(
         )
           ? payload.institutionLogo
           : null,
+        institutionDomain: toDomain(payload.institutionDomain),
+        institutionCheckedAt: payload.institutionCheckedAt ?? null,
         providerAccounts: (payload.providerAccounts ?? []).map((entry) => ({
           ...entry,
           mask: entry.mask ?? null,
