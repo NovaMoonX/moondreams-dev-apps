@@ -1,0 +1,18 @@
+From: AMC Theatres <receipts@amctheatres.com>
+Subject: Your AMC Ticket Cancellation
+
+We've canceled your reservation as requested.
+Pat, below are the details of your refund.
+Order Number: 1275187999
+Original Order Date: 11/20/2026
+Refund Date: 11/23/2026
+Ticket Refund Details
+Confirmation #: 0188120457
+Refund Date: 11/23/2026
+Wicked: For Good PG
+12/06/2026 11:05
+AMC Southlake 24
+Refunded Tickets: 1 Adult; $0.00
+Refund Summary
+Reason for Refund: SelfServiceRefund
+Total Amount Refunded: $0.00

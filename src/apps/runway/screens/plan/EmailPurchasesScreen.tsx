@@ -22,33 +22,43 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
+import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
+import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
+import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import FallbackImage from '@/components/FallbackImage';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useNow } from '@/hooks/useNow';
+import {
+  hasConfirmNotice,
+  shortenForwardingAddress,
+} from '@/lib/emailForwarding/address';
+import {
+  isConfirmNoticeDue,
+  readConfirmTapped,
+  writeConfirmTapped,
+} from '@/lib/emailForwarding/confirmNotice';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinal, formatTimeAgo } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
-import EmailAddressText from '@apps/runway/components/EmailAddressText';
-import EmailConfirmNotice from '@apps/runway/components/EmailConfirmNotice';
 import EmailRowBadge from '@apps/runway/components/EmailRowBadge';
 import EmailEventSheet from '@apps/runway/components/EmailEventSheet';
 import EmailSenderSheet from '@apps/runway/components/EmailSenderSheet';
-import EmailSetupView from '@apps/runway/components/EmailSetupView';
 import {
   EMAIL_WORDS,
   FILTER_FROM_WORDS,
   describeEmailFilter,
   describeEmailRowOutcome,
-  hasConfirmNotice,
-  shortenForwardingAddress,
   stripForwardPrefix,
 } from '@apps/runway/components/emailWords';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import {
+  EMAIL_ADDRESS_PREFIX,
+  RUNWAY_SEARCH_THRESHOLD,
+} from '@apps/runway/constants';
 import {
   useEmailActions,
   useEmailEvents,
@@ -70,27 +80,6 @@ import {
 
 const ROWS_SHOWN = 5;
 const CONFIRM_TAPPED_KEY = 'runway:email-confirm-tapped';
-const CONFIRM_NOTICE_DAYS = 7;
-const DAY_MS = 86_400_000;
-
-const readConfirmTapped = (confirmAt: number | null) => {
-  try {
-    return (
-      confirmAt !== null &&
-      localStorage.getItem(CONFIRM_TAPPED_KEY) === String(confirmAt)
-    );
-  } catch {
-    return false;
-  }
-};
-
-const writeConfirmTapped = (confirmAt: number) => {
-  try {
-    localStorage.setItem(CONFIRM_TAPPED_KEY, String(confirmAt));
-  } catch {
-    // Storage can be blocked; the notice then stays its seven days.
-  }
-};
 
 const OUTCOME_BADGES: Record<EmailEventRead['outcome'], LucideIcon> = {
   purchase: Receipt,
@@ -300,26 +289,13 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const pendingConfirm = intake.confirm;
   const confirmAt = pendingConfirm?.at ?? null;
   const isConfirmTappedBefore = useMemo(
-    () => readConfirmTapped(confirmAt),
+    () => readConfirmTapped(CONFIRM_TAPPED_KEY, confirmAt),
     [confirmAt],
   );
-  const getIsConfirmShown = (
-    pendingConfirm: NonNullable<typeof intake.confirm>,
-  ) => {
-    if (pendingConfirm.autoConfirm === 'confirmed') {
-      return (
-        isEventsLoaded &&
-        !events.some(
-          (entry) =>
-            entry.outcome !== 'confirm' && entry.receivedAt > pendingConfirm.at,
-        )
-      );
-    }
-    // A hand-forwarded email proves nothing about automatic forwarding, so only time ends the notice, never a tap.
-    return now < pendingConfirm.at + CONFIRM_NOTICE_DAYS * DAY_MS;
-  };
   const shownConfirm =
-    pendingConfirm !== null && getIsConfirmShown(pendingConfirm)
+    pendingConfirm !== null &&
+    (pendingConfirm.autoConfirm !== 'confirmed' || isEventsLoaded) &&
+    isConfirmNoticeDue(pendingConfirm, events, now)
       ? pendingConfirm
       : null;
   const isConfirmDrawn =
@@ -424,6 +400,8 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     >
       {isSetupShown ? (
         <EmailSetupView
+          setupLine={EMAIL_WORDS.setupLine}
+          prefix={EMAIL_ADDRESS_PREFIX}
           address={intake.address}
           isLoading={intake.isLoading}
           isFailed={intake.isFailed}
@@ -437,12 +415,13 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
         <div className='space-y-6'>
           {shownConfirm !== null && (
             <EmailConfirmNotice
+              appName='Runway'
               confirm={shownConfirm}
               isTapped={
                 isConfirmTappedBefore || confirmTappedAt === shownConfirm.at
               }
               onConfirmTapped={() => {
-                writeConfirmTapped(shownConfirm.at);
+                writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
                 setConfirmTappedAt(shownConfirm.at);
               }}
             />
@@ -535,7 +514,10 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
               <ActionRow
                 icon={<Mail />}
                 label={EMAIL_WORDS.addressRow}
-                subtitle={shortenForwardingAddress(intake.address)}
+                subtitle={shortenForwardingAddress(
+                  intake.address,
+                  EMAIL_ADDRESS_PREFIX,
+                )}
                 hasChevron
                 onClick={() => setIsReopened(true)}
               />

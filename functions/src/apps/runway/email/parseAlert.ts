@@ -115,24 +115,11 @@ export function subjectTemplate(subject: string): string {
   );
 }
 
-const ENTITIES: Record<string, string> = {
-  nbsp: ' ',
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  '#39': "'",
-};
-
-export function htmlToText(html: string): string {
-  return html
-    .replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<(?:br|\/p|\/div|\/tr|\/li|\/h\d)[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&(#?\w+);/g, (whole, name: string) => ENTITIES[name] ?? whole)
-    .replace(/[ \t\r\f\v]+/g, ' ');
-}
+export {
+  isProtonInvitation,
+  readProtonLink,
+} from '../../../email/forwardingConfirmation.js';
+export { htmlToText } from '../../../email/emailUtils.js';
 
 const BODY_MAX = 4000;
 const EXCERPT_LINES = 6;
@@ -187,46 +174,6 @@ export function excerptOf(
     .slice(start, start + EXCERPT_LINES)
     .join('\n')
     .slice(0, EXCERPT_MAX);
-}
-
-const PROTON_DOMAINS = ['proton.me', 'protonmail.com', 'pm.me'];
-
-export function isProtonSender(from: string): boolean {
-  const address = (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
-  const domain = address.split('@')[1] ?? '';
-  return PROTON_DOMAINS.some(
-    (known) => domain === known || domain.endsWith(`.${known}`),
-  );
-}
-
-/** Proton's forwarding invitation: from a Proton sender that passed DKIM, with forwarding in the subject and an invitation link. */
-export const isProtonInvitation = (mail: {
-  from: string;
-  subject: string;
-  text: string;
-  isDkimPassed: boolean;
-}): boolean =>
-  isProtonSender(mail.from) &&
-  mail.isDkimPassed &&
-  /forward/i.test(mail.subject) &&
-  readProtonLink(mail.text) !== undefined;
-
-/** The invitation's accept link: a proton.me https link that mentions forwarding, accepting or an invite; support, legal and blog pages are never it. */
-export function readProtonLink(text: string) {
-  const links = Array.from(
-    text.matchAll(
-      /(?:^|[\s"'<(])(https:\/\/((?:[a-z0-9-]+\.)*proton\.me)(?=[/?#\s"'<>)\]]|$)(\/[^\s"'<>)\]]*)?)/gi,
-    ),
-  )
-    .filter(
-      ([, , host, path = '']) =>
-        !/^(?:help|legal|policies)\./i.test(host) &&
-        !/^\/(?:support|legal|blog)(?:[/?#]|$)/i.test(path),
-    )
-    .map(([, link]) => link);
-  const isInvitePath = (link: string) =>
-    /forward|accept|invite/i.test(link.replace(/^https:\/\/[^/]+/i, ''));
-  return links.find(isInvitePath);
 }
 
 export function toCents(value: string): number | null {

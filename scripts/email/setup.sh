@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# Sets up Runway's purchases-from-email intake: one shared secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
-# Each person's address is runway-<token>@moondreamsmail.com, a receive-only domain whose catch-all sends every app's mail to the email worker.
+# Sets up the shared email intake (A-List's tickets from email today, Runway's purchases from email too): one secret saved in Firebase and on the Cloudflare email worker, then the Cloudflare Email Routing clicks.
+# Each app's addresses are <prefix>-<token>@moondreamsmail.com (runway-, amc-), a receive-only domain whose catch-all sends every app's mail to the email worker.
 # The secret is generated here, never printed or written to disk. Safe to re-run.
-#   npm run runway:email-setup                 picks up where the last run stopped
-#   npm run runway:email-setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
-#   npm run runway:email-setup -- --restart    starts over from step 1
+#   npm run email:setup                 picks up where the last run stopped
+#   npm run email:setup -- --from 3     starts at step 3 (a start at step 2 restarts at step 1: the secret is kept only within one run)
+#   npm run email:setup -- --restart    starts over from step 1
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 source scripts/lib/setupState.sh
 
 PROJECT=moondreams-dev-apps
-SECRET_NAME=RUNWAY_EMAIL_WEBHOOK_SECRET
+SECRET_NAME=EMAIL_WEBHOOK_SECRET
+# Runway used to read this name; its value is still reused so the worker's one secret keeps working.
+LEGACY_SECRET_NAME=RUNWAY_EMAIL_WEBHOOK_SECRET
 WORKER_CONFIG=workers/email-router/wrangler.toml
-INGEST_URL=https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestRunwayEmail
+FUNCTIONS_URL=https://us-central1-moondreams-dev-apps.cloudfunctions.net
 LAST_STEP=4
-PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/runway-email-setup-step"
+PROGRESS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/moondreams/email-setup-step"
 CURRENT="starting"
 CURRENT_STEP=1
 
@@ -51,18 +53,19 @@ start_step() {
   return 1
 }
 
-# The intake reads the secret at run time, so nothing grants the functions' account access to it on deploy.
+# The intakes read their secrets at run time, so nothing grants the functions' account access on deploy.
 grant_read() {
+  local name=$1
   if command -v gcloud >/dev/null 2>&1; then
     local number
     number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
-    gcloud secrets add-iam-policy-binding "$SECRET_NAME" --project="$PROJECT" \
+    gcloud secrets add-iam-policy-binding "$name" --project="$PROJECT" \
       --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
       --role="roles/secretmanager.secretAccessor" >/dev/null
-    echo "1. ✓ The functions can read $SECRET_NAME."
+    echo "1. ✓ The functions can read $name."
   else
-    echo "1. gcloud isn't installed, so give the functions read access in the browser (one time):"
-    echo "     a. Open https://console.cloud.google.com/security/secret-manager/secret/$SECRET_NAME/permissions?project=$PROJECT"
+    echo "1. gcloud isn't installed, so give the functions read access to $name in the browser (one time):"
+    echo "     a. Open https://console.cloud.google.com/security/secret-manager/secret/$name/permissions?project=$PROJECT"
     echo "     b. Grant access → New principal: the account ending in -compute@developer.gserviceaccount.com"
     echo "     c. Role: Secret Manager Secret Accessor → Save"
     printf '   Press Enter when it is saved. '
@@ -71,18 +74,20 @@ grant_read() {
 }
 
 # A call without the secret must reach the intake's own check: 401 proves it is open to the worker and can read its secret.
+# An intake that ships with an unmerged change isn't deployed yet (404), so it is checked on a re-run after the merge.
 check_intake() {
-  local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$INGEST_URL" || true)
+  local fn=$1 code
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$FUNCTIONS_URL/$fn" || true)
   case "$code" in
-    401) echo "2. ✓ The intake answers the worker." ;;
-    403) echo "✗ Google Cloud refuses calls to the intake (403): it isn't open yet. Merge and deploy, or run: npm run fb:invoker -- ingestRunwayEmail" >&2; exit 1 ;;
-    503) echo "✗ The intake can't read $SECRET_NAME (503). Run this step's grant again: npm run runway:email-setup -- --restart" >&2; exit 1 ;;
-    *) echo "✗ The intake answered $code instead of 401." >&2; exit 1 ;;
+    401) echo "2. ✓ $fn answers the worker." ;;
+    404) echo "2. $fn isn't deployed yet. After the merge deploys it, check it with: npm run email:setup -- --from 2" ;;
+    403) echo "✗ Google Cloud refuses calls to $fn (403): it isn't open yet. Merge and deploy, or run: npm run fb:invoker -- $fn" >&2; exit 1 ;;
+    503) echo "✗ $fn can't read $SECRET_NAME (503). Run the grant again: npm run email:setup -- --restart" >&2; exit 1 ;;
+    *) echo "✗ $fn answered $code instead of 401." >&2; exit 1 ;;
   esac
 }
 
-trap 'status=$?; (( status == 0 )) || { echo "✗ Stopped at step $CURRENT_STEP: $CURRENT." >&2; echo "  Fix that and run npm run runway:email-setup again to pick up from step $CURRENT_STEP (or add -- --restart to start over)." >&2; }' EXIT
+trap 'status=$?; (( status == 0 )) || { echo "✗ Stopped at step $CURRENT_STEP: $CURRENT." >&2; echo "  Fix that and run npm run email:setup again to pick up from step $CURRENT_STEP (or add -- --restart to start over)." >&2; }' EXIT
 
 need node "Install Node 20 or later."
 need openssl "It ships with macOS and most Linux systems."
@@ -92,26 +97,39 @@ source scripts/lib/firebaseLogin.sh; require_firebase_login
 [[ "${1:-}" == "--restart" ]] && rm -f "$PROGRESS_FILE"
 START=${from:-$(( $(confirmed_step) + 1 ))}
 if (( START > LAST_STEP )); then
-  echo "Every step was done on an earlier run. To redo one: npm run runway:email-setup -- --from <step>"
+  echo "Every step was done on an earlier run. To redo one: npm run email:setup -- --from <step>"
+fi
+
+# Runway's live function already checks the worker's secret; reusing its value means nothing that works today has to be redeployed.
+REUSED=0
+if SHARED=$(firebase functions:secrets:access "$LEGACY_SECRET_NAME" --project "$PROJECT" 2>/dev/null) && [[ -n "$SHARED" ]]; then
+  REUSED=1
+else
+  SHARED=$(openssl rand -hex 32)
 fi
 
 # One value is shared by both sides, so it is made once, kept only in this process, and saved in steps 1 and 2 of the same run.
 # A run that starts at step 2 cannot know the secret, so it restarts at step 1.
-if (( START == 2 )); then
+if (( START == 2 && REUSED == 0 )); then
   echo "Step 2 needs the secret made in step 1, and that secret exists only while one run lasts, so this run starts again at step 1."
   START=1
 fi
-SHARED=$(openssl rand -hex 32)
 
 if start_step 1 "the secret in Firebase"; then
-  if output=$(printf %s "$SHARED" | firebase functions:secrets:set "$SECRET_NAME" --project "$PROJECT" --data-file=- 2>&1); then
-    echo "1. ✓ Saved $SECRET_NAME in Firebase."
-    grant_read
-  else
-    echo "✗ Firebase couldn't save $SECRET_NAME. It said:" >&2
-    sed 's/^/     /' <<<"$output" >&2
-    exit 1
-  fi
+  names=("$SECRET_NAME")
+  (( REUSED == 1 )) || names+=("$LEGACY_SECRET_NAME")
+  (( REUSED == 1 )) && echo "1. Runway's email secret already exists, so the shared one takes the same value."
+  for name in "${names[@]}"; do
+    if output=$(printf %s "$SHARED" | firebase functions:secrets:set "$name" --project "$PROJECT" --data-file=- 2>&1); then
+      echo "1. ✓ Saved $name in Firebase."
+    else
+      echo "✗ Firebase couldn't save $name. It said:" >&2
+      sed 's/^/     /' <<<"$output" >&2
+      exit 1
+    fi
+  done
+  grant_read "$SECRET_NAME"
+  grant_read "$LEGACY_SECRET_NAME"
   remember_step 1
 fi
 
@@ -125,7 +143,8 @@ if start_step 2 "the secret on the email worker"; then
   npx wrangler deploy -c "$WORKER_CONFIG"
   printf %s "$SHARED" | npx wrangler secret put INGEST_SECRET -c "$WORKER_CONFIG"
   echo "2. ✓ The worker has INGEST_SECRET."
-  check_intake
+  check_intake ingestRunwayEmail
+  check_intake ingestAListEmail
   remember_step 2
 fi
 
@@ -144,11 +163,11 @@ if start_step 3 "Cloudflare Email Routing"; then
 fi
 
 if start_step 4 "the feature switch"; then
-  echo "4. Open https://apps.moondreams.dev/admin, then Features, and turn on \"Purchases from email\" for yourself (testing) or for everyone."
+  echo "4. Open https://apps.moondreams.dev/admin, then Features, and turn on \"AMC emails\" for yourself (testing) or for everyone."
   printf '   Press Enter when it is on. '
   read -r _ || true
   remember_step 4
 fi
 
 echo
-echo "✓ Purchases from email are set up. Open Runway's Settings, copy your address and forward a bank alert to it."
+echo "✓ The email intake is set up. Open A-List, copy your address and forward an AMC reservation email to it."
