@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
+import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
 import ChangeRow from '@apps/runway/components/ChangeRow';
 import {
   ITEM_HISTORY_PREVIEW,
@@ -18,6 +19,9 @@ interface ItemHistoryViewProps {
 function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
   const state = useItemChanges(itemId);
   const [isAll, setIsAll] = useState(false);
+  const itemName = useAppSelector(
+    (current) => selectItemLooks(current).get(itemId)?.name ?? null,
+  );
   const startDate = useAppSelector(
     (current) => current.runway.plan?.startDate ?? null,
   );
@@ -64,6 +68,7 @@ function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
             confirmedDayKey={null}
             onOpenRecord={() => undefined}
             undoneMoveIds={undoneMoveIds}
+            itemName={itemName}
           />
         ))}
         {isCut && (isAll || state.changes.length <= ITEM_HISTORY_PREVIEW) && (

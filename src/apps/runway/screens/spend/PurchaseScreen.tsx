@@ -95,6 +95,7 @@ import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { isOpenToPlace } from '@apps/runway/engine/purchases';
+import { canOfferRule } from '@apps/runway/engine/matching';
 import {
   selectCostPaid,
   selectExpenses,
@@ -144,7 +145,7 @@ interface PurchaseScreenProps {
   fallback?: OpenPurchase | null;
   /** False when it was opened from its own group, which is already under it. */
   hasGroupLink?: boolean;
-  /** Needs a home keeps the sheet open on a purchase just sent for the third time in a row, to offer a rule; it hands over the purchase as sent. */
+  /** Keeps the sheet open on a purchase just sent by hand, to offer a rule; it hands over the purchase as sent. Without it the sheet keeps itself open. */
   onSuggestRule?: (placed: OpenPurchase) => void;
   /** The caption over the amount when the opener knows more than "Purchase" (a move, a card payment). */
   kindLabel?: string;
@@ -210,6 +211,8 @@ function PurchaseScreen({
   const [openedFromGroup, setOpenedFromGroup] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justPlaced, setJustPlaced] = useState<OpenPurchase | null>(null);
+  const keepOpenToSuggest = onSuggestRule ?? setJustPlaced;
 
   const openReceipt = (imageId: string) => {
     scrollBeforeReceipt.current =
@@ -236,7 +239,8 @@ function PurchaseScreen({
   const purchase =
     purchases.find((entry) => entry.id === purchaseId) ??
     lostPair ??
-    (fallback?.id === purchaseId ? fallback : null);
+    (fallback?.id === purchaseId ? fallback : null) ??
+    (justPlaced?.id === purchaseId ? justPlaced : null);
   // The server's copy, not the held one, so a sheet's own save keeps its view (and its failure line) until the server answers.
   const isListedWaiting = useAppSelector((state) =>
     state.runway.isNeedsHomeLoaded
@@ -325,18 +329,28 @@ function PurchaseScreen({
     isOpenToPlace(purchase) &&
     !twinHeldIds.has(purchase.id);
   const isPlaceable = isWaiting || isOpen;
+  const chosenEnvelopeId =
+    purchase.lines.find(
+      (line) => line.via === 'chosen' && line.envelopeId !== null,
+    )?.envelopeId ?? null;
+  const isPlacedByHand =
+    !isPlaceable &&
+    chosenEnvelopeId !== null &&
+    purchase.ruleId === null &&
+    purchase.pairedWithId === null &&
+    (purchase.billRef ?? null) === null;
   const canMakeRule =
-    isPlaceable &&
+    (isPlaceable || isPlacedByHand) &&
     isTrackingLevel(level) &&
     lostPair === null &&
-    (purchase.source === 'link' || purchase.source === 'email') &&
-    purchase.amountCents > 0;
+    canOfferRule(purchase);
   const merchantRule =
     canMakeRule && merchantKey !== null
       ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)
       : null;
   const heldRule =
     canMakeRule &&
+    isPlaceable &&
     isHeldByOffer(purchase.id, waitingPurchases, recentPurchases, twinHeldIds)
       ? wouldRulePlace(
           purchase,
@@ -662,7 +676,10 @@ function PurchaseScreen({
         onBack={() => setRuleStep(null)}
         onClose={() => setRuleStep(null)}
         onDecline={
-          ruleStep.view === 'suggest' && user && merchantKey !== null
+          (ruleStep.view === 'suggest' ||
+            (ruleStep.view === 'make' && !ruleStep.wasWaiting)) &&
+          user &&
+          merchantKey !== null
             ? () => {
                 declineRule(user.uid, merchantKey);
                 setRuleStep(null);
@@ -889,7 +906,7 @@ function PurchaseScreen({
               <NeedsHomeAssign
                 purchase={purchase}
                 onDone={onClose}
-                onSuggestRule={onSuggestRule}
+                onSuggestRule={keepOpenToSuggest}
               />
             </PairOffer>
           )}
@@ -897,7 +914,7 @@ function PurchaseScreen({
             <NeedsHomeAssign
               purchase={purchase}
               onDone={onClose}
-              onSuggestRule={onSuggestRule}
+              onSuggestRule={keepOpenToSuggest}
             />
           )}
           <ActionGroup
@@ -918,7 +935,7 @@ function PurchaseScreen({
             )}
             {canMakeRule &&
               (merchantRule === null
-                ? heldRule === null
+                ? heldRule === null && suggestion === null
                 : merchantRule.id !== heldRule?.id) && (
                 <ActionRow
                   isGrouped
@@ -926,14 +943,23 @@ function PurchaseScreen({
                   hasChevron
                   icon={<Repeat />}
                   label={
-                    merchantRule === null
-                      ? RULE_WORDS.alwaysDo
-                      : RULE_WORDS.yourRule
+                    merchantRule !== null
+                      ? RULE_WORDS.yourRule
+                      : isPlacedByHand &&
+                          chosenEnvelopeId !== null &&
+                          purchase.merchant?.trim()
+                        ? RULE_WORDS.alwaysSendTo(
+                            purchase.merchant.trim(),
+                            nameOf(chosenEnvelopeId),
+                          )
+                        : RULE_WORDS.alwaysDo
                   }
                   subtitle={
-                    merchantRule === null
-                      ? RULE_WORDS.alwaysDoSub
-                      : describeRuleSentence(merchantRule)
+                    merchantRule !== null
+                      ? describeRuleSentence(merchantRule)
+                      : isPlacedByHand
+                        ? RULE_WORDS.alwaysSendSub
+                        : RULE_WORDS.alwaysDoSub
                   }
                   onClick={() =>
                     merchantRule === null

@@ -282,6 +282,13 @@ const OWN_MOVE_CATEGORIES = new Set([
   'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
 ]);
 
+/** A posted bank or email purchase that a store, card or kind rule could place: never a pending charge, money in, or a move the bank files as one. */
+export const canOfferRule = (purchase: OpenPurchase) =>
+  (purchase.source === 'link' || purchase.source === 'email') &&
+  purchase.status !== 'pending' &&
+  purchase.amountCents > 0 &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
 /** A synced purchase the bank calls a card payment or a move between the person's own accounts, still waiting and unpaired: not spending until the person says it is. */
 export const isBankMove = (purchase: OpenPurchase) =>
   purchase.source === 'link' &&
