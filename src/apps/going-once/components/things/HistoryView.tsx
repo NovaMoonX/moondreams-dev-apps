@@ -1,4 +1,4 @@
-import BackLink from '@/components/BackLink';
+import BackHeading from '@/components/BackHeading';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
 import type { Item } from '@apps/going-once/types';
 import {
@@ -22,7 +22,7 @@ function HistoryView({ item, uid, onBack }: HistoryViewProps) {
 
   return (
     <div className='space-y-5'>
-      <BackLink onBack={onBack} label='History' />
+      <BackHeading onBack={onBack} title='History' />
       {changes.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
           Nothing has changed yet. Marking it pending or sold shows up here.
