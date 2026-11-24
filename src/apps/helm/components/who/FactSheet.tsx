@@ -278,8 +278,8 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
     >
       {shown && isSettleView && (
         <div className='space-y-4'>
-          <div className='flex items-center gap-1'>
-            <BackLink isChevronOnly onBack={requestBack} />
+          <div className='space-y-2'>
+            <BackLink onBack={requestBack} />
             <p className='min-w-0 text-2xl font-semibold'>
               {settling.entry.question.prompt}
             </p>

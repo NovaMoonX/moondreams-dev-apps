@@ -15,7 +15,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import BackLink from '@/components/BackLink';
+import BackHeading from '@/components/BackHeading';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import {
@@ -785,12 +785,10 @@ function HorizonSheet({
         />
       ) : view === 'history' ? (
         <div className='flex flex-1 flex-col gap-4'>
-          <div className='flex items-center gap-1'>
-            <BackLink isChevronOnly onBack={() => setView('main')} />
-            <p className='min-w-0 text-2xl font-semibold'>
-              {ITEM_VIEW_WORDS.historyTitle}
-            </p>
-          </div>
+          <BackHeading
+            onBack={() => setView('main')}
+            title={ITEM_VIEW_WORDS.historyTitle}
+          />
           <ItemHistoryView itemId={itemId} />
         </div>
       ) : openCost && costEdit !== null && costEdit !== 'form' ? (

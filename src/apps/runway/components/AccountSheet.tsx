@@ -15,7 +15,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import AmountHero from '@/components/AmountHero';
-import BackLink from '@/components/BackLink';
+import BackHeading from '@/components/BackHeading';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
 import InlineNotice from '@/components/InlineNotice';
@@ -353,10 +353,7 @@ function AccountSheet({
     });
 
   const viewTitle = (title: string) => (
-    <div className='flex items-center gap-1'>
-      <BackLink isChevronOnly onBack={() => goTo('menu')} />
-      <p className='min-w-0 text-2xl font-semibold'>{title}</p>
-    </div>
+    <BackHeading onBack={() => goTo('menu')} title={title} />
   );
 
   const errorNotice = error && (
