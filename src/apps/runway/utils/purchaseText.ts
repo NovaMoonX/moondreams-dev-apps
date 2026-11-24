@@ -376,6 +376,21 @@ export function describePurchaseMatch(
     : `Matched to your bank: ${typedPart} is ${bankPart}.`;
 }
 
+/** The change-log sentence for an order from a store's email matched to the several charges it posted as, or for an Undo that splits them again. */
+export function describeSplitMatch(
+  merged: { banks: readonly OpenPurchase[]; typed: OpenPurchase },
+  nameOf: (envelopeId: string) => string,
+  isSplit: boolean,
+): string {
+  const typedPart = `${getPurchaseTitle(merged.typed, nameOf)}, ${money(merged.typed.amountCents)} on ${formatDateOrdinalUTC(merged.typed.date)}`;
+  const charges = merged.banks
+    .map((bank) => money(bank.amountCents))
+    .join(', ');
+  return isSplit
+    ? `Match undone: ${typedPart} is its own purchase again, and its ${merged.banks.length} bank charges (${charges}) wait in Needs a home.`
+    : `Matched to your bank: ${typedPart} is ${merged.banks.length} bank charges (${charges}).`;
+}
+
 const describeGroupChange = (
   before: string | null,
   after: string | null,

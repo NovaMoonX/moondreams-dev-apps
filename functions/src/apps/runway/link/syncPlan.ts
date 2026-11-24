@@ -73,6 +73,8 @@ export interface PurchaseState {
   dedupeKey: string;
   date: number;
   status: 'pending' | 'posted';
+  /** Whether the bank ever showed it as pending; kept after it posts, since a posted charge replaces its pending one. Null on a purchase stored before it was kept. */
+  wasPending: boolean | null;
   needsHome: boolean;
   accountId: string | null;
   expenseId: string | null;
@@ -160,6 +162,7 @@ function upsert(
       dedupeKey: key,
       date: tx.date,
       status: tx.isPending ? 'pending' : 'posted',
+      wasPending: tx.isPending || tx.pendingTransactionId !== null,
       needsHome: true,
       accountId: target.accountId,
       expenseId: null,
@@ -188,6 +191,13 @@ function upsert(
     ...current,
     date: tx.date,
     status: tx.isPending ? 'pending' : 'posted',
+    wasPending:
+      current.wasPending === true ||
+      current.status === 'pending' ||
+      tx.isPending ||
+      tx.pendingTransactionId !== null
+        ? true
+        : current.wasPending,
     payload: {
       ...current.payload,
       amountCents: tx.amountCents,
@@ -207,6 +217,7 @@ function upsert(
   const isChanged =
     next.date !== current.date ||
     next.status !== current.status ||
+    next.wasPending !== current.wasPending ||
     next.payload.amountCents !== current.payload.amountCents ||
     next.payload.merchant !== current.payload.merchant ||
     (next.payload.merchantLogo ?? null) !==
@@ -270,6 +281,7 @@ const takeOver = (
   dedupeKey: posted.dedupeKey,
   date: posted.date,
   status: 'posted',
+  wasPending: true,
   accountId: posted.accountId,
   payload: {
     ...dropped.payload,

@@ -12,7 +12,10 @@ import {
   selectEmailEvents,
   selectEmailFilters,
   selectEmailIntake,
+  getWaitingBank,
   selectEmailOverdue,
+  selectPostedOnlySides,
+  selectSideBankNames,
   selectIsEmailEventsLoaded,
   selectIsEmailIntakeFailed,
   selectIsEmailIntakeLoaded,
@@ -122,9 +125,18 @@ export function useEmailFilters(): EmailFilterRead[] {
   return useAppSelector(selectEmailFilters);
 }
 
-/** Emailed purchases still waiting for their bank's charge after `EMAIL_WAIT_DAYS`. */
+/** Emailed purchases still waiting for their bank's charge past how long its card, account or order is expected to take. */
 export function useEmailOverduePurchases(): OpenPurchase[] {
   return useAppSelector(selectEmailOverdue);
+}
+
+/** The bank an emailed purchase waits on, when its card or account is known, and whether that bank sends a charge only once it posts. */
+export function useWaitingBank(
+  purchase: Pick<OpenPurchase, 'accountId' | 'paidByCardId'>,
+) {
+  const names = useAppSelector(selectSideBankNames);
+  const postedOnly = useAppSelector(selectPostedOnlySides);
+  return getWaitingBank(purchase, names, postedOnly);
 }
 
 export function useEmailActions(): EmailActions {
