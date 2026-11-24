@@ -2,7 +2,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import FallbackImage from '@/components/FallbackImage';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
-import { storeLogoUrl } from '@apps/pinch/utils/storeLogo';
+import { brandLogoUrl } from '@/utils/brandLogoUtils';
 
 interface StoreLogoProps {
   name: string;
@@ -26,7 +26,7 @@ function StoreLogo({
 }: StoreLogoProps) {
   const ownUrl = useStorageImageUrl(imagePath, imageVersion);
   const url =
-    ownUrl ?? (imagePath === null && domain ? storeLogoUrl(domain) : null);
+    ownUrl ?? (imagePath === null && domain ? brandLogoUrl(domain) : null);
 
   const letter = (
     <span

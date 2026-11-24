@@ -22,6 +22,7 @@ import {
   type LinkChoice,
   type MatchTargetKind,
 } from '@apps/runway/engine/linkMatch';
+import { findTwinLink } from '@apps/runway/engine/twinLinks';
 import { openBankLink } from '@apps/runway/lib/bankLink';
 import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 import { useHoldsPrompt } from '@apps/runway/hooks/useHoldsPrompt';
@@ -102,6 +103,18 @@ const presetChoices = (
 const toRowLabel = (row: LinkSession['accounts'][number]) =>
   `${cleanBankName(row.name)}${row.mask ? ` \u2022\u2022${row.mask}` : ''}`;
 
+/** The sign-in a refused exchange says is already linked, when that is why it was refused. */
+const readTwinLinkId = (error: unknown) => {
+  const details =
+    (error as { code?: unknown; details?: unknown } | null) ?? null;
+  const twinLinkId = (details?.details as { twinLinkId?: unknown } | undefined)
+    ?.twinLinkId;
+  return details?.code === 'functions/already-exists' &&
+    typeof twinLinkId === 'string'
+    ? twinLinkId
+    : null;
+};
+
 /** The name of the item a link was started from, or null when it started from Settings or the add picker. */
 const getStartedName = (startedFrom: LinkBankScreenProps['startedFrom']) => {
   if (!startedFrom) return null;
@@ -145,6 +158,11 @@ function LinkBankScreen({
   const [isBusy, setIsBusy] = useState(false);
   const isWorking = isBusy || busyId !== null;
   const [message, setMessage] = useState<string | null>(null);
+  const [twinId, setTwinId] = useState<string | null>(null);
+  const twin = joinable.find((link) => link.id === twinId) ?? null;
+  const offered = twin
+    ? [twin, ...joinable.filter((link) => link.id !== twin.id)]
+    : joinable;
   const [isLevelStuck, setIsLevelStuck] = useState(false);
   const [isAskingHeld, setIsAskingHeld] = useState(false);
   const { isAfterLink } = useHoldsPrompt();
@@ -173,11 +191,22 @@ function LinkBankScreen({
     if (!user || isBusy) return;
     setIsBusy(true);
     setMessage(null);
+    setTwinId(null);
     try {
       const linkToken = await createLinkSession();
       const opened = await openBankLink(linkToken);
       if (opened === null) {
         setMessage(LINK_WORDS.notLinked);
+        return;
+      }
+      // The provider's advice: a sign-in that repeats one already linked is never exchanged, so it never becomes a second link.
+      const repeated = findTwinLink(
+        store.getState().runway.links,
+        opened.institutionName ?? '',
+        opened.accounts,
+      );
+      if (repeated) {
+        setTwinId(repeated.id);
         return;
       }
       const next = await exchangeLink(
@@ -190,6 +219,11 @@ function LinkBankScreen({
       setBaseline(preset);
       setStep({ kind: 'match' });
     } catch (error) {
+      const repeatedId = readTwinLinkId(error);
+      if (repeatedId !== null) {
+        setTwinId(repeatedId);
+        return;
+      }
       setMessage(getErrorMessage(error, LINK_WORDS.sessionFailed));
     } finally {
       setIsBusy(false);
@@ -200,6 +234,7 @@ function LinkBankScreen({
     if (!user || isBusy) return;
     setIsBusy(true);
     setMessage(null);
+    setTwinId(null);
     const bank = link.institutionName || LINK_WORDS.yourBank;
     try {
       const result = await reconnectLink(link.id);
@@ -375,12 +410,22 @@ function LinkBankScreen({
                     ))}
                   </ul>
                 </div>
-                <InlineNotice tone='warning'>
-                  {LINK_WORDS.pickEveryAccount}
-                </InlineNotice>
+                {twin ? (
+                  <div role='status'>
+                    <InlineNotice tone='info'>
+                      {LINK_WORDS.alreadyLinked(
+                        twin.institutionName || LINK_WORDS.yourBank,
+                      )}
+                    </InlineNotice>
+                  </div>
+                ) : (
+                  <InlineNotice tone='warning'>
+                    {LINK_WORDS.pickEveryAccount}
+                  </InlineNotice>
+                )}
                 {joinable.length > 0 && (
                   <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
-                    {joinable.map((link) => {
+                    {offered.map((link) => {
                       const bank = link.institutionName || LINK_WORDS.yourBank;
                       return (
                         <li key={link.id}>
@@ -401,7 +446,9 @@ function LinkBankScreen({
                               hasChevron
                               icon={<Landmark />}
                               label={LINK_WORDS.addToLinkedRow(bank)}
-                              subtitle={LINK_WORDS.addToLinkedHelp}
+                              subtitle={
+                                twin ? undefined : LINK_WORDS.addToLinkedHelp
+                              }
                               isDisabled={isWorking}
                               onClick={() => void addAccounts(link)}
                             />
