@@ -239,21 +239,35 @@ export const getMerchantKeys = (purchase: OpenPurchase): string[] => [
 
 const MIN_NAME_LENGTH = 3;
 
-const isNamedLike = (bill: AutoBill, purchase: OpenPurchase) => {
-  const keys = getPurchaseKeys(purchase);
-  if (bill.merchantKeys.length > 0) {
-    return keys.some((key) => bill.merchantKeys.includes(key));
+/** Whether comparable charge names match a bill's learned names, or else contain or sit inside its comparable name. */
+export const areKeysNamedLike = (
+  billName: string,
+  merchantKeys: readonly string[],
+  keys: readonly string[],
+) => {
+  if (merchantKeys.length > 0) {
+    return keys.some((key) => merchantKeys.includes(key));
   }
-  const name = toComparable(bill.name);
   return (
-    name.length >= MIN_NAME_LENGTH &&
+    billName.length >= MIN_NAME_LENGTH &&
     keys.some(
       (key) =>
         key.length >= MIN_NAME_LENGTH &&
-        (key.includes(name) || name.includes(key)),
+        (key.includes(billName) || billName.includes(key)),
     )
   );
 };
+
+/** Whether a charge carries a name the bill has learned, or else one that contains or is contained by the bill's own name. */
+export const isNamedLike = (
+  bill: Pick<AutoBill, 'name' | 'merchantKeys'>,
+  purchase: OpenPurchase,
+) =>
+  areKeysNamedLike(
+    toComparable(bill.name),
+    bill.merchantKeys,
+    getPurchaseKeys(purchase),
+  );
 
 const isNearDue = (purchase: OpenPurchase, dueOn: DateOnly, days: number) =>
   purchase.date >= addUtcDays(dueOn, -days) &&
