@@ -4650,6 +4650,16 @@ async function writeSeedPurchases(
       summary: 'Purchase changed: Safeway, amount $54.18 to $64.18.',
     },
     {
+      id: 'seed-change-purchase-ruled',
+      createdAt: safewayDate + 9 * 3_600_000,
+      summary: `Purchase sent to Groceries: Trader Joe's, $38.20 on ${formatDateOrdinalUTC(safewayDate)}. By your rule “Trader Joe's goes to Groceries”.`,
+    },
+    {
+      id: 'seed-change-purchase-sent',
+      createdAt: safewayDate + 12 * 3_600_000,
+      summary: `Purchase sent to Groceries: Safeway, $54.18 on ${formatDateOrdinalUTC(safewayDate)}.`,
+    },
+    {
       id: 'seed-change-purchase-removed',
       createdAt: removedDate + 14 * 3_600_000,
       summary: `Purchase removed: Walgreens, $12.40 on ${formatDateOrdinalUTC(removedDate)}.`,
