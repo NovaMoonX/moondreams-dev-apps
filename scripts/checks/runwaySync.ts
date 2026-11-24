@@ -165,6 +165,7 @@ const tx = (
   merchantLogo: null,
   bankName: null,
   category: null,
+  isKnownBusiness: false,
   isPending: false,
   ...extra,
 });

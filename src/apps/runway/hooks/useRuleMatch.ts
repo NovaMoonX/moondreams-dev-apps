@@ -12,6 +12,7 @@ import {
   findBillCandidateIds,
   getMatchedKeys,
 } from '@apps/runway/engine/autoPay';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 import { findRulePlacements } from '@apps/runway/engine/rules';
 import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
@@ -21,6 +22,7 @@ import {
   selectAutoBills,
   selectIsAutoPayReady,
 } from '@apps/runway/store/selectors/autoPaySelectors';
+import { selectTwinHeldIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
@@ -89,6 +91,7 @@ export function usePlaceByRules(uid: string | null) {
   const waiting = useAppSelector(selectLinkWaiting);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const rules = useAppSelector(selectRules);
+  const twinHeld = useAppSelector(selectTwinHeldIds);
   const today = todayAsUtcDate();
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const autoBills = useAppSelector((state) => selectAutoBills(state, today));
@@ -120,7 +123,7 @@ export function usePlaceByRules(uid: string | null) {
   });
 
   useEffect(() => {
-    if (uid === null || !isReady || level !== 'link') return;
+    if (uid === null || !isReady || !isTrackingLevel(level)) return;
     if (isRunning.current) {
       isWaitingToRun.current = true;
       return;
@@ -138,6 +141,7 @@ export function usePlaceByRules(uid: string | null) {
       purchases,
       rules,
       new Set(envelopes.map(({ item }) => item.id)),
+      twinHeld,
     ).flatMap(({ purchase, rule }) => {
       const key = `${purchase.id}:${purchase.updatedAt}`;
       return tried.current.has(key) ||
@@ -259,6 +263,7 @@ export function usePlaceByRules(uid: string | null) {
     waiting,
     purchases,
     rules,
+    twinHeld,
     envelopes,
     autoBills,
     accounts,

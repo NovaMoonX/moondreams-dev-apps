@@ -49,6 +49,7 @@ import {
   toMonthKey,
 } from '@apps/runway/engine/closings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 import { isRefundLike } from '@apps/runway/engine/matching';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useNow } from '@/hooks/useNow';
@@ -267,7 +268,7 @@ function SpendScreen() {
               },
             ]
           : []),
-        ...(level === 'link'
+        ...(isTrackingLevel(level)
           ? [
               {
                 id: 'rules',

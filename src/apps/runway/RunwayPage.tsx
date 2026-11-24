@@ -462,7 +462,7 @@ function RunwayContent() {
       );
     }
 
-    if (view === 'rules' && level === 'link') {
+    if (view === 'rules' && isTrackingLevel(level)) {
       return (
         <div>
           <RulesScreen onClose={closeView} />

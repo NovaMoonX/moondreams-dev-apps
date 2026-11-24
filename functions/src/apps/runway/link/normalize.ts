@@ -1,3 +1,4 @@
+import { isKnownBusiness } from '../merchantNames.js';
 import type {
   AccountKind,
   NormalizedAccount,
@@ -74,6 +75,10 @@ export interface RawTransaction {
   logoUrl?: string | null;
   name: string | null;
   category?: string | null;
+  /** Plaid's id for the business behind the charge; present only for a business it recognised. */
+  merchantEntityId?: string | null;
+  /** Plaid's broad kind (`TRANSFER_OUT`, `BANK_FEES`). */
+  categoryPrimary?: string | null;
   isPending: boolean;
 }
 
@@ -131,6 +136,7 @@ export function normalizeTransaction(
     merchantLogo: toHttpsUrl(raw.logoUrl),
     bankName: toBankName(raw.merchantName, raw.name),
     category: raw.category?.trim().toUpperCase() || null,
+    isKnownBusiness: isKnownBusiness(raw),
     isPending: raw.isPending,
   };
   return result;
