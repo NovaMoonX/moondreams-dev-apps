@@ -24,6 +24,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import ActionRow from '@/components/ActionRow';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
+import EmailForwardingProgress from '@/components/emailForwarding/EmailForwardingProgress';
 import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import FallbackImage from '@/components/FallbackImage';
 import FormSheet from '@/components/FormSheet';
@@ -382,6 +383,22 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           isFailed={intake.isFailed}
           isBusy={isBusy}
           error={error}
+          progress={
+            <EmailForwardingProgress
+              appName='Runway'
+              confirm={shownConfirm}
+              isTapped={
+                shownConfirm !== null &&
+                (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at)
+              }
+              onConfirmTapped={() => {
+                if (shownConfirm === null) return;
+                writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
+                setConfirmTappedAt(shownConfirm.at);
+              }}
+              lastReceivedAt={intake.lastReceivedAt}
+            />
+          }
           onGetAddress={() => void getNewAddress()}
           onRetry={intake.retry}
           onDone={backToStatus}

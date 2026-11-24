@@ -5,6 +5,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
+import EmailForwardingProgress from '@/components/emailForwarding/EmailForwardingProgress';
 import EmailForwardingStatusLine from '@/components/emailForwarding/EmailForwardingStatusLine';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
@@ -31,6 +32,7 @@ import EmailEventSheet from '@apps/a-list/components/email/EmailEventSheet';
 import {
   EMAIL_ADDRESS_PREFIX,
   EMAIL_EVENT_KEEP_DAYS,
+  EMAIL_FILTER,
   EMAIL_SETUP_LINE,
   EMAIL_TICKETS_SHORT_TITLE,
 } from '@apps/a-list/constants';
@@ -228,6 +230,23 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
             isFailed={loadError !== null}
             isBusy={isBusy}
             error={error}
+            progress={
+              <EmailForwardingProgress
+                appName='A-List'
+                confirm={shownConfirm}
+                isTapped={
+                  shownConfirm !== null &&
+                  (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at)
+                }
+                onConfirmTapped={() => {
+                  if (shownConfirm === null) return;
+                  writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
+                  setConfirmTappedAt(shownConfirm.at);
+                }}
+                lastReceivedAt={intake?.lastReceivedAt ?? null}
+              />
+            }
+            filter={EMAIL_FILTER}
             onGetAddress={() => void getNewAddress()}
             onRetry={() => window.location.reload()}
             onDone={backToStatus}
