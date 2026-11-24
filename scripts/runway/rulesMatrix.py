@@ -37,6 +37,7 @@ COLLECTIONS = {
     'rules': {'update', 'delete'},
     'memories': {'delete'},
     'startedPayments': {'delete'},
+    'doneForYou': {'update', 'delete'},
     'emailFilters': {'delete'},
     'emailSetup': {'update'},
 }
