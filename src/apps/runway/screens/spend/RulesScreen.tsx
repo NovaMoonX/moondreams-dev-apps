@@ -9,6 +9,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
 import AddRuleSheet, {
+  type AddRuleView,
   type RuleSeed,
 } from '@apps/runway/components/AddRuleSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -54,6 +55,17 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const canAdd = isTrackingLevel(useAppSelector(selectLevel));
   const [isAdding, setIsAdding] = useState(false);
   const [seed, setSeed] = useState<RuleSeed | null>(null);
+  const [addView, setAddView] = useState<AddRuleView>('start');
+  const [storeQuery, setStoreQuery] = useState('');
+  const startAdding = () => {
+    setAddView('start');
+    setStoreQuery('');
+    setIsAdding(true);
+  };
+  const openFromAdd = (ruleId: string) => {
+    setIsAdding(false);
+    setOpenId(ruleId);
+  };
   const pickSeed = (picked: RuleSeed) => {
     setIsAdding(false);
     setSeed(picked);
@@ -164,13 +176,21 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           isInSubview
           label={RULE_WORDS.add}
           icon={<Plus className='h-5 w-5' aria-hidden='true' />}
-          onClick={() => setIsAdding(true)}
+          onClick={startAdding}
         />
       )}
-      {isAdding && (
-        <AddRuleSheet onPick={pickSeed} onClose={() => setIsAdding(false)} />
+      {canAdd && isAdding && (
+        <AddRuleSheet
+          view={addView}
+          query={storeQuery}
+          onViewChange={setAddView}
+          onQueryChange={setStoreQuery}
+          onPick={pickSeed}
+          onOpenRule={openFromAdd}
+          onClose={() => setIsAdding(false)}
+        />
       )}
-      {seed !== null && (
+      {canAdd && seed !== null && (
         <RuleSheet
           purchase={null}
           rule={null}

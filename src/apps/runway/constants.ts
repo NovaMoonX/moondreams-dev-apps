@@ -5533,9 +5533,9 @@ export const RULE_WORDS = {
   add: 'Add a rule',
   pickTitle: 'Add a rule',
   pickCard: 'Everything on a card',
-  pickCardSub: 'Send all of a card’s purchases to one envelope',
+  pickCardSub: 'One envelope for all of a card',
   pickKind: 'A kind of purchase',
-  pickKindSub: 'Like groceries or gas, wherever you buy it',
+  pickKindSub: 'Like groceries or restaurants',
   stores: 'Stores you’ve bought from',
   searchStores: 'Search stores',
   noStores:
@@ -5544,6 +5544,7 @@ export const RULE_WORDS = {
   allStoresHaveRules:
     'Every store you’ve bought from lately already has a rule.',
   storeTimes: (count: number) => (count === 1 ? 'Once' : `${count} times`),
+  hasRule: (sentence: string) => `Your rule: ${sentence}`,
   cardTitle: 'Which card?',
   kindTitle: 'Which kind of purchase?',
   noCards: 'No cards to pick from yet.',

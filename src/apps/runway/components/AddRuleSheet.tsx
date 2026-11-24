@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { CreditCard, Shapes, Store } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -19,7 +19,7 @@ import {
   selectNeedsHomeSections,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenPurchase } from '@apps/runway/types';
+import type { OpenPurchase, OpenRule } from '@apps/runway/types';
 import { getCategoryLabel } from '@apps/runway/utils/ruleText';
 
 /** What a new rule starts from: a store, a card or a kind of purchase, with the store's usual card and kind to narrow it by. */
@@ -30,12 +30,17 @@ export interface RuleSeed {
   cardId: string | null;
 }
 
+export type AddRuleView = 'start' | 'cards' | 'kinds';
+
 interface AddRuleSheetProps {
+  view: AddRuleView;
+  query: string;
+  onViewChange: (view: AddRuleView) => void;
+  onQueryChange: (query: string) => void;
   onPick: (seed: RuleSeed) => void;
+  onOpenRule: (ruleId: string) => void;
   onClose: () => void;
 }
-
-type View = 'start' | 'cards' | 'kinds';
 
 const SEARCH_FROM = 5;
 
@@ -74,7 +79,10 @@ const toStores = (
       .reduce((byKey, purchase) => {
         const key = toMerchantKey(purchase.merchant);
         if (key === null || namedKeys.has(key)) return byKey;
-        return byKey.set(key, [...(byKey.get(key) ?? []), purchase]);
+        const rows = byKey.get(key);
+        if (rows) rows.push(purchase);
+        else byKey.set(key, [purchase]);
+        return byKey;
       }, new Map<string, OpenPurchase[]>()),
   ]
     .map(([merchantKey, rows]) => {
@@ -93,26 +101,43 @@ const toStores = (
     );
 
 /** Starts a rule from the Rules screen: a store bought from lately (most often first), everything on a card, or a kind of purchase. */
-function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
+function AddRuleSheet({
+  view,
+  query,
+  onViewChange,
+  onQueryChange,
+  onPick,
+  onOpenRule,
+  onClose,
+}: AddRuleSheetProps) {
   const purchases = useAppSelector((state) => state.runway.purchases);
   const rules = useAppSelector(selectRules);
   const cards = useAppSelector(selectAllCards);
-  const { getCardLabel } = useRuleNames();
-  const [view, setView] = useState<View>('start');
-  const [query, setQuery] = useState('');
-
-  const namedKeys = new Set(
-    rules.flatMap((rule) =>
-      rule.merchantKey === null ? [] : [rule.merchantKey],
-    ),
-  );
+  const { getCardLabel, describe } = useRuleNames();
   const today = todayAsUtcDate();
-  const moveIds = new Set(
-    useAppSelector((state) => selectNeedsHomeSections(state, today)).moves.map(
-      ({ purchase }) => purchase.id,
-    ),
+  const moves = useAppSelector(
+    (state) => selectNeedsHomeSections(state, today).moves,
   );
-  const stores = toStores(purchases, namedKeys, moveIds);
+  const stores = useMemo(
+    () =>
+      toStores(
+        purchases,
+        new Set(
+          rules.flatMap((rule) =>
+            rule.merchantKey === null ? [] : [rule.merchantKey],
+          ),
+        ),
+        new Set(moves.map(({ purchase }) => purchase.id)),
+      ),
+    [purchases, rules, moves],
+  );
+  const findBroadRule = (cardId: string | null, category: string | null) =>
+    rules.find(
+      (rule) =>
+        rule.merchantKey === null &&
+        rule.cardId === cardId &&
+        rule.category === category,
+    ) ?? null;
   const needle = query.trim().toLowerCase();
   const shownStores = stores.filter(
     (row) => needle === '' || row.merchantName.toLowerCase().includes(needle),
@@ -140,7 +165,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
     cardId: null,
     ...fields,
   });
-  const back = () => setView('start');
+  const back = () => onViewChange('start');
 
   const getTitle = () => {
     if (view === 'cards') return RULE_WORDS.cardTitle;
@@ -166,7 +191,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
         {stores.length >= SEARCH_FROM && (
           <SearchInput
             value={query}
-            onChange={setQuery}
+            onChange={onQueryChange}
             placeholder={RULE_WORDS.searchStores}
           />
         )}
@@ -215,7 +240,12 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
   };
 
   const renderChoices = (
-    rows: readonly { key: string; label: string; seed: RuleSeed }[],
+    rows: readonly {
+      key: string;
+      label: string;
+      seed: RuleSeed;
+      existing: OpenRule | null;
+    }[],
     empty: string,
     icon: ReactNode,
   ) =>
@@ -223,23 +253,31 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
       <p className='text-muted-foreground text-sm'>{empty}</p>
     ) : (
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {rows.map((row) => (
-          <ItemRow
-            key={row.key}
-            name={row.label}
-            leading={
-              <span
-                className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
-                aria-hidden='true'
-              >
-                {icon}
-              </span>
-            }
-            isPrivate={false}
-            ariaLabel={row.label}
-            onOpen={() => onPick(row.seed)}
-          />
-        ))}
+        {rows.map((row) => {
+          const detail = row.existing
+            ? RULE_WORDS.hasRule(describe(row.existing, true))
+            : undefined;
+          return (
+            <ItemRow
+              key={row.key}
+              name={row.label}
+              detail={detail}
+              leading={
+                <span
+                  className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
+                  aria-hidden='true'
+                >
+                  {icon}
+                </span>
+              }
+              isPrivate={false}
+              ariaLabel={detail ? `${row.label}, ${detail}` : row.label}
+              onOpen={() =>
+                row.existing ? onOpenRule(row.existing.id) : onPick(row.seed)
+              }
+            />
+          );
+        })}
       </ul>
     );
 
@@ -250,6 +288,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
           key: card.id,
           label: card.label,
           seed: seedOf({ cardId: card.id }),
+          existing: findBroadRule(card.id, null),
         })),
         RULE_WORDS.noCards,
         <CreditCard className='h-4 w-4' />,
@@ -261,6 +300,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
           key: kind.code,
           label: kind.label,
           seed: seedOf({ category: kind.code }),
+          existing: findBroadRule(null, kind.code),
         })),
         RULE_WORDS.noKinds,
         <Shapes className='h-4 w-4' />,
@@ -275,7 +315,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
             label={RULE_WORDS.pickCard}
             subtitle={RULE_WORDS.pickCardSub}
             hasChevron
-            onClick={() => setView('cards')}
+            onClick={() => onViewChange('cards')}
           />
           <ActionRow
             isGrouped
@@ -283,7 +323,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
             label={RULE_WORDS.pickKind}
             subtitle={RULE_WORDS.pickKindSub}
             hasChevron
-            onClick={() => setView('kinds')}
+            onClick={() => onViewChange('kinds')}
           />
         </ActionGroup>
         <SectionDivider label={RULE_WORDS.stores} />
@@ -300,7 +340,7 @@ function AddRuleSheet({ onPick, onClose }: AddRuleSheetProps) {
       title={getTitle()}
       viewKey={view}
     >
-      <div className='space-y-3 pb-4'>
+      <div className='min-h-[min(36rem,70dvh)] space-y-3 pb-4'>
         {view !== 'start' && <BackLink onBack={back} />}
         {renderView()}
       </div>

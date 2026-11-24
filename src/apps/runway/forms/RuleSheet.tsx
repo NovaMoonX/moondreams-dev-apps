@@ -62,7 +62,6 @@ interface RuleSheetProps {
   onBack?: () => void;
   stayName?: string | null;
   onDecline?: () => void;
-  /** A new rule started without a purchase (a store, card or kind picked on the Rules screen); its envelope starts unanswered. */
   seed?: Facts | null;
 }
 
