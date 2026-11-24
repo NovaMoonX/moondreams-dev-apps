@@ -11,12 +11,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCentsShort } from '@/utils/moneyUtils';
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
-import type { BillPayment } from '@apps/runway/engine/demands';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { getBillPins } from '@apps/runway/engine/billShare';
 import {
@@ -29,13 +26,10 @@ import {
   restoreBillPins,
 } from '@apps/runway/store/actions/dayActions';
 import {
-  selectIsDaysLoaded,
-  selectIsPlanItemsLoaded,
   selectAllCards,
   selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillSealed, BillVersion } from '@apps/runway/types';
-import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
 import {
@@ -46,7 +40,8 @@ import {
 interface BillPaidFromNoticeProps {
   billId: string;
   bill: BillSealed;
-  payment: BillPayment | null;
+  /** Null when the pay carries the payment. */
+  message: string | null;
   today: number;
   /** Opens the bill's form at its Paid from question. */
   onPickAnother: () => void;
@@ -56,65 +51,18 @@ interface BillPaidFromNoticeProps {
 function BillPaidFromNotice({
   billId,
   bill,
-  payment,
+  message,
   today,
   onPickAnother,
 }: BillPaidFromNoticeProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const mask = useMaskedText();
   const { isHidden } = useValuesHidden();
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const allCards = useAppSelector(selectAllCards);
-  const isLoaded = useAppSelector(
-    (state) => selectIsPlanItemsLoaded(state) && selectIsDaysLoaded(state),
-  );
-  const lookahead = useDeferredLookahead(today, isLoaded);
   const [isBusy, setIsBusy] = useState(false);
   const isBusyRef = useRef(false);
-  const { fundedBy } = bill;
 
-  if (
-    (fundedBy.kind !== 'pay' && fundedBy.kind !== 'lastBefore') ||
-    !payment ||
-    payment.paid
-  )
-    return null;
-
-  const dueOn = formatDateOrdinalUTC(payment.dueOn);
-  const isUnfunded =
-    payment.parts.length === 0 && payment.fundedCents < payment.totalCents;
-  const payDays = new Set(payment.parts.map((part) => part.day.dayKey));
-  const shortProblem =
-    lookahead?.problems.find(
-      (problem) =>
-        problem.kind === 'short' &&
-        problem.itemId === billId &&
-        problem.isBill &&
-        payDays.has(problem.dayKey),
-    ) ?? null;
-  const getMessage = () => {
-    if (isUnfunded) {
-      return fundedBy.kind === 'pay'
-        ? PAID_FROM_WORDS.noticeNoPay(
-            describePayChoice(fundedBy, plan),
-            bill.name,
-            dueOn,
-          )
-        : PAID_FROM_WORDS.noticeNoPayAtAll(bill.name, dueOn);
-    }
-    if (shortProblem?.kind === 'short') {
-      return mask(
-        PAID_FROM_WORDS.noticeShort(
-          bill.name,
-          formatCentsShort(shortProblem.shortBy),
-          formatDateOrdinalUTC(shortProblem.on),
-        ),
-      );
-    }
-    return null;
-  };
-  const message = getMessage();
   if (message === null) return null;
 
   const spread = async () => {

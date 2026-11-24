@@ -204,6 +204,7 @@ import type {
   GoalSealed,
   GoalVersion,
   ItemKind,
+  MoneyRange,
   OpenPurchase,
   OpenVersion,
   Pairing,
@@ -307,6 +308,8 @@ export interface ItemSheetProps {
   };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
+  /** A bill's change form opens with this amount already typed in (a suggestion the person is reviewing). */
+  presetAmount?: MoneyRange;
   /** Opens at "What will change?" with this open event already picked as what the change is part of. */
   presetEventId?: string;
   /** Opens on this coming change's own sheet (its id and first day, as `getChangeRef` reads them from a change). */
@@ -388,6 +391,7 @@ function ItemSheet({
   linkAction,
   startsAtStep,
   presetEventId,
+  presetAmount,
   presetChange,
   payment = null,
   onMarked,
@@ -456,6 +460,7 @@ function ItemSheet({
   const [endDate, setEndDate] = useState('');
   const [pauseDate, setPauseDate] = useState(toDateInputValue(today));
   const [eventId, setEventId] = useState<string | null>(presetEventId ?? null);
+  const [presetAmountOnce, setPresetAmountOnce] = useState(presetAmount);
   const [error, setError] = useState<string | null>(null);
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const [groupChoice, setGroupChoice] = useState('');
@@ -1077,7 +1082,10 @@ function ItemSheet({
     }
   };
 
-  const backToSheet = () => setPhase('sheet');
+  const backToSheet = () => {
+    setPresetAmountOnce(undefined);
+    setPhase('sheet');
+  };
 
   if (phase === 'change') {
     if (version.kind === 'bill') {
@@ -1090,6 +1098,7 @@ function ItemSheet({
           presetEventId={presetEventId}
           planAhead={planAhead ?? undefined}
           openStep={openStep as BillStepId | null}
+          presetAmount={presetAmountOnce}
           onClose={onClose}
           onCancel={backToSheet}
         />

@@ -165,6 +165,7 @@ export const reconnectRunwayLink = onCall(
     const result = await syncRunwayLink(firestore, keyring, uid, linkId, {
       isFresh: false,
       isStatementsDue: true,
+      isRecurringDue: true,
     });
     if (result.state === 'skipped') {
       await firestore.runTransaction(async (transaction) => {

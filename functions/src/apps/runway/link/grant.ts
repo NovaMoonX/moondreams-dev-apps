@@ -22,6 +22,10 @@ export interface ProviderGrantDoc {
   statementsCheckedAt: number | null;
   /** Set when the provider's last answer was that it cannot give this link's card details, so asks back off. */
   isStatementsUnsupported: boolean | null;
+  /** When the repeating charges were last asked of the provider; null until the first ask, and missing on a grant written before they were kept. */
+  recurringCheckedAt: number | null;
+  /** Set when the provider's last answer was that it cannot give this link's repeating charges, so asks back off. */
+  isRecurringUnsupported: boolean | null;
 }
 
 export const grantsPath = (uid: string) => `apps/runway/server/${uid}/grants`;
@@ -74,6 +78,8 @@ export function sealGrant(
     isLiveBalanceOff: null,
     statementsCheckedAt: null,
     isStatementsUnsupported: null,
+    recurringCheckedAt: null,
+    isRecurringUnsupported: null,
     masterKeyId: keyring.current,
     wrapped: ciphertext,
     nonce,

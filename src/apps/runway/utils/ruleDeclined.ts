@@ -1,7 +1,7 @@
 const KEY_PREFIX = 'runway-rule-declined';
 
 /** cyrb53: a small synchronous digest, since crypto.subtle is missing on plain-HTTP pages. */
-const digest = (text: string) => {
+export const digest = (text: string) => {
   const mixed = Array.from(text).reduce(
     ([h1, h2], char) => {
       const code = char.charCodeAt(0);
