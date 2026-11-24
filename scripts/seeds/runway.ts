@@ -4767,6 +4767,7 @@ async function writeSeedEmail(
       cents: 2_764,
       subject: 'A charge of $27.64 on your Venture X',
       readBy: 'pattern',
+      isWaitingForHome: true,
     },
   ];
   await Promise.all(
@@ -4777,7 +4778,7 @@ async function writeSeedEmail(
         date,
         source: 'email',
         status: null,
-        needsHome: false,
+        needsHome: 'isWaitingForHome' in entry,
         accountId: null,
         dedupeKey: null,
         expenseId: null,
