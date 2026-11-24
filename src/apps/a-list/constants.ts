@@ -29,6 +29,12 @@ export const EMAIL_ADDRESS_PREFIX = 'amc';
 export const EMAIL_SETUP_LINE =
   'Forward your AMC reservation and cancellation emails here, by hand or with your email’s own rules, and your calendar keeps up. Anything else is skipped.';
 
+/** What AMC's ticket emails share, offered as a starting point for the member's own mail filter. */
+export const EMAIL_FILTER = {
+  sender: 'noreply@email.amctheatres.com',
+  phrase: 'order number',
+};
+
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';
 
