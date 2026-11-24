@@ -82,6 +82,9 @@ export const EMAIL_WORDS = {
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
   emailActionsCaption: 'The email',
   drawerFromEmail: 'Read from your bank’s alert email.',
+  drawerFromStore: 'Read from the store’s email.',
+  drawerStoreWaiting:
+    'Read from the store’s email. It merges on its own when your bank sends the same charge.',
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
     `Your bank hasn’t sent this charge in ${days} days. Stop waiting to keep it as it is, or remove it.`,
@@ -106,6 +109,8 @@ const OUTCOME_ROW_WORDS: Record<EmailOutcome, string> = {
   confirm: 'Confirmation',
   unread: 'Couldn’t read it',
   notTracking: 'Not tracking that day',
+  refund: 'Refund',
+  cancel: 'Cancellation',
 };
 
 export const describeEmailRowOutcome = (outcome: EmailOutcome) =>
@@ -118,6 +123,8 @@ const OUTCOME_WORDS: Record<EmailOutcome, string> = {
   confirm: 'Forwarding confirmation',
   unread: 'Couldn’t read it',
   notTracking: 'Not tracking that day',
+  refund: 'A refund from the store',
+  cancel: 'A cancelled order',
 };
 
 export const describeEmailOutcome = (outcome: EmailOutcome) =>
