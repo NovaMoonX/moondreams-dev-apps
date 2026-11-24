@@ -89,9 +89,14 @@ export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
   readonly code: string | null;
   /** The provider's request id and the path that failed; never a token or account. */
-  trace: { requestId: string | null; path: string | null } = {
+  trace: {
+    requestId: string | null;
+    path: string | null;
+    detail: string | null;
+  } = {
     requestId: null,
     path: null,
+    detail: null,
   };
   constructor(
     kind: ProviderErrorKind,

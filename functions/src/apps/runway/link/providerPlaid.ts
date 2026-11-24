@@ -58,6 +58,14 @@ interface PlaidFailure {
   request_id?: string;
 }
 
+/** Plaid's own sentence for a failure, clipped, with anything shaped like a token masked. */
+const asProviderDetail = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() !== ''
+    ? value
+        .replace(/\b(access|link|public|processor)-[A-Za-z0-9-]+/g, '[token]')
+        .slice(0, 300)
+    : null;
+
 const asRequestId = (value: unknown): string | null =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)
     ? value
@@ -117,6 +125,18 @@ function toProviderError(code: string): ProviderError {
       asProviderCode(code),
     );
   }
+  if (
+    code === 'INVALID_FIELD' ||
+    code === 'INVALID_BODY' ||
+    code === 'MISSING_FIELDS' ||
+    code === 'INVALID_CONFIGURATION'
+  ) {
+    return new ProviderError(
+      'rejected',
+      'Your bank\u2019s connection turned this request down, so trying again won\u2019t help yet.',
+      asProviderCode(code),
+    );
+  }
   if (code === 'ITEM_LIMIT_EXCEEDED' || code === 'USER_PERMISSION_REVOKED') {
     return new ProviderError(
       'limit',
@@ -151,13 +171,17 @@ export async function call<T>(
       'unavailable',
       'Could not reach the bank connection. Try again in a few minutes.',
     );
-    unreached.trace = { requestId: null, path };
+    unreached.trace = { requestId: null, path, detail: null };
     throw unreached;
   });
   const json = (await response.json().catch(() => ({}))) as T & PlaidFailure;
   if (!response.ok) {
     const failure = toProviderError(json.error_code ?? '');
-    failure.trace = { requestId: asRequestId(json.request_id), path };
+    failure.trace = {
+      requestId: asRequestId(json.request_id),
+      path,
+      detail: asProviderDetail(json.error_message),
+    };
     throw failure;
   }
   return json;

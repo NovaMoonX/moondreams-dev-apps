@@ -98,6 +98,7 @@ export async function withProvider<T>(work: () => Promise<T>) {
         code: error.code,
         requestId: error.trace.requestId,
         path: error.trace.path,
+        detail: error.trace.detail,
       });
       throw new HttpsError(
         error.kind === 'unavailable' ? 'unavailable' : 'failed-precondition',
@@ -106,6 +107,7 @@ export async function withProvider<T>(work: () => Promise<T>) {
           providerCode: error.code,
           requestId: error.trace.requestId,
           path: error.trace.path,
+          detail: error.trace.detail,
         },
       );
     }
