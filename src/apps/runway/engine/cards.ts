@@ -517,6 +517,8 @@ export function getBankDueState(input: {
   today: DateOnly;
   days: number;
   since: DateOnly;
+  /** The day a started payment is judged still waited for on, when the window starts on another day than today. */
+  waitedOn?: DateOnly;
 }): DueCard | null {
   const { statement } = input;
   if (statement === null || input.owedCents <= 0) return null;
@@ -527,7 +529,7 @@ export function getBankDueState(input: {
   const isStartedCovering = input.started.some(
     (payment) =>
       payment.cardId === input.card.id &&
-      isStillWaitedFor(payment, input.today) &&
+      isStillWaitedFor(payment, input.waitedOn ?? input.today) &&
       payment.amountCents >= minimumCents &&
       (statementOn === null || payment.startedOn >= statementOn),
   );
