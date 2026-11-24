@@ -128,7 +128,7 @@ for pair in "${pairs[@]}"; do
   workdir=$(mktemp -d)
   errors=$(mktemp)
   if git worktree add -q --detach "$workdir" "origin/$head" 2>"$errors" &&
-    git "${identity[@]}" -C "$workdir" merge -q --no-edit -m "Merge $base into $head" "origin/$base" >/dev/null 2>"$errors" &&
+    git ${identity[@]+"${identity[@]}"} -C "$workdir" merge -q --no-edit -m "Merge $base into $head" "origin/$base" >/dev/null 2>"$errors" &&
     git -C "$workdir" push -q origin "HEAD:refs/heads/$head" 2>"$errors"; then
     report "$head" "$base" merged "$behind" ""
   else
