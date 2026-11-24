@@ -605,14 +605,13 @@ async function writeCardStatements(
   planKey: PlanKey,
   targets: ReadonlyMap<string, Target>,
   hadAnswer: CardDetailsAnswer | null,
-  isConsentUnsupported: boolean,
 ) {
   const answer = await provider.listCardStatements(grant);
-  // A bank that refused the ask for consent keeps answering "needs consent", which would bring the offer back.
-  const read: CardStatementRead =
-    answer.kind === 'needsConsent' && isConsentUnsupported
-      ? { kind: 'unsupported' }
-      : answer;
+  // A bank that refused the ask for consent keeps answering "needs consent"; read fresh, since a tap may have just found that.
+  const isRefused =
+    answer.kind === 'needsConsent' &&
+    (await grantRef.get()).data()?.isCardConsentUnsupported === true;
+  const read: CardStatementRead = isRefused ? { kind: 'unsupported' } : answer;
   if (read.kind === 'notReady') {
     await retryStatementsSoon(grantRef);
     return;
@@ -978,7 +977,6 @@ export async function syncRunwayLink(
         planKey,
         targets,
         hadAnswer,
-        grantDoc.isCardConsentUnsupported === true,
       ).catch(async (error: unknown) => {
         logger.warn('runway.sync.statementsFailed', {
           linkId,

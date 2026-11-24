@@ -323,11 +323,10 @@ const UNSUPPORTED_CODES = new Set([
 ]);
 
 // Plaid answers an update-mode ask for liabilities at a bank without them with INVALID_FIELD ("liabilities not supported by <bank>").
-const isCardConsentRefusal = (error: unknown) =>
+const isCardConsentRefusal = (error: unknown): error is ProviderError =>
   error instanceof ProviderError &&
-  (error.code === 'INVALID_PRODUCT' ||
-    (error.code === 'INVALID_FIELD' &&
-      /liabilities/i.test(error.trace.detail ?? '')));
+  (error.code === 'INVALID_FIELD' || error.code === 'INVALID_PRODUCT') &&
+  /liabilities/i.test(error.trace.detail ?? '');
 
 const createLinkToken = (body: Record<string, unknown>) =>
   call<{ link_token: string }>('/link/token/create', body);
@@ -361,7 +360,11 @@ export const plaidProvider: BankDataProvider = {
         }),
         async (error: unknown) => {
           if (!isCardConsentRefusal(error)) throw error;
-          logger.warn('runway.link.cardConsentUnsupported');
+          logger.warn('runway.link.cardConsentUnsupported', {
+            code: error.code,
+            requestId: error.trace.requestId,
+            detail: error.trace.detail,
+          });
           const { link_token } = await createLinkToken(reopen);
           return { linkToken: link_token, isCardConsentUnsupported: true };
         },
