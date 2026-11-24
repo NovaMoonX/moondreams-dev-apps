@@ -1,14 +1,10 @@
-import {
-  DropdownMenu,
-  DropdownMenuFactories,
-} from '@moondreamsdev/dreamer-ui/components';
-import { Camera, ImagePlus } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Camera, ImagePlus, Images } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
-
-const { option } = DropdownMenuFactories;
-const TAKE = 'take';
-const CHOOSE = 'choose';
+import FormSheet from '@/components/FormSheet';
 
 interface PhotoActionRowProps {
   label: string;
@@ -23,7 +19,32 @@ interface PhotoActionRowProps {
   onPick: (isCamera: boolean) => void;
 }
 
-/** One drawer row that adds a photo: on a touch screen a tap asks Take a photo or Choose a photo. */
+interface PhotoTileProps {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}
+
+function PhotoTile({ icon, label, onClick }: PhotoTileProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      onClick={onClick}
+      className='bg-accent/50 border-border h-auto min-h-36 w-full flex-col justify-start gap-3 rounded-2xl border px-3! py-6 text-center font-normal whitespace-normal'
+    >
+      <span
+        className='bg-primary text-primary-foreground grid size-14 place-items-center rounded-full'
+        aria-hidden='true'
+      >
+        {icon}
+      </span>
+      <span className='text-foreground text-base font-semibold'>{label}</span>
+    </Button>
+  );
+}
+
+/** One drawer row that adds a photo: on a touch screen a tap opens a sheet with a camera tile and a gallery tile. */
 function PhotoActionRow({
   label,
   subtitle,
@@ -32,43 +53,51 @@ function PhotoActionRow({
   isRoomy = false,
   isGrouped = false,
   takeLabel = 'Take a photo',
-  chooseLabel = 'Choose a photo',
+  chooseLabel = 'Choose from gallery',
   onPick,
 }: PhotoActionRowProps) {
-  const row = (onClick: () => void) => (
-    <ActionRow
-      isGrouped={isGrouped}
-      isRoomy={isRoomy}
-      icon={<ImagePlus />}
-      label={label}
-      subtitle={subtitle}
-      isDisabled={isDisabled}
-      onClick={onClick}
-    />
-  );
+  const [isOpen, setIsOpen] = useState(false);
+  const isAsking = canTakePhoto && !isDisabled;
 
-  if (!canTakePhoto || isDisabled) return row(() => onPick(false));
+  const pick = (isCamera: boolean) => {
+    onPick(isCamera);
+    setIsOpen(false);
+  };
 
   return (
-    <DropdownMenu
-      placement='bottom'
-      alignment='start'
-      className='min-w-56'
-      trigger={<div className='block w-full'>{row(() => undefined)}</div>}
-      items={[
-        option({
-          label: takeLabel,
-          value: TAKE,
-          icon: <Camera className='size-4' aria-hidden='true' />,
-        }),
-        option({
-          label: chooseLabel,
-          value: CHOOSE,
-          icon: <ImagePlus className='size-4' aria-hidden='true' />,
-        }),
-      ]}
-      onItemSelect={(value) => onPick(value === TAKE)}
-    />
+    <>
+      <ActionRow
+        isGrouped={isGrouped}
+        isRoomy={isRoomy}
+        icon={<ImagePlus />}
+        label={label}
+        subtitle={subtitle}
+        isDisabled={isDisabled}
+        hasChevron={isAsking}
+        onClick={() => (isAsking ? setIsOpen(true) : onPick(false))}
+      />
+      {isOpen && (
+        <FormSheet
+          isOpen
+          isDrawerWhenShort
+          title={label}
+          onClose={() => setIsOpen(false)}
+        >
+          <div className='grid grid-cols-2 gap-3 pb-2'>
+            <PhotoTile
+              icon={<Camera className='size-6' />}
+              label={takeLabel}
+              onClick={() => pick(true)}
+            />
+            <PhotoTile
+              icon={<Images className='size-6' />}
+              label={chooseLabel}
+              onClick={() => pick(false)}
+            />
+          </div>
+        </FormSheet>
+      )}
+    </>
   );
 }
 
