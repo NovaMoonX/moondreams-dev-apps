@@ -4,9 +4,7 @@ import { ListChecks, Mail } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
-import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SelectionBar from '@/components/SelectionBar';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
@@ -20,14 +18,11 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import EnvelopePickSheet from '@apps/runway/components/EnvelopePickSheet';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import MoneyInSheet from '@apps/runway/components/MoneyInSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
-import {
-  NEEDS_HOME_WORDS,
-  PAIR_WORDS,
-  RUNWAY_SEARCH_THRESHOLD,
-} from '@apps/runway/constants';
+import { NEEDS_HOME_WORDS, PAIR_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
@@ -39,7 +34,6 @@ import {
 } from '@apps/runway/store/actions/purchaseActions';
 import {
   selectAllCards,
-  selectEnvelopes,
   selectItemLooks,
   selectIsNeedsHomeLoaded,
   selectIsSortingPaused,
@@ -138,74 +132,6 @@ function NeedsHomeRow({
       }
       onOpen={tick ? undefined : onOpen}
     />
-  );
-}
-
-function EnvelopePickSheet({
-  count,
-  onPick,
-  onClose,
-}: {
-  count: number;
-  onPick: (envelopeId: string) => void;
-  onClose: () => void;
-}) {
-  const today = todayAsUtcDate();
-  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
-  const looks = useAppSelector(selectItemLooks);
-  const [query, setQuery] = useState('');
-  const shown = envelopes.filter(({ item }) =>
-    (looks.get(item.id)?.name ?? '')
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
-
-  return (
-    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title='Envelopes'>
-      <div className='space-y-3 pb-4'>
-        <div>
-          <h3 className='text-2xl font-semibold'>
-            {NEEDS_HOME_WORDS.bulkPickTitle}
-          </h3>
-          <p className='text-muted-foreground text-sm'>
-            {NEEDS_HOME_WORDS.bulkPickSub(count)}
-          </p>
-        </div>
-        {envelopes.length >= RUNWAY_SEARCH_THRESHOLD && (
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={NEEDS_HOME_WORDS.bulkSearch}
-          />
-        )}
-        {envelopes.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>
-            {NEEDS_HOME_WORDS.bulkNoEnvelopes}
-          </p>
-        ) : shown.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>
-            {NEEDS_HOME_WORDS.bulkNoMatch}
-          </p>
-        ) : (
-          <ul className='border-border divide-border bg-card max-h-[max(9rem,calc(92dvh-29rem))] divide-y overflow-y-auto rounded-2xl border'>
-            {shown.map(({ item }) => {
-              const name = looks.get(item.id)?.name ?? item.id;
-              return (
-                <ItemRow
-                  key={item.id}
-                  name={name}
-                  emoji={looks.get(item.id)?.emoji ?? null}
-                  isPrivate={false}
-                  ariaLabel={name}
-                  isAction
-                  onOpen={() => onPick(item.id)}
-                />
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </FormSheet>
   );
 }
 
@@ -578,7 +504,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       )}
       {isPicking && (
         <EnvelopePickSheet
-          count={selected.length}
+          subtitle={NEEDS_HOME_WORDS.bulkPickSub(selected.length)}
           onPick={putInEnvelope}
           onClose={() => setIsPicking(false)}
         />
