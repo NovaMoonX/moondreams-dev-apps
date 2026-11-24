@@ -1,5 +1,3 @@
-import { EMAIL_ADDRESS_PREFIX } from '@apps/runway/constants';
-import type { EmailIntakeRead } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailFilterSealed,
   EmailOutcome,
@@ -16,9 +14,6 @@ export const EMAIL_WORDS = {
   rowCaption: 'Email',
   rowSub: 'Forward bank alerts and store receipts',
   title: 'Email purchases',
-  getAddress: 'Get your address',
-  addressLoadFailed: 'Couldn’t load your address. Try again.',
-  tryAgain: 'Try again',
   newAddress: 'Get a new address',
   newAddressSub: 'Your old address stops working',
   newAddressTitle: 'Get a new address?',
@@ -58,21 +53,6 @@ export const EMAIL_WORDS = {
   setupLine:
     'Forward your bank alerts and store receipts here, by hand or with your email’s own rules.',
   copyAddress: 'Copy address',
-  copyFailed: 'Couldn’t copy it. Press and hold the address to copy it.',
-  done: 'Done',
-  confirmAsked: (provider: string) => `${provider} asked to confirm forwarding`,
-  confirmButton: (provider: string | null) =>
-    provider === null ? 'Confirm forwarding' : `Confirm with ${provider}`,
-  confirmCodeLine: (provider: string | null) =>
-    provider === null
-      ? 'Enter this code where you set up forwarding'
-      : `Enter this code in ${provider}’s forwarding settings`,
-  copyCode: 'Copy code',
-  confirmedBy: (provider: string) =>
-    `Runway confirmed ${provider}’s forwarding`,
-  confirmStillNeeded: (provider: string | null) =>
-    `${provider ?? 'Your email'} still needs your OK`,
-  confirmAgain: 'Confirm again',
   emailTitle: 'Email',
   filterOut: 'Filter out emails like this',
   filterOutSub: 'Future ones are skipped before anything is read.',
@@ -199,28 +179,3 @@ export function describeEmailFilter(filter: EmailFilterSealed): {
     detail: parts.length > 1 ? parts.slice(1).join(' · ') : null,
   };
 }
-
-/** The providers whose forwarding confirmation Functions recognise, as the person knows them. */
-export const CONFIRM_PROVIDER_NAMES = {
-  gmail: 'Gmail',
-  yahoo: 'Yahoo',
-  proton: 'Proton Mail',
-} as const;
-
-export const shortenForwardingAddress = (address: string) => {
-  const [name, ...host] = address.split('@');
-  const keep = EMAIL_ADDRESS_PREFIX.length + 1 + 4;
-  return name.length <= keep + 1
-    ? address
-    : `${name.slice(0, keep)}…@${host.join('@')}`;
-};
-
-type EmailConfirm = NonNullable<EmailIntakeRead['confirm']>;
-
-export const readConfirmLink = (confirm: EmailConfirm) =>
-  confirm.url?.startsWith('https://') ? confirm.url : null;
-
-export const hasConfirmNotice = (confirm: EmailConfirm) =>
-  confirm.autoConfirm === 'confirmed' ||
-  readConfirmLink(confirm) !== null ||
-  confirm.code !== null;

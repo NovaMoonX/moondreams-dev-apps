@@ -4,6 +4,7 @@ import {
   calendarSharesReducer,
   type CalendarSharesState,
 } from './slices/calendarSharesSlice';
+import { emailReducer, type EmailState } from './slices/emailSlice';
 import {
   membershipReducer,
   type MembershipState,
@@ -18,6 +19,7 @@ export interface AListState {
   viewings: ViewingsState;
   theatres: TheatresState;
   calendarShares: CalendarSharesState;
+  email: EmailState;
 }
 
 export const aListReducer = combineReducers({
@@ -26,6 +28,7 @@ export const aListReducer = combineReducers({
   viewings: viewingsReducer,
   theatres: theatresReducer,
   calendarShares: calendarSharesReducer,
+  email: emailReducer,
 });
 
 export { type MembershipState } from './slices/membershipSlice';
@@ -33,3 +36,4 @@ export { type WatchlistState } from './slices/watchlistSlice';
 export { type ViewingsState } from './slices/viewingsSlice';
 export { type TheatresState } from './slices/theatresSlice';
 export { type CalendarSharesState } from './slices/calendarSharesSlice';
+export { type EmailState } from './slices/emailSlice';

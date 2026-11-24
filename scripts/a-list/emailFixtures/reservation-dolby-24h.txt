@@ -1,0 +1,21 @@
+From: AMC Theatres <receipts@amctheatres.com>
+Subject: Your AMC Ticket Reservation Confirmation
+
+Your Ticket Reservation Details
+Ticket Confirmation#: 0191009922
+Dolby Cinema at AMC
+Project Hail Mary PG-13
+19:40 11/27/2026
+AMC Dine-In Rosedale 18
+The listed showtime is when trailers begin.
+Auditorium: 3
+Reserved Seats: H10
+Ticket: 1 Adult; $20.49
+1 AMC Stubs A-List Savings: -$20.49
+Ticket Total: $0.00
+Waived Convenience Fee: $2.69
+AMC Stubs Details
+Member Name: Jordan Avery
+AMC Stubs A-List Number: 1101000550800002
+Summary
+Total Amount: $0.00

@@ -4,3 +4,4 @@ compatibility_date = "2026-11-01"
 
 [vars]
 INGEST_URL = "https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestRunwayEmail"
+A_LIST_INGEST_URL = "https://us-central1-moondreams-dev-apps.cloudfunctions.net/ingestAListEmail"

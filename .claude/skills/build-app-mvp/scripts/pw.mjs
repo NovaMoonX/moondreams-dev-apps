@@ -28,9 +28,9 @@ export async function fillOutsideData(ctx) {
     });
   });
 }
-export async function open({ mobile = true, showToasts = false, colorScheme = 'light', viewport = null } = {}) {
+export async function open({ mobile = true, showToasts = false, colorScheme = 'light', viewport = null, deviceScaleFactor = 1 } = {}) {
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ timezoneId: 'America/Los_Angeles', colorScheme, viewport: viewport ?? (mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 }) });
+  const ctx = await browser.newContext({ timezoneId: 'America/Los_Angeles', colorScheme, deviceScaleFactor, viewport: viewport ?? (mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 }) });
   await ctx.addInitScript((keepToasts) => { document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '.firebase-emulator-warning{display:none!important}' + (keepToasts ? '' : ' [role="region"].fixed.pointer-events-none{display:none!important}'); document.head.appendChild(st); }); }, showToasts);
   await fillOutsideData(ctx);
   const page = await ctx.newPage();
