@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 
 import type { Firestore } from 'firebase-admin/firestore';
 
+import {
+  findInstitutionLogo,
+  INSTITUTION_LOGOS_PATH,
+  learnInstitutionLogo,
+  toInstitutionKey,
+  toSafeLogo,
+} from '../../functions/src/apps/runway/institutionLogos.ts';
 import { planEmailPurchaseFill } from '../../functions/src/apps/runway/email/fillEmailPurchasesPlan.ts';
 import { normalizeTransaction } from '../../functions/src/apps/runway/link/normalize.ts';
 import {
@@ -320,5 +327,115 @@ assert.notEqual(
   ),
   null,
 );
+
+// Bank logos: a name is found through its legal ending, a logo is kept only as https or an image, and a document holds a bank and nothing else.
+assert.equal(
+  toInstitutionKey('Capital One, N.A.'),
+  toInstitutionKey('capital one'),
+);
+assert.equal(toInstitutionKey('Chase Bank'), 'chase');
+assert.equal(toInstitutionKey('US Bank'), 'us bank', 'too short without Bank');
+assert.equal(toInstitutionKey('TD Bank, N.A.'), 'td bank');
+assert.equal(toInstitutionKey('Citibank Online'), 'citibank online');
+assert.notEqual(
+  toInstitutionKey('Citibank Online'),
+  toInstitutionKey('Citibank'),
+  'an unlisted ending is not guessed away',
+);
+assert.equal(toInstitutionKey('Bank of America, N.A.'), 'bank of america');
+assert.equal(toInstitutionKey('Wells Fargo & Company'), 'wells fargo company');
+assert.equal(toInstitutionKey('N A'), null);
+assert.equal(toInstitutionKey(null), null);
+assert.equal(toSafeLogo('javascript:alert(1)'), null);
+assert.equal(toSafeLogo('http://logos.example/a.png'), null);
+assert.equal(toSafeLogo('data:image/svg+xml;base64,PHN2Zz4='), null);
+assert.equal(
+  toSafeLogo('data:image/png;base64,iVBOR=='),
+  'data:image/png;base64,iVBOR==',
+);
+assert.equal(
+  toSafeLogo('https://logos.example/a.png'),
+  'https://logos.example/a.png',
+);
+const bankDocs = new Map<string, Record<string, unknown>>();
+const bankStore = (fail: boolean) =>
+  ({
+    doc: (path: string) => ({
+      get: async () => {
+        if (fail) throw new Error('down');
+        return { data: () => bankDocs.get(path) };
+      },
+      set: async (data: Record<string, unknown>) => {
+        bankDocs.set(path, data);
+      },
+    }),
+  }) as unknown as Firestore;
+await learnInstitutionLogo(
+  bankStore(false),
+  ['Capital One', 'Capital One, N.A.', null],
+  'data:image/png;base64,iVBOR==',
+  NOW,
+);
+assert.equal(bankDocs.size, 1, 'two spellings of one bank share a document');
+assert.equal(
+  Object.keys([...bankDocs.values()][0])
+    .sort()
+    .join(),
+  'logo,name,seenAt',
+  'a document holds nothing about a person',
+);
+await learnInstitutionLogo(
+  bankStore(false),
+  ['Capital One Financial'],
+  'https://logos.example/co.png',
+  NOW,
+);
+assert.equal(bankDocs.size, 2);
+await learnInstitutionLogo(
+  bankStore(false),
+  ['capital one, n.a.'],
+  'https://logos.example/co-new.png',
+  NOW,
+);
+assert.equal(bankDocs.size, 2, 'the same bank keeps its one document');
+assert.equal(
+  [...bankDocs.values()].find(
+    (doc) => doc.logo === 'https://logos.example/co-new.png',
+  )?.name,
+  'Capital One',
+  'a new logo keeps the name already stored',
+);
+bankDocs.clear();
+await learnInstitutionLogo(
+  bankStore(false),
+  ['Capital One', 'Capital One, N.A.', null],
+  'data:image/png;base64,iVBOR==',
+  NOW,
+);
+assert.equal(
+  await learnInstitutionLogo(bankStore(false), ['Chase'], 'not a logo', NOW),
+  true,
+  'no logo to share is done',
+);
+assert.equal(
+  await learnInstitutionLogo(
+    bankStore(true),
+    ['Chase'],
+    'https://logos.example/c.png',
+    NOW,
+  ),
+  false,
+  'a failed write is tried again',
+);
+assert.equal(bankDocs.size, 1, 'a bad logo teaches nothing');
+assert.deepEqual(
+  await findInstitutionLogo(bankStore(false), 'CAPITAL ONE BANK, N.A.'),
+  { name: 'Capital One', logo: 'data:image/png;base64,iVBOR==' },
+);
+assert.ok(
+  bankDocs.has(`${INSTITUTION_LOGOS_PATH}/${merchantDocId('capital one')}`),
+);
+assert.equal(await findInstitutionLogo(bankStore(false), 'Chase'), null);
+assert.equal(await findInstitutionLogo(bankStore(true), 'Capital One'), null);
 
 console.log('runwayMerchantNames: ok');

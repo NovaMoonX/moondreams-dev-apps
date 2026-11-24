@@ -49,6 +49,12 @@ export interface OpenEmailFilter extends EmailFilterSealed {
 
 const EVENT_LIMIT = 50;
 
+const toSenderLogo = (logo: string | null | undefined) =>
+  typeof logo === 'string' &&
+  (logo.startsWith('https://') || logo.startsWith('data:image/'))
+    ? logo
+    : null;
+
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
@@ -154,6 +160,8 @@ export function startEmailEventsListener(
               bodyText: payload.bodyText ?? null,
               readBy: payload.readBy ?? null,
               storeEmail: payload.storeEmail ?? null,
+              senderLogo: toSenderLogo(payload.senderLogo),
+              senderCompany: payload.senderCompany ?? null,
             };
           }),
         );
