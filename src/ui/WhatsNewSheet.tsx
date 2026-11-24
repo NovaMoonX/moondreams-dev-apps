@@ -88,7 +88,7 @@ function NoteRow({
         type='button'
         variant='tertiary'
         aria-label={`${note.text}, show me`}
-        className='h-auto min-h-10 w-full items-start justify-start gap-3 px-0 py-2 text-left font-normal'
+        className='h-auto min-h-10 w-full items-start justify-start gap-3 !px-0 py-2 text-left font-normal'
         onClick={() => onShowMe(note)}
       >
         {icon}
