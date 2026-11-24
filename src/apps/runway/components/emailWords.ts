@@ -102,6 +102,9 @@ export const EMAIL_WORDS = {
     'Read from your bank’s alert email. It merges on its own when your bank sends the same charge.',
   emailActionsCaption: 'The email',
   drawerFromEmail: 'Read from your bank’s alert email.',
+  drawerFromStore: 'Read from the store’s email.',
+  drawerStoreWaiting:
+    'Read from the store’s email. It merges on its own when your bank sends the same charge.',
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
     `Your bank hasn’t sent this charge in ${days} days. Stop waiting to keep it as it is, or remove it.`,
