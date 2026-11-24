@@ -38,6 +38,7 @@ import SetupLanding from '@apps/runway/screens/start/SetupLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
+import RuleOverCover from '@apps/runway/components/RuleOverCover';
 import AccountsScreen from '@apps/runway/screens/plan/AccountsScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
@@ -295,6 +296,12 @@ function RunwayContent() {
   useApplyStoreOrders(user?.uid ?? null);
   const doneForYou = useDoneForYou();
   const [isDoneForYouOpen, setIsDoneForYouOpen] = useState(false);
+  const [returnId, setReturnId] = useState<string | null>(null);
+  const closeCover = () => {
+    setReturnId(doneForYou.coverEntryId);
+    doneForYou.closeCover();
+    setIsDoneForYouOpen(true);
+  };
   const openDoneForYou = () => {
     setIsDoneForYouOpen(true);
     if (!user) return;
@@ -305,6 +312,7 @@ function RunwayContent() {
   };
   const closeDoneForYou = () => {
     setIsDoneForYouOpen(false);
+    setReturnId(null);
     if (!user) return;
     setDoneForYouSeen(user.uid).catch((error: unknown) =>
       console.error('Done for you was not marked seen', error),
@@ -574,6 +582,8 @@ function RunwayContent() {
     <>
       <Fragment key={isScrambled ? 'made-up' : 'real'}>{getView()}</Fragment>
       <DoneForYouSheet
+        key={returnId ?? 'list'}
+        startId={returnId}
         isOpen={isDoneForYouOpen}
         onClose={closeDoneForYou}
         title={DONE_FOR_YOU_WORDS.title}
@@ -583,6 +593,9 @@ function RunwayContent() {
         renderText={(text) => <MaskedText>{text}</MaskedText>}
         titleTrailing={<ValuesEyeButton />}
       />
+      {doneForYou.coverId !== null && (
+        <RuleOverCover purchaseId={doneForYou.coverId} onClose={closeCover} />
+      )}
     </>
   );
 }
