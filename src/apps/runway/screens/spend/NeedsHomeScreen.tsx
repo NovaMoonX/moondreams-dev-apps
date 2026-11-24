@@ -49,6 +49,7 @@ import {
   describePurchaseReturned,
   getPairSideName,
 } from '@apps/runway/utils/purchaseText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface NeedsHomeScreenProps {
   onClose: () => void;
@@ -247,6 +248,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       description:
         outcome.error === null ? undefined : NEEDS_HOME_WORDS.bulkPartlyFailed,
       type: outcome.error === null ? 'success' : 'warning',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: NEEDS_HOME_WORDS.undo,
         onClick: () =>

@@ -107,6 +107,7 @@ import {
   DraftPlanNotReady,
 } from '@apps/runway/store/actions/draftActions';
 import type { DraftKind, StartDraft } from '@apps/runway/utils/startDraft';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const KINDS: { kind: BudgetKind; label: string; search: string }[] = [
   { kind: 'income', label: BUDGET_WORDS.income, search: 'Search your income' },
@@ -830,6 +831,7 @@ function BudgetStart({
     addToast({
       title: BUDGET_WORDS.tookOut(keys.length, name),
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: BUDGET_WORDS.undo,
         onClick: () => setForNames((current) => ({ ...current, ...before })),
@@ -895,6 +897,7 @@ function BudgetStart({
         .filter((line) => line !== null && line !== '')
         .join(' '),
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: BUDGET_WORDS.undo,
         onClick: () =>

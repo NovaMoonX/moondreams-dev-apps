@@ -20,7 +20,11 @@ import {
   salePageQueryKeys,
   sendInterest,
 } from '@apps/going-once/queries/salePageQueries';
-import type { InterestResult, PublicThing } from '@apps/going-once/types';
+import type {
+  InterestResult,
+  PublicBundle,
+  PublicThing,
+} from '@apps/going-once/types';
 import { formatPhone, readContact } from '@apps/going-once/utils/contact';
 import { toPrefilledMessage } from '@apps/going-once/utils/inquiries';
 import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
@@ -31,6 +35,8 @@ import {
 
 interface InterestViewProps {
   thing: PublicThing;
+  /** Set when the buyer is asking about the whole bundle; the ask goes on its first thing. */
+  bundle?: PublicBundle | null;
   linkId: string;
   paymentMethods: string[];
   /** The sale's pickup days that haven't passed; the buyer must answer when there are any. */
@@ -69,6 +75,7 @@ const getContactNote = (
 /** The buyer's I'm interested form, swapped into the thing's drawer: a name, one phone-or-email field and a message, then its own Sent confirmation. Nothing on it says who is selling. */
 function InterestView({
   thing,
+  bundle = null,
   linkId,
   paymentMethods,
   openDays,
@@ -81,8 +88,12 @@ function InterestView({
 }: InterestViewProps) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const isPending = (bundle ?? thing).status === 'PENDING';
   const [message, setMessage] = useState(
-    toPrefilledMessage(thing.title, thing.status === 'PENDING'),
+    toPrefilledMessage(
+      bundle === null ? thing.title : `${bundle.name} bundle`,
+      isPending,
+    ),
   );
   const [pickedDays, setDays] = useState<DaysAnswer>(daysAnswer);
   const days = {
@@ -110,7 +121,8 @@ function InterestView({
       try {
         const result = await sendInterest({
           linkId,
-          itemId: thing.id,
+          itemId: bundle?.thingIds[0] ?? thing.id,
+          bundleId: bundle?.id ?? null,
           name: name.trim(),
           contact: contact.trim(),
           message: message.trim(),
@@ -207,7 +219,10 @@ function InterestView({
           Sent. The people running this sale can reach you at {sent.contact}.
         </p>
         <p className='text-muted-foreground text-sm'>
-          About: {thing.title} · {formatCentsShort(thing.askingPriceCents)}
+          About: {bundle === null ? thing.title : `${bundle.name} bundle`} ·{' '}
+          {formatCentsShort(
+            bundle === null ? thing.askingPriceCents : bundle.priceCents,
+          )}
         </p>
         {footer}
       </div>
@@ -215,8 +230,13 @@ function InterestView({
 
   return (
     <div className='space-y-5 pb-28'>
-      <BackLink onBack={onBack} label={thing.title} />
-      {thing.status === 'PENDING' && (
+      <BackLink onBack={onBack} label={bundle?.name ?? thing.title} />
+      {bundle !== null && (
+        <p className='text-sm font-medium text-pretty'>
+          About the {bundle.name} bundle ({bundle.thingIds.length} things)
+        </p>
+      )}
+      {isPending && (
         <p className='text-sm text-pretty'>
           Someone&apos;s picking this up. Ask anyway in case it falls through.
         </p>

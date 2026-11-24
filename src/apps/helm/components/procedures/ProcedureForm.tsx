@@ -46,6 +46,7 @@ import {
   type DraftStep,
   type ProcedureDraft,
 } from '@apps/helm/utils/procedureDraft';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface ProcedureFormSheetProps {
   isOpen: boolean;
@@ -209,6 +210,7 @@ function ProcedureFormFields({
     change(removeGroup(draft, groupId));
     if (heldIds.length === 0) return;
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.procedureGroupRemoved(
         group.name || HELM_COPY.procedureGroupFallback,
       ),

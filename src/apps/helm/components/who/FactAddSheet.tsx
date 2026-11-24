@@ -13,6 +13,7 @@ import {
   addFact,
   type FactSubject,
 } from '@apps/helm/store/actions/memoryActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface FactAddSheetProps {
   isOpen: boolean;
@@ -53,6 +54,7 @@ function FactAddForm({
       if (result.kind === 'done') {
         onClose();
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.factAddedToast,
           type: 'success',
           action: {

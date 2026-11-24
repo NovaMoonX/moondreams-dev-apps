@@ -50,6 +50,7 @@ import {
   type RunStep,
 } from '@apps/helm/utils/runSteps';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const { option } = DropdownMenuFactories;
 
@@ -256,6 +257,7 @@ function RunScreen({
       written.catch(reportFailure(HELM_COPY.runDeleteFailed));
       back();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.runDeleted(title),
         type: 'success',
         action: {

@@ -28,6 +28,7 @@ import { isUnavailable } from '@apps/helm/store/actions/topicActions';
 import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelectors';
 import { toProcedureMarkdown } from '@apps/helm/utils/procedureMarkdown';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import { filterPrivateOwnPage } from '@apps/helm/utils/privacy';
 
@@ -147,6 +148,7 @@ function ProcedureScreen({
       const { restore } = await deleteProcedure(user.uid, procedure.id);
       onBack();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.procedureDeleted(
           procedure.title || HELM_COPY.procedureUntitled,
         ),

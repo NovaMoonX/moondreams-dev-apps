@@ -53,6 +53,7 @@ import {
   describeRulePlaced,
   getCategoryLabel,
 } from '@apps/runway/utils/ruleText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface RuleSheetProps {
   purchase: OpenPurchase | null;
@@ -226,6 +227,7 @@ function RuleSheet({
         nameOf(envelopeId),
       ),
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: RULE_WORDS.undo,
         onClick: () =>

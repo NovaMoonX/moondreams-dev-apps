@@ -33,6 +33,7 @@ import {
   toFiguredSide,
   toSideLine,
 } from '@apps/helm/utils/connectionText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const NOT_RELATED = 'notRelated';
 
@@ -129,6 +130,7 @@ function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
         onDirtyChange(false);
         onClose();
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: toast,
           type: 'info',
           action: {

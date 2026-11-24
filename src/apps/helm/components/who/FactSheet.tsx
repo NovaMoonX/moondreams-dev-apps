@@ -30,6 +30,7 @@ import {
   getFactSource,
   toFactDay,
 } from '@apps/helm/utils/factLines';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 interface FactSheetProps {
@@ -117,6 +118,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
     }
     isDone();
     addToast({
+      duration: UNDO_WINDOW_MS,
       title,
       type: 'success',
       action: {

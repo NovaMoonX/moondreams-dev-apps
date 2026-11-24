@@ -21,6 +21,7 @@ import {
   stopPattern,
 } from '@apps/helm/store/actions/patternActions';
 import type { OpenPattern } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -81,6 +82,7 @@ export function useGuardrailAnswers() {
         if (answer.kind !== 'saved') return told(answer.kind, '');
         const date = toToastDay(answer.until);
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: options.isHold
             ? HELM_COPY.guardrailHeld(answer.name, date)
             : options.target
@@ -124,6 +126,7 @@ export function useGuardrailAnswers() {
         const result = await stopPattern(uid, pattern.id);
         if (result !== 'saved') return told(result, '');
         addToast({
+          duration: UNDO_WINDOW_MS,
           title:
             pattern.subject.collection === 'tasks'
               ? HELM_COPY.guardrailStoppedTask(assistant, name)

@@ -87,6 +87,15 @@ interface HeldSliceState<T> {
   hold: HeldList<T>;
 }
 
+/** One listener list of a slice that can hold a transaction's writes. */
+export interface HeldListCases<S> {
+  kind: string;
+  holdOf: (state: S) => HeldList<Identified>;
+  belongs: (item: Identified, state: S) => boolean;
+  show: (state: S, list: Identified[]) => void;
+  accepts: (state: S, scope: string | null) => boolean;
+}
+
 /** The hold, settle and drop cases for one list; a retried transaction's holds replace its earlier attempt's, and a list `accepts` decides is not open takes none. */
 export function addHeldCases<T extends Identified, S extends HeldSliceState<T>>(
   builder: ActionReducerMapBuilder<S>,
@@ -102,37 +111,60 @@ export function addHeldCases<T extends Identified, S extends HeldSliceState<T>>(
     accepts: (state: S, scope: string | null) => boolean;
   },
 ): void {
-  const relay = (state: S) => {
-    const list = lay(state.hold, (item) => belongs(item, state), Date.now());
-    if (list !== null) show(state, list);
+  addHeldListsCases(builder, actions, [
+    {
+      kind,
+      holdOf: (state) => state.hold as HeldList<Identified>,
+      belongs: (item, state) => belongs(item as T, state),
+      show: (state, list) => show(state, list as T[]),
+      accepts,
+    },
+  ]);
+}
+
+/** `addHeldCases` for a slice that keeps several held lists, registered once since a slice takes one reducer per action. */
+export function addHeldListsCases<S>(
+  builder: ActionReducerMapBuilder<S>,
+  actions: HeldActions,
+  lists: HeldListCases<S>[],
+): void {
+  const relay = (state: S, list: HeldListCases<S>) => {
+    const laid = lay(
+      list.holdOf(state),
+      (item) => list.belongs(item, state),
+      Date.now(),
+    );
+    if (laid !== null) list.show(state, laid);
   };
   builder
     .addCase(actions.hold, (draft, action) => {
       const state = draft as unknown as S;
       const { token, scope, writes } = action.payload;
-      const added = (writes[kind] ?? []) as HeldWrite<T>[];
-      const hasOwn = state.hold.held.some((hold) => hold.token === token);
-      if (added.length === 0 && !hasOwn) return;
-      if (!accepts(state, scope)) return;
-      state.hold.held = addHeldWrites(
-        dropHeldWrites(state.hold.held, token),
-        added,
-      );
-      relay(state);
+      lists.forEach((list) => {
+        const hold = list.holdOf(state);
+        const added = (writes[list.kind] ?? []) as HeldWrite<Identified>[];
+        const hasOwn = hold.held.some((held) => held.token === token);
+        if (added.length === 0 && !hasOwn) return;
+        if (!list.accepts(state, scope)) return;
+        hold.held = addHeldWrites(dropHeldWrites(hold.held, token), added);
+        relay(state, list);
+      });
     })
     .addCase(actions.settle, (draft, action) => {
       const state = draft as unknown as S;
-      if (!state.hold.held.some((hold) => hold.token === action.payload)) {
-        return;
-      }
-      state.hold.held = settleHeldWrites(state.hold.held, action.payload);
+      lists.forEach((list) => {
+        const hold = list.holdOf(state);
+        if (!hold.held.some((held) => held.token === action.payload)) return;
+        hold.held = settleHeldWrites(hold.held, action.payload);
+      });
     })
     .addCase(actions.drop, (draft, action) => {
       const state = draft as unknown as S;
-      if (!state.hold.held.some((hold) => hold.token === action.payload)) {
-        return;
-      }
-      state.hold.held = dropHeldWrites(state.hold.held, action.payload);
-      relay(state);
+      lists.forEach((list) => {
+        const hold = list.holdOf(state);
+        if (!hold.held.some((held) => held.token === action.payload)) return;
+        hold.held = dropHeldWrites(hold.held, action.payload);
+        relay(state, list);
+      });
     });
 }

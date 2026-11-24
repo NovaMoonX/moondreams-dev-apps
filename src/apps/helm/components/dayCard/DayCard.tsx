@@ -20,6 +20,7 @@ import {
 } from '@apps/helm/store/actions/dayAimsActions';
 import type { StruggleSignal } from '@apps/helm/types';
 import { foldedAimsLine, readWindDownCounts } from '@apps/helm/utils/dayCard';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 // Plans already tried this session for a day's aims, so a plan that fails never loops.
 const attempted = new Set<string>();
@@ -79,6 +80,7 @@ function DayCard({
     start()
       .then((change) => {
         addToast({
+          duration: UNDO_WINDOW_MS,
           title,
           type: 'info',
           action: {
