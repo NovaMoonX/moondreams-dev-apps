@@ -122,6 +122,9 @@ const Muted = ({ children }: { children: ReactNode }) => (
   <p className='text-muted-foreground text-sm'>{children}</p>
 );
 
+const LINK_HIT =
+  'relative after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[""]';
+
 const LATE_AFTER_MS = 120_000;
 
 const useIsLate = () => {
@@ -223,6 +226,7 @@ function ConfirmStep({
                   <ExternalLinkText
                     href={settingsLink.href}
                     label={settingsLink.label}
+                    className={LINK_HIT}
                   />
                 )}
               </>
@@ -246,6 +250,7 @@ function ConfirmStep({
                 <ExternalLinkText
                   href={settingsLink.href}
                   label={settingsLink.label}
+                  className={LINK_HIT}
                 />
               )}
             </div>

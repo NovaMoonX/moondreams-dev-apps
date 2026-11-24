@@ -55,7 +55,7 @@ function InstructionSteps({
               href={item.href}
               target='_blank'
               rel='noreferrer'
-              className='text-primary -my-2 inline-block py-2 underline underline-offset-4'
+              className='text-primary focus-visible:outline-primary -my-2 inline-block rounded-sm py-2 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2'
             >
               {item.text}
               <ExternalLink
