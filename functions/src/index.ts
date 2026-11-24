@@ -66,11 +66,9 @@ export { ingestRunwayEmail } from './apps/runway/email/ingestRunwayEmail.js';
 export { rotateRunwayEmailAddress } from './apps/runway/email/rotateRunwayEmailAddress.js';
 export { suggestRunwayEmailFilter } from './apps/runway/email/suggestRunwayEmailFilter.js';
 export { syncRunwayAccounts } from './apps/runway/syncRunwayAccounts.js';
-export {
-  markRunwayReworkOnItem,
-  markRunwayReworkOnPlan,
-  markRunwayReworkOnRecord,
-} from './apps/runway/figures/markRunwayRework.js';
+export { markRunwayReworkOnItem } from './apps/runway/figures/markRunwayRework.js';
+export { markRunwayReworkOnPlan } from './apps/runway/figures/markRunwayRework.js';
+export { markRunwayReworkOnRecord } from './apps/runway/figures/markRunwayRework.js';
 export { drainRunwayReworks } from './apps/runway/figures/drainRunwayReworks.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { deleteSale } from './apps/going-once/deleteSale.js';
