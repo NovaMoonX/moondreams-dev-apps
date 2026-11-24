@@ -22,6 +22,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
+import FallbackImage from '@/components/FallbackImage';
 import FormSheet from '@/components/FormSheet';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
@@ -54,6 +55,7 @@ import {
   useEmailFilters,
   useEmailIntake,
   useIsEmailEventsLoaded,
+  usePurchaseBankLink,
 } from '@apps/runway/hooks/useEmailPurchases';
 import type {
   EmailEventRead,
@@ -159,6 +161,27 @@ function EventRows({ events, onOpen }: EventRowsProps) {
   );
 }
 
+function SenderBadge({
+  logo,
+  kind,
+}: {
+  logo: string | null;
+  kind: EmailSender['kind'];
+}) {
+  const badge = <EmailRowBadge icon={KIND_BADGES[kind]} />;
+  if (logo === null) return badge;
+  return (
+    // Logos are drawn for a white ground, so the tile stays white in dark mode as a bank app's would.
+    <FallbackImage
+      src={logo}
+      alt=''
+      aria-hidden='true'
+      className='border-border size-10 shrink-0 rounded-xl border bg-white object-contain p-1'
+      fallback={badge}
+    />
+  );
+}
+
 interface SenderRowsProps {
   senders: EmailSender[];
   onOpen: (address: string) => void;
@@ -170,6 +193,9 @@ function SenderRows({ senders, onOpen }: SenderRowsProps) {
       {senders.map((sender) => {
         const detail = EMAIL_WORDS.senderDetail(
           sender.kind,
+          sender.company?.toLowerCase() === sender.name?.toLowerCase()
+            ? null
+            : sender.company,
           sender.count,
           formatDateOrdinal(sender.lastAt),
         );
@@ -181,7 +207,7 @@ function SenderRows({ senders, onOpen }: SenderRowsProps) {
               sender.name ?? <EmailAddressText address={sender.address} />
             }
             nameLines={3}
-            leading={<EmailRowBadge icon={KIND_BADGES[sender.kind]} />}
+            leading={<SenderBadge logo={sender.logo} kind={sender.kind} />}
             detail={detail}
             isPrivate={false}
             ariaLabel={`${sender.name ?? sender.address}, ${detail}. Open`}
@@ -256,7 +282,8 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
 
   const openEvent = events.find((entry) => entry.id === openEventId) ?? null;
   const openFilter = filters.find((entry) => entry.id === openFilterId) ?? null;
-  const allSenders = groupEmailSenders(events).flatMap(
+  const bankLinkOf = usePurchaseBankLink();
+  const allSenders = groupEmailSenders(events, bankLinkOf).flatMap(
     (group) => group.senders,
   );
   const senders = allSenders.filter(
