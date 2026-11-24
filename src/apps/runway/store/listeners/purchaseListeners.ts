@@ -17,6 +17,7 @@ import type {
   PurchaseDoc,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -41,6 +42,7 @@ export function startPurchasesListener(
       ...(to === null ? [] : [where('date', '<', to)]),
     ),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const current = sequence.latest;
       try {
@@ -84,6 +86,7 @@ function startConstrainedPurchasesListener(
       constraint,
     ),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const current = sequence.latest;
       try {

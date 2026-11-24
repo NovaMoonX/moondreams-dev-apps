@@ -50,6 +50,20 @@ export function payLineIdOfDayKey(dayKey: string): string {
   return result;
 }
 
+/** The date-only day of an instant in an IANA zone; null reads the device's zone, as `todayAsUtcDate` does. */
+export function dayInZone(ms: number, zone: string | null): number {
+  if (zone === null) return todayAsUtcDate(ms);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(ms);
+  const read = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return Date.UTC(read('year'), read('month') - 1, read('day'));
+}
+
 /** The only reader of the viewer's local day: today as UTC midnight. */
 export function todayAsUtcDate(now: number = Date.now()): number {
   const local = new Date(now);

@@ -1,8 +1,8 @@
 import {
   CUSHION_DAYS,
-  HORIZON_WORDS,
+  getCostLineName,
   INCOME_END_GAP_DAYS,
-} from '@apps/runway/constants';
+} from './engineConstants';
 import type {
   Cents,
   DateOnly,
@@ -260,7 +260,7 @@ const getShortName = (
       other.costId &&
       names[getCostNameKey(other.itemId, other.costId)]?.name === costName,
   );
-  return isShared ? HORIZON_WORDS.costLineName(costName, itemName) : costName;
+  return isShared ? getCostLineName(costName, itemName) : costName;
 };
 
 /** Every Must that goes unfunded, and every bill or cost payment that falls due before the next income day and is not set aside in full, in the draft's own order. */

@@ -40,8 +40,6 @@ import {
   splitBankPurchase,
   unlinkDeposit,
   unpairAccountPurchases,
-  type MergedPurchase,
-  type MergedSplit,
   type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
 import { giveUpSplit } from '@apps/runway/store/runwaySlice';
@@ -69,6 +67,8 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   CardPaymentCovers,
+  MergedPurchase,
+  MergedSplit,
   OpenPurchase,
   RunwayEncryption,
   PurchaseAssignedBy,

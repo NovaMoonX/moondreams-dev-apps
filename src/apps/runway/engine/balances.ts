@@ -16,7 +16,7 @@ import {
   type ClosingState,
 } from './closings';
 import { getEffectiveSplits } from './correct';
-import { START_DAY_KEY } from '@apps/runway/constants';
+import { START_DAY_KEY } from './engineConstants';
 
 import {
   collectCardPaid,

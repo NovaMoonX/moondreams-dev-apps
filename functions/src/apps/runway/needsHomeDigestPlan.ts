@@ -1,5 +1,5 @@
 import { getLocalClock } from '../../notifications/localClock.js';
-import { isSameStore } from './storeNames.js';
+import { isSameStore } from './engine/storeNames.js';
 
 export const DEFAULT_NOTIFY_HOUR = 19;
 

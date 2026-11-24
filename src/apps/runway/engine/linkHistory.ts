@@ -1,4 +1,4 @@
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { dayInZone } from '@apps/runway/engine/dates';
 import {
   findAccountPairs,
   findPurchaseMatches,
@@ -21,6 +21,7 @@ export function makeIsLinkHistory(
   links: readonly OpenLink[],
   accounts: readonly OpenAccount[],
   cards: readonly OpenCard[],
+  zone: string | null = null,
 ): (purchase: OpenPurchase) => boolean {
   const linkById = new Map(links.map((link) => [link.id, link]));
   const linkOf = new Map<string, OpenLink>([
@@ -46,7 +47,7 @@ export function makeIsLinkHistory(
     if (!link) return false;
     return (
       purchase.createdAt >= link.createdAt &&
-      purchase.date < todayAsUtcDate(link.createdAt)
+      purchase.date < dayInZone(link.createdAt, zone)
     );
   };
 }

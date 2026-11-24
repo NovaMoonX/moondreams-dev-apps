@@ -13,7 +13,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
-import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import { LOOKAHEAD_MONTHS } from './engineConstants';
 
 import { addUtcMonths, DAY_MS } from './dates';
 import { getGoalBalanceAt, getGoalCostId, type GoalCover } from './horizonGoal';

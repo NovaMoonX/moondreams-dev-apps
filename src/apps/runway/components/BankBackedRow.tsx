@@ -14,8 +14,10 @@ import { formatCents } from '@/utils/moneyUtils';
 import { BANK_BACKED_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { setBankBackedSeen } from '@apps/runway/store/actions/planActions';
-import { selectBankBacking } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import {
+  selectBalances,
+  selectDrawnBankBacking,
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectIsAccountsLoaded,
   selectIsMovesLoaded,
@@ -26,7 +28,7 @@ import {
 function BankBackedRow() {
   const { user } = useAuth();
   const { isHidden } = useValuesHidden();
-  const backing = useAppSelector(selectBankBacking);
+  const backing = useAppSelector(selectDrawnBankBacking);
   const balances = useAppSelector(selectBalances);
   const isReady = useAppSelector(
     (state) =>

@@ -53,8 +53,10 @@ import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { canChangeStart } from '@apps/runway/utils/startingCorrection';
 import HeldBreakdownView from '@apps/runway/screens/home/HeldBreakdownView';
-import { selectBankBacking } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import {
+  selectBalances,
+  selectDrawnBankBacking,
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
@@ -83,7 +85,7 @@ interface SumRow {
 function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
   const level = useAppSelector(selectLevel);
-  const isBankBacked = useAppSelector(selectBankBacking).isBacked;
+  const isBankBacked = useAppSelector(selectDrawnBankBacking).isBacked;
   const {
     view,
     checkEnvelope,

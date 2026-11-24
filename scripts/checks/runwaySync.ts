@@ -23,6 +23,11 @@ import {
   waitingLines,
   type PurchaseState,
 } from '../../functions/src/apps/runway/link/syncPlan.ts';
+import { ENGINE_VERSION } from '../../src/apps/runway/engine/engineConstants.ts';
+import {
+  isSnapshotUsable,
+  type OpenFiguresSnapshot,
+} from '../../src/apps/runway/utils/figuresSnapshot.ts';
 import { verifyPlaidWebhook } from '../../functions/src/apps/runway/link/webhookVerify.ts';
 
 const DAY = 86_400_000;
@@ -708,6 +713,60 @@ assert.equal(
   await verifyPlaidWebhook(good, body, now, async () => null),
   false,
   'an unknown key id fails',
+);
+
+const heldFigures = {
+  engineVersion: ENGINE_VERSION,
+  asOf: 20_000 * DAY,
+  computedAt: 5_000,
+  planStamp: 1_000,
+  figures: {},
+} as unknown as OpenFiguresSnapshot;
+const usableFacts: Parameters<typeof isSnapshotUsable>[1] = {
+  today: 20_000 * DAY,
+  planUpdatedAt: 1_000,
+  lastWriteAt: 4_000,
+};
+const isUsable = (
+  snapshot: OpenFiguresSnapshot | null,
+  change: Partial<typeof usableFacts> = {},
+) => isSnapshotUsable(snapshot, { ...usableFacts, ...change });
+assert.equal(isUsable(heldFigures), true, 'a fresh snapshot is used');
+assert.equal(isUsable(null), false, 'no snapshot is unusable');
+assert.equal(
+  isUsable({ ...heldFigures, engineVersion: ENGINE_VERSION + 1 }),
+  false,
+  'another engine version is not used',
+);
+assert.equal(
+  isUsable(heldFigures, { today: 21_000 * DAY }),
+  false,
+  'another day is not used',
+);
+assert.equal(
+  isUsable(heldFigures, { planUpdatedAt: 1_001 }),
+  false,
+  'a plan changed since is not used',
+);
+assert.equal(
+  isUsable(heldFigures, { planUpdatedAt: null }),
+  false,
+  'no plan is not used',
+);
+assert.equal(
+  isUsable(heldFigures, { lastWriteAt: 6_000 }),
+  false,
+  'a write on this phone after it was computed is not used',
+);
+assert.equal(
+  isUsable(heldFigures, { lastWriteAt: 5_000 }),
+  false,
+  'a write at the same moment is not used',
+);
+assert.equal(
+  isUsable(heldFigures, { lastWriteAt: null }),
+  true,
+  'no known write passes',
 );
 
 console.log('runwaySync: all checks passed');

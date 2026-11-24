@@ -13,6 +13,8 @@ import { createSealedReader } from '@lib/security';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { openJson } from '@apps/runway/security';
 import { openDay } from '@apps/runway/store/listeners/dayListeners';
+import { markLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
+import { FIGURE_INPUT_COLLECTIONS } from '@apps/runway/engine/engineConstants';
 import {
   openMove,
   openPurchase,
@@ -271,7 +273,11 @@ export async function runHeldTransaction<T>(
 ): Promise<T> {
   const token = generateUuid();
   const encryption = await getRunwayEncryption(uid).catch(() => null);
+  const touched = { figures: false };
   const hold = async (writes: RecordedWrite[]) => {
+    touched.figures = writes.some(({ segments }) =>
+      FIGURE_INPUT_COLLECTIONS.includes(segments[4] ?? ''),
+    );
     if (encryption === null) return;
     const built = await buildItems(writes, uid, token, encryption);
     if (built === null) {
@@ -301,6 +307,7 @@ export async function runHeldTransaction<T>(
   };
   try {
     const result = await runRecordedTransaction(body, hold);
+    if (touched.figures) markLocalWrite(uid);
     store.dispatch(settleWrites(token));
     void watchWriteLanded({
       feature: 'Runway',

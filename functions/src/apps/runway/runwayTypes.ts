@@ -1,0 +1,1635 @@
+// Generated from src/apps/runway/types.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
+import type { AppEncryption, EncryptedFieldPayload } from '../../vendor/securityTypes.js';
+
+import type {
+  ACCOUNT_KINDS,
+  CALENDAR_PERIODS,
+  CHANGE_KINDS,
+  DAY_RECORD_KINDS,
+  ITEM_KINDS,
+  MORE_ENTRIES,
+  MOVE_KINDS,
+  PURCHASE_LINE_VIAS,
+  PURCHASE_SOURCES,
+  START_HOLDINGS,
+  DAY_STATUSES,
+  LINK_STATUSES,
+  GOAL_STATES,
+  LEVELS,
+  HOLD_CHOICES,
+  PLAN_SECTIONS,
+  PRIORITIES,
+  SCHEDULE_KINDS,
+  STANCES,
+} from './engine/engineConstants.js';
+
+export type RunwayTab = 'home' | 'days' | 'spend' | 'plan';
+
+export type PlanSection = (typeof PLAN_SECTIONS)[number];
+
+export type Stance = (typeof STANCES)[number];
+
+export type Level = (typeof LEVELS)[number];
+
+export type MoreEntry = (typeof MORE_ENTRIES)[number];
+
+export type AccountKind = (typeof ACCOUNT_KINDS)[number];
+
+/** Ciphertext of a JSON object, the shape `@lib/security` produces. */
+export type Sealed = EncryptedFieldPayload;
+
+export type RunwayEncryption = AppEncryption<'runway'>;
+
+export interface PlanSealedFields {
+  currencyCode: string;
+  /** Local hour (0-23) of the daily "Purchases waiting for a home" push; null reads as 7 pm. A plan sealed before it existed lacks the key. */
+  notifyHour: number | null;
+  /** IANA zone the hour is in; null until the person saves an hour. */
+  notifyTimeZone: string | null;
+  /** The person's answer to "Where are your goals and envelopes kept?": when to ask again, or never. Null until they answer; a plan sealed before it existed lacks the key. */
+  holdsPrompt: HoldsPromptChoice | null;
+  /** Epoch ms the person read why Free to Spend now comes from their account balances; null until then. A plan sealed before it existed lacks the key. */
+  bankBackedSeenAt: number | null;
+  /** Goal id to the target date the Horizon nudge was dismissed at; a changed date asks again. Null until a nudge is dismissed; a plan sealed before it existed lacks the key. */
+  horizonNudgeDismissed: Record<string, number> | null;
+  /** Envelope ids pinned to Home's first tiles, in the person's order. Null until one is pinned; a plan sealed before it existed lacks the key. */
+  homePins: string[] | null;
+  /** IANA zone of the person's device, which the server reads a day's start in; the phone writes it when it differs. Null until then; a plan sealed before it existed lacks the key. */
+  timeZone: string | null;
+}
+
+/** `figures/current`: the figures the server last worked out for the plan, so the app can draw Home before its own sums finish. Written only by Functions. */
+export interface FiguresSnapshotDoc {
+  id: 'current';
+  /** The engine version that worked it out; a snapshot from another version is never shown. */
+  engineVersion: number;
+  /** The plan day (UTC midnight, in the plan's zone) the figures are for. */
+  asOf: DateOnly;
+  /** Server epoch ms the figures were worked out. */
+  computedAt: number;
+  /** The plan's `updatedAt` the figures were worked out from. */
+  planStamp: number;
+  /** `FiguresSnapshotSealed`. */
+  sealed: Sealed;
+}
+
+export interface HoldsPromptChoice {
+  /** Epoch ms before which Home does not ask; null when no wait was chosen. */
+  askAfter: number | null;
+  /** True after "Don't ask again". */
+  isOff: boolean;
+}
+
+/** Which pushes the person turned on; readable on purpose, since the sending Function needs it and it holds no amount. */
+export interface PlanNotify {
+  needsHome: boolean;
+}
+
+/** A stretch of tracking: Track is on while the last period has `to` null. A period is closed by the day tracking stopped. */
+export interface TrackingPeriod {
+  from: DateOnly;
+  to: DateOnly | null;
+  /** The day the first account or card was linked, which makes the level Link; null while none is (a period written before Link is read as null). */
+  linkedFrom: DateOnly | null;
+}
+
+/** Whether bank charges wait in Needs a home. Readable on purpose (the push Function reads it) and holds no amount. */
+export interface SortingState {
+  isPaused: boolean;
+  /** Epoch ms: a charge created before it never waits. */
+  from: number;
+}
+
+export interface PlanDoc {
+  uid: string;
+  createdAt: number;
+  updatedAt: number;
+  stance: Stance;
+  /** The starting point; null until the person says where things stand. A plan written before it existed has none. */
+  startDate: DateOnly | null;
+  /** Oldest first, never overlapping; a plan written before tracking existed has none and reads as Plan. */
+  trackingPeriods: TrackingPeriod[];
+  /** 'yyyy-mm' of the earliest month a ledger write has touched since its closing was built: closings from that month on are stale. Null when none is; a plan written before closings existed has none. */
+  dirtyFrom: string | null;
+  /** Null on a plan made before pushes existed. */
+  notify: PlanNotify | null;
+  /** Null (or missing on an older plan) means every charge waits. */
+  sorting: SortingState | null;
+  keyId: string | null;
+  sealed: Sealed | null;
+  /** The sealed totals-and-names summary a connected app reads; null when Free to Spend is unknown, and absent on a plan made before it existed. */
+  shareSummary: Sealed | null;
+  /** Epoch ms the person last opened Done for you; null before they have, and on a plan made before it existed. */
+  doneForYouSeenAt: number | null;
+}
+
+/** What a plan shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
+export interface ShareSummary {
+  computedAt: number;
+  currency: string;
+  /** Signed: negative means over. */
+  freeToSpendCents: Cents;
+  /** 'YYYY-MM-DD' of the next income day; null when none is coming. */
+  nextIncomeOn: string | null;
+  /** Every bill due before that day at the Want dial, overdue ones included. */
+  dueBeforeIncomeCents: Cents;
+  /** Unpaid ones overdue or due within 30 days (else the next one within a year), and those paid this month. A summary an older phone wrote lacks the last four and `paysItself` (true when Runway pays that payment itself; null or missing reads as false). */
+  bills: {
+    name: string;
+    amountCents: Cents;
+    dueOn: string;
+    repeats: string;
+    endsOn: string | null;
+    endsAfter: number | null;
+    paidOn: string | null;
+    paysItself: boolean | null;
+  }[];
+  horizon: {
+    name: string;
+    targetCents: Cents;
+    setAsideCents: Cents;
+    targetOn: string | null;
+  }[];
+}
+
+export interface OpenPlan extends PlanSealedFields {
+  uid: string;
+  createdAt: number;
+  updatedAt: number;
+  stance: Stance;
+  startDate: DateOnly | null;
+  trackingPeriods: TrackingPeriod[];
+  dirtyFrom: string | null;
+  notify: PlanNotify | null;
+  sorting: SortingState | null;
+  keyId: string | null;
+  doneForYouSeenAt: number | null;
+}
+
+/** Integer cents. */
+export type Cents = number;
+
+/** A calendar day as UTC midnight, in ms. */
+export type DateOnly = number;
+
+export type ItemKind = (typeof ITEM_KINDS)[number];
+export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
+export type Priority = (typeof PRIORITIES)[number];
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
+
+export interface MoneyRange {
+  lowCents: Cents;
+  highCents: Cents;
+}
+
+/** All null is never; whichever is reached first ends the line. */
+export interface Ending {
+  onDate: DateOnly | null;
+  afterCount: number | null;
+}
+
+export interface Schedule {
+  kind: ScheduleKind;
+  /** The first occurrence. */
+  anchor: DateOnly | null;
+  /** Monthly: [d]; twice a month: [d1, d2]. Day 31 lands on a short month's last day. */
+  monthDays: number[];
+  /** Every few months: the months between dates, 12 for yearly, on the anchor's day; a schedule written before it existed has none. */
+  intervalMonths?: number | null;
+}
+
+export interface SourceSealed {
+  name: string;
+  pairings: Pairing[];
+}
+
+export interface PayLineSealed {
+  name: string;
+  schedule: Schedule;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  ending: Ending;
+  /** Replaces the plan's stance for this pay line; a version written before it existed has none. */
+  stanceOverride: Stance | null;
+  /** The account the pay lands in; a version written before it existed has none, and null means not chosen. */
+  accountId: string | null;
+  pairings: Pairing[];
+}
+
+/** What a funding line asks for: money, basis points of the day's money, or what the pool then holds. */
+export type FundingAmount =
+  | { kind: 'exact'; cents: Cents }
+  | { kind: 'percent'; bps: number; of: 'dayMoney' | 'remaining' }
+  | { kind: 'rest' };
+
+/** A pay-first amount: a funding amount, or basis points of the target bill's payment at its high end. */
+export type PairingAmount = FundingAmount | { kind: 'billShare'; bps: number };
+
+/** Sends part of one income day's money to a named bill, envelope or goal. */
+export interface Pairing {
+  targetItemId: string;
+  amount: PairingAmount;
+  topUpFromAnySource: boolean;
+}
+
+export type HoldChoice = (typeof HOLD_CHOICES)[number];
+export type DayStatus = (typeof DAY_STATUSES)[number];
+export type GoalState = (typeof GOAL_STATES)[number];
+
+/** What the person changed for one income day. `pairings` null means the pay line's set applies. */
+export interface DayOverrideSealed {
+  pairings: Pairing[] | null;
+  /** The choice for a short pairing, by the target's item id. */
+  holdResolutions: Record<string, HoldChoice>;
+  /** An envelope's or goal's whole payload for this income day only, by item id; a day written before it existed has none. */
+  payloads: Record<string, EnvelopeSealed | GoalSealed>;
+  /** What this income day puts toward a bill's payment, by bill id; a day written before it existed has none. */
+  billCents: Record<string, Cents>;
+}
+
+export interface IncomeDayDoc {
+  id: string;
+  payLineId: string;
+  sourceId: string | null;
+  expectedOn: DateOnly;
+  arrivedOn: DateOnly | null;
+  status: DayStatus;
+  createdAt: number;
+  confirmedAt: number | null;
+  doneLineIds: string[];
+  sealed: Sealed | null;
+}
+
+export type DayRecordKind = (typeof DAY_RECORD_KINDS)[number];
+
+/** Append-only: the draft as it stood and the split that was confirmed, one each per day. */
+export interface DayRecordDoc {
+  id: string;
+  dayId: string;
+  kind: DayRecordKind;
+  createdAt: number;
+  sealed: Sealed;
+  /** The record a correction replaces; null on the proposed and confirmed records. */
+  supersedesId: string | null;
+}
+
+/** One funded line of a day, with the names it had when the day was confirmed. */
+export interface RecordLine {
+  lineId: string;
+  itemId: string;
+  /** The extra this line funded, by its level; null (or missing on an older record) for the item's own amount. */
+  part?: Priority | null;
+  name: string;
+  emoji: string | null;
+  tier: Priority;
+  demandCents: Cents;
+  cents: Cents;
+  shortBy: Cents;
+  paidBy: { dayId: string; cents: Cents }[];
+  /** The Horizon cost this line saves toward; null elsewhere, and on a record sealed before Horizon costs. */
+  costId: string | null;
+  /** The cost's own name when this line saves toward a Horizon cost ("Surgery"; `name` stays the item's); null on every other line. */
+  costName: string | null;
+  /** True when the line gives back to Free to Spend what a fronted payment took; an older record reads false. */
+  repaysFree: boolean;
+}
+
+export interface ProposedSealed {
+  /** Names the plan and the day's changes the draft was computed from. */
+  fingerprint: string;
+  stance: Stance;
+  expectedCents: Cents;
+  freeToSpendCents: Cents;
+  lines: RecordLine[];
+}
+
+/** What differs from the proposed draft, each with an optional note. */
+export type RecordDifference =
+  | {
+      kind: 'amount';
+      plannedCents: Cents;
+      actualCents: Cents;
+      note: string | null;
+    }
+  | {
+      /** A line given more or less than the draft proposed: where the extra went or the shortfall came from. */
+      kind: 'line';
+      lineId: string;
+      itemId: string;
+      name: string;
+      plannedCents: Cents;
+      actualCents: Cents;
+      note: string | null;
+    };
+
+export interface ConfirmedSealed {
+  fingerprint: string;
+  stance: Stance;
+  arrivedCents: Cents;
+  expectedCents: Cents;
+  freeToSpendCents: Cents;
+  lines: RecordLine[];
+  differences: RecordDifference[];
+}
+
+/** A line a correction changed, with what it was and what it became. */
+export interface CorrectionChange {
+  lineId: string;
+  itemId: string;
+  name: string;
+  emoji: string | null;
+  beforeCents: Cents;
+  afterCents: Cents;
+}
+
+/** The split a correction puts in place of the one it replaces, with what changed and why. */
+export interface CorrectionSealed {
+  stance: Stance;
+  arrivedCents: Cents;
+  freeToSpendCents: Cents;
+  lines: RecordLine[];
+  before: { arrivedCents: Cents; freeToSpendCents: Cents };
+  changes: CorrectionChange[];
+  note: string | null;
+}
+
+interface OpenRecordBase {
+  id: string;
+  dayId: string;
+  createdAt: number;
+}
+
+export type OpenRecord =
+  | (OpenRecordBase & { kind: 'proposed'; payload: ProposedSealed })
+  | (OpenRecordBase & { kind: 'confirmed'; payload: ConfirmedSealed })
+  | (OpenRecordBase & {
+      kind: 'correction';
+      supersedesId: string;
+      payload: CorrectionSealed;
+    });
+
+export interface OpenDay {
+  id: string;
+  payLineId: string;
+  sourceId: string | null;
+  expectedOn: DateOnly;
+  arrivedOn: DateOnly | null;
+  confirmedAt: number | null;
+  status: DayStatus;
+  doneLineIds: string[];
+  override: DayOverrideSealed;
+}
+
+export interface FundingRule {
+  /** A calendar cadence reads it as the amount for one period; the others as the amount for one income day. */
+  amount: FundingAmount;
+  cadence:
+    | { kind: 'everyIncomeDay' }
+    | { kind: 'everyNth'; n: 2 | 3; anchorDayKey: string }
+    | { kind: 'chosen'; dayKeys: string[] }
+    | { kind: 'calendar'; period: CalendarPeriod; startsOn: DateOnly | null }
+    | { kind: 'none' };
+  /** The income source whose pay the rule counts; a rule written before it existed counts every source. */
+  sourceId?: string | null;
+  /** The one pay it comes out of (a pay line, and for a monthly or twice-a-month line one day of the month); null or missing on a rule written before it means every pay its source allows. */
+  pay?: FundingPay | null;
+}
+
+/** A pay a funding rule comes out of: the shape a bill's "A pay I pick" uses. */
+export interface FundingPay {
+  payLineId: string;
+  monthDay: number | null;
+}
+
+/** Money an envelope or goal asks for at a lower priority than its own, on the same days as its amount. */
+export interface PriorityExtra {
+  tier: Priority;
+  cents: Cents;
+  /** A fractional rank inside its own tier. */
+  orderIndex: number;
+}
+
+export interface EnvelopeSealed {
+  name: string;
+  emoji: string | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  funding: FundingRule;
+  /** The most it should hold; it gets nothing more once it does. A version written before the max reads as null. */
+  maxCents: Cents | null;
+  /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
+  groupId: string | null;
+  /** The envelopes that pay, in order, when a purchase runs this one out; a version written before it reads as none. */
+  spillTo: string[];
+  /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
+  /** Extras at lower priorities ("+$250 want"); a version written before they existed has none. */
+  extras?: PriorityExtra[] | null;
+}
+
+/** How a bill is funded: spread over the income days before it is due, all from the last one, from one pay line (and one day of the month when `monthDay` is set), or on days the person picked. */
+export type BillFundedBy =
+  | { kind: 'suggested' }
+  | { kind: 'lastBefore' }
+  | { kind: 'pay'; payLineId: string; monthDay: number | null }
+  | { kind: 'chosen'; dayKeys: string[] };
+
+export interface BillSealed {
+  name: string;
+  emoji: string | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  timing: { kind: 'date'; schedule: Schedule };
+  ending: Ending;
+  fundedBy: BillFundedBy;
+  /** Replaces the plan's stance for this bill; a version written before it existed has none. */
+  stanceOverride: Stance | null;
+  /** The group that lists this bill; a version written before groups existed reads as null. */
+  groupId: string | null;
+  /** The card it is usually charged to, which marking it paid starts from; null (or missing on an older version) when it is paid in cash. */
+  paidByCardId?: string | null;
+  /** The account it is paid from; null (or missing) means the plan's one pull account when there is exactly one. */
+  accountId?: string | null;
+  /** The bill is charged or pulled on its own: it never asks to be marked paid. Missing or null reads as false; offered from Track up. */
+  paysItself?: boolean | null;
+  /** What was set aside for it when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
+  /** The day of the month the person pays it, the last one on or before each due date; null (or missing) pays on the due date. */
+  payOnDay?: number | null;
+  /** The card whose annual fee this bill is: its name, amount, date, group and card follow the card and are changed only there. Missing or null on any other bill. */
+  cardFeeOf?: string | null;
+}
+
+/** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */
+export interface GroupSealed {
+  name: string;
+  /** The priority the group's bills are at, and a new bill starts with; null leaves it to each bill. */
+  startingPriority: Priority | null;
+  /** The same for its envelopes; a version written before it existed reads as `startingPriority`, which then covered both. */
+  envelopePriority: Priority | null;
+  /** The same for its goals; a version written before goals could join reads as null. */
+  goalPriority: Priority | null;
+  /** The emoji its bills, envelopes and goals wear unless they have their own; a version written before it existed reads as null. */
+  emoji: string | null;
+}
+
+export interface GoalSealed {
+  name: string;
+  emoji: string | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  targetCents: Cents;
+  targetDate: DateOnly | null;
+  funding: FundingRule;
+  /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
+  /** Paused stops new money and keeps the balance; a version written before it existed has none and reads as active. */
+  state: GoalState;
+  /** Extras at lower priorities, on the same days as its contribution; a version written before they existed has none. */
+  extras?: PriorityExtra[] | null;
+  /** The group that lists this goal; a version written before goals had groups reads as null. */
+  groupId: string | null;
+}
+
+/** What an event's costs fall back on once the money put toward it runs out. */
+export type HorizonRest =
+  | { kind: 'pays' }
+  | { kind: 'onePay'; dayKey: string }
+  | { kind: 'outside' }
+  | { kind: 'later' };
+
+/** Where an event stands: open, done with every cost settled, or called off before it happened. */
+export type HorizonState = 'open' | 'finished' | 'calledOff';
+
+/** Where the money an event held went when it was finished or called off. */
+export interface HorizonMoneyLeft {
+  /** Free to Spend, an envelope or goal (`toId`), or kept by the event until it is released. */
+  kind: 'free' | 'place' | 'held';
+  toId: string | null;
+  cents: Cents;
+  /** The id of the transfer that moved it; null when nothing moved. */
+  moveId: string | null;
+}
+
+/** A planned change to an item that belongs to an event: the change's id (shared by every version it wrote) and the item it changed. */
+export interface HorizonLink {
+  changeId: string;
+  itemId: string;
+}
+
+/** One event's costs and the planned changes linked to it. */
+export interface HorizonSealed {
+  name: string;
+  emoji: string | null;
+  /** "Around Jan 15th"; display only. */
+  happensOn: DateOnly;
+  /** Null for a single day. */
+  happensUntil: DateOnly | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  /** Where what the money put toward it does not cover comes from. */
+  rest: HorizonRest;
+  note: string | null;
+  costs: HorizonCost[];
+  /** A version from `stateOn` changes it; a version sealed before it read as open. */
+  state: HorizonState;
+  /** The day it was finished or called off; null while open. */
+  stateOn: DateOnly | null;
+  /** Where its money went when `state` changed; null while open or when it held none. */
+  stateMoney: HorizonMoneyLeft | null;
+  /** The planned changes to other items that belong to this event, in the order they were linked; a version sealed before links existed has none. */
+  links: HorizonLink[];
+  /** The goal this event draws its costs from while it keeps saving; null for none, and for a version sealed before goals could be linked. */
+  goalId: string | null;
+}
+
+/** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
+export type HorizonStored = Omit<
+  HorizonSealed,
+  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney' | 'links' | 'goalId'
+> & {
+  links?: HorizonLink[];
+  goalId?: string | null;
+  rest?: HorizonRest | null;
+  state?: HorizonState;
+  stateOn?: DateOnly | null;
+  stateMoney?: HorizonMoneyLeft | null;
+  costs: (Omit<
+    HorizonCost,
+    | 'isOutside'
+    | 'ending'
+    | 'pricedOn'
+    | 'endsAfter'
+    | 'becameBillId'
+    | 'becameBillOn'
+    | 'priority'
+  > & {
+    isOutside?: boolean;
+    ending?: Ending;
+    pricedOn?: DateOnly | null;
+    endsAfter?: DateOnly | null;
+    becameBillId?: string | null;
+    becameBillOn?: DateOnly | null;
+    priority?: Priority | null;
+  })[];
+};
+
+export interface HorizonCost {
+  /** Stable across versions. */
+  id: string;
+  name: string;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  schedule: Schedule;
+  /** When a repeating cost stops; never for a cost paid once. */
+  ending: Ending;
+  /** Paid outside the plan: listed, never covered, never short. */
+  isOutside: boolean;
+  /** The day Set the price last ran; null while the first estimate stands. */
+  pricedOn: DateOnly | null;
+  /** Set when a cost with paid payments is removed: it asks for nothing after this day. */
+  endsAfter: DateOnly | null;
+  /** Set by Make it a bill: the bill that took the cost over, which plans every payment from its first due date. */
+  becameBillId: string | null;
+  /** The bill's first due date; the cost plans nothing from it on. */
+  becameBillOn: DateOnly | null;
+  /** Null follows the Horizon item's own priority. */
+  priority: Priority | null;
+  note: string | null;
+}
+
+export interface PlanItemDoc {
+  id: string;
+  kind: ItemKind;
+  parentId: string | null;
+  createdAt: number;
+  endedAt: DateOnly | null;
+  archivedAt: number | null;
+  /** From this day what the item holds is Free to Spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
+  heldReleasedOn: DateOnly | null;
+  /** A bill's learned merchant names (`MatchSealed`), sealed; null or missing when it has learned none. */
+  matchSealed?: Sealed | null;
+}
+
+/** What a bill that pays itself has learned about its charges: the comparable forms of the merchant names a matched charge carried, newest first. */
+export interface MatchSealed {
+  merchantKeys: string[];
+}
+
+/** A credit card: the reserve it shows is what has been charged to it and not yet paid off. `archivedAt` hides it from new charges. */
+export interface CardDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  /** Set by linking; null for a card typed by hand, and read as null on a card written before Link. */
+  linkId: string | null;
+  sealed: Sealed;
+}
+
+export interface CardSealed {
+  /** The bank that issues it ("Capital One"). */
+  issuer: string;
+  /** The card's own name ("Venture X"), when it has one. */
+  name: string | null;
+  /** The day of the month a payment is due (1 to 31, the month's last day when shorter); null when none was given. */
+  dueDay: number | null;
+  /** The card's last four digits, which tell two cards at one bank apart; missing on a card saved before it existed, read as null. */
+  lastFour?: string | null;
+  /** The account that pays this card; null (or missing) means the plan's one pull account when there is exactly one. */
+  payFromAccountId?: string | null;
+  /** The card's annual fee and the bill that plans for it; missing or null when it has none. */
+  annualFee?: CardAnnualFee | null;
+}
+
+export interface CardAnnualFee {
+  cents: Cents;
+  /** The fee's first date in the plan, repeating yearly on that day. */
+  firstDueOn: DateOnly;
+  /** The bill that plans for it, which carries `cardFeeOf` naming this card. */
+  billId: string;
+}
+
+/** Where money is really held: a checking or savings account, a cash account, a brokerage. Archived when it is no longer used. */
+export interface AccountDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  /** Set by linking; null for an account typed by hand. */
+  linkId: string | null;
+  sealed: Sealed;
+}
+
+export interface AccountSealed {
+  /** What the person calls it ("Checking A"). */
+  name: string;
+  /** The bank or service that holds it ("Capital One"). */
+  institution: string;
+  kind: AccountKind;
+  /** False for money that is not for spending (a brokerage or retirement account). */
+  countedTowardTotal: boolean;
+  /** Cards and bills pull from it. */
+  isPullAccount: boolean;
+  lastFour: string | null;
+  /** What it held when the person last said; null until they do. */
+  balanceCents: Cents | null;
+  /** The day that balance was given (date-only). */
+  balanceOn: DateOnly | null;
+  /** The goals and envelopes whose money sits in it; an id is held by one account at most. */
+  holds: string[];
+  /** The yearly rate the account earns, in basis points; null for none, and always null off a checking, savings or cash management account. A version written before it reads as null. */
+  apyBps: number | null;
+  /** The day of the month interest lands (1 to 31, a day past the month's end means its last); null is the last day. */
+  interestDay: number | null;
+}
+
+export interface OpenAccount extends AccountSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  linkId: string | null;
+}
+
+export interface OpenCard extends CardSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  linkId: string | null;
+}
+
+export type LinkStatus = (typeof LINK_STATUSES)[number];
+
+/** One sign-in at one bank; written by Functions, read here. */
+export interface LinkDoc {
+  id: string;
+  status: LinkStatus;
+  lastSyncAt: number | null;
+  createdAt: number;
+  /** @deprecated Superseded by `cardDetails`; read only on a link not synced since, written null. */
+  needsCardConsent: boolean | null;
+  /** The bank's last answer about card details: shared, waiting for the person's agreement, or not offered for this sign-in; null until first asked, and missing on a link written before it was kept. */
+  cardDetails: CardDetailsAnswer | null;
+  /** Whether the provider's own name and logo for this bank were added to the shared bank list; null until then, and missing on a link written before it was kept. */
+  logoShared: boolean | null;
+  sealed: Sealed;
+}
+
+export type CardDetailsAnswer = 'shared' | 'needsConsent' | 'unsupported';
+
+export type ProviderAccountKind = 'depository' | 'credit' | 'other';
+
+/** An account the bank sent, and what the person did with it: bound to one of theirs, or left out. */
+export interface LinkProviderAccount {
+  providerAccountId: string;
+  name: string;
+  kind: ProviderAccountKind;
+  mask: string | null;
+  /** The bank's figure at sign-in; null on links sealed before it was kept. */
+  balanceCents: Cents | null;
+  accountId: string | null;
+  cardId: string | null;
+  isSkipped: boolean;
+}
+
+export interface LinkSealed {
+  institutionName: string;
+  /** The bank's logo as a PNG data URL; null when the bank sent none. */
+  institutionLogo: string | null;
+  /** The bank's website (`capitalone.com`), for a stand-in logo while the bank sends none; null when unknown. */
+  institutionDomain: string | null;
+  /** When the bank's logo and website were last asked for; written by Functions, never read here. */
+  institutionCheckedAt: number | null;
+  providerAccounts: LinkProviderAccount[];
+}
+
+export interface OpenLink extends LinkSealed {
+  id: string;
+  status: LinkStatus;
+  lastSyncAt: number | null;
+  createdAt: number;
+  needsCardConsent: boolean;
+  cardDetails: CardDetailsAnswer | null;
+}
+
+/** What the bank last said an account or card holds; written by Functions. */
+export interface AccountBalanceDoc {
+  id: string;
+  asOf: number;
+  sealed: Sealed;
+}
+
+export interface OpenAccountBalance {
+  id: string;
+  asOf: number;
+  cents: Cents;
+  /** A bank account's balance less pending holds; null when the bank does not send it, always null for a card. */
+  availableCents: Cents | null;
+  /** A card's credit limit; null for an account. */
+  limitCents: Cents | null;
+  /** True when the balance gets the five-minute check: the bank shares it instantly and this link's live reads are on; null when unknown. */
+  hasInstantBalance: boolean | null;
+}
+
+/** What the bank's latest statement says about a linked card, keyed by the card id; written by Functions. */
+export interface CardStatementDoc {
+  id: string;
+  /** When Runway last read it from the bank. */
+  asOf: number;
+  sealed: Sealed;
+}
+
+export interface CardStatementSealed {
+  /** The minimum the bank asks for by `dueOn`; null when the bank does not say. */
+  minimumCents: Cents | null;
+  /** What the card owed when the last statement was issued. */
+  statementCents: Cents | null;
+  statementOn: DateOnly | null;
+  /** The bank's next due date; null when no payment is expected. */
+  dueOn: DateOnly | null;
+  lastPaymentCents: Cents | null;
+  lastPaymentOn: DateOnly | null;
+}
+
+export interface OpenCardStatement extends CardStatementSealed {
+  id: string;
+  asOf: number;
+}
+
+/** An account as the bank describes it, before the person says which of theirs it is. */
+export interface NormalizedAccount {
+  providerAccountId: string;
+  name: string;
+  kind: ProviderAccountKind;
+  subtype: string | null;
+  mask: string | null;
+  /** For a credit account, what is owed, as a positive number. */
+  balanceCents: Cents | null;
+}
+
+/** A named group of purchases ("Chicago trip") whose total is shown across them; it changes no balance. */
+export interface ExpenseDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+export interface ExpenseSealed {
+  name: string;
+  note: string | null;
+}
+
+export interface OpenExpense extends ExpenseSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** An always-do-this rule, stored under `rules`. The collection's name is the one the first design gave it. */
+export interface RuleDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** At least one of the three conditions is set: a merchant alone, a kind of place alone, a card alone, or a kind of place with a card. */
+export interface RuleSealed {
+  /** This merchant, in the one comparable form (`toComparable`); null when the rule does not name one. */
+  merchantKey: string | null;
+  /** The merchant as the person last saw it, for the sentence; null exactly when `merchantKey` is. */
+  merchantName: string | null;
+  /** This kind of place: the bank's detailed category; null when the rule does not name one. */
+  category: string | null;
+  /** Everything on this card; null when the rule does not name one. */
+  cardId: string | null;
+  /** The envelope's id, or `'varies'` (a merchant alone) to ask every time. */
+  target: string;
+}
+
+export interface OpenRule extends RuleSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A card payment the person says they started at their bank, under `startedPayments`; at Link it waits for the bank to show it. */
+export interface StartedPaymentDoc {
+  id: string;
+  cardId: string;
+  startedOn: DateOnly;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface StartedPaymentSealed {
+  amountCents: Cents;
+}
+
+export interface OpenStartedPayment extends StartedPaymentSealed {
+  id: string;
+  cardId: string;
+  startedOn: DateOnly;
+  createdAt: number;
+}
+
+/** Something the person confirmed by hand that Runway uses to settle a later match, under `memories`. */
+export interface MemoryDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** A move the person paired by hand: money out of one account into another account or a card (exactly one of the two is set). */
+export interface RouteMemorySealed {
+  kind: 'route';
+  fromAccountId: string;
+  toAccountId: string | null;
+  toCardId: string | null;
+}
+
+/** A payer the person linked a deposit from to a pay line by hand. */
+export interface PayerMemorySealed {
+  kind: 'payer';
+  /** The merchant in the one comparable form (`toMerchantKey`). */
+  merchantKey: string;
+  merchantName: string;
+  payLineId: string;
+}
+
+export type MemorySealed = RouteMemorySealed | PayerMemorySealed;
+
+export type OpenMemory = MemorySealed & {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+/** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
+export interface ReceiptImageDoc {
+  id: string;
+  /** The purchase its bytes were stored under; it stays the same when a match moves the document to the bank's purchase. */
+  purchaseId: string;
+  createdAt: number;
+  bytes: number;
+  sealed: Sealed;
+}
+
+export interface ReceiptImageSealed {
+  fileName: string | null;
+  contentType: string;
+  /** The nonce the Storage bytes were sealed with. */
+  nonce: string;
+}
+
+export interface OpenReceiptImage extends ReceiptImageSealed {
+  id: string;
+  /** Where its sealed bytes are stored. */
+  purchaseId: string;
+  /** The purchase it belongs to now; a purchase typed by hand and matched to the bank's hands its photos over and keeps `purchaseId`. */
+  ownerId: string;
+  createdAt: number;
+  bytes: number;
+}
+
+export interface PlanVersionDoc {
+  id: string;
+  itemId: string;
+  kind: ItemKind;
+  createdAt: number;
+  effectiveFrom: DateOnly;
+  effectiveUntil: DateOnly | null;
+  changeId: string;
+  sealed: Sealed;
+}
+
+/** The move of money a `moveChange` entry records, kept so its History row can take it back; an entry that takes one back carries the same ids with `isUndo` set. */
+export interface ChangeMove {
+  moveId: string;
+  date: DateOnly;
+  /** Null is Free to Spend. */
+  fromId: string | null;
+  toId: string | null;
+  cents: Cents;
+  note: string | null;
+  /** The money came from, or went to, outside the plan: money on hand changed by the same amount. */
+  isOutside: boolean;
+  /** The sentence that says what taking it back restores, for the confirm, the toast and the log. */
+  undoText: string;
+  isUndo: boolean;
+  /** Set when the entry is a bill's payment marked paid; the transfer fields then only name its amount. Null elsewhere; read as null on older entries. */
+  bill: {
+    billId: string;
+    name: string;
+    dueOn: DateOnly;
+    paidOn: DateOnly;
+    amountCents: Cents;
+    fromFreeCents: Cents;
+    cardId: string | null;
+  } | null;
+  /** Set when the entry is a Horizon cost's payment marked paid; null elsewhere and read as null on older entries. */
+  cost: {
+    itemId: string;
+    itemName: string;
+    costId: string;
+    name: string;
+    dueOn: DateOnly;
+    paidOn: DateOnly;
+    amountCents: Cents;
+    fromFreeCents: Cents;
+    mark: CostPaidMark;
+    purchaseId: string | null;
+    /** What the event's linked goal paid, and which goal; missing on an entry written before goals could be linked. */
+    fromGoalCents?: Cents;
+    goalId?: string | null;
+    goalName?: string | null;
+  } | null;
+}
+
+export interface ChangeSealed {
+  summary: string;
+  /** The person's reason; a change written before notes existed has none. */
+  note?: string | null;
+  /** A move written before outside moves existed has no `isOutside`. */
+  move?:
+    | (Omit<ChangeMove, 'isOutside' | 'cost'> & {
+        isOutside?: boolean;
+        cost?: ChangeMove['cost'];
+      })
+    | null;
+}
+
+export interface ChangeDoc {
+  id: string;
+  kind: ChangeKind;
+  createdAt: number;
+  effectiveFrom: DateOnly | null;
+  itemIds: string[];
+  sealed: Sealed;
+}
+
+/** A change entry as the log shows it; `isUnreadable` is set when its sealed payload would not open, and the readable fields still show. */
+export interface OpenChange {
+  id: string;
+  kind: ChangeKind;
+  createdAt: number;
+  effectiveFrom: DateOnly | null;
+  itemIds: string[];
+  summary: string;
+  note: string | null;
+  move: ChangeMove | null;
+  isUnreadable: boolean;
+}
+
+interface OpenVersionBase {
+  id: string;
+  itemId: string;
+  createdAt: number;
+  effectiveFrom: DateOnly;
+  effectiveUntil: DateOnly | null;
+  changeId: string;
+}
+
+export type OpenVersion =
+  | (OpenVersionBase & { kind: 'source'; payload: SourceSealed })
+  | (OpenVersionBase & { kind: 'payLine'; payload: PayLineSealed })
+  | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed })
+  | (OpenVersionBase & { kind: 'bill'; payload: BillSealed })
+  | (OpenVersionBase & { kind: 'goal'; payload: GoalSealed })
+  | (OpenVersionBase & { kind: 'group'; payload: GroupSealed })
+  | (OpenVersionBase & { kind: 'horizon'; payload: HorizonSealed });
+
+export type PayLineVersion = Extract<OpenVersion, { kind: 'payLine' }>;
+export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
+export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
+export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;
+export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;
+export type GroupVersion = Extract<OpenVersion, { kind: 'group' }>;
+export type HorizonVersion = Extract<OpenVersion, { kind: 'horizon' }>;
+
+export type MoveKind = (typeof MOVE_KINDS)[number];
+
+/** Append-only: a bill marked paid (`reversesMoveId` null) or the undo of one, or a `start` holding. `date` is the due date of a payment, or the starting day of a `start`. */
+export interface MoveDoc {
+  id: string;
+  kind: MoveKind;
+  date: DateOnly;
+  refId: string | null;
+  reversesMoveId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface BillPaidSealed {
+  amountCents: Cents;
+  /** The day the person marked it paid. */
+  paidOn: DateOnly;
+  /** The part that had not been set aside yet, which came out of Free to Spend. */
+  fromFreeCents: Cents;
+  /** The card it was charged to, which then owes it while the cash stays put; null (or missing on an older move) when it was paid in cash. */
+  cardId?: string | null;
+  /** Set when the app wrote the mark itself for a bill that pays itself; null (or missing) for a mark the person made. `isEstimate` is a ranged bill's top of range, awaiting the real amount; `purchaseId` is the charge that settled it. */
+  auto?: AutoPaidMark | null;
+}
+
+export interface AutoPaidMark {
+  isEstimate: boolean;
+  purchaseId: string | null;
+}
+
+/** How a Horizon cost's payment was marked: out of the item's money, by a purchase (which moved the money), or outside the plan (which moves nothing). */
+export type CostPaidMark = 'item' | 'purchase' | 'outside';
+
+/** A Horizon cost's payment marked paid: `refId` is the item, `date` the payment's due date. */
+export interface CostPaidSealed {
+  costId: string;
+  dueOn: DateOnly;
+  /** What it came to: the exact amount, or what the person said for a range. */
+  amountCents: Cents;
+  /** The day the person marked it paid. */
+  paidOn: DateOnly;
+  /** The part beyond what the item held, which came out of Free to Spend. */
+  fromFreeCents: Cents;
+  mark: CostPaidMark;
+  /** The purchase that moved the money when `mark` is `purchase`; null otherwise. */
+  purchaseId: string | null;
+  /** The part that came out of the event's linked goal, paid before the event's own money; zero or missing on a mark written before goals could be linked. */
+  fromGoalCents?: Cents;
+  /** The goal `fromGoalCents` came out of; null or missing when none did. */
+  goalId?: string | null;
+}
+
+/** A card paid off: `refId` is the card, `date` the day it was paid. */
+export interface CardPaymentSealed {
+  amountCents: Cents;
+  /** What it covered: everything waiting, the minimum, or part of it. A payment written before this existed has none and reads as `full`, since Pay off then always started at the whole balance. */
+  covers?: CardPaymentCovers;
+}
+
+/** Money moved between buckets: `refId` is `fromId`, or `toId` when `fromId` is null; `toId` null is Free to Spend. A move that names it in `reversesMoveId` takes it back. */
+export interface TransferSealed {
+  /** Null is Free to Spend, so `toId` is then an item. */
+  fromId: string | null;
+  toId: string | null;
+  cents: Cents;
+  note: string | null;
+  /** Money from outside the plan into an item, or out of it: money on hand changes by `cents` too. Missing on a move written before it existed, which reads as false. */
+  isOutside: boolean;
+}
+
+export type CardPaymentCovers = 'full' | 'minimum' | 'part';
+
+export type StartHolding = (typeof START_HOLDINGS)[number];
+
+/** What one holding had on the starting day: the money on hand, what an envelope or goal holds, what a bill has set aside, or what a card owes. */
+export interface StartSealed {
+  amountCents: Cents;
+  holding: StartHolding;
+}
+
+/** Tracking turned on (`up`, on the first day of the period) or off (`down`, on the last day it counted). */
+export interface TrackingChangeSealed {
+  direction: 'up' | 'down';
+}
+
+interface OpenMoveBase {
+  id: string;
+  date: DateOnly;
+  refId: string | null;
+  reversesMoveId: string | null;
+  createdAt: number;
+}
+
+export type OpenMove =
+  | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
+  | (OpenMoveBase & { kind: 'costPaid'; payload: CostPaidSealed })
+  | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
+  | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
+  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed })
+  | (OpenMoveBase & { kind: 'transfer'; payload: TransferSealed });
+
+export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
+export type StartMove = Extract<OpenMove, { kind: 'start' }>;
+
+export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
+export type PurchaseAssignedBy = 'auto' | 'person';
+/** What a pair of purchases on the person's own linked accounts is: money moved between two accounts, or a payment from an account to a card. */
+export type PurchasePairKind = 'transfer' | 'cardPayment';
+export type PurchaseLineVia = (typeof PURCHASE_LINE_VIAS)[number];
+
+/** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to Spend. */
+export interface PurchaseLine {
+  envelopeId: string | null;
+  /** Negative on a refund. */
+  cents: Cents;
+  via: PurchaseLineVia;
+}
+
+/** The Horizon cost payment a purchase pays: the item (also the purchase's one line), the cost and the payment's due date. */
+export interface CostRef {
+  itemId: string;
+  costId: string;
+  dueOn: DateOnly;
+}
+
+/** The bill payment a charge was matched to, and the paid mark it settled. */
+export interface BillRef {
+  billId: string;
+  dueOn: DateOnly;
+  moveId: string;
+}
+
+export interface PurchaseSealed {
+  /** Negative for a refund. */
+  amountCents: Cents;
+  merchant: string | null;
+  /** An https link to the merchant's logo the bank sent; null on a purchase typed by hand and on one synced before logos were kept (read as null). */
+  merchantLogo?: string | null;
+  /** The bank's own description of a synced charge when it differs from the merchant ("AMZN Mktp US*2K4"); null or missing otherwise. */
+  bankName?: string | null;
+  /** The bank's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null on a purchase typed by hand and on one saved before it was read (read as null). */
+  category: string | null;
+  /** The rule that placed it; null when the person did, and on a purchase saved before rules (read as null). */
+  ruleId: string | null;
+  /** The person's own name for the purchase; it titles the row before the merchant. Null on purchases saved before labels existed. */
+  label: string | null;
+  /** A memo, read on the purchase's sheet and never used as its title. */
+  note: string | null;
+  /** Adds up to `amountCents`. */
+  lines: PurchaseLine[];
+  /** The purchase a refund returns money for; null for a purchase or a refund that names none. */
+  refundOfId: string | null;
+  /** The card it was charged to, whose payment it then waits for; null (or missing on an older purchase) when it was paid in cash. */
+  paidByCardId?: string | null;
+  /** An https link to the order or receipt; null (or missing on an older purchase) when none was added. */
+  link: string | null;
+  /** The items read from a receipt, one per line; null (or missing on an older purchase) when none were read. */
+  receiptText: string | null;
+  /** The cost payment this purchase marks paid; null (or missing on an older purchase) when it pays none. */
+  costRef?: CostRef | null;
+  /** The bill payment this charge was matched to: the charge counts nowhere (no lines) because the bill's paid mark already did; null (or missing on an older purchase) when it is matched to none. */
+  billRef?: BillRef | null;
+  /** On a purchase typed by hand: the bank purchases the person said it is not, so it is never matched to them again; null when none (and on a purchase saved before matching, read as null). */
+  notSameAs: string[] | null;
+  /** On a deposit linked to an income day: that day's key (`OpenDay.id`); null when it is linked to none (and on a purchase saved before deposits were matched, read as null). */
+  incomeDayId: string | null;
+  /** Who chose the deposit's day or sent it back: a pass of the app, or the person (whose choice no pass changes); null while neither has (read as null on an older purchase). */
+  assignedBy: PurchaseAssignedBy | null;
+  /** On a purchase paired with another as a move between the person's own accounts: the other one's id; null when unpaired (and read as null on a purchase saved before pairing). */
+  pairedWithId: string | null;
+  /** What the pair is; null exactly when `pairedWithId` is. */
+  pairKind: PurchasePairKind | null;
+  /** On the card's side of a card payment: the `cardPayment` move the pairing wrote; null when none (and read as null on an older purchase). */
+  cardPaymentMoveId: string | null;
+  /** On the money-in side of a transfer: the income day whose "Move to" item the pairing ticked; null when it ticked none (and read as null on an older purchase). */
+  tickedDayKey: string | null;
+  /** What a store's email made of it: an order, a refund or a cancellation, with the order number; null on anything else (missing on an older purchase, read as null). */
+  storeEmail?: StoreEmail | null;
+  /** On an order: each cancellation the app took off it before it was charged, newest last; null when none (missing on an older purchase, read as null). */
+  orderLog?: OrderLogEntry[] | null;
+}
+
+/** What a store's email does to an order: places it, returns money for it, or cancels some or all of it. */
+export interface StoreEmail {
+  kind: 'order' | 'refund' | 'cancel';
+  /** As the store printed it; null when the email gave none. */
+  orderNumber: string | null;
+  /** A cancellation of the whole order; false for anything else. */
+  isWholeOrder: boolean;
+  /** The store as the email named it. */
+  merchant: string | null;
+}
+
+/** A cancellation taken off an order that had not been charged yet. */
+export interface OrderLogEntry {
+  kind: 'cancel';
+  cents: Cents;
+  /** The day the email arrived. */
+  on: DateOnly;
+  emailEventId: string | null;
+  /** The cancellation's own purchase, kept with no lines so it counts nowhere; null when the email gave no amount. */
+  purchaseId: string | null;
+  /** Set when the person undid it: the order is back to what it was, and the entry stays so the app never takes it off again. */
+  undoneAt: number | null;
+}
+
+/** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */
+export type PurchaseStatus = 'pending' | 'posted';
+
+/** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
+export interface PurchaseDoc {
+  id: string;
+  date: DateOnly;
+  source: PurchaseSource;
+  /** Only a purchase from a linked bank has one; null on one typed by hand (missing on an older one, read as null). */
+  status: PurchaseStatus | null;
+  needsHome: boolean;
+  /** The account a linked purchase came from; a card's is `paidByCardId` in the sealed payload. */
+  accountId: string | null;
+  /** Written by Functions to find a bank charge again; a client never sets or changes it. */
+  dedupeKey: string | null;
+  /** The expense group it belongs to; null (or missing on an older purchase) when none. */
+  expenseId: string | null;
+  /** On a purchase read from a bank's alert email (`source` 'email'): the email it came from; null otherwise (and missing on an older purchase, read as null). */
+  emailEventId: string | null;
+  /** On a purchase read from an email: true while Runway waits for its bank to send the same charge, false once there is nothing to wait for (its card or account isn't linked, or the person stopped waiting); null on every other purchase (and missing on an older one). */
+  emailWaiting: boolean | null;
+  /** On a purchase from a linked bank, written by Functions: true once the bank has shown it as pending (or its posted charge named a pending one), false when it only ever arrived posted; null on any other purchase, and missing on an older one (read as null). */
+  wasPending: boolean | null;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** The person's forwarding address for bank alert emails, written only by Functions; one per plan, at `emailIntake/address`. The address is `runway-<token>@moondreamsmail.com`. */
+export interface EmailIntakeDoc {
+  id: 'address';
+  /** Lowercase letters and digits; changes when the person asks for a new address, and the old one stops working at once. */
+  token: string;
+  createdAt: number;
+  updatedAt: number;
+  /** When an email last reached the address; null until one does. */
+  lastReceivedAt: number | null;
+  /** When a mail provider's forwarding confirmation last arrived; null until one does. */
+  confirmAt: number | null;
+  /** When an email a provider forwarded on its own (not by hand) last arrived; null until one does (missing on an older document, read as null). */
+  forwardedAt: number | null;
+  /** Whether Functions followed the confirmation link themselves: 'confirmed', 'failed' or 'skipped' (a provider they don't follow); null until a confirmation arrives (and on an older document, which the person confirms by hand). */
+  autoConfirm: 'confirmed' | 'failed' | 'skipped' | null;
+  /** Whose confirmation arrived; null until one does, or when the provider is not one of these. */
+  confirmProvider: 'gmail' | 'yahoo' | 'proton' | null;
+  /** `EmailIntakeSealed`; null until a confirmation arrives. */
+  sealed: Sealed | null;
+}
+
+export interface EmailIntakeSealed {
+  /** The https link that confirms forwarding, from the provider's confirmation email. */
+  confirmUrl: string | null;
+  /** The confirmation code the same email carries, for a provider that asks for it instead; null when none was found. */
+  confirmCode: string | null;
+}
+
+/** @deprecated The setup walkthrough is gone; kept for the stored progress documents, which nothing reads or writes now. */
+export type EmailProvider =
+  'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'proton' | 'other';
+
+/** @deprecated See `EmailProvider`. */
+export type EmailSetupStepId =
+  | 'provider'
+  | 'copy'
+  | 'forwarding'
+  | 'bank'
+  | 'rule'
+  | 'confirm'
+  | 'filter'
+  | 'test';
+
+/** @deprecated The setup walkthrough is gone and nothing reads or writes this document now; older ones stay in place. It held how far the person got setting up forwarding, at `emailSetup/progress`, with the banks whose alerts were forwarded sealed. */
+export interface EmailSetupDoc {
+  id: 'progress';
+  provider: EmailProvider | null;
+  /** The furthest step reached, by id so a provider's list can change without moving it; null before a provider is chosen. */
+  stepId: EmailSetupStepId | null;
+  /** When setup was finished (the first purchase arrived, or the person completed it); null while unfinished. */
+  doneAt: number | null;
+  /** `EmailSetupSealed`: the banks whose alerts the person forwards; null until one is added (and missing on an older doc). */
+  sealed: Sealed | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** @deprecated See `EmailSetupDoc`. */
+export interface EmailBank {
+  id: string;
+  name: string;
+  /** Lowercase; at least one. */
+  addresses: string[];
+  addedAt: number;
+}
+
+/** @deprecated See `EmailSetupDoc`. */
+export interface EmailSetupSealed {
+  banks: EmailBank[];
+}
+
+/** What became of one email that reached the address. */
+export type EmailOutcome =
+  | 'purchase'
+  | 'notPurchase'
+  | 'filtered'
+  | 'confirm'
+  | 'unread'
+  | 'notTracking'
+  | 'refund'
+  | 'cancel';
+
+/** What kind of sender an email came from, as Functions judged it: a bank's alert, a store's receipt, or something that is not money. */
+export type EmailSenderKind = 'bank' | 'store' | 'other';
+
+/** One email that reached the address, written only by Functions and removed on its own after `EMAIL_EVENT_KEEP_DAYS`; kept so a filter can be built from it. */
+export interface EmailEventDoc {
+  id: string;
+  receivedAt: number;
+  outcome: EmailOutcome;
+  /** The sender's kind; null on an older event (read as a bank when it became a purchase, else not money). */
+  senderKind: EmailSenderKind | null;
+  /** The purchase it became; null for any other outcome. */
+  purchaseId: string | null;
+  /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
+  expiresAt: number;
+  sealed: Sealed;
+}
+
+export interface EmailEventSealed {
+  /** The sender's address, lowercase. */
+  from: string;
+  subject: string;
+  /** The subject with amounts, card numbers and dates replaced (`toSubjectTemplate`), lowercase. */
+  subjectTemplate: string;
+  /** An excerpt of the email's text, up to 6 lines joined with a line break, for building a filter; older events hold one line. */
+  snippet: string;
+  /** The whole readable text with its line breaks and links reduced to host names (up to 4000 characters); null on older events. */
+  bodyText: string | null;
+  /** How the purchase was read: a known pattern or the AI; null when nothing was read. */
+  readBy: 'pattern' | 'ai' | null;
+  /** What a store's email does to an order; null for any other email (missing on an older event, read as null). */
+  storeEmail?: StoreEmail | null;
+  /** The company's logo (an https address or an image data URL) when the email is confidently from one; null when unknown (missing on an older event, read as null). */
+  senderLogo: string | null;
+  /** That company's name, a store the shared shop list knows or a bank the alert names; null when unknown (missing on an older event, read as null). */
+  senderCompany: string | null;
+}
+
+/** A filter the person made from an email: an email that matches every condition it sets is skipped before anything reads it. Created and deleted by the app, read by Functions. */
+export interface EmailFilterDoc {
+  id: string;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+/** Every condition is lowercase; an empty list or null is no condition, and a filter with no condition matches nothing. */
+export interface EmailFilterSealed {
+  fromAddress: string | null;
+  subjectTemplate: string | null;
+  subjectContains: string[];
+  bodyContains: string[];
+}
+
+/** A placed pending charge the bank dropped, noted by Functions so the app can say where its money went back; the app deletes it once read. */
+export interface ReleasedChargeDoc {
+  id: string;
+  date: DateOnly;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface ReleasedChargeSealed {
+  title: string | null;
+  amountCents: Cents;
+  lines: PurchaseLine[];
+}
+
+export interface OpenReleasedCharge extends ReleasedChargeSealed {
+  id: string;
+  date: DateOnly;
+}
+
+export interface OpenPurchase extends PurchaseSealed {
+  id: string;
+  date: DateOnly;
+  source: PurchaseSource;
+  status: PurchaseStatus | null;
+  accountId: string | null;
+  needsHome: boolean;
+  expenseId: string | null;
+  emailEventId: string | null;
+  emailWaiting: boolean | null;
+  wasPending: boolean | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What the ledger summed to at the end of a month, as stored: dates are whole days since 1970, a bill's funded days are `[day, cents]` and its paid payments `[dueDay, cents, paidDay, fromFreeCents, mark]`, where `mark` is the number of the mark in the move's id or the id itself when it is not the usual one. */
+export interface ClosingSealed {
+  version: number;
+  startDay: number;
+  arrivedCents: Cents;
+  given: Record<string, Cents>;
+  /** `[day, arrivedCents, given]` for each split that arrived after its month ended and is still after the next month's start. */
+  late: [number, Cents, Record<string, Cents>][];
+  spentCents: Cents;
+  spentByItem: Record<string, Cents>;
+  funded: Record<string, [number, Cents][]>;
+  /** `[dueDay, amountCents, paidDay, fromFreeCents, mark, cardId]`. */
+  paid: Record<
+    string,
+    [number, Cents, number, Cents, number | string, string | null][]
+  >;
+  /** What purchases charged to each card, by card id. */
+  charged: Record<string, Cents>;
+  /** `[day, cents, moveId]` for each card payment not undone. */
+  cardPaid: Record<string, [number, Cents, string][]>;
+  /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
+  transfers: [number, string | null, string | null, Cents, string, boolean][];
+  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId, fromGoalCents, goalId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
+  costPaid?: Record<
+    string,
+    [
+      string,
+      number,
+      Cents,
+      number,
+      Cents,
+      CostPaidMark,
+      string | null,
+      string,
+      Cents?,
+      (string | null)?,
+    ][]
+  >;
+  /** `[costId, day]` for each confirmed day that gave back a fronted payment, by item id; missing on a closing written before it. */
+  repaid?: Record<string, [string, number][]>;
+}
+
+/** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */
+export interface ClosingDoc {
+  id: string;
+  month: string;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+// Round 4: funding on the calendar.
+export type CalendarPeriod = (typeof CALENDAR_PERIODS)[number];
+
+export type DoneForYouKind =
+  | 'merge'
+  | 'deposit'
+  | 'pair'
+  | 'rule'
+  | 'charge'
+  | 'autoMark'
+  | 'history'
+  | 'released'
+  | 'ended'
+  | 'storeRefund'
+  | 'storeCancel';
+
+/** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
+export type DoneForYouUndo =
+  | { kind: 'merge'; merged: MergedPurchase }
+  | { kind: 'mergeSplit'; merged: MergedSplit }
+  | {
+      kind: 'deposit';
+      deposit: OpenPurchase;
+      linked: OpenPurchase;
+      dayOn: DateOnly;
+    }
+  | {
+      kind: 'pair';
+      out: OpenPurchase;
+      into: OpenPurchase;
+      pairKind: PurchasePairKind;
+      names: { from: string; to: string };
+      paired: { out: OpenPurchase; into: OpenPurchase };
+    }
+  | { kind: 'rule'; placed: OpenPurchase }
+  | { kind: 'storeRefund'; applied: OpenPurchase }
+  | {
+      kind: 'storeCancel';
+      /** The order before the cancellation came off it, and as the app wrote it. */
+      before: OpenPurchase;
+      written: OpenPurchase;
+      /** The cancellation's own purchase as the app left it (no lines); null when the email gave no amount. */
+      cancel: OpenPurchase | null;
+      emailEventId: string | null;
+    }
+  | { kind: 'charge'; result: ChargeMatchResult };
+
+/** What an entry acted on, so its item can show it and open it; each kind fills what it has. */
+export interface DoneForYouSubject {
+  purchaseId: string | null;
+  merchant: string | null;
+  merchantLogo: string | null;
+  amountCents: Cents | null;
+  ruleId: string | null;
+  billId: string | null;
+  itemId: string | null;
+  toName: string | null;
+  toEmoji: string | null;
+  fromName: string | null;
+}
+
+export interface DoneForYouSealed {
+  title: string;
+  detail: string | null;
+  why: string | null;
+  undo: DoneForYouUndo | null;
+  /** Null on an entry written before it was kept. */
+  subject: DoneForYouSubject | null;
+}
+
+/** Something the app did on its own, under `doneForYou`; only `undoneAt` and removal change it. */
+export interface DoneForYouDoc {
+  id: string;
+  kind: DoneForYouKind;
+  createdAt: number;
+  undoneAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenDoneForYou extends DoneForYouSealed {
+  id: string;
+  kind: DoneForYouKind;
+  createdAt: number;
+  undoneAt: number | null;
+}
+
+/** A bill payment mark as the ledger holds it. */
+export type WrittenPaidMark = {
+  moveId: string;
+  billId: string;
+  dueOn: DateOnly;
+} & BillPaidSealed;
+
+/** What an Undo of a match needs. */
+export interface ChargeMatchResult {
+  /** The charge as it was before the match. */
+  purchase: OpenPurchase;
+  billId: string;
+  billName: string;
+  dueOn: DateOnly;
+  /** The charge's `updatedAt` after the match, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+  written: WrittenPaidMark | null;
+  replaced: WrittenPaidMark | null;
+  keysBefore: string[] | null;
+  keysAfter: string[] | null;
+}
+
+export interface MergedPurchase {
+  bank: OpenPurchase;
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+export interface MergedSplit {
+  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}

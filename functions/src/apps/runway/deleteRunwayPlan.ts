@@ -10,6 +10,7 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { isSignInRecent } from '../../auth/recentSignIn.js';
+import { reworkPath } from './figures/reworkState.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   grantsPath,
@@ -182,6 +183,7 @@ export const deleteRunwayPlan = onCall(
         firestore,
         firestore.doc(serverPath(uid)),
       );
+      await firestore.doc(reworkPath(uid)).delete();
       const receipts = await deleteReceiptObjects(uid);
 
       const documents =
