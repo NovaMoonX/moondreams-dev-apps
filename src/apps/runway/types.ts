@@ -1212,6 +1212,34 @@ export interface PurchaseSealed {
   cardPaymentMoveId: string | null;
   /** On the money-in side of a transfer: the income day whose "Move to" item the pairing ticked; null when it ticked none (and read as null on an older purchase). */
   tickedDayKey: string | null;
+  /** What a store's email made of it: an order, a refund or a cancellation, with the order number; null on anything else (missing on an older purchase, read as null). */
+  storeEmail?: StoreEmail | null;
+  /** On an order: each cancellation the app took off it before it was charged, newest last; null when none (missing on an older purchase, read as null). */
+  orderLog?: OrderLogEntry[] | null;
+}
+
+/** What a store's email does to an order: places it, returns money for it, or cancels some or all of it. */
+export interface StoreEmail {
+  kind: 'order' | 'refund' | 'cancel';
+  /** As the store printed it; null when the email gave none. */
+  orderNumber: string | null;
+  /** A cancellation of the whole order; false for anything else. */
+  isWholeOrder: boolean;
+  /** The store as the email named it. */
+  merchant: string | null;
+}
+
+/** A cancellation taken off an order that had not been charged yet. */
+export interface OrderLogEntry {
+  kind: 'cancel';
+  cents: Cents;
+  /** The day the email arrived. */
+  on: DateOnly;
+  emailEventId: string | null;
+  /** The cancellation's own purchase, kept with no lines so it counts nowhere; null when the email gave no amount. */
+  purchaseId: string | null;
+  /** Set when the person undid it: the order is back to what it was, and the entry stays so the app never takes it off again. */
+  undoneAt: number | null;
 }
 
 /** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */
@@ -1316,7 +1344,9 @@ export type EmailOutcome =
   | 'filtered'
   | 'confirm'
   | 'unread'
-  | 'notTracking';
+  | 'notTracking'
+  | 'refund'
+  | 'cancel';
 
 /** What kind of sender an email came from, as Functions judged it: a bank's alert, a store's receipt, or something that is not money. */
 export type EmailSenderKind = 'bank' | 'store' | 'other';
@@ -1347,6 +1377,8 @@ export interface EmailEventSealed {
   bodyText: string | null;
   /** How the purchase was read: a known pattern or the AI; null when nothing was read. */
   readBy: 'pattern' | 'ai' | null;
+  /** What a store's email does to an order; null for any other email (missing on an older event, read as null). */
+  storeEmail?: StoreEmail | null;
 }
 
 /** A filter the person made from an email: an email that matches every condition it sets is skipped before anything reads it. Created and deleted by the app, read by Functions. */
@@ -1459,7 +1491,9 @@ export type DoneForYouKind =
   | 'autoMark'
   | 'history'
   | 'released'
-  | 'ended';
+  | 'ended'
+  | 'storeRefund'
+  | 'storeCancel';
 
 /** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
 export type DoneForYouUndo =
@@ -1479,6 +1513,16 @@ export type DoneForYouUndo =
       paired: { out: OpenPurchase; into: OpenPurchase };
     }
   | { kind: 'rule'; placed: OpenPurchase }
+  | { kind: 'storeRefund'; applied: OpenPurchase }
+  | {
+      kind: 'storeCancel';
+      /** The order before the cancellation came off it, and as the app wrote it. */
+      before: OpenPurchase;
+      written: OpenPurchase;
+      /** The cancellation's own purchase as the app left it (no lines); null when the email gave no amount. */
+      cancel: OpenPurchase | null;
+      emailEventId: string | null;
+    }
   | { kind: 'charge'; result: ChargeMatchResult };
 
 /** What an entry acted on, so its item can show it and open it; each kind fills what it has. */

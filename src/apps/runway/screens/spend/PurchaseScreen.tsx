@@ -71,6 +71,7 @@ import ReceiptFileInput, {
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
 import PairOffer from '@apps/runway/components/PairOffer';
+import OrderHistory from '@apps/runway/components/OrderHistory';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import SameAsEmailOffer from '@apps/runway/components/SameAsEmailOffer';
 import SameAsOffer from '@apps/runway/components/SameAsOffer';
@@ -372,6 +373,11 @@ function PurchaseScreen({
     ? (purchases.find((entry) => entry.id === purchase.refundOfId) ?? null)
     : null;
   const refunds = purchases.filter((entry) => entry.refundOfId === purchase.id);
+  const isStoreOrder =
+    purchase.amountCents >= 0 &&
+    (purchase.storeEmail?.kind === 'order' ||
+      (purchase.orderLog ?? []).length > 0 ||
+      refunds.some((refund) => refund.storeEmail != null));
   const refundedCents = refunds.reduce(
     (sum, entry) => sum - entry.amountCents,
     0,
@@ -1061,7 +1067,7 @@ function PurchaseScreen({
                 onClick={() => openPurchase(original.id)}
               />
             )}
-            {refundedCents > 0 && (
+            {refundedCents > 0 && !isStoreOrder && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -1075,6 +1081,14 @@ function PurchaseScreen({
               />
             )}
           </ActionGroup>
+          {isStoreOrder && (
+            <OrderHistory
+              order={purchase}
+              refunds={refunds}
+              mask={mask}
+              onOpen={openPurchase}
+            />
+          )}
           {isEmail && (
             <ActionGroup isRoomy caption={EMAIL_WORDS.emailActionsCaption}>
               <EmailPurchaseRows purchase={purchase} onFailed={setError} />

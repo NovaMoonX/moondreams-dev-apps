@@ -153,6 +153,7 @@ export function startEmailEventsListener(
               snippet: payload.snippet ?? '',
               bodyText: payload.bodyText ?? null,
               readBy: payload.readBy ?? null,
+              storeEmail: payload.storeEmail ?? null,
             };
           }),
         );

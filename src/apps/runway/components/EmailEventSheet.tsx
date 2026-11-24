@@ -8,7 +8,9 @@ import {
   MailCheck,
   Receipt,
   ShoppingBag,
+  PackageX,
   type LucideIcon,
+  Undo2,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -37,6 +39,8 @@ const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   unread: Info,
   notPurchase: CircleSlash,
   notTracking: CircleSlash,
+  refund: Undo2,
+  cancel: PackageX,
 };
 
 function EmailHeader({ event }: { event: EmailEventRead }) {
