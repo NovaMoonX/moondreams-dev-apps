@@ -705,6 +705,8 @@ const PURCHASE_SEALED_FIELDS = {
   pairKind: 'notUseful',
   cardPaymentMoveId: 'notUseful',
   tickedDayKey: 'notUseful',
+  storeEmail: 'never',
+  orderLog: 'notUseful',
 } satisfies Record<keyof PurchaseSealed, ShareDecision>;
 
 const PURCHASE_DOC_FIELDS = {
@@ -778,6 +780,7 @@ const EMAIL_EVENT_SEALED_FIELDS = {
   snippet: 'never',
   bodyText: 'never',
   readBy: 'notUseful',
+  storeEmail: 'never',
 } satisfies Record<keyof EmailEventSealed, ShareDecision>;
 
 const EMAIL_FILTER_DOC_FIELDS = {

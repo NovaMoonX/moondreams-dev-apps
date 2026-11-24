@@ -7,10 +7,12 @@ import {
   Flag,
   History,
   Link2,
+  PackageX,
+  RotateCcw,
   Wand2,
 } from 'lucide-react';
 
-import { DONE_FOR_YOU_WORDS } from '@apps/runway/constants';
+import { DONE_FOR_YOU_WORDS, STORE_ORDER_WORDS } from '@apps/runway/constants';
 import DoneForYouHero from '@apps/runway/components/DoneForYouHero';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PurchaseMark from '@apps/runway/components/PurchaseMark';
@@ -26,6 +28,8 @@ const KIND_LOOKS = {
   ended: { icon: <Flag />, label: DONE_FOR_YOU_WORDS.kindEnded },
   history: { icon: <History />, label: DONE_FOR_YOU_WORDS.kindHistory },
   released: { icon: <Clock />, label: DONE_FOR_YOU_WORDS.kindReleased },
+  storeRefund: { icon: <RotateCcw />, label: STORE_ORDER_WORDS.outcomeRefund },
+  storeCancel: { icon: <PackageX />, label: STORE_ORDER_WORDS.outcomeCancel },
 } satisfies Record<DoneForYouKind, { icon: ReactNode; label: string }>;
 
 const hasLogo = (subject: DoneForYouSubject) =>

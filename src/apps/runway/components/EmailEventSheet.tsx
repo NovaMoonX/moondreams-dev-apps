@@ -8,6 +8,8 @@ import {
   MailCheck,
   Receipt,
   ShoppingBag,
+  RotateCcw,
+  PackageX,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -37,6 +39,8 @@ const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   unread: Info,
   notPurchase: CircleSlash,
   notTracking: CircleSlash,
+  refund: RotateCcw,
+  cancel: PackageX,
 };
 
 function EmailHeader({ event }: { event: EmailEventRead }) {

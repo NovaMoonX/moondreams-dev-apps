@@ -14,12 +14,17 @@ import {
   DEPOSIT_WORDS,
   DONE_FOR_YOU_DAYS,
   DONE_FOR_YOU_WORDS,
+  STORE_ORDER_WORDS,
   NEEDS_HOME_WORDS,
   PAIR_WORDS,
   RULE_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
+import {
+  undoStoreRefund,
+  undoTakeOff,
+} from '@apps/runway/store/actions/storeOrderActions';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoChargeMatch } from '@apps/runway/store/actions/autoPayActions';
 import {
@@ -129,6 +134,26 @@ const getExpected = (
           date: undo.result.purchase.date,
         },
       ];
+    case 'storeRefund':
+      return [
+        {
+          id: undo.applied.id,
+          updatedAt: undo.applied.updatedAt,
+          date: undo.applied.date,
+        },
+      ];
+    case 'storeCancel':
+      return [undo.written, undo.cancel].flatMap((purchase) =>
+        purchase === null
+          ? []
+          : [
+              {
+                id: purchase.id,
+                updatedAt: purchase.updatedAt,
+                date: purchase.date,
+              },
+            ],
+      );
   }
 };
 
@@ -194,6 +219,10 @@ const getUndoLabel = (undo: DoneForYouUndo, sorting: SortingState | null) => {
       return DONE_FOR_YOU_WORDS.undoRule;
     case 'charge':
       return DONE_FOR_YOU_WORDS.undoCharge;
+    case 'storeRefund':
+      return STORE_ORDER_WORDS.undoRefund;
+    case 'storeCancel':
+      return STORE_ORDER_WORDS.undoCancel;
   }
 };
 
@@ -210,6 +239,14 @@ const getUndoneWords = (undo: DoneForYouUndo, sorting: SortingState | null) => {
       return RULE_WORDS.undone;
     case 'charge':
       return AUTO_PAY_WORDS.undone;
+    case 'storeRefund':
+      return STORE_ORDER_WORDS.refundUndoneSummary(
+        undo.applied.merchant ?? STORE_ORDER_WORDS.store,
+      );
+    case 'storeCancel':
+      return STORE_ORDER_WORDS.cancelUndoneSummary(
+        undo.written.merchant ?? STORE_ORDER_WORDS.store,
+      );
   }
 };
 
@@ -266,6 +303,29 @@ async function runUndo(uid: string, undo: DoneForYouUndo) {
       return;
     case 'charge':
       await inTurn(() => undoChargeMatch(uid, encryption, undo.result));
+      return;
+    case 'storeRefund':
+      await undoStoreRefund(
+        uid,
+        encryption,
+        undo.applied,
+        STORE_ORDER_WORDS.refundUndoneSummary(
+          undo.applied.merchant ?? STORE_ORDER_WORDS.store,
+        ),
+      );
+      return;
+    case 'storeCancel':
+      await undoTakeOff(
+        uid,
+        encryption,
+        undo.before,
+        undo.written,
+        undo.cancel,
+        undo.emailEventId,
+        STORE_ORDER_WORDS.cancelUndoneSummary(
+          undo.written.merchant ?? STORE_ORDER_WORDS.store,
+        ),
+      );
       return;
   }
 }
@@ -415,6 +475,9 @@ export function useDoneForYou() {
           ...purchaseDoor(),
           ...getItemDoor(subject.billId, DONE_FOR_YOU_WORDS.openBill),
         ];
+      case 'storeRefund':
+      case 'storeCancel':
+        return purchaseDoor();
       case 'autoMark':
         return getItemDoor(subject.billId, DONE_FOR_YOU_WORDS.openBill);
       case 'ended':

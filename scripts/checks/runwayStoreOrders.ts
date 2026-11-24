@@ -1,0 +1,211 @@
+import assert from 'node:assert/strict';
+
+import {
+  findStoreOrder,
+  isOpenStoreAction,
+  planStoreAction,
+  takeOffLines,
+  toOrderKey,
+  type StoreAction,
+} from '../../src/apps/runway/engine/storeOrders.ts';
+import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
+
+const day = 86_400_000;
+const base = 20_000 * day;
+const make = (
+  id: string,
+  amountCents: number,
+  dayOffset: number,
+  extra: Partial<OpenPurchase> = {},
+): OpenPurchase => ({
+  id,
+  date: base + dayOffset * day,
+  source: 'link',
+  status: 'posted',
+  accountId: null,
+  needsHome: false,
+  expenseId: null,
+  createdAt: base,
+  updatedAt: base,
+  amountCents,
+  merchant: 'Target',
+  label: null,
+  note: null,
+  lines: [{ envelopeId: 'home', cents: amountCents, via: 'chosen' }],
+  refundOfId: null,
+  paidByCardId: 'card',
+  link: null,
+  receiptText: null,
+  costRef: null,
+  notSameAs: null,
+  incomeDayId: null,
+  assignedBy: null,
+  pairedWithId: null,
+  pairKind: null,
+  cardPaymentMoveId: null,
+  tickedDayKey: null,
+  emailEventId: null,
+  emailWaiting: null,
+  category: null,
+  ruleId: null,
+  storeEmail: null,
+  orderLog: null,
+  ...extra,
+});
+const order = (
+  kind: StoreEmail['kind'],
+  orderNumber: string | null,
+  isWholeOrder = false,
+): StoreEmail => ({
+  kind,
+  orderNumber,
+  isWholeOrder,
+});
+const actionOf = (purchase: OpenPurchase): StoreAction => ({
+  id: purchase.id,
+  storeEmail: purchase.storeEmail as StoreEmail,
+  merchant: purchase.merchant,
+  date: purchase.date,
+  amountCents: purchase.amountCents,
+});
+const live = () => true;
+
+// Order numbers compare without case or punctuation, and too short a number tells nothing.
+assert.equal(toOrderKey('112-3344 556'), '1123344556');
+assert.equal(toOrderKey('ab12'), 'AB12');
+assert.equal(toOrderKey('A1'), null);
+assert.equal(toOrderKey('ORDER'), null);
+
+// A refund by order number finds its order and goes back to the envelope it counted in.
+{
+  const bought = make('o', 5000, 0, { storeEmail: order('order', '112-3344') });
+  const refund = make('r', -2000, 5, {
+    source: 'email',
+    needsHome: true,
+    lines: [{ envelopeId: null, cents: -2000, via: 'free' }],
+    storeEmail: order('refund', '1123344'),
+  });
+  assert.equal(isOpenStoreAction(refund), true);
+  const all = [bought, refund];
+  assert.equal(findStoreOrder(actionOf(refund), all)?.id, 'o');
+  const plan = planStoreAction(actionOf(refund), bought, all, live);
+  assert.equal(plan?.kind, 'refund');
+  assert.deepEqual(plan?.kind === 'refund' && plan.lines, [
+    { envelopeId: 'home', cents: -2000, via: 'chosen' },
+  ]);
+  // An envelope that is gone makes it a tie for the person to place.
+  assert.equal(
+    planStoreAction(actionOf(refund), bought, all, () => false)?.kind,
+    'tie',
+  );
+  // Once answered (tied, or the person's), it is not open again.
+  assert.equal(isOpenStoreAction({ ...refund, refundOfId: 'o' }), false);
+  assert.equal(isOpenStoreAction({ ...refund, assignedBy: 'person' }), false);
+}
+
+// A refund without a number applies only when exactly one purchase from the store fits within 60 days.
+{
+  const refund = make('r', -1500, 30, {
+    source: 'email',
+    needsHome: true,
+    storeEmail: order('refund', null),
+  });
+  const one = make('a', 4000, 0);
+  assert.equal(findStoreOrder(actionOf(refund), [one, refund])?.id, 'a');
+  const two = make('b', 2000, 10);
+  assert.equal(findStoreOrder(actionOf(refund), [one, two, refund]), null);
+  const old = make('c', 4000, -40);
+  assert.equal(findStoreOrder(actionOf(refund), [old, refund]), null);
+  const elsewhere = make('d', 4000, 0, { merchant: 'Walmart' });
+  assert.equal(findStoreOrder(actionOf(refund), [elsewhere, refund]), null);
+  const tooSmall = make('e', 1000, 0);
+  assert.equal(findStoreOrder(actionOf(refund), [tooSmall, refund]), null);
+}
+
+// A cancellation of an order the bank has not charged comes off the order, in proportion to its lines.
+{
+  const bought = make('o', 6000, 0, {
+    source: 'email',
+    status: null,
+    lines: [
+      { envelopeId: 'home', cents: 4000, via: 'chosen' },
+      { envelopeId: null, cents: 2000, via: 'free' },
+    ],
+    storeEmail: order('order', 'W-90011'),
+  });
+  const cancel = make('x', -3000, 1, {
+    source: 'email',
+    needsHome: true,
+    storeEmail: order('cancel', 'W90011'),
+  });
+  const plan = planStoreAction(
+    actionOf(cancel),
+    bought,
+    [bought, cancel],
+    live,
+  );
+  assert.equal(plan?.kind, 'takeOff');
+  if (plan?.kind === 'takeOff') {
+    assert.equal(plan.amountCents, 3000);
+    assert.deepEqual(
+      plan.lines.map((line) => line.cents),
+      [2000, 1000],
+    );
+  }
+  // A whole-order cancellation with no amount takes all that is left.
+  const whole: StoreAction = {
+    id: 'ev',
+    storeEmail: order('cancel', 'W90011', true),
+    merchant: null,
+    date: base,
+    amountCents: null,
+  };
+  const wholePlan = planStoreAction(whole, bought, [bought], live);
+  assert.equal(wholePlan?.kind === 'takeOff' && wholePlan.amountCents, 0);
+  // Once the bank has charged it, a cancellation comes back as a refund instead.
+  const charged = {
+    ...bought,
+    source: 'link' as const,
+    status: 'posted' as const,
+  };
+  assert.equal(
+    planStoreAction(actionOf(cancel), charged, [charged, cancel], live)?.kind,
+    'refund',
+  );
+}
+
+// Lines always add up after taking off, rounding included.
+{
+  const lines = takeOffLines(
+    [
+      { envelopeId: 'a', cents: 333, via: 'chosen' },
+      { envelopeId: 'b', cents: 333, via: 'chosen' },
+      { envelopeId: 'c', cents: 334, via: 'chosen' },
+    ],
+    100,
+  );
+  assert.equal(
+    lines.reduce((sum, line) => sum + line.cents, 0),
+    900,
+  );
+}
+
+// A refund larger than what is left of the order is not applied.
+{
+  const bought = make('o', 5000, 0, { storeEmail: order('order', '55501') });
+  const earlier = make('r1', -4000, 2, {
+    refundOfId: 'o',
+    storeEmail: order('refund', '55501'),
+  });
+  const refund = make('r2', -2000, 4, {
+    source: 'email',
+    needsHome: true,
+    storeEmail: order('refund', '55501'),
+  });
+  assert.equal(
+    planStoreAction(actionOf(refund), bought, [bought, earlier, refund], live),
+    null,
+  );
+}
+
+console.log('runwayStoreOrders: ok');

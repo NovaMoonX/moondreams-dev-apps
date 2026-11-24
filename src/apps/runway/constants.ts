@@ -5723,3 +5723,47 @@ export const DONE_FOR_YOU_WORDS = {
   kindHistory: 'History',
   kindReleased: 'Dropped charge',
 } as const;
+
+/** What the app says when it applies a store's refund or cancellation to an order on its own. */
+export const STORE_ORDER_WORDS = {
+  refundApplied: (store: string, place: string) =>
+    `${store} refund went back to ${place}`,
+  refundTied: (store: string) => `${store} refund tied to its order`,
+  refundTiedWhy:
+    'Part of the order came from an envelope that is gone, so pick where the money goes.',
+  refundWhyNumber: (orderNumber: string) =>
+    `The store's email named order ${orderNumber}.`,
+  refundWhyStore: (store: string) =>
+    `It is the only ${store} purchase in the last 60 days it fits.`,
+  cancelTakenOff: (store: string) => `${store} order cancelled in part`,
+  cancelWhole: (store: string) => `${store} order cancelled`,
+  cancelWhy: 'The store cancelled it before the card was charged.',
+  cancelAfterCharge: (store: string, place: string) =>
+    `${store} cancellation went back to ${place}`,
+  undoRefund: 'Undo and send it to Needs a home',
+  undoCancel: 'Undo and count the order again',
+  refundSummary: (store: string, place: string) =>
+    `A refund from ${store} went back to ${place}.`,
+  refundUndoneSummary: (store: string) =>
+    `A refund from ${store} went back to Needs a home.`,
+  cancelSummary: (store: string) =>
+    `${store} cancelled part of an order, so it was taken off the order.`,
+  cancelUndoneSummary: (store: string) =>
+    `The ${store} order counts in full again.`,
+  freeToSpend: 'Free to Spend',
+  severalEnvelopes: 'where the order counted',
+  store: 'The store',
+  order: 'Order',
+  orderNumber: (orderNumber: string) => `Order ${orderNumber}`,
+  history: 'Order history',
+  ordered: 'Ordered',
+  refunded: 'Refunded',
+  cancelled: 'Cancelled',
+  cancelledUndone: 'Cancelled, then undone',
+  wholeOrderCancelled: 'Cancelled',
+  outcomeRefund: 'Refund',
+  outcomeCancel: 'Cancellation',
+  outcomeRefundDetail: 'A store refund',
+  outcomeCancelDetail: 'A cancelled order',
+  undoneFailed: 'That was not undone. Nothing was changed.',
+} as const;

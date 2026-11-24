@@ -10,6 +10,8 @@ import {
   Landmark,
   Mail,
   Receipt,
+  RotateCcw,
+  PackageX,
   Store,
   Trash2,
   type LucideIcon,
@@ -95,6 +97,8 @@ const OUTCOME_BADGES: Record<EmailEventRead['outcome'], LucideIcon> = {
   confirm: Mail,
   notPurchase: Mail,
   notTracking: Mail,
+  refund: RotateCcw,
+  cancel: PackageX,
 };
 
 const KIND_BADGES: Record<EmailSender['kind'], LucideIcon> = {

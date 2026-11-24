@@ -126,6 +126,8 @@ const OUTCOME_ROW_WORDS: Record<EmailOutcome, string> = {
   confirm: 'Confirmation',
   unread: 'Couldn’t read it',
   notTracking: 'Not tracking that day',
+  refund: 'Refund',
+  cancel: 'Cancellation',
 };
 
 export const describeEmailRowOutcome = (outcome: EmailOutcome) =>
@@ -138,6 +140,8 @@ const OUTCOME_WORDS: Record<EmailOutcome, string> = {
   confirm: 'Forwarding confirmation',
   unread: 'Couldn’t read it',
   notTracking: 'Not tracking that day',
+  refund: 'A refund from the store',
+  cancel: 'A cancelled order',
 };
 
 export const describeEmailOutcome = (outcome: EmailOutcome) =>

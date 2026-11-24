@@ -84,6 +84,7 @@ import { useShareSummary } from '@apps/runway/hooks/useShareSummary';
 import { useLinkHistory } from '@apps/runway/hooks/useLinkHistory';
 import { useReleasedCharges } from '@apps/runway/hooks/useReleasedCharges';
 import { usePlaceByRules } from '@apps/runway/hooks/useRuleMatch';
+import { useApplyStoreOrders } from '@apps/runway/hooks/useStoreOrders';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useSyncOnReturn } from '@apps/runway/hooks/useSyncOnReturn';
@@ -291,6 +292,7 @@ function RunwayContent() {
   useReleasedCharges(user?.uid ?? null);
   useMatchLinkHistory(user?.uid ?? null);
   useMatchEmailPurchases(user?.uid ?? null);
+  useApplyStoreOrders(user?.uid ?? null);
   const doneForYou = useDoneForYou();
   const [isDoneForYouOpen, setIsDoneForYouOpen] = useState(false);
   const openDoneForYou = () => {

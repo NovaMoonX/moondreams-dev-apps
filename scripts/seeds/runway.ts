@@ -4824,6 +4824,109 @@ async function writeSeedEmail(
     }),
   );
 
+  // A store order a cancellation already came off, and a refund for it the app ties on its own when Runway opens.
+  const storeBase = {
+    status: null,
+    accountId: null,
+    dedupeKey: null,
+    expenseId: null,
+    emailWaiting: false,
+  } as const;
+  const storeSealed = {
+    label: null,
+    note: null,
+    paidByCardId: SEED_VENTURE_CARD,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    incomeDayId: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    tickedDayKey: null,
+    category: null,
+    ruleId: null,
+  } as const;
+  const orderOn = today - 6 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/purchases/seed-store-order-walmart`),
+    {
+      ...storeBase,
+      id: 'seed-store-order-walmart',
+      date: orderOn,
+      source: 'email',
+      needsHome: false,
+      emailEventId: 'seed-email-event-walmart-order',
+      emailWaiting: true,
+      createdAt: orderOn + 10 * hour,
+      updatedAt: orderOn + 30 * hour,
+      sealed: await sealJson(
+        {
+          ...storeSealed,
+          amountCents: 7_440,
+          merchant: 'Walmart',
+          lines: [
+            {
+              envelopeId: 'seed-envelope-groceries',
+              cents: 7_440,
+              via: 'chosen',
+            },
+          ],
+          refundOfId: null,
+          assignedBy: 'person',
+          storeEmail: {
+            kind: 'order',
+            orderNumber: '2000131-55180',
+            isWholeOrder: false,
+          },
+          orderLog: [
+            {
+              kind: 'cancel',
+              cents: 1_200,
+              on: orderOn + DAY_MS,
+              emailEventId: 'seed-email-event-walmart-cancel',
+              purchaseId: null,
+              undoneAt: null,
+            },
+          ],
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+    } satisfies PurchaseDoc,
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/purchases/seed-store-refund-walmart`),
+    {
+      ...storeBase,
+      id: 'seed-store-refund-walmart',
+      date: today - DAY_MS,
+      source: 'email',
+      needsHome: true,
+      emailEventId: 'seed-email-event-walmart-refund',
+      emailWaiting: false,
+      createdAt: today - DAY_MS + 9 * hour,
+      updatedAt: today - DAY_MS + 9 * hour,
+      sealed: await sealJson(
+        {
+          ...storeSealed,
+          amountCents: -1_850,
+          merchant: 'Walmart',
+          lines: [{ envelopeId: null, cents: -1_850, via: 'free' }],
+          refundOfId: null,
+          assignedBy: null,
+          storeEmail: {
+            kind: 'refund',
+            orderNumber: '2000131-55180',
+            isWholeOrder: false,
+          },
+          orderLog: null,
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+    } satisfies PurchaseDoc,
+  );
+
   const readEmail = (
     text: string,
     found: { amountCents: number | null; merchant: string | null } = {
