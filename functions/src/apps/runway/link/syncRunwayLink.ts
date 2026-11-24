@@ -727,19 +727,23 @@ async function keepLogo(
     };
     transaction.update(linkRef, {
       sealed: sealWithKey(planKey, { ...nextLink }, SEALED_SCHEMA_VERSION),
-      logoShared: true,
     });
     return true;
   });
-  if (isKept) {
-    await learnInstitutionLogo(
-      firestore,
-      [institution.name],
-      institution.logo,
-      Date.now(),
-    );
-  }
+  if (!isKept) return;
+  const isShared = await learnInstitutionLogo(
+    firestore,
+    [institution.name],
+    institution.logo,
+    Date.now(),
+  );
+  if (isShared) await markLogoShared(firestore, linkRef);
 }
+
+const markLogoShared = (firestore: Firestore, linkRef: DocumentReference) =>
+  writeUnlessRevoked(firestore, linkRef, (transaction) =>
+    transaction.update(linkRef, { logoShared: true }),
+  );
 
 /** Teaches the shared bank list from a link that kept its logo before the list existed, once, under the name the provider gives the bank and never the one the device sent. */
 async function shareLogo(
@@ -748,15 +752,13 @@ async function shareLogo(
   grant: ProviderGrant,
 ) {
   const institution = await provider.getInstitution(grant);
-  await learnInstitutionLogo(
+  const isShared = await learnInstitutionLogo(
     firestore,
     [institution?.name],
     institution?.logo,
     Date.now(),
   );
-  await writeUnlessRevoked(firestore, linkRef, (transaction) =>
-    transaction.update(linkRef, { logoShared: true }),
-  );
+  if (isShared) await markLogoShared(firestore, linkRef);
 }
 
 const DETAILS_HISTORY_DAYS = 90;

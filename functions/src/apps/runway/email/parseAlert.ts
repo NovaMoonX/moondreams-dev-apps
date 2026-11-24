@@ -335,10 +335,24 @@ const INSTITUTION_HOST_LABELS: Record<string, string[]> = {
 const MAIL_PROVIDERS =
   /^(?:gmail|googlemail|yahoo|outlook|hotmail|live|icloud|me|proton|protonmail|aol)$/;
 
-/** The registrable name of an address's host ("alerts@email.chase.com" is "chase"); empty when there is no host or it is a mailbox provider's, which names nobody. */
+const COMPANY_SUFFIXES = new Set([
+  'com',
+  'net',
+  'org',
+  'co',
+  'us',
+  'bank',
+  'io',
+]);
+
+/** The registrable name of an address's host ("alerts@email.chase.com" is "chase"); empty when there is no host, its ending is not a common company one (so `chase.xyz` and `chase.co.uk` name nobody) or it is a mailbox provider's. */
 const readHostLabel = (address: string) => {
-  const label = address.split('@')[1]?.split('.').slice(-2, -1)[0] ?? '';
-  return MAIL_PROVIDERS.test(label) ? '' : label;
+  const [label = '', suffix = ''] = (address.split('@')[1] ?? '')
+    .split('.')
+    .slice(-2);
+  return COMPANY_SUFFIXES.has(suffix) && !MAIL_PROVIDERS.test(label)
+    ? label
+    : '';
 };
 
 /** Whether an address is the bank's own: its host's name is the bank's name (no spaces) or one it is known by. A name that only appears in a subject, body or display name proves nothing. */
@@ -364,6 +378,10 @@ export const isMerchantHost = (address: string, merchant: string) => {
       .startsWith(label)
   );
 };
+
+/** Whether a name is one of the known banks or card issuers the patterns read, as against a name guessed from a sender's host. */
+export const isKnownInstitution = (name: string) =>
+  INSTITUTIONS.some(([, known]) => known === name);
 
 /** Whether the sender's address belongs to one of the known banks or card issuers. */
 export const isKnownInstitutionSender = (from: string) =>

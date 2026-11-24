@@ -23,11 +23,19 @@ export type PurchaseBankLink = (
 
 const MIN_LINKED_PURCHASES = 2;
 
-const isSameBank = (company: string, linkName: string) => {
-  const a = toComparable(company);
-  const b = toComparable(linkName);
-  return a !== '' && b !== '' && (a.includes(b) || b.includes(a));
+const BANK_ENDING = / (?:n a|na|bank|inc|llc|corp|corporation)$/;
+
+const toBankKey = (name: string): string => {
+  const key = toComparable(name);
+  const next = key.replace(BANK_ENDING, '');
+  return next !== key && next.replace(/ /g, '').length >= 3
+    ? toBankKey(next)
+    : key;
 };
+
+/** Two names for one bank, equal once case, punctuation and a trailing "N.A." or "Bank" are set aside ("Citi" is not "Citizens Bank"). */
+const isSameBank = (company: string, linkName: string) =>
+  toBankKey(company) !== '' && toBankKey(company) === toBankKey(linkName);
 
 export interface EmailSenderGroup {
   kind: EmailSenderKind;

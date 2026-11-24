@@ -412,7 +412,21 @@ await learnInstitutionLogo(
   'data:image/png;base64,iVBOR==',
   NOW,
 );
-await learnInstitutionLogo(bankStore(false), ['Chase'], 'not a logo', NOW);
+assert.equal(
+  await learnInstitutionLogo(bankStore(false), ['Chase'], 'not a logo', NOW),
+  true,
+  'no logo to share is done',
+);
+assert.equal(
+  await learnInstitutionLogo(
+    bankStore(true),
+    ['Chase'],
+    'https://logos.example/c.png',
+    NOW,
+  ),
+  false,
+  'a failed write is tried again',
+);
 assert.equal(bankDocs.size, 1, 'a bad logo teaches nothing');
 assert.deepEqual(
   await findInstitutionLogo(bankStore(false), 'CAPITAL ONE BANK, N.A.'),

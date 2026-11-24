@@ -44,6 +44,7 @@ import {
   excerptOf,
   htmlToText,
   isInstitutionHost,
+  isKnownInstitution,
   isKnownInstitutionSender,
   isMerchantHost,
   parseAlertEmail,
@@ -328,6 +329,7 @@ async function readSenderCompany(
   if (
     senderKind !== 'bank' ||
     found.institution === null ||
+    !isKnownInstitution(found.institution) ||
     !isInstitutionHost(address, found.institution)
   ) {
     return none;

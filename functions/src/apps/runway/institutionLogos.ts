@@ -45,7 +45,7 @@ export const toSafeLogo = (value: unknown) =>
     ? value
     : toHttpsUrl(typeof value === 'string' ? value : null);
 
-/** Keeps the list current from a bank logo a link recorded, under each name the bank goes by. Never throws: a link must not wait on or fail for it. */
+/** Keeps the list current from a bank logo a link recorded, under each name the bank goes by. Never throws: a link must not wait on or fail for it. True once the logo is stored or there is none to store, false when a failure means it should be tried again. */
 export async function learnInstitutionLogo(
   firestore: Firestore,
   names: readonly (string | null | undefined)[],
@@ -53,7 +53,7 @@ export async function learnInstitutionLogo(
   now: number,
 ) {
   const safeLogo = toSafeLogo(logo);
-  if (safeLogo === null) return;
+  if (safeLogo === null) return true;
   try {
     const entries = [
       ...names
@@ -82,8 +82,10 @@ export async function learnInstitutionLogo(
         } satisfies InstitutionLogoDoc);
       }),
     );
+    return true;
   } catch {
     logger.warn('runway.institutionLogos.learnFailed');
+    return false;
   }
 }
 

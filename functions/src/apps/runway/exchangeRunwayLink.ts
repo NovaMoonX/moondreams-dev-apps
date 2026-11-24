@@ -98,6 +98,14 @@ export const exchangeRunwayLink = onCall(
           isSkipped: false,
         })),
       };
+      const isLogoShared =
+        institution !== null &&
+        (await learnInstitutionLogo(
+          firestore,
+          [institution.name],
+          institution.logo,
+          now,
+        ));
       const batch = firestore.batch();
       batch.create(
         firestore.doc(`${grantsPath(uid)}/${linkId}`),
@@ -113,17 +121,11 @@ export const exchangeRunwayLink = onCall(
         lastSyncAt: null,
         createdAt: now,
         needsCardConsent: null,
-        logoShared: institution === null ? null : true,
+        logoShared: isLogoShared ? true : null,
         cardDetails: null,
         sealed: sealWithKey(planKey, { ...linkSealed }, SEALED_SCHEMA_VERSION),
       });
       await batch.commit();
-      await learnInstitutionLogo(
-        firestore,
-        [institution?.name],
-        institution?.logo,
-        now,
-      );
 
       await discardSupersededLinks(firestore, keyring, planKey.key, uid, {
         linkId,

@@ -17,6 +17,7 @@ import {
   excerptOf,
   htmlToText,
   isInstitutionHost,
+  isKnownInstitution,
   isMerchantHost,
   isProtonInvitation,
   parseAlertEmail,
@@ -940,6 +941,15 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     'one loaded purchase is not enough',
   );
   assert.equal(
+    bankLogo(
+      [bankMail('a', 1, 'p1', 'Citi'), bankMail('b', 2, 'p2', 'Citi')],
+      { p1: 'L1', p2: 'L1' },
+      'Citizens Bank',
+    ),
+    null,
+    'a name that only starts like the bank is not the bank',
+  );
+  assert.equal(
     bankLogo(bankEvents, { p1: 'L1', p2: 'L1' }, 'Chase'),
     null,
     'a link at another bank is not this sender',
@@ -981,6 +991,11 @@ assert.ok(isInstitutionHost('alerts@capitalone.com', 'Capital One'));
 assert.ok(isInstitutionHost('no-reply@email.chase.com', 'Chase'));
 assert.ok(isInstitutionHost('alerts@welcome.aexp.com', 'American Express'));
 assert.ok(isInstitutionHost('alerts@apple.com', 'Apple Card'));
+assert.equal(isInstitutionHost('promo@chase.xyz', 'Chase'), false);
+assert.equal(isInstitutionHost('promo@chase.co.uk', 'Chase'), false);
+assert.equal(isMerchantHost('hi@bluebottle.shop', 'Blue Bottle Coffee'), false);
+assert.ok(isKnownInstitution('Capital One'));
+assert.equal(isKnownInstitution('Stripe'), false);
 assert.equal(isInstitutionHost('promo@evil.example', 'Chase'), false);
 assert.equal(isInstitutionHost('chase@evil.example', 'Chase'), false);
 assert.equal(isInstitutionHost('promo@chase-offers.com', 'Chase'), false);
