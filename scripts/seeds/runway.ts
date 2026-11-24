@@ -3526,6 +3526,7 @@ async function writeSeedSelfPaying(
         date,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: true,
         accountId: null,
         expenseId: null,
@@ -4085,6 +4086,7 @@ async function seedUnlinkedPlan(
         date,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: false,
         accountId,
         expenseId: null,
@@ -4339,6 +4341,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4594,6 +4597,7 @@ async function writeSeedPurchases(
         date,
         source: 'link',
         status: entry.status,
+        wasPending: entry.status === 'pending',
         needsHome: true,
         accountId: entry.accountId,
         expenseId: null,
@@ -4804,6 +4808,7 @@ async function writeSeedEmail(
         expenseId: null,
         emailEventId: entry.eventId,
         emailWaiting: true,
+        wasPending: null,
         createdAt: entry.receivedAt,
         updatedAt: entry.receivedAt,
         sealed: await sealJson(
@@ -4841,6 +4846,7 @@ async function writeSeedEmail(
     dedupeKey: null,
     expenseId: null,
     emailWaiting: false,
+    wasPending: null,
   } as const;
   const storeSealed = {
     label: null,
@@ -4916,6 +4922,7 @@ async function writeSeedEmail(
       needsHome: true,
       emailEventId: 'seed-email-event-walmart-refund',
       emailWaiting: false,
+      wasPending: null,
       createdAt: today - DAY_MS + 9 * hour,
       updatedAt: today - DAY_MS + 9 * hour,
       sealed: await sealJson(
@@ -5176,6 +5183,7 @@ async function seedDoneForYou(
     date: today - 4 * DAY_MS,
     source: 'link',
     status: 'posted',
+    wasPending: false,
     needsHome: false,
     accountId: null,
     expenseId: null,
@@ -5428,6 +5436,7 @@ async function seedRules(
       date,
       source: 'link',
       status: 'posted',
+      wasPending: false,
       needsHome: false,
       accountId: null,
       expenseId: null,
@@ -5478,6 +5487,7 @@ async function seedRules(
         date: at,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: false,
         accountId: null,
         expenseId: null,
@@ -5592,6 +5602,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
       } satisfies PurchaseDoc);
     }),
   );
