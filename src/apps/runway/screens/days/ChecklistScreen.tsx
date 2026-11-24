@@ -80,6 +80,7 @@ import {
   getMarkCardId,
 } from '@apps/runway/utils/cardText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -162,6 +163,7 @@ function ChecklistBillRow({
           ? ITEM_SHEET_R2_WORDS.markedPaid(getLineTitle(line))
           : CARD_WORDS.markedPaidWith(getLineTitle(line), cardName),
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
         onClick: () =>
@@ -517,6 +519,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
             ? CHECKLIST_R3_WORDS.restNeedsConnection
             : CHECKLIST_R3_WORDS.restNotSaved,
           type: 'error',
+          duration: UNDO_WINDOW_MS,
           action: {
             label: ITEM_SHEET_R2_WORDS.undo,
             onClick: () => void undoAll(marked, dayLines),

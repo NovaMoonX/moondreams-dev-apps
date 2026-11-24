@@ -42,6 +42,7 @@ import {
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, HorizonCost } from '@apps/runway/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** The event when it is finished or called off: taking one of its paid marks back reopens a finished one and is refused on a called-off one. */
 export const getFinishedHorizon = (itemId: string) => {
@@ -272,6 +273,7 @@ export function useCostPaid({
           ? mask(COST_PAID_WORDS.fromFree(formatCents(written.fromFreeCents)))
           : undefined,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
         onClick: () => void takeBack(written),

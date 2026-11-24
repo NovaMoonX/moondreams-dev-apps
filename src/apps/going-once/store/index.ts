@@ -3,13 +3,14 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { resetAllState } from '@/store/actions/globalActions';
 import {
-  addHeldCases,
+  addHeldListsCases,
   deliverHeld,
   emptyHeldList,
   type HeldList,
 } from '@/store/heldLists';
 import { goingOnceHeldActions } from '@apps/going-once/store/heldLists';
 import type {
+  Bundle,
   Inquiry,
   Item,
   Sale,
@@ -30,7 +31,10 @@ export interface GoingOnceState {
   openSale: { sale: Sale | null; status: LoadStatus };
   /** Tagged with the sale they were read for, so a stale list is never shown. */
   items: { saleId: string | null; items: Item[]; status: LoadStatus };
+  /** Tagged with the sale they were read for, like the things. */
+  bundles: { saleId: string | null; items: Bundle[]; status: LoadStatus };
   hold: HeldList<Item>;
+  bundleHold: HeldList<Bundle>;
   inquiries: {
     saleId: string | null;
     new: { items: Inquiry[]; status: LoadStatus };
@@ -56,7 +60,9 @@ const initialState: GoingOnceState = {
   sales: { items: [], status: 'loading' },
   openSale: { sale: null, status: 'loading' },
   items: { saleId: null, items: [], status: 'loading' },
+  bundles: { saleId: null, items: [], status: 'loading' },
   hold: emptyHeldList<Item>(),
+  bundleHold: emptyHeldList<Bundle>(),
   inquiries: {
     saleId: null,
     new: { items: [], status: 'loading' },
@@ -120,6 +126,34 @@ export const goingOnceSlice = createSlice({
       state.hold = emptyHeldList();
       state.items = initialState.items;
     },
+    setBundles(
+      state,
+      action: PayloadAction<{ saleId: string; bundles: Bundle[] }>,
+    ) {
+      const { saleId, bundles } = action.payload;
+      if (state.bundles.saleId !== saleId) state.bundleHold = emptyHeldList();
+      state.bundles = {
+        saleId,
+        items: deliverHeld(state.bundleHold, bundles, () => true),
+        status: 'ready',
+      };
+    },
+    setBundlesError(state, action: PayloadAction<string>) {
+      if (
+        state.bundles.saleId === action.payload &&
+        state.bundleHold.deliveredAt !== null
+      )
+        state.bundles.items = state.bundleHold.incoming;
+      state.bundleHold = emptyHeldList();
+      state.bundles =
+        state.bundles.saleId === action.payload
+          ? { ...state.bundles, status: 'error' }
+          : { saleId: action.payload, items: [], status: 'error' };
+    },
+    clearBundles(state) {
+      state.bundleHold = emptyHeldList();
+      state.bundles = initialState.bundles;
+    },
     setInquiries(
       state,
       action: PayloadAction<{
@@ -169,9 +203,9 @@ export const goingOnceSlice = createSlice({
     retryLoading(state) {
       state.loadAttempt += 1;
       if (state.sales.status === 'error') state.sales.status = 'loading';
-      if (state.openSale.status === 'error')
-        state.openSale.status = 'loading';
+      if (state.openSale.status === 'error') state.openSale.status = 'loading';
       if (state.items.status === 'error') state.items.status = 'loading';
+      if (state.bundles.status === 'error') state.bundles.status = 'loading';
       if (state.inquiries.new.status === 'error')
         state.inquiries.new.status = 'loading';
       if (state.inquiries.handled.status === 'error')
@@ -189,14 +223,28 @@ export const goingOnceSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
-    addHeldCases<Item, GoingOnceState>(builder, goingOnceHeldActions, 'items', {
-      belongs: () => true,
-      show: (state, list) => {
-        state.items.items = list;
+    addHeldListsCases<GoingOnceState>(builder, goingOnceHeldActions, [
+      {
+        kind: 'items',
+        holdOf: (state) => state.hold,
+        belongs: () => true,
+        show: (state, list) => {
+          state.items.items = list as Item[];
+        },
+        accepts: (state, scope) =>
+          state.items.status === 'ready' && state.items.saleId === scope,
       },
-      accepts: (state, scope) =>
-        state.items.status === 'ready' && state.items.saleId === scope,
-    });
+      {
+        kind: 'bundles',
+        holdOf: (state) => state.bundleHold,
+        belongs: () => true,
+        show: (state, list) => {
+          state.bundles.items = list as Bundle[];
+        },
+        accepts: (state, scope) =>
+          state.bundles.status === 'ready' && state.bundles.saleId === scope,
+      },
+    ]);
   },
 });
 
@@ -211,6 +259,9 @@ export const {
   setItems,
   setItemsError,
   clearItems,
+  setBundles,
+  setBundlesError,
+  clearBundles,
   setInquiries,
   setInquiriesError,
   clearInquiries,

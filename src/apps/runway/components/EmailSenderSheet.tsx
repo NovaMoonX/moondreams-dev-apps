@@ -5,6 +5,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
@@ -55,6 +56,7 @@ function EmailSenderSheet({ sender, onClose }: EmailSenderSheetProps) {
       addToast({
         title: EMAIL_WORDS.filteredOut(sender.address),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: EMAIL_WORDS.undo,
           onClick: () =>

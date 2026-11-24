@@ -47,6 +47,7 @@ import {
   isDismissable,
   type OpenQuestion,
 } from '@apps/helm/utils/heldCaptures';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface QuestionCardProps {
   captureId: string;
@@ -215,6 +216,7 @@ function QuestionCard({
             ? HELM_COPY.factKeptNeither
             : HELM_COPY.factKept(kept.label);
       addToast({
+        duration: UNDO_WINDOW_MS,
         title,
         type: 'success',
         action: {

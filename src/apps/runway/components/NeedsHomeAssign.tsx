@@ -29,6 +29,7 @@ import {
   describePurchaseAssigned,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const LIKELY_SHOWN = 3;
 
@@ -104,6 +105,7 @@ function NeedsHomeAssign({
       addToast({
         title: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: NEEDS_HOME_WORDS.undo,
           onClick: () => void putBack(user.uid, placed),
@@ -146,6 +148,7 @@ function NeedsHomeAssign({
           addToast({
             title: NEEDS_HOME_WORDS.alreadySent(nameOf(home.envelopeId)),
             type: 'success',
+            duration: UNDO_WINDOW_MS,
             action: {
               label: NEEDS_HOME_WORDS.undo,
               onClick: () => void putBack(user.uid, fresh),

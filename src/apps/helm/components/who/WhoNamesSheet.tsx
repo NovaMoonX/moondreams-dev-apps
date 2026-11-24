@@ -17,6 +17,7 @@ import {
   type SoundsLikeChange,
 } from '@apps/helm/store/actions/whoActions';
 import type { OpenWho } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface WhoNamesSheetProps {
   isOpen: boolean;
@@ -107,6 +108,7 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
     setNote(null);
     if (!(await saveHeard({ remove: heard }))) return;
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.soundsLikeRemovedToast(heard),
       type: 'info',
       action: {
@@ -159,6 +161,7 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
     setNote(null);
     if (!(await save({ remove: alias }))) return;
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.aliasRemovedToast(alias),
       type: 'info',
       action: {

@@ -29,6 +29,7 @@ import {
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { topicsCitingNote } from '@apps/helm/utils/topicSources';
 import type { OpenNote } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface NoteFormSheetProps {
   isOpen: boolean;
@@ -106,6 +107,7 @@ function NoteFormFields({
     isUndone: (result: unknown) => boolean = () => true,
   ) =>
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: toastTitle,
       type: 'success',
       action: {

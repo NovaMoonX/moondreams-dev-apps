@@ -97,6 +97,7 @@ import {
 } from '@apps/runway/utils/rangeInput';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type PriceWay = 'exact' | 'range';
 
@@ -387,6 +388,7 @@ function CostSheet({
       addToast({
         title: HORIZON_WORDS.removedToast(gone.name),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: PAY_SHARE_WORDS.undo,
           onClick: () => {

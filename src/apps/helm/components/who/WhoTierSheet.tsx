@@ -6,6 +6,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { setWhoTier } from '@apps/helm/store/actions/whoActions';
 import type { OpenWho, WhoTier } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface WhoTierSheetProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ function WhoTierSheet({ isOpen, onClose, who }: WhoTierSheetProps) {
       addToast({ title: HELM_COPY.editFailed, type: 'error' });
     });
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.tierSetToast(who.name, tierLabels[tier]),
       type: 'success',
       action: {

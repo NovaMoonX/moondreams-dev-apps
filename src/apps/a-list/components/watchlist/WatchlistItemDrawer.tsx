@@ -47,8 +47,8 @@ import {
 } from '@apps/a-list/store/actions/watchlistActions';
 import { selectWatchlistRows } from '@apps/a-list/store/selectors';
 import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
-const UNDO_TOAST_MS = 6000;
 const undoneToasts = new Set<string>();
 
 type DrawerView = 'details' | 'addToCalendar' | 'edit' | 'archive';
@@ -72,7 +72,9 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       ) ?? null,
   );
   const [view, setView] = useState<DrawerView>('details');
-  const [editValues, setEditValues] = useState<WatchlistDetailsValues | null>(null);
+  const [editValues, setEditValues] = useState<WatchlistDetailsValues | null>(
+    null,
+  );
   const [archiveReason, setArchiveReason] = useState<string | null>(null);
   const [customReason, setCustomReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -164,7 +166,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
         id: toastId,
         title: 'Archived',
         description: item.movie.title,
-        duration: UNDO_TOAST_MS,
+        duration: UNDO_WINDOW_MS,
         action: {
           label: 'Undo',
           onClick: () => {
@@ -455,7 +457,10 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
                   </span>
                   <span className='min-w-0 flex-1 break-words'>
                     {line.parts.map((part, index) => (
-                      <span key={part} className={join(index > 0 && 'whitespace-nowrap')}>
+                      <span
+                        key={part}
+                        className={join(index > 0 && 'whitespace-nowrap')}
+                      >
                         {index > 0 && '· '}
                         {part}{' '}
                       </span>

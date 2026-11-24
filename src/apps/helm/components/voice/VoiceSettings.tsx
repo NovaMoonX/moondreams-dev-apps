@@ -35,6 +35,7 @@ import {
   setWakeWordOn,
 } from '@apps/helm/store/actions/settingsActions';
 import type { VoiceMode } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface VoiceSettingsProps {
   isOpen: boolean;
@@ -202,6 +203,7 @@ function OfflineListeningRow({
   const remove = () => {
     onDevice.remove();
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.voiceOfflineRemoved,
       type: 'info',
       action: { label: HELM_COPY.voiceOfflineUndo, onClick: onDevice.download },

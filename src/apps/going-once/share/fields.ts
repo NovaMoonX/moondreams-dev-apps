@@ -8,6 +8,9 @@ import type {
   ItemPhoto,
   Item,
   Inquiry,
+  Bundle,
+  BundleChange,
+  BundleSaleRecord,
   PersonSettings,
 } from '@apps/going-once/types';
 
@@ -111,6 +114,8 @@ const ITEM_FIELDS = {
   createdAt: 'notUseful',
   lastEditedAt: 'shared',
   lastEditedBy: 'notUseful',
+  bundleId: 'notUseful',
+  isBundleOnly: 'notUseful',
 } satisfies Record<keyof Item, ShareDecision>;
 
 const INQUIRY_FIELDS = {
@@ -132,7 +137,44 @@ const INQUIRY_FIELDS = {
   createdAt: 'shared',
   lastSentAt: 'never',
   contactClearedAt: 'never',
+  bundleId: 'never',
+  bundleLabelAtSend: 'never',
 } satisfies Record<keyof Inquiry, ShareDecision>;
+
+const BUNDLE_CHANGE_FIELDS = {
+  kind: 'notUseful',
+  byUid: 'notUseful',
+  at: 'notUseful',
+  itemId: 'notUseful',
+  itemStatus: 'notUseful',
+  priceCents: 'notUseful',
+  fromPriceCents: 'notUseful',
+} satisfies Record<keyof BundleChange, ShareDecision>;
+
+const BUNDLE_SALE_RECORD_FIELDS = {
+  priceCents: 'notUseful',
+  method: 'notUseful',
+  soldOn: 'notUseful',
+  markedBy: 'notUseful',
+  markedAt: 'notUseful',
+} satisfies Record<keyof BundleSaleRecord, ShareDecision>;
+
+const BUNDLE_FIELDS = {
+  id: 'notUseful',
+  saleId: 'notUseful',
+  name: 'notUseful',
+  itemIds: 'notUseful',
+  priceCents: 'notUseful',
+  status: 'notUseful',
+  dealItemIds: 'notUseful',
+  sale: 'notUseful',
+  keptAtGoneCount: 'notUseful',
+  history: 'notUseful',
+  createdBy: 'notUseful',
+  createdAt: 'notUseful',
+  lastEditedAt: 'notUseful',
+  lastEditedBy: 'notUseful',
+} satisfies Record<keyof Bundle, ShareDecision>;
 
 const PERSON_SETTINGS_FIELDS = {
   inquiryPushOffSaleIds: 'notUseful',
@@ -148,6 +190,9 @@ export const SHARE_FIELDS = {
   ItemPhoto: ITEM_PHOTO_FIELDS,
   Item: ITEM_FIELDS,
   Inquiry: INQUIRY_FIELDS,
+  Bundle: BUNDLE_FIELDS,
+  BundleChange: BUNDLE_CHANGE_FIELDS,
+  BundleSaleRecord: BUNDLE_SALE_RECORD_FIELDS,
   PersonSettings: PERSON_SETTINGS_FIELDS,
 };
 
@@ -155,5 +200,6 @@ export const SHARE_FIELDS = {
 export const NOT_STORED: Record<string, string> = {
   PublicPhoto: 'public page response',
   PublicThing: 'public page response',
+  PublicBundle: 'public page response',
   InterestRequest: 'callable request',
 };

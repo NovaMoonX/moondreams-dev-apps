@@ -31,6 +31,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { saveBillShare } from '@apps/runway/store/actions/dayActions';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface CostShareViewProps {
   itemId: string;
@@ -132,6 +133,7 @@ function CostShareView({
       addToast({
         title: HORIZON_WORDS.costShareToast(costName),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: PAY_SHARE_WORDS.undo,
           onClick: () =>

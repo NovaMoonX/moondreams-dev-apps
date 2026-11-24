@@ -70,6 +70,7 @@ import type {
   ItemKind,
   OpenVersion,
 } from '@apps/runway/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 export type ChangeStep = 'form' | 'when' | 'reason';
 
@@ -480,6 +481,7 @@ export function useChangeFlow({
             addToast({
               title: PAY_SHARE_WORDS.pinsClearedToast(billName, cleared.length),
               type: 'success',
+              duration: UNDO_WINDOW_MS,
               action: {
                 label: PAY_SHARE_WORDS.undoPins,
                 onClick: () =>

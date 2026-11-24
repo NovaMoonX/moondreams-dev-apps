@@ -38,6 +38,7 @@ import {
   readWhenBlocker,
   type WhenDraft,
 } from '@apps/helm/utils/habitDraft';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface GoalQuestionFlowProps {
   isOpen: boolean;
@@ -308,6 +309,7 @@ function GoalFlowForm({
           )
         : null;
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.goalCreatedToast(name),
         type: 'success',
         action: {
