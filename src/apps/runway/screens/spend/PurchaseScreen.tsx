@@ -1,8 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import {
   HandCoins,
-  Camera,
-  ImagePlus,
   Layers,
   Pencil,
   ReceiptText,
@@ -14,6 +12,7 @@ import {
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
+import PhotoActionRow from '@/components/PhotoActionRow';
 import ActionRow from '@/components/ActionRow';
 import {
   EmailPurchaseNotice,
@@ -94,6 +93,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { isOpenToPlace } from '@apps/runway/engine/purchases';
 import {
   selectCostPaid,
   selectExpenses,
@@ -255,8 +255,6 @@ function PurchaseScreen({
   const receipts =
     receiptsResult.status === 'loaded' ? receiptsResult.images : [];
   const isReceiptsLoaded = receiptsResult.status === 'loaded';
-  const isCameraFirst =
-    canTakePhoto && receiptsResult.status !== 'failed' && receipts.length === 0;
   const viewedReceipt =
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
@@ -321,8 +319,10 @@ function PurchaseScreen({
     !(user && merchantKey !== null && isRuleDeclined(user.uid, merchantKey))
       ? run
       : null;
+  const isOpen = isTrackingLevel(level) && isOpenToPlace(purchase);
+  const isPlaceable = isWaiting || isOpen;
   const canMakeRule =
-    isWaiting &&
+    isPlaceable &&
     isTrackingLevel(level) &&
     lostPair === null &&
     (purchase.source === 'link' || purchase.source === 'email') &&
@@ -348,7 +348,7 @@ function PurchaseScreen({
   const openRuleStep = (
     view: 'make' | 'suggest' | 'edit',
     ruleId: string | null,
-  ) => setRuleStep({ view, ruleId, wasWaiting: isWaiting });
+  ) => setRuleStep({ view, ruleId, wasWaiting: isPlaceable });
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
@@ -860,6 +860,13 @@ function PurchaseScreen({
               />
             </PairOffer>
           )}
+          {!isWaiting && isOpen && (
+            <NeedsHomeAssign
+              purchase={purchase}
+              onDone={onClose}
+              onSuggestRule={onSuggestRule}
+            />
+          )}
           <ActionGroup isRoomy>
             {billRef === null && (
               <ActionRow
@@ -868,10 +875,10 @@ function PurchaseScreen({
                 hasChevron
                 icon={<Pencil />}
                 label={
-                  isWaiting ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
+                  isPlaceable ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
                 }
                 subtitle={
-                  isWaiting ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
+                  isPlaceable ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
                 }
                 isDisabled={isBusy}
                 onClick={() => {
@@ -969,25 +976,11 @@ function PurchaseScreen({
                   onClick={() => setIsCostOpen(true)}
                 />
               )}
-            {isCameraFirst && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                icon={<Camera />}
-                label={SPEND_WORDS.takeReceiptPhoto}
-                isDisabled={!isReceiptsLoaded || isAddingReceipt}
-                onClick={() => receiptChooser.current?.open({ isCamera: true })}
-              />
-            )}
-            <ActionRow
+            <PhotoActionRow
               isGrouped
               isRoomy
-              icon={<ImagePlus />}
-              label={
-                canTakePhoto
-                  ? SPEND_WORDS.chooseReceiptPhoto
-                  : SPEND_WORDS.addReceipt
-              }
+              label={SPEND_WORDS.addReceiptPhoto}
+              canTakePhoto={canTakePhoto}
               subtitle={
                 isAddingReceipt
                   ? SPEND_WORDS.receiptAdding
@@ -1000,7 +993,7 @@ function PurchaseScreen({
                 isAddingReceipt ||
                 receipts.length >= MAX_RECEIPTS_PER_PURCHASE
               }
-              onClick={() => receiptChooser.current?.open()}
+              onPick={(isCamera) => receiptChooser.current?.open({ isCamera })}
             />
             <ReceiptFileInput
               chooser={receiptChooser}

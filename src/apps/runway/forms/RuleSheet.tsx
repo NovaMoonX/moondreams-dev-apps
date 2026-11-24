@@ -13,11 +13,9 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import {
-  RULE_WORDS,
-  SPEND_WORDS,
-} from '@apps/runway/constants';
+import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isOpenToPlace } from '@apps/runway/engine/purchases';
 import {
   isBroadMerchant,
   RULE_VARIES,
@@ -29,7 +27,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   assignPurchase,
   readPurchaseNow,
-  returnPurchaseToWaiting,
+  undoPlacement,
 } from '@apps/runway/store/actions/purchaseActions';
 import {
   createRule,
@@ -49,10 +47,7 @@ import type {
   RunwayEncryption,
 } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
-import {
-  describePurchaseReturned,
-  getPurchaseTitle,
-} from '@apps/runway/utils/purchaseText';
+import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 import {
   describeRule,
   describeRulePlaced,
@@ -152,7 +147,9 @@ function RuleSheet({
   const [picked, setPicked] = useState<string | null>(likely);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [willSend] = useState(purchase?.needsHome ?? false);
+  const [willSend] = useState(
+    purchase !== null && (purchase.needsHome || isOpenToPlace(purchase)),
+  );
 
   const isMerchantAlone = ticks.merchant && !ticks.kind && !ticks.card;
   const target = picked === RULE_VARIES && !isMerchantAlone ? null : picked;
@@ -211,6 +208,7 @@ function RuleSheet({
     uid: string,
     encryption: RunwayEncryption,
     placed: OpenPurchase,
+    before: OpenPurchase,
     envelopeId: string,
   ) =>
     addToast({
@@ -223,14 +221,8 @@ function RuleSheet({
       action: {
         label: RULE_WORDS.undo,
         onClick: () =>
-          void returnPurchaseToWaiting(
-            uid,
-            encryption,
-            placed,
-            describePurchaseReturned(placed, nameOf),
-            { ruleId: null, assignedBy: 'person' },
-          ).catch(() =>
-            addToast({ title: RULE_WORDS.undoFailed, type: 'error' }),
+          void undoPlacement(uid, encryption, placed, before, nameOf).catch(
+            () => addToast({ title: RULE_WORDS.undoFailed, type: 'error' }),
           ),
       },
     });
@@ -249,9 +241,15 @@ function RuleSheet({
       if (!fresh || fresh.ruleId === null || fresh.needsHome || !home) {
         throw sendError;
       }
-      toastPlaced(user.uid, encryption, fresh, home.envelopeId ?? made.target);
+      toastPlaced(
+        user.uid,
+        encryption,
+        fresh,
+        purchase,
+        home.envelopeId ?? made.target,
+      );
     };
-    if (!purchase.needsHome) {
+    if (!purchase.needsHome && !isOpenToPlace(purchase)) {
       await toastStored(new Error(SPEND_WORDS.changedElsewhere)).catch(() =>
         addToast({ title: RULE_WORDS.made, type: 'success' }),
       );
@@ -284,6 +282,7 @@ function RuleSheet({
           ruleId: made.id,
           updatedAt,
         },
+        purchase,
         made.target,
       );
     } catch (sendError) {

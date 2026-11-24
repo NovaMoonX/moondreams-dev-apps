@@ -58,7 +58,11 @@ import {
   getUndoCardPaymentMoveId,
 } from '@apps/runway/store/actions/cardActions';
 import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
-import { describePurchaseRemoval } from '@apps/runway/utils/purchaseText';
+import {
+  describePurchaseKeptFree,
+  describePurchaseRemoval,
+  describePurchaseReturned,
+} from '@apps/runway/utils/purchaseText';
 import type {
   Cents,
   CardPaymentCovers,
@@ -712,6 +716,32 @@ export const returnPurchaseToWaiting = (
     true,
     placement,
   );
+
+/** Takes back a placement made from a purchase's sheet: one that was waiting goes back to Needs a home, one that sat unplaced in Free to Spend goes back there as it was. */
+export const undoPlacement = (
+  uid: string,
+  encryption: RunwayEncryption,
+  placed: OpenPurchase,
+  before: Pick<OpenPurchase, 'needsHome' | 'lines' | 'ruleId' | 'assignedBy'>,
+  nameOf: (envelopeId: string) => string,
+) =>
+  before.needsHome
+    ? returnPurchaseToWaiting(
+        uid,
+        encryption,
+        placed,
+        describePurchaseReturned(placed, nameOf),
+        { ruleId: null, assignedBy: 'person' },
+      )
+    : assignPurchase(
+        uid,
+        encryption,
+        placed,
+        before.lines,
+        describePurchaseKeptFree(placed, nameOf),
+        false,
+        { ruleId: before.ruleId, assignedBy: before.assignedBy },
+      );
 
 export interface PurchaseAssignment {
   purchase: OpenPurchase;

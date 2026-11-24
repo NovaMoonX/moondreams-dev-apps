@@ -198,3 +198,22 @@ export function getPurchaseEffect(
   };
   return result;
 }
+
+/** A charge from the bank or an email sitting in Free to Spend that nobody chose for it (it came in while sorting was paused, or before it could wait): it can still be given an envelope or a rule. */
+export function isOpenToPlace(purchase: OpenPurchase): boolean {
+  const result =
+    !purchase.needsHome &&
+    (purchase.source === 'link' || purchase.source === 'email') &&
+    purchase.amountCents > 0 &&
+    purchase.lines.length > 0 &&
+    purchase.lines.every(
+      (line) => line.envelopeId === null && line.via === 'free',
+    ) &&
+    purchase.assignedBy === null &&
+    purchase.ruleId === null &&
+    (purchase.billRef ?? null) === null &&
+    purchase.pairedWithId === null &&
+    purchase.refundOfId === null &&
+    purchase.incomeDayId === null;
+  return result;
+}

@@ -17,7 +17,7 @@ function ActionGroup({ children, isRoomy = false, caption }: ActionGroupProps) {
     <div
       data-action-rows=''
       className={join(
-        'border-border divide-border divide-y overflow-hidden rounded-2xl border empty:hidden',
+        'border-border divide-border divide-y overflow-hidden rounded-2xl border empty:hidden has-[[aria-expanded=true]]:overflow-visible',
         !isRoomy && 'bg-muted/50',
       )}
     >
