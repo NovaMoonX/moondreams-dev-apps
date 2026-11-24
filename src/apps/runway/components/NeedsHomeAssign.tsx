@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { LayoutGrid } from 'lucide-react';
 
+import EnvelopePickSheet from '@apps/runway/components/EnvelopePickSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
@@ -13,7 +15,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   assignPurchase,
   readPurchaseNow,
-  returnPurchaseToWaiting,
+  undoPlacement,
 } from '@apps/runway/store/actions/purchaseActions';
 import {
   selectEnvelopes,
@@ -25,7 +27,7 @@ import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
 import { isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import {
   describePurchaseAssigned,
-  describePurchaseReturned,
+  getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
 
 const LIKELY_SHOWN = 3;
@@ -37,7 +39,7 @@ interface NeedsHomeAssignProps {
   onSuggestRule?: (placed: OpenPurchase) => void;
 }
 
-/** The likeliest envelopes for a waiting purchase, each one tap away; anything else goes through the purchase's own edit. */
+/** The likeliest envelopes for an unplaced purchase, then every envelope; never a split. */
 function NeedsHomeAssign({
   purchase,
   onDone,
@@ -51,6 +53,7 @@ function NeedsHomeAssign({
   const looks = useAppSelector(selectItemLooks);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPicking, setIsPicking] = useState(false);
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -63,12 +66,12 @@ function NeedsHomeAssign({
 
   const putBack = async (uid: string, sent: OpenPurchase) => {
     try {
-      await returnPurchaseToWaiting(
+      await undoPlacement(
         uid,
         await getRunwayEncryption(uid),
         sent,
-        describePurchaseReturned(sent, nameOf),
-        { ruleId: null, assignedBy: 'person' },
+        purchase,
+        nameOf,
       );
     } catch (undoError) {
       addToast({
@@ -157,7 +160,11 @@ function NeedsHomeAssign({
     }
   };
 
-  if (likely.length === 0) return null;
+  if (envelopes.length === 0) return null;
+  const otherLabel =
+    likely.length > 0
+      ? NEEDS_HOME_WORDS.otherEnvelope
+      : NEEDS_HOME_WORDS.chooseEnvelope;
   return (
     <div className='space-y-2'>
       <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.whichTitle}</p>
@@ -174,11 +181,38 @@ function NeedsHomeAssign({
             onOpen={() => void send(id)}
           />
         ))}
+        <ItemRow
+          leading={
+            <span
+              className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
+              aria-hidden='true'
+            >
+              <LayoutGrid className='h-5 w-5' />
+            </span>
+          }
+          name={otherLabel}
+          detail={NEEDS_HOME_WORDS.chooseEnvelopeSub}
+          isPrivate={false}
+          ariaLabel={`${otherLabel}, ${NEEDS_HOME_WORDS.chooseEnvelopeSub}`}
+          onOpen={() => setIsPicking(true)}
+        />
       </ul>
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}
         </p>
+      )}
+      {isPicking && (
+        <EnvelopePickSheet
+          subtitle={NEEDS_HOME_WORDS.pickFor(
+            getPurchaseTitle(purchase, nameOf),
+          )}
+          onPick={(envelopeId) => {
+            setIsPicking(false);
+            void send(envelopeId);
+          }}
+          onClose={() => setIsPicking(false)}
+        />
       )}
     </div>
   );
