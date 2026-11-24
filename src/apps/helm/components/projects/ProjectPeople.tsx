@@ -18,6 +18,7 @@ import {
 } from '@apps/helm/store/actions/projectActions';
 import { selectWhoById } from '@apps/helm/store/selectors/whoSelectors';
 import type { OpenProject, OpenWho, ProjectRole } from '@apps/helm/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface ProjectPeopleProps {
   project: OpenProject;
@@ -121,6 +122,7 @@ function ProjectPeople({ project, isReadOnly, onOpenWho }: ProjectPeopleProps) {
         return false;
       }
       addToast({
+        duration: UNDO_WINDOW_MS,
         title,
         type: 'success',
         action: {

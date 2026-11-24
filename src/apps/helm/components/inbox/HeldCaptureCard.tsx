@@ -38,6 +38,7 @@ import {
 } from '@apps/helm/utils/heldCaptures';
 import type { HeldReason } from '@apps/helm/types';
 import { getJoinedOf } from '@apps/helm/utils/sessions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface HeldCaptureCardProps {
   item: HeldItem | null;
@@ -112,6 +113,7 @@ function HeldCaptureCard({ item, onClose }: HeldCaptureCardProps) {
       );
       write.catch(reportFailure);
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.madeTask,
         type: 'success',
         action: {

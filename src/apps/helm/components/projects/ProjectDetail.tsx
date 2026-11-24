@@ -60,6 +60,7 @@ import { KeepPrivateError } from '@apps/helm/store/actions/privacyActions';
 import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 import { sortProjectTasks } from '@apps/helm/utils/projectTasks';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import QuietRow from '@apps/helm/components/privacy/QuietRow';
 
@@ -187,6 +188,7 @@ function ProjectDetail({
       : setProjectStatus(user.uid, project, next);
     change.written.catch(reportFailure);
     addToast({
+      duration: UNDO_WINDOW_MS,
       title:
         next === 'finished'
           ? HELM_COPY.projectFinishedToast(project.name, openTasks.length)
@@ -215,6 +217,7 @@ function ProjectDetail({
       : pickGoalBackUp(user.uid, project.id);
     change.written.catch(reportGoalFailure);
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: isAsideNext
         ? HELM_COPY.goalAsideToast(project.name)
         : HELM_COPY.goalBackUpToast(project.name),
@@ -238,6 +241,7 @@ function ProjectDetail({
         made.written.catch(reportGoalFailure);
         onBack();
         addToast({
+          duration: UNDO_WINDOW_MS,
           title:
             habitsChoice === 'keep' && goalHabitNames.length > 0
               ? HELM_COPY.goalHabitsKeptToast(
@@ -272,6 +276,7 @@ function ProjectDetail({
         const made = await turnIntoProject(user.uid, project.id, habitsChoice);
         made.written.catch(reportGoalFailure);
         addToast({
+          duration: UNDO_WINDOW_MS,
           title: HELM_COPY.goalToProjectToast(project.name),
           type: 'success',
           action: {
@@ -349,6 +354,7 @@ function ProjectDetail({
       const { restore } = await deleteProject(user.uid, project.id);
       onBack();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.projectDeletedToast(project.name),
         type: 'success',
         action: {

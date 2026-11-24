@@ -1278,6 +1278,8 @@ export interface PurchaseDoc {
   emailEventId: string | null;
   /** On a purchase read from an email: true while Runway waits for its bank to send the same charge, false once there is nothing to wait for (its card or account isn't linked, or the person stopped waiting); null on every other purchase (and missing on an older one). */
   emailWaiting: boolean | null;
+  /** On a purchase from a linked bank, written by Functions: true once the bank has shown it as pending (or its posted charge named a pending one), false when it only ever arrived posted; null on any other purchase, and missing on an older one (read as null). */
+  wasPending: boolean | null;
   createdAt: number;
   updatedAt: number;
   sealed: Sealed;
@@ -1440,6 +1442,7 @@ export interface OpenPurchase extends PurchaseSealed {
   expenseId: string | null;
   emailEventId: string | null;
   emailWaiting: boolean | null;
+  wasPending: boolean | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -1513,6 +1516,7 @@ export type DoneForYouKind =
 /** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
 export type DoneForYouUndo =
   | { kind: 'merge'; merged: MergedPurchase }
+  | { kind: 'mergeSplit'; merged: MergedSplit }
   | {
       kind: 'deposit';
       deposit: OpenPurchase;
@@ -1606,5 +1610,14 @@ export interface MergedPurchase {
   typed: OpenPurchase;
   images: ReceiptImageDoc[];
   /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+export interface MergedSplit {
+  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
   updatedAt: number;
 }

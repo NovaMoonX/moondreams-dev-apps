@@ -3526,6 +3526,7 @@ async function writeSeedSelfPaying(
         date,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: true,
         accountId: null,
         expenseId: null,
@@ -4085,6 +4086,7 @@ async function seedUnlinkedPlan(
         date,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: false,
         accountId,
         expenseId: null,
@@ -4339,6 +4341,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4594,6 +4597,7 @@ async function writeSeedPurchases(
         date,
         source: 'link',
         status: entry.status,
+        wasPending: entry.status === 'pending',
         needsHome: true,
         accountId: entry.accountId,
         expenseId: null,
@@ -4648,6 +4652,16 @@ async function writeSeedPurchases(
       id: 'seed-change-purchase-edited',
       createdAt: safewayDate + 13 * 3_600_000,
       summary: 'Purchase changed: Safeway, amount $54.18 to $64.18.',
+    },
+    {
+      id: 'seed-change-purchase-ruled',
+      createdAt: safewayDate + 9 * 3_600_000,
+      summary: `Purchase sent to Groceries: Trader Joe's, $38.20 on ${formatDateOrdinalUTC(safewayDate)}. By your rule “Trader Joe's goes to Groceries”.`,
+    },
+    {
+      id: 'seed-change-purchase-sent',
+      createdAt: safewayDate + 12 * 3_600_000,
+      summary: `Purchase sent to Groceries: Safeway, $54.18 on ${formatDateOrdinalUTC(safewayDate)}.`,
     },
     {
       id: 'seed-change-purchase-removed',
@@ -4794,6 +4808,7 @@ async function writeSeedEmail(
         expenseId: null,
         emailEventId: entry.eventId,
         emailWaiting: true,
+        wasPending: null,
         createdAt: entry.receivedAt,
         updatedAt: entry.receivedAt,
         sealed: await sealJson(
@@ -4831,6 +4846,7 @@ async function writeSeedEmail(
     dedupeKey: null,
     expenseId: null,
     emailWaiting: false,
+    wasPending: null,
   } as const;
   const storeSealed = {
     label: null,
@@ -4906,6 +4922,7 @@ async function writeSeedEmail(
       needsHome: true,
       emailEventId: 'seed-email-event-walmart-refund',
       emailWaiting: false,
+      wasPending: null,
       createdAt: today - DAY_MS + 9 * hour,
       updatedAt: today - DAY_MS + 9 * hour,
       sealed: await sealJson(
@@ -5166,6 +5183,7 @@ async function seedDoneForYou(
     date: today - 4 * DAY_MS,
     source: 'link',
     status: 'posted',
+    wasPending: false,
     needsHome: false,
     accountId: null,
     expenseId: null,
@@ -5418,6 +5436,7 @@ async function seedRules(
       date,
       source: 'link',
       status: 'posted',
+      wasPending: false,
       needsHome: false,
       accountId: null,
       expenseId: null,
@@ -5468,6 +5487,7 @@ async function seedRules(
         date: at,
         source: 'link',
         status: 'posted',
+        wasPending: false,
         needsHome: false,
         accountId: null,
         expenseId: null,
@@ -5582,6 +5602,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        wasPending: null,
       } satisfies PurchaseDoc);
     }),
   );

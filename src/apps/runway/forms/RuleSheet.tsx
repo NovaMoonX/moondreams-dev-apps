@@ -53,6 +53,7 @@ import {
   describeRulePlaced,
   getCategoryLabel,
 } from '@apps/runway/utils/ruleText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface RuleSheetProps {
   purchase: OpenPurchase | null;
@@ -134,16 +135,24 @@ function RuleSheet({
       card: !hasMerchant && !hasKind && hasCard,
     };
   });
-  const likely = purchase
-    ? (rankLikelyEnvelopes(
-        purchase.merchant,
-        history,
-        envelopes.map(({ item }) => item.id),
-        1,
-      )[0] ?? null)
-    : rule && !isEnded(rule)
-      ? rule.target
-      : null;
+  const chosen = purchase?.lines.find(
+    (line) =>
+      line.via === 'chosen' &&
+      line.envelopeId !== null &&
+      envelopes.some(({ item }) => item.id === line.envelopeId),
+  )?.envelopeId;
+  const likely = chosen
+    ? chosen
+    : purchase
+      ? (rankLikelyEnvelopes(
+          purchase.merchant,
+          history,
+          envelopes.map(({ item }) => item.id),
+          1,
+        )[0] ?? null)
+      : rule && !isEnded(rule)
+        ? rule.target
+        : null;
   const [picked, setPicked] = useState<string | null>(likely);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +227,7 @@ function RuleSheet({
         nameOf(envelopeId),
       ),
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: RULE_WORDS.undo,
         onClick: () =>

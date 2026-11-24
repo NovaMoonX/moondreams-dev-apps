@@ -59,6 +59,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getBillCardName } from '@apps/runway/utils/cardText';
 import { describeDueDay } from '@apps/runway/utils/billText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type DueBill = Lookahead['due'][number];
 type DueCost = Lookahead['dueCosts'][number];
@@ -190,6 +191,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
               )
             : undefined,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
         onClick: () => void undo(written),

@@ -22,6 +22,7 @@ import { doneTasksQueryOptions } from '@apps/helm/queries/doneTaskQueries';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { OpenTask } from '@apps/helm/types';
 import type { SearchTarget } from '@apps/helm/utils/searchRecords';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 export type SearchOpen = Extract<
   SearchTarget,
@@ -71,6 +72,7 @@ function SearchSheets({ open, tasks, onClose }: SearchSheetsProps) {
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
     });
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: HELM_COPY.taskReopenedToast(task?.title ?? ''),
       type: 'success',
       action: {

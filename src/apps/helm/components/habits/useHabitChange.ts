@@ -1,6 +1,7 @@
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { HELM_COPY } from '@apps/helm/constants';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface HabitChange {
   written: Promise<void>;
@@ -16,6 +17,7 @@ export function useHabitChange() {
       addToast({ title: failure, type: 'error' });
     });
     addToast({
+      duration: UNDO_WINDOW_MS,
       title: toast,
       type: 'success',
       action: {

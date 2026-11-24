@@ -20,6 +20,7 @@ import {
   countOnlyFacts,
   ForgetPartialError,
 } from '@apps/helm/store/actions/whoActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
@@ -107,6 +108,7 @@ function PlaceDetail({
       const { counts, restore } = await forgetPlace(user.uid, place.id);
       onBack();
       addToast({
+        duration: UNDO_WINDOW_MS,
         title: HELM_COPY.forgotToast(place.name, counts.tasks),
         type: 'success',
         action: {

@@ -10,7 +10,9 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NEEDS_HOME_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { findPlacementRun, toMerchantKey } from '@apps/runway/engine/rules';
+import { toMerchantKey } from '@apps/runway/engine/rules';
+import { canOfferRule } from '@apps/runway/engine/matching';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   assignPurchase,
@@ -22,6 +24,7 @@ import {
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
 import { isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
@@ -29,6 +32,7 @@ import {
   describePurchaseAssigned,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const LIKELY_SHOWN = 3;
 
@@ -104,21 +108,22 @@ function NeedsHomeAssign({
       addToast({
         title: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: NEEDS_HOME_WORDS.undo,
           onClick: () => void putBack(user.uid, placed),
         },
       });
-      const run = findPlacementRun(
-        toMerchantKey(purchase.merchant),
-        [...history.filter((entry) => entry.id !== purchase.id), placed],
-        store.getState().runway.rules,
-      );
       const merchantKey = toMerchantKey(purchase.merchant);
+      const hasRule = store
+        .getState()
+        .runway.rules.some((rule) => rule.merchantKey === merchantKey);
       if (
         onSuggestRule &&
-        run?.envelopeId === envelopeId &&
+        isTrackingLevel(selectLevel(store.getState())) &&
+        canOfferRule(placed) &&
         merchantKey !== null &&
+        !hasRule &&
         !isRuleDeclined(user.uid, merchantKey)
       ) {
         onSuggestRule(placed);
@@ -146,6 +151,7 @@ function NeedsHomeAssign({
           addToast({
             title: NEEDS_HOME_WORDS.alreadySent(nameOf(home.envelopeId)),
             type: 'success',
+            duration: UNDO_WINDOW_MS,
             action: {
               label: NEEDS_HOME_WORDS.undo,
               onClick: () => void putBack(user.uid, fresh),

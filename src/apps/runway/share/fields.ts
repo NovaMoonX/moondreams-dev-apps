@@ -740,6 +740,7 @@ const PURCHASE_DOC_FIELDS = {
   expenseId: 'notUseful',
   emailEventId: 'notUseful',
   emailWaiting: 'notUseful',
+  wasPending: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
   sealed: 'shared',
@@ -1008,4 +1009,5 @@ export const NOT_STORED: Record<string, string> = {
   NormalizedAccount: 'provider account reading',
   ChargeMatchResult: 'in-memory result of matching a bank charge',
   MergedPurchase: 'in-memory result of merging two purchases',
+  MergedSplit: 'in-memory result of merging an order with the charges it posted as',
 };

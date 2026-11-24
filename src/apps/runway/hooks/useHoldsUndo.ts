@@ -11,6 +11,7 @@ import {
   undoAccountHolds,
   type WrittenHolds,
 } from '@apps/runway/store/actions/accountActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** Toasts a saved change to what accounts hold with an Undo that reverses exactly that save, once, and reports what it could not. */
 export function useHoldsUndo() {
@@ -56,6 +57,7 @@ export function useHoldsUndo() {
     addToast({
       title,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: ACCOUNT_WORDS.undo,
         onClick: () => {

@@ -87,6 +87,7 @@ import {
 import { describeRange } from '@apps/runway/utils/rangeText';
 
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface IncomeDayScreenProps {
   dayKey: string;
@@ -225,6 +226,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       addToast({
         title: CONFIRM_WORDS.markedNotArrived,
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: ITEM_SHEET_R2_WORDS.undo,
           onClick: () => void undoNotArrived(user.uid, encryption, ref),
@@ -282,6 +284,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       addToast({
         title: PAY_SHARE_WORDS.resetToast(name),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: PAY_SHARE_WORDS.undo,
           onClick: () =>

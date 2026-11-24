@@ -24,6 +24,7 @@ import {
   DRAFT_TIE_KEYS,
   EMAIL_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
+  EMAIL_WAIT_DAYS,
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCES,
   getCostLineName,
@@ -77,6 +78,7 @@ export {
   DRAFT_TIE_KEYS,
   EMAIL_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
+  EMAIL_WAIT_DAYS,
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCES,
   GOAL_STATES,
@@ -1101,8 +1103,6 @@ export const MAX_EMOJI_LENGTH = 8;
 /** The domain a person's forwarding address lives on; the address is `${EMAIL_ADDRESS_PREFIX}-<token>@${EMAIL_DOMAIN}`. */
 export const EMAIL_DOMAIN = 'moondreamsmail.com';
 export const EMAIL_ADDRESS_PREFIX = 'runway';
-/** How long an emailed purchase waits for its bank before Home asks about it. */
-export const EMAIL_WAIT_DAYS = 5;
 /** How long an email's sender, subject, excerpt and (for a bank email Runway read) its text are kept. */
 export const EMAIL_EVENT_KEEP_DAYS = 30;
 /** The amount a purchase can be, in cents. */
@@ -3961,7 +3961,7 @@ export const GOAL_CHART_WORDS = {
 
 // Round 4, package G5.
 /** Changes an item's History shows before "Show all". */
-export const ITEM_HISTORY_PREVIEW = 6;
+export const ITEM_HISTORY_PREVIEW = 20;
 
 // Round 7, package B1.
 /** What a moved payday does to the income days the person changed for themselves. */
@@ -5357,6 +5357,9 @@ export const RULE_WORDS = {
   noMatch: 'No rule matches that.',
   alwaysDo: 'Always do this',
   alwaysDoSub: 'Send purchases like this one here, from now on',
+  alwaysSendTo: (merchant: string, envelope: string) =>
+    `Always send ${merchant} to ${envelope}`,
+  alwaysSendSub: 'By this store, card or kind of purchase',
   sheetTitle: 'Always do this',
   editTitle: 'Rule',
   question: 'What should it catch?',

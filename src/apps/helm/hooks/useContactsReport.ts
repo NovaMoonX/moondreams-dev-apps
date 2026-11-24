@@ -7,6 +7,7 @@ import {
   type ContactsImportResult,
 } from '@apps/helm/queries/contactsQueries';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 /** Says what an import did, with an Undo on the toast, and what a failed one means. */
 export function useContactsReport() {
@@ -44,6 +45,7 @@ export function useContactsReport() {
     addToast({
       title: result.summary ?? HELM_COPY.contactsBringIn,
       type: 'success',
+      duration: UNDO_WINDOW_MS,
       action: { label: HELM_COPY.undo, onClick: () => undo(executionId) },
     });
   };

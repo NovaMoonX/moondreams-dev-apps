@@ -128,6 +128,7 @@ import {
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface HorizonSheetProps {
   itemId: string;
@@ -439,6 +440,7 @@ function HorizonSheet({
       addToast({
         title: mask(HORIZON_END_WORDS.releasedAmount(money, horizon.name)),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: HORIZON_END_WORDS.undo,
           onClick: () => {

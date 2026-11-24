@@ -332,7 +332,8 @@ export const mergePurchases = (
 /** The ids of emailed purchases whose bank charge is here, or could be one of several here: the charge counts, so Free to Spend and a card's balance leave them out rather than count one purchase twice. */
 export const toTwinnedEmailIds = (
   twins: ReturnType<typeof findEmailTwins>,
-): ReadonlySet<string> => new Set([...twins.clear.keys(), ...twins.ambiguous]);
+): ReadonlySet<string> =>
+  new Set([...twins.clear.keys(), ...twins.ambiguous, ...twins.split.keys()]);
 
 /** At Link, each linked card with a balance from its bank, read from the bank (`getBankOwedByCard`); empty at every other level, where a card's figure is what Runway counted. */
 export const getBankOwed = (

@@ -49,6 +49,7 @@ import {
 import type { Cents, OpenMove } from '@apps/runway/types';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const FREE = 'free';
 
@@ -260,6 +261,7 @@ function MoveLeftoverView({
       addToast({
         title: mask(MOVE_WORDS.moved(money, toName)),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: MOVE_WORDS.undo,
           onClick: () =>
