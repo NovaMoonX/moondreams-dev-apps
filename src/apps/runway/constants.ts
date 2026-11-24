@@ -5033,7 +5033,7 @@ const getBulkCount = (written: number, total: number) => {
 
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
-  homeSub: 'From your bank',
+  homeSub: 'From your bank or email',
   countedChip: 'Counted in Free to Spend',
   intro:
     "You don't have to sort these. Each one already counts against Free to Spend; putting it in an envelope just makes that envelope's number exact.",

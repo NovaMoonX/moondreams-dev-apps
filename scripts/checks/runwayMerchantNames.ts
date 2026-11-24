@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import type { Firestore } from 'firebase-admin/firestore';
 
-import { planEmailPurchaseFill } from '../../functions/src/apps/runway/email/fillEmailPurchases.ts';
+import { planEmailPurchaseFill } from '../../functions/src/apps/runway/email/fillEmailPurchasesPlan.ts';
 import { normalizeTransaction } from '../../functions/src/apps/runway/link/normalize.ts';
 import {
   findMerchant,

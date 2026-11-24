@@ -109,7 +109,10 @@ export const isAnsweredEmail = (
 
 /** A bank charge already settled by the person (placed, kept, left out) or matched to a bill or a pair, rather than one waiting or placed by a rule: its own state wins over an email's. */
 export const isSettledByPerson = (
-  purchase: Pick<OpenPurchase, 'needsHome' | 'assignedBy' | 'billRef' | 'pairedWithId'>,
+  purchase: Pick<
+    OpenPurchase,
+    'needsHome' | 'assignedBy' | 'billRef' | 'pairedWithId'
+  >,
 ) =>
   !purchase.needsHome &&
   (purchase.assignedBy !== 'auto' ||

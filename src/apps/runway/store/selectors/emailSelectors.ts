@@ -67,12 +67,15 @@ export const isOverdueEmail = (
   !twinned.has(purchase.id) &&
   purchase.date < today - EMAIL_WAIT_DAYS * DAY_MS;
 
-/** Emailed purchases still waiting, with no clear bank twin, dated more than `EMAIL_WAIT_DAYS` before today, oldest first: what Home asks about once. */
+/** Emailed purchases still waiting, with no clear bank twin, dated more than `EMAIL_WAIT_DAYS` before today and already answered (one still in Needs a home is asked about there), oldest first: what Home asks about once. */
 export const selectEmailOverdue = createSelector(
   [selectAllPurchases, selectTwinnedEmailIds, () => todayAsUtcDate()],
   (purchases, twinned, today): OpenPurchase[] =>
     purchases
-      .filter((purchase) => isOverdueEmail(purchase, twinned, today))
+      .filter(
+        (purchase) =>
+          !purchase.needsHome && isOverdueEmail(purchase, twinned, today),
+      )
       .sort((a, b) => a.date - b.date || a.id.localeCompare(b.id)),
 );
 

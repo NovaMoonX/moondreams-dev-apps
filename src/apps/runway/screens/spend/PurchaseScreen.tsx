@@ -333,12 +333,7 @@ function PurchaseScreen({
       : null;
   const heldRule =
     canMakeRule &&
-    isHeldByOffer(
-      purchase.id,
-      waitingPurchases,
-      recentPurchases,
-      twinHeldIds,
-    )
+    isHeldByOffer(purchase.id, waitingPurchases, recentPurchases, twinHeldIds)
       ? wouldRulePlace(
           purchase,
           rules,

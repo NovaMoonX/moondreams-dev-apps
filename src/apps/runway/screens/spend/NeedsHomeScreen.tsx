@@ -106,6 +106,10 @@ function NeedsHomeRow({
           formatDateOrdinalUTC(purchase.date),
           ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
           sourceName,
+          ...(purchase.source === 'email' &&
+          sourceName !== EMAIL_WORDS.fromEmail
+            ? [EMAIL_WORDS.fromEmail]
+            : []),
           ...(place === null ? [] : [place]),
         ]
   ).join(' · ');
@@ -122,7 +126,6 @@ function NeedsHomeRow({
               className='text-muted-foreground ml-1.5 inline h-3.5 w-3.5 align-[-2px]'
               aria-hidden='true'
             />
-            <span className='sr-only'>{EMAIL_WORDS.fromEmail}</span>
           </>
         )
       }

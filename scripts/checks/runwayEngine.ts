@@ -20427,7 +20427,7 @@ checkHorizonMoves();
   );
 }
 
-{
+const checkRulePlacements = () => {
   const rule = (id: string, over: Partial<OpenRule>): OpenRule => ({
     id,
     createdAt: 1,
@@ -20706,7 +20706,8 @@ checkHorizonMoves();
     'and the split still adds up',
   );
   assert.equal(rulePlaced.length, 2, 'the chain pays what the envelope cannot');
-}
+};
+checkRulePlacements();
 
 // A goal linked to a Horizon event: the walk covers each cost from the goal first, a payment takes from the goal then the event, and the nudge asks as the date nears.
 {

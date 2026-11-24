@@ -4727,6 +4727,7 @@ async function writeSeedEmail(
     cents: number;
     subject: string;
     readBy: 'pattern' | 'ai';
+    isWaitingForHome?: true;
   }[] = [
     {
       id: 'seed-email-purchase-coffee',
