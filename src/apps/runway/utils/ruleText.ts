@@ -1,5 +1,6 @@
 export {
   describeRule,
+  describeRuleParts,
   describeRulePlaced,
   getCategoryLabel,
   type RuleNames,

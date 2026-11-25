@@ -54,11 +54,14 @@ export interface RuleNames {
   isCardLeftOut?: boolean;
 }
 
-/** The rule as a sentence: "Restaurants go to Dining out", "Everything on Venture X goes to Dining out", "Gas on any card, and everything on Citi, go to Gas", "Safeway goes to Groceries", "Amazon: ask me every time". */
-export function describeRule(rule: RuleSealed, names: RuleNames): string {
+/** The rule in two parts, what it catches and where that goes, for a row that shows them on two lines: "Gas on any card, and everything on Citi" over "Go to Gas". */
+export function describeRuleParts(
+  rule: RuleSealed,
+  names: RuleNames,
+): { subject: string; outcome: string } {
   const { merchantName, category, cardId } = rule;
   if (merchantName !== null && rule.target === RULE_VARIES) {
-    return `${merchantName}: ${RULE_ENGINE_WORDS.askEvery.toLowerCase()}`;
+    return { subject: merchantName, outcome: RULE_ENGINE_WORDS.askEvery };
   }
   const onCard = names.isCardLeftOut
     ? ' on this card'
@@ -70,14 +73,27 @@ export function describeRule(rule: RuleSealed, names: RuleNames): string {
       ? `Everything${names.isCardLeftOut ? '' : onCard}`
       : cardId === null
         ? kind
-        : `${kind} on any card, and everything${onCard},`);
+        : `${kind} on any card, and everything${onCard}`);
   const verb =
     merchantName === null &&
     kind !== null &&
     (cardId !== null || isPlural(kind))
-      ? 'go'
-      : 'goes';
-  return `${subject} ${verb} to ${names.envelope}`;
+      ? 'Go'
+      : 'Goes';
+  return { subject, outcome: `${verb} to ${names.envelope}` };
+}
+
+/** The rule as a sentence: "Restaurants go to Dining out", "Everything on Venture X goes to Dining out", "Gas on any card, and everything on Citi, go to Gas", "Safeway goes to Groceries", "Amazon: ask me every time". */
+export function describeRule(rule: RuleSealed, names: RuleNames): string {
+  const { subject, outcome } = describeRuleParts(rule, names);
+  if (rule.merchantName !== null && rule.target === RULE_VARIES) {
+    return `${subject}: ${outcome.toLowerCase()}`;
+  }
+  const isTwoTicks =
+    rule.merchantName === null &&
+    rule.category !== null &&
+    rule.cardId !== null;
+  return `${subject}${isTwoTicks ? ',' : ''} ${outcome.charAt(0).toLowerCase()}${outcome.slice(1)}`;
 }
 
 export const isRefund = (purchase: OpenPurchase) => purchase.amountCents < 0;
