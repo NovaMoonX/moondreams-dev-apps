@@ -3,10 +3,10 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   BookOpen,
   CalendarDays,
+  Flame,
   Lightbulb,
   Pencil,
   ShoppingBasket,
-  Wheat,
 } from 'lucide-react';
 
 import type {
@@ -48,17 +48,24 @@ const getWho = (by: PinchOutsideChange['by']) =>
     : (by.name ?? "Helm's assistant");
 
 const getLook = (change: PinchOutsideChange) => {
+  const made = change.createdIngredientIds?.length ?? 0;
   switch (change.kind) {
     case 'recipeUpdated':
       return {
         title: WORDS.recipeUpdated(change.title),
-        undoLabel: WORDS.undoRecipeUpdated,
+        undoLabel:
+          made === 0
+            ? WORDS.undoRecipeUpdated
+            : WORDS.undoRecipeUpdatedWithNew(made),
         icon: <Pencil />,
       };
     case 'recipeAdded':
       return {
         title: WORDS.recipeAdded(change.title),
-        undoLabel: WORDS.undoRecipeAdded,
+        undoLabel:
+          made === 0
+            ? WORDS.undoRecipeAdded
+            : WORDS.undoRecipeAddedWithNew(made),
         icon: <BookOpen />,
       };
     case 'mealPlanned':
@@ -71,9 +78,11 @@ const getLook = (change: PinchOutsideChange) => {
       return {
         title: WORDS.shoppingAdded(change.title),
         undoLabel:
-          change.addedAmount === null
-            ? WORDS.undoShoppingAdded
-            : WORDS.undoShoppingMerged,
+          made > 0
+            ? WORDS.undoShoppingAddedWithNew
+            : change.addedAmount === null
+              ? WORDS.undoShoppingAdded
+              : WORDS.undoShoppingMerged,
         icon: <ShoppingBasket />,
       };
     case 'ideaSaved':
@@ -86,7 +95,7 @@ const getLook = (change: PinchOutsideChange) => {
       return {
         title: WORDS.nutritionFilled(change.title),
         undoLabel: WORDS.undoNutritionFilled,
-        icon: <Wheat />,
+        icon: <Flame />,
       };
   }
 };
@@ -142,7 +151,7 @@ export function useOutsideChanges({
           {
             label: WORDS.openIngredient,
             subtitle: WORDS.openIngredientSub,
-            icon: <Wheat />,
+            icon: <Flame />,
             unavailable: ingredients.has(ingredientId)
               ? undefined
               : WORDS.ingredientGone,
@@ -217,26 +226,32 @@ export function useOutsideChanges({
       const isUndone = change.undoneAt !== null;
       const staleNote = getStaleNote(change);
       const isStale = staleNote !== null;
+      const isCounted =
+        change.lines.length > 1 && change.kind.startsWith('recipe');
+      const heroLines = isCounted ? change.lines : change.lines.slice(1);
       return {
         id: change.id,
         createdAt: change.createdAt,
         title: look.title,
-        detail:
-          change.lines.length > 1
-            ? `${change.lines.length} changes`
-            : (change.lines[0] ?? null),
+        detail: isCounted
+          ? `${change.lines.length} changes`
+          : (change.lines[0] ?? null),
         whyLine: getWho(change.by),
         rowLead: getRowWho(change.by),
         canUndo: !isUndone && !isStale,
         isUndone,
-        note: staleNote,
+        note:
+          staleNote ??
+          ((change.createdIngredientIds?.length ?? 0) > 0
+            ? WORDS.newIngredientKept
+            : null),
         rowNote: null,
         undoLabel: look.undoLabel,
         kindIcon: look.icon,
         hero:
-          change.lines.length > 1 ? (
+          heroLines.length > 0 ? (
             <ul className='border-border bg-card list-disc space-y-1 rounded-2xl border py-3 pr-3 pl-7 text-sm'>
-              {change.lines.map((line, index) => (
+              {heroLines.map((line, index) => (
                 <li key={`${index}-${line}`}>{line}</li>
               ))}
             </ul>

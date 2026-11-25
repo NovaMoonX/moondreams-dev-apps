@@ -29,7 +29,7 @@ import {
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
-import { getMadeByName, getChangeWho } from '@apps/pinch/utils/notes';
+import { getChangeWho, getMadeByName } from '@apps/pinch/utils/notes';
 import { getIngredientAdjustments } from '@apps/pinch/utils/ingredientAdjustments';
 import {
   getServingGrams,
@@ -126,6 +126,10 @@ function IngredientDrawer({
   const basis: NutritionBasis = hasServingChoice ? options.basis : 'PER_100G';
   const isPerServing = basis === 'SERVING' && servingGrams !== null;
   const nutritionMadeBy = getMadeByName(record?.nutritionBy);
+  const addedBy =
+    getMadeByName(record?.addedBy) === null
+      ? null
+      : getChangeWho({ by: record?.addedBy ?? null });
   const nutritionCaption = isPerServing
     ? `Per 1 serving (${servingText})`
     : 'Per 100 g';
@@ -167,9 +171,11 @@ function IngredientDrawer({
               key: 'custom',
               content: (
                 <>
-                  <span aria-hidden='true'>✏️ </span>One you added
+                  <span aria-hidden='true'>✏️ </span>
+                  {addedBy === null ? 'One you added' : `Added by ${addedBy}`}
                 </>
               ),
+              ...(addedBy !== null && { canWrap: true }),
             },
             ingredient.isAdjusted && {
               key: 'adjusted',
@@ -229,11 +235,6 @@ function IngredientDrawer({
               </li>
             ))}
         </ul>
-        {getMadeByName(record?.addedBy) !== null && (
-          <p className='text-muted-foreground text-xs'>
-            Added by {getChangeWho({ by: record?.addedBy ?? null })}
-          </p>
-        )}
         {ingredient.aliases.length > 0 && (
           <p className='text-muted-foreground text-sm'>
             Also called {ingredient.aliases.join(', ')}
@@ -247,15 +248,15 @@ function IngredientDrawer({
                 {nutritionCaption}
               </h3>
               {nutritionMadeBy !== null && (
-                <span className='text-muted-foreground flex items-center gap-1 text-xs'>
-                  From {nutritionMadeBy}
-                  <HelpTip title={`Filled in by ${nutritionMadeBy}`}>
-                    <p>
-                      This is {nutritionMadeBy}'s estimate, not a measured
-                      value. Edit the nutrition and it becomes yours.
-                    </p>
-                  </HelpTip>
-                </span>
+                <HelpTip
+                  badgeLabel={`From ${nutritionMadeBy}`}
+                  title={`Filled in by ${nutritionMadeBy}`}
+                >
+                  <p>
+                    This is {nutritionMadeBy}'s estimate, not a measured value.
+                    Edit the nutrition and it becomes yours.
+                  </p>
+                </HelpTip>
               )}
               {hasServingChoice && (
                 <PillGroup

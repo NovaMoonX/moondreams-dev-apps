@@ -1008,6 +1008,14 @@ export const OUTSIDE_CHANGES_WORDS = {
   ingredientGone: 'That ingredient is no longer in your kitchen.',
   undoRecipeUpdated: 'Undo and put the recipe back',
   undoRecipeAdded: 'Undo and remove the recipe',
+  undoRecipeAddedWithNew: (count: number) =>
+    `Undo and remove the recipe and its new ${count === 1 ? 'ingredient' : 'ingredients'}`,
+  undoRecipeUpdatedWithNew: (count: number) =>
+    `Undo, put the recipe back and remove its new ${count === 1 ? 'ingredient' : 'ingredients'}`,
+  undoShoppingAddedWithNew:
+    'Undo, take it off your list and remove the new ingredient',
+  newIngredientKept:
+    'A new ingredient stays in your kitchen if something else uses it by then.',
   undoMealPlanned: 'Undo and take it off the calendar',
   undoShoppingAdded: 'Undo and take it off your list',
   undoShoppingMerged: 'Undo and take off what was added',
