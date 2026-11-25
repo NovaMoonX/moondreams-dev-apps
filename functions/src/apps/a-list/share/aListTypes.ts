@@ -193,7 +193,10 @@ export interface AListTheatre {
 export type TheatreDraft = Omit<AListTheatre, 'createdAt' | 'lastEditedAt'>;
 
 export type ShareRangeKind =
-  'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH' | 'CUSTOM';
+  'LIVE' | 'THIS_WEEK' | 'NEXT_WEEK' | 'THIS_MONTH' | 'NEXT_MONTH' | 'CUSTOM';
+
+/** A snapshot is frozen when it is made; a live share always shows the calendar as it is now. */
+export type ShareKind = 'SNAPSHOT' | 'LIVE';
 
 /** One showing as a visitor sees it: no ids, prices, ratings or anything that says whose calendar it is. */
 export interface SharedViewing {
@@ -209,18 +212,27 @@ export interface SharedViewing {
   theatreName: string | null;
 }
 
-/** A frozen copy of part of the calendar behind an unguessable link; later changes to the calendar never reach it. */
+/**
+ * Part of the calendar behind an unguessable link: a frozen copy of some dates (a snapshot), or the whole calendar as it is now (live).
+ */
 export interface CalendarShare {
   /** Equals the document id and the token in the link; immutable. */
   id: string;
   /** Immutable; only the owner can read, change or delete the share. */
   ownerUid: string;
-  /** Date-only (UTC midnight): the first day included. */
-  startDate: number;
-  /** Date-only (UTC midnight): the last day included. */
-  endDate: number;
+  /** Immutable. Missing on shares made before live ones existed, which are snapshots. */
+  kind: ShareKind | null;
+  /** Date-only (UTC midnight): the first day included; null for a live share. */
+  startDate: number | null;
+  /** Date-only (UTC midnight): the last day included; null for a live share. */
+  endDate: number | null;
+  /** Set only by the server once someone signed in adds the share; changing the PIN or deleting the share retires it. */
+  feedId: string | null;
+  /** Server-only: the PIN the feed was made under, so a feed from before a PIN change is never handed out. */
+  feedPin: string | null;
   /** Four characters a visitor must enter; null when the link is open to anyone who has it. */
   pin: string | null;
+  /** The frozen copy for a snapshot; always empty for a live share. */
   viewings: SharedViewing[];
   createdAt: number;
   lastEditedAt: number;
@@ -228,14 +240,33 @@ export interface CalendarShare {
 
 /** What the share function returns to a visitor: the calendar without the owner or the PIN. */
 export interface SharedCalendar {
-  startDate: number;
-  endDate: number;
+  kind: ShareKind;
+  startDate: number | null;
+  endDate: number | null;
   createdAt: number;
   viewings: SharedViewing[];
 }
 
+/** The server-kept copy of a share that people who added it listen to (`apps/a-list/shareFeeds/{feedId}`). */
+export interface ShareFeed extends SharedCalendar {
+  updatedAt: number;
+}
+
+/** A share a member added to their own calendar, under the name of the person it is from. Doc id = the share id. */
+export interface AddedCalendar {
+  id: string;
+  feedId: string;
+  /** Who it is from, as the member typed it; unique among the member's people, and shared by every link from one person. */
+  personName: string;
+  kind: ShareKind;
+  /** Whether its showings appear on the member's calendar. */
+  isShown: boolean;
+  createdAt: number;
+  lastEditedAt: number;
+}
+
 export type SharedCalendarResult =
-  | { status: 'ok'; calendar: SharedCalendar }
+  | { status: 'ok'; calendar: SharedCalendar; feedId: string | null }
   | { status: 'pin_required' | 'wrong_pin' | 'not_found' };
 
 /** A theater found through AMC, before it is saved. */

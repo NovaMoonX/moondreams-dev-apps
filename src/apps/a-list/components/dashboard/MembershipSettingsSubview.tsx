@@ -10,9 +10,10 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import Subview from '@/components/Subview';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { FriendsCalendarsSheet } from '@apps/a-list/components/friends/FriendsCalendarsSheet';
 import EmailTicketsRow from '@apps/a-list/components/email/EmailTicketsRow';
 import {
   CostSheet,
@@ -29,11 +30,13 @@ import {
   updateMembership,
   type MembershipEditableFields,
 } from '@apps/a-list/store/actions/membershipActions';
+import { selectSharedPeople } from '@apps/a-list/store/selectors';
 import type { MembershipProfile } from '@apps/a-list/types';
+import { joinNames } from '@apps/a-list/utils/friendShowings';
 import { getTicketPriceKind } from '@apps/a-list/utils/ticketPrice';
 
 type SettingsSheetName =
-  'cost' | 'start' | 'ticketPrice' | 'releases' | 'goals';
+  'cost' | 'start' | 'ticketPrice' | 'releases' | 'goals' | 'friends';
 
 function getCostSummary(membership: MembershipProfile) {
   const base = `${formatCents(membership.monthlyCostCents)} a month`;
@@ -52,6 +55,14 @@ function getGoalsSummary(membership: MembershipProfile) {
   return parts.length === 0 ? 'No goals yet' : parts.join(' · ');
 }
 
+const MAX_SUMMARY_NAMES = 3;
+
+function getFriendsSummary(names: string[]) {
+  if (names.length === 0) return 'None yet';
+  if (names.length <= MAX_SUMMARY_NAMES) return joinNames(names);
+  return `${names.slice(0, MAX_SUMMARY_NAMES).join(', ')} and ${names.length - MAX_SUMMARY_NAMES} more`;
+}
+
 interface MembershipSettingsSubviewProps {
   membership: MembershipProfile;
   onClose: () => void;
@@ -65,6 +76,7 @@ function MembershipSettingsSubview({
   const isEmailOpen = useIsGateOpen('a-list', EMAIL_TICKETS_GATE_ID);
   const [openSheet, setOpenSheet] = useState<SettingsSheetName | null>(null);
   const dispatch = useAppDispatch();
+  const people = useAppSelector(selectSharedPeople);
   const { addToast } = useToast();
   const isReleasesShown = membership.showReleasesOnCalendar !== false;
   const save = async (fields: Partial<MembershipEditableFields>) => {
@@ -130,6 +142,17 @@ function MembershipSettingsSubview({
               onClick={() => setOpenSheet('releases')}
             />
           )}
+        </SettingsGroup>
+        <SettingsGroup title='Shared with you'>
+          <SettingsRow
+            icon='👯'
+            title='Friends’ calendars'
+            description={getFriendsSummary(
+              people.map((person) => person.personName),
+            )}
+            hasChevron
+            onClick={() => setOpenSheet('friends')}
+          />
         </SettingsGroup>
         {isEmailOpen && (
           <SettingsGroup title='Automations'>
@@ -212,6 +235,9 @@ function MembershipSettingsSubview({
             </p>
           </div>
         </FormSheet>
+      )}
+      {openSheet === 'friends' && (
+        <FriendsCalendarsSheet uid={membership.uid} onClose={closeSheet} />
       )}
       {openSheet === 'goals' && <GoalsSheet {...sheetProps} />}
     </Subview>

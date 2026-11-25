@@ -1,7 +1,9 @@
 import { formatDate, formatTime } from '@/utils/formatUtils';
+import FriendsDaySection from '@apps/a-list/components/friends/FriendsDaySection';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import type { Viewing } from '@apps/a-list/types';
+import type { FriendMovieGroup } from '@apps/a-list/utils/friendShowings';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 const MAX_ROWS = 5;
@@ -11,11 +13,18 @@ interface DayHoverCardProps {
   date: Date;
   viewings: Viewing[];
   openings: WatchlistRowData[];
+  friendGroups: FriendMovieGroup[];
   now: number;
 }
 
 /** What a day's popover shows: each movie with its time and state, then what opens that day. */
-function DayHoverCard({ date, viewings, openings, now }: DayHoverCardProps) {
+function DayHoverCard({
+  date,
+  viewings,
+  openings,
+  friendGroups,
+  now,
+}: DayHoverCardProps) {
   return (
     <div className='space-y-1 text-left'>
       <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
@@ -56,6 +65,7 @@ function DayHoverCard({ date, viewings, openings, now }: DayHoverCardProps) {
             ` +${openings.length - MAX_OPENING_TITLES} more`}
         </p>
       )}
+      <FriendsDaySection groups={friendGroups} isCompact />
     </div>
   );
 }
