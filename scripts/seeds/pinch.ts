@@ -77,6 +77,7 @@ const outsideChange = (
   shoppingItemId: null,
   addedAmount: null,
   createdItem: false,
+  previousItem: null,
   undoneAt: null,
   undoneBy: null,
   ...change,
@@ -1246,7 +1247,10 @@ const toShareEntries = (recipeId: string, kind: 'TIP' | 'NOTE') =>
     }));
 
 // What the app builds from a recipe: lines named the way a visitor reads them and nothing of the owner's. The share's own allowlist then rebuilds it.
-const toShareRecipe = (recipe: SeedRecipeLike, includes = { tips: false, notes: false }) => ({
+const toShareRecipe = (
+  recipe: SeedRecipeLike,
+  includes = { tips: false, notes: false },
+) => ({
   title: recipe.title,
   description: recipe.description,
   servings: recipe.servings,
@@ -1289,7 +1293,10 @@ export function buildSeedShares(
   const recipeCopy = toCoveredCopy(
     {
       recipe: toSharedRecipe(
-        toShareRecipe(findSeedRecipe(recipeSourceId), { tips: true, notes: true }),
+        toShareRecipe(findSeedRecipe(recipeSourceId), {
+          tips: true,
+          notes: true,
+        }),
       ),
       meal: null,
     },
@@ -1384,8 +1391,13 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     (
       await Promise.all(
         SEED_COOKS.filter((cook) => cook.hasPhoto).map(async (cook, index) => {
-          const cookedAt = today - cook.daysAgo * DAY_MS + cook.hour * 3_600_000;
-          const path = getCookPhotoPath(alex.uid, cook.id, cookedAt + 3_600_000);
+          const cookedAt =
+            today - cook.daysAgo * DAY_MS + cook.hour * 3_600_000;
+          const path = getCookPhotoPath(
+            alex.uid,
+            cook.id,
+            cookedAt + 3_600_000,
+          );
           const isUploaded = await uploadSeedImage(
             path,
             'that cook shows a camera tile',
@@ -1469,7 +1481,11 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .set({
           ...fields,
           ...('rating' in cook
-            ? { photoPath: hasPhoto ? (cookPhotoPaths.get(cook.id) ?? null) : null }
+            ? {
+                photoPath: hasPhoto
+                  ? (cookPhotoPaths.get(cook.id) ?? null)
+                  : null,
+              }
             : {}),
           cookedAt,
           createdAt: cookedAt,

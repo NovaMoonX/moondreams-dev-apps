@@ -2029,14 +2029,20 @@ export function planAppChangeUndo(
   });
 }
 
-/** What the apps answered to an Undo: the records now taken back, and the apps' own sentences for the ones that refused. */
+/** What the apps answered to an Undo: the records now taken back, those with nothing left to take back (settled, so Undo stops offering them), and the apps' own sentences for every one that refused. */
 export const settleAppChangeUndo = (
   calls: { docId: string }[],
-  answers: ({ ok: true } | { ok: false; message: string })[],
+  answers: (
+    { ok: true } | { ok: false; message: string; isSettled: boolean }
+  )[],
 ) => ({
   takenBackDocIds: calls.flatMap((call, index) =>
     answers[index]?.ok === true ? [call.docId] : [],
   ),
+  settledDocIds: calls.flatMap((call, index) => {
+    const answer = answers[index];
+    return answer && !answer.ok && answer.isSettled ? [call.docId] : [];
+  }),
   refusals: answers.flatMap((answer) => (answer.ok ? [] : [answer.message])),
 });
 

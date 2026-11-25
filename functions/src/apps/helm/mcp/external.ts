@@ -597,7 +597,7 @@ async function saveTurn({
   ].join(' ');
 }
 
-/** Files a change an app made for an outside assistant as one capture and one execution, so it shows in Helm's Activity and Undo takes it back through the app. The app already holds the record; a failure here never undoes the change. */
+/** Files a change an app made for an outside assistant as one capture and one execution, so it shows in Activity and Undo takes it back through the app. The app already holds the record; a failure here never undoes the change. */
 async function fileAppChange({
   ctx,
   key,

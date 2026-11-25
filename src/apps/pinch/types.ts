@@ -549,6 +549,8 @@ export interface PinchOutsideChange {
   /** How much was merged into an item already on the list; null when the item was created. */
   addedAmount: number | null;
   createdItem: boolean;
+  /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
+  previousItem: { amount: number | null; isChecked: boolean } | null;
   undoneAt: number | null;
   undoneBy: 'pinch' | 'helm' | null;
   createdAt: number;

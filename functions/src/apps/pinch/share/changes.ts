@@ -1154,7 +1154,8 @@ export const addToShoppingList = async (
   });
 };
 
-type Undone = { ok: true } | { ok: false; message: string };
+/** `isSettled`: nothing is left to take back (already taken back, or what it touched is gone), so a caller can stop offering Undo. */
+type Undone = { ok: true } | { ok: false; message: string; isSettled: boolean };
 
 const takenBackIn = (by: ChangeUndoFrom | null) =>
   `Already taken back in ${by === 'helm' ? 'Helm' : 'Pinch'}.`;
@@ -1168,25 +1169,41 @@ export const undoPinchOutsideChange = async (
   now = Date.now(),
 ): Promise<Undone> => {
   if (changeId === '' || changeId.includes('/')) {
-    return { ok: false, message: 'That change is no longer recorded.' };
+    return {
+      ok: false,
+      message: 'That change is no longer recorded.',
+      isSettled: true,
+    };
   }
   const recordRef = ref(firestore, uid, 'outsideChanges', changeId);
   return firestore.runTransaction(async (transaction): Promise<Undone> => {
     const stored = await transaction.get(recordRef);
     if (!stored.exists) {
-      return { ok: false, message: 'That change is no longer recorded.' };
+      return {
+        ok: false,
+        message: 'That change is no longer recorded.',
+        isSettled: true,
+      };
     }
     const record = stored.data() as OutsideChange;
     if (record.undoneAt !== null && record.undoneAt !== undefined) {
-      return { ok: false, message: takenBackIn(record.undoneBy) };
+      return {
+        ok: false,
+        message: takenBackIn(record.undoneBy),
+        isSettled: true,
+      };
     }
     const markUndone = () =>
       transaction.update(recordRef, { undoneAt: now, undoneBy: from });
     const alreadyGone = (message: string): Undone => {
       transaction.update(recordRef, { undoneAt: now, undoneBy: 'pinch' });
-      return { ok: false, message };
+      return { ok: false, message, isSettled: true };
     };
-    const refuse = (message: string): Undone => ({ ok: false, message });
+    const refuse = (message: string): Undone => ({
+      ok: false,
+      message,
+      isSettled: false,
+    });
     const finish = (): Undone => {
       markUndone();
       return { ok: true };

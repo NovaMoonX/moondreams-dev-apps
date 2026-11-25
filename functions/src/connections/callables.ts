@@ -34,6 +34,7 @@ import {
   READER_SINKS,
   SOURCE_ADAPTERS,
   SOURCE_SECRETS,
+  type UndoChangeResult,
 } from './registry.js';
 import { InProcessSourceClient } from './sourceClient.js';
 import {
@@ -200,7 +201,7 @@ export const grantConnection = onCall(OPTIONS, async (request) => {
 /** Takes back one change an app recorded for an assistant, from the app's own screens or from Helm. The source app's adapter does it and refuses, with a sentence, once what it touched has moved on; no switch is read, so a change can always be taken back. */
 export const undoAppChange = onCall(
   OPTIONS,
-  async (request): Promise<{ ok: true } | { ok: false; message: string }> => {
+  async (request): Promise<UndoChangeResult> => {
     const auth = requireAuth(request);
     const data = request.data as Record<string, unknown> | null;
     const connectorId = data?.connectorId;

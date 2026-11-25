@@ -533,6 +533,30 @@ export interface RecipeNoteBy {
   name: string | null;
 }
 
+/** What an outside assistant or Nomos changed in the kitchen through Helm; written only by the server, read by the owner, and kept 30 days. */
+export interface PinchOutsideChange {
+  id: string;
+  kind: 'recipeUpdated' | 'recipeAdded' | 'mealPlanned' | 'shoppingAdded';
+  by: { kind: 'assistant' | 'nomos'; name: string | null };
+  /** What it changed: the recipe's, meal's or item's name. */
+  title: string;
+  /** What changed, at most 8, "and N more" last. */
+  lines: string[];
+  recipeId: string | null;
+  /** The recipe update's change record. */
+  noteId: string | null;
+  plannedMealId: string | null;
+  shoppingItemId: string | null;
+  /** How much was merged into an item already on the list; null when the item was created. */
+  addedAmount: number | null;
+  createdItem: boolean;
+  /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
+  previousItem: { amount: number | null; isChecked: boolean } | null;
+  undoneAt: number | null;
+  undoneBy: 'pinch' | 'helm' | null;
+  createdAt: number;
+}
+
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */

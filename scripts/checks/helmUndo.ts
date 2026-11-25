@@ -4184,12 +4184,24 @@ test("an outside assistant's app changes are one unit each, taken back by asking
   const calls = planAppChangeUndo(original, null);
   const settled = settleAppChangeUndo(calls, [
     { ok: true },
-    { ok: false, message: 'Sugar was ticked off since, so it stays.' },
+    {
+      ok: false,
+      message: 'Sugar was ticked off since, so it stays.',
+      isSettled: false,
+    },
   ]);
   assert.deepEqual(settled.takenBackDocIds, ['app:pinch__c1']);
+  assert.deepEqual(settled.settledDocIds, []);
   assert.deepEqual(settled.refusals, [
     'Sugar was ticked off since, so it stays.',
   ]);
+  const alreadyBack = settleAppChangeUndo(calls, [
+    { ok: false, message: 'Already taken back in Pinch.', isSettled: true },
+    { ok: true },
+  ]);
+  assert.deepEqual(alreadyBack.takenBackDocIds, ['app:pinch__c2']);
+  assert.deepEqual(alreadyBack.settledDocIds, ['app:pinch__c1']);
+  assert.deepEqual(alreadyBack.refusals, ['Already taken back in Pinch.']);
 });
 
 const failures: string[] = [];

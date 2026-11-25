@@ -964,3 +964,41 @@ export const MAX_SHARED_NOTES = 30;
 export const MAX_SHARED_NOTE_LENGTH = 2000;
 /** The most tips one add brings across all its recipes, so the add stays one batch under Firestore's 500 writes. */
 export const MAX_IMPORTED_TIPS = 150;
+
+/** What an assistant's changes are kept for, in days. */
+export const OUTSIDE_CHANGES_DAYS = 30;
+
+export const OUTSIDE_CHANGES_WORDS = {
+  title: 'Done for you',
+  summary: (count: number) =>
+    count === 1
+      ? 'An assistant changed something in your kitchen'
+      : `Your assistants made ${count} changes in your kitchen`,
+  view: 'View',
+  empty: 'Nothing done for you yet',
+  emptyBody:
+    'When an assistant you connected to Helm changes your recipes, meal plan or shopping list, it shows here for 30 days, with a way to undo it.',
+  undo: 'Undo',
+  undoneAgo: (ago: string) => `Taken back ${ago}`,
+  undoneNotice: (ago: string) => `Taken back ${ago}`,
+  undoFailed: "That wasn't taken back. Nothing was changed.",
+  today: 'Today',
+  yesterday: 'Yesterday',
+  buttonLabel: 'Done for you',
+  recipeUpdated: (title: string) => `Changed ${title}`,
+  recipeAdded: (title: string) => `Added ${title}`,
+  mealPlanned: (title: string) => `Planned ${title}`,
+  shoppingAdded: (title: string) => `Added ${title} to your list`,
+  undoRecipeUpdated: 'Undo and put the recipe back',
+  undoRecipeAdded: 'Undo and remove the recipe',
+  undoMealPlanned: 'Undo and take it off the calendar',
+  undoShoppingAdded: 'Undo and take it off your list',
+  undoShoppingMerged: 'Undo and take off what was added',
+  recipeUpdatedNote:
+    "You can also put it back from the recipe's Changes, under More.",
+  openRecipe: 'Open the recipe',
+  openRecipeSub: 'See it as it is now',
+  recipeGone: 'That recipe is no longer in your kitchen.',
+  openShopping: 'Open your shopping list',
+  openShoppingSub: 'See what is on it now',
+} as const;

@@ -52,7 +52,7 @@ const releaseUnusedAccountCallable = httpsCallable<
 
 const undoAppChangeCallable = httpsCallable<
   { connectorId: string; changeId: string; from: 'pinch' | 'helm' },
-  { ok: true } | { ok: false; message: string }
+  { ok: true } | { ok: false; message: string; isSettled: boolean }
 >(functions, 'undoAppChange');
 
 /** Takes back one change an app recorded for an outside assistant. Resolves to the app's own sentence when it refuses because what the change touched has moved on. */

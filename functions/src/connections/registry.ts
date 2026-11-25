@@ -98,7 +98,9 @@ export interface SourceAdapter {
   }): Promise<ConnectorOption[]>;
 }
 
-export type UndoChangeResult = { ok: true } | { ok: false; message: string };
+/** `isSettled`: nothing is left to take back, so a caller stops offering Undo. */
+export type UndoChangeResult =
+  { ok: true } | { ok: false; message: string; isSettled: boolean };
 
 export interface ServerAppActionCtx {
   uid: string;

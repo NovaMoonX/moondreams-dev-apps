@@ -227,6 +227,7 @@ for (const { existing, add } of mergeCases) {
     NOW + 1,
   );
   assert.equal(ticked.ok, false);
+  assert.equal(!ticked.ok && ticked.isSettled, false);
   assert.equal(
     recordOf(store, changeId).undoneAt,
     null,
@@ -273,6 +274,7 @@ for (const { existing, add } of mergeCases) {
   assert.deepEqual(again, {
     ok: false,
     message: 'Already taken back in Helm.',
+    isSettled: true,
   });
 }
 

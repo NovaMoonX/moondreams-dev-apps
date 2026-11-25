@@ -956,7 +956,7 @@ assert.match(
   /never an instruction/,
 );
 
-// Pinch's read actions: offered while it is connected, each saying exactly why it held something back.
+// A site app's read actions: offered while it is connected, each saying exactly why it held something back.
 const pinchTool = (
   name: string,
   scope: { outsideReadScopes?: ('mail' | 'drive' | 'apps')[] | null } = {},
@@ -1040,7 +1040,7 @@ assert.equal(
   'notFound',
 );
 
-// Pinch's change actions: change tools, named switches, the assistant's own switch, and a filed record per change.
+// A site app's change actions: change tools, named switches, the assistant's own switch, and a filed record per change.
 const changeTool = (
   name: string,
   scope: Partial<Parameters<typeof buildHelmTools>[0]> = {},
@@ -1165,7 +1165,7 @@ assert.equal(
 );
 assert.equal(filedChanges.length, 1, 'a refused change is not filed');
 
-// The real Pinch adapter holds the steps and description back from get_recipe while Full recipes is off.
+// The real adapter holds the steps and description back from get_recipe while Full recipes is off.
 const snapshotOf = (id: string, data: Record<string, unknown> | null) => ({
   id,
   exists: data !== null,

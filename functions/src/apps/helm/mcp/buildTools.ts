@@ -98,7 +98,7 @@ export interface LiveReads {
   isLiveDeepLink: (connectorId: string, link: string) => boolean;
 }
 
-/** The read actions of each site app connected to Helm, and how to run one; `run` is passed by a test, otherwise the router is loaded when an action first runs. */
+/** The actions of each connected site app, and how to run one; the router loads when an action first runs unless `run` is passed in. */
 export interface AppActionReads {
   apps: SiteActionApp[];
   run?: (

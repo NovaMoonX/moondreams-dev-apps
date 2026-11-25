@@ -61,7 +61,12 @@ export async function undoAppChangeExecution(
         }),
       ),
     );
-    const { takenBackDocIds, refusals } = settleAppChangeUndo(calls, answers);
+    const settled = settleAppChangeUndo(calls, answers);
+    const { refusals } = settled;
+    const takenBackDocIds = [
+      ...settled.takenBackDocIds,
+      ...settled.settledDocIds,
+    ];
     if (takenBackDocIds.length === 0) {
       return {
         kind: 'refused',
@@ -70,7 +75,12 @@ export async function undoAppChangeExecution(
       };
     }
     const undoRef = doc(executionsOf(uid));
-    const report = [HELM_COPY.appChangeTookBackReport, ...refusals].join(' ');
+    const report = [
+      ...(settled.takenBackDocIds.length > 0
+        ? [HELM_COPY.appChangeTookBackReport]
+        : []),
+      ...refusals,
+    ].join(' ');
     return await runHeldTransaction(
       uid,
       async (transaction): Promise<UndoResult> => {
