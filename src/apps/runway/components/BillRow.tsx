@@ -8,6 +8,7 @@ import { isTrackingLevel } from '@apps/runway/engine/level';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
@@ -233,6 +234,8 @@ export function BillSheet({
   const repeat = schedule.kind === 'once' ? null : describeBillRepeat(schedule);
   const getDueFact = () => {
     if (isUndated) return null;
+    if (payment?.paid)
+      return `${payment.paid.paidOn < payment.payOn ? 'paid ahead' : 'paid'}\u00a0${formatDateOrdinalUTC(payment.paid.paidOn)}`;
     if (payment)
       return `due\u00a0${describeDueDay(schedule, payment.dueOn, today)}`;
     return 'No payment left';

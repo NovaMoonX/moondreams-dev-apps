@@ -27,7 +27,7 @@ interface SheetHeadProps {
   isFigureMuted?: boolean;
   /** Drops the label on a screen 500px tall or less, where a sheet has little room. */
   isLabelDroppedWhenShort?: boolean;
-  /** Makes the figure a door to setting it: a pencil by the label and a pressed state on the figure. */
+  /** Makes the figure a door to setting it: a pencil beside the figure and a pressed state on the figure. */
   onFigureTap?: () => void;
   figureAriaLabel?: string;
 }
@@ -97,22 +97,20 @@ function SheetHead({
             label
           )}
         </p>
-        {onFigureTap && (
-          <Pencil
-            className='text-muted-foreground h-3.5 w-3.5 shrink-0'
-            aria-hidden='true'
-          />
-        )}
       </div>
       {figureLine &&
         (onFigureTap ? (
           <Button
             type='button'
             variant='base'
-            className="active:bg-primary/10 relative -mx-1 h-auto min-h-0 w-[calc(100%+0.5rem)] !justify-start rounded-lg !px-1 !py-0 text-left font-normal whitespace-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+            className="active:bg-primary/10 relative -mx-1 h-auto min-h-0 w-[calc(100%+0.5rem)] !justify-between gap-3 rounded-lg !px-1 !py-0 text-left font-normal whitespace-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
             onClick={onFigureTap}
           >
             {figureLine}
+            <Pencil
+              className='text-muted-foreground h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
             {figureAriaLabel && (
               <span className='sr-only'>{figureAriaLabel}</span>
             )}
