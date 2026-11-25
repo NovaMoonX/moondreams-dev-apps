@@ -115,6 +115,36 @@ const reservations = [
     feeWaivedCents: 269,
     format: null,
   },
+  {
+    name: 'reservation-entourage-raw',
+    confirmation: '0172635494',
+    title: 'Avengers: Doomsday',
+    contentRating: null,
+    showtimeLocal: local(2026, 12, 20, 12, 45),
+    theatreName: 'AMC Southpoint 17',
+    auditorium: '7',
+    seats: 'F5',
+    ticketCount: 1,
+    ticketKind: 'ADULT',
+    ticketPriceCents: 1309,
+    feeWaivedCents: 269,
+    format: null,
+  },
+  {
+    name: 'reservation-paid-raw',
+    confirmation: '0503528152',
+    title: 'OVERLORD: The Sacred Kingdom',
+    contentRating: null,
+    showtimeLocal: local(2024, 11, 15, 22, 10),
+    theatreName: 'AMC Indianapolis 17',
+    auditorium: '8',
+    seats: 'D3',
+    ticketCount: 1,
+    ticketKind: 'ADULT',
+    ticketPriceCents: 1399,
+    feeWaivedCents: 0,
+    format: null,
+  },
 ];
 
 reservations.forEach(({ name, ...expected }) => {
@@ -126,6 +156,24 @@ reservations.forEach(({ name, ...expected }) => {
     name,
   );
 });
+
+// AMC's own text puts a tracking link before the number; a hand-forward from Gmail writes one after it and a picture mark beside the title.
+const paidOrder = readFixture('reservation-paid-raw');
+const paidByGmail = paidOrder.text
+  .replace(/^https?:\/\/\S+\s*$/gm, '')
+  .replace(
+    '0503528152',
+    '0503528152 <https://click.email.amctheatres.com/?qs=x>',
+  )
+  .replace(
+    'OVERLORD: The Sacred Kingdom',
+    'OVERLORD: The Sacred Kingdom [image: Rating]',
+  );
+assert.deepEqual(
+  parseAmcEmail(withoutImageMarks(paidByGmail)),
+  parseAmcEmail(paidOrder.text),
+  'a hand-forwarded order reads as the original',
+);
 
 const cancellation = readFixture('cancellation');
 assert.ok(isFromAmc(cancellation.from, cancellation.text));

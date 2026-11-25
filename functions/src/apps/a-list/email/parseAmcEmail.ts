@@ -56,6 +56,18 @@ const FORMAT_WORDS: [RegExp, AmcFormat][] = [
 
 const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+/** One line per non-empty line, its spaces collapsed, so a title and a theater on their own lines stay apart. */
+const toLines = (value: string) =>
+  value
+    .split('\n')
+    .map(collapse)
+    .filter((line) => line !== '')
+    .join('\n');
+
+const LANGUAGE_LINE =
+  /\b(?:spoken|subtitles?|subtitled|dubbed|open caption(?:ed)?)\b/i;
+const LINK = /<https?:\/\/[^>\s]*>|https?:\/\/\S+/gi;
+
 const isRealDate = (year: number, month: number, day: number) => {
   const date = new Date(Date.UTC(year, month - 1, day));
   return (
@@ -100,10 +112,19 @@ function readShowing(segment: string) {
     date.index + date[0].length,
     time.index + time[0].length,
   );
-  const head = segment.slice(0, start).trim();
+  const head = collapse(
+    segment
+      .slice(0, start)
+      .split('\n')
+      .filter((line) => !LANGUAGE_LINE.test(line))
+      .join(' '),
+  );
   const rated = RATINGS.exec(head);
   const title = (rated?.[1] ?? head).replace(/[\s:,;.-]+$/, '').trim();
-  const theatreName = segment.slice(end).trim().slice(0, 80);
+  const theatreName = (segment.slice(end).trim().split('\n')[0] ?? '').slice(
+    0,
+    80,
+  );
   return title === '' || theatreName === ''
     ? null
     : {
@@ -145,7 +166,7 @@ function readReservation(text: string): AmcReservation | null {
       pattern.lastIndex = 0;
       return pattern.test(rawSegment);
     })?.[1] ?? null;
-  const segment = collapse(
+  const segment = toLines(
     FORMAT_WORDS.reduce(
       (kept, [pattern]) => kept.replace(pattern, ' '),
       rawSegment,
@@ -189,7 +210,7 @@ function readCancellation(text: string): AmcCancellation | null {
   const found = readConfirmationNumber(text);
   if (found === null) return null;
   const endIndex = found.after.search(/Refunded Tickets:/i);
-  const segment = collapse(
+  const segment = toLines(
     (endIndex === -1
       ? found.after.slice(0, 300)
       : found.after.slice(0, endIndex)
@@ -217,7 +238,9 @@ function readCancellation(text: string): AmcCancellation | null {
 }
 
 /** Reads AMC's reservation and cancellation layouts from the email's text; null when it is neither or the layout isn't recognised. Never reads the member's name or Stubs number. */
-export function parseAmcEmail(text: string): AmcReading | null {
+export function parseAmcEmail(email: string): AmcReading | null {
+  // AMC's own plain text puts a tracking link between a label and its value, and a forward writes one after a linked word.
+  const text = email.replace(LINK, ' ');
   const isCancellation =
     /canceled your reservation|cancelled your reservation|ticket refund details|refunded tickets/i.test(
       text,
