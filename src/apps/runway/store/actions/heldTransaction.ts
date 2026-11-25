@@ -23,6 +23,7 @@ import {
 import {
   dropWrites,
   holdWrites,
+  HELD_KINDS,
   settleWrites,
   type HeldKind,
   type HeldWritesInput,
@@ -258,11 +259,9 @@ const isWatched = (entry: Built, heldDayIds: Set<string>): boolean => {
   );
 };
 
-const HELD_KIND_LIST: HeldKind[] = ['days', 'records', 'moves', 'purchases'];
-
 const isLanded = (token: string) => () => {
   const { held } = store.getState().runway;
-  return HELD_KIND_LIST.every(
+  return HELD_KINDS.every(
     (kind) =>
       (held[kind] as HeldWrite<Opened>[]).every((hold) => hold.token !== token),
   );
@@ -270,12 +269,14 @@ const isLanded = (token: string) => () => {
 
 const describeWaiting = (token: string) => (): string[] => {
   const { held, deliveredAt, deliveredAtNeedsHome } = store.getState().runway;
-  return HELD_KIND_LIST.flatMap((kind) => {
+  return HELD_KINDS.flatMap((kind) => {
     const holds = (held[kind] as HeldWrite<Opened>[]).filter(
       (hold) => hold.token === token,
     );
     if (holds.length === 0) return [];
-    const settledAt = holds[0].settledAt ?? Infinity;
+    const settledAt = Math.max(
+      ...holds.map((hold) => hold.settledAt ?? Infinity),
+    );
     const lastDelivery = Math.max(
       deliveredAt[kind] ?? 0,
       kind === 'purchases' ? (deliveredAtNeedsHome ?? 0) : 0,
