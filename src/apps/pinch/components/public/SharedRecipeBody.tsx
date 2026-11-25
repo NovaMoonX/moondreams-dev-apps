@@ -135,7 +135,7 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
         caption='Notes stay on this page when you add the recipe.'
       />
 
-      <RecipeLinksSection links={links} rel={LINK_REL} isPlayerHidden />
+      <RecipeLinksSection links={links} rel={LINK_REL} />
     </div>
   );
 }

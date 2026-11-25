@@ -1562,7 +1562,7 @@ export function createPinchAdapter(
         (ctx, input) => updateRecipe(deps.firestore(), ctx, input),
       ),
       add_recipe: toAppAction(
-        "Saves a new recipe in the person's Recipes: a title, and optionally servings, prepMinutes, cookMinutes, description, ingredients and steps. It applies at once and returns the new recipeId; Pinch and Helm show it with an Undo (which archives it). Confirm with the person what you will add before you call it.",
+        "Saves a new recipe in the person's Recipes: a title, and optionally servings, prepMinutes, cookMinutes, description, ingredients and steps, plus its categories (always send at least one) and any of the person's collections it fits (8 or more servings suits a Bulk-style collection). It applies at once and returns the new recipeId; Pinch and Helm show it with an Undo (which archives it). Confirm with the person what you will add before you call it.",
         ADD_RECIPE_SHAPE,
         (ctx, input) => addRecipe(deps.firestore(), ctx, input),
       ),
