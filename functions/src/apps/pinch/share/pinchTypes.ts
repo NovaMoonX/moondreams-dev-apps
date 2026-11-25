@@ -570,7 +570,14 @@ export interface PinchOutsideChange {
   addedAmount: number | null;
   createdItem: boolean;
   /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
-  previousItem: { amount: number | null; isChecked: boolean } | null;
+  previousItem: {
+    amount: number | null;
+    isChecked: boolean;
+    /** The item's note before the merge; a record written before notes lacks it, and Undo then leaves the note alone. */
+    note?: string | null;
+    /** The note this change wrote; Undo restores the old note only while the item still holds it. Absent when no note was written. */
+    writtenNote?: string | null;
+  } | null;
   /** The idea an `ideaSaved` change made. A missing key reads as null. */
   ideaId: string | null;
   /** Custom ingredients this change created, which its Undo archives while nothing else uses them. A missing key reads as none. */

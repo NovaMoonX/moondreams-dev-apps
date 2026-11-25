@@ -234,6 +234,122 @@ for (const { existing, add } of mergeCases) {
   assert.equal(recordOf(store, data.changes[0].id).createdItem, false);
 }
 
+// A shopping note: new lines keep it, an existing note appends whole parts once, a legacy line with sources is left alone, and Undo puts the note back.
+{
+  const path = `${K}/shoppingItems/cat-chicken-breast__EACH`;
+  const base = {
+    id: 'cat-chicken-breast__EACH',
+    ingredientId: 'cat-chicken-breast',
+    unit: 'EACH',
+    amount: 2,
+    isChecked: false,
+    createdAt: NOW - 5000,
+    updatedAt: NOW - 5000,
+    sources: [],
+    pantryAddedAt: null,
+  };
+  const add = (store: ReturnType<typeof createStore>, note: string | null) =>
+    addToShoppingList(store.firestore, ctx(NOW), {
+      items: [{ name: 'Chicken breast', note }],
+    });
+
+  const fresh = createStore();
+  const created = dataOf(await add(fresh, 'diced'));
+  assert.equal(
+    fresh.docs.get(path)?.note,
+    'diced',
+    'a new item takes the note',
+  );
+  assert.match(created.lines[0], /\(diced\)/);
+  const none = createStore();
+  await add(none, null);
+  assert.equal(none.docs.get(path)?.note, null, 'no note is null');
+
+  const noted = createStore({ [path]: { ...base, note: 'diced' } });
+  const appended = dataOf(await add(noted, 'organic'));
+  assert.equal(noted.docs.get(path)?.note, 'diced · organic');
+  assert.equal(
+    noted.docs.get(path)?.amount,
+    2,
+    'a note-only change leaves the amount',
+  );
+  assert.equal(appended.changes.length, 1, 'a note-only change is recorded');
+  const changeId = appended.changes[0].id;
+  assert.equal(recordOf(noted, changeId).previousItem?.note, 'diced');
+
+  const again = dataOf(await add(noted, 'DICED · Organic'));
+  assert.equal(noted.docs.get(path)?.note, 'diced · organic');
+  assert.equal(again.changes.length, 0, 'a part already there is not repeated');
+  const substring = dataOf(await add(noted, 'dice'));
+  assert.equal(
+    noted.docs.get(path)?.note,
+    'diced · organic · dice',
+    'only whole parts match',
+  );
+  assert.equal(substring.changes.length, 1);
+
+  const legacy = createStore({
+    [path]: { ...base, sources: ['recipe:r1:4'] },
+  });
+  const legacyData = dataOf(await add(legacy, 'diced'));
+  assert.equal('note' in legacy.docs.get(path)!, false, 'derived note kept');
+  assert.equal(legacyData.changes.length, 0);
+  const bare = createStore({ [path]: { ...base } });
+  await add(bare, 'diced');
+  assert.equal(
+    bare.docs.get(path)?.note,
+    'diced',
+    'a legacy line with no sources is set',
+  );
+
+  const restored = createStore({ [path]: { ...base, note: 'diced' } });
+  const restoredId = dataOf(await add(restored, 'organic')).changes[0].id;
+  const undone = await undoPinchOutsideChange(
+    restored.firestore,
+    UID,
+    restoredId,
+    'helm',
+    NOW + 1,
+  );
+  assert.equal(undone.ok, true);
+  assert.equal(
+    restored.docs.get(path)?.note,
+    'diced',
+    'Undo restores the note',
+  );
+
+  const edited = createStore({ [path]: { ...base, note: 'diced' } });
+  const editedId = dataOf(await add(edited, 'organic')).changes[0].id;
+  edited.docs.set(path, { ...edited.docs.get(path), note: 'my own words' });
+  await undoPinchOutsideChange(
+    edited.firestore,
+    UID,
+    editedId,
+    'helm',
+    NOW + 1,
+  );
+  assert.equal(
+    edited.docs.get(path)?.note,
+    'my own words',
+    'a note the person changed since is left alone',
+  );
+
+  const older = createStore({ [path]: { ...base, note: 'diced · organic' } });
+  const olderData = dataOf(await add(older, 'fresh'));
+  const olderId = olderData.changes[0].id;
+  const olderRecord = recordOf(older, olderId);
+  older.docs.set(`${K}/outsideChanges/${olderId}`, {
+    ...olderRecord,
+    previousItem: { amount: 2, isChecked: false },
+  });
+  await undoPinchOutsideChange(older.firestore, UID, olderId, 'helm', NOW + 1);
+  assert.equal(
+    older.docs.get(path)?.note,
+    'diced · organic · fresh',
+    'a record without a note leaves the note alone',
+  );
+}
+
 // Undo subtracts only what was added, and refuses once the line moved on.
 {
   const path = `${K}/shoppingItems/cat-chicken-breast__EACH`;
