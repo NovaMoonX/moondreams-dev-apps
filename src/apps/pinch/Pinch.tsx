@@ -104,8 +104,14 @@ function Pinch() {
     Partial<Record<PinchTab, number>>
   >({});
   const homeTab = toStartTab(useAppSelector(selectPinchSettings).defaultTab);
+  const [openTarget, setOpenTarget] = useState<{
+    kind: 'idea' | 'ingredient';
+    id: string;
+    nonce: number;
+  } | null>(null);
   const showTab = useCallback(
     (tab: PinchTab) => {
+      setOpenTarget(null);
       const next = new URLSearchParams(window.location.search);
       const isFromCalendar = !next.has('tab');
       if (isFromCalendar) calendarIndexRef.current = getHistoryIndex();
@@ -122,6 +128,16 @@ function Pinch() {
     }
     showTab('shopping');
   }, [showTab]);
+  const showChangedThing = useCallback(
+    (kind: 'idea' | 'ingredient', id: string) => {
+      if (subviewRef.current !== null || hasDialogOnTop()) {
+        return;
+      }
+      showTab(kind === 'idea' ? 'recipes' : 'kitchen');
+      setOpenTarget({ kind, id, nonce: Date.now() });
+    },
+    [showTab],
+  );
   const showSettingsTab = useCallback(() => {
     if (subviewRef.current !== null) {
       return;
@@ -146,6 +162,8 @@ function Pinch() {
     uid: user?.uid ?? '',
     openRecipe: openChangedRecipe,
     openShopping: showShoppingTab,
+    openIdea: (id) => showChangedThing('idea', id),
+    openIngredient: (id) => showChangedThing('ingredient', id),
   });
   const { markSeen: markOutsideChangesSeen } = outsideChanges;
   const openOutsideChanges = useCallback(() => {
@@ -304,6 +322,7 @@ function Pinch() {
       return;
     }
     setCalendarFocus(null);
+    setOpenTarget(null);
     const historyIndex = getHistoryIndex();
     const isFromCalendar = !searchParams.has('tab');
     if (
@@ -357,10 +376,24 @@ function Pinch() {
   const getScreen = () => {
     const resetCount = resetCounts[activeTab] ?? 0;
     if (activeTab === 'recipes') {
-      return <RecipesScreen key={resetCount} uid={user.uid} />;
+      return (
+        <RecipesScreen
+          key={`${resetCount}-${openTarget?.nonce ?? 0}`}
+          uid={user.uid}
+          openIdeaId={openTarget?.kind === 'idea' ? openTarget.id : undefined}
+        />
+      );
     }
     if (activeTab === 'kitchen') {
-      return <KitchenScreen key={resetCount} uid={user.uid} />;
+      return (
+        <KitchenScreen
+          key={`${resetCount}-${openTarget?.nonce ?? 0}`}
+          uid={user.uid}
+          openIngredientId={
+            openTarget?.kind === 'ingredient' ? openTarget.id : undefined
+          }
+        />
+      );
     }
     if (activeTab === 'shopping') {
       return <ShoppingScreen key={resetCount} uid={user.uid} />;

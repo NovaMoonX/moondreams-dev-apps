@@ -207,6 +207,8 @@ const buildCustomRecord = (
   gramsEach: null,
   defaultProductId: null,
   isArchived: false,
+  addedBy: null,
+  nutritionBy: null,
   createdAt: now,
   updatedAt: now,
 });
