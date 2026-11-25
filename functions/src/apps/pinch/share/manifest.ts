@@ -334,7 +334,7 @@ export const PINCH_SHARES: SourceShares = {
           id: 'add_to_shopping_list',
           kind: 'change',
           categories: [],
-          permission: 'shoppingList',
+          permission: 'addToShoppingList',
           label: 'Add to the shopping list',
         },
       ],
@@ -358,7 +358,7 @@ export const PINCH_SHARES: SourceShares = {
             'Put a recipe or a dish on a day of your plan. It never takes a meal off.',
         },
         {
-          id: 'shoppingList',
+          id: 'addToShoppingList',
           label: 'Add to the shopping list',
           meaning:
             'Add things to your shopping list, or more of something already on it. It never ticks or removes anything.',

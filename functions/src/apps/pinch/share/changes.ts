@@ -31,7 +31,9 @@ import {
   MAX_STEP_LENGTH,
   MEAL_TYPE_LABELS,
   MEAL_TYPES,
+  SOFT_MAX_PLANNED_MEALS,
   SOFT_MAX_RECIPE_NOTES,
+  SOFT_MAX_RECIPES,
   SOFT_MAX_SHOPPING_ITEMS,
   UNIT_LABELS,
   UNITS,
@@ -92,12 +94,21 @@ export interface ChangeContext {
   actor: ChangeActor;
   now: number;
   timeZone: string;
+  /** The share categories the person has on right now: the assistant's reply may quote stored content only from these. */
+  allowedCategories: ReadonlySet<string>;
 }
 
-/** What a change action hands back as `data`: Helm files one execution from it. */
+/** What the assistant is told: built from what its call sent and the categories that are on, never from the stored before and after text. */
+export interface ChangeReply {
+  summary: string;
+  lines: string[];
+}
+
+/** What a change action hands back as `data`: Helm files one execution from `summary`, `lines` and `changes` (the person sees those); only `reply` goes back to the assistant. */
 export interface ChangeData {
   summary: string;
   lines: string[];
+  reply: ChangeReply;
   changes: { id: string; title: string; lines: string[] }[];
   /** The recipe a change made or edited, to pass on to the recipe tools. */
   recipeId: string | null;
@@ -181,8 +192,13 @@ const changeRecord = (
   lines: capLines(fields.lines),
 });
 
-const toData = (summary: string, records: OutsideChange[]): ChangeData => ({
+const toData = (
+  summary: string,
+  records: OutsideChange[],
+  reply: ChangeReply,
+): ChangeData => ({
   summary,
+  reply,
   lines: records.flatMap((record) => record.lines),
   changes: records.map(({ id, title, lines }) => ({ id, title, lines })),
   recipeId: records[0]?.recipeId ?? null,
@@ -361,40 +377,42 @@ const buildLines = (
       byKey.set(lineKey(line), [...(byKey.get(lineKey(line)) ?? []), line.id]),
     new Map<string, string[]>(),
   );
-  const lines: RecipeIngredient[] = [];
-  for (const entry of input) {
-    const unit = readUnit(entry.unit);
+  const problem = input.flatMap((entry) => {
+    if (readUnit(entry.unit) === null) {
+      return [`"${entry.unit}" isn't a unit Pinch uses. ${UNIT_HELP}`];
+    }
     const amount = entry.amount ?? null;
-    if (unit === null) {
-      return {
-        kind: 'refused',
-        message: `"${entry.unit}" isn't a unit Pinch uses. ${UNIT_HELP}`,
+    return amount !== null && !isValidAmount(amount)
+      ? [`The amount for ${entry.name} is off. Use a number above zero.`]
+      : [];
+  })[0];
+  if (problem !== undefined) return { kind: 'refused', message: problem };
+  const { lines } = input.reduce(
+    (built, entry) => {
+      const amount = entry.amount ?? null;
+      const name = entry.name.replace(/\s+/g, ' ').trim();
+      const match = matchIngredient(name, book.choices);
+      const base = {
+        ingredientId: match?.id ?? null,
+        freeText: match ? null : name,
+        group: cleanGroupName(entry.group),
       };
-    }
-    if (amount !== null && !isValidAmount(amount)) {
-      return {
-        kind: 'refused',
-        message: `The amount for ${entry.name} is off. Use a number above zero.`,
+      const reusable = built.pool.get(lineKey(base)) ?? [];
+      const line: RecipeIngredient = {
+        id: reusable[0] ?? randomUUID(),
+        ...base,
+        amount: amount === null ? null : Math.round(amount * 10_000) / 10_000,
+        unit: amount === null ? 'EACH' : (readUnit(entry.unit) ?? 'EACH'),
+        note: clipText(entry.note ?? '', MAX_NOTE_LENGTH) || null,
+        adaptedFrom: null,
       };
-    }
-    const name = entry.name.replace(/\s+/g, ' ').trim();
-    const match = matchIngredient(name, book.choices);
-    const base = {
-      ingredientId: match?.id ?? null,
-      freeText: match ? null : name,
-      group: cleanGroupName(entry.group),
-    };
-    const reusable = pool.get(lineKey(base)) ?? [];
-    pool.set(lineKey(base), reusable.slice(1));
-    lines.push({
-      id: reusable[0] ?? randomUUID(),
-      ...base,
-      amount: amount === null ? null : Math.round(amount * 10_000) / 10_000,
-      unit: amount === null ? 'EACH' : unit,
-      note: clipText(entry.note ?? '', MAX_NOTE_LENGTH) || null,
-      adaptedFrom: null,
-    });
-  }
+      return {
+        pool: new Map(built.pool).set(lineKey(base), reusable.slice(1)),
+        lines: [...built.lines, line],
+      };
+    },
+    { pool, lines: [] as RecipeIngredient[] },
+  );
   return { kind: 'ok', value: lines };
 };
 
@@ -470,6 +488,12 @@ export const UPDATE_RECIPE_SHAPE = {
   description: recipeFields.description,
   ingredients: recipeFields.ingredients.optional(),
   steps: recipeFields.steps.optional(),
+  basedOn: z
+    .number()
+    .optional()
+    .describe(
+      'The version pinch_get_recipe returned. Required whenever ingredients or steps are sent, because they replace the whole list: if the recipe was changed in Pinch since you read it, nothing is written and you are told to read it again.',
+    ),
 };
 
 export const ADD_RECIPE_SHAPE = {
@@ -562,6 +586,65 @@ const NOT_FOUND_RECIPE =
 const patchOf = (input: Record<string, unknown>, key: string) =>
   Object.hasOwn(input, key) && input[key] !== undefined;
 
+const META_KEYS = [
+  'title',
+  'servings',
+  'prepMinutes',
+  'cookMinutes',
+  'description',
+] as const;
+
+const countOf = (count: number, noun: string) =>
+  `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/** Lines for the assistant: what its call sent, plus the stored before text only for the categories that are on (a removed step quotes the old step only with full recipes on). */
+const toRecipeReply = (
+  ctx: ChangeContext,
+  input: Record<string, unknown>,
+  book: IngredientBook,
+  before: ReturnType<typeof getRecipeSnapshot>,
+  after: ReturnType<typeof getRecipeSnapshot>,
+) => {
+  const diff = (part: Partial<typeof after>) =>
+    getRecipeChanges(before, { ...before, ...part }, book.names);
+  const minutes = (label: string, key: 'prepMinutes' | 'cookMinutes') =>
+    !patchOf(input, key)
+      ? []
+      : [
+          after[key] === null
+            ? `${label} removed`
+            : `${label} set to ${after[key]} min`,
+        ];
+  const sentMeta = [
+    ...(patchOf(input, 'title') ? [`Renamed to “${after.title}”`] : []),
+    ...(patchOf(input, 'servings') ? [`Serves ${after.servings}`] : []),
+    ...minutes('Prep time', 'prepMinutes'),
+    ...minutes('Cook time', 'cookMinutes'),
+    ...(patchOf(input, 'description') ? ['Description changed'] : []),
+  ];
+  const meta = ctx.allowedCategories.has('recipes')
+    ? diff(
+        Object.fromEntries(
+          META_KEYS.filter((key) => patchOf(input, key)).map((key) => [
+            key,
+            after[key],
+          ]),
+        ),
+      )
+    : sentMeta;
+  const ingredients = !patchOf(input, 'ingredients')
+    ? []
+    : ctx.allowedCategories.has('recipeIngredients')
+      ? diff({ ingredients: after.ingredients })
+      : [`Ingredients replaced (${after.ingredients.length})`];
+  const steps = !patchOf(input, 'steps')
+    ? []
+    : ctx.allowedCategories.has('fullRecipes')
+      ? diff({ steps: after.steps, stepSections: after.stepSections })
+      : [`Steps replaced (${countOf(after.steps.length, 'step')})`];
+  return capLines([...meta, ...ingredients, ...steps]);
+};
+
 /** Edits only what was sent, in one transaction that also records it as a change in the recipe's history, so Pinch's own history and Undo treat it like a device save. */
 export const updateRecipe = async (
   firestore: Firestore,
@@ -582,6 +665,19 @@ export const updateRecipe = async (
       ),
     ]);
     if (!found) return { status: 'notFound', message: NOT_FOUND_RECIPE };
+    if (patchOf(input, 'ingredients') || patchOf(input, 'steps')) {
+      const basedOn = readNumber(input.basedOn);
+      if (basedOn === null) {
+        return refused(
+          'Ingredients and steps replace the whole list, so send basedOn: the version pinch_get_recipe returned for this recipe. Read it first, then send every line you want kept.',
+        );
+      }
+      if (Number(found.recipe.updatedAt) > basedOn) {
+        return refused(
+          'This recipe was changed in Pinch since you read it, so nothing was written. Read it again with pinch_get_recipe and send your edit based on what it says now.',
+        );
+      }
+    }
     if (notes.data().count >= SOFT_MAX_RECIPE_NOTES) {
       return refused(
         `Pinch keeps up to ${SOFT_MAX_RECIPE_NOTES} entries in its recipe notes and history, and it is full, so this edit can't be recorded. The person can clear old notes in Pinch first.`,
@@ -626,9 +722,12 @@ export const updateRecipe = async (
       ...(steps?.kind === 'ok' && steps.value),
     };
     const changes = getRecipeChanges(before, after, book.names);
+    const isTitleShown = ctx.allowedCategories.has('recipes');
     if (changes.length === 0) {
+      const summary = `Nothing needed changing: ${isTitleShown ? found.recipe.title : 'the recipe'} already reads that way.`;
       return ok({
-        summary: `Nothing needed changing: ${found.recipe.title} already reads that way.`,
+        summary,
+        reply: { summary, lines: [] },
         lines: [],
         changes: [],
         recipeId,
@@ -679,7 +778,12 @@ export const updateRecipe = async (
       ref(firestore, ctx.uid, 'outsideChanges', record.id),
       record,
     );
-    return ok(toData(`Changed ${after.title} in Pinch.`, [record]));
+    return ok(
+      toData(`Changed ${after.title} in Pinch.`, [record], {
+        summary: `Changed ${isTitleShown ? after.title : 'the recipe'} in Pinch.`,
+        lines: toRecipeReply(ctx, input, book, before, after),
+      }),
+    );
   });
 };
 
@@ -727,18 +831,36 @@ export const addRecipe = async (
     title,
     lines: [
       `Added the recipe ${title}`,
-      `${lines.value.length} ingredient${lines.value.length === 1 ? '' : 's'}, ${steps.value.steps.length} step${steps.value.steps.length === 1 ? '' : 's'}`,
+      `${countOf(lines.value.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
     ],
     recipeId: id,
   });
-  await firestore.runTransaction(async (transaction) => {
+  const isFull = await firestore.runTransaction(async (transaction) => {
+    const count = await transaction.get(
+      firestore.collection(kitchenPath(ctx.uid, 'recipes')).count(),
+    );
+    if (count.data().count >= SOFT_MAX_RECIPES) return true;
     transaction.create(ref(firestore, ctx.uid, 'recipes', id), recipe);
     transaction.create(
       ref(firestore, ctx.uid, 'outsideChanges', record.id),
       record,
     );
+    return false;
   });
-  return ok(toData(`Added ${title} to Pinch's recipes.`, [record]));
+  if (isFull) {
+    return refused(
+      `Pinch keeps up to ${SOFT_MAX_RECIPES} recipes and it is full, so nothing was added. The person can delete some in Pinch first.`,
+    );
+  }
+  const summary = `Added ${title} to Pinch's recipes.`;
+  return ok(
+    toData(summary, [record], {
+      summary,
+      lines: [
+        `${countOf(lines.value.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+      ],
+    }),
+  );
 };
 
 const dayFormatter = new Intl.DateTimeFormat('en-US', {
@@ -796,6 +918,10 @@ export const planMeal = async (
     recipeId,
     name,
     servings,
+    {
+      isRecipesOn: ctx.allowedCategories.has('recipes'),
+      isSavedMealsOn: ctx.allowedCategories.has('savedMeals'),
+    },
   );
   if (planned.kind === 'refused') return planned.result;
   const id = randomUUID();
@@ -824,18 +950,29 @@ export const planMeal = async (
     plannedMealId: id,
     recipeId: planned.recipeId,
   });
-  await firestore.runTransaction(async (transaction) => {
+  const isFull = await firestore.runTransaction(async (transaction) => {
+    const count = await transaction.get(
+      firestore.collection(kitchenPath(ctx.uid, 'plannedMeals')).count(),
+    );
+    if (count.data().count >= SOFT_MAX_PLANNED_MEALS) return true;
     transaction.create(ref(firestore, ctx.uid, 'plannedMeals', id), meal);
     transaction.create(
       ref(firestore, ctx.uid, 'outsideChanges', record.id),
       record,
     );
+    return false;
   });
+  if (isFull) {
+    return refused(
+      `Pinch's plan holds up to ${SOFT_MAX_PLANNED_MEALS} meals and it is full, so nothing was planned. The person can clear old days in Pinch first.`,
+    );
+  }
+  const when = `${MEAL_TYPE_LABELS[mealType as MealType].toLowerCase()} on ${dayFormatter.format(date)}`;
   return ok(
-    toData(
-      `Planned ${planned.title} for ${MEAL_TYPE_LABELS[mealType as MealType].toLowerCase()} on ${dayFormatter.format(date)}.`,
-      [record],
-    ),
+    toData(`Planned ${planned.title} for ${when}.`, [record], {
+      summary: `Planned ${planned.replyTitle} for ${when}.`,
+      lines: [],
+    }),
   );
 };
 
@@ -843,6 +980,8 @@ type Plate =
   | {
       kind: 'ok';
       title: string;
+      /** What the assistant may be told: the stored name only when its category is on. */
+      replyTitle: string;
       recipeId: string | null;
       savedMeal: { id: string; name: string } | null;
       items: Omit<MealItem, 'id'>[];
@@ -855,6 +994,7 @@ const resolvePlate = async (
   recipeId: string | null,
   name: string | null,
   servings: number | null,
+  open: { isRecipesOn: boolean; isSavedMealsOn: boolean },
 ): Promise<Plate> => {
   const unknown = (what: string): Plate => ({
     kind: 'refused',
@@ -876,6 +1016,7 @@ const resolvePlate = async (
     return {
       kind: 'ok',
       title,
+      replyTitle: open.isRecipesOn ? title : 'the recipe',
       recipeId: id,
       savedMeal: null,
       items: [
@@ -888,28 +1029,40 @@ const resolvePlate = async (
     };
   };
   if (recipeId !== null) return planRecipe(recipeId);
+  if (!open.isRecipesOn && !open.isSavedMealsOn) {
+    return {
+      kind: 'refused',
+      result: refused(
+        'Pinch can only place a meal by name when the person shares their recipes or saved meals with Helm. Use a recipeId, or ask the person to turn one of those on.',
+      ),
+    };
+  }
   const [meals, recipes] = await Promise.all([
-    firestore
-      .collection(kitchenPath(uid, 'meals'))
-      .limit(SAVED_MEAL_LIMIT)
-      .get(),
-    firestore
-      .collection(kitchenPath(uid, 'recipes'))
-      .select('title', 'isArchived')
-      .limit(RECIPE_TITLE_LIMIT)
-      .get(),
+    open.isSavedMealsOn
+      ? firestore
+          .collection(kitchenPath(uid, 'meals'))
+          .limit(SAVED_MEAL_LIMIT)
+          .get()
+      : null,
+    open.isRecipesOn
+      ? firestore
+          .collection(kitchenPath(uid, 'recipes'))
+          .select('title', 'isArchived')
+          .limit(RECIPE_TITLE_LIMIT)
+          .get()
+      : null,
   ]);
   const wanted = name ?? '';
   const meal = nameMatcher.match(
     wanted,
-    meals.docs.flatMap((doc) => {
+    (meals?.docs ?? []).flatMap((doc) => {
       const mealName = readText(doc.get('name'));
       return mealName === null ? [] : [{ id: doc.id, name: mealName }];
     }),
   );
   if (meal) {
     const items = (
-      (meals.docs.find((doc) => doc.id === meal.id)?.get('items') ??
+      (meals?.docs.find((doc) => doc.id === meal.id)?.get('items') ??
         []) as Partial<MealItem>[]
     ).flatMap((item) =>
       (item.kind === 'RECIPE' || item.kind === 'INGREDIENT') &&
@@ -928,6 +1081,7 @@ const resolvePlate = async (
       : {
           kind: 'ok',
           title: meal.name,
+          replyTitle: meal.name,
           recipeId: null,
           savedMeal: meal,
           items,
@@ -935,7 +1089,7 @@ const resolvePlate = async (
   }
   const recipe = nameMatcher.match(
     wanted,
-    recipes.docs.flatMap((doc) => {
+    (recipes?.docs ?? []).flatMap((doc) => {
       const title = readText(doc.get('title'));
       return title === null || doc.get('isArchived') === true
         ? []
@@ -980,48 +1134,56 @@ export const addToShoppingList = async (
     return refused(`Add up to ${MAX_ITEMS_PER_CALL} things at a time.`);
   }
   const book = await readIngredientBook(firestore, ctx.uid);
-  const freshIds = new Map<string, string>();
-  const wanted = new Map<string, WantedLine>();
-  for (const entry of requested) {
-    const unit = readUnit(entry.unit);
+  const problem = requested.flatMap((entry) => {
+    if (readUnit(entry.unit) === null) {
+      return [`"${entry.unit}" isn't a unit Pinch uses. ${UNIT_HELP}`];
+    }
     const amount = entry.amount ?? null;
-    if (unit === null) {
-      return refused(`"${entry.unit}" isn't a unit Pinch uses. ${UNIT_HELP}`);
-    }
-    if (amount !== null && !isValidAmount(roundAmount(amount))) {
-      return refused(
-        `The amount for ${entry.name} is off. Use a number above zero.`,
-      );
-    }
-    const typed = entry.name.replace(/\s+/g, ' ').trim();
-    const match = matchIngredient(typed, book.choices);
-    const freshKey = typed.toLowerCase();
-    const ingredientId =
-      match?.id ??
-      freshIds.get(freshKey) ??
-      freshIds.set(freshKey, randomUUID()).get(freshKey) ??
-      '';
-    const name =
-      match?.name ??
-      toDisplayCase(typed, { style: 'sentence', keepAcronyms: true });
-    const lineUnit = amount === null ? 'EACH' : unit;
-    const id = `${ingredientId}__${lineUnit}`;
-    const known = wanted.get(id);
-    wanted.set(id, {
-      id,
-      ingredientId,
-      unit: lineUnit,
-      amount:
-        amount === null && (known?.amount ?? null) === null
-          ? null
-          : Math.min(
-              roundAmount((known?.amount ?? 0) + (amount ?? 0)),
-              MAX_SHOPPING_AMOUNT,
-            ),
-      name,
-      newName: match ? null : name,
-    });
-  }
+    return amount !== null && !isValidAmount(roundAmount(amount))
+      ? [`The amount for ${entry.name} is off. Use a number above zero.`]
+      : [];
+  })[0];
+  if (problem !== undefined) return refused(problem);
+  const { wanted } = requested.reduce(
+    (built, entry) => {
+      const amount = entry.amount ?? null;
+      const typed = entry.name.replace(/\s+/g, ' ').trim();
+      const match = matchIngredient(typed, book.choices);
+      const freshKey = typed.toLowerCase();
+      const freshId = built.freshIds.get(freshKey) ?? randomUUID();
+      const ingredientId = match?.id ?? freshId;
+      const name =
+        match?.name ??
+        toDisplayCase(typed, { style: 'sentence', keepAcronyms: true });
+      const lineUnit =
+        amount === null ? 'EACH' : (readUnit(entry.unit) ?? 'EACH');
+      const id = `${ingredientId}__${lineUnit}`;
+      const known = built.wanted.get(id);
+      return {
+        freshIds: match
+          ? built.freshIds
+          : new Map(built.freshIds).set(freshKey, freshId),
+        wanted: new Map(built.wanted).set(id, {
+          id,
+          ingredientId,
+          unit: lineUnit,
+          amount:
+            amount === null && (known?.amount ?? null) === null
+              ? null
+              : Math.min(
+                  roundAmount((known?.amount ?? 0) + (amount ?? 0)),
+                  MAX_SHOPPING_AMOUNT,
+                ),
+          name,
+          newName: match ? null : name,
+        }),
+      };
+    },
+    {
+      freshIds: new Map<string, string>(),
+      wanted: new Map<string, WantedLine>(),
+    },
+  );
   const sums = [...wanted.values()];
   const outcome = await firestore.runTransaction(async (transaction) => {
     const [snapshots, count] = await Promise.all([
@@ -1039,7 +1201,9 @@ export const addToShoppingList = async (
       return {
         kind: 'refused' as const,
         result: refused(
-          `The shopping list is full (${SOFT_MAX_SHOPPING_ITEMS} items). The person can clear what they got in Pinch first.`,
+          ctx.allowedCategories.has('shoppingList')
+            ? `The shopping list is full (${SOFT_MAX_SHOPPING_ITEMS} items). The person can clear what they got in Pinch first.`
+            : 'Pinch could not add these. The person can make room on their shopping list in Pinch first.',
         ),
       };
     }
@@ -1139,11 +1303,22 @@ export const addToShoppingList = async (
   const already = records.flatMap(({ line, record }) =>
     record ? [] : [`${line.name} was already on the list`],
   );
+  const summary =
+    made.length === 0
+      ? 'Everything was already on the shopping list.'
+      : `Added ${countOf(made.length, 'thing')} to the shopping list.`;
+  const isListShown = ctx.allowedCategories.has('shoppingList');
   return ok({
-    summary:
-      made.length === 0
-        ? 'Everything was already on the shopping list.'
-        : `Added ${made.length} thing${made.length === 1 ? '' : 's'} to the shopping list.`,
+    summary,
+    reply: isListShown
+      ? {
+          summary,
+          lines: [...made.flatMap((record) => record.lines), ...already],
+        }
+      : {
+          summary: `Added ${countOf(sums.length, 'item')} to the shopping list.`,
+          lines: [],
+        },
     lines: [...made.flatMap((record) => record.lines), ...already],
     changes: made.map(({ id, title, lines: changeLines }) => ({
       id,
@@ -1160,7 +1335,7 @@ type Undone = { ok: true } | { ok: false; message: string; isSettled: boolean };
 const takenBackIn = (by: ChangeUndoFrom | null) =>
   `Already taken back in ${by === 'helm' ? 'Helm' : 'Pinch'}.`;
 
-/** Takes an outside change back in one transaction that re-reads what it touched and refuses, with a sentence, once the record has moved on. Pinch's screens and Helm both call it. */
+/** Takes an outside change back in one transaction that re-reads what it touched and refuses, with a sentence, once the record has moved on. */
 export const undoPinchOutsideChange = async (
   firestore: Firestore,
   uid: string,
@@ -1196,7 +1371,7 @@ export const undoPinchOutsideChange = async (
     const markUndone = () =>
       transaction.update(recordRef, { undoneAt: now, undoneBy: from });
     const alreadyGone = (message: string): Undone => {
-      transaction.update(recordRef, { undoneAt: now, undoneBy: 'pinch' });
+      transaction.update(recordRef, { undoneAt: now, undoneBy: from });
       return { ok: false, message, isSettled: true };
     };
     const refuse = (message: string): Undone => ({

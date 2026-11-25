@@ -137,10 +137,14 @@ function Pinch() {
     setSubview(next);
   }, []);
   const [isOutsideChangesOpen, setIsOutsideChangesOpen] = useState(false);
+  const openChangedRecipe = useCallback(
+    (recipeId: string) =>
+      openSubviewFromToast({ kind: 'recipe', id: recipeId }),
+    [openSubviewFromToast],
+  );
   const outsideChanges = useOutsideChanges({
     uid: user?.uid ?? '',
-    openRecipe: (recipeId) =>
-      openSubviewFromToast({ kind: 'recipe', id: recipeId }),
+    openRecipe: openChangedRecipe,
     openShopping: showShoppingTab,
   });
   const { markSeen: markOutsideChangesSeen } = outsideChanges;

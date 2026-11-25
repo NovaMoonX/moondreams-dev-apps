@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { z } from 'zod';
 
 import {
@@ -122,6 +123,15 @@ export interface AppChangeDone {
   summary: string;
   lines: string[];
   changes: { id: string; title: string; lines: string[] }[];
+}
+
+/** An app's reply to a change: `reply` is the only part an assistant is told. */
+interface AppChangeAnswer extends Pick<
+  AppChangeDone,
+  'summary' | 'lines' | 'changes'
+> {
+  reply: { summary: string; lines: string[] };
+  recipeId: string | null;
 }
 
 export interface HelmToolScope {
@@ -1229,7 +1239,7 @@ export function buildHelmTools(scope: HelmToolScope) {
         name: `${app.appId}_${id}`,
         audience: 'external',
         kind: 'change',
-        description: `${action.description} Changes ${appLabel} through Helm, only what the person allowed (${permission?.label ?? 'a change'}); it never deletes. It applies at once and the person can undo it in ${appLabel} and in Helm, so confirm with the person before calling it. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotChange or notFound; say exactly what a status says.`,
+        description: `${action.description} Changes ${appLabel} through Helm, only what the person allowed (${permission?.label ?? 'a change'}); it never deletes. It applies at once and the person can undo it in ${appLabel} and in Helm, so confirm with the person before calling it. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotChange, refused (nothing was changed; the message says why) or notFound (nothing was changed; the id was not found); say exactly what a status says.`,
         shape: action.shape,
         run: async (input) => {
           if (scope.outsideReadScopes && scope.canChangeApps !== true) {
@@ -1264,21 +1274,36 @@ export function buildHelmTools(scope: HelmToolScope) {
             };
           }
           if (result.status !== 'ok') return result;
-          const done = result.data as {
-            summary: string;
-            lines: string[];
-            changes: AppChangeDone['changes'];
+          const done = result.data as AppChangeAnswer;
+          const isFiled =
+            done.changes.length === 0 ||
+            (await (
+              scope.onAppChange?.({
+                connectorId: app.connectorId,
+                actionId: id,
+                summary: done.summary,
+                lines: done.lines,
+                changes: done.changes,
+              }) ?? Promise.resolve()
+            ).then(
+              () => true,
+              (error: unknown) => {
+                logger.warn('helm.live.appChangeFilingFailed', {
+                  step: 'fileAppChange',
+                  cause: error instanceof Error ? error.name : 'error',
+                });
+                return false;
+              },
+            ));
+          return {
+            status: 'ok',
+            summary: done.reply.summary,
+            lines: done.reply.lines,
+            ...(done.recipeId !== null && { recipeId: done.recipeId }),
+            ...(!isFiled && {
+              note: `The change is made and can be undone in ${appLabel}, but it could not be added to the person's list in Helm yet, so it can't be undone from there.`,
+            }),
           };
-          await scope
-            .onAppChange?.({
-              connectorId: app.connectorId,
-              actionId: id,
-              summary: done.summary,
-              lines: done.lines,
-              changes: done.changes,
-            })
-            .catch(() => undefined);
-          return { status: 'ok', summary: done.summary, lines: done.lines };
         },
       }));
   });

@@ -65,6 +65,7 @@ jobs:
       - run: npm run check:pinch-ingest
       - run: npm run check:pinch-voice
       - run: npm run check:pinch-share
+      - run: npm run check:pinch-outside
       - run: npm run check:going-once-share
       - run: npm run check:going-once-push
       - run: npm run check:going-once-finish

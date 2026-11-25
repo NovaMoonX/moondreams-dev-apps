@@ -215,7 +215,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       ...current,
       [permissionId]: { isOn, since: grant.updatedAt },
     }));
-    setFailures((current) => without(current, permissionId));
+    setFailures((current) => without(current, `change:${permissionId}`));
     try {
       await updateConnection({
         grantId: grant.id,
@@ -226,7 +226,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       setPendingChanges((current) => without(current, permissionId));
       setFailures((current) => ({
         ...current,
-        [permissionId]: failureLine(
+        [`change:${permissionId}`]: failureLine(
           error,
           appName,
           HELM_COPY.connectionToggleFailed,
@@ -692,9 +692,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                       />
                     )}
                   </label>
-                  {failures[permission.id] && (
+                  {failures[`change:${permission.id}`] && (
                     <p className='text-destructive text-[13px]' role='alert'>
-                      {failures[permission.id]}
+                      {failures[`change:${permission.id}`]}
                     </p>
                   )}
                 </li>

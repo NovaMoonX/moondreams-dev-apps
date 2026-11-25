@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { BookOpen, CalendarDays, Pencil, ShoppingBasket } from 'lucide-react';
 
@@ -82,77 +82,80 @@ export function useOutsideChanges({
       state.pinch.outsideChanges.loadError === null,
   );
   const recipes = useAppSelector(selectRecipesById);
-  const [seenAt, setSeenAt] = useState(() => readSeen(uid));
+  const [seen, setSeen] = useState<{ uid: string; at: number } | null>(null);
+  const seenAt = seen?.uid === uid ? seen.at : readSeen(uid);
 
-  const getDoors = (change: PinchOutsideChange): DoneForYouDoor[] => {
-    const { recipeId } = change;
-    if (recipeId !== null) {
+  const items = useMemo((): DoneForYouEntry[] => {
+    const getDoors = (change: PinchOutsideChange): DoneForYouDoor[] => {
+      const { recipeId } = change;
+      if (recipeId !== null) {
+        return [
+          {
+            label: WORDS.openRecipe,
+            subtitle: WORDS.openRecipeSub,
+            icon: <BookOpen />,
+            unavailable: recipes.has(recipeId) ? undefined : WORDS.recipeGone,
+            onSelect: () => openRecipe(recipeId),
+          },
+        ];
+      }
+      if (change.kind !== 'shoppingAdded') return [];
       return [
         {
-          label: WORDS.openRecipe,
-          subtitle: WORDS.openRecipeSub,
-          icon: <BookOpen />,
-          unavailable: recipes.has(recipeId) ? undefined : WORDS.recipeGone,
-          onSelect: () => openRecipe(recipeId),
+          label: WORDS.openShopping,
+          subtitle: WORDS.openShoppingSub,
+          icon: <ShoppingBasket />,
+          onSelect: openShopping,
         },
       ];
-    }
-    if (change.kind !== 'shoppingAdded') return [];
-    return [
-      {
-        label: WORDS.openShopping,
-        subtitle: WORDS.openShoppingSub,
-        icon: <ShoppingBasket />,
-        onSelect: openShopping,
-      },
-    ];
-  };
-
-  const items: DoneForYouEntry[] = changes.map((change) => {
-    const look = getLook(change);
-    const isUndone = change.undoneAt !== null;
-    return {
-      id: change.id,
-      createdAt: change.createdAt,
-      title: look.title,
-      detail:
-        change.lines.length > 1
-          ? `${change.lines.length} changes`
-          : (change.lines[0] ?? null),
-      whyLine: getWho(change.by),
-      canUndo: !isUndone,
-      isUndone,
-      note: change.kind === 'recipeUpdated' ? WORDS.recipeUpdatedNote : null,
-      rowNote: null,
-      undoLabel: look.undoLabel,
-      kindIcon: look.icon,
-      hero:
-        change.lines.length > 1 ? (
-          <ul className='border-border bg-card list-disc space-y-1 rounded-2xl border py-3 pr-3 pl-7 text-sm'>
-            {change.lines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        ) : undefined,
-      doors: getDoors(change),
-      undoneAt: change.undoneAt,
     };
-  });
+
+    return changes.map((change) => {
+      const look = getLook(change);
+      const isUndone = change.undoneAt !== null;
+      return {
+        id: change.id,
+        createdAt: change.createdAt,
+        title: look.title,
+        detail:
+          change.lines.length > 1
+            ? `${change.lines.length} changes`
+            : (change.lines[0] ?? null),
+        whyLine: getWho(change.by),
+        canUndo: !isUndone,
+        isUndone,
+        note: change.kind === 'recipeUpdated' ? WORDS.recipeUpdatedNote : null,
+        rowNote: null,
+        undoLabel: look.undoLabel,
+        kindIcon: look.icon,
+        hero:
+          change.lines.length > 1 ? (
+            <ul className='border-border bg-card list-disc space-y-1 rounded-2xl border py-3 pr-3 pl-7 text-sm'>
+              {change.lines.map((line, index) => (
+                <li key={`${index}-${line}`}>{line}</li>
+              ))}
+            </ul>
+          ) : undefined,
+        doors: getDoors(change),
+        undoneAt: change.undoneAt,
+      };
+    });
+  }, [changes, recipes, openRecipe, openShopping]);
 
   const newest = changes.reduce(
     (time, change) => Math.max(time, change.createdAt),
     0,
   );
 
-  const markSeen = () => {
+  const markSeen = useCallback(() => {
     if (newest === 0) return;
-    setSeenAt(newest);
+    setSeen({ uid, at: newest });
     try {
       localStorage.setItem(seenKey(uid), String(newest));
     } catch {
       // Without storage the dot comes back on the next visit.
     }
-  };
+  }, [newest, uid]);
 
   return {
     items,
