@@ -1307,7 +1307,7 @@ function RecipeIngredients({
                               className={join(
                                 'text-sm font-normal',
                                 row.isAmountless
-                                  ? 'max-w-[50%] truncate'
+                                  ? 'max-w-[50%] wrap-break-word'
                                   : 'shrink-0 whitespace-nowrap',
                                 isRowAmountValid(row)
                                   ? 'text-muted-foreground'

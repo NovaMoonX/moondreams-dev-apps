@@ -58,7 +58,7 @@ function ShoppingRow({
             </span>
           )}
           {notesText && (
-            <span className='text-muted-foreground block truncate text-xs'>
+            <span className='text-muted-foreground line-clamp-2 text-xs'>
               {notesText}
             </span>
           )}
