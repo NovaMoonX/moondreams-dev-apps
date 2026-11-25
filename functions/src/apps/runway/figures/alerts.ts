@@ -15,9 +15,11 @@ import {
   type PushReport,
 } from '../../../notifications/sendPush.js';
 import {
+  ALERT_HOLD_MAX_MS,
   getAlertFigure,
   getAlertLineCents,
   getEachTimeCents,
+  MAX_ALERTS,
   stepAlert,
   type AlertState,
 } from '../engine/alerts.js';
@@ -92,10 +94,29 @@ const isSame = (previous: AlertStateDoc | null, state: AlertState) =>
     [state.alertUpdatedAt, state.isBelow, state.lastFiredAt, state.heldSince],
   );
 
-/** An alert that will not open is skipped, and its state left alone. */
-function openAlert(key: Buffer, sealed: unknown): AlertSealed | null {
+const isCents = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value);
+
+/** The rules check no shape, so an alert is used only when what it opens to is one the app writes. */
+function isAlertShape(value: unknown): value is AlertSealed {
+  const alert = value as Partial<AlertSealed> | null;
+  const target = alert?.target;
+  const line = alert?.line;
+  const isTarget =
+    target?.kind === 'freeToSpend' ||
+    (target?.kind === 'envelope' && typeof target.itemId === 'string');
+  const isLine =
+    (line?.kind === 'cents' && isCents(line.cents)) ||
+    (line?.kind === 'share' && isCents(line.bps));
+  return isTarget && isLine && typeof alert?.isNamed === 'boolean';
+}
+
+/** An alert that will not open, or opens to a shape the app never writes, is skipped, and its state left alone. */
+function openAlert(key: Buffer, doc: AlertDoc): AlertSealed | null {
+  if (!isCents(doc.updatedAt)) return null;
   try {
-    return openWithKey(key, sealed as SealedPayload) as unknown as AlertSealed;
+    const opened: unknown = openWithKey(key, doc.sealed as SealedPayload);
+    return isAlertShape(opened) ? opened : null;
   } catch {
     return null;
   }
@@ -144,9 +165,9 @@ export async function runAlerts(
   const { uid, now } = run;
   const under = (name: string) =>
     firestore.collection(`apps/runway/plans/${uid}/${name}`);
-  const alertDocs = await under('alerts').get();
-  if (alertDocs.empty) return null;
-  const stateDocs = await under('alertStates').get();
+  const alertDocs = await under('alerts').limit(MAX_ALERTS).get();
+  const stateDocs = await under('alertStates').limit(MAX_ALERTS * 2).get();
+  if (alertDocs.empty && stateDocs.empty) return null;
   const states = new Map(
     stateDocs.docs.map((entry) => [entry.id, entry.data() as AlertStateDoc]),
   );
@@ -155,7 +176,7 @@ export async function runAlerts(
   const liveIds = new Set(live.map(({ item }) => item.id));
   const evaluated = alertDocs.docs.flatMap((entry): Evaluated[] => {
     const doc = entry.data() as AlertDoc;
-    const alert = openAlert(run.key, doc.sealed);
+    const alert = openAlert(run.key, doc);
     if (alert === null) return [];
     const target = alert.target;
     const envelope =
@@ -169,14 +190,18 @@ export async function runAlerts(
       envelope === null ? null : getEachTimeCents(envelope),
     );
     if (figure === null || line === null) return [];
-    const previous = states.get(entry.id) ?? null;
+    const stored = states.get(entry.id) ?? null;
+    const isStale =
+      stored?.heldSince != null && now - stored.heldSince > ALERT_HOLD_MAX_MS;
+    const previous =
+      stored === null || !isStale ? stored : { ...stored, heldSince: null };
     const stepped = stepAlert(previous, doc.updatedAt, figure, line, now);
     return [
       {
         id: entry.id,
         alert,
         envelope: envelope?.name ?? null,
-        previous,
+        previous: stored,
         fires: stepped.fires,
         state: stepped.state,
       },
@@ -232,16 +257,21 @@ export async function runAlerts(
     })),
   );
 
-  if (outcome === 'sent') {
-    const cleared = firestore.batch();
-    toSend.forEach((entry) =>
-      cleared.update(under('alertStates').doc(entry.id), {
-        heldSince: null,
-        updatedAt: now,
-      }),
-    );
-    await cleared.commit();
-  }
+  // A clear that fails after a good send leaves the alert held, so the next run may send it again: once too often, never lost.
+  const cleared = firestore.batch();
+  toSend.forEach((entry) =>
+    cleared.set(
+      under('alertStates').doc(entry.id),
+      { heldSince: null, updatedAt: now },
+      { merge: true },
+    ),
+  );
+  const isCleared =
+    outcome !== 'sent' ||
+    (await cleared.commit().then(
+      () => true,
+      () => false,
+    ));
 
   const stillHeld = before.filter(
     (entry) => held(entry) && !(outcome === 'sent' && sendIds.has(entry.id)),
@@ -252,6 +282,8 @@ export async function runAlerts(
     fired: evaluated.filter((entry) => entry.fires).length,
     sent: outcome === 'sent' ? toSend.length : 0,
     failed: outcome === 'failed',
+    clearFailed: !isCleared,
+    skipped: alertDocs.size - evaluated.length,
     held: stillHeld.length,
   });
   return stillHeld.length === 0 ? null : getNextMorning(now, run.zone);

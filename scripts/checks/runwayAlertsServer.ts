@@ -309,6 +309,56 @@ async function main() {
   await run(gone, at(14), quietBox.send);
   assert.equal(await stateOf(gone, 'scrambled'), undefined);
 
+  // One that opens to a shape the app never writes, or has no stamp, is skipped too, and the run still finishes.
+  await firestore.doc(`${planOf(gone)}/alerts/odd`).set({
+    id: 'odd',
+    createdAt: at(0),
+    updatedAt: at(0),
+    sealed: seal(gone, { target: { kind: 'nope' }, line: null }),
+  });
+  await firestore.doc(`${planOf(gone)}/alerts/unstamped`).set({
+    id: 'unstamped',
+    createdAt: at(0),
+    sealed: seal(gone, {
+      target: { kind: 'freeToSpend' },
+      line: { kind: 'cents', cents: 10_000 },
+      isNamed: false,
+    }),
+  });
+  const odd = await run(gone, at(15), quietBox.send);
+  assert.equal(odd.kind, 'done', 'a bad alert never fails the run');
+  assert.equal(await stateOf(gone, 'odd'), undefined);
+  assert.equal(await stateOf(gone, 'unstamped'), undefined);
+
+  // Deleting the last alert removes what was kept about it.
+  await Promise.all(
+    ['keep', 'scrambled', 'odd', 'unstamped'].map((id) =>
+      firestore.doc(`${planOf(gone)}/alerts/${id}`).delete(),
+    ),
+  );
+  await run(gone, at(16), quietBox.send);
+  assert.equal(
+    (await firestore.collection(`${planOf(gone)}/alertStates`).get()).size,
+    0,
+    'no state outlives the last alert',
+  );
+
+  // A hold older than a day went off for a moment long past, so it is dropped, not sent.
+  const stale = 'alerts-stale';
+  await seedPlan(stale, true);
+  await putAlert(stale, 'low-groceries');
+  const late = outbox();
+  await run(stale, at(12), late.send);
+  await spend(stale, 35_000);
+  await run(stale, at(13), async () => {
+    throw new Error('messaging is down');
+  });
+  assert.equal((await stateOf(stale, 'low-groceries'))?.heldSince, at(13));
+  await run(stale, at(38), late.send);
+  assert.equal(late.sent.length, 0, 'a day-old hold is not sent');
+  assert.equal((await stateOf(stale, 'low-groceries'))?.heldSince, null);
+  assert.equal((await stateOf(stale, 'low-groceries'))?.isBelow, true);
+
   // A failing send keeps the hold so a later run tries again, and a named alert names its envelope.
   const failing = 'alerts-failing';
   await seedPlan(failing, true);

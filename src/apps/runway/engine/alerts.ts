@@ -11,6 +11,12 @@ import { withExtras } from './parts';
 /** The quick shares an envelope's alert offers, in basis points of what it gets each time. */
 export const ALERT_SHARE_BPS = { half: 5_000, quarter: 2_500 } as const;
 
+/** The most alerts a plan keeps: the app stops offering more, and the server reads no further. */
+export const MAX_ALERTS = 50;
+
+/** An alert held overnight older than this went off for a moment long past, so it is dropped rather than sent. */
+export const ALERT_HOLD_MAX_MS = 24 * 60 * 60 * 1000;
+
 /** What an envelope gets each time when that is a set amount; a share of a pay or "the rest" has no fixed figure, so it has no share lines. */
 export function getEachTimeCents(
   envelope: EnvelopeVersion['payload'],
