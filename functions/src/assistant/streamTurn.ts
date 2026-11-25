@@ -192,9 +192,15 @@ export async function streamTurn({
     return event;
   };
 
-  const countRound = (usage: Anthropic.Beta.Messages.BetaUsage) => {
+  const countRound = (
+    usage: Anthropic.Beta.Messages.BetaUsage,
+    searchesStarted = 0,
+  ) => {
     tally.usage = addUsage(tally.usage, toUsage(usage));
-    tally.searches += usage.server_tool_use?.web_search_requests ?? 0;
+    tally.searches += Math.max(
+      usage.server_tool_use?.web_search_requests ?? 0,
+      searchesStarted,
+    );
   };
   const readRound = async (
     stream: ReturnType<typeof client.beta.messages.stream>,
@@ -247,9 +253,15 @@ export async function streamTurn({
       { signal },
     );
     const message = await readRound(stream, roundText).catch((error) => {
-      // A round cut off part way was still billed for what it had used.
+      // A round cut off part way was still billed for what it had used; its lookup count arrives only at the end, so started lookups are counted from its blocks.
       const partial = stream.currentMessage;
-      if (partial !== undefined) countRound(partial.usage);
+      if (partial !== undefined) {
+        countRound(
+          partial.usage,
+          partial.content.filter((block) => block.type === 'server_tool_use')
+            .length,
+        );
+      }
       throw error;
     });
     countRound(message.usage);

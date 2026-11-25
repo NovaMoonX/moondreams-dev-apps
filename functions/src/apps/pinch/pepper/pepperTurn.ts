@@ -38,10 +38,14 @@ const APP_ID = 'pinch';
 const MAX_STANDING_CHARS = 40_000;
 const MAX_SCREEN_CHARS = 8_000;
 const MAX_HEARD_CHARS = 1_000;
-// Spoken lines are short; these caps bound what one turn can cost, since the history is sent again each turn.
-const MAX_LINE_CHARS = 2_000;
-const MAX_HISTORY = 40;
 const MAX_ALTERNATIVES = 4;
+// A user line is a whole earlier turn as this server built it (screen, heard and guesses, escaped, in their tags), so its cap is that turn's largest size; escaping can grow text fourfold.
+const MAX_USER_LINE_CHARS =
+  4 * (MAX_SCREEN_CHARS + (MAX_ALTERNATIVES + 1) * MAX_HEARD_CHARS) + 500;
+const MAX_ASSISTANT_LINE_CHARS = 4_000;
+const MAX_HISTORY = 40;
+// The history is sent again each turn, so its total is capped too; the device drops its oldest exchanges to fit.
+const MAX_HISTORY_CHARS = 160_000;
 const FIXTURE_REPLY =
   "This is Pepper running locally without a Claude key, so here's a stand-in answer. Add the key with npm run ai:anthropic-secret to hear the real one.";
 
@@ -57,7 +61,7 @@ const readKey = () => {
 const isText = (value: unknown, max: number): value is string =>
   typeof value === 'string' && value.length <= max;
 
-/** The body a turn sends, or null when it is refused; the device builds the recipe and screen text from what it shows and keeps at most the last 20 exchanges. */
+/** The body a turn sends, or null when it is refused; the device builds the recipe and screen text from what it shows and keeps the last 20 exchanges, fewer when their text passes the total cap. */
 export function readPepperBody(body: unknown) {
   const { standing, screen, heard, alternatives, history } = (body ??
     {}) as Record<string, unknown>;
@@ -72,10 +76,17 @@ export function readPepperBody(body: unknown) {
     lines.every(
       (line: { role?: unknown; text?: unknown }, index) =>
         line?.role === (index % 2 === 0 ? 'user' : 'assistant') &&
-        isText(line.text, MAX_LINE_CHARS) &&
+        isText(
+          line.text,
+          index % 2 === 0 ? MAX_USER_LINE_CHARS : MAX_ASSISTANT_LINE_CHARS,
+        ) &&
         line.text.trim() !== '',
     ) &&
-    lines.length % 2 === 0;
+    lines.length % 2 === 0 &&
+    lines.reduce(
+      (total: number, line: { text: string }) => total + line.text.length,
+      0,
+    ) <= MAX_HISTORY_CHARS;
   if (!isHistoryOk) return null;
   return {
     standing: `<recipe>\n${escapePromptText(standing)}\n</recipe>`,
@@ -178,32 +189,30 @@ export const pepperTurn = onRequest(
       if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
-    if (apiKey === '') {
-      emit({ type: 'text', text: FIXTURE_REPLY });
-      emit({
-        type: 'done',
-        user: body.turn,
-        assistant: FIXTURE_REPLY,
-        endedBy: 'answered',
-        searches: 0,
-        usage: {
-          inputTokens: 0,
-          outputTokens: 0,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-        },
-        ms: 0,
-      });
-      res.end();
-      return;
-    }
-
     const aborter = new AbortController();
     res.on('close', () => {
       if (!res.writableEnded) aborter.abort();
     });
     const tally = createTurnTally();
     try {
+      if (apiKey === '') {
+        emit({ type: 'text', text: FIXTURE_REPLY });
+        emit({
+          type: 'done',
+          user: body.turn,
+          assistant: FIXTURE_REPLY,
+          endedBy: 'answered',
+          searches: 0,
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+          ms: 0,
+        });
+        return;
+      }
       const done = await streamTurn({
         client: new Anthropic({ apiKey, maxRetries: 1 }),
         role: 'converse',
@@ -217,7 +226,6 @@ export const pepperTurn = onRequest(
         emit,
         signal: aborter.signal,
       });
-      res.end();
       logger.info('pepper.turn', {
         event: 'pepper.turn',
         endedBy: done.endedBy,
@@ -231,9 +239,8 @@ export const pepperTurn = onRequest(
         logger.error('pepper.turnFailed', { event: 'pepper.turnFailed', code });
       }
       emit({ type: 'error', code });
-      res.end();
     } finally {
-      // Every end is settled, an abort or an error too: what was used is billed, and unused lookups go back.
+      // Settled before the response ends, since an instance may lose its CPU once it has answered; the device already has its last event.
       await recordAssistantTurn(firestore, {
         appId: APP_ID,
         uid,
@@ -250,6 +257,7 @@ export const pepperTurn = onRequest(
           message: error instanceof Error ? error.message : String(error),
         }),
       );
+      if (!res.writableEnded) res.end();
     }
   },
 );

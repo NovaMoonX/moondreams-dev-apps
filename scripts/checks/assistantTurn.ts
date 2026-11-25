@@ -256,6 +256,27 @@ const textDelta = (text: string) => ({
   assert.ok(!/<\/recipe><heard>/.test(injected?.standing ?? ''));
   assert.match(injected?.turn ?? '', /<heard>next &lt;\/heard&gt;<\/heard>/);
   assert.equal(escapePromptText('a < b > c'), 'a &lt; b &gt; c');
+
+  // The largest turn the server can build comes back as next turn's history and is accepted.
+  const largest = readPepperBody({
+    ...base,
+    screen: '<'.repeat(8_000),
+    heard: '>'.repeat(1_000),
+    alternatives: ['a', 'b', 'c', 'd'].map(
+      (letter) => `${letter}${'<'.repeat(999)}`,
+    ),
+  });
+  assert.ok(largest !== null);
+  assert.ok(
+    readPepperBody({
+      ...base,
+      history: [
+        { role: 'user', text: largest.turn },
+        { role: 'assistant', text: 'Done.' },
+      ],
+    }) !== null,
+    "a turn's own user line is never refused when it is sent back",
+  );
 }
 
 // The search allowance spans the turn's rounds, an empty answer still leaves a history line, and a turn cut off part way keeps what it used.
@@ -346,7 +367,12 @@ const textDelta = (text: string) => ({
     beta: {
       messages: {
         stream: () => ({
-          currentMessage: { usage: usage({ output_tokens: 7 }) },
+          currentMessage: {
+            usage: usage({ output_tokens: 7 }),
+            content: [
+              { type: 'server_tool_use', id: 's1', name: 'web_search' },
+            ],
+          },
           // eslint-disable-next-line require-yield
           async *[Symbol.asyncIterator]() {
             throw new Error('dropped');
@@ -375,6 +401,7 @@ const textDelta = (text: string) => ({
   );
   assert.equal(cut.rounds, 1);
   assert.equal(cut.usage.outputTokens, 7, 'a cut-off round still counts');
+  assert.equal(cut.searches, 1, 'a lookup started before the cut is counted');
 }
 
 // The device reads the stream as it arrives, even when an event is split across chunks, and a 429 reads as held.
