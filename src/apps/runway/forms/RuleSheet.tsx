@@ -139,7 +139,11 @@ function RuleSheet({
   const canTickKind = hasKind && covering.kind === null;
   const canTickCard = hasCard && covering.card === null;
   const isAllCovered =
-    rule === null && !hasMerchant && !canTickKind && !canTickCard;
+    rule === null &&
+    !hasMerchant &&
+    !canTickKind &&
+    !canTickCard &&
+    (covering.kind !== null || covering.card !== null);
 
   const [ticks, setTicks] = useState(() => {
     if (rule) {
@@ -182,16 +186,18 @@ function RuleSheet({
     purchase !== null && (purchase.needsHome || isOpenToPlace(purchase)),
   );
 
-  const isMerchantAlone = ticks.merchant && !ticks.kind && !ticks.card;
+  const isKindTicked = ticks.kind && (rule !== null || canTickKind);
+  const isCardTicked = ticks.card && (rule !== null || canTickCard);
+  const isMerchantAlone = ticks.merchant && !isKindTicked && !isCardTicked;
   const target = picked === RULE_VARIES && !isMerchantAlone ? null : picked;
   const draft: RuleSealed = {
     merchantKey: ticks.merchant ? facts.merchantKey : null,
     merchantName: ticks.merchant ? facts.merchantName : null,
-    category: ticks.kind ? facts.category : null,
-    cardId: ticks.card ? facts.cardId : null,
+    category: isKindTicked ? facts.category : null,
+    cardId: isCardTicked ? facts.cardId : null,
     target: target ?? '',
   };
-  const hasCondition = ticks.merchant || ticks.kind || ticks.card;
+  const hasCondition = ticks.merchant || isKindTicked || isCardTicked;
   const blocker = isAllCovered
     ? null
     : !hasCondition
@@ -493,14 +499,7 @@ function RuleSheet({
                 </span>
               );
               if (cover) {
-                const mark = (
-                  <span
-                    className='bg-primary/15 text-primary grid size-5 shrink-0 place-items-center rounded-full'
-                    aria-hidden='true'
-                  >
-                    <Check className='size-3.5' strokeWidth={3} />
-                  </span>
-                );
+                const mark = <AppCheckbox checked isDisplayOnly />;
                 return (
                   <li key={name}>
                     <Button
