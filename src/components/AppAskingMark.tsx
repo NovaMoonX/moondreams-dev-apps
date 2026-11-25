@@ -1,9 +1,6 @@
 import { useMarkAppAsking } from '@/hooks/useAppEntered';
 
-/**
- * Rendered beside a sheet an app opens by itself (a question, a welcome tour), so what waits
- * for the person to be free (What's new) waits until it closes rather than opening over it.
- */
+/** Holds What's new back while the sheet it sits beside, one an app opened by itself, is up. */
 function AppAskingMark({ scope }: { scope: string }) {
   useMarkAppAsking(scope);
   return null;

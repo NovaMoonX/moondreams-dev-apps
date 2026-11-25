@@ -1,9 +1,6 @@
 import { useMarkAppEntered } from '@/hooks/useAppEntered';
 
-/**
- * Placed only where an app's own screens render, never beside its loading, sign-in, landing,
- * locked or error states, so what waits for the person to be inside (What's new) waits for it.
- */
+/** Marks the app entered: render only where its own screens show, never its loading, sign-in, landing, locked or error states. */
 function AppEnteredMark({ scope }: { scope: string }) {
   useMarkAppEntered(scope);
   return null;
