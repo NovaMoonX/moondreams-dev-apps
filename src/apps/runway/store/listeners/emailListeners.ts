@@ -40,6 +40,7 @@ export interface OpenEmailEvent extends EmailEventSealed {
   outcome: EmailEventDoc['outcome'];
   senderKind: EmailEventDoc['senderKind'];
   purchaseId: string | null;
+  savedAt: number | null;
   expiresAt: number;
 }
 
@@ -154,6 +155,7 @@ export function startEmailEventsListener(
               outcome: data.outcome,
               senderKind: data.senderKind ?? null,
               purchaseId: data.purchaseId ?? null,
+              savedAt: data.savedAt ?? null,
               expiresAt: toMillis(data.expiresAt),
               from: payload.from ?? '',
               subject: payload.subject ?? '',

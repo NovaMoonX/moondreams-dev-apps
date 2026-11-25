@@ -1384,6 +1384,8 @@ export interface EmailEventDoc {
   senderKind: EmailSenderKind | null;
   /** The purchase it became; null for any other outcome. */
   purchaseId: string | null;
+  /** When the server saved what it read, epoch ms; with `receivedAt` it gives how long the email took to read. Null on an older event. */
+  savedAt: number | null;
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
   expiresAt: number;
   sealed: Sealed;

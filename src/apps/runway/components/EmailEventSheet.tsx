@@ -18,6 +18,7 @@ import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useCanSeeDebugDetails } from '@/lib/debugProfiles/useCanSeeDebugDetails';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinal } from '@/utils/formatUtils';
 import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
@@ -44,6 +45,11 @@ const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
 };
 
 function EmailHeader({ event }: { event: EmailEventRead }) {
+  const canSeeDebug = useCanSeeDebugDetails();
+  const readMs =
+    event.savedAt === null
+      ? null
+      : Math.max(0, event.savedAt - event.receivedAt);
   return (
     <dl className='border-border bg-card grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-2xl border p-4 text-sm'>
       <dt className='text-muted-foreground'>{EMAIL_WORDS.from}</dt>
@@ -58,6 +64,14 @@ function EmailHeader({ event }: { event: EmailEventRead }) {
       <dd className='min-w-0 break-words'>
         {formatDateOrdinal(event.receivedAt)}
       </dd>
+      {canSeeDebug && readMs !== null && (
+        <>
+          <dt className='text-muted-foreground'>{EMAIL_WORDS.readIn}</dt>
+          <dd className='min-w-0'>
+            {EMAIL_WORDS.readTook(Math.round(readMs / 1000))}
+          </dd>
+        </>
+      )}
     </dl>
   );
 }
