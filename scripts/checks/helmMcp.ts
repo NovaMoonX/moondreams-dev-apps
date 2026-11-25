@@ -7,6 +7,7 @@ import { McpServer } from '../../functions/node_modules/@modelcontextprotocol/sd
 import { toJSONSchema, z } from '../../functions/node_modules/zod/index.js';
 
 import { PINCH_SHARES } from '../../src/apps/pinch/share/manifest.ts';
+import type { AssistantToolKind } from '../../src/lib/connections/contract.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
 import {
   SOURCE_ADAPTERS,
@@ -170,7 +171,7 @@ const OUTSIDE_TOOLS = [
   'list_topics',
   'pinch_add',
   'pinch_read',
-  'pinch_save_recipe',
+  'pinch_save',
   'search_procedures',
   'search_tasks',
 ];
@@ -1142,7 +1143,7 @@ const changeTool = (
     ...scope,
   });
 const saveRecipe = (scope: Parameters<typeof changeTool>[1] = {}) =>
-  changeTool('pinch_save_recipe', scope)!;
+  changeTool('pinch_save', scope)!;
 const EDIT = { action: 'update_recipe', recipeId: 'r1', servings: 6 };
 const PINCH_CHANGES = PINCH_ACTIONS.filter(
   (action) => action.kind === 'change',
@@ -1178,7 +1179,7 @@ assert.equal(
       canChangeApps: true,
     }),
     'nomos',
-  ).some((tool) => tool.name === 'pinch_save_recipe'),
+  ).some((tool) => tool.name === 'pinch_save'),
   false,
 );
 // Without the assistant's own switch, or with every kind of change off, no change tool is offered at all.
@@ -1188,7 +1189,7 @@ for (const scope of [
   { outsideReadScopes: null, canChangeApps: false },
 ]) {
   assert.equal(
-    changeTool('pinch_save_recipe', scope),
+    changeTool('pinch_save', scope),
     undefined,
     'an assistant without "Change things in your apps" sees no change tools',
   );
@@ -1428,10 +1429,9 @@ assert.equal(
 );
 
 // How every app offers assistant tools (docs/conventions/connections.md "An app offers an assistant a handful of tools").
-const MAX_CHANGE_TOOLS_PER_APP = 2;
+const TOOL_KINDS = ['read', 'add', 'save'];
 const MAX_OUTSIDE_TOOLS = 40;
 const MIN_OPTION_DESCRIPTION = 60;
-const TOOL_ID = /^[a-z][a-z0-9_]*$/;
 const unwrapOptional = (schema: z.ZodType): z.ZodType => {
   const def = (schema as unknown as { _zod: { def: { type: string; innerType?: z.ZodType } } })._zod.def;
   return def.type === 'optional' && def.innerType ? unwrapOptional(def.innerType) : schema;
@@ -1489,9 +1489,6 @@ const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] 
     }
     const byTool = (id: string) =>
       manifest.actions.filter((action) => action.tool === id);
-    const readTools = declared.filter((id) =>
-      byTool(id).some((action) => action.kind === 'read'),
-    );
     const names = declared.map((id) => `${appId}_${id}`);
     const mentioned = manifest.actions.flatMap((action) => {
       const server = adapter.actions?.[action.id];
@@ -1515,16 +1512,19 @@ const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] 
       ...(manifest.askedAbout.length < 3
         ? [`${connectorId} needs at least three everyday words in askedAbout`]
         : []),
-      ...(declared.length - readTools.length > MAX_CHANGE_TOOLS_PER_APP
-        ? [`${connectorId} offers ${declared.length - readTools.length} change tools; group its changes into ${MAX_CHANGE_TOOLS_PER_APP} or fewer`]
-        : []),
-      ...(readTools.length > 1
-        ? [`${connectorId} spreads its reads over ${readTools.join(', ')}: one read tool per app`]
-        : []),
+      ...declared
+        .filter((id, index) => declared.indexOf(id) !== index)
+        .map((id) => `${connectorId} declares its ${id} tool twice: one tool of each kind per app`),
       ...manifest.tools.flatMap((tool) => [
-        ...(TOOL_ID.test(tool.id) && `${appId}_${tool.id}`.length <= 64
-          ? []
-          : [`${connectorId} tool ${tool.id} is not a short snake_case id`]),
+        ...(tool.id === ('delete' as string)
+          ? [`${connectorId} offers a delete tool, but assistants can't delete yet`]
+          : TOOL_KINDS.includes(tool.id)
+            ? []
+            : [`${connectorId} tool ${tool.id} is not read, add or save`]),
+        ...(`${appId}_${tool.id}`.length <= 64 ? [] : [`${connectorId}'s tool names run past 64 characters`]),
+        ...(tool.id === 'save' && !byTool(tool.id).some((action) => action.changesExisting)
+          ? [`${connectorId} save tool holds no change to what exists; changes that only add go under add`]
+          : []),
         ...(tool.title.trim().length < 4 ? [`${connectorId} tool ${tool.id} needs a title`] : []),
         ...(byTool(tool.id).length === 0 ? [`${connectorId} tool ${tool.id} has no actions`] : []),
         ...(new Set(byTool(tool.id).map((action) => action.kind)).size > 1
@@ -1540,6 +1540,11 @@ const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] 
             ? [`${connectorId} ${action.id}'s description is too short to choose by`]
             : []),
           ...(action.kind === 'read' && action.changesExisting ? [`${connectorId} ${action.id} is a read that changes`] : []),
+          ...(action.kind === 'read' && action.tool !== 'read' ? [`${connectorId} ${action.id} is a read, so it goes under read`] : []),
+          ...(action.kind === 'change' && action.tool === 'read' ? [`${connectorId} ${action.id} is a change offered under read`] : []),
+          ...(action.changesExisting && action.tool !== 'save'
+            ? [`${connectorId} ${action.id} can change what exists, so it goes under save`]
+            : []),
           ...(action.kind === 'change' && !manifest.changes.some((change) => change.id === action.permission)
             ? [`${connectorId} ${action.id} names no declared switch`]
             : []),
@@ -1590,25 +1595,42 @@ const broken = (
 const firesWith = (failures: string[], words: string) =>
   assert.ok(failures.some((line) => line.includes(words)), `expected "${words}" in ${JSON.stringify(failures)}`);
 firesWith(broken((manifest) => { manifest.askedAbout = ['meals']; }), 'at least three everyday words');
+const asKind = (id: string) => id as AssistantToolKind;
 firesWith(
   broken((manifest) => {
-    manifest.tools.push({ id: 'one_more', title: 'One more thing' });
-    manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'one_more';
+    manifest.tools.push({ id: asKind('one_more'), title: 'One more thing' });
+    manifest.actions.find((action) => action.id === 'save_idea')!.tool = asKind('one_more');
   }),
-  'group its changes into',
+  'is not read, add or save',
 );
 firesWith(
   broken((manifest) => {
-    manifest.tools.push({ id: 'read_kitchen', title: 'Read the kitchen' });
-    manifest.actions.find((action) => action.id === 'get_kitchen')!.tool = 'read_kitchen';
+    manifest.tools.push({ id: asKind('delete'), title: 'Remove a recipe' });
+    manifest.actions.find((action) => action.id === 'save_idea')!.tool = asKind('delete');
   }),
-  'one read tool per app',
+  "assistants can't delete yet",
 );
+firesWith(broken((manifest) => { manifest.tools.push({ id: 'add', title: 'Add more' }); }), 'tool twice');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'update_recipe')!.tool = 'add'; }), 'can change what exists, so it goes under save');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.tool = 'add'; }), 'is a read, so it goes under read');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'read'; }), 'is a change offered under read');
 firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'read'; }), 'mixes reads and changes');
-firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'ideas'; }), 'names undeclared tool');
-firesWith(broken((manifest) => { manifest.tools.push({ id: 'unused', title: 'Unused tool' }); }), 'has no actions');
+firesWith(
+  broken((manifest) => {
+    manifest.actions.filter((action) => action.tool === 'save').forEach((action) => { action.changesExisting = false; });
+  }),
+  'holds no change to what exists',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = asKind('ideas'); }), 'names undeclared tool');
+firesWith(
+  broken((manifest) => {
+    manifest.tools = manifest.tools.filter((tool) => tool.id !== 'add');
+    manifest.actions.filter((action) => action.tool === 'add').forEach((action) => { action.tool = 'save'; });
+    manifest.tools.push({ id: 'add', title: 'Unused tool' });
+  }),
+  'has no actions',
+);
 firesWith(broken((manifest) => { manifest.tools[0].title = ''; }), 'needs a title');
-firesWith(broken((manifest) => { manifest.tools[0].id = 'Read-Pinch'; manifest.actions.filter((action) => action.tool === 'read').forEach((action) => { action.tool = 'Read-Pinch'; }); }), 'short snake_case id');
 firesWith(broken((_, actions) => { actions.surprise = actions.save_idea; }), 'does not declare');
 firesWith(
   broken((_, actions) => {
@@ -1639,7 +1661,7 @@ firesWith(
 firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.permission = 'nope'; }), 'names no declared switch');
 firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.categories = []; }), 'names no category');
 firesWith(broken((_, actions) => { delete actions.save_idea; }), 'has no server action');
-firesWith(broken((manifest) => { manifest.tools[0].id = 'r'.repeat(60); manifest.actions.filter((action) => action.tool === 'read').forEach((action) => { action.tool = 'r'.repeat(60); }); }), 'short snake_case id');
+firesWith(toolFailuresFor(`app:${'p'.repeat(60)}`, pinchAdapter), 'run past 64 characters');
 firesWith(toolFailuresFor('google:calendar', pinchAdapter), 'is not a site app');
 firesWith(
   toolFailuresFor('app:quiet', { ...pinchAdapter, manifest: { ...structuredClone(pinchAdapter.manifest), actions: [] }, actions: {} }),
@@ -1667,7 +1689,7 @@ console.log(`Outside tools with Pinch connected and every switch on: ${OUTSIDE_T
   });
   const hintsOf = (name: string) => listed.find((tool) => tool.name === name)!.annotations!;
   assert.equal(hintsOf('pinch_read').readOnlyHint, true);
-  assert.equal(hintsOf('pinch_save_recipe').destructiveHint, true, 'an edit can replace what is there');
+  assert.equal(hintsOf('pinch_save').destructiveHint, true, 'an edit can replace what is there');
   assert.equal(hintsOf('pinch_add').readOnlyHint, false);
   assert.equal(hintsOf('pinch_add').destructiveHint, false, 'a change that only adds is not destructive');
   const readSchema = listed.find((tool) => tool.name === 'pinch_read')!.inputSchema as {

@@ -27,4 +27,4 @@ The convention or rule the decision produced links the record (`Why, what else w
 
 ## Records
 
-- [2026-11-25 How apps offer tools to assistants](2026-11-25-assistant-tools.md): a handful of grouped tools per app, switched-off reads listed and marked, change tools hidden when the assistant can't change.
+- [2026-11-25 How apps offer tools to assistants](2026-11-25-assistant-tools.md): the same three tools per app (read, add, save), switched-off reads listed and marked, change tools hidden when the assistant can't change.
