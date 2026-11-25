@@ -35,7 +35,7 @@ function ActionTiles({ tiles }: ActionTilesProps) {
           variant='tertiary'
           rounded='none'
           onClick={tile.onClick}
-          className='text-foreground! hover:bg-muted active:bg-muted h-auto min-h-16 w-full min-w-0 flex-col justify-center gap-1 px-1! py-2.5 text-center font-normal whitespace-normal focus-visible:outline-2 focus-visible:-outline-offset-2 [&_svg]:size-[18px]'
+          className='text-foreground! hover:bg-muted active:bg-muted h-auto min-h-16 w-full min-w-0 flex-col justify-start gap-1 px-1! pt-3 pb-2.5 text-center font-normal whitespace-normal first:rounded-l-2xl! last:rounded-r-2xl! focus-visible:outline-2 focus-visible:-outline-offset-2 [&_svg]:size-[18px]'
         >
           <span
             aria-hidden='true'
