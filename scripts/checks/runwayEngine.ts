@@ -20733,6 +20733,38 @@ const checkRulePlacements = () => {
     'Food on any card, and everything on this card, go to Gas',
     'and keeps the card under its heading',
   );
+  assert.equal(
+    findRule(fact('Chipotle', 'GAS', 'c1'), [
+      { ...kindCardRule, createdAt: 2 },
+      { ...cardRule, createdAt: 1 },
+    ])?.rule.id,
+    'c',
+    'two rules that fit by the card alone: the older one wins',
+  );
+  assert.equal(
+    describeRule(cardRule, { envelope: 'Gas', card: 'Citi' }),
+    'Everything on Citi goes to Gas',
+    'a card alone reads as everything on it',
+  );
+  assert.equal(
+    describeRule(cardRule, {
+      envelope: 'Gas',
+      card: 'Citi',
+      isCardLeftOut: true,
+    }),
+    'Everything goes to Gas',
+    'and under its heading needs no card',
+  );
+  assert.equal(
+    describeRule(rule('g', { category: 'GAS' }), { envelope: 'Fuel' }),
+    'Gas goes to Fuel',
+    'a kind alone reads on its own',
+  );
+  assert.equal(
+    describeRule(kindCardRule, { envelope: 'Gas', card: null }),
+    'Food on any card, and everything on a card, go to Gas',
+    'a missing card name still reads',
+  );
   const variesRule = rule('v', {
     merchantKey: 'corner shop',
     merchantName: 'Corner Shop',
