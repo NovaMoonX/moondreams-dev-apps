@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import {
   ArrowDownLeft,
+  Bell,
   Calculator,
   ChevronRight,
   Clock,
@@ -26,6 +27,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
+  ALERT_WORDS,
   BALANCE_CHECK_WORDS,
   BANK_BACKED_WORDS,
   CARD_WORDS,
@@ -39,6 +41,9 @@ import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import { CheckBalanceBody } from '@apps/runway/screens/home/CheckBalanceScreen';
 import { WhereYourCashIsBody } from '@apps/runway/screens/home/WhereYourCashIsScreen';
 import LevelGate from '@apps/runway/components/LevelGate';
+import FreeToSpendAlerts from '@apps/runway/components/FreeToSpendAlerts';
+import { useAlerts } from '@apps/runway/hooks/useAlerts';
+import { getAlertsSummary } from '@apps/runway/utils/alertText';
 import { DEFAULT_SPEND_PERIOD } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -95,6 +100,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     closeCheckBalance,
     openCashPosition,
     closeCashPosition,
+    openFreeAlerts,
+    closeFreeAlerts,
     openHeldView,
     closeHeldView,
     leaveViewForTab,
@@ -102,8 +109,14 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     showSpendPeriod,
   } = useRunwayUrlState();
   const mask = useMaskedText();
-  const { isHidden, toggle: toggleHidden } = useValuesHidden();
+  const { isHidden, isScrambled, toggle: toggleHidden } = useValuesHidden();
   const now = useNow(60_000);
+  const freeAlerts = useAlerts(
+    { kind: 'freeToSpend' },
+    null,
+    todayAsUtcDate(now),
+  );
+  const isAlertsLoaded = useAppSelector((state) => state.runway.isAlertsLoaded);
   const monthRange = getSpendRange(DEFAULT_SPEND_PERIOD, todayAsUtcDate(now));
   const monthMoneyIn = useAppSelector(selectMoneyIn).filter(
     (purchase) =>
@@ -138,6 +151,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const isChecking = view === 'checkAmount';
   const isCheckingBalance = view === 'checkBalance';
   const isViewingCash = view === 'cashPosition';
+  const isViewingAlerts = view === 'freeToSpendAlerts';
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -271,6 +285,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     if (isChecking) return CHECK_WORDS.title;
     if (isCheckingBalance) return BALANCE_CHECK_WORDS.title;
     if (isViewingCash) return CASH_POSITION_WORDS.title;
+    if (isViewingAlerts) return ALERT_WORDS.title;
     if (held) return held.name;
     return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
   };
@@ -278,6 +293,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     if (isChecking) return closeCheckAmount;
     if (isCheckingBalance) return closeCheckBalance;
     if (isViewingCash) return closeCashPosition;
+    if (isViewingAlerts) return closeFreeAlerts;
     if (held) return closeHeldView;
     return sheetKey === null ? undefined : () => setSheetKey(null);
   };
@@ -295,6 +311,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         <CheckBalanceBody onOpenDays={() => leaveViewForTab('days')} />
       ) : isViewingCash ? (
         <WhereYourCashIsBody />
+      ) : isViewingAlerts ? (
+        <FreeToSpendAlerts />
       ) : held ? (
         <HeldBreakdownView
           kind={held.kind}
@@ -487,6 +505,27 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 />
               )}
             </LevelGate>
+            {isTrackingLevel(level) && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Bell />}
+                label={ALERT_WORDS.row}
+                subtitle={
+                  isAlertsLoaded
+                    ? mask(
+                        getAlertsSummary(
+                          freeAlerts.entries,
+                          freeAlerts.figureCents,
+                          isHidden || isScrambled,
+                        ),
+                      )
+                    : undefined
+                }
+                onClick={openFreeAlerts}
+              />
+            )}
           </ActionGroup>
           {!isStartOpen && !isBankBacked && (
             <p className='text-muted-foreground text-sm'>

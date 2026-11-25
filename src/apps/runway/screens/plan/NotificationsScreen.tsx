@@ -32,7 +32,7 @@ import {
   NOTIFY_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
-import AlertsPanel from '@apps/runway/components/AlertsPanel';
+import FreeToSpendAlerts from '@apps/runway/components/FreeToSpendAlerts';
 import LevelGate from '@apps/runway/components/LevelGate';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -217,31 +217,10 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
         )}
         <LevelGate level='track'>
           <ActionSection caption={ALERT_WORDS.freeTitle}>
-            <div className='space-y-3'>
-              <p className='text-muted-foreground text-sm'>
-                {ALERT_WORDS.freeHelp}
-              </p>
-              {!canLink && stuckState !== null && (
-                <InlineNotice tone='warning'>
-                  {getDeviceNotificationsText(stuckState)}
-                </InlineNotice>
-              )}
-              {!isOn && device === 'off' && (
-                <ActionRow
-                  icon={<Smartphone />}
-                  label={ALERT_WORDS.turnOn}
-                  subtitle={ALERT_WORDS.turnOnSub}
-                  onClick={() => {
-                    setMessage(null);
-                    void askDevice();
-                  }}
-                />
-              )}
-              <AlertsPanel
-                target={{ kind: 'freeToSpend' }}
-                eachTimeCents={null}
-              />
-            </div>
+            <FreeToSpendAlerts
+              isStuckShownAbove={canLink}
+              isOffShownAbove={isOn}
+            />
           </ActionSection>
         </LevelGate>
       </div>

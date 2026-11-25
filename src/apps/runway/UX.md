@@ -452,7 +452,7 @@ Where it lives: a clock (`DoneForYouButton`) on Home's title line before the eye
 
 ## Alert ladders
 
-Where it lives: Settings > Notifications (Free to Spend's alerts, at Track and Link) and an envelope's sheet under "Alerts" (Track and Link). `AlertLadder` is pure presentation.
+Where it lives: Free to Spend's alerts at Track and Link, under "Alerts" at the bottom of Free to Spend's detail (with the ladder's next line as its subtitle) and in Settings > Notifications; and an envelope's sheet under "Alerts" (Track and Link). `AlertLadder` is pure presentation.
 
 - **One rail per set, highest line at the top.** Each alert is a notch on a vertical rail with a row beside it: "Half left · $150", "A quarter left · $75", "Runs out", "Below $50", over "Last went off 2 days ago" or "Hasn't gone off yet" (a share on an envelope with no set amount reads "Paused while this envelope has no set amount" and is hollow). Rows are 56px tall at least, carry a trailing chevron and open the alert's sheet (change, or the trash icon to remove with an Undo); no chips.
 - **A Now marker sits at today's figure.** Notches the figure has reached are filled, those ahead hollow. The gap between notches follows the money (scaled to what the envelope gets each time, or to Free to Spend's highest line or figure). "Add an alert" is a full-width secondary button under the ladder; at 50 alerts it is replaced by one quiet line.

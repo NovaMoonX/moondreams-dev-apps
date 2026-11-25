@@ -169,6 +169,7 @@ export const RUNWAY_VIEWS = [
   'checkAmount',
   'checkBalance',
   'cashPosition',
+  'freeToSpendAlerts',
   'heldBills',
   'heldGoals',
   'heldEnvelopes',
