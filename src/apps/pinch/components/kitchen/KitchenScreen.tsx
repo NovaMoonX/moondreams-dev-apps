@@ -76,9 +76,11 @@ type Overlay =
 
 interface KitchenScreenProps {
   uid: string;
+  /** An ingredient whose drawer opens as the screen mounts. */
+  openIngredientId?: string;
 }
 
-function KitchenScreen({ uid }: KitchenScreenProps) {
+function KitchenScreen({ uid, openIngredientId }: KitchenScreenProps) {
   const [query, setQuery] = usePinchSessionState('kitchen:query', '');
   const [view, setView] = usePinchSessionState<KitchenView>(
     'kitchen:view',
@@ -88,7 +90,11 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     'kitchen:filters',
     NO_INGREDIENT_FILTERS,
   );
-  const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [overlay, setOverlay] = useState<Overlay | null>(
+    openIngredientId === undefined
+      ? null
+      : { kind: 'details', id: openIngredientId },
+  );
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const families = useAppSelector(selectIngredientFamilies);

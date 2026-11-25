@@ -67,6 +67,23 @@ const truncate = (text: string, max: number) => {
   return `${text.slice(0, end).trimEnd()}…`;
 };
 
+const DESCRIPTION_QUOTE_LENGTH = 60;
+
+const clipAtWord = (text: string, max: number) => {
+  if (text.length <= max) return text;
+  const head = truncate(text, max).slice(0, -1);
+  const cut = head.lastIndexOf(' ');
+  return `${(cut > max / 2 ? head.slice(0, cut) : head).trimEnd()}…`;
+};
+
+const getFirstLine = (text: string) =>
+  clipAtWord(
+    (text.split(/\r?\n/).find((line) => line.trim() !== '') ?? '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    DESCRIPTION_QUOTE_LENGTH,
+  );
+
 const clip = (text: string, max: number) =>
   truncate(text.replace(/\s+/g, ' ').trim(), max);
 
@@ -530,7 +547,11 @@ const getTextChanges = (before: Normalized, after: Normalized) => {
     if (before.description === after.description) return [];
     if (before.description === null) return ['Added a description'];
     if (after.description === null) return ['Removed the description'];
-    return ['Description changed'];
+    const was = getFirstLine(before.description);
+    const now = getFirstLine(after.description);
+    return was === now
+      ? ['Description changed']
+      : [`Description: “${was}” → “${now}”`];
   };
 
   return [...titleChange, ...servingsChange, ...getDescriptionChange()];

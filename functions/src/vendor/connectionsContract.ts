@@ -49,6 +49,28 @@ export interface CategoryManifest {
   historyDays?: number;
 }
 
+/** One thing a source app does for an assistant on request, drawing only on categories the person switched on. */
+export interface AppActionManifest {
+  /** Snake verb_noun. */
+  id: string;
+  kind: 'read' | 'change';
+  /** A read's share categories: it is usable while any is on, and its result says which ones held something back. */
+  categories: string[];
+  /** A change's permission id; null for a read. */
+  permission: string | null;
+  /** The person's words for it. */
+  label: string;
+}
+
+/** A kind of change a source app lets an assistant make, each its own switch on the connection, off until the person turns it on. */
+export interface ChangePermissionManifest {
+  id: string;
+  /** The switch's label, in the person's words. */
+  label: string;
+  /** One sentence on what turning it on lets an assistant do, and what it never does. */
+  meaning: string;
+}
+
 export interface ConnectorManifest {
   id: ConnectorId;
   kind: 'firstPartyApp' | 'oauth' | 'apiKey';
@@ -60,7 +82,11 @@ export interface ConnectorManifest {
   categories: CategoryManifest[];
   /** The person's words for what is never shared; such data has no category and no field. */
   never: string[];
-  capabilities: { read: true; write: false; backgroundSync: boolean };
+  /** What the app offers an assistant beyond its records; `[]` for a source with none. */
+  actions: AppActionManifest[];
+  /** The kinds of change an assistant may be allowed to make; `[]` for a source that takes none. */
+  changes: ChangePermissionManifest[];
+  capabilities: { read: true; write: boolean; backgroundSync: boolean };
   connect:
     | { kind: 'siteGrant' }
     | {
@@ -159,6 +185,11 @@ export interface GrantCategory {
   seenScopeVersion: number | null;
 }
 
+export interface GrantChange {
+  isOn: boolean;
+  changedAt: number | null;
+}
+
 export interface CategoryState {
   lastOkAt: number | null;
   lastError: { code: string; at: number } | null;
@@ -170,6 +201,8 @@ export interface ConnectionGrant {
   connectorId: ConnectorId;
   accountId: string;
   categories: Record<string, GrantCategory>;
+  /** Change permission id to its switch; a missing id reads as off. */
+  changes: Record<string, GrantChange>;
   options: { calendarIds: string[] } | null;
   status: GrantStatus;
   categoryState: Record<string, CategoryState>;
@@ -217,6 +250,8 @@ export interface GrantConnectionRequest {
 export interface UpdateConnectionRequest {
   grantId: string;
   categories?: Record<string, boolean>;
+  /** Change permission id to on or off. */
+  changes?: Record<string, boolean>;
   options?: GrantOptions;
   /** The account's short name ("work"); null clears it. */
   accountLabel?: string | null;

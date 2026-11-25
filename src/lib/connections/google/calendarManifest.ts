@@ -43,6 +43,8 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
     },
   ],
   never: ['Descriptions', 'guests', 'video links', 'attachments'],
+  actions: [],
+  changes: [],
   capabilities: { read: true, write: false, backgroundSync: true },
   connect: {
     kind: 'oauth',

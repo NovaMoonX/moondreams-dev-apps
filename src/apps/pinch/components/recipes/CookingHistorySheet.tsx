@@ -16,7 +16,8 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort } from '@/utils/formatUtils';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
+import ChangeEntryView from '@apps/pinch/components/notes/ChangeEntryView';
+import ChangeRow from '@apps/pinch/components/notes/ChangeRow';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import CookEditView from '@apps/pinch/components/recipes/CookEditView';
 import CookJournal from '@apps/pinch/components/recipes/CookJournal';
@@ -83,6 +84,7 @@ const PHOTOS_SHOWN = 30;
 
 type HistoryView =
   | { kind: 'list' }
+  | { kind: 'change'; noteId: string; token: number }
   | { kind: 'edit'; cookId: string | null; token: number }
   | { kind: 'note'; cookId: string; noteId: string | null; token: number };
 
@@ -283,6 +285,17 @@ function CookingHistorySheet({
     changesHidden > 1 ? tweaks.slice(0, changesLimit) : tweaks;
 
   const getBody = () => {
+    if (view.kind === 'change') {
+      const changeView = view;
+      return (
+        <ChangeEntryView
+          uid={uid}
+          recipeId={recipeId}
+          noteId={changeView.noteId}
+          onBack={() => closeView(changeView.token)}
+        />
+      );
+    }
     if (view.kind === 'note') {
       const noteView = view;
       const noteCook = cooks.find((cook) => cook.id === noteView.cookId);
@@ -416,22 +429,13 @@ function CookingHistorySheet({
         </div>
         {shownMode === 'changes' ? (
           <div className='min-h-0 flex-1 overflow-y-auto'>
-            {undoError && (
-              <p className='text-destructive pt-2 text-sm'>{undoError}</p>
-            )}
             <ul className='divide-border divide-y'>
               {shownChanges.map((entry) => (
-                <NoteEntry
+                <ChangeRow
                   key={entry.id}
                   note={entry}
-                  cook={null}
-                  writtenBefore={null}
-                  stepAt={null}
-                  isStepLost={false}
-                  onEdit={null}
-                  onApplyChange={null}
-                  onUndo={
-                    undoableIds.includes(entry.id) ? () => void askUndo() : null
+                  onOpen={(noteId) =>
+                    openView((token) => ({ kind: 'change', noteId, token }))
                   }
                 />
               ))}

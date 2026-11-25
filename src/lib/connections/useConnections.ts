@@ -29,6 +29,7 @@ const toGrant = (
       { ...category, seenScopeVersion: category.seenScopeVersion ?? null },
     ]),
   ),
+  changes: data.changes ?? {},
   options: data.options ?? null,
   status: STATUSES.find((status) => status === data.status) ?? 'ended',
   categoryState: data.categoryState ?? {},

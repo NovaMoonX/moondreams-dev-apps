@@ -271,6 +271,11 @@ function RecipeForm({
   const tracking = useAppSelector((state) =>
     selectTweakTracking(state, recipeId),
   );
+  const hasCooks = useAppSelector(
+    (state) =>
+      recipeId !== null &&
+      (selectCookSummaries(state).get(recipeId)?.count ?? 0) > 0,
+  );
   const existingCoverUrl = useStorageImageUrl(
     recipe?.coverPath ?? null,
     recipe?.updatedAt ?? 0,
@@ -1139,7 +1144,11 @@ function RecipeForm({
 
   const handleSubmit = async (data: RecipeFormData) => {
     const hasReason = applied.length > 0 && why.trim() !== '';
-    if (recipe && (tracking === 'on' || applied.length > 0) && !hasReason) {
+    if (
+      recipe &&
+      ((tracking === 'on' && hasCooks) || applied.length > 0) &&
+      !hasReason
+    ) {
       const { changes, topics } = getDraftChanges(
         recipe,
         withLinesAsWritten(getDraft(data, ''), recipe, units),

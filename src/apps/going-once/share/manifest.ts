@@ -208,6 +208,8 @@ export const GOING_ONCE_SHARES: SourceShares = {
         "buyers' emails, phone numbers, messages and full names",
         'where things were bought',
       ],
+      actions: [],
+      changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

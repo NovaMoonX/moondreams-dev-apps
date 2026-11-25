@@ -773,6 +773,9 @@ export const MAX_TWEAK_CHANGES = 8;
 export const MAX_TWEAK_CHANGE_LENGTH = 200;
 /** The most notes one recipe's journal takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_RECIPE_NOTES = 300;
+/** The most recipes and planned meals an outside assistant's change can take a kitchen to: counted by the server only; the rules and the screens do not count documents. */
+export const SOFT_MAX_RECIPES = 2000;
+export const SOFT_MAX_PLANNED_MEALS = 3000;
 /** Under Firestore's 500 writes per batch. */
 export const RECIPE_NOTE_BATCH_SIZE = 400;
 export const RECIPE_NOTES_FIRST_PAGE = 5;
@@ -963,3 +966,63 @@ export const MAX_SHARED_NOTES = 30;
 export const MAX_SHARED_NOTE_LENGTH = 2000;
 /** The most tips one add brings across all its recipes, so the add stays one batch under Firestore's 500 writes. */
 export const MAX_IMPORTED_TIPS = 150;
+
+/** What an assistant's changes are kept for, in days. */
+export const OUTSIDE_CHANGES_DAYS = 30;
+
+export const OUTSIDE_CHANGES_WORDS = {
+  title: 'Done for you',
+  summary: (count: number) =>
+    count === 1
+      ? 'An assistant changed something in your kitchen'
+      : `Your assistants made ${count} changes in your kitchen`,
+  view: 'View',
+  empty: 'Nothing done for you yet',
+  emptyBody:
+    'When an assistant you connected to Helm changes your recipes, meal plan or shopping list, it shows here for 30 days, with a way to undo it.',
+  undo: 'Undo',
+  undoneAgo: (ago: string) => `Taken back ${ago}`,
+  undoneNotice: (ago: string) => `Taken back ${ago}`,
+  undoFailed: "That wasn't taken back. Nothing was changed.",
+  today: 'Today',
+  yesterday: 'Yesterday',
+  buttonLabel: 'Done for you',
+  recipeUpdated: (title: string) => `Changed ${title}`,
+  recipeAdded: (title: string) => `Added ${title}`,
+  mealPlanned: (title: string) => `Planned ${title}`,
+  shoppingAdded: (title: string) => `Added ${title} to your list`,
+  ideaSaved: (title: string) => `Saved ${title} as an idea`,
+  nutritionFilled: (title: string) => `Filled in nutrition for ${title}`,
+  undoIdeaSaved: 'Undo and remove the idea',
+  undoNutritionFilled: 'Undo and take the nutrition off',
+  ideaChangedAfter:
+    "The idea was changed after this, so it can't be taken back here.",
+  nutritionChangedAfter:
+    "The nutrition was changed after this, so it can't be taken back here.",
+  openIdea: 'Open the idea',
+  openIdeaSub: 'See it as it is now',
+  ideaGone: 'That idea is no longer in your kitchen.',
+  openIngredient: 'Open the ingredient',
+  openIngredientSub: 'See it as it is now',
+  ingredientGone: 'That ingredient is no longer in your kitchen.',
+  undoRecipeUpdated: 'Undo and put the recipe back',
+  undoRecipeAdded: 'Undo and remove the recipe',
+  undoRecipeAddedWithNew: (count: number) =>
+    `Undo and remove the recipe and its new ${count === 1 ? 'ingredient' : 'ingredients'}`,
+  undoRecipeUpdatedWithNew: (count: number) =>
+    `Undo, put the recipe back and remove its new ${count === 1 ? 'ingredient' : 'ingredients'}`,
+  undoShoppingAddedWithNew:
+    'Undo, take it off your list and remove the new ingredient',
+  newIngredientKept:
+    'A new ingredient stays in your kitchen if something else uses it by then.',
+  undoMealPlanned: 'Undo and take it off the calendar',
+  undoShoppingAdded: 'Undo and take it off your list',
+  undoShoppingMerged: 'Undo and take off what was added',
+  recipeChangedAfter:
+    "The recipe was changed after this, so it can't be taken back here.",
+  openRecipe: 'Open the recipe',
+  openRecipeSub: 'See it as it is now',
+  recipeGone: 'That recipe is no longer in your kitchen.',
+  openShopping: 'Open your shopping list',
+  openShoppingSub: 'See what is on it now',
+} as const;

@@ -750,6 +750,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   syncedApp('app:pinch', 'savedMeals', 'Saved meals'),
   syncedApp('app:pinch', 'ideas', 'Recipe ideas'),
   liveApp('app:pinch', 'recipeIngredients', 'Recipe ingredients'),
+  liveApp('app:pinch', 'fullRecipes', 'Recipe steps and descriptions'),
   liveApp('app:pinch', 'cooked', 'Recipes the person cooked'),
   syncedApp('app:runway', 'moneySummary', 'Free to Spend'),
   syncedApp('app:runway', 'upcomingBills', 'Bills coming up', ['relate']),

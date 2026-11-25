@@ -259,6 +259,8 @@ export const WAYPOINT_SHARES: SourceShares = {
         'receipts',
         'the album',
       ],
+      actions: [],
+      changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

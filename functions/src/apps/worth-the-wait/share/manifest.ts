@@ -89,6 +89,8 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
         'when an item was added',
         'the invite code',
       ],
+      actions: [],
+      changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

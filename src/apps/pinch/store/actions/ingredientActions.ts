@@ -98,6 +98,7 @@ export const saveIngredient = createAsyncThunk<
         const ownedFields = {
           ...missingKeys,
           nutritionPer100g: draft.nutrition,
+          nutritionBy: null,
           servingAmount: draft.servingAmount,
           servingUnit: draft.servingUnit,
           updatedAt: now,
@@ -122,6 +123,8 @@ export const saveIngredient = createAsyncThunk<
           gramsEach: null,
           defaultProductId: null,
           isArchived: false,
+          addedBy: null,
+          nutritionBy: null,
           createdAt: now,
           updatedAt: now,
         };
@@ -196,6 +199,7 @@ export const removeIngredient = createAsyncThunk<
           familyId: null,
           iconKey: null,
           nutritionPer100g: null,
+          nutritionBy: null,
           servingAmount: null,
           servingUnit: null,
           gramsPerMl: null,
