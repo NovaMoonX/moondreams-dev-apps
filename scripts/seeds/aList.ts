@@ -507,6 +507,147 @@ function toSharedViewing(
   };
 }
 
+// Friends' calendars: a live link from Jamie (added as Sam), a snapshot from Taylor (added as Anna),
+// and a second snapshot from Jamie not yet added, to show "Add to Sam" when it is opened.
+const SEED_FRIEND_LIVE_SHARE_ID = `seedpalsfeed${'4'.repeat(14)}`;
+const SEED_FRIEND_SNAPSHOT_SHARE_ID = `seedpalssnap${'5'.repeat(14)}`;
+const SEED_FRIEND_SECOND_SHARE_ID = `seedpalsmany${'6'.repeat(14)}`;
+const SEED_FRIEND_LIVE_FEED_ID = `seedfeedwarm${'7'.repeat(20)}`;
+const SEED_FRIEND_SNAPSHOT_FEED_ID = `seedfeedsnap${'8'.repeat(20)}`;
+
+async function writeSeedFriendCalendars(
+  context: SeedContext,
+  membershipRef: FirebaseFirestore.DocumentReference,
+  watchlist: ReturnType<typeof getWatchlistFixtures>,
+) {
+  const { now, firestore } = context;
+  const movieOf = (movieKey: string) =>
+    watchlist.find((item) => item.movieKey === movieKey)!.movie;
+  const showing = (
+    movieKey: string,
+    daysFromNow: number,
+    hour: number,
+    minute: number,
+    theatreIndex: number,
+  ) => {
+    const movie = movieOf(movieKey);
+    return {
+      title: movie.title,
+      posterUrl: movie.posterUrl,
+      runtimeMinutes: movie.runtimeMinutes,
+      contentRating: movie.contentRating,
+      showtimeAt: getShowtime(now, daysFromNow, hour, minute),
+      status: 'PLANNED',
+      format: null,
+      theatreName: SEED_THEATRES[theatreIndex].name,
+    };
+  };
+  const samShowings = [
+    showing('imdb-tt99000001', 4, 19, 0, 0),
+    showing('imdb-tt99000003', 6, 18, 45, 0),
+    showing('imdb-tt0133093', 2, 20, 15, 1),
+    // A day the member plans other movies, so the day drawer shows a friend's different pick.
+    showing('imdb-tt99000003', 8, 21, 0, 1),
+  ];
+  const annaShowings = [
+    showing('imdb-tt99000001', 4, 21, 30, 1),
+    showing('imdb-tt99000003', 6, 18, 45, 0),
+  ];
+  const shares = firestore
+    .collection('apps')
+    .doc('a-list')
+    .collection('calendarShares');
+  const feeds = firestore
+    .collection('apps')
+    .doc('a-list')
+    .collection('shareFeeds');
+  const createdAt = now - 2 * DAY_MS;
+  const snapshotStart = getDayUtc(now, 1);
+  const snapshotEnd = getDayUtcAhead(now, 14);
+
+  await Promise.all([
+    shares.doc(SEED_FRIEND_LIVE_SHARE_ID).set({
+      id: SEED_FRIEND_LIVE_SHARE_ID,
+      ownerUid: FIXTURE_USERS.partnerTwo.uid,
+      kind: 'LIVE',
+      startDate: null,
+      endDate: null,
+      pin: null,
+      feedId: SEED_FRIEND_LIVE_FEED_ID,
+      feedPin: null,
+      viewings: [],
+      createdAt,
+      lastEditedAt: createdAt,
+    }),
+    feeds.doc(SEED_FRIEND_LIVE_FEED_ID).set({
+      kind: 'LIVE',
+      startDate: null,
+      endDate: null,
+      createdAt,
+      viewings: samShowings,
+      updatedAt: now,
+    }),
+    shares.doc(SEED_FRIEND_SNAPSHOT_SHARE_ID).set({
+      id: SEED_FRIEND_SNAPSHOT_SHARE_ID,
+      ownerUid: FIXTURE_USERS.nineLivesCaretaker.uid,
+      kind: 'SNAPSHOT',
+      startDate: snapshotStart,
+      endDate: snapshotEnd,
+      pin: null,
+      feedId: SEED_FRIEND_SNAPSHOT_FEED_ID,
+      feedPin: null,
+      viewings: annaShowings,
+      createdAt,
+      lastEditedAt: createdAt,
+    }),
+    feeds.doc(SEED_FRIEND_SNAPSHOT_FEED_ID).set({
+      kind: 'SNAPSHOT',
+      startDate: snapshotStart,
+      endDate: snapshotEnd,
+      createdAt,
+      viewings: annaShowings,
+      updatedAt: createdAt,
+    }),
+    shares.doc(SEED_FRIEND_SECOND_SHARE_ID).set({
+      id: SEED_FRIEND_SECOND_SHARE_ID,
+      ownerUid: FIXTURE_USERS.partnerTwo.uid,
+      kind: 'SNAPSHOT',
+      startDate: snapshotStart,
+      endDate: snapshotEnd,
+      pin: null,
+      feedId: null,
+      feedPin: null,
+      viewings: samShowings.slice(0, 2),
+      createdAt,
+      lastEditedAt: createdAt,
+    }),
+    ...[
+      {
+        id: SEED_FRIEND_LIVE_SHARE_ID,
+        feedId: SEED_FRIEND_LIVE_FEED_ID,
+        personName: 'Sam',
+        kind: 'LIVE',
+      },
+      {
+        id: SEED_FRIEND_SNAPSHOT_SHARE_ID,
+        feedId: SEED_FRIEND_SNAPSHOT_FEED_ID,
+        personName: 'Anna',
+        kind: 'SNAPSHOT',
+      },
+    ].map((calendar) =>
+      membershipRef
+        .collection('sharedCalendars')
+        .doc(calendar.id)
+        .set({
+          ...calendar,
+          isShown: true,
+          createdAt,
+          lastEditedAt: createdAt,
+        }),
+    ),
+  ]);
+}
+
 const SEED_EMAIL_ADDRESS =
   'amc-3f9a1c7e5b2d48a6906de1f4b7c8a253@moondreamsmail.com';
 const HOUR_MS = 3_600_000;
@@ -797,13 +938,18 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
           ownerUid: alex.uid,
           startDate: getDayUtc(context.now, 75),
           endDate: getDayUtcAhead(context.now, 45),
+          kind: 'SNAPSHOT',
           pin,
+          feedId: null,
+          feedPin: null,
           viewings: items.map(toSharedViewing),
           createdAt: context.now - DAY_MS,
           lastEditedAt: context.now - DAY_MS,
         }),
     ),
   );
+
+  await writeSeedFriendCalendars(context, membershipRef, watchlist);
 
   const previewsViewing = viewings.find(
     (viewing) => viewing.id === PREVIEWS_VIEWING_ID,

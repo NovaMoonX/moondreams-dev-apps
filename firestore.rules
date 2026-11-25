@@ -242,11 +242,23 @@ service cloud.firestore {
       }
 
       allow read, delete: if isShareOwner();
+      // The feed id is the server's: a client never sets or changes it, nor turns a snapshot into a live share.
       allow create: if request.auth != null
         && request.resource.data.ownerUid == request.auth.uid
         && shareId.matches('^[2-9a-hj-np-z]{26}$')
+        && request.resource.data.get('feedId', null) == null
+        && request.resource.data.get('feedPin', null) == null
+        && request.resource.data.get('kind', 'SNAPSHOT') in ['SNAPSHOT', 'LIVE']
+        && (request.resource.data.get('kind', 'SNAPSHOT') == 'SNAPSHOT' || request.resource.data.viewings.size() == 0)
         && exists(/databases/$(database)/documents/apps/a-list/memberships/$(request.auth.uid));
-      allow update: if isShareOwner() && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow update: if isShareOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin', 'lastEditedAt']);
+    }
+
+    // A share's feed is found only by its own unguessable id, which the share function hands a signed-in visitor who passed the PIN.
+    // Anyone holding that id may read it; nobody may list feeds, and only Functions write them.
+    match /apps/a-list/shareFeeds/{feedId} {
+      allow get: if request.auth != null;
     }
 
     // --- App: helm ---

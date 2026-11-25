@@ -2,11 +2,18 @@ import { useEffect } from 'react';
 
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { useAddedFeedsSync } from '@apps/a-list/hooks/useAddedFeedsSync';
+import { startAddedCalendarsListener } from '@apps/a-list/store/listeners/addedCalendarListeners';
 import { startCalendarSharesListener } from '@apps/a-list/store/listeners/calendarShareListeners';
 import { startMembershipListener } from '@apps/a-list/store/listeners/membershipListeners';
 import { startTheatresListener } from '@apps/a-list/store/listeners/theatreListeners';
 import { startViewingsListener } from '@apps/a-list/store/listeners/viewingListeners';
 import { startWatchlistListener } from '@apps/a-list/store/listeners/watchlistListeners';
+import {
+  clearAddedCalendars,
+  setAddedCalendars,
+  setAddedCalendarsLoadError,
+} from '@apps/a-list/store/slices/addedCalendarsSlice';
 import {
   clearCalendarShares,
   setCalendarShares,
@@ -35,6 +42,7 @@ import {
 
 export function useAListSync(uid: string | null) {
   const dispatch = useAppDispatch();
+  useAddedFeedsSync();
 
   useEffect(() => {
     if (!uid) {
@@ -43,6 +51,7 @@ export function useAListSync(uid: string | null) {
       dispatch(clearViewings());
       dispatch(clearTheatres());
       dispatch(clearCalendarShares());
+      dispatch(clearAddedCalendars());
       return;
     }
 
@@ -101,7 +110,23 @@ export function useAListSync(uid: string | null) {
         ),
     );
 
+    // Also outside "loaded": friends' calendars are extras on top of the member's own.
+    const unsubscribeAddedCalendars = startAddedCalendarsListener(
+      uid,
+      (items) => dispatch(setAddedCalendars(items)),
+      (error) =>
+        dispatch(
+          setAddedCalendarsLoadError(
+            getErrorMessage(
+              error,
+              'Unable to load the calendars shared with you.',
+            ),
+          ),
+        ),
+    );
+
     return () => {
+      unsubscribeAddedCalendars();
       unsubscribeCalendarShares();
       unsubscribeTheatres();
       unsubscribeMembership();

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
-interface SettingsRowProps {
+interface SettingsRowBaseProps {
   /** An emoji or icon for the round chip at the start. */
   icon: ReactNode;
   title: string;
@@ -11,15 +11,26 @@ interface SettingsRowProps {
   badge?: ReactNode;
   /** A quiet line or two under the title: what it does, or why it is off. */
   description?: ReactNode;
-  /** The row's own control at its end, usually a switch; the whole top line is its tap target. */
-  control?: ReactNode;
   /** Fields that belong to this row, under its text. */
   children?: ReactNode;
   /** Makes the icon and text one tappable button (pick this account, open this item); the control stays its own target. */
   onClick?: () => void;
-  /** With `onClick`, ends the button with a chevron, for a row that opens a list or sheet. */
-  hasChevron?: boolean;
 }
+
+// A row that opens something never also carries a switch: the switch belongs inside what it opens.
+type SettingsRowProps = SettingsRowBaseProps &
+  (
+    | {
+        /** The row's own control at its end, usually a switch; the whole top line is its tap target. */
+        control?: ReactNode;
+        hasChevron?: false;
+      }
+    | {
+        control?: never;
+        /** With `onClick`, ends the button with a chevron, for a row that opens a list or sheet. */
+        hasChevron: true;
+      }
+  );
 
 /** One line of a `SettingsGroup`: an icon chip, a title with its description and a control at the end, with the row's own fields beneath. */
 function SettingsRow({

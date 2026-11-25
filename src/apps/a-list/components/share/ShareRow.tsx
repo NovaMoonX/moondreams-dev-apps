@@ -7,7 +7,12 @@ import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import { formatDateTime } from '@/utils/formatUtils';
 import type { CalendarShare } from '@apps/a-list/types';
-import { formatShareRange, getShareUrl } from '@apps/a-list/utils/sharing';
+import {
+  getShareRangeLabel,
+  getShareTitle,
+  getShareUrl,
+  isLiveShare,
+} from '@apps/a-list/utils/sharing';
 
 interface PinDetailsProps {
   pin: string;
@@ -37,7 +42,7 @@ function PinDetails({ pin, onCopyPin }: PinDetailsProps) {
           size='sm'
           rounded='full'
           aria-pressed={isShown}
-          className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']"
+          className="relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           onClick={() => setIsShown((current) => !current)}
         >
           {isShown ? (
@@ -52,7 +57,7 @@ function PinDetails({ pin, onCopyPin }: PinDetailsProps) {
           variant='tertiary'
           size='sm'
           rounded='full'
-          className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']"
+          className="relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           onClick={onCopyPin}
         >
           <Copy className='h-4 w-4' aria-hidden='true' />
@@ -79,22 +84,29 @@ function ShareRow({
   onDelete,
 }: ShareRowProps) {
   const url = getShareUrl(share.id);
+  const isLive = isLiveShare(share);
   const movieCount = share.viewings.length;
 
   return (
     <li className='space-y-3 py-4'>
       <div className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
-          <p className='font-medium'>
-            {formatShareRange(share.startDate, share.endDate)}
-          </p>
+          <p className='font-medium'>{getShareTitle(share)}</p>
           <p className='text-muted-foreground text-xs'>
-            {movieCount === 1 ? '1 movie' : `${movieCount} movies`} · made{' '}
-            {formatDateTime(share.createdAt)}
+            {isLive
+              ? 'Always up to date'
+              : movieCount === 1
+                ? '1 movie'
+                : `${movieCount} movies`}{' '}
+            · made {formatDateTime(share.createdAt)}
           </p>
         </div>
         <DeleteIconButton
-          label={`Delete the link for ${formatShareRange(share.startDate, share.endDate)}`}
+          label={
+            isLive
+              ? 'Delete the live link'
+              : `Delete the link for ${getShareRangeLabel(share)}`
+          }
           disabled={isDisabled}
           onClick={() => onDelete(share)}
         />

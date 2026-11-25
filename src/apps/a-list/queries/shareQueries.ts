@@ -16,9 +16,14 @@ export const shareQueryKeys = {
 };
 
 // Never persisted: the result is someone's calendar and the key can hold their PIN.
-export function sharedCalendarQueryOptions(shareId: string, pin: string | null) {
+/** Keyed on who is signed in: only a signed-in visitor gets the feed id, so signing in on the page asks again. */
+export function sharedCalendarQueryOptions(
+  shareId: string,
+  pin: string | null,
+  uid: string | null,
+) {
   return queryOptions({
-    queryKey: shareQueryKeys.detail(shareId, pin),
+    queryKey: [...shareQueryKeys.detail(shareId, pin), uid ?? 'signed-out'],
     queryFn: async () => {
       const result = await getCalendarShareCallable({ shareId, pin });
       return result.data;
