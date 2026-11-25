@@ -33,6 +33,8 @@ export interface DoneForYouEntry {
   isUndone: boolean;
   /** A muted line in the item, such as why its Undo is gone or the way back when there is none. */
   note: string | null;
+  /** Who did it, leading the row's line before the time. */
+  rowLead?: string;
   /** A short line on the row, such as that its Undo is gone. */
   rowNote: string | null;
   /** What the item's Undo button says; the sheet's `undo` word when null. */
@@ -221,8 +223,10 @@ function DoneForYouSheet({
       return words.undoneAgo(formatTimeAgo(at, now, true));
     }
     const ago = formatTimeAgo(entry.createdAt, now);
-    if (entry.rowNote !== null) return `${ago} \u00b7 ${entry.rowNote}`;
-    return entry.detail === null ? ago : `${ago} \u00b7 ${entry.detail}`;
+    const lead =
+      entry.rowLead === undefined ? ago : `${entry.rowLead} \u00b7 ${ago}`;
+    if (entry.rowNote !== null) return `${lead} \u00b7 ${entry.rowNote}`;
+    return entry.detail === null ? lead : `${lead} \u00b7 ${entry.detail}`;
   };
 
   const renderRow = (entry: DoneForYouEntry) => {

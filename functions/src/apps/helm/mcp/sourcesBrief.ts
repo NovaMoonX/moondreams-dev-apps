@@ -60,6 +60,9 @@ export const toHeldBackPrompt = (
 };
 
 export interface ConnectedSource {
+  connectorId?: string;
+  /** The tools this app's read actions are offered as, when it has any. */
+  actionTools?: string[];
   name: string;
   about: string;
   categories: { label: string; meaning: string }[];
@@ -84,9 +87,14 @@ export const sourcesBriefFor = (
       .filter((source) => source.access === scope)
       .map((source) => source.name);
   const readable = MCP_READ_SCOPES.flatMap((scope) => {
-    const tools = READ_SCOPE_TOOLS[scope].filter((tool) =>
-      toolNames.includes(tool),
-    );
+    const tools = [
+      ...READ_SCOPE_TOOLS[scope].filter((tool) => toolNames.includes(tool)),
+      ...sources
+        .filter((source) => source.access === scope)
+        .flatMap((source) =>
+          (source.actionTools ?? []).filter((tool) => toolNames.includes(tool)),
+        ),
+    ];
     const names = namesFor(scope);
     return names.length > 0 && readScopes.includes(scope) && tools.length > 0
       ? [{ names, tools }]

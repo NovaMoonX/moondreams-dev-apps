@@ -19,6 +19,8 @@ export function buildCatalogRecord(
     gramsEach: null,
     defaultProductId,
     isArchived: false,
+    addedBy: null,
+    nutritionBy: null,
     createdAt: now,
     updatedAt: now,
   };

@@ -9,7 +9,7 @@ import {
   Check,
   FolderOpen,
   HandCoins,
-  ArrowRightLeft,
+  ArrowLeftRight,
   Scale,
   History,
   Landmark,
@@ -278,6 +278,8 @@ export interface ItemSheetProps {
   fact?: string | null;
   /** A second muted line under the fact. */
   secondFact?: string | null;
+  /** Takes the place of the "Balance over time" row's title when the goal has a pace to tell. */
+  balanceTitle?: string;
   /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
@@ -391,6 +393,7 @@ function ItemSheet({
   figureSuffix,
   fact,
   secondFact,
+  balanceTitle,
   help,
   quickChange,
   dayAction,
@@ -453,7 +456,6 @@ function ItemSheet({
     today,
   );
   const [planAhead, setPlanAhead] = useState<'date' | 'stretch' | null>(null);
-  const [fromPlan, setFromPlan] = useState(false);
   const [focusedChange, setFocusedChange] = useState(presetChange ?? null);
   const [isChangeFromList, setIsChangeFromList] = useState(false);
   const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
@@ -713,7 +715,6 @@ function ItemSheet({
     setHeldChoice(null);
     setEventId(presetEventId ?? null);
     setPauseDate(toDateInputValue(today));
-    setFromPlan(false);
     setView(nextView);
   };
 
@@ -1234,6 +1235,11 @@ function ItemSheet({
   const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && isTrackingLevel(level);
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
+  const canSetHeld =
+    canChange &&
+    (itemKind === 'envelope' || itemKind === 'goal') &&
+    isArchivable &&
+    hasStarted;
   const hasBillRow =
     itemKind === 'bill' &&
     version !== null &&
@@ -1327,11 +1333,7 @@ function ItemSheet({
       : [
           'amount',
           'stretch',
-          'stop',
           ...(itemKind === 'payLine' ? (['pause'] as const) : []),
-          ...(goal && !isPaused && !isUnfunded
-            ? (['stopSaving'] as const)
-            : []),
         ];
   const planAheadOn = (choice: PlanAheadChoice) => {
     if (choice === 'amount' || choice === 'stretch') {
@@ -1341,19 +1343,7 @@ function ItemSheet({
       setPhase('change');
       return;
     }
-    if (choice === 'pause') {
-      openPause();
-      return;
-    }
-    if (choice === 'stop') {
-      goTo('end');
-      setEndPick('');
-      setEndDate('');
-    } else {
-      goTo('pause');
-      setPauseDate('');
-    }
-    setFromPlan(true);
+    openPause();
   };
   const openChangeSheet = (change: PlanChange, isFromList: boolean) => {
     goTo('changeSheet');
@@ -1604,25 +1594,22 @@ function ItemSheet({
             <ActionRow
               isGrouped
               hasChevron
-              icon={<ArrowRightLeft />}
+              icon={<ArrowLeftRight />}
               label={
                 itemKind === 'goal' ? MOVE_WORDS.openGoal : MOVE_WORDS.open
               }
               onClick={() => goTo('move')}
             />
           )}
-        {canChange &&
-          (itemKind === 'envelope' || itemKind === 'goal') &&
-          isArchivable &&
-          hasStarted && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Scale />}
-              label={SET_HELD_WORDS.open}
-              onClick={() => goTo('setHeld')}
-            />
-          )}
+        {canSetHeld && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Scale />}
+            label={SET_HELD_WORDS.open}
+            onClick={() => goTo('setHeld')}
+          />
+        )}
         {canChange &&
           (itemKind === 'envelope' || itemKind === 'goal') &&
           isArchivable &&
@@ -1686,6 +1673,7 @@ function ItemSheet({
             goalId={itemId}
             goal={goal}
             today={today}
+            title={balanceTitle}
             onOpen={() => goTo('balance')}
           />
         )}
@@ -2340,22 +2328,14 @@ function ItemSheet({
   const getPrimaryLabel = () => {
     if (view === 'end' && isEndValid)
       return LIFECYCLE_WORDS.endAfterConfirm(formatDateOrdinalUTC(endOn));
-    if (fromPlan && view === 'pause' && isPauseValid)
-      return LIFECYCLE_WORDS.stopSavingFromConfirm(
-        formatDateOrdinalUTC(pauseOn),
-      );
     return getActionTitle(view, itemKind);
   };
-  const leaveAction = () => goTo(fromPlan ? 'planChoice' : 'menu');
+  const leaveAction = () => goTo('menu');
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={leaveAction} />
       <div className='space-y-1'>
-        <ActionTitle>
-          {fromPlan && view === 'pause'
-            ? COMING_WORDS.planStopSaving
-            : getActionTitle(view, itemKind)}
-        </ActionTitle>
+        <ActionTitle>{getActionTitle(view, itemKind)}</ActionTitle>
         {VIEW_NOTES[view] !== '' && (
           <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
         )}
@@ -2482,7 +2462,6 @@ function ItemSheet({
   const planChoiceView = (
     <PlanAheadView
       choices={planAheadChoices}
-      isGoal={goal !== null}
       onPick={planAheadOn}
       onBack={() => (presetEventId === undefined ? goTo('menu') : onClose())}
     />

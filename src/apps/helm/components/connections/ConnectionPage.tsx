@@ -100,6 +100,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [pending, setPending] = useState<
     Record<string, { isOn: boolean; since: number }>
   >({});
+  const [pendingChanges, setPendingChanges] = useState<
+    Record<string, { isOn: boolean; since: number }>
+  >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [seenNow, setSeenNow] = useState<Record<string, number>>({});
   const [handedNews] = useState(() =>
@@ -199,6 +202,31 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       setFailures((current) => ({
         ...current,
         [categoryId]: failureLine(
+          error,
+          appName,
+          HELM_COPY.connectionToggleFailed,
+        ),
+      }));
+    }
+  };
+
+  const changePermission = async (permissionId: string, isOn: boolean) => {
+    setPendingChanges((current) => ({
+      ...current,
+      [permissionId]: { isOn, since: grant.updatedAt },
+    }));
+    setFailures((current) => without(current, `change:${permissionId}`));
+    try {
+      await updateConnection({
+        grantId: grant.id,
+        changes: { [permissionId]: isOn },
+      });
+    } catch (error) {
+      console.error('Helm connection change did not save', error);
+      setPendingChanges((current) => without(current, permissionId));
+      setFailures((current) => ({
+        ...current,
+        [`change:${permissionId}`]: failureLine(
           error,
           appName,
           HELM_COPY.connectionToggleFailed,
@@ -355,7 +383,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       </p>
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {!isGoogle
-          ? HELM_COPY.connectReadOnlyPromise(name, appName)
+          ? manifest && manifest.changes.length > 0
+            ? HELM_COPY.connectReadAndChangePromise(name, appName)
+            : HELM_COPY.connectReadOnlyPromise(name, appName)
           : isGmailGrant
             ? HELM_COPY.googleGmailReadOnly(name)
             : isDriveGrant
@@ -623,6 +653,68 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           </p>
         )}
       </section>
+      {manifest && manifest.changes.length > 0 && (
+        <section className='flex flex-col gap-2'>
+          <h2 className='text-muted-foreground text-[13px] font-medium'>
+            {HELM_COPY.connectionChanges}
+          </h2>
+          <ul className='helm-card divide-border divide-y overflow-hidden'>
+            {manifest.changes.map((permission) => {
+              const entry = pendingChanges[permission.id];
+              const waiting =
+                entry && entry.since === grant.updatedAt ? entry : null;
+              const isOn =
+                waiting?.isOn ?? grant.changes[permission.id]?.isOn ?? false;
+              return (
+                <li
+                  key={permission.id}
+                  className='flex flex-col gap-1 px-3 py-3'
+                >
+                  <label className='flex min-h-11 items-center gap-3'>
+                    <span className='min-w-0 flex-1'>
+                      <span className='text-foreground block text-[15px]'>
+                        {permission.label}
+                      </span>
+                      <span className='text-muted-foreground block text-[13px] text-pretty'>
+                        {permission.meaning}
+                      </span>
+                    </span>
+                    {isOffline ? (
+                      locked
+                    ) : (
+                      <AppToggle
+                        aria-label={permission.label}
+                        checked={isOn}
+                        disabled={waiting !== null}
+                        onCheckedChange={(next) =>
+                          void changePermission(permission.id, next)
+                        }
+                      />
+                    )}
+                  </label>
+                  {isOn &&
+                    HELM_COPY.connectionChangeNeeds[permission.id] &&
+                    !grant.categories[
+                      HELM_COPY.connectionChangeNeeds[permission.id].categoryId
+                    ]?.isOn && (
+                      <p className='text-muted-foreground text-[13px] text-pretty'>
+                        {HELM_COPY.connectionChangeNeeds[permission.id].line}
+                      </p>
+                    )}
+                  {failures[`change:${permission.id}`] && (
+                    <p className='text-destructive text-[13px]' role='alert'>
+                      {failures[`change:${permission.id}`]}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.connectionChangesOutsideLine}
+          </p>
+        </section>
+      )}
       {isOffline ? (
         <LockedButton
           label={HELM_COPY.connectionDisconnect(appName)}

@@ -8,10 +8,13 @@ import type {
 } from '../../src/apps/pinch/types.ts';
 import { placeLineInGroup } from '../../src/apps/pinch/utils/ingredientGroups.ts';
 import {
+  getChangeByLine,
   getMissingNoteFields,
   getNoteSummaries,
   getOutsideTweak,
+  getTweakTracking,
   getUndoableTweakIds,
+  planGoBack,
   planTweakUndo,
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
@@ -89,6 +92,7 @@ const tweak = (
   stepText: null,
   reason: null,
   previous,
+  by: { kind: 'you', name: null },
   createdAt,
   updatedAt: createdAt,
 });
@@ -943,5 +947,88 @@ check(
     );
   },
 );
+
+check('a save is recorded for a recipe that was never cooked', () => {
+  assert.equal(getTweakTracking({ isNotesReady: true, noteCount: 0 }), 'on');
+  assert.equal(getTweakTracking({ isNotesReady: false, noteCount: 0 }), 'off');
+  assert.equal(
+    getTweakTracking({ isNotesReady: true, noteCount: 300 }),
+    'full',
+  );
+  assert.equal(tweak('t', AT, getRecipeSnapshot(before)).cookId, null);
+});
+
+check('an older entry has no author and reads as You', () => {
+  assert.equal(getMissingNoteFields({ text: null }).by, null);
+  assert.equal('by' in getMissingNoteFields({ by: null }), false);
+  const when = () => 'Nov 24, 6:28 PM';
+  const legacy = { ...tweak('l', AT, null), by: null };
+  assert.equal(getChangeByLine(legacy, when), 'You · Nov 24, 6:28 PM');
+  assert.equal(
+    getChangeByLine(
+      { ...legacy, by: { kind: 'assistant', name: 'Gemini' } },
+      when,
+    ),
+    'Gemini, through Helm · Nov 24, 6:28 PM',
+  );
+  assert.equal(
+    getChangeByLine({ ...legacy, by: { kind: 'nomos', name: 'Pepper' } }, when),
+    'Pepper · Nov 24, 6:28 PM',
+  );
+});
+
+const current: Recipe = {
+  ...(after as unknown as Recipe),
+  id: 'adobo',
+  updatedAt: AT,
+};
+const goBack = (overrides: Partial<Parameters<typeof planGoBack>[0]>) =>
+  planGoBack({
+    recipe: current,
+    target: tweak('t', AT - 1_000, getRecipeSnapshot(before)),
+    seenUpdatedAt: AT,
+    newId: 'new',
+    dayLabel: 'Nov 20',
+    now: AT + 10,
+    ...overrides,
+  });
+
+check(
+  'going back restores the snapshot and records a new undoable change',
+  () => {
+    const plan = goBack({});
+    assert.equal(plan.kind, 'RESTORE');
+    if (plan.kind !== 'RESTORE') return;
+    assert.equal(plan.fields.title, 'Adobo');
+    assert.equal(plan.fields.servings, 4);
+    assert.deepEqual(plan.entry.changes, [
+      'Went back to before the Nov 20 change',
+    ]);
+    assert.equal(plan.entry.kind, 'TWEAK');
+    assert.deepEqual(plan.entry.by, { kind: 'you', name: null });
+    assert.equal(plan.entry.previous?.title, 'Weeknight adobo');
+    const written = { ...current, updatedAt: plan.entry.createdAt };
+    assert.deepEqual(getUndoableTweakIds([plan.entry], written.updatedAt), [
+      'new',
+    ]);
+    assert.equal(
+      planTweakUndo({ updatedAt: written.updatedAt }, [plan.entry]).kind,
+      'REVERT',
+    );
+  },
+);
+
+check('going back is refused in a sentence when it cannot be done', () => {
+  const message = (plan: ReturnType<typeof planGoBack>) =>
+    plan.kind === 'REFUSE' ? plan.message : null;
+  assert.match(message(goBack({ seenUpdatedAt: AT - 1 })) ?? '', /saved again/);
+  assert.match(message(goBack({ recipe: null })) ?? '', /recipe is gone/);
+  assert.match(message(goBack({ target: null })) ?? '', /removed/);
+  assert.match(
+    message(goBack({ target: tweak('l', AT, null) })) ?? '',
+    /can't be put back/,
+  );
+  assert.match(message(goBack({ target: note('n', AT) })) ?? '', /removed/);
+});
 
 console.log(`pinchTweakUndo: ${passed} checks passed`);

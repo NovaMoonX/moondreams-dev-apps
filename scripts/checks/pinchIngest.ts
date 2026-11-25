@@ -34,6 +34,8 @@ const custom = (id: string, name: string): IngredientRecord => ({
   gramsPerMl: null,
   gramsEach: null,
   defaultProductId: null,
+  addedBy: null,
+  nutritionBy: null,
   isArchived: false,
   createdAt: 0,
   updatedAt: 0,

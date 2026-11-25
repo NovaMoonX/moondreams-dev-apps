@@ -9,7 +9,7 @@ function ChangeList({ changes }: ChangeListProps) {
 
   return (
     <div className='space-y-1'>
-      <p className='text-muted-foreground text-xs'>You changed:</p>
+      <p className='text-muted-foreground text-xs'>What changed:</p>
       <ul className='list-disc space-y-0.5 pl-5 text-sm'>
         {changes.map((change, index) => (
           <li key={index} className='wrap-break-word'>

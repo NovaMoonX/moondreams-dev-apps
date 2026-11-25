@@ -125,13 +125,15 @@ export function readUpdateConnectionRequest(
   const hasOptions = data.options !== undefined;
   const hasLabel = data.accountLabel !== undefined;
   const hasSeen = data.seenScopes !== undefined;
-  if (!hasCategories && !hasOptions && !hasLabel && !hasSeen)
+  const hasChanges = data.changes !== undefined;
+  if (!hasCategories && !hasOptions && !hasLabel && !hasSeen && !hasChanges)
     throw badRequest();
   return {
     grantId: data.grantId,
     ...(hasCategories
       ? { categories: readCategoryChanges(data.categories) }
       : {}),
+    ...(hasChanges ? { changes: readCategoryChanges(data.changes) } : {}),
     ...(hasOptions ? { options: requireOptions(data.options) } : {}),
     ...(hasLabel
       ? { accountLabel: readAccountLabelInput(data.accountLabel) }
@@ -213,6 +215,7 @@ export function buildNewGrant(
         },
       ]),
     ),
+    changes: {},
     options: req.options,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -269,6 +272,31 @@ export function applyCategoryChanges(
         : { isOn: false, changedAt: now, seenScopeVersion: version },
     }),
     switched,
+  );
+}
+
+/** The grant's change permissions with the asked switches applied; a switch already in the asked state keeps its time. */
+export function applyPermissionChanges(
+  grant: ConnectionGrant,
+  asked: Record<string, boolean>,
+  manifest: ConnectorManifest,
+  now: number,
+): ConnectionGrant['changes'] {
+  const isDeclared = Object.keys(asked).every((id) =>
+    manifest.changes.some((permission) => permission.id === id),
+  );
+  if (!isDeclared) {
+    throw new HttpsError(
+      'invalid-argument',
+      "That app doesn't offer that kind of change.",
+    );
+  }
+  return Object.entries(asked).reduce(
+    (changes, [id, isOn]) =>
+      changes[id]?.isOn === isOn
+        ? changes
+        : { ...changes, [id]: { isOn, changedAt: now } },
+    grant.changes,
   );
 }
 
@@ -359,6 +387,22 @@ const readKeptCopies = (value: unknown): ConnectionGrant['keptCopies'] =>
     ? { count: value.count, deleteAfter: readTime(value.deleteAfter) }
     : null;
 
+const readChanges = (value: unknown): ConnectionGrant['changes'] =>
+  isRecord(value)
+    ? Object.fromEntries(
+        Object.entries(value).flatMap(([id, change]) =>
+          isRecord(change) && typeof change.isOn === 'boolean'
+            ? [
+                [
+                  id,
+                  { isOn: change.isOn, changedAt: readTime(change.changedAt) },
+                ],
+              ]
+            : [],
+        ),
+      )
+    : {};
+
 const readOptions = (value: unknown): ConnectionGrant['options'] =>
   isRecord(value) && Array.isArray(value.calendarIds)
     ? {
@@ -376,6 +420,7 @@ export function readGrant(data: unknown): ConnectionGrant {
     connectorId: readText(doc.connectorId) as ConnectorId,
     accountId: readText(doc.accountId),
     categories: readCategories(doc.categories),
+    changes: readChanges(doc.changes),
     options: readOptions(doc.options),
     status: GRANT_STATUSES.find((status) => status === doc.status) ?? 'ended',
     categoryState: readCategoryState(doc.categoryState),

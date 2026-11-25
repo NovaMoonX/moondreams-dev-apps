@@ -17,6 +17,10 @@ import {
 } from './slices/ingredientsSlice';
 import { mealsReducer, type MealsState } from './slices/mealsSlice';
 import { notesReducer, type NotesState } from './slices/notesSlice';
+import {
+  outsideChangesReducer,
+  type OutsideChangesState,
+} from './slices/outsideChangesSlice';
 import { packagesReducer, type PackagesState } from './slices/packagesSlice';
 import {
   plannedMealsReducer,
@@ -53,6 +57,7 @@ export interface PinchState {
   containers: ContainersState;
   packages: PackagesState;
   shares: SharesState;
+  outsideChanges: OutsideChangesState;
 }
 
 export const pinchReducer = combineReducers({
@@ -74,4 +79,5 @@ export const pinchReducer = combineReducers({
   containers: containersReducer,
   packages: packagesReducer,
   shares: sharesReducer,
+  outsideChanges: outsideChangesReducer,
 });

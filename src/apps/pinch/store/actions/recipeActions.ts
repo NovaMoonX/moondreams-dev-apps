@@ -14,6 +14,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+import { formatDateShort } from '@/utils/formatUtils';
 import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
@@ -32,7 +33,11 @@ import {
   getRecipeSnapshot,
   isUnrestoredLine,
 } from '@apps/pinch/utils/recipeChanges';
-import { getTweakReason, planTweakUndo } from '@apps/pinch/utils/notes';
+import {
+  getTweakReason,
+  planGoBack,
+  planTweakUndo,
+} from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import {
   getCoverFields,
@@ -215,6 +220,7 @@ const getTweakPlan = (
     previous: changes.every(isUnrestoredLine)
       ? null
       : getRecipeSnapshot(existing),
+    by: { kind: 'you', name: null },
     createdAt: now,
     updatedAt: now,
   };
@@ -330,6 +336,8 @@ export const saveRecipe = createAsyncThunk<
           gramsEach: null,
           defaultProductId: null,
           isArchived: false,
+          addedBy: null,
+          nutritionBy: null,
           createdAt: now,
           updatedAt: now,
         };
@@ -463,6 +471,82 @@ export const undoRecipeChange = createAsyncThunk<
     }
 
     return noteIds.length;
+  },
+);
+
+interface GoBackToChangeInput {
+  uid: string;
+  recipeId: string;
+  noteId: string;
+  /** The recipe's `updatedAt` as the screen showed it. */
+  seenUpdatedAt: number;
+}
+
+/** Puts the recipe back to how a recorded change found it and records that as a new change (so it can be undone like any other), in one transaction that re-reads the recipe and the entry: it refuses when the recipe was saved since the screen showed it or the entry is gone or kept no snapshot. Writes the same fields an undo does. */
+export const goBackToChange = createAsyncThunk<
+  void,
+  GoBackToChangeInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/recipes/goBackToChange',
+  async (
+    { uid, recipeId, noteId, seenUpdatedAt },
+    { getState, rejectWithValue },
+  ) => {
+    const targetRef = doc(
+      db,
+      'apps',
+      'pinch',
+      'kitchens',
+      uid,
+      'notes',
+      noteId,
+    );
+    const newRef = doc(
+      db,
+      'apps',
+      'pinch',
+      'kitchens',
+      uid,
+      'notes',
+      generateUuid(),
+    );
+    try {
+      await freezeBeforeEdit(uid, getState());
+      const refusal = await runHeldTransaction(uid, async (transaction) => {
+        const recipeSnapshot = await transaction.get(recipeDoc(uid, recipeId));
+        const targetSnapshot = await transaction.get(targetRef);
+        const target = targetSnapshot.exists()
+          ? (targetSnapshot.data() as RecipeNote)
+          : null;
+        const now = Date.now();
+        const plan = planGoBack({
+          recipe: recipeSnapshot.exists()
+            ? { ...(recipeSnapshot.data() as Recipe), id: recipeId }
+            : null,
+          target,
+          seenUpdatedAt,
+          newId: newRef.id,
+          dayLabel: formatDateShort(target?.createdAt ?? now),
+          now,
+        });
+        if (plan.kind === 'REFUSE') return plan.message;
+
+        transaction.update(recipeDoc(uid, recipeId), {
+          ...plan.fields,
+          updatedAt: now,
+        });
+        transaction.set(newRef, plan.entry);
+        return null;
+      });
+      if (refusal !== null) return rejectWithValue(refusal);
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to go back to before this change.'),
+      );
+    }
+
+    return undefined;
   },
 );
 

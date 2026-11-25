@@ -109,6 +109,7 @@ for (const image of [
 // an idea offers what its link would, from the picture it kept
 const idea = (overrides: Partial<Idea>): Idea => ({
   id: 'i1',
+  by: null,
   kind: 'LINK',
   title: 'Adobo',
   note: null,

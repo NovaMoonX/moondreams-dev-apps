@@ -859,6 +859,7 @@ assert.deepEqual(
     savedMeals: true,
     ideas: true,
     recipeIngredients: false,
+    fullRecipes: false,
     cooked: false,
   },
 );
@@ -875,6 +876,7 @@ const staged = buildNewGrant(
 );
 assert.deepEqual(Object.keys(staged.categories).sort(), [
   'cooked',
+  'fullRecipes',
   'ideas',
   'pantryStock',
   'plannedMeals',

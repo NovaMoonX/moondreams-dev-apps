@@ -192,7 +192,7 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'artifact',
           label: 'Recipe ingredients',
           meaning:
-            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts and the collections it is in, plus how long it takes (not servings or kind of dish). Never the steps, notes or links.",
+            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts, its collections and time, and which of your ingredients a name is. Never servings, steps, description, notes, links or nutrition values.",
           detail:
             'Each recipe, its ingredients and amounts, time and collections',
           mode: 'live',
@@ -213,6 +213,36 @@ export const PINCH_SHARES: SourceShares = {
               label: 'The collections it is in',
               sinceVersion: 1,
               addedOn: '2026-11-16',
+            },
+            {
+              label:
+                'Which of your ingredients a name is, and whether it has nutrition yet',
+              sinceVersion: 2,
+              addedOn: '2026-11-25',
+            },
+          ],
+          scopeVersion: 2,
+        },
+        {
+          id: 'fullRecipes',
+          kind: 'artifact',
+          label: 'Full recipes',
+          meaning:
+            "The method of each saved recipe: the written description and every step, in order. Never the recipe's notes, links, prices or nutrition.",
+          detail: 'Each recipe with its description and steps',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each recipe's description",
+              sinceVersion: 1,
+              addedOn: '2026-11-25',
+            },
+            {
+              label: "Each recipe's steps, in order",
+              sinceVersion: 1,
+              addedOn: '2026-11-25',
             },
           ],
           scopeVersion: 1,
@@ -243,12 +273,135 @@ export const PINCH_SHARES: SourceShares = {
         },
       ],
       never: [
-        'Recipe steps, notes and links',
+        'Recipe notes and links',
         'prices and costs',
         'nutrition',
         'how a cook turned out',
       ],
-      capabilities: { read: true, write: false, backgroundSync: true },
+      actions: [
+        {
+          id: 'get_meal_plan',
+          kind: 'read',
+          categories: ['plannedMeals'],
+          permission: null,
+          label: 'Look up planned meals',
+        },
+        {
+          id: 'search_recipes',
+          kind: 'read',
+          categories: ['recipes', 'savedMeals', 'ideas'],
+          permission: null,
+          label: 'Search recipes, saved meals and ideas',
+        },
+        {
+          id: 'get_recipe',
+          kind: 'read',
+          categories: ['recipes', 'recipeIngredients', 'fullRecipes'],
+          permission: null,
+          label: 'Open one recipe',
+        },
+        {
+          id: 'get_shopping_list',
+          kind: 'read',
+          categories: ['shoppingList'],
+          permission: null,
+          label: 'Read the shopping list',
+        },
+        {
+          id: 'get_kitchen',
+          kind: 'read',
+          categories: ['pantryStock', 'useSoon'],
+          permission: null,
+          label: 'See what is in the kitchen',
+        },
+        {
+          id: 'find_ingredients',
+          kind: 'read',
+          categories: ['recipeIngredients'],
+          permission: null,
+          label: "Look up which names the kitchen's ingredients use",
+        },
+        {
+          id: 'update_recipe',
+          kind: 'change',
+          categories: [],
+          permission: 'editRecipes',
+          label: 'Edit a recipe',
+        },
+        {
+          id: 'add_recipe',
+          kind: 'change',
+          categories: [],
+          permission: 'addRecipes',
+          label: 'Add a recipe',
+        },
+        {
+          id: 'plan_meal',
+          kind: 'change',
+          categories: [],
+          permission: 'planMeals',
+          label: 'Plan a meal',
+        },
+        {
+          id: 'add_to_shopping_list',
+          kind: 'change',
+          categories: [],
+          permission: 'addToShoppingList',
+          label: 'Add to the shopping list',
+        },
+        {
+          id: 'save_idea',
+          kind: 'change',
+          categories: [],
+          permission: 'saveIdeas',
+          label: 'Save a recipe idea',
+        },
+        {
+          id: 'fill_nutrition',
+          kind: 'change',
+          categories: [],
+          permission: 'fillNutrition',
+          label: 'Fill in missing nutrition',
+        },
+      ],
+      changes: [
+        {
+          id: 'editRecipes',
+          label: 'Edit recipes',
+          meaning:
+            "Change a recipe's name, servings, times, description, ingredients or steps, adding an ingredient it needs that you don't have.",
+        },
+        {
+          id: 'addRecipes',
+          label: 'Add recipes',
+          meaning:
+            "Save a new recipe, with any ingredient it needs that you don't have. It can never remove one.",
+        },
+        {
+          id: 'planMeals',
+          label: 'Plan meals',
+          meaning: 'Put a recipe or dish on your plan. It never takes one off.',
+        },
+        {
+          id: 'addToShoppingList',
+          label: 'Add to the shopping list',
+          meaning:
+            'Add to your shopping list. It never ticks or removes anything.',
+        },
+        {
+          id: 'saveIdeas',
+          label: 'Save recipe ideas',
+          meaning:
+            'Save a link or a written idea to try later. It never changes or removes an idea.',
+        },
+        {
+          id: 'fillNutrition',
+          label: 'Fill in missing nutrition',
+          meaning:
+            'Only for ingredients with no nutrition yet. It never changes nutrition you or the catalog already have.',
+        },
+      ],
+      capabilities: { read: true, write: true, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },
   ],

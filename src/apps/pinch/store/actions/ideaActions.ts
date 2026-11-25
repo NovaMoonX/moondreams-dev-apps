@@ -135,6 +135,7 @@ export const createIdea = createAsyncThunk<
       imageUrl: url === null ? null : toIdeaImageUrl(draft.imageUrl),
       photoPath,
       recipeId: null,
+      by: null,
       createdAt: now,
       updatedAt: now,
     };

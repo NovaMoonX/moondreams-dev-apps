@@ -75,6 +75,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Saved meals: look in <synced_records>, then call search_synced; you cannot change it.
 - Recipe ideas: look in <synced_records>, then call search_synced; you cannot change it.
 - Recipe ingredients: call search_app_records; you cannot change it.
+- Recipe steps and descriptions: call search_app_records; you cannot change it.
 - Recipes the person cooked: call search_app_records; you cannot change it.
 - Free to Spend: look in <synced_records>, then call search_synced; you cannot change it.
 - Bills coming up: look in <synced_records>, then call search_synced; you cannot change it.

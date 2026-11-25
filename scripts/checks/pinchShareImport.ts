@@ -106,6 +106,8 @@ const own = (
   gramsPerMl: null,
   gramsEach: null,
   defaultProductId: null,
+  addedBy: null,
+  nutritionBy: null,
   isArchived,
   createdAt: 1,
   updatedAt: 1,

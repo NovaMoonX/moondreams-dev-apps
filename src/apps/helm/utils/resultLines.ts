@@ -131,6 +131,22 @@ export function buildResultLines(
         },
       ];
     }
+    if (ref.collection === 'appChanges') {
+      const lines = effect?.written['sealed.lines'];
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            toText(effect?.written['sealed.title']) ??
+            HELM_COPY.resultAppChangeFallback,
+          detail:
+            Array.isArray(lines) && typeof lines[0] === 'string'
+              ? lines[0]
+              : null,
+        },
+      ];
+    }
     if (ref.collection === 'seenAs') {
       return [
         {

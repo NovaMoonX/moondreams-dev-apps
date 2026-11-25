@@ -5,6 +5,7 @@ import IdeaThumbnail from '@apps/pinch/components/ideas/IdeaThumbnail';
 import { useIsIdeaWaiting } from '@apps/pinch/hooks/useIdeaSaving';
 import type { Idea } from '@apps/pinch/types';
 import { getIdeaDetail } from '@apps/pinch/utils/ideas';
+import { getMadeByName } from '@apps/pinch/utils/notes';
 
 interface IdeaRowProps {
   idea: Idea;
@@ -13,9 +14,12 @@ interface IdeaRowProps {
 
 function IdeaRow({ idea, onOpen }: IdeaRowProps) {
   const isWaiting = useIsIdeaWaiting(idea.id);
+  const madeBy = getMadeByName(idea.by);
   const detail = isWaiting
     ? "Saves when you're back online"
-    : getIdeaDetail(idea);
+    : [madeBy === null ? null : `From ${madeBy}`, getIdeaDetail(idea)]
+        .filter(Boolean)
+        .join(' \u00b7 ');
 
   return (
     <Button

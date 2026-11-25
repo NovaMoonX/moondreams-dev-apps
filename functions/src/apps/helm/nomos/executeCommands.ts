@@ -253,7 +253,8 @@ export interface EffectRef {
     | 'scheduledActions'
     | 'research'
     | 'seenAs'
-    | 'dayAims';
+    | 'dayAims'
+    | 'appChanges';
   docId: string;
 }
 

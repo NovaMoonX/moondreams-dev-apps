@@ -57,6 +57,10 @@ export interface IngredientRecord {
   defaultProductId: string | null;
   /** Hidden from lists and pickers but still resolving for the planned days and recipes that use it; only a custom ingredient is ever archived. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
+  /** Who added a custom ingredient when it wasn't the person (an outside assistant's recipe or list item); null for the person. Immutable. A missing key reads as null. */
+  addedBy: RecipeNoteBy | null;
+  /** Who filled in `nutritionPer100g` when an assistant did, shown as its source until the person edits the nutrition, which clears it. A missing key reads as null. */
+  nutritionBy: RecipeNoteBy | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -405,6 +409,8 @@ export interface Idea {
   photoPath: string | null;
   /** The recipe this became. A missing key, an id no recipe has, or an archived recipe reads as not made yet. */
   recipeId: string | null;
+  /** Who saved it when it wasn't the person; null for the person. Immutable. A missing key reads as null. */
+  by: RecipeNoteBy | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -525,6 +531,49 @@ export type RecipeSnapshot = Pick<
 > &
   Partial<Pick<Recipe, 'categories' | 'care' | 'links' | 'stepSections'>>;
 
+/** Who made a recorded change: the person on this device, an outside assistant reached through Helm (its own name), or Nomos (named by the app that shows it). */
+export interface RecipeNoteBy {
+  kind: 'you' | 'assistant' | 'nomos';
+  /** The assistant's name for 'assistant' and 'nomos'; null for 'you'. */
+  name: string | null;
+}
+
+/** What an outside assistant or Nomos changed in the kitchen through Helm; written only by the server, read by the owner, and kept 30 days. */
+export interface PinchOutsideChange {
+  id: string;
+  kind:
+    | 'recipeUpdated'
+    | 'recipeAdded'
+    | 'mealPlanned'
+    | 'shoppingAdded'
+    | 'ideaSaved'
+    | 'nutritionFilled';
+  by: { kind: 'assistant' | 'nomos'; name: string | null };
+  /** What it changed: the recipe's, meal's or item's name. */
+  title: string;
+  /** What changed, at most 8, "and N more" last. */
+  lines: string[];
+  recipeId: string | null;
+  /** The recipe update's change record. */
+  noteId: string | null;
+  plannedMealId: string | null;
+  shoppingItemId: string | null;
+  /** How much was merged into an item already on the list; null when the item was created. */
+  addedAmount: number | null;
+  createdItem: boolean;
+  /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
+  previousItem: { amount: number | null; isChecked: boolean } | null;
+  /** The idea an `ideaSaved` change made. A missing key reads as null. */
+  ideaId: string | null;
+  /** Custom ingredients this change created, which its Undo archives while nothing else uses them. A missing key reads as none. */
+  createdIngredientIds: string[] | null;
+  /** The ingredients a `nutritionFilled` change gave nutrition, and whether it had to write the ingredient's record (a catalog one the person never adjusted). A missing key reads as none. */
+  filledNutrition: { ingredientId: string; createdRecord: boolean }[] | null;
+  undoneAt: number | null;
+  undoneBy: 'pinch' | 'helm' | null;
+  createdAt: number;
+}
+
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
@@ -547,6 +596,8 @@ export interface RecipeNote {
   reason: string | null;
   /** A TWEAK's recipe as it was before the edit, so the edit can be undone while it is the recipe's latest; null for every other kind and for a tweak written before undo existed. Immutable. A missing key reads as null. */
   previous: RecipeSnapshot | null;
+  /** Who made a TWEAK; null for every other kind and for an entry written before this was kept, which reads as the person. Immutable. A missing key reads as null. */
+  by: RecipeNoteBy | null;
   /** An instant, shown in local time. Immutable, except that applying a CHANGE dates the TWEAK it becomes. */
   createdAt: number;
   updatedAt: number;
