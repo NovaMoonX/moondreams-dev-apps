@@ -33,7 +33,7 @@ function ActionTiles({ tiles }: ActionTilesProps) {
           type='button'
           variant='tertiary'
           onClick={tile.onClick}
-          className='bg-accent/50 border-border text-accent-foreground active:bg-accent h-auto min-h-[76px] w-full min-w-0 flex-col justify-center gap-1.5 rounded-xl border px-1! py-2.5 text-center font-normal whitespace-normal [&_svg]:size-5'
+          className='bg-accent/50 border-border text-accent-foreground active:bg-accent h-auto min-h-[80px] w-full min-w-0 flex-col justify-center gap-1.5 rounded-xl border px-1! py-2.5 text-center font-normal whitespace-normal [&_svg]:size-5'
         >
           <span aria-hidden='true' className='grid place-items-center'>
             {tile.icon}

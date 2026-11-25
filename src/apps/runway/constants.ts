@@ -3210,7 +3210,7 @@ export const FROM_SPEND_WORDS = {
   newPurchase: 'New purchase',
   newPurchaseSub: 'Type it in',
   fromSpend: 'From Spend',
-  fromSpendSub: 'One already in Spend',
+  fromSpendSub: 'Pick one already in Spend',
   title: 'From Spend',
   search: 'Search purchases',
   empty: 'Nothing in Spend is waiting for an envelope.',
