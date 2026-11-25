@@ -200,6 +200,7 @@
     "check:mcp-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/mcp/rulesMatrix.py\"",
     "check:runway-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/runway/rulesMatrix.py && python3 scripts/runway/linkRules.py\"",
     "check:a-list-email-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/a-list/emailRulesMatrix.py\"",
+    "check:ci": "bash scripts/checkCi.sh",
     "check:indexes": "tsx scripts/checkFirestoreIndexes.ts",
     "check:rules-size": "tsx scripts/checkRulesSize.ts",
     "fb:indexes": "firebase deploy --only firestore:indexes",
