@@ -380,7 +380,7 @@ const lineShape = z.object({
     .min(1)
     .max(MAX_NAME_LENGTH)
     .describe(
-      'The plain everyday ingredient, singular, with no amount or brand: "Ground beef", not "2 lb lean ground beef". Cut, leanness, variety, brand and preparation (bone-in, skinless, diced, fresh, 93% lean) go in the note: "Ground beef" with note "93% lean". Call pinch_find_ingredients first and use the names the kitchen already has.',
+      'The plain everyday ingredient, singular, with no amount or brand: "Ground beef", not "2 lb lean ground beef". Cut, leanness, variety, brand and preparation (bone-in, skinless, diced, fresh, 93% lean) go in the note: "Ground beef" with note "93% lean". Call pinch_read (action find_ingredients) first and use the names the kitchen already has.',
     ),
   amount: z
     .number()
@@ -408,7 +408,7 @@ const lineShape = z.object({
     .boolean()
     .nullish()
     .describe(
-      'Set true for a real food the person buys that the kitchen does not have yet (pinch_find_ingredients says match is null): Pinch adds it to their ingredients, and its Undo takes it back while nothing else uses it. Leave it out for anything that is not an ingredient to buy, such as "reserved pasta water": that stays a plain line.',
+      'Set true for a real food the person buys that the kitchen does not have yet (pinch_read (action find_ingredients) says match is null): Pinch adds it to their ingredients, and its Undo takes it back while nothing else uses it. Leave it out for anything that is not an ingredient to buy, such as "reserved pasta water": that stays a plain line.',
     ),
 });
 
@@ -659,7 +659,7 @@ export const UPDATE_RECIPE_SHAPE = {
     .min(1)
     .max(128)
     .describe(
-      'A recipe id exactly as pinch_search_recipes or pinch_get_meal_plan returned it.',
+      'A recipe id exactly as pinch_read (action search_recipes) or pinch_read (action get_meal_plan) returned it.',
     ),
   title: recipeFields.title.optional(),
   servings: recipeFields.servings.optional(),
@@ -672,7 +672,7 @@ export const UPDATE_RECIPE_SHAPE = {
     .number()
     .optional()
     .describe(
-      'The version pinch_get_recipe returned. Required whenever ingredients or steps are sent, because they replace the whole list: if the recipe was changed in Pinch since you read it, nothing is written and you are told to read it again.',
+      'The version pinch_read (action get_recipe) returned. Required whenever ingredients or steps are sent, because they replace the whole list: if the recipe was changed in Pinch since you read it, nothing is written and you are told to read it again.',
     ),
 };
 
@@ -702,7 +702,7 @@ export const PLAN_MEAL_SHAPE = {
     .string()
     .max(128)
     .nullish()
-    .describe('A recipe id from pinch_search_recipes.'),
+    .describe('A recipe id from pinch_read (action search_recipes).'),
   name: z
     .string()
     .max(MAX_RECIPE_TITLE_LENGTH)
@@ -761,7 +761,7 @@ const readLiveRecipe = async (
 };
 
 const NOT_FOUND_RECIPE =
-  'No recipe has that id. Use an id from pinch_search_recipes.';
+  'No recipe has that id. Use an id from pinch_read (action search_recipes).';
 
 const patchOf = (input: Record<string, unknown>, key: string) =>
   Object.hasOwn(input, key) && input[key] !== undefined;
@@ -856,12 +856,12 @@ export const updateRecipe = async (
       const basedOn = readNumber(input.basedOn);
       if (basedOn === null) {
         return refused(
-          'Ingredients and steps replace the whole list, so send basedOn: the version pinch_get_recipe returned for this recipe. Read it first, then send every line you want kept.',
+          'Ingredients and steps replace the whole list, so send basedOn: the version pinch_read (action get_recipe) returned for this recipe. Read it first, then send every line you want kept.',
         );
       }
       if (basedOn !== (readNumber(found.recipe.updatedAt) ?? 0)) {
         return refused(
-          'This recipe was changed in Pinch since you read it, so nothing was written. Read it again with pinch_get_recipe and send your edit based on what it says now.',
+          'This recipe was changed in Pinch since you read it, so nothing was written. Read it again with pinch_read (action get_recipe) and send your edit based on what it says now.',
         );
       }
     }
@@ -1128,7 +1128,7 @@ export const planMeal = async (
   const name = readText(input.name);
   if (recipeId === null && name === null) {
     return refused(
-      'Say which recipe: a recipeId from pinch_search_recipes, or the name of a saved meal or recipe.',
+      'Say which recipe: a recipeId from pinch_read (action search_recipes), or the name of a saved meal or recipe.',
     );
   }
   const planned = await resolvePlate(
@@ -1218,7 +1218,7 @@ const resolvePlate = async (
   const unknown = (what: string): Plate => ({
     kind: 'refused',
     result: refused(
-      `${what} isn't in Pinch. Use a recipeId from pinch_search_recipes, or the exact name of a saved meal or recipe.`,
+      `${what} isn't in Pinch. Use a recipeId from pinch_read (action search_recipes), or the exact name of a saved meal or recipe.`,
     ),
   });
   const planRecipe = async (id: string): Promise<Plate> => {
@@ -1252,7 +1252,7 @@ const resolvePlate = async (
     return {
       kind: 'refused',
       result: refused(
-        'Pinch can only place a meal by name when this assistant may read the person\'s apps and they share their recipes or saved meals. Use a recipeId from pinch_search_recipes, or ask the person to turn on "Read your apps" for this assistant in Helm > Settings > Connected assistants.',
+        'Pinch can only place a meal by name when this assistant may read the person\'s apps and they share their recipes or saved meals. Use a recipeId from pinch_read (action search_recipes), or ask the person to turn on "Read your apps" for this assistant in Helm > Settings > Connected assistants.',
       ),
     };
   }
@@ -1747,7 +1747,7 @@ export const FILL_NUTRITION_SHAPE = {
           .min(1)
           .max(MAX_NAME_LENGTH)
           .describe(
-            "An ingredient already in the person's kitchen, by the name pinch_find_ingredients gave.",
+            "An ingredient already in the person's kitchen, by the name pinch_read (action find_ingredients) gave.",
           ),
         per100g: z
           .object({

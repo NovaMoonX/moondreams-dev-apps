@@ -40,13 +40,11 @@ import {
   type CaptureDoc,
   type SortResult,
 } from '../sortHelmCapture.js';
-import type { McpReadScope } from '../../../mcp/shapes.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { openTopicRecord } from '../noteStore.js';
 import { openLiveTopic } from '../topicVersionStore.js';
 import { TOPICS_LIMIT } from '../topicLimits.js';
 import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
-import type { SiteActionApp } from '../../../connections/liveRouter.js';
 import { buildHelmTools, type AppChangeDone } from './buildTools.js';
 import {
   SAVE_ABOUT_CAP,
@@ -59,9 +57,9 @@ import {
 import {
   READ_SCOPE_TOOLS,
   accessForConnector,
-  sourcesBriefFor,
   type ConnectedSource,
 } from './sourcesBrief.js';
+import { helmGuideFor } from './guide.js';
 import { offeredHelmTools, registerHelmTools } from './server.js';
 
 const RESOURCE = 'https://apps.moondreams.dev/mcp/helm';
@@ -85,8 +83,10 @@ const refuseAll = (message: string) => {
   server.registerTool(
     'helm_unavailable',
     {
+      title: 'Helm is unavailable',
       description: `${message} Nothing in Helm can be read or changed through this connection until that changes.`,
       annotations: {
+        title: 'Helm is unavailable',
         readOnlyHint: true,
         destructiveHint: false,
         openWorldHint: false,
@@ -739,65 +739,6 @@ const readConnectedSources = async (
   );
 };
 
-/** What an assistant is told when it connects, capability first: what Helm reaches, which tool to call for it, and that every gap is said exactly as a tool's status says. The person calls their Helm assistant by the name they chose, so that name routes here. */
-const instructionsFor = (
-  name: string,
-  canWrite: boolean,
-  sources: ConnectedSource[],
-  access: {
-    clientName: string;
-    readScopes: McpReadScope[];
-    toolNames: string[];
-  },
-  apps: SiteActionApp[],
-) => {
-  const reads = (app: SiteActionApp) =>
-    app.actions.filter(({ kind }) => kind === 'read');
-  const changesOf = (app: SiteActionApp) =>
-    app.actions.filter(({ kind }) => kind === 'change');
-  const appLines = apps.map(
-    (app) =>
-      `${connectorLabel(app.connectorId)}: ${reads(app)
-        .map(({ id, label }) => `${app.appId}_${id} (${label.toLowerCase()})`)
-        .join(', ')}`,
-  );
-  const routes = apps.map(
-    (app) =>
-      `For anything in ${connectorLabel(app.connectorId)} (${reads(app)
-        .map(({ label }) => label.toLowerCase())
-        .join(
-          ', ',
-        )}), call the ${app.appId}_ tools directly; never ask_helm for it.`,
-  );
-  const changeLines = apps
-    .filter((app) => changesOf(app).length > 0)
-    .map(
-      (app) =>
-        `${connectorLabel(app.connectorId)}: ${changesOf(app)
-          .map(({ id, label }) => `${app.appId}_${id} (${label.toLowerCase()})`)
-          .join(', ')}`,
-    );
-  return [
-    `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
-    `Helm reaches the person's topics and procedures (list_topics, get_topic, search_procedures), tasks (search_tasks), calendar (get_calendar) and the apps they connected${appLines.length > 0 ? `: ${appLines.join('; ')}. These only read, and each call checks what the person shares at that moment` : ''}. Whenever the conversation touches their own life (their things, people, plans or routines), check Helm on your own, without waiting to be told. Use only what the tools return; if they find nothing, say so rather than guessing.`,
-    ...routes,
-    changeLines.length > 0
-      ? `Helm can also change the apps the person allowed, never delete: ${changeLines.join('; ')}. A change applies at once, and the person can undo it in the app and in Helm, so say what you are about to change and get their go-ahead before calling a change tool, then tell them what it did from its summary. A change tool answers switchedOff when that kind of change is off for the app (the person turns it on in Helm > Connected apps) and assistantCannotChange when "Change things in your apps" is off for this assistant (Helm > Settings > Connected assistants); say exactly that and don't try another way.`
-      : '',
-    `Every tool says plainly when something is held back: a result with status switchedOff names the switch that is off and where the person turns it on, and assistantCannotRead names the permission to turn on for this assistant. Tell the person exactly that, in those words, and never work around it with ask_helm.`,
-    canWrite
-      ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question that needs more than a lookup (it files a turn, which is why it is not read-only), and save_to_helm saves what they learned or researched in this chat.`
-      : `When they say "ask ${name}" or mention Helm, look things up with the tools above. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
-    canWrite
-      ? `When they want to keep what they learned or researched here (they say save this, remember this or tell ${name} about it), call save_to_helm with the learning written out in full, after list_topics so it goes in the topic that fits. For a task, a date or anything to do, use tell_helm.`
-      : '',
-    `This connection takes text only: it can't receive photos, files, voice notes or any other media, and nothing is attached to what reaches ${name}. When the person shares one and wants it in Helm, say that this connection can't take it, and that they can add it in Helm itself; if it holds words they want kept, you may pass those on as text, saying so.`,
-    sourcesBriefFor(name, sources, access),
-  ]
-    .filter((line) => line !== '')
-    .join(' ');
-};
-
 const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const firestore = getFirestore();
   if (!(await isGateOpenForUid(ctx.uid, GATE_APP_ID, GATE_ID, 'off'))) {
@@ -861,19 +802,16 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const server = new McpServer(
     { name: 'helm', version: '1.0.0' },
     {
-      instructions: instructionsFor(
+      instructions: helmGuideFor(
         name,
         ctx.canWrite,
-        sources.map((source) => ({
-          ...source,
-          actionTools: actionApps
-            .filter((app) => app.connectorId === source.connectorId)
-            .flatMap((app) =>
-              app.actions
-                .filter(({ kind }) => kind === 'read')
-                .map(({ id }) => `${app.appId}_${id}`),
-            ),
-        })),
+        ctx.canChangeApps,
+        sources.map((source) => {
+          const app = actionApps.find(
+            (entry) => entry.connectorId === source.connectorId,
+          );
+          return { ...source, ownTools: app ? `${app.appId}_` : null };
+        }),
         {
           clientName: ctx.clientName,
           readScopes: ctx.readScopes,
@@ -890,9 +828,11 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   server.registerTool(
     'tell_helm',
     {
+      title: 'Tell Helm',
       description: `Tells ${name}, the person's assistant in Helm, something in their own words, as if they had typed it to ${name}: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person says "tell ${name}" or wants ${name} or Helm to remember or do something (add a task, note a date). To save what they learned or researched, use save_to_helm instead. Do not use it for a question: use ask_helm. Text only: it can't carry a photo, file or other media, so when the person wants one in Helm, tell them to add it in Helm itself. The person can undo everything it does in Helm.`,
       inputSchema: tellShape,
       annotations: {
+        title: 'Tell Helm',
         readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: false,
@@ -903,9 +843,11 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   server.registerTool(
     'save_to_helm',
     {
+      title: 'Save to Helm',
       description: `Saves what the person learned or researched in this chat into ${name}'s Helm, at once and with no waiting, filed under the topic that fits. Call it when the person says save this, remember this or tell ${name} about what they learned. Write the learning out in full in "learned" (the facts, numbers and conclusions themselves, never "remember this" or a pointer to this chat). Call list_topics first and pass the topic that fits, or newTopic when none does. Pass at most 5 sources worth keeping, never every page read. Text only: it can't carry a photo, file or other media. The person can see it, and undo it, in Helm.`,
       inputSchema: saveShape,
       annotations: {
+        title: 'Save to Helm',
         readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: false,
@@ -925,9 +867,11 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   server.registerTool(
     'ask_helm',
     {
+      title: 'Ask Helm',
       description: `Asks ${name}, the person's assistant in Helm, a question about their own life, in their words, and returns its answer with the records it rests on and, apart, anything it added from general knowledge (labelled "Not from your records"). Call it when the person says "ask ${name}", or for a question that needs more than a quick lookup: dates, people, plans, what they decided or noted. For a plain lookup of tasks, topics, procedures or calendar days, the search tools are quicker. The question shows in Helm's Activity like a typed one.`,
       inputSchema: askShape,
       annotations: {
+        title: 'Ask Helm',
         readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: false,

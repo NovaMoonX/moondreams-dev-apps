@@ -511,18 +511,27 @@ export interface SiteActionApp {
   connectorId: string;
   /** The app's id, as in its connector id. */
   appId: string;
-  /** The person's words for each action, with what it needs on: share categories for a read, one change permission for a change. */
+  /** What the app is, for an assistant that has never seen it. */
+  about: string;
+  /** The everyday words a person uses for what it holds. */
+  askedAbout: string[];
+  /** The tools its actions are offered under, each a title in the person's words. */
+  tools: { id: string; title: string }[];
+  /** The person's words for each action, with what it needs on (share categories for a read, one change permission for a change) and whether that is on as the list is read; a call reads the grant again. */
   actions: {
     id: string;
     kind: 'read' | 'change';
     label: string;
+    tool: string;
+    changesExisting: boolean;
+    isOn: boolean;
     categories: { id: string; label: string }[];
     permission: { id: string; label: string } | null;
     action: ServerAppAction;
   }[];
 }
 
-/** The site apps this reader holds a live grant for that offer actions (reads and changes), whatever is switched on, so an assistant always knows they exist. */
+/** The site apps this reader holds a live grant for that offer actions (reads and changes), whatever is switched on, so an assistant always knows they exist; each action says whether it is on right now. */
 export const listSiteActionApps = async (
   firestore: Firestore,
   uid: string,
@@ -548,10 +557,14 @@ export const listSiteActionApps = async (
       return [];
     }
     const { manifest, actions } = SOURCE_ADAPTERS[connectorId];
+    const grant = readGrant(snapshots[index].data());
     return [
       {
         connectorId,
         appId: readConnectorAppId(connectorId) ?? '',
+        about: manifest.about,
+        askedAbout: manifest.askedAbout,
+        tools: manifest.tools,
         actions: manifest.actions.flatMap((entry) =>
           actions?.[entry.id]
             ? [
@@ -559,6 +572,14 @@ export const listSiteActionApps = async (
                   id: entry.id,
                   kind: entry.kind,
                   label: entry.label,
+                  tool: entry.tool,
+                  changesExisting: entry.changesExisting,
+                  isOn:
+                    entry.kind === 'change'
+                      ? grant.changes[entry.permission ?? '']?.isOn === true
+                      : entry.categories.some(
+                          (id) => grant.categories[id]?.isOn === true,
+                        ),
                   categories: entry.categories.flatMap((id) => {
                     const found = manifest.categories.find(
                       (category) => category.id === id,

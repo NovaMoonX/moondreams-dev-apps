@@ -41,7 +41,21 @@ export const offeredHelmTools = (
       extraTools.includes(tool.name),
   );
 
-/** Registers the tools an audience is offered; each is annotated by its kind (a read unless it says it changes something), and none reaches beyond the person's own records. */
+const REFUSALS = new Set([
+  'switchedOff',
+  'assistantCannotRead',
+  'assistantCannotChange',
+  'refused',
+  'notFound',
+]);
+
+/** A result that held something back or changed nothing, so a client marks it as a tool error and the model reads why. */
+const isRefusal = (result: unknown) =>
+  typeof result === 'object' &&
+  result !== null &&
+  REFUSALS.has(String((result as { status?: unknown }).status));
+
+/** Registers the tools an audience is offered, each with its title and honest hints: a read is read-only, a change is destructive unless it only adds, and none reaches beyond the person's own records. A refusal comes back as a tool error. */
 export function registerHelmTools(
   server: McpServer,
   tools: ReturnType<typeof buildHelmTools>,
@@ -52,20 +66,23 @@ export function registerHelmTools(
     server.registerTool(
       tool.name,
       {
+        title: tool.title,
         description:
           audience === 'external'
             ? (tool.externalDescription ?? tool.description)
             : tool.description,
         inputSchema: tool.shape,
         annotations: {
+          title: tool.title,
           readOnlyHint: tool.kind !== 'change',
-          destructiveHint: tool.kind === 'change',
+          destructiveHint: tool.kind === 'change' && tool.isAdditive !== true,
           openWorldHint: false,
         },
       },
       async (input: Record<string, unknown>) => {
         const result = await tool.run(input as never);
         return {
+          ...(isRefusal(result) && { isError: true }),
           content: [
             {
               type: 'text' as const,

@@ -661,7 +661,7 @@ const replyText = (result: AppActionResult) => {
   assert.equal(stale.status, 'refused');
   assert.match(
     (stale as { message: string }).message,
-    /changed in Pinch since you read it.*pinch_get_recipe/,
+    /changed in Pinch since you read it.*pinch_read \(action get_recipe\)/,
   );
   assert.deepEqual(store.docs.get(`${K}/recipes/r1`)?.steps, [
     'Boil.',
