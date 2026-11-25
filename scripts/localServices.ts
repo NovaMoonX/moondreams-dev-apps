@@ -35,8 +35,8 @@ interface ServiceInfo {
 
 const SERVICES: Record<FixtureService, ServiceInfo> = {
   anthropic: {
-    apps: 'Helm',
-    appIds: ['helm'],
+    apps: 'Helm, and Pepper in Pinch',
+    appIds: ['helm', 'pinch'],
     keys: ['ANTHROPIC_API_KEY'],
     isBound: true,
     setup:

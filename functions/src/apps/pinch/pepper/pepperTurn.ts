@@ -44,10 +44,10 @@ const MAX_USER_LINE_CHARS =
   4 * (MAX_SCREEN_CHARS + (MAX_ALTERNATIVES + 1) * MAX_HEARD_CHARS) + 500;
 const MAX_ASSISTANT_LINE_CHARS = 4_000;
 const MAX_HISTORY = 40;
-// The history is sent again each turn, so its total is capped too; the device drops its oldest exchanges to fit.
+// The history is sent again each turn, so its total is capped too; a device must drop its oldest exchanges to fit.
 const MAX_HISTORY_CHARS = 160_000;
 const FIXTURE_REPLY =
-  "This is Pepper running locally without a Claude key, so here's a stand-in answer. Add the key with npm run ai:anthropic-secret to hear the real one.";
+  "This is Pepper running locally without a Claude key, so here's a stand-in answer. Run npm run local:app -- pinch and choose the real Claude to hear the real one.";
 
 const readKey = () => {
   if (isForcedFixture('anthropic')) return '';
@@ -107,7 +107,7 @@ export const pepperTurn = onRequest(
   {
     region: 'us-central1',
     maxInstances: 10,
-    timeoutSeconds: 60,
+    timeoutSeconds: 120,
     secrets: [ANTHROPIC_API_KEY],
     cors: SERVED_ORIGINS,
   },
@@ -241,17 +241,19 @@ export const pepperTurn = onRequest(
       emit({ type: 'error', code });
     } finally {
       // Settled before the response ends, since an instance may lose its CPU once it has answered; the device already has its last event.
-      await recordAssistantTurn(firestore, {
-        appId: APP_ID,
-        uid,
-        now,
-        searchesReserved: reserved.searchesReserved,
-        searches: tally.searches,
-        hundredthsOfCent:
-          tally.rounds === 0
-            ? 0
-            : getTurnCost('converse', tally.usage, tally.searches),
-      }).catch((error: unknown) =>
+      const settle = async () =>
+        recordAssistantTurn(firestore, {
+          appId: APP_ID,
+          uid,
+          now,
+          searchesReserved: reserved.searchesReserved,
+          searches: tally.searches,
+          hundredthsOfCent:
+            tally.rounds === 0
+              ? 0
+              : getTurnCost('converse', tally.usage, tally.searches),
+        });
+      await settle().catch((error: unknown) =>
         logger.error('pepper.recordFailed', {
           event: 'pepper.recordFailed',
           message: error instanceof Error ? error.message : String(error),
