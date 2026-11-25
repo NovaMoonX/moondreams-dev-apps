@@ -67,6 +67,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     id: string;
     section: ShopSection | null;
   } | null>(null);
+  const [listOnlyWords, setListOnlyWords] = useState<string[]>([]);
   const [searchKey, setSearchKey] = useState(0);
   const fieldRef = useRef<HTMLDivElement>(null);
 
@@ -165,8 +166,13 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         !item.isChecked &&
         (item.freeText ?? '').toLowerCase() === wanted,
     );
-    if (onListAlready) {
-      setError(`${onListAlready.freeText} is already on your list.`);
+    const addedHere = listOnlyWords.find(
+      (listed) => listed.toLowerCase() === wanted,
+    );
+    if (onListAlready || addedHere) {
+      setError(
+        `${onListAlready?.freeText ?? addedHere} is already on your list.`,
+      );
       return;
     }
     if (onList.size >= SOFT_MAX_SHOPPING_ITEMS) {
@@ -179,11 +185,15 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     const id = makeListOnlyId();
     setError(null);
     setAdded((current) => [...current, words.trim()]);
+    setListOnlyWords((current) => [...current, words.trim()]);
     setListOnly({ id, section: null });
     setSearchKey((current) => current + 1);
     dispatch(addListOnlyItem({ uid, id, text: words, shopSection: null }))
       .unwrap()
       .catch((addError) => {
+        setListOnlyWords((current) =>
+          current.filter((listed) => listed !== words.trim()),
+        );
         setListOnly((current) => (current?.id === id ? null : current));
         setError(getErrorMessage(addError, 'Unable to add this to your list.'));
       });
@@ -236,8 +246,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         ) : (
           <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
             <p className='text-muted-foreground text-sm [@media(max-height:499px)]:hidden'>
-              What do you need? Food goes on the list at a typical serving, and
-              anything else, like paper towels, can go on just as you type it.
+              What do you need? Food goes on at a typical serving.
             </p>
             <div ref={fieldRef}>
               <ItemSearch
@@ -246,7 +255,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                 isDisabled={isAdding || !isReady}
                 suggestions={{
                   caption: 'From your list and your cooking',
-                  ids: suggestedIds,
+                  ids: listOnly ? [] : suggestedIds,
                 }}
                 isCapped
                 onPick={(ingredientId) => {
@@ -269,6 +278,9 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                 />
                 <span className='min-w-0 wrap-break-word'>
                   Added {added.at(-1)}
+                  {listOnly?.section &&
+                    listOnly.section !== 'other' &&
+                    ` under ${SHOP_SECTION_LABELS[listOnly.section]}`}
                   {added.length > 1 && (
                     <span className='text-muted-foreground whitespace-nowrap'>
                       {' '}
@@ -281,11 +293,10 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
             {!note && listOnly && (
               <div className='space-y-2'>
                 <p className='text-muted-foreground text-xs'>
-                  Which part of the shop? Optional, it sits under Other until
-                  you pick.
+                  Part of the shop (optional)
                 </p>
                 <PillGroup
-                  label='Which part of the shop'
+                  label='Part of the shop'
                   options={SHOP_SECTIONS.map((value) => ({
                     value,
                     label: SHOP_SECTION_LABELS[value],

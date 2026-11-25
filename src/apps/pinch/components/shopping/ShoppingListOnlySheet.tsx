@@ -118,7 +118,7 @@ function ShoppingListOnlySheet({
           void handleSubmit();
         }}
       >
-        <p className='text-muted-foreground text-sm'>
+        <p className='text-muted-foreground text-sm [@media(max-height:499px)]:hidden'>
           Only on your list, so it stays out of your recipes, kitchen and
           prices.
         </p>
