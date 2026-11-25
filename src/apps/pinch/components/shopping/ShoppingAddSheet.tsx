@@ -159,7 +159,8 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     if (isAdding || !isReady) {
       return;
     }
-    const wanted = words.trim().toLowerCase();
+    const shown = words.trim().replace(/\s+/g, ' ');
+    const wanted = shown.toLowerCase();
     const onListAlready = items.find(
       (item) =>
         item.ingredientId === null &&
@@ -184,16 +185,22 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
 
     const id = makeListOnlyId();
     setError(null);
-    setAdded((current) => [...current, words.trim()]);
-    setListOnlyWords((current) => [...current, words.trim()]);
+    setAdded((current) => [...current, shown]);
+    setListOnlyWords((current) => [...current, shown]);
     setListOnly({ id, section: null });
     setSearchKey((current) => current + 1);
     dispatch(addListOnlyItem({ uid, id, text: words, shopSection: null }))
       .unwrap()
       .catch((addError) => {
         setListOnlyWords((current) =>
-          current.filter((listed) => listed !== words.trim()),
+          current.filter((listed) => listed !== shown),
         );
+        setAdded((current) => {
+          const at = current.lastIndexOf(shown);
+          return at === -1
+            ? current
+            : [...current.slice(0, at), ...current.slice(at + 1)];
+        });
         setListOnly((current) => (current?.id === id ? null : current));
         setError(getErrorMessage(addError, 'Unable to add this to your list.'));
       });

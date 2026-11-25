@@ -697,12 +697,12 @@ export function getShoppingMealsText(
   return `${shown.join(', ')} and ${rest.length} more`;
 }
 
-/** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 /** A line that names an ingredient, as opposed to a list-only line ("Paper towels"). */
 export const isIngredientItem = <T extends Pick<ShoppingItem, 'ingredientId'>>(
   item: T,
 ): item is T & { ingredientId: string } => item.ingredientId !== null;
 
+/** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>
   Number.isFinite(amount) && amount > 0 && amount <= MAX_SHOPPING_AMOUNT;
 
