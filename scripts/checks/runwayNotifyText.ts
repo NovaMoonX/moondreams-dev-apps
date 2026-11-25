@@ -14,7 +14,13 @@ import {
   MAX_SPLIT_POOL,
   withoutEmailTwins,
 } from '../../functions/src/apps/runway/needsHomeDigestPlan.ts';
-import { needsHomeBody } from '../../functions/src/apps/runway/notificationText.ts';
+import {
+  alertBody,
+  alertPath,
+  FREE_TO_SPEND_PATH,
+  needsHomeBody,
+  namedAlertBody,
+} from '../../functions/src/apps/runway/notificationText.ts';
 
 const source = readFileSync(
   new URL(
@@ -24,23 +30,71 @@ const source = readFileSync(
   'utf8',
 );
 
-// Text: the only interpolation allowed is the count.
-const holes = [...source.matchAll(/\$\{([^}]*)\}/g)].map((match) =>
-  match[1].trim(),
+// Text: the only interpolation allowed is the count, the one function that names an envelope the person chose to have named,
+// and the address that opens an envelope by its id (an id says nothing about the person's money).
+const NAMED_FUNCTION = /export const namedAlertBody[\s\S]*?;\n/;
+const PATH_FUNCTION = /export const envelopePath[\s\S]*?;\n/;
+const named = NAMED_FUNCTION.exec(source)?.[0] ?? '';
+const path = PATH_FUNCTION.exec(source)?.[0] ?? '';
+const rest = source.replace(NAMED_FUNCTION, '').replace(PATH_FUNCTION, '');
+assert.deepEqual(
+  [...path.matchAll(/\$\{([^}]*)\}/g)].map((match) => match[1].trim()),
+  ['encodeURIComponent(itemId)'],
+  'the envelope address interpolates more than its id',
+);
+const holesOf = (text: string) =>
+  [...text.matchAll(/\$\{([^}]*)\}/g)].map((match) => match[1].trim());
+assert.deepEqual(
+  holesOf(named),
+  ['envelope.trim().slice(0, 40)'],
+  'the named alert body interpolates more than the envelope word',
 );
 assert.deepEqual(
-  holes.filter((hole) => hole !== 'count'),
+  holesOf(rest).filter((hole) => hole !== 'count'),
   [],
   'a push template interpolates something other than the count',
 );
 assert.ok(
   !/\b(amount|cents|merchant|name|note|memo|payee|sealed)\b/i.test(
-    source.replace(/\/\*\*[\s\S]*?\*\//g, ''),
+    rest.replace(/\/\*\*[\s\S]*?\*\//g, ''),
   ),
   'notificationText.ts reads a field named like a sealed field',
 );
 assert.equal(needsHomeBody(1), '1 purchase needs a home');
 assert.equal(needsHomeBody(4), '4 purchases need a home');
+
+// Alerts: words are fixed, an amount never appears, and a name only for an alert the person named.
+const fts = { isFreeToSpend: true, itemId: null, envelope: null };
+const env = { isFreeToSpend: false, itemId: 'item-1', envelope: null };
+assert.equal(
+  alertBody([fts]),
+  'Free to Spend dropped below one of your alerts.',
+);
+assert.equal(alertBody([env]), 'An envelope dropped below one of your alerts.');
+assert.equal(
+  alertBody([{ isFreeToSpend: false, envelope: 'Groceries' }]),
+  'Groceries dropped below one of your alerts.',
+);
+assert.equal(
+  namedAlertBody('  Groceries '),
+  'Groceries dropped below one of your alerts.',
+);
+assert.equal(
+  namedAlertBody('x'.repeat(80)),
+  `${'x'.repeat(40)} dropped below one of your alerts.`,
+);
+assert.equal(alertBody([fts, env]), '2 of your alerts went off.');
+assert.equal(
+  alertBody([{ ...env, envelope: 'Groceries' }, env, fts]),
+  '3 of your alerts went off.',
+  'several alerts never name an envelope',
+);
+assert.equal(alertPath([fts]), FREE_TO_SPEND_PATH);
+assert.equal(alertPath([env]), '/runway?openEnvelope=item-1');
+assert.equal(alertPath([fts, env]), '/runway');
+[fts, env].forEach((one) =>
+  assert.ok(!/\d|\$/.test(alertBody([one])), 'an alert push carries no figure'),
+);
 
 // Decision: hour match, UTC fallback, default hour, date roll-over.
 const at = (iso: string) => Date.parse(iso);
