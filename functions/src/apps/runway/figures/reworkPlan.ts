@@ -6,6 +6,7 @@ import type {
 
 import { getFreeToSpendFigure } from '../engine/balances.js';
 import { dayInZone } from '../engine/dates.js';
+import { isTrackingLevel } from '../engine/level.js';
 import {
   decodeClosing,
   getHistory,
@@ -66,6 +67,7 @@ import type {
   ShareSummary,
   StartedPaymentDoc,
 } from '../runwayTypes.js';
+import { runAlerts, type SendAlertPush } from './alerts.js';
 import { HOUR_MS, pickZone } from './reworkState.js';
 import {
   applyPlaced,
@@ -79,8 +81,8 @@ const KNOWN_KINDS: readonly string[] = MOVE_KINDS;
 
 export type ReworkOutcome =
   | { kind: 'gone' }
-  | { kind: 'done'; zone: string }
-  | { kind: 'waiting'; zone: string };
+  | { kind: 'done'; zone: string; wakeAt: number | null }
+  | { kind: 'waiting'; zone: string; wakeAt: null };
 
 const planPath = (uid: string) => `apps/runway/plans/${uid}`;
 
@@ -197,6 +199,7 @@ export async function reworkPlan(
   keyring: Keyring,
   uid: string,
   now: number,
+  sendAlertPush?: SendAlertPush,
 ): Promise<ReworkOutcome> {
   const planSnapshot = await firestore.doc(planPath(uid)).get();
   if (!planSnapshot.exists) return { kind: 'gone' };
@@ -229,7 +232,7 @@ export async function reworkPlan(
   // stored figures go (bank writes don't move the plan's stamp, so they could pass as current) and the run waits.
   if (history.status !== 'ready') {
     await firestore.doc(`${planPath(uid)}/figures/current`).delete();
-    return { kind: 'waiting', zone };
+    return { kind: 'waiting', zone, wakeAt: null };
   }
   const { closing, from } = history;
 
@@ -413,5 +416,21 @@ export async function reworkPlan(
     getFreeToSpendFigure(figures.balances).kind === 'unknown',
     now,
   );
-  return { kind: 'done', zone };
+  const wakeAt = !isTrackingLevel(figures.level)
+    ? null
+    : await runAlerts(
+        firestore,
+        {
+          uid,
+          key: planKey.key,
+          balances: figures.balances,
+          items: input.items,
+          versions: input.versions,
+          today,
+          zone,
+          now,
+        },
+        sendAlertPush,
+      );
+  return { kind: 'done', zone, wakeAt };
 }

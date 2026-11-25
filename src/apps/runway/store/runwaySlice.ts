@@ -26,6 +26,7 @@ import type {
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type { OpenFiguresSnapshot } from '@apps/runway/utils/figuresSnapshot';
 import type {
+  AlertStateDoc,
   DateOnly,
   OpenAccount,
   OpenAccountBalance,
@@ -33,6 +34,7 @@ import type {
   OpenLink,
   OpenCard,
   OpenExpense,
+  OpenAlert,
   OpenDoneForYou,
   OpenMemory,
   OpenStartedPayment,
@@ -100,6 +102,10 @@ export interface RunwayState {
   /** What the app did on its own in the last 30 days, newest first, and whether it has been read once. */
   doneForYou: OpenDoneForYou[];
   isDoneForYouLoaded: boolean;
+  /** Every alert the person set, and where each stands (written by the server only). */
+  alerts: OpenAlert[];
+  isAlertsLoaded: boolean;
+  alertStates: AlertStateDoc[];
   /** The forwarding address, the latest emails that reached it and the person's filters; read only while the email switch is open. */
   emailIntake: OpenEmailIntake | null;
   isEmailIntakeLoaded: boolean;
@@ -248,6 +254,9 @@ const initialState: RunwayState = {
   isMemoriesLoaded: false,
   doneForYou: [],
   isDoneForYouLoaded: false,
+  alerts: [],
+  isAlertsLoaded: false,
+  alertStates: [],
   emailIntake: null,
   isEmailIntakeLoaded: false,
   isEmailIntakeFailed: false,
@@ -382,6 +391,13 @@ export const runwaySlice = createSlice({
     setDoneForYou: (state, action: PayloadAction<OpenDoneForYou[]>) => {
       state.doneForYou = action.payload;
       state.isDoneForYouLoaded = true;
+    },
+    setAlerts: (state, action: PayloadAction<OpenAlert[]>) => {
+      state.alerts = action.payload;
+      state.isAlertsLoaded = true;
+    },
+    setAlertStates: (state, action: PayloadAction<AlertStateDoc[]>) => {
+      state.alertStates = action.payload;
     },
     setEmailIntake: (state, action: PayloadAction<OpenEmailIntake | null>) => {
       state.emailIntake = action.payload;
@@ -599,6 +615,8 @@ export const {
   setRules,
   setMemories,
   setDoneForYou,
+  setAlerts,
+  setAlertStates,
   setEmailIntake,
   setEmailEvents,
   setEmailFilters,
