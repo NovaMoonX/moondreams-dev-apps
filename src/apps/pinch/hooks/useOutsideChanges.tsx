@@ -10,10 +10,12 @@ import { useAppSelector } from '@/store';
 import { OUTSIDE_CHANGES_WORDS as WORDS } from '@apps/pinch/constants';
 import { undoOutsideChange } from '@apps/pinch/store/actions/outsideChangeActions';
 import {
+  selectNotesByRecipe,
   selectOutsideChanges,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { PinchOutsideChange } from '@apps/pinch/types';
+import { getUndoableTweakIds } from '@apps/pinch/utils/notes';
 
 const seenKey = (uid: string) => `pinch.outsideChangesSeen.${uid}`;
 
@@ -24,6 +26,10 @@ const readSeen = (uid: string) => {
     return 0;
   }
 };
+
+/** The assistant's own name, as a row leads with it. */
+const getRowWho = (by: PinchOutsideChange['by']) =>
+  by.name ?? (by.kind === 'assistant' ? 'An assistant' : "Helm's assistant");
 
 /** "Gemini, through Helm", or the assistant's own name for Nomos. */
 const getWho = (by: PinchOutsideChange['by']) =>
@@ -82,6 +88,7 @@ export function useOutsideChanges({
       state.pinch.outsideChanges.loadError === null,
   );
   const recipes = useAppSelector(selectRecipesById);
+  const notesByRecipe = useAppSelector(selectNotesByRecipe);
   const [seen, setSeen] = useState<{ uid: string; at: number } | null>(null);
   const seenAt = seen?.uid === uid ? seen.at : readSeen(uid);
 
@@ -110,9 +117,23 @@ export function useOutsideChanges({
       ];
     };
 
+    const isRecipeUndoable = (change: PinchOutsideChange) => {
+      const recipe =
+        change.recipeId === null ? undefined : recipes.get(change.recipeId);
+      if (!recipe || change.noteId === null) return false;
+      const tweaks = (notesByRecipe.get(recipe.id) ?? []).filter(
+        (note) => note.kind === 'TWEAK',
+      );
+      return getUndoableTweakIds(tweaks, recipe.updatedAt).includes(
+        change.noteId,
+      );
+    };
+
     return changes.map((change) => {
       const look = getLook(change);
       const isUndone = change.undoneAt !== null;
+      const isStale =
+        change.kind === 'recipeUpdated' && !isRecipeUndoable(change);
       return {
         id: change.id,
         createdAt: change.createdAt,
@@ -122,9 +143,10 @@ export function useOutsideChanges({
             ? `${change.lines.length} changes`
             : (change.lines[0] ?? null),
         whyLine: getWho(change.by),
-        canUndo: !isUndone,
+        rowLead: getRowWho(change.by),
+        canUndo: !isUndone && !isStale,
         isUndone,
-        note: change.kind === 'recipeUpdated' ? WORDS.recipeUpdatedNote : null,
+        note: isStale ? WORDS.recipeChangedAfter : null,
         rowNote: null,
         undoLabel: look.undoLabel,
         kindIcon: look.icon,
@@ -140,7 +162,7 @@ export function useOutsideChanges({
         undoneAt: change.undoneAt,
       };
     });
-  }, [changes, recipes, openRecipe, openShopping]);
+  }, [changes, recipes, notesByRecipe, openRecipe, openShopping]);
 
   const newest = changes.reduce(
     (time, change) => Math.max(time, change.createdAt),

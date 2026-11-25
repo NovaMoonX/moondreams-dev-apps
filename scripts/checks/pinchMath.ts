@@ -2182,7 +2182,21 @@ assert.deepEqual(changesFor({ servings: 6 }), ['Serves 4 → 6']);
 assert.deepEqual(changesFor({ servings: 2.5 }), ['Serves 4 → 2.5']);
 assert.deepEqual(
   changesFor({ description: 'Sticky, tangy and a little sweet.' }),
+  ['Description: “Sticky and tangy.” → “Sticky, tangy and a little sweet.”'],
+);
+assert.deepEqual(
+  changesFor({
+    description: `${'Sticky and tangy and glazed '.repeat(4)}end.\nSecond line.`,
+  }),
+  [
+    'Description: “Sticky and tangy.” → “Sticky and tangy and glazed Sticky and tangy and glazed…”',
+  ],
+  'a long first line is shortened at a word',
+);
+assert.deepEqual(
+  changesFor({ description: 'Sticky and tangy.\nServe warm.' }),
   ['Description changed'],
+  'a change below the first line has nothing to quote',
 );
 assert.deepEqual(changesFor({ description: null }), [
   'Removed the description',

@@ -945,7 +945,7 @@ export const planMeal = async (
     kind: 'mealPlanned',
     title: planned.title,
     lines: [
-      `${MEAL_TYPE_LABELS[mealType as MealType]} on ${dayFormatter.format(date)}: ${planned.title}`,
+      `${MEAL_TYPE_LABELS[mealType as MealType]} on ${dayFormatter.format(date)}`,
     ],
     plannedMealId: id,
     recipeId: planned.recipeId,

@@ -692,6 +692,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                       />
                     )}
                   </label>
+                  {isOn &&
+                    HELM_COPY.connectionChangeNeeds[permission.id] &&
+                    !grant.categories[
+                      HELM_COPY.connectionChangeNeeds[permission.id].categoryId
+                    ]?.isOn && (
+                      <p className='text-muted-foreground text-[13px] text-pretty'>
+                        {HELM_COPY.connectionChangeNeeds[permission.id].line}
+                      </p>
+                    )}
                   {failures[`change:${permission.id}`] && (
                     <p className='text-destructive text-[13px]' role='alert'>
                       {failures[`change:${permission.id}`]}

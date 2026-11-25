@@ -7,6 +7,7 @@ import { ChevronRight, Lock } from 'lucide-react';
 import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import HelpTip from '@/components/HelpTip';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useWaitUntilShown } from '@/hooks/useWaitUntilShown';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
@@ -191,8 +192,13 @@ function AssistantSheet({
               <Fragment key={scope}>
                 <div className='flex items-start justify-between gap-3'>
                   <div className='min-w-0'>
-                    <p className='text-[15px] font-medium'>
+                    <p className='flex items-center gap-1.5 text-[15px] font-medium'>
                       {HELM_COPY.assistantReadScopeLabels[scope]}
+                      {scope === 'apps' && assistant.name === 'Gemini' && (
+                        <HelpTip title={HELM_COPY.assistantGeminiAsksTitle}>
+                          {HELM_COPY.assistantGeminiAsks(helmAppName)}
+                        </HelpTip>
+                      )}
                     </p>
                     {isConnected(scope) ? (
                       <p className='text-muted-foreground text-[13px] text-pretty'>
@@ -235,6 +241,11 @@ function AssistantSheet({
                           canChangeApps,
                         )}
                       </p>
+                      {canChangeApps && !isOn && (
+                        <p className='text-muted-foreground text-[13px] text-pretty'>
+                          {HELM_COPY.assistantChangesNeedsRead(assistant.name)}
+                        </p>
+                      )}
                     </div>
                     <AppToggle
                       aria-label={HELM_COPY.assistantChangesLabel}
@@ -258,11 +269,6 @@ function AssistantSheet({
               {HELM_COPY.assistantOpenConnectedApps}
               <ChevronRight className='size-4' aria-hidden='true' />
             </Button>
-          )}
-          {assistant.name === 'Gemini' && (
-            <p className='text-muted-foreground text-[13px] text-pretty'>
-              {HELM_COPY.assistantGeminiAsks(helmAppName)}
-            </p>
           )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantPrivacy(assistant.name)}

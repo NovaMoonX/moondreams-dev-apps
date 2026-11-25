@@ -293,21 +293,20 @@ export const formatChangeWhen = (at: number) =>
     minute: '2-digit',
   });
 
-/** "You · Nov 24, 6:28 PM", "Gemini, through Helm · …", or the assistant's own name for Nomos. An entry with no `by` is the person's. */
+/** "You", "Gemini, through Helm", or the assistant's own name for Nomos. An entry with no `by` is the person's. */
+export const getChangeWho = (note: RecipeNote) => {
+  const by = note.by ?? null;
+  if (by === null || by.kind === 'you') return 'You';
+  if (by.kind === 'assistant')
+    return `${by.name ?? 'An assistant'}, through Helm`;
+  return by.name ?? "Helm's assistant";
+};
+
+/** "You · Nov 24, 6:28 PM", "Gemini, through Helm · …", or the assistant's own name for Nomos. */
 export const getChangeByLine = (
   note: RecipeNote,
   formatWhen: (at: number) => string,
-) => {
-  const by = note.by ?? null;
-  const who =
-    by === null || by.kind === 'you'
-      ? 'You'
-      : by.kind === 'assistant'
-        ? `${by.name ?? 'An assistant'}, through Helm`
-        : (by.name ?? "Helm's assistant");
-
-  return `${who} · ${formatWhen(note.createdAt)}`;
-};
+) => `${getChangeWho(note)} · ${formatWhen(note.createdAt)}`;
 
 /** Whether edits to a recipe are recorded as a tweak: the notes have loaded without error and the journal has room. */
 export const getTweakTracking = (state: {

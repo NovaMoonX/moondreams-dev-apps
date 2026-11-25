@@ -996,8 +996,8 @@ export const OUTSIDE_CHANGES_WORDS = {
   undoMealPlanned: 'Undo and take it off the calendar',
   undoShoppingAdded: 'Undo and take it off your list',
   undoShoppingMerged: 'Undo and take off what was added',
-  recipeUpdatedNote:
-    "You can also put it back from the recipe's Changes, under More.",
+  recipeChangedAfter:
+    "The recipe was changed after this, so it can't be taken back here.",
   openRecipe: 'Open the recipe',
   openRecipeSub: 'See it as it is now',
   recipeGone: 'That recipe is no longer in your kitchen.',
