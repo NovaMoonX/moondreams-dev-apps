@@ -168,11 +168,8 @@ const OUTSIDE_TOOLS = [
   'get_topic',
   'list_connections',
   'list_topics',
-  'pinch_add_to_shopping_list',
-  'pinch_fill_nutrition',
-  'pinch_plan_meal',
+  'pinch_add',
   'pinch_read',
-  'pinch_save_idea',
   'pinch_save_recipe',
   'search_procedures',
   'search_tasks',
@@ -1169,7 +1166,7 @@ assert.deepEqual(PINCH_CHANGES.map((action) => action.id).sort(), [
   assert.match(tool.description, /confirm with the person/);
 });
 assert.equal(saveRecipe().isAdditive, false, 'an edit is not only additive');
-assert.equal(changeTool('pinch_plan_meal')!.isAdditive, true);
+assert.equal(changeTool('pinch_add')!.isAdditive, true);
 assert.equal(
   offeredHelmTools(
     buildHelmTools({
@@ -1198,7 +1195,7 @@ for (const scope of [
 }
 PINCH_CHANGES.forEach((action) => offActions.add(action.id));
 assert.equal(
-  changeTool('pinch_plan_meal'),
+  changeTool('pinch_add'),
   undefined,
   'a change whose switch is off is not offered',
 );
@@ -1431,27 +1428,37 @@ assert.equal(
 );
 
 // How every app offers assistant tools (docs/conventions/connections.md "An app offers an assistant a handful of tools").
-const MAX_TOOLS_PER_APP = 6;
+const MAX_CHANGE_TOOLS_PER_APP = 2;
 const MAX_OUTSIDE_TOOLS = 40;
 const MIN_OPTION_DESCRIPTION = 60;
 const TOOL_ID = /^[a-z][a-z0-9_]*$/;
 const unwrapOptional = (schema: z.ZodType): z.ZodType => {
   const def = (schema as unknown as { _zod: { def: { type: string; innerType?: z.ZodType } } })._zod.def;
-  return ['optional', 'default'].includes(def.type) && def.innerType ? unwrapOptional(def.innerType) : schema;
+  return def.type === 'optional' && def.innerType ? unwrapOptional(def.innerType) : schema;
 };
-const withoutWords = (value: unknown): unknown =>
+const withoutWords = (value: unknown, isPropertyMap = false): unknown =>
   Array.isArray(value)
-    ? value.map(withoutWords)
+    ? value.map((inner) => withoutWords(inner))
     : value && typeof value === 'object'
       ? Object.fromEntries(
           Object.entries(value)
-            .filter(([key]) => !['description', 'default', '$schema'].includes(key))
-            .map(([key, inner]) => [key, withoutWords(inner)]),
+            .filter(([key]) => isPropertyMap || !['description', '$schema'].includes(key))
+            .map(([key, inner]) => [key, withoutWords(inner, !isPropertyMap && key === 'properties')]),
         )
       : value;
-// The client validates a grouped tool against the first option's copy of a shared field, so every copy must accept exactly the same values.
+// Helm's server validates a grouped call against the first option's copy of a shared field, defaults included, so every copy must accept and fill exactly the same values.
 const schemaOf = (schema: z.ZodType): string =>
   JSON.stringify(withoutWords(toJSONSchema(unwrapOptional(schema))));
+// A refinement or transform never reaches JSON schema, so the comparison can't see it: a shared field carries none.
+const isOpaque = (schema: z.ZodType): boolean => {
+  const def = (schema as unknown as { _zod: { def: { type: string; innerType?: z.ZodType; checks?: { _zod: { def: { check: string } } }[] } } })._zod.def;
+  return (
+    def.type === 'pipe' ||
+    def.type === 'transform' ||
+    (def.checks ?? []).some((check) => check._zod.def.check === 'custom') ||
+    (['optional', 'default', 'nullable'].includes(def.type) && def.innerType !== undefined && isOpaque(def.innerType))
+  );
+};
 assert.equal(
   schemaOf(z.string().max(100).describe('For search_recipes, words.')),
   schemaOf(z.string().max(100).optional().describe('For find_ingredients, a name.')),
@@ -1459,6 +1466,12 @@ assert.equal(
 assert.notEqual(schemaOf(z.enum(['a', 'b'])), schemaOf(z.enum(['a', 'c'])));
 assert.notEqual(schemaOf(z.string().max(100)), schemaOf(z.string().max(200)));
 assert.notEqual(schemaOf(z.string()), schemaOf(z.string().nullable()));
+assert.notEqual(schemaOf(z.number().default(2)), schemaOf(z.number().default(4)));
+assert.notEqual(
+  schemaOf(z.object({ description: z.string() })),
+  schemaOf(z.object({ description: z.number() })),
+);
+assert.ok(isOpaque(z.string().refine((text) => text !== 'x')) && !isOpaque(z.string().max(3)));
 const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] => {
     const { manifest } = adapter;
     const appId = connectorId.replace(/^app:/, '');
@@ -1502,8 +1515,8 @@ const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] 
       ...(manifest.askedAbout.length < 3
         ? [`${connectorId} needs at least three everyday words in askedAbout`]
         : []),
-      ...(declared.length > MAX_TOOLS_PER_APP
-        ? [`${connectorId} offers ${declared.length} tools; group actions whose fields agree to stay at ${MAX_TOOLS_PER_APP} or fewer`]
+      ...(declared.length - readTools.length > MAX_CHANGE_TOOLS_PER_APP
+        ? [`${connectorId} offers ${declared.length - readTools.length} change tools; group its changes into ${MAX_CHANGE_TOOLS_PER_APP} or fewer`]
         : []),
       ...(readTools.length > 1
         ? [`${connectorId} spreads its reads over ${readTools.join(', ')}: one read tool per app`]
@@ -1533,7 +1546,7 @@ const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] 
           ...(action.kind === 'read' && action.categories.length === 0 ? [`${connectorId} ${action.id} names no category`] : []),
         ];
       }),
-      // Options grouped under one tool share one input, so a field they share must be the same kind of value.
+      // Options grouped under one tool share one input, so a field they share must accept the same values.
       ...declared.flatMap((id) => {
         const shapes = byTool(id).flatMap((action) => {
           const server = adapter.actions?.[action.id];
@@ -1546,7 +1559,11 @@ const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] 
             const schemas = new Set(
               shapes.filter((shape) => key in shape).map((shape) => schemaOf(shape[key] as z.ZodType)),
             );
-            return schemas.size > 1 ? [`${connectorId} tool ${id}: ${key} accepts different values across its options (${[...schemas].join(' vs ')})`] : [];
+            const copies = shapes.filter((shape) => key in shape).map((shape) => shape[key] as z.ZodType);
+            return [
+              ...(schemas.size > 1 ? [`${connectorId} tool ${id}: ${key} accepts different values across its options (${[...schemas].join(' vs ')})`] : []),
+              ...(copies.length > 1 && copies.some(isOpaque) ? [`${connectorId} tool ${id}: ${key} is shared but refined or transformed, which only one option's copy would apply`] : []),
+            ];
           }),
         ];
       }),
@@ -1578,7 +1595,7 @@ firesWith(
     manifest.tools.push({ id: 'one_more', title: 'One more thing' });
     manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'one_more';
   }),
-  'group actions whose fields agree',
+  'group its changes into',
 );
 firesWith(
   broken((manifest) => {
@@ -1613,6 +1630,21 @@ firesWith(
   'which is not a tool',
 );
 firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.changesExisting = true; }), 'is a read that changes');
+firesWith(
+  broken((_, actions) => {
+    actions.add_recipe = { ...actions.add_recipe, shape: { ...actions.add_recipe.shape, servings: (actions.add_recipe.shape.servings as z.ZodNumber).refine((n) => n !== 3) } };
+  }),
+  'refined or transformed',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.permission = 'nope'; }), 'names no declared switch');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.categories = []; }), 'names no category');
+firesWith(broken((_, actions) => { delete actions.save_idea; }), 'has no server action');
+firesWith(broken((manifest) => { manifest.tools[0].id = 'r'.repeat(60); manifest.actions.filter((action) => action.tool === 'read').forEach((action) => { action.tool = 'r'.repeat(60); }); }), 'short snake_case id');
+firesWith(toolFailuresFor('google:calendar', pinchAdapter), 'is not a site app');
+firesWith(
+  toolFailuresFor('app:quiet', { ...pinchAdapter, manifest: { ...structuredClone(pinchAdapter.manifest), actions: [] }, actions: {} }),
+  'declares tools or words but no actions',
+);
 assert.ok(
   OUTSIDE_TOOLS.length <= MAX_OUTSIDE_TOOLS,
   `outside assistants are offered ${OUTSIDE_TOOLS.length} tools with every app connected; keep it at ${MAX_OUTSIDE_TOOLS} or fewer`,
@@ -1636,8 +1668,8 @@ console.log(`Outside tools with Pinch connected and every switch on: ${OUTSIDE_T
   const hintsOf = (name: string) => listed.find((tool) => tool.name === name)!.annotations!;
   assert.equal(hintsOf('pinch_read').readOnlyHint, true);
   assert.equal(hintsOf('pinch_save_recipe').destructiveHint, true, 'an edit can replace what is there');
-  assert.equal(hintsOf('pinch_plan_meal').readOnlyHint, false);
-  assert.equal(hintsOf('pinch_plan_meal').destructiveHint, false, 'a change that only adds is not destructive');
+  assert.equal(hintsOf('pinch_add').readOnlyHint, false);
+  assert.equal(hintsOf('pinch_add').destructiveHint, false, 'a change that only adds is not destructive');
   const readSchema = listed.find((tool) => tool.name === 'pinch_read')!.inputSchema as {
     properties: Record<string, { enum?: string[] }>;
     required?: string[];

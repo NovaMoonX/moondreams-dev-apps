@@ -357,7 +357,7 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'planMeals',
           label: 'Plan a meal',
-          tool: 'plan_meal',
+          tool: 'add',
           changesExisting: false,
         },
         {
@@ -366,7 +366,7 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'addToShoppingList',
           label: 'Add to the shopping list',
-          tool: 'add_to_shopping_list',
+          tool: 'add',
           changesExisting: false,
         },
         {
@@ -375,7 +375,7 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'saveIdeas',
           label: 'Save a recipe idea',
-          tool: 'save_idea',
+          tool: 'add',
           changesExisting: false,
         },
         {
@@ -384,17 +384,14 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'fillNutrition',
           label: 'Fill in missing nutrition',
-          tool: 'fill_nutrition',
+          tool: 'add',
           changesExisting: false,
         },
       ],
       tools: [
         { id: 'read', title: 'Read Pinch' },
         { id: 'save_recipe', title: 'Add or edit a recipe' },
-        { id: 'plan_meal', title: 'Plan a meal' },
-        { id: 'add_to_shopping_list', title: 'Add to the shopping list' },
-        { id: 'save_idea', title: 'Save a recipe idea' },
-        { id: 'fill_nutrition', title: 'Fill in missing nutrition' },
+        { id: 'add', title: 'Plan a meal, or add groceries, ideas or nutrition' },
       ],
       askedAbout: [
         'meals',

@@ -1739,7 +1739,7 @@ const nutritionNumber = (key: keyof typeof NUTRITION_LIMITS) =>
     );
 
 export const FILL_NUTRITION_SHAPE = {
-  items: z
+  ingredients: z
     .array(
       z.object({
         ingredient: z
@@ -1830,7 +1830,7 @@ export const fillNutrition = async (
   ctx: ChangeContext,
   input: Record<string, unknown>,
 ): Promise<AppActionResult> => {
-  const rows = Array.isArray(input.items) ? input.items : [];
+  const rows = Array.isArray(input.ingredients) ? input.ingredients : [];
   if (rows.length === 0 || rows.length > MAX_ITEMS_PER_CALL) {
     return refused(`Send between 1 and ${MAX_ITEMS_PER_CALL} ingredients.`);
   }
