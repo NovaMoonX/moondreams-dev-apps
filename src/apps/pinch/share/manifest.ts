@@ -192,7 +192,7 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'artifact',
           label: 'Recipe ingredients',
           meaning:
-            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts and the collections it is in, plus how long it takes (not servings or kind of dish). Never the steps, notes or links.",
+            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts and the collections it is in, plus how long it takes (not servings or kind of dish). Never the steps, description, notes or links.",
           detail:
             'Each recipe, its ingredients and amounts, time and collections',
           mode: 'live',
@@ -213,6 +213,30 @@ export const PINCH_SHARES: SourceShares = {
               label: 'The collections it is in',
               sinceVersion: 1,
               addedOn: '2026-11-16',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'fullRecipes',
+          kind: 'artifact',
+          label: 'Full recipes',
+          meaning:
+            "The method of each saved recipe: the written description and every step, in order. Never the recipe's notes, links, prices or nutrition.",
+          detail: 'Each recipe with its description and steps',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 4,
+          reads: [
+            {
+              label: "Each recipe's description",
+              sinceVersion: 1,
+              addedOn: '2026-11-25',
+            },
+            {
+              label: "Each recipe's steps, in order",
+              sinceVersion: 1,
+              addedOn: '2026-11-25',
             },
           ],
           scopeVersion: 1,
@@ -243,10 +267,47 @@ export const PINCH_SHARES: SourceShares = {
         },
       ],
       never: [
-        'Recipe steps, notes and links',
+        'Recipe notes and links',
         'prices and costs',
         'nutrition',
         'how a cook turned out',
+      ],
+      actions: [
+        {
+          id: 'get_meal_plan',
+          kind: 'read',
+          categories: ['plannedMeals'],
+          permission: null,
+          label: 'Look up planned meals',
+        },
+        {
+          id: 'search_recipes',
+          kind: 'read',
+          categories: ['recipes', 'savedMeals', 'ideas'],
+          permission: null,
+          label: 'Search recipes, saved meals and ideas',
+        },
+        {
+          id: 'get_recipe',
+          kind: 'read',
+          categories: ['recipes', 'recipeIngredients', 'fullRecipes'],
+          permission: null,
+          label: 'Open one recipe',
+        },
+        {
+          id: 'get_shopping_list',
+          kind: 'read',
+          categories: ['shoppingList'],
+          permission: null,
+          label: 'Read the shopping list',
+        },
+        {
+          id: 'get_kitchen',
+          kind: 'read',
+          categories: ['pantryStock', 'useSoon'],
+          permission: null,
+          label: 'See what is in the kitchen',
+        },
       ],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },

@@ -307,6 +307,7 @@ export const NINE_LIVES_SHARES: SourceShares = {
         'microchip and insurance details',
         'litter logs',
       ],
+      actions: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

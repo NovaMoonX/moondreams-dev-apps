@@ -1203,6 +1203,8 @@ export const HELM_COPY = {
   assistantLastUsed: (when: string) => `Last used ${when}`,
   assistantNeverUsed: 'Not used yet',
   assistantReads: 'Can look up your tasks, calendar, topics and procedures',
+  assistantGeminiAsks: (app: string) =>
+    `Gemini may still ask before each lookup, even after Always allow. That is Gemini's own setting, not ${app}'s.`,
   assistantReadScopeLabels: {
     mail: 'Read Gmail',
     drive: 'Read Google Drive',

@@ -218,6 +218,7 @@ export const RUNWAY_SHARES: SourceShares = {
         'income sources',
         'receipts and notes',
       ],
+      actions: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

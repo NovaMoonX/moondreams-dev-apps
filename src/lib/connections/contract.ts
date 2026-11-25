@@ -48,6 +48,19 @@ export interface CategoryManifest {
   historyDays?: number;
 }
 
+/** One thing a source app does for an assistant on request, drawing only on categories the person switched on. */
+export interface AppActionManifest {
+  /** Snake verb_noun. */
+  id: string;
+  kind: 'read' | 'change';
+  /** A read's share categories: it is usable while any is on, and its result says which ones held something back. */
+  categories: string[];
+  /** A change's permission id; null for a read. */
+  permission: string | null;
+  /** The person's words for it. */
+  label: string;
+}
+
 export interface ConnectorManifest {
   id: ConnectorId;
   kind: 'firstPartyApp' | 'oauth' | 'apiKey';
@@ -59,6 +72,8 @@ export interface ConnectorManifest {
   categories: CategoryManifest[];
   /** The person's words for what is never shared; such data has no category and no field. */
   never: string[];
+  /** What the app offers an assistant beyond its records; `[]` for a source with none. */
+  actions: AppActionManifest[];
   capabilities: { read: true; write: false; backgroundSync: boolean };
   connect:
     | { kind: 'siteGrant' }

@@ -34,6 +34,7 @@ import {
   ANTHROPIC_API_KEY,
   loadKeyringOrFail,
   readLiveGrants,
+  readSiteActionApps,
   readSiteGrants,
   runHelmSort,
   type CaptureDoc,
@@ -45,6 +46,7 @@ import { openTopicRecord } from '../noteStore.js';
 import { openLiveTopic } from '../topicVersionStore.js';
 import { TOPICS_LIMIT } from '../topicLimits.js';
 import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
+import type { SiteActionApp } from '../../../connections/liveRouter.js';
 import { buildHelmTools } from './buildTools.js';
 import {
   SAVE_ABOUT_CAP,
@@ -640,6 +642,7 @@ const readConnectedSources = async (
   }, new Map<string, { manifest: (typeof SOURCE_ADAPTERS)[string]['manifest']; onIds: Set<string> }>());
   return [...byConnector.entries()].map(
     ([connectorId, { manifest, onIds }]) => ({
+      connectorId,
       name: connectorLabel(connectorId),
       access: accessForConnector(connectorId),
       about: manifest.about,
@@ -650,7 +653,7 @@ const readConnectedSources = async (
   );
 };
 
-/** What an assistant is told when it connects: the person calls their Helm assistant by the name they chose, so that name routes here. */
+/** What an assistant is told when it connects, capability first: what Helm reaches, which tool to call for it, and that every gap is said exactly as a tool's status says. The person calls their Helm assistant by the name they chose, so that name routes here. */
 const instructionsFor = (
   name: string,
   canWrite: boolean,
@@ -660,13 +663,26 @@ const instructionsFor = (
     readScopes: McpReadScope[];
     toolNames: string[];
   },
-) =>
-  [
+  apps: SiteActionApp[],
+) => {
+  const appLines = apps.map(
+    (app) =>
+      `${connectorLabel(app.connectorId)}: ${app.actions
+        .map(({ id, label }) => `${app.appId}_${id} (${label.toLowerCase()})`)
+        .join(', ')}`,
+  );
+  const routes = apps.map(
+    (app) =>
+      `For anything in ${connectorLabel(app.connectorId)} (${app.actions.map(({ label }) => label.toLowerCase()).join(', ')}), call the ${app.appId}_ tools directly; never ask_helm for it.`,
+  );
+  return [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
+    `Helm reaches the person's topics and procedures (list_topics, get_topic, search_procedures), tasks (search_tasks), calendar (get_calendar) and the apps they connected${appLines.length > 0 ? `: ${appLines.join('; ')}. These only read, and each call checks what the person shares at that moment` : ''}. Whenever the conversation touches their own life (their things, people, plans or routines), check Helm on your own, without waiting to be told. Use only what the tools return; if they find nothing, say so rather than guessing.`,
+    ...routes,
+    `Every tool says plainly when something is held back: a result with status switchedOff names the switch that is off and where the person turns it on, and assistantCannotRead names the permission to turn on for this assistant. Tell the person exactly that, in those words, and never work around it with ask_helm.`,
     canWrite
-      ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question, save_to_helm saves what they learned or researched in this chat, and the search tools look things up directly.`
-      : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
-    `Whenever the conversation touches the person's own life (their things, people, plans or routines), check Helm on your own, without waiting to be told: list_topics and get_topic for what they have written down, search_tasks and get_calendar. Use only what the tools return; if they find nothing, say so rather than guessing.`,
+      ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question that needs more than a lookup (it files a turn, which is why it is not read-only), and save_to_helm saves what they learned or researched in this chat.`
+      : `When they say "ask ${name}" or mention Helm, look things up with the tools above. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
     canWrite
       ? `When they want to keep what they learned or researched here (they say save this, remember this or tell ${name} about it), call save_to_helm with the learning written out in full, after list_topics so it goes in the topic that fits. For a task, a date or anything to do, use tell_helm.`
       : '',
@@ -675,6 +691,7 @@ const instructionsFor = (
   ]
     .filter((line) => line !== '')
     .join(' ');
+};
 
 const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const firestore = getFirestore();
@@ -690,10 +707,11 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const profile = await firestore.doc(`apps/helm/users/${ctx.uid}`).get();
   const name =
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
-  const [liveGrants, siteGrants, sources] = await Promise.all([
+  const [liveGrants, siteGrants, sources, actionApps] = await Promise.all([
     ctx.readScopes.length > 0 ? readLiveGrants(firestore, ctx.uid) : [],
     ctx.readScopes.length > 0 ? readSiteGrants(firestore, ctx.uid) : [],
     readConnectedSources(firestore, ctx.uid).catch((): ConnectedSource[] => []),
+    readSiteActionApps(firestore, ctx.uid),
   ]);
   const topicAliases = createSealedAliasBook('tp', ctx.uid, key);
   const tools = buildHelmTools({
@@ -708,6 +726,8 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
     siteGrants: ctx.readScopes.includes('apps') ? siteGrants : [],
     key,
     outsideReadScopes: ctx.readScopes,
+    appActions: { apps: actionApps },
+    assistantName: ctx.clientName,
     firestore,
     timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
     mask: {
@@ -734,13 +754,26 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const server = new McpServer(
     { name: 'helm', version: '1.0.0' },
     {
-      instructions: instructionsFor(name, ctx.canWrite, sources, {
-        clientName: ctx.clientName,
-        readScopes: ctx.readScopes,
-        toolNames: offeredHelmTools(tools, 'external', permittedTools).map(
-          (tool) => tool.name,
-        ),
-      }),
+      instructions: instructionsFor(
+        name,
+        ctx.canWrite,
+        sources.map((source) => ({
+          ...source,
+          actionTools: actionApps
+            .filter((app) => app.connectorId === source.connectorId)
+            .flatMap((app) =>
+              app.actions.map(({ id }) => `${app.appId}_${id}`),
+            ),
+        })),
+        {
+          clientName: ctx.clientName,
+          readScopes: ctx.readScopes,
+          toolNames: offeredHelmTools(tools, 'external', permittedTools).map(
+            (tool) => tool.name,
+          ),
+        },
+        actionApps,
+      ),
     },
   );
   registerHelmTools(server, tools, 'external', permittedTools);

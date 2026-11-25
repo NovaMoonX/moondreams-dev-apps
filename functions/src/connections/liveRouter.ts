@@ -10,6 +10,7 @@ import {
   toGrantId,
   type ConnectorId,
 } from '../vendor/connectionsContract.js';
+import { validZone } from './liveDay.js';
 import { toDocumentLink, toMailLink, isLiveDeepLink } from './deepLinks.js';
 import { GoogleHttpError } from './google/client.js';
 import {
@@ -26,7 +27,9 @@ import { readGrant } from './grants.js';
 import {
   READER_APPS,
   SOURCE_ADAPTERS,
+  type AppActionResult,
   type LiveQueryResult,
+  type ServerAppAction,
 } from './registry.js';
 import { ReconnectNeeded, getGoogleAccessToken } from './tokens.js';
 
@@ -495,5 +498,144 @@ export const querySiteLive = async (
       code: error instanceof Error ? error.name : 'error',
     });
     return { ok: false, reason: 'failed' };
+  }
+};
+
+export interface SiteActionApp {
+  connectorId: string;
+  /** The app's id, as in its connector id. */
+  appId: string;
+  /** The person's words for each read action, with what it needs on. */
+  actions: {
+    id: string;
+    label: string;
+    categories: { id: string; label: string }[];
+    action: ServerAppAction;
+  }[];
+}
+
+/** The site apps this reader holds a live grant for that offer read actions, whatever is switched on, so an assistant always knows they exist. */
+export const listSiteActionApps = async (
+  firestore: Firestore,
+  uid: string,
+  readerAppId: string,
+): Promise<SiteActionApp[]> => {
+  const connectorIds = Object.keys(SOURCE_ADAPTERS).filter(
+    (id) =>
+      readConnectorAppId(id) !== null &&
+      SOURCE_ADAPTERS[id].manifest.actions.some(
+        (action) =>
+          action.kind === 'read' &&
+          SOURCE_ADAPTERS[id].actions?.[action.id] !== undefined,
+      ),
+  );
+  const snapshots = await Promise.all(
+    connectorIds.map((id) =>
+      firestore.doc(siteGrantPath(uid, readerAppId, id)).get(),
+    ),
+  );
+  return connectorIds.flatMap((connectorId, index): SiteActionApp[] => {
+    if (
+      !snapshots[index].exists ||
+      readGrant(snapshots[index].data()).status !== 'live'
+    ) {
+      return [];
+    }
+    const { manifest, actions } = SOURCE_ADAPTERS[connectorId];
+    return [
+      {
+        connectorId,
+        appId: readConnectorAppId(connectorId) ?? '',
+        actions: manifest.actions.flatMap((entry) =>
+          entry.kind === 'read' && actions?.[entry.id]
+            ? [
+                {
+                  id: entry.id,
+                  label: entry.label,
+                  categories: entry.categories.flatMap((id) => {
+                    const found = manifest.categories.find(
+                      (category) => category.id === id,
+                    );
+                    return found ? [{ id, label: found.label }] : [];
+                  }),
+                  action: actions[entry.id],
+                },
+              ]
+            : [],
+        ),
+      },
+    ];
+  });
+};
+
+/** Runs one of a site app's actions for a reader. The grant is read again on every call and nothing is kept, so a switch turned off a moment ago is already honoured. */
+export const runSiteAction = async (
+  firestore: Firestore,
+  input: {
+    uid: string;
+    readerAppId: string;
+    connectorId: string;
+    actionId: string;
+    input: Record<string, unknown>;
+    actor: { kind: 'outside' | 'nomos'; name: string };
+    timeZone: string;
+  },
+): Promise<AppActionResult> => {
+  const adapter = Object.hasOwn(SOURCE_ADAPTERS, input.connectorId)
+    ? SOURCE_ADAPTERS[input.connectorId]
+    : null;
+  const declared = adapter?.manifest.actions.find(
+    (action) => action.id === input.actionId,
+  );
+  const action =
+    declared?.kind === 'read' && adapter?.actions
+      ? adapter.actions[input.actionId]
+      : undefined;
+  if (!adapter || !declared || !action) {
+    return { status: 'notFound', message: 'That app has no such action.' };
+  }
+  const labelOf = (id: string) =>
+    adapter.manifest.categories.find((category) => category.id === id)?.label ??
+    id;
+  const noLongerShared: AppActionResult = {
+    status: 'switchedOff',
+    needs: declared.categories.map((id) => ({
+      category: id,
+      label: labelOf(id),
+    })),
+  };
+  try {
+    const snapshot = await firestore
+      .doc(siteGrantPath(input.uid, input.readerAppId, input.connectorId))
+      .get();
+    const grant = readGrant(snapshot.data());
+    if (!snapshot.exists || grant.status !== 'live') return noLongerShared;
+    const allowedCategories = new Set(
+      declared.categories.filter((id) => grant.categories[id]?.isOn === true),
+    );
+    if (allowedCategories.size === 0) return noLongerShared;
+    const ctx = { uid: input.uid, accountId: SITE_ACCOUNT_ID, grant };
+    if ((await adapter.status(ctx)) !== 'ok') return noLongerShared;
+    return await action.run(
+      {
+        uid: input.uid,
+        grant,
+        allowedCategories,
+        actor: input.actor,
+        now: Date.now(),
+        timeZone: validZone(input.timeZone),
+      },
+      input.input,
+    );
+  } catch (error) {
+    logger.warn('connections.live.actionFailed', {
+      connector: input.connectorId,
+      action: input.actionId,
+      code: error instanceof Error ? error.name : 'error',
+    });
+    return {
+      status: 'refused',
+      message: 'Something went wrong reaching it. Try again in a moment.',
+    };
   }
 };

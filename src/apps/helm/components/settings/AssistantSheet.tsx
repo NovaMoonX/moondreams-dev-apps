@@ -213,6 +213,11 @@ function AssistantSheet({
               <ChevronRight className='size-4' aria-hidden='true' />
             </Button>
           )}
+          {assistant.name === 'Gemini' && (
+            <p className='text-muted-foreground text-[13px] text-pretty'>
+              {HELM_COPY.assistantGeminiAsks(helmAppName)}
+            </p>
+          )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantPrivacy(assistant.name)}
           </p>

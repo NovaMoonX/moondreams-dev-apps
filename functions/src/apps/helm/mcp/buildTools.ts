@@ -39,7 +39,11 @@ import type {
   LiveSearchItem,
   SiteLiveGrant,
 } from '../../../connections/liveRouter.js';
-import type { LiveQueryResult } from '../../../connections/registry.js';
+import type {
+  AppActionResult,
+  LiveQueryResult,
+} from '../../../connections/registry.js';
+import type { SiteActionApp } from '../../../connections/liveRouter.js';
 import { formatMoney } from '../../../utils/formatMoney.js';
 import type { McpReadScope } from '../../../mcp/shapes.js';
 import { filterSourcesForOutside } from './sourcesBrief.js';
@@ -94,6 +98,23 @@ export interface LiveReads {
   isLiveDeepLink: (connectorId: string, link: string) => boolean;
 }
 
+/** The read actions of each site app connected to Helm, and how to run one; `run` is passed by a test, otherwise the router is loaded when an action first runs. */
+export interface AppActionReads {
+  apps: SiteActionApp[];
+  run?: (
+    firestore: Firestore,
+    input: {
+      uid: string;
+      readerAppId: string;
+      connectorId: string;
+      actionId: string;
+      input: Record<string, unknown>;
+      actor: { kind: 'outside' | 'nomos'; name: string };
+      timeZone: string;
+    },
+  ) => Promise<AppActionResult>;
+}
+
 export interface HelmToolScope {
   uid: string;
   key: HelmKey;
@@ -108,6 +129,10 @@ export interface HelmToolScope {
     connectorId: string;
     categories: { id: string; label: string; kind: string }[];
   }[];
+  /** Offers one tool per read action of each connected site app, always, so an assistant knows what exists; a call says exactly which switch holds it back. */
+  appActions?: AppActionReads;
+  /** The outside assistant's name as the person sees it in Helm, for the switch a refusal names. */
+  assistantName?: string;
   quotes?: QuoteBook;
   searched?: SearchedLog;
   /** Set on an outside assistant's turn: its switches, which bound every stored record a tool returns. */
@@ -148,6 +173,8 @@ export interface HelmTool<Shape extends z.ZodRawShape> {
   /** What an outside assistant reads instead, for a tool whose `description` leans on context only Nomos is given. */
   externalDescription?: string;
   shape: Shape;
+  /** Defaults to a read; a change is annotated as one so an assistant asks before it runs. */
+  kind?: 'read' | 'change';
   run: (input: z.infer<z.ZodObject<Shape>>) => Promise<unknown>;
   /** The most characters of its result the model gets, when more than the usual. */
   maxChars?: number;
@@ -1118,6 +1145,68 @@ export function buildHelmTools(scope: HelmToolScope) {
     },
   };
 
+  const appActionTools = (scope.appActions?.apps ?? []).flatMap((app) => {
+    const appLabel = connectorLabel(app.connectorId);
+    return app.actions.map(
+      ({ id, categories, action }): HelmTool<z.ZodRawShape> => ({
+        name: `${app.appId}_${id}`,
+        audience: 'both',
+        kind: 'read',
+        description: `${action.description} Reads ${appLabel} through Helm, only what the person shares (${categories.map((category) => category.label).join(', ')}); nothing is changed. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotRead or notFound; say exactly what a status says.`,
+        shape: action.shape,
+        run: async (input) => {
+          if (
+            scope.outsideReadScopes &&
+            !scope.outsideReadScopes.includes('apps')
+          ) {
+            const who = scope.assistantName?.trim() || 'This assistant';
+            return {
+              status: 'assistantCannotRead',
+              message: `${who} isn't allowed to read the person's apps. Turn on "Read your apps" for ${who} in Helm > Settings > Connected assistants.`,
+            };
+          }
+          const run =
+            scope.appActions?.run ??
+            (await import('../../../connections/liveRouter.js')).runSiteAction;
+          const result = await run(scope.firestore, {
+            uid: scope.uid,
+            readerAppId: 'helm',
+            connectorId: app.connectorId,
+            actionId: id,
+            input: input as Record<string, unknown>,
+            actor: {
+              kind: scope.outsideReadScopes ? 'outside' : 'nomos',
+              name: scope.assistantName ?? 'Helm',
+            },
+            timeZone,
+          }).catch((): AppActionResult => ({
+            status: 'refused',
+            message: 'Something went wrong reaching it. Try again in a moment.',
+          }));
+          const where = `Helm > Connected apps > ${appLabel}`;
+          if (result.status === 'switchedOff') {
+            return {
+              status: 'switchedOff',
+              message: `${appLabel}'s ${result.needs.map((need) => need.label).join(' and ')} ${result.needs.length > 1 ? 'are' : 'is'} switched off. The person can turn ${result.needs.length > 1 ? 'one on' : 'it on'} in ${where}.`,
+              needs: result.needs.map((need) => need.label),
+            };
+          }
+          if (result.status !== 'ok') return result;
+          return {
+            status: 'ok',
+            ...(result.data as Record<string, unknown>),
+            ...(result.heldBack.length > 0 && {
+              heldBack: result.heldBack.map(
+                (held) =>
+                  `${held.label} is switched off, so that part is left out. The person can turn it on in ${where}.`,
+              ),
+            }),
+          };
+        },
+      }),
+    );
+  });
+
   const topicRead = scope.topicRead;
   const getTopic: HelmTool<typeof getTopicShape> = {
     name: 'get_topic',
@@ -1428,6 +1517,7 @@ export function buildHelmTools(scope: HelmToolScope) {
     ...(siteGrants.some((grant) => grant.categories.length > 0)
       ? [searchAppRecords]
       : []),
+    ...appActionTools,
     ...(topicRead ? [getTopic, listTopics] : []),
     ...(procedureRead ? [searchProcedures] : []),
     ...(questionReask ? [bringBackQuestion] : []),

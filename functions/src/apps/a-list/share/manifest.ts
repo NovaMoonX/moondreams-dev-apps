@@ -170,6 +170,7 @@ export const A_LIST_SHARES: SourceShares = {
         'your monthly bill and tax',
         'share links',
       ],
+      actions: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

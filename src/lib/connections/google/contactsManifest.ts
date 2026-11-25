@@ -35,6 +35,7 @@ export const GOOGLE_CONTACTS_MANIFEST: ConnectorManifest = {
     'Contact groups, notes and any field beyond name, email, phone and photo',
     'Creating, changing or deleting contacts',
   ],
+  actions: [],
   capabilities: { read: true, write: false, backgroundSync: false },
   connect: {
     kind: 'oauth',

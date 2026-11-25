@@ -2,6 +2,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+import { MAX_INGREDIENT_GROUP_LENGTH } from '../../src/apps/pinch/constants.ts';
 import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -26,6 +27,20 @@ const COPIES: Copy[] = [
     importRewrites: {
       '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
     },
+  },
+  {
+    src: 'src/apps/pinch/utils/ingredientGroups.ts',
+    dest: 'functions/src/apps/pinch/share/ingredientGroups.ts',
+    importRewrites: {
+      '@/utils/stringUtils': '../../../vendor/stringUtils.js',
+      '@apps/pinch/constants': './groupConstants.js',
+      '@apps/pinch/utils/freeLines': './freeLines.js',
+    },
+  },
+  {
+    src: 'src/apps/pinch/utils/freeLines.ts',
+    dest: 'functions/src/apps/pinch/share/freeLines.ts',
+    importRewrites: { '@apps/pinch/types': './lineTypes.js' },
   },
   {
     src: 'src/apps/a-list/share/manifest.ts',
@@ -442,6 +457,12 @@ interface Generated {
 }
 
 const GENERATED: Generated[] = [
+  {
+    src: 'src/apps/pinch/constants.ts',
+    dest: 'functions/src/apps/pinch/share/groupConstants.ts',
+    build: () =>
+      `export const MAX_INGREDIENT_GROUP_LENGTH = ${MAX_INGREDIENT_GROUP_LENGTH};\n`,
+  },
   {
     src: 'src/apps/pinch/catalog/catalogIngredients.ts',
     dest: 'functions/src/apps/pinch/share/catalogNames.ts',

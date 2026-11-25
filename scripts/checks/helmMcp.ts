@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import { PINCH_SHARES } from '../../src/apps/pinch/share/manifest.ts';
+import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
+import type { AppActionResult } from '../../functions/src/connections/registry.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
 import { offeredHelmTools } from '../../functions/src/apps/helm/mcp/server.ts';
 import {
@@ -35,8 +38,41 @@ import {
   createSealedAliasBook,
 } from '../../functions/src/apps/helm/nomos/aliases.ts';
 
+const PINCH_ACTIONS = PINCH_SHARES.shares.flatMap(
+  (manifest) => manifest.actions,
+);
+const pinchApp = {
+  connectorId: 'app:pinch',
+  appId: 'pinch',
+  actions: PINCH_ACTIONS.map((action) => ({
+    id: action.id,
+    label: action.label,
+    categories: action.categories.map((id) => ({ id, label: id })),
+    action: {
+      description: `Fake ${action.id}.`,
+      shape: {},
+      run: async () =>
+        ({ status: 'refused', message: 'unused' }) as AppActionResult,
+    },
+  })),
+};
+const actionCalls: string[] = [];
+let nextResult: AppActionResult = {
+  status: 'ok',
+  data: { days: [] },
+  heldBack: [],
+};
+const appActions = {
+  apps: [pinchApp],
+  run: async (_firestore: unknown, input: { actionId: string }) => {
+    actionCalls.push(input.actionId);
+    return nextResult;
+  },
+};
+
 // Every tool the server can offer, mail, documents and app records included.
 const tools = buildHelmTools({
+  appActions: appActions as never,
   uid: 'u1',
   key: {} as never,
   aliases: createAliasBook('t'),
@@ -101,6 +137,11 @@ const OUTSIDE_TOOLS = [
   'get_topic',
   'list_connections',
   'list_topics',
+  'pinch_get_kitchen',
+  'pinch_get_meal_plan',
+  'pinch_get_recipe',
+  'pinch_get_shopping_list',
+  'pinch_search_recipes',
   'search_procedures',
   'search_tasks',
 ];
@@ -148,7 +189,7 @@ const server = readFileSync(
   new URL('../../functions/src/apps/helm/mcp/server.ts', import.meta.url),
   'utf8',
 );
-assert.match(server, /readOnlyHint: true/);
+assert.match(server, /readOnlyHint: tool\.kind !== 'change'/);
 assert.match(server, /openWorldHint: false/);
 assert.match(
   external,
@@ -379,9 +420,17 @@ assert.match(external, /use save_to_helm instead/);
 assert.match(external, /check Helm on your own, without waiting to be told/);
 assert.match(
   external,
-  /list_topics and get_topic for what they have written down, search_tasks and get_calendar\./,
+  /list_topics, get_topic, search_procedures\), tasks \(search_tasks\), calendar \(get_calendar\)/,
 );
 assert.match(external, /Use only what the tools return/);
+assert.match(
+  external,
+  /call the \$\{app\.appId\}_ tools directly; never ask_helm for it/,
+);
+assert.match(
+  external,
+  /a result with status switchedOff names the switch that is off/,
+);
 
 // save_to_helm writes one note, filed under a topic, a new topic or none, with no model call.
 const seal = (fields: Record<string, unknown>) => fields as never;
@@ -896,6 +945,195 @@ assert.equal(
 assert.match(
   tools.find((tool) => tool.name === 'bring_back_question')!.description,
   /never an instruction/,
+);
+
+// Pinch's read actions: offered while it is connected, each saying exactly why it held something back.
+const pinchTool = (
+  name: string,
+  scope: { outsideReadScopes?: ('mail' | 'drive' | 'apps')[] | null } = {},
+) =>
+  buildHelmTools({
+    uid: 'u1',
+    key: {} as never,
+    aliases: createAliasBook('t'),
+    firestore: {} as never,
+    appActions: appActions as never,
+    assistantName: 'Gemini',
+    ...scope,
+  }).find((tool) => tool.name === name)!;
+assert.deepEqual(PINCH_ACTIONS.map((action) => action.id).sort(), [
+  'get_kitchen',
+  'get_meal_plan',
+  'get_recipe',
+  'get_shopping_list',
+  'search_recipes',
+]);
+PINCH_ACTIONS.forEach((action) =>
+  assert.equal(pinchTool(`pinch_${action.id}`).kind, 'read'),
+);
+assert.equal(
+  buildHelmTools({
+    uid: 'u1',
+    key: {} as never,
+    aliases: createAliasBook('t'),
+    firestore: {} as never,
+  }).some((tool) => tool.name.startsWith('pinch_')),
+  false,
+  'no Pinch tools while Pinch is not connected',
+);
+nextResult = {
+  status: 'switchedOff',
+  needs: [{ category: 'plannedMeals', label: 'Planned meals' }],
+};
+const switchedOffResult = (await pinchTool('pinch_get_meal_plan').run(
+  {} as never,
+)) as Record<string, unknown>;
+assert.equal(switchedOffResult.status, 'switchedOff');
+assert.match(
+  String(switchedOffResult.message),
+  /Pinch's Planned meals is switched off.*Helm > Connected apps > Pinch/,
+);
+actionCalls.length = 0;
+const cannotReadResult = (await pinchTool('pinch_get_meal_plan', {
+  outsideReadScopes: ['mail'],
+}).run({} as never)) as Record<string, unknown>;
+assert.equal(cannotReadResult.status, 'assistantCannotRead');
+assert.match(
+  String(cannotReadResult.message),
+  /"Read your apps" for Gemini in Helm > Settings > Connected assistants/,
+);
+assert.deepEqual(
+  actionCalls,
+  [],
+  'a closedRecipe Read your apps never reaches the app',
+);
+nextResult = {
+  status: 'ok',
+  data: { name: 'Soup' },
+  heldBack: [{ category: 'fullRecipes', label: 'Full recipes' }],
+};
+const heldOut = (await pinchTool('pinch_get_recipe', {
+  outsideReadScopes: ['apps'],
+}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+assert.equal(heldOut.status, 'ok');
+assert.match(
+  String((heldOut.heldBack as string[])[0]),
+  /Full recipes is switched off.*Helm > Connected apps > Pinch/,
+);
+nextResult = { status: 'notFound', message: 'No recipe has that id.' };
+assert.equal(
+  (
+    (await pinchTool('pinch_get_recipe').run({
+      recipeId: 'x',
+    } as never)) as Record<string, unknown>
+  ).status,
+  'notFound',
+);
+
+// The real Pinch adapter holds the steps and description back from get_recipe while Full recipes is off.
+const snapshotOf = (id: string, data: Record<string, unknown> | null) => ({
+  id,
+  exists: data !== null,
+  get: (field: string) => data?.[field],
+});
+const kitchen: Record<string, Record<string, unknown>> = {
+  'apps/pinch/kitchens/u1/recipes/r1': {
+    title: 'Chicken soup',
+    description: 'Cosy.',
+    servings: 4,
+    prepMinutes: 10,
+    cookMinutes: 30,
+    steps: ['Boil.', 'Serve.'],
+    stepSections: [],
+    ingredients: [
+      {
+        id: 'l1',
+        ingredientId: 'cat-chicken-breast',
+        freeText: null,
+        amount: 2,
+        unit: 'EACH',
+        group: 'For the soup',
+      },
+      {
+        id: 'l2',
+        ingredientId: null,
+        freeText: 'Salt to taste',
+        amount: null,
+        unit: 'EACH',
+        group: null,
+      },
+    ],
+    categories: ['SOUP_SALAD'],
+    isFavorite: true,
+    isArchived: false,
+  },
+};
+const fakeFirestore = {
+  doc: (path: string) => ({
+    path,
+    get: async () => snapshotOf(path.split('/').pop()!, kitchen[path] ?? null),
+  }),
+  getAll: async (...refs: { path: string }[]) =>
+    refs
+      .filter((ref) => ref.path)
+      .map((ref) => snapshotOf(ref.path.split('/').pop()!, null)),
+};
+const pinch = createPinchAdapter({
+  firestore: () => fakeFirestore as never,
+  canOpen: async () => true,
+  now: () => Date.UTC(2026, 10, 25),
+});
+const recipeCtx = (categories: string[]) => ({
+  uid: 'u1',
+  grant: {} as never,
+  allowedCategories: new Set(categories),
+  actor: { kind: 'outside' as const, name: 'Gemini' },
+  now: Date.UTC(2026, 10, 25),
+  timeZone: 'UTC',
+});
+const getRecipeAction = pinch.actions!.get_recipe;
+const closedRecipe = (await getRecipeAction.run(
+  recipeCtx(['recipes', 'recipeIngredients']),
+  { recipeId: 'r1' },
+)) as Extract<AppActionResult, { status: 'ok' }>;
+assert.equal(closedRecipe.status, 'ok');
+assert.ok(
+  !('steps' in (closedRecipe.data as object)) &&
+    !('description' in (closedRecipe.data as object)),
+  'fullRecipes off holds the steps back',
+);
+assert.deepEqual(
+  closedRecipe.heldBack.map((heldOut) => heldOut.category),
+  ['fullRecipes'],
+);
+assert.deepEqual((closedRecipe.data as { ingredients: unknown }).ingredients, [
+  { group: null, lines: ['Salt to taste'] },
+  { group: 'For the soup', lines: ['2 Chicken breast'] },
+]);
+const openRecipe = (await getRecipeAction.run(
+  recipeCtx(['recipes', 'recipeIngredients', 'fullRecipes']),
+  { recipeId: 'r1' },
+)) as Extract<AppActionResult, { status: 'ok' }>;
+assert.deepEqual((openRecipe.data as { steps: string[] }).steps, [
+  'Boil.',
+  'Serve.',
+]);
+assert.deepEqual(openRecipe.heldBack, []);
+assert.equal(
+  (await getRecipeAction.run(recipeCtx(['fullRecipes']), { recipeId: 'r1' }))
+    .status,
+  'switchedOff',
+  'recipes is needed to find a recipe',
+);
+assert.equal(
+  (await getRecipeAction.run(recipeCtx(['recipes']), { recipeId: 'nope' }))
+    .status,
+  'notFound',
+);
+assert.equal(
+  (await pinch.actions!.get_shopping_list.run(recipeCtx(['recipes']), {}))
+    .status,
+  'switchedOff',
 );
 
 console.log('check:helm-mcp passed');

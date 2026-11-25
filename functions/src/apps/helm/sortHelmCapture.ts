@@ -95,7 +95,11 @@ import {
   restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
-import type { LiveGrant, SiteLiveGrant } from '../../connections/liveRouter.js';
+import type {
+  LiveGrant,
+  SiteActionApp,
+  SiteLiveGrant,
+} from '../../connections/liveRouter.js';
 import {
   readContextKeyDates,
   readIndexIn,
@@ -717,6 +721,18 @@ export const readSiteGrants = (firestore: Firestore, uid: string) =>
     )
     .catch((error): SiteLiveGrant[] => {
       logger.warn('helm.live.siteGrantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
+
+export const readSiteActionApps = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listSiteActionApps }) =>
+      listSiteActionApps(firestore, uid, 'helm'),
+    )
+    .catch((error): SiteActionApp[] => {
+      logger.warn('helm.live.actionAppsFailed', {
         cause: error instanceof Error ? error.name : 'error',
       });
       return [];
@@ -3201,6 +3217,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           readOffCategories(firestore, uid),
         ])
       : [[], [], []];
+    const actionApps =
+      mode !== 'rest' &&
+      !isScheduledCapture(capture) &&
+      isQuestion(combined.text.trim())
+        ? await readSiteActionApps(firestore, uid)
+        : [];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
@@ -3273,6 +3295,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         liveGrants,
         siteGrants,
         offCategories,
+        appActions: { apps: actionApps },
+        assistantName: read.isOutside ? read.via : undefined,
         quotes,
         searched,
         mask: unattendedMask,

@@ -1,5 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import type { SecretParam } from 'firebase-functions/params';
+import type { ZodRawShape } from 'zod';
 
 import type {
   ConnectionGrant,
@@ -80,12 +81,46 @@ export interface SourceAdapter {
   query?(ctx: SourceCtx, req: LiveQueryRequest): Promise<LiveQueryResult>;
   /** A site path under the source's own route, or null. */
   deepLink(ref: string, ctx: SourceCtx): string | null;
+  /** What the app offers an assistant, by the ids its manifest lists in `actions`. */
+  actions?: Record<string, ServerAppAction>;
   /** The choices the account offers (calendars), read live. */
   readOptions?(args: {
     firestore: Firestore;
     uid: string;
     accountId: string;
   }): Promise<ConnectorOption[]>;
+}
+
+export interface ServerAppActionCtx {
+  uid: string;
+  grant: ConnectionGrant;
+  /** The share categories the person has on right now. */
+  allowedCategories: Set<string>;
+  actor: { kind: 'outside' | 'nomos'; name: string };
+  now: number;
+  /** The person's own IANA zone. */
+  timeZone: string;
+}
+
+export type AppActionResult =
+  | {
+      status: 'ok';
+      data: unknown;
+      heldBack: { category: string; label: string }[];
+    }
+  | { status: 'switchedOff'; needs: { category: string; label: string }[] }
+  | { status: 'notFound'; message: string }
+  | { status: 'refused'; message: string };
+
+/** One action a site app offers an assistant, keyed in `SourceAdapter.actions` by its manifest id. */
+export interface ServerAppAction {
+  /** Written for an assistant: what it returns, what each argument is and where its ids come from. */
+  description: string;
+  shape: ZodRawShape;
+  run(
+    ctx: ServerAppActionCtx,
+    input: Record<string, unknown>,
+  ): Promise<AppActionResult>;
 }
 
 export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {

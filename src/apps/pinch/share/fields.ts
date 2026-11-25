@@ -305,7 +305,7 @@ const RECIPE_INGREDIENT_FIELDS = {
   amount: 'shared',
   unit: 'shared',
   note: 'never',
-  group: 'never',
+  group: 'shared',
   adaptedFrom: 'never',
 } satisfies Record<keyof RecipeIngredient, ShareDecision>;
 
@@ -326,15 +326,15 @@ const RECIPE_LINK_FIELDS = {
 const RECIPE_FIELDS = {
   id: 'notUseful',
   title: 'shared',
-  description: 'never',
+  description: 'shared',
   servings: 'shared',
   prepMinutes: 'shared',
   cookMinutes: 'shared',
   coverPath: 'notUseful',
   coverUrl: 'notUseful',
   ingredients: 'shared',
-  steps: 'never',
-  stepSections: 'never',
+  steps: 'shared',
+  stepSections: 'shared',
   nutritionOverride: 'never',
   source: 'notUseful',
   sourceId: 'notUseful',
@@ -425,4 +425,5 @@ export const NOT_STORED: Record<string, string> = {
   ChangePinchShareResult: 'callable result',
   CopyPinchShareCoverRequest: 'callable request',
   CopyPinchShareCoverResult: 'callable result',
+  RecipeNoteBy: 'nested inside RecipeNote.by, which is never shared',
 };

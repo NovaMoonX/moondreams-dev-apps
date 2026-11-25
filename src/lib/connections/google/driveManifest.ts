@@ -38,6 +38,7 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
     'Sheets, slides, images and other files',
     'Creating, changing, sharing or deleting files',
   ],
+  actions: [],
   capabilities: { read: true, write: false, backgroundSync: false },
   connect: {
     kind: 'oauth',
