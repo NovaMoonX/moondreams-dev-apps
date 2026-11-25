@@ -510,6 +510,7 @@ async function handleMail(
     outcome: result.outcome,
     senderKind: result.senderKind,
     purchaseId: result.purchase?.ref.id ?? null,
+    savedAt: Date.now(),
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
       planKey,

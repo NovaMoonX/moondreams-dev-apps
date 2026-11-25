@@ -808,6 +808,7 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     id,
     from,
     receivedAt,
+    savedAt: null,
     outcome,
     senderKind,
     purchaseId: null,
