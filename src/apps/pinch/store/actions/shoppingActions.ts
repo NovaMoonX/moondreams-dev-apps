@@ -90,10 +90,11 @@ function writeLine(
   );
   const note = appendWords(existing?.note, line.note, MAX_SHOPPING_NOTE_LENGTH);
   if (existing) {
+    // A legacy item's note is derived from its sources, which now include this line's, so writing one would drop the derived text.
     transaction.update(snapshot.ref, {
       ...fields,
       sources,
-      ...(existing.note === undefined && note === null ? {} : { note }),
+      ...(existing.note === undefined ? {} : { note }),
       amountText:
         fields.amount === null
           ? appendWords(
@@ -287,6 +288,12 @@ export const updateShoppingItem = createAsyncThunk<
           now,
           isChecked,
         );
+        if (note !== undefined) {
+          transaction.update(target.ref, {
+            note:
+              note === null ? null : note.slice(0, MAX_SHOPPING_NOTE_LENGTH),
+          });
+        }
       });
     } catch (error) {
       return rejectWithValue(
@@ -303,22 +310,27 @@ interface SetShoppingItemNoteInput {
   note: string | null;
 }
 
-/** A row's note is one text: the first item keeps it and the row's other items let go of theirs, so it never doubles. Field-scoped, so it queues offline like any edit. */
+/** A row's note is one text: the first item keeps it and the row's other items let go of theirs, so it never doubles. A row item removed meanwhile is skipped. */
 export const setShoppingItemNote = createAsyncThunk<
   void,
   SetShoppingItemNoteInput,
   { rejectValue: string }
 >('pinch/shopping/setNote', async ({ uid, ids, note }, { rejectWithValue }) => {
   try {
-    const batch = writeBatch(db);
-    const now = Date.now();
-    ids.forEach((id, index) =>
-      batch.update(shoppingDoc(uid, id), {
-        note: index === 0 ? note : null,
-        updatedAt: now,
-      }),
-    );
-    await batch.commit();
+    await runHeldTransaction(uid, async (transaction) => {
+      const snapshots = await Promise.all(
+        ids.map((id) => transaction.get(shoppingDoc(uid, id))),
+      );
+      const now = Date.now();
+      snapshots
+        .filter((snapshot) => snapshot.exists())
+        .forEach((snapshot, index) =>
+          transaction.update(snapshot.ref, {
+            note: index === 0 ? note : null,
+            updatedAt: now,
+          }),
+        );
+    });
   } catch (error) {
     return rejectWithValue(getWriteMessage(error, 'Unable to save this note.'));
   }

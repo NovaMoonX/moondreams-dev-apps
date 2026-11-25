@@ -82,6 +82,7 @@ import {
   getShoppingMealsText,
   getShoppingForText,
   getShoppingNotesText,
+  joinWords,
   getShopRowId,
   getShownShoppingView,
   isPutAway,
@@ -142,13 +143,13 @@ const makeNotesText = (
 ): GetNotesText => {
   const textByKey = new Map<string, string | null>();
   return (row) => {
-    if (row.note !== undefined) return row.note;
-    const key = `${row.ingredientId}|${row.sources.join('|')}`;
-    const known = textByKey.get(key);
-    if (known !== undefined) return known;
-    const text = getShoppingNotesText(row.ingredientId, row.sources, context);
-    textByKey.set(key, text);
-    return text;
+    if (row.legacySources.length === 0) return row.note ?? null;
+    const key = `${row.ingredientId}|${row.legacySources.join('|')}`;
+    const derived =
+      textByKey.get(key) ??
+      getShoppingNotesText(row.ingredientId, row.legacySources, context);
+    textByKey.set(key, derived);
+    return joinWords([row.note, derived]);
   };
 };
 
@@ -248,6 +249,7 @@ const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.amountText === b.amountText &&
   a.words === b.words &&
   a.note === b.note &&
+  a.legacySources.join() === b.legacySources.join() &&
   a.isChecked === b.isChecked &&
   a.itemIds.join() === b.itemIds.join() &&
   a.sources.join() === b.sources.join();

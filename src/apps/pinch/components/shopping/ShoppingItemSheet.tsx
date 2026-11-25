@@ -89,13 +89,16 @@ function ShoppingItemSheet({
   const [item] = items;
   const [savedNote] = useState(
     () =>
-      (items.every((rowItem) => rowItem.note === undefined)
-        ? getShoppingNotesText(
-            item.ingredientId,
-            items.flatMap((rowItem) => rowItem.sources ?? []),
-            context,
-          )
-        : joinWords(items.map((rowItem) => rowItem.note))) ?? '',
+      joinWords([
+        ...items.map((rowItem) => rowItem.note),
+        getShoppingNotesText(
+          item.ingredientId,
+          items.flatMap((rowItem) =>
+            rowItem.note === undefined ? (rowItem.sources ?? []) : [],
+          ),
+          context,
+        ),
+      ]) ?? '',
   );
   const [noteText, setNoteText] = useState(savedNote);
   const noteRef = useRef<HTMLTextAreaElement>(null);
@@ -213,7 +216,7 @@ function ShoppingItemSheet({
             mergedIds: rowIds.slice(1),
             amount,
             unit,
-            note: noteValue,
+            ...(isNoteChanged ? { note: noteValue } : {}),
           }),
         ).unwrap();
       } else {

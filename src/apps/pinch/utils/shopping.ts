@@ -96,7 +96,9 @@ export const appendWords = (
     .filter((part) => part !== '');
   const result = parts.reduce(
     (text, part) =>
-      text.toLowerCase().includes(part.toLowerCase())
+      text
+        .split(WORDS_SEPARATOR)
+        .some((have) => have.trim().toLowerCase() === part.toLowerCase())
         ? text
         : text === ''
           ? part
@@ -188,6 +190,8 @@ export interface ShoppingRowData {
   words: string | null;
   /** The items' notes joined; undefined while no item has the key at all (written before notes), which shows the notes derived from the recipes. */
   note: string | null | undefined;
+  /** The sources of the items written before notes, whose notes are derived from their recipes and joined with `note`. */
+  legacySources: string[];
   isChecked: boolean;
   /** What put the row's items on the list, each once, by key. */
   sources: string[];
@@ -1652,6 +1656,11 @@ export function groupShoppingItems(
         note: rowItems.every((item) => item.note === undefined)
           ? undefined
           : joinWords(byBase.map((item) => item.note)),
+        legacySources: getSourceKeys(
+          byBase.flatMap((item) =>
+            item.note === undefined ? (item.sources ?? []) : [],
+          ),
+        ),
         isChecked: byBase[0].isChecked,
         sources: getSourceKeys(byBase.flatMap((item) => item.sources ?? [])),
       };
