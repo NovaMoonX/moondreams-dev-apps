@@ -155,6 +155,8 @@ export function startShoppingListener(
           return {
             ...item,
             amountText: item.amountText ?? null,
+            freeText: item.freeText ?? null,
+            shopSection: item.shopSection ?? null,
           };
         }),
       ),

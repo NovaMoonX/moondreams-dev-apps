@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { NotebookText, Plus } from 'lucide-react';
+import { ListPlus, NotebookText, Plus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import SearchInput from '@/components/SearchInput';
@@ -149,6 +149,8 @@ interface ItemSearchProps {
   onStageNew?: (name: string) => void;
   /** When given, a typed name nothing matches can also be kept as plain words outside the kitchen. */
   onPickFree?: (words: string) => void;
+  /** When given, a typed name no ingredient has can also go on the shopping list as its own words ("Paper towels"), offered first. */
+  onPickListOnly?: (words: string) => void;
 }
 
 /** One search over the catalog and the person's own ingredients, capped at a few rows, that ends with "add this as a new ingredient" when nothing has exactly the typed name. */
@@ -165,6 +167,7 @@ function ItemSearch({
   isDisabled = false,
   onStageNew,
   onPickFree,
+  onPickListOnly,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
@@ -244,6 +247,9 @@ function ItemSearch({
     mealMatches.length + recipeMatches.length + matches.length > 0;
   const getNoMatchLine = () => {
     if (hasResults) return null;
+    if (canCreate && onPickListOnly) {
+      return `Nothing called “${trimmed}” in your kitchen. Add it just to your list, or as a new ingredient.`;
+    }
     if (canCreate) {
       return `Nothing called “${trimmed}” yet. You can add it as a new ingredient.`;
     }
@@ -411,6 +417,25 @@ function ItemSearch({
                 />
               </li>
             ))}
+            {canCreate && onPickListOnly && (
+              <li>
+                <PickRowShell
+                  isCompact={isLandscape}
+                  isDisabled={isDisabled}
+                  onClick={() => {
+                    onPickListOnly(trimmed.slice(0, MAX_NAME_LENGTH));
+                    setQuery('');
+                  }}
+                >
+                  <span className='flex min-w-0 items-center gap-2 font-medium'>
+                    <ListPlus className='size-4 shrink-0' aria-hidden='true' />
+                    <span className='truncate'>
+                      Just on my list “{trimmed}”
+                    </span>
+                  </span>
+                </PickRowShell>
+              </li>
+            )}
             {canCreate && (
               <li>
                 <PickRowShell

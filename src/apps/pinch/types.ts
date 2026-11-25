@@ -1,4 +1,5 @@
 import type { MeasureUnit } from '@/utils/measureUtils';
+import type { ShopSection } from '@apps/pinch/constants';
 export type PinchTab =
   'calendar' | 'recipes' | 'kitchen' | 'shopping' | 'settings';
 
@@ -381,8 +382,12 @@ export interface Collection {
 export interface ShoppingItem {
   /** Immutable. */
   id: string;
-  /** Immutable. */
-  ingredientId: string;
+  /** Immutable; null for a list-only line ("Paper towels"), which is never an ingredient and has no amount, unit choice or sources. */
+  ingredientId: string | null;
+  /** A list-only line's own words, at most `MAX_NAME_LENGTH` characters; null on every ingredient line. Documents written before this lack the key, which reads as null. */
+  freeText: string | null;
+  /** Where a list-only line is found in a shop, as the person picked it; null is Other, and always null on an ingredient line, whose section comes from the ingredient. Documents written before this lack the key, which reads as null. */
+  shopSection: ShopSection | null;
   /** Above zero, at most 1,000,000, two decimals; null for a line that is just the name ("Parsley"), which is always in `EACH`. */
   amount: number | null;
   /** Immutable: a different unit is a different item. */
