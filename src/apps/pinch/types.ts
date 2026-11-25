@@ -406,7 +406,10 @@ export interface Idea {
   siteName: string | null;
   /** https only: the page's own picture, a third party's address. */
   imageUrl: string | null;
+  /** @deprecated Replaced by `photoPaths`; written as null going forward. A document from before reads as a one-item list through `getIdeaPhotoPaths`. */
   photoPath: string | null;
+  /** Storage paths of a photo idea's pictures, the first being its picture (`photo.webp`, then `photo-1.webp`, `photo-2.webp`); `[]` for a link or written idea, and a missing key on a document from before. */
+  photoPaths: string[];
   /** The recipe this became. A missing key, an id no recipe has, or an archived recipe reads as not made yet. */
   recipeId: string | null;
   /** Who saved it when it wasn't the person; null for the person. Immutable. A missing key reads as null. */

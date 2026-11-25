@@ -1713,6 +1713,7 @@ export const saveIdea = async (
     siteName: host === null ? null : host.slice(0, MAX_IDEA_SITE_NAME_LENGTH),
     imageUrl: null,
     photoPath: null,
+    photoPaths: [],
     recipeId: null,
     by: toBy(ctx.actor),
     createdAt: ctx.now,

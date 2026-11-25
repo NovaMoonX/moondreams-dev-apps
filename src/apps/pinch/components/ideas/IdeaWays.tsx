@@ -10,10 +10,8 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FallbackImage from '@/components/FallbackImage';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
-import PhotoPicker from '@/components/forms/PhotoPicker';
 import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { useImageUpload } from '@/hooks/useImageUpload';
 import { useLinkLookup } from '@/hooks/useLinkPreview';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -25,7 +23,9 @@ import {
   toWebLink,
 } from '@/utils/urlUtils';
 import IdeaNoteField from '@apps/pinch/components/ideas/IdeaNoteField';
+import IdeaPhotosField from '@apps/pinch/components/ideas/IdeaPhotosField';
 import { IDEA_KIND_EMOJIS, MAX_IDEA_TITLE_LENGTH } from '@apps/pinch/constants';
+import { useIdeaPhotos } from '@apps/pinch/hooks/useIdeaPhotos';
 import { ideaPageQueryOptions } from '@apps/pinch/queries/ideaPageQueries';
 import { trackIdeaSave } from '@apps/pinch/hooks/useIdeaSaving';
 import {
@@ -395,7 +395,7 @@ export function IdeaLinkWay({
             url: data.url,
             siteName: preview ? siteName : null,
             imageUrl,
-            photoFile: null,
+            photoFiles: [],
           });
         }}
         submitButton={
@@ -423,52 +423,28 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
     uid,
     onSaved,
   );
-  const upload = useImageUpload(null, 'photo');
-  const { pick, clear } = upload;
+  const upload = useIdeaPhotos();
   const [data, setData] = useState({ title: '', note: '' });
 
   const title = data.title.trim();
-  const canSave = upload.file !== null && !upload.isPreparing && title !== '';
+  const canSave =
+    upload.photos.length > 0 && !upload.isPreparing && title !== '';
 
   const fields = [
     custom({
       name: 'photo',
       label: '',
       renderComponent: () => (
-        <div className='space-y-2'>
-          <span className='block text-sm font-medium'>Picture</span>
-          <div className='flex items-center gap-4'>
-            <span
-              className='bg-accent grid size-24 shrink-0 place-items-center overflow-hidden rounded-2xl text-4xl'
-              aria-hidden='true'
-            >
-              {upload.previewUrl ? (
-                <FallbackImage
-                  src={upload.previewUrl}
-                  alt=''
-                  fallback={IDEA_KIND_EMOJIS.PHOTO}
-                  className='size-full object-cover'
-                />
-              ) : (
-                IDEA_KIND_EMOJIS.PHOTO
-              )}
-            </span>
-            <PhotoPicker
-              photoUrl={upload.previewUrl}
-              showPreview={false}
-              canTakePhoto
-              uploadLabel='Choose a photo'
-              changeLabel='Choose another'
-              error={upload.error}
-              loading={upload.isPreparing}
-              onSelect={(file) => {
-                clearError();
-                void pick(file);
-              }}
-              onRemove={clear}
-            />
-          </div>
-        </div>
+        <IdeaPhotosField
+          photos={upload.photos}
+          error={upload.error}
+          isPreparing={upload.isPreparing}
+          onAdd={(files) => {
+            clearError();
+            upload.add(files);
+          }}
+          onClear={upload.clear}
+        />
       ),
     }),
     custom({
@@ -508,8 +484,8 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
         }}
         onSubmit={async () => {
           if (!canSave) return;
-          const photoFile = await upload.readyFile();
-          if (photoFile === null) return;
+          const photoFiles = await upload.readyFiles();
+          if (photoFiles.length === 0) return;
           void submit({
             kind: 'PHOTO',
             title,
@@ -517,7 +493,7 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
             url: null,
             siteName: null,
             imageUrl: null,
-            photoFile,
+            photoFiles,
           });
         }}
         submitButton={
@@ -527,8 +503,8 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
             error={error}
             note={
               isSubmitting
-                ? 'Uploading the picture. You can close this; it finishes on its own.'
-                : upload.file !== null && title === ''
+                ? 'Uploading the pictures. You can close this; it finishes on its own.'
+                : upload.photos.length > 0 && title === ''
                   ? 'Give it a title to save.'
                   : null
             }
@@ -624,7 +600,7 @@ export function IdeaTextWay({
             url: null,
             siteName: null,
             imageUrl: null,
-            photoFile: null,
+            photoFiles: [],
           });
         }}
         submitButton={

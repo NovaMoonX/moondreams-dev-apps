@@ -10,6 +10,7 @@ interface ShoppingRowProps {
   name: string;
   amountText: string | null;
   forText: string | null;
+  notesText: string | null;
   isChecked: boolean;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
@@ -21,6 +22,7 @@ function ShoppingRow({
   name,
   amountText,
   forText,
+  notesText,
   isChecked,
   onToggle,
   onOpen,
@@ -51,6 +53,11 @@ function ShoppingRow({
               )}
               {forText &&
                 (amountText ? `\u00a0·\u00a0for ${forText}` : `For ${forText}`)}
+            </span>
+          )}
+          {notesText && (
+            <span className='text-muted-foreground block truncate text-xs'>
+              {notesText}
             </span>
           )}
         </span>

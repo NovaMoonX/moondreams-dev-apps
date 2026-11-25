@@ -192,6 +192,7 @@ import {
 import {
   findIdeaByUrl,
   getIdeaDetail,
+  getIdeaPhotoPaths,
   getIdeaRecipeMethod,
   getIdeaSearchText,
   getMissingIdeaFields,
@@ -1119,6 +1120,7 @@ const idea = (fields: Partial<Idea>): Idea => ({
   siteName: null,
   imageUrl: null,
   photoPath: null,
+  photoPaths: [],
   recipeId: null,
   createdAt: 1,
   updatedAt: 1,
@@ -3040,7 +3042,35 @@ assert.equal(
 assert.equal(
   getIdeaRecipeMethod(idea({ kind: 'PHOTO', url: null })),
   'manual',
-  'a photo idea starts by hand',
+  'a photo idea with no stored picture starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(
+    idea({ kind: 'PHOTO', url: null, photoPaths: ['a/photo.webp'] }),
+  ),
+  'file',
+  'a photo idea is read from the pictures it holds',
+);
+assert.deepEqual(
+  getIdeaPhotoPaths(idea({ kind: 'PHOTO', photoPath: 'a/photo.webp' })),
+  ['a/photo.webp'],
+  'an idea from before photoPaths reads its one photoPath as a list',
+);
+assert.deepEqual(
+  getIdeaPhotoPaths(
+    idea({
+      kind: 'PHOTO',
+      photoPath: 'old',
+      photoPaths: ['a/photo.webp', 'a/photo-1.webp'],
+    }),
+  ),
+  ['a/photo.webp', 'a/photo-1.webp'],
+  'photoPaths wins over the deprecated photoPath',
+);
+assert.deepEqual(
+  getIdeaPhotoPaths(idea({ kind: 'LINK', photoPaths: ['x'] })),
+  [],
+  'only a photo idea has pictures',
 );
 assert.equal(
   getIdeaRecipeMethod(idea({ kind: 'TEXT', url: 'https://example.com/a' })),

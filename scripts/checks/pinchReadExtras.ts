@@ -122,6 +122,7 @@ const idea = (overrides: Partial<Idea>): Idea => ({
   siteName: null,
   imageUrl: 'https://www.seriouseats.com/thmb/adobo.jpg',
   photoPath: null,
+  photoPaths: [],
   recipeId: null,
   createdAt: 0,
   updatedAt: 0,
