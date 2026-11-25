@@ -58,6 +58,7 @@ import {
   HISTORY_WORDS,
   RUNWAY_TAB_LABELS,
   TRUSTED_BROWSER_WORDS,
+  EMAIL_PURCHASES_GATE_ID,
 } from '@apps/runway/constants';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import { canKeepDeviceSecrets } from '@/lib/security';
@@ -93,6 +94,7 @@ import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial'
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useSyncOnReturn } from '@apps/runway/hooks/useSyncOnReturn';
 import { useFreshListenersOnReturn } from '@/hooks/useFreshListenersOnReturn';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
 import { setOpenItemRequest } from '@apps/runway/utils/openItemRequest';
@@ -315,7 +317,7 @@ function RunwayContent() {
   useLoadFeatureGates('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   useSyncOnReturn();
-  useFreshListenersOnReturn();
+  useFreshListenersOnReturn(useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID));
   useMatchBankPurchases(user?.uid ?? null);
   useAutoPay(user?.uid ?? null);
   useShareSummary(user?.uid ?? null);
