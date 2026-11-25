@@ -20686,6 +20686,27 @@ const checkRulePlacements = () => {
     null,
     'the store itself stays broad',
   );
+  assert.equal(
+    isBroadMerchant('target gaslight', []),
+    true,
+    'a word that only starts with gas is not a fuel station',
+  );
+  assert.equal(
+    isBroadMerchant('walmart gasoline', []),
+    false,
+    'gasoline is a fuel word',
+  );
+  assert.equal(
+    isBroadMerchant('costco gas', [
+      rule('cv', {
+        merchantKey: 'costco gas',
+        merchantName: 'Costco Gas',
+        target: RULE_VARIES,
+      }),
+    ]),
+    true,
+    'a fuel station the person marked as varying stays broad',
+  );
   const variesRule = rule('v', {
     merchantKey: 'corner shop',
     merchantName: 'Corner Shop',

@@ -60,8 +60,10 @@ interface StoreRow extends RuleSeed {
   count: number;
 }
 
+// A pending charge often carries the bank's raw name, so the store list counts posted charges only.
 const isStorePurchase = (purchase: OpenPurchase) =>
   canOfferRule(purchase) &&
+  purchase.status !== 'pending' &&
   purchase.pairedWithId === null &&
   purchase.incomeDayId === null &&
   (purchase.billRef ?? null) === null;
