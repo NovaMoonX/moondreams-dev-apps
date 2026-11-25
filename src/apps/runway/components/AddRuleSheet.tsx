@@ -17,6 +17,7 @@ import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import {
   selectAllCards,
   selectNeedsHomeSections,
+  selectEnvelopes,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase, OpenRule } from '@apps/runway/types';
@@ -114,6 +115,7 @@ function AddRuleSheet({
   const cards = useAppSelector(selectAllCards);
   const { getCardLabel, describe } = useRuleNames();
   const today = todayAsUtcDate();
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const moves = useAppSelector(
     (state) => selectNeedsHomeSections(state, today).moves,
   );
@@ -132,7 +134,12 @@ function AddRuleSheet({
   );
   const findBroadRule = (fits: (rule: OpenRule) => boolean) =>
     rules
-      .filter((rule) => rule.merchantKey === null && fits(rule))
+      .filter(
+        (rule) =>
+          rule.merchantKey === null &&
+          envelopes.some(({ item }) => item.id === rule.target) &&
+          fits(rule),
+      )
       .sort(
         (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
       )[0] ?? null;
