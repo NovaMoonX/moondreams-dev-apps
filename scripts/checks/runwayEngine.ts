@@ -207,6 +207,7 @@ import {
   readPurchaseChange,
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeRulePlaced } from '../../src/apps/runway/utils/ruleText.ts';
+import { describeRule } from '../../src/apps/runway/engine/doneText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   describeCoverage,
@@ -20658,15 +20659,15 @@ const checkRulePlacements = () => {
   assert.equal(
     findRule(fact('Chipotle', 'FOOD', 'c1'), all)?.rule.id,
     'kc',
-    'a kind with a card beats a kind alone',
+    'a rule whose kind and card both fit beats a kind alone',
   );
   assert.equal(
-    findRule(fact('Chipotle', 'FOOD', 'c2'), all)?.rule.id,
+    findRule(fact('Chipotle', 'FOOD', 'c2'), [cardRule, kindRule])?.rule.id,
     'k',
     'a kind beats a card',
   );
   assert.equal(
-    findRule(fact('Chipotle', 'GAS', 'c1'), all)?.rule.id,
+    findRule(fact('Chipotle', 'GAS', 'c1'), [kindRule, cardRule])?.rule.id,
     'c',
     'a card rule is the last resort',
   );
@@ -20691,14 +20692,81 @@ const checkRulePlacements = () => {
     'a broad merchant escapes a kind rule',
   );
   assert.equal(
-    findRule(fact('Amazon', 'FOOD', 'c1'), [kindCardRule]),
+    findRule(fact('Amazon', 'FOOD', 'c2'), [kindCardRule]),
     null,
-    'also a kind with a card',
+    'also the kind tick of a rule that ticks a card',
   );
   assert.equal(
     findRule(fact('Amazon', 'FOOD', 'c1'), [cardRule])?.rule.id,
     'c',
     'but a card rule still fits it',
+  );
+  assert.equal(
+    findRule(fact("BJ's Wholesale Club Fuel", 'GAS', 'c1'), [kindCardRule])
+      ?.rule.id,
+    'kc',
+    'each tick catches on its own: everything on the card, even a broad store',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'FOOD', 'c2'), [kindCardRule])?.rule.id,
+    'kc',
+    'and the kind of place on any card',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'GAS', 'c2'), [kindCardRule]),
+    null,
+    'a purchase that fits neither tick is not caught',
+  );
+  assert.equal(
+    describeRule(
+      { ...kindCardRule, target: 'e-kc' },
+      { envelope: 'Gas', card: 'Citi' },
+    ),
+    'Food on any card, and everything on Citi, go to Gas',
+    'a rule with both ticks reads as two catches',
+  );
+  assert.equal(
+    describeRule(
+      { ...kindCardRule, target: 'e-kc' },
+      { envelope: 'Gas', card: 'Citi', isCardLeftOut: true },
+    ),
+    'Food on any card, and everything on this card, go to Gas',
+    'and keeps the card under its heading',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'GAS', 'c1'), [
+      { ...kindCardRule, createdAt: 2 },
+      { ...cardRule, createdAt: 1 },
+    ])?.rule.id,
+    'c',
+    'two rules that fit by the card alone: the older one wins',
+  );
+  assert.equal(
+    describeRule(cardRule, { envelope: 'Gas', card: 'Citi' }),
+    'Everything on Citi goes to Gas',
+    'a card alone reads as everything on it',
+  );
+  assert.equal(
+    describeRule(cardRule, {
+      envelope: 'Gas',
+      card: 'Citi',
+      isCardLeftOut: true,
+    }),
+    'Everything goes to Gas',
+    'and under its heading needs no card',
+  );
+  assert.equal(
+    describeRule(rule('g', { category: 'GAS' }), {
+      envelope: 'Fuel',
+      card: null,
+    }),
+    'Gas goes to Fuel',
+    'a kind alone reads on its own',
+  );
+  assert.equal(
+    describeRule(kindCardRule, { envelope: 'Gas', card: null }),
+    'Food on any card, and everything on a card, go to Gas',
+    'a missing card name still reads',
   );
   const variesRule = rule('v', {
     merchantKey: 'corner shop',
