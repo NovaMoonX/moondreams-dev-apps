@@ -212,8 +212,8 @@ const formatMonth = (at: number) =>
     year: 'numeric',
   });
 
-const countChanges = (count: number) =>
-  `${count} ${count === 1 ? 'change' : 'changes'}`;
+const countMore = (count: number) =>
+  `${count} more ${count === 1 ? 'change' : 'changes'}`;
 
 /** The scrolling ancestor of the sheet's content: the drawer's body on a phone, the modal's from `sm`. */
 const findScroller = (node: HTMLElement | null): HTMLElement | null => {
@@ -282,13 +282,13 @@ function WhatsNewSheet({
   };
 
   const rolled = rollUp(notes);
-  const told = [...rolled.told, ...rolled.moreTold];
+  const restCount = rolled.total - rolled.told.length;
   const isOneRelease = new Set(notes.map((note) => note.version)).size <= 1;
   const sinceDate = isOneRelease ? null : formatDateShort(rolled.sinceAt ?? 0);
   const sinceLine = sinceDate ? `Since ${sinceDate}` : null;
-  const allLabel = sinceDate
-    ? `All ${countChanges(rolled.total)} since ${sinceDate}`
-    : `All ${countChanges(rolled.total)}`;
+  const restLabel = sinceDate
+    ? `${countMore(restCount)} since ${sinceDate}`
+    : countMore(restCount);
   const getVersionLine = (note: WhatsNewNote) =>
     isDebug ? `Version ${note.version}` : null;
 
@@ -308,9 +308,9 @@ function WhatsNewSheet({
         </Section>
       ));
 
-  const everyChange = () => (
+  const theRest = () => (
     <div className='space-y-5'>
-      {toldSections(told)}
+      {toldSections(rolled.moreTold)}
       {rolled.smaller.length > 0 ? (
         <Section label='Smaller changes'>
           <NoteList
@@ -430,8 +430,8 @@ function WhatsNewSheet({
     if (view === 'all') {
       return (
         <div className='space-y-5'>
-          <BackHeading onBack={() => setView('main')} title={allLabel} />
-          {everyChange()}
+          <BackHeading onBack={() => setView('main')} title={restLabel} />
+          {theRest()}
         </div>
       );
     }
@@ -446,7 +446,7 @@ function WhatsNewSheet({
       onClick={() => setView('all')}
     >
       <span className='block min-w-0'>
-        <span className='block'>{`See all ${countChanges(rolled.total)}`}</span>
+        <span className='block'>{`See ${countMore(restCount)}`}</span>
         {sinceLine ? (
           <span className='text-muted-foreground block text-sm'>
             {sinceLine}

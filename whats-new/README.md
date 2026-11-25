@@ -44,7 +44,7 @@ Before writing a note, read the app's notes not yet in a release (`git tag --con
 - **After a release:** a new note names the old one in `replaces`, and people then see only the newer line; debug viewers keep both in their log.
 - **Undoing a feature:** replace its note with one saying what changed, or delete the note when it's unreleased or nobody would notice.
 - Versions only group what shipped together; they don't link notes.
-- A listed line on its own opens nothing: it waits in the app's history and joins the next pop-up that has something to tell, under **See all**.
+- A listed line on its own opens nothing: it waits in the app's history and joins the next pop-up that has something to tell, under its **See N more changes** door.
 
 To correct a note, edit its file; to pull one back, delete it. The next deploy republishes the feed from the files. A note's version and date come from the merge that added its file, and notes older than 6 months drop out on their own.
 
