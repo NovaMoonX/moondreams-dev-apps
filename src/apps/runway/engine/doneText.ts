@@ -53,26 +53,29 @@ export interface RuleNames {
   isCardLeftOut?: boolean;
 }
 
-/** The rule as a sentence: "Restaurants on Venture X go to Dining out", "Safeway goes to Groceries", "Amazon: ask me every time". */
+/** The rule as a sentence: "Restaurants go to Dining out", "Everything on Venture X goes to Dining out", "Gas on any card, and everything on Citi, go to Gas", "Safeway goes to Groceries", "Amazon: ask me every time". */
 export function describeRule(rule: RuleSealed, names: RuleNames): string {
   const { merchantName, category, cardId } = rule;
   if (merchantName !== null && rule.target === RULE_VARIES) {
     return `${merchantName}: ${RULE_ENGINE_WORDS.askEvery.toLowerCase()}`;
   }
-  const onCard = names.isCardLeftOut ? '' : ` on ${names.card ?? 'a card'}`;
+  const onCard = names.isCardLeftOut
+    ? ' on this card'
+    : ` on ${names.card ?? 'a card'}`;
+  const kind = category === null ? null : getCategoryLabel(category);
   const subject =
     merchantName ??
-    (category === null
-      ? `Everything${onCard}`
-      : `${getCategoryLabel(category)}${cardId === null ? '' : onCard}`);
+    (kind === null
+      ? `Everything${names.isCardLeftOut ? '' : onCard}`
+      : cardId === null
+        ? kind
+        : `${kind} on any card, and everything${onCard},`);
   const verb =
-    merchantName !== null
-      ? 'goes'
-      : category === null
-        ? 'goes'
-        : isPlural(getCategoryLabel(category))
-          ? 'go'
-          : 'goes';
+    merchantName === null &&
+    kind !== null &&
+    (cardId !== null || isPlural(kind))
+      ? 'go'
+      : 'goes';
   return `${subject} ${verb} to ${names.envelope}`;
 }
 
