@@ -1722,7 +1722,13 @@ export const addToShoppingList = async (
   const records = outcome.written;
   const made = records.flatMap(({ record }) => (record ? [record] : []));
   const already = records.flatMap(({ line, record }) =>
-    record ? [] : [`${line.name} was already on the list`],
+    record
+      ? []
+      : [
+          line.note
+            ? `${line.name} was already on the list; its note was left as it was`
+            : `${line.name} was already on the list`,
+        ],
   );
   const summary =
     made.length === 0
