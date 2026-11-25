@@ -228,6 +228,13 @@ export async function rebuildClosingsOnServer(
       rest: readonly string[],
       previous: ClosingState | null,
     ): Promise<boolean> => {
+      if (rest.length > 0 && Date.now() >= deadline) {
+        logger.info('runway.closings.paused', {
+          uidHash: hashOf(uid),
+          resumesFrom: rest[0],
+        });
+        return false;
+      }
       const chunk = rest.slice(0, CLOSING_WRITE_CHUNK);
       const later = rest.slice(chunk.length);
       const built =
@@ -242,13 +249,6 @@ export async function rebuildClosingsOnServer(
         isLast ? target : null,
       );
       if (later.length === 0) return isLast;
-      if (Date.now() >= deadline) {
-        logger.info('runway.closings.paused', {
-          uidHash: hashOf(uid),
-          resumesFrom: later[0],
-        });
-        return false;
-      }
       return step(later, built.at(-1) ?? previous);
     };
     return step(months, valid);

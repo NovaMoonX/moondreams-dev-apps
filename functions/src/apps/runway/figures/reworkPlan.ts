@@ -64,7 +64,7 @@ import type {
 } from '../runwayTypes.js';
 import { runAlerts, type SendAlertPush } from './alerts.js';
 import { readClosing, rebuildClosingsOnServer } from './rebuildClosings.js';
-import { HOUR_MS, pickZone } from './reworkState.js';
+import { HOUR_MS, MINUTE_MS, pickZone } from './reworkState.js';
 import {
   applyPlaced,
   logSortFailure,
@@ -78,7 +78,7 @@ const KNOWN_KINDS: readonly string[] = MOVE_KINDS;
 export type ReworkOutcome =
   | { kind: 'gone' }
   | { kind: 'done'; zone: string; wakeAt: number | null }
-  | { kind: 'waiting'; zone: string; wakeAt: null };
+  | { kind: 'waiting'; zone: string; wakeAt: number | null };
 
 const planPath = (uid: string) => `apps/runway/plans/${uid}`;
 
@@ -210,16 +210,22 @@ export async function reworkPlan(
         await clearFigures();
         throw error;
       }));
-    if (isRebuilt) {
+    const isPastDeadline =
+      options.deadline !== undefined && Date.now() >= options.deadline;
+    if (isRebuilt && !isPastDeadline) {
       return reworkPlan(firestore, keyring, uid, now, sendAlertPush, {
         ...options,
         canRebuild: false,
       });
     }
     // Stored figures could pass as current (bank writes don't move the plan's stamp), so they go until the
-    // closings are whole; a partial rebuild's own write marks the plan, so the next run carries on from there.
+    // closings are whole; a rebuild's own write marks the plan, and a run out of time may have written nothing.
     await clearFigures();
-    return { kind: 'waiting', zone, wakeAt: null };
+    return {
+      kind: 'waiting',
+      zone,
+      wakeAt: isPastDeadline ? Date.now() + MINUTE_MS : null,
+    };
   }
   const { closing, from } = history;
 

@@ -227,6 +227,9 @@ const outbox = () => {
 const run = (uid: string, now: number, send: SendAlertPush) =>
   reworkPlan(firestore, DEV_KEYRING, uid, now, send);
 
+const closingsOf = async (uid: string) =>
+  (await firestore.collection(`${planOf(uid)}/closings`).get()).docs;
+
 async function main() {
   // A drop outside quiet hours sends one push and leaves nothing held.
   const day = 'alerts-day';
@@ -511,8 +514,6 @@ async function main() {
     'done',
     'stale closings no longer make the run wait',
   );
-  const closingsOf = async (uid: string) =>
-    (await firestore.collection(`${planOf(uid)}/closings`).get()).docs;
   const built = await closingsOf(behind);
   assert.equal(
     built.at(-1)?.id,
@@ -599,6 +600,7 @@ async function main() {
   );
 
   await checkClosingParity(target);
+  await checkRebuildBudget(target);
 
   console.log('Runway alerts server: all checks passed.');
 }
@@ -690,6 +692,82 @@ function withOneRace(uid: string, calls: { count: number }): Firestore {
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
+}
+
+async function checkRebuildBudget(target: string) {
+  const late = 'alerts-budget-spent';
+  await seedPlan(late, true, today - 120 * DAY_MS);
+  const figuresOf = () =>
+    firestore.doc(`${planOf(late)}/figures/current`).get();
+  const spent = await reworkPlan(
+    firestore,
+    DEV_KEYRING,
+    late,
+    at(12),
+    outbox().send,
+    { deadline: Date.now() - 1 },
+  );
+  assert.equal(spent.kind, 'waiting', 'a spent budget waits');
+  assert.ok(
+    spent.kind === 'waiting' && spent.wakeAt !== null,
+    'a run that may have written nothing asks to run again soon',
+  );
+  assert.equal(
+    (await closingsOf(late)).length,
+    0,
+    'no chunk starts past the deadline',
+  );
+  assert.equal((await figuresOf()).exists, false);
+
+  // The rebuild ends inside the budget, which is gone by the time figures would be worked out.
+  const counted = { count: 0 };
+  const counting = new Proxy(firestore, {
+    get(target, prop) {
+      if (prop === 'runTransaction') {
+        return (...args: Parameters<Firestore['runTransaction']>) => {
+          counted.count += 1;
+          return target.runTransaction(...args);
+        };
+      }
+      const value: unknown = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  const spentAfterRebuild = {
+    get deadline() {
+      return counted.count === 0 ? Date.now() + 60 * 60_000 : 0;
+    },
+  };
+  const afterRebuild = await reworkPlan(
+    counting,
+    DEV_KEYRING,
+    late,
+    at(12),
+    outbox().send,
+    spentAfterRebuild,
+  );
+  assert.equal(
+    afterRebuild.kind,
+    'waiting',
+    'no figure pass after a rebuild that used the budget',
+  );
+  assert.equal(
+    (await closingsOf(late)).at(-1)?.id,
+    target,
+    'the rebuild itself finished',
+  );
+  assert.equal(
+    (await firestore.doc(planOf(late)).get()).get('dirtyFrom'),
+    null,
+  );
+  assert.equal((await figuresOf()).exists, false);
+
+  const next = await run(late, at(12) + 60_000, outbox().send);
+  assert.equal(next.kind, 'done', 'the next run works out the figures');
+  assert.equal(
+    (await figuresOf()).get('planStamp'),
+    (await firestore.doc(planOf(late)).get()).get('updatedAt'),
+  );
 }
 
 async function checkClosingParity(target: string) {
