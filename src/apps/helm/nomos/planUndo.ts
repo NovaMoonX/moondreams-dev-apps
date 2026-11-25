@@ -1999,6 +1999,47 @@ export const withoutGroupings = (view: OpenExecution): OpenExecution => {
   };
 };
 
+/** Whether an execution wrote only changes an app made for an outside assistant, so its Undo is a call to that app and writes no Helm record. */
+export const isAppChangeExecution = (refs: Pick<EffectRef, 'collection'>[]) =>
+  refs.length > 0 && refs.every((ref) => ref.collection === 'appChanges');
+
+/** The app changes an Undo asks their apps to take back: the execution's own, not yet taken back, and only the ones `docIds` names when it is given. */
+export function planAppChangeUndo(
+  original: Pick<
+    OpenExecution,
+    'effectRefs' | 'undoneByExecutionId' | 'undoneDocIds'
+  >,
+  docIds: string[] | null,
+): { docId: string; connectorId: string; changeId: string }[] {
+  const undone = getUndoneDocIds(original);
+  return original.effectRefs.flatMap((ref) => {
+    const at = ref.docId.indexOf('__');
+    return ref.collection === 'appChanges' &&
+      at > 0 &&
+      !undone.has(ref.docId) &&
+      (docIds === null || docIds.includes(ref.docId))
+      ? [
+          {
+            docId: ref.docId,
+            connectorId: ref.docId.slice(0, at),
+            changeId: ref.docId.slice(at + 2),
+          },
+        ]
+      : [];
+  });
+}
+
+/** What the apps answered to an Undo: the records now taken back, and the apps' own sentences for the ones that refused. */
+export const settleAppChangeUndo = (
+  calls: { docId: string }[],
+  answers: ({ ok: true } | { ok: false; message: string })[],
+) => ({
+  takenBackDocIds: calls.flatMap((call, index) =>
+    answers[index]?.ok === true ? [call.docId] : [],
+  ),
+  refusals: answers.flatMap((answer) => (answer.ok ? [] : [answer.message])),
+});
+
 /** A grouping after Undo: the person's Group them goes back to proposed, a server link becomes a no. */
 export function toGroupingUndoPatch(
   actor: Execution['actor'],

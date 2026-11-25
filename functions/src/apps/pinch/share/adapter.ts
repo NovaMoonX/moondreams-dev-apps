@@ -28,6 +28,17 @@ import {
   readReminders,
 } from '../eatSoonDigest.js';
 import { CATALOG_NAMES } from './catalogNames.js';
+import {
+  ADD_RECIPE_SHAPE,
+  ADD_TO_SHOPPING_LIST_SHAPE,
+  PLAN_MEAL_SHAPE,
+  UPDATE_RECIPE_SHAPE,
+  addRecipe,
+  addToShoppingList,
+  planMeal,
+  undoPinchOutsideChange,
+  updateRecipe,
+} from './changes.js';
 import { groupIngredientLines } from './ingredientGroups.js';
 import { PINCH_SHARES } from './manifest.js';
 
@@ -1519,7 +1530,29 @@ export function createPinchAdapter(
         GET_KITCHEN_SHAPE,
         (ctx, input) => getKitchen(deps.firestore(), ctx, input),
       ),
+      update_recipe: toAppAction(
+        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_get_recipe first and send every line you want kept. recipeId comes from pinch_search_recipes or pinch_get_meal_plan. It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
+        UPDATE_RECIPE_SHAPE,
+        (ctx, input) => updateRecipe(deps.firestore(), ctx, input),
+      ),
+      add_recipe: toAppAction(
+        "Saves a new recipe in the person's Recipes: a title, and optionally servings, prepMinutes, cookMinutes, description, ingredients and steps. It applies at once and returns the new recipeId; Pinch and Helm show it with an Undo (which archives it). Confirm with the person what you will add before you call it.",
+        ADD_RECIPE_SHAPE,
+        (ctx, input) => addRecipe(deps.firestore(), ctx, input),
+      ),
+      plan_meal: toAppAction(
+        "Plans a meal on a day and slot of the person's calendar: a date (YYYY-MM-DD, today or later), a mealType (breakfast, lunch, dinner, snack, dessert or drink), and either a recipeId from pinch_search_recipes or the name of a saved meal or recipe, with optional servings. It applies at once and shows in Pinch's calendar with an Undo, and in Helm. It never takes a meal off. Confirm the day and slot with the person before you call it.",
+        PLAN_MEAL_SHAPE,
+        (ctx, input) => planMeal(deps.firestore(), ctx, input),
+      ),
+      add_to_shopping_list: toAppAction(
+        "Adds things to the person's shopping list: each with a name and optionally an amount and unit. Something already on the list gains the amount. It never ticks or removes anything. It applies at once and shows in Pinch's shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.",
+        ADD_TO_SHOPPING_LIST_SHAPE,
+        (ctx, input) => addToShoppingList(deps.firestore(), ctx, input),
+      ),
     },
+    undoChange: (firestore, uid, changeId, from) =>
+      undoPinchOutsideChange(firestore, uid, changeId, from),
     deepLink: (ref) => {
       const [collection] = ref.split('/');
       return Object.hasOwn(DEEP_LINKS, collection)

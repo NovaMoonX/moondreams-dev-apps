@@ -125,13 +125,15 @@ export function readUpdateConnectionRequest(
   const hasOptions = data.options !== undefined;
   const hasLabel = data.accountLabel !== undefined;
   const hasSeen = data.seenScopes !== undefined;
-  if (!hasCategories && !hasOptions && !hasLabel && !hasSeen)
+  const hasChanges = data.changes !== undefined;
+  if (!hasCategories && !hasOptions && !hasLabel && !hasSeen && !hasChanges)
     throw badRequest();
   return {
     grantId: data.grantId,
     ...(hasCategories
       ? { categories: readCategoryChanges(data.categories) }
       : {}),
+    ...(hasChanges ? { changes: readCategoryChanges(data.changes) } : {}),
     ...(hasOptions ? { options: requireOptions(data.options) } : {}),
     ...(hasLabel
       ? { accountLabel: readAccountLabelInput(data.accountLabel) }
@@ -270,6 +272,31 @@ export function applyCategoryChanges(
         : { isOn: false, changedAt: now, seenScopeVersion: version },
     }),
     switched,
+  );
+}
+
+/** The grant's change permissions with the asked switches applied; a switch already in the asked state keeps its time. */
+export function applyPermissionChanges(
+  grant: ConnectionGrant,
+  asked: Record<string, boolean>,
+  manifest: ConnectorManifest,
+  now: number,
+): ConnectionGrant['changes'] {
+  const isDeclared = Object.keys(asked).every((id) =>
+    manifest.changes.some((permission) => permission.id === id),
+  );
+  if (!isDeclared) {
+    throw new HttpsError(
+      'invalid-argument',
+      "That app doesn't offer that kind of change.",
+    );
+  }
+  return Object.entries(asked).reduce(
+    (changes, [id, isOn]) =>
+      changes[id]?.isOn === isOn
+        ? changes
+        : { ...changes, [id]: { isOn, changedAt: now } },
+    grant.changes,
   );
 }
 

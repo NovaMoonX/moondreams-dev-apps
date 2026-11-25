@@ -57,6 +57,30 @@ interface Allowed extends Hit {
 /** Hits that exist today and are intended or not yet fixed; a hit not listed fails, and an entry that no longer matches fails too. */
 const ALLOWED: Allowed[] = [
   {
+    file: 'functions/src/connections/callables.ts',
+    kind: 'word',
+    match: 'helm',
+    why: "Undo's `from` says which screen asked (the app that holds the change, or Helm), the way the app's own record stores it.",
+  },
+  {
+    file: 'functions/src/connections/callables.ts',
+    kind: 'word',
+    match: 'pinch',
+    why: "Undo's `from` says which screen asked (the app that holds the change, or Helm), the way the app's own record stores it.",
+  },
+  {
+    file: 'src/lib/connections/connectionCalls.ts',
+    kind: 'word',
+    match: 'helm',
+    why: "Undo's `from` says which screen asked (the app that holds the change, or Helm), the way the app's own record stores it.",
+  },
+  {
+    file: 'src/lib/connections/connectionCalls.ts',
+    kind: 'word',
+    match: 'pinch',
+    why: "Undo's `from` says which screen asked (the app that holds the change, or Helm), the way the app's own record stores it.",
+  },
+  {
     file: 'functions/src/connections/google/fixtures.ts',
     kind: 'word',
     match: 'budget',

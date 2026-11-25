@@ -38,9 +38,11 @@ import {
   closeGroupings,
   undoGroupingExecution,
 } from '@apps/helm/store/actions/groupingActions';
+import { undoAppChangeExecution } from '@apps/helm/nomos/undoAppChanges';
 import { undoPatternExecution } from '@apps/helm/store/actions/patternActions';
 import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import {
+  isAppChangeExecution,
   narrowForUndo,
   planReopen,
   planUndo,
@@ -437,6 +439,8 @@ export async function undoExecution(
     .map((ref) => ref.docId);
   if (groupingIds.length > 0 && groupingIds.length === peekRefs.length)
     return undoGroupingExecution(uid, encryption, executionId);
+  if (isAppChangeExecution(peekRefs))
+    return undoAppChangeExecution(uid, encryption, executionId, options.docIds);
 
   try {
     const first = await getDoc(executionRef);
