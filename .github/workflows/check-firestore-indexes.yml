@@ -106,6 +106,7 @@ jobs:
       - run: npm run check:runway-rework
       - run: npm run check:runway-alert-engine
       - run: npm run check:helm-undo
+      - run: npm run check:helm-mcp
       - run: npm run check:batch-jobs
       - run: npm run check:helm-sort
       - run: npm run check:helm-name-hints
