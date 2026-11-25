@@ -44,8 +44,13 @@ export const PINCH_SHARES: SourceShares = {
           reads: [
             { label: 'Each item still to buy', sinceVersion: 1, addedOn: null },
             { label: 'How much of it to buy', sinceVersion: 1, addedOn: null },
+            {
+              label: 'Things you add in your own words, like paper towels',
+              sinceVersion: 2,
+              addedOn: '2026-11-25',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
         {
           id: 'useSoon',

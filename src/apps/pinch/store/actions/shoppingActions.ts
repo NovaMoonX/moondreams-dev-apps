@@ -312,6 +312,8 @@ export const updateShoppingItem = createAsyncThunk<
 
 interface AddListOnlyItemInput {
   uid: string;
+  /** From `makeListOnlyId`, so the sheet can show the line before the write lands. */
+  id: string;
   /** The person's own words ("Paper towels"). */
   text: string;
   /** Null files it under Other. */
@@ -319,16 +321,17 @@ interface AddListOnlyItemInput {
 }
 
 /** A line that is never an ingredient: its own words, no amount or sources, so cost, nutrition, the pantry and the meals on the list never see it. Resolves to its id. */
+export const makeListOnlyId = () => `free__${generateUuid()}`;
+
 export const addListOnlyItem = createAsyncThunk<
   string,
   AddListOnlyItemInput,
   { rejectValue: string }
 >(
   'pinch/shopping/addListOnly',
-  async ({ uid, text, shopSection }, { rejectWithValue }) => {
+  async ({ uid, id, text, shopSection }, { rejectWithValue }) => {
     const freeText = text.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME_LENGTH);
     if (freeText === '') return rejectWithValue('Type what you need first.');
-    const id = `free__${generateUuid()}`;
     const now = Date.now();
     const item: ShoppingItem = {
       id,

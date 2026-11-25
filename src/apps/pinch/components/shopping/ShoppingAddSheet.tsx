@@ -23,6 +23,7 @@ import {
 } from '@apps/pinch/constants';
 import {
   addListOnlyItem,
+  makeListOnlyId,
   addToShoppingList,
   setListOnlySection,
 } from '@apps/pinch/store/actions/shoppingActions';
@@ -153,7 +154,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     }
   };
 
-  const handlePickListOnly = async (words: string) => {
+  const handlePickListOnly = (words: string) => {
     if (isAdding || !isReady) {
       return;
     }
@@ -175,20 +176,17 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
       return;
     }
 
+    const id = makeListOnlyId();
     setError(null);
-    setIsAdding(true);
-    try {
-      const id = await dispatch(
-        addListOnlyItem({ uid, text: words, shopSection: null }),
-      ).unwrap();
-      setAdded((current) => [...current, words.trim()]);
-      setListOnly({ id, section: null });
-      setSearchKey((current) => current + 1);
-    } catch (addError) {
-      setError(getErrorMessage(addError, 'Unable to add this to your list.'));
-    } finally {
-      setIsAdding(false);
-    }
+    setAdded((current) => [...current, words.trim()]);
+    setListOnly({ id, section: null });
+    setSearchKey((current) => current + 1);
+    dispatch(addListOnlyItem({ uid, id, text: words, shopSection: null }))
+      .unwrap()
+      .catch((addError) => {
+        setListOnly((current) => (current?.id === id ? null : current));
+        setError(getErrorMessage(addError, 'Unable to add this to your list.'));
+      });
   };
 
   const handleSection = (section: ShopSection) => {
@@ -255,7 +253,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                   setListOnly(null);
                   void handlePick(ingredientId);
                 }}
-                onPickListOnly={(words) => void handlePickListOnly(words)}
+                onPickListOnly={handlePickListOnly}
               />
             </div>
             {note && (
