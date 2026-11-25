@@ -704,6 +704,21 @@ export const ADD_RECIPE_SHAPE = {
 const toCollectionKey = (label: string) =>
   label.toLowerCase().replace(/[\s-]+/g, '');
 
+const toCategoryKey = (entry: unknown) =>
+  String(entry)
+    .trim()
+    .toUpperCase()
+    .replace(/[\s&-]+/g, '_');
+
+const readMissedCategories = (value: unknown) => {
+  const known = new Set<string>(
+    DISH_CATEGORIES.map((category) => category.value),
+  );
+  return (Array.isArray(value) ? value : [])
+    .filter((entry) => !known.has(toCategoryKey(entry)))
+    .map(String);
+};
+
 const readCategoryInput = (value: unknown) => {
   const asked = new Set(
     (Array.isArray(value) ? value : []).map((entry) =>
@@ -1121,12 +1136,19 @@ export const addRecipe = async (
       ? `In ${collections.labels.map((label) => `“${label}”`).join(', ')}`
       : null,
   ].filter((line): line is string => line !== null);
-  const missedLine =
-    collections.missed.length === 0
+  const missedCategories = readMissedCategories(input.categories);
+  const missedLine = [
+    ...(missedCategories.length === 0
+      ? []
+      : [
+          `No category called ${missedCategories.join(', ')}. Categories: ${DISH_CATEGORIES.map((category) => category.value.toLowerCase()).join(', ')}.`,
+        ]),
+    ...(collections.missed.length === 0
       ? []
       : [
           `No collection called ${collections.missed.join(', ')}. ${collections.all.length === 0 ? 'They have no collections yet.' : `Their collections: ${collections.all.join(', ')}.`}`,
-        ];
+        ]),
+  ];
   const record = changeRecord(ctx, {
     kind: 'recipeAdded',
     title,
