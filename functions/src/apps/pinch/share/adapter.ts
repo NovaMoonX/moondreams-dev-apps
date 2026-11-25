@@ -1537,7 +1537,7 @@ export function createPinchAdapter(
         (ctx, input) => searchRecipes(deps.firestore(), ctx, input),
       ),
       get_recipe: toAppAction(
-        'Opens one recipe: its version (pass it as basedOn to update_recipe), servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
+        'Opens one recipe: its version (pass it as basedOn to pinch_save_recipe (action update_recipe)), servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
         GET_RECIPE_SHAPE,
         (ctx, input) => getRecipe(deps.firestore(), ctx, input),
       ),
@@ -1552,12 +1552,12 @@ export function createPinchAdapter(
         (ctx, input) => getKitchen(deps.firestore(), ctx, input),
       ),
       find_ingredients: toAppAction(
-        'Looks up which of a list of ingredient names the person\'s kitchen already has, up to 50 at a time. Each answer has asked, match (the kitchen\'s own name and whether it has nutrition, or null), noteWords (descriptor words such as lean or 93% to put in the recipe line\'s note, because the kitchen\'s ingredient is the plain one: "lean ground beef" is their "Ground beef" with "lean" in the note) and close (up to three near names when nothing matched). Call it before pinch_add_recipe or pinch_update_recipe and write each line with the kitchen\'s name.',
+        'Looks up which of a list of ingredient names the person\'s kitchen already has, up to 50 at a time. Each answer has asked, match (the kitchen\'s own name and whether it has nutrition, or null), noteWords (descriptor words such as lean or 93% to put in the recipe line\'s note, because the kitchen\'s ingredient is the plain one: "lean ground beef" is their "Ground beef" with "lean" in the note) and close (up to three near names when nothing matched). Call it before pinch_save_recipe (action add_recipe) or pinch_save_recipe (action update_recipe) and write each line with the kitchen\'s name.',
         FIND_INGREDIENTS_SHAPE,
         (ctx, input) => findKitchenIngredients(deps.firestore(), ctx, input),
       ),
       update_recipe: toAppAction(
-        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_get_recipe first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_search_recipes or pinch_get_meal_plan. It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
+        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_read (action get_recipe) first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_read (action search_recipes) or pinch_read (action get_meal_plan). It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
         UPDATE_RECIPE_SHAPE,
         (ctx, input) => updateRecipe(deps.firestore(), ctx, input),
       ),
@@ -1567,7 +1567,7 @@ export function createPinchAdapter(
         (ctx, input) => addRecipe(deps.firestore(), ctx, input),
       ),
       plan_meal: toAppAction(
-        "Plans a meal on a day and slot of the person's calendar: a date (YYYY-MM-DD, today or later), a mealType (breakfast, lunch, dinner, snack, dessert or drink), and either a recipeId from pinch_search_recipes or the name of a saved meal or recipe, with optional servings. It applies at once and shows in Pinch's calendar with an Undo, and in Helm. It never takes a meal off. Confirm the day and slot with the person before you call it.",
+        "Plans a meal on a day and slot of the person's calendar: a date (YYYY-MM-DD, today or later), a mealType (breakfast, lunch, dinner, snack, dessert or drink), and either a recipeId from pinch_read (action search_recipes) or the name of a saved meal or recipe, with optional servings. It applies at once and shows in Pinch's calendar with an Undo, and in Helm. It never takes a meal off. Confirm the day and slot with the person before you call it.",
         PLAN_MEAL_SHAPE,
         (ctx, input) => planMeal(deps.firestore(), ctx, input),
       ),
@@ -1582,7 +1582,7 @@ export function createPinchAdapter(
         (ctx, input) => saveIdea(deps.firestore(), ctx, input),
       ),
       fill_nutrition: toAppAction(
-        "Fills in nutrition per 100 g (calories, protein, carbs, fat) for ingredients in the person's kitchen that have none yet, up to 30 at a time, each named as pinch_find_ingredients gave it (hasNutrition false). It never creates an ingredient and never changes nutrition that is already there: those are skipped and named. It applies at once, shows in Pinch's ingredient with its source and in Done for you with an Undo, and in Helm. Only send values from a source you trust, and confirm with the person before you call it. It needs Recipe ingredients on, since it matches names to the kitchen.",
+        "Fills in nutrition per 100 g (calories, protein, carbs, fat) for ingredients in the person's kitchen that have none yet, up to 30 at a time, each named as pinch_read (action find_ingredients) gave it (hasNutrition false). It never creates an ingredient and never changes nutrition that is already there: those are skipped and named. It applies at once, shows in Pinch's ingredient with its source and in Done for you with an Undo, and in Helm. Only send values from a source you trust, and confirm with the person before you call it. It needs Recipe ingredients on, since it matches names to the kitchen.",
         FILL_NUTRITION_SHAPE,
         (ctx, input) =>
           ctx.allowedCategories.has('recipeIngredients')

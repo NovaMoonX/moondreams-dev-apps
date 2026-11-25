@@ -1,0 +1,64 @@
+# How apps offer tools to assistants
+
+**Decided** Nov 25, 2026, with the owner, in the session that followed [#1260](https://github.com/NovaMoonX/moondreams-dev-apps/pull/1260). **Held by** `docs/conventions/connections.md` "An app offers an assistant a handful of tools" and `npm run check:helm-mcp`.
+
+## The question
+
+Helm's MCP server offers outside assistants (Gemini, Claude, ChatGPT) and Nomos the tools a connected app publishes. Through #1260 every app action became its own tool, `{app}_{action}`. With Pinch connected, an outside assistant saw 19 tools, 12 of them Pinch's, and every new app or action added more. The site is heading toward about 30 apps, so one tool per action would reach hundreds. How should tools be offered so they stay manageable for the assistant, consistent across apps, easy to add to, and enforced by checks rather than memory?
+
+Three follow-ups shaped the answer: how an assistant that has never heard of "Pinch" knows it means meals; how a grouped tool's fields stay clear when each action takes different ones; and what an assistant sees when the person has switched a read or a change off.
+
+## What we considered
+
+- **One tool per action (what #1260 shipped).** The simplest schema: each tool has exactly its own fields. Lost because the count grows with every action of every app, and each tool's name, description and schema is read by the model on every turn. Anthropic and OpenAI both say fewer tools choose better (below).
+- **One MCP server per app** (a Pinch server, a Runway server). Each server stays small, and a client can connect only the apps it wants. Lost because the person would set up and grant each assistant once per app, Helm's grants, switches and Undo would be split across servers, and the assistant would still hold every connected server's tools at once, so the total doesn't shrink.
+- **Rely on the client's tool search.** Claude's API can defer tools and load "only the 3–5 tools Claude needs". Lost as the plan, because it is a feature of some clients, not of MCP, and we can't choose what Gemini or ChatGPT do. Grouping still helps a client that searches (the prefix makes one search find an app's group).
+- **A discovery meta-tool** (one `find_tools` that returns what to call). Lost because the assistant can't call a tool it was never listed, so it would still need the real ones, and it adds a round trip to every request.
+- **Changing the tool list as switches change (`listChanged`).** MCP lets a server notify a client that its tools changed. Lost because Helm's server is stateless (a fresh server per request, nothing held between them), and the notification needs a stream the client asked for; clients also differ in whether they re-read.
+- **Group per app by kind, a few change tools (first build).** One read tool and a change tool for each set of changes whose fields agree; Pinch's 12 actions became 6 tools, 5 of them changes. Lost because the owner had asked for no more than one or two change tools, and the plan they approved said about four: changes that share no fields don't need separate tools, since each option's fields are optional and labelled "For plan_meal, …" and the option checks its own on the server, so the worry that kept them apart (that a tool mixing very different inputs needs schema features clients support unevenly, such as `oneOf`) doesn't apply to this design.
+- **One read tool and at most two change tools per app (chosen).** An `action` field picks the option. The two change tools split by what they can do to the person's things: one holds the edits, with any add that shares their fields (a recipe's add beside its edit), and is marked destructive; the other holds every change that only adds. Pinch's 12 actions are 3 tools.
+
+For switched-off reads and changes we weighed:
+
+- **Hide anything switched off.** Clean, but the assistant then can't tell the person what to turn on, and because a tool list is read once at connect, turning a switch on would show nothing new until a reconnect anyway.
+- **List everything, refuse at run time.** Honest about what exists, but offers changes the assistant can never make, and a client may ask the person to confirm a change that is bound to fail.
+- **List reads with an "Off right now" mark, hide change tools that can't run (chosen).** A read is harmless to list, and its mark names the exact switch, so the assistant can say "turn on Recipes in Helm > Connected apps > Pinch". A change tool appears only when the assistant may change things and at least one of its options is on; the guide says which kinds of change are off and that one turned on later appears at the next connect.
+
+## What we chose
+
+- Each manifest action names its `tool`; the manifest lists its `tools` with a person-worded `title`; a tool is named `{app}_{tool}` (`pinch_read`, `pinch_save_recipe`, `pinch_add`).
+- A grouped tool takes a required `action` and optional fields, each described "For get_recipe, …"; the option checks its own fields when called and refuses with "Nothing was run" and what it takes.
+- One read tool per app and at most two change tools (`pinch_save_recipe`: edit or add a recipe; `pinch_add`: plan a meal, add to the shopping list, save an idea, fill in nutrition), never a read and a change together; a field two options of one tool share accepts exactly the same values, and a field name that would clash is renamed (`fill_nutrition` takes `ingredients`, since `items` is the shopping list's).
+- Every app tool opens with the app's `about` and its `askedAbout` words (meals, groceries, what to cook), so the assistant matches the person's words to the app.
+- Titles on every tool; `readOnlyHint` on reads; `destructiveHint` only where an option can alter what exists (`changesExisting`); `openWorldHint` false; refusals returned with `isError: true`.
+- The guide is a short map (each app, its `pinch_` prefix and words, the switches that are off), never a list of tool names, under 4,000 characters.
+- Every call still re-reads the grant; the mark and the hiding are only what is listed.
+- **Who gets which.** The same tools serve both kinds of assistant. Nomos, Helm's own, gets each app's read tool (`pinch_read`) with the same options, marks and words, and its loop passes refusals back as errors; it does not get the change tools, as before this decision (#1260 gave changes to outside assistants only), because Nomos would first need its own way to ask before acting and show Undo in the conversation. When it does, it uses these same grouped tools. The guide is only the outside assistants' instructions; Nomos has its own prompt.
+
+## Why
+
+- **Fewer, grouped tools choose better.** Claude's tool-use guide: "Consolidate related operations into fewer tools. Rather than creating a separate tool for every action (`create_pr`, `review_pr`, `merge_pr`), group them into a single tool with an `action` parameter. Fewer, more capable tools reduce selection ambiguity and make your tool surface easier for Claude to navigate." ([Implement tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use)). Anthropic's engineering post: "More tools don't always lead to better outcomes… Too many tools or overlapping tools can also distract agents from pursuing efficient strategies." ([Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents)). OpenAI: "Aim for fewer than 20 functions available at the start of a turn… though this is just a soft suggestion." ([Function calling](https://developers.openai.com/api/docs/guides/function-calling)). With Pinch connected and every switch on, an outside assistant now sees 10 tools, under that line.
+- **A prefix per service.** Claude's guide: "Use meaningful namespacing in tool names… prefix names with the service (for example, `github_list_prs`, `slack_send_message`). This makes tool selection unambiguous", and for tool search "prefix by service or resource… so one search matches the whole group".
+- **Hints say what the tool does, honestly.** The MCP spec: `destructiveHint` "If true, the tool may perform destructive updates to its environment. If false, the tool performs only additive updates." ([schema, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/schema)). Marking every change destructive would make a client confirm an add as if it erased something, so only an edit that replaces is marked. The spec also says clients treat annotations as untrusted unless the server is trusted, so the run-time checks stay.
+- **A refusal is an error the model can act on.** The spec ([Tools, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)): tool execution errors "contain actionable feedback that language models can use to self-correct and retry with adjusted parameters", and "Clients SHOULD provide tool execution errors to language models to enable self-correction." So a switched-off or refused call is `isError: true`, with words that say what to do.
+- **The tool list is fixed for a connection.** The spec's `listChanged` (same page) is a promise to notify, delivered only on a stream the client asked for; Helm's stateless server can't keep one. That is why a read stays listed with its mark, and why the guide says a newly turned-on change appears next time.
+- **The owner's bar:** tools that are "manageable, accessible, and actionable… consistent… something we can build and add to in the future, and ensure that our rules and check guarantee that it's being followed." One server, grouped per app, a manifest-only path for a new app and a check over every adapter answer each part.
+
+## How it is held
+
+`check:helm-mcp` (run by `check:ci` and in CI) walks every adapter in `SOURCE_ADAPTERS`: ids and names, titles, one read tool, no mixed kinds, at most two change tools an app and 40 offered to an outside assistant in all, at least 3 `askedAbout` words, every declared tool used and every action's tool declared, shared fields accepting exactly the same values (compared as JSON schema, defaults included and descriptions aside, with no refinement or transform on a shared field), Nomos given the read tool and no change tool, option descriptions long enough, and every `{app}_x` a description names real. Each rule has a broken manifest that must make it fire. It also runs the server in process and checks the titles, hints, `required: ['action']` and `isError`. The convention is `connections.md` "An app offers an assistant a handful of tools".
+
+## When to revisit
+
+- **Gemini's own guidance is unconfirmed:** its function-calling docs answered 403 from the sandbox. Read them when reachable and note here whether they agree.
+- **A client that searches tools well** (Claude's tool search, a ChatGPT equivalent) for every assistant the person uses would make one tool per action affordable again; grouping would still help, so revisit only if grouping starts to hurt.
+- **An app whose changes won't fit two tools**, such as two edits whose same-named fields mean different things: rename the field first; raise the cap here only if renaming can't settle it.
+- **Assistants mixing up a large add tool's options** (from Helm's filed turns): sharpen the option descriptions first, then consider a third change tool.
+- **A stateful server or client support for `listChanged`** would let a switch turned on show its tool at once; then hiding switched-off reads could be weighed again.
+- **Nomos is given changes**: it reuses the change tools as they are; write here how it asks and undoes.
+- **Results showing assistants pick the wrong option** (from Helm's filed turns): sharpen descriptions before splitting tools.
+
+## Changes
+
+- Nov 25, 2026: first written; after review, shared fields must accept the same values, not only the same type, and who gets which tools is stated.
+- Nov 25, 2026: change tools capped at two per app, at the owner's question ("I thought we were talking about having no more than 1 or 2 change tools"); Pinch's four additive changes became `pinch_add`, so Pinch offers 3 tools and an outside assistant 10.

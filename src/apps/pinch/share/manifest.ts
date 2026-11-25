@@ -285,6 +285,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: ['plannedMeals'],
           permission: null,
           label: 'Look up planned meals',
+          tool: 'read',
+          changesExisting: false,
         },
         {
           id: 'search_recipes',
@@ -292,6 +294,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: ['recipes', 'savedMeals', 'ideas'],
           permission: null,
           label: 'Search recipes, saved meals and ideas',
+          tool: 'read',
+          changesExisting: false,
         },
         {
           id: 'get_recipe',
@@ -299,6 +303,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: ['recipes', 'recipeIngredients', 'fullRecipes'],
           permission: null,
           label: 'Open one recipe',
+          tool: 'read',
+          changesExisting: false,
         },
         {
           id: 'get_shopping_list',
@@ -306,6 +312,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: ['shoppingList'],
           permission: null,
           label: 'Read the shopping list',
+          tool: 'read',
+          changesExisting: false,
         },
         {
           id: 'get_kitchen',
@@ -313,6 +321,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: ['pantryStock', 'useSoon'],
           permission: null,
           label: 'See what is in the kitchen',
+          tool: 'read',
+          changesExisting: false,
         },
         {
           id: 'find_ingredients',
@@ -320,6 +330,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: ['recipeIngredients'],
           permission: null,
           label: "Look up which names the kitchen's ingredients use",
+          tool: 'read',
+          changesExisting: false,
         },
         {
           id: 'update_recipe',
@@ -327,6 +339,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'editRecipes',
           label: 'Edit a recipe',
+          tool: 'save_recipe',
+          changesExisting: true,
         },
         {
           id: 'add_recipe',
@@ -334,6 +348,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'addRecipes',
           label: 'Add a recipe',
+          tool: 'save_recipe',
+          changesExisting: false,
         },
         {
           id: 'plan_meal',
@@ -341,6 +357,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'planMeals',
           label: 'Plan a meal',
+          tool: 'add',
+          changesExisting: false,
         },
         {
           id: 'add_to_shopping_list',
@@ -348,6 +366,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'addToShoppingList',
           label: 'Add to the shopping list',
+          tool: 'add',
+          changesExisting: false,
         },
         {
           id: 'save_idea',
@@ -355,6 +375,8 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'saveIdeas',
           label: 'Save a recipe idea',
+          tool: 'add',
+          changesExisting: false,
         },
         {
           id: 'fill_nutrition',
@@ -362,7 +384,29 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'fillNutrition',
           label: 'Fill in missing nutrition',
+          tool: 'add',
+          changesExisting: false,
         },
+      ],
+      tools: [
+        { id: 'read', title: 'Read Pinch' },
+        { id: 'save_recipe', title: 'Add or edit a recipe' },
+        { id: 'add', title: 'Plan a meal, or add groceries, ideas or nutrition' },
+      ],
+      askedAbout: [
+        'meals',
+        'meal plan',
+        'breakfast, lunch and dinner',
+        'what to cook',
+        'recipes',
+        'cooking',
+        'ingredients',
+        'groceries',
+        'shopping list',
+        'pantry, fridge and freezer',
+        'food to use up',
+        'recipe ideas',
+        'nutrition',
       ],
       changes: [
         {

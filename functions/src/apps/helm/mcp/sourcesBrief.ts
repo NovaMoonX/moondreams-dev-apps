@@ -61,8 +61,8 @@ export const toHeldBackPrompt = (
 
 export interface ConnectedSource {
   connectorId?: string;
-  /** The tools this app's read actions are offered as, when it has any. */
-  actionTools?: string[];
+  /** The prefix of the tools this app offers itself (`pinch_`), or null when it offers none. */
+  ownTools?: string | null;
   name: string;
   about: string;
   categories: { label: string; meaning: string }[];
@@ -90,10 +90,11 @@ export const sourcesBriefFor = (
     const tools = [
       ...READ_SCOPE_TOOLS[scope].filter((tool) => toolNames.includes(tool)),
       ...sources
-        .filter((source) => source.access === scope)
-        .flatMap((source) =>
-          (source.actionTools ?? []).filter((tool) => toolNames.includes(tool)),
-        ),
+        .filter((source) => source.access === scope && source.ownTools)
+        .filter((source) =>
+          toolNames.some((tool) => tool.startsWith(source.ownTools ?? '')),
+        )
+        .map((source) => `its own ${source.ownTools} tools for ${source.name}`),
     ];
     const names = namesFor(scope);
     return names.length > 0 && readScopes.includes(scope) && tools.length > 0
