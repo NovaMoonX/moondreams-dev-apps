@@ -136,7 +136,6 @@ function GoalRow({
               ? `${PRIORITY_LABELS[goal.priority]} · ${HOW_OFTEN_WORDS.notBeingAdded.toLowerCase()}`
               : `${PRIORITY_LABELS[goal.priority]} · ${funding}`
           }
-          isFigureHeld
           balanceTitle={isSavingFor(goal) ? paceLine : undefined}
           extra={<GoalAccountNote goalId={goalId} />}
           quickChange={{

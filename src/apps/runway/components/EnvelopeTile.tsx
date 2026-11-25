@@ -258,7 +258,6 @@ function EnvelopeTile({
           ]
             .filter(Boolean)
             .join(' · ')}
-          isFigureHeld={!isPlan}
           help={helpNote}
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.change,

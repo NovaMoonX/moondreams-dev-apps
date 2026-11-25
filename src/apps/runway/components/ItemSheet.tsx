@@ -278,8 +278,6 @@ export interface ItemSheetProps {
   fact?: string | null;
   /** A second muted line under the fact. */
   secondFact?: string | null;
-  /** The figure is what the item holds now, so tapping it opens "What it holds now" in place of a row. */
-  isFigureHeld?: boolean;
   /** Takes the place of the "Balance over time" row's title when the goal has a pace to tell. */
   balanceTitle?: string;
   /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
@@ -395,7 +393,6 @@ function ItemSheet({
   figureSuffix,
   fact,
   secondFact,
-  isFigureHeld = false,
   balanceTitle,
   help,
   quickChange,
@@ -1410,10 +1407,6 @@ function ItemSheet({
         fact={fact ?? ownHero.fact}
         secondFact={secondFact}
         help={help}
-        onFigureTap={
-          canSetHeld && isFigureHeld ? () => goTo('setHeld') : undefined
-        }
-        figureAriaLabel={SET_HELD_WORDS.open}
       />
       {extra}
       {itemKind === 'envelope' && (
@@ -1608,7 +1601,7 @@ function ItemSheet({
               onClick={() => goTo('move')}
             />
           )}
-        {canSetHeld && !isFigureHeld && (
+        {canSetHeld && (
           <ActionRow
             isGrouped
             hasChevron

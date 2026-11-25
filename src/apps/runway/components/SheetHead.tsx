@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -27,9 +25,6 @@ interface SheetHeadProps {
   isFigureMuted?: boolean;
   /** Drops the label on a screen 500px tall or less, where a sheet has little room. */
   isLabelDroppedWhenShort?: boolean;
-  /** Makes the figure a door to setting it: a pencil beside the figure and a pressed state on the figure. */
-  onFigureTap?: () => void;
-  figureAriaLabel?: string;
 }
 
 /** The top of a row's sheet: the figure large, what it is, and one short fact. */
@@ -44,30 +39,7 @@ function SheetHead({
   helpTitle,
   isLabelDroppedWhenShort = false,
   isFigureMuted = false,
-  onFigureTap,
-  figureAriaLabel,
 }: SheetHeadProps) {
-  const figureLine = figure && (
-    <span className='block break-words'>
-      <span
-        className={join(
-          'text-4xl font-semibold tracking-tight tabular-nums [@media(max-height:599px)]:text-3xl',
-          isFigureMuted && 'text-muted-foreground',
-        )}
-      >
-        {typeof figure === 'string' ? (
-          <MaskedText>{figure}</MaskedText>
-        ) : (
-          figure
-        )}
-      </span>
-      {suffix && (
-        <span className='text-muted-foreground ml-2 text-base whitespace-nowrap'>
-          <MaskedText>{suffix}</MaskedText>
-        </span>
-      )}
-    </span>
-  );
   return (
     <div className='border-border bg-accent rounded-2xl border p-4 [@media(max-height:599px)]:p-3'>
       <div
@@ -98,26 +70,27 @@ function SheetHead({
           )}
         </p>
       </div>
-      {figureLine &&
-        (onFigureTap ? (
-          <Button
-            type='button'
-            variant='base'
-            className="active:bg-primary/10 relative -mx-1 h-auto min-h-0 w-[calc(100%+0.5rem)] !justify-between gap-3 rounded-lg !px-1 !py-0 text-left font-normal whitespace-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-            onClick={onFigureTap}
-          >
-            {figureLine}
-            <Pencil
-              className='text-muted-foreground h-4 w-4 shrink-0'
-              aria-hidden='true'
-            />
-            {figureAriaLabel && (
-              <span className='sr-only'>{figureAriaLabel}</span>
+      {figure && (
+        <p className='break-words'>
+          <span
+            className={join(
+              'text-4xl font-semibold tracking-tight tabular-nums [@media(max-height:599px)]:text-3xl',
+              isFigureMuted && 'text-muted-foreground',
             )}
-          </Button>
-        ) : (
-          figureLine
-        ))}
+          >
+            {typeof figure === 'string' ? (
+              <MaskedText>{figure}</MaskedText>
+            ) : (
+              figure
+            )}
+          </span>
+          {suffix && (
+            <span className='text-muted-foreground ml-2 text-base whitespace-nowrap'>
+              <MaskedText>{suffix}</MaskedText>
+            </span>
+          )}
+        </p>
+      )}
       {fact && (
         <p className='text-muted-foreground text-sm break-words'>
           <span className='line-clamp-3'>
