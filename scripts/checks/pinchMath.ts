@@ -3081,6 +3081,8 @@ assert.equal(
 const reading: ExtractedRecipe = {
   title: 'Chicken adobo',
   servings: 4,
+  isServingsEstimate: false,
+  categories: [],
   prepMinutes: 10,
   cookMinutes: 40,
   description: 'Soy and vinegar, braised.',
@@ -8858,6 +8860,8 @@ assert.equal(
     {
       title: 'Shakshuka',
       servings: 3,
+      isServingsEstimate: false,
+      categories: [],
       prepMinutes: null,
       cookMinutes: null,
       description: null,
@@ -10415,6 +10419,8 @@ assert.equal(
     {
       title: 'Adobo',
       servings: 4,
+      isServingsEstimate: false,
+      categories: [],
       prepMinutes: null,
       cookMinutes: null,
       description: null,
