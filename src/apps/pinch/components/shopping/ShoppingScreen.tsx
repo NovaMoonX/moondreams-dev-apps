@@ -66,6 +66,7 @@ import {
   selectShoppingMeals,
   selectShoppingOpenCount,
   selectShoppingRows,
+  selectShoppingSourceContext,
   selectShoppingSourceLabels,
 } from '@apps/pinch/store/selectors';
 import type {
@@ -80,6 +81,7 @@ import {
   getShoppingCostCoverage,
   getShoppingMealsText,
   getShoppingSourcesText,
+  getShoppingNotesText,
   getShopRowId,
   getShownShoppingView,
   isPutAway,
@@ -136,9 +138,26 @@ const makeForText = (
   };
 };
 
+type GetNotesText = (row: ShoppingRowData) => string | null;
+
+const makeNotesText = (
+  context: Parameters<typeof getShoppingNotesText>[2],
+): GetNotesText => {
+  const textByKey = new Map<string, string | null>();
+  return (row) => {
+    const key = `${row.ingredientId}|${row.sources.join('|')}`;
+    const known = textByKey.get(key);
+    if (known !== undefined) return known;
+    const text = getShoppingNotesText(row.ingredientId, row.sources, context);
+    textByKey.set(key, text);
+    return text;
+  };
+};
+
 interface ShoppingRowsProps {
   rows: ShoppingRowData[];
   getForText: GetForText;
+  getNotesText: GetNotesText;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
   /** Whether the first chunk of rows mounts at once, for the first screenful. */
@@ -149,6 +168,7 @@ interface ShoppingRowsProps {
 function ShoppingRows({
   rows,
   getForText,
+  getNotesText,
   onToggle,
   onOpen,
   isEager = true,
@@ -164,9 +184,10 @@ function ShoppingRows({
   const getChunkHeight = (chunk: ShoppingRowData[]) =>
     chunk.reduce((sum, row) => {
       const detail = `${row.amountText ?? ''} · for ${getForText(row.sources) ?? ''}`;
+      const notesHeight = getNotesText(row) ? DETAIL_LINE_HEIGHT : 0;
       return detail.length > DETAIL_LINE_CHARS
-        ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT
-        : sum + ROW_HEIGHT;
+        ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT + notesHeight
+        : sum + ROW_HEIGHT + notesHeight;
     }, 0);
 
   return (
@@ -193,6 +214,7 @@ function ShoppingRows({
                   name={row.name}
                   amountText={row.amountText}
                   forText={getForText(row.sources)}
+                  notesText={getNotesText(row)}
                   isChecked={row.isChecked}
                   onToggle={onToggle}
                   onOpen={onOpen}
@@ -217,6 +239,7 @@ interface ShoppingGroupSectionProps {
   group: ShoppingGroup;
   isEager: boolean;
   getForText: GetForText;
+  getNotesText: GetNotesText;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
 }
@@ -240,6 +263,7 @@ const ShoppingGroupSection = memo(
     group,
     isEager,
     getForText,
+    getNotesText,
     onToggle,
     onOpen,
   }: ShoppingGroupSectionProps) {
@@ -250,6 +274,7 @@ const ShoppingGroupSection = memo(
           rows={group.rows}
           isEager={isEager}
           getForText={getForText}
+          getNotesText={getNotesText}
           onToggle={onToggle}
           onOpen={onOpen}
         />
@@ -259,6 +284,7 @@ const ShoppingGroupSection = memo(
   (prev, next) =>
     prev.isEager === next.isEager &&
     prev.getForText === next.getForText &&
+    prev.getNotesText === next.getNotesText &&
     prev.onToggle === next.onToggle &&
     prev.onOpen === next.onOpen &&
     isSameGroup(prev.group, next.group),
@@ -332,6 +358,11 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const getForText = useMemo(
     () => makeForText(sourceLabels, todayKey),
     [sourceLabels, todayKey],
+  );
+  const sourceContext = useAppSelector(selectShoppingSourceContext);
+  const getNotesText = useMemo(
+    () => makeNotesText(sourceContext),
+    [sourceContext],
   );
   const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -641,6 +672,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           key={`${shownView}-${half}`}
           rows={found[half].flatMap((group) => group.rows)}
           getForText={getForText}
+          getNotesText={getNotesText}
           onToggle={handleToggle}
           onOpen={handleOpen}
           className='lg:w-[calc(50%-1rem)]'
@@ -653,6 +685,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               group={group}
               isEager={index < EAGER_GROUPS}
               getForText={getForText}
+              getNotesText={getNotesText}
               onToggle={handleToggle}
               onOpen={handleOpen}
             />
@@ -687,6 +720,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
                 rows={found.got.flatMap((group) => group.rows)}
                 isEager={matches.toBuy < SHOP_SECTION_DIVIDER_MIN_ROWS}
                 getForText={getForText}
+                getNotesText={getNotesText}
                 onToggle={handleToggle}
                 onOpen={handleOpen}
                 className='lg:w-[calc(50%-1rem)]'
