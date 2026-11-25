@@ -2,6 +2,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { WEEK_STARTS_ON } from '@apps/a-list/constants';
 import type {
+  ShareKind,
   ShareRangeKind,
   SharedViewing,
   Viewing,
@@ -96,6 +97,33 @@ export function formatShareRange(startDate: number, endDate: number) {
 
   const result = `${formatDateUTC(startDate)} – ${formatDateUTC(endDate)}`;
   return result;
+}
+
+/** A share made before live ones existed has no kind and is a snapshot. */
+export function isLiveShare(share: { kind: ShareKind | null }) {
+  return share.kind === 'LIVE';
+}
+
+/** The dates a snapshot covers; "these dates" when it holds none. */
+export function getShareRangeLabel(share: {
+  startDate: number | null;
+  endDate: number | null;
+}) {
+  if (share.startDate === null || share.endDate === null) return 'these dates';
+
+  return formatShareRange(share.startDate, share.endDate);
+}
+
+/** "Live · your whole calendar", or "Snapshot of October 1 – October 31". */
+export function getShareTitle(share: {
+  kind: ShareKind | null;
+  startDate: number | null;
+  endDate: number | null;
+}) {
+  if (isLiveShare(share)) return 'Live · your whole calendar';
+  if (share.startDate === null || share.endDate === null) return 'Snapshot';
+
+  return `Snapshot of ${getShareRangeLabel(share)}`;
 }
 
 export function getShareUrl(shareId: string) {

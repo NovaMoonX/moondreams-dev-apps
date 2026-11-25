@@ -1,6 +1,10 @@
 import { combineReducers } from '@reduxjs/toolkit';
 
 import {
+  addedCalendarsReducer,
+  type AddedCalendarsState,
+} from './slices/addedCalendarsSlice';
+import {
   calendarSharesReducer,
   type CalendarSharesState,
 } from './slices/calendarSharesSlice';
@@ -19,6 +23,7 @@ export interface AListState {
   viewings: ViewingsState;
   theatres: TheatresState;
   calendarShares: CalendarSharesState;
+  addedCalendars: AddedCalendarsState;
   email: EmailState;
 }
 
@@ -28,6 +33,7 @@ export const aListReducer = combineReducers({
   viewings: viewingsReducer,
   theatres: theatresReducer,
   calendarShares: calendarSharesReducer,
+  addedCalendars: addedCalendarsReducer,
   email: emailReducer,
 });
 
@@ -37,3 +43,4 @@ export { type ViewingsState } from './slices/viewingsSlice';
 export { type TheatresState } from './slices/theatresSlice';
 export { type CalendarSharesState } from './slices/calendarSharesSlice';
 export { type EmailState } from './slices/emailSlice';
+export { type AddedCalendarsState } from './slices/addedCalendarsSlice';
