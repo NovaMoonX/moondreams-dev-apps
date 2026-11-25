@@ -66,7 +66,7 @@ export const EMAIL_WORDS = {
   from: 'From',
   subject: 'Subject',
   received: 'Received',
-  readIn: 'Saved after',
+  readIn: 'Saved in',
   readTook: (seconds: number) =>
     seconds < 90
       ? `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`
