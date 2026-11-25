@@ -27,6 +27,7 @@ html.pinch-theme {
   --radius-2xl: 1.75rem;
 
   --pinch-drizzle: var(--color-orange-600);
+  --assistant-orb-accent: var(--pinch-drizzle);
   --pinch-drizzle-fill: var(--color-orange-700);
   --pinch-drizzle-fill-foreground: var(--color-white);
   --pinch-drizzle-soft: color-mix(
