@@ -200,10 +200,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           seed={seed}
           onBack={backToAdd}
           onClose={() => setSeed(null)}
-          onOpenRule={(ruleId) => {
-            setSeed(null);
-            setOpenId(ruleId);
-          }}
         />
       )}
       {opened !== null && (

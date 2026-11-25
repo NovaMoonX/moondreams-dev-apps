@@ -64,7 +64,6 @@ interface RuleSheetProps {
   stayName?: string | null;
   onDecline?: () => void;
   seed?: Facts | null;
-  onOpenRule?: (ruleId: string) => void;
 }
 
 export interface Facts {
@@ -110,7 +109,6 @@ function RuleSheet({
   stayName = null,
   onDecline,
   seed = null,
-  onOpenRule,
 }: RuleSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -177,6 +175,8 @@ function RuleSheet({
         : null;
   const [picked, setPicked] = useState<string | null>(likely);
   const [isBusy, setIsBusy] = useState(false);
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const peeked = rules.find(({ id }) => id === peekId) ?? null;
   const [error, setError] = useState<string | null>(null);
   const [willSend] = useState(
     purchase !== null && (purchase.needsHome || isOpenToPlace(purchase)),
@@ -437,6 +437,18 @@ function RuleSheet({
       : []),
   ];
 
+  if (peeked) {
+    return (
+      <RuleSheet
+        key={peeked.id}
+        purchase={null}
+        rule={peeked}
+        onBack={() => setPeekId(null)}
+        onClose={() => setPeekId(null)}
+      />
+    );
+  }
+
   return (
     <FormSheet
       isOpen
@@ -491,26 +503,19 @@ function RuleSheet({
                 );
                 return (
                   <li key={name}>
-                    {onOpenRule ? (
-                      <Button
-                        type='button'
-                        variant='base'
-                        className='text-foreground! flex min-h-14 w-full items-center justify-start! gap-3! rounded-none! px-3! py-2! text-left font-normal'
-                        onClick={() => onOpenRule(cover.id)}
-                      >
-                        {mark}
-                        {text}
-                        <ChevronRight
-                          className='text-muted-foreground h-4 w-4 shrink-0'
-                          aria-hidden='true'
-                        />
-                      </Button>
-                    ) : (
-                      <div className='flex min-h-14 items-center gap-3 px-3 py-2'>
-                        {mark}
-                        {text}
-                      </div>
-                    )}
+                    <Button
+                      type='button'
+                      variant='base'
+                      className='text-foreground! flex min-h-14 w-full items-center justify-start! gap-3! rounded-none! px-3! py-2! text-left font-normal'
+                      onClick={() => setPeekId(cover.id)}
+                    >
+                      {mark}
+                      {text}
+                      <ChevronRight
+                        className='text-muted-foreground h-4 w-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
                   </li>
                 );
               }

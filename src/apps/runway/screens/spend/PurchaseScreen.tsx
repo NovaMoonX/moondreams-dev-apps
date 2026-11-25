@@ -675,7 +675,6 @@ function PurchaseScreen({
         stayName={ruleStep.wasWaiting ? null : envelopes}
         onBack={() => setRuleStep(null)}
         onClose={() => setRuleStep(null)}
-        onOpenRule={(ruleId) => openRuleStep('edit', ruleId)}
         onDecline={
           (ruleStep.view === 'suggest' ||
             (ruleStep.view === 'make' && !ruleStep.wasWaiting)) &&
