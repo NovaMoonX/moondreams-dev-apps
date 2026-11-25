@@ -44,9 +44,6 @@ const BROAD_MERCHANTS = [
   'venmo',
 ];
 
-/** A broad store's own fuel station sells one thing, so a kind-of-place rule still catches it ("BJ's Wholesale Club Fuel"). */
-const FUEL_WORDS = new Set(['fuel', 'gas', 'gasoline']);
-
 /** What a rule looks at on a purchase. */
 export interface RuleFacts {
   merchant: string | null;
@@ -66,17 +63,16 @@ export const toMerchantKey = (merchant: string | null): string | null => {
   return key === '' ? null : key;
 };
 
-/** A store that sells everything (not its fuel station), or one the person said varies, is never caught by a kind-of-place rule. */
+/** A store that sells everything, or one the person said varies, is never caught by a kind-of-place rule. */
 export function isBroadMerchant(
   merchantKey: string | null,
   rules: readonly OpenRule[],
 ): boolean {
   if (merchantKey === null) return false;
   return (
-    (BROAD_MERCHANTS.some(
+    BROAD_MERCHANTS.some(
       (name) => merchantKey === name || merchantKey.startsWith(`${name} `),
-    ) &&
-      !merchantKey.split(' ').some((word) => FUEL_WORDS.has(word))) ||
+    ) ||
     rules.some(
       (rule) => rule.merchantKey === merchantKey && rule.target === RULE_VARIES,
     )

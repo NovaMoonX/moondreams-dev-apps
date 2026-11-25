@@ -20663,50 +20663,6 @@ const checkRulePlacements = () => {
     'c',
     'but a card rule still fits it',
   );
-  const gasCardRule = rule('gc', {
-    category: 'GAS',
-    cardId: 'c1',
-    target: 'e-gas',
-  });
-  assert.equal(
-    findRule(fact("BJ's Wholesale Club Fuel", 'GAS', 'c1'), [gasCardRule])?.rule
-      .id,
-    'gc',
-    "a broad store's fuel station is caught by a gas rule with its card",
-  );
-  assert.equal(
-    findRule(fact('Costco Gas', 'GAS', 'c2'), [
-      rule('g', { category: 'GAS', target: 'e-gas' }),
-    ])?.rule.id,
-    'g',
-    'and by a gas rule alone',
-  );
-  assert.equal(
-    findRule(fact("BJ's Wholesale Club", 'GAS', 'c1'), [gasCardRule]),
-    null,
-    'the store itself stays broad',
-  );
-  assert.equal(
-    isBroadMerchant('target gaslight', []),
-    true,
-    'a word that only starts with gas is not a fuel station',
-  );
-  assert.equal(
-    isBroadMerchant('walmart gasoline', []),
-    false,
-    'gasoline is a fuel word',
-  );
-  assert.equal(
-    isBroadMerchant('costco gas', [
-      rule('cv', {
-        merchantKey: 'costco gas',
-        merchantName: 'Costco Gas',
-        target: RULE_VARIES,
-      }),
-    ]),
-    true,
-    'a fuel station the person marked as varying stays broad',
-  );
   const variesRule = rule('v', {
     merchantKey: 'corner shop',
     merchantName: 'Corner Shop',
