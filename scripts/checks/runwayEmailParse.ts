@@ -614,16 +614,15 @@ refused.forEach(([url, provider]) =>
 );
 
 const seen: { url: string; init: RequestInit | undefined }[] = [];
-let cancelled = 0;
-const respond = (status: number, location?: string) =>
+const SUCCESS_PAGE = '<h1>Confirmation Success!</h1>';
+const respond = (status: number, location?: string, page = SUCCESS_PAGE) =>
   ({
     ok: status >= 200 && status < 300,
     status,
     headers: new Headers(location === undefined ? {} : { location }),
+    text: async () => page,
     body: {
-      cancel: async () => {
-        cancelled += 1;
-      },
+      cancel: async () => undefined,
     },
   }) as unknown as Response;
 const routedFetch = (routes: Record<string, Response>) =>
@@ -646,7 +645,6 @@ assert.deepEqual(followed, {
 assert.equal(seen.length, 1);
 assert.equal(seen[0].init?.method, 'GET');
 assert.equal(seen[0].init?.redirect, 'manual');
-assert.equal(cancelled, 1, 'the body is cancelled');
 assert.ok(seen[0].init?.signal instanceof AbortSignal);
 assert.equal(
   (await followConfirmLink(gmailLink, 'gmail', fakeFetch(404))).autoConfirm,
@@ -745,15 +743,68 @@ const loop = await followConfirmLink(
 assert.equal(loop.autoConfirm, 'failed', 'more than 3 hops fails');
 assert.ok(!seen.some((call) => call.url === hopTo('d')));
 assert.equal(
-  (await followConfirmLink(gmailLink, 'gmail', fakeFetch(204))).autoConfirm,
-  'confirmed',
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({ [gmailLink]: respond(200, undefined, '<p>Hello</p>') }),
+    )
+  ).autoConfirm,
+  'failed',
+  'a page that loads without saying it confirmed is not proof',
 );
+
+// Gmail's page asks for a tap on Confirm: its form is sent once, and only the answer that says so counts.
+const askPage = `<form method="POST" action="/mail/vf-abc123/confirm"><input type="hidden" name="at" value="tok&amp;1"><input type="submit" name="confirm" value="Confirm"></form>`;
+const confirmUrl = 'https://mail.google.com/mail/vf-abc123/confirm';
+const formSeen = seen.length;
+const submitted = await followConfirmLink(
+  gmailLink,
+  'gmail',
+  routedFetch({
+    [gmailLink]: respond(200, undefined, askPage),
+    [confirmUrl]: respond(200),
+  }),
+);
+assert.equal(submitted.autoConfirm, 'confirmed');
+const post = seen[formSeen + 1];
+assert.equal(post.url, confirmUrl);
+assert.equal(post.init?.method, 'POST');
+assert.equal(post.init?.body, 'at=tok%261&confirm=Confirm');
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({
+        [gmailLink]: respond(200, undefined, askPage),
+        [confirmUrl]: respond(200, undefined, askPage),
+      }),
+    )
+  ).autoConfirm,
+  'failed',
+  'the form is sent once, never in a loop',
+);
+const evilForm = askPage.replace(
+  '/mail/vf-abc123/confirm',
+  'https://evil.example.com/x',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({ [gmailLink]: respond(200, undefined, evilForm) }),
+    )
+  ).autoConfirm,
+  'failed',
+);
+assert.ok(!seen.some((call) => call.url.includes('evil.example.com')));
 assert.equal(
   (await followConfirmLink(gmailLink, 'gmail', fakeFetch(302))).autoConfirm,
   'failed',
   'a redirect with no Location fails',
 );
-assert.equal(cancelled, seen.length, 'every response body is cancelled');
 const before = seen.length;
 assert.equal(
   (

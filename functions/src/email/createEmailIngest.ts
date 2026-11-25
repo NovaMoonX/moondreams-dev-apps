@@ -13,6 +13,7 @@ import {
   isSecretValid,
   readAddressToken,
   takeRateSlot,
+  withoutImageMarks,
 } from './emailUtils.js';
 import {
   confirmProviderOf,
@@ -190,7 +191,7 @@ export function createEmailIngest(config: EmailIngestConfig) {
       to: asString(body.to, 320),
       from: asString(body.from, 320),
       subject: asString(body.subject, 1000),
-      text: text.trim() !== '' ? text : htmlToText(html),
+      text: withoutImageMarks(text.trim() !== '' ? text : htmlToText(html)),
       receivedAt,
       isDkimPassed: dkim === 'pass',
       dkimDomain: dkim === 'pass' ? asDomain(body.dkimDomain) : null,

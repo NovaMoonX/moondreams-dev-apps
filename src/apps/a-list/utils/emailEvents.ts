@@ -30,7 +30,13 @@ export function describeEmailEvent(
   event: AListEmailEvent,
   timeZone: string | null,
 ) {
-  const title = event.movieTitle ?? event.removedViewing?.movie.title ?? null;
+  const title =
+    event.movieTitle
+      ?.replace(/\[image:[^\]]*\]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() ||
+    event.removedViewing?.movie.title ||
+    null;
   const when =
     event.showtimeAt === null
       ? null
@@ -45,7 +51,7 @@ export function describeEmailEvent(
     cancelNotFound: `Couldn’t find ${named} on your calendar`,
     notTicket: 'Not an AMC ticket email',
     unread: 'Couldn’t read this AMC email',
-    confirm: 'Forwarding confirmed',
+    confirm: 'Asked to confirm forwarding',
   };
   return titles[event.outcome];
 }

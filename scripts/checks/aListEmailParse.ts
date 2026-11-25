@@ -5,6 +5,7 @@ import {
   htmlToText,
   snippetOf,
   withoutEmailAddresses,
+  withoutImageMarks,
 } from '../../functions/src/email/emailUtils.ts';
 import {
   isForwardingConfirmation,
@@ -136,6 +137,20 @@ assert.deepEqual(parseAmcEmail(cancellation.text), {
   title: 'How to Rob a Bank',
   showtimeLocal: local(2026, 11, 13, 18, 50),
   theatreName: 'AMC Chattanooga 18',
+  refundedCount: 1,
+});
+
+// Gmail writes each picture as "[image: …]" when it forwards; the intake drops those marks before reading.
+const gmailForwarded = readFixture('cancellation-gmail-forwarded');
+assert.ok(isFromAmc(gmailForwarded.from, gmailForwarded.text));
+assert.deepEqual(parseAmcEmail(withoutImageMarks(gmailForwarded.text)), {
+  kind: 'cancellation',
+  confirmation: '0195443676',
+  orderNumber: '1281639600',
+  refundDate: '11/25/2026',
+  title: 'Focker In-Law',
+  showtimeLocal: local(2026, 11, 25, 16, 15),
+  theatreName: 'AMC Park Place 16',
   refundedCount: 1,
 });
 
@@ -586,9 +601,9 @@ assert.equal(
   'past five minutes',
 );
 assert.equal(
-  findCancelTarget([base], cancel),
-  null,
-  'a showing with no ticket is not canceled by a guess',
+  findCancelTarget([base], cancel)?.id,
+  'v1',
+  'a showing planned in the app with no ticket yet is still the one canceled',
 );
 assert.equal(
   findCancelTarget([{ ...paid, amcConfirmation: '0999999999' }], cancel),

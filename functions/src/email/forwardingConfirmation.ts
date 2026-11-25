@@ -179,7 +179,60 @@ const resolveHop = (location: string | null, from: string) => {
   }
 };
 
-/** Opens a confirm link, following at most 3 redirects by hand and only to accepted pages. Never throws. */
+const SUCCESS_TEXT =
+  /confirmation success|you may now forward|successfully (?:confirmed|verified)|(?:forwarding|address) (?:has been |is now )?(?:confirmed|verified)/i;
+const MAX_PAGE_CHARS = 200_000;
+
+const decodeAttribute = (value: string) =>
+  value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+
+const readAttribute = (tag: string, name: string) => {
+  const match = new RegExp(
+    `\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    'i',
+  ).exec(tag);
+  return match === null
+    ? null
+    : decodeAttribute(match[1] ?? match[2] ?? match[3] ?? '');
+};
+
+/** The page's first POST form: where it posts and the named fields it sends (hidden inputs and the submit button), or null. */
+export function readConfirmForm(html: string, pageUrl: string) {
+  const form = /<form\b([^>]*)>([\s\S]*?)<\/form>/i.exec(html);
+  if (form === null) return null;
+  const opening = ` ${form[1]}`;
+  if ((readAttribute(opening, 'method') ?? 'get').toLowerCase() !== 'post') {
+    return null;
+  }
+  const action = resolveHop(readAttribute(opening, 'action') ?? '', pageUrl);
+  if (action === null) return null;
+  const fields = Array.from(
+    form[2].matchAll(/<(?:input|button)\b([^>]*)>/gi),
+  ).flatMap(([, attributes]) => {
+    const tag = ` ${attributes}`;
+    const name = readAttribute(tag, 'name');
+    const type = (readAttribute(tag, 'type') ?? '').toLowerCase();
+    return name === null || ['checkbox', 'radio', 'file'].includes(type)
+      ? []
+      : [[name, readAttribute(tag, 'value') ?? ''] as [string, string]];
+  });
+  return { action, body: new URLSearchParams(fields).toString() };
+}
+
+const readPage = async (response: Response) =>
+  typeof response.text === 'function'
+    ? (await response.text()).slice(0, MAX_PAGE_CHARS)
+    : '';
+
+/**
+ * Opens a confirm link, following at most 3 redirects by hand and only to accepted pages, and sends the page's confirm form once when it has one.
+ * It reports `confirmed` only when the provider's page says so: a page that merely loads (Gmail's asks for a tap on Confirm) is not proof. Never throws.
+ */
 export async function followConfirmLink(
   url: string | null,
   provider: ConfirmProvider | null,
@@ -189,42 +242,60 @@ export async function followConfirmLink(
     return { autoConfirm: 'skipped', status: null, errorName: null };
   }
   const signal = AbortSignal.timeout(CONFIRM_TIMEOUT_MS);
-  const failed = (status: number | null): FollowResult => ({
-    autoConfirm: 'failed',
-    status,
-    errorName: null,
-  });
-  const open = async (target: string, hops: number): Promise<FollowResult> => {
+  const failed = (
+    status: number | null,
+    errorName: string | null = null,
+  ): FollowResult => ({ autoConfirm: 'failed', status, errorName });
+  const open = async (
+    target: string,
+    hops: number,
+    form: { body: string } | null,
+  ): Promise<FollowResult> => {
     if (!isAcceptedConfirmUrl(target, provider) || isSignInPage(target)) {
       return failed(null);
     }
     const response = await doFetch(target, {
-      method: 'GET',
+      method: form === null ? 'GET' : 'POST',
       redirect: 'manual',
       credentials: 'omit',
       signal,
+      ...(form === null
+        ? {}
+        : {
+            body: form.body,
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          }),
     });
-    await response.body?.cancel();
     if (REDIRECT_STATUSES.includes(response.status)) {
+      await response.body?.cancel();
       const next = resolveHop(
         response.headers?.get('location') ?? null,
         target,
       );
       return next === null || hops >= MAX_HOPS
         ? failed(response.status)
-        : open(next, hops + 1);
+        : open(next, hops + 1, null);
     }
-    return response.status >= 200 && response.status < 300
-      ? { autoConfirm: 'confirmed', status: response.status, errorName: null }
-      : failed(response.status);
+    if (response.status < 200 || response.status >= 300) {
+      await response.body?.cancel();
+      return failed(response.status);
+    }
+    const page = await readPage(response);
+    if (SUCCESS_TEXT.test(page)) {
+      return {
+        autoConfirm: 'confirmed',
+        status: response.status,
+        errorName: null,
+      };
+    }
+    const confirmForm = form === null ? readConfirmForm(page, target) : null;
+    return confirmForm === null
+      ? failed(response.status, 'NotConfirmed')
+      : open(confirmForm.action, hops, confirmForm);
   };
   try {
-    return await open(url, 0);
+    return await open(url, 0, null);
   } catch (error) {
-    return {
-      autoConfirm: 'failed',
-      status: null,
-      errorName: (error as Error)?.name ?? 'Error',
-    };
+    return failed(null, (error as Error)?.name ?? 'Error');
   }
 }
