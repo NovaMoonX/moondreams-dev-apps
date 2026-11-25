@@ -32,6 +32,8 @@ export const GOOGLE_GMAIL_MANIFEST: ConnectorManifest = {
   ],
   never: ['Attachments', 'Sending, labelling, archiving or deleting'],
   actions: [],
+  tools: [],
+  askedAbout: [],
   changes: [],
   capabilities: { read: true, write: false, backgroundSync: false },
   connect: {

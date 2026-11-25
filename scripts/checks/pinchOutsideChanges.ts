@@ -661,7 +661,7 @@ const replyText = (result: AppActionResult) => {
   assert.equal(stale.status, 'refused');
   assert.match(
     (stale as { message: string }).message,
-    /changed in Pinch since you read it.*pinch_get_recipe/,
+    /changed in Pinch since you read it.*pinch_read \(action get_recipe\)/,
   );
   assert.deepEqual(store.docs.get(`${K}/recipes/r1`)?.steps, [
     'Boil.',
@@ -1297,7 +1297,7 @@ const line = (name: string, extra: Fields = {}) => ({
   const store = seed();
   const data = dataOf(
     await fillNutrition(store.firestore, ctx(NOW), {
-      items: [
+      ingredients: [
         { ingredient: 'dragon fruit', per100g: values },
         { ingredient: 'oat milk', per100g: values },
         { ingredient: 'old thing', per100g: values },
@@ -1338,7 +1338,7 @@ const line = (name: string, extra: Fields = {}) => ({
 
   // A batch where every item is refused changes nothing.
   const none = await fillNutrition(store.firestore, ctx(NOW), {
-    items: [{ ingredient: 'oat milk', per100g: values }],
+    ingredients: [{ ingredient: 'oat milk', per100g: values }],
   });
   assert.equal(none.status, 'refused');
   assert.match((none as { message: string }).message, /already has nutrition/);
@@ -1351,7 +1351,7 @@ const line = (name: string, extra: Fields = {}) => ({
     assert.equal(
       (
         await fillNutrition(seed().firestore, ctx(NOW), {
-          items: [{ ingredient: 'dragon fruit', per100g }],
+          ingredients: [{ ingredient: 'dragon fruit', per100g }],
         })
       ).status,
       'refused',
@@ -1368,7 +1368,7 @@ const line = (name: string, extra: Fields = {}) => ({
   const again = seed();
   const second = dataOf(
     await fillNutrition(again.firestore, ctx(NOW), {
-      items: [{ ingredient: 'dragon fruit', per100g: values }],
+      ingredients: [{ ingredient: 'dragon fruit', per100g: values }],
     }),
   );
   again.docs.set(`${K}/ingredients/ing-df`, {
@@ -1398,7 +1398,7 @@ const line = (name: string, extra: Fields = {}) => ({
   try {
     const data = dataOf(
       await fillNutrition(store.firestore, ctx(NOW), {
-        items: [
+        ingredients: [
           {
             ingredient: 'Egg',
             per100g: { calories: 143, protein: 12.6, carbs: 0.7, fat: 9.5 },

@@ -307,6 +307,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
         'litter logs',
       ],
       actions: [],
+      tools: [],
+      askedAbout: [],
       changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },

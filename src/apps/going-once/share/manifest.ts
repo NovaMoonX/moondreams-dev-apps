@@ -209,6 +209,8 @@ export const GOING_ONCE_SHARES: SourceShares = {
         'where things were bought',
       ],
       actions: [],
+      tools: [],
+      askedAbout: [],
       changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },

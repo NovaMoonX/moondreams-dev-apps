@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import { Client } from '../../functions/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
+import { InMemoryTransport } from '../../functions/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js';
+import { McpServer } from '../../functions/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js';
+import { toJSONSchema, z } from '../../functions/node_modules/zod/index.js';
+
 import { PINCH_SHARES } from '../../src/apps/pinch/share/manifest.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
-import type { AppActionResult } from '../../functions/src/connections/registry.ts';
+import {
+  SOURCE_ADAPTERS,
+  type AppActionResult,
+  type SourceAdapter,
+} from '../../functions/src/connections/registry.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
-import { offeredHelmTools } from '../../functions/src/apps/helm/mcp/server.ts';
+import {
+  offeredHelmTools,
+  registerHelmTools,
+} from '../../functions/src/apps/helm/mcp/server.ts';
+import { helmGuideFor } from '../../functions/src/apps/helm/mcp/guide.ts';
 import {
   READ_SCOPE_LABELS,
   READ_SCOPE_TOOLS,
@@ -38,27 +51,32 @@ import {
   createSealedAliasBook,
 } from '../../functions/src/apps/helm/nomos/aliases.ts';
 
-const PINCH_ACTIONS = PINCH_SHARES.shares.flatMap(
-  (manifest) => manifest.actions,
-);
+const PINCH_MANIFEST = PINCH_SHARES.shares[0]!;
+const PINCH_ACTIONS = PINCH_MANIFEST.actions;
+const PINCH_SERVER_ACTIONS = createPinchAdapter().actions!;
+// Which actions read as switched on when the tools are listed; a call reads the grant again.
+const offActions = new Set<string>();
 const pinchApp = {
   connectorId: 'app:pinch',
   appId: 'pinch',
-  actions: PINCH_ACTIONS.map((action) => ({
-    id: action.id,
-    kind: action.kind,
-    label: action.label,
-    categories: action.categories.map((id) => ({ id, label: id })),
-    permission: action.permission
-      ? { id: action.permission, label: action.permission }
-      : null,
-    action: {
-      description: `Fake ${action.id}.`,
-      shape: {},
-      run: async () =>
-        ({ status: 'refused', message: 'unused' }) as AppActionResult,
-    },
-  })),
+  about: PINCH_MANIFEST.about,
+  askedAbout: PINCH_MANIFEST.askedAbout,
+  tools: PINCH_MANIFEST.tools,
+  get actions() {
+    return PINCH_ACTIONS.map((action) => ({
+      id: action.id,
+      kind: action.kind,
+      label: action.label,
+      tool: action.tool,
+      changesExisting: action.changesExisting,
+      isOn: !offActions.has(action.id),
+      categories: action.categories.map((id) => ({ id, label: id })),
+      permission: action.permission
+        ? { id: action.permission, label: action.permission }
+        : null,
+      action: PINCH_SERVER_ACTIONS[action.id],
+    }));
+  },
 };
 const actionCalls: string[] = [];
 const readFlags: (boolean | undefined)[] = [];
@@ -83,6 +101,7 @@ const appActions = {
 // Every tool the server can offer, mail, documents and app records included.
 const tools = buildHelmTools({
   appActions: appActions as never,
+  canChangeApps: true,
   uid: 'u1',
   key: {} as never,
   aliases: createAliasBook('t'),
@@ -141,24 +160,17 @@ assert.deepEqual(failures, []);
 
 // Every tool an outside assistant gets is named here on purpose. get_calendar is the one that reads other apps'
 // copies: event titles and times only, which an assistant needs to answer "what's on Friday".
+// The guide is a map; detail lives in each tool, which an assistant reads only when it needs it.
+const GUIDE_CHAR_CAP = 4_000;
 const OUTSIDE_TOOLS = [
   'connection_status',
   'get_calendar',
   'get_topic',
   'list_connections',
   'list_topics',
-  'pinch_add_recipe',
-  'pinch_add_to_shopping_list',
-  'pinch_fill_nutrition',
-  'pinch_find_ingredients',
-  'pinch_get_kitchen',
-  'pinch_get_meal_plan',
-  'pinch_get_recipe',
-  'pinch_get_shopping_list',
-  'pinch_plan_meal',
-  'pinch_save_idea',
-  'pinch_search_recipes',
-  'pinch_update_recipe',
+  'pinch_add',
+  'pinch_read',
+  'pinch_save_recipe',
   'search_procedures',
   'search_tasks',
 ];
@@ -169,6 +181,15 @@ assert.deepEqual(
     .sort(),
   OUTSIDE_TOOLS,
   'the tools offered to outside assistants changed: review the new one and name it in OUTSIDE_TOOLS',
+);
+
+// Nomos reads each app through the same grouped read tool; changes stay with outside assistants until Nomos gets its own ask-and-undo.
+assert.deepEqual(
+  tools
+    .filter((tool) => tool.audience !== 'external' && tool.name.startsWith('pinch_'))
+    .map((tool) => tool.name),
+  ['pinch_read'],
+  'Nomos gets pinch_read and none of the change tools',
 );
 
 // Mail, documents and app records reach an outside assistant only behind its own read permission, listed by name.
@@ -421,33 +442,61 @@ assert.ok(
     !onButEmpty.includes('turn on'),
 );
 assert.match(external, /`Tells \$\{name\}/);
-// An outside assistant is told the connection is text only, and to send the person to Helm for a photo or file.
-assert.match(
-  external,
-  /This connection takes text only: it can't receive photos, files/,
-);
-assert.match(external, /they can add it in Helm itself/);
 assert.match(
   external,
   /Text only: it can't carry a photo, file or other media/,
 );
 assert.match(external, /`Asks \$\{name\}/);
-// Saving what was learned points to save_to_helm, and the instructions tell an outside assistant to check Helm on its own.
 assert.match(external, /use save_to_helm instead/);
-assert.match(external, /check Helm on your own, without waiting to be told/);
+assert.match(external, /instructions: helmGuideFor\(\s*name,\s*ctx\.canWrite,\s*ctx\.canChangeApps,/);
+
+// The guide an outside assistant reads on connecting: a short map, not a tool list.
+const guide = (over: { canWrite?: boolean; canChangeApps?: boolean } = {}) =>
+  helmGuideFor(
+    'Sol',
+    over.canWrite ?? true,
+    over.canChangeApps ?? true,
+    [],
+    { clientName: 'Gemini', readScopes: ['apps'], toolNames: OUTSIDE_TOOLS },
+    [pinchApp as never],
+  );
+const fullGuide = guide();
+// Text only, and the person is sent to Helm for a photo or file.
+assert.match(fullGuide, /This connection takes text only: it can't receive photos, files/);
+assert.match(fullGuide, /they can add it in Helm itself/);
+// It tells an outside assistant to check Helm on its own, and to use only what the tools return.
+assert.match(fullGuide, /check Helm on your own, without waiting to be told/);
 assert.match(
-  external,
+  fullGuide,
   /list_topics, get_topic, search_procedures\), tasks \(search_tasks\), calendar \(get_calendar\)/,
 );
-assert.match(external, /Use only what the tools return/);
-assert.match(
-  external,
-  /call the \$\{app\.appId\}_ tools directly; never ask_helm for it/,
+assert.match(fullGuide, /Use only what the tools return/);
+assert.match(fullGuide, /call its tools directly, never ask_helm/);
+assert.match(fullGuide, /a result with status switchedOff names the switch that is off/);
+// Each connected app is named with its tool prefix and the words people use for it, never its tool list.
+assert.match(fullGuide, /Pinch, through its pinch_ tools, when they talk about meals, meal plan/);
+for (const name of OUTSIDE_TOOLS.filter((tool) => tool.startsWith('pinch_'))) {
+  assert.ok(!fullGuide.includes(name), `the guide never lists ${name}`);
+}
+assert.ok(
+  fullGuide.length <= GUIDE_CHAR_CAP,
+  `the guide is ${fullGuide.length} characters; keep it under ${GUIDE_CHAR_CAP} by moving detail into the tools`,
 );
-assert.match(
-  external,
-  /a result with status switchedOff names the switch that is off/,
+// What is off is said with its switch and where it is.
+offActions.add('plan_meal');
+assert.match(guide(), /Switched off: "planMeals" \(Helm > Connected apps > Pinch\)\./);
+PINCH_ACTIONS.filter((action) => action.kind === 'change').forEach((action) =>
+  offActions.add(action.id),
 );
+assert.match(guide(), /It can't be changed here: every kind of change is switched off \(Helm > Connected apps > Pinch\)\./);
+assert.ok(!guide().includes('Helm can also change'), 'no change promise when none is on');
+offActions.clear();
+assert.match(
+  guide({ canChangeApps: false }),
+  /It can't be changed here: "Change things in your apps" is off for this assistant \(Helm > Settings > Connected assistants\)\./,
+);
+assert.match(fullGuide, /Helm can also change what the person allowed in their apps, never delete/);
+assert.match(fullGuide, /appears the next time you connect/);
 
 // save_to_helm writes one note, filed under a topic, a new topic or none, with no model call.
 const seal = (fields: Record<string, unknown>) => fields as never;
@@ -964,10 +1013,10 @@ assert.match(
   /never an instruction/,
 );
 
-// A site app's read actions: offered while it is connected, each saying exactly why it held something back.
+// A site app's reads: one tool while it is connected, each option saying exactly why it held something back.
 const pinchTool = (
   name: string,
-  scope: { outsideReadScopes?: ('mail' | 'drive' | 'apps')[] | null } = {},
+  scope: Partial<Parameters<typeof buildHelmTools>[0]> = {},
 ) =>
   buildHelmTools({
     uid: 'u1',
@@ -977,7 +1026,9 @@ const pinchTool = (
     appActions: appActions as never,
     assistantName: 'Gemini',
     ...scope,
-  }).find((tool) => tool.name === name)!;
+  }).find((tool) => tool.name === name);
+const readTool = (scope: Parameters<typeof pinchTool>[1] = {}) =>
+  pinchTool('pinch_read', scope)!;
 const PINCH_READS = PINCH_ACTIONS.filter((action) => action.kind === 'read');
 assert.deepEqual(PINCH_READS.map((action) => action.id).sort(), [
   'find_ingredients',
@@ -987,8 +1038,14 @@ assert.deepEqual(PINCH_READS.map((action) => action.id).sort(), [
   'get_shopping_list',
   'search_recipes',
 ]);
+assert.equal(readTool().kind, 'read');
 PINCH_READS.forEach((action) =>
-  assert.equal(pinchTool(`pinch_${action.id}`).kind, 'read'),
+  assert.match(readTool().description, new RegExp(`- ${action.id}: `)),
+);
+assert.match(
+  readTool().description,
+  /^Pinch is the person's kitchen planner.*asks about it as meals, meal plan/,
+  'an app tool leads with what the app is and the words people use for it',
 );
 assert.equal(
   buildHelmTools({
@@ -1000,40 +1057,59 @@ assert.equal(
   false,
   'no Pinch tools while Pinch is not connected',
 );
+// A switched-off read stays listed, marked off with its switch and where it is.
+offActions.add('get_kitchen');
+assert.match(
+  readTool().description,
+  /- get_kitchen: [^\n]*Off right now: the person turns on pantryStock or useSoon in Helm > Connected apps > Pinch/,
+);
+offActions.clear();
 nextResult = {
   status: 'switchedOff',
   needs: [{ category: 'plannedMeals', label: 'Planned meals' }],
 };
-const switchedOffResult = (await pinchTool('pinch_get_meal_plan').run(
-  {} as never,
-)) as Record<string, unknown>;
+actionCalls.length = 0;
+const switchedOffResult = (await readTool().run({
+  action: 'get_meal_plan',
+} as never)) as Record<string, unknown>;
+assert.deepEqual(actionCalls, ['get_meal_plan'], 'action picks the option');
 assert.equal(switchedOffResult.status, 'switchedOff');
 assert.match(
   String(switchedOffResult.message),
   /Pinch's Planned meals is switched off.*Helm > Connected apps > Pinch/,
 );
 actionCalls.length = 0;
-const cannotReadResult = (await pinchTool('pinch_get_meal_plan', {
+const cannotReadResult = (await readTool({
   outsideReadScopes: ['mail'],
-}).run({} as never)) as Record<string, unknown>;
+}).run({ action: 'get_meal_plan' } as never)) as Record<string, unknown>;
 assert.equal(cannotReadResult.status, 'assistantCannotRead');
 assert.match(
   String(cannotReadResult.message),
   /"Read your apps" for Gemini in Helm > Settings > Connected assistants/,
 );
-assert.deepEqual(
-  actionCalls,
-  [],
-  'a closedRecipe Read your apps never reaches the app',
+assert.deepEqual(actionCalls, [], 'a closed Read your apps never reaches the app');
+// An option's own fields are checked when it runs, and a miss names what it takes.
+actionCalls.length = 0;
+const missingField = (await readTool().run({
+  action: 'get_recipe',
+} as never)) as Record<string, unknown>;
+assert.equal(missingField.status, 'refused');
+assert.match(
+  String(missingField.message),
+  /Nothing was run\. get_recipe takes recipeId \(required\)/,
 );
+assert.deepEqual(actionCalls, [], 'a call missing its fields never reaches the app');
 nextResult = {
   status: 'ok',
   data: { name: 'Soup' },
   heldBack: [{ category: 'fullRecipes', label: 'Full recipes' }],
 };
-const heldOut = (await pinchTool('pinch_get_recipe', {
+const heldOut = (await readTool({
   outsideReadScopes: ['apps'],
-}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+}).run({ action: 'get_recipe', recipeId: 'r1' } as never)) as Record<
+  string,
+  unknown
+>;
 assert.equal(heldOut.status, 'ok');
 assert.match(
   String((heldOut.heldBack as string[])[0]),
@@ -1042,25 +1118,21 @@ assert.match(
 nextResult = { status: 'notFound', message: 'No recipe has that id.' };
 assert.equal(
   (
-    (await pinchTool('pinch_get_recipe').run({
+    (await readTool().run({
+      action: 'get_recipe',
       recipeId: 'x',
     } as never)) as Record<string, unknown>
   ).status,
   'notFound',
 );
 
-// A site app's change actions: change tools, named switches, the assistant's own switch, and a filed record per change.
+// A site app's changes: grouped tools offered only while the assistant may change apps and a kind is on, named switches, and a filed record per change.
 const changeTool = (
   name: string,
   scope: Partial<Parameters<typeof buildHelmTools>[0]> = {},
 ) =>
-  buildHelmTools({
-    uid: 'u1',
-    key: {} as never,
-    aliases: createAliasBook('t'),
-    firestore: {} as never,
-    appActions: appActions as never,
-    assistantName: 'Gemini',
+  pinchTool(name, {
+    canChangeApps: true,
     onAppChange: async (change) => {
       filedChanges.push({
         actionId: change.actionId,
@@ -1068,7 +1140,10 @@ const changeTool = (
       });
     },
     ...scope,
-  }).find((tool) => tool.name === name)!;
+  });
+const saveRecipe = (scope: Parameters<typeof changeTool>[1] = {}) =>
+  changeTool('pinch_save_recipe', scope)!;
+const EDIT = { action: 'update_recipe', recipeId: 'r1', servings: 6 };
 const PINCH_CHANGES = PINCH_ACTIONS.filter(
   (action) => action.kind === 'change',
 );
@@ -1080,8 +1155,8 @@ assert.deepEqual(PINCH_CHANGES.map((action) => action.id).sort(), [
   'save_idea',
   'update_recipe',
 ]);
-PINCH_CHANGES.forEach((action) => {
-  const tool = changeTool(`pinch_${action.id}`);
+[...new Set(PINCH_CHANGES.map((action) => action.tool))].forEach((id) => {
+  const tool = changeTool(`pinch_${id}`)!;
   assert.equal(tool.kind, 'change');
   assert.equal(
     tool.audience,
@@ -1090,6 +1165,8 @@ PINCH_CHANGES.forEach((action) => {
   );
   assert.match(tool.description, /confirm with the person/);
 });
+assert.equal(saveRecipe().isAdditive, false, 'an edit is not only additive');
+assert.equal(changeTool('pinch_add')!.isAdditive, true);
 assert.equal(
   offeredHelmTools(
     buildHelmTools({
@@ -1098,43 +1175,45 @@ assert.equal(
       aliases: createAliasBook('t'),
       firestore: {} as never,
       appActions: appActions as never,
+      canChangeApps: true,
     }),
     'nomos',
-  ).some((tool) => tool.name === 'pinch_update_recipe'),
+  ).some((tool) => tool.name === 'pinch_save_recipe'),
   false,
 );
-actionCalls.length = 0;
-const cannotChange = (await changeTool('pinch_update_recipe', {
-  outsideReadScopes: ['apps'],
-  canChangeApps: false,
-}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
-assert.equal(cannotChange.status, 'assistantCannotChange');
-assert.match(
-  String(cannotChange.message),
-  /"Change things in your apps" for Gemini in Helm > Settings > Connected assistants/,
-);
-assert.deepEqual(
-  actionCalls,
-  [],
-  'an assistant without the switch never reaches the app',
-);
+// Without the assistant's own switch, or with every kind of change off, no change tool is offered at all.
+for (const scope of [
+  { canChangeApps: false },
+  { canChangeApps: undefined },
+  { outsideReadScopes: null, canChangeApps: false },
+]) {
+  assert.equal(
+    changeTool('pinch_save_recipe', scope),
+    undefined,
+    'an assistant without "Change things in your apps" sees no change tools',
+  );
+}
+PINCH_CHANGES.forEach((action) => offActions.add(action.id));
 assert.equal(
-  (
-    (await changeTool('pinch_update_recipe', {
-      outsideReadScopes: ['apps'],
-    }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>
-  ).status,
-  'assistantCannotChange',
-  'a missing switch reads as off',
+  changeTool('pinch_add'),
+  undefined,
+  'a change whose switch is off is not offered',
 );
+offActions.clear();
+offActions.add('update_recipe');
+assert.match(
+  saveRecipe().description,
+  /- update_recipe: [^\n]*Off right now: the person turns on "editRecipes" in Helm > Connected apps > Pinch/,
+  'a grouped option that is off stays listed and names its switch',
+);
+offActions.clear();
 nextResult = {
   status: 'switchedOff',
   needs: [{ category: 'editRecipes', label: 'Edit recipes' }],
 };
-const changeOff = (await changeTool('pinch_update_recipe', {
+const changeOff = (await saveRecipe({
   outsideReadScopes: ['apps'],
-  canChangeApps: true,
-}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+}).run(EDIT as never)) as Record<string, unknown>;
 assert.equal(changeOff.status, 'switchedOff');
 assert.deepEqual(changeOff.needs, ['Edit recipes']);
 assert.match(
@@ -1158,22 +1237,9 @@ for (const [scopes, expected] of [
   [['mail'], false],
 ] as const) {
   readFlags.length = 0;
-  await changeTool('pinch_update_recipe', {
-    outsideReadScopes: [...scopes],
-    canChangeApps: true,
-  }).run({ recipeId: 'r1' } as never);
+  await saveRecipe({ outsideReadScopes: [...scopes] }).run(EDIT as never);
   assert.deepEqual(readFlags, [expected]);
 }
-assert.equal(
-  (
-    (await changeTool('pinch_update_recipe', {
-      outsideReadScopes: null,
-      canChangeApps: false,
-    }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>
-  ).status,
-  'assistantCannotChange',
-  'the change switch alone gates a change',
-);
 nextResult = {
   status: 'ok',
   data: {
@@ -1185,10 +1251,9 @@ nextResult = {
   },
   heldBack: [],
 };
-const changeOk = (await changeTool('pinch_update_recipe', {
-  outsideReadScopes: ['apps'],
-  canChangeApps: true,
-}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+const changeOk = (await saveRecipe({ outsideReadScopes: ['apps'] }).run(
+  EDIT as never,
+)) as Record<string, unknown>;
 assert.deepEqual(
   changeOk,
   {
@@ -1200,7 +1265,7 @@ assert.deepEqual(
   'the assistant is told the reply, never the stored lines',
 );
 assert.match(
-  changeTool('pinch_update_recipe').description,
+  saveRecipe().description,
   /refused.*notFound/,
   'every status a change can return is listed',
 );
@@ -1210,13 +1275,12 @@ assert.deepEqual(filedChanges, [
 // A filing that fails is logged, and the reply says the change is in the app but not in Helm's list.
 {
   const filedBefore = filedChanges.length;
-  const failing = (await changeTool('pinch_update_recipe', {
+  const failing = (await saveRecipe({
     outsideReadScopes: ['apps'],
-    canChangeApps: true,
     onAppChange: async () => {
       throw new Error('boom');
     },
-  }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+  }).run(EDIT as never)) as Record<string, unknown>;
   assert.equal(failing.status, 'ok');
   assert.match(
     String(failing.note),
@@ -1243,19 +1307,15 @@ assert.deepEqual(filedChanges, [
     },
     heldBack: [],
   };
-  await changeTool('pinch_update_recipe', {
-    outsideReadScopes: ['apps'],
-    canChangeApps: true,
-  }).run({ recipeId: 'r1' } as never);
+  await saveRecipe({ outsideReadScopes: ['apps'] }).run(EDIT as never);
   assert.equal(filedChanges.length, filedBefore);
 }
 nextResult = { status: 'refused', message: 'That recipe has too many notes.' };
 assert.equal(
   (
-    (await changeTool('pinch_update_recipe', {
-      outsideReadScopes: ['apps'],
-      canChangeApps: true,
-    }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>
+    (await saveRecipe({ outsideReadScopes: ['apps'] }).run(
+      EDIT as never,
+    )) as Record<string, unknown>
   ).status,
   'refused',
 );
@@ -1366,5 +1426,263 @@ assert.equal(
     .status,
   'switchedOff',
 );
+
+// How every app offers assistant tools (docs/conventions/connections.md "An app offers an assistant a handful of tools").
+const MAX_CHANGE_TOOLS_PER_APP = 2;
+const MAX_OUTSIDE_TOOLS = 40;
+const MIN_OPTION_DESCRIPTION = 60;
+const TOOL_ID = /^[a-z][a-z0-9_]*$/;
+const unwrapOptional = (schema: z.ZodType): z.ZodType => {
+  const def = (schema as unknown as { _zod: { def: { type: string; innerType?: z.ZodType } } })._zod.def;
+  return def.type === 'optional' && def.innerType ? unwrapOptional(def.innerType) : schema;
+};
+const withoutWords = (value: unknown, isPropertyMap = false): unknown =>
+  Array.isArray(value)
+    ? value.map((inner) => withoutWords(inner))
+    : value && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([key]) => isPropertyMap || !['description', '$schema'].includes(key))
+            .map(([key, inner]) => [key, withoutWords(inner, !isPropertyMap && key === 'properties')]),
+        )
+      : value;
+// The server validates a grouped call against the first option's copy of a shared field, defaults included, so every copy must accept and fill exactly the same values.
+const schemaOf = (schema: z.ZodType): string =>
+  JSON.stringify(withoutWords(toJSONSchema(unwrapOptional(schema))));
+// A refinement or transform never reaches JSON schema, so the comparison can't see it: a shared field carries none.
+const isOpaque = (schema: z.ZodType): boolean => {
+  const def = (schema as unknown as { _zod: { def: { type: string; innerType?: z.ZodType; checks?: { _zod: { def: { check: string } } }[] } } })._zod.def;
+  return (
+    def.type === 'pipe' ||
+    def.type === 'transform' ||
+    (def.checks ?? []).some((check) => check._zod.def.check === 'custom') ||
+    (['optional', 'default', 'nullable'].includes(def.type) && def.innerType !== undefined && isOpaque(def.innerType))
+  );
+};
+assert.equal(
+  schemaOf(z.string().max(100).describe('For search_recipes, words.')),
+  schemaOf(z.string().max(100).optional().describe('For find_ingredients, a name.')),
+);
+assert.notEqual(schemaOf(z.enum(['a', 'b'])), schemaOf(z.enum(['a', 'c'])));
+assert.notEqual(schemaOf(z.string().max(100)), schemaOf(z.string().max(200)));
+assert.notEqual(schemaOf(z.string()), schemaOf(z.string().nullable()));
+assert.notEqual(schemaOf(z.number().default(2)), schemaOf(z.number().default(4)));
+assert.notEqual(
+  schemaOf(z.object({ description: z.string() })),
+  schemaOf(z.object({ description: z.number() })),
+);
+assert.ok(isOpaque(z.string().refine((text) => text !== 'x')) && !isOpaque(z.string().max(3)));
+const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] => {
+    const { manifest } = adapter;
+    const appId = connectorId.replace(/^app:/, '');
+    const declared = manifest.tools.map((tool) => tool.id);
+    const undeclared = Object.keys(adapter.actions ?? {})
+      .filter((id) => !manifest.actions.some((action) => action.id === id))
+      .map((id) => `${connectorId} implements ${id}, which its manifest does not declare`);
+    if (manifest.actions.length === 0) {
+      return [
+        ...undeclared,
+        ...(manifest.tools.length === 0 && manifest.askedAbout.length === 0
+          ? []
+          : [`${connectorId} declares tools or words but no actions`]),
+      ];
+    }
+    const byTool = (id: string) =>
+      manifest.actions.filter((action) => action.tool === id);
+    const readTools = declared.filter((id) =>
+      byTool(id).some((action) => action.kind === 'read'),
+    );
+    const names = declared.map((id) => `${appId}_${id}`);
+    const mentioned = manifest.actions.flatMap((action) => {
+      const server = adapter.actions?.[action.id];
+      const texts = server
+        ? [
+            server.description,
+            ...Object.values(server.shape).map(
+              (field) => (field as z.ZodType).description ?? '',
+            ),
+          ]
+        : [];
+      return texts.flatMap((text) =>
+        [...text.matchAll(new RegExp(`\\b${appId}_[a-z_]+`, 'g'))].map(
+          (match) => ({ action: action.id, name: match[0] }),
+        ),
+      );
+    });
+    return [
+      ...undeclared,
+      ...(connectorId.startsWith('app:') ? [] : [`${connectorId} offers actions but is not a site app`]),
+      ...(manifest.askedAbout.length < 3
+        ? [`${connectorId} needs at least three everyday words in askedAbout`]
+        : []),
+      ...(declared.length - readTools.length > MAX_CHANGE_TOOLS_PER_APP
+        ? [`${connectorId} offers ${declared.length - readTools.length} change tools; group its changes into ${MAX_CHANGE_TOOLS_PER_APP} or fewer`]
+        : []),
+      ...(readTools.length > 1
+        ? [`${connectorId} spreads its reads over ${readTools.join(', ')}: one read tool per app`]
+        : []),
+      ...manifest.tools.flatMap((tool) => [
+        ...(TOOL_ID.test(tool.id) && `${appId}_${tool.id}`.length <= 64
+          ? []
+          : [`${connectorId} tool ${tool.id} is not a short snake_case id`]),
+        ...(tool.title.trim().length < 4 ? [`${connectorId} tool ${tool.id} needs a title`] : []),
+        ...(byTool(tool.id).length === 0 ? [`${connectorId} tool ${tool.id} has no actions`] : []),
+        ...(new Set(byTool(tool.id).map((action) => action.kind)).size > 1
+          ? [`${connectorId} tool ${tool.id} mixes reads and changes`]
+          : []),
+      ]),
+      ...manifest.actions.flatMap((action) => {
+        const server = adapter.actions?.[action.id];
+        return [
+          ...(declared.includes(action.tool) ? [] : [`${connectorId} ${action.id} names undeclared tool ${action.tool}`]),
+          ...(server ? [] : [`${connectorId} ${action.id} has no server action`]),
+          ...(server && server.description.length < MIN_OPTION_DESCRIPTION
+            ? [`${connectorId} ${action.id}'s description is too short to choose by`]
+            : []),
+          ...(action.kind === 'read' && action.changesExisting ? [`${connectorId} ${action.id} is a read that changes`] : []),
+          ...(action.kind === 'change' && !manifest.changes.some((change) => change.id === action.permission)
+            ? [`${connectorId} ${action.id} names no declared switch`]
+            : []),
+          ...(action.kind === 'read' && action.categories.length === 0 ? [`${connectorId} ${action.id} names no category`] : []),
+        ];
+      }),
+      // Options grouped under one tool share one input, so a field they share must accept the same values.
+      ...declared.flatMap((id) => {
+        const shapes = byTool(id).flatMap((action) => {
+          const server = adapter.actions?.[action.id];
+          return server ? [server.shape] : [];
+        });
+        const keys = [...new Set(shapes.flatMap((shape) => Object.keys(shape)))];
+        return [
+          ...(keys.includes('action') && shapes.length > 1 ? [`${connectorId} tool ${id} has a field named action, which picks the option`] : []),
+          ...keys.flatMap((key) => {
+            const schemas = new Set(
+              shapes.filter((shape) => key in shape).map((shape) => schemaOf(shape[key] as z.ZodType)),
+            );
+            const copies = shapes.filter((shape) => key in shape).map((shape) => shape[key] as z.ZodType);
+            return [
+              ...(schemas.size > 1 ? [`${connectorId} tool ${id}: ${key} accepts different values across its options (${[...schemas].join(' vs ')})`] : []),
+              ...(copies.length > 1 && copies.some(isOpaque) ? [`${connectorId} tool ${id}: ${key} is shared but refined or transformed, which only one option's copy would apply`] : []),
+            ];
+          }),
+        ];
+      }),
+      ...mentioned
+        .filter(({ name }) => !names.includes(name))
+        .map(({ action, name }) => `${connectorId} ${action} mentions ${name}, which is not a tool`),
+    ];
+};
+assert.deepEqual(
+  Object.entries(SOURCE_ADAPTERS).flatMap(([connectorId, adapter]) => toolFailuresFor(connectorId, adapter)),
+  [],
+);
+
+// Each rule fires on a manifest that breaks it, so a later app can't slip past one that only Pinch exercises.
+const pinchAdapter = SOURCE_ADAPTERS['app:pinch'];
+const broken = (
+  change: (manifest: SourceAdapter['manifest'], actions: NonNullable<SourceAdapter['actions']>) => void,
+) => {
+  const manifest = structuredClone(pinchAdapter.manifest);
+  const actions = { ...pinchAdapter.actions };
+  change(manifest, actions);
+  return toolFailuresFor('app:pinch', { ...pinchAdapter, manifest, actions });
+};
+const firesWith = (failures: string[], words: string) =>
+  assert.ok(failures.some((line) => line.includes(words)), `expected "${words}" in ${JSON.stringify(failures)}`);
+firesWith(broken((manifest) => { manifest.askedAbout = ['meals']; }), 'at least three everyday words');
+firesWith(
+  broken((manifest) => {
+    manifest.tools.push({ id: 'one_more', title: 'One more thing' });
+    manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'one_more';
+  }),
+  'group its changes into',
+);
+firesWith(
+  broken((manifest) => {
+    manifest.tools.push({ id: 'read_kitchen', title: 'Read the kitchen' });
+    manifest.actions.find((action) => action.id === 'get_kitchen')!.tool = 'read_kitchen';
+  }),
+  'one read tool per app',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'read'; }), 'mixes reads and changes');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'ideas'; }), 'names undeclared tool');
+firesWith(broken((manifest) => { manifest.tools.push({ id: 'unused', title: 'Unused tool' }); }), 'has no actions');
+firesWith(broken((manifest) => { manifest.tools[0].title = ''; }), 'needs a title');
+firesWith(broken((manifest) => { manifest.tools[0].id = 'Read-Pinch'; manifest.actions.filter((action) => action.tool === 'read').forEach((action) => { action.tool = 'Read-Pinch'; }); }), 'short snake_case id');
+firesWith(broken((_, actions) => { actions.surprise = actions.save_idea; }), 'does not declare');
+firesWith(
+  broken((_, actions) => {
+    actions.add_recipe = { ...actions.add_recipe, shape: { ...actions.add_recipe.shape, basedOn: z.string() } };
+  }),
+  'accepts different values across its options',
+);
+firesWith(
+  broken((_, actions) => {
+    actions.add_recipe = { ...actions.add_recipe, shape: { ...actions.add_recipe.shape, action: z.string() } };
+  }),
+  'field named action',
+);
+firesWith(broken((_, actions) => { actions.get_kitchen = { ...actions.get_kitchen, description: 'Too short.' }; }), 'too short to choose by');
+firesWith(
+  broken((_, actions) => {
+    actions.get_kitchen = { ...actions.get_kitchen, description: `${actions.get_kitchen.description} Then call pinch_get_everything.` };
+  }),
+  'which is not a tool',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.changesExisting = true; }), 'is a read that changes');
+firesWith(
+  broken((_, actions) => {
+    actions.add_recipe = { ...actions.add_recipe, shape: { ...actions.add_recipe.shape, servings: (actions.add_recipe.shape.servings as z.ZodNumber).refine((n) => n !== 3) } };
+  }),
+  'refined or transformed',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.permission = 'nope'; }), 'names no declared switch');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.categories = []; }), 'names no category');
+firesWith(broken((_, actions) => { delete actions.save_idea; }), 'has no server action');
+firesWith(broken((manifest) => { manifest.tools[0].id = 'r'.repeat(60); manifest.actions.filter((action) => action.tool === 'read').forEach((action) => { action.tool = 'r'.repeat(60); }); }), 'short snake_case id');
+firesWith(toolFailuresFor('google:calendar', pinchAdapter), 'is not a site app');
+firesWith(
+  toolFailuresFor('app:quiet', { ...pinchAdapter, manifest: { ...structuredClone(pinchAdapter.manifest), actions: [] }, actions: {} }),
+  'declares tools or words but no actions',
+);
+assert.ok(
+  OUTSIDE_TOOLS.length <= MAX_OUTSIDE_TOOLS,
+  `outside assistants are offered ${OUTSIDE_TOOLS.length} tools with every app connected; keep it at ${MAX_OUTSIDE_TOOLS} or fewer`,
+);
+console.log(`Outside tools with Pinch connected and every switch on: ${OUTSIDE_TOOLS.length}; guide ${fullGuide.length} characters.`);
+
+// Registered tools carry a title, honest hints, and a refusal comes back as a tool error.
+{
+  const mcp = new McpServer({ name: 'helm-check', version: '1.0.0' });
+  registerHelmTools(mcp, tools, 'external');
+  const client = new Client({ name: 'helm-check-client', version: '1.0.0' });
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await Promise.all([mcp.connect(serverSide), client.connect(clientSide)]);
+  const listed = (await client.listTools()).tools;
+  assert.deepEqual(listed.map((tool) => tool.name).sort(), OUTSIDE_TOOLS);
+  listed.forEach((tool) => {
+    assert.ok(tool.title && tool.title.length >= 4, `${tool.name} has a title`);
+    assert.equal(tool.annotations?.openWorldHint, false, `${tool.name} stays in the person's own records`);
+    assert.ok((tool.description ?? '').length >= MIN_OPTION_DESCRIPTION, `${tool.name} says enough to choose by`);
+  });
+  const hintsOf = (name: string) => listed.find((tool) => tool.name === name)!.annotations!;
+  assert.equal(hintsOf('pinch_read').readOnlyHint, true);
+  assert.equal(hintsOf('pinch_save_recipe').destructiveHint, true, 'an edit can replace what is there');
+  assert.equal(hintsOf('pinch_add').readOnlyHint, false);
+  assert.equal(hintsOf('pinch_add').destructiveHint, false, 'a change that only adds is not destructive');
+  const readSchema = listed.find((tool) => tool.name === 'pinch_read')!.inputSchema as {
+    properties: Record<string, { enum?: string[] }>;
+    required?: string[];
+  };
+  assert.deepEqual(readSchema.properties.action.enum?.sort(), PINCH_READS.map((action) => action.id).sort());
+  assert.deepEqual(readSchema.required, ['action'], 'only action is required; each option checks its own fields');
+  nextResult = { status: 'switchedOff', needs: [{ category: 'plannedMeals', label: 'Planned meals' }] };
+  const refused = await client.callTool({ name: 'pinch_read', arguments: { action: 'get_meal_plan' } });
+  assert.equal(refused.isError, true, 'a switched-off read is a tool error');
+  nextResult = { status: 'ok', data: { days: [] }, heldBack: [] };
+  const answered = await client.callTool({ name: 'pinch_read', arguments: { action: 'get_meal_plan' } });
+  assert.equal(answered.isError ?? false, false);
+  await Promise.all([client.close(), mcp.close()]);
+}
 
 console.log('check:helm-mcp passed');
