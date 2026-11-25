@@ -175,6 +175,26 @@ assert.deepEqual(
   'a hand-forwarded order reads as the original',
 );
 
+// Only a line that is just the language goes; a title that holds such a word stays, and a language line under the showtime is never the theater.
+const shaped = (lines: string[]) =>
+  parseAmcEmail(
+    ['Ticket Confirmation#: 0172635494', ...lines, 'Auditorium: 7'].join('\n'),
+  );
+assert.equal(
+  shaped(['The Dubbed Project', '12:45 PM 12/20/2026', 'AMC Southpoint 17'])
+    ?.title,
+  'The Dubbed Project',
+);
+assert.equal(
+  shaped([
+    'Spirited Away',
+    '12:45 PM 12/20/2026',
+    'Japanese Spoken with English Subtitles',
+    'AMC Southpoint 17',
+  ])?.theatreName,
+  'AMC Southpoint 17',
+);
+
 const cancellation = readFixture('cancellation');
 assert.ok(isFromAmc(cancellation.from, cancellation.text));
 assert.deepEqual(parseAmcEmail(cancellation.text), {

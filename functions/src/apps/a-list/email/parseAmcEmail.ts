@@ -56,16 +56,17 @@ const FORMAT_WORDS: [RegExp, AmcFormat][] = [
 
 const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
 
-/** One line per non-empty line, its spaces collapsed, so a title and a theater on their own lines stay apart. */
+const LANGUAGE_LINE =
+  /^(?:(?:[a-z]+ )?(?:spoken|dubbed)(?: with (?:[a-z]+ )?subtitles)?|(?:with )?(?:[a-z]+ )?subtitles|open caption(?:ed)?)$/i;
+
+/** One line per non-empty line, its spaces collapsed, so a title and a theater on their own lines stay apart; a line that only names the language is dropped. */
 const toLines = (value: string) =>
   value
     .split('\n')
     .map(collapse)
-    .filter((line) => line !== '')
+    .filter((line) => line !== '' && !LANGUAGE_LINE.test(line))
     .join('\n');
 
-const LANGUAGE_LINE =
-  /\b(?:spoken|subtitles?|subtitled|dubbed|open caption(?:ed)?)\b/i;
 const LINK = /<https?:\/\/[^>\s]*>|https?:\/\/\S+/gi;
 
 const isRealDate = (year: number, month: number, day: number) => {
@@ -112,13 +113,7 @@ function readShowing(segment: string) {
     date.index + date[0].length,
     time.index + time[0].length,
   );
-  const head = collapse(
-    segment
-      .slice(0, start)
-      .split('\n')
-      .filter((line) => !LANGUAGE_LINE.test(line))
-      .join(' '),
-  );
+  const head = collapse(segment.slice(0, start));
   const rated = RATINGS.exec(head);
   const title = (rated?.[1] ?? head).replace(/[\s:,;.-]+$/, '').trim();
   const theatreName = (segment.slice(end).trim().split('\n')[0] ?? '').slice(

@@ -24,7 +24,7 @@ dist-ssr
 *.sw?
 
 # TypeScript build info
-tsconfig.app.tsbuildinfo
+*.tsbuildinfo
 
 # Firebase
 .firebase
