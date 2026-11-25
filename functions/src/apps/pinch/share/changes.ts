@@ -27,6 +27,7 @@ import {
   suggestIngredients,
 } from './ingredientMatch.js';
 import { planTweakUndo } from './notes.js';
+import { DISH_CATEGORIES } from './pinchConstants.js';
 import {
   MAX_IDEA_NOTE_LENGTH,
   MAX_IDEA_SITE_NAME_LENGTH,
@@ -684,6 +685,90 @@ export const ADD_RECIPE_SHAPE = {
   description: recipeFields.description,
   ingredients: recipeFields.ingredients.optional(),
   steps: recipeFields.steps.optional(),
+  categories: z
+    .array(z.string().max(20))
+    .max(DISH_CATEGORIES.length)
+    .nullish()
+    .describe(
+      `What kind of dish it is, one or more of: ${DISH_CATEGORIES.map((category) => category.value.toLowerCase()).join(', ')}. Always pick at least one: macaroni and cheese, mashed potatoes or roasted vegetables are side; a sauce, dressing, dip, gravy or pesto is sauce.`,
+    ),
+  collections: z
+    .array(z.string().max(80))
+    .max(20)
+    .nullish()
+    .describe(
+      "Names of the person's own collections to put it in (never new ones): a recipe that makes 8 or more servings fits a collection like Bulk or Meal prep. A name that matches none is skipped and the reply lists the collections they have.",
+    ),
+};
+
+const toCollectionKey = (label: string) =>
+  label.toLowerCase().replace(/[\s-]+/g, '');
+
+const toCategoryKey = (entry: unknown) =>
+  String(entry)
+    .trim()
+    .toUpperCase()
+    .replace(/[\s&-]+/g, '_');
+
+const readMissedCategories = (value: unknown) => {
+  const known = new Set<string>(
+    DISH_CATEGORIES.map((category) => category.value),
+  );
+  return (Array.isArray(value) ? value : [])
+    .filter((entry) => !known.has(toCategoryKey(entry)))
+    .map(String);
+};
+
+const readCategoryInput = (value: unknown) => {
+  const asked = new Set(
+    (Array.isArray(value) ? value : []).map((entry) =>
+      String(entry)
+        .trim()
+        .toUpperCase()
+        .replace(/[\s&-]+/g, '_'),
+    ),
+  );
+  return DISH_CATEGORIES.map((category) => category.value).filter((key) =>
+    asked.has(key),
+  );
+};
+
+const matchCollections = async (
+  firestore: Firestore,
+  uid: string,
+  value: unknown,
+) => {
+  const asked = (Array.isArray(value) ? value : [])
+    .map((entry) => String(entry).trim())
+    .filter((entry) => entry !== '');
+  if (asked.length === 0) return { ids: [], labels: [], missed: [], all: [] };
+  const snapshot = await firestore
+    .collection(kitchenPath(uid, 'collections'))
+    .select('label')
+    .limit(500)
+    .get();
+  const all = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    label: String(doc.get('label') ?? ''),
+  }));
+  const byKey = new Map(
+    all.map((entry) => [toCollectionKey(entry.label), entry]),
+  );
+  const found = asked.map((name) => ({
+    name,
+    hit: byKey.get(toCollectionKey(name)),
+  }));
+  const hits = Array.from(
+    new Map(
+      found.flatMap(({ hit }) => (hit ? [[hit.id, hit] as const] : [])),
+    ).values(),
+  );
+  return {
+    ids: hits.map((hit) => hit.id),
+    labels: hits.map((hit) => hit.label),
+    missed: found.filter(({ hit }) => !hit).map(({ name }) => name),
+    all: all.map((entry) => entry.label),
+  };
 };
 
 export const PLAN_MEAL_SHAPE = {
@@ -1007,10 +1092,16 @@ export const addRecipe = async (
   if (lines.kind === 'refused') return refused(lines.message);
   if (steps.kind === 'refused') return refused(steps.message);
   const id = randomUUID();
+  const categories = readCategoryInput(input.categories);
+  const collections = await matchCollections(
+    firestore,
+    ctx.uid,
+    input.collections,
+  );
   const recipe: Recipe = {
     id,
     title,
-    categories: [],
+    categories,
     description: readText(
       clipText(String(input.description ?? ''), MAX_RECIPE_DESCRIPTION_LENGTH),
     ),
@@ -1027,18 +1118,44 @@ export const addRecipe = async (
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: null,
-    collectionIds: [],
+    collectionIds: collections.ids,
     isArchived: false,
     isFavorite: false,
     createdAt: ctx.now,
     updatedAt: ctx.now,
   };
+  const placedLines = [
+    categories.length > 0
+      ? `Category: ${DISH_CATEGORIES.filter((category) =>
+          categories.includes(category.value),
+        )
+          .map((category) => category.label)
+          .join(', ')}`
+      : null,
+    collections.labels.length > 0
+      ? `In ${collections.labels.map((label) => `“${label}”`).join(', ')}`
+      : null,
+  ].filter((line): line is string => line !== null);
+  const missedCategories = readMissedCategories(input.categories);
+  const missedLine = [
+    ...(missedCategories.length === 0
+      ? []
+      : [
+          `No category called ${missedCategories.join(', ')}. Categories: ${DISH_CATEGORIES.map((category) => category.value.toLowerCase()).join(', ')}.`,
+        ]),
+    ...(collections.missed.length === 0
+      ? []
+      : [
+          `No collection called ${collections.missed.join(', ')}. ${collections.all.length === 0 ? 'They have no collections yet.' : `Their collections: ${collections.all.join(', ')}.`}`,
+        ]),
+  ];
   const record = changeRecord(ctx, {
     kind: 'recipeAdded',
     title,
     lines: [
       `Added the recipe ${title}`,
       `${countOf(lines.value.lines.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+      ...placedLines,
       ...newIngredientsLines(lines.value.created),
     ],
     recipeId: id,
@@ -1076,6 +1193,8 @@ export const addRecipe = async (
       summary,
       lines: [
         `${countOf(lines.value.lines.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+        ...placedLines,
+        ...missedLine,
         ...toIngredientReply(ctx, lines.value),
       ],
     }),

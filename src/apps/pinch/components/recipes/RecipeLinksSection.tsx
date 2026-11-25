@@ -103,19 +103,20 @@ interface RecipeLinksSectionProps {
   links: RecipeLink[];
   /** What the links tell the other site; a page someone else made adds `nofollow ugc`. */
   rel?: string;
-  /** Plays nothing and draws no picture from another site, for a page whose visitors didn't ask to reach one: the how-to video is a link row there. */
-  isPlayerHidden?: boolean;
+  /** Draws the video as a tinted tile, never the host's picture, for a page whose visitors didn't ask to reach another site; the player still loads on the tap. */
+  isPosterLocal?: boolean;
 }
 
 /** The how-to video plays in place (the host's player loads on the tap); every other link, and the video when it can't play here, is a row that opens the other site in a new tab. Nothing is drawn for a recipe with no links. */
 function RecipeLinksSection({
   links,
   rel = DEFAULT_REL,
-  isPlayerHidden = false,
+  isPosterLocal = false,
 }: RecipeLinksSectionProps) {
   const howTo = getHowToLink(links);
+  const found = howTo === null ? null : getInlineVideo(howTo.url);
   const video =
-    howTo === null || isPlayerHidden ? null : getInlineVideo(howTo.url);
+    found !== null && isPosterLocal ? { ...found, thumbnailUrl: null } : found;
   const rows = video === null ? links : getOtherLinks(links);
   if (howTo === null && rows.length === 0) return null;
 

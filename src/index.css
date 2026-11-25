@@ -547,6 +547,11 @@ button[class*='transition-all'] {
   transition: none;
 }
 
+/* Dreamer UI's `Skeleton` fills with `bg-muted/70`, which nearly vanishes against a page's background in light and dark, so loading read as a blank page. It takes a tint of the text colour instead. */
+.bg-muted\/70.animate-pulse {
+  background-color: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+}
+
 /* A `SideSheet` slides in from the left; the exit is a transition driven by the component. */
 @keyframes side-sheet-in {
   from {

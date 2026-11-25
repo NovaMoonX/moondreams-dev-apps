@@ -27,7 +27,7 @@ import { useSiteNotice } from '@hooks/useSiteNotice';
 /** Pages a visitor opens from a link: the site's menu and account button have no use there, so the header is left off. */
 const PUBLIC_SHARE_PREFIXES = ['/pinch/shared/', '/going-once/s/'];
 
-/** A link's page never names what it shows: its title is the same for every link. */
+/** The title until a page names what it shows; Pinch's shared page swaps in the recipe's name once it loads. */
 const getPageTitle = (pathname: string, appName: string | null) => {
   if (pathname.startsWith('/a-list/shared/')) {
     return 'Movie calendar - A-List Tracker';
