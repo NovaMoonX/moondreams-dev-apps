@@ -133,7 +133,7 @@ export const readIsoMinutes = (value: unknown): number | null => {
 };
 
 const SERVINGS_YIELD =
-  /^\s*(?:(?:serves|yields?)\s*:?\s*)?(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|people|persons?|portions?|helpings?)?\s*(?:\(.*\))?\s*$/i;
+  /^\s*(?:(?:serves|yields?)\s*:?\s*)?(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:(?:servings?|people|persons?|portions?|helpings?)\s*(?:\(.*\))?)?\s*$/i;
 const MAKES_SERVINGS =
   /^\s*makes\s*:?\s*(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|portions?|helpings?)\b/i;
 

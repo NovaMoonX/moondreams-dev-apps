@@ -247,6 +247,7 @@ assert.equal(readYieldServings('Serves: 4'), 4);
 assert.equal(readYieldServings('Yield: 8'), 8);
 assert.equal(readYieldServings('about 6 servings'), 6);
 assert.equal(readYieldServings('Makes 12'), null);
+assert.equal(readYieldServings('24 (cupcakes)'), null);
 assert.equal(readYieldServings('Makes 12 servings'), 12);
 assert.equal(readYieldServings(['12 rolls', '6 servings']), 6);
 for (const real of [
