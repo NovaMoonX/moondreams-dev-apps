@@ -10,6 +10,8 @@ import {
   reserveAssistantTurn,
 } from '../../../assistant/assistantUsage.js';
 import {
+  createTurnTally,
+  escapePromptText,
   getTurnCost,
   getTurnErrorCode,
   streamTurn,
@@ -18,8 +20,8 @@ import {
 } from '../../../assistant/streamTurn.js';
 import { verifyCaller } from '../../../assistant/verifyCaller.js';
 import { isForcedFixture, isRunningInEmulator } from '../../../emulator.js';
-import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
-import { isServedOrigin, SERVED_ORIGINS } from '../../../voice/streamSpeech.js';
+import { isGateOpenForToken } from '../../../gates/assertGateOpen.js';
+import { isServedOrigin, SERVED_ORIGINS } from '../../../servedOrigins.js';
 import {
   buildPepperTurn,
   PEPPER_LIMITS,
@@ -36,8 +38,9 @@ const APP_ID = 'pinch';
 const MAX_STANDING_CHARS = 40_000;
 const MAX_SCREEN_CHARS = 8_000;
 const MAX_HEARD_CHARS = 1_000;
-const MAX_LINE_CHARS = 12_000;
-const MAX_HISTORY = 60;
+// Spoken lines are short; these caps bound what one turn can cost, since the history is sent again each turn.
+const MAX_LINE_CHARS = 2_000;
+const MAX_HISTORY = 40;
 const MAX_ALTERNATIVES = 4;
 const FIXTURE_REPLY =
   "This is Pepper running locally without a Claude key, so here's a stand-in answer. Add the key with npm run ai:anthropic-secret to hear the real one.";
@@ -54,9 +57,9 @@ const readKey = () => {
 const isText = (value: unknown, max: number): value is string =>
   typeof value === 'string' && value.length <= max;
 
-/** The body a turn sends, or why it is refused; the device builds the recipe and screen text from what it shows. */
+/** The body a turn sends, or null when it is refused; the device builds the recipe and screen text from what it shows and keeps at most the last 20 exchanges. */
 export function readPepperBody(body: unknown) {
-  const { standing, screen, heard, alternatives, history, timeZone } = (body ??
+  const { standing, screen, heard, alternatives, history } = (body ??
     {}) as Record<string, unknown>;
   if (!isText(standing, MAX_STANDING_CHARS) || standing.trim() === '') {
     return null;
@@ -75,7 +78,7 @@ export function readPepperBody(body: unknown) {
     lines.length % 2 === 0;
   if (!isHistoryOk) return null;
   return {
-    standing: `<recipe>\n${standing}\n</recipe>`,
+    standing: `<recipe>\n${escapePromptText(standing)}\n</recipe>`,
     turn: buildPepperTurn(
       screen,
       heard.trim(),
@@ -85,8 +88,6 @@ export function readPepperBody(body: unknown) {
         .slice(0, MAX_ALTERNATIVES),
     ),
     history: lines as TurnLine[],
-    timeZone:
-      typeof timeZone === 'string' && timeZone.length <= 64 ? timeZone : 'UTC',
   };
 }
 
@@ -118,8 +119,8 @@ export const pepperTurn = onRequest(
       return;
     }
     const { uid } = caller;
-    const isOpen = await isGateOpenForUid(
-      uid,
+    const isOpen = await isGateOpenForToken(
+      caller.token,
       APP_ID,
       'pepper',
       'testing',
@@ -138,6 +139,12 @@ export const pepperTurn = onRequest(
       res.status(400).json({ error: 'body' });
       return;
     }
+    const apiKey = readKey();
+    if (apiKey === '' && !isRunningInEmulator()) {
+      logger.error('pepper.keyMissing', { event: 'pepper.keyMissing' });
+      res.status(503).json({ error: 'unavailable' });
+      return;
+    }
 
     const firestore = getFirestore();
     const now = Date.now();
@@ -145,9 +152,14 @@ export const pepperTurn = onRequest(
       appId: APP_ID,
       uid,
       now,
-      timeZone: body.timeZone,
       limits: PEPPER_LIMITS,
-    }).catch(() => null);
+    }).catch((error: unknown) => {
+      logger.error('pepper.reserveFailed', {
+        event: 'pepper.reserveFailed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
     if (reserved === null) {
       res.status(503).json({ error: 'unavailable' });
       return;
@@ -166,14 +178,7 @@ export const pepperTurn = onRequest(
       if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
-    const apiKey = readKey();
     if (apiKey === '') {
-      if (!isRunningInEmulator()) {
-        logger.error('pepper.keyMissing', { event: 'pepper.keyMissing' });
-        emit({ type: 'error', code: 'unavailable' });
-        res.end();
-        return;
-      }
       emit({ type: 'text', text: FIXTURE_REPLY });
       emit({
         type: 'done',
@@ -197,6 +202,7 @@ export const pepperTurn = onRequest(
     res.on('close', () => {
       if (!res.writableEnded) aborter.abort();
     });
+    const tally = createTurnTally();
     try {
       const done = await streamTurn({
         client: new Anthropic({ apiKey, maxRetries: 1 }),
@@ -206,10 +212,12 @@ export const pepperTurn = onRequest(
         standing: body.standing,
         history: body.history,
         turn: body.turn,
-        searchesLeft: reserved.searchesLeft,
+        maxSearches: reserved.searchesReserved,
+        tally,
         emit,
         signal: aborter.signal,
       });
+      res.end();
       logger.info('pepper.turn', {
         event: 'pepper.turn',
         endedBy: done.endedBy,
@@ -217,21 +225,31 @@ export const pepperTurn = onRequest(
         searches: done.searches,
         ...done.usage,
       });
-      await recordAssistantTurn(firestore, {
-        appId: APP_ID,
-        uid,
-        now,
-        timeZone: body.timeZone,
-        searches: done.searches,
-        hundredthsOfCent: getTurnCost('converse', done.usage, done.searches),
-      }).catch(() => undefined);
     } catch (error) {
       const code = getTurnErrorCode(error);
       if (code !== 'aborted') {
         logger.error('pepper.turnFailed', { event: 'pepper.turnFailed', code });
       }
       emit({ type: 'error', code });
+      res.end();
+    } finally {
+      // Every end is settled, an abort or an error too: what was used is billed, and unused lookups go back.
+      await recordAssistantTurn(firestore, {
+        appId: APP_ID,
+        uid,
+        now,
+        searchesReserved: reserved.searchesReserved,
+        searches: tally.searches,
+        hundredthsOfCent:
+          tally.rounds === 0
+            ? 0
+            : getTurnCost('converse', tally.usage, tally.searches),
+      }).catch((error: unknown) =>
+        logger.error('pepper.recordFailed', {
+          event: 'pepper.recordFailed',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
-    res.end();
   },
 );

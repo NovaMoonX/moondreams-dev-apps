@@ -371,6 +371,7 @@ export function useVoiceConversation({
     lastLineAt: null as number | null,
     heardBy: 'browser',
     isTurnDetected: false,
+    isTurnEnded: false,
     mode: createListeningState('TAP'),
     isCancelled: false,
     stopListening: null as (() => void) | null,
@@ -635,7 +636,8 @@ export function useVoiceConversation({
     setIsListening(true);
     setIsThinking(false);
     setHeard('');
-    armQuiet();
+    if (run.current.isTurnEnded) finish();
+    else armQuiet();
   };
 
   /** Drops a listen that never confirmed a person: no utterance, no nothing-heard, no notice. */
@@ -911,6 +913,7 @@ export function useVoiceConversation({
     run.current.isUnasked = options.isUnasked === true;
     run.current.heardWords = '';
     run.current.isTurnDetected = false;
+    run.current.isTurnEnded = false;
     run.current.listenId += 1;
     const listenId = run.current.listenId;
     // A listener stopped for an earlier listen can still report late; only this listen's own callbacks count.
@@ -959,7 +962,10 @@ export function useVoiceConversation({
         if (isCurrent()) run.current.isTurnDetected = true;
       },
       onEndOfTurn: () => {
-        if (isCurrent() && !run.current.pending) finish();
+        if (!isCurrent()) return;
+        // The cloud says a turn ended only once; over a line still being confirmed it is kept for the confirmation.
+        if (run.current.pending) run.current.isTurnEnded = true;
+        else finish();
       },
       preRoll: null,
     };
@@ -994,6 +1000,9 @@ export function useVoiceConversation({
     };
     const startDevice = (source: FrameSource | null) => {
       window.clearTimeout(run.current.quietId);
+      // The device recognizer judges no turn end of its own, so the cloud's wait no longer applies.
+      run.current.isTurnDetected = false;
+      run.current.isTurnEnded = false;
       if (latest.current.canHearOnDevice) {
         setIsPreparing(source === null && pendingText === undefined);
         startAdapter(createOnDeviceStt({ source }));

@@ -48,19 +48,41 @@ export interface StreamTurnRequest {
   /** Never changes between turns, so it stays cached with the tools. */
   system: string;
   tools: DeviceTool[];
-  /** What the whole conversation is about (a recipe), sent once at the top and cached for every turn after. */
+  /** What the whole conversation is about, sent once at the top and cached for every turn after. */
   standing: string;
   history: TurnLine[];
   /** This turn's words: what changed on screen since the last turn, then what the person said. */
   turn: string;
-  searchesLeft: number;
+  /** Web lookups this turn may make across all of its rounds (set aside before the turn). */
+  maxSearches: number;
+  /** Owned by the caller, so what was used is known however the turn ends (an abort or an error included). */
+  tally: TurnTally;
   emit: (event: TurnEvent) => void;
   signal: AbortSignal;
 }
 
+export interface TurnTally {
+  usage: ModelUsage;
+  searches: number;
+  /** Requests sent to the model; nothing to record while it is 0. */
+  rounds: number;
+}
+
+export const createTurnTally = (): TurnTally => ({
+  usage: EMPTY_USAGE,
+  searches: 0,
+  rounds: 0,
+});
+
+/** Stands in for an answer with no words (a refusal, a cut-off turn), so the history line the device keeps is never empty. */
+export const NO_WORDS_LINE = '(No spoken answer.)';
+
+/** Text put between tags in a prompt can't open or close a tag of its own. */
+export const escapePromptText = (text: string) =>
+  text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 const MAX_ROUNDS = 4;
 const MAX_OUTPUT_TOKENS = 4_000;
-const SEARCHES_PER_TURN = 3;
 /** Anthropic's price for web search: $10 per 1,000 searches, in hundredths of a cent each. */
 export const SEARCH_COST_HUNDREDTHS = 100;
 const DONE_RESULT = 'Done on the screen.';
@@ -101,31 +123,36 @@ export async function streamTurn({
   standing,
   history,
   turn,
-  searchesLeft,
+  maxSearches,
+  tally,
   emit,
   signal,
 }: StreamTurnRequest): Promise<Extract<TurnEvent, { type: 'done' }>> {
   const startedAt = Date.now();
   const spec = getModelSpec(role);
   const deviceNames = new Set(tools.map((tool) => tool.name));
-  const maxSearches = Math.min(SEARCHES_PER_TURN, searchesLeft);
-  const toolList: Anthropic.Beta.Messages.BetaToolUnion[] = [
-    ...tools.map((tool) => ({
+  const deviceTools: Anthropic.Beta.Messages.BetaToolUnion[] = tools.map(
+    (tool) => ({
       name: tool.name,
       description: tool.description,
       input_schema:
         tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
-    })),
-    ...(maxSearches > 0
+    }),
+  );
+  // The allowance spans the turn: a later round is offered only what earlier rounds left, and none once it is spent.
+  const getToolList = (): Anthropic.Beta.Messages.BetaToolUnion[] => {
+    const left = maxSearches - tally.searches;
+    return left > 0
       ? [
+          ...deviceTools,
           {
             type: 'web_search_20250305' as const,
             name: 'web_search' as const,
-            max_uses: maxSearches,
+            max_uses: left,
           },
         ]
-      : []),
-  ];
+      : deviceTools;
+  };
   const messages: Message[] = [
     {
       role: 'user',
@@ -144,11 +171,8 @@ export async function streamTurn({
     { role: 'user', content: turn },
   ];
   const state = {
-    usage: EMPTY_USAGE,
-    searches: 0,
     spoken: [] as string[],
     did: [] as string[],
-    rounds: 0,
   };
   const done = (endedBy: TurnEnd) => {
     const words = state.spoken.join(' ').replace(/\s+/g, ' ').trim();
@@ -157,40 +181,25 @@ export async function streamTurn({
       user: turn,
       assistant:
         state.did.length === 0
-          ? words
+          ? words || NO_WORDS_LINE
           : `${words} [Did on screen: ${state.did.join('; ')}]`.trim(),
       endedBy,
-      searches: state.searches,
-      usage: state.usage,
+      searches: tally.searches,
+      usage: tally.usage,
       ms: Date.now() - startedAt,
     };
     emit(event);
     return event;
   };
 
-  while (state.rounds < MAX_ROUNDS) {
-    if (signal.aborted) return done('aborted');
-    state.rounds += 1;
-    const roundText = { value: '' };
-    const stream = client.beta.messages.stream(
-      {
-        model: spec.id,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: [
-          {
-            type: 'text',
-            text: system,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
-        tools: toolList,
-        tool_choice: { type: 'auto' },
-        messages,
-        cache_control: { type: 'ephemeral' },
-        output_config: { effort: spec.effort },
-      },
-      { signal },
-    );
+  const countRound = (usage: Anthropic.Beta.Messages.BetaUsage) => {
+    tally.usage = addUsage(tally.usage, toUsage(usage));
+    tally.searches += usage.server_tool_use?.web_search_requests ?? 0;
+  };
+  const readRound = async (
+    stream: ReturnType<typeof client.beta.messages.stream>,
+    roundText: { value: string },
+  ): Promise<Anthropic.Beta.Messages.BetaMessage> => {
     for await (const event of stream) {
       if (
         event.type === 'content_block_start' &&
@@ -211,9 +220,39 @@ export async function streamTurn({
         emit({ type: 'text', text });
       }
     }
-    const message = await stream.finalMessage();
-    state.usage = addUsage(state.usage, toUsage(message.usage));
-    state.searches += message.usage.server_tool_use?.web_search_requests ?? 0;
+    return stream.finalMessage();
+  };
+
+  while (tally.rounds < MAX_ROUNDS) {
+    if (signal.aborted) return done('aborted');
+    tally.rounds += 1;
+    const roundText = { value: '' };
+    const stream = client.beta.messages.stream(
+      {
+        model: spec.id,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: [
+          {
+            type: 'text',
+            text: system,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        tools: getToolList(),
+        tool_choice: { type: 'auto' },
+        messages,
+        cache_control: { type: 'ephemeral' },
+        output_config: { effort: spec.effort },
+      },
+      { signal },
+    );
+    const message = await readRound(stream, roundText).catch((error) => {
+      // A round cut off part way was still billed for what it had used.
+      const partial = stream.currentMessage;
+      if (partial !== undefined) countRound(partial.usage);
+      throw error;
+    });
+    countRound(message.usage);
     if (roundText.value.trim() !== '') state.spoken.push(roundText.value);
     if (message.stop_reason === 'refusal') return done('refused');
     messages.push({ role: 'assistant', content: message.content as Block[] });

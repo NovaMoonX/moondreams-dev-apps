@@ -19,7 +19,12 @@ export type AssistantTurnEvent =
 export type AssistantTurnResult =
   | { status: 'done'; done: Extract<AssistantTurnEvent, { type: 'done' }> }
   | { status: 'held'; reason: string }
-  | { status: 'failed'; code: string };
+  | {
+      status: 'failed';
+      code: string;
+      /** The thrown error behind a network failure or a cut stream, for debug viewers. */
+      cause?: unknown;
+    };
 
 const readEvent = (chunk: string): AssistantTurnEvent | null => {
   const data = chunk
@@ -84,6 +89,7 @@ export async function streamAssistantTurn({
     return {
       status: 'failed',
       code: signal.aborted ? 'aborted' : 'network',
+      cause: response,
     };
   }
   if (!response.ok || response.body === null) return readRefusal(response);
@@ -111,11 +117,15 @@ export async function streamAssistantTurn({
       .forEach(take);
     if (!done) await pump();
   };
-  await pump().catch(() => undefined);
+  const cut = await pump().then(
+    () => undefined,
+    (error: unknown) => error,
+  );
   return (
     state.result ?? {
       status: 'failed',
       code: signal.aborted ? 'aborted' : 'cut',
+      cause: cut,
     }
   );
 }

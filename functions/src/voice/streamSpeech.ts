@@ -1,12 +1,12 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { isForcedFixture, isRunningInEmulator } from '../emulator.js';
-import { getAppCheck } from 'firebase-admin/app-check';
-import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { onRequest } from 'firebase-functions/v2/https';
 
-import { isGateOpenForUid } from '../gates/assertGateOpen.js';
+import { verifyCaller } from '../assistant/verifyCaller.js';
+import { isGateOpenForToken } from '../gates/assertGateOpen.js';
+import { isServedOrigin, SERVED_ORIGINS } from '../servedOrigins.js';
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import { createDeepgramAura } from './providers/deepgramAura.js';
 import { createGeminiTts } from './providers/geminiTts.js';
@@ -39,15 +39,6 @@ export type SpeechRequest =
     }
   | { ok: false; status: number; error: string };
 
-const ALLOWED_ORIGINS: (string | RegExp)[] = [
-  'https://apps.moondreams.dev',
-  /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
-];
-const isEmulator = isRunningInEmulator;
-// The dev server and a phone on the LAN load the page over plain HTTP from any host.
-export const SERVED_ORIGINS: (string | RegExp)[] = isEmulator()
-  ? [...ALLOWED_ORIGINS, /^http:\/\/[^/]+:\d+$/]
-  : ALLOWED_ORIGINS;
 const PRIORITIES: readonly string[] = ['ack', 'reply', 'summary'];
 const PROVIDER_TIMEOUT_MS = 10_000;
 const TONE_RATE = 24_000;
@@ -57,15 +48,6 @@ const refuse = (status: number, error: string): SpeechRequest => ({
   status,
   error,
 });
-
-export const isServedOrigin = (
-  origin: string | undefined,
-  allowedOrigins: readonly (string | RegExp)[],
-) =>
-  origin !== undefined &&
-  allowedOrigins.some((entry) =>
-    typeof entry === 'string' ? entry === origin : entry.test(origin),
-  );
 
 /** The method, origin and body checks; the person's tokens are checked by the handler. */
 export function readSpeechRequest({
@@ -135,7 +117,8 @@ const getProvider = async (
 ): Promise<TtsProvider | null> => {
   if (id === 'googleTts') {
     // Locally the emulator answers a tone, unless the developer opts into real speech through their own Google sign-in.
-    if (isEmulator() && process.env.VOICE_REAL_SPEECH !== '1') return null;
+    if (isRunningInEmulator() && process.env.VOICE_REAL_SPEECH !== '1')
+      return null;
     kept.googleTts ??= createGoogleTts({
       projectId: process.env.GCLOUD_PROJECT ?? '',
     });
@@ -181,9 +164,6 @@ const makeTone = () => {
 const toStatus = (error: unknown) =>
   Number(/answered (\d{3})/.exec(String(error))?.[1]) || null;
 
-const bearerOf = (header: string | undefined) =>
-  /^Bearer (.+)$/.exec(header ?? '')?.[1] ?? null;
-
 export const streamSpeech = onRequest(
   {
     region: 'us-central1',
@@ -218,25 +198,9 @@ export const streamSpeech = onRequest(
       return fail(403, 'origin');
     }
 
-    const idToken = bearerOf(req.headers.authorization);
-    const uid = await (idToken === null
-      ? Promise.resolve(null)
-      : getAuth()
-          .verifyIdToken(idToken)
-          .then((decoded) => decoded.uid)
-          .catch(() => null));
-    if (uid === null) return fail(401, 'unauthenticated');
-
-    const appCheckToken = req.header('X-Firebase-AppCheck');
-    // The emulator cannot reach App Check, so a present header is taken as is there.
-    const isAppCheckOk =
-      !!appCheckToken &&
-      (isEmulator() ||
-        (await getAppCheck()
-          .verifyToken(appCheckToken)
-          .then(() => true)
-          .catch(() => false)));
-    if (!isAppCheckOk) return fail(401, 'app-check');
+    const caller = await verifyCaller(req);
+    if ('error' in caller) return fail(401, caller.error);
+    const { uid } = caller;
     if (request === null) {
       await getProvider(VOICE_PROVIDER_DEFAULT);
       res.status(204).end();
@@ -248,8 +212,8 @@ export const streamSpeech = onRequest(
     const limits = VOICE_APPS[appId];
     if (
       limits.gate !== null &&
-      !(await isGateOpenForUid(
-        uid,
+      !(await isGateOpenForToken(
+        caller.token,
         appId,
         limits.gate.id,
         limits.gate.defaultRollout,
@@ -259,7 +223,7 @@ export const streamSpeech = onRequest(
     }
     const providerId = VOICE_PROVIDER_DEFAULT;
     const provider = await getProvider(providerId);
-    if (provider === null && !isEmulator()) {
+    if (provider === null && !isRunningInEmulator()) {
       if (!keyState.isMissingLogged) {
         keyState.isMissingLogged = true;
         logger.error('voice.speechKeyMissing', {
