@@ -305,7 +305,7 @@ function RecipeReader({
     if (picked.length > room) {
       setState(
         failed(
-          `Up to ${MAX_RECIPE_FILES} files, so the first ${room === 1 ? 'one' : room} were added.`,
+          `Up to ${MAX_RECIPE_FILES} files, so only ${room === 1 ? 'the first one was' : `the first ${room} were`} added.`,
         ),
       );
       setFileKey((current) => current + 1);
