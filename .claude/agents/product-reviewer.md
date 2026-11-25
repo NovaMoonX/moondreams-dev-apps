@@ -49,7 +49,7 @@ You are reviewing the finished MVP of the <App Name> app in NovaMoonX/moondreams
 - `src/apps/<id>/README.md`, `src/apps/<id>/PRODUCT.md`, `src/apps/<id>/UX.md` and `src/apps/<id>/TECHNICAL.md`;
 - `docs/conventions/design-ux.md` and `docs/conventions/product.md`.
 
-The app runs at http://127.0.0.1:5173/<route> against local emulators that are already running and seeded. Don't restart, reset or reseed anything.
+The app runs at http://127.0.0.1:5173/<route> against local emulators that are already running and seeded. Don't restart, reset or reseed anything. If nothing answers there, stop at once and report only `Blocked: the app is not running` (and what you tried), never a review read from code: a code-only pass looks finished and hides that no journey was walked (a product review of Runway alerts came back from code alone).
 
 **How to drive the app:**
 - Use throwaway Playwright scripts in `polish-<role>/` in your scratchpad directory, built on `.claude/skills/build-app-mvp/scripts/pw.mjs` (import it by absolute path). `open({ mobile: true })` gives 390×844; `open({ mobile: false })` gives 1280×900. Both run in America/Los_Angeles.

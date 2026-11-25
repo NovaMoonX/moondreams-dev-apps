@@ -79,7 +79,7 @@ assert.equal(
 
 // A run that saw a write during it comes back in 60 seconds; a quiet one waits for midnight or six hours.
 const started = at('2026-05-01T12:00:00Z');
-const quiet = afterRun(state({ seq: 3 }), 3, started, 'UTC');
+const quiet = afterRun(state({ seq: 3 }), 3, started, 'UTC', null);
 assert.equal(
   quiet.dueAt,
   started + 6 * HOUR_MS,
@@ -89,19 +89,34 @@ assert.equal(quiet.seq, 3);
 assert.equal(quiet.leaseUntil, 0);
 assert.equal(quiet.lastRunAt, started);
 assert.equal(
-  afterRun(state({ seq: 3 }), 3, at('2026-05-01T20:00:00Z'), 'UTC').dueAt,
+  afterRun(state({ seq: 3 }), 3, at('2026-05-01T20:00:00Z'), 'UTC', null).dueAt,
   at('2026-05-02T00:05:00Z'),
   'midnight when it is nearer than six hours',
 );
 assert.equal(
-  afterRun(state({ seq: 4 }), 3, started, 'UTC').dueAt,
+  afterRun(state({ seq: 4 }), 3, started, 'UTC', null).dueAt,
   started + MINUTE_MS,
   'a write during the run comes back in 60s',
 );
 assert.equal(
-  afterRun(state({ seq: 4, failures: 2 }), 3, started, 'UTC').failures,
+  afterRun(state({ seq: 4, failures: 2 }), 3, started, 'UTC', null).failures,
   0,
   'a run clears the failures',
+);
+
+// A held alert's morning wake brings the plan back sooner than its usual time, and never later.
+const wake = at('2026-05-01T14:00:00Z');
+assert.equal(afterRun(state({ seq: 3 }), 3, started, 'UTC', wake).dueAt, wake);
+assert.equal(
+  afterRun(state({ seq: 3 }), 3, started, 'UTC', started + 9 * HOUR_MS).dueAt,
+  started + 6 * HOUR_MS,
+  'a wake later than the usual time changes nothing',
+);
+assert.equal(
+  afterRun(state({ seq: 4 }), 3, started, 'UTC', started + 10 * MINUTE_MS)
+    .dueAt,
+  started + MINUTE_MS,
+  'a wake later than the gap after a write changes nothing',
 );
 
 // Midnight plus five minutes, in a zone, across a change of clocks.
@@ -164,15 +179,15 @@ assert.equal(
   noon + 10 * MINUTE_MS,
 );
 assert.equal(
-  afterRun({ ...guarded, seq: 2 }, 1, noon + HOUR_MS, 'UTC').dueAt,
+  afterRun({ ...guarded, seq: 2 }, 1, noon + HOUR_MS, 'UTC', null).dueAt,
   noon + HOUR_MS + 10 * MINUTE_MS,
 );
 assert.equal(
-  afterRun(guarded, 0, noon, 'UTC').runsToday,
+  afterRun(guarded, 0, noon, 'UTC', null).runsToday,
   61,
   'runs are counted in the same local day',
 );
-const nextDay = afterRun({ ...guarded, seq: 2 }, 1, midnight, 'UTC');
+const nextDay = afterRun({ ...guarded, seq: 2 }, 1, midnight, 'UTC', null);
 assert.equal(nextDay.runsToday, 1, 'a new local day starts the count again');
 assert.equal(nextDay.dueAt, midnight + MINUTE_MS);
 const countedLA = afterRun(
@@ -180,6 +195,7 @@ const countedLA = afterRun(
   0,
   at('2026-05-02T05:00:00Z'),
   'America/Los_Angeles',
+  null,
 );
 assert.equal(countedLA.runsToday, 8, 'the day is the plan zone day, not UTC');
 

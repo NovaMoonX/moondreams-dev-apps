@@ -185,6 +185,8 @@
     "check:batch-jobs": "tsx scripts/checks/batchJobs.ts",
     "check:server-copies": "tsx scripts/checks/serverCopies.ts",
     "check:runway-server-parity": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayServerParity.ts",
+    "check:runway-alert-engine": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayAlertEngine.ts",
+    "check:runway-alerts-server": "firebase emulators:exec --only firestore --project demo-runway-alerts \"TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayAlertsServer.ts\"",
     "check:runway-rework": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayRework.ts",
     "check:runway-sort-server": "firebase emulators:exec --only firestore --project demo-runway-sort \"TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwaySortServer.ts\"",
     "connections:vendor": "tsx scripts/checks/serverCopies.ts --write",
