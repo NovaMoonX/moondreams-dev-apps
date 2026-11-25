@@ -36,6 +36,7 @@ Built:
 - [x] Link a bank: sign in at your bank, say which of your cards and accounts each of its accounts is, and bring their balances in, with the bank's figure offered, never applied on its own
 - [x] Purchases from a linked bank wait in Needs a home and are filed in a tap; one you already typed by hand is matched to the bank's, so it counts once
 - [x] Rules: always send a place, a kind of place or a card to an envelope, made from a waiting purchase, changed or removed in Spend > Rules
+- [x] Alerts: as many as you like on Free to Spend and on each envelope, shown as a ladder of lines with a Now marker; each goes off once as the figure falls to its line, and the push never says an amount
 - [x] Unlink a bank: new purchases stop and everything that came in stays; unlinking the last bank moves the plan from Link to Track, stopping tracking moves it to Plan, and moving back up restores the same data
 
 Next:

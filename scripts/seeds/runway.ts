@@ -88,6 +88,9 @@ import type {
   CardSealed,
   ExpenseDoc,
   RuleDoc,
+  AlertDoc,
+  AlertSealed,
+  AlertStateDoc,
   DoneForYouDoc,
   DoneForYouKind,
   DoneForYouSealed,
@@ -4682,6 +4685,7 @@ async function writeSeedPurchases(
   );
   const ruled = await seedRules(context, plan, encryption, today);
   const done = await seedDoneForYou(context, plan, encryption, today);
+  const alerted = await seedAlerts(context, plan, encryption, today);
   const emailDocuments = await writeSeedEmail(
     context,
     plan,
@@ -4749,6 +4753,7 @@ async function writeSeedPurchases(
     1 +
     ruled +
     done +
+    alerted +
     emailDocuments
   );
 }
@@ -5418,6 +5423,79 @@ async function seedDoneForYou(
   );
   await batch.commit();
   return entries.length;
+}
+
+/**
+ * Jamie's alerts, sealed like the app seals them: Free to Spend below $300, and Groceries (which gets a set amount) at half left and when it runs out. The half-left alert last went off two days ago. Alerts from an earlier run go first.
+ */
+async function seedAlerts(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+): Promise<number> {
+  const [kept, keptStates] = await Promise.all([
+    context.firestore.collection(`${plan}/alerts`).get(),
+    context.firestore.collection(`${plan}/alertStates`).get(),
+  ]);
+  await Promise.all(
+    [...kept.docs, ...keptStates.docs].map((entry) => entry.ref.delete()),
+  );
+  const createdAt = today - 10 * DAY_MS;
+  const groceries = {
+    kind: 'envelope' as const,
+    itemId: 'seed-envelope-groceries',
+  };
+  const alerts: { id: string; payload: AlertSealed }[] = [
+    {
+      id: 'seed-alert-free',
+      payload: {
+        target: { kind: 'freeToSpend' },
+        line: { kind: 'cents', cents: 30_000 },
+        isNamed: false,
+      },
+    },
+    {
+      id: 'seed-alert-groceries-half',
+      payload: {
+        target: groceries,
+        line: { kind: 'share', bps: 5_000 },
+        isNamed: true,
+      },
+    },
+    {
+      id: 'seed-alert-groceries-out',
+      payload: {
+        target: groceries,
+        line: { kind: 'cents', cents: 0 },
+        isNamed: false,
+      },
+    },
+  ];
+  const batch = context.firestore.batch();
+  await Promise.all(
+    alerts.map(async ({ id, payload }, index) => {
+      batch.set(context.firestore.doc(`${plan}/alerts/${id}`), {
+        id,
+        createdAt: createdAt + index,
+        updatedAt: createdAt + index,
+        sealed: await sealJson(payload, encryption),
+      } satisfies AlertDoc);
+    }),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/alertStates/seed-alert-groceries-half`),
+    {
+      id: 'seed-alert-groceries-half',
+      alertUpdatedAt: createdAt + 1,
+      isBelow: false,
+      lastFiredAt: context.now - 2 * DAY_MS,
+      heldSince: null,
+      updatedAt: context.now - 2 * DAY_MS,
+    } satisfies AlertStateDoc,
+  );
+  await batch.commit();
+  return alerts.length + 1;
 }
 
 /**

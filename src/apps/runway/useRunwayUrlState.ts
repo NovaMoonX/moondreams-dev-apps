@@ -94,6 +94,10 @@ export function useRunwayUrlState() {
     'logPage',
     parseAsInteger,
   );
+  const [requestedOpenEnvelope, setRequestedOpenEnvelope] = useQueryState(
+    'openEnvelope',
+    parseAsString,
+  );
   const [requestedItem, setRequestedItem] = useQueryState(
     'logItem',
     parseAsString,
@@ -462,6 +466,9 @@ export function useRunwayUrlState() {
     openDueBill,
     closeOpenItem,
     showOnPlan,
+    openEnvelope: requestedOpenEnvelope,
+    clearOpenEnvelope: () =>
+      setRequestedOpenEnvelope(null, { history: 'replace' }),
     isUndatedBillsOnly: requestedUndatedBills === true,
     openUndatedBills,
     closeUndatedBills,
@@ -503,6 +510,7 @@ export function useRunwayUrlState() {
     moreEntry: null,
     isFixesOpen: false,
     openItem: null,
+    openEnvelope: null,
     isUndatedBillsOnly: false,
     isAllDueOpen: false,
     isGroupsOpen: false,

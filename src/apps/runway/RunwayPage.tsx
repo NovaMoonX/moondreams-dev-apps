@@ -70,6 +70,7 @@ import {
   selectSpendPurchases,
   selectIsPlanItemsLoaded,
   selectSetupState,
+  selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
@@ -226,11 +227,27 @@ function RunwayContent() {
     closeView,
     settingsView,
     closeSettingsView,
+    showOnPlan,
+    openEnvelope,
+    clearOpenEnvelope,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isItemsLoaded = isPlanItemsLoaded && isDaysLoaded;
+  const isLiveOpenEnvelope = useAppSelector((state) =>
+    selectEnvelopes(state, today).some(({ item }) => item.id === openEnvelope),
+  );
+  useEffect(() => {
+    if (openEnvelope === null || !isPlanItemsLoaded) return;
+    const open = async () => {
+      if (isLiveOpenEnvelope) {
+        await showOnPlan('envelopes', { itemId: openEnvelope });
+      }
+      await clearOpenEnvelope();
+    };
+    void open();
+  }, [openEnvelope, isPlanItemsLoaded, isLiveOpenEnvelope]); // eslint-disable-line react-hooks/exhaustive-deps
   const hasOpenDay = useAppSelector((state) => {
     if (openDayKey === null) return false;
     const { open, confirmed } = selectListedDays(state, today);

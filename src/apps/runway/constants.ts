@@ -2490,6 +2490,53 @@ export const NOTIFY_WORDS = {
   deviceOffSub: 'Turn on for this device',
 } as const;
 
+export const ALERT_WORDS = {
+  row: 'Alerts',
+  rowEmpty: 'No alerts yet',
+  rowCount: (count: number) => `${count} ${count === 1 ? 'alert' : 'alerts'}`,
+  rowNext: (count: string, next: string) => `${count} · next ${next}`,
+  title: 'Alerts',
+  freeTitle: 'Free to Spend alerts',
+  freeHelp: 'A nudge when Free to Spend drops to an amount you pick.',
+  envelopeTitle: (name: string) => `${name} alerts`,
+  empty: 'No alerts yet',
+  add: 'Add an alert',
+  limit: 'A plan holds up to 50 alerts. Remove one to add another.',
+  addTitle: 'New alert',
+  editTitle: 'Change alert',
+  now: 'Now',
+  runsOut: 'Runs out',
+  half: 'Half left',
+  quarter: 'A quarter left',
+  below: (amount: string) => `Below ${amount}`,
+  shareLeft: (percent: number) => `${percent}% left`,
+  nextHalf: 'at half left',
+  nextQuarter: 'at a quarter left',
+  nextRunsOut: 'when it runs out',
+  nextAmount: (amount: string) => `at ${amount}`,
+  nextShare: (percent: number) => `at ${percent}% left`,
+  withAmount: (title: string, amount: string) => `${title} · ${amount}`,
+  wentOff: (ago: string) => `Went off ${ago}`,
+  notYet: "Hasn't gone off yet",
+  question: 'When should it go off?',
+  anAmount: 'An amount',
+  amountLabel: 'Alert amount',
+  amountPlaceholder: '0.00',
+  amountMin: 'An amount must be at least $0.',
+  pickOne: 'Pick when it should go off.',
+  namedTitle: "Show the envelope's name",
+  namedHelp:
+    "The push will show this envelope's name on your lock screen. Amounts never show.",
+  save: 'Save alert',
+  saveAlert: 'Add alert',
+  cancel: 'Cancel',
+  remove: 'Remove alert',
+  removed: 'Alert removed',
+  saveFailed: 'That did not save. Nothing was changed.',
+  turnOn: 'Turn on alerts for this device',
+  turnOnSub: 'Alerts come as notifications, and this device is not set up yet',
+} as const;
+
 export const DELETE_PLAN_PHRASE = 'delete my plan';
 
 export const DELETE_PLAN_WORDS = {

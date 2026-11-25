@@ -86,6 +86,8 @@ apps/runway/
 │   ├── expenses/{expenseId}                 ExpenseDoc           a named group of purchases ("Chicago trip")
 │   ├── rules/{ruleId}                       MerchantRuleDoc
 │   ├── memories/{id}                        MemoryDoc (sealed route or payer the person confirmed)
+│   ├── alerts/{alertId}                     AlertDoc             a line on Free to Spend or one envelope's figure; the app writes it
+│   ├── alertStates/{alertId}                AlertStateDoc        where the alert stands; written by functions only
 │   ├── changes/{changeId}                   ChangeDoc            append-only change log
 │   ├── whatIfs/{whatIfId}                   WhatIfDoc
 │   ├── closings/{yyyy-mm}                   ClosingDoc           derived cache, rebuildable
@@ -555,6 +557,22 @@ interface RuleSealed {
   category: string | null;                  // this kind of place: the provider's detailed category code (Plaid personal_finance_category.detailed)
   cardId: string | null;                    // everything on this card
   target: string | 'varies';                // envelopeId; 'varies' needs merchantKey and always asks
+}
+
+interface AlertDoc {                        // apps/runway/plans/{uid}/alerts/{alertId}
+  id: string; createdAt: number; updatedAt: number;
+  sealed: Sealed;                           // AlertSealed
+}
+
+interface AlertSealed {
+  target: { kind: 'freeToSpend' } | { kind: 'envelope'; itemId: string };
+  line: { kind: 'cents'; cents: number } | { kind: 'share'; bps: number };   // a share is of what the envelope gets each time (set amounts only)
+  isNamed: boolean;                         // the person chose the envelope's name on the lock screen; amounts never show
+}
+
+interface AlertStateDoc {                   // apps/runway/plans/{uid}/alertStates/{alertId}, written by functions only
+  id: string; alertUpdatedAt: number;       // the alert's updatedAt this state was taken against
+  isBelow: boolean; lastFiredAt: number | null; heldSince: number | null; updatedAt: number;
 }
 
 interface PurchaseSealed {                  // ...as now, plus (read as null on older purchases)
@@ -1405,6 +1423,14 @@ Next Steps, after Link. It ships as three pieces in this order, each usable on i
 Functions added: `reconcileRunwayPurchases` (task-triggered, internal) and `sendRunwayReminders` (scheduled, hourly), with rows in `functions/README.md`. No new secret.
 
 ---
+
+## Alerts
+
+People set as many alerts as they like (up to `MAX_ALERTS`) on Free to Spend and on each envelope, at Track and Link. An alert goes off when its figure falls to or below its line and rearms once the figure is back above it.
+
+- **Phone:** `store/actions/alertActions.ts` writes `alerts` (`createAlert`, `updateAlert`, `deleteAlert`; a plain write, sealed with the plan key like rules). Every change to the sealed payload sets a new `updatedAt`, because the server re-baselines on it. `store/listeners/alertListeners.ts` reads `alerts` and `alertStates` into the slice. Deleting goes through `deferAction` (hidden by `useHiddenDeferredKeys` while its Undo is offered), so the write waits out the Undo. The figure and the line come from `engine/alerts.ts` (`getAlertFigure`, `getAlertLineCents`, `getEachTimeCents`), the ladder is `components/AlertLadder.tsx` (pure), and `AlertsPanel` wires it to the store for the Notifications screen (Free to Spend) and the envelope sheet's Alerts view.
+- **Server:** after every rework at Track and Link the function steps each alert (`stepAlert`), treats `alerts` writes as figure inputs, and writes `alertStates`. A push that would go out in quiet hours (22:00 to 08:00 local) is held (`heldSince`) and the plan is woken at 08:00 to send the held ones together. Push words are fixed and never carry an amount; an envelope's name appears only when its alert has `isNamed`. A single envelope alert's push opens `/runway?openEnvelope=<itemId>`, which `RunwayPage` reads once the plan's items load: a live envelope opens its sheet on Plan's Envelopes, anything else just clears the parameter.
+- **Rules:** the owner may create, update and delete `alerts`; `alertStates` is read-only to the app.
 
 ## Figures on the server
 

@@ -24,11 +24,16 @@ import {
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  ALERT_WORDS,
   DEFAULT_NOTIFY_HOUR,
   NOTIFY_FIRST_HOUR,
   NOTIFY_LAST_HOUR,
   NOTIFY_WORDS,
 } from '@apps/runway/constants';
+import { ActionSection } from '@apps/runway/components/ActionSection';
+import AlertsPanel from '@apps/runway/components/AlertsPanel';
+import LevelGate from '@apps/runway/components/LevelGate';
+import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { setNotify } from '@apps/runway/store/actions/planActions';
 import {
@@ -55,6 +60,7 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const plan = useAppSelector((state) => state.runway.plan);
+  const canLink = useCanLinkBank();
   const uid = user?.uid ?? null;
   const device = useQuery({
     ...devicePushQueryOptions(uid ?? ''),
@@ -64,7 +70,7 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   const [isSwitching, setIsSwitching] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const isOn = plan?.notify?.needsHome ?? false;
+  const isOn = canLink && (plan?.notify?.needsHome ?? false);
   const hour = plan?.notifyHour ?? DEFAULT_NOTIFY_HOUR;
   const deviceZone = getDeviceTimeZone();
   const zone = plan?.notifyTimeZone ?? deviceZone;
@@ -119,77 +125,79 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   return (
     <Subview overlay title={NOTIFY_WORDS.rowLabel} onClose={onClose}>
       <div className='space-y-4'>
-        <SettingsGroup title={NOTIFY_WORDS.group}>
-          <SettingsRow
-            icon={<Bell className='size-5' />}
-            title={NOTIFY_WORDS.switchLabel}
-            description={
-              <>
-                {NOTIFY_WORDS.switchHelp}
-                {message && (
-                  <span className='text-destructive mt-1 block' role='alert'>
-                    {message}
-                  </span>
-                )}
-              </>
-            }
-            control={
-              <AppToggle
-                aria-label={NOTIFY_WORDS.switchLabel}
-                checked={isOn}
-                onCheckedChange={(isChecked) => void handleSwitch(isChecked)}
-              />
-            }
-          >
-            {(stuckState !== null || isOn) && (
-              <>
-                {stuckState !== null && (
-                  <InlineNotice tone='warning'>
-                    {getDeviceNotificationsText(stuckState)}
-                  </InlineNotice>
-                )}
-                {isOn && (
-                  <div className='space-y-2'>
-                    <p className='text-muted-foreground text-xs'>
-                      {NOTIFY_WORDS.hourLabel}
-                    </p>
-                    <Select
-                      className='max-w-40'
-                      options={HOUR_OPTIONS}
-                      value={String(hour)}
-                      onChange={(next) =>
-                        void save({
-                          hour: Number(next),
-                          timeZone: getDeviceTimeZone(),
-                        })
-                      }
-                    />
-                    {isZoneElsewhere ? (
-                      <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
-                        <p className='text-muted-foreground text-xs'>
-                          {NOTIFY_WORDS.zoneSaved(zoneName || zone || '')}
-                        </p>
-                        <Button
-                          variant='tertiary'
-                          size='sm'
-                          onClick={() => void save({ timeZone: deviceZone })}
-                        >
-                          {NOTIFY_WORDS.switchZone(deviceZoneName)}
-                        </Button>
-                      </div>
-                    ) : (
-                      zoneName !== '' && (
-                        <p className='text-muted-foreground text-xs'>
-                          {NOTIFY_WORDS.zone(zoneName)}
-                        </p>
-                      )
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </SettingsRow>
-        </SettingsGroup>
+        {canLink && (
+          <SettingsGroup title={NOTIFY_WORDS.group}>
+            <SettingsRow
+              icon={<Bell className='size-5' />}
+              title={NOTIFY_WORDS.switchLabel}
+              description={
+                <>
+                  {NOTIFY_WORDS.switchHelp}
+                  {message && (
+                    <span className='text-destructive mt-1 block' role='alert'>
+                      {message}
+                    </span>
+                  )}
+                </>
+              }
+              control={
+                <AppToggle
+                  aria-label={NOTIFY_WORDS.switchLabel}
+                  checked={isOn}
+                  onCheckedChange={(isChecked) => void handleSwitch(isChecked)}
+                />
+              }
+            >
+              {(stuckState !== null || isOn) && (
+                <>
+                  {stuckState !== null && (
+                    <InlineNotice tone='warning'>
+                      {getDeviceNotificationsText(stuckState)}
+                    </InlineNotice>
+                  )}
+                  {isOn && (
+                    <div className='space-y-2'>
+                      <p className='text-muted-foreground text-xs'>
+                        {NOTIFY_WORDS.hourLabel}
+                      </p>
+                      <Select
+                        className='max-w-40'
+                        options={HOUR_OPTIONS}
+                        value={String(hour)}
+                        onChange={(next) =>
+                          void save({
+                            hour: Number(next),
+                            timeZone: getDeviceTimeZone(),
+                          })
+                        }
+                      />
+                      {isZoneElsewhere ? (
+                        <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+                          <p className='text-muted-foreground text-xs'>
+                            {NOTIFY_WORDS.zoneSaved(zoneName || zone || '')}
+                          </p>
+                          <Button
+                            variant='tertiary'
+                            size='sm'
+                            onClick={() => void save({ timeZone: deviceZone })}
+                          >
+                            {NOTIFY_WORDS.switchZone(deviceZoneName)}
+                          </Button>
+                        </div>
+                      ) : (
+                        zoneName !== '' && (
+                          <p className='text-muted-foreground text-xs'>
+                            {NOTIFY_WORDS.zone(zoneName)}
+                          </p>
+                        )
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </SettingsRow>
+          </SettingsGroup>
+        )}
         {isOn && device === 'off' && (
           <ActionRow
             icon={<Smartphone />}
@@ -201,6 +209,35 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
             }}
           />
         )}
+        <LevelGate level='track'>
+          <ActionSection caption={ALERT_WORDS.freeTitle}>
+            <div className='space-y-3'>
+              <p className='text-muted-foreground text-sm'>
+                {ALERT_WORDS.freeHelp}
+              </p>
+              {stuckState !== null && (
+                <InlineNotice tone='warning'>
+                  {getDeviceNotificationsText(stuckState)}
+                </InlineNotice>
+              )}
+              {!isOn && device === 'off' && (
+                <ActionRow
+                  icon={<Smartphone />}
+                  label={ALERT_WORDS.turnOn}
+                  subtitle={ALERT_WORDS.turnOnSub}
+                  onClick={() => {
+                    setMessage(null);
+                    void askDevice();
+                  }}
+                />
+              )}
+              <AlertsPanel
+                target={{ kind: 'freeToSpend' }}
+                eachTimeCents={null}
+              />
+            </div>
+          </ActionSection>
+        </LevelGate>
       </div>
     </Subview>
   );
