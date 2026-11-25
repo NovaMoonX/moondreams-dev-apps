@@ -1446,7 +1446,7 @@ const withoutWords = (value: unknown, isPropertyMap = false): unknown =>
             .map(([key, inner]) => [key, withoutWords(inner, !isPropertyMap && key === 'properties')]),
         )
       : value;
-// Helm's server validates a grouped call against the first option's copy of a shared field, defaults included, so every copy must accept and fill exactly the same values.
+// The server validates a grouped call against the first option's copy of a shared field, defaults included, so every copy must accept and fill exactly the same values.
 const schemaOf = (schema: z.ZodType): string =>
   JSON.stringify(withoutWords(toJSONSchema(unwrapOptional(schema))));
 // A refinement or transform never reaches JSON schema, so the comparison can't see it: a shared field carries none.
