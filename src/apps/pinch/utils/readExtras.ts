@@ -132,14 +132,19 @@ export const readIsoMinutes = (value: unknown): number | null => {
   return total > 0 ? total : null;
 };
 
-/** The first whole number of servings in a Recipe's `recipeYield` ("8 servings", ["8", "8 servings"], 8). */
+const SERVINGS_YIELD =
+  /^\s*(?:serves\s+|makes\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|people|persons?|portions?|helpings?)?\s*$/i;
+
+/** Servings in a Recipe's `recipeYield` when it reads as servings ("8", "8 servings", "Serves 6-8", ["8", "8 servings"], 8); a pan, loaf, dozen or quart is no count of servings. */
 export const readYieldServings = (value: unknown): number | null => {
-  const first = Array.isArray(value) ? value[0] : value;
-  const found =
-    typeof first === 'number'
-      ? first
-      : Number(/\d+/.exec(String(first ?? ''))?.[0]);
-  return Number.isInteger(found) && found > 0 && found <= 500 ? found : null;
+  const found = (Array.isArray(value) ? value : [value])
+    .map((entry) =>
+      typeof entry === 'number'
+        ? entry
+        : Number(SERVINGS_YIELD.exec(String(entry ?? ''))?.[1]),
+    )
+    .find((count) => Number.isInteger(count) && count > 0 && count <= 500);
+  return found ?? null;
 };
 
 const getPublished = (

@@ -287,15 +287,13 @@ export async function extractRecipeFromPage(
   guidance: string | null,
 ): Promise<ExtractedRecipe> {
   const data = page.structuredData?.length
-    ? `Recipe data the page publishes (may be incomplete):\n${JSON.stringify(page.structuredData)}\n\n`
+    ? `--- PAGE DATA (schema.org JSON, may be incomplete) ---\n${JSON.stringify(page.structuredData)}\n\n`
     : '';
-  const heading = [page.title, page.meta?.description]
-    .filter(Boolean)
-    .join('\n');
+  const heading = `--- PAGE TITLE ---\n${page.title ?? ''}\n\n--- PAGE DESCRIPTION ---\n${page.meta?.description ?? ''}\n\n`;
 
   const extracted = await generate([
     {
-      text: `${withGuidance(PROMPT, guidance)}\n\nThis came from a web page, so ignore ads, comments and related links.\n\n--- BEGIN RECIPE ---\n${heading}\n\n${data}Page text:\n${page.text ?? ''}\n--- END RECIPE ---`,
+      text: `${withGuidance(PROMPT, guidance)}\n\nThis came from a web page, so ignore ads, comments and related links. The recipe below is in labelled parts (the page's title, description, published data and text): the labels and the data's keys and web addresses are never part of a field, and the title is the dish's name alone ("Easy candied yams"), never the page title's site name or the data.\n\n--- BEGIN RECIPE ---\n${heading}${data}--- PAGE TEXT ---\n${page.text ?? ''}\n--- END RECIPE ---`,
     },
   ]);
 

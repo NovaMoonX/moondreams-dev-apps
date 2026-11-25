@@ -9,7 +9,10 @@ import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
 } from '../../src/apps/pinch/constants.ts';
 import type { Idea } from '../../src/apps/pinch/types.ts';
-import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
+import {
+  normalizeExtractedRecipe,
+  readTitle,
+} from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import {
   getExtraLinks,
   getIdeaExtras,
@@ -227,7 +230,6 @@ assert.equal(
   0,
 );
 
-// a page's published Recipe data fills the times and servings the reading missed, and its servings replace an estimate
 assert.equal(readIsoMinutes('PT15M'), 15);
 assert.equal(readIsoMinutes('PT1H10M'), 70);
 assert.equal(readIsoMinutes('P0DT0H20M'), 20);
@@ -237,6 +239,29 @@ assert.equal(readYieldServings(['8', '8 servings']), 8);
 assert.equal(readYieldServings('Serves 6'), 6);
 assert.equal(readYieldServings(4), 4);
 assert.equal(readYieldServings('a lot'), null);
+assert.equal(readYieldServings('Serves 6-8'), 6);
+assert.equal(readYieldServings('2 dozen cookies'), null);
+assert.equal(readYieldServings('1 9x13 pan'), null);
+assert.equal(readYieldServings(['1 loaf', '12 slices']), null);
+const LEAKED =
+  'Easy Candied YamsRecipe Search Result Recipe Data The Page Publishes (May Be Incomplete): _Type:Recipe, Name:Easy Candied Yams, Author:_Id:Https://www.lovebakesgoodcakes.com/#/schema/person/2ba133f1b1';
+assert.equal(readTitle(LEAKED), null);
+assert.equal(readTitle('Easy candied yams'), 'Easy candied yams');
+assert.equal(
+  readTitle("Grandma's 3-ingredient biscuits"),
+  "Grandma's 3-ingredient biscuits",
+);
+assert.equal(
+  withPageFallbacks(
+    normalizeExtractedRecipe({ title: LEAKED, ingredients: [], steps: [] }),
+    {
+      title: 'Easy Candied Yams | Love Bakes Good Cakes',
+      meta: undefined,
+      structuredData: undefined,
+    },
+  ).title,
+  'Easy Candied Yams',
+);
 const missed = normalizeExtractedRecipe({
   title: 'Garlic pasta',
   servings: 4,
