@@ -12,6 +12,11 @@ import {
   streamTurn,
   type TurnEvent,
 } from '../../functions/src/assistant/streamTurn.ts';
+import {
+  appendExchange,
+  trimHistory,
+  type PepperLine,
+} from '../../src/apps/pinch/utils/pepperHistory.ts';
 import { readPepperBody } from '../../functions/src/apps/pinch/pepper/pepperTurn.ts';
 import { PEPPER_TOOLS } from '../../functions/src/apps/pinch/pepper/pepperPrompt.ts';
 
@@ -279,6 +284,62 @@ const textDelta = (text: string) => ({
   );
 }
 
+// The device's history keeps each exchange word for word and drops whole oldest exchanges at 20 pairs and at the character cap, always in a shape the server accepts.
+{
+  const pair = (index: number, size = 10): PepperLine[] => [
+    { role: 'user', text: `q${index} <turn>`.padEnd(size, 'u') },
+    { role: 'assistant', text: `a${index}`.padEnd(size, 'a') },
+  ];
+  const body = (history: PepperLine[]) => ({
+    standing: 'Pasta',
+    screen: 'Step 2',
+    heard: 'next',
+    history,
+  });
+  const exact = {
+    user: ' <turn>  with  spaces\n',
+    assistant: ' (No spoken answer.) ',
+  };
+  assert.deepEqual(appendExchange([], exact), [
+    { role: 'user', text: exact.user },
+    { role: 'assistant', text: exact.assistant },
+  ]);
+
+  const twentyFive = Array.from({ length: 25 }, (_, index) =>
+    pair(index),
+  ).flat();
+  const trimmed = trimHistory(twentyFive);
+  assert.equal(trimmed.length, 40);
+  assert.equal(trimmed[0]?.text.slice(0, 2), 'q5');
+  assert.ok(
+    trimmed.every(
+      (line, index) => line.role === (index % 2 === 0 ? 'user' : 'assistant'),
+    ),
+  );
+  assert.equal(trimHistory(twentyFive.slice(0, 40)).length, 40);
+
+  const big = (index: number): PepperLine[] => [
+    { role: 'user', text: `q${index}`.padEnd(30_000, 'u') },
+    { role: 'assistant', text: `a${index}`.padEnd(3_000, 'a') },
+  ];
+  const heavy = Array.from({ length: 8 }, (_, index) => big(index)).flat();
+  const total = (lines: PepperLine[]) =>
+    lines.reduce((sum, line) => sum + line.text.length, 0);
+  assert.ok(total(heavy) > 160_000);
+  const fitted = trimHistory(heavy);
+  assert.ok(total(fitted) <= 160_000);
+  assert.equal(fitted.length % 2, 0);
+  assert.equal(fitted[0]?.text.slice(0, 2), 'q4');
+  assert.equal(fitted.at(-1)?.text.slice(0, 2), 'a7');
+  assert.ok(readPepperBody(body(fitted)) !== null);
+  assert.ok(readPepperBody(body(trimHistory(twentyFive))) !== null);
+
+  const grown = appendExchange(trimHistory(twentyFive), exact);
+  assert.equal(grown.length, 42);
+  assert.equal(trimHistory(grown).length, 40);
+  assert.equal(trimHistory(grown).at(-2)?.text, exact.user);
+}
+
 // The search allowance spans the turn's rounds, an empty answer still leaves a history line, and a turn cut off part way keeps what it used.
 {
   const seen: unknown[] = [];
@@ -453,5 +514,5 @@ const textDelta = (text: string) => ({
 }
 
 console.log(
-  'assistant turn: sentence feed, tool round trip, search allowance, usage on every end, escaping, body and stream reading passed',
+  'assistant turn: sentence feed, tool round trip, search allowance, usage on every end, escaping, body and stream reading, kept history passed',
 );
