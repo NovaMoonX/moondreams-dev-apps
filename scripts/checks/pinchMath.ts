@@ -205,9 +205,11 @@ import {
   getMergedFields,
   getRecipeLines,
   getShoppingCost,
+  isIngredientItem,
   getShoppingItemId,
   getShownShoppingView,
   groupShoppingItems,
+  countOpenShopRows as countOpenRows,
   isPutAway,
   isValidAmount,
   mergeLines,
@@ -675,6 +677,8 @@ const shopItem = (
 ): ShoppingItem => ({
   id: getShoppingItemId(ingredientId, unit),
   ingredientId,
+  freeText: null,
+  shopSection: null,
   amount,
   unit,
   isChecked,
@@ -731,6 +735,71 @@ assert.deepEqual(
   ]),
   [['Pantry', [['rice__LB']]]],
   'a checked item is in "Got it", grouped by its section, and not in "To buy"',
+);
+
+const listOnly = (
+  id: string,
+  freeText: string,
+  shopSection: ShoppingItem['shopSection'],
+  isChecked = false,
+): ShoppingItem => ({
+  ...shopItem('unused', 'EACH', 1, isChecked),
+  id,
+  ingredientId: null,
+  freeText,
+  shopSection,
+  amount: null,
+});
+const listOnlyItems = [
+  shopItem('rice', 'CUP', 1, false),
+  listOnly('free__a', 'Paper towels', null),
+  listOnly('free__b', 'Paper towels', null),
+  listOnly('free__c', 'Ice', 'frozen'),
+  listOnly('free__d', 'Dish soap', 'other', true),
+];
+const listOnlyGrouped = groupShoppingItems(
+  listOnlyItems,
+  shopSectionIngredients,
+);
+assert.deepEqual(
+  listOnlyGrouped.toBuy.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.name, row.itemIds, row.ingredientId]),
+  ]),
+  [
+    ['Pantry', [['Rice', ['rice__CUP'], 'rice']]],
+    ['Frozen', [['Ice', ['free__c'], null]]],
+    [
+      'Other',
+      [
+        ['Paper towels', ['free__a'], null],
+        ['Paper towels', ['free__b'], null],
+      ],
+    ],
+  ],
+  'a list-only line is its own row, named by its words, in the part of the shop the person picked or Other, and never merges with another line',
+);
+assert.deepEqual(
+  listOnlyGrouped.got.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.name, row.amountText]),
+  ]),
+  [['Other', [['Dish soap', null]]]],
+  'a ticked list-only line moves to Got it with no amount',
+);
+assert.equal(
+  countOpenRows(listOnlyItems),
+  4,
+  "the Shopping tab's badge counts each open list-only line as a row",
+);
+assert.deepEqual(
+  getShoppingCost(
+    listOnlyItems.filter(isIngredientItem),
+    shopSectionIngredients,
+    new Map(),
+  ).rowCount,
+  1,
+  'cost never sees a list-only line',
 );
 
 const heldItems = [
@@ -8787,7 +8856,7 @@ assert.equal(
 
   // the list's cost: a name-only line is neither counted nor left out
   const amtListCost = getShoppingCost(
-    amtList.filter((item) => !item.isChecked),
+    amtList.filter((item) => !item.isChecked).filter(isIngredientItem),
     amtById,
     new Map([['thigh', amtThighProduct]]),
   );
@@ -9504,6 +9573,8 @@ assert.equal(
   ): ShoppingItem => ({
     id: getShoppingItemId(ingredientId, unit),
     ingredientId,
+    freeText: null,
+    shopSection: null,
     amount,
     unit,
     isChecked,
@@ -9816,6 +9887,8 @@ assert.equal(
       return new Map(next).set(id, {
         id,
         ingredientId: line.ingredientId,
+        freeText: null,
+        shopSection: null,
         unit: line.unit,
         note: null,
         amountText: null,
@@ -9975,6 +10048,8 @@ assert.equal(
         {
           id: 'x__CUP',
           ingredientId: 'x',
+          freeText: null,
+          shopSection: null,
           unit: 'CUP',
           amount,
           isChecked: false,

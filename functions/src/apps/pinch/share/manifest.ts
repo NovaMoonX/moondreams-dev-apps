@@ -38,7 +38,7 @@ export const PINCH_SHARES: SourceShares = {
           label: 'Shopping list',
           detail: "What's still to buy",
           meaning:
-            'Ingredients the person still needs to buy, with how much of each.',
+            'What the person still needs to buy: ingredients with how much of each, and anything else they put on the list in their own words.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -392,7 +392,10 @@ export const PINCH_SHARES: SourceShares = {
       tools: [
         { id: 'read', title: 'Read Pinch' },
         { id: 'save', title: 'Add or edit a recipe' },
-        { id: 'add', title: 'Plan a meal, or add groceries, ideas or nutrition' },
+        {
+          id: 'add',
+          title: 'Plan a meal, or add groceries, ideas or nutrition',
+        },
       ],
       askedAbout: [
         'meals',

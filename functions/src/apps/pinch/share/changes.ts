@@ -1689,6 +1689,8 @@ export const addToShoppingList = async (
         const item: ShoppingItem = {
           id: line.id,
           ingredientId: line.ingredientId,
+          freeText: null,
+          shopSection: null,
           unit: line.unit,
           createdAt: ctx.now,
           amount: sum,

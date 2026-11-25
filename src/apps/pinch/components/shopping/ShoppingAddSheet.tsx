@@ -15,10 +15,17 @@ import {
   DEFAULT_SERVING,
   SHOPPING_ADD_MODE_LABELS,
   SHOPPING_ADD_MODES,
+  SHOP_SECTION_LABELS,
+  SHOP_SECTIONS,
   SOFT_MAX_SHOPPING_ITEMS,
+  type ShopSection,
   type ShoppingAddMode,
 } from '@apps/pinch/constants';
-import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
+import {
+  addListOnlyItem,
+  addToShoppingList,
+  setListOnlySection,
+} from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectCookSummaries,
   selectIngredientsById,
@@ -55,6 +62,10 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
+  const [listOnly, setListOnly] = useState<{
+    id: string;
+    section: ShopSection | null;
+  } | null>(null);
   const [searchKey, setSearchKey] = useState(0);
   const fieldRef = useRef<HTMLDivElement>(null);
 
@@ -142,6 +153,61 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     }
   };
 
+  const handlePickListOnly = async (words: string) => {
+    if (isAdding || !isReady) {
+      return;
+    }
+    const wanted = words.trim().toLowerCase();
+    const onListAlready = items.find(
+      (item) =>
+        item.ingredientId === null &&
+        !item.isChecked &&
+        (item.freeText ?? '').toLowerCase() === wanted,
+    );
+    if (onListAlready) {
+      setError(`${onListAlready.freeText} is already on your list.`);
+      return;
+    }
+    if (onList.size >= SOFT_MAX_SHOPPING_ITEMS) {
+      setError(
+        "Your list is full: take something off or clear what you've got.",
+      );
+      return;
+    }
+
+    setError(null);
+    setIsAdding(true);
+    try {
+      const id = await dispatch(
+        addListOnlyItem({ uid, text: words, shopSection: null }),
+      ).unwrap();
+      setAdded((current) => [...current, words.trim()]);
+      setListOnly({ id, section: null });
+      setSearchKey((current) => current + 1);
+    } catch (addError) {
+      setError(getErrorMessage(addError, 'Unable to add this to your list.'));
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleSection = (section: ShopSection) => {
+    if (!listOnly) return;
+    const id = listOnly.id;
+    setListOnly({ id, section });
+    dispatch(
+      setListOnlySection({
+        uid,
+        id,
+        shopSection: section === 'other' ? null : section,
+      }),
+    )
+      .unwrap()
+      .catch((sectionError: unknown) =>
+        setError(getErrorMessage(sectionError, 'Unable to save this change.')),
+      );
+  };
+
   return (
     <FormSheet isOpen onClose={onClose} title='Shopping list'>
       <div className='space-y-4'>
@@ -172,8 +238,8 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         ) : (
           <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
             <p className='text-muted-foreground text-sm [@media(max-height:499px)]:hidden'>
-              What do you need? It goes on the list at a typical serving, and
-              the arrow beside it on the list changes how much.
+              What do you need? Food goes on the list at a typical serving, and
+              anything else, like paper towels, can go on just as you type it.
             </p>
             <div ref={fieldRef}>
               <ItemSearch
@@ -185,7 +251,11 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                   ids: suggestedIds,
                 }}
                 isCapped
-                onPick={(ingredientId) => void handlePick(ingredientId)}
+                onPick={(ingredientId) => {
+                  setListOnly(null);
+                  void handlePick(ingredientId);
+                }}
+                onPickListOnly={(words) => void handlePickListOnly(words)}
               />
             </div>
             {note && (
@@ -209,6 +279,18 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                   )}
                 </span>
               </p>
+            )}
+            {!note && listOnly && (
+              <PillGroup
+                label='Which part of the shop? (optional)'
+                options={SHOP_SECTIONS.map((value) => ({
+                  value,
+                  label: SHOP_SECTION_LABELS[value],
+                }))}
+                value={listOnly.section ?? 'other'}
+                onChange={handleSection}
+                isThin
+              />
             )}
             {error && <p className='text-destructive text-sm'>{error}</p>}
             {added.length > 0 && (

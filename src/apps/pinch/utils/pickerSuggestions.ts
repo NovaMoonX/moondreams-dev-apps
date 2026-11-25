@@ -1,6 +1,6 @@
 import type { Package, Recipe, ShoppingItem } from '@apps/pinch/types';
 import { getLineIngredientIds } from '@apps/pinch/utils/freeLines';
-import { isPutAway } from '@apps/pinch/utils/shopping';
+import { isIngredientItem, isPutAway } from '@apps/pinch/utils/shopping';
 
 /** The most rows an ingredient picker offers while its field is empty. */
 export const MAX_PICK_SUGGESTIONS = 3;
@@ -49,7 +49,9 @@ export function getPantryPickIds(
   packages: readonly Package[],
 ) {
   const gotIt = newestFirst(
-    shoppingItems.filter((item) => item.isChecked && !isPutAway(item)),
+    shoppingItems
+      .filter(isIngredientItem)
+      .filter((item) => item.isChecked && !isPutAway(item)),
     (item) => item.updatedAt,
   ).map((item) => item.ingredientId);
   const stocked = newestFirst(
@@ -66,13 +68,14 @@ export function getShoppingPickIds(
   recipes: readonly RecipeLines[],
   cookSummaries: ReadonlyMap<string, { lastCookedAt: number }>,
 ) {
+  const ingredientItems = shoppingItems.filter(isIngredientItem);
   const toBuy = new Set(
-    shoppingItems
+    ingredientItems
       .filter((item) => !item.isChecked)
       .map((item) => item.ingredientId),
   );
   const seen = [
-    ...shoppingItems.map((item) => ({
+    ...ingredientItems.map((item) => ({
       id: item.ingredientId,
       at: item.updatedAt,
     })),
