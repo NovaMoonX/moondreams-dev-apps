@@ -222,6 +222,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
 
   const getTitle = () => {
     if (stage === 'start') return 'New recipe';
+    if (stage === 'file' && fromIdea?.kind === 'PHOTO') return 'From your idea';
     if (stage === 'idea') return 'Idea';
     if (stage === 'form')
       return (
