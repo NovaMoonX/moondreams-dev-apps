@@ -57,6 +57,10 @@ export interface IngredientRecord {
   defaultProductId: string | null;
   /** Hidden from lists and pickers but still resolving for the planned days and recipes that use it; only a custom ingredient is ever archived. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
+  /** Who added a custom ingredient when it wasn't the person (an outside assistant's recipe or list item); null for the person. Immutable. A missing key reads as null. */
+  addedBy: RecipeNoteBy | null;
+  /** Who filled in `nutritionPer100g` when an assistant did, shown as its source until the person edits the nutrition, which clears it. A missing key reads as null. */
+  nutritionBy: RecipeNoteBy | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -405,6 +409,8 @@ export interface Idea {
   photoPath: string | null;
   /** The recipe this became. A missing key, an id no recipe has, or an archived recipe reads as not made yet. */
   recipeId: string | null;
+  /** Who saved it when it wasn't the person; null for the person. Immutable. A missing key reads as null. */
+  by: RecipeNoteBy | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -535,7 +541,13 @@ export interface RecipeNoteBy {
 /** What an outside assistant or Nomos changed in the kitchen through Helm; written only by the server, read by the owner, and kept 30 days. */
 export interface PinchOutsideChange {
   id: string;
-  kind: 'recipeUpdated' | 'recipeAdded' | 'mealPlanned' | 'shoppingAdded';
+  kind:
+    | 'recipeUpdated'
+    | 'recipeAdded'
+    | 'mealPlanned'
+    | 'shoppingAdded'
+    | 'ideaSaved'
+    | 'nutritionFilled';
   by: { kind: 'assistant' | 'nomos'; name: string | null };
   /** What it changed: the recipe's, meal's or item's name. */
   title: string;
@@ -551,6 +563,12 @@ export interface PinchOutsideChange {
   createdItem: boolean;
   /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
   previousItem: { amount: number | null; isChecked: boolean } | null;
+  /** The idea an `ideaSaved` change made. A missing key reads as null. */
+  ideaId: string | null;
+  /** Custom ingredients this change created, which its Undo archives while nothing else uses them. A missing key reads as none. */
+  createdIngredientIds: string[] | null;
+  /** The ingredients a `nutritionFilled` change gave nutrition, and whether it had to write the ingredient's record (a catalog one the person never adjusted). A missing key reads as none. */
+  filledNutrition: { ingredientId: string; createdRecord: boolean }[] | null;
   undoneAt: number | null;
   undoneBy: 'pinch' | 'helm' | null;
   createdAt: number;
