@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type {
   DocumentReference,
+  DocumentSnapshot,
   Firestore,
   Transaction,
 } from 'firebase-admin/firestore';
@@ -12,12 +13,26 @@ import {
   createOptionMatcher,
   toDisplayCase,
 } from '../../../vendor/optionMatchUtils.js';
+import {
+  getComparableUrl,
+  getWebLinkHost,
+  toWebLink,
+} from '../../../vendor/urlUtils.js';
 import { dayToUtcMidnight, getLocalMoment } from '../eatSoonDigest.js';
 import { CATALOG_NAMES } from './catalogNames.js';
+import { CATALOG_NUTRITION_IDS } from './catalogNutrition.js';
 import { cleanGroupName } from './ingredientGroups.js';
-import { matchIngredient } from './ingredientMatch.js';
+import {
+  matchIngredient,
+  matchIngredientWithNote,
+  suggestIngredients,
+} from './ingredientMatch.js';
 import { planTweakUndo } from './notes.js';
 import {
+  MAX_IDEA_NOTE_LENGTH,
+  MAX_IDEA_SITE_NAME_LENGTH,
+  MAX_IDEA_TITLE_LENGTH,
+  MAX_IDEA_URL_LENGTH,
   MAX_MEAL_ITEMS,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
@@ -31,6 +46,7 @@ import {
   MAX_STEP_LENGTH,
   MEAL_TYPE_LABELS,
   MEAL_TYPES,
+  SOFT_MAX_IDEAS,
   SOFT_MAX_PLANNED_MEALS,
   SOFT_MAX_RECIPE_NOTES,
   SOFT_MAX_RECIPES,
@@ -39,9 +55,11 @@ import {
   UNITS,
 } from './pinchConstants.js';
 import type {
+  Idea,
   IngredientRecord,
   MealItem,
   MealType,
+  NutritionValues,
   PlannedMeal,
   Recipe,
   RecipeIngredient,
@@ -59,7 +77,12 @@ import {
 import { toStoredStepSections } from './stepSections.js';
 
 export type OutsideChangeKind =
-  'recipeUpdated' | 'recipeAdded' | 'mealPlanned' | 'shoppingAdded';
+  | 'recipeUpdated'
+  | 'recipeAdded'
+  | 'mealPlanned'
+  | 'shoppingAdded'
+  | 'ideaSaved'
+  | 'nutritionFilled';
 
 export type ChangeUndoFrom = 'pinch' | 'helm';
 
@@ -79,6 +102,11 @@ export interface OutsideChange {
   createdItem: boolean;
   /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
   previousItem: { amount: number | null; isChecked: boolean } | null;
+  ideaId: string | null;
+  /** Custom ingredients this change created: its Undo archives each while nothing else uses it and it is unchanged. */
+  createdIngredientIds: string[] | null;
+  /** The ingredients a fill gave nutrition, and whether it had to write a catalog ingredient's record. */
+  filledNutrition: { ingredientId: string; createdRecord: boolean }[] | null;
   undoneAt: number | null;
   undoneBy: ChangeUndoFrom | null;
   createdAt: number;
@@ -173,6 +201,9 @@ const changeRecord = (
         | 'addedAmount'
         | 'createdItem'
         | 'previousItem'
+        | 'ideaId'
+        | 'createdIngredientIds'
+        | 'filledNutrition'
       >
     >,
 ): OutsideChange => ({
@@ -185,6 +216,9 @@ const changeRecord = (
   addedAmount: null,
   createdItem: false,
   previousItem: null,
+  ideaId: null,
+  createdIngredientIds: null,
+  filledNutrition: null,
   undoneAt: null,
   undoneBy: null,
   createdAt: ctx.now,
@@ -272,9 +306,20 @@ const toChoice = (
 interface IngredientBook {
   /** What a name can match: the catalog and the person's own, archived ones left out. */
   choices: ResolvedIngredient[];
+  /** The person's archived custom ingredients, for telling "archived" from "not in the kitchen". */
+  archivedChoices: ResolvedIngredient[];
   /** Every ingredient id the kitchen knows, for naming lines in a change summary. */
   names: Map<string, { name: string }>;
+  /** How many ingredient documents the kitchen holds, for the cap on new ones. */
+  count: number;
+  /** The nutrition each stored record carries (a custom ingredient's, or a catalog one the person adjusted), null when it has none. */
+  nutrition: Map<string, NutritionValues | null>;
 }
+
+const hasAnyNutrition = (values: unknown) =>
+  typeof values === 'object' &&
+  values !== null &&
+  Object.values(values).some((value) => typeof value === 'number');
 
 const readIngredientBook = async (
   firestore: Firestore,
@@ -282,43 +327,61 @@ const readIngredientBook = async (
 ): Promise<IngredientBook> => {
   const snapshot = await firestore
     .collection(kitchenPath(uid, 'ingredients'))
-    .select('name', 'catalogId', 'isArchived')
+    .select('name', 'catalogId', 'isArchived', 'nutritionPer100g')
     .limit(INGREDIENT_LIMIT)
     .get();
   const records = new Map(snapshot.docs.map((doc) => [doc.id, doc]));
   const catalog = Object.entries(CATALOG_NAMES).map(([id, name]) =>
     toChoice(id, readText(records.get(id)?.get('name')) ?? name, false),
   );
-  const custom = snapshot.docs.flatMap((doc) => {
-    const name = readText(doc.get('name'));
-    return doc.get('catalogId') == null &&
-      name !== null &&
-      doc.get('isArchived') !== true
-      ? [toChoice(doc.id, name, true)]
-      : [];
-  });
-  const choices = [...catalog, ...custom];
-  const archived = snapshot.docs.flatMap((doc) => {
+  const customs = snapshot.docs.flatMap((doc) => {
     const name = readText(doc.get('name'));
     return doc.get('catalogId') == null && name !== null
-      ? [[doc.id, { name }] as const]
+      ? [
+          {
+            ...toChoice(doc.id, name, true),
+            isArchived: doc.get('isArchived') === true,
+          },
+        ]
       : [];
   });
+  const choices = [
+    ...catalog,
+    ...customs.filter((choice) => !choice.isArchived),
+  ];
+  const archivedChoices = customs.filter((choice) => choice.isArchived);
   return {
     choices,
-    names: new Map([
-      ...choices.map((choice) => [choice.id, { name: choice.name }] as const),
-      ...archived,
-    ]),
+    archivedChoices,
+    names: new Map(
+      [...choices, ...archivedChoices].map(
+        (choice) => [choice.id, { name: choice.name }] as const,
+      ),
+    ),
+    count: snapshot.size,
+    nutrition: new Map(
+      snapshot.docs.map((doc) => {
+        const values = doc.get('nutritionPer100g') as NutritionValues | null;
+        return [doc.id, values ?? null] as const;
+      }),
+    ),
   };
 };
+
+/** Whether an ingredient has any nutrition: a custom one's own, or a catalog one's record when the person set it, else the catalog's. */
+const hasNutritionIn = (choice: ResolvedIngredient, stored: unknown) =>
+  choice.isCustom || (stored ?? null) !== null
+    ? hasAnyNutrition(stored)
+    : CATALOG_NUTRITION_IDS.has(choice.id);
 
 const lineShape = z.object({
   name: z
     .string()
     .min(1)
     .max(MAX_NAME_LENGTH)
-    .describe('The ingredient as written, such as "yellow onion".'),
+    .describe(
+      'The plain everyday ingredient, singular, with no amount or brand: "Ground beef", not "2 lb lean ground beef". Cut, leanness, variety, brand and preparation (bone-in, skinless, diced, fresh, 93% lean) go in the note: "Ground beef" with note "93% lean". Call pinch_find_ingredients first and use the names the kitchen already has.',
+    ),
   amount: z
     .number()
     .positive()
@@ -333,12 +396,20 @@ const lineShape = z.object({
     .string()
     .max(MAX_NOTE_LENGTH)
     .nullish()
-    .describe('A short note such as "finely chopped".'),
+    .describe(
+      'A short note: a preparation such as "finely chopped", the cut, leanness or variety ("93% lean"), or the brand.',
+    ),
   group: z
     .string()
     .max(80)
     .nullish()
     .describe('A heading the line sits under, such as "For the sauce".'),
+  isNewIngredient: z
+    .boolean()
+    .nullish()
+    .describe(
+      'Set true for a real food the person buys that the kitchen does not have yet (pinch_find_ingredients says match is null): Pinch adds it to their ingredients, and its Undo takes it back while nothing else uses it. Leave it out for anything that is not an ingredient to buy, such as "reserved pasta water": that stays a plain line.',
+    ),
 });
 
 const stepShape = z.object({
@@ -360,12 +431,36 @@ const lineKey = (
 ) =>
   `${line.ingredientId ?? `free:${(line.freeText ?? '').toLowerCase()}`}|${(cleanGroupName(line.group) ?? '').toLowerCase()}`;
 
-/** Lines matched to the person's ingredients and the catalog; a name that matches nothing stays as a kitchen-free line rather than becoming a new ingredient. A line that is the same as one the recipe has keeps its id, so the recorded change names only what really changed. */
+interface NewIngredient {
+  id: string;
+  name: string;
+}
+
+interface BuiltLines {
+  lines: RecipeIngredient[];
+  /** The custom ingredients the lines need that the kitchen lacks, to be written with the change. */
+  created: NewIngredient[];
+  /** Lines that matched a kitchen ingredient once descriptor words were ignored, for the reply and the record. */
+  matches: { asked: string; name: string; noteWords: string[] }[];
+}
+
+const joinNote = (noteWords: string[], note: string | null | undefined) => {
+  const have = (note ?? '').toLowerCase();
+  const added = noteWords.filter((word) => !have.includes(word));
+  return (
+    clipText(
+      [added.join(' '), (note ?? '').trim()].filter(Boolean).join(', '),
+      MAX_NOTE_LENGTH,
+    ) || null
+  );
+};
+
+/** Lines matched to the person's ingredients and the catalog, on the full name and then with descriptor words ignored (those go to the front of the note). A name that matches nothing becomes a new custom ingredient only when the line says `isNewIngredient`; otherwise it stays a kitchen-free line. A line that is the same as one the recipe has keeps its id, so the recorded change names only what really changed. */
 const buildLines = (
   input: LineInput[],
   book: IngredientBook,
   existing: RecipeIngredient[],
-): Built<RecipeIngredient[]> => {
+): Built<BuiltLines> => {
   if (input.length > MAX_RECIPE_INGREDIENTS) {
     return {
       kind: 'refused',
@@ -387,34 +482,119 @@ const buildLines = (
       : [];
   })[0];
   if (problem !== undefined) return { kind: 'refused', message: problem };
-  const { lines } = input.reduce(
-    (built, entry) => {
+  const built = input.reduce(
+    (state, entry) => {
       const amount = entry.amount ?? null;
       const name = entry.name.replace(/\s+/g, ' ').trim();
-      const match = matchIngredient(name, book.choices);
+      const found = matchIngredientWithNote(name, state.choices);
+      const fresh: NewIngredient | null =
+        found || entry.isNewIngredient !== true
+          ? null
+          : {
+              id: randomUUID(),
+              name: toDisplayCase(name, {
+                style: 'sentence',
+                keepAcronyms: true,
+              }),
+            };
+      const ingredientId = found?.ingredient.id ?? fresh?.id ?? null;
+      const noteWords = found?.noteWords ?? [];
       const base = {
-        ingredientId: match?.id ?? null,
-        freeText: match ? null : name,
+        ingredientId,
+        freeText: ingredientId === null ? name : null,
         group: cleanGroupName(entry.group),
       };
-      const reusable = built.pool.get(lineKey(base)) ?? [];
+      const reusable = state.pool.get(lineKey(base)) ?? [];
       const line: RecipeIngredient = {
         id: reusable[0] ?? randomUUID(),
         ...base,
         amount: amount === null ? null : Math.round(amount * 10_000) / 10_000,
         unit: amount === null ? 'EACH' : (readUnit(entry.unit) ?? 'EACH'),
-        note: clipText(entry.note ?? '', MAX_NOTE_LENGTH) || null,
+        note: joinNote(noteWords, entry.note),
         adaptedFrom: null,
       };
       return {
-        pool: new Map(built.pool).set(lineKey(base), reusable.slice(1)),
-        lines: [...built.lines, line],
+        pool: new Map(state.pool).set(lineKey(base), reusable.slice(1)),
+        lines: [...state.lines, line],
+        choices: fresh
+          ? [...state.choices, toChoice(fresh.id, fresh.name, true)]
+          : state.choices,
+        created: fresh ? [...state.created, fresh] : state.created,
+        matches:
+          found && noteWords.length > 0
+            ? [
+                ...state.matches,
+                { asked: name, name: found.ingredient.name, noteWords },
+              ]
+            : state.matches,
       };
     },
-    { pool, lines: [] as RecipeIngredient[] },
+    {
+      pool,
+      lines: [] as RecipeIngredient[],
+      choices: book.choices,
+      created: [] as NewIngredient[],
+      matches: [] as BuiltLines['matches'],
+    },
   );
-  return { kind: 'ok', value: lines };
+  if (built.created.length + book.count > INGREDIENT_LIMIT) {
+    return {
+      kind: 'refused',
+      message: `Pinch's ingredient list is full, so nothing was added. The person can remove ingredients they don't use in Pinch first.`,
+    };
+  }
+  return {
+    kind: 'ok',
+    value: {
+      lines: built.lines,
+      created: built.created,
+      matches: built.matches,
+    },
+  };
 };
+
+const toNewIngredientRecord = (
+  ctx: ChangeContext,
+  created: NewIngredient,
+): IngredientRecord => ({
+  id: created.id,
+  catalogId: null,
+  name: created.name,
+  familyId: null,
+  iconKey: null,
+  nutritionPer100g: null,
+  servingAmount: null,
+  servingUnit: null,
+  gramsPerMl: null,
+  gramsEach: null,
+  defaultProductId: null,
+  isArchived: false,
+  addedBy: toBy(ctx.actor),
+  nutritionBy: null,
+  createdAt: ctx.now,
+  updatedAt: ctx.now,
+});
+
+const newIngredientsLines = (created: NewIngredient[]) =>
+  created.length === 0
+    ? []
+    : [
+        `Added ${countOf(created.length, 'new ingredient')}: ${created.map((entry) => entry.name).join(', ')}`,
+      ];
+
+/** What an assistant is told about the ingredients its lines made and matched: the words it sent, and the kitchen's own names only while ingredients are shared. */
+const toIngredientReply = (
+  ctx: ChangeContext,
+  built: Pick<BuiltLines, 'created' | 'matches'>,
+) => [
+  ...newIngredientsLines(built.created),
+  ...(ctx.allowedCategories.has('recipeIngredients')
+    ? built.matches.map(
+        ({ asked, name, noteWords }) =>
+          `Used your ${name} for '${asked}', ${noteWords.join(' ')} in the note`,
+      )
+    : []),
+];
 
 const buildSteps = (
   input: StepInput[],
@@ -703,6 +883,15 @@ export const updateRecipe = async (
       : null;
     const failed = [lines, steps].find((built) => built?.kind === 'refused');
     if (failed?.kind === 'refused') return refused(failed.message);
+    const made = lines?.kind === 'ok' ? lines.value : null;
+    const created = made?.created ?? [];
+    const liveBook: IngredientBook = {
+      ...book,
+      names: new Map([
+        ...book.names,
+        ...created.map((entry) => [entry.id, { name: entry.name }] as const),
+      ]),
+    };
     const title = patchOf(input, 'title')
       ? clipText(String(input.title), MAX_RECIPE_TITLE_LENGTH)
       : null;
@@ -725,10 +914,10 @@ export const updateRecipe = async (
           ),
         ),
       }),
-      ...(lines?.kind === 'ok' && { ingredients: lines.value }),
+      ...(made && { ingredients: made.lines }),
       ...(steps?.kind === 'ok' && steps.value),
     };
-    const changes = getRecipeChanges(before, after, book.names);
+    const changes = getRecipeChanges(before, after, liveBook.names);
     const isTitleShown = ctx.allowedCategories.has('recipes');
     if (changes.length === 0) {
       const summary = `Nothing needed changing: ${isTitleShown ? found.recipe.title : 'the recipe'} already reads that way.`;
@@ -759,9 +948,11 @@ export const updateRecipe = async (
     const record = changeRecord(ctx, {
       kind: 'recipeUpdated',
       title: after.title,
-      lines: changes,
+      lines: [...changes, ...newIngredientsLines(created)],
       recipeId,
       noteId,
+      createdIngredientIds:
+        created.length === 0 ? null : created.map((entry) => entry.id),
     });
     transaction.update(recipeRef, {
       title: after.title,
@@ -781,6 +972,12 @@ export const updateRecipe = async (
       ...('isArchived' in found.recipe ? {} : { isArchived: false }),
     });
     transaction.create(ref(firestore, ctx.uid, 'notes', noteId), note);
+    created.forEach((entry) =>
+      transaction.create(
+        ref(firestore, ctx.uid, 'ingredients', entry.id),
+        toNewIngredientRecord(ctx, entry),
+      ),
+    );
     transaction.create(
       ref(firestore, ctx.uid, 'outsideChanges', record.id),
       record,
@@ -788,7 +985,10 @@ export const updateRecipe = async (
     return ok(
       toData(`Changed ${after.title} in Pinch.`, [record], {
         summary: `Changed ${isTitleShown ? after.title : 'the recipe'} in Pinch.`,
-        lines: toRecipeReply(ctx, input, book, before, after),
+        lines: capLines([
+          ...toIngredientReply(ctx, { created, matches: made?.matches ?? [] }),
+          ...toRecipeReply(ctx, input, liveBook, before, after),
+        ]),
       }),
     );
   });
@@ -819,7 +1019,7 @@ export const addRecipe = async (
     cookMinutes: readNumber(input.cookMinutes),
     coverPath: null,
     coverUrl: null,
-    ingredients: lines.value,
+    ingredients: lines.value.lines,
     steps: steps.value.steps,
     stepSections: steps.value.stepSections,
     care: null,
@@ -838,9 +1038,14 @@ export const addRecipe = async (
     title,
     lines: [
       `Added the recipe ${title}`,
-      `${countOf(lines.value.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+      `${countOf(lines.value.lines.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+      ...newIngredientsLines(lines.value.created),
     ],
     recipeId: id,
+    createdIngredientIds:
+      lines.value.created.length === 0
+        ? null
+        : lines.value.created.map((entry) => entry.id),
   });
   const isFull = await firestore.runTransaction(async (transaction) => {
     const count = await transaction.get(
@@ -848,6 +1053,12 @@ export const addRecipe = async (
     );
     if (count.data().count >= SOFT_MAX_RECIPES) return true;
     transaction.create(ref(firestore, ctx.uid, 'recipes', id), recipe);
+    lines.value.created.forEach((entry) =>
+      transaction.create(
+        ref(firestore, ctx.uid, 'ingredients', entry.id),
+        toNewIngredientRecord(ctx, entry),
+      ),
+    );
     transaction.create(
       ref(firestore, ctx.uid, 'outsideChanges', record.id),
       record,
@@ -864,7 +1075,8 @@ export const addRecipe = async (
     toData(summary, [record], {
       summary,
       lines: [
-        `${countOf(lines.value.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+        `${countOf(lines.value.lines.length, 'ingredient')}, ${countOf(steps.value.steps.length, 'step')}`,
+        ...toIngredientReply(ctx, lines.value),
       ],
     }),
   );
@@ -1248,6 +1460,10 @@ export const addToShoppingList = async (
               : `Added ${what} to what was already on the list`,
         ],
         shoppingItemId: line.id,
+        createdIngredientIds:
+          existing === null && line.newName !== null
+            ? [line.ingredientId]
+            : null,
         addedAmount: existing === null ? null : line.amount,
         createdItem: existing === null,
         previousItem: existing
@@ -1274,25 +1490,12 @@ export const addToShoppingList = async (
         };
         transaction.set(snapshot.ref, item);
         if (line.newName !== null) {
-          const custom: IngredientRecord = {
-            id: line.ingredientId,
-            catalogId: null,
-            name: line.newName,
-            familyId: null,
-            iconKey: null,
-            nutritionPer100g: null,
-            servingAmount: null,
-            servingUnit: null,
-            gramsPerMl: null,
-            gramsEach: null,
-            defaultProductId: null,
-            isArchived: false,
-            createdAt: ctx.now,
-            updatedAt: ctx.now,
-          };
           transaction.set(
             ref(firestore, ctx.uid, 'ingredients', line.ingredientId),
-            custom,
+            toNewIngredientRecord(ctx, {
+              id: line.ingredientId,
+              name: line.newName,
+            }),
           );
         }
       }
@@ -1336,11 +1539,526 @@ export const addToShoppingList = async (
   });
 };
 
+export const SAVE_IDEA_SHAPE = {
+  title: z
+    .string()
+    .min(1)
+    .max(MAX_IDEA_TITLE_LENGTH)
+    .describe('A short name for the idea, such as "Smoky lentil soup".'),
+  url: z
+    .string()
+    .max(MAX_IDEA_URL_LENGTH)
+    .nullish()
+    .describe(
+      'A link to the recipe, a web address starting with http:// or https://. Leave it out for an idea with no link.',
+    ),
+  note: z
+    .string()
+    .max(MAX_IDEA_NOTE_LENGTH)
+    .nullish()
+    .describe('Why it is worth trying, or what to remember about it.'),
+};
+
+/** Saves a link or a written idea the way Pinch's own Ideas screen does: never changes or removes one, and refuses a link or title that is already saved. */
+export const saveIdea = async (
+  firestore: Firestore,
+  ctx: ChangeContext,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  const title = clipText(String(input.title ?? ''), MAX_IDEA_TITLE_LENGTH);
+  if (title === '') return refused('The idea needs a title.');
+  const note = readText(
+    clipText(String(input.note ?? ''), MAX_IDEA_NOTE_LENGTH),
+  );
+  const typedUrl = readText(
+    typeof input.url === 'string' ? input.url.trim() : null,
+  );
+  const url =
+    typedUrl !== null && /^https?:\/\//i.test(typedUrl)
+      ? toWebLink(typedUrl)
+      : null;
+  if (typedUrl !== null && (url === null || url.length > MAX_IDEA_URL_LENGTH)) {
+    return refused(
+      'The link has to be a web address that starts with http:// or https://, so nothing was saved. Leave the link out to save a written idea.',
+    );
+  }
+  const host = url === null ? null : getWebLinkHost(url);
+  const id = randomUUID();
+  const idea: Idea = {
+    id,
+    kind: url === null ? 'TEXT' : 'LINK',
+    title,
+    note,
+    url,
+    siteName: host === null ? null : host.slice(0, MAX_IDEA_SITE_NAME_LENGTH),
+    imageUrl: null,
+    photoPath: null,
+    recipeId: null,
+    by: toBy(ctx.actor),
+    createdAt: ctx.now,
+    updatedAt: ctx.now,
+  };
+  const firstLine =
+    (note ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean) ?? null;
+  const lines = [
+    ...(host === null ? [] : [`From ${host}`]),
+    ...(firstLine === null ? [] : [clipText(firstLine, 100)]),
+  ];
+  const record = changeRecord(ctx, {
+    kind: 'ideaSaved',
+    title,
+    lines,
+    ideaId: id,
+  });
+  const isIdeasOn = ctx.allowedCategories.has('ideas');
+  const comparableUrl = url === null ? null : getComparableUrl(url);
+  const outcome = await firestore.runTransaction(async (transaction) => {
+    const { docs } = await transaction.get(
+      firestore
+        .collection(kitchenPath(ctx.uid, 'ideas'))
+        .select('title', 'url'),
+    );
+    if (docs.length >= SOFT_MAX_IDEAS) {
+      return `Pinch's ideas hold up to ${SOFT_MAX_IDEAS} and the list is full, so nothing was saved. The person can delete some in Pinch first.`;
+    }
+    const sameLink = docs.find((doc) => {
+      const stored = readText(doc.get('url'));
+      return (
+        comparableUrl !== null &&
+        stored !== null &&
+        getComparableUrl(stored) === comparableUrl
+      );
+    });
+    if (sameLink) {
+      return isIdeasOn
+        ? `That link is already saved as the idea “${readText(sameLink.get('title')) ?? 'Untitled'}”, so nothing was saved.`
+        : 'That link is already in the ideas, so nothing was saved.';
+    }
+    const sameTitle = docs.find(
+      (doc) =>
+        readText(doc.get('title'))?.trim().toLowerCase() ===
+        title.toLowerCase(),
+    );
+    if (sameTitle) {
+      return isIdeasOn
+        ? `An idea called “${readText(sameTitle.get('title'))}” is already saved, so nothing was saved.`
+        : 'An idea with that title is already saved, so nothing was saved.';
+    }
+    transaction.create(ref(firestore, ctx.uid, 'ideas', id), idea);
+    transaction.create(
+      ref(firestore, ctx.uid, 'outsideChanges', record.id),
+      record,
+    );
+    return null;
+  });
+  if (outcome !== null) return refused(outcome);
+  const summary = `Saved the idea “${title}” in Pinch's Ideas.`;
+  return ok(toData(summary, [record], { summary, lines }));
+};
+
+const MAX_FIND_NAMES = 50;
+
+export const FIND_INGREDIENTS_SHAPE = {
+  names: z
+    .array(z.string().min(1).max(MAX_NAME_LENGTH))
+    .min(1)
+    .max(MAX_FIND_NAMES)
+    .describe(
+      'Ingredient names as a recipe would write them, such as "lean ground beef". Each answer says which of the kitchen\'s own names it is, and any words (like "lean") to put in the line\'s note.',
+    ),
+};
+
+export interface FoundIngredient {
+  asked: string;
+  match: { name: string; hasNutrition: boolean } | null;
+  noteWords: string[];
+  close: string[];
+}
+
+/** Which of the names the kitchen already has, by exactly the matching recipe lines use. */
+export const findIngredients = async (
+  firestore: Firestore,
+  uid: string,
+  input: Record<string, unknown>,
+): Promise<
+  | { kind: 'ok'; value: FoundIngredient[] }
+  | { kind: 'refused'; message: string }
+> => {
+  const names = (Array.isArray(input.names) ? input.names : []).flatMap(
+    (name) =>
+      typeof name === 'string' && name.trim() !== ''
+        ? [name.replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LENGTH)]
+        : [],
+  );
+  if (names.length === 0 || names.length > MAX_FIND_NAMES) {
+    return {
+      kind: 'refused',
+      message: `Send between 1 and ${MAX_FIND_NAMES} names.`,
+    };
+  }
+  const book = await readIngredientBook(firestore, uid);
+  return {
+    kind: 'ok',
+    value: names.map((asked) => {
+      const found = matchIngredientWithNote(asked, book.choices);
+      return {
+        asked,
+        match: found && {
+          name: found.ingredient.name,
+          hasNutrition: hasNutritionIn(
+            found.ingredient,
+            book.nutrition.get(found.ingredient.id),
+          ),
+        },
+        noteWords: found?.noteWords ?? [],
+        close: found ? [] : suggestIngredients(asked, book.choices),
+      };
+    }),
+  };
+};
+
+const NUTRITION_LIMITS = {
+  calories: 900,
+  protein: 100,
+  carbs: 100,
+  fat: 100,
+} as const;
+
+const nutritionNumber = (key: keyof typeof NUTRITION_LIMITS) =>
+  z
+    .number()
+    .min(0)
+    .max(NUTRITION_LIMITS[key])
+    .nullable()
+    .describe(
+      key === 'calories' ? 'kcal per 100 g' : `grams of ${key} per 100 g`,
+    );
+
+export const FILL_NUTRITION_SHAPE = {
+  items: z
+    .array(
+      z.object({
+        ingredient: z
+          .string()
+          .min(1)
+          .max(MAX_NAME_LENGTH)
+          .describe(
+            "An ingredient already in the person's kitchen, by the name pinch_find_ingredients gave.",
+          ),
+        per100g: z
+          .object({
+            calories: nutritionNumber('calories'),
+            protein: nutritionNumber('protein'),
+            carbs: nutritionNumber('carbs'),
+            fat: nutritionNumber('fat'),
+          })
+          .describe(
+            'Per 100 g, from a source you trust. Give null for a value you do not know; at least one must be a number.',
+          ),
+      }),
+    )
+    .min(1)
+    .max(MAX_ITEMS_PER_CALL)
+    .describe(
+      'Ingredients to fill in. Only an ingredient with no nutrition yet is filled; one that has any is left as the person set it.',
+    ),
+};
+
+const readNutritionItem = (
+  value: unknown,
+): { ingredient: string; per100g: NutritionValues } | null => {
+  const entry = (value ?? {}) as Record<string, unknown>;
+  const ingredient =
+    typeof entry.ingredient === 'string'
+      ? entry.ingredient.replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LENGTH)
+      : '';
+  const given = (entry.per100g ?? {}) as Record<string, unknown>;
+  const read = (key: keyof typeof NUTRITION_LIMITS) => {
+    const number = given[key] ?? null;
+    return number === null ||
+      (typeof number === 'number' &&
+        Number.isFinite(number) &&
+        number >= 0 &&
+        number <= NUTRITION_LIMITS[key])
+      ? (number as number | null)
+      : undefined;
+  };
+  const per100g = {
+    calories: read('calories'),
+    protein: read('protein'),
+    carbs: read('carbs'),
+    fat: read('fat'),
+  };
+  const values = Object.values(per100g);
+  return ingredient === '' ||
+    values.includes(undefined) ||
+    values.every((number) => number === null)
+    ? null
+    : { ingredient, per100g: per100g as NutritionValues };
+};
+
+const formatNutrition = (values: NutritionValues) =>
+  [
+    values.calories === null ? null : `${values.calories} kcal`,
+    values.protein === null ? null : `${values.protein} g protein`,
+    values.carbs === null ? null : `${values.carbs} g carbs`,
+    values.fat === null ? null : `${values.fat} g fat`,
+  ]
+    .filter((part) => part !== null)
+    .join(', ');
+
+interface NutritionTarget {
+  ingredient: string;
+  per100g: NutritionValues;
+  choice: ResolvedIngredient | null;
+  why: string | null;
+}
+
+interface NutritionFill extends NutritionTarget {
+  choice: ResolvedIngredient;
+  snapshot: DocumentSnapshot;
+  createdRecord: boolean;
+}
+
+/** Gives nutrition to ingredients that have none, never changing what the person or the catalog already holds, and never making an ingredient. */
+export const fillNutrition = async (
+  firestore: Firestore,
+  ctx: ChangeContext,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  const rows = Array.isArray(input.items) ? input.items : [];
+  if (rows.length === 0 || rows.length > MAX_ITEMS_PER_CALL) {
+    return refused(`Send between 1 and ${MAX_ITEMS_PER_CALL} ingredients.`);
+  }
+  const items = rows.map(readNutritionItem);
+  const bad = items.findIndex((item) => item === null);
+  if (bad >= 0) {
+    return refused(
+      `The nutrition for item ${bad + 1} is off, so nothing was changed. Each needs an ingredient name and numbers per 100 g (calories up to ${NUTRITION_LIMITS.calories}, the rest up to ${NUTRITION_LIMITS.protein}), at least one of them not null.`,
+    );
+  }
+  const book = await readIngredientBook(firestore, ctx.uid);
+  const resolved = items.flatMap((item): NutritionTarget[] => {
+    if (item === null) return [];
+    const active = matchIngredientWithNote(item.ingredient, book.choices);
+    if (active) return [{ ...item, choice: active.ingredient, why: null }];
+    const archived = matchIngredientWithNote(
+      item.ingredient,
+      book.archivedChoices,
+    );
+    return [
+      {
+        ...item,
+        choice: null,
+        why: archived
+          ? `${item.ingredient} is archived in Pinch, so it was skipped.`
+          : `${item.ingredient} isn't in the kitchen, so it was skipped. Fill nutrition only for an ingredient Pinch already has.`,
+      },
+    ];
+  });
+  const outcome = await firestore.runTransaction(async (transaction) => {
+    const snapshots = await Promise.all(
+      resolved.map((entry) =>
+        entry.choice
+          ? transaction.get(
+              ref(firestore, ctx.uid, 'ingredients', entry.choice.id),
+            )
+          : null,
+      ),
+    );
+    const { filled, skipped } = resolved.reduce(
+      (state, entry, index) => {
+        const { choice } = entry;
+        const snapshot = snapshots[index];
+        if (choice === null || snapshot === null) {
+          return { ...state, skipped: [...state.skipped, entry.why ?? ''] };
+        }
+        if (state.filled.some((done) => done.choice.id === choice.id)) {
+          return {
+            ...state,
+            skipped: [
+              ...state.skipped,
+              `${entry.ingredient} was listed twice, so only the first was used.`,
+            ],
+          };
+        }
+        if (choice.isCustom && !snapshot.exists) {
+          return {
+            ...state,
+            skipped: [
+              ...state.skipped,
+              `${entry.ingredient} isn't in the kitchen, so it was skipped.`,
+            ],
+          };
+        }
+        if (choice.isCustom && snapshot.get('isArchived') === true) {
+          return {
+            ...state,
+            skipped: [
+              ...state.skipped,
+              `${entry.ingredient} is archived in Pinch, so it was skipped.`,
+            ],
+          };
+        }
+        if (hasNutritionIn(choice, snapshot.get('nutritionPer100g'))) {
+          return {
+            ...state,
+            skipped: [
+              ...state.skipped,
+              `${entry.ingredient} already has nutrition; only the person can change it.`,
+            ],
+          };
+        }
+        return {
+          ...state,
+          filled: [
+            ...state.filled,
+            { ...entry, choice, snapshot, createdRecord: !snapshot.exists },
+          ],
+        };
+      },
+      {
+        filled: [] as NutritionFill[],
+        skipped: [] as string[],
+      },
+    );
+    if (filled.length === 0) return { kind: 'none' as const, skipped };
+    const by = toBy(ctx.actor);
+    filled.forEach((entry) => {
+      const values = {
+        nutritionPer100g: entry.per100g,
+        nutritionBy: by,
+        updatedAt: ctx.now,
+      };
+      if (!entry.createdRecord) {
+        transaction.update(entry.snapshot.ref, values);
+        return;
+      }
+      const record: IngredientRecord = {
+        id: entry.choice.id,
+        catalogId: entry.choice.id,
+        name: null,
+        familyId: null,
+        iconKey: null,
+        servingAmount: null,
+        servingUnit: null,
+        gramsPerMl: null,
+        gramsEach: null,
+        defaultProductId: null,
+        isArchived: false,
+        addedBy: null,
+        createdAt: ctx.now,
+        ...values,
+      };
+      transaction.create(entry.snapshot.ref, record);
+    });
+    const change = changeRecord(ctx, {
+      kind: 'nutritionFilled',
+      title:
+        filled.length === 1
+          ? filled[0].choice.name
+          : `Nutrition for ${filled.length} ingredients`,
+      lines: filled.map(
+        (entry) =>
+          `${entry.choice.name}: ${formatNutrition(entry.per100g)} per 100 g`,
+      ),
+      filledNutrition: filled.map((entry) => ({
+        ingredientId: entry.choice.id,
+        createdRecord: entry.createdRecord,
+      })),
+    });
+    transaction.create(
+      ref(firestore, ctx.uid, 'outsideChanges', change.id),
+      change,
+    );
+    return { kind: 'filled' as const, change, filled, skipped };
+  });
+  if (outcome.kind === 'none') {
+    return refused(`Nothing was changed. ${outcome.skipped.join(' ')}`);
+  }
+  const summary = `Filled in nutrition for ${countOf(outcome.filled.length, 'ingredient')} in Pinch.`;
+  return ok(
+    toData(summary, [outcome.change], {
+      summary,
+      lines: capLines([
+        ...outcome.filled.map(
+          (entry) =>
+            `${entry.ingredient}: ${formatNutrition(entry.per100g)} per 100 g`,
+        ),
+        ...outcome.skipped,
+      ]),
+    }),
+  );
+};
+
 /** `isSettled`: nothing is left to take back (already taken back, or what it touched is gone), so a caller can stop offering Undo. */
 type Undone = { ok: true } | { ok: false; message: string; isSettled: boolean };
 
 const takenBackIn = (by: ChangeUndoFrom | null) =>
   `Already taken back in ${by === 'helm' ? 'Helm' : 'Pinch'}.`;
+
+const kitchenCollection = (firestore: Firestore, uid: string, name: string) =>
+  firestore.collection(kitchenPath(uid, name));
+
+/** Which of these ingredients something still points at: a recipe line, a saved meal, a price, a shopping item, a package in the kitchen or a planned meal. Recipes and saved meals carry no id index, so they are read once whole; the rest are asked by id. `except` is what the undo itself is about to remove or restore. */
+const readIngredientsInUse = async (
+  firestore: Firestore,
+  uid: string,
+  ids: string[],
+  except: { recipeId: string | null; shoppingItemId: string | null },
+): Promise<Set<string>> => {
+  const [recipes, meals] = await Promise.all([
+    kitchenCollection(firestore, uid, 'recipes').select('ingredients').get(),
+    kitchenCollection(firestore, uid, 'meals').select('items').get(),
+  ]);
+  const listed = new Set([
+    ...recipes.docs.flatMap((doc) =>
+      doc.id === except.recipeId
+        ? []
+        : ((doc.get('ingredients') ?? []) as { ingredientId?: unknown }[]).map(
+            (line) => line.ingredientId,
+          ),
+    ),
+    ...meals.docs.flatMap((doc) =>
+      ((doc.get('items') ?? []) as { refId?: unknown }[]).map(
+        (item) => item.refId,
+      ),
+    ),
+  ]);
+  const used = await Promise.all(
+    ids.map(async (id) => {
+      if (listed.has(id)) return true;
+      const [shopping, packages, products, planned] = await Promise.all([
+        kitchenCollection(firestore, uid, 'shoppingItems')
+          .where('ingredientId', '==', id)
+          .limit(2)
+          .get(),
+        kitchenCollection(firestore, uid, 'packages')
+          .where('ingredientId', '==', id)
+          .limit(1)
+          .get(),
+        kitchenCollection(firestore, uid, 'products')
+          .where('ingredientId', '==', id)
+          .limit(1)
+          .get(),
+        kitchenCollection(firestore, uid, 'plannedMeals')
+          .where('refIds', 'array-contains', id)
+          .limit(1)
+          .get(),
+      ]);
+      return (
+        shopping.docs.some((doc) => doc.id !== except.shoppingItemId) ||
+        packages.docs.length > 0 ||
+        products.docs.length > 0 ||
+        planned.docs.length > 0
+      );
+    }),
+  );
+  return new Set(ids.filter((_, index) => used[index]));
+};
 
 /** Takes an outside change back in one transaction that re-reads what it touched and refuses, with a sentence, once the record has moved on. */
 export const undoPinchOutsideChange = async (
@@ -1358,6 +2076,22 @@ export const undoPinchOutsideChange = async (
     };
   }
   const recordRef = ref(firestore, uid, 'outsideChanges', changeId);
+  const planned = (await recordRef.get()).data() as OutsideChange | undefined;
+  const createdIds = Array.isArray(planned?.createdIngredientIds)
+    ? planned.createdIngredientIds.filter(
+        (id): id is string => typeof id === 'string' && !id.includes('/'),
+      )
+    : [];
+  const inUse = new Set(
+    createdIds.length === 0
+      ? []
+      : await readIngredientsInUse(firestore, uid, createdIds, {
+          recipeId: planned?.recipeId ?? null,
+          shoppingItemId: planned?.createdItem
+            ? (planned.shoppingItemId ?? null)
+            : null,
+        }),
+  );
   return firestore.runTransaction(async (transaction): Promise<Undone> => {
     const stored = await transaction.get(recordRef);
     if (!stored.exists) {
@@ -1386,7 +2120,27 @@ export const undoPinchOutsideChange = async (
       message,
       isSettled: false,
     });
+    const made = await Promise.all(
+      (Array.isArray(record.createdIngredientIds)
+        ? record.createdIngredientIds
+        : []
+      )
+        .filter((id) => createdIds.includes(id) && !inUse.has(id))
+        .map((id) => transaction.get(ref(firestore, uid, 'ingredients', id))),
+    );
     const finish = (): Undone => {
+      made.forEach((ingredient) => {
+        if (
+          ingredient.exists &&
+          ingredient.get('isArchived') !== true &&
+          ingredient.get('updatedAt') === record.createdAt
+        ) {
+          transaction.update(ingredient.ref, {
+            isArchived: true,
+            updatedAt: now,
+          });
+        }
+      });
       markUndone();
       return { ok: true };
     };
@@ -1440,6 +2194,54 @@ export const undoPinchOutsideChange = async (
         );
       }
       transaction.delete(mealRef);
+      return finish();
+    }
+    if (record.kind === 'ideaSaved') {
+      const ideaRef = ref(firestore, uid, 'ideas', record.ideaId ?? '_');
+      const idea = await transaction.get(ideaRef);
+      if (!idea.exists) return alreadyGone('That idea is already gone.');
+      if (readText(idea.get('recipeId')) !== null) {
+        return refuse('The idea was made into a recipe.');
+      }
+      if (idea.get('updatedAt') !== record.createdAt) {
+        return refuse('The idea was changed since.');
+      }
+      transaction.delete(ideaRef);
+      return finish();
+    }
+    if (record.kind === 'nutritionFilled') {
+      const filled = Array.isArray(record.filledNutrition)
+        ? record.filledNutrition
+        : [];
+      const snapshots = await Promise.all(
+        filled.map((entry) =>
+          transaction.get(
+            ref(firestore, uid, 'ingredients', entry.ingredientId),
+          ),
+        ),
+      );
+      const changedAt = snapshots.findIndex(
+        (snapshot) =>
+          !snapshot.exists ||
+          snapshot.get('nutritionBy') == null ||
+          snapshot.get('updatedAt') !== record.createdAt,
+      );
+      if (changedAt >= 0) {
+        const name =
+          readText(snapshots[changedAt].get('name')) ??
+          CATALOG_NAMES[filled[changedAt].ingredientId] ??
+          'An ingredient';
+        return refuse(
+          `${name} was changed since, so the nutrition was left as it is.`,
+        );
+      }
+      snapshots.forEach((snapshot) =>
+        transaction.update(snapshot.ref, {
+          nutritionPer100g: null,
+          nutritionBy: null,
+          updatedAt: now,
+        }),
+      );
       return finish();
     }
     const itemRef = ref(

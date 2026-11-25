@@ -531,6 +531,18 @@ const GENERATED: Generated[] = [
         2,
       )};\n`,
   },
+  {
+    src: 'src/apps/pinch/catalog/catalogIngredients.ts',
+    dest: 'functions/src/apps/pinch/share/catalogNutrition.ts',
+    build: () =>
+      `export const CATALOG_NUTRITION_IDS: ReadonlySet<string> = new Set(${JSON.stringify(
+        CATALOG_INGREDIENTS.filter((entry) =>
+          Object.values(entry.per100g).some((value) => value !== null),
+        ).map((entry) => entry.id),
+        null,
+        2,
+      )});\n`,
+  },
 ];
 
 const header = (src: string) =>

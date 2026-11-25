@@ -149,11 +149,14 @@ const OUTSIDE_TOOLS = [
   'list_topics',
   'pinch_add_recipe',
   'pinch_add_to_shopping_list',
+  'pinch_fill_nutrition',
+  'pinch_find_ingredients',
   'pinch_get_kitchen',
   'pinch_get_meal_plan',
   'pinch_get_recipe',
   'pinch_get_shopping_list',
   'pinch_plan_meal',
+  'pinch_save_idea',
   'pinch_search_recipes',
   'pinch_update_recipe',
   'search_procedures',
@@ -977,6 +980,7 @@ const pinchTool = (
   }).find((tool) => tool.name === name)!;
 const PINCH_READS = PINCH_ACTIONS.filter((action) => action.kind === 'read');
 assert.deepEqual(PINCH_READS.map((action) => action.id).sort(), [
+  'find_ingredients',
   'get_kitchen',
   'get_meal_plan',
   'get_recipe',
@@ -1071,7 +1075,9 @@ const PINCH_CHANGES = PINCH_ACTIONS.filter(
 assert.deepEqual(PINCH_CHANGES.map((action) => action.id).sort(), [
   'add_recipe',
   'add_to_shopping_list',
+  'fill_nutrition',
   'plan_meal',
+  'save_idea',
   'update_recipe',
 ]);
 PINCH_CHANGES.forEach((action) => {

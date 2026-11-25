@@ -56,6 +56,71 @@ export const matchIngredient = (
   ingredients: ResolvedIngredient[],
 ) => matcher.match(name, ingredients);
 
+/** Words and amounts a line carries about the cut or the leanness that the ingredient's own name does not ("lean", "93%", "80/20"). */
+const DESCRIPTOR_PATTERN =
+  /(?<![\p{L}\p{N}-])(?:\d{1,3}\s*%|\d{1,3}\s*\/\s*\d{1,3}%?|extra[\s-]+lean|low[\s-]+sodium|bone[\s-]*in|lean|boneless|skinless|fresh|frozen|large|small|medium|chopped|diced|minced|sliced|organic|unsalted)(?![\p{L}\p{N}-])/giu;
+
+export interface DescriptorMatch {
+  ingredient: ResolvedIngredient;
+  /** The words the line carried that the match left out, as written and in order, for the line's note; empty for a match on the full name. */
+  noteWords: string[];
+}
+
+/** `matchIngredient` on the full name first, then with descriptor words ignored ("Lean ground beef" is the person's "Ground beef", with "lean" for the note). A descriptor that is a word of the matched ingredient's own name stays with the name, never the note, and only the line's words are ever dropped, so "ground" in "Ground beef" is never lost. */
+export const matchIngredientWithNote = (
+  name: string,
+  ingredients: ResolvedIngredient[],
+): DescriptorMatch | null => {
+  const full = matcher.match(name, ingredients);
+  if (full) return { ingredient: full, noteWords: [] };
+  const dropped = Array.from(name.matchAll(DESCRIPTOR_PATTERN), ([word]) =>
+    word.toLowerCase().replace(/\s+/g, ' '),
+  );
+  if (dropped.length === 0) return null;
+  const rest = name
+    .replace(DESCRIPTOR_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const ingredient = rest === '' ? null : matcher.match(rest, ingredients);
+  if (!ingredient) return null;
+  const own = ` ${normalizeName(ingredient.name)} `;
+  return {
+    ingredient,
+    noteWords: dropped.filter(
+      (word) => !own.includes(` ${normalizeName(word)} `),
+    ),
+  };
+};
+
+/** Up to `limit` names of ingredients that share a word with a name nothing matched, the person's own first, for an assistant to choose from. */
+export const suggestIngredients = (
+  name: string,
+  ingredients: ResolvedIngredient[],
+  limit = 3,
+) => {
+  const asked = new Set(
+    withoutFiller(name.replace(DESCRIPTOR_PATTERN, ' '))
+      .split(' ')
+      .filter((word) => word.length > 2),
+  );
+  return ingredients
+    .map((ingredient) => ({
+      ingredient,
+      shared: normalizeName(ingredient.name)
+        .split(' ')
+        .filter((word) => asked.has(word)).length,
+    }))
+    .filter(({ shared }) => shared > 0)
+    .sort(
+      (left, right) =>
+        right.shared - left.shared ||
+        Number(right.ingredient.isCustom) - Number(left.ingredient.isCustom) ||
+        left.ingredient.name.length - right.ingredient.name.length,
+    )
+    .slice(0, limit)
+    .map(({ ingredient }) => ingredient.name);
+};
+
 export interface ReadNameResolution {
   resolution: OptionResolution<ResolvedIngredient>;
   /** The other name the line gave, only when the line matched no ingredient, so the new one's note keeps it. */

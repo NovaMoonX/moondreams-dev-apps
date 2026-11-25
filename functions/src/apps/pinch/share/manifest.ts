@@ -310,6 +310,13 @@ export const PINCH_SHARES: SourceShares = {
           label: 'See what is in the kitchen',
         },
         {
+          id: 'find_ingredients',
+          kind: 'read',
+          categories: ['recipeIngredients'],
+          permission: null,
+          label: "Look up which names the kitchen's ingredients use",
+        },
+        {
           id: 'update_recipe',
           kind: 'change',
           categories: [],
@@ -337,6 +344,20 @@ export const PINCH_SHARES: SourceShares = {
           permission: 'addToShoppingList',
           label: 'Add to the shopping list',
         },
+        {
+          id: 'save_idea',
+          kind: 'change',
+          categories: [],
+          permission: 'saveIdeas',
+          label: 'Save a recipe idea',
+        },
+        {
+          id: 'fill_nutrition',
+          kind: 'change',
+          categories: [],
+          permission: 'fillNutrition',
+          label: 'Fill in missing nutrition',
+        },
       ],
       changes: [
         {
@@ -360,6 +381,18 @@ export const PINCH_SHARES: SourceShares = {
           label: 'Add to the shopping list',
           meaning:
             'Add to your shopping list. It never ticks or removes anything.',
+        },
+        {
+          id: 'saveIdeas',
+          label: 'Save recipe ideas',
+          meaning:
+            'Save a link or a written idea to try later. It never changes or removes an idea.',
+        },
+        {
+          id: 'fillNutrition',
+          label: 'Fill in missing nutrition',
+          meaning:
+            'Only for ingredients with no nutrition yet. It never changes nutrition you or the catalog already have.',
         },
       ],
       capabilities: { read: true, write: true, backgroundSync: true },

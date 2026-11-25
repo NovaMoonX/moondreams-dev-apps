@@ -31,11 +31,17 @@ import { CATALOG_NAMES } from './catalogNames.js';
 import {
   ADD_RECIPE_SHAPE,
   ADD_TO_SHOPPING_LIST_SHAPE,
+  FILL_NUTRITION_SHAPE,
+  FIND_INGREDIENTS_SHAPE,
   PLAN_MEAL_SHAPE,
+  SAVE_IDEA_SHAPE,
   UPDATE_RECIPE_SHAPE,
   addRecipe,
   addToShoppingList,
+  fillNutrition,
+  findIngredients,
   planMeal,
+  saveIdea,
   undoPinchOutsideChange,
   updateRecipe,
 } from './changes.js';
@@ -1416,6 +1422,20 @@ const getKitchen = async (
   });
 };
 
+const findKitchenIngredients = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  if (!ctx.allowedCategories.has('recipeIngredients')) {
+    return switchedOff(['recipeIngredients']);
+  }
+  const found = await findIngredients(firestore, ctx.uid, input);
+  return found.kind === 'refused'
+    ? { status: 'refused', message: found.message }
+    : toActionResult('find_ingredients', ctx, { results: found.value });
+};
+
 const toAppAction = (
   description: string,
   shape: z.ZodRawShape,
@@ -1531,6 +1551,11 @@ export function createPinchAdapter(
         GET_KITCHEN_SHAPE,
         (ctx, input) => getKitchen(deps.firestore(), ctx, input),
       ),
+      find_ingredients: toAppAction(
+        'Looks up which of a list of ingredient names the person\'s kitchen already has, up to 50 at a time. Each answer has asked, match (the kitchen\'s own name and whether it has nutrition, or null), noteWords (descriptor words such as lean or 93% to put in the recipe line\'s note, because the kitchen\'s ingredient is the plain one: "lean ground beef" is their "Ground beef" with "lean" in the note) and close (up to three near names when nothing matched). Call it before pinch_add_recipe or pinch_update_recipe and write each line with the kitchen\'s name.',
+        FIND_INGREDIENTS_SHAPE,
+        (ctx, input) => findKitchenIngredients(deps.firestore(), ctx, input),
+      ),
       update_recipe: toAppAction(
         "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_get_recipe first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_search_recipes or pinch_get_meal_plan. It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
         UPDATE_RECIPE_SHAPE,
@@ -1550,6 +1575,16 @@ export function createPinchAdapter(
         "Adds things to the person's shopping list: each with a name and optionally an amount and unit. Something already on the list gains the amount. It never ticks or removes anything. It applies at once and shows in Pinch's shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.",
         ADD_TO_SHOPPING_LIST_SHAPE,
         (ctx, input) => addToShoppingList(deps.firestore(), ctx, input),
+      ),
+      save_idea: toAppAction(
+        "Saves a recipe idea in the person's Ideas to try later: a title, and optionally a link (http:// or https:// only) and a note. It never changes or removes an idea, and it says so when the same link or title is already saved. It applies at once and shows in Pinch's Ideas and Done for you with an Undo, and in Helm. Confirm what you will save before you call it.",
+        SAVE_IDEA_SHAPE,
+        (ctx, input) => saveIdea(deps.firestore(), ctx, input),
+      ),
+      fill_nutrition: toAppAction(
+        "Fills in nutrition per 100 g (calories, protein, carbs, fat) for ingredients in the person's kitchen that have none yet, up to 30 at a time, each named as pinch_find_ingredients gave it (hasNutrition false). It never creates an ingredient and never changes nutrition that is already there: those are skipped and named. It applies at once, shows in Pinch's ingredient with its source and in Done for you with an Undo, and in Helm. Only send values from a source you trust, and confirm with the person before you call it.",
+        FILL_NUTRITION_SHAPE,
+        (ctx, input) => fillNutrition(deps.firestore(), ctx, input),
       ),
     },
     undoChange: (firestore, uid, changeId, from) =>
