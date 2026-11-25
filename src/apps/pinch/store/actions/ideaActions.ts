@@ -31,8 +31,14 @@ const ideaDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'ideas', id);
 
 /** The first picture keeps the original name, so an idea from before several pictures is already its own first one. */
-export const getIdeaPhotoPath = (uid: string, ideaId: string, index = 0) =>
-  `apps/pinch/kitchens/${uid}/ideas/${ideaId}/photo${index === 0 ? '' : `-${index}`}.webp`;
+/** A replaced set gets a fresh `version`, so a failed replace never overwrites the pictures the document still points at. */
+export const getIdeaPhotoPath = (
+  uid: string,
+  ideaId: string,
+  index = 0,
+  version: number | null = null,
+) =>
+  `apps/pinch/kitchens/${uid}/ideas/${ideaId}/photo${version === null ? '' : `-${version}`}${index === 0 ? '' : `-${index}`}.webp`;
 
 const BAD_TITLE = `Give it a title of up to ${MAX_IDEA_TITLE_LENGTH} characters.`;
 const BAD_NOTE = `Keep the note to ${MAX_IDEA_NOTE_LENGTH} characters.`;
@@ -250,8 +256,9 @@ export const updateIdea = createAsyncThunk<
         `An idea keeps up to ${MAX_RECIPE_FILES} pictures.`,
       );
     }
+    const version = Date.now();
     const photoPaths = isReplacing
-      ? photoFiles.map((_, index) => getIdeaPhotoPath(uid, id, index))
+      ? photoFiles.map((_, index) => getIdeaPhotoPath(uid, id, index, version))
       : oldPaths;
 
     try {
@@ -280,6 +287,11 @@ export const updateIdea = createAsyncThunk<
         );
       }
     } catch (error) {
+      if (isReplacing) {
+        await Promise.all(
+          photoPaths.map((path) => deleteFile(path).catch(() => undefined)),
+        );
+      }
       return rejectWithValue(
         getWriteMessage(error, 'Unable to save this idea.'),
       );

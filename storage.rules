@@ -120,7 +120,7 @@ service firebase.storage {
 
       allow read: if isKitchenOwner();
       allow create, update: if isKitchenOwner()
-        && fileName.matches('photo(-[12])?[.]webp')
+        && fileName.matches('photo(-[0-9]{13})?(-[12])?[.]webp')
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isKitchenOwner();
