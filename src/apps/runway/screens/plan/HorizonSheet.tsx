@@ -990,9 +990,6 @@ function HorizonSheet({
                   : HORIZON_WORDS.leftFact(
                       formatCents(figures.setAsideCents),
                       formatCents(figures.spentCents),
-                      figures.fromFreeCents > 0 || isHidden
-                        ? formatCents(figures.fromFreeCents)
-                        : null,
                     )
               }
             />

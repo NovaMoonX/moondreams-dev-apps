@@ -17,8 +17,9 @@ type GoalBalanceViewProps = GoalSeriesTarget;
 /** The sheet's row that opens the chart; a goal with fewer than two points has none. */
 export function GoalBalanceDoor({
   onOpen,
+  title,
   ...props
-}: GoalBalanceViewProps & { onOpen: () => void }) {
+}: GoalBalanceViewProps & { onOpen: () => void; title?: string }) {
   const series = useGoalSeries(props);
   if (!series.hasChart) return null;
   return (
@@ -26,7 +27,8 @@ export function GoalBalanceDoor({
       isGrouped
       hasChevron
       icon={<ChartLine />}
-      label={GOAL_CHART_WORDS.door}
+      label={title ?? GOAL_CHART_WORDS.door}
+      subtitle={title ? GOAL_CHART_WORDS.door : undefined}
       onClick={onOpen}
     />
   );

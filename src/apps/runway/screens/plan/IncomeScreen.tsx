@@ -135,18 +135,11 @@ interface PayLineRowProps {
   itemId: string;
   payLine: PayLineSealed;
   planStance: Stance;
-  funds: string[];
   today: number;
 }
 
 /** One pay: its name, when it arrives and its amount; it opens the pay's sheet. */
-function PayLineRow({
-  itemId,
-  payLine,
-  planStance,
-  funds,
-  today,
-}: PayLineRowProps) {
+function PayLineRow({ itemId, payLine, planStance, today }: PayLineRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { openItem, closeOpenItem, showPlanSection } = useRunwayUrlState();
   const request = openItem?.itemId === itemId ? openItem : null;
@@ -173,13 +166,7 @@ function PayLineRow({
           today={today}
           figureLabel='Each pay'
           figure={amount}
-          fact={[
-            timing,
-            describeEnding(payLine),
-            funds.length > 0 ? describeFunds(funds) : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
+          fact={[timing, describeEnding(payLine)].filter(Boolean).join(' · ')}
           help={describeRange(
             payLine.amount,
             stance,
@@ -260,7 +247,6 @@ function IncomeScreen() {
                     itemId={item.id}
                     payLine={version.payload}
                     planStance={stance}
-                    funds={namesOf(version.payload.pairings)}
                     today={today}
                   />
                 ))}
