@@ -79,42 +79,43 @@ export function isBroadMerchant(
   );
 }
 
-const isMerchantRule = (rule: OpenRule) => rule.merchantKey !== null;
+/** Each ticked condition catches on its own: a kind of place on any card, everything on a card. A merchant rule names only its merchant. */
+const getMatchTier = (
+  rule: OpenRule,
+  facts: RuleFacts,
+  merchantKey: string | null,
+  isBroad: boolean,
+): number | null => {
+  if (rule.merchantKey !== null) {
+    return rule.merchantKey === merchantKey ? 0 : null;
+  }
+  const isKind =
+    rule.category !== null && rule.category === facts.category && !isBroad;
+  const isCard = rule.cardId !== null && rule.cardId === facts.cardId;
+  return isKind && isCard ? 1 : isKind ? 2 : isCard ? 3 : null;
+};
 
-/** Merchant first, then a kind of place with a card, then a kind of place, then a card. */
-const getTier = (rule: OpenRule): number =>
-  isMerchantRule(rule)
-    ? 0
-    : rule.category !== null && rule.cardId !== null
-      ? 1
-      : rule.category !== null
-        ? 2
-        : 3;
-
-/** The most specific rule that fits a purchase, or null. A kind-of-place rule skips a broad merchant, and a rule that asks every time comes back with `isAsk`. */
+/** The most specific rule that fits a purchase, or null: merchant first, then one whose kind and card both fit, then a kind, then a card. A kind of place never catches a broad merchant, and a rule that asks every time comes back with `isAsk`. */
 export function findRule(
   facts: RuleFacts,
   rules: readonly OpenRule[],
 ): RuleMatch | null {
   const merchantKey = toMerchantKey(facts.merchant);
   const isBroad = isBroadMerchant(merchantKey, rules);
-  const fits = (rule: OpenRule) =>
-    (rule.merchantKey !== null ||
-      rule.category !== null ||
-      rule.cardId !== null) &&
-    (rule.merchantKey === null || rule.merchantKey === merchantKey) &&
-    (rule.category === null || rule.category === facts.category) &&
-    (rule.cardId === null || rule.cardId === facts.cardId) &&
-    !(isBroad && rule.category !== null && rule.merchantKey === null);
   const [best] = rules
-    .filter(fits)
+    .flatMap((rule) => {
+      const tier = getMatchTier(rule, facts, merchantKey, isBroad);
+      return tier === null ? [] : [{ rule, tier }];
+    })
     .sort(
       (a, b) =>
-        getTier(a) - getTier(b) ||
-        a.createdAt - b.createdAt ||
-        a.id.localeCompare(b.id),
+        a.tier - b.tier ||
+        a.rule.createdAt - b.rule.createdAt ||
+        a.rule.id.localeCompare(b.rule.id),
     );
-  return best ? { rule: best, isAsk: best.target === RULE_VARIES } : null;
+  return best
+    ? { rule: best.rule, isAsk: best.rule.target === RULE_VARIES }
+    : null;
 }
 
 export interface RulePlacement {

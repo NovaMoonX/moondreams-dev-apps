@@ -282,10 +282,9 @@ const OWN_MOVE_CATEGORIES = new Set([
   'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
 ]);
 
-/** A posted bank or email purchase that a store, card or kind rule could place: never a pending charge, money in, or a move the bank files as one. */
+/** A bank or email purchase that a store, card or kind rule could place, pending or posted: never money in, or a move the bank files as one. */
 export const canOfferRule = (purchase: OpenPurchase) =>
   (purchase.source === 'link' || purchase.source === 'email') &&
-  purchase.status !== 'pending' &&
   purchase.amountCents > 0 &&
   !OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
 
