@@ -23,7 +23,7 @@ export interface CookRow {
   id: string;
   name: string;
   note: string | null;
-  /** The scaled amount, or for a line with no amount its note ("to taste"), which never scales. */
+  /** The scaled amount, or for a line with no amount its words ("to taste"), which never scales. */
   amountText: string;
   isMeasured: boolean;
   /** The heading it sits under in the list, or null. */

@@ -137,6 +137,7 @@ check(
     ]);
     assert.deepEqual(Object.keys(result.ingredients[0]).sort(), [
       'amount',
+      'amountText',
       'catalogId',
       'group',
       'isFree',

@@ -7,6 +7,7 @@ import { getUploadMimeType } from '@/utils/uploadMimeType';
 import {
   CARE_DAYS_PER_MONTH,
   CARE_DAYS_PER_WEEK,
+  MAX_AMOUNT_TEXT_LENGTH,
   DISH_CATEGORIES,
   MAX_GUIDANCE_CHARS,
   MAX_INGREDIENT_GROUP_LENGTH,
@@ -88,7 +89,11 @@ const responseSchema = {
           },
           note: nullable(
             SchemaType.STRING,
-            `A short note, at most ${MAX_NOTE_LENGTH} characters, only if the line has one: a preparation such as "diced", a description of the ingredient from the line (the variety or cut in parentheses, such as "medium or short grain, if you can"), the brand or product named ("Famous Dave's Sassy BBQ"), the container a size came from ("1 bottle"), and the source's own words for an amount it does not measure ("to taste", "a handful", "as needed"). Leave out advice and asides that do not change what to buy or how to prepare it. Never an amount or a second measure.`,
+            `A short note, at most ${MAX_NOTE_LENGTH} characters, only if the line has one: a preparation such as "diced", a description of the ingredient from the line (the variety or cut in parentheses, such as "medium or short grain, if you can"), the brand or product named ("Famous Dave's Sassy BBQ"), the container a size came from ("1 bottle"), and nothing about how much (that is amountText). Leave out advice and asides that do not change what to buy or how to prepare it. Never an amount or a second measure.`,
+          ),
+          amountText: nullable(
+            SchemaType.STRING,
+            `For a line with no amount only: the source's own words for how much, at most ${MAX_AMOUNT_TEXT_LENGTH} characters ("to taste", "a handful", "for garnish", "as needed"). Null when the line has an amount or says nothing about how much.`,
           ),
           alsoCalled: nullable(
             SchemaType.STRING,
@@ -99,7 +104,15 @@ const responseSchema = {
             `The heading the line sits under in the recipe, as a short plain name of at most ${MAX_INGREDIENT_GROUP_LENGTH} characters ("For the sauce", "Marinade", "Bulgogi sauce" for "Bulgogi sauce (don't skip the onion & apple!):"): no colon, no parentheses, no advice. A line that closes a set ("That's for your cornbread") heads the lines before it, and when the method makes a part on its own first, the part the line goes into ("For the cornbread", "For the dressing"). Null for a recipe made in one go. Never a role ("Aromatics"), and never the recipe's own "Ingredients" title.`,
           ),
         },
-        required: ['name', 'amount', 'unit', 'note', 'alsoCalled', 'group'],
+        required: [
+          'name',
+          'amount',
+          'unit',
+          'note',
+          'amountText',
+          'alsoCalled',
+          'group',
+        ],
       },
     },
     steps: {
@@ -172,8 +185,8 @@ Rules:
 - Text in parentheses after an ingredient describes it or renames it; it is never the amount, and it is not part of the name. A description ("white rice (medium or short grain, if you can)") goes in the note, short. Another name for the same ingredient ("beef mince (ground beef)") goes in alsoCalled, with the name as the first one written. The amount and unit come only from the measure at the start of the line.
 - A line that gives one amount in two measures ("500g / 1 lb beef mince", "1 cup (240 ml) milk") is one ingredient with one amount: use the first measure and leave the other out. Never return two lines for it. The one exception is a container and its size, above: the size wins.
 - Keep every note under ${MAX_NOTE_LENGTH} characters and every name under ${MAX_NAME_LENGTH}: when a line has more to say, keep what changes what to buy or how to prepare it and leave out asides and advice.
-- When a line gives no amount ("salt to taste", "a handful of fresh parsley", "olive oil as needed"), leave amount and unit null and keep those words in the note ("to taste", "a handful", "as needed"). Never turn them into a number.
-- A line that names two ingredients ("salt and pepper to taste") is two lines, each with the same amount, unit, note and group.
+- When a line gives no amount ("salt to taste", "a handful of fresh parsley", "olive oil as needed"), leave amount and unit null and put those words in amountText ("to taste", "a handful", "for garnish", "as needed"), at most ${MAX_AMOUNT_TEXT_LENGTH} characters. Never turn them into a number, and keep them out of the note: the note only describes the ingredient itself (chopped, room temperature, a brand).
+- A line that names two ingredients ("salt and pepper to taste") is two lines, each with the same amount, unit, amountText, note and group.
 - Some recipes put their ingredients under headings ("For the sauce:", "Marinade"). Give each line the heading it sits under as its group, as a short plain name of at most ${MAX_INGREDIENT_GROUP_LENGTH} characters with no colon, parentheses or advice ("Bulgogi sauce" for "Bulgogi sauce (don't skip the onion & apple!):"), and null for a line under no heading. The same ingredient under two headings is two lines, each with its own amount. A line that closes a set ("That's for your cornbread") is the heading of the lines before it. When the method makes a part on its own before the rest (a cornbread baked first, then the dressing it goes into; a crust, then its filling), group every line by the part it goes into, named for that part ("For the cornbread", "For the dressing"), with the same names the step sections use. Never group by role ("Aromatics", "Seasoning", "Binder"), and leave a recipe made in one go ungrouped (null).
 - An ingredient the source leaves to the cook ("whatever meat you are cooking", "your favourite cheese") is its own line, named plainly ("Meat") with the source's words in the note ("your choice"), and its step says what to do with it.
 - Steps: each step is one thing the cook does. A step never points back at the list or the source ("add the rest listed above", "everything else", "the remaining ingredients"): it names each ingredient it adds ("add the cream of chicken soup, milk, salt, pepper, poultry seasoning and sage"), so it can be followed alone. Where the recipe packs several actions into one step ("Dice the chicken. In a bowl, toss it with garlic and Cajun seasoning."), split it into one step per action, keeping the recipe's times and temperatures. A step names its ingredients without their amounts, since the ingredient list holds the amount and scales it with the servings: "Add the flour", never "Add 2 cups of flour". Where a step uses only part of an ingredient, say which part in words ("half the sugar", "the rest of the stock"), never as a measure. An amount the recipe gives only in a step belongs on that ingredient's line. Sizes that are not ingredients stay ("a 9-inch pan", "1-inch pieces"). A step is read on its own in cook mode, so each names what it acts on: "Leave the chicken for 30 minutes", never "Leave it for 30 minutes"; an "it" or "them" that points back to an earlier step becomes the thing itself. Put each step in a section: the stage of the dish it belongs to, as a short plain name ("Prep the chicken", "Boil the pasta", "Make the sauce"). Use the recipe's own stage headings when it has them, including a step's lead-in ("Boil the Pasta: Bring a pot…" is the step "Bring a pot…" in the section "Boil the pasta"), and otherwise group consecutive steps by what they work on. Sections follow the order of the steps; never reorder steps to fill one. A recipe of three steps or fewer needs no sections (null).
@@ -189,7 +202,7 @@ const VIDEO_PROMPT = `This is a cooking video, not a written recipe. Watch all o
 - Cooks often say an ingredient or an amount aloud without ever showing it as text, and often show a text overlay, caption or ingredient list while the audio is only music or silence. Read the spoken words from the audio and read every on-screen caption, overlay, label and written list from the frames. An ingredient or a step found in only one of them still belongs in the recipe.
 - A step that is only shown (a pan going into the oven, onions cooked until golden) and never said is still a step; write it as a plain instruction.
 - When the audio and the on-screen text give the same amount, use it. When they disagree, use the on-screen text for amounts, times and temperatures, and say so in "unread".
-- When the cook gives no amount ("a splash of soy sauce", "some garlic"), leave amount null and put their words in the note. Never guess an amount from how much looks poured or chopped.
+- When the cook gives no amount ("a splash of soy sauce", "some garlic"), leave amount null and put their words in amountText. Never guess an amount from how much looks poured or chopped.
 - photoSearch is a short image search (3–6 words) naming the finished dish as it looks in the video: the dish name plus the pasta shape, protein or key look it shows or names; no brand or channel names.
 - Take the title from the video's own title card or the cook's own words. Ignore sponsor messages, intros, chatter, outros and requests to like or subscribe.
 - If the video makes more than one recipe, return the first and say so in "unread". Also put in "unread" anything you could not hear or read: unclear audio, text that is too small or on screen too briefly, a part that is cut off.`;

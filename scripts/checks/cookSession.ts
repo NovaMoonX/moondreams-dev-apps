@@ -696,6 +696,7 @@ const ingredientLine = (
   freeText: null,
   amount,
   unit: 'TSP' as const,
+  amountText: null,
   note,
   group: null,
   adaptedFrom: null,

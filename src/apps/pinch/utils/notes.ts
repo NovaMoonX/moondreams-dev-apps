@@ -218,6 +218,7 @@ const getRestoreFields = (previous: RecipeSnapshot): RecipeSnapshot => ({
   ingredients: previous.ingredients.map((line) => ({
     ...line,
     freeText: line.freeText ?? null,
+    amountText: line.amountText ?? null,
   })),
 });
 

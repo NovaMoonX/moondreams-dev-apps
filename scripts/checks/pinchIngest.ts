@@ -522,19 +522,20 @@ assert.deepEqual(
     line.amount,
     line.unit,
     line.note,
+    line.amountText,
   ]),
   [
-    ['olive oil', 2, 'TBSP', null],
-    ['salt', null, null, 'to taste'],
-    ['pepper', null, null, 'to taste'],
-    ['fresh parsley', null, null, 'a handful, chopped'],
-    ['salt', null, null, 'to taste'],
-    ['Half and half', null, null, null],
-    ['half and half', 1, 'CUP', null],
-    ['macaroni and cheese', null, null, null],
-    ['sweet and sour sauce', null, null, null],
+    ['olive oil', 2, 'TBSP', null, null],
+    ['salt', null, null, 'to taste', null],
+    ['pepper', null, null, 'to taste', null],
+    ['fresh parsley', null, null, 'chopped', 'a handful'],
+    ['salt', null, null, null, 'to taste'],
+    ['Half and half', null, null, null, null],
+    ['half and half', 1, 'CUP', null, null],
+    ['macaroni and cheese', null, null, null, null],
+    ['sweet and sour sauce', null, null, null, null],
   ],
-  '"salt and pepper to taste" is two lines and "handful of parsley" is parsley noted "a handful"; half and half, macaroni and cheese and sweet and sour sauce stay whole',
+  '"salt and pepper to taste" is two lines and "handful of parsley" is parsley with the amount "a handful" and the note "chopped"; "salt to taste" keeps "to taste" as its amount; half and half, macaroni and cheese and sweet and sour sauce stay whole',
 );
 assert.deepEqual(
   shakshuka.ingredients.slice(1, 4).map((line) => idOf(line.name)),
@@ -569,17 +570,22 @@ const pasta = normalizeExtractedRecipe({
   unread: [],
 });
 assert.deepEqual(
-  pasta.ingredients.map((line) => [line.name, line.amount, line.note]),
+  pasta.ingredients.map((line) => [
+    line.name,
+    line.amount,
+    line.note,
+    line.amountText,
+  ]),
   [
-    ['spaghetti', 12, null],
-    ['Kosher salt', null, null],
-    ['freshly ground black pepper', null, null],
-    ['basil leaves', null, 'a small handful'],
-    ['parmesan', null, 'for serving, to taste'],
-    ['thyme', null, 'sprigs'],
-    ['a pinch of salt', 1, null],
+    ['spaghetti', 12, null, null],
+    ['Kosher salt', null, null, null],
+    ['freshly ground black pepper', null, null, null],
+    ['basil leaves', null, null, 'a small handful'],
+    ['parmesan', null, 'to taste', 'for serving'],
+    ['thyme', null, null, 'sprigs'],
+    ['a pinch of salt', 1, null, null],
   ],
-  'a measured line is left as read; an unmeasured one loses its measure words to the note',
+  'a measured line is left as read; an unmeasured one moves its measure words to the amount in words',
 );
 assert.equal(
   normalizeExtractedRecipe({

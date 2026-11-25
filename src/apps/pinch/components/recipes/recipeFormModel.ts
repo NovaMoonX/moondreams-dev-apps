@@ -6,6 +6,7 @@ import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import {
   MAX_MINUTES,
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_SERVING_AMOUNT,
@@ -90,8 +91,10 @@ export interface IngredientRow {
   freeText: string | null;
   amount: string;
   unit: Unit;
-  /** No amount by choice ("to taste", "a handful"): the note says how much, if anything, and the line saves without one. */
+  /** No amount by choice ("to taste", "a handful"): `amountText` says how much, if anything, and the line saves without one. */
   isAmountless: boolean;
+  /** How much in words while the line has no amount; typing an amount clears it. */
+  amountText: string | null;
   note: string | null;
   /** A name from the reader that no ingredient matches: shown until the person adds it as new or picks another. */
   proposedName: string | null;
@@ -140,6 +143,7 @@ export const getInitialData = (
     amount: line.amount === null ? '' : formatAmountText(line.amount),
     unit: line.unit,
     isAmountless: line.amount === null,
+    amountText: line.amount === null ? (line.amountText ?? null) : null,
     note: line.note ?? null,
     proposedName: null,
     newName: null,
@@ -236,6 +240,10 @@ export const getDataFromExtracted = (
         amount: amount === null ? '' : formatAmountText(amount),
         unit,
         isAmountless: amount === null,
+        amountText:
+          amount === null && line.amountText
+            ? clipAtWord(line.amountText, MAX_AMOUNT_TEXT_LENGTH)
+            : null,
         note: clipNote(
           addPrepToNote(line.note, leftover ? [...prep, leftover] : prep),
         ),
@@ -358,6 +366,7 @@ export const toRecipeLine = (row: IngredientRow): RecipeIngredient => ({
   freeText: row.freeText === null ? null : row.freeText.trim(),
   amount: row.isAmountless ? null : (parseAmountText(row.amount) ?? 0),
   unit: row.isAmountless ? 'EACH' : row.unit,
+  amountText: row.isAmountless ? row.amountText?.trim() || null : null,
   note: row.note,
   group: cleanGroupName(row.group),
   adaptedFrom: row.isAmountless ? null : (row.adaptedFrom ?? null),
@@ -445,6 +454,7 @@ const isIngredientRow = (value: unknown) =>
   UNITS.some((unit) => unit === value.unit) &&
   typeof value.isAmountless === 'boolean' &&
   isTextOrNull(value.note) &&
+  (value.amountText === undefined || isTextOrNull(value.amountText)) &&
   isTextOrNull(value.proposedName) &&
   isTextOrNull(value.newName) &&
   (value.freeText === undefined || isTextOrNull(value.freeText)) &&
@@ -524,6 +534,7 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
       ...row,
       adaptedFrom: row.adaptedFrom ?? null,
       freeText: row.freeText ?? null,
+      amountText: row.amountText ?? null,
     })),
     categories: getCategories({ categories: categories as DishCategory[] }),
     stepSections: (steps as string[]).map((_, index) =>

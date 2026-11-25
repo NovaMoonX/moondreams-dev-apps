@@ -80,8 +80,9 @@ import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getShoppingCostCoverage,
   getShoppingMealsText,
-  getShoppingSourcesText,
+  getShoppingForText,
   getShoppingNotesText,
+  joinWords,
   getShopRowId,
   getShownShoppingView,
   isPutAway,
@@ -123,16 +124,13 @@ const formatNames = (names: string[]) =>
 type GetForText = (sources: string[]) => string | null;
 
 // Rows share sources, and every render and height estimate asks again, so each set is worked out once per change of names.
-const makeForText = (
-  labels: Map<string, ShoppingSourceLabel>,
-  todayKey: string,
-): GetForText => {
+const makeForText = (labels: Map<string, ShoppingSourceLabel>): GetForText => {
   const textBySources = new Map<string, string | null>();
   return (sources) => {
     const key = sources.join('|');
     const known = textBySources.get(key);
     if (known !== undefined) return known;
-    const text = getShoppingSourcesText(sources, labels, todayKey);
+    const text = getShoppingForText(sources, labels);
     textBySources.set(key, text);
     return text;
   };
@@ -145,12 +143,13 @@ const makeNotesText = (
 ): GetNotesText => {
   const textByKey = new Map<string, string | null>();
   return (row) => {
-    const key = `${row.ingredientId}|${row.sources.join('|')}`;
-    const known = textByKey.get(key);
-    if (known !== undefined) return known;
-    const text = getShoppingNotesText(row.ingredientId, row.sources, context);
-    textByKey.set(key, text);
-    return text;
+    if (row.legacySources.length === 0) return row.note ?? null;
+    const key = `${row.ingredientId}|${row.legacySources.join('|')}`;
+    const derived =
+      textByKey.get(key) ??
+      getShoppingNotesText(row.ingredientId, row.legacySources, context);
+    textByKey.set(key, derived);
+    return joinWords([row.note, derived]);
   };
 };
 
@@ -183,7 +182,7 @@ function ShoppingRows({
   );
   const getChunkHeight = (chunk: ShoppingRowData[]) =>
     chunk.reduce((sum, row) => {
-      const detail = `${row.amountText ?? ''} · for ${getForText(row.sources) ?? ''}`;
+      const detail = `${row.amountText ?? row.words ?? ''} · ${getForText(row.sources) ?? ''}`;
       const notesHeight = getNotesText(row) ? DETAIL_LINE_HEIGHT : 0;
       return detail.length > DETAIL_LINE_CHARS
         ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT + notesHeight
@@ -212,7 +211,7 @@ function ShoppingRows({
                   key={row.id}
                   id={row.id}
                   name={row.name}
-                  amountText={row.amountText}
+                  amountText={row.amountText ?? row.words}
                   forText={getForText(row.sources)}
                   notesText={getNotesText(row)}
                   isChecked={row.isChecked}
@@ -248,6 +247,9 @@ const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.id === b.id &&
   a.name === b.name &&
   a.amountText === b.amountText &&
+  a.words === b.words &&
+  a.note === b.note &&
+  a.legacySources.join() === b.legacySources.join() &&
   a.isChecked === b.isChecked &&
   a.itemIds.join() === b.itemIds.join() &&
   a.sources.join() === b.sources.join();
@@ -355,10 +357,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sourceLabels = useAppSelector(selectShoppingSourceLabels);
   const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
-  const getForText = useMemo(
-    () => makeForText(sourceLabels, todayKey),
-    [sourceLabels, todayKey],
-  );
+  const getForText = useMemo(() => makeForText(sourceLabels), [sourceLabels]);
   const sourceContext = useAppSelector(selectShoppingSourceContext);
   const getNotesText = useMemo(
     () => makeNotesText(sourceContext),
