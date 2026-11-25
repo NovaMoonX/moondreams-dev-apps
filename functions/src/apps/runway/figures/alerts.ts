@@ -155,6 +155,7 @@ async function sendOnce(
 /**
  * Judges the plan's alerts against the figures just written: an alert goes off when its figure falls to or below its
  * line from above, one push carries every alert that went off, and one that goes off in quiet hours is held for 08:00.
+ * An archived or missing envelope's alerts are deleted, since archiving can't be taken back.
  * Returns when to run again for a held alert, or null.
  */
 export async function runAlerts(
@@ -174,11 +175,21 @@ export async function runAlerts(
 
   const live = resolveEnvelopes(run.items, run.versions, run.today);
   const liveIds = new Set(live.map(({ item }) => item.id));
+  const keptIds = new Set(
+    run.items
+      .filter((item) => (item.archivedAt ?? null) === null)
+      .map((item) => item.id),
+  );
+  const retired: string[] = [];
   const evaluated = alertDocs.docs.flatMap((entry): Evaluated[] => {
     const doc = entry.data() as AlertDoc;
     const alert = openAlert(run.key, doc);
     if (alert === null) return [];
     const target = alert.target;
+    if (target.kind === 'envelope' && !keptIds.has(target.itemId)) {
+      retired.push(entry.id);
+      return [];
+    }
     const envelope =
       target.kind === 'envelope'
         ? (live.find(({ item }) => item.id === target.itemId)?.version
@@ -230,7 +241,9 @@ export async function runAlerts(
   );
 
   const gone = [...states.keys()].filter(
-    (id) => !alertDocs.docs.some((entry) => entry.id === id),
+    (id) =>
+      retired.includes(id) ||
+      !alertDocs.docs.some((entry) => entry.id === id),
   );
   const batch = firestore.batch();
   before
@@ -242,6 +255,7 @@ export async function runAlerts(
       ),
     );
   gone.forEach((id) => batch.delete(under('alertStates').doc(id)));
+  retired.forEach((id) => batch.delete(under('alerts').doc(id)));
   await batch.commit();
 
   const outcome = await sendOnce(
@@ -283,7 +297,8 @@ export async function runAlerts(
     sent: outcome === 'sent' ? toSend.length : 0,
     failed: outcome === 'failed',
     clearFailed: !isCleared,
-    skipped: alertDocs.size - evaluated.length,
+    skipped: alertDocs.size - evaluated.length - retired.length,
+    retired: retired.length,
     held: stillHeld.length,
   });
   return stillHeld.length === 0 ? null : getNextMorning(now, run.zone);

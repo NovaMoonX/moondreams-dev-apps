@@ -403,6 +403,28 @@ async function main() {
   assert.equal(together.sent[0].body, '2 of your alerts went off.');
   assert.ok(together.sent[0].url.endsWith('/runway'));
 
+  // An archived envelope's alerts are deleted with their state; another envelope's stay.
+  const archived = 'alerts-archived';
+  await seedPlan(archived, true);
+  await putAlert(archived, 'on-groceries');
+  await putAlert(archived, 'on-everyday', {
+    target: { kind: 'envelope', itemId: everyday },
+  });
+  await run(archived, at(12), outbox().send);
+  assert.ok(await stateOf(archived, 'on-groceries'));
+  await firestore
+    .doc(`${planOf(archived)}/items/${groceries}`)
+    .update({ archivedAt: today });
+  await run(archived, at(13), outbox().send);
+  const left = await firestore.collection(`${planOf(archived)}/alerts`).get();
+  assert.deepEqual(
+    left.docs.map((entry) => entry.id),
+    ['on-everyday'],
+    'only the archived envelope loses its alerts',
+  );
+  assert.equal(await stateOf(archived, 'on-groceries'), undefined);
+  assert.ok(await stateOf(archived, 'on-everyday'));
+
   console.log('Runway alerts server: all checks passed.');
 }
 

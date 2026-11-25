@@ -66,10 +66,7 @@ assert.equal(needsHomeBody(4), '4 purchases need a home');
 // Alerts: words are fixed, an amount never appears, and a name only for an alert the person named.
 const fts = { isFreeToSpend: true, itemId: null, envelope: null };
 const env = { isFreeToSpend: false, itemId: 'item-1', envelope: null };
-assert.equal(
-  alertBody([fts]),
-  'Free to Spend dropped below one of your alerts.',
-);
+assert.equal(alertBody([fts]), 'One of your alerts went off.');
 assert.equal(alertBody([env]), 'An envelope dropped below one of your alerts.');
 assert.equal(
   alertBody([{ isFreeToSpend: false, envelope: 'Groceries' }]),

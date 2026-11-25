@@ -15,15 +15,14 @@ export const envelopePath = (itemId: string) =>
 export const namedAlertBody = (envelope: string) =>
   `${envelope.trim().slice(0, 40)} dropped below one of your alerts.`;
 
-/** What a lock screen says when alerts go off: never an amount. */
+/** What a lock screen says when alerts go off: never an amount, and Free to Spend's never says the money is low. */
 export function alertBody(
   fired: readonly { isFreeToSpend: boolean; envelope: string | null }[],
 ): string {
   const [only] = fired;
   const count = fired.length;
   if (count !== 1) return `${count} of your alerts went off.`;
-  if (only.isFreeToSpend)
-    return 'Free to Spend dropped below one of your alerts.';
+  if (only.isFreeToSpend) return 'One of your alerts went off.';
   return only.envelope === null
     ? 'An envelope dropped below one of your alerts.'
     : namedAlertBody(only.envelope);
