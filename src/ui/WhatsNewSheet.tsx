@@ -102,19 +102,34 @@ function NoteRow({
   onShowMe: (note: WhatsNewNote) => void;
 }) {
   const isCard = !isCompact && look.rows === 'cards';
+  const isBullet = isCompact && note.kind === 'fixed';
   const shell = join(
-    'flex w-full items-center gap-3 text-left',
+    'flex w-full text-left',
+    isBullet ? 'items-start gap-2.5' : 'items-center gap-3',
     isCard
       ? 'border-border rounded-2xl border px-3 py-3'
       : isCompact
-        ? 'min-h-10 py-2'
+        ? join('py-1.5', note.path && 'min-h-10')
         : 'min-h-12 py-2.5',
   );
+  const mark = () => {
+    if (isBullet) {
+      return (
+        <span
+          className={join('flex h-5 shrink-0 items-center', topLine && 'mt-4')}
+          aria-hidden='true'
+        >
+          <span className='bg-primary size-1.5 rounded-full' />
+        </span>
+      );
+    }
+    return hasMark ? (
+      <NoteMark emoji={note.emoji} look={look} isSmall={isCompact} />
+    ) : null;
+  };
   const content = (
     <>
-      {hasMark ? (
-        <NoteMark emoji={note.emoji} look={look} isSmall={isCompact} />
-      ) : null}
+      {mark()}
       <span className='block min-w-0 flex-1'>
         {topLine ? (
           <span className='text-muted-foreground block text-xs'>{topLine}</span>
@@ -130,7 +145,7 @@ function NoteRow({
       </span>
       {note.path ? (
         <ChevronRight
-          className='text-muted-foreground size-4 shrink-0'
+          className='text-muted-foreground size-4 shrink-0 self-center'
           aria-hidden='true'
         />
       ) : null}
@@ -178,7 +193,15 @@ function NoteList({
   const hasMark = notes.some((note) => note.emoji !== null);
   const isCards = !isCompact && look.rows === 'cards';
   return (
-    <ul className={isCards ? 'space-y-2' : 'divide-border divide-y'}>
+    <ul
+      className={
+        isCards
+          ? 'space-y-2'
+          : isCompact
+            ? 'space-y-1'
+            : 'divide-border divide-y'
+      }
+    >
       {notes.map((note) => (
         <NoteRow
           key={note.id}
@@ -336,6 +359,24 @@ function WhatsNewSheet({
     </div>
   );
 
+  // Inside a month or a version, a run of fixes is labelled once rather than "Fixed" on every bullet.
+  const fixList = (
+    list: WhatsNewNote[],
+    getTopLine: (note: WhatsNewNote) => string | null,
+  ) =>
+    list.length === 0 ? null : (
+      <div className='space-y-1'>
+        <p className='text-muted-foreground text-xs font-medium'>Fixes</p>
+        <NoteList
+          notes={list}
+          look={look}
+          isCompact
+          getTopLine={getTopLine}
+          onShowMe={onShowMe}
+        />
+      </div>
+    );
+
   const versionLog = () => (
     <div className='space-y-5'>
       {groupByVersion(notes).map((group) => (
@@ -343,13 +384,16 @@ function WhatsNewSheet({
           key={group.version}
           label={`Version ${group.version} · ${formatDateShort(group.publishedAt)}`}
         >
-          <NoteList
-            notes={group.notes}
-            look={look}
-            isCompact
-            getTopLine={(note) => KIND_WORDS[note.kind]}
-            onShowMe={onShowMe}
-          />
+          {group.notes.some((note) => note.kind !== 'fixed') ? (
+            <NoteList
+              notes={group.notes.filter((note) => note.kind !== 'fixed')}
+              look={look}
+              isCompact
+              getTopLine={(note) => KIND_WORDS[note.kind]}
+              onShowMe={onShowMe}
+            />
+          ) : null}
+          {fixList(byKind(group.notes, 'fixed'), () => null)}
         </Section>
       ))}
     </div>
@@ -365,7 +409,6 @@ function WhatsNewSheet({
           {[
             { key: 'told', list: month.told, isCompact: false },
             { key: 'smaller', list: month.smaller, isCompact: true },
-            { key: 'fixes', list: month.fixes, isCompact: true },
           ]
             .filter((group) => group.list.length > 0)
             .map((group) => (
@@ -378,6 +421,7 @@ function WhatsNewSheet({
                 onShowMe={onShowMe}
               />
             ))}
+          {fixList(month.fixes, getVersionLine)}
         </Section>
       ))}
     </div>
