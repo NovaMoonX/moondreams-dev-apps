@@ -259,6 +259,7 @@ export const getDataFromExtracted = (
       cook: extracted.cookMinutes === null ? '' : String(extracted.cookMinutes),
     },
     description: extracted.description ?? '',
+    categories: extracted.categories,
     ingredients: orderIngredientLines(rows).slice(0, MAX_RECIPE_INGREDIENTS),
     steps: extracted.steps,
     stepSections: extracted.steps.map((_, index) =>
