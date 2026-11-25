@@ -1,9 +1,7 @@
-import type {
-  DocumentData,
-  DocumentReference,
-  Firestore,
-  QueryDocumentSnapshot,
-} from 'firebase-admin/firestore';
+import { createHash } from 'node:crypto';
+
+import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
 import {
   buildClosings,
@@ -22,12 +20,8 @@ import {
   CLOSING_REBUILD_ATTEMPTS,
   CLOSING_WRITE_CHUNK,
 } from '../engine/engineConstants.js';
-import {
-  openMove,
-  openPurchase,
-  openRecord,
-  type ReadSealed,
-} from '../engine/openDocs.js';
+import { openMonthEntries } from '../engine/monthEntries.js';
+import type { ReadSealed } from '../engine/openDocs.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
 import {
   openWithKey,
@@ -39,28 +33,27 @@ import type {
   ClosingDoc,
   ClosingSealed,
   DateOnly,
-  DayRecordDoc,
-  IncomeDayDoc,
-  MoveDoc,
   PlanDoc,
-  PurchaseDoc,
 } from '../runwayTypes.js';
+import { MINUTE_MS } from './reworkState.js';
 
 type PlanKey = Awaited<ReturnType<typeof unwrapPlanKey>>;
 
 /** Months one run rebuilds at most; each chunk moves `dirtyFrom` forward, so the write it makes marks the plan and the next run goes on. */
 export const SERVER_REBUILD_MONTHS = 24;
 
-const CLOSING_MOVE_KINDS: readonly string[] = [
-  'billPaid',
-  'cardPayment',
-  'transfer',
-  'costPaid',
-];
+/** How long a rebuild may keep starting chunks when its caller names no deadline. */
+const DEFAULT_BUDGET_MS = 2 * MINUTE_MS;
 
 const planPath = (uid: string) => `apps/runway/plans/${uid}`;
 
-class PlanMovedError extends Error {}
+const hashOf = (uid: string) =>
+  createHash('sha256').update(uid).digest('hex').slice(0, 12);
+
+/** The plan's `updatedAt` moved under a chunk: another device or run wrote first. */
+export class PlanMovedError extends Error {
+  override name = 'PlanMovedError';
+}
 
 /** The newest closing the phone would read (before `dirtyFrom` when set), decoded; one that will not open is none. */
 export async function readClosing(
@@ -89,10 +82,7 @@ export async function readClosing(
   }
 }
 
-const withId = <T>(entry: QueryDocumentSnapshot<DocumentData>) =>
-  ({ ...entry.data(), id: entry.id }) as T;
-
-/** One month of the ledger opened into what a closing sums, as the phone's `openMonthEntries` does. */
+/** One month of the ledger, read with the Admin SDK by the same dates the phone reads it by and opened by the shared engine reader. */
 async function readMonth(
   firestore: Firestore,
   uid: string,
@@ -105,7 +95,7 @@ async function readMonth(
   const to = getMonthStart(getNextMonth(month));
   const under = (name: string) =>
     firestore.collection(`${planPath(uid)}/${name}`);
-  const [dayDocs, moveDocs, purchaseDocs] = await Promise.all([
+  const [days, moves, purchases] = await Promise.all([
     under('days')
       .where('expectedOn', '>=', from)
       .where('expectedOn', '<', to)
@@ -113,43 +103,18 @@ async function readMonth(
     under('moves').where('date', '>=', from).where('date', '<', to).get(),
     under('purchases').where('date', '>=', from).where('date', '<', to).get(),
   ]);
-  const days = dayDocs.docs.map((entry) => withId<IncomeDayDoc>(entry));
-  const [records, moves, purchases] = await Promise.all([
-    Promise.all(
-      days
-        .filter((day) => day.status === 'confirmed')
-        .map(async (day) =>
-          Promise.all(
-            (await under(`days/${day.id}/records`).get()).docs.map((entry) =>
-              openRecord(withId<DayRecordDoc>(entry), read),
-            ),
-          ),
-        ),
-    ),
-    Promise.all(
-      moveDocs.docs
-        .map((entry) => withId<MoveDoc>(entry))
-        .filter((entry) => CLOSING_MOVE_KINDS.includes(entry.kind))
-        .map((entry) => openMove(entry, read)),
-    ),
-    Promise.all(
-      purchaseDocs.docs.map((entry) =>
-        openPurchase(withId<PurchaseDoc>(entry), read),
-      ),
-    ),
-  ]);
-  return {
+  return openMonthEntries(
+    {
+      days: days.docs,
+      moves: moves.docs,
+      purchases: purchases.docs,
+      getRecords: async (dayId) =>
+        (await under(`days/${dayId}/records`).get()).docs,
+    },
+    read,
     startDate,
-    days: days.map((day) => ({
-      id: day.id,
-      expectedOn: day.expectedOn,
-      arrivedOn: day.arrivedOn ?? null,
-    })),
-    records: records.flat(),
-    moves,
-    purchases,
     billIds,
-  };
+  );
 }
 
 /** One transaction that writes some closings and moves `dirtyFrom`, refused when the plan's `updatedAt` is no longer the one read. */
@@ -185,20 +150,28 @@ async function commit(
   });
 }
 
+export interface RebuildOptions {
+  /** Epoch ms after which no new chunk starts; the next run resumes from the `dirtyFrom` the last chunk left. */
+  deadline?: number;
+}
+
 /**
  * Brings the closings up to date on the server exactly as the phone's `rebuildClosings` does: the same months,
  * the same sealed closings and the same guarded transactions (each checks the plan's `updatedAt`, writes up to
  * six closings, moves `dirtyFrom` forward and raises `updatedAt`), so a phone and a run racing never both commit.
- * At most `SERVER_REBUILD_MONTHS` are built per call; true when the closings reach the last closable month.
+ * At most `SERVER_REBUILD_MONTHS` per call, stopping between chunks past the deadline; true once whole.
  */
 export async function rebuildClosingsOnServer(
   firestore: Firestore,
   key: PlanKey,
   uid: string,
   today: DateOnly,
+  options: RebuildOptions = {},
 ): Promise<boolean> {
+  const deadline = options.deadline ?? Date.now() + DEFAULT_BUDGET_MS;
   const read: ReadSealed = async <T extends object>(sealed: unknown) =>
     openWithKey(key.key, sealed as SealedPayload) as T;
+  const progress = { fromMonth: null as string | null };
 
   const attempt = async (): Promise<boolean> => {
     const snapshot = await firestore.doc(planPath(uid)).get();
@@ -218,6 +191,7 @@ export async function rebuildClosingsOnServer(
       validMonth: valid?.month ?? null,
       target,
     });
+    progress.fromMonth = range?.from ?? dirtyFrom;
     if (range === null && dirtyFrom === null) return true;
     const stamp = { value: plan.updatedAt ?? 0 };
     const allMonths = range === null ? [] : listMonths(range.from, range.to);
@@ -235,46 +209,49 @@ export async function rebuildClosingsOnServer(
                 .get()
             ).docs.map((entry) => entry.id),
           );
-
-    const built: ClosingState[] =
-      startDate === null || months.length === 0
-        ? []
-        : await buildClosings(months, valid, (month) =>
-            readMonth(firestore, uid, read, startDate, billIds, month),
-          );
-
-    const now = Date.now();
-    const docs = built.map((state): ClosingDoc => ({
+    const readOne = (month: string) =>
+      startDate === null
+        ? Promise.reject(new Error('A plan with no start has no months.'))
+        : readMonth(firestore, uid, read, startDate, billIds, month);
+    const toDoc = (state: ClosingState): ClosingDoc => ({
       id: state.month,
       month: state.month,
-      createdAt: now,
+      createdAt: Date.now(),
       sealed: sealWithKey(
         key,
         { ...encodeClosing(state) },
         SEALED_SCHEMA_VERSION,
       ),
-    }));
-    const chunks = Array.from(
-      { length: Math.max(1, Math.ceil(docs.length / CLOSING_WRITE_CHUNK)) },
-      (_, index) =>
-        docs.slice(
-          index * CLOSING_WRITE_CHUNK,
-          (index + 1) * CLOSING_WRITE_CHUNK,
-        ),
-    );
-    await chunks.reduce(async (previous, chunk, index) => {
-      await previous;
-      const isLast = isWhole && index === chunks.length - 1;
+    });
+
+    const step = async (
+      rest: readonly string[],
+      previous: ClosingState | null,
+    ): Promise<boolean> => {
+      const chunk = rest.slice(0, CLOSING_WRITE_CHUNK);
+      const later = rest.slice(chunk.length);
+      const built =
+        chunk.length === 0 ? [] : await buildClosings(chunk, previous, readOne);
+      const isLast = isWhole && later.length === 0;
       await commit(
         firestore,
         uid,
         stamp,
-        chunk,
-        isLast ? null : getNextMonth(chunk[chunk.length - 1].month),
+        built.map(toDoc),
+        isLast ? null : getNextMonth(chunk[chunk.length - 1]),
         isLast ? target : null,
       );
-    }, Promise.resolve());
-    return isWhole;
+      if (later.length === 0) return isLast;
+      if (Date.now() >= deadline) {
+        logger.info('runway.closings.paused', {
+          uidHash: hashOf(uid),
+          resumesFrom: later[0],
+        });
+        return false;
+      }
+      return step(later, built.at(-1) ?? previous);
+    };
+    return step(months, valid);
   };
 
   const run = async (triesLeft: number): Promise<boolean> => {
@@ -284,6 +261,19 @@ export async function rebuildClosingsOnServer(
       if (error instanceof PlanMovedError && triesLeft > 1) {
         return run(triesLeft - 1);
       }
+      const code = (error as { code?: unknown } | null)?.code;
+      logger.warn(
+        error instanceof PlanMovedError
+          ? 'runway.closings.moved'
+          : 'runway.closings.failed',
+        {
+          uidHash: hashOf(uid),
+          fromMonth: progress.fromMonth,
+          errorName: error instanceof Error ? error.name : typeof error,
+          code:
+            typeof code === 'string' || typeof code === 'number' ? code : null,
+        },
+      );
       throw error;
     }
   };

@@ -2,15 +2,33 @@
 import assert from 'node:assert/strict';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  getFirestore,
+  type Firestore,
+} from 'firebase-admin/firestore';
 
 import { reworkPlan } from '../../functions/src/apps/runway/figures/reworkPlan.ts';
-import { SERVER_REBUILD_MONTHS } from '../../functions/src/apps/runway/figures/rebuildClosings.ts';
+import {
+  rebuildClosingsOnServer,
+  SERVER_REBUILD_MONTHS,
+} from '../../functions/src/apps/runway/figures/rebuildClosings.ts';
 import {
   decodeClosing,
+  encodeClosing,
   getLastClosableMonth,
+  getMonthStart,
+  getNextMonth,
+  listMonths,
   toMonthKey,
 } from '../../functions/src/apps/runway/engine/closings.ts';
+import {
+  buildClosings as buildOnPhone,
+  encodeClosing as encodeOnPhone,
+  getMonthStart as phoneMonthStart,
+  getNextMonth as phoneNextMonth,
+} from '../../src/apps/runway/engine/closings.ts';
+import { openMonthEntries as openOnPhone } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import type { SendAlertPush } from '../../functions/src/apps/runway/figures/alerts.ts';
 import { SEALED_SCHEMA_VERSION } from '../../functions/src/apps/runway/link/linkShared.ts';
 import {
@@ -25,7 +43,13 @@ import type {
   AlertDoc,
   AlertSealed,
   AlertStateDoc,
+  BillPaidSealed,
+  CardPaymentSealed,
   ClosingSealed,
+  ConfirmedSealed,
+  DayRecordDoc,
+  IncomeDayDoc,
+  MoveDoc,
   PurchaseDoc,
   PurchaseSealed,
 } from '../../functions/src/apps/runway/runwayTypes.ts';
@@ -558,9 +582,9 @@ async function main() {
   const partial = await closingsOf(ancient);
   assert.equal(partial.length, SERVER_REBUILD_MONTHS);
   assert.equal(
-    (await firestore.doc(planOf(ancient)).get()).get('dirtyFrom') !== null,
-    true,
-    'a partial rebuild leaves dirtyFrom where it stopped',
+    (await firestore.doc(planOf(ancient)).get()).get('dirtyFrom'),
+    getNextMonth(partial[SERVER_REBUILD_MONTHS - 1].id),
+    'a partial rebuild leaves dirtyFrom on the month after the last closing it wrote',
   );
   assert.equal(
     (await firestore.doc(`${planOf(ancient)}/figures/current`).get()).exists,
@@ -574,7 +598,247 @@ async function main() {
     null,
   );
 
+  await checkClosingParity(target);
+
   console.log('Runway alerts server: all checks passed.');
+}
+
+async function buildOnPhoneFor(uid: string, start: number, target: string) {
+  const plan = planOf(uid);
+  const encryption = {
+    appId: 'runway' as const,
+    keyId: data(uid).keyId,
+    keyVersion: 1,
+    key: data(uid).key.toString('hex'),
+  };
+  const items = await firestore.collection(`${plan}/items`).get();
+  const billIds = new Set(
+    items.docs
+      .filter((entry) => entry.get('kind') === 'bill')
+      .map((entry) => entry.id),
+  );
+  const states = await buildOnPhone(
+    listMonths(toMonthKey(start), target),
+    null,
+    async (month) => {
+      const from = phoneMonthStart(month);
+      const to = phoneMonthStart(phoneNextMonth(month));
+      const inMonth = (name: string, field: string) =>
+        firestore
+          .collection(`${plan}/${name}`)
+          .where(field, '>=', from)
+          .where(field, '<', to)
+          .get();
+      const [days, moves, purchases] = await Promise.all([
+        inMonth('days', 'expectedOn'),
+        inMonth('moves', 'date'),
+        inMonth('purchases', 'date'),
+      ]);
+      return openOnPhone(
+        {
+          days: days.docs,
+          moves: moves.docs,
+          purchases: purchases.docs,
+          getRecords: async (dayId) =>
+            (await firestore.collection(`${plan}/days/${dayId}/records`).get())
+              .docs,
+        },
+        encryption,
+        start,
+        billIds,
+      );
+    },
+  );
+  return states.map((state) => ({
+    month: state.month,
+    sealed: encodeOnPhone(state),
+  }));
+}
+
+async function readOnServer(uid: string) {
+  const docs = (await firestore.collection(`${planOf(uid)}/closings`).get())
+    .docs;
+  return docs.map((entry) => ({
+    month: entry.id,
+    sealed: encodeClosing(
+      decodeClosing(
+        entry.id,
+        openWithKey(
+          data(uid).key,
+          entry.get('sealed'),
+        ) as unknown as ClosingSealed,
+      ),
+    ),
+  }));
+}
+
+function withOneRace(uid: string, calls: { count: number }): Firestore {
+  return new Proxy(firestore, {
+    get(target, prop) {
+      if (prop === 'runTransaction') {
+        return async (...args: Parameters<Firestore['runTransaction']>) => {
+          calls.count += 1;
+          if (calls.count === 1) {
+            await target
+              .doc(planOf(uid))
+              .update({ updatedAt: FieldValue.increment(1) });
+          }
+          return target.runTransaction(...args);
+        };
+      }
+      const value: unknown = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+async function checkClosingParity(target: string) {
+  const uid = 'closings-parity';
+  const plan = planOf(uid);
+  const start = today - 120 * DAY_MS;
+  const firstMonth = toMonthKey(start);
+  const payDay = getMonthStart(getNextMonth(firstMonth)) + 2 * DAY_MS;
+  const paidDay = payDay + 3 * DAY_MS;
+  await seedPlan(uid, true, start);
+  await firestore.doc(`${plan}/items/bill-rent`).set({
+    id: 'bill-rent',
+    kind: 'bill',
+    parentId: null,
+    createdAt: start,
+    endedAt: null,
+    archivedAt: null,
+    heldReleasedOn: null,
+  });
+  const day: IncomeDayDoc = {
+    id: 'day-1',
+    payLineId: 'pay-1',
+    sourceId: null,
+    expectedOn: payDay,
+    arrivedOn: payDay,
+    status: 'confirmed',
+    createdAt: payDay,
+    confirmedAt: payDay,
+    doneLineIds: [],
+    sealed: null,
+  };
+  await firestore.doc(`${plan}/days/day-1`).set(day);
+  const line = (itemId: string, cents: number, tier: 'must' | 'should') => ({
+    lineId: `day-1:${itemId}`,
+    itemId,
+    part: null,
+    name: itemId,
+    emoji: null,
+    tier,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [{ dayId: 'day-1', cents }],
+    costId: null,
+    costName: null,
+    repaysFree: false,
+  });
+  const record: DayRecordDoc = {
+    id: 'day-1-confirmed',
+    dayId: 'day-1',
+    kind: 'confirmed',
+    createdAt: payDay,
+    supersedesId: null,
+    sealed: seal(uid, {
+      fingerprint: 'parity',
+      stance: 'conservative',
+      arrivedCents: 100_000,
+      expectedCents: 100_000,
+      freeToSpendCents: 30_000,
+      lines: [
+        line('bill-rent', 50_000, 'must'),
+        line(groceries, 20_000, 'should'),
+      ],
+      differences: [],
+    } satisfies ConfirmedSealed),
+  };
+  await firestore.doc(`${plan}/days/day-1/records/day-1-confirmed`).set(record);
+  const paid: MoveDoc = {
+    id: 'paid_bill-rent_parity',
+    kind: 'billPaid',
+    date: paidDay,
+    refId: 'bill-rent',
+    reversesMoveId: null,
+    createdAt: paidDay,
+    sealed: seal(uid, {
+      amountCents: 50_000,
+      paidOn: paidDay,
+      fromFreeCents: 0,
+      cardId: null,
+      auto: null,
+    } satisfies BillPaidSealed),
+  };
+  const cardPayment: MoveDoc = {
+    id: 'cardpay-parity',
+    kind: 'cardPayment',
+    date: paidDay,
+    refId: 'card-1',
+    reversesMoveId: null,
+    createdAt: paidDay,
+    sealed: seal(uid, {
+      amountCents: 12_000,
+      covers: 'full',
+    } satisfies CardPaymentSealed),
+  };
+  await firestore.doc(`${plan}/moves/${paid.id}`).set(paid);
+  await firestore.doc(`${plan}/moves/${cardPayment.id}`).set(cardPayment);
+  await firestore
+    .doc(`${plan}/purchases/parity-spent`)
+    .set(purchase(uid, 'parity-spent', 4_500, payDay + DAY_MS));
+  await firestore.doc(`${plan}/closings/2099-01`).set({
+    id: '2099-01',
+    month: '2099-01',
+    createdAt: start,
+    sealed: seal(uid, { left: 'from another start' }),
+  });
+
+  const key = data(uid);
+  assert.equal(await rebuildClosingsOnServer(firestore, key, uid, today), true);
+  const phone = await buildOnPhoneFor(uid, start, target);
+  const server = await readOnServer(uid);
+  assert.deepEqual(
+    server,
+    phone,
+    'the server seals the closings the phone would',
+  );
+  const payMonth = phone.find((entry) => entry.month === toMonthKey(payDay))
+    ?.sealed as unknown as ClosingSealed;
+  assert.equal(payMonth.arrivedCents, 100_000, 'the confirmed pay is summed');
+  assert.equal(payMonth.paid['bill-rent']?.length, 1, 'the bill paid is kept');
+  assert.equal(
+    payMonth.cardPaid['card-1']?.length,
+    1,
+    'the card payment is kept',
+  );
+  assert.equal(payMonth.spentCents, 4_500, 'the purchase is summed');
+  assert.equal(
+    (await firestore.doc(`${plan}/closings/2099-01`).get()).exists,
+    false,
+    'a closing past the last closable month is deleted',
+  );
+  assert.equal((await firestore.doc(plan).get()).get('dirtyFrom'), null);
+
+  // Another writer moves the stamp just as the first chunk commits: the rebuild starts again and still ends right.
+  const before = (await firestore.doc(plan).get()).get('updatedAt') as number;
+  await firestore
+    .doc(plan)
+    .update({ dirtyFrom: firstMonth, updatedAt: before + 1 });
+  const calls = { count: 0 };
+  assert.equal(
+    await rebuildClosingsOnServer(withOneRace(uid, calls), key, uid, today),
+    true,
+  );
+  assert.ok(calls.count > 1, 'the refused chunk is tried again');
+  assert.equal((await firestore.doc(plan).get()).get('dirtyFrom'), null);
+  assert.deepEqual(
+    await readOnServer(uid),
+    phone,
+    'a raced rebuild seals the same closings',
+  );
 }
 
 main().catch((error: unknown) => {

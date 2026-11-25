@@ -29,6 +29,8 @@ const TIMEOUT_SECONDS = 300;
 const LEASE_MS = TIMEOUT_SECONDS * 1000;
 /** No new batch starts after this, so a batch never runs into the timeout and charges its plans a failure. */
 const START_BUDGET_MS = 4 * MINUTE_MS;
+/** No closing rebuild starts a new chunk after this, leaving the run time to work out and write the figures. */
+const REBUILD_BUDGET_MS = TIMEOUT_SECONDS * 1000 - MINUTE_MS;
 
 const hashOf = (uid: string) =>
   createHash('sha256').update(uid).digest('hex').slice(0, 12);
@@ -94,12 +96,15 @@ async function drainOne(
   firestore: Firestore,
   keyring: Keyring,
   uid: string,
+  deadline: number,
 ): Promise<Outcome> {
   const now = Date.now();
   const leased = await takeLease(firestore, uid, now);
   if (leased === null) return 'skipped';
   try {
-    const outcome = await reworkPlan(firestore, keyring, uid, now);
+    const outcome = await reworkPlan(firestore, keyring, uid, now, undefined, {
+      deadline,
+    });
     if (outcome.kind === 'gone') {
       await firestore.doc(reworkPath(uid)).delete();
       return 'gone';
@@ -155,7 +160,9 @@ export const drainRunwayReworks = onSchedule(
       return [
         ...before,
         ...(await Promise.all(
-          batch.map((uid) => drainOne(firestore, keyring, uid)),
+          batch.map((uid) =>
+            drainOne(firestore, keyring, uid, now + REBUILD_BUDGET_MS),
+          ),
         )),
       ];
     }, Promise.resolve([]));

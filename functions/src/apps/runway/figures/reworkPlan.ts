@@ -3,7 +3,6 @@ import type {
   Firestore,
   QuerySnapshot,
 } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions';
 
 import { getFreeToSpendFigure } from '../engine/balances.js';
 import { dayInZone } from '../engine/dates.js';
@@ -97,13 +96,6 @@ const openOrSkip = async <T>(open: () => Promise<T>): Promise<T[]> =>
     () => [],
   );
 
-const logClosingFailure = (error: unknown) => {
-  const code = (error as { code?: unknown } | null)?.code;
-  logger.warn('runway.closings.failed', {
-    code: typeof code === 'string' || typeof code === 'number' ? code : null,
-  });
-};
-
 const toDocs = <T>(snapshot: QuerySnapshot) =>
   snapshot.docs.map((entry) => withId<T>(entry));
 
@@ -178,7 +170,7 @@ export async function reworkPlan(
   uid: string,
   now: number,
   sendAlertPush?: SendAlertPush,
-  canRebuild = true,
+  options: { deadline?: number; canRebuild?: boolean } = {},
 ): Promise<ReworkOutcome> {
   const planSnapshot = await firestore.doc(planPath(uid)).get();
   if (!planSnapshot.exists) return { kind: 'gone' };
@@ -211,16 +203,18 @@ export async function reworkPlan(
     const clearFigures = () =>
       firestore.doc(`${planPath(uid)}/figures/current`).delete();
     const isRebuilt =
-      canRebuild &&
-      (await rebuildClosingsOnServer(firestore, planKey, uid, today).catch(
-        async (error: unknown) => {
-          logClosingFailure(error);
-          await clearFigures();
-          throw error;
-        },
-      ));
+      options.canRebuild !== false &&
+      (await rebuildClosingsOnServer(firestore, planKey, uid, today, {
+        deadline: options.deadline,
+      }).catch(async (error: unknown) => {
+        await clearFigures();
+        throw error;
+      }));
     if (isRebuilt) {
-      return reworkPlan(firestore, keyring, uid, now, sendAlertPush, false);
+      return reworkPlan(firestore, keyring, uid, now, sendAlertPush, {
+        ...options,
+        canRebuild: false,
+      });
     }
     // Stored figures could pass as current (bank writes don't move the plan's stamp), so they go until the
     // closings are whole; a partial rebuild's own write marks the plan, so the next run carries on from there.
