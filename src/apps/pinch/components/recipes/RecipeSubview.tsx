@@ -17,6 +17,7 @@ import {
   getRecipeDraftKey,
   readRecipeDraftTitle,
 } from '@apps/pinch/components/recipes/recipeFormModel';
+import IdeaPhotoReading from '@apps/pinch/components/recipes/IdeaPhotoReading';
 import RecipeReader from '@apps/pinch/components/recipes/RecipeReader';
 import RecipeStart from '@apps/pinch/components/recipes/RecipeStart';
 import {
@@ -30,6 +31,7 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeStartMethod } from '@apps/pinch/types';
+import { NO_EXTRAS } from '@apps/pinch/utils/readExtras';
 import { clipIdeaTitle, getReadingForIdea } from '@apps/pinch/utils/ideas';
 
 type Stage = 'start' | 'form' | 'idea' | Exclude<RecipeStartMethod, 'manual'>;
@@ -289,6 +291,27 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           backStepRef={backStepRef}
           onLeave={() => void leave()}
           onTitleChange={changeTitle}
+        />
+      );
+    }
+    if (stage === 'file' && fromIdea?.kind === 'PHOTO') {
+      return (
+        <IdeaPhotoReading
+          idea={fromIdea}
+          onBack={goBack}
+          onManual={() => setStage('form')}
+          onRead={(recipe) => {
+            const reading = getReadingForIdea(recipe, fromIdea);
+            isDirtyRef.current = true;
+            setRead({
+              recipe: reading,
+              source: 'AI_FILE',
+              label: fromIdea.title,
+              extras: NO_EXTRAS,
+            });
+            setTitle(reading.title ?? '');
+            setStage('form');
+          }}
         />
       );
     }

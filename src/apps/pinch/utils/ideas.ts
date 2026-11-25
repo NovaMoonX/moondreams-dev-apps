@@ -86,12 +86,25 @@ export const getMissingIdeaFields = (existing: object) =>
     IDEA_KEYS.filter((key) => !(key in existing)).map((key) => [key, null]),
   );
 
+/** A photo idea's stored pictures, first one first; a document from before `photoPaths` has its single `photoPath` as a one-item list. */
+export const getIdeaPhotoPaths = (
+  idea: Pick<Idea, 'kind' | 'photoPath' | 'photoPaths'>,
+): string[] => {
+  if (idea.kind !== 'PHOTO') return [];
+  if (Array.isArray(idea.photoPaths) && idea.photoPaths.length > 0) {
+    return idea.photoPaths;
+  }
+  return idea.photoPath ? [idea.photoPath] : [];
+};
+
 export const getIdeaRecipeMethod = (
-  idea: Pick<Idea, 'kind' | 'url'>,
-): RecipeStartMethod =>
-  idea.kind === 'LINK' && idea.url && toWebLink(idea.url) !== null
-    ? 'link'
-    : 'manual';
+  idea: Pick<Idea, 'kind' | 'url' | 'photoPath' | 'photoPaths'>,
+): RecipeStartMethod => {
+  if (idea.kind === 'LINK' && idea.url && toWebLink(idea.url) !== null) {
+    return 'link';
+  }
+  return getIdeaPhotoPaths(idea).length > 0 ? 'file' : 'manual';
+};
 
 /** A reading made for an idea keeps what the person wrote there, their note and their title (unless it is only the site's name, which is what a failed lookup saved), and fills the rest. */
 export const getReadingForIdea = (

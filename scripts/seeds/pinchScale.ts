@@ -592,6 +592,7 @@ export async function seedPinchScale(
           ? `https://images.example.test/scale/idea-${index}.jpg`
           : null,
       photoPath: null,
+      photoPaths: [],
       recipeId: index % 10 === 9 ? `scale-recipe-${index}` : null,
     };
   });

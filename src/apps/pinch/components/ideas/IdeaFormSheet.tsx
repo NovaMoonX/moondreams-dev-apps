@@ -9,27 +9,28 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FallbackImage from '@/components/FallbackImage';
 import Field from '@/components/forms/Field';
-import PhotoPicker from '@/components/forms/PhotoPicker';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { hasSeveralWebLinks, toWebLink } from '@/utils/urlUtils';
 import IdeaNoteField from '@apps/pinch/components/ideas/IdeaNoteField';
+import IdeaPhotosField from '@apps/pinch/components/ideas/IdeaPhotosField';
 import {
-  IDEA_KIND_EMOJIS,
   MAX_IDEA_TITLE_LENGTH,
   MAX_IDEA_URL_LENGTH,
 } from '@apps/pinch/constants';
-import { useIdeaImageUrl } from '@apps/pinch/hooks/useIdeaImageUrl';
+import { useIdeaPhotos } from '@apps/pinch/hooks/useIdeaPhotos';
 import { removeIdea, updateIdea } from '@apps/pinch/store/actions/ideaActions';
 import { selectIdeas, selectRecipesById } from '@apps/pinch/store/selectors';
 import type { Idea } from '@apps/pinch/types';
-import { findIdeaByUrl, toIdeaUrl } from '@apps/pinch/utils/ideas';
+import {
+  findIdeaByUrl,
+  getIdeaPhotoPaths,
+  toIdeaUrl,
+} from '@apps/pinch/utils/ideas';
 
 const { custom } = FormFactories;
 
@@ -50,9 +51,9 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
   const { confirm } = useActionModal();
   const ideas = useAppSelector(selectIdeas);
   const recipesById = useAppSelector(selectRecipesById);
-  const savedPhotoUrl = useIdeaImageUrl(idea);
-  const upload = useImageUpload(null, 'photo');
-  const { pick: pickPhoto, error: photoError } = upload;
+  const upload = useIdeaPhotos();
+  const { add: addPhotos, clear: clearPhotos } = upload;
+  const savedPaths = useMemo(() => getIdeaPhotoPaths(idea), [idea]);
   const [data, setData] = useState<IdeaFormData>({
     title: idea.title,
     url: idea.url ?? '',
@@ -74,7 +75,6 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
     return duplicate ? "That one's already in your ideas." : null;
   };
   const blocker = getBlocker();
-  const photoUrl = upload.previewUrl ?? savedPhotoUrl;
 
   const fields = useMemo(
     () => [
@@ -136,37 +136,18 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
               name: 'photo',
               label: '',
               renderComponent: () => (
-                <div className='space-y-2'>
-                  <span className='block text-sm font-medium'>Picture</span>
-                  <div className='flex items-center gap-4'>
-                    <span
-                      className='bg-accent grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-3xl'
-                      aria-hidden='true'
-                    >
-                      {photoUrl ? (
-                        <FallbackImage
-                          src={photoUrl}
-                          alt=''
-                          fallback={IDEA_KIND_EMOJIS.PHOTO}
-                          className='size-full object-cover'
-                        />
-                      ) : (
-                        IDEA_KIND_EMOJIS.PHOTO
-                      )}
-                    </span>
-                    <PhotoPicker
-                      photoUrl={photoUrl}
-                      showPreview={false}
-                      canTakePhoto
-                      changeLabel='Replace photo'
-                      error={photoError}
-                      onSelect={(file) => {
-                        setError(null);
-                        void pickPhoto(file);
-                      }}
-                    />
-                  </div>
-                </div>
+                <IdeaPhotosField
+                  photos={upload.photos}
+                  error={upload.error}
+                  isPreparing={upload.isPreparing}
+                  savedPaths={savedPaths}
+                  savedVersion={idea.updatedAt}
+                  onAdd={(files) => {
+                    setError(null);
+                    addPhotos(files);
+                  }}
+                  onClear={clearPhotos}
+                />
               ),
             }),
           ]
@@ -183,14 +164,24 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
         ),
       }),
     ],
-    [isLink, idea.kind, photoUrl, photoError, pickPhoto],
+    [
+      isLink,
+      idea.kind,
+      idea.updatedAt,
+      savedPaths,
+      upload.photos,
+      upload.error,
+      upload.isPreparing,
+      addPhotos,
+      clearPhotos,
+    ],
   );
 
   const handleSubmit = async () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const photoFile = await upload.readyFile();
+      const photoFiles = await upload.readyFiles();
       await dispatch(
         updateIdea({
           uid,
@@ -198,7 +189,7 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
           title: data.title,
           note: data.note,
           url: data.url,
-          photoFile,
+          photoFiles,
         }),
       ).unwrap();
       onClose();

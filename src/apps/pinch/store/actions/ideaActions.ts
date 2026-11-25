@@ -12,6 +12,7 @@ import { getComparableUrl, getWebLinkHost } from '@/utils/urlUtils';
 import {
   MAX_IDEA_NOTE_LENGTH,
   MAX_IDEA_TITLE_LENGTH,
+  MAX_RECIPE_FILES,
   SOFT_MAX_IDEAS,
 } from '@apps/pinch/constants';
 import type { IdeasState } from '@apps/pinch/store/slices/ideasSlice';
@@ -20,6 +21,7 @@ import {
   clipIdeaTitle,
   clipSiteName,
   findIdeaByUrl,
+  getIdeaPhotoPaths,
   getMissingIdeaFields,
   toIdeaImageUrl,
   toIdeaUrl,
@@ -28,8 +30,9 @@ import {
 const ideaDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'ideas', id);
 
-export const getIdeaPhotoPath = (uid: string, ideaId: string) =>
-  `apps/pinch/kitchens/${uid}/ideas/${ideaId}/photo.webp`;
+/** The first picture keeps the original name, so an idea from before several pictures is already its own first one. */
+export const getIdeaPhotoPath = (uid: string, ideaId: string, index = 0) =>
+  `apps/pinch/kitchens/${uid}/ideas/${ideaId}/photo${index === 0 ? '' : `-${index}`}.webp`;
 
 const BAD_TITLE = `Give it a title of up to ${MAX_IDEA_TITLE_LENGTH} characters.`;
 const BAD_NOTE = `Keep the note to ${MAX_IDEA_NOTE_LENGTH} characters.`;
@@ -59,6 +62,12 @@ const resizeIdeaPhoto = async (file: File) => {
   return resized;
 };
 
+const resizeIdeaPhotos = (files: File[]) =>
+  Promise.all(files.map(resizeIdeaPhoto)).then(
+    (photos) => ({ photos }),
+    (error: unknown) => ({ error }),
+  );
+
 export interface IdeaDraft {
   kind: IdeaKind;
   title: string;
@@ -66,7 +75,8 @@ export interface IdeaDraft {
   url: string | null;
   siteName: string | null;
   imageUrl: string | null;
-  photoFile: File | null;
+  /** A photo idea's pictures, the first being its picture; at most `MAX_RECIPE_FILES`. */
+  photoFiles: File[];
 }
 
 interface CreateIdeaInput {
@@ -98,8 +108,11 @@ export const getNewIdeaProblem = (draft: IdeaDraft, ideas: IdeasState) => {
   if (url !== null && findIdeaByUrl(ideas.items, url) !== null) {
     return DUPLICATE_LINK;
   }
-  if (draft.kind === 'PHOTO' && draft.photoFile === null) {
+  if (draft.kind === 'PHOTO' && draft.photoFiles.length === 0) {
     return 'Pick a picture first.';
+  }
+  if (draft.kind === 'PHOTO' && draft.photoFiles.length > MAX_RECIPE_FILES) {
+    return `An idea keeps up to ${MAX_RECIPE_FILES} pictures.`;
   }
   return null;
 };
@@ -121,7 +134,10 @@ export const createIdea = createAsyncThunk<
 
     const now = Date.now();
     const id = chosenId ?? generateUuid();
-    const photoPath = draft.kind === 'PHOTO' ? getIdeaPhotoPath(uid, id) : null;
+    const photoPaths =
+      draft.kind === 'PHOTO'
+        ? draft.photoFiles.map((_, index) => getIdeaPhotoPath(uid, id, index))
+        : [];
     const idea: Idea = {
       id,
       kind: draft.kind,
@@ -133,7 +149,8 @@ export const createIdea = createAsyncThunk<
           ? null
           : (clipSiteName(draft.siteName) ?? clipSiteName(host)),
       imageUrl: url === null ? null : toIdeaImageUrl(draft.imageUrl),
-      photoPath,
+      photoPath: null,
+      photoPaths,
       recipeId: null,
       by: null,
       createdAt: now,
@@ -141,12 +158,7 @@ export const createIdea = createAsyncThunk<
     };
 
     const resized =
-      photoPath && draft.photoFile
-        ? await resizeIdeaPhoto(draft.photoFile).then(
-            (photo) => ({ photo }),
-            (error: unknown) => ({ error }),
-          )
-        : null;
+      photoPaths.length > 0 ? await resizeIdeaPhotos(draft.photoFiles) : null;
     if (resized && 'error' in resized) {
       return rejectWithValue(
         getWriteMessage(resized.error, 'Unable to save this idea.'),
@@ -154,14 +166,18 @@ export const createIdea = createAsyncThunk<
     }
 
     try {
-      if (photoPath && resized) {
-        await uploadFile(photoPath, resized.photo);
+      if (resized) {
+        await Promise.all(
+          resized.photos.map((photo, index) =>
+            uploadFile(photoPaths[index], photo),
+          ),
+        );
       }
       await setDoc(ideaDoc(uid, id), idea);
     } catch (error) {
-      if (photoPath) {
-        await deleteFile(photoPath).catch(() => undefined);
-      }
+      await Promise.all(
+        photoPaths.map((path) => deleteFile(path).catch(() => undefined)),
+      );
       return rejectWithValue(
         getWriteMessage(error, 'Unable to save this idea.'),
       );
@@ -177,7 +193,8 @@ interface UpdateIdeaInput {
   title: string;
   note: string | null;
   url: string | null;
-  photoFile: File | null;
+  /** Pictures that replace the stored ones as a set; empty keeps what is stored. */
+  photoFiles: File[];
 }
 
 /** Field-scoped on purpose: a recipe made from the idea in the meantime keeps its link. */
@@ -188,7 +205,7 @@ export const updateIdea = createAsyncThunk<
 >(
   'pinch/ideas/update',
   async (
-    { uid, id, title: typedTitle, note: typedNote, url: typedUrl, photoFile },
+    { uid, id, title: typedTitle, note: typedNote, url: typedUrl, photoFiles },
     { getState, rejectWithValue },
   ) => {
     const { items } = getState().pinch.ideas;
@@ -226,21 +243,42 @@ export const updateIdea = createAsyncThunk<
     const linkChange = getLinkChange();
     if ('error' in linkChange) return rejectWithValue(linkChange.error);
 
-    const photoPath =
-      existing.kind === 'PHOTO' ? getIdeaPhotoPath(uid, id) : null;
+    const oldPaths = getIdeaPhotoPaths(existing);
+    const isReplacing = existing.kind === 'PHOTO' && photoFiles.length > 0;
+    if (isReplacing && photoFiles.length > MAX_RECIPE_FILES) {
+      return rejectWithValue(
+        `An idea keeps up to ${MAX_RECIPE_FILES} pictures.`,
+      );
+    }
+    const photoPaths = isReplacing
+      ? photoFiles.map((_, index) => getIdeaPhotoPath(uid, id, index))
+      : oldPaths;
 
     try {
-      if (photoPath && photoFile) {
-        await uploadFile(photoPath, await resizeIdeaPhoto(photoFile));
+      if (isReplacing) {
+        const resized = await resizeIdeaPhotos(photoFiles);
+        if ('error' in resized) throw resized.error;
+        await Promise.all(
+          resized.photos.map((photo, index) =>
+            uploadFile(photoPaths[index], photo),
+          ),
+        );
       }
       await updateDoc(ideaDoc(uid, id), {
         ...getMissingIdeaFields(existing),
         title,
         note,
         ...linkChange.fields,
-        ...(photoPath && photoFile ? { photoPath } : {}),
+        ...(existing.kind === 'PHOTO' ? { photoPath: null, photoPaths } : {}),
         updatedAt: Date.now(),
       });
+      if (isReplacing) {
+        await Promise.all(
+          oldPaths
+            .filter((path) => !photoPaths.includes(path))
+            .map((path) => deleteFile(path).catch(() => undefined)),
+        );
+      }
     } catch (error) {
       return rejectWithValue(
         getWriteMessage(error, 'Unable to save this idea.'),
@@ -271,8 +309,12 @@ export const removeIdea = createAsyncThunk<
     );
   }
 
-  if (existing?.photoPath) {
-    await deleteFile(existing.photoPath).catch(() => undefined);
+  if (existing) {
+    await Promise.all(
+      getIdeaPhotoPaths(existing).map((path) =>
+        deleteFile(path).catch(() => undefined),
+      ),
+    );
   }
 
   return id;
