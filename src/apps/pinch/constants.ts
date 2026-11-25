@@ -165,6 +165,8 @@ export const MAX_GUIDANCE_CHARS = 300;
 export const MAX_GUIDED_ITEMS = 5;
 export const MAX_GUIDED_LENGTH = 80;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** How many photos, screenshots or PDFs one reading takes, read together as one recipe. */
+export const MAX_RECIPE_FILES = 3;
 export const MAX_MEAL_ITEMS = 10;
 
 /** What the slot on the page behind a share link says, by what was shared. */
