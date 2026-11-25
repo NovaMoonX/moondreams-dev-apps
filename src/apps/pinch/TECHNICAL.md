@@ -394,8 +394,10 @@ A collection is a named set of recipes the person made ("Bulk", "High-protein", 
 
 ```typescript
 interface ShoppingItem {
-  id: string;                                  // `${ingredientId}__${unit}`; immutable
-  ingredientId: string;                        // a catalog id or a custom ingredient's id; immutable; 1 … 80 characters
+  id: string;                                  // `${ingredientId}__${unit}`, or `free__<uuid>` for a list-only line; immutable
+  ingredientId: string | null;                 // a catalog id or a custom ingredient's id; immutable; 1 … 80 characters; null for a list-only line
+  freeText: string | null;                     // a list-only line's words ("Paper towels"), at most MAX_NAME_LENGTH; null on an ingredient line; missing reads as null
+  shopSection: ShopSection | null;             // the part of the shop a list-only line was put in; null reads as Other and is always null on an ingredient line; missing reads as null
   amount: number | null;                       // > 0, at most 1,000,000, two decimals; null = just the name, always unit 'EACH'
   unit: Unit;                                  // immutable: a different unit is a different item
   isChecked: boolean;                          // got it: shown under "Got it" until cleared
@@ -408,7 +410,7 @@ interface ShoppingItem {
 }
 ```
 
-The id carries the identity, so no query is needed to find "the line for chicken thigh in pounds": a transaction reads that one document. A unit's name never holds `__` (`FL_OZ` has one underscore), so the last `__` always splits the id. The list stores no name, family or price: those are read through the ingredient at render time, so renaming an ingredient or moving it to another family reaches the list, and an ingredient that is gone reads as "Removed ingredient" in the "Other" group. Items are plain documents with no archive state; the person deletes them. `amount` is `null` for a line with only a name, and `sources` (at most 60 entries) says what put the line on the list; the client writes both, and the rules read `sources` with `get('sources', [])`, so a line written before it reads exactly as before. Sources are merged from the add transaction's own read (the added ones move to the end and the oldest go past 60), not with `arrayUnion`, which can't keep them under the rules' cap of 60. A ticked line that an add starts again keeps its old sources with the new ones, so a day that was already bought is still known as added.
+The id carries the identity, so no query is needed to find "the line for chicken thigh in pounds": a transaction reads that one document. A unit's name never holds `__` (`FL_OZ` has one underscore), so the last `__` always splits the id. The list stores no name, family or price: those are read through the ingredient at render time, so renaming an ingredient or moving it to another family reaches the list, and an ingredient that is gone reads as "Removed ingredient" in the "Other" group. Items are plain documents with no archive state; the person deletes them. **A list-only line** (paper towels, soap: `addListOnlyItem`) has `ingredientId: null`, its words in `freeText`, amount null and EACH, and a random id, so it never merges: each is its own row (`free:<id>` in `getOwnRowId`), named by its words and grouped under its `shopSection`, and the one-thing sheet refuses the same words while one is open. Ticks, notes, remove, Undo, Clear and the badge treat it like any line; `isIngredientItem` keeps it out of the cost, the pantry put-away, the pickers, Remove from a meal and every "for N recipes" count. `renameListOnlyItem` and `setListOnlySection` are field-scoped updates. The connections adapter titles it by `freeText`. `amount` is `null` for a line with only a name, and `sources` (at most 60 entries) says what put the line on the list; the client writes both, and the rules read `sources` with `get('sources', [])`, so a line written before it reads exactly as before. Sources are merged from the add transaction's own read (the added ones move to the end and the oldest go past 60), not with `arrayUnion`, which can't keep them under the rules' cap of 60. A ticked line that an add starts again keeps its old sources with the new ones, so a day that was already bought is still known as added.
 
 ### 6c. `Idea` — `…/ideas/{id}`
 

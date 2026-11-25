@@ -138,16 +138,19 @@ function ShoppingListOnlySheet({
             onChange={(event) => setNameText(event.target.value)}
           />
         </div>
-        <PillGroup
-          label='Which part of the shop'
-          options={SHOP_SECTIONS.map((value) => ({
-            value,
-            label: SHOP_SECTION_LABELS[value],
-          }))}
-          value={section}
-          onChange={setSection}
-          isThin
-        />
+        <div className='space-y-1'>
+          <p className='text-muted-foreground text-xs'>Part of the shop</p>
+          <PillGroup
+            label='Part of the shop'
+            options={SHOP_SECTIONS.map((value) => ({
+              value,
+              label: SHOP_SECTION_LABELS[value],
+            }))}
+            value={section}
+            onChange={setSection}
+            isThin
+          />
+        </div>
         <div className='space-y-1'>
           <Label
             htmlFor='pinch-list-only-note'

@@ -281,16 +281,22 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
               </p>
             )}
             {!note && listOnly && (
-              <PillGroup
-                label='Which part of the shop? (optional)'
-                options={SHOP_SECTIONS.map((value) => ({
-                  value,
-                  label: SHOP_SECTION_LABELS[value],
-                }))}
-                value={listOnly.section ?? 'other'}
-                onChange={handleSection}
-                isThin
-              />
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-xs'>
+                  Which part of the shop? Optional, it sits under Other until
+                  you pick.
+                </p>
+                <PillGroup
+                  label='Which part of the shop'
+                  options={SHOP_SECTIONS.map((value) => ({
+                    value,
+                    label: SHOP_SECTION_LABELS[value],
+                  }))}
+                  value={listOnly.section ?? 'other'}
+                  onChange={handleSection}
+                  isThin
+                />
+              </div>
             )}
             {error && <p className='text-destructive text-sm'>{error}</p>}
             {added.length > 0 && (
