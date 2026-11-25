@@ -1,15 +1,22 @@
-// Run against the Firestore emulator: `npm run check:runway-alerts-server`. After a rework the server judges the person's alerts, sends one push when one goes off, and holds one that goes off in quiet hours until 08:00 local.
+// Run against the Firestore emulator: `npm run check:runway-alerts-server`. After a rework the server judges the person's alerts, sends one push when one goes off, and holds one that goes off in quiet hours until 08:00 local. When closings are stale or behind, the run rebuilds them itself and still writes figures and judges alerts.
 import assert from 'node:assert/strict';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 import { reworkPlan } from '../../functions/src/apps/runway/figures/reworkPlan.ts';
+import { SERVER_REBUILD_MONTHS } from '../../functions/src/apps/runway/figures/rebuildClosings.ts';
+import {
+  decodeClosing,
+  getLastClosableMonth,
+  toMonthKey,
+} from '../../functions/src/apps/runway/engine/closings.ts';
 import type { SendAlertPush } from '../../functions/src/apps/runway/figures/alerts.ts';
 import { SEALED_SCHEMA_VERSION } from '../../functions/src/apps/runway/link/linkShared.ts';
 import {
   DEV_KEYRING,
   deriveSeedDataKey,
+  openWithKey,
   sealWithKey,
   wrapDataKey,
   wrappedKeyPath,
@@ -18,6 +25,7 @@ import type {
   AlertDoc,
   AlertSealed,
   AlertStateDoc,
+  ClosingSealed,
   PurchaseDoc,
   PurchaseSealed,
 } from '../../functions/src/apps/runway/runwayTypes.ts';
@@ -43,9 +51,14 @@ const data = (uid: string) => ({
 const seal = (uid: string, fields: object) =>
   sealWithKey(data(uid), { ...fields }, SEALED_SCHEMA_VERSION);
 
-const purchase = (uid: string, id: string, cents: number): PurchaseDoc => ({
+const purchase = (
+  uid: string,
+  id: string,
+  cents: number,
+  date = today - DAY_MS,
+): PurchaseDoc => ({
   id,
-  date: today - DAY_MS,
+  date,
   source: 'manual',
   status: 'posted',
   needsHome: false,
@@ -80,19 +93,19 @@ const purchase = (uid: string, id: string, cents: number): PurchaseDoc => ({
   } satisfies PurchaseSealed),
 });
 
-async function seedPlan(uid: string, isTracking: boolean) {
+async function seedPlan(uid: string, isTracking: boolean, start = startDate) {
   const plan = planOf(uid);
   await firestore
     .doc(wrappedKeyPath(uid))
     .set(wrapDataKey(DEV_KEYRING, uid, data(uid), at(0)));
   await firestore.doc(plan).set({
     uid,
-    createdAt: startDate,
-    updatedAt: startDate,
+    createdAt: start,
+    updatedAt: start,
     stance: 'conservative',
-    startDate,
+    startDate: start,
     trackingPeriods: isTracking
-      ? [{ from: startDate, to: null, linkedFrom: startDate }]
+      ? [{ from: start, to: null, linkedFrom: start }]
       : [],
     dirtyFrom: null,
     notify: { needsHome: false },
@@ -109,7 +122,7 @@ async function seedPlan(uid: string, isTracking: boolean) {
         id,
         kind: 'envelope',
         parentId: null,
-        createdAt: startDate,
+        createdAt: start,
         endedAt: null,
         archivedAt: null,
         heldReleasedOn: null,
@@ -118,8 +131,8 @@ async function seedPlan(uid: string, isTracking: boolean) {
         id: `version-${id}`,
         itemId: id,
         kind: 'envelope',
-        createdAt: startDate,
-        effectiveFrom: startDate,
+        createdAt: start,
+        effectiveFrom: start,
         effectiveUntil: null,
         changeId: `change-${id}`,
         sealed: seal(uid, {
@@ -139,10 +152,10 @@ async function seedPlan(uid: string, isTracking: boolean) {
       await firestore.doc(`${plan}/moves/start_${id}`).set({
         id: `start_${id}`,
         kind: 'start',
-        date: startDate,
+        date: start,
         refId: id,
         reversesMoveId: null,
-        createdAt: startDate,
+        createdAt: start,
         sealed: seal(uid, { amountCents: 40_000, holding: 'envelope' }),
       });
     }),
@@ -461,6 +474,105 @@ async function main() {
   assert.equal(raisedState?.lineFrom, 'version-raised');
   assert.equal(raisedState?.isBelow, true);
   assert.equal(afterRaise.sent.length, 0, 'a raised amount sends no push');
+
+  // Closings two months behind (none yet, the plan began months ago) are rebuilt by the run itself, then figures and alerts follow.
+  const behind = 'alerts-behind';
+  const longAgo = today - 120 * DAY_MS;
+  const target = getLastClosableMonth(today);
+  await seedPlan(behind, true, longAgo);
+  await putAlert(behind, 'low-groceries');
+  const behindRun = await run(behind, at(12), outbox().send);
+  assert.equal(
+    behindRun.kind,
+    'done',
+    'stale closings no longer make the run wait',
+  );
+  const closingsOf = async (uid: string) =>
+    (await firestore.collection(`${planOf(uid)}/closings`).get()).docs;
+  const built = await closingsOf(behind);
+  assert.equal(
+    built.at(-1)?.id,
+    target,
+    'closings reach the last closable month',
+  );
+  assert.equal(built[0]?.id, toMonthKey(longAgo));
+  const opened = decodeClosing(
+    target,
+    openWithKey(
+      data(behind).key,
+      built.at(-1)?.get('sealed'),
+    ) as unknown as ClosingSealed,
+  );
+  assert.equal(
+    opened.startDate,
+    longAgo,
+    'a server closing opens as the phone reads it',
+  );
+  const planAfter = (await firestore.doc(planOf(behind)).get()).data();
+  assert.equal(planAfter?.dirtyFrom, null);
+  const figures = (
+    await firestore.doc(`${planOf(behind)}/figures/current`).get()
+  ).data();
+  assert.ok(figures, 'figures are written in the same run');
+  assert.equal(
+    figures?.planStamp,
+    planAfter?.updatedAt,
+    'the figures carry the stamp the rebuild left, so the phone trusts them',
+  );
+  assert.equal((await stateOf(behind, 'low-groceries'))?.isBelow, false);
+
+  // A charge dated in a closed month marks dirtyFrom; the run rebuilds from there, clears it, and the alert goes off.
+  const closedMonth = toMonthKey(longAgo);
+  const stamped = planAfter?.updatedAt as number;
+  await firestore
+    .doc(`${planOf(behind)}/purchases/late`)
+    .set(purchase(behind, 'late', 35_000, longAgo + DAY_MS));
+  await firestore
+    .doc(planOf(behind))
+    .update({ dirtyFrom: closedMonth, updatedAt: stamped + 1 });
+  const dirty = outbox();
+  const dirtyRun = await run(behind, at(13), dirty.send);
+  assert.equal(dirtyRun.kind, 'done');
+  const cleaned = (await firestore.doc(planOf(behind)).get()).data();
+  assert.equal(cleaned?.dirtyFrom, null, 'the rebuild clears dirtyFrom');
+  assert.ok((cleaned?.updatedAt as number) > stamped + 1);
+  assert.equal(
+    (await firestore.doc(`${planOf(behind)}/figures/current`).get()).get(
+      'planStamp',
+    ),
+    cleaned?.updatedAt,
+  );
+  assert.equal(
+    dirty.sent.length,
+    1,
+    'a charge in a closed month still sets off its alert',
+  );
+  assert.equal((await stateOf(behind, 'low-groceries'))?.isBelow, true);
+
+  // A plan further back than one run builds goes as far as it may, marks where it stopped and finishes on the next run.
+  const ancient = 'alerts-ancient';
+  const yearsAgo = today - (SERVER_REBUILD_MONTHS + 6) * 31 * DAY_MS;
+  await seedPlan(ancient, true, yearsAgo);
+  const firstPart = await run(ancient, at(12), outbox().send);
+  assert.equal(firstPart.kind, 'waiting');
+  const partial = await closingsOf(ancient);
+  assert.equal(partial.length, SERVER_REBUILD_MONTHS);
+  assert.equal(
+    (await firestore.doc(planOf(ancient)).get()).get('dirtyFrom') !== null,
+    true,
+    'a partial rebuild leaves dirtyFrom where it stopped',
+  );
+  assert.equal(
+    (await firestore.doc(`${planOf(ancient)}/figures/current`).get()).exists,
+    false,
+  );
+  const secondPart = await run(ancient, at(12) + 60_000, outbox().send);
+  assert.equal(secondPart.kind, 'done');
+  assert.equal((await closingsOf(ancient)).at(-1)?.id, target);
+  assert.equal(
+    (await firestore.doc(planOf(ancient)).get()).get('dirtyFrom'),
+    null,
+  );
 
   console.log('Runway alerts server: all checks passed.');
 }

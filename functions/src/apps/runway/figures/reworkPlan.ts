@@ -3,15 +3,12 @@ import type {
   Firestore,
   QuerySnapshot,
 } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
 import { getFreeToSpendFigure } from '../engine/balances.js';
 import { dayInZone } from '../engine/dates.js';
 import { isTrackingLevel } from '../engine/level.js';
-import {
-  decodeClosing,
-  getHistory,
-  type ClosingState,
-} from '../engine/closings.js';
+import { getHistory } from '../engine/closings.js';
 import { ENGINE_VERSION, MOVE_KINDS } from '../engine/engineConstants.js';
 import {
   computeFigures,
@@ -53,7 +50,6 @@ import type {
   AccountBalanceDoc,
   AccountDoc,
   CardDoc,
-  ClosingSealed,
   DayRecordDoc,
   IncomeDayDoc,
   MoveDoc,
@@ -68,6 +64,7 @@ import type {
   StartedPaymentDoc,
 } from '../runwayTypes.js';
 import { runAlerts, type SendAlertPush } from './alerts.js';
+import { readClosing, rebuildClosingsOnServer } from './rebuildClosings.js';
 import { HOUR_MS, pickZone } from './reworkState.js';
 import {
   applyPlaced,
@@ -100,32 +97,12 @@ const openOrSkip = async <T>(open: () => Promise<T>): Promise<T[]> =>
     () => [],
   );
 
-/** The newest closing the phone would read (before `dirtyFrom` when set), decoded; one that will not open is none. */
-async function readClosing(
-  firestore: Firestore,
-  uid: string,
-  dirtyFrom: string | null,
-  key: Buffer,
-): Promise<ClosingState | null> {
-  const collection = firestore.collection(`${planPath(uid)}/closings`);
-  const snapshot = await (
-    dirtyFrom === null ? collection : collection.where('month', '<', dirtyFrom)
-  )
-    .orderBy('month', 'desc')
-    .limit(1)
-    .get();
-  const entry = snapshot.docs[0];
-  if (!entry) return null;
-  try {
-    const sealed = openWithKey(
-      key,
-      asSealed(entry.get('sealed')),
-    ) as unknown as ClosingSealed;
-    return decodeClosing(entry.get('month') as string, sealed);
-  } catch {
-    return null;
-  }
-}
+const logClosingFailure = (error: unknown) => {
+  const code = (error as { code?: unknown } | null)?.code;
+  logger.warn('runway.closings.failed', {
+    code: typeof code === 'string' || typeof code === 'number' ? code : null,
+  });
+};
 
 const toDocs = <T>(snapshot: QuerySnapshot) =>
   snapshot.docs.map((entry) => withId<T>(entry));
@@ -191,8 +168,9 @@ async function writeShareSummary(
 
 /**
  * Places the waiting charges the person's rules fit, works out the plan's figures from what the phone reads for
- * the same day, writes them sealed and keeps the share summary current. It writes no closing and never touches a
- * closed month: a charge dated in one is left for the phone, so the figures are always written after a sort.
+ * the same day, writes them sealed and keeps the share summary current. When the closings are stale or behind it
+ * rebuilds them first, as the phone would, then reads the plan again. A charge dated in a closed month is still
+ * left for the phone to place, so the figures are always written after a sort.
  */
 export async function reworkPlan(
   firestore: Firestore,
@@ -200,6 +178,7 @@ export async function reworkPlan(
   uid: string,
   now: number,
   sendAlertPush?: SendAlertPush,
+  canRebuild = true,
 ): Promise<ReworkOutcome> {
   const planSnapshot = await firestore.doc(planPath(uid)).get();
   if (!planSnapshot.exists) return { kind: 'gone' };
@@ -228,10 +207,24 @@ export async function reworkPlan(
     today,
     hasFailed: false,
   });
-  // Closings are rebuilt only on the phone; until then the whole ledger would have to be read, so the
-  // stored figures go (bank writes don't move the plan's stamp, so they could pass as current) and the run waits.
   if (history.status !== 'ready') {
-    await firestore.doc(`${planPath(uid)}/figures/current`).delete();
+    const clearFigures = () =>
+      firestore.doc(`${planPath(uid)}/figures/current`).delete();
+    const isRebuilt =
+      canRebuild &&
+      (await rebuildClosingsOnServer(firestore, planKey, uid, today).catch(
+        async (error: unknown) => {
+          logClosingFailure(error);
+          await clearFigures();
+          throw error;
+        },
+      ));
+    if (isRebuilt) {
+      return reworkPlan(firestore, keyring, uid, now, sendAlertPush, false);
+    }
+    // Stored figures could pass as current (bank writes don't move the plan's stamp), so they go until the
+    // closings are whole; a partial rebuild's own write marks the plan, so the next run carries on from there.
+    await clearFigures();
     return { kind: 'waiting', zone, wakeAt: null };
   }
   const { closing, from } = history;
