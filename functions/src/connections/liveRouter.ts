@@ -9,6 +9,7 @@ import {
   readConnectorAppId,
   toGrantId,
   type ConnectorId,
+  type ConnectorManifest,
 } from '../vendor/connectionsContract.js';
 import { validZone } from './liveDay.js';
 import { toDocumentLink, toMailLink, isLiveDeepLink } from './deepLinks.js';
@@ -501,20 +502,27 @@ export const querySiteLive = async (
   }
 };
 
+const toPermission = (manifest: ConnectorManifest, id: string | null) => {
+  const found = manifest.changes.find((permission) => permission.id === id);
+  return found ? { id: found.id, label: found.label } : null;
+};
+
 export interface SiteActionApp {
   connectorId: string;
   /** The app's id, as in its connector id. */
   appId: string;
-  /** The person's words for each read action, with what it needs on. */
+  /** The person's words for each action, with what it needs on: share categories for a read, one change permission for a change. */
   actions: {
     id: string;
+    kind: 'read' | 'change';
     label: string;
     categories: { id: string; label: string }[];
+    permission: { id: string; label: string } | null;
     action: ServerAppAction;
   }[];
 }
 
-/** The site apps this reader holds a live grant for that offer read actions, whatever is switched on, so an assistant always knows they exist. */
+/** The site apps this reader holds a live grant for that offer actions (reads and changes), whatever is switched on, so an assistant always knows they exist. */
 export const listSiteActionApps = async (
   firestore: Firestore,
   uid: string,
@@ -524,9 +532,7 @@ export const listSiteActionApps = async (
     (id) =>
       readConnectorAppId(id) !== null &&
       SOURCE_ADAPTERS[id].manifest.actions.some(
-        (action) =>
-          action.kind === 'read' &&
-          SOURCE_ADAPTERS[id].actions?.[action.id] !== undefined,
+        (action) => SOURCE_ADAPTERS[id].actions?.[action.id] !== undefined,
       ),
   );
   const snapshots = await Promise.all(
@@ -547,10 +553,11 @@ export const listSiteActionApps = async (
         connectorId,
         appId: readConnectorAppId(connectorId) ?? '',
         actions: manifest.actions.flatMap((entry) =>
-          entry.kind === 'read' && actions?.[entry.id]
+          actions?.[entry.id]
             ? [
                 {
                   id: entry.id,
+                  kind: entry.kind,
                   label: entry.label,
                   categories: entry.categories.flatMap((id) => {
                     const found = manifest.categories.find(
@@ -558,6 +565,7 @@ export const listSiteActionApps = async (
                     );
                     return found ? [{ id, label: found.label }] : [];
                   }),
+                  permission: toPermission(manifest, entry.permission),
                   action: actions[entry.id],
                 },
               ]
@@ -587,22 +595,28 @@ export const runSiteAction = async (
   const declared = adapter?.manifest.actions.find(
     (action) => action.id === input.actionId,
   );
-  const action =
-    declared?.kind === 'read' && adapter?.actions
-      ? adapter.actions[input.actionId]
-      : undefined;
+  const action = adapter?.actions ? adapter.actions[input.actionId] : undefined;
   if (!adapter || !declared || !action) {
     return { status: 'notFound', message: 'That app has no such action.' };
   }
   const labelOf = (id: string) =>
     adapter.manifest.categories.find((category) => category.id === id)?.label ??
     id;
+  const permission =
+    declared.kind === 'change'
+      ? toPermission(adapter.manifest, declared.permission)
+      : null;
+  if (declared.kind === 'change' && !permission) {
+    return { status: 'notFound', message: 'That app has no such action.' };
+  }
   const noLongerShared: AppActionResult = {
     status: 'switchedOff',
-    needs: declared.categories.map((id) => ({
-      category: id,
-      label: labelOf(id),
-    })),
+    needs: permission
+      ? [{ category: permission.id, label: permission.label }]
+      : declared.categories.map((id) => ({
+          category: id,
+          label: labelOf(id),
+        })),
   };
   try {
     const snapshot = await firestore
@@ -613,7 +627,11 @@ export const runSiteAction = async (
     const allowedCategories = new Set(
       declared.categories.filter((id) => grant.categories[id]?.isOn === true),
     );
-    if (allowedCategories.size === 0) return noLongerShared;
+    if (permission) {
+      if (grant.changes[permission.id]?.isOn !== true) return noLongerShared;
+    } else if (allowedCategories.size === 0) {
+      return noLongerShared;
+    }
     const ctx = { uid: input.uid, accountId: SITE_ACCOUNT_ID, grant };
     if ((await adapter.status(ctx)) !== 'ok') return noLongerShared;
     return await action.run(

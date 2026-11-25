@@ -1887,6 +1887,9 @@ export const HELM_COPY = {
   groupingActionFailed: "Couldn't save that. Check your connection.",
   groupingTookBackSummary: 'Took back the grouping',
   groupingTookBackReport: 'Took those links back.',
+  appChangeTookBackSummary: 'Took back a change in an app',
+  appChangeTookBackReport: 'Took that change back.',
+  appChangeNotTakenBack: "That change couldn't be taken back.",
   groupingLinkedHeading: 'Linked',
   groupingSourcesTitle: 'What goes together',
   groupingFiledUndoFailed: "Couldn't take that back. Try again.",
@@ -3345,6 +3348,7 @@ export const HELM_COPY = {
     `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
   resultHabitFallback: 'Habit',
   resultSeenAsFallback: 'A line about you',
+  resultAppChangeFallback: 'A change in an app',
   tookBackSeenAs: (count: number) =>
     `Put back ${count} ${count === 1 ? 'line' : 'lines'} about you`,
   undoSeenAsPhrase: (count: number) =>

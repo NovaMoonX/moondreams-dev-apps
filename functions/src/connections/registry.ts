@@ -83,6 +83,13 @@ export interface SourceAdapter {
   deepLink(ref: string, ctx: SourceCtx): string | null;
   /** What the app offers an assistant, by the ids its manifest lists in `actions`. */
   actions?: Record<string, ServerAppAction>;
+  /** Takes one change an action recorded back; refuses with a sentence once what it touched has moved on. `from` is where the person asked. */
+  undoChange?(
+    firestore: Firestore,
+    uid: string,
+    changeId: string,
+    from: 'pinch' | 'helm',
+  ): Promise<UndoChangeResult>;
   /** The choices the account offers (calendars), read live. */
   readOptions?(args: {
     firestore: Firestore;
@@ -90,6 +97,8 @@ export interface SourceAdapter {
     accountId: string;
   }): Promise<ConnectorOption[]>;
 }
+
+export type UndoChangeResult = { ok: true } | { ok: false; message: string };
 
 export interface ServerAppActionCtx {
   uid: string;
@@ -108,6 +117,7 @@ export type AppActionResult =
       data: unknown;
       heldBack: { category: string; label: string }[];
     }
+  /** `category` is the share category, or the change permission's id for a change. */
   | { status: 'switchedOff'; needs: { category: string; label: string }[] }
   | { status: 'notFound'; message: string }
   | { status: 'refused'; message: string };

@@ -27,6 +27,7 @@ import {
   readSyncRequest,
   readUpdateConnectionRequest,
   requestedScopes,
+  applyPermissionChanges,
 } from './grants.js';
 import {
   READER_APPS,
@@ -196,6 +197,40 @@ export const grantConnection = onCall(OPTIONS, async (request) => {
   return { grantId };
 });
 
+/** Takes back one change an app recorded for an assistant, from the app's own screens or from Helm. The source app's adapter does it and refuses, with a sentence, once what it touched has moved on; no switch is read, so a change can always be taken back. */
+export const undoAppChange = onCall(
+  OPTIONS,
+  async (request): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const auth = requireAuth(request);
+    const data = request.data as Record<string, unknown> | null;
+    const connectorId = data?.connectorId;
+    const changeId = data?.changeId;
+    const from = data?.from;
+    if (
+      typeof connectorId !== 'string' ||
+      typeof changeId !== 'string' ||
+      changeId === '' ||
+      changeId.length > 128 ||
+      (from !== 'pinch' && from !== 'helm')
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        "That request wasn't understood.",
+      );
+    }
+    const adapter = isKnown(SOURCE_ADAPTERS, connectorId)
+      ? SOURCE_ADAPTERS[connectorId]
+      : null;
+    if (!adapter?.undoChange) {
+      throw new HttpsError(
+        'invalid-argument',
+        "That app doesn't take changes back.",
+      );
+    }
+    return adapter.undoChange(getFirestore(), auth.uid, changeId, from);
+  },
+);
+
 export const updateConnection = onCall(OPTIONS, async (request) => {
   const auth = requireAuth(request);
   const req = readUpdateConnectionRequest(request.data);
@@ -242,7 +277,16 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
     if (labelSnapshot && !labelSnapshot.exists) {
       throw new HttpsError('not-found', "That account doesn't exist.");
     }
+    if (req.changes !== undefined && isOutside) {
+      throw new HttpsError(
+        'invalid-argument',
+        "That request wasn't understood.",
+      );
+    }
     const now = Date.now();
+    const permissions = req.changes
+      ? applyPermissionChanges(current, req.changes, manifest, now)
+      : null;
     const changes = req.categories ?? {};
     const categories = applyCategoryChanges(
       current,
@@ -269,6 +313,7 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
             ),
           }
         : {}),
+      ...(permissions ? { changes: permissions } : {}),
       ...(req.options !== undefined ? { options: req.options } : {}),
       updatedAt: now,
     });

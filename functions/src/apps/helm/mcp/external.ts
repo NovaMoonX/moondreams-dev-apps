@@ -47,7 +47,7 @@ import { openLiveTopic } from '../topicVersionStore.js';
 import { TOPICS_LIMIT } from '../topicLimits.js';
 import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
 import type { SiteActionApp } from '../../../connections/liveRouter.js';
-import { buildHelmTools } from './buildTools.js';
+import { buildHelmTools, type AppChangeDone } from './buildTools.js';
 import {
   SAVE_ABOUT_CAP,
   SAVE_LEARNED_CAP,
@@ -597,6 +597,92 @@ async function saveTurn({
   ].join(' ');
 }
 
+/** Files a change an app made for an outside assistant as one capture and one execution, so it shows in Helm's Activity and Undo takes it back through the app. The app already holds the record; a failure here never undoes the change. */
+async function fileAppChange({
+  ctx,
+  key,
+  change,
+}: {
+  ctx: McpRequestContext;
+  key: HelmKey;
+  change: AppChangeDone;
+}) {
+  const firestore = getFirestore();
+  const base = `apps/helm/users/${ctx.uid}`;
+  const now = Date.now();
+  const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
+  const profile = await firestore.doc(base).get();
+  const timeZone = toKnownZone(
+    (profile.data()?.timeZone as string | undefined) ?? 'UTC',
+  );
+  const words = `${connectorLabel(change.connectorId)}: ${change.summary}`;
+  const captureRef = firestore
+    .collection(`${base}/captures`)
+    .doc(
+      retryKeyFor(
+        ctx,
+        `${words}|${change.changes.map(({ id }) => id).join(',')}`,
+        now,
+      ),
+    );
+  const executionRef = firestore.collection(`${base}/executions`).doc();
+  const batch = firestore.batch();
+  batch.create(captureRef, {
+    ...outsideCaptureFields(ctx, now),
+    status: 'sorted',
+    executionIds: [executionRef.id],
+    sortedAt: now,
+    sealed: seal({
+      text: words,
+      reading: readingOf(words, now, timeZone),
+      answer: null,
+      questionAnswer: null,
+    }),
+  });
+  batch.create(executionRef, {
+    via: ctx.clientName,
+    captureId: captureRef.id,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: AUTOMATIC_LEVEL,
+    state: 'succeeded',
+    effectRefs: change.changes.map(({ id }) => ({
+      op: 'create',
+      collection: 'appChanges',
+      docId: `${change.connectorId}__${id}`,
+    })),
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: now,
+    decidedAt: now,
+    finishedAt: now,
+    sealed: seal({
+      summary: change.summary,
+      said: null,
+      commands: [],
+      effects: change.changes.map(({ title, lines }) => ({
+        written: { 'sealed.title': title, 'sealed.lines': lines },
+        previous: null,
+      })),
+      lines: [],
+      undoReport: null,
+      goneIds: null,
+      undoReason: null,
+      heldSpoken: null,
+      spoken: null,
+    }),
+  });
+  await batch.commit().catch((error: unknown) => {
+    if ((error as { code?: unknown }).code !== ALREADY_EXISTS) throw error;
+  });
+}
+
 const askShape = {
   question: z
     .string()
@@ -665,20 +751,39 @@ const instructionsFor = (
   },
   apps: SiteActionApp[],
 ) => {
+  const reads = (app: SiteActionApp) =>
+    app.actions.filter(({ kind }) => kind === 'read');
+  const changesOf = (app: SiteActionApp) =>
+    app.actions.filter(({ kind }) => kind === 'change');
   const appLines = apps.map(
     (app) =>
-      `${connectorLabel(app.connectorId)}: ${app.actions
+      `${connectorLabel(app.connectorId)}: ${reads(app)
         .map(({ id, label }) => `${app.appId}_${id} (${label.toLowerCase()})`)
         .join(', ')}`,
   );
   const routes = apps.map(
     (app) =>
-      `For anything in ${connectorLabel(app.connectorId)} (${app.actions.map(({ label }) => label.toLowerCase()).join(', ')}), call the ${app.appId}_ tools directly; never ask_helm for it.`,
+      `For anything in ${connectorLabel(app.connectorId)} (${reads(app)
+        .map(({ label }) => label.toLowerCase())
+        .join(
+          ', ',
+        )}), call the ${app.appId}_ tools directly; never ask_helm for it.`,
   );
+  const changeLines = apps
+    .filter((app) => changesOf(app).length > 0)
+    .map(
+      (app) =>
+        `${connectorLabel(app.connectorId)}: ${changesOf(app)
+          .map(({ id, label }) => `${app.appId}_${id} (${label.toLowerCase()})`)
+          .join(', ')}`,
+    );
   return [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
     `Helm reaches the person's topics and procedures (list_topics, get_topic, search_procedures), tasks (search_tasks), calendar (get_calendar) and the apps they connected${appLines.length > 0 ? `: ${appLines.join('; ')}. These only read, and each call checks what the person shares at that moment` : ''}. Whenever the conversation touches their own life (their things, people, plans or routines), check Helm on your own, without waiting to be told. Use only what the tools return; if they find nothing, say so rather than guessing.`,
     ...routes,
+    changeLines.length > 0
+      ? `Helm can also change the apps the person allowed, never delete: ${changeLines.join('; ')}. A change applies at once, and the person can undo it in the app and in Helm, so say what you are about to change and get their go-ahead before calling a change tool, then tell them what it did from its summary. A change tool answers switchedOff when that kind of change is off for the app (the person turns it on in Helm > Connected apps) and assistantCannotChange when "Change things in your apps" is off for this assistant (Helm > Settings > Connected assistants); say exactly that and don't try another way.`
+      : '',
     `Every tool says plainly when something is held back: a result with status switchedOff names the switch that is off and where the person turns it on, and assistantCannotRead names the permission to turn on for this assistant. Tell the person exactly that, in those words, and never work around it with ask_helm.`,
     canWrite
       ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question that needs more than a lookup (it files a turn, which is why it is not read-only), and save_to_helm saves what they learned or researched in this chat.`
@@ -727,6 +832,8 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
     key,
     outsideReadScopes: ctx.readScopes,
     appActions: { apps: actionApps },
+    canChangeApps: ctx.canChangeApps,
+    onAppChange: (change) => fileAppChange({ ctx, key, change }),
     assistantName: ctx.clientName,
     firestore,
     timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
@@ -762,7 +869,9 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
           actionTools: actionApps
             .filter((app) => app.connectorId === source.connectorId)
             .flatMap((app) =>
-              app.actions.map(({ id }) => `${app.appId}_${id}`),
+              app.actions
+                .filter(({ kind }) => kind === 'read')
+                .map(({ id }) => `${app.appId}_${id}`),
             ),
         })),
         {

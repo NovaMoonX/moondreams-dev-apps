@@ -1501,7 +1501,9 @@ export interface EffectRef {
     | 'scheduledActions'
     | 'research'
     | 'dayAims'
-    | 'groupings';
+    | 'groupings'
+    /** A change an app made for an outside assistant; the id is `{connectorId}__{changeId}`, and Undo asks that app. */
+    | 'appChanges';
   docId: string;
 }
 

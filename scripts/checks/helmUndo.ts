@@ -16,7 +16,10 @@ import {
   canUndo,
   getTakenBackIds,
   getUndoneDocIds,
+  isAppChangeExecution,
   narrowForUndo,
+  planAppChangeUndo,
+  settleAppChangeUndo,
   planReopen,
   planUndo,
   procedureEffectKind,
@@ -4122,6 +4125,71 @@ test('setWhereabouts puts back where the person lived or was', () => {
     (awayBack.updates[0].reseal as unknown as { away: unknown }).away,
     [],
   );
+});
+
+test("an outside assistant's app changes are one unit each, taken back by asking the app, never by a Helm write", () => {
+  const change = (id: string, title: string) => ({
+    ref: {
+      op: 'update',
+      collection: 'appChanges',
+      docId: `app:pinch__${id}`,
+    } as EffectRef,
+    effect: {
+      written: { 'sealed.title': title, 'sealed.lines': ['Added 2 cups'] },
+      previous: null,
+    },
+  });
+  const original = execution([change('c1', 'Flour'), change('c2', 'Sugar')]);
+  assert.equal(isAppChangeExecution(original.effectRefs), true);
+  assert.equal(
+    isAppChangeExecution([
+      ...original.effectRefs,
+      ...execution([update('t1', {}, {})]).effectRefs,
+    ]),
+    false,
+  );
+  const built = buildUndoUnits(original);
+  assert.deepEqual(
+    built.units.map((unit) => [unit.kind, unit.title]),
+    [
+      ['appChange', 'Flour'],
+      ['appChange', 'Sugar'],
+    ],
+  );
+  assert.deepEqual(
+    buildResultLines(original, new Map(), 'UTC', NOW).map((line) => [
+      line.title,
+      line.detail,
+    ]),
+    [
+      ['Flour', 'Added 2 cups'],
+      ['Sugar', 'Added 2 cups'],
+    ],
+  );
+  assert.deepEqual(planAppChangeUndo(original, null), [
+    { docId: 'app:pinch__c1', connectorId: 'app:pinch', changeId: 'c1' },
+    { docId: 'app:pinch__c2', connectorId: 'app:pinch', changeId: 'c2' },
+  ]);
+  assert.deepEqual(
+    planAppChangeUndo(original, ['app:pinch__c2']).map((call) => call.changeId),
+    ['c2'],
+  );
+  assert.deepEqual(
+    planAppChangeUndo(
+      { ...original, undoneDocIds: ['app:pinch__c1'] },
+      null,
+    ).map((call) => call.changeId),
+    ['c2'],
+  );
+  const calls = planAppChangeUndo(original, null);
+  const settled = settleAppChangeUndo(calls, [
+    { ok: true },
+    { ok: false, message: 'Sugar was ticked off since, so it stays.' },
+  ]);
+  assert.deepEqual(settled.takenBackDocIds, ['app:pinch__c1']);
+  assert.deepEqual(settled.refusals, [
+    'Sugar was ticked off since, so it stays.',
+  ]);
 });
 
 const failures: string[] = [];

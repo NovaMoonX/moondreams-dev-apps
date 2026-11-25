@@ -541,9 +541,17 @@ service cloud.firestore {
       allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
     }
 
-    // Everything in a kitchen is private to one person and nests under their uid.
+    // Everything in a kitchen is private to one person and nests under their uid. The one exception is
+    // `outsideChanges`: the record of what an outside assistant changed, written only by Functions so a
+    // client can neither forge one nor mark one undone; its owner reads it to show and take it back.
     match /apps/pinch/kitchens/{uid}/{document=**} {
-      allow read, write: if isUser(uid);
+      allow read: if isUser(uid);
+      allow write: if isUser(uid) && document[0] != 'outsideChanges';
+    }
+
+    match /apps/pinch/kitchens/{uid}/outsideChanges/{changeId} {
+      allow read: if isUser(uid);
+      allow write: if false;
     }
 
     match /apps/pinch/settings/{uid} {

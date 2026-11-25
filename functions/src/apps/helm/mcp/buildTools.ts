@@ -115,6 +115,15 @@ export interface AppActionReads {
   ) => Promise<AppActionResult>;
 }
 
+/** One change an app made for an outside assistant, as the app answered it. */
+export interface AppChangeDone {
+  connectorId: string;
+  actionId: string;
+  summary: string;
+  lines: string[];
+  changes: { id: string; title: string; lines: string[] }[];
+}
+
 export interface HelmToolScope {
   uid: string;
   key: HelmKey;
@@ -133,6 +142,10 @@ export interface HelmToolScope {
   appActions?: AppActionReads;
   /** The outside assistant's name as the person sees it in Helm, for the switch a refusal names. */
   assistantName?: string;
+  /** Set on an outside assistant's turn: whether its "Change things in your apps" switch is on. A change tool is only offered to an outside turn. */
+  canChangeApps?: boolean;
+  /** Called after each change that went through, so the turn is filed in Helm with an Undo. */
+  onAppChange?: (change: AppChangeDone) => Promise<void>;
   quotes?: QuoteBook;
   searched?: SearchedLog;
   /** Set on an outside assistant's turn: its switches, which bound every stored record a tool returns. */
@@ -1147,8 +1160,9 @@ export function buildHelmTools(scope: HelmToolScope) {
 
   const appActionTools = (scope.appActions?.apps ?? []).flatMap((app) => {
     const appLabel = connectorLabel(app.connectorId);
-    return app.actions.map(
-      ({ id, categories, action }): HelmTool<z.ZodRawShape> => ({
+    return app.actions
+      .filter((entry) => entry.kind === 'read')
+      .map(({ id, categories, action }): HelmTool<z.ZodRawShape> => ({
         name: `${app.appId}_${id}`,
         audience: 'both',
         kind: 'read',
@@ -1203,8 +1217,70 @@ export function buildHelmTools(scope: HelmToolScope) {
             }),
           };
         },
-      }),
-    );
+      }));
+  });
+
+  const appChangeTools = (scope.appActions?.apps ?? []).flatMap((app) => {
+    const appLabel = connectorLabel(app.connectorId);
+    const where = `Helm > Connected apps > ${appLabel}`;
+    return app.actions
+      .filter((entry) => entry.kind === 'change')
+      .map(({ id, permission, action }): HelmTool<z.ZodRawShape> => ({
+        name: `${app.appId}_${id}`,
+        audience: 'external',
+        kind: 'change',
+        description: `${action.description} Changes ${appLabel} through Helm, only what the person allowed (${permission?.label ?? 'a change'}); it never deletes. It applies at once and the person can undo it in ${appLabel} and in Helm, so confirm with the person before calling it. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotChange or notFound; say exactly what a status says.`,
+        shape: action.shape,
+        run: async (input) => {
+          if (scope.outsideReadScopes && scope.canChangeApps !== true) {
+            const who = scope.assistantName?.trim() || 'This assistant';
+            return {
+              status: 'assistantCannotChange',
+              message: `${who} isn't allowed to change the person's apps. Turn on "Change things in your apps" for ${who} in Helm > Settings > Connected assistants.`,
+            };
+          }
+          const run =
+            scope.appActions?.run ??
+            (await import('../../../connections/liveRouter.js')).runSiteAction;
+          const result = await run(scope.firestore, {
+            uid: scope.uid,
+            readerAppId: 'helm',
+            connectorId: app.connectorId,
+            actionId: id,
+            input: input as Record<string, unknown>,
+            actor: { kind: 'outside', name: scope.assistantName ?? 'Helm' },
+            timeZone,
+          }).catch((): AppActionResult => ({
+            status: 'refused',
+            message:
+              'Something went wrong reaching it. Nothing was changed. Try again in a moment.',
+          }));
+          if (result.status === 'switchedOff') {
+            const labels = result.needs.map((need) => need.label);
+            return {
+              status: 'switchedOff',
+              message: `${appLabel}'s "${labels.join('" and "')}" ${labels.length > 1 ? 'are' : 'is'} switched off, so nothing was changed. The person can turn ${labels.length > 1 ? 'one on' : 'it on'} in ${where}.`,
+              needs: labels,
+            };
+          }
+          if (result.status !== 'ok') return result;
+          const done = result.data as {
+            summary: string;
+            lines: string[];
+            changes: AppChangeDone['changes'];
+          };
+          await scope
+            .onAppChange?.({
+              connectorId: app.connectorId,
+              actionId: id,
+              summary: done.summary,
+              lines: done.lines,
+              changes: done.changes,
+            })
+            .catch(() => undefined);
+          return { status: 'ok', summary: done.summary, lines: done.lines };
+        },
+      }));
   });
 
   const topicRead = scope.topicRead;
@@ -1518,6 +1594,7 @@ export function buildHelmTools(scope: HelmToolScope) {
       ? [searchAppRecords]
       : []),
     ...appActionTools,
+    ...appChangeTools,
     ...(topicRead ? [getTopic, listTopics] : []),
     ...(procedureRead ? [searchProcedures] : []),
     ...(questionReask ? [bringBackQuestion] : []),

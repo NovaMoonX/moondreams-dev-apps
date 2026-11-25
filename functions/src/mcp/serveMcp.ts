@@ -53,6 +53,7 @@ export interface McpRequestContext {
   clientId: string;
   clientName: string;
   canWrite: boolean;
+  canChangeApps: boolean;
   readScopes: McpReadScope[];
 }
 
@@ -128,6 +129,7 @@ async function sealClient(
         firstSeenAt: now,
         lastUsedAt: now,
         canWrite: true,
+        canChangeApps: false,
         readScopes: [],
         revokedAt: null,
       });
@@ -137,6 +139,7 @@ async function sealClient(
         clientId: claims.clientId,
         clientName,
         canWrite: true,
+        canChangeApps: false,
         readScopes: [],
       };
     }
@@ -169,6 +172,7 @@ async function sealClient(
       clientId: claims.clientId,
       clientName: typeof stored.name === 'string' ? stored.name : clientName,
       canWrite: stored.canWrite === true,
+      canChangeApps: stored.canChangeApps === true,
       readScopes: readScopesOf(stored.readScopes),
     };
   });

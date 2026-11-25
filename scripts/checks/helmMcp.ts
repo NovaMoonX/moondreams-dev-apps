@@ -46,8 +46,12 @@ const pinchApp = {
   appId: 'pinch',
   actions: PINCH_ACTIONS.map((action) => ({
     id: action.id,
+    kind: action.kind,
     label: action.label,
     categories: action.categories.map((id) => ({ id, label: id })),
+    permission: action.permission
+      ? { id: action.permission, label: action.permission }
+      : null,
     action: {
       description: `Fake ${action.id}.`,
       shape: {},
@@ -62,6 +66,7 @@ let nextResult: AppActionResult = {
   data: { days: [] },
   heldBack: [],
 };
+const filedChanges: { actionId: string; summary: string }[] = [];
 const appActions = {
   apps: [pinchApp],
   run: async (_firestore: unknown, input: { actionId: string }) => {
@@ -137,11 +142,15 @@ const OUTSIDE_TOOLS = [
   'get_topic',
   'list_connections',
   'list_topics',
+  'pinch_add_recipe',
+  'pinch_add_to_shopping_list',
   'pinch_get_kitchen',
   'pinch_get_meal_plan',
   'pinch_get_recipe',
   'pinch_get_shopping_list',
+  'pinch_plan_meal',
   'pinch_search_recipes',
+  'pinch_update_recipe',
   'search_procedures',
   'search_tasks',
 ];
@@ -961,14 +970,15 @@ const pinchTool = (
     assistantName: 'Gemini',
     ...scope,
   }).find((tool) => tool.name === name)!;
-assert.deepEqual(PINCH_ACTIONS.map((action) => action.id).sort(), [
+const PINCH_READS = PINCH_ACTIONS.filter((action) => action.kind === 'read');
+assert.deepEqual(PINCH_READS.map((action) => action.id).sort(), [
   'get_kitchen',
   'get_meal_plan',
   'get_recipe',
   'get_shopping_list',
   'search_recipes',
 ]);
-PINCH_ACTIONS.forEach((action) =>
+PINCH_READS.forEach((action) =>
   assert.equal(pinchTool(`pinch_${action.id}`).kind, 'read'),
 );
 assert.equal(
@@ -1029,6 +1039,131 @@ assert.equal(
   ).status,
   'notFound',
 );
+
+// Pinch's change actions: change tools, named switches, the assistant's own switch, and a filed record per change.
+const changeTool = (
+  name: string,
+  scope: Partial<Parameters<typeof buildHelmTools>[0]> = {},
+) =>
+  buildHelmTools({
+    uid: 'u1',
+    key: {} as never,
+    aliases: createAliasBook('t'),
+    firestore: {} as never,
+    appActions: appActions as never,
+    assistantName: 'Gemini',
+    onAppChange: async (change) => {
+      filedChanges.push({
+        actionId: change.actionId,
+        summary: change.summary,
+      });
+    },
+    ...scope,
+  }).find((tool) => tool.name === name)!;
+const PINCH_CHANGES = PINCH_ACTIONS.filter(
+  (action) => action.kind === 'change',
+);
+assert.deepEqual(PINCH_CHANGES.map((action) => action.id).sort(), [
+  'add_recipe',
+  'add_to_shopping_list',
+  'plan_meal',
+  'update_recipe',
+]);
+PINCH_CHANGES.forEach((action) => {
+  const tool = changeTool(`pinch_${action.id}`);
+  assert.equal(tool.kind, 'change');
+  assert.equal(
+    tool.audience,
+    'external',
+    'Nomos is not given change tools yet',
+  );
+  assert.match(tool.description, /confirm with the person/);
+});
+assert.equal(
+  offeredHelmTools(
+    buildHelmTools({
+      uid: 'u1',
+      key: {} as never,
+      aliases: createAliasBook('t'),
+      firestore: {} as never,
+      appActions: appActions as never,
+    }),
+    'nomos',
+  ).some((tool) => tool.name === 'pinch_update_recipe'),
+  false,
+);
+actionCalls.length = 0;
+const cannotChange = (await changeTool('pinch_update_recipe', {
+  outsideReadScopes: ['apps'],
+  canChangeApps: false,
+}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+assert.equal(cannotChange.status, 'assistantCannotChange');
+assert.match(
+  String(cannotChange.message),
+  /"Change things in your apps" for Gemini in Helm > Settings > Connected assistants/,
+);
+assert.deepEqual(
+  actionCalls,
+  [],
+  'an assistant without the switch never reaches the app',
+);
+assert.equal(
+  (
+    (await changeTool('pinch_update_recipe', {
+      outsideReadScopes: ['apps'],
+    }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>
+  ).status,
+  'assistantCannotChange',
+  'a missing switch reads as off',
+);
+nextResult = {
+  status: 'switchedOff',
+  needs: [{ category: 'editRecipes', label: 'Edit recipes' }],
+};
+const changeOff = (await changeTool('pinch_update_recipe', {
+  outsideReadScopes: ['apps'],
+  canChangeApps: true,
+}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+assert.equal(changeOff.status, 'switchedOff');
+assert.deepEqual(changeOff.needs, ['Edit recipes']);
+assert.match(
+  String(changeOff.message),
+  /"Edit recipes" is switched off, so nothing was changed.*Helm > Connected apps > Pinch/,
+);
+assert.deepEqual(filedChanges, [], 'a change that did not happen is not filed');
+nextResult = {
+  status: 'ok',
+  data: {
+    summary: 'Changed Chicken soup',
+    lines: ['Servings 4 to 6'],
+    changes: [{ id: 'c1', title: 'Chicken soup', lines: ['Servings 4 to 6'] }],
+    recipeId: 'r1',
+  },
+  heldBack: [],
+};
+const changeOk = (await changeTool('pinch_update_recipe', {
+  outsideReadScopes: ['apps'],
+  canChangeApps: true,
+}).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+assert.deepEqual(changeOk, {
+  status: 'ok',
+  summary: 'Changed Chicken soup',
+  lines: ['Servings 4 to 6'],
+});
+assert.deepEqual(filedChanges, [
+  { actionId: 'update_recipe', summary: 'Changed Chicken soup' },
+]);
+nextResult = { status: 'refused', message: 'That recipe has too many notes.' };
+assert.equal(
+  (
+    (await changeTool('pinch_update_recipe', {
+      outsideReadScopes: ['apps'],
+      canChangeApps: true,
+    }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>
+  ).status,
+  'refused',
+);
+assert.equal(filedChanges.length, 1, 'a refused change is not filed');
 
 // The real Pinch adapter holds the steps and description back from get_recipe while Full recipes is off.
 const snapshotOf = (id: string, data: Record<string, unknown> | null) => ({

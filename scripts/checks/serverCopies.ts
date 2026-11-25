@@ -15,6 +15,61 @@ interface Copy {
   importRewrites: Record<string, string>;
 }
 
+const PINCH_LOCAL = {
+  '@apps/pinch/constants': './pinchConstants.js',
+  '@apps/pinch/types': './pinchTypes.js',
+  '@/utils/stringUtils': '../../../vendor/stringUtils.js',
+  '@/utils/optionMatchUtils': '../../../vendor/optionMatchUtils.js',
+  '@/utils/measureUtils': '../../../vendor/measureUtils.js',
+  '@/utils/urlUtils': '../../../vendor/urlUtils.js',
+  '@/utils/idUtils': '../../../vendor/idUtils.js',
+  '@/components/VideoEmbed': './videoEmbed.js',
+  '@apps/pinch/utils/collections': './collectionChange.js',
+  '@apps/pinch/utils/ingredientGroups': './ingredientGroups.js',
+  '@apps/pinch/utils/categories': './categories.js',
+  '@apps/pinch/utils/recipeCare': './recipeCare.js',
+  '@apps/pinch/utils/recipeFormat': './recipeFormat.js',
+  '@apps/pinch/utils/recipeLinks': './recipeLinks.js',
+  '@apps/pinch/utils/stepSections': './stepSections.js',
+  '@apps/pinch/utils/recipeChanges': './recipeChanges.js',
+  '@apps/pinch/utils/ingredientNames': './ingredientNames.js',
+};
+
+/** The pure pieces behind a recipe's recorded changes and its ingredient matching, so an outside change writes exactly what a device save would. */
+const PINCH_CHANGE_COPIES: Copy[] = [
+  ['src/apps/pinch/types.ts', 'functions/src/apps/pinch/share/pinchTypes.ts'],
+  [
+    'src/apps/pinch/constants.ts',
+    'functions/src/apps/pinch/share/pinchConstants.ts',
+  ],
+  ['src/utils/measureUtils.ts', 'functions/src/vendor/measureUtils.ts'],
+  ['src/utils/urlUtils.ts', 'functions/src/vendor/urlUtils.ts'],
+  ['src/utils/idUtils.ts', 'functions/src/vendor/idUtils.ts'],
+  ...[
+    'categories',
+    'recipeCare',
+    'recipeFormat',
+    'recipeLinks',
+    'stepSections',
+    'recipeChanges',
+    'notes',
+    'ingredientNames',
+    'ingredientMatch',
+  ].map((name): [string, string] => [
+    `src/apps/pinch/utils/${name}.ts`,
+    `functions/src/apps/pinch/share/${name}.ts`,
+  ]),
+].map(([src, dest]) => ({
+  src,
+  dest,
+  importRewrites: {
+    ...PINCH_LOCAL,
+    '@apps/pinch/utils/recipeChanges': './recipeChanges.js',
+    '@apps/pinch/utils/notes': './notes.js',
+    '@apps/pinch/utils/ingredientMatch': './ingredientMatch.js',
+  },
+}));
+
 const COPIES: Copy[] = [
   {
     src: 'src/lib/connections/contract.ts',
@@ -42,6 +97,7 @@ const COPIES: Copy[] = [
     dest: 'functions/src/apps/pinch/share/freeLines.ts',
     importRewrites: { '@apps/pinch/types': './lineTypes.js' },
   },
+  ...PINCH_CHANGE_COPIES,
   {
     src: 'src/apps/a-list/share/manifest.ts',
     dest: 'functions/src/apps/a-list/share/manifest.ts',
