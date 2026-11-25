@@ -107,7 +107,7 @@ const step = (
   figure: number,
   now: number,
   updatedAt = 1,
-) => stepAlert(previous, updatedAt, figure, LINE, now);
+) => stepAlert(previous, updatedAt, null, figure, LINE, now);
 const first = step(null, 3_000, 10);
 assert.equal(first.fires, false, 'a new alert already below does not go off');
 assert.equal(first.state.isBelow, true);
@@ -138,6 +138,18 @@ assert.equal(
   step(drop.state, 100, 60, 2).state.lastFiredAt,
   20,
   'a changed alert keeps when it last went off',
+);
+
+// A share line whose envelope amount changed starts over without going off, even when the new line is above the figure.
+const share = stepAlert(null, 1, 'version-a', 9_000, 5_000, 10);
+const raised = stepAlert(share.state, 1, 'version-b', 9_000, 12_000, 20);
+assert.equal(raised.fires, false, 'a raised amount does not set it off');
+assert.equal(raised.state.lineFrom, 'version-b');
+assert.equal(raised.state.isBelow, true);
+assert.equal(
+  stepAlert(share.state, 1, 'version-a', 4_000, 5_000, 20).fires,
+  true,
+  'spending on the same amount still sets it off',
 );
 
 // A held alert is dropped on recovery, and kept while still below.

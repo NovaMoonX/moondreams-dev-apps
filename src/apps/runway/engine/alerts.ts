@@ -52,24 +52,32 @@ export function getAlertFigure(
 
 export interface AlertState {
   alertUpdatedAt: number;
+  /** The envelope version a share line was worked out from; null for an amount. */
+  lineFrom: string | null;
   isBelow: boolean;
   lastFiredAt: number | null;
   heldSince: number | null;
 }
 
-/** An alert's next state: it goes off when the figure falls to or below its line from above, and rearms once the figure is back above. A new or changed alert takes where things stand without going off, and a held alert whose figure recovers is dropped. */
+/** An alert's next state: it goes off when the figure falls to or below its line from above, and rearms once the figure is back above. A new or changed alert, or a share line whose envelope amount changed, takes where things stand without going off, and a held alert whose figure recovers is dropped. */
 export function stepAlert(
   previous: AlertState | null,
   alertUpdatedAt: number,
+  lineFrom: string | null,
   figure: Cents,
   lineCents: Cents,
   now: number,
 ): { state: AlertState; fires: boolean } {
   const isBelow = figure <= lineCents;
-  if (previous === null || previous.alertUpdatedAt !== alertUpdatedAt) {
+  const isNewLine =
+    previous === null ||
+    previous.alertUpdatedAt !== alertUpdatedAt ||
+    previous.lineFrom !== lineFrom;
+  if (isNewLine) {
     return {
       state: {
         alertUpdatedAt,
+        lineFrom,
         isBelow,
         lastFiredAt: previous?.lastFiredAt ?? null,
         heldSince: null,

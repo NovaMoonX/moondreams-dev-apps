@@ -250,13 +250,15 @@ function RunwayContent() {
     if (!isPlanItemsLoaded) return;
     if (handledEnvelope.current === openEnvelope) return;
     handledEnvelope.current = openEnvelope;
+    const itemId = openEnvelope;
     const open = async () => {
+      // Cleared on the entry the link landed on before anything is pushed, or Back would land on it and open it again.
+      await clearOpenEnvelope();
       if (isLiveOpenEnvelope) {
-        await showOnPlan('envelopes', { itemId: openEnvelope });
+        await showOnPlan('envelopes', { itemId });
       } else {
         addToast({ title: ALERT_WORDS.envelopeGone, type: 'info' });
       }
-      await clearOpenEnvelope();
     };
     void open();
   }, [openEnvelope, isPlanItemsLoaded, isLiveOpenEnvelope]); // eslint-disable-line react-hooks/exhaustive-deps

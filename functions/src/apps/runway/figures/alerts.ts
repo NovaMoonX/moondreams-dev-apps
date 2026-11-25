@@ -76,6 +76,7 @@ const toState = (
 ): AlertStateDoc => ({
   id,
   alertUpdatedAt: state.alertUpdatedAt,
+  lineFrom: state.lineFrom,
   isBelow: state.isBelow,
   lastFiredAt: state.lastFiredAt,
   heldSince: state.heldSince,
@@ -87,11 +88,18 @@ const isSame = (previous: AlertStateDoc | null, state: AlertState) =>
   isDeepStrictEqual(
     [
       previous.alertUpdatedAt,
+      previous.lineFrom,
       previous.isBelow,
       previous.lastFiredAt,
       previous.heldSince,
     ],
-    [state.alertUpdatedAt, state.isBelow, state.lastFiredAt, state.heldSince],
+    [
+      state.alertUpdatedAt,
+      state.lineFrom,
+      state.isBelow,
+      state.lastFiredAt,
+      state.heldSince,
+    ],
   );
 
 const isCents = (value: unknown): value is number =>
@@ -189,11 +197,11 @@ export async function runAlerts(
       retired.push(entry.id);
       return [];
     }
-    const envelope =
+    const version =
       target.kind === 'envelope'
-        ? (live.find(({ item }) => item.id === target.itemId)?.version
-            .payload ?? null)
+        ? (live.find(({ item }) => item.id === target.itemId)?.version ?? null)
         : null;
+    const envelope = version?.payload ?? null;
     const figure = getAlertFigure(target, run.balances, liveIds);
     const line = getAlertLineCents(
       alert.line,
@@ -205,7 +213,15 @@ export async function runAlerts(
       stored?.heldSince != null && now - stored.heldSince > ALERT_HOLD_MAX_MS;
     const previous =
       stored === null || !isStale ? stored : { ...stored, heldSince: null };
-    const stepped = stepAlert(previous, doc.updatedAt, figure, line, now);
+    const lineFrom = alert.line.kind === 'share' ? (version?.id ?? null) : null;
+    const stepped = stepAlert(
+      previous,
+      doc.updatedAt,
+      lineFrom,
+      figure,
+      line,
+      now,
+    );
     return [
       {
         id: entry.id,

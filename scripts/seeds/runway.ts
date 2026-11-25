@@ -5488,6 +5488,7 @@ async function seedAlerts(
     {
       id: 'seed-alert-groceries-half',
       alertUpdatedAt: createdAt + 1,
+      lineFrom: null,
       isBelow: false,
       lastFiredAt: context.now - 2 * DAY_MS,
       heldSince: null,

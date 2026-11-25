@@ -1615,6 +1615,8 @@ export interface AlertStateDoc {
   id: string;
   /** The alert's `updatedAt` this state was taken against; a changed alert starts over without going off. */
   alertUpdatedAt: number;
+  /** The envelope version a share line was worked out from, so a changed amount starts over too; null for an amount. */
+  lineFrom: string | null;
   /** The figure was at or below the line at the last evaluation. */
   isBelow: boolean;
   lastFiredAt: number | null;

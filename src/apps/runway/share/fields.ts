@@ -874,6 +874,7 @@ const ALERT_SEALED_FIELDS = {
 const ALERT_STATE_DOC_FIELDS = {
   id: 'notUseful',
   alertUpdatedAt: 'notUseful',
+  lineFrom: 'notUseful',
   isBelow: 'never',
   lastFiredAt: 'notUseful',
   heldSince: 'notUseful',

@@ -425,6 +425,43 @@ async function main() {
   assert.equal(await stateOf(archived, 'on-groceries'), undefined);
   assert.ok(await stateOf(archived, 'on-everyday'));
 
+  // Raising an envelope's amount moves a share line above the figure; that is not spending, so nothing goes off.
+  const raised = 'alerts-raised';
+  await seedPlan(raised, true);
+  await putAlert(raised, 'half-groceries', {
+    line: { kind: 'share', bps: 5_000 },
+  });
+  await run(raised, at(12), outbox().send);
+  assert.equal((await stateOf(raised, 'half-groceries'))?.isBelow, false);
+  await firestore.doc(`${planOf(raised)}/versions/version-raised`).set({
+    id: 'version-raised',
+    itemId: groceries,
+    kind: 'envelope',
+    createdAt: at(12),
+    effectiveFrom: today,
+    effectiveUntil: null,
+    changeId: 'change-raised',
+    sealed: seal(raised, {
+      name: 'Groceries',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      groupId: null,
+      maxCents: null,
+      spillTo: [],
+      funding: {
+        amount: { kind: 'exact', cents: 200_000 },
+        cadence: { kind: 'everyIncomeDay' },
+      },
+    }),
+  });
+  const afterRaise = outbox();
+  await run(raised, at(13), afterRaise.send);
+  const raisedState = await stateOf(raised, 'half-groceries');
+  assert.equal(raisedState?.lineFrom, 'version-raised');
+  assert.equal(raisedState?.isBelow, true);
+  assert.equal(afterRaise.sent.length, 0, 'a raised amount sends no push');
+
   console.log('Runway alerts server: all checks passed.');
 }
 
