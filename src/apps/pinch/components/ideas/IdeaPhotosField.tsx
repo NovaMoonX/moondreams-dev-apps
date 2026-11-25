@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { Camera, ImagePlus, Plus, X } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import FallbackImage from '@/components/FallbackImage';
@@ -25,7 +26,10 @@ const TILE_SIZES = {
 export function IdeaPhotoTile({ url, size = 'lg' }: IdeaPhotoTileProps) {
   return (
     <span
-      className={`bg-accent grid shrink-0 place-items-center overflow-hidden rounded-xl text-3xl ${TILE_SIZES[size]}`}
+      className={join(
+        'bg-accent grid shrink-0 place-items-center overflow-hidden rounded-xl text-3xl',
+        TILE_SIZES[size],
+      )}
       aria-hidden='true'
     >
       {url ? (
