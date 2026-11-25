@@ -1,45 +1,31 @@
-import { useCallback, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import {
-  ChevronDown,
-  ChevronRight,
-  CircleArrowUp,
-  Loader2,
-  Megaphone,
-  Wrench,
-} from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 
+import BackHeading from '@/components/BackHeading';
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
-import SegmentedControl from '@/components/SegmentedControl';
 import {
   groupByMonth,
   groupByVersion,
   isFixOnly,
   rollUp,
 } from '@/lib/whatsNew/whatsNew';
+import type { WhatsNewLook } from '@/lib/whatsNew/whatsNewLooks';
 import type { WhatsNewKind, WhatsNewNote } from '@/lib/whatsNew/whatsNewTypes';
 import { formatDateShort } from '@/utils/formatUtils';
 
-const KIND_LOOK: Record<
-  WhatsNewKind,
-  { word: string; Icon: ComponentType<{ className?: string }> }
-> = {
-  new: { word: 'New', Icon: Megaphone },
-  improved: { word: 'Improved', Icon: CircleArrowUp },
-  fixed: { word: 'Fixed', Icon: Wrench },
+const KIND_WORDS: Record<WhatsNewKind, string> = {
+  new: 'New',
+  improved: 'Improved',
+  fixed: 'Fixed',
 };
 
-const HISTORY_VIEWS = [
-  { value: 'highlights', label: 'Highlights' },
-  { value: 'log', label: 'Every change' },
-] as const;
-
-type HistoryView = (typeof HISTORY_VIEWS)[number]['value'];
+type SheetView = 'main' | 'all';
 
 interface WhatsNewSheetProps {
   isOpen: boolean;
@@ -48,6 +34,7 @@ interface WhatsNewSheetProps {
   /** A pop-up holds what is unseen and ends in Got it; history holds everything and just closes. */
   mode: 'popup' | 'history';
   notes: WhatsNewNote[];
+  look: WhatsNewLook;
   /** History only: whether the feed is still loading or failed, so neither reads as "nothing new". */
   feedState?: 'loading' | 'failed' | 'ready';
   onRetry?: () => void;
@@ -59,30 +46,100 @@ interface WhatsNewSheetProps {
   onStopFixOnly?: () => void;
 }
 
+function NoteMark({
+  emoji,
+  look,
+  isSmall,
+}: {
+  emoji: string | null;
+  look: WhatsNewLook;
+  isSmall: boolean;
+}) {
+  if (look.mark === 'emoji') {
+    return (
+      <span
+        className={join(
+          'grid shrink-0 place-items-center leading-none',
+          isSmall ? 'size-8 text-lg' : 'size-10 text-2xl',
+        )}
+        aria-hidden='true'
+      >
+        {emoji}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={join(
+        'grid shrink-0 place-items-center border leading-none',
+        emoji === null
+          ? 'border-transparent'
+          : 'border-border bg-accent [text-shadow:0_0_1.5px_rgb(0_0_0/0.55)]',
+        isSmall ? 'size-8 rounded-lg text-base' : 'size-10 rounded-xl text-lg',
+      )}
+      aria-hidden='true'
+    >
+      {emoji}
+    </span>
+  );
+}
+
+/** One note: the app's mark, the words and, when it opens something, a chevron across the whole row. */
 function NoteRow({
   note,
+  look,
+  isCompact,
+  hasMark,
+  topLine,
   onShowMe,
 }: {
   note: WhatsNewNote;
+  look: WhatsNewLook;
+  isCompact: boolean;
+  hasMark: boolean;
+  /** A muted line over the words, such as the kind or the version. */
+  topLine: string | null;
   onShowMe: (note: WhatsNewNote) => void;
 }) {
-  const { word, Icon } = KIND_LOOK[note.kind];
-  const icon = (
-    <Icon className='text-primary mt-0.5 size-4 shrink-0' aria-hidden='true' />
+  const isCard = !isCompact && look.rows === 'cards';
+  const shell = join(
+    'flex w-full items-center gap-3 text-left',
+    isCard
+      ? 'border-border rounded-2xl border px-3 py-3'
+      : isCompact
+        ? 'min-h-10 py-2'
+        : 'min-h-12 py-2.5',
   );
-  const text = (
-    <span className='block min-w-0 flex-1'>
-      <span className='text-muted-foreground block text-xs'>{word}</span>
-      <span className='text-foreground block text-sm text-pretty'>
-        {note.text}
+  const content = (
+    <>
+      {hasMark ? (
+        <NoteMark emoji={note.emoji} look={look} isSmall={isCompact} />
+      ) : null}
+      <span className='block min-w-0 flex-1'>
+        {topLine ? (
+          <span className='text-muted-foreground block text-xs'>{topLine}</span>
+        ) : null}
+        <span
+          className={join(
+            'text-foreground block text-pretty',
+            isCompact ? 'text-sm' : 'text-base',
+          )}
+        >
+          {note.text}
+        </span>
       </span>
-    </span>
+      {note.path ? (
+        <ChevronRight
+          className='text-muted-foreground size-4 shrink-0'
+          aria-hidden='true'
+        />
+      ) : null}
+    </>
   );
   if (!note.path) {
     return (
-      <li className='flex items-start gap-3 py-2'>
-        {icon}
-        {text}
+      <li>
+        <div className={shell}>{content}</div>
       </li>
     );
   }
@@ -92,15 +149,14 @@ function NoteRow({
         type='button'
         variant='tertiary'
         aria-label={`${note.text}, show me`}
-        className='h-auto min-h-10 w-full items-start justify-start gap-3 !px-0 py-2 text-left font-normal'
+        className={join(
+          shell,
+          'text-foreground! h-auto justify-start font-normal',
+          isCard ? 'hover:bg-muted rounded-2xl! px-3!' : 'rounded-none! px-0!',
+        )}
         onClick={() => onShowMe(note)}
       >
-        {icon}
-        {text}
-        <ChevronRight
-          className='text-muted-foreground mt-0.5 size-4 shrink-0'
-          aria-hidden='true'
-        />
+        {content}
       </Button>
     </li>
   );
@@ -108,68 +164,47 @@ function NoteRow({
 
 function NoteList({
   notes,
+  look,
+  isCompact,
+  getTopLine,
   onShowMe,
 }: {
   notes: WhatsNewNote[];
+  look: WhatsNewLook;
+  isCompact: boolean;
+  getTopLine?: (note: WhatsNewNote) => string | null;
   onShowMe: (note: WhatsNewNote) => void;
 }) {
+  const hasMark = notes.some((note) => note.emoji !== null);
+  const isCards = !isCompact && look.rows === 'cards';
   return (
-    <ul className='divide-border divide-y'>
+    <ul className={isCards ? 'space-y-2' : 'divide-border divide-y'}>
       {notes.map((note) => (
-        <NoteRow key={note.id} note={note} onShowMe={onShowMe} />
+        <NoteRow
+          key={note.id}
+          note={note}
+          look={look}
+          isCompact={isCompact}
+          hasMark={hasMark}
+          topLine={getTopLine?.(note) ?? null}
+          onShowMe={onShowMe}
+        />
       ))}
     </ul>
   );
 }
 
-function FoldRow({
-  label,
-  isOpen,
-  onToggle,
-}: {
-  label: string;
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='text-muted-foreground relative w-full justify-center gap-1.5 text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-1 before:content-[""]'
-      onClick={onToggle}
-    >
-      {isOpen ? 'Show less' : label}
-      <ChevronDown
-        className={join('size-4', isOpen && 'rotate-180')}
-        aria-hidden='true'
-      />
-    </Button>
+    <section className='space-y-2'>
+      <SectionDivider label={label} />
+      {children}
+    </section>
   );
 }
 
-const countFixes = (count: number) =>
-  `and ${count} ${count === 1 ? 'fix' : 'fixes'}`;
-
-function VersionLog({
-  notes,
-  onShowMe,
-}: {
-  notes: WhatsNewNote[];
-  onShowMe: (note: WhatsNewNote) => void;
-}) {
-  return (
-    <div className='space-y-4'>
-      {groupByVersion(notes).map((group) => (
-        <section key={group.version}>
-          <SectionDivider
-            label={`Version ${group.version} · ${formatDateShort(group.publishedAt)}`}
-          />
-          <NoteList notes={group.notes} onShowMe={onShowMe} />
-        </section>
-      ))}
-    </div>
-  );
-}
+const byKind = (notes: WhatsNewNote[], kind: WhatsNewKind) =>
+  notes.filter((note) => note.kind === kind);
 
 const formatMonth = (at: number) =>
   new Date(at).toLocaleDateString(undefined, {
@@ -177,41 +212,8 @@ const formatMonth = (at: number) =>
     year: 'numeric',
   });
 
-/** The history's highlights: one heading per month, its fixes folded under it. */
-function MonthList({
-  notes,
-  openFixMonths,
-  onToggleFixes,
-  onShowMe,
-}: {
-  notes: WhatsNewNote[];
-  openFixMonths: string[];
-  onToggleFixes: (key: string) => void;
-  onShowMe: (note: WhatsNewNote) => void;
-}) {
-  return (
-    <div className='space-y-4'>
-      {groupByMonth(notes).map((month) => (
-        <section key={month.key}>
-          <SectionDivider label={formatMonth(month.at)} />
-          <NoteList notes={month.highlights} onShowMe={onShowMe} />
-          {month.fixes.length === 0 ? null : (
-            <>
-              {openFixMonths.includes(month.key) ? (
-                <NoteList notes={month.fixes} onShowMe={onShowMe} />
-              ) : null}
-              <FoldRow
-                label={countFixes(month.fixes.length)}
-                isOpen={openFixMonths.includes(month.key)}
-                onToggle={() => onToggleFixes(month.key)}
-              />
-            </>
-          )}
-        </section>
-      ))}
-    </div>
-  );
-}
+const countChanges = (count: number) =>
+  `${count} ${count === 1 ? 'change' : 'changes'}`;
 
 /** The scrolling ancestor of the sheet's content: the drawer's body on a phone, the modal's from `sm`. */
 const findScroller = (node: HTMLElement | null): HTMLElement | null => {
@@ -223,8 +225,8 @@ const findScroller = (node: HTMLElement | null): HTMLElement | null => {
 };
 
 /**
- * What's new, read-only, in a drawer or modal. A pop-up shows what the person hasn't seen (a roll-up
- * of the best lines for most people, the full log for debug viewers); history shows what the feed holds.
+ * What's new, read-only, in a drawer or modal, drawn in the app's own look. A pop-up tells what the
+ * person would want to hear, with one door to every change; history holds what the feed holds, by month.
  */
 function WhatsNewSheet({
   isOpen,
@@ -232,6 +234,7 @@ function WhatsNewSheet({
   scopeName,
   mode,
   notes,
+  look,
   feedState = 'ready',
   onRetry,
   isDebug,
@@ -242,10 +245,7 @@ function WhatsNewSheet({
   onStopFixOnly,
 }: WhatsNewSheetProps) {
   const { confirm } = useActionModal();
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const [isFixesOpen, setIsFixesOpen] = useState(false);
-  const [openFixMonths, setOpenFixMonths] = useState<string[]>([]);
-  const [view, setView] = useState<HistoryView>('highlights');
+  const [view, setView] = useState<SheetView>('main');
   const scrollTop = useRef(0);
 
   // The sheet stays mounted while collapsed, so where it was left is kept and put back on reopening.
@@ -268,16 +268,145 @@ function WhatsNewSheet({
   const stopFixOnly = async () => {
     const isConfirmed = await confirm({
       title: 'Stop showing fix-only updates?',
-      message:
-        "You won't see a pop-up for updates that only fix things. Turn them back on in Manage your account, under Updates.",
+      message: (
+        <>
+          You won&apos;t see a pop-up for updates that only fix things. Turn
+          them back on in <strong>Manage your account</strong>, under{' '}
+          <strong>Updates</strong>.
+        </>
+      ),
       confirmText: 'Stop showing',
       cancelText: 'Keep showing',
     });
     if (isConfirmed) onStopFixOnly?.();
   };
 
-  const isLog = isDebug && (mode === 'popup' || view === 'log');
   const rolled = rollUp(notes);
+  const told = [...rolled.told, ...rolled.moreTold];
+  const isOneRelease = new Set(notes.map((note) => note.version)).size <= 1;
+  const allLabel = isOneRelease
+    ? `All ${countChanges(rolled.total)}`
+    : `All ${countChanges(rolled.total)} since ${formatDateShort(rolled.sinceAt ?? 0)}`;
+  const getVersionLine = (note: WhatsNewNote) =>
+    isDebug ? `Version ${note.version}` : null;
+
+  const toldSections = (list: WhatsNewNote[]) =>
+    (['new', 'improved'] as const)
+      .map((kind) => ({ kind, list: byKind(list, kind) }))
+      .filter((group) => group.list.length > 0)
+      .map((group) => (
+        <Section key={group.kind} label={KIND_WORDS[group.kind]}>
+          <NoteList
+            notes={group.list}
+            look={look}
+            isCompact={false}
+            getTopLine={getVersionLine}
+            onShowMe={onShowMe}
+          />
+        </Section>
+      ));
+
+  const everyChange = () => (
+    <div className='space-y-5'>
+      {toldSections(told)}
+      {rolled.smaller.length > 0 ? (
+        <Section label='Smaller changes'>
+          <NoteList
+            notes={rolled.smaller}
+            look={look}
+            isCompact
+            getTopLine={getVersionLine}
+            onShowMe={onShowMe}
+          />
+        </Section>
+      ) : null}
+      {rolled.fixes.length > 0 ? (
+        <Section label='Fixes'>
+          <NoteList
+            notes={rolled.fixes}
+            look={look}
+            isCompact
+            getTopLine={getVersionLine}
+            onShowMe={onShowMe}
+          />
+        </Section>
+      ) : null}
+    </div>
+  );
+
+  const versionLog = () => (
+    <div className='space-y-5'>
+      {groupByVersion(notes).map((group) => (
+        <Section
+          key={group.version}
+          label={`Version ${group.version} · ${formatDateShort(group.publishedAt)}`}
+        >
+          <NoteList
+            notes={group.notes}
+            look={look}
+            isCompact
+            getTopLine={(note) => KIND_WORDS[note.kind]}
+            onShowMe={onShowMe}
+          />
+        </Section>
+      ))}
+    </div>
+  );
+
+  const history = () => (
+    <div className='space-y-5'>
+      {groupByMonth(notes).map((month) => (
+        <Section key={month.key} label={formatMonth(month.at)}>
+          {month.told.length > 0 ? (
+            <NoteList
+              notes={month.told}
+              look={look}
+              isCompact={false}
+              getTopLine={getVersionLine}
+              onShowMe={onShowMe}
+            />
+          ) : null}
+          {month.smaller.length + month.fixes.length > 0 ? (
+            <NoteList
+              notes={[...month.smaller, ...month.fixes]}
+              look={look}
+              isCompact
+              getTopLine={(note) =>
+                [KIND_WORDS[note.kind], getVersionLine(note)]
+                  .filter(Boolean)
+                  .join(' · ')
+              }
+              onShowMe={onShowMe}
+            />
+          ) : null}
+        </Section>
+      ))}
+    </div>
+  );
+
+  const popup = () => {
+    if (rolled.told.length === 0) return versionLog();
+    const isAllShown = rolled.told.length === rolled.total;
+    return (
+      <div className='space-y-5'>
+        {toldSections(rolled.told)}
+        {isAllShown ? null : (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='border-border text-foreground! h-auto min-h-12 w-full justify-between! rounded-none! border-t px-0! pt-3 text-left text-base font-medium'
+            onClick={() => setView('all')}
+          >
+            {`See ${allLabel.charAt(0).toLowerCase()}${allLabel.slice(1)}`}
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   const body = () => {
     if (mode === 'history' && feedState === 'loading') {
@@ -309,63 +438,20 @@ function WhatsNewSheet({
         </p>
       );
     }
-    if (isLog) return <VersionLog notes={notes} onShowMe={onShowMe} />;
-    if (mode === 'history') {
+    if (mode === 'history') return history();
+    if (view === 'all') {
       return (
-        <MonthList
-          notes={notes}
-          openFixMonths={openFixMonths}
-          onToggleFixes={(key) =>
-            setOpenFixMonths((open) =>
-              open.includes(key)
-                ? open.filter((openKey) => openKey !== key)
-                : [...open, key],
-            )
-          }
-          onShowMe={onShowMe}
-        />
+        <div className='space-y-5'>
+          <BackHeading onBack={() => setView('main')} title={allLabel} />
+          {everyChange()}
+        </div>
       );
     }
-    return (
-      <div className='space-y-2'>
-        <NoteList
-          notes={
-            isMoreOpen
-              ? [...rolled.highlights, ...rolled.moreHighlights]
-              : rolled.highlights
-          }
-          onShowMe={onShowMe}
-        />
-        {rolled.moreHighlights.length > 0 ? (
-          <FoldRow
-            label={`and ${rolled.moreHighlights.length} more since ${formatDateShort(rolled.sinceAt ?? 0)}`}
-            isOpen={isMoreOpen}
-            onToggle={() => setIsMoreOpen((isOpen) => !isOpen)}
-          />
-        ) : null}
-        {rolled.fixes.length === 0 ? null : (
-          <>
-            {isFixesOpen ? (
-              <NoteList notes={rolled.fixes} onShowMe={onShowMe} />
-            ) : null}
-            <FoldRow
-              label={countFixes(rolled.fixes.length)}
-              isOpen={isFixesOpen}
-              onToggle={() => setIsFixesOpen((isOpen) => !isOpen)}
-            />
-          </>
-        )}
-      </div>
-    );
+    return popup();
   };
 
   const footer = () => {
     if (mode === 'history') return undefined;
-    const gotIt = (
-      <Button type='button' size='lg' onClick={onGotIt}>
-        Got it
-      </Button>
-    );
     if (!isDebug) {
       return (
         <div className='p-4'>
@@ -388,7 +474,11 @@ function WhatsNewSheet({
               Collapse
             </Button>
           }
-          rightActions={gotIt}
+          rightActions={
+            <Button type='button' size='lg' onClick={onGotIt}>
+              Got it
+            </Button>
+          }
         />
       </div>
     );
@@ -400,27 +490,18 @@ function WhatsNewSheet({
       onClose={onClose}
       title={title}
       footer={footer()}
-      viewKey={mode === 'history' ? view : undefined}
+      viewKey={mode === 'popup' ? view : undefined}
     >
       <div
         ref={keepScroll}
         className={join('space-y-4', mode === 'history' && 'min-h-[55dvh]')}
       >
-        {mode === 'history' && isDebug ? (
-          <SegmentedControl
-            label='What to show'
-            options={HISTORY_VIEWS}
-            value={view}
-            onChange={setView}
-            isCompact
-          />
-        ) : null}
         {body()}
         {mode === 'popup' && isDebug && isFixOnly(notes) && onStopFixOnly ? (
           <Button
             type='button'
             variant='tertiary'
-            className='text-muted-foreground w-full justify-between px-0 text-sm font-normal'
+            className='text-muted-foreground w-full justify-between !px-0 text-sm font-normal'
             onClick={() => void stopFixOnly()}
           >
             Stop showing fix-only updates

@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { APP_REGISTRY } from '../../src/lib/app/app.registry.ts';
 import { FEATURE_GATES } from '../../src/lib/gates/gates.registry.ts';
 import {
+  WHATS_NEW_REPLACES_MAX,
   WHATS_NEW_TEXT_MAX,
   type WhatsNewDraft,
   type WhatsNewFile,
@@ -14,7 +15,25 @@ export const WHATS_NEW_DIR = 'whats-new';
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const KINDS = ['new', 'improved', 'fixed'];
 const AUDIENCES = ['everyone', 'debug'];
-const KEYS = ['app', 'kind', 'text', 'path', 'gate', 'audience'];
+const KEYS = [
+  'app',
+  'kind',
+  'text',
+  'path',
+  'gate',
+  'audience',
+  'isTold',
+  'emoji',
+  'replaces',
+];
+
+const graphemeCount = (value: string) =>
+  [...new Intl.Segmenter().segment(value)].length;
+
+const isEmojiMark = (value: string) =>
+  graphemeCount(value) <= 2 &&
+  /\p{Extended_Pictographic}/u.test(value) &&
+  !/[\p{L}\p{N}]/u.test(value);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -24,11 +43,12 @@ const checkNote = (note: unknown, at: string): string[] => {
   const missing = KEYS.filter((key) => !(key in note));
   if (missing.length > 0) {
     return [
-      `${at}: missing ${missing.join(', ')} (write null for an empty path or gate)`,
+      `${at}: missing ${missing.join(', ')} (write null for an empty path, gate or emoji, and [] for no replaces)`,
     ];
   }
   const extra = Object.keys(note).filter((key) => !KEYS.includes(key));
-  const { app, kind, text, path, gate, audience } = note;
+  const { app, kind, text, path, gate, audience, isTold, emoji, replaces } =
+    note;
   const appIds = APP_REGISTRY.map((entry) => entry.id as string);
   return [
     ...extra.map((key) => `${at}: unknown key "${key}"`),
@@ -43,6 +63,27 @@ const checkNote = (note: unknown, at: string): string[] => {
     ...(typeof audience === 'string' && AUDIENCES.includes(audience)
       ? []
       : [`${at}: audience must be one of ${AUDIENCES.join(', ')}`]),
+    ...(typeof isTold !== 'boolean'
+      ? [`${at}: isTold must be true or false`]
+      : isTold && kind === 'fixed'
+        ? [`${at}: a fixed note is only listed; set isTold to false`]
+        : []),
+    ...(emoji === null || (typeof emoji === 'string' && isEmojiMark(emoji))
+      ? []
+      : [
+          `${at}: emoji must be null or one or two emoji characters, no letters or digits`,
+        ]),
+    ...(isTold === true && emoji === null
+      ? [`${at}: a told note needs an emoji; add one for what it is about`]
+      : []),
+    ...(!Array.isArray(replaces) ||
+    !replaces.every((id) => typeof id === 'string')
+      ? [`${at}: replaces must be a list of note ids (use [] for none)`]
+      : replaces.length > WHATS_NEW_REPLACES_MAX
+        ? [
+            `${at}: replaces names ${replaces.length} notes; keep it to ${WHATS_NEW_REPLACES_MAX}`,
+          ]
+        : []),
     ...(typeof text !== 'string' || text.trim() === ''
       ? [`${at}: text must be a non-empty sentence`]
       : [
@@ -127,11 +168,30 @@ export const readWhatsNewFiles = (): {
         readFileSync(`${WHATS_NEW_DIR}/${slug}.json`, 'utf8'),
       ),
     }));
-  return {
-    files: results.flatMap(({ slug, file }) =>
-      file ? [{ slug, notes: file.notes }] : [],
+  const files = results.flatMap(({ slug, file }) =>
+    file ? [{ slug, notes: file.notes }] : [],
+  );
+  const knownIds = new Set(
+    files.flatMap(({ slug, notes }) =>
+      notes.map((_, index) => `${slug}-${index}`),
     ),
-    errors: results.flatMap(({ errors }) => errors),
+  );
+  const replaceErrors = files.flatMap(({ slug, notes }) =>
+    notes.flatMap((draft, index) =>
+      draft.replaces.flatMap((id) =>
+        id === `${slug}-${index}`
+          ? [`${WHATS_NEW_DIR}/${slug}.json note ${index + 1}: replaces itself`]
+          : knownIds.has(id)
+            ? []
+            : [
+                `${WHATS_NEW_DIR}/${slug}.json note ${index + 1}: replaces "${id}", which is not a note id of any file in ${WHATS_NEW_DIR}/ (ids are <file slug>-<index>)`,
+              ],
+      ),
+    ),
+  );
+  return {
+    files,
+    errors: [...results.flatMap(({ errors }) => errors), ...replaceErrors],
   };
 };
 

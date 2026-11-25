@@ -17,10 +17,21 @@ const isNullableString = (value: unknown): value is string | null | undefined =>
   value === undefined || value === null || typeof value === 'string';
 
 /** One entry of the feed, or null when a field is missing or malformed. The database drops null fields, so an absent `path` or `gate` reads as null. */
-const readNote = (id: string, value: unknown): WhatsNewNote | null => {
+export const readNote = (id: string, value: unknown): WhatsNewNote | null => {
   if (typeof value !== 'object' || value === null) return null;
-  const { app, kind, text, version, audience, publishedAt, path, gate } =
-    value as Record<string, unknown>;
+  const {
+    app,
+    kind,
+    text,
+    version,
+    audience,
+    publishedAt,
+    path,
+    gate,
+    isTold,
+    emoji,
+    replaces,
+  } = value as Record<string, unknown>;
   const isValid =
     typeof app === 'string' &&
     (app === 'site' || app in APP_REGISTRY_ID_MAP) &&
@@ -32,7 +43,12 @@ const readNote = (id: string, value: unknown): WhatsNewNote | null => {
     AUDIENCES.includes((audience ?? 'everyone') as WhatsNewAudience) &&
     typeof publishedAt === 'number' &&
     isNullableString(path) &&
-    isNullableString(gate);
+    isNullableString(gate) &&
+    (isTold === undefined || typeof isTold === 'boolean') &&
+    isNullableString(emoji) &&
+    (replaces === undefined ||
+      (Array.isArray(replaces) &&
+        replaces.every((id) => typeof id === 'string')));
   if (!isValid) return null;
   return {
     id,
@@ -44,6 +60,9 @@ const readNote = (id: string, value: unknown): WhatsNewNote | null => {
     publishedAt,
     path: path ?? null,
     gate: gate ?? null,
+    isTold: kind !== 'fixed' && (isTold ?? true),
+    emoji: emoji ?? null,
+    replaces: (replaces as string[] | undefined) ?? [],
   };
 };
 

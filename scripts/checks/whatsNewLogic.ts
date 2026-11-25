@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { readNote } from '../../src/lib/whatsNew/whatsNewQueries.ts';
 import {
   getFirstEncounterMark,
   getUnseenNotes,
@@ -30,6 +31,9 @@ const note = (
     path: null,
     gate: null,
     audience: 'everyone',
+    isTold: kind !== 'fixed',
+    emoji: null,
+    replaces: [],
     version,
     publishedAt: Date.UTC(2026, 10, 1) + counter * 1000,
     ...extra,
@@ -106,9 +110,10 @@ assert.equal(mark([gated, older]), '1.182.0');
 assert.equal(mark([older, siteNote], { runningVersion: 'dev' }), '1.9.0');
 assert.equal(mark([future, current], { runningVersion: '1.9.0' }), '1.9.0');
 
-// A fix-only update pops up only for a debug viewer who hasn't switched it off.
+// Only a told note pops up; a listed-only release stays quiet for everyone but a debug viewer who hasn't switched it off.
 const fixes = [note('1.182.0', 'fixed'), note('1.181.0', 'fixed')];
 const mixed = [...fixes, note('1.182.0', 'improved')];
+const listed = [note('1.182.0', 'improved', { isTold: false }), ...fixes];
 const everyone = { isDebug: false, showFixOnly: null };
 assert.equal(shouldPopUp(fixes, everyone), false);
 assert.equal(shouldPopUp(fixes, { isDebug: true, showFixOnly: null }), true);
@@ -116,26 +121,65 @@ assert.equal(shouldPopUp(fixes, { isDebug: true, showFixOnly: true }), true);
 assert.equal(shouldPopUp(fixes, { isDebug: true, showFixOnly: false }), false);
 assert.equal(shouldPopUp(mixed, everyone), true);
 assert.equal(shouldPopUp(mixed, { isDebug: true, showFixOnly: false }), true);
+assert.equal(shouldPopUp(listed, everyone), false);
+assert.equal(shouldPopUp(listed, { isDebug: false, showFixOnly: true }), false);
+assert.equal(shouldPopUp(listed, { isDebug: true, showFixOnly: true }), true);
+assert.equal(shouldPopUp(listed, { isDebug: true, showFixOnly: false }), false);
 assert.equal(shouldPopUp([], { isDebug: true, showFixOnly: null }), false);
 
-// The roll-up keeps five highlights (new before improved, newest first), counts the rest and the fixes.
+// A replaced note is hidden from a regular viewer and kept for a debug viewer.
+const oldNote = note('1.100.0', 'new');
+const newNote = note('1.182.0', 'improved', { replaces: [oldNote.id] });
+assert.deepEqual(ids(getVisibleNotes([oldNote, newNote], context())), [
+  newNote.id,
+]);
+assert.deepEqual(
+  ids(getVisibleNotes([oldNote, newNote], context({ isDebug: true }))),
+  [newNote.id, oldNote.id],
+);
+
+// An old feed note without the new fields reads as told unless it is a fix.
+const feedNote = {
+  app: 'runway',
+  kind: 'new',
+  text: 'Old line',
+  version: '1.1.0',
+  audience: 'everyone',
+  publishedAt: 1,
+};
+assert.deepEqual(
+  (({ isTold, emoji, replaces }) => ({ isTold, emoji, replaces }))(
+    readNote('a', feedNote)!,
+  ),
+  { isTold: true, emoji: null, replaces: [] },
+);
+assert.equal(readNote('b', { ...feedNote, kind: 'fixed' })!.isTold, false);
+assert.equal(readNote('c', { ...feedNote, isTold: 'yes' }), null);
+
+// The roll-up keeps five told notes (new before improved, newest first), then the rest, the listed ones and the fixes.
 const many = [
   ...Array.from({ length: 4 }, (_, i) => note(`1.1${i}.0`, 'improved')),
   ...Array.from({ length: 5 }, (_, i) => note(`1.2${i}.0`, 'new')),
+  ...Array.from({ length: 2 }, () =>
+    note('1.130.0', 'improved', { isTold: false }),
+  ),
   ...Array.from({ length: 3 }, () => note('1.150.0', 'fixed')),
 ];
 const rolled = rollUp(many);
-assert.equal(rolled.highlights.length, 5);
-assert.equal(rolled.moreHighlights.length, 4);
+assert.equal(rolled.told.length, 5);
+assert.equal(rolled.moreTold.length, 4);
+assert.equal(rolled.smaller.length, 2);
 assert.equal(rolled.fixes.length, 3);
-assert.ok(rolled.highlights.every((n) => n.kind === 'new'));
+assert.equal(rolled.total, many.length);
+assert.ok(rolled.told.every((n) => n.kind === 'new'));
 assert.deepEqual(
-  rolled.highlights.map((n) => n.version),
+  rolled.told.map((n) => n.version),
   ['1.24.0', '1.23.0', '1.22.0', '1.21.0', '1.20.0'],
 );
-assert.equal(rolled.moreHighlights[0].kind, 'improved');
+assert.equal(rolled.moreTold[0].kind, 'improved');
 assert.equal(rolled.sinceAt, Math.min(...many.map((n) => n.publishedAt)));
 assert.equal(rollUp([]).sinceAt, null);
+assert.equal(rollUp([]).total, 0);
 
 // The log groups by version, newest first, with new before improved before fixed inside.
 const logged = groupByVersion([
@@ -153,17 +197,22 @@ assert.deepEqual(
   ['new', 'improved', 'fixed'],
 );
 
-// History groups by month, newest first, fixes apart from highlights.
+// History groups by month, newest first, with told, listed and fixes apart.
 const months = groupByMonth([
   note('1.1.0', 'new', { publishedAt: new Date(2026, 8, 15).getTime() }),
   note('1.2.0', 'fixed', { publishedAt: new Date(2026, 10, 5).getTime() }),
   note('1.2.0', 'new', { publishedAt: new Date(2026, 10, 6).getTime() }),
+  note('1.2.0', 'improved', {
+    isTold: false,
+    publishedAt: new Date(2026, 10, 7).getTime(),
+  }),
 ]);
 assert.deepEqual(
   months.map((m) => m.key),
   ['2026-11', '2026-09'],
 );
-assert.equal(months[0].highlights.length, 1);
+assert.equal(months[0].told.length, 1);
+assert.equal(months[0].smaller.length, 1);
 assert.equal(months[0].fixes.length, 1);
 
 console.log('check:whats-new-logic passed');

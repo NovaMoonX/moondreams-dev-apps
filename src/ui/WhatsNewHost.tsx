@@ -22,6 +22,7 @@ import {
   closeWhatsNewHistory,
   useOpenWhatsNewHistory,
 } from '@/lib/whatsNew/whatsNewHistoryStore';
+import { getWhatsNewLook } from '@/lib/whatsNew/whatsNewLooks';
 import { whatsNewQueryOptions } from '@/lib/whatsNew/whatsNewQueries';
 import type { WhatsNewNote, WhatsNewScope } from '@/lib/whatsNew/whatsNewTypes';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
@@ -187,6 +188,7 @@ function WhatsNewHost() {
   const title =
     scope === 'site' ? "What's new across the site" : `What's new in ${name}`;
   const poppedKey = `${uid}:${scope}`;
+  const look = getWhatsNewLook(scope);
 
   const closePopup = () =>
     setPopup((held) => (held ? { ...held, isOpen: false } : held));
@@ -230,6 +232,7 @@ function WhatsNewHost() {
           scopeName={name}
           mode='popup'
           notes={shownPopup.notes}
+          look={look}
           isDebug={isDebug}
           onClose={closePopup}
           onGotIt={gotIt}
@@ -245,6 +248,7 @@ function WhatsNewHost() {
         scopeName={name}
         mode='history'
         notes={historyNotes}
+        look={look}
         feedState={
           feed.isPending ? 'loading' : feed.isError ? 'failed' : 'ready'
         }

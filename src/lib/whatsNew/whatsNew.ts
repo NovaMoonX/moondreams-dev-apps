@@ -11,7 +11,7 @@ import {
   type WhatsNewScope,
 } from './whatsNewTypes';
 
-export const ROLL_UP_HIGHLIGHT_CAP = 5;
+export const ROLL_UP_TOLD_CAP = 5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const KIND_ORDER: Record<WhatsNewKind, number> = {
@@ -30,10 +30,12 @@ export interface WhatsNewContext {
 }
 
 export interface WhatsNewRollUp {
-  highlights: WhatsNewNote[];
-  moreHighlights: WhatsNewNote[];
+  told: WhatsNewNote[];
+  moreTold: WhatsNewNote[];
+  smaller: WhatsNewNote[];
   fixes: WhatsNewNote[];
   sinceAt: number | null;
+  total: number;
 }
 
 export interface WhatsNewVersionGroup {
@@ -45,7 +47,8 @@ export interface WhatsNewVersionGroup {
 export interface WhatsNewMonthGroup {
   key: string;
   at: number;
-  highlights: WhatsNewNote[];
+  told: WhatsNewNote[];
+  smaller: WhatsNewNote[];
   fixes: WhatsNewNote[];
 }
 
@@ -75,16 +78,19 @@ const byKindThenNewest = (a: WhatsNewNote, b: WhatsNewNote) =>
 export const getVisibleNotes = (
   notes: WhatsNewNote[],
   context: WhatsNewContext,
-) =>
-  notes
-    .filter(
-      (note) =>
-        note.app === context.scope &&
-        isVersionAvailable(note.version, context.runningVersion) &&
-        (note.audience === 'everyone' || context.isDebug) &&
-        (note.gate === null || context.isGateOpen(note.app, note.gate)),
-    )
-    .sort(byNewest);
+) => {
+  const shown = notes.filter(
+    (note) =>
+      note.app === context.scope &&
+      isVersionAvailable(note.version, context.runningVersion) &&
+      (note.audience === 'everyone' || context.isDebug) &&
+      (note.gate === null || context.isGateOpen(note.app, note.gate)),
+  );
+  const replaced = new Set(shown.flatMap((note) => note.replaces));
+  return (
+    context.isDebug ? shown : shown.filter((note) => !replaced.has(note.id))
+  ).sort(byNewest);
+};
 
 export const getNewestVersion = (notes: WhatsNewNote[]) =>
   notes.reduce<string | null>(
@@ -113,30 +119,31 @@ export const getFirstEncounterMark = (
     ? getNewestVersion(notes.filter((note) => note.app === scope))
     : runningVersion;
 
-/** Fix-only updates pop up only for a debug viewer who hasn't turned them off. */
+/** Only a told note opens the sheet by itself; a debug viewer who hasn't turned it off also gets it for anything listed. */
 export const shouldPopUp = (
   unseen: WhatsNewNote[],
   { isDebug, showFixOnly }: { isDebug: boolean; showFixOnly: boolean | null },
 ) =>
   unseen.length > 0 &&
-  (unseen.some((note) => note.kind !== 'fixed') ||
-    (isDebug && showFixOnly !== false));
+  (unseen.some((note) => note.isTold) || (isDebug && showFixOnly !== false));
 
 export const isFixOnly = (notes: WhatsNewNote[]) =>
   notes.every((note) => note.kind === 'fixed');
 
 export const rollUp = (unseen: WhatsNewNote[]): WhatsNewRollUp => {
-  const highlights = unseen
-    .filter((note) => note.kind !== 'fixed')
-    .sort(byKindThenNewest);
+  const told = unseen.filter((note) => note.isTold).sort(byKindThenNewest);
   return {
-    highlights: highlights.slice(0, ROLL_UP_HIGHLIGHT_CAP),
-    moreHighlights: highlights.slice(ROLL_UP_HIGHLIGHT_CAP),
+    told: told.slice(0, ROLL_UP_TOLD_CAP),
+    moreTold: told.slice(ROLL_UP_TOLD_CAP),
+    smaller: unseen
+      .filter((note) => !note.isTold && note.kind !== 'fixed')
+      .sort(byKindThenNewest),
     fixes: unseen.filter((note) => note.kind === 'fixed').sort(byNewest),
     sinceAt:
       unseen.length === 0
         ? null
         : Math.min(...unseen.map((note) => note.publishedAt)),
+    total: unseen.length,
   };
 };
 
@@ -172,8 +179,9 @@ export const groupByMonth = (notes: WhatsNewNote[]): WhatsNewMonthGroup[] =>
     .map(([key, group]) => ({
       key,
       at: Math.max(...group.map((note) => note.publishedAt)),
-      highlights: group
-        .filter((note) => note.kind !== 'fixed')
+      told: group.filter((note) => note.isTold).sort(byKindThenNewest),
+      smaller: group
+        .filter((note) => !note.isTold && note.kind !== 'fixed')
         .sort(byKindThenNewest),
       fixes: group.filter((note) => note.kind === 'fixed').sort(byNewest),
     }))

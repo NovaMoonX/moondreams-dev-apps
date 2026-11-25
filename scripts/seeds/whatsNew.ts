@@ -11,7 +11,12 @@ const note = (
   version: string,
   daysAgo: number,
   text: string,
-  path: string | null = null,
+  {
+    path = null,
+    isTold = false,
+    emoji = null,
+    replaces = [],
+  }: Partial<Pick<WhatsNewNote, 'path' | 'isTold' | 'emoji' | 'replaces'>> = {},
 ): SeedNote => ({
   app,
   kind,
@@ -21,6 +26,9 @@ const note = (
   path,
   gate: null,
   audience: 'everyone',
+  isTold,
+  emoji,
+  replaces,
 });
 
 const NOTES: SeedNote[] = [
@@ -30,7 +38,7 @@ const NOTES: SeedNote[] = [
     '1.171.0',
     3,
     'Star your favorite apps and they sit first on Home.',
-    '/',
+    { path: '/', isTold: true, emoji: '⭐' },
   ),
   note(
     'site',
@@ -38,6 +46,7 @@ const NOTES: SeedNote[] = [
     '1.168.0',
     12,
     'The account menu now opens faster on slow connections.',
+    { emoji: '⚡' },
   ),
   note(
     'site',
@@ -49,10 +58,18 @@ const NOTES: SeedNote[] = [
   note(
     'runway',
     'new',
+    '1.172.0',
+    1,
+    'Set an alarm on an envelope, and Runway tells you when it runs low.',
+    { path: '/runway', isTold: true, emoji: '⏰' },
+  ),
+  note(
+    'runway',
+    'new',
     '1.170.0',
     2,
     'See what is left to spend after your bills on the Plan screen.',
-    '/runway',
+    { path: '/runway', isTold: true, emoji: '💸' },
   ),
   note(
     'runway',
@@ -60,7 +77,7 @@ const NOTES: SeedNote[] = [
     '1.169.0',
     5,
     'Move money between envelopes with one tap.',
-    '/runway',
+    { path: '/runway', isTold: true, emoji: '🔁' },
   ),
   note(
     'runway',
@@ -68,6 +85,7 @@ const NOTES: SeedNote[] = [
     '1.167.0',
     9,
     'Pay a card bill from the card statement itself.',
+    { isTold: true, emoji: '💳' },
   ),
   note(
     'runway',
@@ -75,6 +93,7 @@ const NOTES: SeedNote[] = [
     '1.165.0',
     14,
     'Envelope history now shows running totals.',
+    { isTold: true, emoji: '📈' },
   ),
   note(
     'runway',
@@ -82,13 +101,15 @@ const NOTES: SeedNote[] = [
     '1.164.0',
     16,
     'Bank connections explain why a bank refused a request.',
+    { emoji: '🏦' },
   ),
   note(
     'runway',
     'improved',
     '1.162.0',
     21,
-    'Goals show how far along they are at a glance.',
+    'Search finds envelopes and goals by name.',
+    { emoji: '🔍' },
   ),
   note(
     'runway',
@@ -110,6 +131,15 @@ const NOTES: SeedNote[] = [
     '1.140.0',
     60,
     'Runway can read a forwarded bill email.',
+    { isTold: true, emoji: '📧' },
+  ),
+  note(
+    'runway',
+    'improved',
+    '1.161.0',
+    24,
+    'Forwarded bill emails are read for you, and Runway asks before adding anything.',
+    { isTold: true, emoji: '📧', replaces: ['seed-13'] },
   ),
   note(
     'pinch',
@@ -117,7 +147,7 @@ const NOTES: SeedNote[] = [
     '1.158.0',
     30,
     'Cook with your voice: say "next step" and Pinch reads it.',
-    '/pinch',
+    { path: '/pinch', isTold: true, emoji: '🎙️' },
   ),
   note(
     'pinch',
@@ -125,6 +155,7 @@ const NOTES: SeedNote[] = [
     '1.159.0',
     28,
     'Shopping lists group items by store aisle.',
+    { emoji: '🛒' },
   ),
   note(
     'pinch',

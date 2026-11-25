@@ -18,7 +18,15 @@ export interface WhatsNewDraft {
   /** A feature switch of the note's app; the note is hidden from anyone it is closed for. */
   gate: string | null;
   audience: WhatsNewAudience;
+  /** True when the person would want to hear it on opening the app; false for a line that is only listed. Always false for a fix. */
+  isTold: boolean;
+  /** One emoji for what the change is about, or null. */
+  emoji: string | null;
+  /** Ids of earlier notes this one supersedes; people see only this one. */
+  replaces: string[];
 }
+
+export const WHATS_NEW_REPLACES_MAX = 5;
 
 export interface WhatsNewFile {
   notes: WhatsNewDraft[];
