@@ -203,6 +203,7 @@
     "check:ci": "bash scripts/checkCi.sh",
     "check:indexes": "tsx scripts/checkFirestoreIndexes.ts",
     "check:rules-size": "tsx scripts/checkRulesSize.ts",
+    "check:rules-wildcard": "tsx scripts/checks/rulesWildcard.ts",
     "fb:indexes": "firebase deploy --only firestore:indexes",
     "fb:functions": "cd functions && npm run build && firebase deploy --only functions",
     "fb:deploy:smart": "tsx scripts/fbDeploySmart.ts",
