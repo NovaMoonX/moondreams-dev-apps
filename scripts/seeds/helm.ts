@@ -7592,12 +7592,14 @@ const SEED_ASSISTANTS = [
     clientId: 'https://claude.ai/oauth/seed-claude.json',
     name: 'Claude',
     canWrite: true,
+    canChangeApps: true,
     readScopes: ['apps'],
   },
   {
     clientId: 'https://gemini.google.com/oauth/seed-gemini.json',
     name: 'Gemini',
     canWrite: false,
+    canChangeApps: false,
     readScopes: [],
   },
 ] as const;
@@ -7965,6 +7967,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               firstSeenAt: context.now - (9 - index * 4) * DAY_MS,
               lastUsedAt,
               canWrite: assistant.canWrite,
+              canChangeApps: assistant.canChangeApps,
               readScopes: assistant.readScopes,
               revokedAt: null,
             },
@@ -8784,7 +8787,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       },
       useSoon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
-    changes: {},
+    changes: { planMeals: { isOn: true, changedAt: connectedAt } },
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(

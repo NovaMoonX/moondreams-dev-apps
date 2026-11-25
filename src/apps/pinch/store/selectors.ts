@@ -740,3 +740,6 @@ export const selectSharesLoadError = (state: RootState) =>
 /** Until it has loaded, or after it failed, whether a recipe is already shared isn't known. */
 export const selectIsSharesReady = (state: RootState) =>
   state.pinch.shares.isLoaded && state.pinch.shares.loadError === null;
+
+export const selectOutsideChanges = (state: RootState) =>
+  state.pinch.outsideChanges.items;

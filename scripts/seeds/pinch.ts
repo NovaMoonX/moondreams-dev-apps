@@ -8,6 +8,7 @@ import {
 } from '../../functions/src/apps/pinch/pinchShareView.ts';
 import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
 import { getCookPhotoPath } from '../../src/apps/pinch/utils/cooks.ts';
+import type { PinchOutsideChange } from '../../src/apps/pinch/types.ts';
 import { getStepAnchor } from '../../src/apps/pinch/utils/notes.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -61,6 +62,53 @@ const SEED_SHOPPING = [
   shoppingItem('cat-garlic', 'EACH', 6, false, ADOBO_ADDED),
   shoppingItem('cat-lime-juice', 'TBSP', 2, true, DINNERS_ADDED),
   shoppingItem('cat-cilantro', 'CUP', 0.25, true, DINNERS_ADDED),
+];
+
+const outsideChange = (
+  change: Partial<PinchOutsideChange> &
+    Pick<PinchOutsideChange, 'id' | 'kind' | 'title' | 'lines'> & {
+      minutesAgo: number;
+    },
+) => ({
+  by: { kind: 'assistant' as const, name: 'Gemini' },
+  recipeId: null,
+  noteId: null,
+  plannedMealId: null,
+  shoppingItemId: null,
+  addedAmount: null,
+  createdItem: false,
+  undoneAt: null,
+  undoneBy: null,
+  ...change,
+});
+
+// What Gemini did through Helm: a recipe edit, a planned dinner and a line added to the list.
+const SEED_OUTSIDE_CHANGES = [
+  outsideChange({
+    id: 'seed-pinch-outside-1',
+    kind: 'recipeUpdated',
+    title: 'Chicken adobo',
+    lines: ['Servings: 4 \u2192 6', 'Added the ingredient "Bay leaves"'],
+    recipeId: 'seed-pinch-recipe-adobo',
+    minutesAgo: 25,
+  }),
+  outsideChange({
+    id: 'seed-pinch-outside-2',
+    kind: 'mealPlanned',
+    title: 'Chicken adobo',
+    lines: ['Dinner on Friday'],
+    plannedMealId: 'seed-pinch-planned-4',
+    minutesAgo: 70,
+  }),
+  outsideChange({
+    id: 'seed-pinch-outside-3',
+    kind: 'shoppingAdded',
+    title: 'Garlic',
+    lines: ['2 more, 6 in all'],
+    shoppingItemId: 'cat-garlic__EACH',
+    addedAmount: 2,
+    minutesAgo: 26 * 60,
+  }),
 ];
 
 const idea = (
@@ -1538,6 +1586,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: createdAt + index,
         });
     }),
+    ...SEED_OUTSIDE_CHANGES.map(({ minutesAgo, ...change }) =>
+      kitchenRef
+        .collection('outsideChanges')
+        .doc(change.id)
+        .set({ ...change, createdAt: context.now - minutesAgo * 60_000 }),
+    ),
     ...seedShares.flatMap(({ share, snapshot }) => [
       context.firestore.doc(`apps/pinch/shares/${share.id}`).set(share),
       context.firestore
@@ -1602,6 +1656,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       CATALOG_STORE_SEEDS.length +
       PLANNED_BLUEPRINTS.length +
       SEED_MEALS.length +
+      SEED_OUTSIDE_CHANGES.length +
       seedShares.length * 2 +
       2,
   };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -13,6 +13,7 @@ import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useConnections } from '@/lib/connections/useConnections';
 import {
   disconnectMcpClient,
+  setMcpCanChangeApps,
   setMcpReadScope,
   updateMcpClient,
   type McpReadScope,
@@ -49,6 +50,9 @@ function AssistantSheet({
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const [pendingCanWrite, setPendingCanWrite] = useState<boolean | null>(null);
+  const [pendingCanChange, setPendingCanChange] = useState<boolean | null>(
+    null,
+  );
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [pendingScopes, setPendingScopes] = useState<
     Partial<Record<McpReadScope, boolean>>
@@ -102,6 +106,23 @@ function AssistantSheet({
     }
   };
 
+  const setCanChangeApps = async (canChangeApps: boolean) => {
+    if (!assistant || pendingCanChange !== null) return;
+    setPendingCanChange(canChangeApps);
+    try {
+      await setMcpCanChangeApps(assistant.clientKey, canChangeApps);
+      await waitFor(
+        (current) =>
+          current === null || current.canChangeApps === canChangeApps,
+      );
+    } catch (error) {
+      console.error('Helm assistant change permission was not updated', error);
+      addToast({ title: HELM_COPY.assistantUpdateFailed, type: 'error' });
+    } finally {
+      setPendingCanChange(null);
+    }
+  };
+
   const disconnect = async () => {
     if (!assistant || isDisconnecting) return;
     const isConfirmed = await confirm({
@@ -128,6 +149,7 @@ function AssistantSheet({
   };
 
   const canWrite = pendingCanWrite ?? assistant?.canWrite ?? false;
+  const canChangeApps = pendingCanChange ?? assistant?.canChangeApps ?? false;
 
   return (
     <DetailSheet
@@ -166,40 +188,64 @@ function AssistantSheet({
             const isOn =
               pendingScopes[scope] ?? assistant.readScopes.includes(scope);
             return (
-              <div
-                key={scope}
-                className='flex items-start justify-between gap-3'
-              >
-                <div className='min-w-0'>
-                  <p className='text-[15px] font-medium'>
-                    {HELM_COPY.assistantReadScopeLabels[scope]}
-                  </p>
-                  {isConnected(scope) ? (
-                    <p className='text-muted-foreground text-[13px] text-pretty'>
-                      {HELM_COPY.assistantReadScopeHint(
-                        scope,
-                        assistant.name,
-                        helmAppName,
-                        { isOn, canWrite },
-                      )}
+              <Fragment key={scope}>
+                <div className='flex items-start justify-between gap-3'>
+                  <div className='min-w-0'>
+                    <p className='text-[15px] font-medium'>
+                      {HELM_COPY.assistantReadScopeLabels[scope]}
                     </p>
-                  ) : (
-                    <p className='text-muted-foreground flex items-center gap-1.5 text-[13px] text-pretty'>
-                      <Lock className='size-3.5 shrink-0' aria-hidden='true' />
-                      {HELM_COPY.assistantNeedsSource(scope)}
-                    </p>
+                    {isConnected(scope) ? (
+                      <p className='text-muted-foreground text-[13px] text-pretty'>
+                        {HELM_COPY.assistantReadScopeHint(
+                          scope,
+                          assistant.name,
+                          helmAppName,
+                          { isOn, canWrite },
+                        )}
+                      </p>
+                    ) : (
+                      <p className='text-muted-foreground flex items-center gap-1.5 text-[13px] text-pretty'>
+                        <Lock
+                          className='size-3.5 shrink-0'
+                          aria-hidden='true'
+                        />
+                        {HELM_COPY.assistantNeedsSource(scope)}
+                      </p>
+                    )}
+                  </div>
+                  {(isConnected(scope) || isOn) && (
+                    <AppToggle
+                      aria-label={HELM_COPY.assistantReadScopeLabels[scope]}
+                      checked={isOn}
+                      onCheckedChange={(checked) =>
+                        void setReadScope(scope, checked)
+                      }
+                    />
                   )}
                 </div>
-                {(isConnected(scope) || isOn) && (
-                  <AppToggle
-                    aria-label={HELM_COPY.assistantReadScopeLabels[scope]}
-                    checked={isOn}
-                    onCheckedChange={(checked) =>
-                      void setReadScope(scope, checked)
-                    }
-                  />
+                {scope === 'apps' && (
+                  <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                      <p className='text-[15px] font-medium'>
+                        {HELM_COPY.assistantChangesLabel}
+                      </p>
+                      <p className='text-muted-foreground text-[13px] text-pretty'>
+                        {HELM_COPY.assistantChangesHint(
+                          assistant.name,
+                          canChangeApps,
+                        )}
+                      </p>
+                    </div>
+                    <AppToggle
+                      aria-label={HELM_COPY.assistantChangesLabel}
+                      checked={canChangeApps}
+                      onCheckedChange={(checked) =>
+                        void setCanChangeApps(checked)
+                      }
+                    />
+                  </div>
                 )}
-              </div>
+              </Fragment>
             );
           })}
           {shownScopes.some((scope) => !isConnected(scope)) && (

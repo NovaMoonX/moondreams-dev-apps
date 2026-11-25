@@ -425,5 +425,6 @@ export const NOT_STORED: Record<string, string> = {
   ChangePinchShareResult: 'callable result',
   CopyPinchShareCoverRequest: 'callable request',
   CopyPinchShareCoverResult: 'callable result',
+  PinchOutsideChange: 'written by the server for the owner only, never shared',
   RecipeNoteBy: 'nested inside RecipeNote.by, which is never shared',
 };

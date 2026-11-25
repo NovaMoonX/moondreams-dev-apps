@@ -12,6 +12,7 @@ const completeMcpSignInCallable = httpsCallable<
 
 const updateMcpClientCallable = httpsCallable<
   | { clientKey: string; canWrite: boolean }
+  | { clientKey: string; canChangeApps: boolean }
   | { clientKey: string; readScope: McpReadScope; isOn: boolean },
   unknown
 >(functions, 'updateMcpClient');
@@ -27,6 +28,13 @@ export const completeMcpSignIn = async (externalAuthId: string) =>
 
 export const updateMcpClient = async (clientKey: string, canWrite: boolean) => {
   await updateMcpClientCallable({ clientKey, canWrite });
+};
+
+export const setMcpCanChangeApps = async (
+  clientKey: string,
+  canChangeApps: boolean,
+) => {
+  await updateMcpClientCallable({ clientKey, canChangeApps });
 };
 
 export const setMcpReadScope = async (
