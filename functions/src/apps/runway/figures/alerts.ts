@@ -160,11 +160,8 @@ async function sendOnce(
   }
 }
 
-/**
- * Judges the plan's alerts against the figures just written: an alert goes off when its figure falls to or below its line,
- * one push carries all that went off, quiet hours hold them for 08:00, and an archived envelope's alerts are deleted.
- * Returns when to run again for a held alert, or null.
- */
+/** Judges the plan's alerts against the figures just written: one push carries all that went off, quiet hours hold them for 08:00,
+ * and an archived envelope's alerts are deleted. Returns when to run again for a held alert, or null. */
 export async function runAlerts(
   firestore: Firestore,
   run: AlertRun,
@@ -174,7 +171,9 @@ export async function runAlerts(
   const under = (name: string) =>
     firestore.collection(`apps/runway/plans/${uid}/${name}`);
   const alertDocs = await under('alerts').limit(MAX_ALERTS).get();
-  const stateDocs = await under('alertStates').limit(MAX_ALERTS * 2).get();
+  const stateDocs = await under('alertStates')
+    .limit(MAX_ALERTS * 2)
+    .get();
   if (alertDocs.empty && stateDocs.empty) return null;
   const states = new Map(
     stateDocs.docs.map((entry) => [entry.id, entry.data() as AlertStateDoc]),
@@ -257,8 +256,7 @@ export async function runAlerts(
 
   const gone = [...states.keys()].filter(
     (id) =>
-      retired.includes(id) ||
-      !alertDocs.docs.some((entry) => entry.id === id),
+      retired.includes(id) || !alertDocs.docs.some((entry) => entry.id === id),
   );
   const batch = firestore.batch();
   before
