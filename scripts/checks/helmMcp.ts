@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Client } from '../../functions/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
 import { InMemoryTransport } from '../../functions/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js';
 import { McpServer } from '../../functions/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js';
-import type { z } from '../../functions/node_modules/zod/index.js';
+import { toJSONSchema, z } from '../../functions/node_modules/zod/index.js';
 
 import { PINCH_SHARES } from '../../src/apps/pinch/share/manifest.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
@@ -183,6 +183,15 @@ assert.deepEqual(
     .sort(),
   OUTSIDE_TOOLS,
   'the tools offered to outside assistants changed: review the new one and name it in OUTSIDE_TOOLS',
+);
+
+// Nomos reads each app through the same grouped read tool; changes stay with outside assistants until Nomos gets its own ask-and-undo.
+assert.deepEqual(
+  tools
+    .filter((tool) => tool.audience !== 'external' && tool.name.startsWith('pinch_'))
+    .map((tool) => tool.name),
+  ['pinch_read'],
+  'Nomos gets pinch_read and none of the change tools',
 );
 
 // Mail, documents and app records reach an outside assistant only behind its own read permission, listed by name.
@@ -1425,12 +1434,30 @@ const MAX_TOOLS_PER_APP = 6;
 const MAX_OUTSIDE_TOOLS = 40;
 const MIN_OPTION_DESCRIPTION = 60;
 const TOOL_ID = /^[a-z][a-z0-9_]*$/;
-const typeOf = (schema: z.ZodType): string => {
+const unwrapOptional = (schema: z.ZodType): z.ZodType => {
   const def = (schema as unknown as { _zod: { def: { type: string; innerType?: z.ZodType } } })._zod.def;
-  return ['optional', 'nullable', 'default'].includes(def.type) && def.innerType
-    ? typeOf(def.innerType)
-    : def.type;
+  return ['optional', 'default'].includes(def.type) && def.innerType ? unwrapOptional(def.innerType) : schema;
 };
+const withoutWords = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(withoutWords)
+    : value && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([key]) => !['description', 'default', '$schema'].includes(key))
+            .map(([key, inner]) => [key, withoutWords(inner)]),
+        )
+      : value;
+// The client validates a grouped tool against the first option's copy of a shared field, so every copy must accept exactly the same values.
+const schemaOf = (schema: z.ZodType): string =>
+  JSON.stringify(withoutWords(toJSONSchema(unwrapOptional(schema))));
+assert.equal(
+  schemaOf(z.string().max(100).describe('For search_recipes, words.')),
+  schemaOf(z.string().max(100).optional().describe('For find_ingredients, a name.')),
+);
+assert.notEqual(schemaOf(z.enum(['a', 'b'])), schemaOf(z.enum(['a', 'c'])));
+assert.notEqual(schemaOf(z.string().max(100)), schemaOf(z.string().max(200)));
+assert.notEqual(schemaOf(z.string()), schemaOf(z.string().nullable()));
 const toolFailures = Object.entries(SOURCE_ADAPTERS).flatMap(
   ([connectorId, adapter]) => {
     const { manifest } = adapter;
@@ -1509,10 +1536,10 @@ const toolFailures = Object.entries(SOURCE_ADAPTERS).flatMap(
         return [
           ...(keys.includes('action') && shapes.length > 1 ? [`${connectorId} tool ${id} has a field named action, which picks the option`] : []),
           ...keys.flatMap((key) => {
-            const types = new Set(
-              shapes.filter((shape) => key in shape).map((shape) => typeOf(shape[key] as z.ZodType)),
+            const schemas = new Set(
+              shapes.filter((shape) => key in shape).map((shape) => schemaOf(shape[key] as z.ZodType)),
             );
-            return types.size > 1 ? [`${connectorId} tool ${id}: ${key} is ${[...types].join(' and ')} across its options`] : [];
+            return schemas.size > 1 ? [`${connectorId} tool ${id}: ${key} accepts different values across its options (${[...schemas].join(' vs ')})`] : [];
           }),
         ];
       }),

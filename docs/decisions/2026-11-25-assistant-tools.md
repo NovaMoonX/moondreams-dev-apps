@@ -32,6 +32,7 @@ For switched-off reads and changes we weighed:
 - Titles on every tool; `readOnlyHint` on reads; `destructiveHint` only where an option can alter what exists (`changesExisting`); `openWorldHint` false; refusals returned with `isError: true`.
 - The guide is a short map (each app, its `pinch_` prefix and words, the switches that are off), never a list of tool names, under 4,000 characters.
 - Every call still re-reads the grant; the mark and the hiding are only what is listed.
+- **Who gets which.** The same tools serve both kinds of assistant. Nomos, Helm's own, gets each app's read tool (`pinch_read`) with the same options, marks and words, and its loop passes refusals back as errors; it does not get the change tools, as before this decision (#1260 gave changes to outside assistants only), because Nomos would first need its own way to ask before acting and show Undo in the conversation. When it does, it uses these same grouped tools. The guide is only the outside assistants' instructions; Nomos has its own prompt.
 
 ## Why
 
@@ -44,7 +45,7 @@ For switched-off reads and changes we weighed:
 
 ## How it is held
 
-`check:helm-mcp` (run by `check:ci` and in CI) walks every adapter in `SOURCE_ADAPTERS`: ids and names, titles, one read tool, no mixed kinds, at most 6 tools an app and 40 overall, at least 3 `askedAbout` words, every declared tool used and every action's tool declared, shared fields of one type, option descriptions long enough, and every `{app}_x` a description names real. It also runs the server in process and checks the titles, hints, `required: ['action']` and `isError`. The convention is `connections.md` "An app offers an assistant a handful of tools".
+`check:helm-mcp` (run by `check:ci` and in CI) walks every adapter in `SOURCE_ADAPTERS`: ids and names, titles, one read tool, no mixed kinds, at most 6 tools an app and 40 overall, at least 3 `askedAbout` words, every declared tool used and every action's tool declared, shared fields accepting exactly the same values (compared as JSON schema, descriptions aside), Nomos given the read tool and no change tool, option descriptions long enough, and every `{app}_x` a description names real. It also runs the server in process and checks the titles, hints, `required: ['action']` and `isError`. The convention is `connections.md` "An app offers an assistant a handful of tools".
 
 ## When to revisit
 
@@ -52,8 +53,9 @@ For switched-off reads and changes we weighed:
 - **A client that searches tools well** (Claude's tool search, a ChatGPT equivalent) for every assistant the person uses would make one tool per action affordable again; grouping would still help, so revisit only if grouping starts to hurt.
 - **An app that needs more than 6 tools**, or a change whose fields can't agree with any group: split by what the person does, not by field, and raise the cap here first if it truly needs it.
 - **A stateful server or client support for `listChanged`** would let a switch turned on show its tool at once; then hiding switched-off reads could be weighed again.
+- **Nomos is given changes**: it reuses the change tools as they are; write here how it asks and undoes.
 - **Results showing assistants pick the wrong option** (from Helm's filed turns): sharpen descriptions before splitting tools.
 
 ## Changes
 
-- Nov 25, 2026: first written.
+- Nov 25, 2026: first written; after review, shared fields must accept the same values, not only the same type, and who gets which tools is stated.
