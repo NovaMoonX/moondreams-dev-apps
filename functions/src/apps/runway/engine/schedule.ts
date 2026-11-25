@@ -1,0 +1,181 @@
+// Generated from src/apps/runway/engine/schedule.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
+import { MAX_OCCURRENCES } from './engineConstants.js';
+import type { Ending, FundingRule, Schedule } from '../runwayTypes.js';
+
+import { scopeToSource } from './calendar.js';
+import { DAY_MS, daysInUtcMonth } from './dates.js';
+
+const steppedDates = (anchor: number, to: number, stepDays: number) => {
+  const count =
+    to < anchor ? 0 : Math.floor((to - anchor) / (stepDays * DAY_MS)) + 1;
+  const result = Array.from(
+    { length: Math.min(count, MAX_OCCURRENCES) },
+    (_, index) => anchor + index * stepDays * DAY_MS,
+  );
+  return result;
+};
+
+const monthlyDates = (schedule: Schedule, anchor: number, to: number) => {
+  const first = new Date(anchor);
+  const last = new Date(to);
+  const months =
+    (last.getUTCFullYear() - first.getUTCFullYear()) * 12 +
+    last.getUTCMonth() -
+    first.getUTCMonth() +
+    1;
+  const days = [...new Set(schedule.monthDays)].sort((a, b) => a - b);
+  const result = Array.from(
+    { length: Math.min(Math.max(months, 0), MAX_OCCURRENCES) },
+    (_, index) => index,
+  )
+    .flatMap((index) => {
+      const year = first.getUTCFullYear();
+      const month = first.getUTCMonth() + index;
+      const length = daysInUtcMonth(year, month);
+      const clamped = days.map((day) =>
+        Date.UTC(year, month, Math.min(day, length)),
+      );
+      return [...new Set(clamped)];
+    })
+    .filter((date) => date >= anchor && date <= to);
+  return result;
+};
+
+/** Every `interval` months from the anchor, on the anchor's day of the month or a short month's last day. */
+const everyMonthsDates = (anchor: number, to: number, interval: number) => {
+  const first = new Date(anchor);
+  const last = new Date(to);
+  const year = first.getUTCFullYear();
+  const day = first.getUTCDate();
+  const months =
+    (last.getUTCFullYear() - year) * 12 +
+    last.getUTCMonth() -
+    first.getUTCMonth();
+  const count = months < 0 ? 0 : Math.floor(months / interval) + 1;
+  const result = Array.from(
+    { length: Math.min(count, MAX_OCCURRENCES) },
+    (_, index) => {
+      const month = first.getUTCMonth() + index * interval;
+      return Date.UTC(year, month, Math.min(day, daysInUtcMonth(year, month)));
+    },
+  ).filter((date) => date <= to);
+  return result;
+};
+
+/** A pay-on day only means something for a schedule with at most one payment a month; two in one month would share a pay day. */
+export const canPayOnSchedule = (schedule: Schedule) =>
+  schedule.kind !== 'weekly' &&
+  schedule.kind !== 'everyOtherWeek' &&
+  schedule.kind !== 'twiceMonthly' &&
+  new Set(schedule.monthDays).size <= 1;
+
+/** The day a payment due on `dueOn` is paid: the last `payOnDay` of a month on or before it (a short month's last day), or the due date itself. */
+export const toPayOn = (dueOn: number, payOnDay: number | null | undefined) => {
+  if (!payOnDay) return dueOn;
+  const due = new Date(dueOn);
+  const onMonth = (offset: number) => {
+    const year = due.getUTCFullYear();
+    const month = due.getUTCMonth() - offset;
+    return Date.UTC(
+      year,
+      month,
+      Math.min(payOnDay, daysInUtcMonth(year, month)),
+    );
+  };
+  const same = onMonth(0);
+  return same <= dueOn ? same : onMonth(1);
+};
+
+/** The months between a schedule's dates when it repeats every few months, else null. */
+export const getIntervalMonths = (schedule: Schedule): number | null =>
+  schedule.kind === 'everyMonths'
+    ? Math.max(1, Math.round(schedule.intervalMonths ?? 12))
+    : null;
+
+const MAX_CACHED_SCHEDULES = 512;
+const candidateCache = new Map<string, readonly number[]>();
+
+const generateCandidates = (schedule: Schedule, to: number) => {
+  const anchor = schedule.anchor;
+  if (anchor === null) return [];
+  if (schedule.kind === 'once') return anchor <= to ? [anchor] : [];
+  if (schedule.kind === 'weekly') return steppedDates(anchor, to, 7);
+  if (schedule.kind === 'everyOtherWeek') return steppedDates(anchor, to, 14);
+  if (schedule.kind === 'monthly' || schedule.kind === 'twiceMonthly') {
+    return monthlyDates(schedule, anchor, to);
+  }
+  const interval = getIntervalMonths(schedule);
+  if (interval !== null) return everyMonthsDates(anchor, to, interval);
+  return [];
+};
+
+/** A schedule's dates up to `to`, kept by what names them: a lookahead asks the same bills for the same dates once per income day. */
+const candidateDates = (schedule: Schedule, to: number): readonly number[] => {
+  const key = `${schedule.kind}|${schedule.anchor}|${String(schedule.monthDays)}|${schedule.intervalMonths ?? ''}|${to}`;
+  const cached = candidateCache.get(key);
+  if (cached) return cached;
+  const result = generateCandidates(schedule, to);
+  if (candidateCache.size >= MAX_CACHED_SCHEDULES) candidateCache.clear();
+  candidateCache.set(key, result);
+  return result;
+};
+
+/**
+ * The dates a schedule produces from `from` through `to` (both inclusive, UTC midnight), cut off by the
+ * ending. A count ending counts from the first occurrence ever, not from `from`; an end date covers its
+ * whole day. An irregular schedule has no dates.
+ */
+export function occurrences(
+  schedule: Schedule,
+  ending: Ending,
+  from: number,
+  to: number,
+): number[] {
+  const onDate = ending.onDate;
+  const result = candidateDates(schedule, to)
+    .filter((date) => onDate === null || date <= onDate)
+    .slice(0, ending.afterCount ?? MAX_OCCURRENCES)
+    .filter((date) => date >= from);
+  return result;
+}
+
+/**
+ * Of the plan-wide income days, the ones a funding cadence selects, counted in chronological order
+ * whatever order they arrive in. Every Nth counts from the anchor day: the anchor and every Nth day
+ * after it. An anchor that is no longer in the list (its day has passed) counts from the first day listed.
+ */
+export function selectFundedDays<D extends { dayKey: string; on: number }>(
+  cadence: FundingRule['cadence'],
+  days: readonly D[],
+): D[] {
+  const ordered = [...days].sort(
+    (a, b) =>
+      a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
+  );
+  if (cadence.kind === 'none') return [];
+  if (cadence.kind === 'everyIncomeDay' || cadence.kind === 'calendar') {
+    return ordered;
+  }
+  if (cadence.kind === 'chosen') {
+    const chosen = new Set(cadence.dayKeys);
+    return ordered.filter((day) => chosen.has(day.dayKey));
+  }
+  const found = ordered.findIndex((day) => day.dayKey === cadence.anchorDayKey);
+  const anchorIndex = Math.max(found, 0);
+  const result = ordered.filter(
+    (_, index) =>
+      index >= anchorIndex && (index - anchorIndex) % cadence.n === 0,
+  );
+  return result;
+}
+
+/** Of the income days, the ones a funding rule counts: its source's pays only when it names one, then its cadence's. */
+export function selectRuleDays<
+  D extends { dayKey: string; on: number; sourceId?: string | null },
+>(funding: FundingRule, days: readonly D[]): D[] {
+  const result = selectFundedDays(
+    funding.cadence,
+    scopeToSource(funding, days),
+  );
+  return result;
+}

@@ -1,8 +1,8 @@
 import {
   CUSHION_DAYS,
-  HORIZON_WORDS,
+  getCostLineName,
   INCOME_END_GAP_DAYS,
-} from '@apps/runway/constants';
+} from './engineConstants';
 import type {
   Cents,
   DateOnly,
@@ -176,6 +176,7 @@ export interface Lookahead {
   horizonShort: HorizonShort[];
   /** Each walked income day: what it brings in, what its draft leaves free to spend and what it gives each item. */
   steps: {
+    dayKey: string;
     on: DateOnly;
     moneyCents: Cents;
     freeCents: Cents;
@@ -259,7 +260,7 @@ const getShortName = (
       other.costId &&
       names[getCostNameKey(other.itemId, other.costId)]?.name === costName,
   );
-  return isShared ? HORIZON_WORDS.costLineName(costName, itemName) : costName;
+  return isShared ? getCostLineName(costName, itemName) : costName;
 };
 
 /** Every Must that goes unfunded, and every bill or cost payment that falls due before the next income day and is not set aside in full, in the draft's own order. */
@@ -543,6 +544,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
         steps: [
           ...acc.steps,
           {
+            dayKey: day.dayKey,
             on: day.on,
             moneyCents: result.draft.moneyCents,
             freeCents: result.draft.freeToSpend.cents,
@@ -595,6 +597,18 @@ export function lookahead(input: LookaheadInput): Lookahead {
     steps: walked.steps,
   };
   return result;
+}
+
+/** The first walked income day that gives an item money, with what all its parts get that day; null when none in the walked stretch does. */
+export function getNextFill(steps: Lookahead['steps'], itemId: string) {
+  const fills = steps.map((step) => ({
+    dayKey: step.dayKey,
+    on: step.on,
+    cents: step.lines
+      .filter((line) => line.itemId === itemId)
+      .reduce((sum, line) => sum + line.cents, 0),
+  }));
+  return fills.find((fill) => fill.cents > 0) ?? null;
 }
 
 export interface StanceCushion {

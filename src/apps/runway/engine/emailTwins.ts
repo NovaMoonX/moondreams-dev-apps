@@ -2,7 +2,7 @@ import {
   EMAIL_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
   EMAIL_WAIT_DAYS,
-} from '@apps/runway/constants';
+} from './engineConstants';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import { isSameStore } from '@apps/runway/engine/storeNames';
 import type { OpenPurchase } from '@apps/runway/types';

@@ -115,6 +115,7 @@ const balances = {
     now: { on: d(10), freeCents: 5_000, allCents: 50_000 },
     steps: [
       {
+        dayKey: 'd14',
         on: d(14),
         moneyCents: 100_000,
         freeCents: 10_000,
@@ -123,8 +124,20 @@ const balances = {
           { itemId: 'rent', cents: 70_000 },
         ],
       },
-      { on: d(28), moneyCents: 100_000, freeCents: 0, lines: [] },
-      { on: d(42), moneyCents: 100_000, freeCents: 10_000, lines: [] },
+      {
+        dayKey: 'd28',
+        on: d(28),
+        moneyCents: 100_000,
+        freeCents: 0,
+        lines: [],
+      },
+      {
+        dayKey: 'd42',
+        on: d(42),
+        moneyCents: 100_000,
+        freeCents: 10_000,
+        lines: [],
+      },
     ],
     payments: {
       rent: [payment(d(15), 80_000), payment(d(45), 80_000)],
@@ -183,7 +196,15 @@ const balances = {
   const one = getMoneyProjection({
     today: d(10),
     now: { on: d(10), freeCents: 0, allCents: 0 },
-    steps: [{ on: d(12), moneyCents: 1_000, freeCents: 1_000, lines: [] }],
+    steps: [
+      {
+        dayKey: 'd12',
+        on: d(12),
+        moneyCents: 1_000,
+        freeCents: 1_000,
+        lines: [],
+      },
+    ],
     payments: {},
     billsSince: d(0),
     until: d(40),

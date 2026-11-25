@@ -51,7 +51,7 @@ import {
   type SenderKind,
 } from './parseAlert.js';
 import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
-import { unwrapForwarded } from './unwrapForwarded.js';
+import { unwrapForwarded } from '../../../email/unwrapForwarded.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -510,6 +510,7 @@ async function handleMail(
     outcome: result.outcome,
     senderKind: result.senderKind,
     purchaseId: result.purchase?.ref.id ?? null,
+    savedAt: Date.now(),
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
       planKey,

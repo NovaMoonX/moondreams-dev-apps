@@ -17,6 +17,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackHeading from '@/components/BackHeading';
 import BackLink from '@/components/BackLink';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
@@ -79,9 +80,6 @@ import {
   getPlannedMealNutrition,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
-
-const BACK_HEAD_CLASS =
-  'space-y-1 [@media(max-height:599px)]:flex [@media(max-height:599px)]:items-center [@media(max-height:599px)]:gap-3 [@media(max-height:599px)]:space-y-0';
 
 interface MoreRow {
   key: string;
@@ -493,12 +491,7 @@ function PlannedMealView({
     if (view.kind === 'more') {
       return (
         <div ref={moreViewRef} className='space-y-5'>
-          <div className={BACK_HEAD_CLASS}>
-            <BackLink onBack={closeMore} />
-            <h3 className='text-lg font-semibold wrap-break-word'>
-              {mealLabel}
-            </h3>
-          </div>
+          <BackHeading onBack={closeMore} title={mealLabel} />
           <ActionGroup isRoomy caption='What would you like to do?'>
             {moreRows.map((row) => (
               <div key={row.key} data-more-row={row.key}>
@@ -537,12 +530,7 @@ function PlannedMealView({
     <>
       {viewBody}
       <div className={join('space-y-5', viewBody !== null && 'hidden')}>
-        <div className={BACK_HEAD_CLASS}>
-          <BackLink onBack={onBack} />
-          <h3 className='min-w-0 text-lg font-semibold wrap-break-word'>
-            {mealLabel}
-          </h3>
-        </div>
+        <BackHeading onBack={onBack} title={mealLabel} />
         <FormSection
           title='On the plate'
           detail={

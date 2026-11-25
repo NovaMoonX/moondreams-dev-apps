@@ -26,10 +26,11 @@ import {
   subjectTemplate,
 } from '../../functions/src/apps/runway/email/parseAlert.ts';
 import {
+  isHandForwarded,
   readForwardedDate,
   stripForwardPrefixes,
   unwrapForwarded,
-} from '../../functions/src/apps/runway/email/unwrapForwarded.ts';
+} from '../../functions/src/email/unwrapForwarded.ts';
 
 const RECEIVED = Date.UTC(2026, 10, 4, 18, 30);
 const NOV_3 = Date.UTC(2026, 10, 3);
@@ -425,6 +426,7 @@ forwards.forEach(({ name, subject, text }) => {
     isDkimPassed: true,
   };
   assert.ok(!isForwardingConfirmation(outer), `${name}: not a confirmation`);
+  assert.ok(isHandForwarded(outer), `${name}: hand-forwarded`);
   const mail = unwrapForwarded(outer);
   assert.equal(mail.from.includes('no.reply.alerts@chase.com'), true, name);
   assert.equal(mail.subject, ALERT_SUBJECT, `${name}: subject`);
@@ -455,6 +457,12 @@ assert.deepEqual(unwrapForwarded(autoForward), {
   ...autoForward,
   subject: ALERT_SUBJECT,
 });
+// Only an email a provider's rule sent on as it was proves that forwarding is live.
+assert.ok(isHandForwarded(autoForward), 'a Fwd: subject reads as by hand');
+assert.ok(
+  !isHandForwarded({ ...autoForward, subject: ALERT_SUBJECT }),
+  'a rule-forwarded alert is not by hand',
+);
 [
   ['Fwd: Fwd: hello', 'hello'],
   ['FWD: Fw: FW: TR: WG: hello', 'hello'],
@@ -800,6 +808,7 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     id,
     from,
     receivedAt,
+    savedAt: null,
     outcome,
     senderKind,
     purchaseId: null,

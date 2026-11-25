@@ -1,5 +1,5 @@
 // `npm run connections:vendor` writes the server's copies; `npm run check:server-copies` fails when one differs.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
@@ -74,13 +74,6 @@ const COPIES: Copy[] = [
     },
   },
   {
-    src: 'src/apps/runway/engine/storeNames.ts',
-    dest: 'functions/src/apps/runway/storeNames.ts',
-    importRewrites: {
-      '@/utils/optionMatchUtils': '../../vendor/optionMatchUtils.js',
-    },
-  },
-  {
     src: 'src/apps/runway/share/manifest.ts',
     dest: 'functions/src/apps/runway/share/manifest.ts',
     importRewrites: {
@@ -130,6 +123,11 @@ const COPIES: Copy[] = [
   {
     src: 'src/utils/proseUtils.ts',
     dest: 'functions/src/vendor/proseUtils.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/utils/formatUtils.ts',
+    dest: 'functions/src/vendor/formatUtils.ts',
     importRewrites: {},
   },
   {
@@ -387,6 +385,56 @@ const COPIES: Copy[] = [
   },
 ];
 
+const RUNWAY_ENGINE_DIR = 'src/apps/runway/engine';
+
+/** A Runway engine file's imports, each pointed at the sibling copy or the vendored helper it becomes on the server. */
+const toEngineRewrites = (text: string): Record<string, string> =>
+  Object.fromEntries(
+    [...text.matchAll(/from '([^']+)'/g)].flatMap(([, spec]) => {
+      if (spec.startsWith('./')) return [[spec, `${spec}.js`]];
+      if (spec.startsWith('@apps/runway/engine/')) {
+        return [[spec, `./${spec.slice('@apps/runway/engine/'.length)}.js`]];
+      }
+      if (spec === '@apps/runway/types') return [[spec, '../runwayTypes.js']];
+      if (spec === '@/utils/optionMatchUtils') {
+        return [[spec, '../../../vendor/optionMatchUtils.js']];
+      }
+      if (spec === '@/utils/formatUtils') {
+        return [[spec, '../../../vendor/formatUtils.js']];
+      }
+      return [];
+    }),
+  );
+
+const RUNWAY_ENGINE_COPIES: Copy[] = readdirSync(
+  resolve(ROOT, RUNWAY_ENGINE_DIR),
+)
+  .filter((name) => name.endsWith('.ts'))
+  .sort()
+  .map((name) => ({
+    src: `${RUNWAY_ENGINE_DIR}/${name}`,
+    dest: `functions/src/apps/runway/engine/${name}`,
+    importRewrites: toEngineRewrites(
+      readFileSync(resolve(ROOT, RUNWAY_ENGINE_DIR, name), 'utf8'),
+    ),
+  }));
+
+const RUNWAY_SHARED_COPIES: Copy[] = [
+  {
+    src: 'src/lib/security/types.ts',
+    dest: 'functions/src/vendor/securityTypes.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/runway/types.ts',
+    dest: 'functions/src/apps/runway/runwayTypes.ts',
+    importRewrites: {
+      '@lib/security': '../../vendor/securityTypes.js',
+      '@apps/runway/engine/engineConstants': './engine/engineConstants.js',
+    },
+  },
+];
+
 interface Generated {
   src: string;
   dest: string;
@@ -417,8 +465,14 @@ const rewriteImports = (text: string, rewrites: Record<string, string>) =>
     text,
   );
 
+const ALL_COPIES = [
+  ...COPIES,
+  ...RUNWAY_SHARED_COPIES,
+  ...RUNWAY_ENGINE_COPIES,
+];
+
 const expected = [
-  ...COPIES.map((copy) => ({
+  ...ALL_COPIES.map((copy) => ({
     dest: copy.dest,
     text:
       header(copy.src) +
@@ -432,6 +486,14 @@ const expected = [
     text: `${header(entry.src)}\n// prettier-ignore\n${entry.build()}`,
   })),
 ];
+
+const leftover = expected.filter(({ text }) =>
+  /from '(@\/|@apps\/)/.test(text),
+);
+leftover.forEach(({ dest }) =>
+  console.error(`${dest} still imports from @/ or @apps/; add its rewrite.`),
+);
+if (leftover.length > 0) process.exit(1);
 
 const isWrite = process.argv.includes('--write');
 

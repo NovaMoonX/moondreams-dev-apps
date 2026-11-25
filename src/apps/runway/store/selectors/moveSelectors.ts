@@ -15,7 +15,11 @@ import {
   resolveVersion,
 } from '@apps/runway/engine/resolve';
 import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
+import { selectBankOwedByCard } from '@apps/runway/store/selectors/cardBankSelectors';
+import {
+  getBankDueByCard,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
@@ -30,6 +34,19 @@ import { isTrackingLevel } from '@apps/runway/engine/level';
 const selectVersions = (state: RootState) => state.runway.versions;
 const selectMoves = (state: RootState) => state.runway.moves;
 const selectStartDate = (state: RootState) => state.runway.plan?.startDate ?? 0;
+const selectBankDueInputs = createSelector(
+  [
+    selectBankOwedByCard,
+    (state: RootState) => state.runway.cardStatements,
+    (state: RootState) => state.runway.links,
+    (state: RootState) => state.runway.startedPayments,
+  ],
+  (owed, cardStatements, links, started) => ({
+    owed,
+    runway: { cardStatements, links },
+    started,
+  }),
+);
 const selectDayKey = (_state: RootState, _today: number, dayKey: string) =>
   dayKey;
 
@@ -60,6 +77,7 @@ export const selectAccountMoves = createSelector(
     selectVersions,
     selectMoves,
     selectStartDate,
+    selectBankDueInputs,
     selectDayKey,
     (_state: RootState, today: number) => today,
   ],
@@ -73,6 +91,7 @@ export const selectAccountMoves = createSelector(
     versions,
     moves,
     startDate,
+    bankDueInputs,
     dayKey,
     today,
   ): AccountMove[] => {
@@ -108,14 +127,24 @@ export const selectAccountMoves = createSelector(
             : [];
         }),
     );
+    const windowDays = Math.ceil((end - start) / DAY_MS);
+    const listedCards = getListedCards(allCards, balances.reserveByCard);
     const cards: MoveCardInput[] = isTrack
       ? getDueCards(
-          getListedCards(allCards, balances.reserveByCard),
+          listedCards,
           balances.reserveByCard,
           moves,
           start,
-          Math.ceil((end - start) / DAY_MS),
+          windowDays,
           startDate,
+          getBankDueByCard({
+            ...bankDueInputs,
+            cards: listedCards,
+            startDate,
+            today: start,
+            days: windowDays,
+            waitedOn: today,
+          }),
         ).map((due) => ({
           id: due.card.id,
           name: getCardName(due.card, allCards),

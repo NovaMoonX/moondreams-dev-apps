@@ -4,7 +4,10 @@ import type {
   Cents,
   DateOnly,
   OpenPurchase,
+  PlanItemDoc,
+  PurchaseAssignedBy,
   PurchaseLine,
+  PurchaseSealed,
   TrackingPeriod,
 } from '@apps/runway/types';
 
@@ -22,6 +25,46 @@ export function splitEvenly(total: Cents, ids: readonly string[]): Cents[] {
 
 export const sumLines = (lines: readonly PurchaseLine[]): Cents =>
   lines.reduce((sum, line) => sum + line.cents, 0);
+
+/** The sealed fields of a waiting purchase sent to its envelopes: everything it had, now unpaired, with its lines and who placed it. */
+export const toAssignedSealed = (
+  previous: OpenPurchase,
+  lines: PurchaseLine[],
+  ruleId: string | null,
+  assignedBy: PurchaseAssignedBy | null,
+): Required<PurchaseSealed> => ({
+  amountCents: previous.amountCents,
+  merchant: previous.merchant,
+  merchantLogo: previous.merchantLogo ?? null,
+  bankName: previous.bankName ?? null,
+  category: previous.category,
+  ruleId,
+  label: previous.label,
+  note: previous.note,
+  lines,
+  refundOfId: previous.refundOfId,
+  paidByCardId: previous.paidByCardId ?? null,
+  link: previous.link,
+  receiptText: previous.receiptText,
+  costRef: previous.costRef ?? null,
+  billRef: previous.billRef ?? null,
+  notSameAs: previous.notSameAs,
+  incomeDayId: null,
+  assignedBy,
+  pairedWithId: null,
+  pairKind: null,
+  cardPaymentMoveId: null,
+  tickedDayKey: null,
+  storeEmail: previous.storeEmail ?? null,
+  orderLog: previous.orderLog ?? null,
+});
+
+/** Whether an envelope or horizon can still take a purchase's lines: it exists and is neither archived nor finished. */
+export const isEnvelopeLive = (item: PlanItemDoc | undefined): boolean =>
+  item !== undefined &&
+  (item.kind === 'envelope' || item.kind === 'horizon') &&
+  item.archivedAt === null &&
+  !(item.kind === 'horizon' && item.endedAt !== null);
 
 /** A purchase's lines as the person chose them; a share of nothing is left out. */
 export function toChosenLines(

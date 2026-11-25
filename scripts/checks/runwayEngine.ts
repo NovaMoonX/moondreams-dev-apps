@@ -76,6 +76,7 @@ import {
   findPlacementRun,
   findRulePlacements,
   isBroadMerchant,
+  planRulePlacements,
   RULE_VARIES,
 } from '../../src/apps/runway/engine/rules.ts';
 import type {
@@ -348,6 +349,7 @@ import {
 } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { describeCostGivesBack } from '../../src/apps/runway/utils/changeText.ts';
 import {
+  getNextFill,
   getStanceCushion,
   lookahead,
   type LookaheadCarry,
@@ -16616,6 +16618,42 @@ const version = (
   );
 }
 
+{
+  // An envelope's next fill is the first walked day that gives it anything, its parts added together.
+  const steps: Lookahead['steps'] = [
+    {
+      dayKey: 'pay:1',
+      on: utc(2027, 0, 1),
+      moneyCents: 100_000,
+      freeCents: 0,
+      lines: [
+        { itemId: 'food', cents: 0 },
+        { itemId: 'rent', cents: 50_000 },
+      ],
+    },
+    {
+      dayKey: 'pay:2',
+      on: utc(2027, 0, 15),
+      moneyCents: 100_000,
+      freeCents: 0,
+      lines: [
+        { itemId: 'food', cents: 15_000 },
+        { itemId: 'food', cents: 5_000 },
+      ],
+    },
+  ];
+  assert.deepEqual(
+    getNextFill(steps, 'food'),
+    { dayKey: 'pay:2', on: utc(2027, 0, 15), cents: 20_000 },
+    'a day that gives an envelope nothing is skipped, and its must and want parts count as one fill',
+  );
+  assert.equal(
+    getNextFill(steps, 'gym'),
+    null,
+    'an envelope no walked day gives money to has no next fill',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -20768,6 +20806,112 @@ const checkRulePlacements = () => {
     ),
     [],
     'a rule that asks places nothing',
+  );
+
+  const planDay = Date.UTC(2026, 10, 9);
+  const planInput = (
+    charges: OpenPurchase[],
+    over: Partial<Parameters<typeof planRulePlacements>[0]> = {},
+  ): Parameters<typeof planRulePlacements>[0] => ({
+    level: 'link',
+    today: planDay,
+    needsHome: charges,
+    purchases: [],
+    rules: [merchantRule],
+    autoBills: [],
+    accounts: [],
+    spill: {
+      trackingPeriods: [
+        { from: planDay - 90 * LINK_DAY_MS, to: null, linkedFrom: null },
+      ],
+      envelopes: [
+        {
+          item: { id: 'e-merchant' },
+          version: { payload: { spillTo: [] } },
+        },
+      ] as unknown as Parameters<
+        typeof planRulePlacements
+      >[0]['spill']['envelopes'],
+      assignedByItem: () => ({ 'e-merchant': 10_000 }),
+    },
+    twinHeld: new Set<string>(),
+    isLinkHistory: () => false,
+    ...over,
+  });
+  const planned = (
+    charges: OpenPurchase[],
+    postedOnly: boolean,
+    over: Partial<Parameters<typeof planRulePlacements>[0]> = {},
+  ) =>
+    planRulePlacements(planInput(charges, over), { postedOnly }).map(
+      ({ purchase }) => purchase.id,
+    );
+  const posted = waitingCharge('posted', { status: 'posted' as const });
+  const pending = waitingCharge('pending', { status: 'pending' as const });
+  assert.deepEqual(
+    planned([posted, pending], false),
+    ['posted', 'pending'],
+    'the phone places a pending charge too',
+  );
+  assert.deepEqual(
+    planned([posted, pending], true),
+    ['posted'],
+    'a posted-only pass leaves a pending charge until it posts',
+  );
+  assert.deepEqual(
+    planned([posted, waitingCharge('mine', { assignedBy: 'person' })], false),
+    ['posted'],
+    'a charge the person placed is untouched',
+  );
+  const bill = {
+    id: 'safeway-bill',
+    name: 'Safeway',
+    since: planDay - 60 * LINK_DAY_MS,
+    cardId: 'c1',
+    accountId: null,
+    merchantKeys: [],
+    payments: [
+      {
+        dueOn: planDay - LINK_DAY_MS,
+        lowCents: 2_500,
+        highCents: 2_500,
+        paid: null,
+      },
+    ],
+    undoneDueOn: [],
+  };
+  const onCard = (id: string, date: number) =>
+    waitingCharge(id, { paidByCardId: 'c1', date });
+  assert.deepEqual(
+    planned([onCard('bill-held', planDay - LINK_DAY_MS)], false, {
+      autoBills: [bill],
+    }),
+    [],
+    'a charge a bill that pays itself is waiting for is left to the bill',
+  );
+  assert.deepEqual(
+    planned([onCard('bill-held', planDay - LINK_DAY_MS)], false),
+    ['bill-held'],
+    'the same charge is placed once no bill is waiting for it',
+  );
+  assert.deepEqual(
+    planned([posted, waitingCharge('twin', {})], false, {
+      twinHeld: new Set(['twin']),
+    }),
+    ['posted'],
+    'a charge a waiting emailed purchase is or may be is left to the pair',
+  );
+  assert.deepEqual(
+    planned([posted, waitingCharge('old', {})], false, {
+      isLinkHistory: (purchase) => purchase.id === 'old',
+    }),
+    ['posted'],
+    'bank history is never placed',
+  );
+  assert.deepEqual(
+    planRulePlacements(planInput([posted]), { postedOnly: false })[0].lines,
+    [{ envelopeId: 'e-merchant', cents: 2_500, via: 'chosen' }],
+    'a charge the envelope covers is one chosen line',
   );
 
   const own = (

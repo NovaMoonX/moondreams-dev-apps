@@ -1,4 +1,4 @@
-import { PRIORITIES } from '@apps/runway/constants';
+import { PRIORITIES } from './engineConstants';
 import { resolveSpill } from '@apps/runway/engine/spill';
 import type { Cents, Priority } from '@apps/runway/types';
 

@@ -14,6 +14,7 @@ import { createSealedReader } from '@lib/security';
 import { openJson } from '@apps/runway/security';
 import { openMove } from '@apps/runway/store/listeners/openLedger';
 import type { MoveDoc, OpenMove, RunwayEncryption } from '@apps/runway/types';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -53,6 +54,7 @@ export function startMovesListener(
     return onSnapshot(
       source,
       async (snapshot) => {
+        noteLocalWrite(uid, snapshot);
         mine.latest += 1;
         const current = mine.latest;
         try {

@@ -9,7 +9,7 @@ import type {
   OpenStartedPayment,
 } from '@apps/runway/types';
 
-import { DAY_MS, daysInUtcMonth, todayAsUtcDate } from './dates';
+import { DAY_MS, daysInUtcMonth, dayInZone } from './dates';
 
 /** The day a card is due in one month: its due day, or the month's last day when the month is shorter. */
 const dueInMonth = (dueDay: number, year: number, month: number): DateOnly =>
@@ -192,6 +192,7 @@ export function getDueCards(
   days: number,
   startDate: DateOnly,
   bankDue: Readonly<Record<string, DueCard | null>> = {},
+  zone: string | null = null,
 ): DueCard[] {
   const result = cards
     .flatMap((card) => {
@@ -211,7 +212,7 @@ export function getDueCards(
         payments,
         today,
         days,
-        Math.max(startDate, todayAsUtcDate(card.createdAt)),
+        Math.max(startDate, dayInZone(card.createdAt, zone)),
       );
       return state === null ? [] : [state];
     })
@@ -517,6 +518,8 @@ export function getBankDueState(input: {
   today: DateOnly;
   days: number;
   since: DateOnly;
+  /** The day a started payment is judged still waited for on, when the window starts on another day than today. */
+  waitedOn?: DateOnly;
 }): DueCard | null {
   const { statement } = input;
   if (statement === null || input.owedCents <= 0) return null;
@@ -527,7 +530,7 @@ export function getBankDueState(input: {
   const isStartedCovering = input.started.some(
     (payment) =>
       payment.cardId === input.card.id &&
-      isStillWaitedFor(payment, input.today) &&
+      isStillWaitedFor(payment, input.waitedOn ?? input.today) &&
       payment.amountCents >= minimumCents &&
       (statementOn === null || payment.startedOn >= statementOn),
   );

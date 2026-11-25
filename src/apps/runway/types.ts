@@ -1,11 +1,5 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
-import type { ChargeMatchResult } from '@apps/runway/store/actions/autoPayActions';
-import type {
-  MergedPurchase,
-  MergedSplit,
-} from '@apps/runway/store/actions/purchaseActions';
-
 import type {
   ACCOUNT_KINDS,
   CALENDAR_PERIODS,
@@ -26,7 +20,7 @@ import type {
   PRIORITIES,
   SCHEDULE_KINDS,
   STANCES,
-} from '@apps/runway/constants';
+} from '@apps/runway/engine/engineConstants';
 
 export type RunwayTab = 'home' | 'days' | 'spend' | 'plan';
 
@@ -59,6 +53,23 @@ export interface PlanSealedFields {
   horizonNudgeDismissed: Record<string, number> | null;
   /** Envelope ids pinned to Home's first tiles, in the person's order. Null until one is pinned; a plan sealed before it existed lacks the key. */
   homePins: string[] | null;
+  /** IANA zone of the person's device, which the server reads a day's start in; the phone writes it when it differs. Null until then; a plan sealed before it existed lacks the key. */
+  timeZone: string | null;
+}
+
+/** `figures/current`: the figures the server last worked out for the plan, so the app can draw Home before its own sums finish. Written only by Functions. */
+export interface FiguresSnapshotDoc {
+  id: 'current';
+  /** The engine version that worked it out; a snapshot from another version is never shown. */
+  engineVersion: number;
+  /** The plan day (UTC midnight, in the plan's zone) the figures are for. */
+  asOf: DateOnly;
+  /** Server epoch ms the figures were worked out. */
+  computedAt: number;
+  /** The plan's `updatedAt` the figures were worked out from. */
+  planStamp: number;
+  /** `FiguresSnapshotSealed`. */
+  sealed: Sealed;
 }
 
 export interface HoldsPromptChoice {
@@ -1290,6 +1301,8 @@ export interface EmailIntakeDoc {
   lastReceivedAt: number | null;
   /** When a mail provider's forwarding confirmation last arrived; null until one does. */
   confirmAt: number | null;
+  /** When an email a provider forwarded on its own (not by hand) last arrived; null until one does (missing on an older document, read as null). */
+  forwardedAt: number | null;
   /** Whether Functions followed the confirmation link themselves: 'confirmed', 'failed' or 'skipped' (a provider they don't follow); null until a confirmation arrives (and on an older document, which the person confirms by hand). */
   autoConfirm: 'confirmed' | 'failed' | 'skipped' | null;
   /** Whose confirmation arrived; null until one does, or when the provider is not one of these. */
@@ -1371,6 +1384,8 @@ export interface EmailEventDoc {
   senderKind: EmailSenderKind | null;
   /** The purchase it became; null for any other outcome. */
   purchaseId: string | null;
+  /** When the server saved what it read, epoch ms; with `receivedAt` it gives how long the email took to read. Null on an older event. */
+  savedAt: number | null;
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
   expiresAt: number;
   sealed: Sealed;
@@ -1565,6 +1580,52 @@ export interface DoneForYouSealed {
   subject: DoneForYouSubject | null;
 }
 
+/** What an alert watches: Free to Spend, or one envelope's figure. */
+export type AlertTarget =
+  | { kind: 'freeToSpend' }
+  | { kind: 'envelope'; itemId: string };
+
+/** Where an alert goes off: a set amount, or a share (in basis points) of what its envelope gets each time. */
+export type AlertLine =
+  | { kind: 'cents'; cents: Cents }
+  | { kind: 'share'; bps: number };
+
+export interface AlertSealed {
+  target: AlertTarget;
+  line: AlertLine;
+  /** The person chose to have the envelope's name on the lock screen; amounts never are. */
+  isNamed: boolean;
+}
+
+/** One alert the person set, under `alerts`. */
+export interface AlertDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+export interface OpenAlert extends AlertSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Where an alert stands, under `alertStates/{alertId}`: written only by the server, which evaluates alerts after each rework. */
+export interface AlertStateDoc {
+  id: string;
+  /** The alert's `updatedAt` this state was taken against; a changed alert starts over without going off. */
+  alertUpdatedAt: number;
+  /** The envelope version a share line was worked out from, so a changed amount starts over too; null for an amount. */
+  lineFrom: string | null;
+  /** The figure was at or below the line at the last evaluation. */
+  isBelow: boolean;
+  lastFiredAt: number | null;
+  /** It went off in quiet hours and waits for the morning push; cleared once sent or once the figure is back above. */
+  heldSince: number | null;
+  updatedAt: number;
+}
+
 /** Something the app did on its own, under `doneForYou`; only `undoneAt` and removal change it. */
 export interface DoneForYouDoc {
   id: string;
@@ -1579,4 +1640,43 @@ export interface OpenDoneForYou extends DoneForYouSealed {
   kind: DoneForYouKind;
   createdAt: number;
   undoneAt: number | null;
+}
+
+/** A bill payment mark as the ledger holds it. */
+export type WrittenPaidMark = {
+  moveId: string;
+  billId: string;
+  dueOn: DateOnly;
+} & BillPaidSealed;
+
+/** What an Undo of a match needs. */
+export interface ChargeMatchResult {
+  /** The charge as it was before the match. */
+  purchase: OpenPurchase;
+  billId: string;
+  billName: string;
+  dueOn: DateOnly;
+  /** The charge's `updatedAt` after the match, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+  written: WrittenPaidMark | null;
+  replaced: WrittenPaidMark | null;
+  keysBefore: string[] | null;
+  keysAfter: string[] | null;
+}
+
+export interface MergedPurchase {
+  bank: OpenPurchase;
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+export interface MergedSplit {
+  /** The charges as they were, the first holding the email's note, receipt text, order log and photos. */
+  banks: OpenPurchase[];
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** Every merged charge's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
 }

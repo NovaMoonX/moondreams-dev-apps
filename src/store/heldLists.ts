@@ -156,6 +156,7 @@ export function addHeldListsCases<S>(
         const hold = list.holdOf(state);
         if (!hold.held.some((held) => held.token === action.payload)) return;
         hold.held = settleHeldWrites(hold.held, action.payload);
+        relay(state, list);
       });
     })
     .addCase(actions.drop, (draft, action) => {

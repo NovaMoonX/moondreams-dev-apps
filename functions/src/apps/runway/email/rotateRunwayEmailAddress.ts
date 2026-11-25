@@ -49,6 +49,7 @@ export const rotateRunwayEmailAddress = onCall(
         updatedAt: now,
         lastReceivedAt: null,
         confirmAt: null,
+        forwardedAt: null,
         autoConfirm: null,
         confirmProvider: null,
         sealed: null,

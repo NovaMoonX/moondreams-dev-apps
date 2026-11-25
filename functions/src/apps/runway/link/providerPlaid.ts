@@ -58,6 +58,18 @@ interface PlaidFailure {
   request_id?: string;
 }
 
+const asProviderDetail = (
+  value: unknown,
+  secrets: readonly string[],
+): string | null =>
+  typeof value === 'string' && value.trim() !== ''
+    ? secrets
+        .filter((known) => known !== '')
+        .reduce((text, known) => text.split(known).join('[secret]'), value)
+        .replace(/\b(access|link|public|processor)-[A-Za-z0-9-]+/g, '[token]')
+        .slice(0, 300)
+    : null;
+
 const asRequestId = (value: unknown): string | null =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)
     ? value
@@ -117,6 +129,18 @@ function toProviderError(code: string): ProviderError {
       asProviderCode(code),
     );
   }
+  if (
+    code === 'INVALID_FIELD' ||
+    code === 'INVALID_BODY' ||
+    code === 'MISSING_FIELDS' ||
+    code === 'INVALID_CONFIGURATION'
+  ) {
+    return new ProviderError(
+      'rejected',
+      'Your bank\u2019s connection turned this request down, so trying again won\u2019t help yet.',
+      asProviderCode(code),
+    );
+  }
   if (code === 'ITEM_LIMIT_EXCEEDED' || code === 'USER_PERMISSION_REVOKED') {
     return new ProviderError(
       'limit',
@@ -151,13 +175,17 @@ export async function call<T>(
       'unavailable',
       'Could not reach the bank connection. Try again in a few minutes.',
     );
-    unreached.trace = { requestId: null, path };
+    unreached.trace = { requestId: null, path, detail: null };
     throw unreached;
   });
   const json = (await response.json().catch(() => ({}))) as T & PlaidFailure;
   if (!response.ok) {
     const failure = toProviderError(json.error_code ?? '');
-    failure.trace = { requestId: asRequestId(json.request_id), path };
+    failure.trace = {
+      requestId: asRequestId(json.request_id),
+      path,
+      detail: asProviderDetail(json.error_message, [clientId, secret]),
+    };
     throw failure;
   }
   return json;
@@ -294,6 +322,12 @@ const UNSUPPORTED_CODES = new Set([
   'INVALID_PRODUCT',
 ]);
 
+// Plaid answers an update-mode ask for liabilities at a bank without them with INVALID_FIELD ("liabilities not supported by <bank>").
+const isCardConsentRefusal = (error: unknown): error is ProviderError =>
+  error instanceof ProviderError &&
+  (error.code === 'INVALID_FIELD' || error.code === 'INVALID_PRODUCT') &&
+  /liabilities/i.test(error.trace.detail ?? '');
+
 const createLinkToken = (body: Record<string, unknown>) =>
   call<{ link_token: string }>('/link/token/create', body);
 
@@ -307,15 +341,34 @@ export const plaidProvider: BankDataProvider = {
       ...(isEmulator() ? {} : { webhook: webhookUrl() }),
     };
     if (update) {
-      const { link_token } = await createLinkToken({
+      const reopen = {
         ...base,
         access_token: update.accessToken,
         update: { account_selection_enabled: update.accountSelection },
-        ...(update.askCardConsent
-          ? { additional_consented_products: ['liabilities'] }
-          : {}),
-      });
-      return { linkToken: link_token };
+      };
+      if (!update.askCardConsent) {
+        const { link_token } = await createLinkToken(reopen);
+        return { linkToken: link_token, isCardConsentUnsupported: false };
+      }
+      return createLinkToken({
+        ...reopen,
+        additional_consented_products: ['liabilities'],
+      }).then(
+        ({ link_token }) => ({
+          linkToken: link_token,
+          isCardConsentUnsupported: false,
+        }),
+        async (error: unknown) => {
+          if (!isCardConsentRefusal(error)) throw error;
+          logger.warn('runway.link.cardConsentUnsupported', {
+            code: error.code,
+            requestId: error.trace.requestId,
+            detail: error.trace.detail,
+          });
+          const { link_token } = await createLinkToken(reopen);
+          return { linkToken: link_token, isCardConsentUnsupported: true };
+        },
+      );
     }
     const fresh = {
       ...base,
@@ -335,7 +388,7 @@ export const plaidProvider: BankDataProvider = {
       logger.warn('runway.link.cardDetailsUnavailable');
       return createLinkToken(fresh);
     });
-    return { linkToken: link_token };
+    return { linkToken: link_token, isCardConsentUnsupported: false };
   },
 
   async exchange(publicToken) {

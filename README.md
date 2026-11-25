@@ -169,6 +169,10 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 
 Problems we've hit before, so we don't hit them again.
 
+### Debug viewers see "no snapshot after a restart" (listener catch-up) right after a change
+
+Symptom: a fallback notice "Using The last data the screen had instead of Live updates from the server", step `listener catch-up`, about 15 seconds after a tap that saved something, usually twice in the same minute; the change itself had saved. Cause: the screen shows its own write over the live list until the list delivers a copy whose written fields match; when the server rewrites the same record moments later (a server pass, a bank sync) or the opened copy differs in one field, the match never comes, and the 15-second let-go was only checked on the list's next delivery, so after the watchdog's restart (which delivers once, early) nothing let it go and the watchdog reported a stall that wasn't one. Fix: the watchdog now lays the holds again once 15 seconds have passed, so a hold the list has delivered past lets go and shows the server's copy, and Runway's notice lists which kind still waits and whether its list delivered since the write. To tell it apart: `nothing delivered since the write` is a real stalled connection; `delivered since the write` means a copy came that never matched, which this fix now clears without a notice. Not yet confirmed: which kind of record mismatched; Runway's facts name it the next time.
+
 ### Locally, every account in Helm (or Runway) says "Your things can't be opened right now"
 
 Symptom: in a local run, every seeded account shows the locked card, and switching accounts doesn't help. Cause (strongly suspected, not reproduced on the owner's machine): when `functions/.secret.local` has no `HELM_MASTER_KEYS`, the functions emulator fetches the secret from Secret Manager, and once `npm run helm:setup` has created the production keyring, a signed-in machine gets that one, while the seed seals every account's key with the development keyring. Fix: `npm run local:app` and every emulator start now write the development keyring for each app master key the file lacks (`scripts/appKeys/pinDevKeyrings.ts`) and restart running emulators when they had to. To tell it apart: the card's Error details (local builds and debug viewers) show `functions/failed-precondition`, and the functions log says `helm.keys.unwrapFailed`; any other code is a different problem.
@@ -187,6 +191,20 @@ The project's consent screen (Google Cloud console, Google Auth Platform, Audien
 - **Cause:** signing in at a bank that was already linked (through Link a bank rather than the bank's Add more accounts) makes Plaid create a second Item for the same login. Each Item has its own account and transaction ids, so Runway kept two links to one bank, and both were billed by Plaid.
 - **Fix:** a repeat sign-in is now caught before it is exchanged (the accounts Plaid's window reports, by mask and name, against links already finished) and again on the server, and the person is sent to Add accounts on the link they have. A pair made before the fix shows "Combine your two {bank} links" on the bank's sheet, which keeps one link, moves every placed account onto it and removes the other at Plaid; purchases stay as they were.
 - **Telling it apart:** two logins at one bank (a personal and a joint login) share no account mask, are not offered Combine and stay as two rows on purpose. A pair whose links each brought in their own copy of an account shows a note to unlink one instead of Combine.
+
+### Runway's "Agree at {bank}" for a card's minimum fails every time
+
+- **Symptom:** tapping Agree at OnePay on "See your minimum payment" said the bank connection did not work, every time; Error details showed `INVALID_FIELD` from `/link/token/create`, and Plaid's own line read "Update mode: liabilities not supported by OnePay".
+- **Cause:** Plaid's liabilities read for that login answered "needs consent", so the card offered the agreement, but the bank doesn't offer liabilities at all, so Plaid refuses the update-mode ask for it. A reconnect of the same link asked for it too and would have failed the same way.
+- **Fix:** that refusal now marks the link's card details `unsupported` and the grant `isCardConsentUnsupported`, so the card says the bank doesn't share its minimum, a later sync's "needs consent" is read as unsupported, and a reconnect opens without asking for liabilities.
+- **Telling it apart:** any other `INVALID_FIELD`, or one whose "Provider says" line names another field, is a different problem; look the request id up in the Plaid Dashboard (Activity → Logs).
+
+### Runway asks to sign in to a bank again right after "Combine your two links"
+
+- **Symptom:** Combine says it worked, then Home shows "Sign in to Capital One again" for the link that was kept.
+- **Cause (inferred, not confirmed):** both links synced fine in the combine's own catch-up, and the kept one only failed after the other was removed at Plaid. At an OAuth bank (Capital One for the owner) the two Plaid Items for one login appear to share one consent at the bank, so removing one signs the other out too. Plaid's docs describe Chase, PNC and Schwab invalidating the older Item when a new one is made, but say nothing about removal reaching a sibling; the function logs `runway.sync.needsAttention` with the provider code for the kept link right after `runway.link.combined`, which confirms it.
+- **Fix:** nothing is lost. Tap the reconnect row and sign in once; the kept link picks up from where it stopped. Combine now warns that the bank may ask for one more sign-in, reports `needsSignIn` when the kept link was signed out, and opens the bank's window on it straight away.
+- **Telling it apart:** a link that asks to sign in again weeks later is the bank's yearly consent refresh (Capital One asks after a year), not this.
 
 ### A change shows, but the rest of the screen stays old until a reload
 

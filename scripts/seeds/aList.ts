@@ -818,6 +818,7 @@ async function writeSeedEmail(
         autoConfirm: 'confirmed',
         confirmProvider: 'gmail',
         lastReceivedAt: at(2),
+        forwardedAt: at(2),
         createdAt: at(24 * 13),
         updatedAt: at(2),
       }),

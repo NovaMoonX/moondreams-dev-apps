@@ -16,7 +16,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { getCoveredCents } from '@apps/runway/engine/billCover';
 import { selectBillCover } from '@apps/runway/store/selectors/billCoverSelectors';
-import type { Cents } from '@apps/runway/types';
+import type { Cents, WrittenPaidMark } from '@apps/runway/types';
 import { countMarks } from '@apps/runway/engine/progress';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
 import { unmatchPurchaseFromBill } from '@apps/runway/hooks/useAutoPay';
@@ -26,7 +26,6 @@ import { readPurchaseNow } from '@apps/runway/store/actions/purchaseActions';
 import {
   markBillPaid,
   undoBillPaid,
-  type WrittenPaidMark,
 } from '@apps/runway/store/actions/moveActions';
 import {
   selectIsMovesLoaded,

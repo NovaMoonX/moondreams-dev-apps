@@ -88,10 +88,15 @@ export const asProviderCode = (value: unknown): string | null =>
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
   readonly code: string | null;
-  /** The provider's request id and the path that failed; never a token or account. */
-  trace: { requestId: string | null; path: string | null } = {
+  /** The provider's request id, the path that failed and its own sentence, masked of tokens and keys. */
+  trace: {
+    requestId: string | null;
+    path: string | null;
+    detail: string | null;
+  } = {
     requestId: null,
     path: null,
+    detail: null,
   };
   constructor(
     kind: ProviderErrorKind,
@@ -121,7 +126,7 @@ export interface TransactionDetails {
 }
 
 export interface BankDataProvider {
-  /** With `update`, a token that reopens an existing connection (and lets the person pick accounts again) instead of making a new one. */
+  /** With `update`, a token that reopens an existing connection (and lets the person pick accounts again) instead of making a new one. When the bank cannot share card details, `askCardConsent` is dropped and `isCardConsentUnsupported` is true. */
   createLinkSession(
     uid: string,
     update?: {
@@ -129,7 +134,7 @@ export interface BankDataProvider {
       accountSelection: boolean;
       askCardConsent: boolean;
     },
-  ): Promise<{ linkToken: string }>;
+  ): Promise<{ linkToken: string; isCardConsentUnsupported: boolean }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
   /** The institution's id, name, logo (a PNG data URL) and website host, or null when the provider cannot say. */
   getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;

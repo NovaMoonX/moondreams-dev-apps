@@ -1,8 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { isCountedAt } from '@apps/runway/engine/priorities';
 import { getCostPriority, getLiveCosts } from '@apps/runway/engine/horizon';
-import { PRIORITIES } from '@apps/runway/constants';
 import { fundingAtLevel, getExtras } from '@apps/runway/engine/parts';
 import type { GoalSealed, HorizonSealed, Priority } from '@apps/runway/types';
 
@@ -17,8 +17,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-export const isCountedAt = (priority: Priority, dial: Priority) =>
-  PRIORITIES.indexOf(priority) <= PRIORITIES.indexOf(dial);
+export { isCountedAt };
 
 /** The dial a goal's finish date is counted at: only a counted goal with an extra the dial leaves out moves. */
 export const getGoalPaceDial = (

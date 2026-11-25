@@ -1,5 +1,5 @@
 // Generated from src/apps/runway/engine/storeNames.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
-import { toComparable } from '../../vendor/optionMatchUtils.js';
+import { toComparable } from '../../../vendor/optionMatchUtils.js';
 
 export const getMerchantWords = (name: string | null) =>
   toComparable(name?.trim() || '')

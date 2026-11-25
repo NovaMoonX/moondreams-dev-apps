@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { parseAsStringLiteral, useQueryState } from 'nuqs';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -48,6 +49,43 @@ import {
 import type { AListOverlay, AListTab } from '@apps/a-list/types';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
 
+// Page-sized screens live in the URL so a reload lands on them; drawers and the add flow stay in memory.
+const A_LIST_URL_VIEWS = [
+  'settings',
+  'email',
+  'settings-email',
+  'projection',
+  'share',
+  'theaters',
+  'paid-tickets',
+  'unpriced-tickets',
+] as const;
+type AListUrlView = (typeof A_LIST_URL_VIEWS)[number];
+
+const toUrlOverlay = (view: AListUrlView): AListOverlay => {
+  if (view === 'settings') return { kind: 'membership' };
+  if (view === 'email') return { kind: 'emailTickets' };
+  if (view === 'settings-email')
+    return { kind: 'emailTickets', returnTo: 'membership' };
+  if (view === 'paid-tickets') return { kind: 'tickets', view: 'paid' };
+  if (view === 'unpriced-tickets') return { kind: 'tickets', view: 'unpriced' };
+  return { kind: view };
+};
+
+const toUrlView = (overlay: AListOverlay): AListUrlView | null => {
+  if (overlay.kind === 'membership') return 'settings';
+  if (overlay.kind === 'emailTickets')
+    return overlay.returnTo === 'membership' ? 'settings-email' : 'email';
+  if (overlay.kind === 'tickets') return `${overlay.view}-tickets`;
+  if (
+    overlay.kind === 'projection' ||
+    overlay.kind === 'share' ||
+    overlay.kind === 'theaters'
+  )
+    return overlay.kind;
+  return null;
+};
+
 function getYesterdayKey() {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
@@ -58,7 +96,11 @@ function AList() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [openedOverlay, setOverlay] = useState<AListOverlay | null>(null);
+  const [heldOverlay, setHeldOverlay] = useState<AListOverlay | null>(null);
+  const [urlView, setUrlView] = useQueryState(
+    'view',
+    parseAsStringLiteral(A_LIST_URL_VIEWS),
+  );
   const linkedViewingId = searchParams.get('viewing');
   const isLinkedViewingKnown = useAppSelector(
     (state) =>
@@ -152,6 +194,14 @@ function AList() {
     );
   }
 
+  const openedOverlay = urlView === null ? heldOverlay : toUrlOverlay(urlView);
+
+  const setOverlay = (next: AListOverlay | null) => {
+    const view = next === null ? null : toUrlView(next);
+    setHeldOverlay(view === null ? next : null);
+    void setUrlView(view, { history: 'replace' });
+  };
+
   // A link to a showing deleted since it was shared opens nothing rather than an empty sheet.
   const overlay: AListOverlay | null =
     (openedOverlay?.kind === 'emailTickets' && !isEmailGateOpen
@@ -166,6 +216,7 @@ function AList() {
     if (!searchParams.has('viewing')) return;
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('viewing');
+    nextSearchParams.delete('view');
     setSearchParams(nextSearchParams, { replace: true });
   };
 

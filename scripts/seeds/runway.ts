@@ -88,6 +88,9 @@ import type {
   CardSealed,
   ExpenseDoc,
   RuleDoc,
+  AlertDoc,
+  AlertSealed,
+  AlertStateDoc,
   DoneForYouDoc,
   DoneForYouKind,
   DoneForYouSealed,
@@ -2048,6 +2051,19 @@ async function writeSeedStart(
       {
         summary: 'Moved $42.00 from Groceries to Vacation fund.',
         note: null,
+        move: {
+          moveId: transferId,
+          bill: null,
+          cost: null,
+          date: movedOn,
+          fromId: transfer.fromId,
+          toId: transfer.toId,
+          cents: transfer.cents,
+          note: null,
+          isOutside: false,
+          undoText: 'Put $42.00 back in Groceries from Vacation fund',
+          isUndo: false,
+        },
       } satisfies ChangeSealed,
       encryption,
     ),
@@ -4155,6 +4171,7 @@ const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
 /**
  * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, a card refund, two account moves and an unclear pair. One purchase a rule already placed.
+ * Two Safeway charges wait for the rule: the posted one is placed by the server's next rework or the phone's own pass, whichever runs first; the pending one waits for the bank only on the server, since the phone places it when the app is open. A third the person already placed by hand stays where they put it.
  * The Sweetgreen lunch fits the restaurants rule and waits only because its merge offer (the typed one lacks the tip) is unanswered.
  */
 async function writeSeedPurchases(
@@ -4392,6 +4409,26 @@ async function writeSeedPurchases(
       status: 'posted',
       accountId: 'seed-account-checking-a',
       cardId: null,
+    },
+    {
+      id: 'seed-link-purchase-safeway-posted',
+      daysAgo: 1,
+      merchant: 'Safeway',
+      amountCents: 3_875,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+      category: 'FOOD_AND_DRINK_GROCERIES',
+    },
+    {
+      id: 'seed-link-purchase-safeway-pending',
+      daysAgo: 0,
+      merchant: 'Safeway',
+      amountCents: 1_260,
+      status: 'pending',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+      category: 'FOOD_AND_DRINK_GROCERIES',
     },
     {
       id: 'seed-link-purchase-lunch',
@@ -4648,6 +4685,7 @@ async function writeSeedPurchases(
   );
   const ruled = await seedRules(context, plan, encryption, today);
   const done = await seedDoneForYou(context, plan, encryption, today);
+  const alerted = await seedAlerts(context, plan, encryption, today);
   const emailDocuments = await writeSeedEmail(
     context,
     plan,
@@ -4715,6 +4753,7 @@ async function writeSeedPurchases(
     1 +
     ruled +
     done +
+    alerted +
     emailDocuments
   );
 }
@@ -4739,6 +4778,7 @@ async function writeSeedEmail(
     updatedAt: context.now - DAY_MS,
     lastReceivedAt: context.now - 2 * hour,
     confirmAt: context.now - DAY_MS,
+    forwardedAt: null,
     autoConfirm: 'failed',
     confirmProvider: 'gmail',
     sealed: await sealJson(
@@ -5157,6 +5197,7 @@ async function writeSeedEmail(
       batch.set(context.firestore.doc(`${plan}/emailEvents/${entry.id}`), {
         id: entry.id,
         receivedAt: entry.receivedAt,
+        savedAt: entry.receivedAt + 6_000,
         outcome: entry.outcome,
         senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
@@ -5386,6 +5427,80 @@ async function seedDoneForYou(
 }
 
 /**
+ * Jamie's alerts, sealed like the app seals them: Free to Spend below $300, and Groceries (which gets a set amount) at half left and when it runs out. The half-left alert last went off two days ago. Alerts from an earlier run go first.
+ */
+async function seedAlerts(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+): Promise<number> {
+  const [kept, keptStates] = await Promise.all([
+    context.firestore.collection(`${plan}/alerts`).get(),
+    context.firestore.collection(`${plan}/alertStates`).get(),
+  ]);
+  await Promise.all(
+    [...kept.docs, ...keptStates.docs].map((entry) => entry.ref.delete()),
+  );
+  const createdAt = today - 10 * DAY_MS;
+  const groceries = {
+    kind: 'envelope' as const,
+    itemId: 'seed-envelope-groceries',
+  };
+  const alerts: { id: string; payload: AlertSealed }[] = [
+    {
+      id: 'seed-alert-free',
+      payload: {
+        target: { kind: 'freeToSpend' },
+        line: { kind: 'cents', cents: 30_000 },
+        isNamed: false,
+      },
+    },
+    {
+      id: 'seed-alert-groceries-half',
+      payload: {
+        target: groceries,
+        line: { kind: 'share', bps: 5_000 },
+        isNamed: true,
+      },
+    },
+    {
+      id: 'seed-alert-groceries-out',
+      payload: {
+        target: groceries,
+        line: { kind: 'cents', cents: 0 },
+        isNamed: false,
+      },
+    },
+  ];
+  const batch = context.firestore.batch();
+  await Promise.all(
+    alerts.map(async ({ id, payload }, index) => {
+      batch.set(context.firestore.doc(`${plan}/alerts/${id}`), {
+        id,
+        createdAt: createdAt + index,
+        updatedAt: createdAt + index,
+        sealed: await sealJson(payload, encryption),
+      } satisfies AlertDoc);
+    }),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/alertStates/seed-alert-groceries-half`),
+    {
+      id: 'seed-alert-groceries-half',
+      alertUpdatedAt: createdAt + 1,
+      lineFrom: null,
+      isBelow: false,
+      lastFiredAt: context.now - 2 * DAY_MS,
+      heldSince: null,
+      updatedAt: context.now - 2 * DAY_MS,
+    } satisfies AlertStateDoc,
+  );
+  await batch.commit();
+  return alerts.length + 1;
+}
+
+/**
  * Jamie's rules, sealed like the app seals them: Safeway, restaurants on the Venture X, everything on the Discover, and Amazon asks every time. Rules from an earlier run go first.
  * Only the Amazon charge is left to ask about; the Sweetgreen lunch waits on its merge offer, not on a rule.
  */
@@ -5553,6 +5668,50 @@ async function seedRules(
       } satisfies PurchaseDoc);
     }),
   );
+  const handId = 'seed-link-purchase-safeway-hand';
+  const handDate = today - 2 * DAY_MS;
+  const handAt = handDate + 12 * 3_600_000;
+  batch.set(context.firestore.doc(`${plan}/purchases/${handId}`), {
+    id: handId,
+    date: handDate,
+    source: 'link',
+    status: 'posted',
+    needsHome: false,
+    accountId: null,
+    expenseId: null,
+    dedupeKey: `${handId}-dedupe`,
+    createdAt: handAt,
+    updatedAt: handAt,
+    sealed: await sealJson(
+      {
+        amountCents: 2_260,
+        merchant: 'Safeway',
+        category: 'FOOD_AND_DRINK_GROCERIES',
+        ruleId: null,
+        label: null,
+        note: null,
+        lines: [
+          { envelopeId: 'seed-envelope-everyday', cents: 2_260, via: 'chosen' },
+        ],
+        refundOfId: null,
+        paidByCardId: SEED_VENTURE_CARD,
+        link: null,
+        receiptText: null,
+        costRef: null,
+        notSameAs: null,
+        incomeDayId: null,
+        assignedBy: 'person',
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    emailEventId: null,
+    emailWaiting: null,
+    wasPending: false,
+  } satisfies PurchaseDoc);
   const twice: {
     id: string;
     source: 'link' | 'manual';
@@ -5631,7 +5790,7 @@ async function seedRules(
     }),
   );
   await batch.commit();
-  return rules.length + 4 + twice.length;
+  return rules.length + 5 + twice.length;
 }
 
 /**

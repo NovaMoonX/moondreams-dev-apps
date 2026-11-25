@@ -11,6 +11,7 @@ import {
   Mail,
   Receipt,
   PackageX,
+  Plus,
   Store,
   Trash2,
   type LucideIcon,
@@ -21,9 +22,9 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionRow from '@/components/ActionRow';
-import CopyTextButton from '@/components/CopyTextButton';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
+import EmailForwardingProgress from '@/components/emailForwarding/EmailForwardingProgress';
 import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import FallbackImage from '@/components/FallbackImage';
 import FormSheet from '@/components/FormSheet';
@@ -31,10 +32,7 @@ import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useNow } from '@/hooks/useNow';
-import {
-  hasConfirmNotice,
-  shortenForwardingAddress,
-} from '@/lib/emailForwarding/address';
+import { hasConfirmNotice } from '@/lib/emailForwarding/address';
 import {
   isConfirmNoticeDue,
   readConfirmTapped,
@@ -295,7 +293,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
   const shownConfirm =
     pendingConfirm !== null &&
     (pendingConfirm.autoConfirm !== 'confirmed' || isEventsLoaded) &&
-    isConfirmNoticeDue(pendingConfirm, events, now)
+    isConfirmNoticeDue(pendingConfirm, events, now, intake.forwardedAt)
       ? pendingConfirm
       : null;
   const isConfirmDrawn =
@@ -374,29 +372,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
       isTitleWrapped
       onClose={onClose}
       onBack={isOverStatus ? backToStatus : undefined}
-      headerAction={
-        <div className='flex items-center gap-3'>
-          {intake.address !== null && !isSetupShown && (
-            <>
-              <CopyTextButton
-                text={intake.address}
-                label={EMAIL_WORDS.copyAddress}
-                variant='tertiary'
-                isCompact
-                className='max-sm:hidden'
-              />
-              <CopyTextButton
-                text={intake.address}
-                label={EMAIL_WORDS.copyAddress}
-                variant='tertiary'
-                isIconOnly
-                className='max-[359px]:hidden sm:hidden'
-              />
-            </>
-          )}
-          <ValuesEyeButton />
-        </div>
-      }
+      headerAction={<ValuesEyeButton />}
     >
       {isSetupShown ? (
         <EmailSetupView
@@ -407,6 +383,22 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           isFailed={intake.isFailed}
           isBusy={isBusy}
           error={error}
+          progress={
+            <EmailForwardingProgress
+              appName='Runway'
+              confirm={shownConfirm}
+              isTapped={
+                shownConfirm !== null &&
+                (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at)
+              }
+              onConfirmTapped={() => {
+                if (shownConfirm === null) return;
+                writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
+                setConfirmTappedAt(shownConfirm.at);
+              }}
+              lastReceivedAt={intake.lastReceivedAt}
+            />
+          }
           onGetAddress={() => void getNewAddress()}
           onRetry={intake.retry}
           onDone={backToStatus}
@@ -434,6 +426,16 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                 formatTimeAgo(intake.lastReceivedAt, now, true),
               )}
             </p>
+          )}
+          {intake.address !== null && (
+            <ActionRow
+              isRoomy
+              icon={<Plus />}
+              label={EMAIL_WORDS.addAnother(events.length > 0)}
+              subtitle={EMAIL_WORDS.addAnotherSub}
+              hasChevron
+              onClick={() => setIsReopened(true)}
+            />
           )}
           <ActionSection
             caption={EMAIL_WORDS.eventsCaption}
@@ -511,16 +513,6 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
                   {error}
                 </p>
               )}
-              <ActionRow
-                icon={<Mail />}
-                label={EMAIL_WORDS.addressRow}
-                subtitle={shortenForwardingAddress(
-                  intake.address,
-                  EMAIL_ADDRESS_PREFIX,
-                )}
-                hasChevron
-                onClick={() => setIsReopened(true)}
-              />
               <ActionRow
                 isDestructive
                 icon={<KeyRound />}
