@@ -902,8 +902,8 @@ const undo = (
   assert.equal(idea.siteName, 'example.com');
   assert.deepEqual(idea.by, ASSISTANT);
   assert.deepEqual(
-    [idea.imageUrl, idea.photoPath, idea.recipeId],
-    [null, null, null],
+    [idea.imageUrl, idea.photoPath, idea.photoPaths, idea.recipeId],
+    [null, null, [], null],
   );
   assert.equal(idea.updatedAt, NOW);
   assert.match(data.reply.summary, /Lentil soup/);

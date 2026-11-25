@@ -220,6 +220,7 @@ const IDEA_FIELDS = {
   siteName: 'shared',
   imageUrl: 'notUseful',
   photoPath: 'notUseful',
+  photoPaths: 'notUseful',
   recipeId: 'filter',
   by: 'notUseful',
   createdAt: 'notUseful',

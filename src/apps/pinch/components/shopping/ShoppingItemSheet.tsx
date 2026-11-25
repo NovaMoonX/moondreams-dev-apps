@@ -30,6 +30,7 @@ import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
   formatShopAmount,
   getRowSourceShares,
+  getShoppingNotesText,
   getShoppingItemId,
   isValidAmount,
   roundAmount,
@@ -78,6 +79,11 @@ function ShoppingItemSheet({
     !isAllShown && shares.length - SHARES_SHOWN >= SHARES_FOLD_MIN_HIDDEN;
   const shownShares = isFolded ? shares.slice(0, SHARES_SHOWN) : shares;
   const [item] = items;
+  const notesText = getShoppingNotesText(
+    item.ingredientId,
+    items.flatMap((rowItem) => rowItem.sources ?? []),
+    context,
+  );
   const [shown] = useState(
     () => sumShopAmounts(items) ?? { amount: item.amount, unit: item.unit },
   );
@@ -197,6 +203,11 @@ function ShoppingItemSheet({
 
   return (
     <FormSheet isOpen onClose={onClose} title={name}>
+      {notesText && (
+        <p className='text-muted-foreground mb-3 text-sm wrap-break-word'>
+          {notesText}
+        </p>
+      )}
       {shares.length > 0 && (
         <div className='mb-4'>
           <p className='text-muted-foreground mb-1.5 text-xs'>For</p>

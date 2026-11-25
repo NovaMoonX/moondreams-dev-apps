@@ -135,6 +135,7 @@ import {
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
+import { getIdeaPhotoPaths } from '@apps/pinch/utils/ideas';
 import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
 import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
@@ -812,6 +813,7 @@ function RecipeForm({
               }}
               onRemoved={showUndo}
               footerAction={
+                initialRead === null &&
                 (props.value as string[]).filter((step) => step.trim()).length >
                   1 &&
                 formData.stepSections.every((section) => section === null) && (
@@ -1210,8 +1212,9 @@ function RecipeForm({
       <UndoSnackbar pending={pending} onUndo={undo} />
       {initialIdea?.kind === 'PHOTO' && (
         <p className='text-muted-foreground mb-4 text-sm'>
-          Its photo stays with the idea. To have an AI read a picture, start a
-          new recipe with “From a file”.
+          {getIdeaPhotoPaths(initialIdea).length > 1
+            ? 'Its photos stay with the idea.'
+            : 'Its photo stays with the idea.'}
         </p>
       )}
       {initialChanges.length > 0 && (

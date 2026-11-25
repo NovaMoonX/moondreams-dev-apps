@@ -6,10 +6,11 @@ import FallbackImage from '@/components/FallbackImage';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatTimeAgo } from '@/utils/formatUtils';
+import { SavedIdeaPhotoTile } from '@apps/pinch/components/ideas/IdeaPhotosField';
 import { useIdeaImageUrl } from '@apps/pinch/hooks/useIdeaImageUrl';
 import { selectRecipesById } from '@apps/pinch/store/selectors';
 import type { Idea } from '@apps/pinch/types';
-import { getIdeaSiteName } from '@apps/pinch/utils/ideas';
+import { getIdeaPhotoPaths, getIdeaSiteName } from '@apps/pinch/utils/ideas';
 import { getChangeWho, getMadeByName } from '@apps/pinch/utils/notes';
 
 interface IdeaDrawerProps {
@@ -33,6 +34,7 @@ function IdeaDrawer({
   const madeRecipe = recipe && recipe.isArchived !== true ? recipe : null;
   const pageUrl = idea.url && /^https?:\/\//i.test(idea.url) ? idea.url : null;
   const siteName = getIdeaSiteName(idea);
+  const photoPaths = getIdeaPhotoPaths(idea);
 
   return (
     <DetailSheet
@@ -64,7 +66,20 @@ function IdeaDrawer({
       }
     >
       <div className='space-y-4'>
-        {imageUrl && (
+        {photoPaths.length > 1 && (
+          <ul className='grid grid-cols-3 gap-2'>
+            {photoPaths.map((path) => (
+              <li key={path}>
+                <SavedIdeaPhotoTile
+                  path={path}
+                  version={idea.updatedAt}
+                  size='fill'
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {photoPaths.length <= 1 && imageUrl && (
           <FallbackImage
             src={imageUrl}
             alt=''
