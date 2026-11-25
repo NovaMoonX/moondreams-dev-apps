@@ -34,6 +34,10 @@ export function htmlToText(html: string): string {
     .replace(/[ \t\r\f\v]+/g, ' ');
 }
 
+/** The text without the `[image: …]` marks a mail app writes where a picture was when it turns a forwarded email into plain text. */
+export const withoutImageMarks = (text: string) =>
+  text.replace(/\[image:[^\]\n]{0,300}\]/gi, ' ');
+
 /** The start of an email's text with whitespace collapsed. */
 export const snippetOf = (text: string, max = 200) =>
   text.replace(/\s+/g, ' ').trim().slice(0, max);
