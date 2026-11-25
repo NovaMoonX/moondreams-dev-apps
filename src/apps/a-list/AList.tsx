@@ -303,7 +303,7 @@ function AList() {
           onClose={closeOverlay}
         />
       )}
-      {isPastOfferOpen && <AppAskingMark scope='a-list' />}
+      {isPastOfferOpen && overlay === null && <AppAskingMark scope='a-list' />}
       {isPastOfferOpen && overlay === null && (
         <PastMoviesOfferModal
           onSkip={() => setIsPastOfferOpen(false)}

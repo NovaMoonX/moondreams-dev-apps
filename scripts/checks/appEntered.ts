@@ -48,13 +48,13 @@ const wrongAsking = APP_REGISTRY.flatMap((app) =>
   appFiles(app.id).flatMap((file) =>
     Array.from(
       readFileSync(file, 'utf8').matchAll(
-        /(?:<AppAskingMark scope=|useMarkAppAsking\(\s*)'([^']+)'/g,
+        /(?:<AppAskingMark\s+scope=\{?\s*|useMarkAppAsking\(\s*)(['"]?)([^'"\s})]+)\1/g,
       ),
     )
-      .filter((match) => match[1] !== app.id)
+      .filter((match) => !match[1] || match[2] !== app.id)
       .map(
         (match) =>
-          `${file}: asking mark for '${match[1]}', expected '${app.id}'`,
+          `${file}: asking mark for ${match[1] ? `'${match[2]}'` : `a non-literal scope (${match[2]})`}, expected '${app.id}'`,
       ),
   ),
 );

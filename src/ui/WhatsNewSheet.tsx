@@ -126,7 +126,7 @@ function NoteRow({
     isCard
       ? join(
           'border-border rounded-2xl border px-3 py-3',
-          look.rows === 'raised' && 'bg-card shadow-sm',
+          look.rows === 'raised' && 'bg-card dark:bg-muted/40 shadow-sm',
         )
       : isCompact
         ? join('py-1.5', note.path && 'min-h-10')
@@ -156,7 +156,7 @@ function NoteRow({
         ) : null}
         <span
           className={join(
-            'text-foreground block text-pretty',
+            'text-foreground block text-pretty wrap-break-word',
             isCompact ? 'text-sm' : 'text-base',
           )}
         >
@@ -502,7 +502,10 @@ function WhatsNewSheet({
     <Button
       type='button'
       variant='tertiary'
-      className='text-foreground! hover:bg-muted mb-2 h-auto min-h-11 w-full justify-between! rounded-xl! px-3! text-left text-base font-normal'
+      className={join(
+        'text-foreground! hover:bg-muted mb-2 h-auto min-h-11 w-full justify-between! rounded-xl! text-left text-base font-normal',
+        look.rows === 'list' ? 'px-0! hover:bg-transparent' : 'px-3!',
+      )}
       onClick={() => setView('all')}
     >
       <span className='block min-w-0'>

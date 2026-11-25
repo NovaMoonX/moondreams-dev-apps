@@ -49,7 +49,7 @@ const LOOKS: Partial<Record<WhatsNewScope, WhatsNewLook>> = {
     markFill: 'accent',
     isMarkEdged: false,
     rows: 'cards',
-    isPillButtons: false,
+    isPillButtons: true,
   },
   helm: {
     mark: 'tile',

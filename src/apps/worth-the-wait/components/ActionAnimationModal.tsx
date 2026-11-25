@@ -1,8 +1,8 @@
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import AppAskingMark from '@/components/AppAskingMark';
 import { useEffect, useMemo, useState } from 'react';
 
+import AppAskingMark from '@/components/AppAskingMark';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
 import { useRaffleReveal } from '../hooks/useRaffleReveal';
 import type { ActiveAction, Box, Item } from '../types';
