@@ -163,8 +163,8 @@ function PersonView({ uid, person, otherNames, onBack }: PersonViewProps) {
           title='Show on my calendar'
           description={
             person.isShown
-              ? `${person.personName}’s movies appear quietly on your calendar`
-              : `Hidden. Their links stay here for when you want them back.`
+              ? undefined
+              : 'Hidden. Their links stay here for when you want them back.'
           }
           control={
             <AppToggle

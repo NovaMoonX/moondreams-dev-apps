@@ -10,15 +10,18 @@ import {
   type FriendsAlsoGoing,
 } from '@apps/a-list/utils/friendShowings';
 
+// No-break spaces keep "at 9:30 PM" together, so a wrap never leaves the time alone.
+const atTime = (showtimeAt: number) =>
+  `at\u00a0${formatTime(showtimeAt).replace(/ /g, '\u00a0')}`;
+
 function getAlsoGoingLine({ sameTime, otherTimes }: FriendsAlsoGoing) {
   const verb = (names: string[]) => (names.length === 1 ? 'is' : 'are');
   const others = otherTimes.map(
-    ({ showtimeAt, names }) =>
-      `${joinNames(names)} at ${formatTime(showtimeAt)}`,
+    ({ showtimeAt, names }) => `${joinNames(names)} ${atTime(showtimeAt)}`,
   );
   if (sameTime.length > 0) {
     return [
-      `${joinNames(sameTime)} ${verb(sameTime)} going at the same time`,
+      `${joinNames(sameTime)} ${verb(sameTime)} going at the same\u00a0time`,
       ...others,
     ].join(' · ');
   }
@@ -26,7 +29,7 @@ function getAlsoGoingLine({ sameTime, otherTimes }: FriendsAlsoGoing) {
 
   const [first] = otherTimes;
   return [
-    `${joinNames(first.names)} ${verb(first.names)} going at ${formatTime(first.showtimeAt)}`,
+    `${joinNames(first.names)} ${verb(first.names)} going ${atTime(first.showtimeAt)}`,
     ...others.slice(1),
   ].join(', ');
 }
