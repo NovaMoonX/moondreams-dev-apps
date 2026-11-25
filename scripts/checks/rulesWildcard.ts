@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 // `{name=**}` also matches the document the wildcard hangs from, where `name` is empty: `name[0]` errors there
 // and refuses the operation, so every operation a rule indexes the wildcard for needs its own allow on the parent.
+// Only a literal `name[` is seen, and only top-level match paths are compared: indexing inside a helper is not.
 const OPS_COVERED: Record<string, string[]> = {
   read: ['get', 'list'],
   get: ['get'],
