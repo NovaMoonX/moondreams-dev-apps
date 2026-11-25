@@ -78,7 +78,7 @@ const responseSchema = {
           ),
           group: nullable(
             SchemaType.STRING,
-            `The heading the line sits under in the recipe, as a short plain name of at most ${MAX_INGREDIENT_GROUP_LENGTH} characters ("For the sauce", "Marinade", "Bulgogi sauce" for "Bulgogi sauce (don't skip the onion & apple!):"): no colon, no parentheses, no advice. Null when the line sits under no heading. Never make one up, and never use the recipe's own "Ingredients" title.`,
+            `The heading the line sits under in the recipe, as a short plain name of at most ${MAX_INGREDIENT_GROUP_LENGTH} characters ("For the sauce", "Marinade", "Bulgogi sauce" for "Bulgogi sauce (don't skip the onion & apple!):"): no colon, no parentheses, no advice. A line that closes a set ("That's for your cornbread") heads the lines before it, and when the method makes a part on its own first, the part the line goes into ("For the cornbread", "For the dressing"). Null for a recipe made in one go. Never a role ("Aromatics"), and never the recipe's own "Ingredients" title.`,
           ),
         },
         required: ['name', 'amount', 'unit', 'note', 'alsoCalled', 'group'],
