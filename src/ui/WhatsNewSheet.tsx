@@ -226,6 +226,12 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function Heading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className='text-foreground text-base font-semibold'>{children}</h3>
+  );
+}
+
 const byKind = (notes: WhatsNewNote[], kind: WhatsNewKind) =>
   notes.filter((note) => note.kind === kind);
 
@@ -336,104 +342,84 @@ function WhatsNewSheet({
         </Section>
       ));
 
+  // Tiles belong to the pop-up's first screen; every other view lists changes as plain rows.
+  const kindSections = (
+    groups: { key: string; label: string; list: WhatsNewNote[] }[],
+    getTopLine: (note: WhatsNewNote) => string | null,
+  ) =>
+    groups
+      .filter((group) => group.list.length > 0)
+      .map((group) => (
+        <Section key={group.key} label={group.label}>
+          <NoteList
+            notes={group.list}
+            look={look}
+            isCompact
+            getTopLine={getTopLine}
+            onShowMe={onShowMe}
+          />
+        </Section>
+      ));
+
+  const everyKind = (
+    list: WhatsNewNote[],
+    smaller: WhatsNewNote[],
+    fixes: WhatsNewNote[],
+  ) => [
+    { key: 'new', label: 'New', list: byKind(list, 'new') },
+    { key: 'improved', label: 'Improved', list: byKind(list, 'improved') },
+    { key: 'smaller', label: 'Smaller changes', list: smaller },
+    { key: 'fixes', label: 'Fixes', list: fixes },
+  ];
+
   const theRest = () => (
     <div className='space-y-5'>
-      {toldSections(rolled.moreTold)}
-      {rolled.smaller.length > 0 ? (
-        <Section label='Smaller changes'>
-          <NoteList
-            notes={rolled.smaller}
-            look={look}
-            isCompact
-            getTopLine={getVersionLine}
-            onShowMe={onShowMe}
-          />
-        </Section>
-      ) : null}
-      {rolled.fixes.length > 0 ? (
-        <Section label='Fixes'>
-          <NoteList
-            notes={rolled.fixes}
-            look={look}
-            isCompact
-            getTopLine={getVersionLine}
-            onShowMe={onShowMe}
-          />
-        </Section>
-      ) : null}
+      {kindSections(
+        everyKind(rolled.moreTold, rolled.smaller, rolled.fixes),
+        getVersionLine,
+      )}
     </div>
   );
 
-  const fixList = (
-    list: WhatsNewNote[],
-    getTopLine: (note: WhatsNewNote) => string | null,
-    hasLabel: boolean,
-  ) =>
-    list.length === 0 ? null : (
-      <div className='space-y-1'>
-        {hasLabel ? (
-          <p className='text-muted-foreground text-xs font-medium'>Fixes</p>
-        ) : null}
-        <NoteList
-          notes={list}
-          look={look}
-          isCompact
-          getTopLine={getTopLine}
-          onShowMe={onShowMe}
-        />
-      </div>
-    );
-
   const versionLog = () => (
-    <div className='space-y-5'>
+    <div className='space-y-8'>
       {groupByVersion(notes).map((group) => (
-        <Section
-          key={group.version}
-          label={`Version ${group.version} · ${formatDateShort(group.publishedAt)}`}
-        >
-          {group.notes.some((note) => note.kind !== 'fixed') ? (
+        <section key={group.version} className='space-y-3'>
+          <Heading>{`Version ${group.version} · ${formatDateShort(group.publishedAt)}`}</Heading>
+          {isFixOnly(group.notes) ? (
             <NoteList
-              notes={group.notes.filter((note) => note.kind !== 'fixed')}
+              notes={group.notes}
               look={look}
               isCompact
-              getTopLine={(note) => KIND_WORDS[note.kind]}
               onShowMe={onShowMe}
             />
-          ) : null}
-          {fixList(
-            byKind(group.notes, 'fixed'),
-            () => null,
-            !isFixOnly(group.notes),
+          ) : (
+            kindSections(
+              everyKind(
+                group.notes.filter((note) => note.isTold),
+                group.notes.filter(
+                  (note) => !note.isTold && note.kind !== 'fixed',
+                ),
+                byKind(group.notes, 'fixed'),
+              ),
+              () => null,
+            )
           )}
-        </Section>
+        </section>
       ))}
     </div>
   );
 
-  const getKindLine = (note: WhatsNewNote) =>
-    [KIND_WORDS[note.kind], getVersionLine(note)].filter(Boolean).join(' · ');
-
   const history = () => (
-    <div className='space-y-5'>
+    <div className='space-y-8'>
       {groupByMonth(notes).map((month) => (
-        <Section key={month.key} label={formatMonth(month.at)}>
-          {[
-            { key: 'told', list: month.told, isCompact: false },
-            { key: 'smaller', list: month.smaller, isCompact: true },
-          ]
-            .filter((group) => group.list.length > 0)
-            .map((group) => (
-              <NoteList
-                key={group.key}
-                notes={group.list}
-                look={look}
-                isCompact={group.isCompact}
-                getTopLine={getKindLine}
-                onShowMe={onShowMe}
-              />
-            ))}
-          {fixList(month.fixes, getVersionLine, true)}
-        </Section>
+        <section key={month.key} className='space-y-3'>
+          <Heading>{formatMonth(month.at)}</Heading>
+          {kindSections(
+            everyKind(month.told, month.smaller, month.fixes),
+            getVersionLine,
+          )}
+        </section>
       ))}
     </div>
   );
