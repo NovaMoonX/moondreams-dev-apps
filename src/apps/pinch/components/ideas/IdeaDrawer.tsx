@@ -3,11 +3,14 @@ import { ChevronRight, ExternalLink } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import FallbackImage from '@/components/FallbackImage';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { formatTimeAgo } from '@/utils/formatUtils';
 import { useIdeaImageUrl } from '@apps/pinch/hooks/useIdeaImageUrl';
 import { selectRecipesById } from '@apps/pinch/store/selectors';
 import type { Idea } from '@apps/pinch/types';
 import { getIdeaSiteName } from '@apps/pinch/utils/ideas';
+import { getChangeWho, getMadeByName } from '@apps/pinch/utils/notes';
 
 interface IdeaDrawerProps {
   idea: Idea;
@@ -24,6 +27,7 @@ function IdeaDrawer({
   onTurnIntoRecipe,
   onOpenRecipe,
 }: IdeaDrawerProps) {
+  const now = useNow();
   const imageUrl = useIdeaImageUrl(idea);
   const recipe = useAppSelector(selectRecipesById).get(idea.recipeId ?? '');
   const madeRecipe = recipe && recipe.isArchived !== true ? recipe : null;
@@ -68,6 +72,11 @@ function IdeaDrawer({
           />
         )}
         <h3 className='text-lg font-semibold wrap-break-word'>{idea.title}</h3>
+        {getMadeByName(idea.by) !== null && (
+          <p className='text-muted-foreground text-xs'>
+            Saved by {getChangeWho(idea)} · {formatTimeAgo(idea.createdAt, now)}
+          </p>
+        )}
         {idea.note && (
           <p className='text-sm wrap-break-word whitespace-pre-wrap'>
             {idea.note}

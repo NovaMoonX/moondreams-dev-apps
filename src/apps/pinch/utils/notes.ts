@@ -9,6 +9,7 @@ import type {
   Cook,
   NoteKind,
   RecipeNote,
+  RecipeNoteBy,
   RecipeSnapshot,
 } from '@apps/pinch/types';
 import {
@@ -294,13 +295,20 @@ export const formatChangeWhen = (at: number) =>
   });
 
 /** "You", "Gemini, through Helm", or the assistant's own name for Nomos. An entry with no `by` is the person's. */
-export const getChangeWho = (note: RecipeNote) => {
+export const getChangeWho = (note: Pick<RecipeNote, 'by'>) => {
   const by = note.by ?? null;
   if (by === null || by.kind === 'you') return 'You';
   if (by.kind === 'assistant')
     return `${by.name ?? 'An assistant'}, through Helm`;
   return by.name ?? "Helm's assistant";
 };
+
+/** The assistant's own name for a row that says "From Gemini"; null when the person made it. */
+export const getMadeByName = (by: RecipeNoteBy | null | undefined) =>
+  by == null || by.kind === 'you'
+    ? null
+    : (by.name ??
+      (by.kind === 'assistant' ? 'An assistant' : "Helm's assistant"));
 
 /** "You · Nov 24, 6:28 PM", "Gemini, through Helm · …", or the assistant's own name for Nomos. */
 export const getChangeByLine = (

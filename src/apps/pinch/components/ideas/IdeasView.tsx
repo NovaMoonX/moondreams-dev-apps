@@ -112,6 +112,8 @@ interface IdeasViewProps {
   uid: string;
   /** The text the search starts with. */
   initialQuery: string;
+  /** An idea whose drawer is open as the view mounts. */
+  initialOpenId: string | null;
   isAddOpen: boolean;
   onAddClose: () => void;
   onOpenRecipe: (recipeId: string) => void;
@@ -120,6 +122,7 @@ interface IdeasViewProps {
 function IdeasView({
   uid,
   initialQuery,
+  initialOpenId,
   isAddOpen,
   onAddClose,
   onOpenRecipe,
@@ -135,7 +138,9 @@ function IdeasView({
     'recipes:sort:ideas',
     DEFAULT_LIST_SORT,
   );
-  const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [overlay, setOverlay] = useState<Overlay | null>(
+    initialOpenId === null ? null : { kind: 'drawer', id: initialOpenId },
+  );
 
   const hasSearch = ideas.length >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';

@@ -29,6 +29,7 @@ import {
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
+import { getMadeByName, getChangeWho } from '@apps/pinch/utils/notes';
 import { getIngredientAdjustments } from '@apps/pinch/utils/ingredientAdjustments';
 import {
   getServingGrams,
@@ -124,6 +125,7 @@ function IngredientDrawer({
     servingGrams !== null && Math.abs(servingGrams - 100) > 0.005;
   const basis: NutritionBasis = hasServingChoice ? options.basis : 'PER_100G';
   const isPerServing = basis === 'SERVING' && servingGrams !== null;
+  const nutritionMadeBy = getMadeByName(record?.nutritionBy);
   const nutritionCaption = isPerServing
     ? `Per 1 serving (${servingText})`
     : 'Per 100 g';
@@ -227,6 +229,11 @@ function IngredientDrawer({
               </li>
             ))}
         </ul>
+        {getMadeByName(record?.addedBy) !== null && (
+          <p className='text-muted-foreground text-xs'>
+            Added by {getChangeWho({ by: record?.addedBy ?? null })}
+          </p>
+        )}
         {ingredient.aliases.length > 0 && (
           <p className='text-muted-foreground text-sm'>
             Also called {ingredient.aliases.join(', ')}
@@ -239,6 +246,17 @@ function IngredientDrawer({
               <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
                 {nutritionCaption}
               </h3>
+              {nutritionMadeBy !== null && (
+                <span className='text-muted-foreground flex items-center gap-1 text-xs'>
+                  From {nutritionMadeBy}
+                  <HelpTip title={`Filled in by ${nutritionMadeBy}`}>
+                    <p>
+                      This is {nutritionMadeBy}'s estimate, not a measured
+                      value. Edit the nutrition and it becomes yours.
+                    </p>
+                  </HelpTip>
+                </span>
+              )}
               {hasServingChoice && (
                 <PillGroup
                   label='Nutrition per'

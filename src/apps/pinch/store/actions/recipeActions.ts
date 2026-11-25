@@ -336,6 +336,8 @@ export const saveRecipe = createAsyncThunk<
           gramsEach: null,
           defaultProductId: null,
           isArchived: false,
+          addedBy: null,
+          nutritionBy: null,
           createdAt: now,
           updatedAt: now,
         };

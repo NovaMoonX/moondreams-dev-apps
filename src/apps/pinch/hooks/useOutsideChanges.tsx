@@ -1,6 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { BookOpen, CalendarDays, Pencil, ShoppingBasket } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarDays,
+  Lightbulb,
+  Pencil,
+  ShoppingBasket,
+  Wheat,
+} from 'lucide-react';
 
 import type {
   DoneForYouDoor,
@@ -10,6 +17,9 @@ import { useAppSelector } from '@/store';
 import { OUTSIDE_CHANGES_WORDS as WORDS } from '@apps/pinch/constants';
 import { undoOutsideChange } from '@apps/pinch/store/actions/outsideChangeActions';
 import {
+  selectIdeasById,
+  selectIngredientRecordsById,
+  selectIngredientsById,
   selectNotesByRecipe,
   selectOutsideChanges,
   selectRecipesById,
@@ -66,6 +76,18 @@ const getLook = (change: PinchOutsideChange) => {
             : WORDS.undoShoppingMerged,
         icon: <ShoppingBasket />,
       };
+    case 'ideaSaved':
+      return {
+        title: WORDS.ideaSaved(change.title),
+        undoLabel: WORDS.undoIdeaSaved,
+        icon: <Lightbulb />,
+      };
+    case 'nutritionFilled':
+      return {
+        title: WORDS.nutritionFilled(change.title),
+        undoLabel: WORDS.undoNutritionFilled,
+        icon: <Wheat />,
+      };
   }
 };
 
@@ -73,6 +95,8 @@ interface OutsideChangesOptions {
   uid: string;
   openRecipe: (recipeId: string) => void;
   openShopping: () => void;
+  openIdea: (ideaId: string) => void;
+  openIngredient: (ingredientId: string) => void;
 }
 
 /** What outside assistants changed in the kitchen, shaped for the shared Done for you sheet, with its Undo and the unseen dot. */
@@ -80,6 +104,8 @@ export function useOutsideChanges({
   uid,
   openRecipe,
   openShopping,
+  openIdea,
+  openIngredient,
 }: OutsideChangesOptions) {
   const changes = useAppSelector(selectOutsideChanges);
   const isReady = useAppSelector(
@@ -89,11 +115,41 @@ export function useOutsideChanges({
   );
   const recipes = useAppSelector(selectRecipesById);
   const notesByRecipe = useAppSelector(selectNotesByRecipe);
+  const ideasById = useAppSelector(selectIdeasById);
+  const ingredients = useAppSelector(selectIngredientsById);
+  const records = useAppSelector(selectIngredientRecordsById);
   const [seen, setSeen] = useState<{ uid: string; at: number } | null>(null);
   const seenAt = seen?.uid === uid ? seen.at : readSeen(uid);
 
   const items = useMemo((): DoneForYouEntry[] => {
     const getDoors = (change: PinchOutsideChange): DoneForYouDoor[] => {
+      const { ideaId } = change;
+      if (change.kind === 'ideaSaved' && ideaId != null) {
+        return [
+          {
+            label: WORDS.openIdea,
+            subtitle: WORDS.openIdeaSub,
+            icon: <Lightbulb />,
+            unavailable: ideasById.has(ideaId) ? undefined : WORDS.ideaGone,
+            onSelect: () => openIdea(ideaId),
+          },
+        ];
+      }
+      const filled = change.filledNutrition ?? [];
+      if (change.kind === 'nutritionFilled' && filled.length === 1) {
+        const { ingredientId } = filled[0];
+        return [
+          {
+            label: WORDS.openIngredient,
+            subtitle: WORDS.openIngredientSub,
+            icon: <Wheat />,
+            unavailable: ingredients.has(ingredientId)
+              ? undefined
+              : WORDS.ingredientGone,
+            onSelect: () => openIngredient(ingredientId),
+          },
+        ];
+      }
       const { recipeId } = change;
       if (recipeId !== null) {
         return [
@@ -129,11 +185,38 @@ export function useOutsideChanges({
       );
     };
 
+    const isIdeaUndoable = (change: PinchOutsideChange) => {
+      const idea = ideasById.get(change.ideaId ?? '');
+      return (
+        idea !== undefined &&
+        idea.updatedAt === idea.createdAt &&
+        idea.recipeId === null
+      );
+    };
+
+    const isNutritionUndoable = (change: PinchOutsideChange) =>
+      (change.filledNutrition ?? []).every(
+        ({ ingredientId }) => records.get(ingredientId)?.nutritionBy != null,
+      );
+
+    const getStaleNote = (change: PinchOutsideChange) => {
+      if (change.kind === 'recipeUpdated' && !isRecipeUndoable(change)) {
+        return WORDS.recipeChangedAfter;
+      }
+      if (change.kind === 'ideaSaved' && !isIdeaUndoable(change)) {
+        return WORDS.ideaChangedAfter;
+      }
+      if (change.kind === 'nutritionFilled' && !isNutritionUndoable(change)) {
+        return WORDS.nutritionChangedAfter;
+      }
+      return null;
+    };
+
     return changes.map((change) => {
       const look = getLook(change);
       const isUndone = change.undoneAt !== null;
-      const isStale =
-        change.kind === 'recipeUpdated' && !isRecipeUndoable(change);
+      const staleNote = getStaleNote(change);
+      const isStale = staleNote !== null;
       return {
         id: change.id,
         createdAt: change.createdAt,
@@ -146,7 +229,7 @@ export function useOutsideChanges({
         rowLead: getRowWho(change.by),
         canUndo: !isUndone && !isStale,
         isUndone,
-        note: isStale ? WORDS.recipeChangedAfter : null,
+        note: staleNote,
         rowNote: null,
         undoLabel: look.undoLabel,
         kindIcon: look.icon,
@@ -162,7 +245,18 @@ export function useOutsideChanges({
         undoneAt: change.undoneAt,
       };
     });
-  }, [changes, recipes, notesByRecipe, openRecipe, openShopping]);
+  }, [
+    changes,
+    recipes,
+    notesByRecipe,
+    ideasById,
+    ingredients,
+    records,
+    openRecipe,
+    openShopping,
+    openIdea,
+    openIngredient,
+  ]);
 
   const newest = changes.reduce(
     (time, change) => Math.max(time, change.createdAt),

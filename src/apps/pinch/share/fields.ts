@@ -54,6 +54,8 @@ const INGREDIENT_RECORD_FIELDS = {
   gramsEach: 'notUseful',
   defaultProductId: 'notUseful',
   isArchived: 'notUseful',
+  addedBy: 'notUseful',
+  nutritionBy: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'notUseful',
 } satisfies Record<keyof IngredientRecord, ShareDecision>;
@@ -219,6 +221,7 @@ const IDEA_FIELDS = {
   imageUrl: 'notUseful',
   photoPath: 'notUseful',
   recipeId: 'filter',
+  by: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'shared',
 } satisfies Record<keyof Idea, ShareDecision>;
