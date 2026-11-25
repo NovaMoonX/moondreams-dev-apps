@@ -24,8 +24,9 @@ export function useFromSpendCandidates(today: number): OpenPurchase[] {
       isOpenToPlace(purchase) &&
       !twinHeld.has(purchase.id),
   );
+  const chargeIds = new Set(charges.map((purchase) => purchase.id));
   return [
     ...charges.filter((purchase) => !twinHeld.has(purchase.id)),
-    ...open.filter((purchase) => !charges.some((c) => c.id === purchase.id)),
+    ...open.filter((purchase) => !chargeIds.has(purchase.id)),
   ].sort((a, b) => b.date - a.date || b.createdAt - a.createdAt);
 }

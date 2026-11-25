@@ -3201,6 +3201,7 @@ export const ITEM_TILE_WORDS = {
   moreCheck: 'checks',
   moreFor: 'what it is for',
   morePin: 'pin',
+  moreForget: 'what it learned',
   moreStop: 'ending it',
   moreArchive: 'archiving',
 } as const;

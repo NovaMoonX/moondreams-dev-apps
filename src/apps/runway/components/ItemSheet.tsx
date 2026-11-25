@@ -434,6 +434,7 @@ function ItemSheet({
     (state) => selectBalances(state).assignedByItem[itemId] ?? 0,
   );
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<OpenPurchase | null>(null);
   const [spillIds, setSpillIds] = useState<string[]>([]);
   const [isPickingSpill, setIsPickingSpill] = useState(false);
   const [selectedSpillId, setSelectedSpillId] = useState<string | null>(null);
@@ -1166,6 +1167,7 @@ function ItemSheet({
       <PurchaseScreen
         key={purchaseId}
         purchaseId={purchaseId}
+        fallback={placed?.id === purchaseId ? placed : null}
         onOpen={setPurchaseId}
         onClose={backToSheet}
       />
@@ -1434,6 +1436,7 @@ function ItemSheet({
     isTrackEnvelope && ITEM_TILE_WORDS.moreAlerts,
     isTrackEnvelope && ITEM_TILE_WORDS.moreCheck,
     canChange && isGroupable && ITEM_TILE_WORDS.moreFor,
+    canForget && ITEM_TILE_WORDS.moreForget,
     itemKind === 'envelope' && isArchivable && ITEM_TILE_WORDS.morePin,
   ].filter((name) => typeof name === 'string');
   const moreStopName = isStoppable
@@ -1947,9 +1950,10 @@ function ItemSheet({
       today={today}
       onBack={goBack}
       onDone={() => goTo('menu')}
-      onSuggestRule={(placed) => {
+      onSuggestRule={(sent) => {
         goTo('menu');
-        setPurchaseId(placed.id);
+        setPlaced(sent);
+        setPurchaseId(sent.id);
         setPhase('purchaseDetail');
       }}
     />
