@@ -59,6 +59,7 @@ import { hasCover } from '@apps/pinch/utils/recipeCover';
 import {
   formatMinutes,
   formatServings,
+  getAmountWords,
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
@@ -419,8 +420,8 @@ function RecipeFront({
                   >
                     <span className='min-w-0'>
                       {getLineName(line, ingredientsById)}
-                      {line.note && line.amount !== null && (
-                        <span className='text-muted-foreground block text-xs'>
+                      {line.note && (
+                        <span className='text-muted-foreground block text-xs wrap-break-word'>
                           {line.note}
                         </span>
                       )}
@@ -432,9 +433,9 @@ function RecipeFront({
                     </span>
                     <span className='flex max-w-[55%] shrink-0 flex-col items-end gap-0.5 text-right'>
                       {line.amount === null ? (
-                        line.note && (
+                        getAmountWords(line) && (
                           <span className='text-muted-foreground text-sm wrap-break-word'>
-                            {line.note}
+                            {getAmountWords(line)}
                           </span>
                         )
                       ) : (

@@ -45,6 +45,7 @@ export const getRecipeSnapshot = (recipe: RecipeContent): RecipeSnapshot => ({
   ingredients: recipe.ingredients.map((line) => ({
     ...line,
     freeText: line.freeText ?? null,
+    amountText: line.amountText ?? null,
   })),
   steps: recipe.steps,
   stepSections: toStoredStepSections(recipe.steps, recipe.stepSections),
@@ -100,9 +101,12 @@ const formatServings = (servings: number) =>
 const formatQuantity = ({
   amount,
   unit,
-}: Pick<RecipeIngredient, 'amount' | 'unit'>) =>
+  amountText,
+}: Pick<RecipeIngredient, 'amount' | 'unit'> & {
+  amountText?: string | null;
+}) =>
   amount === null
-    ? 'no amount'
+    ? amountText || 'no amount'
     : `${formatAmount(amount)} ${UNIT_LABELS[unit]}`;
 
 type ComparedLine = Omit<RecipeIngredient, 'group' | 'adaptedFrom'>;
@@ -114,6 +118,8 @@ const normalizeLine = (line: RecipeIngredient): ComparedLine => ({
   freeText: line.ingredientId === null ? (line.freeText ?? '').trim() : null,
   amount: line.amount,
   unit: line.amount === null ? 'EACH' : line.unit,
+  amountText:
+    line.amount === null ? (line.amountText ?? '').trim() || null : null,
   note: (line.note ?? '').trim() || null,
 });
 

@@ -36,6 +36,7 @@ import {
   MAX_MEAL_ITEMS,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
@@ -387,12 +388,19 @@ const lineShape = z.object({
     .number()
     .positive()
     .nullish()
-    .describe('How much; leave it out for "to taste".'),
+    .describe('How much; leave it out for "to taste" and put those words in amountText.'),
   unit: z
     .string()
     .max(20)
     .nullish()
     .describe(`The unit of the amount. ${UNIT_HELP}`),
+  amountText: z
+    .string()
+    .max(MAX_AMOUNT_TEXT_LENGTH)
+    .nullish()
+    .describe(
+      'For a line with no amount only: how much in words, such as "to taste" or "a handful". Leave it out when the line has an amount.',
+    ),
   note: z
     .string()
     .max(MAX_NOTE_LENGTH)
@@ -511,6 +519,11 @@ const buildLines = (
         ...base,
         amount: amount === null ? null : Math.round(amount * 10_000) / 10_000,
         unit: amount === null ? 'EACH' : (readUnit(entry.unit) ?? 'EACH'),
+        amountText:
+          amount === null
+            ? clipText(entry.amountText ?? '', MAX_AMOUNT_TEXT_LENGTH).trim() ||
+              null
+            : null,
         note: joinNote(noteWords, entry.note),
         adaptedFrom: null,
       };
@@ -1606,6 +1619,8 @@ export const addToShoppingList = async (
           isChecked: false,
           updatedAt: ctx.now,
           sources: [],
+          note: null,
+          amountText: null,
           pantryAddedAt: null,
         };
         transaction.set(snapshot.ref, item);

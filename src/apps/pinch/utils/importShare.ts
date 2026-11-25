@@ -8,6 +8,7 @@ import {
   MAX_MEAL_ITEMS,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_IMPORTED_TIPS,
   MAX_RECIPE_DESCRIPTION_LENGTH,
@@ -301,6 +302,10 @@ const toRecipe = (
       freeText: isFreeLine(line) ? asName(line.name) : null,
       amount,
       unit: amount === null || !UNITS.includes(line.unit) ? 'EACH' : line.unit,
+      amountText:
+        amount === null
+          ? asText(line.amountText, MAX_AMOUNT_TEXT_LENGTH)
+          : null,
       note: asText(line.note, MAX_NOTE_LENGTH),
       group: cleanGroupName(line.group),
       adaptedFrom: null,

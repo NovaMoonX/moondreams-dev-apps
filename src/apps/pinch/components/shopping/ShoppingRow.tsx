@@ -52,7 +52,9 @@ function ShoppingRow({
                 <span className='whitespace-nowrap'>{amountText}</span>
               )}
               {forText &&
-                (amountText ? `\u00a0·\u00a0for ${forText}` : `For ${forText}`)}
+                (amountText
+                  ? `\u00a0·\u00a0${forText}`
+                  : forText.charAt(0).toUpperCase() + forText.slice(1))}
             </span>
           )}
           {notesText && (

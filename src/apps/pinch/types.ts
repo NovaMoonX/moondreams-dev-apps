@@ -390,6 +390,10 @@ export interface ShoppingItem {
   isChecked: boolean;
   /** What put it on the list: planned meal ids, `recipe:<id>` and `meal:<id>`, oldest first, at most 60; empty for something added on the list itself. Documents written before sources lack the key, which reads as empty. */
   sources: string[];
+  /** The person's own words about the line, filled from the recipes' line descriptions and editable; at most `MAX_SHOPPING_NOTE_LENGTH` characters. Documents written before this lack the key (`undefined` at runtime, which shows the notes derived from the recipes); null once the person or an add has written it. */
+  note: string | null;
+  /** How much in words ("to taste") for a line with no amount; at most `MAX_AMOUNT_TEXT_LENGTH` characters. Documents written before this lack the key, which reads as null. */
+  amountText: string | null;
   /** An instant: the line's `updatedAt` as it was put in the pantry. It counts as put away only while `updatedAt` still equals this, so ticking, unticking or editing it again offers it once more. Documents written before this lack the key, which reads as null. */
   pantryAddedAt: number | null;
   createdAt: number;
@@ -622,9 +626,12 @@ export interface RecipeIngredient {
   ingredientId: string | null;
   /** The words of a line that isn't a kitchen ingredient, shown as its name; null for every ingredient line. Lines written before it lack the key, which reads as null. */
   freeText: string | null;
-  /** Null for a line with no amount ("salt to taste"), whose note says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
+  /** Null for a line with no amount ("salt to taste"), whose `amountText` says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
   amount: number | null;
   unit: Unit;
+  /** How much in words ("to taste", "a handful"), only meaningful when `amount` is null; at most `MAX_AMOUNT_TEXT_LENGTH` characters. Lines written before it lack the key, which reads as null. */
+  amountText: string | null;
+  /** Describes the ingredient itself (chopped, room temperature, a brand), drawn under its name. */
   note: string | null;
   /** The heading the line sits under ("For the sauce"), or null for none; one ingredient may have a line in several groups. Lines written before groups lack the key, which reads as null. */
   group: string | null;
@@ -768,6 +775,8 @@ export interface SharedIngredient {
   catalogId: string | null;
   amount: number | null;
   unit: Unit;
+  /** How much in words for a line with no amount; a share from before it lacks the key, which reads as null. */
+  amountText: string | null;
   note: string | null;
   group: string | null;
   /** A line the owner kept outside their kitchen: it arrives as plain words, never as an ingredient. */

@@ -11,6 +11,7 @@ import type {
 } from '@apps/pinch/types';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { getAmountWords } from '@apps/pinch/utils/recipeFormat';
 import { cleanLinks } from '@apps/pinch/utils/recipeLinks';
 
 const LINK_REL = 'noopener noreferrer nofollow ugc';
@@ -88,16 +89,16 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
                   >
                     <span className='min-w-0 wrap-break-word'>
                       {line.name}
-                      {line.note && line.amount !== null && (
+                      {line.note && (
                         <span className='text-muted-foreground block text-xs'>
                           {line.note}
                         </span>
                       )}
                     </span>
                     {line.amount === null ? (
-                      line.note && (
+                      getAmountWords(line) && (
                         <span className='text-muted-foreground max-w-[55%] shrink-0 text-right text-sm wrap-break-word'>
-                          {line.note}
+                          {getAmountWords(line)}
                         </span>
                       )
                     ) : (

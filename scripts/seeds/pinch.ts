@@ -847,7 +847,7 @@ const line = (
   amount: number,
   unit: string,
   group: string | null = null,
-) => ({ id, ingredientId, amount, unit, note: null, group });
+) => ({ id, ingredientId, amount, unit, amountText: null, note: null, group });
 
 // Lines written before groups have no `group` key; the nachos keep that shape so the legacy path stays exercised.
 const legacyLine = (
@@ -887,7 +887,8 @@ const SEED_RECIPES = [
         ingredientId: 'cat-salt',
         amount: null,
         unit: 'EACH',
-        note: 'to taste',
+        amountText: 'to taste',
+        note: null,
         group: FOR_THE_SAUCE,
       },
     ],
@@ -1231,6 +1232,7 @@ interface SeedRecipeLike {
     ingredientId: string;
     amount: number | null;
     unit: string;
+    amountText?: string | null;
     note: string | null;
     group?: string | null;
   }[];
@@ -1264,6 +1266,7 @@ const toShareRecipe = (
       : null,
     amount: entry.amount,
     unit: entry.unit,
+    amountText: entry.amountText ?? null,
     note: entry.note,
     group: entry.group ?? null,
   })),

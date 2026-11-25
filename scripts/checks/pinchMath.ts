@@ -301,7 +301,7 @@ import {
 import { getDayOnList as srcDayOnList } from '../../src/apps/pinch/utils/shopping.ts';
 import {
   getShoppingSourceLabels as srcLabels,
-  getShoppingSourcesText as srcText,
+  getShoppingForText as srcText,
 } from '../../src/apps/pinch/utils/shopping.ts';
 import { getIngredientAdjustments as adjLines } from '../../src/apps/pinch/utils/ingredientAdjustments.ts';
 import {
@@ -679,6 +679,8 @@ const shopItem = (
   unit,
   isChecked,
   sources: [],
+  note: null,
+  amountText: null,
   pantryAddedAt: null,
   createdAt: 1,
   updatedAt: 1,
@@ -1934,6 +1936,7 @@ const recipeLine = (
   freeText: null,
   amount,
   unit,
+  amountText: null,
   note,
   group: null,
   adaptedFrom: null,
@@ -3089,6 +3092,7 @@ const reading: ExtractedRecipe = {
       name: 'chicken thigh',
       amount: 2,
       unit: 'LB',
+      amountText: null,
       note: null,
       alsoCalled: null,
       group: null,
@@ -7645,8 +7649,7 @@ const srcLabelMap = srcLabels(
     ResolvedIngredient
   >,
 );
-const srcFor = (sources: string[]) =>
-  srcText(sources, srcLabelMap, '2026-10-15');
+const srcFor = (sources: string[]) => srcText(sources, srcLabelMap);
 assert.deepEqual(
   [
     srcFor(['p-thu', 'p-gone']),
@@ -7660,17 +7663,17 @@ assert.deepEqual(
     srcFor([]),
   ],
   [
-    'Thu dinner',
-    'Thu dinner and Fri dinner',
-    'Oct 30 dinner',
-    'Rice pot',
-    'Adobo and rice and Beans',
-    'Fri dinner, Adobo and rice and Rice pot',
-    'Beans, Rice pot and Soup',
+    'for 1 meal',
+    'for 2 meals',
+    'for 1 meal',
+    'for 1 recipe',
+    'for 2 meals',
+    'for 3 meals',
+    'for 3 recipes',
     null,
     null,
   ],
-  'a line says what it is for by name, planned meals by day and meal first, then recipes and saved meals by name, three in full and never only a count; a source that is gone is dropped quietly',
+  'a line says how many recipes or meals it is for, recipes alone as recipes and anything with a meal as meals; a source that is gone is dropped quietly',
 );
 assert.equal(
   srcLabelMap.has('p-empty'),
@@ -8424,6 +8427,7 @@ assert.equal(
     freeText: null,
     amount,
     unit,
+    amountText: null,
     note,
     group: null,
     adaptedFrom: null,
@@ -8575,8 +8579,13 @@ assert.equal(
     getRecipeLines(amtAdobo, amtById, 1),
     [
       { ingredientId: 'thigh', amount: 0.5, unit: 'LB' },
-      { ingredientId: 'salt', amount: null, unit: 'EACH' },
-      { ingredientId: 'parsley', amount: null, unit: 'EACH' },
+      { ingredientId: 'salt', amount: null, unit: 'EACH', note: 'to taste' },
+      {
+        ingredientId: 'parsley',
+        amount: null,
+        unit: 'EACH',
+        note: 'a handful',
+      },
     ],
     'scaling down halves the chicken and leaves salt and parsley as names',
   );
@@ -8651,7 +8660,12 @@ assert.equal(
     ),
     [
       { ingredientId: 'thigh', amount: 2, unit: 'LB' },
-      { ingredientId: 'parsley', amount: null, unit: 'EACH' },
+      {
+        ingredientId: 'parsley',
+        amount: null,
+        unit: 'EACH',
+        note: 'a handful',
+      },
       { ingredientId: 'salt', amount: 2, unit: 'TSP' },
     ],
     'from a plan, salt to taste and 2 tsp of salt is 2 tsp, and parsley stays a name',
@@ -8866,6 +8880,7 @@ assert.equal(
           name: 'eggs',
           amount: 6,
           unit: 'EACH',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: null,
@@ -8874,6 +8889,7 @@ assert.equal(
           name: 'salt',
           amount: null,
           unit: null,
+          amountText: null,
           note: 'to taste',
           alsoCalled: null,
           group: null,
@@ -8882,6 +8898,7 @@ assert.equal(
           name: 'parsley',
           amount: null,
           unit: null,
+          amountText: null,
           note: 'a handful',
           alsoCalled: null,
           group: null,
@@ -8890,6 +8907,7 @@ assert.equal(
           name: 'salt',
           amount: null,
           unit: null,
+          amountText: null,
           note: 'to taste',
           alsoCalled: null,
           group: null,
@@ -8927,6 +8945,7 @@ assert.equal(
       freeText: null,
       amount: null,
       unit: 'EACH',
+      amountText: null,
       note: 'to taste',
       group: null,
       adaptedFrom: null,
@@ -8958,6 +8977,7 @@ assert.equal(
         freeText: null,
         amount: 2,
         unit: 'LB' as const,
+        amountText: null,
         note: null,
         group: null,
         adaptedFrom: null,
@@ -8968,6 +8988,7 @@ assert.equal(
         freeText: null,
         amount: null,
         unit: 'EACH' as const,
+        amountText: null,
         note: 'to taste',
         group: null,
         adaptedFrom: null,
@@ -9327,7 +9348,7 @@ assert.equal(
     new Map(),
     ingredients,
   );
-  const textFor = (sources: string[]) => srcText(sources, labels, '2026-10-15');
+  const textFor = (sources: string[]) => srcText(sources, labels);
   assert.deepEqual(
     [
       textFor(['fri']),
@@ -9335,13 +9356,8 @@ assert.equal(
       textFor(['fri', 'recipe:rice-pot', 'thu-lunch']),
       textFor(many.map((meal) => meal.id)),
     ],
-    [
-      'Fri dinner',
-      'Thu dinner and Fri dinner',
-      'Thu lunch, Fri dinner and Rice pot',
-      'Tue dinner (Plate 0), Tue dinner (Plate 1) and 48 more',
-    ],
-    'a row names its meals, up to three in full and then two and how many more (50 reads "and 48 more", never a bare count)',
+    ['for 1 meal', 'for 2 meals', 'for 3 meals', 'for 50 meals'],
+    'a row counts what it is for',
   );
   assert.deepEqual(
     stopNames(['thu', 'thu-lunch', 'fri', 'long-a'], labels, '2026-10-15').map(
@@ -9488,6 +9504,8 @@ assert.equal(
     unit,
     isChecked,
     sources,
+    note: null,
+    amountText: null,
     pantryAddedAt: null,
     createdAt: 1,
     updatedAt: 1,
@@ -9795,6 +9813,8 @@ assert.equal(
         id,
         ingredientId: line.ingredientId,
         unit: line.unit,
+        note: null,
+        amountText: null,
         pantryAddedAt: existing?.pantryAddedAt ?? null,
         createdAt: existing?.createdAt ?? 1,
         ...fields,
@@ -9955,6 +9975,8 @@ assert.equal(
           amount,
           isChecked: false,
           sources: ['S'],
+          note: null,
+          amountText: null,
           pantryAddedAt: null,
           createdAt: 1,
           updatedAt: 1,
@@ -10120,6 +10142,7 @@ assert.equal(
     freeText: null,
     amount,
     unit,
+    amountText: null,
     note: null,
     group,
     adaptedFrom: null,
@@ -10423,6 +10446,7 @@ assert.equal(
           name: 'soy sauce',
           amount: 2,
           unit: 'TBSP',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: null,
@@ -10431,6 +10455,7 @@ assert.equal(
           name: 'soy sauce',
           amount: 4,
           unit: 'TBSP',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: 'For the chicken',
@@ -10439,6 +10464,7 @@ assert.equal(
           name: 'soy sauce',
           amount: 1,
           unit: 'TBSP',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: 'For the chicken',
@@ -10447,6 +10473,7 @@ assert.equal(
           name: 'garlic',
           amount: 2,
           unit: 'EACH',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: 'For the sauce',
@@ -10455,6 +10482,7 @@ assert.equal(
           name: 'soy sauce',
           amount: 2,
           unit: 'TBSP',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: 'For the sauce',
@@ -10463,6 +10491,7 @@ assert.equal(
           name: 'jasmine rice',
           amount: 1,
           unit: 'CUP',
+          amountText: null,
           note: null,
           alsoCalled: null,
           group: null,
@@ -10503,6 +10532,7 @@ assert.equal(
         freeText: null,
         amount: 1,
         unit: 'TBSP',
+        amountText: null,
         note: null,
         group: null,
         adaptedFrom: null,

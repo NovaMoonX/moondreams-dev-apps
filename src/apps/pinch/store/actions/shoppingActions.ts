@@ -13,7 +13,9 @@ import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import {
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_SHOPPING_LINES_PER_ADD,
+  MAX_SHOPPING_NOTE_LENGTH,
   SHOPPING_BATCH_SIZE,
   UNITS,
 } from '@apps/pinch/constants';
@@ -21,6 +23,7 @@ import { selectShoppingSourceContext } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
   addSources,
+  appendWords,
   countStopRows,
   getKeyShares,
   getMergedFields,
@@ -31,6 +34,7 @@ import {
   getSourceLines,
   isAsStopLeft,
   isValidAmount,
+  joinWords,
   mergeSourcedLines,
   mergeSources,
   isPutAway,
@@ -84,8 +88,21 @@ function writeLine(
     line.sources,
     existing?.isChecked ?? false,
   );
+  const note = appendWords(existing?.note, line.note, MAX_SHOPPING_NOTE_LENGTH);
   if (existing) {
-    transaction.update(snapshot.ref, { ...fields, sources });
+    transaction.update(snapshot.ref, {
+      ...fields,
+      sources,
+      ...(existing.note === undefined && note === null ? {} : { note }),
+      amountText:
+        fields.amount === null
+          ? appendWords(
+              existing.amountText,
+              line.amountText,
+              MAX_AMOUNT_TEXT_LENGTH,
+            )
+          : (existing.amountText ?? null),
+    });
     return;
   }
 
@@ -96,6 +113,11 @@ function writeLine(
     createdAt: now,
     ...fields,
     sources,
+    note,
+    amountText:
+      fields.amount === null
+        ? appendWords(null, line.amountText, MAX_AMOUNT_TEXT_LENGTH)
+        : null,
     pantryAddedAt: null,
   };
   transaction.set(snapshot.ref, item);
@@ -186,6 +208,8 @@ interface UpdateShoppingItemInput {
   mergedIds?: string[];
   amount: number;
   unit: Unit;
+  /** The row's note as typed, written with the amount; left out keeps what the items hold. */
+  note?: string | null;
 }
 
 /** A different unit is a different item, so changing it, or folding a row's items into one, moves the amount in one transaction. */
@@ -196,7 +220,7 @@ export const updateShoppingItem = createAsyncThunk<
 >(
   'pinch/shopping/update',
   async (
-    { uid, item, mergedIds = [], amount: typed, unit },
+    { uid, item, mergedIds = [], amount: typed, unit, note },
     { rejectWithValue },
   ) => {
     const amount = roundAmount(typed);
@@ -208,6 +232,7 @@ export const updateShoppingItem = createAsyncThunk<
       if (unit === item.unit && mergedIds.length === 0) {
         await updateDoc(shoppingDoc(uid, item.id), {
           amount,
+          ...(note === undefined ? {} : { note }),
           updatedAt: Date.now(),
         });
         return;
@@ -230,14 +255,17 @@ export const updateShoppingItem = createAsyncThunk<
           throw new Error('This is already off your list.');
         }
         const isChecked = (current.data() as ShoppingItem).isChecked;
+        const held = [current, ...merged].flatMap((snapshot) =>
+          snapshot.exists() ? [snapshot.data() as ShoppingItem] : [],
+        );
         const sources = mergeSources(
           [],
-          [current, ...merged].flatMap((snapshot) =>
-            snapshot.exists()
-              ? ((snapshot.data() as ShoppingItem).sources ?? [])
-              : [],
-          ),
+          held.flatMap((other) => other.sources ?? []),
         );
+        const carried = {
+          note: note === undefined ? joinWords(held.map((h) => h.note)) : note,
+          amountText: joinWords(held.map((h) => h.amountText)),
+        };
         const now = Date.now();
         [current, ...merged]
           .filter((snapshot) => snapshot.exists() && snapshot.id !== targetId)
@@ -247,11 +275,18 @@ export const updateShoppingItem = createAsyncThunk<
             amount,
             isChecked,
             sources,
+            ...carried,
             updatedAt: now,
           });
           return;
         }
-        writeLine(transaction, { ...line, sources }, target, now, isChecked);
+        writeLine(
+          transaction,
+          { ...line, sources, ...carried },
+          target,
+          now,
+          isChecked,
+        );
       });
     } catch (error) {
       return rejectWithValue(
@@ -260,6 +295,34 @@ export const updateShoppingItem = createAsyncThunk<
     }
   },
 );
+
+interface SetShoppingItemNoteInput {
+  uid: string;
+  /** Every stored item behind one row, the first holding the note. */
+  ids: string[];
+  note: string | null;
+}
+
+/** A row's note is one text: the first item keeps it and the row's other items let go of theirs, so it never doubles. Field-scoped, so it queues offline like any edit. */
+export const setShoppingItemNote = createAsyncThunk<
+  void,
+  SetShoppingItemNoteInput,
+  { rejectValue: string }
+>('pinch/shopping/setNote', async ({ uid, ids, note }, { rejectWithValue }) => {
+  try {
+    const batch = writeBatch(db);
+    const now = Date.now();
+    ids.forEach((id, index) =>
+      batch.update(shoppingDoc(uid, id), {
+        note: index === 0 ? note : null,
+        updatedAt: now,
+      }),
+    );
+    await batch.commit();
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, 'Unable to save this note.'));
+  }
+});
 
 interface RemoveShoppingItemInput {
   uid: string;
@@ -507,19 +570,24 @@ export const restoreShoppingItems = createAsyncThunk<
           const missing = chunk.filter(
             (_, index) => !snapshots[index].exists(),
           );
-          missing.forEach((item) =>
-            transaction.set(shoppingDoc(uid, item.id), {
+          missing.forEach((item) => {
+            const restored: Omit<ShoppingItem, 'note'> = {
               id: item.id,
               ingredientId: item.ingredientId,
               amount: item.amount,
               unit: item.unit,
               isChecked: item.isChecked,
               sources: item.sources ?? [],
+              amountText: item.amountText ?? null,
               pantryAddedAt: isPutAway(item) ? now : null,
               createdAt: item.createdAt,
               updatedAt: now,
-            } satisfies ShoppingItem),
-          );
+            };
+            transaction.set(shoppingDoc(uid, item.id), {
+              ...restored,
+              ...(item.note === undefined ? {} : { note: item.note }),
+            });
+          });
           return missing.length;
         }),
       ),

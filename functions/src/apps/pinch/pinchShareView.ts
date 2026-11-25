@@ -4,6 +4,7 @@ export const SHARE_LIMITS = {
   MAX_RECIPE_DESCRIPTION_LENGTH: 2000,
   MAX_NAME_LENGTH: 120,
   MAX_NOTE_LENGTH: 200,
+  MAX_AMOUNT_TEXT_LENGTH: 40,
   MAX_INGREDIENT_GROUP_LENGTH: 40,
   MAX_STEP_SECTION_LENGTH: 40,
   MAX_RECIPE_INGREDIENTS: 60,
@@ -60,6 +61,7 @@ export interface SharedIngredient {
   catalogId: string | null;
   amount: number | null;
   unit: ShareUnit;
+  amountText: string | null;
   note: string | null;
   group: string | null;
   isFree: boolean;
@@ -253,11 +255,16 @@ function toIngredient(raw: unknown): SharedIngredient | null {
   }
 
   const unit = isUnit(raw.unit) ? raw.unit : null;
+  const amount = unit === null ? null : toAmount(raw.amount);
   const result: SharedIngredient = {
     name,
     catalogId: toCatalogId(raw.catalogId),
-    amount: unit === null ? null : toAmount(raw.amount),
+    amount,
     unit: unit ?? 'EACH',
+    amountText:
+      amount === null
+        ? toText(raw.amountText, SHARE_LIMITS.MAX_AMOUNT_TEXT_LENGTH)
+        : null,
     note: toText(raw.note, SHARE_LIMITS.MAX_NOTE_LENGTH),
     group: toText(raw.group, SHARE_LIMITS.MAX_INGREDIENT_GROUP_LENGTH),
     isFree: raw.isFree === true,

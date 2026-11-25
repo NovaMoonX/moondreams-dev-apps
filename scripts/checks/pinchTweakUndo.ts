@@ -50,6 +50,7 @@ const line = (id: string, amount: number | null): RecipeIngredient => ({
   freeText: null,
   amount,
   unit: 'TBSP',
+  amountText: null,
   note: null,
   group: null,
   adaptedFrom: null,

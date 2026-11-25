@@ -63,6 +63,7 @@ const line = (
   catalogId: null,
   amount: 1,
   unit: 'CUP',
+  amountText: null,
   note: null,
   group: null,
   isFree: false,
