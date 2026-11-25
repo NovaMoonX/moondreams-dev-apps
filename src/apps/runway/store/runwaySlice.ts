@@ -180,7 +180,7 @@ export interface HeldWritesInput {
   purchases?: HeldWrite<OpenPurchase>[];
 }
 
-const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves', 'purchases'];
+export const HELD_KINDS: HeldKind[] = ['days', 'records', 'moves', 'purchases'];
 
 const layPurchases = (state: RunwayState) => {
   const laid = layPurchaseLists({

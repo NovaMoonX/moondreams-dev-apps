@@ -65,6 +65,7 @@ export const createHeldTransaction =
         feature,
         what: 'a change you made',
         hasLanded: () => isLanded(token),
+        recheck: () => store.dispatch(actions.settle(token)),
       });
       return result;
     } catch (error) {

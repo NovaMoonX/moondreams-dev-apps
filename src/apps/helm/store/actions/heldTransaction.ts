@@ -255,6 +255,7 @@ export async function runHeldTransaction<T>(
       feature: 'Helm',
       what: 'a change you made',
       hasLanded: isLanded(token),
+      recheck: () => store.dispatch(settleHelmWrites(token)),
     });
     return result;
   } catch (error) {
