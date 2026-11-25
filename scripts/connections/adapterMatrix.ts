@@ -361,6 +361,7 @@ const seedOther = () =>
       siteName: 'Food Blog',
       imageUrl: 'https://secret.example.test/gnocchi.jpg',
       photoPath: 'secret/path.jpg',
+      photoPaths: ['secret/path-2.jpg'],
       recipeId: null,
       updatedAt: NOW - 6,
     }),

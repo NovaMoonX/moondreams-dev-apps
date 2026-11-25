@@ -132,6 +132,7 @@ const idea = (
   siteName: fields.siteName ?? null,
   imageUrl: fields.imageUrl ?? null,
   photoPath: null,
+  photoPaths: [],
   recipeId: fields.recipeId ?? null,
 });
 

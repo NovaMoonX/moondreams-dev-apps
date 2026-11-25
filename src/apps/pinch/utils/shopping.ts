@@ -126,6 +126,7 @@ export interface ShoppingRowData {
   id: string;
   /** Every stored item the row stands for, largest first. */
   itemIds: string[];
+  ingredientId: string;
   name: string;
   /** What to pick up, or null for a pinch of a spice or oil or a line that is just the name, which needs only its name. */
   amountText: string | null;
@@ -538,6 +539,39 @@ export const joinSourceNames = (names: string[], limit: number) => {
     ? `${shown.join(', ')} and ${more} more`
     : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
 };
+
+/** The notes the source recipes write on this ingredient ("finely chopped"), each once, joined for one muted line; null when none has one. */
+export function getShoppingNotesText(
+  ingredientId: string,
+  sources: string[],
+  context: Pick<
+    ShoppingSourceContext,
+    'plannedById' | 'mealsById' | 'recipesById'
+  >,
+): string | null {
+  const recipeIds = getSourceKeys(sources).flatMap((key) => {
+    const { kind, id } = parseShoppingSource(key);
+    if (kind === 'recipe') return [id];
+    const items =
+      kind === 'meal'
+        ? context.mealsById.get(id)?.items
+        : context.plannedById.get(id)?.items;
+    return (items ?? []).flatMap((item) =>
+      item.kind === 'RECIPE' ? [item.refId] : [],
+    );
+  });
+  const notes = [...new Set(recipeIds)].flatMap((id) =>
+    (context.recipesById.get(id)?.ingredients ?? []).flatMap((line) =>
+      line.ingredientId === ingredientId && line.note?.trim()
+        ? [line.note.trim()]
+        : [],
+    ),
+  );
+  const unique = [
+    ...new Map(notes.map((note) => [note.toLowerCase(), note])).values(),
+  ];
+  return unique.length === 0 ? null : unique.join(' · ');
+}
 
 /** Null when nothing behind the line still resolves. */
 export function getShoppingSourcesText(
@@ -1493,6 +1527,7 @@ export function groupShoppingItems(
       const row: ShoppingRowData = {
         id,
         itemIds: byBase.map((item) => item.id),
+        ingredientId: rowItems[0].ingredientId,
         name: ingredient?.name ?? 'Removed ingredient',
         amountText: formatShopAmount(getShopAmount(rowItems, section), units),
         isChecked: byBase[0].isChecked,
