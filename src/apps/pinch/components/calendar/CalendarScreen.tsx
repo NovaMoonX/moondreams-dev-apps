@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react';
 import EmptyCard from '@/components/EmptyCard';
 import PeriodSwitcher from '@/components/PeriodSwitcher';
 import SectionHeader from '@/components/SectionHeader';
+import OutsideChangesButton from '@apps/pinch/components/shell/OutsideChangesButton';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
@@ -223,6 +224,7 @@ function CalendarScreen({
         action={
           hasRecipes || hasSavedMeals ? (
             <div className='flex items-center gap-3'>
+              <OutsideChangesButton />
               <CalendarViewOptions
                 uid={uid}
                 options={viewOptions.options}

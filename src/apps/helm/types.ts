@@ -2267,6 +2267,8 @@ export interface ConnectedAssistant {
   firstSeenAt: number;
   lastUsedAt: number;
   canWrite: boolean;
+  /** Whether it may make the changes the person switched on for each app; off until they turn it on. A missing key reads as false. */
+  canChangeApps: boolean;
   /** The kinds of source it may read (`mail`, `drive`, `apps`); each is off until the person turns it on. */
   readScopes: string[];
   revokedAt: number | null;

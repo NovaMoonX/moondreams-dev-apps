@@ -103,7 +103,9 @@ function ConnectForm({
         </h3>
       </div>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {HELM_COPY.connectReadOnlyPromise(name, app.name)}
+        {manifest && manifest.changes.length > 0
+          ? HELM_COPY.connectReadAndChangePromise(name, app.name)
+          : HELM_COPY.connectReadOnlyPromise(name, app.name)}
       </p>
       {manifest && manifest.never.length > 0 && (
         <p className='text-muted-foreground text-[13px] text-pretty'>

@@ -1184,6 +1184,8 @@ export const HELM_COPY = {
     `${name} can read these. It doesn't change anything in them, apart from keeping your plan in a Google Calendar when you ask it to.`,
   connectReadOnlyPromise: (name: string, app: string) =>
     `${name} can read these. It can't add, change or delete anything in ${app}.`,
+  connectReadAndChangePromise: (name: string, app: string) =>
+    `${name} can read these. It changes ${app} only in the ways you switch on, each with an Undo, and never deletes anything.`,
   connectedSection: 'Connected',
   notConnectedSection: 'Not connected',
   connectedNothingOn: 'Nothing switched on',
@@ -1239,6 +1241,11 @@ export const HELM_COPY = {
     canWrite
       ? 'Asks questions and adds tasks and notes. Undo anything in Activity.'
       : 'It can look things up, nothing more.',
+  assistantChangesLabel: 'Change things in your apps',
+  assistantChangesHint: (name: string, isOn: boolean) =>
+    isOn
+      ? `${name} can make the changes you've switched on for each app, and every one has an Undo. Choose them under Connected apps.`
+      : `${name} can't change anything in your apps. Turn this on to let it make the changes you choose for each app, with an Undo for each.`,
   assistantPrivacy: (name: string) =>
     `What ${name} reads goes to the company behind it, under its own terms.`,
   assistantConnectedOn: (date: string) => `Connected ${date}`,
@@ -1321,6 +1328,9 @@ export const HELM_COPY = {
   connectionThisAccount: 'This account',
   connectionAccountValue: 'Your moondreams account',
   connectionReads: (name: string) => `What ${name} reads`,
+  connectionChanges: 'What assistants can change',
+  connectionChangesOutsideLine:
+    'Assistants outside Helm also need their own "Change things in your apps" switch, in Settings > Connected assistants.',
   connectionSwitchedOff: (label: string) =>
     `${label} switched off. Its copies were removed.`,
   connectionUndo: 'Undo',

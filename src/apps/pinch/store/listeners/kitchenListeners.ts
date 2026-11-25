@@ -1,7 +1,9 @@
 import {
   collection,
   doc,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   where,
   type Unsubscribe,
@@ -19,6 +21,7 @@ import type {
   Meal,
   Package,
   PinchSettings,
+  PinchOutsideChange,
   PinchShare,
   PlannedMeal,
   Product,
@@ -295,6 +298,28 @@ export function startSharesListener(
     ),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as PinchShare)),
+    onError,
+  );
+}
+
+/** What outside assistants changed in the last 30 days, newest first; the server writes it and only this person reads it. */
+export function startOutsideChangesListener(
+  uid: string,
+  since: number,
+  onChange: (changes: PinchOutsideChange[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      kitchenCollection(uid, 'outsideChanges'),
+      where('createdAt', '>', since),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    ),
+    (snapshot) =>
+      onChange(
+        snapshot.docs.map((document) => document.data() as PinchOutsideChange),
+      ),
     onError,
   );
 }

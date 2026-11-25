@@ -12,7 +12,9 @@ import { useSearchParams } from 'react-router-dom';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import DoneForYouSheet from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
+import { useDoneForYouToast } from '@/hooks/useDoneForYouToast';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useAppSelector } from '@/store';
@@ -38,9 +40,14 @@ import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import SourcesSubview from '@apps/pinch/components/recipes/SourcesSubview';
 import PinchNav from '@apps/pinch/components/shell/PinchNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
-import { PINCH_TABS, toStartTab } from '@apps/pinch/constants';
+import {
+  OUTSIDE_CHANGES_WORDS,
+  PINCH_TABS,
+  toStartTab,
+} from '@apps/pinch/constants';
 import { PinchOverlayContext } from '@apps/pinch/hooks/usePinchOverlay';
 import { PinchSessionContext } from '@apps/pinch/hooks/usePinchSession';
+import { useOutsideChanges } from '@apps/pinch/hooks/useOutsideChanges';
 import { useFreezePastDays } from '@apps/pinch/hooks/useFreezePastDays';
 import { usePinchSync } from '@apps/pinch/hooks/usePinchSync';
 import { usePinchTheme } from '@apps/pinch/hooks/usePinchTheme';
@@ -129,6 +136,26 @@ function Pinch() {
     }
     setSubview(next);
   }, []);
+  const [isOutsideChangesOpen, setIsOutsideChangesOpen] = useState(false);
+  const outsideChanges = useOutsideChanges({
+    uid: user?.uid ?? '',
+    openRecipe: (recipeId) =>
+      openSubviewFromToast({ kind: 'recipe', id: recipeId }),
+    openShopping: showShoppingTab,
+  });
+  const { markSeen: markOutsideChangesSeen } = outsideChanges;
+  const openOutsideChanges = useCallback(() => {
+    setIsOutsideChangesOpen(true);
+    markOutsideChangesSeen();
+  }, [markOutsideChangesSeen]);
+  useDoneForYouToast({
+    items: outsideChanges.items,
+    isReady: Boolean(user) && outsideChanges.isReady,
+    storageKey: `pinch.outsideChangesToasted.${user?.uid ?? ''}`,
+    buildTitle: OUTSIDE_CHANGES_WORDS.summary,
+    viewLabel: OUTSIDE_CHANGES_WORDS.view,
+    onView: openOutsideChanges,
+  });
   const [calendarFocus, setCalendarFocus] = useState<{
     dayKey: string;
     nonce: number;
@@ -160,6 +187,8 @@ function Pinch() {
     },
     [homeTab, setSearchParams],
   );
+  const outsideChangeCount = outsideChanges.items.length;
+  const outsideChangesHasUnseen = outsideChanges.hasUnseen;
   const overlayContext = useMemo(
     () => ({
       subview,
@@ -178,8 +207,16 @@ function Pinch() {
       setIsStartOpen: openStart,
       openIdeaSheet: () => setIsIdeaSheetOpen(true),
       openSubviewFromToast,
+      outsideChanges: {
+        hasItems: outsideChangeCount > 0,
+        hasUnseen: outsideChangesHasUnseen,
+        open: openOutsideChanges,
+      },
     }),
     [
+      outsideChangeCount,
+      outsideChangesHasUnseen,
+      openOutsideChanges,
       subview,
       isStartOpen,
       showShoppingTab,
@@ -414,6 +451,14 @@ function Pinch() {
         />
       )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
+      <DoneForYouSheet
+        isOpen={isOutsideChangesOpen}
+        onClose={() => setIsOutsideChangesOpen(false)}
+        title={OUTSIDE_CHANGES_WORDS.title}
+        items={outsideChanges.items}
+        onUndo={outsideChanges.undo}
+        words={OUTSIDE_CHANGES_WORDS}
+      />
       <div className={join(isTabHidden && 'hidden')}>
         <div className='page pb-28 lg:pb-8 lg:pl-34'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>
