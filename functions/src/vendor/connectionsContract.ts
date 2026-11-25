@@ -98,7 +98,7 @@ export interface ConnectorManifest {
   actions: AppActionManifest[];
   /** The tools its actions are offered under; `[]` for a source with no actions. */
   tools: AssistantToolManifest[];
-  /** The everyday words a person uses for what this source holds (for a budgeting app: spending, bills, what is left this month), so an assistant picks its tools from how they ask; `[]` for a source with no actions. */
+  /** The person's everyday words for what this source holds, which open each of its tools; `[]` for a source with no actions. */
   askedAbout: string[];
   /** The kinds of change an assistant may be allowed to make; `[]` for a source that takes none. */
   changes: ChangePermissionManifest[];

@@ -531,7 +531,7 @@ export interface SiteActionApp {
   }[];
 }
 
-/** The site apps this reader holds a live grant for that offer actions (reads and changes), whatever is switched on, so an assistant always knows they exist; each action says whether it is on right now. */
+/** The site apps with a live grant that offer actions, whatever is switched on; each action says whether it is on now. */
 export const listSiteActionApps = async (
   firestore: Firestore,
   uid: string,

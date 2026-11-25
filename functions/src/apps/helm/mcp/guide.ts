@@ -3,7 +3,7 @@ import type { McpReadScope } from '../../../mcp/shapes.js';
 import { connectorLabel } from '../syncedCopies.js';
 import { sourcesBriefFor, type ConnectedSource } from './sourcesBrief.js';
 
-/** What an assistant is told when it connects: a short map of what Helm reaches and what each connected app is for, what is switched off and where it is turned on, and that every gap is said exactly as a tool's status says. App tools describe themselves, so the map never lists them. The person calls their Helm assistant by the name they chose, so that name routes here. */
+/** An outside assistant's instructions: a short map of what Helm reaches and what is switched off; it never lists an app's tools, which describe themselves. */
 export const helmGuideFor = (
   name: string,
   canWrite: boolean,

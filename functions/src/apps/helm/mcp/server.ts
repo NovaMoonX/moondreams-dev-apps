@@ -55,7 +55,7 @@ const isRefusal = (result: unknown) =>
   result !== null &&
   REFUSALS.has(String((result as { status?: unknown }).status));
 
-/** Registers the tools an audience is offered, each with its title and honest hints: a read is read-only, a change is destructive unless it only adds, and none reaches beyond the person's own records. A refusal comes back as a tool error. */
+/** Registers an audience's tools with their titles and hints; a refusal comes back as a tool error. */
 export function registerHelmTools(
   server: McpServer,
   tools: ReturnType<typeof buildHelmTools>,

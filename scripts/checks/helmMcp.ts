@@ -11,6 +11,7 @@ import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter
 import {
   SOURCE_ADAPTERS,
   type AppActionResult,
+  type SourceAdapter,
 } from '../../functions/src/connections/registry.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
 import {
@@ -1458,15 +1459,20 @@ assert.equal(
 assert.notEqual(schemaOf(z.enum(['a', 'b'])), schemaOf(z.enum(['a', 'c'])));
 assert.notEqual(schemaOf(z.string().max(100)), schemaOf(z.string().max(200)));
 assert.notEqual(schemaOf(z.string()), schemaOf(z.string().nullable()));
-const toolFailures = Object.entries(SOURCE_ADAPTERS).flatMap(
-  ([connectorId, adapter]) => {
+const toolFailuresFor = (connectorId: string, adapter: SourceAdapter): string[] => {
     const { manifest } = adapter;
     const appId = connectorId.replace(/^app:/, '');
     const declared = manifest.tools.map((tool) => tool.id);
+    const undeclared = Object.keys(adapter.actions ?? {})
+      .filter((id) => !manifest.actions.some((action) => action.id === id))
+      .map((id) => `${connectorId} implements ${id}, which its manifest does not declare`);
     if (manifest.actions.length === 0) {
-      return manifest.tools.length === 0 && manifest.askedAbout.length === 0
-        ? []
-        : [`${connectorId} declares tools or words but no actions`];
+      return [
+        ...undeclared,
+        ...(manifest.tools.length === 0 && manifest.askedAbout.length === 0
+          ? []
+          : [`${connectorId} declares tools or words but no actions`]),
+      ];
     }
     const byTool = (id: string) =>
       manifest.actions.filter((action) => action.tool === id);
@@ -1491,6 +1497,7 @@ const toolFailures = Object.entries(SOURCE_ADAPTERS).flatMap(
       );
     });
     return [
+      ...undeclared,
       ...(connectorId.startsWith('app:') ? [] : [`${connectorId} offers actions but is not a site app`]),
       ...(manifest.askedAbout.length < 3
         ? [`${connectorId} needs at least three everyday words in askedAbout`]
@@ -1547,9 +1554,65 @@ const toolFailures = Object.entries(SOURCE_ADAPTERS).flatMap(
         .filter(({ name }) => !names.includes(name))
         .map(({ action, name }) => `${connectorId} ${action} mentions ${name}, which is not a tool`),
     ];
-  },
+};
+assert.deepEqual(
+  Object.entries(SOURCE_ADAPTERS).flatMap(([connectorId, adapter]) => toolFailuresFor(connectorId, adapter)),
+  [],
 );
-assert.deepEqual(toolFailures, []);
+
+// Each rule fires on a manifest that breaks it, so a later app can't slip past one that only Pinch exercises.
+const pinchAdapter = SOURCE_ADAPTERS['app:pinch'];
+const broken = (
+  change: (manifest: SourceAdapter['manifest'], actions: NonNullable<SourceAdapter['actions']>) => void,
+) => {
+  const manifest = structuredClone(pinchAdapter.manifest);
+  const actions = { ...pinchAdapter.actions };
+  change(manifest, actions);
+  return toolFailuresFor('app:pinch', { ...pinchAdapter, manifest, actions });
+};
+const firesWith = (failures: string[], words: string) =>
+  assert.ok(failures.some((line) => line.includes(words)), `expected "${words}" in ${JSON.stringify(failures)}`);
+firesWith(broken((manifest) => { manifest.askedAbout = ['meals']; }), 'at least three everyday words');
+firesWith(
+  broken((manifest) => {
+    manifest.tools.push({ id: 'one_more', title: 'One more thing' });
+    manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'one_more';
+  }),
+  'group actions whose fields agree',
+);
+firesWith(
+  broken((manifest) => {
+    manifest.tools.push({ id: 'read_kitchen', title: 'Read the kitchen' });
+    manifest.actions.find((action) => action.id === 'get_kitchen')!.tool = 'read_kitchen';
+  }),
+  'one read tool per app',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'read'; }), 'mixes reads and changes');
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'save_idea')!.tool = 'ideas'; }), 'names undeclared tool');
+firesWith(broken((manifest) => { manifest.tools.push({ id: 'unused', title: 'Unused tool' }); }), 'has no actions');
+firesWith(broken((manifest) => { manifest.tools[0].title = ''; }), 'needs a title');
+firesWith(broken((manifest) => { manifest.tools[0].id = 'Read-Pinch'; manifest.actions.filter((action) => action.tool === 'read').forEach((action) => { action.tool = 'Read-Pinch'; }); }), 'short snake_case id');
+firesWith(broken((_, actions) => { actions.surprise = actions.save_idea; }), 'does not declare');
+firesWith(
+  broken((_, actions) => {
+    actions.add_recipe = { ...actions.add_recipe, shape: { ...actions.add_recipe.shape, basedOn: z.string() } };
+  }),
+  'accepts different values across its options',
+);
+firesWith(
+  broken((_, actions) => {
+    actions.add_recipe = { ...actions.add_recipe, shape: { ...actions.add_recipe.shape, action: z.string() } };
+  }),
+  'field named action',
+);
+firesWith(broken((_, actions) => { actions.get_kitchen = { ...actions.get_kitchen, description: 'Too short.' }; }), 'too short to choose by');
+firesWith(
+  broken((_, actions) => {
+    actions.get_kitchen = { ...actions.get_kitchen, description: `${actions.get_kitchen.description} Then call pinch_get_everything.` };
+  }),
+  'which is not a tool',
+);
+firesWith(broken((manifest) => { manifest.actions.find((action) => action.id === 'get_kitchen')!.changesExisting = true; }), 'is a read that changes');
 assert.ok(
   OUTSIDE_TOOLS.length <= MAX_OUTSIDE_TOOLS,
   `outside assistants are offered ${OUTSIDE_TOOLS.length} tools with every app connected; keep it at ${MAX_OUTSIDE_TOOLS} or fewer`,
