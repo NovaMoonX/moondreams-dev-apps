@@ -20797,12 +20797,14 @@ const checkRulePlacements = () => {
     'and a rule that asks says so on its second line',
   );
   {
+    const live = new Set(['e-kc', 'e-card', 'e-kind']);
     const covered = findCoveringRules(
       fact("BJ's Wholesale Club Fuel", 'GAS', 'c1'),
       [
         { ...kindCardRule, category: 'GAS', createdAt: 2 },
         { ...cardRule, id: 'c-old', createdAt: 1 },
       ],
+      live,
     );
     assert.equal(
       covered.card?.id,
@@ -20814,10 +20816,14 @@ const checkRulePlacements = () => {
       null,
       'a broad store is never covered by a kind of place',
     );
-    const kindCovered = findCoveringRules(fact('Shell', 'GAS', 'c2'), [
-      { ...kindCardRule, category: 'GAS' },
-      rule('m', { merchantKey: 'shell', merchantName: 'Shell' }),
-    ]);
+    const kindCovered = findCoveringRules(
+      fact('Shell', 'GAS', 'c2'),
+      [
+        { ...kindCardRule, category: 'GAS' },
+        rule('m', { merchantKey: 'shell', merchantName: 'Shell' }),
+      ],
+      live,
+    );
     assert.equal(
       kindCovered.kind?.id,
       'kc',
@@ -20828,6 +20834,17 @@ const checkRulePlacements = () => {
       null,
       'but not a card it does not name, and a merchant rule covers no tick',
     );
+    const ended = findCoveringRules(
+      fact('Shell', 'FOOD', 'c1'),
+      [cardRule, kindRule, rule('cv', { cardId: 'c1', target: RULE_VARIES })],
+      new Set(['e-kind']),
+    );
+    assert.equal(
+      ended.card,
+      null,
+      'a rule whose envelope ended, or that asks, covers nothing',
+    );
+    assert.equal(ended.kind?.id, 'k', 'while a live one still does');
   }
   const variesRule = rule('v', {
     merchantKey: 'corner shop',

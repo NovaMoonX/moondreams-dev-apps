@@ -136,9 +136,12 @@ function RuleSheet({
           cardId: facts.cardId,
         },
         rules,
+        new Set(envelopes.map(({ item }) => item.id)),
       );
   const canTickKind = hasKind && covering.kind === null;
   const canTickCard = hasCard && covering.card === null;
+  const isAllCovered =
+    rule === null && !hasMerchant && !canTickKind && !canTickCard;
 
   const [ticks, setTicks] = useState(() => {
     if (rule) {
@@ -189,11 +192,13 @@ function RuleSheet({
     target: target ?? '',
   };
   const hasCondition = ticks.merchant || ticks.kind || ticks.card;
-  const blocker = !hasCondition
-    ? RULE_WORDS.pickOne
-    : target === null
-      ? RULE_WORDS.pickEnvelope
-      : null;
+  const blocker = isAllCovered
+    ? null
+    : !hasCondition
+      ? RULE_WORDS.pickOne
+      : target === null
+        ? RULE_WORDS.pickEnvelope
+        : null;
   const sentence =
     hasCondition && target !== null
       ? `${describeRule(draft, {
@@ -470,7 +475,7 @@ function RuleSheet({
                     }
                   >
                     {cover
-                      ? RULE_WORDS.alreadyOn(describe(cover, name === 'card'))
+                      ? RULE_WORDS.alreadyOn(getEnvelopeName(cover.target))
                       : sub}
                   </span>
                 </span>
@@ -478,7 +483,7 @@ function RuleSheet({
               if (cover) {
                 const mark = (
                   <span
-                    className='bg-primary text-primary-foreground grid size-5 shrink-0 place-items-center rounded-[4px]'
+                    className='bg-primary/15 text-primary grid size-5 shrink-0 place-items-center rounded-full'
                     aria-hidden='true'
                   >
                     <Check className='size-3.5' strokeWidth={3} />
@@ -523,29 +528,35 @@ function RuleSheet({
             })}
           </ul>
         </div>
-        <div className='space-y-2'>
-          <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
-          <PillGroup
-            label={RULE_WORDS.envelope}
-            options={options}
-            value={target}
-            onChange={setPicked}
-          />
-          {isMerchantAlone && (
-            <Button
-              type='button'
-              variant='tertiary'
-              aria-pressed={picked === RULE_VARIES}
-              className='border-border text-foreground! h-10 w-full justify-between! rounded-xl border text-sm font-normal'
-              onClick={() => setPicked(RULE_VARIES)}
-            >
-              <span>{RULE_WORDS.askEvery}</span>
-              {picked === RULE_VARIES && (
-                <Check className='h-4 w-4' aria-hidden='true' />
-              )}
-            </Button>
-          )}
-        </div>
+        {isAllCovered ? (
+          <p className='text-muted-foreground text-sm' role='status'>
+            {RULE_WORDS.allCovered}
+          </p>
+        ) : (
+          <div className='space-y-2'>
+            <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
+            <PillGroup
+              label={RULE_WORDS.envelope}
+              options={options}
+              value={target}
+              onChange={setPicked}
+            />
+            {isMerchantAlone && (
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-pressed={picked === RULE_VARIES}
+                className='border-border text-foreground! h-10 w-full justify-between! rounded-xl border text-sm font-normal'
+                onClick={() => setPicked(RULE_VARIES)}
+              >
+                <span>{RULE_WORDS.askEvery}</span>
+                {picked === RULE_VARIES && (
+                  <Check className='h-4 w-4' aria-hidden='true' />
+                )}
+              </Button>
+            )}
+          </div>
+        )}
         {sentence !== '' && (
           <p className='text-sm' role='status'>
             {sentence}
@@ -586,14 +597,16 @@ function RuleSheet({
           )
         }
         rightActions={
-          <Button
-            type='button'
-            className='whitespace-nowrap'
-            disabled={blocker !== null || isBusy || isUnchanged}
-            onClick={() => void save()}
-          >
-            {willSend ? RULE_WORDS.saveAndSend : RULE_WORDS.save}
-          </Button>
+          isAllCovered ? undefined : (
+            <Button
+              type='button'
+              className='whitespace-nowrap'
+              disabled={blocker !== null || isBusy || isUnchanged}
+              onClick={() => void save()}
+            >
+              {willSend ? RULE_WORDS.saveAndSend : RULE_WORDS.save}
+            </Button>
+          )
         }
       />
     </FormSheet>
