@@ -80,6 +80,7 @@ import GoalBalanceView, {
   GoalBalanceDoor,
 } from '@apps/runway/components/GoalBalanceView';
 import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
+import NextFillRow from '@apps/runway/components/NextFillRow';
 import SetHeldView from '@apps/runway/components/SetHeldView';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
@@ -1418,6 +1419,16 @@ function ItemSheet({
         help={help}
       />
       {extra}
+      {itemKind === 'envelope' && (
+        <NextFillRow
+          itemId={itemId}
+          name={payload.name}
+          today={today}
+          heldCents={heldCents}
+          hasDoor={presetDayKey === undefined}
+          canCover={canChange && hasStarted && isArchivable}
+        />
+      )}
       {hasBillRow && payment && !paid.isPaid && (
         <div className='space-y-1.5'>
           <Button
