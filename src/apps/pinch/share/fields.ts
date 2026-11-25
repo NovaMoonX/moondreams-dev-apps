@@ -293,6 +293,7 @@ const RECIPE_NOTE_FIELDS = {
   stepText: 'never',
   reason: 'never',
   previous: 'never',
+  by: 'never',
   createdAt: 'never',
   updatedAt: 'never',
 } satisfies Record<keyof RecipeNote, ShareDecision>;

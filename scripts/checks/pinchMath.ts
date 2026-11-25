@@ -2691,6 +2691,7 @@ assert.deepEqual(
     stepText: null,
     reason: null,
     previous: null,
+    by: null,
   },
   'an older note gets the keys it lacks, empty',
 );
@@ -2703,6 +2704,7 @@ assert.deepEqual(
     stepText: null,
     reason: null,
     previous: null,
+    by: null,
   }),
   {},
   'a note with every key, even null ones, lacks nothing',
@@ -2724,30 +2726,15 @@ assert.equal(getTweakReason('  because  '), 'because', 'a reason is trimmed');
 assert.equal(getTweakReason('  \n '), null, 'a blank reason is none');
 assert.equal(isNoteHistoryFull(299), false, '299 notes still fits');
 assert.equal(isNoteHistoryFull(300), true, '300 notes is full');
-const tracking = (
-  isCooksReady: boolean,
-  isNotesReady: boolean,
-  cookCount: number,
-  noteCount: number,
-) => getTweakTracking({ isCooksReady, isNotesReady, cookCount, noteCount });
-assert.equal(tracking(true, true, 3, 5), 'on', 'a cooked recipe is tracked');
-assert.equal(tracking(true, true, 0, 5), 'off', 'a recipe never cooked is not');
+const tracking = (isNotesReady: boolean, noteCount: number) =>
+  getTweakTracking({ isNotesReady, noteCount });
+assert.equal(tracking(true, 5), 'on', 'every recipe is tracked, cooked or not');
 assert.equal(
-  tracking(false, true, 3, 5),
+  tracking(false, 5),
   'off',
-  'nor while the cooks are unknown',
+  'but not while the notes are unknown or failed',
 );
-assert.equal(
-  tracking(true, false, 3, 5),
-  'off',
-  'nor while the notes are unknown or failed',
-);
-assert.equal(tracking(true, true, 3, 300), 'full', 'a full journal says so');
-assert.equal(
-  tracking(true, true, 0, 300),
-  'off',
-  'a full journal of a recipe never cooked is still off',
-);
+assert.equal(tracking(true, 300), 'full', 'a full journal says so');
 
 const cookAt = (id: string, cookedAt: number) =>
   ({ id, recipeId: 'adobo', cookedAt }) as Cook;

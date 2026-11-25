@@ -525,6 +525,13 @@ export type RecipeSnapshot = Pick<
 > &
   Partial<Pick<Recipe, 'categories' | 'care' | 'links' | 'stepSections'>>;
 
+/** Who made a recorded change: the person on this device, an outside assistant reached through Helm (its own name), or Nomos (named by the app that shows it). */
+export interface RecipeNoteBy {
+  kind: 'you' | 'assistant' | 'nomos';
+  /** The assistant's name for 'assistant' and 'nomos'; null for 'you'. */
+  name: string | null;
+}
+
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
@@ -547,6 +554,8 @@ export interface RecipeNote {
   reason: string | null;
   /** A TWEAK's recipe as it was before the edit, so the edit can be undone while it is the recipe's latest; null for every other kind and for a tweak written before undo existed. Immutable. A missing key reads as null. */
   previous: RecipeSnapshot | null;
+  /** Who made a TWEAK; null for every other kind and for an entry written before this was kept, which reads as the person. Immutable. A missing key reads as null. */
+  by: RecipeNoteBy | null;
   /** An instant, shown in local time. Immutable, except that applying a CHANGE dates the TWEAK it becomes. */
   createdAt: number;
   updatedAt: number;

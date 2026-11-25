@@ -139,6 +139,7 @@ export const addNote = createAsyncThunk<
     ...getStepAnchor(steps, stepIndex),
     reason: getReason(kind, input.reason),
     previous: null,
+    by: null,
     createdAt: now,
     updatedAt: now,
   };

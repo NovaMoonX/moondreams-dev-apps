@@ -3,9 +3,9 @@ import { useState } from 'react';
 import FormSection from '@/components/FormSection';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
+import ChangeRow from '@apps/pinch/components/notes/ChangeRow';
 import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import {
-  selectCooksById,
   selectNoteSummaries,
   selectNotesByRecipe,
   selectRecipesById,
@@ -25,12 +25,19 @@ interface RecipeChangesProps {
   recipeId: string;
   onEdit: (noteId: string) => void;
   onApplyChange: (noteId: string) => void;
+  /** Opens a recorded change's own view, which the host swaps into its sheet. */
+  onOpenChange: (noteId: string) => void;
 }
 
-/** The changes with no cook to sit under: one written from the recipe itself, or whose cook was deleted. A change that came from a cook is on that cook's page. Planned ones first, then the edits already made. */
-function RecipeChanges({ recipeId, onEdit, onApplyChange }: RecipeChangesProps) {
+/** The recipe's history: the changes planned for it first, then every save already made, newest first, each opening its own view. */
+function RecipeChanges({
+  recipeId,
+  onEdit,
+  onApplyChange,
+  onOpenChange,
+}: RecipeChangesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
-  const cooksById = useAppSelector(selectCooksById);
+  const isNotesLoaded = useAppSelector((state) => state.pinch.notes.isLoaded);
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
   const steps =
@@ -40,15 +47,24 @@ function RecipeChanges({ recipeId, onEdit, onApplyChange }: RecipeChangesProps) 
   const changes = notes
     .filter(
       (note) =>
-        (note.kind === 'CHANGE' || note.kind === 'TWEAK') &&
-        (note.cookId == null || !cooksById.has(note.cookId)),
+        note.kind === 'TWEAK' ||
+        (note.kind === 'CHANGE' && note.cookId == null),
     )
     .sort(
       (a, b) =>
         Number(b.kind === 'CHANGE') - Number(a.kind === 'CHANGE') ||
         b.createdAt - a.createdAt,
     );
-  if (changes.length === 0) return null;
+  if (changes.length === 0) {
+    return isNotesLoaded ? (
+      <FormSection title='Changes'>
+        <p className='text-muted-foreground text-sm'>
+          Nothing has changed yet. Each time this recipe is saved, it shows up
+          here.
+        </p>
+      </FormSection>
+    ) : null;
+  }
 
   const hidden = changes.length - limit;
   const shown = hidden > 1 ? changes.slice(0, limit) : changes;
@@ -56,18 +72,22 @@ function RecipeChanges({ recipeId, onEdit, onApplyChange }: RecipeChangesProps) 
   return (
     <FormSection title='Changes'>
       <ul className='divide-border divide-y'>
-        {shown.map((note) => (
-          <NoteEntry
-            key={note.id}
-            note={note}
-            cook={null}
-            writtenBefore={getWrittenBefore(note, lastTweakAt)}
-            stepAt={resolveNoteStep(note, steps)}
-            isStepLost={isStepLost(note, steps)}
-            onEdit={note.kind === 'CHANGE' ? onEdit : null}
-            onApplyChange={onApplyChange}
-          />
-        ))}
+        {shown.map((note) =>
+          note.kind === 'TWEAK' ? (
+            <ChangeRow key={note.id} note={note} onOpen={onOpenChange} />
+          ) : (
+            <NoteEntry
+              key={note.id}
+              note={note}
+              cook={null}
+              writtenBefore={getWrittenBefore(note, lastTweakAt)}
+              stepAt={resolveNoteStep(note, steps)}
+              isStepLost={isStepLost(note, steps)}
+              onEdit={note.kind === 'CHANGE' ? onEdit : null}
+              onApplyChange={onApplyChange}
+            />
+          ),
+        )}
       </ul>
       {hidden > 1 && (
         <ShowMoreButton

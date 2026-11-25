@@ -413,11 +413,8 @@ export const selectTweakTracking = (
   recipeId === null
     ? 'off'
     : getTweakTracking({
-        isCooksReady:
-          state.pinch.cooks.isLoaded && state.pinch.cooks.loadError === null,
         isNotesReady:
           state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
-        cookCount: selectCookSummaries(state).get(recipeId)?.count ?? 0,
         noteCount: selectNoteSummaries(state).get(recipeId)?.count ?? 0,
       });
 

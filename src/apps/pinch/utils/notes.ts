@@ -11,7 +11,11 @@ import type {
   RecipeNote,
   RecipeSnapshot,
 } from '@apps/pinch/types';
-import { isContentTweak } from '@apps/pinch/utils/recipeChanges';
+import {
+  getRecipeSnapshot,
+  isContentTweak,
+  type RecipeContent,
+} from '@apps/pinch/utils/recipeChanges';
 
 export interface NoteSummary {
   count: number;
@@ -114,6 +118,7 @@ export const getOutsideTweak = (input: {
   stepText: null,
   reason: null,
   previous: null,
+  by: { kind: 'you', name: null },
   createdAt: input.now,
   updatedAt: input.now,
 });
@@ -138,6 +143,7 @@ export const getMissingNoteFields = (existing: object) => ({
   ...('stepText' in existing ? {} : { stepText: null }),
   ...('reason' in existing ? {} : { reason: null }),
   ...('previous' in existing ? {} : { previous: null }),
+  ...('by' in existing ? {} : { by: null }),
 });
 
 const getLatestTweaks = (notes: RecipeNote[]) => {
@@ -200,31 +206,115 @@ export const planTweakUndo = (
   const result: TweakUndoPlan =
     previous === null
       ? refuse('There is nothing to put back.')
-      : {
-          kind: 'REVERT',
-          fields: {
-            ...previous,
-            stepSections: previous.stepSections ?? [],
-            ingredients: previous.ingredients.map((line) => ({
-              ...line,
-              freeText: line.freeText ?? null,
-            })),
-          },
-        };
+      : { kind: 'REVERT', fields: getRestoreFields(previous) };
 
   return result;
 };
 
-/** Whether edits to a recipe are recorded as a tweak: the recipe has been cooked, both lists have loaded without error and the journal has room. */
+const getRestoreFields = (previous: RecipeSnapshot): RecipeSnapshot => ({
+  ...previous,
+  stepSections: previous.stepSections ?? [],
+  ingredients: previous.ingredients.map((line) => ({
+    ...line,
+    freeText: line.freeText ?? null,
+  })),
+});
+
+export type GoBackPlan =
+  | { kind: 'RESTORE'; fields: RecipeSnapshot; entry: RecipeNote }
+  | { kind: 'REFUSE'; message: string };
+
+/** What going back to before a recorded change does to the recipe as the server has it now: the recipe takes that entry's snapshot and a new, undoable entry records it, or nothing is written and the sentence says why. `seenUpdatedAt` is the recipe's date as the person's screen showed it, so a save made elsewhere since refuses. */
+export const planGoBack = (input: {
+  recipe: (RecipeContent & { id: string; updatedAt: number }) | null;
+  target: RecipeNote | null;
+  seenUpdatedAt: number;
+  newId: string;
+  dayLabel: string;
+  now: number;
+}): GoBackPlan => {
+  const { recipe, target } = input;
+  if (recipe === null)
+    return {
+      kind: 'REFUSE',
+      message: 'This recipe is gone, so there is nothing to go back to.',
+    };
+  if (target === null || target.kind !== 'TWEAK') {
+    return {
+      kind: 'REFUSE',
+      message: 'That change was removed. Close this and look again.',
+    };
+  }
+  if (target.previous == null) {
+    return {
+      kind: 'REFUSE',
+      message:
+        "This change was saved before going back existed, so it can't be put back.",
+    };
+  }
+  if (recipe.updatedAt !== input.seenUpdatedAt) {
+    return {
+      kind: 'REFUSE',
+      message:
+        'The recipe was saved again while this was open, so going back would lose that. Close this and look again.',
+    };
+  }
+
+  return {
+    kind: 'RESTORE',
+    fields: getRestoreFields(target.previous),
+    entry: {
+      id: input.newId,
+      recipeId: recipe.id,
+      kind: 'TWEAK',
+      text: null,
+      changes: [`Went back to before the ${input.dayLabel} change`],
+      cookId: null,
+      stepIndex: null,
+      stepText: null,
+      reason: null,
+      previous: getRecipeSnapshot(recipe),
+      by: { kind: 'you', name: null },
+      createdAt: input.now,
+      updatedAt: input.now,
+    },
+  };
+};
+
+/** An instant as "Nov 24, 6:28 PM" in the viewer's time zone, with the year only when it isn't this one. */
+export const formatChangeWhen = (at: number) =>
+  new Date(at).toLocaleString(undefined, {
+    ...(new Date(at).getFullYear() === new Date().getFullYear()
+      ? {}
+      : { year: 'numeric' }),
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+/** "You · Nov 24, 6:28 PM", "Gemini, through Helm · …", or the assistant's own name for Nomos. An entry with no `by` is the person's. */
+export const getChangeByLine = (
+  note: RecipeNote,
+  formatWhen: (at: number) => string,
+) => {
+  const by = note.by ?? null;
+  const who =
+    by === null || by.kind === 'you'
+      ? 'You'
+      : by.kind === 'assistant'
+        ? `${by.name ?? 'An assistant'}, through Helm`
+        : (by.name ?? "Helm's assistant");
+
+  return `${who} · ${formatWhen(note.createdAt)}`;
+};
+
+/** Whether edits to a recipe are recorded as a tweak: the notes have loaded without error and the journal has room. */
 export const getTweakTracking = (state: {
-  isCooksReady: boolean;
   isNotesReady: boolean;
-  cookCount: number;
   noteCount: number;
 }): TweakTracking => {
-  if (!state.isCooksReady || !state.isNotesReady || state.cookCount === 0) {
-    return 'off';
-  }
+  if (!state.isNotesReady) return 'off';
   return isNoteHistoryFull(state.noteCount) ? 'full' : 'on';
 };
 
