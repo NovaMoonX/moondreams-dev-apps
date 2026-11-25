@@ -166,6 +166,10 @@ export function useRunwayUrlState() {
     setRequestedView('cashPosition', { history: 'replace' });
   const closeCashPosition = () =>
     setRequestedView('freeToSpend', { history: 'replace' });
+  const openFreeAlerts = () =>
+    setRequestedView('freeToSpendAlerts', { history: 'replace' });
+  const closeFreeAlerts = () =>
+    setRequestedView('freeToSpend', { history: 'replace' });
   const openHeldView = (
     held:
       'heldBills' | 'heldGoals' | 'heldEnvelopes' | 'heldHorizon' | 'heldCards',
@@ -439,6 +443,8 @@ export function useRunwayUrlState() {
     closeCheckBalance,
     openCashPosition,
     closeCashPosition,
+    openFreeAlerts,
+    closeFreeAlerts,
     openHeldView,
     closeHeldView,
     openPurchase,

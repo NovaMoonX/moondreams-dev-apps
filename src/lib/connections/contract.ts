@@ -59,16 +59,19 @@ export interface AppActionManifest {
   permission: string | null;
   /** The person's words for it. */
   label: string;
-  /** The id of the `tools` entry it is offered under: actions sharing a tool are its options, picked by the tool's `action` field. */
-  tool: string;
+  /** The `tools` entry it is offered under: actions sharing a tool are its options, picked by the tool's `action` field. */
+  tool: AssistantToolKind;
   /** True for a change that can alter or replace what the person already has (an edit), false for one that only adds, and for a read. */
   changesExisting: boolean;
 }
 
+/** The kinds of tool every app offers under the same names: `read` changes nothing, `add` only creates, `save` can alter what the person already has (and holds the creates that share its fields). Deleting is not offered to assistants. */
+export type AssistantToolKind = 'read' | 'add' | 'save';
+
 /** One tool a source app offers an assistant, grouping actions of one kind whose fields agree, so an app stays a handful of tools however many actions it has. */
 export interface AssistantToolManifest {
-  /** Snake case; the tool is named `{appId}_{id}`. */
-  id: string;
+  /** The tool is named `{appId}_{id}`; an app offers each kind at most once. */
+  id: AssistantToolKind;
   /** A short title in the person's words, shown by assistants that list tools. */
   title: string;
 }
