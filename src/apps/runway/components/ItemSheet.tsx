@@ -7,7 +7,9 @@ import {
   CalendarOff,
   Calculator,
   Check,
+  Ellipsis,
   FolderOpen,
+  ListChecks,
   HandCoins,
   ArrowLeftRight,
   Scale,
@@ -20,6 +22,7 @@ import {
   PiggyBank,
   PinOff,
   Play,
+  Plus,
   ReceiptText,
   Route,
   Ruler,
@@ -29,6 +32,11 @@ import {
   Waves,
   Wallet,
 } from 'lucide-react';
+
+import ActionTiles, { type ActionTile } from '@/components/ActionTiles';
+import ChoiceTilesSheet from '@/components/ChoiceTilesSheet';
+import FromSpendView from '@apps/runway/components/FromSpendView';
+import { useFromSpendCandidates } from '@apps/runway/hooks/useFromSpendCandidates';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -104,10 +112,10 @@ import {
   PAID_AMOUNT_WORDS,
   FORM_FLOW_WORDS,
   GROUP_WORDS,
-  ENVELOPE_SPEND_WORDS,
   ITEM_SHEET_R2_WORDS,
+  ITEM_TILE_WORDS,
+  FROM_SPEND_WORDS,
   ITEM_SHEET_WORDS,
-  PAY_ITEMS_WORDS,
   ITEM_KIND_NOUNS,
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
@@ -119,8 +127,6 @@ import {
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   MEMORY_WORDS,
-  MOVE_WORDS,
-  SET_HELD_WORDS,
   BILL_SET_ASIDE_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
@@ -149,7 +155,6 @@ import GoalForm, { type GoalStepId } from '@apps/runway/forms/GoalForm';
 import IncomeForm, { type IncomeStepId } from '@apps/runway/forms/IncomeForm';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import PayItemsView from '@apps/runway/components/PayItemsView';
-import { usePayMembers } from '@apps/runway/hooks/usePayMembers';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import {
   useAutoChecks,
@@ -259,7 +264,9 @@ type View =
   | 'changeSheet'
   | 'payItems'
   | 'pins'
-  | 'alerts';
+  | 'alerts'
+  | 'more'
+  | 'fromSpend';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 export interface ItemSheetProps {
@@ -380,6 +387,8 @@ const VIEW_NOTES: Record<View, string> = {
   changeSheet: '',
   payItems: '',
   pins: '',
+  more: '',
+  fromSpend: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -450,11 +459,6 @@ function ItemSheet({
     startsAtStep === undefined ? 'sheet' : 'change',
   );
   const [pairingsSeed, setPairingsSeed] = useState<Pairing[] | null>(null);
-  const payMembers = usePayMembers(
-    itemId,
-    kind === 'source' ? 'source' : 'payLine',
-    today,
-  );
   const [planAhead, setPlanAhead] = useState<'date' | 'stretch' | null>(null);
   const [focusedChange, setFocusedChange] = useState(presetChange ?? null);
   const [isChangeFromList, setIsChangeFromList] = useState(false);
@@ -509,6 +513,9 @@ function ItemSheet({
   });
   const [isAskingPaid, setIsAskingPaid] = useState(false);
   const [isStartOpen, setIsStartOpen] = useState(false);
+  const [isFromMore, setIsFromMore] = useState(false);
+  const [isChoosingAdd, setIsChoosingAdd] = useState(false);
+  const fromSpend = useFromSpendCandidates(today);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [chargeDueOn, setChargeDueOn] = useState<number | null>(null);
   const { confirm } = useActionModal();
@@ -690,24 +697,6 @@ function ItemSheet({
       ? (version.payload.pairings ?? [])
       : [];
 
-  const payItemNames = [
-    ...new Set([
-      ...pairings.map(
-        (pairing) =>
-          payMembers.members.find(
-            (member) => member.itemId === pairing.targetItemId,
-          )?.payload.name ??
-          [
-            ...payMembers.bills,
-            ...payMembers.envelopes,
-            ...payMembers.goals,
-          ].find(({ item }) => item.id === pairing.targetItemId)?.version
-            .payload.name ??
-          '',
-      ),
-      ...payMembers.members.map((member) => member.payload.name),
-    ]),
-  ].filter((entry) => entry !== '');
   const goTo = (nextView: View) => {
     setError(null);
     setReason('');
@@ -716,6 +705,12 @@ function ItemSheet({
     setEventId(presetEventId ?? null);
     setPauseDate(toDateInputValue(today));
     setView(nextView);
+    if (nextView === 'menu' || nextView === 'more') setIsFromMore(false);
+  };
+  const goBack = () => goTo(isFromMore ? 'more' : 'menu');
+  const openFromMore = (nextView: View) => {
+    goTo(nextView);
+    setIsFromMore(true);
   };
 
   const groupOptions = groups
@@ -1351,27 +1346,7 @@ function ItemSheet({
     setIsChangeFromList(isFromList);
   };
   const openHistory = () => goTo('history');
-  const getSetAsideSub = (totalCents: number) => {
-    if (billCoveredCents > 0)
-      return mask(
-        billSetAsideCents > 0
-          ? BILL_SET_ASIDE_WORDS.openSubPartCovered(
-              formatCents(billSetAsideCents),
-              formatCents(billCoveredCents),
-            )
-          : BILL_SET_ASIDE_WORDS.openSubCovered(formatCents(billCoveredCents)),
-      );
-    if (totalCents > 0 && billSetAsideCents >= totalCents)
-      return mask(BILL_SET_ASIDE_WORDS.openSubFull(formatCents(totalCents)));
-    return billSetAsideCents > 0
-      ? mask(
-          BILL_SET_ASIDE_WORDS.openSub(
-            formatCents(billSetAsideCents),
-            formatCents(totalCents),
-          ),
-        )
-      : BILL_SET_ASIDE_WORDS.openSubNone;
-  };
+
   const getMarkPaidSub = (due: NonNullable<typeof payment>) => {
     if (paid.needsAmount) return PAID_AMOUNT_WORDS.markSub;
     if (paidWithCard !== null) return CARD_WORDS.chargedTo(paidWithCard);
@@ -1398,6 +1373,72 @@ function ItemSheet({
   const ownHero = getOwnHero();
   const quick =
     quickChange ?? (figureLabel === undefined ? ownQuick : undefined);
+  const isPlainEdit =
+    canChange &&
+    !dayAction &&
+    (quick === undefined || quick.label === ITEM_SHEET_R2_WORDS.change);
+  const baseTiles: (ActionTile | false)[] = [
+    canSetHeld && {
+      key: 'setHeld',
+      icon: <Scale />,
+      label: ITEM_TILE_WORDS.setAmount,
+      onClick: () => goTo('setHeld'),
+    },
+    canChange &&
+      itemKind === 'bill' &&
+      header?.archivedAt == null &&
+      payment !== null &&
+      payment.paid === null && {
+        key: 'setAside',
+        icon: <PiggyBank />,
+        label: ITEM_TILE_WORDS.setAside,
+        onClick: () => (hasStarted ? goTo('setAside') : setIsStartOpen(true)),
+      },
+    isPlainEdit && {
+      key: 'edit',
+      icon: <Pencil />,
+      label: ITEM_TILE_WORDS.edit,
+      onClick: () => openChange(quick?.step ?? null),
+    },
+    canChange &&
+      (isTrackEnvelope || (itemKind === 'goal' && hasStarted)) &&
+      isArchivable &&
+      heldCents > 0 && {
+        key: 'move',
+        icon: <ArrowLeftRight />,
+        label: ITEM_TILE_WORDS.move,
+        onClick: () => goTo('move'),
+      },
+    isFunded && {
+      key: 'payItems',
+      icon: <Link2 />,
+      label: ITEM_TILE_WORDS.payItems,
+      onClick: () => goTo('payItems'),
+    },
+  ];
+  const fixedTiles = baseTiles.filter((tile): tile is ActionTile => !!tile);
+  const isPlanTile = fixedTiles.length < 3 && planAheadChoices.length > 0;
+  const tiles = isPlanTile
+    ? [
+        ...fixedTiles,
+        {
+          key: 'planChange',
+          icon: <CalendarPlus />,
+          label: ITEM_TILE_WORDS.planChange,
+          onClick: () => goTo('planChoice'),
+        },
+      ]
+    : fixedTiles;
+  const moreNames: string[] = [
+    canPlanOnHorizon && !linkedEvent && ITEM_TILE_WORDS.moreHorizon,
+    isTrackEnvelope && ITEM_TILE_WORDS.moreAlerts,
+    isTrackEnvelope && ITEM_TILE_WORDS.moreCheck,
+    canChange && isGroupable && ITEM_TILE_WORDS.moreFor,
+    itemKind === 'envelope' && isArchivable && ITEM_TILE_WORDS.morePin,
+    planAheadChoices.length > 0 && !isPlanTile && ITEM_TILE_WORDS.morePlan,
+    isStoppable && ITEM_TILE_WORDS.moreStop,
+    !isStoppable && isArchivable && ITEM_TILE_WORDS.moreArchive,
+  ].filter((name) => typeof name === 'string');
   const menu = (
     <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
       <SheetHead
@@ -1418,6 +1459,18 @@ function ItemSheet({
           hasDoor={presetDayKey === undefined}
           canCover={canChange && hasStarted && isArchivable}
         />
+      )}
+      {isTrackEnvelope && (
+        <Button
+          type='button'
+          className='w-full gap-2'
+          onClick={() =>
+            fromSpend.length > 0 ? setIsChoosingAdd(true) : setPhase('purchase')
+          }
+        >
+          <ShoppingBag className='h-4 w-4' aria-hidden='true' />
+          {SPEND_WORDS.envelopeAdd}
+        </Button>
       )}
       {hasBillRow && payment && !paid.isPaid && (
         <div className='space-y-1.5'>
@@ -1449,17 +1502,7 @@ function ItemSheet({
       {pastEnd !== null && (
         <p className='text-muted-foreground text-sm'>{pastEnd}</p>
       )}
-      {planAheadChoices.length > 0 && (
-        <Button
-          type='button'
-          variant='secondary'
-          className='w-full gap-2'
-          onClick={() => goTo('planChoice')}
-        >
-          <CalendarPlus className='h-4 w-4' aria-hidden='true' />
-          {COMING_WORDS.planChange}
-        </Button>
-      )}
+      <ActionTiles tiles={tiles} />
       <ActionGroup>
         {itemKind === 'bill' && check?.kind === 'amount' && (
           <ActionRow
@@ -1521,7 +1564,7 @@ function ItemSheet({
             }}
           />
         )}
-        {canChange && !dayAction && quick && (
+        {canChange && !dayAction && quick && !isPlainEdit && (
           <ActionRow
             isGrouped
             hasChevron
@@ -1529,16 +1572,6 @@ function ItemSheet({
             label={quick.label}
             subtitle={quick.subtitle}
             onClick={() => openChange(quick.step)}
-          />
-        )}
-        {canChange && !quick && !dayAction && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Pencil />}
-            label={ITEM_SHEET_WORDS.change}
-            subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
-            onClick={() => openChange(null)}
           />
         )}
         {canChange && linkAction && (
@@ -1561,22 +1594,6 @@ function ItemSheet({
             onClick={() => openChange(payAction.step)}
           />
         )}
-        {canChange &&
-          itemKind === 'bill' &&
-          header?.archivedAt == null &&
-          payment !== null &&
-          payment.paid === null && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<PiggyBank />}
-              label={BILL_SET_ASIDE_WORDS.open}
-              subtitle={getSetAsideSub(payment.totalCents)}
-              onClick={() =>
-                hasStarted ? goTo('setAside') : setIsStartOpen(true)
-              }
-            />
-          )}
         {canChange && maxAction && (
           <ActionRow
             isGrouped
@@ -1587,27 +1604,24 @@ function ItemSheet({
             onClick={() => openChange(maxAction.step)}
           />
         )}
-        {canChange &&
-          (isTrackEnvelope || (itemKind === 'goal' && hasStarted)) &&
-          isArchivable &&
-          heldCents > 0 && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<ArrowLeftRight />}
-              label={
-                itemKind === 'goal' ? MOVE_WORDS.openGoal : MOVE_WORDS.open
-              }
-              onClick={() => goTo('move')}
-            />
-          )}
-        {canSetHeld && (
+        {isStoppable && isUnfunded && (
           <ActionRow
             isGrouped
             hasChevron
-            icon={<Scale />}
-            label={SET_HELD_WORDS.open}
-            onClick={() => goTo('setHeld')}
+            icon={<Play />}
+            label={LIFECYCLE_WORDS.resume}
+            subtitle={ITEM_SHEET_R2_WORDS.startSavingSub}
+            onClick={() => openChange('often')}
+          />
+        )}
+        {isStoppable && goal && isPaused && !isUnfunded && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Play />}
+            label={LIFECYCLE_WORDS.resume}
+            subtitle={ITEM_SHEET_R2_WORDS.resumeSub}
+            onClick={() => goTo('resume')}
           />
         )}
         {canChange &&
@@ -1636,6 +1650,34 @@ function ItemSheet({
             onClick={() => void paid.undo()}
           />
         )}
+        {isChoosingAdd && (
+          <ChoiceTilesSheet
+            title={FROM_SPEND_WORDS.chooserTitle(payload.name)}
+            choices={[
+              {
+                key: 'new',
+                icon: <Plus />,
+                label: FROM_SPEND_WORDS.newPurchase,
+                subtitle: FROM_SPEND_WORDS.newPurchaseSub,
+                onPick: () => {
+                  setIsChoosingAdd(false);
+                  setPhase('purchase');
+                },
+              },
+              {
+                key: 'spend',
+                icon: <ListChecks />,
+                label: FROM_SPEND_WORDS.fromSpend,
+                subtitle: FROM_SPEND_WORDS.fromSpendSub,
+                onPick: () => {
+                  setIsChoosingAdd(false);
+                  goTo('fromSpend');
+                },
+              },
+            ]}
+            onClose={() => setIsChoosingAdd(false)}
+          />
+        )}
         {isStartOpen && (
           <StartingAmountsSheet isOpen onClose={() => setIsStartOpen(false)} />
         )}
@@ -1652,20 +1694,6 @@ function ItemSheet({
             billName={payload.name}
             dueOn={check.dueOn}
             onClose={() => setIsCorrecting(false)}
-          />
-        )}
-        {isFunded && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Link2 />}
-            label={PAY_ITEMS_WORDS.door}
-            subtitle={
-              payItemNames.length === 0
-                ? PAY_ITEMS_WORDS.doorNothing
-                : PAY_ITEMS_WORDS.doorSub(payItemNames)
-            }
-            onClick={() => goTo('payItems')}
           />
         )}
         {goal && (
@@ -1687,19 +1715,30 @@ function ItemSheet({
             onClick={() => goTo('horizonLink')}
           />
         )}
-        {canPlanOnHorizon && !linkedEvent && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<CalendarClock />}
-            label={HORIZON_PLAN_WORDS.door}
-            subtitle={
-              goal
-                ? HORIZON_PLAN_WORDS.goalDoorSub
-                : HORIZON_PLAN_WORDS.envelopeDoorSub
-            }
-            onClick={() => goTo('horizonPlan')}
-          />
+        {isTrackEnvelope && (
+          <>
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<ReceiptText />}
+              label={SPEND_WORDS.title}
+              onClick={() => goTo('purchases')}
+            />
+            {canChange && (
+              <ActionRow
+                isGrouped
+                hasChevron
+                icon={<Waves />}
+                label={SPILL_WORDS.row}
+                subtitle={mask(
+                  savedSpill.length === 0
+                    ? SPILL_WORDS.rowEmpty
+                    : savedSpill.map(spillNameOf).join(', then '),
+                )}
+                onClick={openSpill}
+              />
+            )}
+          </>
         )}
         <ActionRow
           isGrouped
@@ -1708,16 +1747,6 @@ function ItemSheet({
           label={ITEM_SHEET_WORDS.history}
           onClick={openHistory}
         />
-        {canChange && isGroupable && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<FolderOpen />}
-            label={GROUP_WORDS.inGroup}
-            subtitle={currentGroupName}
-            onClick={openGroup}
-          />
-        )}
         {payerRows.length > 0 && (
           <ActionRow
             isGrouped
@@ -1742,6 +1771,83 @@ function ItemSheet({
             onClick={() => void release()}
           />
         )}
+      </ActionGroup>
+      {moreNames.length > 0 && (
+        <ActionGroup>
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Ellipsis />}
+            label={ITEM_TILE_WORDS.more}
+            subtitle={ITEM_TILE_WORDS.moreSub(moreNames).replace(
+              /^./,
+              (first) => first.toUpperCase(),
+            )}
+            onClick={() => goTo('more')}
+          />
+        </ActionGroup>
+      )}
+    </div>
+  );
+
+  const moreView = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionGroup>
+        {canPlanOnHorizon && !linkedEvent && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarClock />}
+            label={HORIZON_PLAN_WORDS.door}
+            subtitle={
+              goal
+                ? HORIZON_PLAN_WORDS.goalDoorSub
+                : HORIZON_PLAN_WORDS.envelopeDoorSub
+            }
+            onClick={() => openFromMore('horizonPlan')}
+          />
+        )}
+        {isTrackEnvelope && (
+          <>
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Bell />}
+              label={ALERT_WORDS.row}
+              subtitle={
+                isAlertsLoaded
+                  ? mask(
+                      getAlertsSummary(
+                        alertSet.entries,
+                        alertSet.figureCents,
+                        isHidden || isScrambled,
+                      ),
+                    )
+                  : undefined
+              }
+              onClick={() => openFromMore('alerts')}
+            />
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Calculator />}
+              label={CHECK_WORDS.open}
+              subtitle={ITEM_SHEET_R2_WORDS.checkSub}
+              onClick={() => openFromMore('check')}
+            />
+          </>
+        )}
+        {canChange && isGroupable && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<FolderOpen />}
+            label={GROUP_WORDS.inGroup}
+            subtitle={currentGroupName}
+            onClick={openGroup}
+          />
+        )}
         {itemKind === 'envelope' && isArchivable && isPinned && (
           <ActionRow
             isGrouped
@@ -1762,70 +1868,21 @@ function ItemSheet({
             }
             onClick={() =>
               homePins.isFull
-                ? goTo('pins')
+                ? openFromMore('pins')
                 : void homePins.setPin(itemId, payload.name, true)
             }
           />
         )}
+        {planAheadChoices.length > 0 && !isPlanTile && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarPlus />}
+            label={COMING_WORDS.planChange}
+            onClick={() => openFromMore('planChoice')}
+          />
+        )}
       </ActionGroup>
-      {isTrackEnvelope && (
-        <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<ShoppingBag />}
-            label={SPEND_WORDS.envelopeAdd}
-            onClick={() => setPhase('purchase')}
-          />
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<ReceiptText />}
-            label={SPEND_WORDS.title}
-            onClick={() => goTo('purchases')}
-          />
-          {canChange && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Waves />}
-              label={SPILL_WORDS.row}
-              subtitle={mask(
-                savedSpill.length === 0
-                  ? SPILL_WORDS.rowEmpty
-                  : savedSpill.map(spillNameOf).join(', then '),
-              )}
-              onClick={openSpill}
-            />
-          )}
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Bell />}
-            label={ALERT_WORDS.row}
-            subtitle={
-              isAlertsLoaded
-                ? mask(
-                    getAlertsSummary(
-                      alertSet.entries,
-                      alertSet.figureCents,
-                      isHidden || isScrambled,
-                    ),
-                  )
-                : undefined
-            }
-            onClick={() => goTo('alerts')}
-          />
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Calculator />}
-            label={CHECK_WORDS.open}
-            subtitle={ITEM_SHEET_R2_WORDS.checkSub}
-            onClick={() => goTo('check')}
-          />
-        </ActionGroup>
-      )}
       {isArchivable && (
         <ActionGroup
           caption={
@@ -1836,16 +1893,6 @@ function ItemSheet({
               : ITEM_SHEET_R2_WORDS.stopOnly
           }
         >
-          {isStoppable && isUnfunded && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Play />}
-              label={LIFECYCLE_WORDS.resume}
-              subtitle={ITEM_SHEET_R2_WORDS.startSavingSub}
-              onClick={() => openChange('often')}
-            />
-          )}
           {isStoppable && goal && !isPaused && !isUnfunded && (
             <ActionRow
               isGrouped
@@ -1853,17 +1900,7 @@ function ItemSheet({
               icon={<Pause />}
               label={LIFECYCLE_WORDS.pause}
               subtitle={ITEM_SHEET_R2_WORDS.pauseSub}
-              onClick={() => goTo('pause')}
-            />
-          )}
-          {isStoppable && goal && isPaused && !isUnfunded && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Play />}
-              label={LIFECYCLE_WORDS.resume}
-              subtitle={ITEM_SHEET_R2_WORDS.resumeSub}
-              onClick={() => goTo('resume')}
+              onClick={() => openFromMore('pause')}
             />
           )}
           {isStoppable && (
@@ -1874,7 +1911,7 @@ function ItemSheet({
               label={LIFECYCLE_WORDS.end}
               subtitle={ITEM_SHEET_R2_WORDS.endSub}
               onClick={() => {
-                goTo('end');
+                openFromMore('end');
                 setEndPick('');
               }}
             />
@@ -1885,7 +1922,7 @@ function ItemSheet({
             icon={<Archive />}
             label={LIFECYCLE_WORDS.archive}
             subtitle={ITEM_SHEET_R2_WORDS.archiveSub}
-            onClick={() => goTo('archive')}
+            onClick={() => openFromMore('archive')}
           />
           {canForget && (
             <ActionRow
@@ -1901,10 +1938,20 @@ function ItemSheet({
     </div>
   );
 
+  const fromSpendView = (
+    <FromSpendView
+      envelopeId={itemId}
+      envelopeName={payload.name}
+      today={today}
+      onBack={goBack}
+      onDone={() => goTo('menu')}
+    />
+  );
+
   const browse = (
     <div className='flex flex-1 flex-col gap-4'>
       <BackHeading
-        onBack={() => goTo('menu')}
+        onBack={goBack}
         title={
           view === 'balance'
             ? GOAL_CHART_WORDS.title
@@ -1950,7 +1997,7 @@ function ItemSheet({
       isRepeating={
         version.kind === 'source' || version.payload.schedule.kind !== 'once'
       }
-      onBack={() => goTo('menu')}
+      onBack={goBack}
       onEditPairings={(initial) => {
         setPairingsSeed(initial);
         setPhase('funds');
@@ -1960,7 +2007,7 @@ function ItemSheet({
 
   const pinsView = (
     <div className='flex flex-1 flex-col gap-4'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={goBack} />
       <ActionTitle>{HOME_PIN_WORDS.title}</ActionTitle>
       <p className='text-muted-foreground -mt-2 text-sm'>
         {homePins.isFull ? HOME_PIN_WORDS.full : HOME_PIN_WORDS.subtitle}
@@ -1983,7 +2030,7 @@ function ItemSheet({
 
   const chargeView = chargeDueOn !== null && (
     <div className='flex flex-1 flex-col gap-4'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={goBack} />
       <ChargePickerView
         billId={itemId}
         billName={payload.name}
@@ -1995,7 +2042,7 @@ function ItemSheet({
 
   const groupView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={goBack} />
       <ActionTitle>{FORM_FLOW_WORDS.groupTitle}</ActionTitle>
       <PickOrCreate
         label={FORM_FLOW_WORDS.group}
@@ -2026,7 +2073,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={() => goTo('menu')}
+            onClick={goBack}
             disabled={isSaving}
           >
             Cancel
@@ -2062,7 +2109,7 @@ function ItemSheet({
     "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
   const alertsView = (
     <div className='flex flex-1 flex-col gap-4'>
-      <BackHeading onBack={() => goTo('menu')} title={ALERT_WORDS.title} />
+      <BackHeading onBack={goBack} title={ALERT_WORDS.title} />
       <AlertsPanel
         target={{ kind: 'envelope', itemId }}
         eachTimeCents={eachTimeCents}
@@ -2071,7 +2118,7 @@ function ItemSheet({
   );
   const spillView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={goBack} />
       <ActionTitle>
         {SPILL_WORDS.title(
           itemKind === 'envelope' ? (payload as EnvelopeSealed).name : '',
@@ -2180,7 +2227,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={() => goTo('menu')}
+            onClick={goBack}
             disabled={isSaving}
           >
             Cancel
@@ -2208,7 +2255,7 @@ function ItemSheet({
       leftCents={heldCents}
       hasEnvelopes={isTrackingLevel(level)}
       today={today}
-      onBack={() => goTo('menu')}
+      onBack={goBack}
     />
   );
 
@@ -2228,7 +2275,7 @@ function ItemSheet({
             }
       }
       today={today}
-      onBack={() => goTo('menu')}
+      onBack={goBack}
     />
   );
 
@@ -2248,7 +2295,7 @@ function ItemSheet({
       }
       account={null}
       today={today}
-      onBack={() => goTo('menu')}
+      onBack={goBack}
     />
   );
 
@@ -2273,7 +2320,7 @@ function ItemSheet({
             }
       }
       today={today}
-      onBack={() => goTo('menu')}
+      onBack={goBack}
       onNewEvent={setHorizonSeed}
       onClose={onClose}
     />
@@ -2284,13 +2331,13 @@ function ItemSheet({
       goalName={payload.name}
       event={linkedEvent}
       today={today}
-      onBack={() => goTo('menu')}
+      onBack={goBack}
     />
   );
 
   const heldInView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={goBack} />
       <ActionTitle>{ACCOUNT_WORDS.whichAccountTitle}</ActionTitle>
       <AccountPicker
         label={ACCOUNT_WORDS.whichAccountLabel}
@@ -2305,7 +2352,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={() => goTo('menu')}
+            onClick={goBack}
             disabled={isSaving}
           >
             Cancel
@@ -2330,7 +2377,7 @@ function ItemSheet({
       return LIFECYCLE_WORDS.endAfterConfirm(formatDateOrdinalUTC(endOn));
     return getActionTitle(view, itemKind);
   };
-  const leaveAction = () => goTo('menu');
+  const leaveAction = goBack;
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={leaveAction} />
@@ -2463,13 +2510,13 @@ function ItemSheet({
     <PlanAheadView
       choices={planAheadChoices}
       onPick={planAheadOn}
-      onBack={() => (presetEventId === undefined ? goTo('menu') : onClose())}
+      onBack={() => (presetEventId === undefined ? goBack() : onClose())}
     />
   );
 
   const comingListView = (
     <div className='flex flex-1 flex-col gap-4'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={goBack} />
       <ActionTitle>{COMING_WORDS.listTitle}</ActionTitle>
       <ComingChangesList
         changes={comingChanges}
@@ -2538,14 +2585,18 @@ function ItemSheet({
                                         ? payItemsView
                                         : view === 'pins'
                                           ? pinsView
-                                          : view === 'dayAction' &&
-                                              dayAction?.renderView
-                                            ? dayAction.renderView({
-                                                onBack: () => goTo('menu'),
-                                                onClose,
-                                                openChange,
-                                              })
-                                            : action
+                                          : view === 'more'
+                                            ? moreView
+                                            : view === 'fromSpend'
+                                              ? fromSpendView
+                                              : view === 'dayAction' &&
+                                                  dayAction?.renderView
+                                                ? dayAction.renderView({
+                                                    onBack: goBack,
+                                                    onClose,
+                                                    openChange,
+                                                  })
+                                                : action
         }
       >
         {menu}

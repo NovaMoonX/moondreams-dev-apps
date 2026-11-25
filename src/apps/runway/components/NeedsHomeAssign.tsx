@@ -60,6 +60,8 @@ interface NeedsHomeAssignProps {
   onDone: () => void;
   /** Called with the purchase as sent when the sheet should stay open to offer a rule for it (the third time in a row); then `onDone` is not called. */
   onSuggestRule?: (placed: OpenPurchase) => void;
+  /** Offers only this envelope, for a sheet that already knows where the purchase goes. */
+  envelopeId?: string;
 }
 
 /** The likeliest envelopes for an unplaced purchase, then every envelope; never a split. */
@@ -67,6 +69,7 @@ function NeedsHomeAssign({
   purchase,
   onDone,
   onSuggestRule,
+  envelopeId: onlyEnvelopeId,
 }: NeedsHomeAssignProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -96,12 +99,15 @@ function NeedsHomeAssign({
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
-  const likely = rankLikelyEnvelopes(
-    purchase.merchant,
-    history,
-    envelopes.map(({ item }) => item.id),
-    LIKELY_SHOWN,
-  );
+  const likely =
+    onlyEnvelopeId !== undefined
+      ? [onlyEnvelopeId]
+      : rankLikelyEnvelopes(
+          purchase.merchant,
+          history,
+          envelopes.map(({ item }) => item.id),
+          LIKELY_SHOWN,
+        );
 
   const putBack = async (uid: string, sent: OpenPurchase) => {
     try {
@@ -275,7 +281,9 @@ function NeedsHomeAssign({
       : NEEDS_HOME_WORDS.chooseEnvelope;
   return (
     <div className='space-y-2'>
-      <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.whichTitle}</p>
+      {onlyEnvelopeId === undefined && (
+        <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.whichTitle}</p>
+      )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {likely.map((id) => (
           <ItemRow
@@ -293,21 +301,23 @@ function NeedsHomeAssign({
             onOpen={() => send(id)}
           />
         ))}
-        <ItemRow
-          leading={
-            <span
-              className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
-              aria-hidden='true'
-            >
-              <LayoutGrid className='h-5 w-5' />
-            </span>
-          }
-          name={otherLabel}
-          detail={NEEDS_HOME_WORDS.chooseEnvelopeSub}
-          isPrivate={false}
-          ariaLabel={`${otherLabel}, ${NEEDS_HOME_WORDS.chooseEnvelopeSub}`}
-          onOpen={() => setIsPicking(true)}
-        />
+        {onlyEnvelopeId === undefined && (
+          <ItemRow
+            leading={
+              <span
+                className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
+                aria-hidden='true'
+              >
+                <LayoutGrid className='h-5 w-5' />
+              </span>
+            }
+            name={otherLabel}
+            detail={NEEDS_HOME_WORDS.chooseEnvelopeSub}
+            isPrivate={false}
+            ariaLabel={`${otherLabel}, ${NEEDS_HOME_WORDS.chooseEnvelopeSub}`}
+            onOpen={() => setIsPicking(true)}
+          />
+        )}
       </ul>
       {error && (
         <p className='text-destructive text-sm' role='alert'>

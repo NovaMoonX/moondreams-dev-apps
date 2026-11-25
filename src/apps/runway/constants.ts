@@ -3199,6 +3199,42 @@ export const COVERAGE_WORDS = {
     `Your plan already comes up short for ${name} on ${on}, before this change.`,
 };
 
+/** The short labels of a sheet's action tiles, and its More door. */
+export const ITEM_TILE_WORDS = {
+  edit: 'Edit',
+  setAmount: 'Set amount',
+  setAside: 'Set aside',
+  move: 'Move',
+  payItems: 'What it pays for',
+  planChange: 'Plan a change',
+  more: 'More',
+  moreSub: (names: readonly string[]) =>
+    names.length <= 3
+      ? formatList([...names])
+      : `${names.slice(0, 2).join(', ')} and more`,
+  moreHorizon: 'Horizon',
+  moreAlerts: 'alerts',
+  moreCheck: 'check an amount',
+  moreFor: 'what it is for',
+  morePin: 'pin',
+  morePlan: 'plan a change',
+  moreStop: 'end it',
+  moreArchive: 'archive',
+} as const;
+
+export const FROM_SPEND_WORDS = {
+  chooserTitle: (name: string) => `Add to ${name}`,
+  newPurchase: 'New purchase',
+  newPurchaseSub: 'Type it in',
+  fromSpend: 'From Spend',
+  fromSpendSub: 'One already in Spend',
+  title: 'From Spend',
+  search: 'Search purchases',
+  empty: 'Nothing in Spend is waiting for an envelope.',
+  noMatch: 'No purchase matches that.',
+  sendTitle: (name: string) => `Put it in ${name}`,
+} as const;
+
 export const ITEM_SHEET_R2_WORDS = {
   moreDetails: 'More details',
   showToChange: 'Show amounts to change it',
