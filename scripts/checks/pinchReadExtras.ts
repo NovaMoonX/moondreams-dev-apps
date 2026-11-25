@@ -9,10 +9,7 @@ import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
 } from '../../src/apps/pinch/constants.ts';
 import type { Idea } from '../../src/apps/pinch/types.ts';
-import {
-  normalizeExtractedRecipe,
-  readTitle,
-} from '../../src/apps/pinch/utils/normalizeRecipe.ts';
+import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import {
   getExtraLinks,
   getIdeaExtras,
@@ -20,6 +17,7 @@ import {
   getVideoExtras,
   NO_EXTRAS,
   readIsoMinutes,
+  readPageTitle,
   readYieldServings,
   withPageFallbacks,
 } from '../../src/apps/pinch/utils/readExtras.ts';
@@ -244,12 +242,34 @@ assert.equal(readYieldServings('Serves 6-8'), 6);
 assert.equal(readYieldServings('2 dozen cookies'), null);
 assert.equal(readYieldServings('1 9x13 pan'), null);
 assert.equal(readYieldServings(['1 loaf', '12 slices']), null);
+assert.equal(readYieldServings('6 servings (1 cup each)'), 6);
+assert.equal(readYieldServings('Serves: 4'), 4);
+assert.equal(readYieldServings('Yield: 8'), 8);
+assert.equal(readYieldServings('about 6 servings'), 6);
+assert.equal(readYieldServings('Makes 12'), null);
+assert.equal(readYieldServings('Makes 12 servings'), 12);
+assert.equal(readYieldServings(['12 rolls', '6 servings']), 6);
+for (const real of [
+  "Mom's #1 Chili",
+  'Mac & Cheese [Easy]',
+  'Dinner @ Home Pasta',
+]) {
+  assert.equal(readPageTitle(real), real);
+}
+assert.equal(
+  normalizeExtractedRecipe({
+    title: "Mom's #1 Chili",
+    ingredients: [],
+    steps: [],
+  }).title,
+  "Mom's #1 Chili",
+);
 const LEAKED =
   'Easy Candied YamsRecipe Search Result Recipe Data The Page Publishes (May Be Incomplete): _Type:Recipe, Name:Easy Candied Yams, Author:_Id:Https://www.lovebakesgoodcakes.com/#/schema/person/2ba133f1b1';
-assert.equal(readTitle(LEAKED), null);
-assert.equal(readTitle('Easy candied yams'), 'Easy candied yams');
+assert.equal(readPageTitle(LEAKED), null);
+assert.equal(readPageTitle('Easy candied yams'), 'Easy candied yams');
 assert.equal(
-  readTitle("Grandma's 3-ingredient biscuits"),
+  readPageTitle("Grandma's 3-ingredient biscuits"),
   "Grandma's 3-ingredient biscuits",
 );
 assert.equal(

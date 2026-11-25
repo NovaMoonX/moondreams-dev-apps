@@ -133,7 +133,9 @@ export const readIsoMinutes = (value: unknown): number | null => {
 };
 
 const SERVINGS_YIELD =
-  /^\s*(?:serves\s+|makes\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|people|persons?|portions?|helpings?)?\s*$/i;
+  /^\s*(?:(?:serves|yields?)\s*:?\s*)?(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|people|persons?|portions?|helpings?)?\s*(?:\(.*\))?\s*$/i;
+const MAKES_SERVINGS =
+  /^\s*makes\s*:?\s*(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|portions?|helpings?)\b/i;
 
 /** Servings in a Recipe's `recipeYield` when it reads as servings ("8", "8 servings", "Serves 6-8", ["8", "8 servings"], 8); a pan, loaf, dozen or quart is no count of servings. */
 export const readYieldServings = (value: unknown): number | null => {
@@ -141,11 +143,25 @@ export const readYieldServings = (value: unknown): number | null => {
     .map((entry) =>
       typeof entry === 'number'
         ? entry
-        : Number(SERVINGS_YIELD.exec(String(entry ?? ''))?.[1]),
+        : Number(
+            (SERVINGS_YIELD.exec(String(entry ?? '')) ??
+              MAKES_SERVINGS.exec(String(entry ?? '')))?.[1],
+          ),
     )
     .find((count) => Number.isInteger(count) && count > 0 && count <= 500);
   return found ?? null;
 };
+
+const LEAKED_TITLE =
+  /https?:\/\/|www\.|[{}]|\b_?(?:type|id):\S|\bschema\.org\b|recipe data|may be incomplete|page text|begin recipe/i;
+const MAX_TITLE_WORDS = 20;
+
+/** A page reading's title that carries a web address, data keys or the reading's own labels was copied from the input, not written: null, so the page's own title fills it. Page readings only. */
+export const readPageTitle = (title: string | null): string | null =>
+  title !== null &&
+  (LEAKED_TITLE.test(title) || title.split(/\s+/).length > MAX_TITLE_WORDS)
+    ? null
+    : title;
 
 const getPublished = (
   nodes: readonly Record<string, unknown>[] | undefined,
@@ -176,7 +192,7 @@ export const withPageFallbacks = (
   );
   const result = {
     ...recipe,
-    title: recipe.title ?? (pageTitle || null),
+    title: readPageTitle(recipe.title) ?? (pageTitle || null),
     description: recipe.description ?? (pageDescription || null),
     prepMinutes:
       recipe.prepMinutes ?? readIsoMinutes(getPublished(nodes, 'prepTime')),

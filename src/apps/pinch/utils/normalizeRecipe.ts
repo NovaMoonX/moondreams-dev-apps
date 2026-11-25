@@ -276,19 +276,6 @@ const mergeOtherMeasures = (
   ];
 };
 
-const LEAKED_TITLE =
-  /https?:\/\/|www\.|[{}[\]@#]|\b_?(?:type|id)\s*:|\bschema\b|recipe data|may be incomplete|page text|begin recipe/i;
-const MAX_TITLE_WORDS = 14;
-
-/** A title that carries a web address, data keys or the reading's own labels was copied from the input, not written: null, so the page's own title or the person fills it. */
-export const readTitle = (value: unknown): string | null => {
-  const title = asString(value)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null;
-  const isLeaked =
-    title !== null &&
-    (LEAKED_TITLE.test(title) || title.split(/\s+/).length > MAX_TITLE_WORDS);
-  return isLeaked ? null : title;
-};
-
 /** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its note. */
 export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<
@@ -298,7 +285,7 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
 
   return {
-    title: readTitle(parsed.title),
+    title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
     isServingsEstimate:
       parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
