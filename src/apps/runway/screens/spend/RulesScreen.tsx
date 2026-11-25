@@ -40,7 +40,8 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const rules = useAppSelector(selectRules);
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
-  const { describe, isEnded, getEnvelopeName, getCardLabel } = useRuleNames();
+  const { describe, describeParts, isEnded, getEnvelopeName, getCardLabel } =
+    useRuleNames();
   const { openView } = useRunwayUrlState();
   const [query, setQuery] = useState('');
   const requestedId = useOpenRuleRequest();
@@ -104,13 +105,15 @@ function RulesScreen({ onClose }: RulesScreenProps) {
 
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
     const sentence = describe(rule, isCardLeftOut);
+    const { subject, outcome } = describeParts(rule, isCardLeftOut);
     const detail = isEnded(rule)
       ? RULE_WORDS.endedEnvelope(getEnvelopeName(rule.target))
-      : undefined;
+      : outcome;
     return (
       <ItemRow
         key={rule.id}
-        name={sentence}
+        name={subject}
+        nameLines={3}
         leading={
           <span
             className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
@@ -121,7 +124,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
         }
         detail={detail}
         isPrivate={false}
-        ariaLabel={`${sentence}${detail ? `, ${detail}` : ''}. Open`}
+        ariaLabel={`${sentence}${isEnded(rule) ? `, ${detail}` : ''}. Open`}
         onOpen={() => setOpenId(rule.id)}
       />
     );
@@ -197,6 +200,10 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           seed={seed}
           onBack={backToAdd}
           onClose={() => setSeed(null)}
+          onOpenRule={(ruleId) => {
+            setSeed(null);
+            setOpenId(ruleId);
+          }}
         />
       )}
       {opened !== null && (

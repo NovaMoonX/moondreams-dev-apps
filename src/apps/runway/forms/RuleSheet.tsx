@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import AppCheckbox from '@/components/AppCheckbox';
@@ -17,6 +17,7 @@ import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isOpenToPlace } from '@apps/runway/engine/purchases';
 import {
+  findCoveringRules,
   isBroadMerchant,
   RULE_VARIES,
   toMerchantKey,
@@ -63,6 +64,7 @@ interface RuleSheetProps {
   stayName?: string | null;
   onDecline?: () => void;
   seed?: Facts | null;
+  onOpenRule?: (ruleId: string) => void;
 }
 
 export interface Facts {
@@ -108,6 +110,7 @@ function RuleSheet({
   stayName = null,
   onDecline,
   seed = null,
+  onOpenRule,
 }: RuleSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -124,6 +127,18 @@ function RuleSheet({
   const hasMerchant = facts.merchantKey !== null;
   const hasKind = facts.category !== null && (rule !== null || !isBroad);
   const hasCard = facts.cardId !== null && getCardLabel(facts.cardId) !== null;
+  const covering = rule
+    ? { kind: null, card: null }
+    : findCoveringRules(
+        {
+          merchant: facts.merchantName,
+          category: facts.category,
+          cardId: facts.cardId,
+        },
+        rules,
+      );
+  const canTickKind = hasKind && covering.kind === null;
+  const canTickCard = hasCard && covering.card === null;
 
   const [ticks, setTicks] = useState(() => {
     if (rule) {
@@ -135,8 +150,8 @@ function RuleSheet({
     }
     return {
       merchant: hasMerchant,
-      kind: !hasMerchant && hasKind,
-      card: !hasMerchant && !hasKind && hasCard,
+      kind: !hasMerchant && canTickKind,
+      card: !hasMerchant && !canTickKind && canTickCard,
     };
   });
   const chosen = purchase?.lines.find(
@@ -391,6 +406,7 @@ function RuleSheet({
             name: 'merchant' as const,
             label: facts.merchantName ?? '',
             sub: RULE_WORDS.thisMerchantSub,
+            cover: null,
           },
         ]
       : []),
@@ -400,6 +416,7 @@ function RuleSheet({
             name: 'kind' as const,
             label: getCategoryLabel(facts.category ?? ''),
             sub: RULE_WORDS.thisKindSub,
+            cover: covering.kind,
           },
         ]
       : []),
@@ -409,6 +426,7 @@ function RuleSheet({
             name: 'card' as const,
             label: RULE_WORDS.thisCard(getCardLabel(facts.cardId) ?? ''),
             sub: RULE_WORDS.thisCardSub,
+            cover: covering.card,
           },
         ]
       : []),
@@ -438,24 +456,71 @@ function RuleSheet({
             )}
           </div>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {tickRows.map(({ name, label, sub }) => (
-              <li key={name}>
-                <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
-                  <AppCheckbox
-                    checked={ticks[name]}
-                    onCheckedChange={(next) => setTick(name, Boolean(next))}
-                  />
-                  <span className='block min-w-0 flex-1 text-sm'>
-                    <span className='line-clamp-2 font-medium break-words'>
-                      {label}
-                    </span>
-                    <span className='text-muted-foreground line-clamp-2 break-words'>
-                      {sub}
-                    </span>
+            {tickRows.map(({ name, label, sub, cover }) => {
+              const text = (
+                <span className='block min-w-0 flex-1 text-sm'>
+                  <span className='line-clamp-2 font-medium break-words'>
+                    {label}
                   </span>
-                </label>
-              </li>
-            ))}
+                  <span
+                    className={
+                      cover
+                        ? 'text-muted-foreground block break-words'
+                        : 'text-muted-foreground line-clamp-2 break-words'
+                    }
+                  >
+                    {cover
+                      ? RULE_WORDS.alreadyOn(describe(cover, name === 'card'))
+                      : sub}
+                  </span>
+                </span>
+              );
+              if (cover) {
+                const mark = (
+                  <span
+                    className='bg-primary text-primary-foreground grid size-5 shrink-0 place-items-center rounded-[4px]'
+                    aria-hidden='true'
+                  >
+                    <Check className='size-3.5' strokeWidth={3} />
+                  </span>
+                );
+                return (
+                  <li key={name}>
+                    {onOpenRule ? (
+                      <Button
+                        type='button'
+                        variant='base'
+                        className='text-foreground! flex min-h-14 w-full items-center justify-start! gap-3! rounded-none! px-3! py-2! text-left font-normal'
+                        onClick={() => onOpenRule(cover.id)}
+                      >
+                        {mark}
+                        {text}
+                        <ChevronRight
+                          className='text-muted-foreground h-4 w-4 shrink-0'
+                          aria-hidden='true'
+                        />
+                      </Button>
+                    ) : (
+                      <div className='flex min-h-14 items-center gap-3 px-3 py-2'>
+                        {mark}
+                        {text}
+                      </div>
+                    )}
+                  </li>
+                );
+              }
+              return (
+                <li key={name}>
+                  <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
+                    <AppCheckbox
+                      checked={ticks[name]}
+                      onCheckedChange={(next) => setTick(name, Boolean(next))}
+                    />
+                    {text}
+                  </label>
+                </li>
+              );
+            })}
           </ul>
         </div>
         <div className='space-y-2'>

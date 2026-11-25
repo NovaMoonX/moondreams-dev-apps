@@ -9,7 +9,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
 import type { RuleSealed } from '@apps/runway/types';
-import { describeRule } from '@apps/runway/utils/ruleText';
+import { describeRule, describeRuleParts } from '@apps/runway/utils/ruleText';
 
 /** A rule as a sentence, and whether its envelope has ended (then it is not applied). */
 export function useRuleNames() {
@@ -27,14 +27,17 @@ export function useRuleNames() {
   const getEnvelopeName = (target: string) =>
     looks.get(target)?.name ?? RULE_WORDS.noEnvelope;
 
+  const toNames = (rule: RuleSealed, isCardLeftOut: boolean) => ({
+    isCardLeftOut,
+    envelope: rule.target === RULE_VARIES ? '' : getEnvelopeName(rule.target),
+    card: getCardLabel(rule.cardId),
+  });
+
   return {
     describe: (rule: RuleSealed, isCardLeftOut = false) =>
-      describeRule(rule, {
-        isCardLeftOut,
-        envelope:
-          rule.target === RULE_VARIES ? '' : getEnvelopeName(rule.target),
-        card: getCardLabel(rule.cardId),
-      }),
+      describeRule(rule, toNames(rule, isCardLeftOut)),
+    describeParts: (rule: RuleSealed, isCardLeftOut = false) =>
+      describeRuleParts(rule, toNames(rule, isCardLeftOut)),
     isEnded: (rule: RuleSealed) =>
       rule.target !== RULE_VARIES && !liveIds.has(rule.target),
     getEnvelopeName,
