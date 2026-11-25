@@ -16,3 +16,10 @@ export const NOTICE_QUIET_CLASSES = {
   warning: `${QUIET_HIT} text-warning-foreground! dark:text-warning! underline underline-offset-2`,
   success: `${QUIET_HIT} text-emerald-700! dark:text-success! underline underline-offset-2`,
 } as const;
+
+/** Classes for a `LockedButton` (`size='sm'`) inside a notice: its dashed outline and label in the notice's tone on the notice's own tint, with a 40px hit area. */
+export const NOTICE_LOCKED_CLASSES = {
+  info: `${HIT} bg-transparent! border-foreground/50! text-foreground!`,
+  warning: `${HIT} bg-transparent! border-warning/70! text-warning-foreground! dark:text-warning!`,
+  success: `${HIT} bg-transparent! border-emerald-700/60! text-emerald-700! dark:border-success/60! dark:text-success!`,
+} as const;
