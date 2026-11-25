@@ -59,7 +59,6 @@ const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
 const LANGUAGE_LINE =
   /^(?:(?:[a-z]+ )?(?:spoken|dubbed)(?: with (?:[a-z]+ )?subtitles)?|(?:with )?(?:[a-z]+ )?subtitles|open caption(?:ed)?)$/i;
 
-/** One line per non-empty line, its spaces collapsed, so a title and a theater on their own lines stay apart; a line that only names the language is dropped. */
 const toLines = (value: string) =>
   value
     .split('\n')
