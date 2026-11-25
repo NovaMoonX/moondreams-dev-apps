@@ -343,25 +343,23 @@ export const PINCH_SHARES: SourceShares = {
           id: 'editRecipes',
           label: 'Edit recipes',
           meaning:
-            "Change a recipe's name, servings, times, description, ingredients or steps. Each edit shows in the recipe's Changes, where you can undo it.",
+            "Change a recipe's name, servings, times, description, ingredients or steps.",
         },
         {
           id: 'addRecipes',
           label: 'Add recipes',
-          meaning:
-            'Save a new recipe to your Recipes. It can never remove one.',
+          meaning: 'Save a new recipe. It can never remove one.',
         },
         {
           id: 'planMeals',
           label: 'Plan meals',
-          meaning:
-            'Put a recipe or a dish on a day of your plan. It never takes a meal off.',
+          meaning: 'Put a recipe or dish on your plan. It never takes one off.',
         },
         {
           id: 'addToShoppingList',
           label: 'Add to the shopping list',
           meaning:
-            'Add things to your shopping list, or more of something already on it. It never ticks or removes anything.',
+            'Add to your shopping list. It never ticks or removes anything.',
         },
       ],
       capabilities: { read: true, write: true, backgroundSync: true },

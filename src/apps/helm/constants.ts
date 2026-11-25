@@ -1181,7 +1181,7 @@ export const HELM_COPY = {
   connectedAppsCount: (count: number) => `${count} connected`,
   connectedAppsNone: 'Not connected',
   connectedAppsLead: (name: string) =>
-    `${name} can read these. It doesn't change anything in them, apart from keeping your plan in a Google Calendar when you ask it to.`,
+    `${name} can read these. Some apps also let it make changes, only the ones you switch on, each with an Undo, and it keeps your plan in a Google Calendar when you ask it to.`,
   connectReadOnlyPromise: (name: string, app: string) =>
     `${name} can read these. It can't add, change or delete anything in ${app}.`,
   connectReadAndChangePromise: (name: string, app: string) =>
@@ -1197,7 +1197,7 @@ export const HELM_COPY = {
   assistantsRowNone: 'Claude, Gemini and others',
   assistantsRowCount: (count: number) => `${count} connected`,
   assistantsLead: (app: string) =>
-    `Claude, Gemini or another assistant can read your ${app} and, if you let it, add to it. What it reads goes to that company and is handled under its own terms.`,
+    `Claude, Gemini or another assistant can read your ${app} and, if you let it, add to it or change your apps. What it reads goes to that company and is handled under its own terms.`,
   assistantsFailed:
     "Your assistants didn't open. Close this page and open it again.",
   assistantsLoading: 'Opening your assistants',
@@ -1205,6 +1205,7 @@ export const HELM_COPY = {
   assistantLastUsed: (when: string) => `Last used ${when}`,
   assistantNeverUsed: 'Not used yet',
   assistantReads: 'Can look up your tasks, calendar, topics and procedures',
+  assistantGeminiAsksTitle: 'Gemini may still ask',
   assistantGeminiAsks: (app: string) =>
     `Gemini may still ask before each lookup, even after Always allow. That is Gemini's own setting, not ${app}'s.`,
   assistantReadScopeLabels: {
@@ -1240,12 +1241,14 @@ export const HELM_COPY = {
   assistantWritesHint: (canWrite: boolean) =>
     canWrite
       ? 'Asks questions and adds tasks and notes. Undo anything in Activity.'
-      : 'It can look things up, nothing more.',
+      : 'It can look things up, and make only the app changes you switch on below.',
   assistantChangesLabel: 'Change things in your apps',
   assistantChangesHint: (name: string, isOn: boolean) =>
     isOn
       ? `${name} can make the changes you've switched on for each app, and every one has an Undo. Choose them under Connected apps.`
-      : `${name} can't change anything in your apps. Turn this on to let it make the changes you choose for each app, with an Undo for each.`,
+      : `Off. ${name} can't change your apps.`,
+  assistantChangesNeedsRead: (name: string) =>
+    `${name} reads a recipe before it changes it, so this needs Read your apps.`,
   assistantPrivacy: (name: string) =>
     `What ${name} reads goes to the company behind it, under its own terms.`,
   assistantConnectedOn: (date: string) => `Connected ${date}`,
@@ -1328,9 +1331,15 @@ export const HELM_COPY = {
   connectionThisAccount: 'This account',
   connectionAccountValue: 'Your moondreams account',
   connectionReads: (name: string) => `What ${name} reads`,
-  connectionChanges: 'What assistants can change',
+  connectionChanges: 'What your assistants can change',
   connectionChangesOutsideLine:
-    'Outside assistants, like Claude or Gemini, also need their own "Change things in your apps" switch, in Settings > Connected assistants.',
+    'Outside assistants, like Claude or Gemini, also need their own "Change things in your apps" switch, in Settings, then Connected assistants. Each change shows in Done for you, and a recipe edit in its Changes.',
+  connectionChangeNeeds: {
+    editRecipes: {
+      categoryId: 'fullRecipes',
+      line: "Assistants can't read the steps yet, so they can only change what they can see. Turn on Full recipes above.",
+    },
+  } as Record<string, { categoryId: string; line: string }>,
   connectionSwitchedOff: (label: string) =>
     `${label} switched off. Its copies were removed.`,
   connectionUndo: 'Undo',

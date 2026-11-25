@@ -5,6 +5,7 @@ import { History, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackHeading from '@/components/BackHeading';
 import BackLink from '@/components/BackLink';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -19,11 +20,7 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import {
-  formatChangeWhen,
-  getChangeByLine,
-  getUndoableTweakIds,
-} from '@apps/pinch/utils/notes';
+import { formatChangeWhen, getUndoableTweakIds } from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
 
@@ -69,6 +66,11 @@ function ChangeEntryView({
 
   const day = formatDateShort(note.createdAt);
   const canGoBack = note.previous != null;
+  const canUndo = undoableIds.includes(note.id);
+  const heading =
+    note.by == null || note.by.kind === 'you'
+      ? 'Your change'
+      : `Change by ${note.by.name ?? 'an assistant'}`;
   const run = async (action: () => Promise<unknown>, done: string) => {
     setIsWorking(true);
     setError(null);
@@ -85,10 +87,10 @@ function ChangeEntryView({
 
   return (
     <div className='space-y-4'>
-      <BackLink onBack={onBack} />
+      <BackHeading onBack={onBack} title={heading} />
       <div className='space-y-0.5'>
-        <p className='font-medium wrap-break-word'>
-          {getChangeByLine(note, formatChangeWhen)}
+        <p className='text-muted-foreground text-sm'>
+          {formatChangeWhen(note.createdAt)}
         </p>
         {note.text && (
           <p className='text-muted-foreground text-sm wrap-break-word'>
@@ -98,7 +100,7 @@ function ChangeEntryView({
       </div>
       <ChangeList changes={note.changes ?? []} />
       <ActionGroup isRoomy>
-        {undoableIds.includes(note.id) && (
+        {canUndo && (
           <ActionRow
             isGrouped
             isRoomy
@@ -123,7 +125,7 @@ function ChangeEntryView({
             isRoomy
             icon={<History />}
             label='Go back to before this change'
-            subtitle='Keeps the history, and this is recorded as a change you can undo'
+            subtitle='Put the recipe back as it was before this change'
             isDisabled={isWorking}
             onClick={() =>
               void run(
@@ -142,6 +144,11 @@ function ChangeEntryView({
           />
         )}
       </ActionGroup>
+      {!canUndo && (
+        <p className='text-muted-foreground text-sm'>
+          Only the latest change can be undone.
+        </p>
+      )}
       {!canGoBack && (
         <p className='text-muted-foreground text-sm'>
           This change was saved without a copy of the recipe before it, so the
