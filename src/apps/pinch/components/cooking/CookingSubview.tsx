@@ -86,6 +86,7 @@ import {
   type CookVoiceActions,
   type CookVoiceResult,
 } from '@apps/pinch/hooks/useCookVoice';
+import { usePepperActions } from '@apps/pinch/hooks/usePepperActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { usePantryTake } from '@apps/pinch/hooks/usePantryTake';
 import { usePutAway } from '@apps/pinch/hooks/usePutAway';
@@ -548,6 +549,7 @@ function CookingSession({
   const voiceGuardedUntil = useRef(0);
   const hasCoachedNext = useRef(false);
   const hasCoachedUndo = useRef(false);
+  const isPepperRun = useRef(false);
   const lastDictated = useRef<{
     id: string;
     at: number;
@@ -1815,18 +1817,23 @@ function CookingSession({
             plate[voiceStep.recipe.id]?.servings ?? voiceStep.recipe.servings,
           );
 
+  /** A question from a Pepper turn is a line to say, never a pending voice question: the person's answer goes back to Pepper as the next turn. */
+  const askAloud = (show: string, speak: string): CookVoiceResult =>
+    isPepperRun.current ? refuse(show, speak) : done(show, speak);
   const askWhich = (
     verb: PendingTimerVerb,
     asked: VoiceTimer[],
     arg: TimerArg,
     missed: string | null = null,
   ): CookVoiceResult => {
-    setPending({
-      kind: 'TIMER',
-      ids: asked.map((timer) => timer.id),
-      verb,
-      ...arg,
-    });
+    if (!isPepperRun.current) {
+      setPending({
+        kind: 'TIMER',
+        ids: asked.map((timer) => timer.id),
+        verb,
+        ...arg,
+      });
+    }
     const { show, speak } = describeTimerQuestion(
       asked.map((timer) => ({
         name:
@@ -1838,7 +1845,7 @@ function CookingSession({
       TIMER_VERB_WORDS[verb],
       missed,
     );
-    return done(show, speak);
+    return askAloud(show, speak);
   };
   const askGuess = (
     verb: PendingTimerVerb,
@@ -1846,19 +1853,21 @@ function CookingSession({
     arg: TimerArg,
     missed: string,
   ): CookVoiceResult => {
-    setPending({
-      kind: 'TIMER',
-      ids: [guess.id],
-      verb,
-      isConfirm: true,
-      ...arg,
-    });
+    if (!isPepperRun.current) {
+      setPending({
+        kind: 'TIMER',
+        ids: [guess.id],
+        verb,
+        isConfirm: true,
+        ...arg,
+      });
+    }
     const { show, speak } = describeTimerGuess(guess.stepName, missed);
-    return done(show, speak);
+    return askAloud(show, speak);
   };
   const askLength = (name: string | null): CookVoiceResult => {
-    setPending({ kind: 'LENGTH', name });
-    return done(
+    if (!isPepperRun.current) setPending({ kind: 'LENGTH', name });
+    return askAloud(
       name === null ? 'How long?' : `How long for ${name}?`,
       name === null
         ? 'How long should the timer run?'
@@ -2052,6 +2061,18 @@ function CookingSession({
       `${lead}Now ${formatServings(next)}, ${was}`,
       `${lead}Okay, ${formatServings(next)}, ${was}. The amounts are updated.`,
     );
+  };
+
+  /** Why a tip, note or change can't be written from the step on screen right now, or null. */
+  const getEntryBlock = () => {
+    if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
+      return 'Go to a step to add that.';
+    }
+    if (capture.isOpen) return 'Finish writing this one first.';
+    if (!capture.isAvailable(recipe.id) || isRemoved) {
+      return "Your notes aren't ready, or this recipe's are full.";
+    }
+    return null;
   };
 
   const makeVoiceActions = (): CookVoiceActions => ({
@@ -2469,13 +2490,8 @@ function CookingSession({
       return done('Closed');
     },
     addEntry: (kind) => {
-      if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
-        return refuse('Go to a step to add that.');
-      }
-      if (capture.isOpen) return refuse('Finish writing this one first.');
-      if (!capture.isAvailable(recipe.id) || isRemoved) {
-        return refuse("Your notes aren't ready, or this recipe's are full.");
-      }
+      const block = getEntryBlock();
+      if (block !== null) return refuse(block);
       showDockView(null);
       setPending({
         kind: 'DICTATE',
@@ -2800,12 +2816,83 @@ function CookingSession({
     })),
   };
   const { connect: connectVoice } = voice;
-  const runVoiceCommand = useEffectEvent((command: CookActionCommand) =>
+  const runCookAction = (command: CookActionCommand) =>
     capture.isOpen && !VOICE_WHILE_WRITING.has(command.kind)
       ? refuse('Finish writing this one first.')
-      : runCookCommand(command, makeVoiceActions()),
-  );
+      : runCookCommand(command, makeVoiceActions());
+  const runVoiceCommand = useEffectEvent(runCookAction);
   useEffect(() => connectVoice(runVoiceCommand, voiceContext));
+  const goToStepForPepper = (step: number): CookVoiceResult => {
+    if (focused !== null) {
+      return refuse(
+        "Time's up: dismiss it first.",
+        'The timer is ringing. Dismiss it first.',
+      );
+    }
+    if (isGatherView) {
+      return refuse("You haven't started yet. Say “next” to start cooking.");
+    }
+    if (isFinishShown) {
+      return refuse('Cooking is finished. Tap Back to return to a step.');
+    }
+    if (!hasSteps) return refuse('This recipe has no steps yet.');
+    if (step > recipe.steps.length) {
+      return refuse(`This recipe has ${recipe.steps.length} steps.`);
+    }
+    showStepsView();
+    setStepIndex(step - 1);
+    scrollToTop();
+    return done();
+  };
+  const runCookForPepper = (command: CookActionCommand) => {
+    isPepperRun.current = true;
+    try {
+      return runCookAction(command);
+    } finally {
+      isPepperRun.current = false;
+    }
+  };
+  const getTickChanges = (queries: string[], isOut: boolean) => {
+    if (!isGatherView) return [];
+    const dishes = getGatherDishes();
+    const plan = planGatherTick(
+      queries,
+      getGatherItems(dishes),
+      isOut,
+      isPlate,
+    );
+    return plan.ok
+      ? plan.sources.filter(
+          ({ recipeId, lineId }) =>
+            (dishes.find((dish) => dish.recipe.id === recipeId)?.gotOut[
+              lineId
+            ] ===
+              true) !==
+            isOut,
+        )
+      : [];
+  };
+  usePepperActions({
+    uid,
+    runCook: runCookForPepper,
+    getTickChanges,
+    setTicks: (lines, isOut) =>
+      lines.forEach(({ recipeId, lineId }) =>
+        toggleGotOutFor(recipeId, lineId, isOut),
+      ),
+    goToStep: goToStepForPepper,
+    say: (text) => voice.speak(text),
+    capture,
+    shown: {
+      recipeId: voiceStep.recipe.id,
+      servings: getVoiceServings(voiceStep.recipe.id),
+      stepCount: voiceStep.recipe.steps.length,
+    },
+    recipeIds: entries.map((candidate) => candidate.recipe.id),
+    entryBlock: getEntryBlock(),
+    isWriting: capture.isOpen,
+    isDishAmbiguous: isGatherView && isPlate,
+  });
   const namedLines = voiceContext.lines.filter((line) => line.names.length > 0);
   const stepLines = namedLines.filter((line) => line.isInStep);
   const ingredientExample = (
