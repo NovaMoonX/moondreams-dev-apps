@@ -390,10 +390,12 @@ assert.equal(
 );
 assert.deepEqual(Object.keys(hostile).sort(), [
   'care',
+  'categories',
   'cookMinutes',
   'description',
   'guided',
   'ingredients',
+  'isServingsEstimate',
   'photoSearch',
   'prepMinutes',
   'servings',
