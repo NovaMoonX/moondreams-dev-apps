@@ -544,9 +544,15 @@ service cloud.firestore {
     // Everything in a kitchen is private to one person and nests under their uid. The one exception is
     // `outsideChanges`: the record of what an outside assistant changed, written only by Functions so a
     // client can neither forge one nor mark one undone; its owner reads it to show and take it back.
-    match /apps/pinch/kitchens/{uid}/{document=**} {
+    match /apps/pinch/kitchens/{uid} {
+      allow read, write: if isUser(uid);
+    }
+
+    // The collection is named, never read by index from a recursive wildcard: that wildcard also matches
+    // the kitchen document itself, where indexing errors and denies every write.
+    match /apps/pinch/kitchens/{uid}/{collection}/{rest=**} {
       allow read: if isUser(uid);
-      allow write: if isUser(uid) && document[0] != 'outsideChanges';
+      allow write: if isUser(uid) && collection != 'outsideChanges';
     }
 
     match /apps/pinch/kitchens/{uid}/outsideChanges/{changeId} {

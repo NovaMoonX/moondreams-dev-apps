@@ -91,13 +91,14 @@ def run_matrix(o_tok, uid, x_tok):
     actors = {'owner': o_tok, 'other': x_tok, 'signed out': None}
     change = f'apps/pinch/kitchens/{uid}/outsideChanges/c1'
     recipe = f'apps/pinch/kitchens/{uid}/recipes/r1'
+    kitchen = f'apps/pinch/kitchens/{uid}'
 
     def check(label, code):
         assert label not in results, label
         results[label] = 'allow' if code == 200 else 'deny'
 
     for a, tok in actors.items():
-        admin([put(change, CHANGE), put(recipe, {'title': 'Soup'})])
+        admin([put(change, CHANGE), put(recipe, {'title': 'Soup'}), put(kitchen, {'showNutrition': False})])
         check(f'change read [{a}]', get(change, tok))
         check(f'changes list [{a}]', get(f'apps/pinch/kitchens/{uid}/outsideChanges', tok))
         check(f'change create [{a}]', commit(tok, [put_new(change + '-new', CHANGE)]))
@@ -106,11 +107,14 @@ def run_matrix(o_tok, uid, x_tok):
         check(f'recipe read [{a}]', get(recipe, tok))
         check(f'recipe update [{a}]', commit(tok, [put(recipe, {'title': 'Stew'})]))
         check(f'recipe create [{a}]', commit(tok, [put_new(recipe + '-new', {'title': 'Pie'})]))
+        check(f'kitchen read [{a}]', get(kitchen, tok))
+        check(f'kitchen update [{a}]', commit(tok, [put(kitchen, {'showNutrition': True})]))
         admin([rm(change + '-new'), rm(recipe + '-new')])
     return results
 
 
-EXPECT_ALLOW = {'change read [owner]', 'changes list [owner]', 'recipe read [owner]', 'recipe update [owner]', 'recipe create [owner]'}
+EXPECT_ALLOW = {'change read [owner]', 'changes list [owner]', 'recipe read [owner]', 'recipe update [owner]', 'recipe create [owner]',
+                'kitchen read [owner]', 'kitchen update [owner]'}
 
 
 def main():
