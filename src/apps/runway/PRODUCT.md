@@ -453,7 +453,7 @@ Many people pay a bill on a day that suits their pay, not on its due date (the o
   - *Income is expected today.* Works on Plan, with nothing linked.
 - **Matching happens on Runway's servers,** so it works when the app is closed. It uses the same rules as when you open the app, looks only at purchases that have posted, and never changes a purchase you assigned yourself.
 - **Each event sends once,** even if the bank reports it twice.
-- **No notification is sent about how much is left in an envelope.**
+- **Alerts are the one way to hear about an amount, and the push still never says it.** At Track and Link you can set up to 50 alerts on Free to Spend and on each envelope (half left, a quarter left, runs out, or an amount); each goes off once as the figure falls to its line and again only after the figure has climbed back above it; changing an envelope's amount moves its share lines without setting them off. A Free to Spend alert's push says only that one of your alerts went off; an envelope's can add the envelope's name on the lock screen, and amounts never show.
 
 ### Privacy and Security, In Detail
 

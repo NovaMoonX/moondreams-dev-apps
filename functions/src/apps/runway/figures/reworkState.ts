@@ -141,12 +141,13 @@ export const pickZone = (
   notifyTimeZone: string | null | undefined,
 ): string => [timeZone, notifyTimeZone].find(isZone) ?? 'UTC';
 
-/** The state after a run that started at `now`: due again at midnight or in six hours when nothing was written meanwhile, a gap later when something was. */
+/** The state after a run that started at `now`: due again at midnight or in six hours when nothing was written meanwhile, a gap later when something was; a held alert's `wakeAt` brings it sooner. */
 export function afterRun(
   state: ReworkState,
   seqAtStart: number,
   now: number,
   zone: string,
+  wakeAt: number | null,
 ): ReworkState {
   const day = dayInZone(now, zone);
   const nextMidnightAt = nextMidnightAfter(now, zone);
@@ -160,13 +161,11 @@ export function afterRun(
     runsDay: day,
     runsToday,
   };
-  return {
-    ...next,
-    dueAt:
-      state.seq === seqAtStart
-        ? Math.min(nextMidnightAt, now + 6 * HOUR_MS)
-        : now + gapAfterRun(next, now),
-  };
+  const dueAt =
+    state.seq === seqAtStart
+      ? Math.min(nextMidnightAt, now + 6 * HOUR_MS)
+      : now + gapAfterRun(next, now);
+  return { ...next, dueAt: Math.min(dueAt, wakeAt ?? dueAt) };
 }
 
 /** The state after a failed run: the next try waits out the backoff, however many writes come meanwhile. */

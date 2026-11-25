@@ -1578,6 +1578,52 @@ export interface DoneForYouSealed {
   subject: DoneForYouSubject | null;
 }
 
+/** What an alert watches: Free to Spend, or one envelope's figure. */
+export type AlertTarget =
+  | { kind: 'freeToSpend' }
+  | { kind: 'envelope'; itemId: string };
+
+/** Where an alert goes off: a set amount, or a share (in basis points) of what its envelope gets each time. */
+export type AlertLine =
+  | { kind: 'cents'; cents: Cents }
+  | { kind: 'share'; bps: number };
+
+export interface AlertSealed {
+  target: AlertTarget;
+  line: AlertLine;
+  /** The person chose to have the envelope's name on the lock screen; amounts never are. */
+  isNamed: boolean;
+}
+
+/** One alert the person set, under `alerts`. */
+export interface AlertDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+export interface OpenAlert extends AlertSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Where an alert stands, under `alertStates/{alertId}`: written only by the server, which evaluates alerts after each rework. */
+export interface AlertStateDoc {
+  id: string;
+  /** The alert's `updatedAt` this state was taken against; a changed alert starts over without going off. */
+  alertUpdatedAt: number;
+  /** The envelope version a share line was worked out from, so a changed amount starts over too; null for an amount. */
+  lineFrom: string | null;
+  /** The figure was at or below the line at the last evaluation. */
+  isBelow: boolean;
+  lastFiredAt: number | null;
+  /** It went off in quiet hours and waits for the morning push; cleared once sent or once the figure is back above. */
+  heldSince: number | null;
+  updatedAt: number;
+}
+
 /** Something the app did on its own, under `doneForYou`; only `undoneAt` and removal change it. */
 export interface DoneForYouDoc {
   id: string;

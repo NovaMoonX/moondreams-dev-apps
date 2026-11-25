@@ -48,6 +48,10 @@ import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
 import { startDoneForYouListener } from '@apps/runway/store/listeners/doneForYouListeners';
 import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListeners';
+import {
+  startAlertsListener,
+  startAlertStatesListener,
+} from '@apps/runway/store/listeners/alertListeners';
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
@@ -98,6 +102,8 @@ import {
   setRules,
   setMemories,
   setDoneForYou,
+  setAlerts,
+  setAlertStates,
   setEmailIntake,
   setIsEmailIntakeLoaded,
   setIsEmailIntakeFailed,
@@ -317,6 +323,17 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (entries) => dispatch(setDoneForYou(entries)),
+          fail,
+        ),
+        startAlertsListener(
+          uid,
+          encryption,
+          (alerts) => dispatch(setAlerts(alerts)),
+          fail,
+        ),
+        startAlertStatesListener(
+          uid,
+          (states) => dispatch(setAlertStates(states)),
           fail,
         ),
         startNeedsHomeListener(

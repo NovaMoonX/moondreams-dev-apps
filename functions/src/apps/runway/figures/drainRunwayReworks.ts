@@ -105,7 +105,7 @@ async function drainOne(
       return 'gone';
     }
     await settle(firestore, uid, (current) =>
-      afterRun(current, leased.seq, now, outcome.zone),
+      afterRun(current, leased.seq, now, outcome.zone, outcome.wakeAt),
     );
     return outcome.kind;
   } catch (error) {

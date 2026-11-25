@@ -17,6 +17,12 @@ if (getApps().length === 0) {
 
 const REGION = 'us-central1';
 
+/** Alerts are judged in the same run, though they are not figure inputs, so a phone write to one never makes stored figures stale. */
+const REWORK_COLLECTIONS: readonly string[] = [
+  ...FIGURE_INPUT_COLLECTIONS,
+  'alerts',
+];
+
 /** Counts a change on the plan's rework state: one more write seen, and the plan due no later than a gap after its last run. */
 async function markRework(uid: string) {
   const firestore = getFirestore();
@@ -64,7 +70,7 @@ export const markRunwayReworkOnPlan = onDocumentWritten(
 export const markRunwayReworkOnItem = onDocumentWritten(
   { document: 'apps/runway/plans/{uid}/{collection}/{id}', region: REGION },
   async (event) => {
-    if (!FIGURE_INPUT_COLLECTIONS.includes(event.params.collection)) return;
+    if (!REWORK_COLLECTIONS.includes(event.params.collection)) return;
     await markRework(event.params.uid);
   },
 );

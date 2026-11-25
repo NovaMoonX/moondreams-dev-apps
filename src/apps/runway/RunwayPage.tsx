@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { Fragment, useEffect, useLayoutEffect, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { History, Loader, LockKeyhole, WifiOff } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -52,6 +53,7 @@ import { getDayKeyMonth } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import {
+  ALERT_WORDS,
   DONE_FOR_YOU_WORDS,
   HISTORY_WORDS,
   RUNWAY_TAB_LABELS,
@@ -70,6 +72,7 @@ import {
   selectSpendPurchases,
   selectIsPlanItemsLoaded,
   selectSetupState,
+  selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
@@ -226,11 +229,39 @@ function RunwayContent() {
     closeView,
     settingsView,
     closeSettingsView,
+    showOnPlan,
+    openEnvelope,
+    clearOpenEnvelope,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isItemsLoaded = isPlanItemsLoaded && isDaysLoaded;
+  const isLiveOpenEnvelope = useAppSelector((state) =>
+    selectEnvelopes(state, today).some(({ item }) => item.id === openEnvelope),
+  );
+  const { addToast } = useToast();
+  const handledEnvelope = useRef<string | null>(null);
+  useEffect(() => {
+    if (openEnvelope === null) {
+      handledEnvelope.current = null;
+      return;
+    }
+    if (!isPlanItemsLoaded) return;
+    if (handledEnvelope.current === openEnvelope) return;
+    handledEnvelope.current = openEnvelope;
+    const itemId = openEnvelope;
+    const open = async () => {
+      // Cleared on the entry the link landed on before anything is pushed, or Back would land on it and open it again.
+      await clearOpenEnvelope();
+      if (isLiveOpenEnvelope) {
+        await showOnPlan('envelopes', { itemId });
+      } else {
+        addToast({ title: ALERT_WORDS.envelopeGone, type: 'info' });
+      }
+    };
+    void open();
+  }, [openEnvelope, isPlanItemsLoaded, isLiveOpenEnvelope]); // eslint-disable-line react-hooks/exhaustive-deps
   const hasOpenDay = useAppSelector((state) => {
     if (openDayKey === null) return false;
     const { open, confirmed } = selectListedDays(state, today);
