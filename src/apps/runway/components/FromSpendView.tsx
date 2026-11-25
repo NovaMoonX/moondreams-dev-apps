@@ -11,6 +11,7 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
+import type { OpenPurchase } from '@apps/runway/types';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
 interface FromSpendViewProps {
@@ -19,28 +20,28 @@ interface FromSpendViewProps {
   today: number;
   onBack: () => void;
   onDone: () => void;
+  onSuggestRule: (placed: OpenPurchase) => void;
 }
 
-/** Puts a charge already in Spend into this envelope: pick the charge, then see what it leaves and send it. */
 function FromSpendView({
   envelopeId,
   envelopeName,
   today,
   onBack,
   onDone,
+  onSuggestRule,
 }: FromSpendViewProps) {
   const candidates = useFromSpendCandidates(today);
   const looks = useAppSelector(selectItemLooks);
   const [query, setQuery] = useState('');
-  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<OpenPurchase | null>(null);
   const nameOf = (id: string) => looks.get(id)?.name ?? '';
-  const picked = candidates.find((entry) => entry.id === pickedId) ?? null;
 
   if (picked) {
     return (
       <div className='flex flex-1 flex-col gap-4'>
         <BackHeading
-          onBack={() => setPickedId(null)}
+          onBack={() => setPicked(null)}
           title={FROM_SPEND_WORDS.sendTitle(envelopeName)}
         />
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -50,6 +51,7 @@ function FromSpendView({
           purchase={picked}
           envelopeId={envelopeId}
           onDone={onDone}
+          onSuggestRule={onSuggestRule}
         />
       </div>
     );
@@ -85,7 +87,7 @@ function FromSpendView({
               key={purchase.id}
               purchase={purchase}
               looks={looks}
-              onOpen={() => setPickedId(purchase.id)}
+              onOpen={() => setPicked(purchase)}
             />
           ))}
         </ul>

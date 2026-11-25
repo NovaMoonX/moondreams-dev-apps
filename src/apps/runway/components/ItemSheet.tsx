@@ -1435,10 +1435,12 @@ function ItemSheet({
     isTrackEnvelope && ITEM_TILE_WORDS.moreCheck,
     canChange && isGroupable && ITEM_TILE_WORDS.moreFor,
     itemKind === 'envelope' && isArchivable && ITEM_TILE_WORDS.morePin,
-    planAheadChoices.length > 0 && !isPlanTile && ITEM_TILE_WORDS.morePlan,
-    isStoppable && ITEM_TILE_WORDS.moreStop,
-    !isStoppable && isArchivable && ITEM_TILE_WORDS.moreArchive,
   ].filter((name) => typeof name === 'string');
+  const moreStopName = isStoppable
+    ? ITEM_TILE_WORDS.moreStop
+    : isArchivable
+      ? ITEM_TILE_WORDS.moreArchive
+      : null;
   const menu = (
     <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
       <SheetHead
@@ -1572,6 +1574,15 @@ function ItemSheet({
             label={quick.label}
             subtitle={quick.subtitle}
             onClick={() => openChange(quick.step)}
+          />
+        )}
+        {planAheadChoices.length > 0 && !isPlanTile && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarPlus />}
+            label={COMING_WORDS.planChange}
+            onClick={() => goTo('planChoice')}
           />
         )}
         {canChange && linkAction && (
@@ -1772,17 +1783,14 @@ function ItemSheet({
           />
         )}
       </ActionGroup>
-      {moreNames.length > 0 && (
+      {(moreNames.length > 0 || moreStopName !== null) && (
         <ActionGroup>
           <ActionRow
             isGrouped
             hasChevron
             icon={<Ellipsis />}
             label={ITEM_TILE_WORDS.more}
-            subtitle={ITEM_TILE_WORDS.moreSub(moreNames).replace(
-              /^./,
-              (first) => first.toUpperCase(),
-            )}
+            subtitle={ITEM_TILE_WORDS.moreSub(moreNames, moreStopName)}
             onClick={() => goTo('more')}
           />
         </ActionGroup>
@@ -1845,7 +1853,10 @@ function ItemSheet({
             icon={<FolderOpen />}
             label={GROUP_WORDS.inGroup}
             subtitle={currentGroupName}
-            onClick={openGroup}
+            onClick={() => {
+              openGroup();
+              setIsFromMore(true);
+            }}
           />
         )}
         {itemKind === 'envelope' && isArchivable && isPinned && (
@@ -1871,15 +1882,6 @@ function ItemSheet({
                 ? openFromMore('pins')
                 : void homePins.setPin(itemId, payload.name, true)
             }
-          />
-        )}
-        {planAheadChoices.length > 0 && !isPlanTile && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<CalendarPlus />}
-            label={COMING_WORDS.planChange}
-            onClick={() => openFromMore('planChoice')}
           />
         )}
       </ActionGroup>
@@ -1945,6 +1947,11 @@ function ItemSheet({
       today={today}
       onBack={goBack}
       onDone={() => goTo('menu')}
+      onSuggestRule={(placed) => {
+        goTo('menu');
+        setPurchaseId(placed.id);
+        setPhase('purchaseDetail');
+      }}
     />
   );
 
