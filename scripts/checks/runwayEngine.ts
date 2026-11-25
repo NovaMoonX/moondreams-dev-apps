@@ -20756,7 +20756,10 @@ const checkRulePlacements = () => {
     'and under its heading needs no card',
   );
   assert.equal(
-    describeRule(rule('g', { category: 'GAS' }), { envelope: 'Fuel' }),
+    describeRule(rule('g', { category: 'GAS' }), {
+      envelope: 'Fuel',
+      card: null,
+    }),
     'Gas goes to Fuel',
     'a kind alone reads on its own',
   );
