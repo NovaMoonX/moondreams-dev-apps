@@ -153,9 +153,8 @@ async function sendOnce(
 }
 
 /**
- * Judges the plan's alerts against the figures just written: an alert goes off when its figure falls to or below its
- * line from above, one push carries every alert that went off, and one that goes off in quiet hours is held for 08:00.
- * An archived or missing envelope's alerts are deleted, since archiving can't be taken back.
+ * Judges the plan's alerts against the figures just written: an alert goes off when its figure falls to or below its line,
+ * one push carries all that went off, quiet hours hold them for 08:00, and an archived envelope's alerts are deleted.
  * Returns when to run again for a held alert, or null.
  */
 export async function runAlerts(
