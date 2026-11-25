@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 
+import AppEnteredMark from '@/components/AppEnteredMark';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
@@ -141,6 +142,8 @@ function WorthTheWait() {
           )}
         </AppEntryFallback>
       )}
+
+      {!shouldOnboardingBeOpen && <AppEnteredMark scope='worth-the-wait' />}
 
       {!shouldOnboardingBeOpen && (
         <WorthTheWaitProvider

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppEnteredMark from '@/components/AppEnteredMark';
 import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import SectionHeader from '@/components/SectionHeader';
@@ -93,6 +94,7 @@ function Home() {
       className={join('page flex items-center justify-center', CANVAS_CLASS)}
     >
       <div className='w-full max-w-4xl'>
+        {!loading && <AppEnteredMark scope='site' />}
         <header className='mb-10 flex items-center justify-center md:pt-6'>
           <div className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
             {APP_TITLE}

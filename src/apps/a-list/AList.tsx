@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import AppEnteredMark from '@/components/AppEnteredMark';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
@@ -244,6 +245,7 @@ function AList() {
 
   return (
     <AListOverlayContext.Provider value={overlayContext}>
+      <AppEnteredMark scope='a-list' />
       {overlay?.kind === 'add' && (
         <AddSubview overlay={overlay} onClose={closeOverlay} />
       )}

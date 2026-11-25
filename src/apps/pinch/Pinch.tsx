@@ -12,6 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppEnteredMark from '@/components/AppEnteredMark';
 import DoneForYouSheet from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useDoneForYouToast } from '@/hooks/useDoneForYouToast';
@@ -414,6 +415,7 @@ function Pinch() {
 
   return (
     <PinchOverlayContext.Provider value={overlayContext}>
+      <AppEnteredMark scope='pinch' />
       {isIdeaSheetOpen && (
         <IdeaAddSheet
           uid={user.uid}

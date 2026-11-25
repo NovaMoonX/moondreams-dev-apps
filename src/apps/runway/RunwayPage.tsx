@@ -7,6 +7,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useMarkAppEntered } from '@/hooks/useAppEntered';
 import { useDoneForYouToast } from '@/hooks/useDoneForYouToast';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -370,6 +371,19 @@ function RunwayContent() {
     isDeletingPlan ? null : (user?.uid ?? null),
   );
   const historyStatus = useAppSelector((state) => selectHistory(state).status);
+  useMarkAppEntered(
+    'runway',
+    user !== null &&
+      !isDeletingPlan &&
+      keyStatus === 'ready' &&
+      isPlanLoaded &&
+      historyStatus !== 'building' &&
+      historyStatus !== 'failed' &&
+      startDraft === null &&
+      view !== 'start' &&
+      isPlanItemsLoaded &&
+      setupState === 'ready',
+  );
 
   const tryAgain = () => {
     dispatch(setKeyStatus('loading'));

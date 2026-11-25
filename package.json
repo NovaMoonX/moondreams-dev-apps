@@ -66,6 +66,7 @@
     "check:pinch-share": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchShare.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchShareBuild.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchShareImport.ts",
     "check:waypoint-balances": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointBalances.ts",
     "check:going-once-share": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOnceShare.ts",
+    "check:app-entered": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/appEntered.ts",
     "check:whats-new-logic": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/whatsNewLogic.ts",
     "check:time-ago": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/timeAgo.ts",
     "check:share-fields": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/shareFields.ts",

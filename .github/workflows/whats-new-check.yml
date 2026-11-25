@@ -19,6 +19,8 @@ jobs:
       - run: npm ci
       - name: Check the What's new logic
         run: npm run check:whats-new-logic
+      - name: Check every app marks itself entered
+        run: npm run check:app-entered
       - name: Check the What's new notes
         run: npm run check:whats-new -- --pr "origin/$BASE_REF"
         env:

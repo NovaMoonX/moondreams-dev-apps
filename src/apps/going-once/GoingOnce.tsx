@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft, Inbox, Store, Tag } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import AppEnteredMark from '@/components/AppEnteredMark';
 import CopyTextButton from '@/components/CopyTextButton';
 import EmptyCard from '@/components/EmptyCard';
 import IconBadge from '@/components/IconBadge';
@@ -246,6 +247,7 @@ function GoingOnce() {
 
   return (
     <>
+      <AppEnteredMark scope='going-once' />
       {sale ? (
         <div className='page'>
           <div className='mx-auto max-w-2xl space-y-4 pb-28'>
