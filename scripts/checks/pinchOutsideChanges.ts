@@ -1022,6 +1022,8 @@ const line = (name: string, extra: Fields = {}) => ({
     createStore({
       ...customIngredient('ing-gb', 'Ground beef'),
       ...customIngredient('ing-peas', 'Frozen peas'),
+      ...customIngredient('ing-bread', 'Bread'),
+      ...customIngredient('ing-beef', 'Beef'),
     });
   const store = seed();
   const data = dataOf(
@@ -1032,6 +1034,8 @@ const line = (name: string, extra: Fields = {}) => ({
         line('93% lean ground beef', { note: 'browned' }),
         line('Frozen peas'),
         line('ground beef', { note: 'lean' }),
+        line('Sliced bread'),
+        line('Minced beef'),
       ],
     }),
   );
@@ -1045,6 +1049,8 @@ const line = (name: string, extra: Fields = {}) => ({
       ['ing-gb', '93% lean, browned'],
       ['ing-peas', null],
       ['ing-gb', 'lean'],
+      ['ing-bread', 'sliced'],
+      [null, null],
     ],
   );
   const text = replyText(

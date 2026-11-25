@@ -1111,6 +1111,7 @@ assert.equal(comparable('hello'), null, 'text is not a page');
 
 const idea = (fields: Partial<Idea>): Idea => ({
   id: 'idea',
+  by: null,
   kind: 'TEXT',
   title: 'Lemon bars',
   note: null,

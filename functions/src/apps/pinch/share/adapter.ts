@@ -1582,9 +1582,12 @@ export function createPinchAdapter(
         (ctx, input) => saveIdea(deps.firestore(), ctx, input),
       ),
       fill_nutrition: toAppAction(
-        "Fills in nutrition per 100 g (calories, protein, carbs, fat) for ingredients in the person's kitchen that have none yet, up to 30 at a time, each named as pinch_find_ingredients gave it (hasNutrition false). It never creates an ingredient and never changes nutrition that is already there: those are skipped and named. It applies at once, shows in Pinch's ingredient with its source and in Done for you with an Undo, and in Helm. Only send values from a source you trust, and confirm with the person before you call it.",
+        "Fills in nutrition per 100 g (calories, protein, carbs, fat) for ingredients in the person's kitchen that have none yet, up to 30 at a time, each named as pinch_find_ingredients gave it (hasNutrition false). It never creates an ingredient and never changes nutrition that is already there: those are skipped and named. It applies at once, shows in Pinch's ingredient with its source and in Done for you with an Undo, and in Helm. Only send values from a source you trust, and confirm with the person before you call it. It needs Recipe ingredients on, since it matches names to the kitchen.",
         FILL_NUTRITION_SHAPE,
-        (ctx, input) => fillNutrition(deps.firestore(), ctx, input),
+        (ctx, input) =>
+          ctx.allowedCategories.has('recipeIngredients')
+            ? fillNutrition(deps.firestore(), ctx, input)
+            : Promise.resolve(switchedOff(['recipeIngredients'])),
       ),
     },
     undoChange: (firestore, uid, changeId, from) =>

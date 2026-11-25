@@ -59,38 +59,40 @@ export const matchIngredient = (
 
 /** Words and amounts a line carries about the cut or the leanness that the ingredient's own name does not ("lean", "93%", "80/20"). */
 const DESCRIPTOR_PATTERN =
-  /(?<![\p{L}\p{N}-])(?:\d{1,3}\s*%|\d{1,3}\s*\/\s*\d{1,3}%?|extra[\s-]+lean|low[\s-]+sodium|bone[\s-]*in|lean|boneless|skinless|fresh|frozen|large|small|medium|chopped|diced|minced|sliced|organic|unsalted)(?![\p{L}\p{N}-])/giu;
+  /(?<![\p{L}\p{N}-])(?:\d{1,3}\s*%|\d{1,3}\s*\/\s*\d{1,3}%?|extra[\s-]+lean|low[\s-]+sodium|bone[\s-]*in|lean|boneless|skinless|fresh|frozen|large|small|medium|chopped|diced|sliced|organic|unsalted)(?![\p{L}\p{N}-])/giu;
 
 export interface DescriptorMatch {
   ingredient: ResolvedIngredient;
-  /** The words the line carried that the match left out, as written and in order, for the line's note; empty for a match on the full name. */
+  /** The descriptor words the line carried that the ingredient's own name lacks, in order, for the line's note ("sliced bread" is Bread with "sliced"). */
   noteWords: string[];
 }
 
-/** `matchIngredient` on the full name first, then with descriptor words ignored ("Lean ground beef" is the person's "Ground beef", with "lean" for the note). A descriptor that is a word of the matched ingredient's own name stays with the name, never the note, and only the line's words are ever dropped, so "ground" in "Ground beef" is never lost. */
+/** `matchIngredient` on the full name first, then with descriptor words ignored; either way the descriptors go to the note ("Lean ground beef" is the person's "Ground beef", with "lean" for the note). A descriptor that is a word of the matched ingredient's own name stays with the name, never the note, and only the line's words are ever dropped, so "ground" in "Ground beef" is never lost. */
 export const matchIngredientWithNote = (
   name: string,
   ingredients: ResolvedIngredient[],
 ): DescriptorMatch | null => {
-  const full = matcher.match(name, ingredients);
-  if (full) return { ingredient: full, noteWords: [] };
   const dropped = Array.from(name.matchAll(DESCRIPTOR_PATTERN), ([word]) =>
     word.toLowerCase().replace(/\s+/g, ' '),
   );
+  const withNote = (ingredient: ResolvedIngredient): DescriptorMatch => {
+    const own = ` ${normalizeName(ingredient.name)} `;
+    return {
+      ingredient,
+      noteWords: dropped.filter(
+        (word) => !own.includes(` ${normalizeName(word)} `),
+      ),
+    };
+  };
+  const full = matcher.match(name, ingredients);
+  if (full) return withNote(full);
   if (dropped.length === 0) return null;
   const rest = name
     .replace(DESCRIPTOR_PATTERN, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   const ingredient = rest === '' ? null : matcher.match(rest, ingredients);
-  if (!ingredient) return null;
-  const own = ` ${normalizeName(ingredient.name)} `;
-  return {
-    ingredient,
-    noteWords: dropped.filter(
-      (word) => !own.includes(` ${normalizeName(word)} `),
-    ),
-  };
+  return ingredient ? withNote(ingredient) : null;
 };
 
 /** Up to `limit` names of ingredients that share a word with a name nothing matched, the person's own first, for an assistant to choose from. */

@@ -141,7 +141,8 @@ export interface ChangeData {
   recipeId: string | null;
 }
 
-const INGREDIENT_LIMIT = 600;
+/** The ingredients a change reads to match names; a kitchen at the limit may hold more than it saw, so a new one is refused there rather than risk a copy. */
+const INGREDIENT_LIMIT = 2000;
 const RECIPE_TITLE_LIMIT = 500;
 const SAVED_MEAL_LIMIT = 200;
 const MAX_ITEMS_PER_CALL = 30;
@@ -2006,13 +2007,16 @@ const kitchenCollection = (firestore: Firestore, uid: string, name: string) =>
 /** Which of these ingredients something still points at: a recipe line, a saved meal, a price, a shopping item, a package in the kitchen or a planned meal. Recipes and saved meals carry no id index, so they are read once whole; the rest are asked by id. `except` is what the undo itself is about to remove or restore. */
 const readIngredientsInUse = async (
   firestore: Firestore,
+  transaction: Transaction,
   uid: string,
   ids: string[],
   except: { recipeId: string | null; shoppingItemId: string | null },
 ): Promise<Set<string>> => {
   const [recipes, meals] = await Promise.all([
-    kitchenCollection(firestore, uid, 'recipes').select('ingredients').get(),
-    kitchenCollection(firestore, uid, 'meals').select('items').get(),
+    transaction.get(
+      kitchenCollection(firestore, uid, 'recipes').select('ingredients'),
+    ),
+    transaction.get(kitchenCollection(firestore, uid, 'meals').select('items')),
   ]);
   const listed = new Set([
     ...recipes.docs.flatMap((doc) =>
@@ -2032,22 +2036,26 @@ const readIngredientsInUse = async (
     ids.map(async (id) => {
       if (listed.has(id)) return true;
       const [shopping, packages, products, planned] = await Promise.all([
-        kitchenCollection(firestore, uid, 'shoppingItems')
-          .where('ingredientId', '==', id)
-          .limit(2)
-          .get(),
-        kitchenCollection(firestore, uid, 'packages')
-          .where('ingredientId', '==', id)
-          .limit(1)
-          .get(),
-        kitchenCollection(firestore, uid, 'products')
-          .where('ingredientId', '==', id)
-          .limit(1)
-          .get(),
-        kitchenCollection(firestore, uid, 'plannedMeals')
-          .where('refIds', 'array-contains', id)
-          .limit(1)
-          .get(),
+        transaction.get(
+          kitchenCollection(firestore, uid, 'shoppingItems')
+            .where('ingredientId', '==', id)
+            .limit(2),
+        ),
+        transaction.get(
+          kitchenCollection(firestore, uid, 'packages')
+            .where('ingredientId', '==', id)
+            .limit(1),
+        ),
+        transaction.get(
+          kitchenCollection(firestore, uid, 'products')
+            .where('ingredientId', '==', id)
+            .limit(1),
+        ),
+        transaction.get(
+          kitchenCollection(firestore, uid, 'plannedMeals')
+            .where('refIds', 'array-contains', id)
+            .limit(1),
+        ),
       ]);
       return (
         shopping.docs.some((doc) => doc.id !== except.shoppingItemId) ||
@@ -2076,22 +2084,6 @@ export const undoPinchOutsideChange = async (
     };
   }
   const recordRef = ref(firestore, uid, 'outsideChanges', changeId);
-  const planned = (await recordRef.get()).data() as OutsideChange | undefined;
-  const createdIds = Array.isArray(planned?.createdIngredientIds)
-    ? planned.createdIngredientIds.filter(
-        (id): id is string => typeof id === 'string' && !id.includes('/'),
-      )
-    : [];
-  const inUse = new Set(
-    createdIds.length === 0
-      ? []
-      : await readIngredientsInUse(firestore, uid, createdIds, {
-          recipeId: planned?.recipeId ?? null,
-          shoppingItemId: planned?.createdItem
-            ? (planned.shoppingItemId ?? null)
-            : null,
-        }),
-  );
   return firestore.runTransaction(async (transaction): Promise<Undone> => {
     const stored = await transaction.get(recordRef);
     if (!stored.exists) {
@@ -2120,12 +2112,23 @@ export const undoPinchOutsideChange = async (
       message,
       isSettled: false,
     });
+    const createdIds = Array.isArray(record.createdIngredientIds)
+      ? record.createdIngredientIds.filter(
+          (id): id is string => typeof id === 'string' && !id.includes('/'),
+        )
+      : [];
+    const inUse =
+      createdIds.length === 0
+        ? new Set<string>()
+        : await readIngredientsInUse(firestore, transaction, uid, createdIds, {
+            recipeId: record.recipeId ?? null,
+            shoppingItemId: record.createdItem
+              ? (record.shoppingItemId ?? null)
+              : null,
+          });
     const made = await Promise.all(
-      (Array.isArray(record.createdIngredientIds)
-        ? record.createdIngredientIds
-        : []
-      )
-        .filter((id) => createdIds.includes(id) && !inUse.has(id))
+      createdIds
+        .filter((id) => !inUse.has(id))
         .map((id) => transaction.get(ref(firestore, uid, 'ingredients', id))),
     );
     const finish = (): Undone => {
