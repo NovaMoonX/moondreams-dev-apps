@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Bell, Smartphone } from 'lucide-react';
 import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import ActionRow from '@/components/ActionRow';
 import AppToggle from '@/components/AppToggle';
@@ -13,15 +13,8 @@ import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
-import { turnOnDevicePush } from '@/lib/notifications/devicePush';
-import {
-  getDeviceNotificationsText,
-  getTurnOnFailureText,
-} from '@/lib/notifications/deviceText';
-import {
-  devicePushQueryOptions,
-  notificationsQueryKeys,
-} from '@/lib/notifications/notificationsQueries';
+import { getDeviceNotificationsText } from '@/lib/notifications/deviceText';
+import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -35,6 +28,7 @@ import { ActionSection } from '@apps/runway/components/ActionSection';
 import FreeToSpendAlerts from '@apps/runway/components/FreeToSpendAlerts';
 import LevelGate from '@apps/runway/components/LevelGate';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import { useTurnOnDevice } from '@apps/runway/hooks/useTurnOnDevice';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { setNotify } from '@apps/runway/store/actions/planActions';
 import {
@@ -59,7 +53,6 @@ interface NotificationsScreenProps {
 /** The once-a-day "Purchases waiting for a home" push: its switch, and the hour it comes. Turning it on asks this device for notifications on that tap. */
 function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const plan = useAppSelector((state) => state.runway.plan);
   const canLink = useCanLinkBank();
   const uid = user?.uid ?? null;
@@ -93,16 +86,12 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
     }
   };
 
+  const turnOnDevice = useTurnOnDevice(uid);
   const askDevice = async () => {
     if (!uid) return false;
-    const result = await turnOnDevicePush(uid);
-    await queryClient.invalidateQueries({
-      queryKey: notificationsQueryKeys.device(uid),
-    });
-    if (result === 'on') return true;
-    if (result === 'dismissed') setMessage(NOTIFY_WORDS.dismissed);
-    else setMessage(getTurnOnFailureText(result));
-    return false;
+    const failure = await turnOnDevice();
+    if (failure !== null) setMessage(failure);
+    return failure === null;
   };
 
   const handleSwitch = async (isChecked: boolean) => {

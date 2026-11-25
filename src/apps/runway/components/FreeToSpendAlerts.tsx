@@ -1,22 +1,16 @@
 import { useState } from 'react';
 
 import { Smartphone } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
 import { useAuth } from '@/hooks/useAuth';
-import { turnOnDevicePush } from '@/lib/notifications/devicePush';
-import {
-  getDeviceNotificationsText,
-  getTurnOnFailureText,
-} from '@/lib/notifications/deviceText';
-import {
-  devicePushQueryOptions,
-  notificationsQueryKeys,
-} from '@/lib/notifications/notificationsQueries';
-import { ALERT_WORDS, NOTIFY_WORDS } from '@apps/runway/constants';
+import { getDeviceNotificationsText } from '@/lib/notifications/deviceText';
+import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
+import { ALERT_WORDS } from '@apps/runway/constants';
 import AlertsPanel from '@apps/runway/components/AlertsPanel';
+import { useTurnOnDevice } from '@apps/runway/hooks/useTurnOnDevice';
 
 interface FreeToSpendAlertsProps {
   /** True where the screen above already says this device can't get notifications. */
@@ -32,7 +26,7 @@ function FreeToSpendAlerts({
 }: FreeToSpendAlertsProps) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const queryClient = useQueryClient();
+  const turnOnDevice = useTurnOnDevice(uid);
   const device = useQuery({
     ...devicePushQueryOptions(uid ?? ''),
     enabled: uid !== null,
@@ -42,18 +36,8 @@ function FreeToSpendAlerts({
     device === 'blocked' || device === 'unsupported' ? device : null;
 
   const askDevice = async () => {
-    if (!uid) return;
     setMessage(null);
-    const result = await turnOnDevicePush(uid);
-    await queryClient.invalidateQueries({
-      queryKey: notificationsQueryKeys.device(uid),
-    });
-    if (result === 'on') return;
-    setMessage(
-      result === 'dismissed'
-        ? NOTIFY_WORDS.dismissed
-        : getTurnOnFailureText(result),
-    );
+    setMessage(await turnOnDevice());
   };
 
   return (

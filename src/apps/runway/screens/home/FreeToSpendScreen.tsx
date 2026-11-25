@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import {
   ArrowDownLeft,
@@ -21,7 +22,9 @@ import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
+import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -109,14 +112,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     showSpendPeriod,
   } = useRunwayUrlState();
   const mask = useMaskedText();
-  const { isHidden, isScrambled, toggle: toggleHidden } = useValuesHidden();
+  const { isHidden, toggle: toggleHidden } = useValuesHidden();
   const now = useNow(60_000);
-  const freeAlerts = useAlerts(
-    { kind: 'freeToSpend' },
-    null,
-    todayAsUtcDate(now),
-  );
-  const isAlertsLoaded = useAppSelector((state) => state.runway.isAlertsLoaded);
   const monthRange = getSpendRange(DEFAULT_SPEND_PERIOD, todayAsUtcDate(now));
   const monthMoneyIn = useAppSelector(selectMoneyIn).filter(
     (purchase) =>
@@ -506,25 +503,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
               )}
             </LevelGate>
             {isTrackingLevel(level) && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                hasChevron
-                icon={<Bell />}
-                label={ALERT_WORDS.row}
-                subtitle={
-                  isAlertsLoaded
-                    ? mask(
-                        getAlertsSummary(
-                          freeAlerts.entries,
-                          freeAlerts.figureCents,
-                          isHidden || isScrambled,
-                        ),
-                      )
-                    : undefined
-                }
-                onClick={openFreeAlerts}
-              />
+              <FreeToSpendAlertsRow onOpen={openFreeAlerts} />
             )}
           </ActionGroup>
           {!isStartOpen && !isBankBacked && (
@@ -535,6 +514,53 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         </div>
       )}
     </Subview>
+  );
+}
+
+interface FreeToSpendAlertsRowProps {
+  onOpen: () => void;
+}
+
+function FreeToSpendAlertsRow({ onOpen }: FreeToSpendAlertsRowProps) {
+  const mask = useMaskedText();
+  const { isHidden, isScrambled } = useValuesHidden();
+  const now = useNow(60_000);
+  const freeAlerts = useAlerts(
+    { kind: 'freeToSpend' },
+    null,
+    todayAsUtcDate(now),
+  );
+  const isAlertsLoaded = useAppSelector((state) => state.runway.isAlertsLoaded);
+  const uid = useAuth().user?.uid ?? null;
+  const device = useQuery({
+    ...devicePushQueryOptions(uid ?? ''),
+    enabled: uid !== null,
+  }).data;
+
+  const getSubtitle = () => {
+    if (!isAlertsLoaded) return undefined;
+    const summary = mask(
+      getAlertsSummary(
+        freeAlerts.entries,
+        freeAlerts.figureCents,
+        isHidden || isScrambled,
+      ),
+    );
+    const isStuck = device === 'blocked' || device === 'unsupported';
+    if (!isStuck || freeAlerts.entries.length === 0) return summary;
+    return ALERT_WORDS.rowDeviceOff(summary);
+  };
+
+  return (
+    <ActionRow
+      isGrouped
+      isRoomy
+      hasChevron
+      icon={<Bell />}
+      label={ALERT_WORDS.row}
+      subtitle={getSubtitle()}
+      onClick={onOpen}
+    />
   );
 }
 
