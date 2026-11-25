@@ -183,56 +183,101 @@ const SUCCESS_TEXT =
   /confirmation success|you may now forward|successfully (?:confirmed|verified)|(?:forwarding|address) (?:has been |is now )?(?:confirmed|verified)/i;
 const MAX_PAGE_CHARS = 200_000;
 
-const decodeAttribute = (value: string) =>
-  value
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-
-const readAttribute = (tag: string, name: string) => {
-  const match = new RegExp(
-    `\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
-    'i',
-  ).exec(tag);
-  return match === null
-    ? null
-    : decodeAttribute(match[1] ?? match[2] ?? match[3] ?? '');
+const NAMED_ENTITIES: Record<string, string> = {
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+  amp: '&',
 };
 
-/** The page's first POST form: where it posts and the named fields it sends (hidden inputs and the submit button), or null. */
-export function readConfirmForm(html: string, pageUrl: string) {
-  const form = /<form\b([^>]*)>([\s\S]*?)<\/form>/i.exec(html);
-  if (form === null) return null;
-  const opening = ` ${form[1]}`;
-  if ((readAttribute(opening, 'method') ?? 'get').toLowerCase() !== 'post') {
-    return null;
-  }
-  const action = resolveHop(readAttribute(opening, 'action') ?? '', pageUrl);
-  if (action === null) return null;
-  const fields = Array.from(
-    form[2].matchAll(/<(?:input|button)\b([^>]*)>/gi),
-  ).flatMap(([, attributes]) => {
-    const tag = ` ${attributes}`;
-    const name = readAttribute(tag, 'name');
-    const type = (readAttribute(tag, 'type') ?? '').toLowerCase();
-    return name === null || ['checkbox', 'radio', 'file'].includes(type)
-      ? []
-      : [[name, readAttribute(tag, 'value') ?? ''] as [string, string]];
+const decodeAttribute = (value: string) =>
+  value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, entity: string) => {
+    const code = entity.startsWith('#x')
+      ? parseInt(entity.slice(2), 16)
+      : entity.startsWith('#')
+        ? Number(entity.slice(1))
+        : null;
+    return code === null
+      ? (NAMED_ENTITIES[entity.toLowerCase()] ?? whole)
+      : String.fromCodePoint(code);
   });
+
+const TAG_ATTRIBUTES =
+  /([^\s"'=<>/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+
+const readAttributes = (tag: string) =>
+  new Map(
+    Array.from(tag.matchAll(TAG_ATTRIBUTES)).map(
+      ([, name, double, single, bare]) => [
+        name.toLowerCase(),
+        decodeAttribute(double ?? single ?? bare ?? ''),
+      ],
+    ),
+  );
+
+const OPENING_TAG = (name: string) =>
+  new RegExp(`<${name}\\b((?:"[^"]*"|'[^']*'|[^'">])*)>`, 'gi');
+
+const CONFIRM_WORDS = /confirm|verify|accept|allow|proceed/i;
+
+/** The page's first POST form: where it posts, its hidden fields and its one confirm button (the submit whose words say confirm, else the first), or null. */
+export function readConfirmForm(html: string, pageUrl: string) {
+  const forms = Array.from(
+    html.matchAll(/<form\b((?:"[^"]*"|'[^']*'|[^'">])*)>([\s\S]*?)<\/form>/gi),
+  ).map(([, opening, inner]) => ({
+    attributes: readAttributes(opening),
+    inner,
+  }));
+  const form = forms.find(
+    ({ attributes }) =>
+      (attributes.get('method') ?? '').toLowerCase() === 'post',
+  );
+  if (form === undefined) return null;
+  const action = resolveHop(form.attributes.get('action') ?? '', pageUrl);
+  if (action === null) return null;
+  const controls = ['input', 'button'].flatMap((tagName) =>
+    Array.from(form.inner.matchAll(OPENING_TAG(tagName))).map(
+      ([, attributes]) => ({ tagName, attributes: readAttributes(attributes) }),
+    ),
+  );
+  const named = controls.filter(({ attributes }) => attributes.has('name'));
+  const isSubmit = ({ tagName, attributes }: (typeof controls)[number]) =>
+    tagName === 'button'
+      ? (attributes.get('type') ?? 'submit').toLowerCase() === 'submit'
+      : ['submit', 'image'].includes(
+          (attributes.get('type') ?? '').toLowerCase(),
+        );
+  const hidden = named.filter(
+    ({ tagName, attributes }) =>
+      tagName === 'input' &&
+      (attributes.get('type') ?? '').toLowerCase() === 'hidden',
+  );
+  const submits = named.filter(isSubmit);
+  const button =
+    submits.find(({ attributes }) =>
+      CONFIRM_WORDS.test(
+        `${attributes.get('name')} ${attributes.get('value') ?? ''}`,
+      ),
+    ) ?? submits[0];
+  const fields = [...hidden, ...(button === undefined ? [] : [button])].map(
+    ({ attributes }) =>
+      [attributes.get('name') ?? '', attributes.get('value') ?? ''] as [
+        string,
+        string,
+      ],
+  );
   return { action, body: new URLSearchParams(fields).toString() };
 }
 
 const readPage = async (response: Response) =>
-  typeof response.text === 'function'
-    ? (await response.text()).slice(0, MAX_PAGE_CHARS)
-    : '';
+  (await response.text()).slice(0, MAX_PAGE_CHARS);
 
-/**
- * Opens a confirm link, following at most 3 redirects by hand and only to accepted pages, and sends the page's confirm form once when it has one.
- * It reports `confirmed` only when the provider's page says so: a page that merely loads (Gmail's asks for a tap on Confirm) is not proof. Never throws.
- */
+/** The words a page shows, without its scripts and styles, so a string inside a script bundle never reads as success. */
+const shownWords = (page: string) =>
+  page.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ');
+
+/** Opens a provider's confirm link and sends its confirm form at most once; `confirmed` only when the page says so, since a page that merely loads is no proof. Never throws. */
 export async function followConfirmLink(
   url: string | null,
   provider: ConfirmProvider | null,
@@ -250,6 +295,7 @@ export async function followConfirmLink(
     target: string,
     hops: number,
     form: { body: string } | null,
+    hasSubmitted: boolean,
   ): Promise<FollowResult> => {
     if (!isAcceptedConfirmUrl(target, provider) || isSignInPage(target)) {
       return failed(null);
@@ -274,27 +320,27 @@ export async function followConfirmLink(
       );
       return next === null || hops >= MAX_HOPS
         ? failed(response.status)
-        : open(next, hops + 1, null);
+        : open(next, hops + 1, null, hasSubmitted);
     }
     if (response.status < 200 || response.status >= 300) {
       await response.body?.cancel();
       return failed(response.status);
     }
     const page = await readPage(response);
-    if (SUCCESS_TEXT.test(page)) {
+    if (SUCCESS_TEXT.test(shownWords(page))) {
       return {
         autoConfirm: 'confirmed',
         status: response.status,
         errorName: null,
       };
     }
-    const confirmForm = form === null ? readConfirmForm(page, target) : null;
+    const confirmForm = hasSubmitted ? null : readConfirmForm(page, target);
     return confirmForm === null
       ? failed(response.status, 'NotConfirmed')
-      : open(confirmForm.action, hops, confirmForm);
+      : open(confirmForm.action, hops, confirmForm, true);
   };
   try {
-    return await open(url, 0, null);
+    return await open(url, 0, null, false);
   } catch (error) {
     return failed(null, (error as Error)?.name ?? 'Error');
   }

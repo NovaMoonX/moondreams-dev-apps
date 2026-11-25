@@ -785,6 +785,59 @@ assert.equal(
   'failed',
   'the form is sent once, never in a loop',
 );
+const busyPage = `<form method="get" action="/search"><input name="q"></form><form method="post" action="/mail/vf-abc123/confirm"><input type="hidden" name="t" value="a&#61;&#x2B;b"><button name="cancel" value="1">Cancel</button><button name="ok" value="Confirm">Confirm</button></form>`;
+const busySeen = seen.length;
+await followConfirmLink(
+  gmailLink,
+  'gmail',
+  routedFetch({
+    [gmailLink]: respond(200, undefined, busyPage),
+    [confirmUrl]: respond(200),
+  }),
+);
+assert.equal(
+  seen[busySeen + 1].init?.body,
+  't=a%3D%2Bb&ok=Confirm',
+  'the POST form, its hidden fields decoded and only the confirm button',
+);
+const redirectSeen = seen.length;
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({
+        [gmailLink]: respond(200, undefined, askPage),
+        [confirmUrl]: respond(302, hopTo('after')),
+        [hopTo('after')]: respond(200, undefined, askPage),
+      }),
+    )
+  ).autoConfirm,
+  'failed',
+);
+assert.equal(
+  seen.slice(redirectSeen).filter((call) => call.init?.method === 'POST')
+    .length,
+  1,
+  'a redirect after the POST never sends the form again',
+);
+assert.equal(
+  (
+    await followConfirmLink(
+      gmailLink,
+      'gmail',
+      routedFetch({
+        [gmailLink]: respond(
+          200,
+          undefined,
+          '<script>var t="Confirmation Success!"</script><p>Confirm?</p>',
+        ),
+      }),
+    )
+  ).autoConfirm,
+  'failed',
+  'success words inside a script are not the page saying so',
+);
 const evilForm = askPage.replace(
   '/mail/vf-abc123/confirm',
   'https://evil.example.com/x',
