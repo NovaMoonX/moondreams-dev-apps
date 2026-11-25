@@ -1537,7 +1537,7 @@ export function createPinchAdapter(
         (ctx, input) => searchRecipes(deps.firestore(), ctx, input),
       ),
       get_recipe: toAppAction(
-        'Opens one recipe: its version (pass it as basedOn to pinch_save_recipe (action update_recipe)), servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
+        'Opens one recipe: its version (pass it as basedOn to pinch_save (action update_recipe)), servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
         GET_RECIPE_SHAPE,
         (ctx, input) => getRecipe(deps.firestore(), ctx, input),
       ),
@@ -1552,7 +1552,7 @@ export function createPinchAdapter(
         (ctx, input) => getKitchen(deps.firestore(), ctx, input),
       ),
       find_ingredients: toAppAction(
-        'Looks up which of a list of ingredient names the person\'s kitchen already has, up to 50 at a time. Each answer has asked, match (the kitchen\'s own name and whether it has nutrition, or null), noteWords (descriptor words such as lean or 93% to put in the recipe line\'s note, because the kitchen\'s ingredient is the plain one: "lean ground beef" is their "Ground beef" with "lean" in the note) and close (up to three near names when nothing matched). Call it before pinch_save_recipe (action add_recipe) or pinch_save_recipe (action update_recipe) and write each line with the kitchen\'s name.',
+        'Looks up which of a list of ingredient names the person\'s kitchen already has, up to 50 at a time. Each answer has asked, match (the kitchen\'s own name and whether it has nutrition, or null), noteWords (descriptor words such as lean or 93% to put in the recipe line\'s note, because the kitchen\'s ingredient is the plain one: "lean ground beef" is their "Ground beef" with "lean" in the note) and close (up to three near names when nothing matched). Call it before pinch_save (action add_recipe or update_recipe) and write each line with the kitchen\'s name.',
         FIND_INGREDIENTS_SHAPE,
         (ctx, input) => findKitchenIngredients(deps.firestore(), ctx, input),
       ),

@@ -340,7 +340,7 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'editRecipes',
           label: 'Edit a recipe',
-          tool: 'save_recipe',
+          tool: 'save',
           changesExisting: true,
         },
         {
@@ -349,7 +349,7 @@ export const PINCH_SHARES: SourceShares = {
           categories: [],
           permission: 'addRecipes',
           label: 'Add a recipe',
-          tool: 'save_recipe',
+          tool: 'save',
           changesExisting: false,
         },
         {
@@ -391,7 +391,7 @@ export const PINCH_SHARES: SourceShares = {
       ],
       tools: [
         { id: 'read', title: 'Read Pinch' },
-        { id: 'save_recipe', title: 'Add or edit a recipe' },
+        { id: 'save', title: 'Add or edit a recipe' },
         { id: 'add', title: 'Plan a meal, or add groceries, ideas or nutrition' },
       ],
       askedAbout: [
