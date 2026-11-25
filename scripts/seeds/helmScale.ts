@@ -1866,6 +1866,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           ]),
         ),
       ),
+      changes: {},
       options: null,
       status: 'live',
       categoryState: Object.fromEntries(

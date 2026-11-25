@@ -10864,6 +10864,7 @@ assert.equal(
       cookId: null,
       ...getStepAnchor(steps, stepIndex),
       reason,
+      by: null,
       previous: null,
       createdAt,
       updatedAt: createdAt,

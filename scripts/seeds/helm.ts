@@ -8784,6 +8784,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       },
       useSoon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -8893,6 +8894,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         seenScopeVersion: null,
       },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -8971,6 +8973,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       pickups: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       sales: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -9054,6 +9057,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         seenScopeVersion: null,
       },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -9184,6 +9188,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         seenScopeVersion: null,
       },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -9292,6 +9297,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         seenScopeVersion: null,
       },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -9371,6 +9377,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         seenScopeVersion: null,
       },
     },
+    changes: {},
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -9421,6 +9428,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     categories: {
       events: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
     },
+    changes: {},
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
     categoryState: {
@@ -9458,6 +9466,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       categories: {
         mail: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       },
+      changes: {},
       options: null,
       categoryState: { mail: { lastOkAt: null, lastError: null, count: 0 } },
       lastSyncAt: null,
@@ -9477,6 +9486,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           seenScopeVersion: null,
         },
       },
+      changes: {},
       options: null,
       categoryState: {
         documents: { lastOkAt: null, lastError: null, count: 0 },
@@ -9498,6 +9508,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           seenScopeVersion: null,
         },
       },
+      changes: {},
       options: null,
       categoryState: {
         contacts: { lastOkAt: null, lastError: null, count: 0 },

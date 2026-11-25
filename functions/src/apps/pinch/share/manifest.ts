@@ -309,8 +309,62 @@ export const PINCH_SHARES: SourceShares = {
           permission: null,
           label: 'See what is in the kitchen',
         },
+        {
+          id: 'update_recipe',
+          kind: 'change',
+          categories: [],
+          permission: 'editRecipes',
+          label: 'Edit a recipe',
+        },
+        {
+          id: 'add_recipe',
+          kind: 'change',
+          categories: [],
+          permission: 'addRecipes',
+          label: 'Add a recipe',
+        },
+        {
+          id: 'plan_meal',
+          kind: 'change',
+          categories: [],
+          permission: 'planMeals',
+          label: 'Plan a meal',
+        },
+        {
+          id: 'add_to_shopping_list',
+          kind: 'change',
+          categories: [],
+          permission: 'shoppingList',
+          label: 'Add to the shopping list',
+        },
       ],
-      capabilities: { read: true, write: false, backgroundSync: true },
+      changes: [
+        {
+          id: 'editRecipes',
+          label: 'Edit recipes',
+          meaning:
+            "Change a recipe's name, servings, times, description, ingredients or steps. Each edit shows in the recipe's Changes, where you can undo it.",
+        },
+        {
+          id: 'addRecipes',
+          label: 'Add recipes',
+          meaning:
+            'Save a new recipe to your Recipes. It can never remove one.',
+        },
+        {
+          id: 'planMeals',
+          label: 'Plan meals',
+          meaning:
+            'Put a recipe or a dish on a day of your plan. It never takes a meal off.',
+        },
+        {
+          id: 'shoppingList',
+          label: 'Add to the shopping list',
+          meaning:
+            'Add things to your shopping list, or more of something already on it. It never ticks or removes anything.',
+        },
+      ],
+      capabilities: { read: true, write: true, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },
   ],

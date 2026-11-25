@@ -213,6 +213,7 @@ export function buildNewGrant(
         },
       ]),
     ),
+    changes: {},
     options: req.options,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -359,6 +360,22 @@ const readKeptCopies = (value: unknown): ConnectionGrant['keptCopies'] =>
     ? { count: value.count, deleteAfter: readTime(value.deleteAfter) }
     : null;
 
+const readChanges = (value: unknown): ConnectionGrant['changes'] =>
+  isRecord(value)
+    ? Object.fromEntries(
+        Object.entries(value).flatMap(([id, change]) =>
+          isRecord(change) && typeof change.isOn === 'boolean'
+            ? [
+                [
+                  id,
+                  { isOn: change.isOn, changedAt: readTime(change.changedAt) },
+                ],
+              ]
+            : [],
+        ),
+      )
+    : {};
+
 const readOptions = (value: unknown): ConnectionGrant['options'] =>
   isRecord(value) && Array.isArray(value.calendarIds)
     ? {
@@ -376,6 +393,7 @@ export function readGrant(data: unknown): ConnectionGrant {
     connectorId: readText(doc.connectorId) as ConnectorId,
     accountId: readText(doc.accountId),
     categories: readCategories(doc.categories),
+    changes: readChanges(doc.changes),
     options: readOptions(doc.options),
     status: GRANT_STATUSES.find((status) => status === doc.status) ?? 'ended',
     categoryState: readCategoryState(doc.categoryState),

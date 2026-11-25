@@ -170,6 +170,7 @@ export const A_LIST_SHARES: SourceShares = {
         'share links',
       ],
       actions: [],
+      changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },
