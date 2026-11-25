@@ -1330,7 +1330,7 @@ export const HELM_COPY = {
   connectionReads: (name: string) => `What ${name} reads`,
   connectionChanges: 'What assistants can change',
   connectionChangesOutsideLine:
-    'Assistants outside Helm also need their own "Change things in your apps" switch, in Settings > Connected assistants.',
+    'Outside assistants, like Claude or Gemini, also need their own "Change things in your apps" switch, in Settings > Connected assistants.',
   connectionSwitchedOff: (label: string) =>
     `${label} switched off. Its copies were removed.`,
   connectionUndo: 'Undo',
