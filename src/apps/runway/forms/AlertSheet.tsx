@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { Type } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import AmountHero from '@/components/AmountHero';
 import AppToggle from '@/components/AppToggle';
+import ClearOfFooter from '@/components/ClearOfFooter';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import MoneyInput from '@/components/MoneyInput';
 import { PillGroup } from '@/components/PillGroup';
 import SettingsRow from '@/components/SettingsRow';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,11 +41,15 @@ interface AlertSheetProps {
   onClose: () => void;
 }
 
-const toChoice = (alert: OpenAlert | null): Choice | null => {
+const toChoice = (
+  alert: OpenAlert | null,
+  eachTimeCents: Cents | null,
+): Choice | null => {
   if (alert === null) return null;
   if (alert.line.kind === 'cents') {
     return alert.line.cents === 0 ? 'zero' : 'amount';
   }
+  if (eachTimeCents === null) return null;
   return alert.line.bps === ALERT_SHARE_BPS.half
     ? 'half'
     : alert.line.bps === ALERT_SHARE_BPS.quarter
@@ -75,7 +80,9 @@ function AlertSheet({
 }: AlertSheetProps) {
   const { user } = useAuth();
   const isEnvelope = target.kind === 'envelope';
-  const [choice, setChoice] = useState<Choice | null>(() => toChoice(alert));
+  const [choice, setChoice] = useState<Choice | null>(() =>
+    toChoice(alert, eachTimeCents),
+  );
   const [amountText, setAmountText] = useState(() =>
     alert?.line.kind === 'cents' && alert.line.cents > 0
       ? centsToInputValue(alert.line.cents)
@@ -105,7 +112,9 @@ function AlertSheet({
     choice === null
       ? ALERT_WORDS.pickOne
       : line === null
-        ? ALERT_WORDS.amountMin
+        ? amountText === ''
+          ? ALERT_WORDS.amountNeeded
+          : ALERT_WORDS.amountMin
         : null;
 
   const save = async () => {
@@ -151,18 +160,19 @@ function AlertSheet({
             onChange={setChoice}
           />
           {choice === 'amount' && (
-            <MoneyInput
-              variant='outline'
-              ariaLabel={ALERT_WORDS.amountLabel}
-              value={amountText}
-              onChange={setAmountText}
-              placeholder={ALERT_WORDS.amountPlaceholder}
-              errorMessage={
-                amountText !== '' && line === null
-                  ? ALERT_WORDS.amountMin
-                  : undefined
-              }
-            />
+            <ClearOfFooter>
+              <AmountHero
+                label={ALERT_WORDS.amountLabel}
+                value={amountText}
+                onChange={setAmountText}
+                disabled={isBusy}
+                errorMessage={
+                  amountText !== '' && line === null
+                    ? ALERT_WORDS.amountMin
+                    : undefined
+                }
+              />
+            </ClearOfFooter>
           )}
         </div>
         {isEnvelope && (

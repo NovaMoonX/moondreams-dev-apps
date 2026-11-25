@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { Fragment, useEffect, useLayoutEffect, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { History, Loader, LockKeyhole, WifiOff } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -52,6 +53,7 @@ import { getDayKeyMonth } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import {
+  ALERT_WORDS,
   DONE_FOR_YOU_WORDS,
   HISTORY_WORDS,
   RUNWAY_TAB_LABELS,
@@ -238,11 +240,21 @@ function RunwayContent() {
   const isLiveOpenEnvelope = useAppSelector((state) =>
     selectEnvelopes(state, today).some(({ item }) => item.id === openEnvelope),
   );
+  const { addToast } = useToast();
+  const handledEnvelope = useRef<string | null>(null);
   useEffect(() => {
-    if (openEnvelope === null || !isPlanItemsLoaded) return;
+    if (openEnvelope === null) {
+      handledEnvelope.current = null;
+      return;
+    }
+    if (!isPlanItemsLoaded) return;
+    if (handledEnvelope.current === openEnvelope) return;
+    handledEnvelope.current = openEnvelope;
     const open = async () => {
       if (isLiveOpenEnvelope) {
         await showOnPlan('envelopes', { itemId: openEnvelope });
+      } else {
+        addToast({ title: ALERT_WORDS.envelopeGone, type: 'info' });
       }
       await clearOpenEnvelope();
     };

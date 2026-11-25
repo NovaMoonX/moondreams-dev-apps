@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { formatTimeAgo } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { ALERT_WORDS } from '@apps/runway/constants';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { AlertStateDoc, Cents } from '@apps/runway/types';
 import {
@@ -13,8 +14,8 @@ import {
   type AlertEntry,
 } from '@apps/runway/utils/alertText';
 
-/** How far apart two notches sit at most, in pixels, when the rail is drawn to scale; the least is a small gap, and hidden amounts use it everywhere. */
-const MAX_GAP_PX = 96;
+/** How far apart two notches sit at most, in pixels, when the rail is drawn to scale; the least is a small gap, and hidden or made-up amounts use it everywhere. */
+const MAX_GAP_PX = 40;
 const MIN_GAP_PX = 8;
 
 interface AlertLadderProps {
@@ -25,7 +26,8 @@ interface AlertLadderProps {
   /** The rail's top: what an envelope gets each time, or the highest of its lines and its figure. */
   topCents: Cents;
   states: ReadonlyMap<string, AlertStateDoc>;
-  isHidden: boolean;
+  /** Evenly spaced, none filled, no Now marker: amounts are hidden or made up. */
+  isEven: boolean;
   /** The plan holds the most alerts it can, so none is offered. */
   isFull: boolean;
   now: number;
@@ -42,7 +44,7 @@ function AlertLadder({
   figureCents,
   topCents,
   states,
-  isHidden,
+  isEven,
   isFull,
   now,
   onOpen,
@@ -56,7 +58,7 @@ function AlertLadder({
   }));
   const isAbove = (step: Step) =>
     step.kind === 'alert' && isPassed(step.entry.lineCents, figureCents);
-  const hasNow = !isHidden && figureCents !== null;
+  const hasNow = !isEven && figureCents !== null;
   const steps: Step[] = hasNow
     ? [
         ...alertSteps.filter(isAbove),
@@ -67,7 +69,7 @@ function AlertLadder({
 
   const gapBefore = (index: number) => {
     if (index === 0) return 0;
-    if (isHidden) return MIN_GAP_PX;
+    if (isEven) return MIN_GAP_PX;
     const gap = Math.max(0, steps[index - 1].at - steps[index].at);
     return Math.min(
       MAX_GAP_PX,
@@ -80,12 +82,25 @@ function AlertLadder({
       {steps.length === 0 ? (
         <p className='text-muted-foreground text-sm'>{ALERT_WORDS.empty}</p>
       ) : (
-        <ol className='relative'>
-          <span
-            aria-hidden='true'
-            className='bg-border absolute top-4 bottom-4 left-[9px] w-0.5'
-          />
+        <ol>
           {steps.map((step, index) => {
+            const rail = (
+              <>
+                {index > 0 && (
+                  <span
+                    aria-hidden='true'
+                    style={{ top: -gapBefore(index) }}
+                    className='bg-border absolute bottom-1/2 left-[9px] w-0.5'
+                  />
+                )}
+                {index < steps.length - 1 && (
+                  <span
+                    aria-hidden='true'
+                    className='bg-border absolute top-1/2 bottom-0 left-[9px] w-0.5'
+                  />
+                )}
+              </>
+            );
             if (step.kind === 'now') {
               return (
                 <li
@@ -93,31 +108,36 @@ function AlertLadder({
                   style={{ marginTop: gapBefore(index) }}
                   className='text-primary relative flex min-h-8 items-center gap-2 pl-9 text-xs font-semibold'
                 >
+                  {rail}
                   <span
                     aria-hidden='true'
                     className='bg-primary ring-accent absolute top-1/2 left-1 size-3 -translate-y-1/2 rounded-full ring-4'
                   />
                   <span>{ALERT_WORDS.now}</span>
                   <span className='tabular-nums'>
-                    {mask(formatCents(step.at))}
+                    <MaskedText>{formatCents(step.at)}</MaskedText>
                   </span>
                 </li>
               );
             }
             const { alert, lineCents } = step.entry;
             const isFilled = hasNow && isPassed(lineCents, figureCents);
-            const title = mask(getAlertTitle(alert.line, lineCents));
+            const rawTitle = getAlertTitle(alert.line, lineCents);
             const lastFiredAt = states.get(alert.id)?.lastFiredAt ?? null;
-            const detail =
-              lastFiredAt === null
+            const getDetail = () => {
+              if (lineCents === null) return ALERT_WORDS.paused;
+              return lastFiredAt === null
                 ? ALERT_WORDS.notYet
                 : ALERT_WORDS.wentOff(formatTimeAgo(lastFiredAt, now, true));
+            };
+            const detail = getDetail();
             return (
               <li
                 key={alert.id}
                 style={{ marginTop: gapBefore(index) }}
                 className='relative pl-9'
               >
+                {rail}
                 <span
                   aria-hidden='true'
                   className={join(
@@ -128,13 +148,13 @@ function AlertLadder({
                 <Button
                   type='button'
                   variant='tertiary'
-                  aria-label={`${title}. ${detail}`}
+                  aria-label={`${mask(rawTitle)}. ${detail}`}
                   className='border-border bg-card h-auto min-h-14 w-full justify-start gap-2 rounded-xl border px-3 py-2 text-left font-normal'
                   onClick={() => onOpen(alert.id)}
                 >
                   <span className='block min-w-0 flex-1'>
-                    <span className='block text-[15px] font-medium break-words'>
-                      {title}
+                    <span className='text-foreground block text-[15px] font-medium break-words'>
+                      <MaskedText>{rawTitle}</MaskedText>
                     </span>
                     <span className='text-muted-foreground block text-[13px]'>
                       {detail}

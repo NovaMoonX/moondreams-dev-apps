@@ -68,13 +68,15 @@ export const isPassed = (lineCents: Cents | null, figure: Cents | null) =>
 export const toAlertRemovalKey = (alertId: string) =>
   `runway-alert-removal:${alertId}`;
 
-/** "3 alerts · next at half left": the next is the highest line the figure has not yet reached. */
+/** "3 alerts · next at half left": the next is the highest line the figure has not yet reached. Count only when `isCountOnly` (amounts hidden or made up). */
 export function getAlertsSummary(
   entries: readonly AlertEntry[],
   figure: Cents | null,
+  isCountOnly: boolean,
 ) {
   if (entries.length === 0) return ALERT_WORDS.rowEmpty;
   const count = ALERT_WORDS.rowCount(entries.length);
+  if (isCountOnly) return count;
   const next = entries.find(
     ({ lineCents }) => lineCents !== null && !isPassed(lineCents, figure),
   );

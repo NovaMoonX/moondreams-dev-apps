@@ -485,11 +485,16 @@ function ItemSheet({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
-  const { isHidden } = useValuesHidden();
+  const { isHidden, isScrambled } = useValuesHidden();
   const homePins = useHomePins(today);
   const eachTimeCents =
     version?.kind === 'envelope' ? getEachTimeCents(version.payload) : null;
-  const alertSet = useAlerts({ kind: 'envelope', itemId }, eachTimeCents);
+  const alertSet = useAlerts(
+    { kind: 'envelope', itemId },
+    eachTimeCents,
+    today,
+  );
+  const isAlertsLoaded = useAppSelector((state) => state.runway.isAlertsLoaded);
   const allCards = useAppSelector(selectAllCards);
   const versions = useAppSelector((state) => state.runway.versions);
   const paid = useBillPaid({
@@ -1799,9 +1804,17 @@ function ItemSheet({
             hasChevron
             icon={<Bell />}
             label={ALERT_WORDS.row}
-            subtitle={mask(
-              getAlertsSummary(alertSet.entries, alertSet.figureCents),
-            )}
+            subtitle={
+              isAlertsLoaded
+                ? mask(
+                    getAlertsSummary(
+                      alertSet.entries,
+                      alertSet.figureCents,
+                      isHidden || isScrambled,
+                    ),
+                  )
+                : undefined
+            }
             onClick={() => goTo('alerts')}
           />
           <ActionRow

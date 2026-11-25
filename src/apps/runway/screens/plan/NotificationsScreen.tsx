@@ -10,6 +10,7 @@ import InlineNotice from '@/components/InlineNotice';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import Subview from '@/components/Subview';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { turnOnDevicePush } from '@/lib/notifications/devicePush';
@@ -123,7 +124,12 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   };
 
   return (
-    <Subview overlay title={NOTIFY_WORDS.rowLabel} onClose={onClose}>
+    <Subview
+      overlay
+      title={NOTIFY_WORDS.rowLabel}
+      onClose={onClose}
+      headerAction={<ValuesEyeButton />}
+    >
       <div className='space-y-4'>
         {canLink && (
           <SettingsGroup title={NOTIFY_WORDS.group}>
@@ -215,7 +221,7 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
               <p className='text-muted-foreground text-sm'>
                 {ALERT_WORDS.freeHelp}
               </p>
-              {stuckState !== null && (
+              {!canLink && stuckState !== null && (
                 <InlineNotice tone='warning'>
                   {getDeviceNotificationsText(stuckState)}
                 </InlineNotice>
