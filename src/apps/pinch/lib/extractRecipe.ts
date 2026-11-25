@@ -211,17 +211,28 @@ const asBase64 = (buffer: ArrayBuffer) =>
     ),
   );
 
-/** Reads a photo, screenshot or PDF of a recipe. */
-export async function extractRecipeFromFile(
-  file: File,
+/** Reads one to three photos, screenshots or PDFs as parts of one recipe (pages of a card, a photo and its back). */
+export async function extractRecipeFromFiles(
+  files: readonly File[],
   guidance: string | null,
 ): Promise<ExtractedRecipe> {
-  const inputFile = await compressIngestionImage(file);
-  const data = asBase64(await inputFile.arrayBuffer());
+  const parts = await Promise.all(
+    files.map(async (file) => {
+      const inputFile = await compressIngestionImage(file);
+      const data = asBase64(await inputFile.arrayBuffer());
+      return { inlineData: { data, mimeType: getUploadMimeType(inputFile) } };
+    }),
+  );
+  const prompt = withGuidance(PROMPT, guidance);
 
   return generate([
-    { text: withGuidance(PROMPT, guidance) },
-    { inlineData: { data, mimeType: getUploadMimeType(inputFile) } },
+    {
+      text:
+        files.length > 1
+          ? `${prompt}\n\nThe ${files.length} files that follow are parts of one recipe, in the order given (pages of a card or book, or photos of the same recipe). Combine them into one recipe and never repeat an ingredient or step shown in two of them.`
+          : prompt,
+    },
+    ...parts,
   ]);
 }
 

@@ -4,7 +4,7 @@ import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
-import { Lightbulb, RefreshCw, X } from 'lucide-react';
+import { Lightbulb, Plus, X } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import FilePickCard from '@/components/FilePickCard';
@@ -25,11 +25,12 @@ import IdeaRow from '@apps/pinch/components/ideas/IdeaRow';
 import {
   MAX_GUIDANCE_CHARS,
   MAX_PASTE_CHARS,
+  MAX_RECIPE_FILES,
   MAX_UPLOAD_BYTES,
   RECIPE_START_METHODS,
 } from '@apps/pinch/constants';
 import {
-  extractRecipeFromFile,
+  extractRecipeFromFiles,
   extractRecipeFromPage,
   extractRecipeFromText,
   extractRecipeFromVideo,
@@ -148,6 +149,24 @@ interface RecipeReaderProps {
   onSaveAsIdea?: (kept: { text: string } | { link: string }) => void;
 }
 
+const getPicked = (files: readonly File[]) => {
+  const [first] = files;
+  if (first === undefined) return null;
+  const size = files.reduce((total, one) => total + one.size, 0);
+  if (files.length === 1) {
+    return {
+      name: first.name,
+      size,
+      emoji: first.type === 'application/pdf' ? '📄' : '🖼️',
+    };
+  }
+  return {
+    name: `${files.length} files, read as one recipe`,
+    size,
+    emoji: '🗂️',
+  };
+};
+
 /** One way of starting a recipe, finished on its own screen: say what the AI will do, take the text, link or file, and read it from a pinned footer. */
 function RecipeReader({
   method,
@@ -166,7 +185,7 @@ function RecipeReader({
   const [state, setState] = useState<State>({ status: 'idle' });
   const [text, setText] = useState(initialText);
   const [link, setLink] = useState(initialUrl ?? initialLink);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [fileKey, setFileKey] = useState(0);
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
   const linkRef = useRef<HTMLTextAreaElement>(null);
@@ -178,7 +197,7 @@ function RecipeReader({
   const canPasteText = initialUrl === undefined;
   const getTyped = () => {
     if (method === 'text') return text;
-    if (method === 'file') return file === null ? '' : 'picked';
+    if (method === 'file') return files.length === 0 ? '' : 'picked';
     return link;
   };
   const typed = getTyped();
@@ -251,36 +270,64 @@ function RecipeReader({
   };
 
   const rejectFile = (message: string) => {
-    setFile(null);
-    reportTyped('', guidanceText);
     setState(failed(message));
     setFileKey((current) => current + 1);
   };
 
-  const handleFile = async (next: File) => {
-    if (!isReadableFile(next)) {
+  const handleFiles = async (picked: File[]) => {
+    const room = MAX_RECIPE_FILES - files.length;
+    if (room <= 0) {
+      rejectFile(
+        `That's ${MAX_RECIPE_FILES} files already, the most one recipe reads.`,
+      );
+      return;
+    }
+    const next = picked.slice(0, room);
+    if (next.some((one) => !isReadableFile(one))) {
       rejectFile("That file isn't a photo or a PDF.");
       return;
     }
-    if (!(await fitsReadLimit(next, MAX_UPLOAD_BYTES))) {
+    const pdfBytes = [...files, ...next]
+      .filter((one) => one.type === 'application/pdf')
+      .reduce((total, one) => total + one.size, 0);
+    const fits = await Promise.all(
+      next.map((one) => fitsReadLimit(one, MAX_UPLOAD_BYTES)),
+    );
+    if (fits.includes(false) || pdfBytes > MAX_UPLOAD_BYTES) {
       rejectFile(
-        'That file is too big to read. Try a photo, or a PDF under 10 MB.',
+        'That is too big to read. Try photos, or PDFs under 10 MB in all.',
       );
       return;
     }
 
-    setFile(next);
+    setFiles((current) => [...current, ...next].slice(0, MAX_RECIPE_FILES));
     reportTyped('picked', guidanceText);
+    if (picked.length > room) {
+      setState(
+        failed(
+          `Up to ${MAX_RECIPE_FILES} files, so only ${room === 1 ? 'the first one was' : `the first ${room} were`} added.`,
+        ),
+      );
+      setFileKey((current) => current + 1);
+      return;
+    }
     setState({ status: 'idle' });
     setFileKey((current) => current + 1);
   };
 
   const chooseFile = () => openFileChooser(fileInput);
 
+  const clearFiles = () => {
+    setFiles([]);
+    reportTyped('', guidanceText);
+    setState({ status: 'idle' });
+  };
+
   const readFile = () => {
-    if (file === null) return;
-    void run(file.name, 'AI_FILE', async () =>
-      toReading(await extractRecipeFromFile(file, guidance)),
+    const [first] = files;
+    if (first === undefined) return;
+    void run(first.name, 'AI_FILE', async () =>
+      toReading(await extractRecipeFromFiles(files, guidance)),
     );
   };
 
@@ -455,8 +502,8 @@ function RecipeReader({
 
   const getHint = () => {
     if (method === 'file') {
-      return file === null
-        ? 'Clear, straight-on photos read best.'
+      return files.length === 0
+        ? `Clear, straight-on photos read best. Up to ${MAX_RECIPE_FILES} for one recipe.`
         : 'Add guidance below if you like, then tap Fill in the recipe.';
     }
     if (method === 'text') {
@@ -473,17 +520,28 @@ function RecipeReader({
 
   const getChips = (): ActionChip[] => {
     if (method === 'file') {
-      return file !== null
-        ? [
-            {
-              key: 'another',
-              icon: <RefreshCw className='h-4 w-4' />,
-              label: 'Choose another file',
-              isDisabled: isReading,
-              onClick: chooseFile,
-            },
-          ]
-        : [];
+      if (files.length === 0) return [];
+      return [
+        ...(files.length < MAX_RECIPE_FILES
+          ? [
+              {
+                key: 'another',
+                icon: <Plus className='h-4 w-4' />,
+                label: 'Add another file',
+                description: `Add a page or photo, up to ${MAX_RECIPE_FILES}`,
+                isDisabled: isReading,
+                onClick: chooseFile,
+              },
+            ]
+          : []),
+        {
+          key: 'clear',
+          icon: <X className='h-4 w-4' />,
+          label: files.length === 1 ? 'Remove the file' : 'Remove the files',
+          isDisabled: isReading,
+          onClick: clearFiles,
+        },
+      ];
     }
     const clearChips: ActionChip[] =
       method === 'text' || canPasteText
@@ -534,8 +592,8 @@ function RecipeReader({
   };
 
   const getPrimary = () => {
-    if (method === 'file' && isTouch && file === null) return null;
-    if (method === 'file' && file === null) {
+    if (method === 'file' && isTouch && files.length === 0) return null;
+    if (method === 'file' && files.length === 0) {
       return (
         <Button type='button' onClick={() => openFileChooser(fileInput)}>
           Choose a file
@@ -594,26 +652,22 @@ function RecipeReader({
       </IntroCard>
       <FormSection
         title={copy.caption}
-        isFilling={method === 'link' || (method === 'file' && file === null)}
+        isFilling={
+          method === 'link' || (method === 'file' && files.length === 0)
+        }
       >
         {method === 'file' ? (
           <FilePickCard
-            title='Tap to choose a file'
+            title='Tap to choose files'
             accepts='Photo, screenshot or PDF'
             limit={`PDF up to ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`}
-            picked={
-              file && {
-                name: file.name,
-                size: file.size,
-                emoji: file.type === 'application/pdf' ? '📄' : '🖼️',
-              }
-            }
+            picked={getPicked(files)}
             status={getStatusLine()}
             isDisabled={isReading}
-            isFilling={file === null}
+            isFilling={files.length === 0}
             onPick={() => openFileChooser(fileInput)}
             onTakePhoto={() => openFileChooser(fileInput, { isCamera: true })}
-            onDropFile={(dropped) => void handleFile(dropped)}
+            onDropFile={(dropped) => void handleFiles([dropped])}
           />
         ) : (
           <div
@@ -659,12 +713,13 @@ function RecipeReader({
           key={fileKey}
           ref={setFileInput}
           type='file'
+          multiple
           accept='application/pdf,image/*'
           aria-label='Upload a recipe'
           className='hidden'
           onChange={(event) => {
-            const next = event.target.files?.[0];
-            if (next) void handleFile(next);
+            const picked = Array.from(event.target.files ?? []);
+            if (picked.length > 0) void handleFiles(picked);
           }}
         />
       )}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -63,6 +63,17 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
   const { isAtLeast } = useMediaQuery();
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isSplit = isAtLeast('lg') || (isAtLeast('sm') && isShort);
+  const pageName =
+    target === null
+      ? null
+      : target.kind === 'RECIPE'
+        ? target.recipe.title
+        : target.meal.name;
+
+  useEffect(() => {
+    if (pageName === null) return;
+    document.title = `${pageName} - Pinch`;
+  }, [pageName]);
 
   if (target === null) return <SharedNotFound />;
 
