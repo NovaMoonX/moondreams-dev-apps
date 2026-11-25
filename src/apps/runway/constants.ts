@@ -2848,10 +2848,12 @@ export const NEXT_FILL_WORDS = {
 
 /** An envelope below zero: a quiet choice under its next fill to bring it to $0 now. */
 export const OVER_FIX_WORDS = {
-  lead: 'Or cover it now from Free\u00a0to\u00a0Spend',
-  leadAlone: 'Cover it from Free\u00a0to\u00a0Spend',
+  lead: 'Or cover it from',
+  leadAlone: 'Cover it from',
+  source: 'Free\u00a0to\u00a0Spend',
   action: 'Bring it to $0',
   lockedTitle: "Free to Spend can't cover it",
+  lockedLead: "can't cover it",
   lockedShort: (free: string, amount: string) =>
     `Free to Spend has ${free}, and this needs ${amount}. Set what it holds now can bring money in from somewhere else.`,
   lockedOver: (over: string) =>

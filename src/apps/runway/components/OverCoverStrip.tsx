@@ -63,8 +63,11 @@ function OverCoverStrip({
         : OVER_FIX_WORDS.lockedShort(formatCents(free.cents), over);
 
   const getLead = () => {
-    if (!canCover) return OVER_FIX_WORDS.lockedTitle;
-    return isAlone ? OVER_FIX_WORDS.leadAlone : OVER_FIX_WORDS.lead;
+    if (!canCover) return [OVER_FIX_WORDS.source, OVER_FIX_WORDS.lockedLead];
+    return [
+      isAlone ? OVER_FIX_WORDS.leadAlone : OVER_FIX_WORDS.lead,
+      OVER_FIX_WORDS.source,
+    ];
   };
   const bringBack = async () => {
     if (isSavingRef.current || !user) return;
@@ -124,10 +127,19 @@ function OverCoverStrip({
   };
 
   return (
-    <div className={join('px-3 py-2', !isAlone && 'border-border border-t')}>
+    <div
+      className={join(
+        'py-2 pr-3',
+        isAlone ? 'pl-3' : 'border-border border-t pl-10',
+      )}
+    >
       <div className='flex items-center gap-3'>
         <p className='text-muted-foreground min-w-0 flex-1 text-[13px]'>
-          {getLead()}
+          {getLead().map((line) => (
+            <span key={line} className='block'>
+              {line}
+            </span>
+          ))}
         </p>
         {canCover ? (
           <Button
