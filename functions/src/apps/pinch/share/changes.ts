@@ -23,7 +23,6 @@ import { CATALOG_NAMES } from './catalogNames.js';
 import { CATALOG_NUTRITION_IDS } from './catalogNutrition.js';
 import { cleanGroupName } from './ingredientGroups.js';
 import {
-  matchIngredient,
   matchIngredientWithNote,
   suggestIngredients,
 } from './ingredientMatch.js';
@@ -1367,7 +1366,8 @@ export const addToShoppingList = async (
     (built, entry) => {
       const amount = entry.amount ?? null;
       const typed = entry.name.replace(/\s+/g, ' ').trim();
-      const match = matchIngredient(typed, book.choices);
+      const match =
+        matchIngredientWithNote(typed, book.choices)?.ingredient ?? null;
       const freshKey = typed.toLowerCase();
       const freshId = built.freshIds.get(freshKey) ?? randomUUID();
       const ingredientId = match?.id ?? freshId;

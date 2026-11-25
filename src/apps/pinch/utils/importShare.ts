@@ -263,7 +263,10 @@ const toImportedSteps = (shared: SharedRecipe) => {
       text: asText(step, MAX_STEP_LENGTH),
       section: cleanStepSection(shared.stepSections?.[index] ?? null),
     }))
-    .filter((step): step is { text: string; section: string | null } => step.text !== null)
+    .filter(
+      (step): step is { text: string; section: string | null } =>
+        step.text !== null,
+    )
     .slice(0, MAX_RECIPE_STEPS);
   const steps = kept.map((step) => step.text);
   return {

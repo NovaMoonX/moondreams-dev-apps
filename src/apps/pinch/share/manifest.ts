@@ -192,7 +192,7 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'artifact',
           label: 'Recipe ingredients',
           meaning:
-            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts and the collections it is in, plus how long it takes (not servings or kind of dish). Never the steps, description, notes or links.",
+            "Recipes read live, for what that one leaves out: each recipe's ingredients with amounts, its collections and time, and which of your ingredients a name is. Never servings, steps, description, notes, links or nutrition values.",
           detail:
             'Each recipe, its ingredients and amounts, time and collections',
           mode: 'live',
@@ -214,8 +214,14 @@ export const PINCH_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: '2026-11-16',
             },
+            {
+              label:
+                'Which of your ingredients a name is, and whether it has nutrition yet',
+              sinceVersion: 2,
+              addedOn: '2026-11-25',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
         {
           id: 'fullRecipes',
@@ -363,12 +369,13 @@ export const PINCH_SHARES: SourceShares = {
           id: 'editRecipes',
           label: 'Edit recipes',
           meaning:
-            "Change a recipe's name, servings, times, description, ingredients or steps.",
+            "Change a recipe's name, servings, times, description, ingredients or steps, adding an ingredient it needs that you don't have.",
         },
         {
           id: 'addRecipes',
           label: 'Add recipes',
-          meaning: 'Save a new recipe. It can never remove one.',
+          meaning:
+            "Save a new recipe, with any ingredient it needs that you don't have. It can never remove one.",
         },
         {
           id: 'planMeals',

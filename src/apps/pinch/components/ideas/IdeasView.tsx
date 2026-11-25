@@ -222,7 +222,10 @@ function IdeasView({
       )}
       {(hasSearch || hasSort) && loadError === null && (
         <div
-          className={join('flex items-center gap-2', !hasSearch && 'justify-end')}
+          className={join(
+            'flex items-center gap-2',
+            !hasSearch && 'justify-end',
+          )}
         >
           {hasSearch && (
             <SearchInput
