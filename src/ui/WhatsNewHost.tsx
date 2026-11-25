@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Megaphone } from 'lucide-react';
 
 import SideTab from '@/components/SideTab';
+import { useIsAppEntered } from '@/hooks/useAppEntered';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { SITE_VERSION } from '@/lib/app';
 import { hasUnsavedWork } from '@/lib/app/unsavedWork';
@@ -122,10 +123,13 @@ function WhatsNewHost() {
   const mark = scope ? (seen.seen[scope] ?? null) : null;
   const unseen = useMemo(() => getUnseenNotes(visible, mark), [visible, mark]);
   const newest = getNewestVersion(unseen);
-  const isPopUpWarranted = shouldPopUp(unseen, {
-    isDebug,
-    showFixOnly: seen.showFixOnly,
-  });
+  const isEntered = useIsAppEntered(scope);
+  const isPopUpWarranted =
+    isEntered &&
+    shouldPopUp(unseen, {
+      isDebug,
+      showFixOnly: seen.showFixOnly,
+    });
   const isCollapsed =
     isDebug &&
     scope !== null &&
