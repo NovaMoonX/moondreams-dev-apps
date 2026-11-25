@@ -92,6 +92,7 @@ import { useApplyStoreOrders } from '@apps/runway/hooks/useStoreOrders';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useSyncOnReturn } from '@apps/runway/hooks/useSyncOnReturn';
+import { useFreshListenersOnReturn } from '@/hooks/useFreshListenersOnReturn';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
 import { setOpenItemRequest } from '@apps/runway/utils/openItemRequest';
@@ -314,6 +315,7 @@ function RunwayContent() {
   useLoadFeatureGates('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   useSyncOnReturn();
+  useFreshListenersOnReturn();
   useMatchBankPurchases(user?.uid ?? null);
   useAutoPay(user?.uid ?? null);
   useShareSummary(user?.uid ?? null);

@@ -5197,6 +5197,7 @@ async function writeSeedEmail(
       batch.set(context.firestore.doc(`${plan}/emailEvents/${entry.id}`), {
         id: entry.id,
         receivedAt: entry.receivedAt,
+        savedAt: entry.receivedAt + 6_000,
         outcome: entry.outcome,
         senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
