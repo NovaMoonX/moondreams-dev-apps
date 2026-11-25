@@ -12,6 +12,7 @@ import EmailChangesNotice from '@apps/a-list/components/email/EmailChangesNotice
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectCalendarShares,
+  selectFriendShowingsByDay,
   selectOpeningsByDay,
   selectTheatres,
   selectViewingsByDay,
@@ -37,6 +38,7 @@ const CALENDAR_STYLES = {
 function CalendarScreen() {
   const { openOverlay } = useAListOverlay();
   const viewingsByDay = useAppSelector(selectViewingsByDay);
+  const friendsByDay = useAppSelector(selectFriendShowingsByDay);
   const theatres = useAppSelector(selectTheatres);
   const now = useNow();
   const openingsByDay = useAppSelector((state) =>
@@ -133,6 +135,7 @@ function CalendarScreen() {
               date={date}
               viewings={viewingsByDay[dayKey] ?? []}
               openings={openingsByDay[dayKey] ?? []}
+              friendGroups={friendsByDay.get(dayKey) ?? []}
               isSelected={isSelected}
               isToday={isToday}
               now={now}

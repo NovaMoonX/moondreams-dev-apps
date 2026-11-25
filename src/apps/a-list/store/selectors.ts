@@ -12,6 +12,11 @@ import {
 } from '@apps/a-list/constants';
 import type { Viewing } from '@apps/a-list/types';
 import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
+import {
+  collectFriendShowings,
+  groupFriendShowingsByDay,
+  groupSharedPeople,
+} from '@apps/a-list/utils/friendShowings';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
 import { getDaysUntilOpening } from '@apps/a-list/utils/opening';
 import { getSavingsSummary } from '@apps/a-list/utils/savings';
@@ -64,6 +69,23 @@ export const selectCalendarShares = createSelector(
     );
     return result;
   },
+);
+
+export const selectAddedCalendarItems = (state: RootState) =>
+  state.aList.addedCalendars.items;
+
+const selectAddedFeeds = (state: RootState) => state.aList.addedCalendars.feeds;
+
+/** The people whose calendars the member added, by name. */
+export const selectSharedPeople = createSelector(
+  [selectAddedCalendarItems, selectAddedFeeds],
+  (calendars, feeds) => groupSharedPeople(calendars, feeds),
+);
+
+/** Shown friends' showings by local day, each day grouped by movie. */
+export const selectFriendShowingsByDay = createSelector(
+  [selectSharedPeople],
+  (people) => groupFriendShowingsByDay(collectFriendShowings(people)),
 );
 
 export const selectAreCalendarSharesLoaded = (state: RootState) =>
