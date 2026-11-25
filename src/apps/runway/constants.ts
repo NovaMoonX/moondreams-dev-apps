@@ -2841,13 +2841,16 @@ export const PURCHASE_COST_WORDS = {
 export const NEXT_FILL_WORDS = {
   row: (amount: string, date: string) => `Gets ${amount} on ${date}`,
   sub: 'See that income day',
+  overUntil: (date: string) => `Over until ${date}`,
+  leaving: (amount: string, left: string) => `Gets ${amount}, leaving ${left}`,
+  stillOver: (over: string) => `Still ${over} over after that`,
 } as const;
 
-/** An envelope below zero, as a card under its sheet's figure with a one-tap way back to $0. */
+/** An envelope below zero: a quiet choice under its next fill to bring it to $0 now. */
 export const OVER_FIX_WORDS = {
-  title: (name: string, amount: string) => `${name} is ${amount} over`,
-  action: 'Bring it back to $0',
-  sub: (amount: string) => `${amount} comes out of Free\u00a0to\u00a0Spend`,
+  lead: 'Or cover it now from Free\u00a0to\u00a0Spend',
+  leadAlone: 'Cover it from Free\u00a0to\u00a0Spend',
+  action: 'Bring it to $0',
   lockedTitle: "Free to Spend can't cover it",
   lockedShort: (free: string, amount: string) =>
     `Free to Spend has ${free}, and this needs ${amount}. Set what it holds now can bring money in from somewhere else.`,

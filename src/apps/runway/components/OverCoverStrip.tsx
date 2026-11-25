@@ -1,22 +1,16 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
-import {
-  NOTICE_ACTION_CLASSES,
-  NOTICE_LOCKED_CLASSES,
-} from '@/components/noticeActionClasses';
 import { useAuth } from '@/hooks/useAuth';
-import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
-import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { MOVE_WORDS, OVER_FIX_WORDS } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
@@ -29,18 +23,24 @@ import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors'
 import type { Cents } from '@apps/runway/types';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
-interface OverFixCardProps {
+interface OverCoverStripProps {
   itemId: string;
   name: string;
-  /** What the envelope holds now; the card is drawn only below zero. */
+  /** What the envelope holds now; the strip is drawn only below zero. */
   heldCents: Cents;
+  /** No next-fill row above it, so it is the box's only line. */
+  isAlone: boolean;
 }
 
-/** An envelope below zero, said apart from its figure, with one tap that moves the overspend in from Free to Spend (with an Undo), or a lock that says why Free to Spend can't. */
-function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
+/** The quiet choice under an overspent envelope's next fill: one tap moves the overspend in from Free to Spend (with an Undo), or a lock says why Free to Spend can't. */
+function OverCoverStrip({
+  itemId,
+  name,
+  heldCents,
+  isAlone,
+}: OverCoverStripProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const { isHidden } = useValuesHidden();
   const mask = useMaskedText();
   const undoMove = useUndoTransfer();
   const free = useAppSelector((state) =>
@@ -51,7 +51,6 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
   const [error, setError] = useState<string | null>(null);
 
   if (heldCents >= 0) return null;
-  if (isHidden) return <NeedsALookRow />;
 
   const overCents = -heldCents;
   const over = formatCents(overCents);
@@ -63,6 +62,10 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
         ? OVER_FIX_WORDS.lockedOver(formatCents(free.cents))
         : OVER_FIX_WORDS.lockedShort(formatCents(free.cents), over);
 
+  const getLead = () => {
+    if (!canCover) return OVER_FIX_WORDS.lockedTitle;
+    return isAlone ? OVER_FIX_WORDS.leadAlone : OVER_FIX_WORDS.lead;
+  };
   const bringBack = async () => {
     if (isSavingRef.current || !user) return;
     if (!navigator.onLine) {
@@ -121,40 +124,40 @@ function OverFixCard({ itemId, name, heldCents }: OverFixCardProps) {
   };
 
   return (
-    <InlineNotice tone='warning' title={mask(OVER_FIX_WORDS.title(name, over))}>
-      {canCover ? (
-        <div className='mt-2 space-y-1.5'>
+    <div className={join('px-3 py-2', !isAlone && 'border-border border-t')}>
+      <div className='flex items-center gap-3'>
+        <p className='text-muted-foreground min-w-0 flex-1 text-[13px]'>
+          {getLead()}
+        </p>
+        {canCover ? (
           <Button
             type='button'
-            variant='primary'
+            variant='secondary'
             size='sm'
-            className={NOTICE_ACTION_CLASSES.warning}
+            className='relative shrink-0 after:absolute after:inset-x-0 after:-inset-y-1.5'
             disabled={isSaving}
             onClick={() => void bringBack()}
           >
             {OVER_FIX_WORDS.action}
           </Button>
-          <p className='text-[13px]'>{mask(OVER_FIX_WORDS.sub(over))}</p>
-        </div>
-      ) : (
-        <div className='mt-2'>
+        ) : (
           <LockedButton
             label={OVER_FIX_WORDS.action}
             title={OVER_FIX_WORDS.lockedTitle}
             size='sm'
-            className={NOTICE_LOCKED_CLASSES.warning}
+            className='relative shrink-0 after:absolute after:inset-x-0 after:-inset-y-1.5'
           >
             <p>{mask(lockedText)}</p>
           </LockedButton>
-        </div>
-      )}
+        )}
+      </div>
       {error !== null && (
-        <p className='text-destructive mt-2 text-sm' role='alert'>
+        <p className='text-destructive mt-1.5 text-sm' role='alert'>
           {error}
         </p>
       )}
-    </InlineNotice>
+    </div>
   );
 }
 
-export default OverFixCard;
+export default OverCoverStrip;
