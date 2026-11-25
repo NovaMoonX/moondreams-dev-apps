@@ -16,6 +16,8 @@ import {
   getPageExtras,
   getVideoExtras,
   NO_EXTRAS,
+  readIsoMinutes,
+  readYieldServings,
   withPageFallbacks,
 } from '../../src/apps/pinch/utils/readExtras.ts';
 import {
@@ -224,5 +226,51 @@ assert.equal(
   getDataFromIdea(idea({ kind: 'TEXT', url: null }), []).links.others.length,
   0,
 );
+
+// a page's published Recipe data fills the times and servings the reading missed, and its servings replace an estimate
+assert.equal(readIsoMinutes('PT15M'), 15);
+assert.equal(readIsoMinutes('PT1H10M'), 70);
+assert.equal(readIsoMinutes('P0DT0H20M'), 20);
+assert.equal(readIsoMinutes('PT0M'), null);
+assert.equal(readIsoMinutes('15 minutes'), null);
+assert.equal(readYieldServings(['8', '8 servings']), 8);
+assert.equal(readYieldServings('Serves 6'), 6);
+assert.equal(readYieldServings(4), 4);
+assert.equal(readYieldServings('a lot'), null);
+const missed = normalizeExtractedRecipe({
+  title: 'Garlic pasta',
+  servings: 4,
+  servingsEstimated: true,
+  prepMinutes: null,
+  cookMinutes: 20,
+  ingredients: [],
+  steps: [],
+  categories: ['MAIN', 'NOT_A_CATEGORY', 'MAIN'],
+});
+assert.deepEqual(missed.categories, ['MAIN']);
+assert.equal(missed.isServingsEstimate, true);
+const published = withPageFallbacks(missed, {
+  title: null,
+  meta: undefined,
+  structuredData: [
+    { prepTime: 'PT10M', cookTime: 'PT45M', recipeYield: '6 servings' },
+  ],
+});
+assert.equal(published.prepMinutes, 10);
+assert.equal(published.cookMinutes, 20);
+assert.equal(published.servings, 6);
+assert.equal(published.isServingsEstimate, false);
+assert.equal(
+  withPageFallbacks(
+    { ...missed, isServingsEstimate: false },
+    {
+      title: null,
+      meta: undefined,
+      structuredData: [{ recipeYield: '6' }],
+    },
+  ).servings,
+  4,
+);
+assert.deepEqual(getDataFromExtracted(missed, []).categories, ['MAIN']);
 
 console.log('pinch read extras: ok');

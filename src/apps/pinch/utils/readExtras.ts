@@ -117,11 +117,48 @@ export const getExtraLinks = (extras: ReadExtras): RecipeLink[] =>
 const TITLE_TAIL = /\s+[|–—•-]\s+[^|–—•-]*$/;
 const MIN_TITLE_LENGTH = 3;
 
-/** Fills a title or description the reader left empty from the page's own: the site's name after a bar or dash is dropped from the title. */
+const ISO_DURATION =
+  /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:\d+(?:\.\d+)?S)?)?$/i;
+
+/** Whole minutes in an ISO 8601 duration such as "PT1H15M"; null for anything else or zero. */
+export const readIsoMinutes = (value: unknown): number | null => {
+  const match =
+    typeof value === 'string' ? ISO_DURATION.exec(value.trim()) : null;
+  if (!match || value === 'P' || value === 'PT') return null;
+  const [days, hours, minutes] = match
+    .slice(1)
+    .map((part) => Number(part ?? 0));
+  const total = days * 24 * 60 + hours * 60 + minutes;
+  return total > 0 ? total : null;
+};
+
+/** The first whole number of servings in a Recipe's `recipeYield` ("8 servings", ["8", "8 servings"], 8). */
+export const readYieldServings = (value: unknown): number | null => {
+  const first = Array.isArray(value) ? value[0] : value;
+  const found =
+    typeof first === 'number'
+      ? first
+      : Number(/\d+/.exec(String(first ?? ''))?.[0]);
+  return Number.isInteger(found) && found > 0 && found <= 500 ? found : null;
+};
+
+const getPublished = (
+  nodes: readonly Record<string, unknown>[] | undefined,
+  key: string,
+) => nodes?.map((node) => node[key]).find((value) => value != null) ?? null;
+
+/** Fills what the reader left empty from the page's own: a title or description, and the prep time, cook time and servings its Recipe data publishes (servings from the page replace an estimate). The site's name after a bar or dash is dropped from the title. */
 export const withPageFallbacks = (
   recipe: ExtractedRecipe,
-  page: Pick<PageContent, 'title' | 'meta'>,
+  page: Pick<PageContent, 'title' | 'meta' | 'structuredData'>,
 ): ExtractedRecipe => {
+  const nodes = page.structuredData;
+  const publishedServings = readYieldServings(
+    getPublished(nodes, 'recipeYield'),
+  );
+  const hasPublishedServings =
+    publishedServings !== null &&
+    (recipe.servings === null || recipe.isServingsEstimate);
   const fullTitle = (page.title ?? '').trim();
   const withoutSite = fullTitle.replace(TITLE_TAIL, '').trim();
   const pageTitle = clipAtWord(
@@ -136,6 +173,14 @@ export const withPageFallbacks = (
     ...recipe,
     title: recipe.title ?? (pageTitle || null),
     description: recipe.description ?? (pageDescription || null),
+    prepMinutes:
+      recipe.prepMinutes ?? readIsoMinutes(getPublished(nodes, 'prepTime')),
+    cookMinutes:
+      recipe.cookMinutes ?? readIsoMinutes(getPublished(nodes, 'cookTime')),
+    servings: hasPublishedServings ? publishedServings : recipe.servings,
+    isServingsEstimate: hasPublishedServings
+      ? false
+      : recipe.isServingsEstimate,
   };
   return result;
 };

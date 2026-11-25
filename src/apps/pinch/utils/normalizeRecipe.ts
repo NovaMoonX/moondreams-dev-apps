@@ -15,7 +15,8 @@ import {
   MAX_STEP_LENGTH,
   UNITS,
 } from '@apps/pinch/constants';
-import type { RecipeCare, Unit } from '@apps/pinch/types';
+import type { DishCategory, RecipeCare, Unit } from '@apps/pinch/types';
+import { getCategories } from '@apps/pinch/utils/categories';
 import {
   getGroupKey,
   shortenGroupName,
@@ -43,6 +44,10 @@ export interface ExtractedIngredient {
 export interface ExtractedRecipe {
   title: string | null;
   servings: number | null;
+  /** True when the source gave no servings and the reader estimated them from the amounts. */
+  isServingsEstimate: boolean;
+  /** The kinds of dish the reader judged it to be. */
+  categories: DishCategory[];
   prepMinutes: number | null;
   cookMinutes: number | null;
   description: string | null;
@@ -72,7 +77,12 @@ export const readSteps = (entries: unknown[]) => {
           : { text: entry, section: null };
       const text = asString(item.text);
       return text
-        ? [{ text: text.slice(0, MAX_STEP_LENGTH), section: cleanStepSection(asString(item.section)) }]
+        ? [
+            {
+              text: text.slice(0, MAX_STEP_LENGTH),
+              section: cleanStepSection(asString(item.section)),
+            },
+          ]
         : [];
     })
     .slice(0, MAX_RECIPE_STEPS);
@@ -277,6 +287,13 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
   return {
     title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
+    isServingsEstimate:
+      parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
+    categories: getCategories({
+      categories: list(parsed.categories).filter(
+        (value): value is string => typeof value === 'string',
+      ),
+    }),
     prepMinutes: asMinutes(parsed.prepMinutes),
     cookMinutes: asMinutes(parsed.cookMinutes),
     description:
