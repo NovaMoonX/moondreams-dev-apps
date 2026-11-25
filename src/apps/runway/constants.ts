@@ -2117,7 +2117,6 @@ export const SPEND_WORDS = {
 } as const;
 
 export const ENVELOPE_SPEND_WORDS = {
-  heading: 'Spending',
   addSub: 'Something you bought with this envelope.',
   listSub: 'Everything spent from it.',
   checkSub: 'See what it would leave. Nothing is spent.',
@@ -2585,12 +2584,6 @@ export const ITEM_SHEET_WORDS = {
 
 /** A pay's "Comes out of this pay" list: the bills, envelopes and goals tied to it, those paid first, and the way to add or release one. */
 export const PAY_ITEMS_WORDS = {
-  door: 'Comes out of this pay',
-  doorNothing: 'Nothing yet',
-  doorSub: (names: readonly string[]) =>
-    names.length <= 3
-      ? formatList([...names])
-      : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`,
   title: (pay: string) => `What comes out of ${pay}`,
   paidFirst: 'Paid first',
   alsoPay: 'Also from this pay',
@@ -2863,7 +2856,6 @@ export const OVER_FIX_WORDS = {
 /** Moving money out of an envelope or goal to another envelope or goal, or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
-  openGoal: "Move what's saved",
   title: (name: string) => `Move money from ${name}`,
   amount: 'Amount to move',
   moveTo: 'Move it to',
@@ -2898,7 +2890,6 @@ export const MOVE_WORDS = {
 } as const;
 
 export const SET_HELD_WORDS = {
-  open: 'Set what it holds now',
   toZero: 'Set it to $0',
   title: (name: string) => `What ${name} holds now`,
   amount: 'Holds now',
@@ -2954,16 +2945,8 @@ export const SET_HELD_WORDS = {
 
 /** A bill's "Already put aside": money added to what is set aside for its payments, never taken out. */
 export const BILL_SET_ASIDE_WORDS = {
-  open: 'Already put aside',
-  openSub: (held: string, total: string) => `${held} of ${total}`,
-  openSubNone: 'Nothing yet',
-  openSubFull: (total: string) => `All ${total} of the next payment`,
-  openSubCovered: (covered: string) =>
-    `Nothing put aside · ${covered} covered from Free to Spend`,
   coverNote: (covered: string, dueOn: string) =>
     `${covered} is covered from Free to Spend until ${dueOn}, since your pays won't reach it in time. Put money aside yourself to hold it here instead.`,
-  openSubPartCovered: (held: string, covered: string) =>
-    `${held} put aside · ${covered} covered from Free to Spend`,
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
   needsAmount: 'Enter how much to put aside.',
@@ -3198,6 +3181,43 @@ export const COVERAGE_WORDS = {
   stillShortOf: (name: string, on: string) =>
     `Your plan already comes up short for ${name} on ${on}, before this change.`,
 };
+
+/** The short labels of a sheet's action tiles, and its More door. */
+export const ITEM_TILE_WORDS = {
+  edit: 'Edit',
+  setAmount: 'Set amount',
+  setAside: 'Set aside',
+  move: 'Move',
+  payItems: 'What it pays for',
+  planChange: 'Plan a change',
+  more: 'More',
+  moreSub: (names: readonly string[], stop: string | null) => {
+    const shown = [...names.slice(0, stop === null ? 3 : 2)];
+    const text = formatList(stop === null ? shown : [...shown, stop]);
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  },
+  moreHorizon: 'Horizon',
+  moreAlerts: 'alerts',
+  moreCheck: 'checks',
+  moreFor: 'what it is for',
+  morePin: 'pin',
+  moreForget: 'what it learned',
+  moreStop: 'ending it',
+  moreArchive: 'archiving',
+} as const;
+
+export const FROM_SPEND_WORDS = {
+  chooserTitle: (name: string) => `Add to ${name}`,
+  newPurchase: 'New purchase',
+  newPurchaseSub: 'Type it in',
+  fromSpend: 'From Spend',
+  fromSpendSub: 'Pick one already in Spend',
+  title: 'From Spend',
+  search: 'Search purchases',
+  empty: 'Nothing in Spend is waiting for an envelope.',
+  noMatch: 'No purchase matches that.',
+  sendTitle: (name: string) => `Put it in ${name}`,
+} as const;
 
 export const ITEM_SHEET_R2_WORDS = {
   moreDetails: 'More details',
