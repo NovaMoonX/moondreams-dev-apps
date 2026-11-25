@@ -179,23 +179,45 @@ export function countFriendsOnDay(groups: FriendMovieGroup[] | undefined) {
   return names.size;
 }
 
-/** The friends seeing the same movie as one of the member's own showings that day. */
+export interface FriendsAlsoGoing {
+  sameTime: string[];
+  otherTimes: { showtimeAt: number; names: string[] }[];
+}
+
+/** Who else is seeing one of the member's own movies that day: those at the same showtime, then everyone else by their time. */
 export function getFriendsAlsoGoing(
   viewing: Viewing,
   groupsByDay: Map<string, FriendMovieGroup[]>,
-): string[] {
+): FriendsAlsoGoing {
   const groups = groupsByDay.get(getDayKey(viewing.showtimeAt)) ?? [];
   const titleKey = normalizeString(viewing.movie.title);
   const group = groups.find((item) => normalizeString(item.title) === titleKey);
-  if (!group) return [];
-
-  const result = Array.from(
-    new Set(group.showings.map((showing) => showing.personName)),
+  const byTime = (group?.showings ?? []).reduce<Map<number, string[]>>(
+    (times, showing) => {
+      const names = times.get(showing.showtimeAt) ?? [];
+      const isListed = names.some(
+        (name) => toPersonKey(name) === toPersonKey(showing.personName),
+      );
+      times.set(
+        showing.showtimeAt,
+        isListed ? names : [...names, showing.personName],
+      );
+      return times;
+    },
+    new Map(),
   );
+
+  const result: FriendsAlsoGoing = {
+    sameTime: byTime.get(viewing.showtimeAt) ?? [],
+    otherTimes: Array.from(byTime.entries())
+      .filter(([showtimeAt]) => showtimeAt !== viewing.showtimeAt)
+      .sort(([left], [right]) => left - right)
+      .map(([showtimeAt, names]) => ({ showtimeAt, names })),
+  };
   return result;
 }
 
-/** A day's friend groups less the movies the member is seeing that day, which their own row already names as "going too". */
+/** A day's friend groups less the movies the member is seeing that day, which their own row already names. */
 export function withoutOwnMovies(
   groups: FriendMovieGroup[],
   viewings: Viewing[],

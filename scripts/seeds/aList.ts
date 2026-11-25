@@ -546,6 +546,8 @@ async function writeSeedFriendCalendars(
     showing('imdb-tt99000001', 4, 19, 0, 0),
     showing('imdb-tt99000003', 6, 18, 45, 0),
     showing('imdb-tt0133093', 2, 20, 15, 1),
+    // A day the member plans other movies, so the day drawer shows a friend's different pick.
+    showing('imdb-tt99000003', 8, 21, 0, 1),
   ];
   const annaShowings = [
     showing('imdb-tt99000001', 4, 21, 30, 1),

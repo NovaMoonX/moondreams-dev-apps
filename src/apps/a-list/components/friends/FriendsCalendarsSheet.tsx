@@ -53,8 +53,13 @@ function getLinksSummary(person: SharedPerson) {
 }
 
 function getPersonSummary(person: SharedPerson) {
-  const base = getLinksSummary(person);
-  return person.hasEnded ? `${base} · A link has ended` : base;
+  return [
+    getLinksSummary(person),
+    person.isShown ? null : 'Hidden from your calendar',
+    person.hasEnded ? 'A link has ended' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 interface PersonViewProps {
@@ -72,6 +77,7 @@ function PersonView({ uid, person, otherNames, onBack }: PersonViewProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [isSavingShown, setIsSavingShown] = useState(false);
   const trimmed = name.trim().replace(/\s+/g, ' ');
   const isTaken = otherNames.some(
     (other) => toPersonKey(other) === toPersonKey(trimmed),
@@ -103,6 +109,26 @@ function PersonView({ uid, person, otherNames, onBack }: PersonViewProps) {
     setIsRenaming(false);
   };
 
+  const setShown = async (isShown: boolean) => {
+    setIsSavingShown(true);
+    try {
+      await dispatch(
+        setSharedPersonShown({
+          uid,
+          calendarIds: person.links.map(({ calendar }) => calendar.id),
+          isShown,
+        }),
+      ).unwrap();
+    } catch {
+      addToast({
+        title: 'That didn’t save',
+        description: 'Check your connection and try again.',
+        type: 'error',
+      });
+    }
+    setIsSavingShown(false);
+  };
+
   const remove = async (link: SharedLink) => {
     const label = getLinkLabel(link);
     const confirmed = await confirm({
@@ -131,6 +157,25 @@ function PersonView({ uid, person, otherNames, onBack }: PersonViewProps) {
   return (
     <div className='space-y-4 pb-4'>
       <BackLink onBack={onBack} label='Back to friends' />
+      <SettingsGroup title='Your calendar'>
+        <SettingsRow
+          icon='📅'
+          title='Show on my calendar'
+          description={
+            person.isShown
+              ? `${person.personName}’s movies appear quietly on your calendar`
+              : `Hidden. Their links stay here for when you want them back.`
+          }
+          control={
+            <AppToggle
+              aria-label={`Show ${person.personName} on my calendar`}
+              checked={person.isShown}
+              disabled={isSavingShown}
+              onCheckedChange={(isShown) => void setShown(isShown)}
+            />
+          }
+        />
+      </SettingsGroup>
       <div className='space-y-1.5'>
         <p className='text-sm font-medium'>Name</p>
         <div className='flex items-start gap-2'>
@@ -202,43 +247,19 @@ interface FriendsCalendarsSheetProps {
   onClose: () => void;
 }
 
-/** The people whose calendars the member added: a switch for each, and a person's own view with rename and remove. */
+/** The people whose calendars the member added, each opening their own view with the show switch, rename and remove. */
 export function FriendsCalendarsSheet({
   uid,
   onClose,
 }: FriendsCalendarsSheetProps) {
-  const dispatch = useAppDispatch();
-  const { addToast } = useToast();
   const people = useAppSelector(selectSharedPeople);
   const [openCalendarId, setOpenCalendarId] = useState<string | null>(null);
-  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
   const openPerson =
     openCalendarId === null
       ? null
       : (people.find((person) =>
           person.links.some(({ calendar }) => calendar.id === openCalendarId),
         ) ?? null);
-
-  const setShown = async (person: SharedPerson, isShown: boolean) => {
-    const key = toPersonKey(person.personName);
-    setPendingKeys((current) => [...current, key]);
-    try {
-      await dispatch(
-        setSharedPersonShown({
-          uid,
-          calendarIds: person.links.map(({ calendar }) => calendar.id),
-          isShown,
-        }),
-      ).unwrap();
-    } catch {
-      addToast({
-        title: 'That didn’t save',
-        description: 'Check your connection and try again.',
-        type: 'error',
-      });
-    }
-    setPendingKeys((current) => current.filter((item) => item !== key));
-  };
 
   return (
     <FormSheet
@@ -265,8 +286,7 @@ export function FriendsCalendarsSheet({
           {people.length === 0 ? (
             <p className='text-muted-foreground py-2 text-center text-sm text-pretty'>
               <span aria-hidden='true'>👯 </span>
-              When a friend sends you their A-List link, open it and tap Show on
-              my calendar.
+              When a friend sends you their A-List link, open it and tap Add.
             </p>
           ) : (
             <SettingsGroup title='Shared with you'>
@@ -278,26 +298,14 @@ export function FriendsCalendarsSheet({
                   description={getPersonSummary(person)}
                   hasChevron
                   onClick={() => setOpenCalendarId(person.links[0].calendar.id)}
-                  control={
-                    <AppToggle
-                      aria-label={`Show ${person.personName} on my calendar`}
-                      checked={person.isShown}
-                      disabled={pendingKeys.includes(
-                        toPersonKey(person.personName),
-                      )}
-                      onCheckedChange={(isShown) =>
-                        void setShown(person, isShown)
-                      }
-                    />
-                  }
                 />
               ))}
             </SettingsGroup>
           )}
           {people.length > 0 && (
             <p className='text-muted-foreground px-1 text-sm text-pretty'>
-              The switch shows a friend’s showings on your calendar. Tap a name
-              to rename them or remove a link.
+              Tap a friend to hide them from your calendar, rename them or
+              remove a link.
             </p>
           )}
         </div>
