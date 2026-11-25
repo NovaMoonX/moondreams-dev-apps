@@ -774,6 +774,9 @@ export const MAX_TWEAK_CHANGES = 8;
 export const MAX_TWEAK_CHANGE_LENGTH = 200;
 /** The most notes one recipe's journal takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_RECIPE_NOTES = 300;
+/** The most recipes and planned meals an outside assistant's change can take a kitchen to: counted by the server only; the rules and the screens do not count documents. */
+export const SOFT_MAX_RECIPES = 2000;
+export const SOFT_MAX_PLANNED_MEALS = 3000;
 /** Under Firestore's 500 writes per batch. */
 export const RECIPE_NOTE_BATCH_SIZE = 400;
 export const RECIPE_NOTES_FIRST_PAGE = 5;

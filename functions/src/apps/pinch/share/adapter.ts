@@ -1334,6 +1334,7 @@ const getRecipe = async (
   return toActionResult('get_recipe', ctx, {
     id: doc.id,
     name: title,
+    version: readTime(doc.get('updatedAt')) ?? 0,
     servings: readTime(doc.get('servings')),
     prepMinutes: readTime(doc.get('prepMinutes')),
     cookMinutes: readTime(doc.get('cookMinutes')),
@@ -1516,7 +1517,7 @@ export function createPinchAdapter(
         (ctx, input) => searchRecipes(deps.firestore(), ctx, input),
       ),
       get_recipe: toAppAction(
-        'Opens one recipe: servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
+        'Opens one recipe: its version (pass it as basedOn to update_recipe), servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
         GET_RECIPE_SHAPE,
         (ctx, input) => getRecipe(deps.firestore(), ctx, input),
       ),
@@ -1531,7 +1532,7 @@ export function createPinchAdapter(
         (ctx, input) => getKitchen(deps.firestore(), ctx, input),
       ),
       update_recipe: toAppAction(
-        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_get_recipe first and send every line you want kept. recipeId comes from pinch_search_recipes or pinch_get_meal_plan. It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
+        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_get_recipe first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_search_recipes or pinch_get_meal_plan. It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
         UPDATE_RECIPE_SHAPE,
         (ctx, input) => updateRecipe(deps.firestore(), ctx, input),
       ),

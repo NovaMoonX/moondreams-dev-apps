@@ -11,6 +11,10 @@ import {
   type OutsideChange,
 } from '../../functions/src/apps/pinch/share/changes.ts';
 import type { AppActionResult } from '../../functions/src/connections/registry.ts';
+import {
+  SOFT_MAX_PLANNED_MEALS,
+  SOFT_MAX_RECIPES,
+} from '../../src/apps/pinch/constants.ts';
 import { getMergedFields } from '../../src/apps/pinch/utils/shopping.ts';
 
 type Fields = Record<string, unknown>;
@@ -99,11 +103,19 @@ const createStore = (seed: Record<string, Fields> = {}) => {
 const UID = 'u1';
 const K = `apps/pinch/kitchens/${UID}`;
 const NOW = Date.UTC(2026, 10, 25, 12);
-const ctx = (now: number): ChangeContext => ({
+const ALL_CATEGORIES = [
+  'recipes',
+  'recipeIngredients',
+  'fullRecipes',
+  'savedMeals',
+  'shoppingList',
+];
+const ctx = (now: number, open = ALL_CATEGORIES): ChangeContext => ({
   uid: UID,
   actor: { kind: 'outside', name: 'Gemini' },
   now,
   timeZone: 'UTC',
+  allowedCategories: new Set(open),
 });
 const dataOf = (result: AppActionResult) => {
   assert.equal(result.status, 'ok', JSON.stringify(result));
@@ -154,7 +166,7 @@ const recipe = (extra: Fields = {}): Fields => ({
   );
 }
 
-// The merge matches Pinch's own: an open line gains the amount, a ticked one restarts with just this amount.
+// The merge matches the client's own: an open line gains the amount, a ticked one restarts with just this amount.
 const mergeCases = [
   { existing: { amount: 1.5, isChecked: false }, add: 0.333 },
   { existing: { amount: 3, isChecked: true }, add: 2 },
@@ -516,6 +528,251 @@ for (const { existing, add } of mergeCases) {
     (await undoPinchOutsideChange(store.firestore, UID, 'a/b', 'helm', NOW)).ok,
     false,
   );
+}
+
+const replyText = (result: AppActionResult) => {
+  const { reply } = dataOf(result);
+  return [reply.summary, ...reply.lines].join('\n');
+};
+
+// The assistant's reply never quotes a stored step, ingredient or title from a category that is off; the person's record still does.
+{
+  const seed = () =>
+    createStore({
+      [`${K}/recipes/r1`]: recipe({
+        steps: ['Boil the secret broth.', 'Serve.'],
+        ingredients: [
+          {
+            id: 'l1',
+            ingredientId: null,
+            freeText: 'Saffron threads',
+            amount: 1,
+            unit: 'EACH',
+            note: null,
+            group: null,
+            adaptedFrom: null,
+          },
+        ],
+      }),
+    });
+  const edit = {
+    recipeId: 'r1',
+    basedOn: NOW - 1000,
+    title: 'Renamed soup',
+    servings: 8,
+    ingredients: [{ name: 'Paprika', amount: 2 }],
+    steps: [{ text: 'Serve.' }],
+  };
+  const off = seed();
+  const offResult = await updateRecipe(off.firestore, ctx(NOW, []), edit);
+  const offText = replyText(offResult);
+  for (const hidden of [
+    'secret broth',
+    'Saffron',
+    'Chicken soup',
+    'Serves 4',
+    '→',
+  ]) {
+    assert.ok(!offText.includes(hidden), `${hidden} leaked: ${offText}`);
+  }
+  assert.match(offText, /Serves 8/);
+  assert.match(offText, /Steps replaced \(1 step\)/);
+  assert.match(offText, /Ingredients replaced \(1\)/);
+  const stored = dataOf(offResult).lines.join('\n');
+  assert.match(stored, /Removed step 1: “Boil the secret broth\.”/);
+  assert.match(stored, /Saffron threads/);
+
+  const stepsOn = seed();
+  const stepsText = replyText(
+    await updateRecipe(stepsOn.firestore, ctx(NOW, ['fullRecipes']), edit),
+  );
+  assert.match(stepsText, /secret broth/);
+  assert.ok(!stepsText.includes('Saffron'), stepsText);
+  const ingredientsOn = seed();
+  const ingredientsText = replyText(
+    await updateRecipe(
+      ingredientsOn.firestore,
+      ctx(NOW, ['recipeIngredients']),
+      edit,
+    ),
+  );
+  assert.match(ingredientsText, /Saffron/);
+  assert.ok(!ingredientsText.includes('secret broth'), ingredientsText);
+  const recipesOn = seed();
+  const titleText = replyText(
+    await updateRecipe(recipesOn.firestore, ctx(NOW, ['recipes']), edit),
+  );
+  assert.match(titleText, /Serves 4 → 8/);
+}
+
+// A whole-list replace carries the version it read: it is required, and a recipe saved since refuses without writing.
+{
+  const store = createStore({ [`${K}/recipes/r1`]: recipe() });
+  const noVersion = await updateRecipe(store.firestore, ctx(NOW), {
+    recipeId: 'r1',
+    steps: [{ text: 'Serve.' }],
+  });
+  assert.equal(noVersion.status, 'refused');
+  assert.match((noVersion as { message: string }).message, /basedOn/);
+  const stale = await updateRecipe(store.firestore, ctx(NOW), {
+    recipeId: 'r1',
+    basedOn: NOW - 2000,
+    steps: [{ text: 'Serve.' }],
+  });
+  assert.equal(stale.status, 'refused');
+  assert.match(
+    (stale as { message: string }).message,
+    /changed in Pinch since you read it.*pinch_get_recipe/,
+  );
+  assert.deepEqual(store.docs.get(`${K}/recipes/r1`)?.steps, [
+    'Boil.',
+    'Serve.',
+  ]);
+  assert.equal(
+    [...store.docs.keys()].some((key) => key.includes('outsideChanges')),
+    false,
+  );
+  assert.equal(
+    (
+      await updateRecipe(store.firestore, ctx(NOW), {
+        recipeId: 'r1',
+        servings: 5,
+      })
+    ).status,
+    'ok',
+    'a field edit needs no version',
+  );
+  const fresh = createStore({ [`${K}/recipes/r1`]: recipe() });
+  assert.equal(
+    (
+      await updateRecipe(fresh.firestore, ctx(NOW), {
+        recipeId: 'r1',
+        basedOn: NOW - 1000,
+        steps: [{ text: 'Serve.' }],
+      })
+    ).status,
+    'ok',
+  );
+}
+
+// The shopping reply and the meal plan reveal nothing from a switched-off category.
+{
+  const path = `${K}/shoppingItems/cat-chicken-breast__EACH`;
+  const store = createStore({
+    [path]: {
+      id: 'cat-chicken-breast__EACH',
+      ingredientId: 'cat-chicken-breast',
+      unit: 'EACH',
+      amount: 2,
+      isChecked: false,
+      createdAt: NOW - 5000,
+      updatedAt: NOW - 5000,
+      sources: [],
+      pantryAddedAt: null,
+    },
+  });
+  const items = {
+    items: [
+      { name: 'Chicken breast', amount: 1, unit: 'EACH' },
+      { name: 'Chicken breast', amount: 1, unit: 'EACH' },
+    ],
+  };
+  const hidden = replyText(
+    await addToShoppingList(store.firestore, ctx(NOW, []), items),
+  );
+  assert.ok(!/already|Chicken|merged/i.test(hidden), hidden);
+  assert.match(hidden, /Added 1 item to the shopping list/);
+  assert.match(
+    replyText(await addToShoppingList(store.firestore, ctx(NOW), items)),
+    /already on what was already on the list|Chicken/,
+  );
+
+  const meals = createStore({
+    [`${K}/recipes/r1`]: recipe({ title: 'Secret stew' }),
+    [`${K}/meals/m1`]: {
+      name: 'Taco night',
+      items: [{ kind: 'RECIPE', refId: 'r1', servings: 2 }],
+    },
+  });
+  const plan = (open: string[], extra: Fields) =>
+    planMeal(meals.firestore, ctx(NOW, open), {
+      date: '2026-11-27',
+      mealType: 'dinner',
+      ...extra,
+    });
+  const byName = await plan([], { name: 'Secret stew' });
+  assert.equal(byName.status, 'refused');
+  assert.ok(!JSON.stringify(byName).includes('Taco'), JSON.stringify(byName));
+  const byId = replyText(await plan([], { recipeId: 'r1' }));
+  assert.ok(!byId.includes('Secret stew'), byId);
+  assert.equal(
+    (await plan(['savedMeals'], { name: 'Secret stew' })).status,
+    'refused',
+    'a recipe is not matched while recipes are off',
+  );
+  assert.match(
+    replyText(await plan(['recipes'], { name: 'Secret stew' })),
+    /Secret stew/,
+  );
+  assert.match(
+    replyText(await plan(['savedMeals'], { name: 'Taco night' })),
+    /Taco night/,
+  );
+  const gone = await plan([], { recipeId: 'nope' });
+  assert.equal(gone.status, 'refused');
+  assert.ok(!JSON.stringify(gone).includes('Secret'), JSON.stringify(gone));
+}
+
+// Adding a recipe or planning a meal stops at the cap with a sentence and writes nothing.
+{
+  const full = (collection: string, count: number) =>
+    createStore(
+      Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `${K}/${collection}/x${index}`,
+          { id: `x${index}` },
+        ]),
+      ),
+    );
+  const recipes = full('recipes', SOFT_MAX_RECIPES);
+  const added = await addRecipe(recipes.firestore, ctx(NOW), {
+    title: 'One more',
+  });
+  assert.equal(added.status, 'refused');
+  assert.equal(recipes.docs.size, SOFT_MAX_RECIPES);
+  const planned = full('plannedMeals', SOFT_MAX_PLANNED_MEALS);
+  planned.docs.set(`${K}/recipes/r1`, recipe());
+  const refusal = await planMeal(planned.firestore, ctx(NOW), {
+    date: '2026-11-27',
+    mealType: 'dinner',
+    recipeId: 'r1',
+  });
+  assert.equal(refusal.status, 'refused');
+  assert.equal(planned.docs.size, SOFT_MAX_PLANNED_MEALS + 1);
+}
+
+// A change already gone is settled by whoever took it back.
+{
+  const store = createStore({
+    [`${K}/outsideChanges/c1`]: {
+      id: 'c1',
+      kind: 'recipeUpdated',
+      recipeId: 'r1',
+      noteId: 'gone',
+      undoneAt: null,
+      undoneBy: null,
+      createdAt: NOW,
+    },
+  });
+  const settled = await undoPinchOutsideChange(
+    store.firestore,
+    UID,
+    'c1',
+    'helm',
+    NOW + 1,
+  );
+  assert.equal(!settled.ok && settled.isSettled, true);
+  assert.equal(recordOf(store, 'c1').undoneBy, 'helm');
 }
 
 console.log('check:pinch-outside passed');

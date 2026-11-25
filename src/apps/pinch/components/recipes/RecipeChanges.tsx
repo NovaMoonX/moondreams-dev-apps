@@ -7,6 +7,7 @@ import ChangeRow from '@apps/pinch/components/notes/ChangeRow';
 import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import {
   selectNoteSummaries,
+  selectNotesLoadError,
   selectNotesByRecipe,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -37,7 +38,10 @@ function RecipeChanges({
   onOpenChange,
 }: RecipeChangesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
-  const isNotesLoaded = useAppSelector((state) => state.pinch.notes.isLoaded);
+  const isNotesReady = useAppSelector(
+    (state) =>
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
+  );
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
   const steps =
@@ -56,7 +60,7 @@ function RecipeChanges({
         b.createdAt - a.createdAt,
     );
   if (changes.length === 0) {
-    return isNotesLoaded ? (
+    return isNotesReady ? (
       <FormSection title='Changes'>
         <p className='text-muted-foreground text-sm'>
           Nothing has changed yet. Each time this recipe is saved, it shows up

@@ -859,6 +859,7 @@ assert.deepEqual(
     savedMeals: true,
     ideas: true,
     recipeIngredients: false,
+    fullRecipes: false,
     cooked: false,
   },
 );

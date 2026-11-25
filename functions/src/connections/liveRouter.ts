@@ -624,8 +624,12 @@ export const runSiteAction = async (
       .get();
     const grant = readGrant(snapshot.data());
     if (!snapshot.exists || grant.status !== 'live') return noLongerShared;
+    // A change names no categories of its own, so it is handed every category that is on: its reply may quote stored content only from those.
     const allowedCategories = new Set(
-      declared.categories.filter((id) => grant.categories[id]?.isOn === true),
+      (declared.kind === 'change'
+        ? adapter.manifest.categories.map((category) => category.id)
+        : declared.categories
+      ).filter((id) => grant.categories[id]?.isOn === true),
     );
     if (permission) {
       if (grant.changes[permission.id]?.isOn !== true) return noLongerShared;

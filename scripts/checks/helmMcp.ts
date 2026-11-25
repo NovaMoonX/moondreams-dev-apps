@@ -1136,6 +1136,7 @@ nextResult = {
   data: {
     summary: 'Changed Chicken soup',
     lines: ['Servings 4 to 6'],
+    reply: { summary: 'Changed the recipe', lines: ['Serves 6'] },
     changes: [{ id: 'c1', title: 'Chicken soup', lines: ['Servings 4 to 6'] }],
     recipeId: 'r1',
   },
@@ -1145,14 +1146,66 @@ const changeOk = (await changeTool('pinch_update_recipe', {
   outsideReadScopes: ['apps'],
   canChangeApps: true,
 }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
-assert.deepEqual(changeOk, {
-  status: 'ok',
-  summary: 'Changed Chicken soup',
-  lines: ['Servings 4 to 6'],
-});
+assert.deepEqual(
+  changeOk,
+  {
+    status: 'ok',
+    summary: 'Changed the recipe',
+    lines: ['Serves 6'],
+    recipeId: 'r1',
+  },
+  'the assistant is told the reply, never the stored lines',
+);
+assert.match(
+  changeTool('pinch_update_recipe').description,
+  /refused.*notFound/,
+  'every status a change can return is listed',
+);
 assert.deepEqual(filedChanges, [
   { actionId: 'update_recipe', summary: 'Changed Chicken soup' },
 ]);
+// A filing that fails is logged, and the reply says the change is in the app but not in Helm's list.
+{
+  const filedBefore = filedChanges.length;
+  const failing = (await changeTool('pinch_update_recipe', {
+    outsideReadScopes: ['apps'],
+    canChangeApps: true,
+    onAppChange: async () => {
+      throw new Error('boom');
+    },
+  }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>;
+  assert.equal(failing.status, 'ok');
+  assert.match(
+    String(failing.note),
+    /made and can be undone in Pinch.*not be added.*Helm.*can't be undone from there/,
+  );
+  assert.equal(filedChanges.length, filedBefore);
+  assert.equal(
+    'note' in changeOk,
+    false,
+    'a filed change makes no claim about Helm',
+  );
+}
+// A change that changed nothing files nothing.
+{
+  const filedBefore = filedChanges.length;
+  nextResult = {
+    status: 'ok',
+    data: {
+      summary: 'Nothing needed changing',
+      lines: [],
+      reply: { summary: 'Nothing needed changing', lines: [] },
+      changes: [],
+      recipeId: 'r1',
+    },
+    heldBack: [],
+  };
+  await changeTool('pinch_update_recipe', {
+    outsideReadScopes: ['apps'],
+    canChangeApps: true,
+  }).run({ recipeId: 'r1' } as never);
+  assert.equal(filedChanges.length, filedBefore);
+}
 nextResult = { status: 'refused', message: 'That recipe has too many notes.' };
 assert.equal(
   (
