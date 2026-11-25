@@ -5,13 +5,10 @@ import { useAppSelector } from '@/store';
 import CardForm from '@apps/runway/forms/CardForm';
 import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import { isTrackingLevel } from '@apps/runway/engine/level';
-import { getCoveredCents } from '@apps/runway/engine/billCover';
-import { selectBillCover } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemSheet, {
@@ -20,7 +17,6 @@ import ItemSheet, {
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   AUTO_PAY_WORDS,
-  BILL_SET_ASIDE_WORDS,
   BILL_WORDS,
   CARD_FEE_WORDS,
   GROUP_WORDS,
@@ -102,35 +98,6 @@ const getDueLine = (
   return isSavingUp
     ? `${BILL_WORDS.savingUp} · due\u00a0${date}`
     : `Due\u00a0${date}`;
-};
-
-/** Where the next payment stands, short: "$1,075 of $1,250 set aside", or "saved" for a bill saved up for. */
-const getProgress = (
-  payment: BillPayment | null,
-  isSavingUp: boolean,
-  coveredCents: number,
-) => {
-  if (!payment) return null;
-  const { paid, fundedCents, totalCents } = payment;
-  if (paid) {
-    return `${paid.paidOn < payment.payOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
-  }
-  if (coveredCents > 0) {
-    return fundedCents > 0
-      ? BILL_SET_ASIDE_WORDS.progressPartCovered(
-          formatCentsShort(fundedCents),
-          formatCentsShort(coveredCents),
-        )
-      : BILL_SET_ASIDE_WORDS.progressCovered;
-  }
-  if (fundedCents <= 0)
-    return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';
-  if (fundedCents >= totalCents) return 'Set aside in full';
-  const cents = formatCentsShort(fundedCents);
-  const total = formatCentsShort(totalCents);
-  return isSavingUp
-    ? BILL_WORDS.saved(cents, total)
-    : `${cents} of ${total} set aside`;
 };
 
 /** A bill in the plan: its name, when it is next due and its amount; it opens the bill's sheet. */
@@ -243,10 +210,6 @@ export function BillSheet({
         (card) => card.id === bill.cardFeeOf && card.archivedAt === null,
       ) ?? null)
     : null;
-  const billCover = useAppSelector(selectBillCover);
-  const coveredCents = payment
-    ? getCoveredCents(billCover, billId, payment.dueOn)
-    : 0;
   const paidFromAction = usePaidFromAction(billId, today);
   const paidWithAction = usePaidWithAction(billId, today);
   const horizonItems = useAppSelector((state) =>
@@ -258,7 +221,6 @@ export function BillSheet({
       .map((cost) => ({ item: version.payload.name, cost: cost.name })),
   )[0];
   const isSelfPaying = useIsSelfPaying(billId, payment?.dueOn ?? null, today);
-  const autoCardName = useBillCardName(billId, payment?.dueOn ?? today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(
     payment && !payment.paid
@@ -277,17 +239,19 @@ export function BillSheet({
   };
   const fact = [
     PRIORITY_LABELS[bill.priority],
-    repeat,
-    getDueFact(),
-    getProgress(payment, isSavingUp, coveredCents),
+    [repeat, getDueFact()].filter(Boolean).join(', '),
   ]
     .filter(Boolean)
     .join(' · ');
-  const payerFact = !isSelfPaying
-    ? null
-    : autoCardName === null
-      ? AUTO_PAY_WORDS.paysItselfFromBank
-      : AUTO_PAY_WORDS.paysItselfFromCard(autoCardName);
+  const hasChargedToRow =
+    !isFeeBill && paidWithAction !== undefined && paidWithAction !== null;
+  const chargedTo =
+    paidWithAction && isSelfPaying
+      ? {
+          ...paidWithAction,
+          subtitle: `${paidWithAction.subtitle} · ${AUTO_PAY_WORDS.paysItselfLine}`,
+        }
+      : paidWithAction;
   const rangeText = describeRange(
     bill.amount,
     stance,
@@ -320,7 +284,9 @@ export function BillSheet({
       }
       figure={amount}
       fact={fact}
-      secondFact={payerFact}
+      secondFact={
+        isSelfPaying && !hasChargedToRow ? AUTO_PAY_WORDS.paysItselfLine : null
+      }
       help={rangeText}
       quickChange={
         isFeeBill
@@ -338,7 +304,7 @@ export function BillSheet({
               }
       }
       maxAction={paidFromAction}
-      payAction={isFeeBill ? undefined : paidWithAction}
+      payAction={isFeeBill ? undefined : chargedTo}
       linkAction={
         feeCard !== null && isTrackingLevel(level)
           ? {

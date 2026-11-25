@@ -582,8 +582,8 @@ export const HORIZON_WORDS = {
   setAside: 'Set aside',
   spent: 'Spent',
   left: 'Left',
-  leftFact: (setAside: string, spent: string, fromFree: string | null) =>
-    `${setAside} set aside, ${spent} spent${fromFree ? `, ${fromFree} of it from Free to Spend` : ''}`,
+  leftFact: (setAside: string, spent: string) =>
+    `${setAside} set aside, ${spent} spent`,
   shortTitle: (amount: string, date: string, more: string | null) =>
     `${amount} short on ${date}${more ? `, ${more} more after` : ''}`,
   shortBody: (
@@ -1332,7 +1332,6 @@ export const LIFECYCLE_WORDS = {
   archiveConfirm: 'Archive',
   pauseConfirm: 'Stop saving',
   endAfterConfirm: (date: string) => `End after ${date}`,
-  stopSavingFromConfirm: (date: string) => `Stop saving from ${date}`,
   pauseFromHeading: 'From',
   pauseFromLabel: 'Stop saving from',
   pauseBlocker: 'Pick the day it stops, from today to ten years ahead.',
@@ -1552,8 +1551,6 @@ export const BILL_WORDS = {
   savingUpFor: 'Saving up for',
   aMonth: 'a month',
   once: 'once',
-  nothingSaved: 'Nothing saved yet',
-  saved: (cents: string, total: string) => `${cents} of ${total} saved`,
   needsDueDate: 'Needs a due date',
   allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
@@ -2963,9 +2960,6 @@ export const BILL_SET_ASIDE_WORDS = {
   openSubFull: (total: string) => `All ${total} of the next payment`,
   openSubCovered: (covered: string) =>
     `Nothing put aside · ${covered} covered from Free to Spend`,
-  progressCovered: 'Covered from Free to Spend',
-  progressPartCovered: (held: string, covered: string) =>
-    `${held} put aside · ${covered} covered`,
   coverNote: (covered: string, dueOn: string) =>
     `${covered} is covered from Free to Spend until ${dueOn}, since your pays won't reach it in time. Put money aside yourself to hold it here instead.`,
   openSubPartCovered: (held: string, covered: string) =>
@@ -3490,13 +3484,8 @@ export const COMING_WORDS = {
   planAmountSub: 'It stays that way until you change it again',
   planStretch: 'A different amount for a while',
   planStretchSub: 'Then it goes back to what it is now',
-  planStop: 'It stops on a date',
-  planStopSub: 'Its history stays',
-  planStopGoalSub: 'The goal ends. Its history stays.',
   planPause: 'Pause it',
   planPauseSub: 'Stop it for a while, then it comes back',
-  planStopSaving: 'Stop saving from a date',
-  planStopSavingSub: 'The goal stays. No new money goes in.',
   planNone: 'Nothing can be planned for this one.',
   somethingNew: 'Something new',
   somethingNewSub: 'A new pay, bill, envelope or goal that starts later',

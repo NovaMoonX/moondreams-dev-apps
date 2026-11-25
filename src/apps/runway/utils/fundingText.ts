@@ -19,7 +19,7 @@ import type {
   PairingAmount,
   PriorityExtra,
 } from '@apps/runway/types';
-import { describePayChoice, listPayOptions } from '@apps/runway/utils/payFrom';
+import { describePayChoice } from '@apps/runway/utils/payFrom';
 
 export const SHARE_BPS = { full: 10_000, half: 5_000 } as const;
 
@@ -136,25 +136,6 @@ export function describeFundingShort(
       : describeAmount(funding.amount);
   const result = `${amount} ${describeCadence(funding.cadence)}${describeExtras(extras, formatCentsShort)}`;
   return result.charAt(0).toUpperCase() + result.slice(1);
-}
-
-/** "From the pay on the 30th" for a rule that comes out of one pay, for an item's sheet; null for every pay. */
-export function describeFundingPayFact(
-  funding: FundingRule,
-  plan: readonly ResolvedSource[],
-): string | null {
-  if (!funding.pay || funding.cadence.kind === 'none') return null;
-  const { payLineId, monthDay } = funding.pay;
-  const isLive = listPayOptions(plan).some(
-    ({ fundedBy }) =>
-      fundedBy.payLineId === payLineId && fundedBy.monthDay === monthDay,
-  );
-  if (!isLive) return FUNDING_PAY_WORDS.gone;
-  const words = FUNDING_PAY_WORDS.suffix(
-    describePayChoice({ kind: 'pay', ...funding.pay }, plan, true),
-  );
-  const result = words.charAt(0).toUpperCase() + words.slice(1);
-  return result;
 }
 
 export { normalizeFunding };

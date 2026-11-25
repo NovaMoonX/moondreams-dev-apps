@@ -18,13 +18,7 @@ import { isSavingFor, type Pace } from '@apps/runway/engine/pace';
 import type { GoalSealed, Priority } from '@apps/runway/types';
 import { getExtras } from '@apps/runway/engine/parts';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
-import { useAppSelector } from '@/store';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
-import {
-  describeFundingPayFact,
-  describeFundingShort,
-} from '@apps/runway/utils/fundingText';
+import { describeFundingShort } from '@apps/runway/utils/fundingText';
 
 interface GoalRowProps {
   goalId: string;
@@ -101,10 +95,6 @@ function GoalRow({
       : ` ${PRIORITY_DIAL_WORDS.paceSuffix[paceDial]}`
   }`;
   const funding = describeFundingShort(goal.funding, getExtras(goal), 'goal');
-  const plan = useAppSelector((state) =>
-    selectResolvedPlan(state, todayAsUtcDate()),
-  );
-  const payFact = describeFundingPayFact(goal.funding, plan);
 
   return (
     <>
@@ -144,8 +134,10 @@ function GoalRow({
           fact={
             !isSavingFor(goal)
               ? `${PRIORITY_LABELS[goal.priority]} · ${HOW_OFTEN_WORDS.notBeingAdded.toLowerCase()}`
-              : `${PRIORITY_LABELS[goal.priority]} · ${funding}${payFact === null ? '' : ` · ${payFact.charAt(0).toLowerCase()}${payFact.slice(1)}`} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
+              : `${PRIORITY_LABELS[goal.priority]} · ${funding}`
           }
+          isFigureHeld
+          balanceTitle={isSavingFor(goal) ? paceLine : undefined}
           extra={<GoalAccountNote goalId={goalId} />}
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.change,

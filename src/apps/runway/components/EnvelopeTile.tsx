@@ -7,7 +7,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
@@ -23,12 +22,10 @@ import {
 } from '@apps/runway/constants';
 import { useIncomeDaysPerMonth } from '@apps/runway/hooks/useGroupFigures';
 import { describeEnvelopeMonthly } from '@apps/runway/utils/billText';
-import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 import {
   describeCadenceLine,
-  describeFundingPayFact,
   describeFundingShort,
   describeExtras,
 } from '@apps/runway/utils/fundingText';
@@ -110,10 +107,14 @@ function EnvelopeTile({
       : extras.filter((extra) => !isCountedAt(extra.tier, dial));
   const whole = withExtras(envelope);
   const funding = describeFundingShort(whole);
-  const plan = useAppSelector((state) =>
-    selectResolvedPlan(state, todayAsUtcDate()),
-  );
-  const payFact = describeFundingPayFact(envelope.funding, plan);
+  const helpNote = [
+    pairedNote,
+    envelope.maxCents === null
+      ? null
+      : `${ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents))}.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
   const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
   const { amount } = counted;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
@@ -254,17 +255,11 @@ function EnvelopeTile({
           fact={[
             isPlan && eachTime ? partsText : PRIORITY_LABELS[envelope.priority],
             isPlan && eachTime ? null : funding,
-            payFact,
-            envelope.maxCents === null
-              ? null
-              : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
-            isPlan && cents !== 0 && extras.length === 0
-              ? `${value} ${word}`
-              : null,
           ]
             .filter(Boolean)
             .join(' · ')}
-          help={pairedNote}
+          isFigureHeld={!isPlan}
+          help={helpNote}
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.change,
             ...(envelope.funding.cadence.kind === 'none'
