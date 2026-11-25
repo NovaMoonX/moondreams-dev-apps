@@ -5479,6 +5479,8 @@ export const RULE_WORDS = {
   thisKindSub: 'Any place like it',
   thisCard: (card: string) => `Everything on ${card}`,
   thisCardSub: 'Every purchase on this card',
+  alreadyOn: (envelope: string) => `Already on in your ${envelope} rule`,
+  allCovered: 'Your rules already catch this. Tap one to change it.',
   merchantAloneTitle: 'Why are the others unavailable?',
   merchantAlone:
     'A place on its own can’t be narrowed to a kind or a card. Untick it to choose those.',

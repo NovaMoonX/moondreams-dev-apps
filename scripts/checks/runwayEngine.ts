@@ -72,6 +72,7 @@ import {
   withBankBalances,
 } from '../../src/apps/runway/engine/accounts.ts';
 import {
+  findCoveringRules,
   findRule,
   findPlacementRun,
   findRulePlacements,
@@ -207,7 +208,10 @@ import {
   readPurchaseChange,
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeRulePlaced } from '../../src/apps/runway/utils/ruleText.ts';
-import { describeRule } from '../../src/apps/runway/engine/doneText.ts';
+import {
+  describeRule,
+  describeRuleParts,
+} from '../../src/apps/runway/engine/doneText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   describeCoverage,
@@ -20768,6 +20772,80 @@ const checkRulePlacements = () => {
     'Food on any card, and everything on a card, go to Gas',
     'a missing card name still reads',
   );
+  assert.deepEqual(
+    describeRuleParts(kindCardRule, {
+      envelope: 'Gas',
+      card: 'Citi',
+      isCardLeftOut: true,
+    }),
+    {
+      subject: 'Food on any card, and everything on this card',
+      outcome: 'Go to Gas',
+    },
+    'a rule row splits what it catches from where it goes',
+  );
+  assert.deepEqual(
+    describeRuleParts(
+      rule('v2', {
+        merchantKey: 'corner shop',
+        merchantName: 'Corner Shop',
+        target: RULE_VARIES,
+      }),
+      { envelope: '', card: null },
+    ),
+    { subject: 'Corner Shop', outcome: 'Ask me every time' },
+    'and a rule that asks says so on its second line',
+  );
+  {
+    const live = new Set(['e-kc', 'e-card', 'e-kind']);
+    const covered = findCoveringRules(
+      fact("BJ's Wholesale Club Fuel", 'GAS', 'c1'),
+      [
+        { ...kindCardRule, category: 'GAS', createdAt: 2 },
+        { ...cardRule, id: 'c-old', createdAt: 1 },
+      ],
+      live,
+    );
+    assert.equal(
+      covered.card?.id,
+      'c-old',
+      'a card tick an older rule already catches is covered by that rule',
+    );
+    assert.equal(
+      covered.kind,
+      null,
+      'a broad store is never covered by a kind of place',
+    );
+    const kindCovered = findCoveringRules(
+      fact('Shell', 'GAS', 'c2'),
+      [
+        { ...kindCardRule, category: 'GAS' },
+        rule('m', { merchantKey: 'shell', merchantName: 'Shell' }),
+      ],
+      live,
+    );
+    assert.equal(
+      kindCovered.kind?.id,
+      'kc',
+      'a two-tick rule covers the kind on any card',
+    );
+    assert.equal(
+      kindCovered.card,
+      null,
+      'but not a card it does not name, and a merchant rule covers no tick',
+    );
+    const ended = findCoveringRules(
+      fact('Shell', 'FOOD', 'c1'),
+      [cardRule, kindRule, rule('cv', { cardId: 'c1', target: RULE_VARIES })],
+      new Set(['e-kind']),
+    );
+    assert.equal(
+      ended.card,
+      null,
+      'a rule whose envelope ended, or that asks, covers nothing',
+    );
+    assert.equal(ended.kind?.id, 'k', 'while a live one still does');
+  }
   const variesRule = rule('v', {
     merchantKey: 'corner shop',
     merchantName: 'Corner Shop',

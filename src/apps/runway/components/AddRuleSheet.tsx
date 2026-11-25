@@ -17,6 +17,7 @@ import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import {
   selectAllCards,
   selectNeedsHomeSections,
+  selectEnvelopes,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase, OpenRule } from '@apps/runway/types';
@@ -114,6 +115,7 @@ function AddRuleSheet({
   const cards = useAppSelector(selectAllCards);
   const { getCardLabel, describe } = useRuleNames();
   const today = todayAsUtcDate();
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const moves = useAppSelector(
     (state) => selectNeedsHomeSections(state, today).moves,
   );
@@ -130,13 +132,17 @@ function AddRuleSheet({
       ),
     [purchases, rules, moves],
   );
-  const findBroadRule = (cardId: string | null, category: string | null) =>
-    rules.find(
-      (rule) =>
-        rule.merchantKey === null &&
-        rule.cardId === cardId &&
-        rule.category === category,
-    ) ?? null;
+  const findBroadRule = (fits: (rule: OpenRule) => boolean) =>
+    rules
+      .filter(
+        (rule) =>
+          rule.merchantKey === null &&
+          envelopes.some(({ item }) => item.id === rule.target) &&
+          fits(rule),
+      )
+      .sort(
+        (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+      )[0] ?? null;
   const needle = query.trim().toLowerCase();
   const shownStores = stores.filter(
     (row) => needle === '' || row.merchantName.toLowerCase().includes(needle),
@@ -287,7 +293,7 @@ function AddRuleSheet({
           key: card.id,
           label: card.label,
           seed: seedOf({ cardId: card.id }),
-          existing: findBroadRule(card.id, null),
+          existing: findBroadRule((rule) => rule.cardId === card.id),
         })),
         RULE_WORDS.noCards,
         <CreditCard className='h-4 w-4' />,
@@ -299,7 +305,7 @@ function AddRuleSheet({
           key: kind.code,
           label: kind.label,
           seed: seedOf({ category: kind.code }),
-          existing: findBroadRule(null, kind.code),
+          existing: findBroadRule((rule) => rule.category === kind.code),
         })),
         RULE_WORDS.noKinds,
         <Shapes className='h-4 w-4' />,

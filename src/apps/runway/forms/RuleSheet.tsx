@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import AppCheckbox from '@/components/AppCheckbox';
@@ -17,6 +17,7 @@ import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { isOpenToPlace } from '@apps/runway/engine/purchases';
 import {
+  findCoveringRules,
   isBroadMerchant,
   RULE_VARIES,
   toMerchantKey,
@@ -124,6 +125,25 @@ function RuleSheet({
   const hasMerchant = facts.merchantKey !== null;
   const hasKind = facts.category !== null && (rule !== null || !isBroad);
   const hasCard = facts.cardId !== null && getCardLabel(facts.cardId) !== null;
+  const covering = rule
+    ? { kind: null, card: null }
+    : findCoveringRules(
+        {
+          merchant: facts.merchantName,
+          category: facts.category,
+          cardId: facts.cardId,
+        },
+        rules,
+        new Set(envelopes.map(({ item }) => item.id)),
+      );
+  const canTickKind = hasKind && covering.kind === null;
+  const canTickCard = hasCard && covering.card === null;
+  const isAllCovered =
+    rule === null &&
+    !hasMerchant &&
+    !canTickKind &&
+    !canTickCard &&
+    (covering.kind !== null || covering.card !== null);
 
   const [ticks, setTicks] = useState(() => {
     if (rule) {
@@ -135,8 +155,8 @@ function RuleSheet({
     }
     return {
       merchant: hasMerchant,
-      kind: !hasMerchant && hasKind,
-      card: !hasMerchant && !hasKind && hasCard,
+      kind: !hasMerchant && canTickKind,
+      card: !hasMerchant && !canTickKind && canTickCard,
     };
   });
   const chosen = purchase?.lines.find(
@@ -159,26 +179,32 @@ function RuleSheet({
         : null;
   const [picked, setPicked] = useState<string | null>(likely);
   const [isBusy, setIsBusy] = useState(false);
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const peeked = rules.find(({ id }) => id === peekId) ?? null;
   const [error, setError] = useState<string | null>(null);
   const [willSend] = useState(
     purchase !== null && (purchase.needsHome || isOpenToPlace(purchase)),
   );
 
-  const isMerchantAlone = ticks.merchant && !ticks.kind && !ticks.card;
+  const isKindTicked = ticks.kind && (rule !== null || canTickKind);
+  const isCardTicked = ticks.card && (rule !== null || canTickCard);
+  const isMerchantAlone = ticks.merchant && !isKindTicked && !isCardTicked;
   const target = picked === RULE_VARIES && !isMerchantAlone ? null : picked;
   const draft: RuleSealed = {
     merchantKey: ticks.merchant ? facts.merchantKey : null,
     merchantName: ticks.merchant ? facts.merchantName : null,
-    category: ticks.kind ? facts.category : null,
-    cardId: ticks.card ? facts.cardId : null,
+    category: isKindTicked ? facts.category : null,
+    cardId: isCardTicked ? facts.cardId : null,
     target: target ?? '',
   };
-  const hasCondition = ticks.merchant || ticks.kind || ticks.card;
-  const blocker = !hasCondition
-    ? RULE_WORDS.pickOne
-    : target === null
-      ? RULE_WORDS.pickEnvelope
-      : null;
+  const hasCondition = ticks.merchant || isKindTicked || isCardTicked;
+  const blocker = isAllCovered
+    ? null
+    : !hasCondition
+      ? RULE_WORDS.pickOne
+      : target === null
+        ? RULE_WORDS.pickEnvelope
+        : null;
   const sentence =
     hasCondition && target !== null
       ? `${describeRule(draft, {
@@ -391,6 +417,7 @@ function RuleSheet({
             name: 'merchant' as const,
             label: facts.merchantName ?? '',
             sub: RULE_WORDS.thisMerchantSub,
+            cover: null,
           },
         ]
       : []),
@@ -400,6 +427,7 @@ function RuleSheet({
             name: 'kind' as const,
             label: getCategoryLabel(facts.category ?? ''),
             sub: RULE_WORDS.thisKindSub,
+            cover: covering.kind,
           },
         ]
       : []),
@@ -409,10 +437,23 @@ function RuleSheet({
             name: 'card' as const,
             label: RULE_WORDS.thisCard(getCardLabel(facts.cardId) ?? ''),
             sub: RULE_WORDS.thisCardSub,
+            cover: covering.card,
           },
         ]
       : []),
   ];
+
+  if (peeked) {
+    return (
+      <RuleSheet
+        key={peeked.id}
+        purchase={null}
+        rule={peeked}
+        onBack={() => setPeekId(null)}
+        onClose={() => setPeekId(null)}
+      />
+    );
+  }
 
   return (
     <FormSheet
@@ -438,49 +479,88 @@ function RuleSheet({
             )}
           </div>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {tickRows.map(({ name, label, sub }) => (
-              <li key={name}>
-                <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
-                  <AppCheckbox
-                    checked={ticks[name]}
-                    onCheckedChange={(next) => setTick(name, Boolean(next))}
-                  />
-                  <span className='block min-w-0 flex-1 text-sm'>
-                    <span className='line-clamp-2 font-medium break-words'>
-                      {label}
-                    </span>
-                    <span className='text-muted-foreground line-clamp-2 break-words'>
-                      {sub}
-                    </span>
+            {tickRows.map(({ name, label, sub, cover }) => {
+              const text = (
+                <span className='block min-w-0 flex-1 text-sm'>
+                  <span className='line-clamp-2 font-medium break-words'>
+                    {label}
                   </span>
-                </label>
-              </li>
-            ))}
+                  <span
+                    className={
+                      cover
+                        ? 'text-muted-foreground block break-words'
+                        : 'text-muted-foreground line-clamp-2 break-words'
+                    }
+                  >
+                    {cover
+                      ? RULE_WORDS.alreadyOn(getEnvelopeName(cover.target))
+                      : sub}
+                  </span>
+                </span>
+              );
+              if (cover) {
+                const mark = <AppCheckbox checked isDisplayOnly />;
+                return (
+                  <li key={name}>
+                    <Button
+                      type='button'
+                      variant='base'
+                      className='text-foreground! flex min-h-14 w-full items-center justify-start! gap-3! rounded-none! px-3! py-2! text-left font-normal'
+                      onClick={() => setPeekId(cover.id)}
+                    >
+                      {mark}
+                      {text}
+                      <ChevronRight
+                        className='text-muted-foreground h-4 w-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                );
+              }
+              return (
+                <li key={name}>
+                  <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
+                    <AppCheckbox
+                      checked={ticks[name]}
+                      onCheckedChange={(next) => setTick(name, Boolean(next))}
+                    />
+                    {text}
+                  </label>
+                </li>
+              );
+            })}
           </ul>
         </div>
-        <div className='space-y-2'>
-          <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
-          <PillGroup
-            label={RULE_WORDS.envelope}
-            options={options}
-            value={target}
-            onChange={setPicked}
-          />
-          {isMerchantAlone && (
-            <Button
-              type='button'
-              variant='tertiary'
-              aria-pressed={picked === RULE_VARIES}
-              className='border-border text-foreground! h-10 w-full justify-between! rounded-xl border text-sm font-normal'
-              onClick={() => setPicked(RULE_VARIES)}
-            >
-              <span>{RULE_WORDS.askEvery}</span>
-              {picked === RULE_VARIES && (
-                <Check className='h-4 w-4' aria-hidden='true' />
-              )}
-            </Button>
-          )}
-        </div>
+        {isAllCovered ? (
+          <p className='text-muted-foreground text-sm' role='status'>
+            {RULE_WORDS.allCovered}
+          </p>
+        ) : (
+          <div className='space-y-2'>
+            <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
+            <PillGroup
+              label={RULE_WORDS.envelope}
+              options={options}
+              value={target}
+              onChange={setPicked}
+            />
+            {isMerchantAlone && (
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-pressed={picked === RULE_VARIES}
+                className='border-border text-foreground! h-10 w-full justify-between! rounded-xl border text-sm font-normal'
+                onClick={() => setPicked(RULE_VARIES)}
+              >
+                <span>{RULE_WORDS.askEvery}</span>
+                {picked === RULE_VARIES && (
+                  <Check className='h-4 w-4' aria-hidden='true' />
+                )}
+              </Button>
+            )}
+          </div>
+        )}
         {sentence !== '' && (
           <p className='text-sm' role='status'>
             {sentence}
@@ -521,14 +601,16 @@ function RuleSheet({
           )
         }
         rightActions={
-          <Button
-            type='button'
-            className='whitespace-nowrap'
-            disabled={blocker !== null || isBusy || isUnchanged}
-            onClick={() => void save()}
-          >
-            {willSend ? RULE_WORDS.saveAndSend : RULE_WORDS.save}
-          </Button>
+          isAllCovered ? undefined : (
+            <Button
+              type='button'
+              className='whitespace-nowrap'
+              disabled={blocker !== null || isBusy || isUnchanged}
+              onClick={() => void save()}
+            >
+              {willSend ? RULE_WORDS.saveAndSend : RULE_WORDS.save}
+            </Button>
+          )
         }
       />
     </FormSheet>
