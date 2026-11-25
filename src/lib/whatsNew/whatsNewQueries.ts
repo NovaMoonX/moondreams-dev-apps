@@ -61,7 +61,7 @@ export const readNote = (id: string, value: unknown): WhatsNewNote | null => {
     path: path ?? null,
     gate: gate ?? null,
     isTold: kind !== 'fixed' && (isTold ?? true),
-    emoji: emoji ?? null,
+    emoji: emoji || null,
     replaces: (replaces as string[] | undefined) ?? [],
   };
 };

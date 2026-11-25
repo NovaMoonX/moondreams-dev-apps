@@ -284,9 +284,11 @@ function WhatsNewSheet({
   const rolled = rollUp(notes);
   const told = [...rolled.told, ...rolled.moreTold];
   const isOneRelease = new Set(notes.map((note) => note.version)).size <= 1;
-  const allLabel = isOneRelease
-    ? `All ${countChanges(rolled.total)}`
-    : `All ${countChanges(rolled.total)} since ${formatDateShort(rolled.sinceAt ?? 0)}`;
+  const sinceDate = isOneRelease ? null : formatDateShort(rolled.sinceAt ?? 0);
+  const sinceLine = sinceDate ? `Since ${sinceDate}` : null;
+  const allLabel = sinceDate
+    ? `All ${countChanges(rolled.total)} since ${sinceDate}`
+    : `All ${countChanges(rolled.total)}`;
   const getVersionLine = (note: WhatsNewNote) =>
     isDebug ? `Version ${note.version}` : null;
 
@@ -353,60 +355,46 @@ function WhatsNewSheet({
     </div>
   );
 
+  const getKindLine = (note: WhatsNewNote) =>
+    [KIND_WORDS[note.kind], getVersionLine(note)].filter(Boolean).join(' · ');
+
   const history = () => (
     <div className='space-y-5'>
       {groupByMonth(notes).map((month) => (
         <Section key={month.key} label={formatMonth(month.at)}>
-          {month.told.length > 0 ? (
-            <NoteList
-              notes={month.told}
-              look={look}
-              isCompact={false}
-              getTopLine={getVersionLine}
-              onShowMe={onShowMe}
-            />
-          ) : null}
-          {month.smaller.length + month.fixes.length > 0 ? (
-            <NoteList
-              notes={[...month.smaller, ...month.fixes]}
-              look={look}
-              isCompact
-              getTopLine={(note) =>
-                [KIND_WORDS[note.kind], getVersionLine(note)]
-                  .filter(Boolean)
-                  .join(' · ')
-              }
-              onShowMe={onShowMe}
-            />
-          ) : null}
+          {[
+            { key: 'told', list: month.told, isCompact: false },
+            { key: 'smaller', list: month.smaller, isCompact: true },
+            { key: 'fixes', list: month.fixes, isCompact: true },
+          ]
+            .filter((group) => group.list.length > 0)
+            .map((group) => (
+              <NoteList
+                key={group.key}
+                notes={group.list}
+                look={look}
+                isCompact={group.isCompact}
+                getTopLine={getKindLine}
+                onShowMe={onShowMe}
+              />
+            ))}
         </Section>
       ))}
     </div>
   );
 
-  const popup = () => {
-    if (rolled.told.length === 0) return versionLog();
-    const isAllShown = rolled.told.length === rolled.total;
-    return (
-      <div className='space-y-5'>
-        {toldSections(rolled.told)}
-        {isAllShown ? null : (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='border-border text-foreground! h-auto min-h-12 w-full justify-between! rounded-none! border-t px-0! pt-3 text-left text-base font-medium'
-            onClick={() => setView('all')}
-          >
-            {`See ${allLabel.charAt(0).toLowerCase()}${allLabel.slice(1)}`}
-            <ChevronRight
-              className='text-muted-foreground size-4 shrink-0'
-              aria-hidden='true'
-            />
-          </Button>
-        )}
-      </div>
+  const isDoorShown =
+    mode === 'popup' &&
+    view === 'main' &&
+    rolled.told.length > 0 &&
+    rolled.told.length < rolled.total;
+
+  const popup = () =>
+    rolled.told.length === 0 ? (
+      versionLog()
+    ) : (
+      <div className='space-y-5'>{toldSections(rolled.told)}</div>
     );
-  };
 
   const body = () => {
     if (mode === 'history' && feedState === 'loading') {
@@ -450,11 +438,34 @@ function WhatsNewSheet({
     return popup();
   };
 
+  const door = isDoorShown ? (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='text-foreground! hover:bg-muted mb-2 h-auto min-h-11 w-full justify-between! rounded-xl! px-3! text-left text-base font-normal'
+      onClick={() => setView('all')}
+    >
+      <span className='block min-w-0'>
+        <span className='block'>{`See all ${countChanges(rolled.total)}`}</span>
+        {sinceLine ? (
+          <span className='text-muted-foreground block text-sm'>
+            {sinceLine}
+          </span>
+        ) : null}
+      </span>
+      <ChevronRight
+        className='text-muted-foreground size-4 shrink-0'
+        aria-hidden='true'
+      />
+    </Button>
+  ) : null;
+
   const footer = () => {
     if (mode === 'history') return undefined;
     if (!isDebug) {
       return (
         <div className='p-4'>
+          {door}
           <Button type='button' size='lg' className='w-full' onClick={onGotIt}>
             Got it
           </Button>
@@ -463,6 +474,7 @@ function WhatsNewSheet({
     }
     return (
       <div className='p-4'>
+        {door}
         <ModalFooterActions
           cancelAction={
             <Button

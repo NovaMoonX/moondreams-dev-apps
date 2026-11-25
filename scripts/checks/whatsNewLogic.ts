@@ -147,14 +147,48 @@ const feedNote = {
   audience: 'everyone',
   publishedAt: 1,
 };
+const readOld = readNote('a', feedNote)!;
 assert.deepEqual(
-  (({ isTold, emoji, replaces }) => ({ isTold, emoji, replaces }))(
-    readNote('a', feedNote)!,
-  ),
+  {
+    isTold: readOld.isTold,
+    emoji: readOld.emoji,
+    replaces: readOld.replaces,
+  },
   { isTold: true, emoji: null, replaces: [] },
 );
 assert.equal(readNote('b', { ...feedNote, kind: 'fixed' })!.isTold, false);
 assert.equal(readNote('c', { ...feedNote, isTold: 'yes' }), null);
+assert.equal(readNote('d', { ...feedNote, emoji: '' })!.emoji, null);
+assert.equal(readNote('e', { ...feedNote, replaces: [1] }), null);
+assert.equal(readNote('f', { ...feedNote, replaces: 'x' }), null);
+
+// A replacer the viewer can't see (debug-only, a closed gate) leaves the old note shown.
+const hiddenReplacer = note('1.182.0', 'improved', {
+  audience: 'debug',
+  replaces: [oldNote.id],
+});
+const closedReplacer = note('1.182.0', 'improved', {
+  gate: 'beta',
+  replaces: [oldNote.id],
+});
+assert.deepEqual(ids(getVisibleNotes([oldNote, hiddenReplacer], context())), [
+  oldNote.id,
+]);
+assert.deepEqual(
+  ids(
+    getVisibleNotes(
+      [oldNote, closedReplacer],
+      context({ isGateOpen: () => false }),
+    ),
+  ),
+  [oldNote.id],
+);
+
+// A release whose only told note was replaced by a listed one opens nothing; the listed line waits for the next told note.
+const toldThenListed = [
+  note('1.182.0', 'improved', { isTold: false, replaces: [oldNote.id] }),
+];
+assert.equal(shouldPopUp(toldThenListed, everyone), false);
 
 // The roll-up keeps five told notes (new before improved, newest first), then the rest, the listed ones and the fixes.
 const many = [

@@ -171,9 +171,9 @@ export const readWhatsNewFiles = (): {
   const files = results.flatMap(({ slug, file }) =>
     file ? [{ slug, notes: file.notes }] : [],
   );
-  const knownIds = new Set(
+  const appById = new Map<string, string>(
     files.flatMap(({ slug, notes }) =>
-      notes.map((_, index) => `${slug}-${index}`),
+      notes.map((draft, index) => [`${slug}-${index}`, draft.app]),
     ),
   );
   const replaceErrors = files.flatMap(({ slug, notes }) =>
@@ -181,11 +181,15 @@ export const readWhatsNewFiles = (): {
       draft.replaces.flatMap((id) =>
         id === `${slug}-${index}`
           ? [`${WHATS_NEW_DIR}/${slug}.json note ${index + 1}: replaces itself`]
-          : knownIds.has(id)
-            ? []
-            : [
+          : !appById.has(id)
+            ? [
                 `${WHATS_NEW_DIR}/${slug}.json note ${index + 1}: replaces "${id}", which is not a note id of any file in ${WHATS_NEW_DIR}/ (ids are <file slug>-<index>)`,
-              ],
+              ]
+            : appById.get(id) !== draft.app
+              ? [
+                  `${WHATS_NEW_DIR}/${slug}.json note ${index + 1}: replaces "${id}", a note of another app; a note can only replace one of its own app's`,
+                ]
+              : [],
       ),
     ),
   );
