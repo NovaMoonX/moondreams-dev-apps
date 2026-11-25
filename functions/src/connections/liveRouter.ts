@@ -587,6 +587,8 @@ export const runSiteAction = async (
     input: Record<string, unknown>;
     actor: { kind: 'outside' | 'nomos'; name: string };
     timeZone: string;
+    /** False when the asking assistant may not read apps: a change's reply then quotes nothing stored. */
+    canRead?: boolean;
   },
 ): Promise<AppActionResult> => {
   const adapter = Object.hasOwn(SOURCE_ADAPTERS, input.connectorId)
@@ -624,10 +626,12 @@ export const runSiteAction = async (
       .get();
     const grant = readGrant(snapshot.data());
     if (!snapshot.exists || grant.status !== 'live') return noLongerShared;
-    // A change names no categories of its own, so it is handed every category that is on: its reply may quote stored content only from those.
+    // A change names no categories of its own, so it is handed every category that is on: its reply may quote stored content only from those, and from none when the assistant may not read.
     const allowedCategories = new Set(
       (declared.kind === 'change'
-        ? adapter.manifest.categories.map((category) => category.id)
+        ? input.canRead === false
+          ? []
+          : adapter.manifest.categories.map((category) => category.id)
         : declared.categories
       ).filter((id) => grant.categories[id]?.isOn === true),
     );

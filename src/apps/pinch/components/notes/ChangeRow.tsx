@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { formatTimeAgo } from '@/utils/formatUtils';
 import type { RecipeNote } from '@apps/pinch/types';
-import { formatChangeWhen, getChangeWho } from '@apps/pinch/utils/notes';
+import { getChangeWho } from '@apps/pinch/utils/notes';
 
 interface ChangeRowProps {
   note: RecipeNote;
@@ -24,7 +24,7 @@ function ChangeRow({ note, onOpen }: ChangeRowProps) {
       <Button
         type='button'
         variant='tertiary'
-        aria-label={`Open the change: ${who}, ${formatChangeWhen(note.createdAt)}`}
+        aria-label={`Open the change by ${who}, ${ago}${first === null ? '' : `: ${first}`}`}
         className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-3 text-left'
         onClick={() => onOpen(note.id)}
       >

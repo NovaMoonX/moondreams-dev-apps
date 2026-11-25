@@ -1242,7 +1242,7 @@ export function buildHelmTools(scope: HelmToolScope) {
         description: `${action.description} Changes ${appLabel} through Helm, only what the person allowed (${permission?.label ?? 'a change'}); it never deletes. It applies at once and the person can undo it in ${appLabel} and in Helm, so confirm with the person before calling it. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotChange, refused (nothing was changed; the message says why) or notFound (nothing was changed; the id was not found); say exactly what a status says.`,
         shape: action.shape,
         run: async (input) => {
-          if (scope.outsideReadScopes && scope.canChangeApps !== true) {
+          if (scope.canChangeApps !== true) {
             const who = scope.assistantName?.trim() || 'This assistant';
             return {
               status: 'assistantCannotChange',
@@ -1260,6 +1260,7 @@ export function buildHelmTools(scope: HelmToolScope) {
             input: input as Record<string, unknown>,
             actor: { kind: 'outside', name: scope.assistantName ?? 'Helm' },
             timeZone,
+            canRead: scope.outsideReadScopes?.includes('apps') ?? false,
           }).catch((): AppActionResult => ({
             status: 'refused',
             message:

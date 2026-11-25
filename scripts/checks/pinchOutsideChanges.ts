@@ -603,6 +603,16 @@ const replyText = (result: AppActionResult) => {
     await updateRecipe(recipesOn.firestore, ctx(NOW, ['recipes']), edit),
   );
   assert.match(titleText, /Serves 4 → 8/);
+
+  const describe = (open: string[]) =>
+    updateRecipe(seed().firestore, ctx(NOW, open), {
+      recipeId: 'r1',
+      description: 'Brand new words.',
+    }).then(replyText);
+  const recipesOnly = await describe(['recipes']);
+  assert.match(recipesOnly, /Description changed/);
+  assert.ok(!recipesOnly.includes('Cosy'), recipesOnly);
+  assert.match(await describe(['recipes', 'fullRecipes']), /“Cosy\.”/);
 }
 
 // A whole-list replace carries the version it read: it is required, and a recipe saved since refuses without writing.
@@ -641,6 +651,35 @@ const replyText = (result: AppActionResult) => {
     ).status,
     'ok',
     'a field edit needs no version',
+  );
+  for (const basedOn of [NOW + 5000, NOW - 999]) {
+    const future = await updateRecipe(store.firestore, ctx(NOW), {
+      recipeId: 'r1',
+      basedOn,
+      steps: [{ text: 'Serve.' }],
+    });
+    assert.equal(future.status, 'refused', `basedOn ${basedOn} must refuse`);
+  }
+  const legacy = createStore({
+    [`${K}/recipes/r1`]: Object.fromEntries(
+      Object.entries(recipe()).filter(([key]) => key !== 'updatedAt'),
+    ),
+  });
+  const guess = await updateRecipe(legacy.firestore, ctx(NOW), {
+    recipeId: 'r1',
+    basedOn: NOW,
+    steps: [{ text: 'Serve.' }],
+  });
+  assert.equal(guess.status, 'refused', 'no stored version means version 0');
+  assert.equal(
+    (
+      await updateRecipe(legacy.firestore, ctx(NOW), {
+        recipeId: 'r1',
+        basedOn: 0,
+        steps: [{ text: 'Serve.' }],
+      })
+    ).status,
+    'ok',
   );
   const fresh = createStore({ [`${K}/recipes/r1`]: recipe() });
   assert.equal(
@@ -702,6 +741,10 @@ const replyText = (result: AppActionResult) => {
     });
   const byName = await plan([], { name: 'Secret stew' });
   assert.equal(byName.status, 'refused');
+  assert.match(
+    (byName as { message: string }).message,
+    /"Read your apps".*Helm > Settings > Connected assistants/,
+  );
   assert.ok(!JSON.stringify(byName).includes('Taco'), JSON.stringify(byName));
   const byId = replyText(await plan([], { recipeId: 'r1' }));
   assert.ok(!byId.includes('Secret stew'), byId);

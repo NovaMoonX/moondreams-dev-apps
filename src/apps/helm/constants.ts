@@ -1909,6 +1909,7 @@ export const HELM_COPY = {
   appChangeTookBackSummary: 'Took back a change in an app',
   appChangeTookBackReport: 'Took that change back.',
   appChangeNotTakenBack: "That change couldn't be taken back.",
+  appChangeUnreachable: "Couldn't reach the app. Try again.",
   groupingLinkedHeading: 'Linked',
   groupingSourcesTitle: 'What goes together',
   groupingFiledUndoFailed: "Couldn't take that back. Try again.",

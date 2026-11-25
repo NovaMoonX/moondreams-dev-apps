@@ -52,14 +52,24 @@ export async function undoAppChangeExecution(
     if (calls.length === 0) {
       return { kind: 'refused', reason: 'nothingToTakeBack', report: null };
     }
-    const answers = await Promise.all(
-      calls.map((call) =>
-        undoAppChange({
-          connectorId: call.connectorId,
-          changeId: call.changeId,
-          from: 'helm',
-        }),
-      ),
+    const answers = (
+      await Promise.allSettled(
+        calls.map((call) =>
+          undoAppChange({
+            connectorId: call.connectorId,
+            changeId: call.changeId,
+            from: 'helm',
+          }),
+        ),
+      )
+    ).map((outcome) =>
+      outcome.status === 'fulfilled'
+        ? outcome.value
+        : {
+            ok: false as const,
+            message: HELM_COPY.appChangeUnreachable,
+            isSettled: false,
+          },
     );
     const settled = settleAppChangeUndo(calls, answers);
     const { refusals } = settled;
