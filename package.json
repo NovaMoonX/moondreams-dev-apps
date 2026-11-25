@@ -232,7 +232,8 @@
     "check:waypoint-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointHeldLists.ts",
     "check:pinch-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchHeldLists.ts",
     "check:a-list-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/aListHeldLists.ts",
-    "check:going-once-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOnceHeldLists.ts"
+    "check:going-once-held-lists": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOnceHeldLists.ts",
+    "pepper:local-secrets": "bash scripts/pepper/local-secrets.sh"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",
