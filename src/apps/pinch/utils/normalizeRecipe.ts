@@ -44,9 +44,7 @@ export interface ExtractedIngredient {
 export interface ExtractedRecipe {
   title: string | null;
   servings: number | null;
-  /** True when the source gave no servings and the reader estimated them from the amounts. */
   isServingsEstimate: boolean;
-  /** The kinds of dish the reader judged it to be. */
   categories: DishCategory[];
   prepMinutes: number | null;
   cookMinutes: number | null;
