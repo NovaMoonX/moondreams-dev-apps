@@ -118,6 +118,37 @@ export function findRule(
     : null;
 }
 
+/** The saved rules that already place a purchase by its kind of place or by its card (a kind never for a broad store; only a rule whose envelope is live), oldest first, so a sheet making a new rule can show those ticks as already on. */
+export function findCoveringRules(
+  facts: RuleFacts,
+  rules: readonly OpenRule[],
+  envelopeIds: ReadonlySet<string>,
+): { kind: OpenRule | null; card: OpenRule | null } {
+  const merchantKey = toMerchantKey(facts.merchant);
+  const isBroad = isBroadMerchant(merchantKey, rules);
+  const oldest = (fits: (rule: OpenRule) => boolean) =>
+    rules
+      .filter(
+        (rule) =>
+          rule.merchantKey === null &&
+          envelopeIds.has(rule.target) &&
+          fits(rule),
+      )
+      .sort(
+        (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+      )[0] ?? null;
+  return {
+    kind:
+      facts.category === null || isBroad
+        ? null
+        : oldest((rule) => rule.category === facts.category),
+    card:
+      facts.cardId === null
+        ? null
+        : oldest((rule) => rule.cardId === facts.cardId),
+  };
+}
+
 export interface RulePlacement {
   purchase: OpenPurchase;
   rule: OpenRule;

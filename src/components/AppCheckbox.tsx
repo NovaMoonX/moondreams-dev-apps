@@ -1,4 +1,9 @@
-import type { ButtonHTMLAttributes, CSSProperties, MouseEvent, Ref } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  CSSProperties,
+  MouseEvent,
+  Ref,
+} from 'react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 export type CheckboxTone = 'primary' | 'success' | 'warning' | 'destructive';
@@ -13,6 +18,8 @@ type AppCheckboxProps = Omit<
   onCheckedChange?: (checked: boolean) => void;
   tone?: CheckboxTone;
   isMark?: boolean;
+  /** Drawn as a disabled box inside a row that is itself the control (a row that opens what already decides it). */
+  isDisplayOnly?: boolean;
 };
 
 const TONE_STYLE: Record<CheckboxTone, CSSProperties | undefined> = {
@@ -39,6 +46,7 @@ function AppCheckbox({
   onCheckedChange,
   tone = 'primary',
   isMark = false,
+  isDisplayOnly = false,
   className,
   style,
   onClick,
@@ -46,8 +54,30 @@ function AppCheckbox({
 }: AppCheckboxProps) {
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
-    if (!event.defaultPrevented) onCheckedChange?.(indeterminate ? true : !checked);
+    if (!event.defaultPrevented)
+      onCheckedChange?.(indeterminate ? true : !checked);
   };
+
+  const mark = (
+    <svg viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+      <path d={indeterminate ? 'M7 12h10' : 'M6 12.5l4 4L18 8'} />
+    </svg>
+  );
+
+  if (isDisplayOnly) {
+    return (
+      <span
+        aria-hidden='true'
+        aria-checked={indeterminate ? 'mixed' : checked}
+        data-variant={isMark ? 'mark' : undefined}
+        data-disabled=''
+        className={join('app-checkbox', className)}
+        style={{ ...TONE_STYLE[tone], ...style }}
+      >
+        {mark}
+      </span>
+    );
+  }
 
   return (
     <button
@@ -61,9 +91,7 @@ function AppCheckbox({
       onClick={handleClick}
       {...rest}
     >
-      <svg viewBox='0 0 24 24' fill='none' aria-hidden='true'>
-        <path d={indeterminate ? 'M7 12h10' : 'M6 12.5l4 4L18 8'} />
-      </svg>
+      {mark}
     </button>
   );
 }
