@@ -304,7 +304,6 @@ function WhatsNewSheet({
     if (isConfirmed) onStopFixOnly?.();
   };
 
-  // Only debug viewers are taken to the screen a fix changed; everyone else reads it.
   const notes = isDebug
     ? feedNotes
     : feedNotes.map((note) =>
@@ -365,7 +364,6 @@ function WhatsNewSheet({
     </div>
   );
 
-  // A run of fixes is labelled once, not "Fixed" on every bullet; a version holding only fixes needs no label.
   const fixList = (
     list: WhatsNewNote[],
     getTopLine: (note: WhatsNewNote) => string | null,
