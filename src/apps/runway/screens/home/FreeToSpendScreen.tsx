@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import {
   ArrowDownLeft,
+  Bell,
   Calculator,
   ChevronRight,
   Clock,
@@ -20,12 +22,15 @@ import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
+import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
+  ALERT_WORDS,
   BALANCE_CHECK_WORDS,
   BANK_BACKED_WORDS,
   CARD_WORDS,
@@ -39,6 +44,9 @@ import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import { CheckBalanceBody } from '@apps/runway/screens/home/CheckBalanceScreen';
 import { WhereYourCashIsBody } from '@apps/runway/screens/home/WhereYourCashIsScreen';
 import LevelGate from '@apps/runway/components/LevelGate';
+import FreeToSpendAlerts from '@apps/runway/components/FreeToSpendAlerts';
+import { useAlerts } from '@apps/runway/hooks/useAlerts';
+import { getAlertsSummary } from '@apps/runway/utils/alertText';
 import { DEFAULT_SPEND_PERIOD } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -95,6 +103,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     closeCheckBalance,
     openCashPosition,
     closeCashPosition,
+    openFreeAlerts,
+    closeFreeAlerts,
     openHeldView,
     closeHeldView,
     leaveViewForTab,
@@ -138,6 +148,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const isChecking = view === 'checkAmount';
   const isCheckingBalance = view === 'checkBalance';
   const isViewingCash = view === 'cashPosition';
+  const isViewingAlerts = view === 'freeToSpendAlerts';
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -271,6 +282,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     if (isChecking) return CHECK_WORDS.title;
     if (isCheckingBalance) return BALANCE_CHECK_WORDS.title;
     if (isViewingCash) return CASH_POSITION_WORDS.title;
+    if (isViewingAlerts) return ALERT_WORDS.title;
     if (held) return held.name;
     return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
   };
@@ -278,6 +290,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     if (isChecking) return closeCheckAmount;
     if (isCheckingBalance) return closeCheckBalance;
     if (isViewingCash) return closeCashPosition;
+    if (isViewingAlerts) return closeFreeAlerts;
     if (held) return closeHeldView;
     return sheetKey === null ? undefined : () => setSheetKey(null);
   };
@@ -295,6 +308,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         <CheckBalanceBody onOpenDays={() => leaveViewForTab('days')} />
       ) : isViewingCash ? (
         <WhereYourCashIsBody />
+      ) : isViewingAlerts ? (
+        <FreeToSpendAlerts />
       ) : held ? (
         <HeldBreakdownView
           kind={held.kind}
@@ -487,6 +502,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 />
               )}
             </LevelGate>
+            {isTrackingLevel(level) && (
+              <FreeToSpendAlertsRow onOpen={openFreeAlerts} />
+            )}
           </ActionGroup>
           {!isStartOpen && !isBankBacked && (
             <p className='text-muted-foreground text-sm'>
@@ -496,6 +514,53 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         </div>
       )}
     </Subview>
+  );
+}
+
+interface FreeToSpendAlertsRowProps {
+  onOpen: () => void;
+}
+
+function FreeToSpendAlertsRow({ onOpen }: FreeToSpendAlertsRowProps) {
+  const mask = useMaskedText();
+  const { isHidden, isScrambled } = useValuesHidden();
+  const now = useNow(60_000);
+  const freeAlerts = useAlerts(
+    { kind: 'freeToSpend' },
+    null,
+    todayAsUtcDate(now),
+  );
+  const isAlertsLoaded = useAppSelector((state) => state.runway.isAlertsLoaded);
+  const uid = useAuth().user?.uid ?? null;
+  const device = useQuery({
+    ...devicePushQueryOptions(uid ?? ''),
+    enabled: uid !== null,
+  }).data;
+
+  const getSubtitle = () => {
+    if (!isAlertsLoaded) return undefined;
+    const summary = mask(
+      getAlertsSummary(
+        freeAlerts.entries,
+        freeAlerts.figureCents,
+        isHidden || isScrambled,
+      ),
+    );
+    const isStuck = device === 'blocked' || device === 'unsupported';
+    if (!isStuck || freeAlerts.entries.length === 0) return summary;
+    return ALERT_WORDS.rowDeviceOff(summary);
+  };
+
+  return (
+    <ActionRow
+      isGrouped
+      isRoomy
+      hasChevron
+      icon={<Bell />}
+      label={ALERT_WORDS.row}
+      subtitle={getSubtitle()}
+      onClick={onOpen}
+    />
   );
 }
 
