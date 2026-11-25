@@ -812,6 +812,7 @@ function RecipeForm({
               }}
               onRemoved={showUndo}
               footerAction={
+                initialRead === null &&
                 (props.value as string[]).filter((step) => step.trim()).length >
                   1 &&
                 formData.stepSections.every((section) => section === null) && (
