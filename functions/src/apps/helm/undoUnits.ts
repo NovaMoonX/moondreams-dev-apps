@@ -22,7 +22,8 @@ export type UnitKind =
   | 'home'
   | 'habit'
   | 'seenAs'
-  | 'personality';
+  | 'personality'
+  | 'appChange';
 
 export type UnitChange =
   'added' | 'changed' | 'completed' | 'removed' | 'moved';
@@ -120,6 +121,7 @@ const KINDS: Record<string, UnitKind> = {
   habits: 'habit',
   habitDays: 'habit',
   seenAs: 'seenAs',
+  appChanges: 'appChange',
 };
 
 const toKindOf = (

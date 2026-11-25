@@ -50,6 +50,18 @@ const releaseUnusedAccountCallable = httpsCallable<
   { accountId: string }
 >(functions, 'releaseUnusedAccount');
 
+const undoAppChangeCallable = httpsCallable<
+  { connectorId: string; changeId: string; from: 'pinch' | 'helm' },
+  { ok: true } | { ok: false; message: string; isSettled: boolean }
+>(functions, 'undoAppChange');
+
+/** Takes back one change an app recorded for an outside assistant. Resolves to the app's own sentence when it refuses because what the change touched has moved on. */
+export const undoAppChange = async (request: {
+  connectorId: string;
+  changeId: string;
+  from: 'pinch' | 'helm';
+}) => (await undoAppChangeCallable(request)).data;
+
 /** Refused with `already-exists` while a live grant for the same reader, source and account stands. */
 export const grantConnection = async (request: GrantConnectionRequest) =>
   (await grantConnectionCallable(request)).data.grantId;

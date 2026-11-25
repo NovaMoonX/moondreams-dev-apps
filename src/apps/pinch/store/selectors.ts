@@ -413,11 +413,8 @@ export const selectTweakTracking = (
   recipeId === null
     ? 'off'
     : getTweakTracking({
-        isCooksReady:
-          state.pinch.cooks.isLoaded && state.pinch.cooks.loadError === null,
         isNotesReady:
           state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
-        cookCount: selectCookSummaries(state).get(recipeId)?.count ?? 0,
         noteCount: selectNoteSummaries(state).get(recipeId)?.count ?? 0,
       });
 
@@ -743,3 +740,6 @@ export const selectSharesLoadError = (state: RootState) =>
 /** Until it has loaded, or after it failed, whether a recipe is already shared isn't known. */
 export const selectIsSharesReady = (state: RootState) =>
   state.pinch.shares.isLoaded && state.pinch.shares.loadError === null;
+
+export const selectOutsideChanges = (state: RootState) =>
+  state.pinch.outsideChanges.items;

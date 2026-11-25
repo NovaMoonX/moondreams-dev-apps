@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { z } from 'zod';
 
 import {
@@ -39,7 +40,11 @@ import type {
   LiveSearchItem,
   SiteLiveGrant,
 } from '../../../connections/liveRouter.js';
-import type { LiveQueryResult } from '../../../connections/registry.js';
+import type {
+  AppActionResult,
+  LiveQueryResult,
+} from '../../../connections/registry.js';
+import type { SiteActionApp } from '../../../connections/liveRouter.js';
 import { formatMoney } from '../../../utils/formatMoney.js';
 import type { McpReadScope } from '../../../mcp/shapes.js';
 import { filterSourcesForOutside } from './sourcesBrief.js';
@@ -94,6 +99,41 @@ export interface LiveReads {
   isLiveDeepLink: (connectorId: string, link: string) => boolean;
 }
 
+/** The actions of each connected site app, and how to run one; the router loads when an action first runs unless `run` is passed in. */
+export interface AppActionReads {
+  apps: SiteActionApp[];
+  run?: (
+    firestore: Firestore,
+    input: {
+      uid: string;
+      readerAppId: string;
+      connectorId: string;
+      actionId: string;
+      input: Record<string, unknown>;
+      actor: { kind: 'outside' | 'nomos'; name: string };
+      timeZone: string;
+    },
+  ) => Promise<AppActionResult>;
+}
+
+/** One change an app made for an outside assistant, as the app answered it. */
+export interface AppChangeDone {
+  connectorId: string;
+  actionId: string;
+  summary: string;
+  lines: string[];
+  changes: { id: string; title: string; lines: string[] }[];
+}
+
+/** An app's reply to a change: `reply` is the only part an assistant is told. */
+interface AppChangeAnswer extends Pick<
+  AppChangeDone,
+  'summary' | 'lines' | 'changes'
+> {
+  reply: { summary: string; lines: string[] };
+  recipeId: string | null;
+}
+
 export interface HelmToolScope {
   uid: string;
   key: HelmKey;
@@ -108,6 +148,14 @@ export interface HelmToolScope {
     connectorId: string;
     categories: { id: string; label: string; kind: string }[];
   }[];
+  /** Offers one tool per read action of each connected site app, always, so an assistant knows what exists; a call says exactly which switch holds it back. */
+  appActions?: AppActionReads;
+  /** The outside assistant's name as the person sees it in Helm, for the switch a refusal names. */
+  assistantName?: string;
+  /** Set on an outside assistant's turn: whether its "Change things in your apps" switch is on. A change tool is only offered to an outside turn. */
+  canChangeApps?: boolean;
+  /** Called after each change that went through, so the turn is filed in Helm with an Undo. */
+  onAppChange?: (change: AppChangeDone) => Promise<void>;
   quotes?: QuoteBook;
   searched?: SearchedLog;
   /** Set on an outside assistant's turn: its switches, which bound every stored record a tool returns. */
@@ -148,6 +196,8 @@ export interface HelmTool<Shape extends z.ZodRawShape> {
   /** What an outside assistant reads instead, for a tool whose `description` leans on context only Nomos is given. */
   externalDescription?: string;
   shape: Shape;
+  /** Defaults to a read; a change is annotated as one so an assistant asks before it runs. */
+  kind?: 'read' | 'change';
   run: (input: z.infer<z.ZodObject<Shape>>) => Promise<unknown>;
   /** The most characters of its result the model gets, when more than the usual. */
   maxChars?: number;
@@ -1118,6 +1168,147 @@ export function buildHelmTools(scope: HelmToolScope) {
     },
   };
 
+  const appActionTools = (scope.appActions?.apps ?? []).flatMap((app) => {
+    const appLabel = connectorLabel(app.connectorId);
+    return app.actions
+      .filter((entry) => entry.kind === 'read')
+      .map(({ id, categories, action }): HelmTool<z.ZodRawShape> => ({
+        name: `${app.appId}_${id}`,
+        audience: 'both',
+        kind: 'read',
+        description: `${action.description} Reads ${appLabel} through Helm, only what the person shares (${categories.map((category) => category.label).join(', ')}); nothing is changed. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotRead or notFound; say exactly what a status says.`,
+        shape: action.shape,
+        run: async (input) => {
+          if (
+            scope.outsideReadScopes &&
+            !scope.outsideReadScopes.includes('apps')
+          ) {
+            const who = scope.assistantName?.trim() || 'This assistant';
+            return {
+              status: 'assistantCannotRead',
+              message: `${who} isn't allowed to read the person's apps. Turn on "Read your apps" for ${who} in Helm > Settings > Connected assistants.`,
+            };
+          }
+          const run =
+            scope.appActions?.run ??
+            (await import('../../../connections/liveRouter.js')).runSiteAction;
+          const result = await run(scope.firestore, {
+            uid: scope.uid,
+            readerAppId: 'helm',
+            connectorId: app.connectorId,
+            actionId: id,
+            input: input as Record<string, unknown>,
+            actor: {
+              kind: scope.outsideReadScopes ? 'outside' : 'nomos',
+              name: scope.assistantName ?? 'Helm',
+            },
+            timeZone,
+          }).catch((): AppActionResult => ({
+            status: 'refused',
+            message: 'Something went wrong reaching it. Try again in a moment.',
+          }));
+          const where = `Helm > Connected apps > ${appLabel}`;
+          if (result.status === 'switchedOff') {
+            return {
+              status: 'switchedOff',
+              message: `${appLabel}'s ${result.needs.map((need) => need.label).join(' and ')} ${result.needs.length > 1 ? 'are' : 'is'} switched off. The person can turn ${result.needs.length > 1 ? 'one on' : 'it on'} in ${where}.`,
+              needs: result.needs.map((need) => need.label),
+            };
+          }
+          if (result.status !== 'ok') return result;
+          return {
+            status: 'ok',
+            ...(result.data as Record<string, unknown>),
+            ...(result.heldBack.length > 0 && {
+              heldBack: result.heldBack.map(
+                (held) =>
+                  `${held.label} is switched off, so that part is left out. The person can turn it on in ${where}.`,
+              ),
+            }),
+          };
+        },
+      }));
+  });
+
+  const appChangeTools = (scope.appActions?.apps ?? []).flatMap((app) => {
+    const appLabel = connectorLabel(app.connectorId);
+    const where = `Helm > Connected apps > ${appLabel}`;
+    return app.actions
+      .filter((entry) => entry.kind === 'change')
+      .map(({ id, permission, action }): HelmTool<z.ZodRawShape> => ({
+        name: `${app.appId}_${id}`,
+        audience: 'external',
+        kind: 'change',
+        description: `${action.description} Changes ${appLabel} through Helm, only what the person allowed (${permission?.label ?? 'a change'}); it never deletes. It applies at once and the person can undo it in ${appLabel} and in Helm, so confirm with the person before calling it. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotChange, refused (nothing was changed; the message says why) or notFound (nothing was changed; the id was not found); say exactly what a status says.`,
+        shape: action.shape,
+        run: async (input) => {
+          if (scope.canChangeApps !== true) {
+            const who = scope.assistantName?.trim() || 'This assistant';
+            return {
+              status: 'assistantCannotChange',
+              message: `${who} isn't allowed to change the person's apps. Turn on "Change things in your apps" for ${who} in Helm > Settings > Connected assistants.`,
+            };
+          }
+          const run =
+            scope.appActions?.run ??
+            (await import('../../../connections/liveRouter.js')).runSiteAction;
+          const result = await run(scope.firestore, {
+            uid: scope.uid,
+            readerAppId: 'helm',
+            connectorId: app.connectorId,
+            actionId: id,
+            input: input as Record<string, unknown>,
+            actor: { kind: 'outside', name: scope.assistantName ?? 'Helm' },
+            timeZone,
+            canRead: scope.outsideReadScopes?.includes('apps') ?? false,
+          }).catch((): AppActionResult => ({
+            status: 'refused',
+            message:
+              'Something went wrong reaching it. Nothing was changed. Try again in a moment.',
+          }));
+          if (result.status === 'switchedOff') {
+            const labels = result.needs.map((need) => need.label);
+            return {
+              status: 'switchedOff',
+              message: `${appLabel}'s "${labels.join('" and "')}" ${labels.length > 1 ? 'are' : 'is'} switched off, so nothing was changed. The person can turn ${labels.length > 1 ? 'one on' : 'it on'} in ${where}.`,
+              needs: labels,
+            };
+          }
+          if (result.status !== 'ok') return result;
+          const done = result.data as AppChangeAnswer;
+          const isFiled =
+            done.changes.length === 0 ||
+            (await (
+              scope.onAppChange?.({
+                connectorId: app.connectorId,
+                actionId: id,
+                summary: done.summary,
+                lines: done.lines,
+                changes: done.changes,
+              }) ?? Promise.resolve()
+            ).then(
+              () => true,
+              (error: unknown) => {
+                logger.warn('helm.live.appChangeFilingFailed', {
+                  step: 'fileAppChange',
+                  cause: error instanceof Error ? error.name : 'error',
+                });
+                return false;
+              },
+            ));
+          return {
+            status: 'ok',
+            summary: done.reply.summary,
+            lines: done.reply.lines,
+            ...(done.recipeId !== null && { recipeId: done.recipeId }),
+            ...(!isFiled && {
+              note: `The change is made and can be undone in ${appLabel}, but it could not be added to the person's list in Helm yet, so it can't be undone from there.`,
+            }),
+          };
+        },
+      }));
+  });
+
   const topicRead = scope.topicRead;
   const getTopic: HelmTool<typeof getTopicShape> = {
     name: 'get_topic',
@@ -1428,6 +1619,8 @@ export function buildHelmTools(scope: HelmToolScope) {
     ...(siteGrants.some((grant) => grant.categories.length > 0)
       ? [searchAppRecords]
       : []),
+    ...appActionTools,
+    ...appChangeTools,
     ...(topicRead ? [getTopic, listTopics] : []),
     ...(procedureRead ? [searchProcedures] : []),
     ...(questionReask ? [bringBackQuestion] : []),

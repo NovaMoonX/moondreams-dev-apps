@@ -2,6 +2,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+import { MAX_INGREDIENT_GROUP_LENGTH } from '../../src/apps/pinch/constants.ts';
 import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -13,6 +14,61 @@ interface Copy {
   /** Import specifiers in the source, each replaced in the copy. */
   importRewrites: Record<string, string>;
 }
+
+const PINCH_LOCAL = {
+  '@apps/pinch/constants': './pinchConstants.js',
+  '@apps/pinch/types': './pinchTypes.js',
+  '@/utils/stringUtils': '../../../vendor/stringUtils.js',
+  '@/utils/optionMatchUtils': '../../../vendor/optionMatchUtils.js',
+  '@/utils/measureUtils': '../../../vendor/measureUtils.js',
+  '@/utils/urlUtils': '../../../vendor/urlUtils.js',
+  '@/utils/idUtils': '../../../vendor/idUtils.js',
+  '@/components/VideoEmbed': './videoEmbed.js',
+  '@apps/pinch/utils/collections': './collectionChange.js',
+  '@apps/pinch/utils/ingredientGroups': './ingredientGroups.js',
+  '@apps/pinch/utils/categories': './categories.js',
+  '@apps/pinch/utils/recipeCare': './recipeCare.js',
+  '@apps/pinch/utils/recipeFormat': './recipeFormat.js',
+  '@apps/pinch/utils/recipeLinks': './recipeLinks.js',
+  '@apps/pinch/utils/stepSections': './stepSections.js',
+  '@apps/pinch/utils/recipeChanges': './recipeChanges.js',
+  '@apps/pinch/utils/ingredientNames': './ingredientNames.js',
+};
+
+/** The pure pieces behind a recipe's recorded changes and its ingredient matching, so an outside change writes exactly what a device save would. */
+const PINCH_CHANGE_COPIES: Copy[] = [
+  ['src/apps/pinch/types.ts', 'functions/src/apps/pinch/share/pinchTypes.ts'],
+  [
+    'src/apps/pinch/constants.ts',
+    'functions/src/apps/pinch/share/pinchConstants.ts',
+  ],
+  ['src/utils/measureUtils.ts', 'functions/src/vendor/measureUtils.ts'],
+  ['src/utils/urlUtils.ts', 'functions/src/vendor/urlUtils.ts'],
+  ['src/utils/idUtils.ts', 'functions/src/vendor/idUtils.ts'],
+  ...[
+    'categories',
+    'recipeCare',
+    'recipeFormat',
+    'recipeLinks',
+    'stepSections',
+    'recipeChanges',
+    'notes',
+    'ingredientNames',
+    'ingredientMatch',
+  ].map((name): [string, string] => [
+    `src/apps/pinch/utils/${name}.ts`,
+    `functions/src/apps/pinch/share/${name}.ts`,
+  ]),
+].map(([src, dest]) => ({
+  src,
+  dest,
+  importRewrites: {
+    ...PINCH_LOCAL,
+    '@apps/pinch/utils/recipeChanges': './recipeChanges.js',
+    '@apps/pinch/utils/notes': './notes.js',
+    '@apps/pinch/utils/ingredientMatch': './ingredientMatch.js',
+  },
+}));
 
 const COPIES: Copy[] = [
   {
@@ -27,6 +83,21 @@ const COPIES: Copy[] = [
       '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
     },
   },
+  {
+    src: 'src/apps/pinch/utils/ingredientGroups.ts',
+    dest: 'functions/src/apps/pinch/share/ingredientGroups.ts',
+    importRewrites: {
+      '@/utils/stringUtils': '../../../vendor/stringUtils.js',
+      '@apps/pinch/constants': './groupConstants.js',
+      '@apps/pinch/utils/freeLines': './freeLines.js',
+    },
+  },
+  {
+    src: 'src/apps/pinch/utils/freeLines.ts',
+    dest: 'functions/src/apps/pinch/share/freeLines.ts',
+    importRewrites: { '@apps/pinch/types': './lineTypes.js' },
+  },
+  ...PINCH_CHANGE_COPIES,
   {
     src: 'src/apps/a-list/share/manifest.ts',
     dest: 'functions/src/apps/a-list/share/manifest.ts',
@@ -443,6 +514,12 @@ interface Generated {
 
 const GENERATED: Generated[] = [
   {
+    src: 'src/apps/pinch/constants.ts',
+    dest: 'functions/src/apps/pinch/share/groupConstants.ts',
+    build: () =>
+      `export const MAX_INGREDIENT_GROUP_LENGTH = ${MAX_INGREDIENT_GROUP_LENGTH};\n`,
+  },
+  {
     src: 'src/apps/pinch/catalog/catalogIngredients.ts',
     dest: 'functions/src/apps/pinch/share/catalogNames.ts',
     build: () =>
@@ -453,6 +530,18 @@ const GENERATED: Generated[] = [
         null,
         2,
       )};\n`,
+  },
+  {
+    src: 'src/apps/pinch/catalog/catalogIngredients.ts',
+    dest: 'functions/src/apps/pinch/share/catalogNutrition.ts',
+    build: () =>
+      `export const CATALOG_NUTRITION_IDS: ReadonlySet<string> = new Set(${JSON.stringify(
+        CATALOG_INGREDIENTS.filter((entry) =>
+          Object.values(entry.per100g).some((value) => value !== null),
+        ).map((entry) => entry.id),
+        null,
+        2,
+      )});\n`,
   },
 ];
 

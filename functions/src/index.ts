@@ -19,6 +19,7 @@ export { verifyRunwayKeys } from './apps/runway/verifyRunwayKeys.js';
 export { grantConnection } from './connections/callables.js';
 export { updateConnection } from './connections/callables.js';
 export { endConnection } from './connections/callables.js';
+export { undoAppChange } from './connections/callables.js';
 export { syncConnections } from './connections/callables.js';
 export { deleteKeptCopies } from './connections/callables.js';
 export { releaseUnusedAccount } from './connections/callables.js';

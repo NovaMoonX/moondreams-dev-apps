@@ -193,6 +193,7 @@ const tipOf = (
   stepIndex: null,
   stepText: null,
   reason: null,
+  by: null,
   previous: null,
   createdAt: 10,
   updatedAt: 10,

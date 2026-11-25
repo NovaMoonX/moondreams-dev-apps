@@ -104,11 +104,12 @@ export const completeMcpSignIn = onCall(
   },
 );
 
-/** What a person changed on a connected assistant: whether it may write, or one read permission on or off. */
+/** What a person changed on a connected assistant: whether it may write, whether it may change apps, or one read permission on or off. */
 const readClientChange = (data: unknown) => {
-  const { canWrite, readScope, isOn } = readObject(data);
+  const { canWrite, canChangeApps, readScope, isOn } = readObject(data);
   const scope = MCP_READ_SCOPES.find((entry) => entry === readScope);
   if (typeof canWrite === 'boolean') return { canWrite };
+  if (typeof canChangeApps === 'boolean') return { canChangeApps };
   if (scope && typeof isOn === 'boolean') {
     return {
       readScopes: isOn

@@ -33,6 +33,7 @@ jobs:
       - run: npm run check:connection-boundaries
       - run: npm run check:share-fields
       - run: npm run check:rules-size
+      - run: npm run check:rules-wildcard
       - run: npm run check:serving
       - run: npm run check:gates
       - run: npm run check:pipeline-map
@@ -65,6 +66,7 @@ jobs:
       - run: npm run check:pinch-ingest
       - run: npm run check:pinch-voice
       - run: npm run check:pinch-share
+      - run: npm run check:pinch-outside
       - run: npm run check:going-once-share
       - run: npm run check:going-once-push
       - run: npm run check:going-once-finish
@@ -104,6 +106,7 @@ jobs:
       - run: npm run check:runway-rework
       - run: npm run check:runway-alert-engine
       - run: npm run check:helm-undo
+      - run: npm run check:helm-mcp
       - run: npm run check:batch-jobs
       - run: npm run check:helm-sort
       - run: npm run check:helm-name-hints

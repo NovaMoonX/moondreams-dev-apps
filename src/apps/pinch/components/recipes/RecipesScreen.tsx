@@ -223,9 +223,11 @@ function NoMatch({ text, actionLabel, onAction }: NoMatchProps) {
 
 interface RecipesScreenProps {
   uid: string;
+  /** An idea whose drawer opens over the Ideas view as the screen mounts. */
+  openIdeaId?: string;
 }
 
-function RecipesScreen({ uid }: RecipesScreenProps) {
+function RecipesScreen({ uid, openIdeaId }: RecipesScreenProps) {
   const { openSubview, setIsStartOpen } = usePinchOverlay();
   const isPhone = useMediaQuery().isBelow('sm');
   const viewOptions = useListViewOptions(uid, 'recipes');
@@ -252,6 +254,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [view, setView] = usePinchSessionState<RecipesView>(
     'recipes:view',
     'recipes',
+    openIdeaId === undefined ? undefined : 'ideas',
   );
   const [query, setQuery] = usePinchSessionState('recipes:query', '');
   const [pickedSource, setPickedSource] = usePinchSessionState(
@@ -681,6 +684,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         <IdeasView
           uid={uid}
           initialQuery={query}
+          initialOpenId={openIdeaId ?? null}
           isAddOpen={isIdeaAddOpen}
           onAddClose={() => setIsIdeaAddOpen(false)}
           onOpenRecipe={setOpenId}

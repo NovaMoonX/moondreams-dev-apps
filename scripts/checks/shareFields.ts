@@ -14,6 +14,10 @@ const ROOT = join(import.meta.dirname, '..', '..');
 
 /** Names an adapter reads that no stored type holds, each with why: sealed payload keys opened with the app's key are not document fields. */
 const ADAPTER_EXEMPT: Record<string, Record<string, string>> = {
+  pinch: {
+    v: "a video link's query parameter, read by the vendored link reader the change actions use (never a stored field)",
+    t: "a video link's start-time query parameter, read by the same vendored link reader",
+  },
   waypoint: {
     displayName:
       "a traveler's profile name, read for the first name of whoever a checklist item is assigned to and, as 'People you travel with', the name of each fellow traveller (never an email)",

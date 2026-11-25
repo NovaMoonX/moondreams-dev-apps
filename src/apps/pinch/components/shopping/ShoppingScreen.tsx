@@ -28,6 +28,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import OutsideChangesButton from '@apps/pinch/components/shell/OutsideChangesButton';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -711,18 +712,21 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       <SectionHeader
         title='Shopping'
         action={
-          canAdd ? (
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              onClick={() => setOverlay({ kind: 'add' })}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              Add
-            </Button>
-          ) : undefined
+          <div className='flex items-center gap-3'>
+            <OutsideChangesButton />
+            {canAdd && (
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className='gap-1'
+                onClick={() => setOverlay({ kind: 'add' })}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                Add
+              </Button>
+            )}
+          </div>
         }
       />
       {isFull && loadError === null && (

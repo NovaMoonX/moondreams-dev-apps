@@ -207,6 +207,8 @@ const buildCustomRecord = (
   gramsEach: null,
   defaultProductId: null,
   isArchived: false,
+  addedBy: null,
+  nutritionBy: null,
   createdAt: now,
   updatedAt: now,
 });
@@ -261,7 +263,10 @@ const toImportedSteps = (shared: SharedRecipe) => {
       text: asText(step, MAX_STEP_LENGTH),
       section: cleanStepSection(shared.stepSections?.[index] ?? null),
     }))
-    .filter((step): step is { text: string; section: string | null } => step.text !== null)
+    .filter(
+      (step): step is { text: string; section: string | null } =>
+        step.text !== null,
+    )
     .slice(0, MAX_RECIPE_STEPS);
   const steps = kept.map((step) => step.text);
   return {
@@ -347,6 +352,7 @@ const toTips = (
         ...getStepAnchor(recipe.steps, step),
         reason: null,
         previous: null,
+        by: null,
         createdAt: now,
         updatedAt: now,
       },

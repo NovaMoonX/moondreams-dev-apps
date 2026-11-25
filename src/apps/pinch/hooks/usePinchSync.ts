@@ -9,6 +9,7 @@ import {
   startCooksListener,
   startFamiliesListener,
   startMealsListener,
+  startOutsideChangesListener,
   startNotesListener,
   startPackagesListener,
   startPinchSettingsListener,
@@ -64,6 +65,11 @@ import {
   setNotesLoadError,
 } from '@apps/pinch/store/slices/notesSlice';
 import {
+  clearOutsideChanges,
+  setOutsideChanges,
+  setOutsideChangesLoadError,
+} from '@apps/pinch/store/slices/outsideChangesSlice';
+import {
   clearPackages,
   setPackages,
   setPackagesLoadError,
@@ -114,6 +120,7 @@ import {
   setStoresLoadError,
 } from '@apps/pinch/store/slices/storesSlice';
 
+import { OUTSIDE_CHANGES_DAYS } from '@apps/pinch/constants';
 import { getMonthWindow } from '@apps/pinch/utils/dayKeys';
 
 /** Starts the listeners for the signed-in person's own kitchen, once per uid, and the planned-meals window once per shown month; screens only read the store. */
@@ -140,6 +147,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
       dispatch(clearShares());
+      dispatch(clearOutsideChanges());
       return;
     }
 
@@ -356,7 +364,22 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       },
     );
 
+    const unsubscribeOutsideChanges = startOutsideChangesListener(
+      uid,
+      Date.now() - OUTSIDE_CHANGES_DAYS * 24 * 60 * 60 * 1000,
+      (changes) => dispatch(setOutsideChanges(changes)),
+      (error) => {
+        console.error('Pinch outside changes listener failed', error);
+        dispatch(
+          setOutsideChangesLoadError(
+            getErrorMessage(error, 'Unable to load what assistants changed.'),
+          ),
+        );
+      },
+    );
+
     return () => {
+      unsubscribeOutsideChanges();
       unsubscribeShares();
       unsubscribeMeals();
       unsubscribePinchSettings();

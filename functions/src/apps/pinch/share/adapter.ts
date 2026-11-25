@@ -1,10 +1,14 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { z } from 'zod';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  AppActionResult,
   LiveQueryRequest,
   LiveQueryResult,
+  ServerAppAction,
+  ServerAppActionCtx,
   SourceAdapter,
   SourceCtx,
   SyncPageRequest,
@@ -17,12 +21,31 @@ import {
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
 import {
+  DAY_MS,
   dayToUtcMidnight,
   getDigestBounds,
   getLocalMoment,
   readReminders,
 } from '../eatSoonDigest.js';
 import { CATALOG_NAMES } from './catalogNames.js';
+import {
+  ADD_RECIPE_SHAPE,
+  ADD_TO_SHOPPING_LIST_SHAPE,
+  FILL_NUTRITION_SHAPE,
+  FIND_INGREDIENTS_SHAPE,
+  PLAN_MEAL_SHAPE,
+  SAVE_IDEA_SHAPE,
+  UPDATE_RECIPE_SHAPE,
+  addRecipe,
+  addToShoppingList,
+  fillNutrition,
+  findIngredients,
+  planMeal,
+  saveIdea,
+  undoPinchOutsideChange,
+  updateRecipe,
+} from './changes.js';
+import { groupIngredientLines } from './ingredientGroups.js';
 import { PINCH_SHARES } from './manifest.js';
 
 const readManifest = () => {
@@ -903,6 +926,522 @@ async function queryCooked(
   };
 }
 
+const readSteps = (value: unknown): string[] =>
+  Array.isArray(value) ? value.flatMap((step) => readText(step) ?? []) : [];
+
+async function queryFullRecipes(
+  firestore: Firestore,
+  uid: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const snapshot = await firestore
+    .collection(kitchenPath(uid, 'recipes'))
+    .orderBy('updatedAt', 'desc')
+    .select('title', 'description', 'steps', 'isArchived', 'updatedAt')
+    .limit(RECIPE_LIMIT)
+    .get();
+  const records = snapshot.docs.flatMap((doc) => {
+    const title = readText(doc.get('title'));
+    const description = readText(doc.get('description'));
+    const steps = readSteps(doc.get('steps'));
+    if (
+      title === null ||
+      doc.get('isArchived') === true ||
+      !matchesText(args.text, title, description)
+    ) {
+      return [];
+    }
+    return [
+      toRecord({
+        sourceRef: `recipes/${doc.id}`,
+        kind: 'artifact',
+        title,
+        detail: clip(
+          joinLines([
+            description,
+            steps.length > 0 ? `${steps.length} steps` : null,
+          ]),
+        ),
+        sourceUpdatedAt: readTime(doc.get('updatedAt')),
+      }),
+    ];
+  });
+  return {
+    records: records.slice(0, MAX_RECORDS_PER_CATEGORY),
+    matchedCount: records.length,
+    totalCents: null,
+    currency: null,
+    isPartial:
+      snapshot.size >= RECIPE_LIMIT ||
+      records.length > MAX_RECORDS_PER_CATEGORY,
+    from: null,
+    to: null,
+  };
+}
+
+const ACTION_RESULT_LIMIT = 15;
+const MAX_PLAN_DAYS = 14;
+const DEFAULT_PLAN_DAYS = 7;
+const KITCHEN_ITEM_LIMIT = 60;
+
+const weekdayDayFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+const categoryLabel = (id: string) =>
+  manifest.categories.find((category) => category.id === id)?.label ?? id;
+
+const toActionResult = (
+  actionId: string,
+  ctx: ServerAppActionCtx,
+  data: unknown,
+): AppActionResult => ({
+  status: 'ok',
+  data,
+  heldBack: (
+    manifest.actions.find((action) => action.id === actionId)?.categories ?? []
+  )
+    .filter((id) => !ctx.allowedCategories.has(id))
+    .map((id) => ({ category: id, label: categoryLabel(id) })),
+});
+
+const switchedOff = (ids: string[]): AppActionResult => ({
+  status: 'switchedOff',
+  needs: ids.map((id) => ({ category: id, label: categoryLabel(id) })),
+});
+
+const dishLabels = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((dish) =>
+        typeof dish === 'string' && Object.hasOwn(DISH_WORDS, dish)
+          ? [DISH_WORDS[dish]]
+          : [],
+      )
+    : [];
+
+const minutesOf = (doc: FirebaseFirestore.DocumentSnapshot) => {
+  const total =
+    (readTime(doc.get('prepMinutes')) ?? 0) +
+    (readTime(doc.get('cookMinutes')) ?? 0);
+  return total > 0 ? total : null;
+};
+
+const toLineText = (names: Map<string, string | null>, row: unknown) => {
+  const record =
+    typeof row === 'object' && row !== null
+      ? (row as Record<string, unknown>)
+      : {};
+  const name =
+    typeof record.ingredientId === 'string'
+      ? (names.get(record.ingredientId) ?? null)
+      : readText(record.freeText);
+  if (name === null) return [];
+  const amount = formatAmount(record.amount, record.unit);
+  return [
+    {
+      group: readText(record.group),
+      text: amount === null ? name : `${amount} ${name}`,
+    },
+  ];
+};
+
+const dayShape = (words: string) =>
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe(words);
+
+const MEAL_PLAN_SHAPE = {
+  from: dayShape(
+    "First day, YYYY-MM-DD, in the person's own time zone. Defaults to today.",
+  ),
+  to: dayShape(
+    `Last day, YYYY-MM-DD. Defaults to six days after the first; at most ${MAX_PLAN_DAYS} days come back at a time.`,
+  ),
+};
+
+const getMealPlan = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  if (!ctx.allowedCategories.has('plannedMeals')) {
+    return switchedOff(['plannedMeals']);
+  }
+  const fromMs = dayToUtcMidnight(
+    readDayText(input.from) ?? getLocalMoment(ctx.now, ctx.timeZone).day,
+  );
+  const toDay = readDayText(input.to);
+  const requestedTo =
+    toDay === null
+      ? fromMs + (DEFAULT_PLAN_DAYS - 1) * DAY_MS
+      : dayToUtcMidnight(toDay);
+  if (requestedTo < fromMs) {
+    return {
+      status: 'refused',
+      message: 'The last day is before the first day.',
+    };
+  }
+  const lastMs = Math.min(requestedTo, fromMs + (MAX_PLAN_DAYS - 1) * DAY_MS);
+  const snapshot = await firestore
+    .collection(kitchenPath(ctx.uid, 'plannedMeals'))
+    .where('date', '>=', fromMs)
+    .where('date', '<=', lastMs)
+    .orderBy('date')
+    .limit(MEAL_LIMIT)
+    .get();
+  const meals = snapshot.docs.flatMap((doc) => {
+    const date = readTime(doc.get('date'));
+    return date === null
+      ? []
+      : [
+          {
+            date,
+            slot: doc.get('mealType') as unknown,
+            name: readText(doc.get('name')),
+            items: readItems(doc.get('items')),
+          },
+        ];
+  });
+  const items = meals.flatMap((meal) => meal.items);
+  const [recipeTitles, ingredientNames] = await Promise.all([
+    readRecipeTitles(
+      firestore,
+      ctx.uid,
+      items.filter((item) => item.kind === 'RECIPE').map((item) => item.refId),
+    ),
+    readIngredientNames(
+      firestore,
+      ctx.uid,
+      items
+        .filter((item) => item.kind === 'INGREDIENT')
+        .map((item) => item.refId),
+    ),
+  ]);
+  const days = Array.from(new Set(meals.map((meal) => meal.date))).map(
+    (date) => ({
+      date: weekdayDayFormatter.format(new Date(date)),
+      meals: meals
+        .filter((meal) => meal.date === date)
+        .map((meal) => ({
+          slot:
+            typeof meal.slot === 'string' &&
+            Object.hasOwn(MEAL_TYPE_WORDS, meal.slot)
+              ? MEAL_TYPE_WORDS[meal.slot]
+              : null,
+          name: meal.name,
+          plate: meal.items.flatMap((item) => {
+            const isRecipe = item.kind === 'RECIPE';
+            const name =
+              (isRecipe ? recipeTitles : ingredientNames).get(item.refId) ??
+              null;
+            if (name === null) return [];
+            return [
+              isRecipe ? { recipeId: item.refId, name } : { ingredient: name },
+            ];
+          }),
+        })),
+    }),
+  );
+  return toActionResult('get_meal_plan', ctx, {
+    from: formatDay(fromMs),
+    to: formatDay(lastMs),
+    days,
+    ...(lastMs < requestedTo && {
+      note: `Only ${MAX_PLAN_DAYS} days come back at a time; ask again from ${formatDay(lastMs + DAY_MS)} for the rest.`,
+    }),
+  });
+};
+
+const SEARCH_RECIPES_SHAPE = {
+  query: z
+    .string()
+    .max(100)
+    .optional()
+    .describe(
+      'Words from the name or the kind of dish, such as "chicken" or "desserts". Leave out to list the newest.',
+    ),
+  kind: z
+    .enum(['recipes', 'savedMeals', 'ideas', 'all'])
+    .optional()
+    .describe(
+      'recipes, savedMeals (plates saved to plan again), ideas (saved to try later) or all. Defaults to all.',
+    ),
+  favoritesOnly: z
+    .boolean()
+    .optional()
+    .describe('Only favourites; ideas have none.'),
+};
+
+const KIND_CATEGORY: Record<string, string> = {
+  recipes: 'recipes',
+  savedMeals: 'savedMeals',
+  ideas: 'ideas',
+};
+
+const searchRecipes = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  const kind = typeof input.kind === 'string' ? input.kind : 'all';
+  const wanted =
+    kind === 'all'
+      ? Object.keys(KIND_CATEGORY)
+      : Object.keys(KIND_CATEGORY).filter((name) => name === kind);
+  const open = wanted.filter((name) =>
+    ctx.allowedCategories.has(KIND_CATEGORY[name]),
+  );
+  if (open.length === 0) {
+    return switchedOff(wanted.map((name) => KIND_CATEGORY[name]));
+  }
+  const text = readText(input.query)?.toLowerCase() ?? null;
+  const isFavoritesOnly = input.favoritesOnly === true;
+  const found = await Promise.all(
+    open.map(async (name) => {
+      if (name === 'recipes') {
+        const snapshot = await firestore
+          .collection(kitchenPath(ctx.uid, 'recipes'))
+          .orderBy('updatedAt', 'desc')
+          .select(
+            'title',
+            'servings',
+            'prepMinutes',
+            'cookMinutes',
+            'categories',
+            'isFavorite',
+            'isArchived',
+            'updatedAt',
+          )
+          .limit(RECIPE_LIMIT)
+          .get();
+        return snapshot.docs.flatMap((doc) => {
+          const title = readText(doc.get('title'));
+          const dishes = dishLabels(doc.get('categories'));
+          const isFavorite = doc.get('isFavorite') === true;
+          if (
+            title === null ||
+            doc.get('isArchived') === true ||
+            (isFavoritesOnly && !isFavorite) ||
+            !matchesText(text, title, ...dishes)
+          ) {
+            return [];
+          }
+          return [
+            {
+              kind: 'recipe',
+              id: doc.id,
+              name: title,
+              minutes: minutesOf(doc),
+              servings: readTime(doc.get('servings')),
+              dishes,
+              favorite: isFavorite,
+            },
+          ];
+        });
+      }
+      if (name === 'savedMeals') {
+        const snapshot = await firestore
+          .collection(kitchenPath(ctx.uid, 'meals'))
+          .orderBy('updatedAt', 'desc')
+          .select('name', 'isFavorite', 'updatedAt')
+          .limit(SAVED_MEAL_LIMIT)
+          .get();
+        return snapshot.docs.flatMap((doc) => {
+          const title = readText(doc.get('name'));
+          const isFavorite = doc.get('isFavorite') === true;
+          if (
+            title === null ||
+            (isFavoritesOnly && !isFavorite) ||
+            !matchesText(text, title)
+          ) {
+            return [];
+          }
+          return [
+            {
+              kind: 'savedMeal',
+              id: doc.id,
+              name: title,
+              favorite: isFavorite,
+            },
+          ];
+        });
+      }
+      if (isFavoritesOnly) return [];
+      const { records } = await syncIdeas(firestore, ctx.uid);
+      return records
+        .filter((record) => matchesText(text, record.title))
+        .map((record) => ({
+          kind: 'idea',
+          id: record.sourceRef.replace(/^ideas\//, ''),
+          name: record.title,
+          detail: record.detail,
+        }));
+    }),
+  );
+  const all = found.flat();
+  return toActionResult('search_recipes', ctx, {
+    results: all.slice(0, ACTION_RESULT_LIMIT),
+    ...(all.length > ACTION_RESULT_LIMIT && {
+      note: `${all.length} matched; the first ${ACTION_RESULT_LIMIT} are shown. Narrow the query to see others.`,
+    }),
+  });
+};
+
+const GET_RECIPE_SHAPE = {
+  recipeId: z
+    .string()
+    .min(1)
+    .max(128)
+    .describe(
+      'A recipe id exactly as search_recipes or get_meal_plan returned it.',
+    ),
+};
+
+const getRecipe = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  if (!ctx.allowedCategories.has('recipes')) return switchedOff(['recipes']);
+  const recipeId = typeof input.recipeId === 'string' ? input.recipeId : '';
+  const notFound: AppActionResult = {
+    status: 'notFound',
+    message:
+      'No recipe has that id. Use an id from search_recipes or get_meal_plan.',
+  };
+  if (recipeId === '' || recipeId.includes('/')) return notFound;
+  const doc = await firestore
+    .doc(`${kitchenPath(ctx.uid, 'recipes')}/${recipeId}`)
+    .get();
+  const title = readText(doc.get('title'));
+  if (!doc.exists || title === null || doc.get('isArchived') === true) {
+    return notFound;
+  }
+  const rows = doc.get('ingredients') as unknown;
+  const lines = Array.isArray(rows) ? rows : [];
+  const names = await readIngredientNames(
+    firestore,
+    ctx.uid,
+    lines.flatMap((line) =>
+      typeof line?.ingredientId === 'string' ? [line.ingredientId] : [],
+    ),
+  );
+  const steps = readSteps(doc.get('steps'));
+  const sections = doc.get('stepSections') as unknown;
+  const sectionOf = (index: number) =>
+    Array.isArray(sections) ? readText(sections[index]) : null;
+  const hasSections = steps.some((_, index) => sectionOf(index) !== null);
+  return toActionResult('get_recipe', ctx, {
+    id: doc.id,
+    name: title,
+    version: readTime(doc.get('updatedAt')) ?? 0,
+    servings: readTime(doc.get('servings')),
+    prepMinutes: readTime(doc.get('prepMinutes')),
+    cookMinutes: readTime(doc.get('cookMinutes')),
+    dishes: dishLabels(doc.get('categories')),
+    favorite: doc.get('isFavorite') === true,
+    ...(ctx.allowedCategories.has('recipeIngredients') && {
+      ingredients: groupIngredientLines(
+        lines.flatMap((line) => toLineText(names, line)),
+      ).map((group) => ({
+        group: group.name,
+        lines: group.lines.map((line) => line.text),
+      })),
+    }),
+    ...(ctx.allowedCategories.has('fullRecipes') && {
+      description: readText(doc.get('description')),
+      steps: hasSections
+        ? steps.map((step, index) => ({
+            section: sectionOf(index),
+            text: step,
+          }))
+        : steps,
+    }),
+  });
+};
+
+const getShoppingList = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+): Promise<AppActionResult> => {
+  if (!ctx.allowedCategories.has('shoppingList')) {
+    return switchedOff(['shoppingList']);
+  }
+  const { records } = await syncShoppingList(firestore, ctx.uid);
+  return toActionResult('get_shopping_list', ctx, {
+    items: records.map((record) => ({
+      name: record.title,
+      amount: record.subtitle,
+    })),
+  });
+};
+
+const GET_KITCHEN_SHAPE = {
+  query: z
+    .string()
+    .max(100)
+    .optional()
+    .describe(
+      'Part of a food name to look for. Leave out to list what is on hand.',
+    ),
+};
+
+const getKitchen = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  const hasStock = ctx.allowedCategories.has('pantryStock');
+  if (!hasStock && !ctx.allowedCategories.has('useSoon')) {
+    return switchedOff(['pantryStock', 'useSoon']);
+  }
+  const text = readText(input.query)?.toLowerCase() ?? null;
+  const { records } = hasStock
+    ? await syncPantryStock(firestore, ctx.uid)
+    : await syncUseSoon(firestore, ctx.uid, ctx.now);
+  const items = records
+    .filter((record) => matchesText(text, record.title))
+    .map((record) => ({
+      name: record.title,
+      where: record.subtitle,
+      ...(record.detail !== null && { detail: record.detail }),
+      ...(record.dueAt !== null && { useBy: formatDay(record.dueAt) }),
+    }));
+  return toActionResult('get_kitchen', ctx, {
+    scope: hasStock ? 'Everything on hand' : 'Only what is near its date',
+    items: items.slice(0, KITCHEN_ITEM_LIMIT),
+    ...(items.length > KITCHEN_ITEM_LIMIT && {
+      note: `${items.length} matched; the first ${KITCHEN_ITEM_LIMIT} are shown.`,
+    }),
+  });
+};
+
+const findKitchenIngredients = async (
+  firestore: Firestore,
+  ctx: ServerAppActionCtx,
+  input: Record<string, unknown>,
+): Promise<AppActionResult> => {
+  if (!ctx.allowedCategories.has('recipeIngredients')) {
+    return switchedOff(['recipeIngredients']);
+  }
+  const found = await findIngredients(firestore, ctx.uid, input);
+  return found.kind === 'refused'
+    ? { status: 'refused', message: found.message }
+    : toActionResult('find_ingredients', ctx, { results: found.value });
+};
+
+const toAppAction = (
+  description: string,
+  shape: z.ZodRawShape,
+  run: ServerAppAction['run'],
+): ServerAppAction => ({ description, shape, run });
+
 const DEEP_LINKS: Record<string, string> = {
   recipes: '/pinch?tab=recipes',
   cooks: '/pinch?tab=recipes',
@@ -978,12 +1517,81 @@ export function createPinchAdapter(
       switch (req.category) {
         case 'recipeIngredients':
           return queryRecipeIngredients(firestore, ctx.uid, args);
+        case 'fullRecipes':
+          return queryFullRecipes(firestore, ctx.uid, args);
         case 'cooked':
           return queryCooked(firestore, ctx.uid, args);
         default:
           throw new Error('Unknown category.');
       }
     },
+    actions: {
+      get_meal_plan: toAppAction(
+        "Returns the person's planned meals, day by day, each meal slot with its name and what is on the plate (recipeId is a Pinch recipe id for get_recipe). Days are in the person's own time zone; the default is the next seven days and at most 14 come back at a time.",
+        MEAL_PLAN_SHAPE,
+        (ctx, input) => getMealPlan(deps.firestore(), ctx, input),
+      ),
+      search_recipes: toAppAction(
+        "Finds the person's recipes, saved meals and recipe ideas by name or kind of dish, up to 15, newest first, archived ones left out. Each result has an id: pass a recipe's id to get_recipe.",
+        SEARCH_RECIPES_SHAPE,
+        (ctx, input) => searchRecipes(deps.firestore(), ctx, input),
+      ),
+      get_recipe: toAppAction(
+        'Opens one recipe: its version (pass it as basedOn to update_recipe), servings, times, kinds of dish, ingredients under their headings, and the description and steps when the person shares full recipes. heldBack names what a switched-off category kept out. recipeId comes from search_recipes or get_meal_plan.',
+        GET_RECIPE_SHAPE,
+        (ctx, input) => getRecipe(deps.firestore(), ctx, input),
+      ),
+      get_shopping_list: toAppAction(
+        "Returns what is still to buy on the person's shopping list, each item with how much of it. Ticked items are left out.",
+        {},
+        (ctx) => getShoppingList(deps.firestore(), ctx),
+      ),
+      get_kitchen: toAppAction(
+        'Returns the food the person has on hand in the pantry, fridge and freezer, where it is kept and the day to use it by; when only food near its date is shared, it lists just that.',
+        GET_KITCHEN_SHAPE,
+        (ctx, input) => getKitchen(deps.firestore(), ctx, input),
+      ),
+      find_ingredients: toAppAction(
+        'Looks up which of a list of ingredient names the person\'s kitchen already has, up to 50 at a time. Each answer has asked, match (the kitchen\'s own name and whether it has nutrition, or null), noteWords (descriptor words such as lean or 93% to put in the recipe line\'s note, because the kitchen\'s ingredient is the plain one: "lean ground beef" is their "Ground beef" with "lean" in the note) and close (up to three near names when nothing matched). Call it before pinch_add_recipe or pinch_update_recipe and write each line with the kitchen\'s name.',
+        FIND_INGREDIENTS_SHAPE,
+        (ctx, input) => findKitchenIngredients(deps.firestore(), ctx, input),
+      ),
+      update_recipe: toAppAction(
+        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_get_recipe first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_search_recipes or pinch_get_meal_plan. It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
+        UPDATE_RECIPE_SHAPE,
+        (ctx, input) => updateRecipe(deps.firestore(), ctx, input),
+      ),
+      add_recipe: toAppAction(
+        "Saves a new recipe in the person's Recipes: a title, and optionally servings, prepMinutes, cookMinutes, description, ingredients and steps. It applies at once and returns the new recipeId; Pinch and Helm show it with an Undo (which archives it). Confirm with the person what you will add before you call it.",
+        ADD_RECIPE_SHAPE,
+        (ctx, input) => addRecipe(deps.firestore(), ctx, input),
+      ),
+      plan_meal: toAppAction(
+        "Plans a meal on a day and slot of the person's calendar: a date (YYYY-MM-DD, today or later), a mealType (breakfast, lunch, dinner, snack, dessert or drink), and either a recipeId from pinch_search_recipes or the name of a saved meal or recipe, with optional servings. It applies at once and shows in Pinch's calendar with an Undo, and in Helm. It never takes a meal off. Confirm the day and slot with the person before you call it.",
+        PLAN_MEAL_SHAPE,
+        (ctx, input) => planMeal(deps.firestore(), ctx, input),
+      ),
+      add_to_shopping_list: toAppAction(
+        "Adds things to the person's shopping list: each with a name and optionally an amount and unit. Something already on the list gains the amount. It never ticks or removes anything. It applies at once and shows in Pinch's shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.",
+        ADD_TO_SHOPPING_LIST_SHAPE,
+        (ctx, input) => addToShoppingList(deps.firestore(), ctx, input),
+      ),
+      save_idea: toAppAction(
+        "Saves a recipe idea in the person's Ideas to try later: a title, and optionally a link (http:// or https:// only) and a note. It never changes or removes an idea, and it says so when the same link or title is already saved. It applies at once and shows in Pinch's Ideas and Done for you with an Undo, and in Helm. Confirm what you will save before you call it.",
+        SAVE_IDEA_SHAPE,
+        (ctx, input) => saveIdea(deps.firestore(), ctx, input),
+      ),
+      fill_nutrition: toAppAction(
+        "Fills in nutrition per 100 g (calories, protein, carbs, fat) for ingredients in the person's kitchen that have none yet, up to 30 at a time, each named as pinch_find_ingredients gave it (hasNutrition false). It never creates an ingredient and never changes nutrition that is already there: those are skipped and named. It applies at once, shows in Pinch's ingredient with its source and in Done for you with an Undo, and in Helm. Only send values from a source you trust, and confirm with the person before you call it. It needs Recipe ingredients on, since it matches names to the kitchen.",
+        FILL_NUTRITION_SHAPE,
+        (ctx, input) =>
+          ctx.allowedCategories.has('recipeIngredients')
+            ? fillNutrition(deps.firestore(), ctx, input)
+            : Promise.resolve(switchedOff(['recipeIngredients'])),
+      ),
+    },
+    undoChange: (firestore, uid, changeId, from) =>
+      undoPinchOutsideChange(firestore, uid, changeId, from),
     deepLink: (ref) => {
       const [collection] = ref.split('/');
       return Object.hasOwn(DEEP_LINKS, collection)

@@ -29,6 +29,7 @@ import {
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
+import { getChangeWho, getMadeByName } from '@apps/pinch/utils/notes';
 import { getIngredientAdjustments } from '@apps/pinch/utils/ingredientAdjustments';
 import {
   getServingGrams,
@@ -124,6 +125,11 @@ function IngredientDrawer({
     servingGrams !== null && Math.abs(servingGrams - 100) > 0.005;
   const basis: NutritionBasis = hasServingChoice ? options.basis : 'PER_100G';
   const isPerServing = basis === 'SERVING' && servingGrams !== null;
+  const nutritionMadeBy = getMadeByName(record?.nutritionBy);
+  const addedBy =
+    getMadeByName(record?.addedBy) === null
+      ? null
+      : getChangeWho({ by: record?.addedBy ?? null });
   const nutritionCaption = isPerServing
     ? `Per 1 serving (${servingText})`
     : 'Per 100 g';
@@ -165,9 +171,11 @@ function IngredientDrawer({
               key: 'custom',
               content: (
                 <>
-                  <span aria-hidden='true'>✏️ </span>One you added
+                  <span aria-hidden='true'>✏️ </span>
+                  {addedBy === null ? 'One you added' : `Added by ${addedBy}`}
                 </>
               ),
+              ...(addedBy !== null && { canWrap: true }),
             },
             ingredient.isAdjusted && {
               key: 'adjusted',
@@ -239,6 +247,17 @@ function IngredientDrawer({
               <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
                 {nutritionCaption}
               </h3>
+              {nutritionMadeBy !== null && (
+                <HelpTip
+                  badgeLabel={`From ${nutritionMadeBy}`}
+                  title={`Filled in by ${nutritionMadeBy}`}
+                >
+                  <p>
+                    This is {nutritionMadeBy}'s estimate, not a measured value.
+                    Edit the nutrition and it becomes yours.
+                  </p>
+                </HelpTip>
+              )}
               {hasServingChoice && (
                 <PillGroup
                   label='Nutrition per'

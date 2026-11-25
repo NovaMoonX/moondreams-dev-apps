@@ -22,6 +22,7 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
+import ChangeEntryView from '@apps/pinch/components/notes/ChangeEntryView';
 import RecipeChanges from '@apps/pinch/components/recipes/RecipeChanges';
 import RecipeFront from '@apps/pinch/components/recipes/RecipeFront';
 import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
@@ -65,7 +66,7 @@ import { isStarred } from '@apps/pinch/utils/favorites';
 import { joinSourceNames } from '@apps/pinch/utils/shopping';
 
 type DrawerView =
-  'recipe' | 'photo' | 'more' | 'collections' | 'share';
+  'recipe' | 'photo' | 'more' | 'collections' | 'share' | 'change';
 
 interface DoorButtonProps {
   label: string;
@@ -217,6 +218,7 @@ function RecipeDrawer({
   const [markError, setMarkError] = useState<string | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [view, setView] = useState<DrawerView>('recipe');
+  const [changeId, setChangeId] = useState<string | null>(null);
   const [shareFooter, setShareFooter] = useState<HTMLElement | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const [todayKey] = useState(() => getCellDayKey(new Date()));
@@ -353,6 +355,16 @@ function RecipeDrawer({
         </div>
       );
     }
+    if (view === 'change' && changeId !== null) {
+      return (
+        <ChangeEntryView
+          uid={uid}
+          recipeId={recipe.id}
+          noteId={changeId}
+          onBack={backToMore}
+        />
+      );
+    }
     if (view === 'more') {
       return (
         <div className='space-y-5'>
@@ -459,6 +471,10 @@ function RecipeDrawer({
           />
           <RecipeChanges
             recipeId={recipe.id}
+            onOpenChange={(noteId) => {
+              setChangeId(noteId);
+              setView('change');
+            }}
             onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
             onApplyChange={(noteId) => {
               onClose();

@@ -29,6 +29,8 @@ export interface PinchOverlayContextValue {
   openSubviewFromToast: (subview: PinchSubview) => void;
   /** The new-idea sheet over whatever screen shows, for a way in other than the Ideas list. */
   openIdeaSheet: () => void;
+  /** What assistants changed, for the Done for you button in a header; the sheet itself lives above the tabs. */
+  outsideChanges: { hasItems: boolean; hasUnseen: boolean; open: () => void };
 }
 
 /** One subview value for the whole app, so a full-page screen can never open on top of another. */

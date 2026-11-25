@@ -41,7 +41,7 @@ export const offeredHelmTools = (
       extraTools.includes(tool.name),
   );
 
-/** Registers the tools an audience is offered; every one only reads and none reaches beyond the person's own records. */
+/** Registers the tools an audience is offered; each is annotated by its kind (a read unless it says it changes something), and none reaches beyond the person's own records. */
 export function registerHelmTools(
   server: McpServer,
   tools: ReturnType<typeof buildHelmTools>,
@@ -58,8 +58,8 @@ export function registerHelmTools(
             : tool.description,
         inputSchema: tool.shape,
         annotations: {
-          readOnlyHint: true,
-          destructiveHint: false,
+          readOnlyHint: tool.kind !== 'change',
+          destructiveHint: tool.kind === 'change',
           openWorldHint: false,
         },
       },
