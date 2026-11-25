@@ -59,7 +59,7 @@ A `## Regression check` section in the PR body shows that what the PR adds does 
 
 ## 3. Review: sized to the PR
 
-There is no outside reviewer: these agents are the whole review, so they run on every PR whose diff meets a trigger, and the order below keeps them cheap. Take the screenshots (step 1) before spawning the product and design reviewers, so they start from the images and the published folder.
+There is no outside reviewer: these agents are the whole review, so they run on every PR whose diff meets a trigger, and the order below keeps them cheap. Take the screenshots (step 1) before spawning the product and design reviewers, so they start from the images and the published folder, and leave the emulators and the dev server running and seeded for them: they drive the app you started and stop with `Blocked` when nothing answers on 5173, so a brief that tells them to start it themselves is a miss.
 
 Size the PR (S, M or L) and run the review that size gets, as `orchestrate` "Sizing the review" defines it; record the size and why in the Review block. The agents are `.claude/agents/`: `validator` (haiku) first, then `technical-reviewer`, `product-reviewer` and `design-reviewer` (sonnet), and for an L PR one reviewer per shard plus `lead-reviewer` (opus), which verifies the findings and does the cross-shard pass. Spawn them by name with `run_in_background: true`; they are **read-only**, report, and you make every fix. The technical reviewer judges from the code; each reviewer answers the others' `questionFor` questions when you send them back to it (`orchestrate` "Sizing the review"). The size in the hook's message is a floor: raise it when the diff is riskier than its line count (a money or date calculation, a transaction).
 

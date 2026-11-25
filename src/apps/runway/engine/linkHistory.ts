@@ -1,4 +1,4 @@
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { dayInZone } from '@apps/runway/engine/dates';
 import {
   findAccountPairs,
   findPurchaseMatches,
@@ -13,23 +13,26 @@ import type {
   RouteMemorySealed,
 } from '@apps/runway/types';
 
+type LinkRef = Pick<OpenLink, 'id' | 'createdAt'>;
+
 /**
  * Whether a bank purchase is part of the history its link brought in: dated before the day the bank was linked.
  * Only purchases added after the link was made can be its history, so a purchase an earlier link of the same account brought in never becomes history when the account is linked again.
  */
 export function makeIsLinkHistory(
-  links: readonly OpenLink[],
+  links: readonly LinkRef[],
   accounts: readonly OpenAccount[],
   cards: readonly OpenCard[],
+  zone: string | null = null,
 ): (purchase: OpenPurchase) => boolean {
   const linkById = new Map(links.map((link) => [link.id, link]));
-  const linkOf = new Map<string, OpenLink>([
-    ...accounts.flatMap((account): [string, OpenLink][] => {
+  const linkOf = new Map<string, LinkRef>([
+    ...accounts.flatMap((account): [string, LinkRef][] => {
       const link =
         account.linkId === null ? undefined : linkById.get(account.linkId);
       return link ? [[`account:${account.id}`, link]] : [];
     }),
-    ...cards.flatMap((card): [string, OpenLink][] => {
+    ...cards.flatMap((card): [string, LinkRef][] => {
       const link = card.linkId === null ? undefined : linkById.get(card.linkId);
       return link ? [[`card:${card.id}`, link]] : [];
     }),
@@ -46,7 +49,7 @@ export function makeIsLinkHistory(
     if (!link) return false;
     return (
       purchase.createdAt >= link.createdAt &&
-      purchase.date < todayAsUtcDate(link.createdAt)
+      purchase.date < dayInZone(link.createdAt, zone)
     );
   };
 }

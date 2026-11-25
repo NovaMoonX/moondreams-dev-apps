@@ -27,6 +27,7 @@ import { createDraftSealer } from '@apps/runway/security';
 import {
   ensurePlan,
   isPlanCached,
+  setPlanTimeZone,
 } from '@apps/runway/store/actions/planActions';
 import {
   startItemsListener,
@@ -47,6 +48,10 @@ import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
 import { startDoneForYouListener } from '@apps/runway/store/listeners/doneForYouListeners';
 import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListeners';
+import {
+  startAlertsListener,
+  startAlertStatesListener,
+} from '@apps/runway/store/listeners/alertListeners';
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
@@ -62,6 +67,8 @@ import {
 } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
+import { startFiguresListener } from '@apps/runway/store/listeners/figuresListener';
+import { readLastWriteAt } from '@apps/runway/utils/figuresSnapshot';
 import { recordDone } from '@apps/runway/hooks/useDoneForYou';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
@@ -73,6 +80,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectConfirmedDayIds,
   selectIsDaysLoaded,
+  selectIsLedgerReady,
   selectIsPlanItemsLoaded,
   selectItemLooks,
   selectLinkHistoryRanges,
@@ -94,6 +102,8 @@ import {
   setRules,
   setMemories,
   setDoneForYou,
+  setAlerts,
+  setAlertStates,
   setEmailIntake,
   setIsEmailIntakeLoaded,
   setIsEmailIntakeFailed,
@@ -115,10 +125,15 @@ import {
   setPeriodFailed,
   setPeriodPurchases,
   setPlan,
+  endHeadStart,
+  setFiguresSnapshot,
+  startHeadStart,
   setPurchases,
   setRecords,
   setVersions,
 } from '@apps/runway/store/runwaySlice';
+
+const zoneSent = new Set<string>();
 
 /**
  * Opens the plan: fetches the data key, creates the plan on first open, then
@@ -138,6 +153,14 @@ export function useRunwaySync(uid: string | null, attempt: number) {
   );
   const reachedEndings = useAppSelector((state) =>
     selectReachedEndingsKey(state, today),
+  );
+  const isLedgerReady = useAppSelector(selectIsLedgerReady);
+  const isHeadStartOver = useAppSelector(
+    (state) => state.runway.isHeadStartOver,
+  );
+  const isPlanOpen = useAppSelector((state) => state.runway.plan !== null);
+  const savedZone = useAppSelector(
+    (state) => state.runway.plan?.timeZone ?? null,
   );
 
   useEffect(() => {
@@ -169,6 +192,49 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       run.isCurrent = false;
     };
   }, [uid, attempt, dispatch]);
+
+  useEffect(() => {
+    if (!uid) return;
+    dispatch(startHeadStart(readLastWriteAt(uid)));
+  }, [uid, dispatch]);
+
+  useEffect(() => {
+    if (isLedgerReady) dispatch(endHeadStart());
+  }, [isLedgerReady, dispatch]);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || isLedgerReady || isHeadStartOver)
+      return;
+
+    const stop: { current: (() => void) | null } = { current: null };
+    const run = { isCurrent: true };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startFiguresListener(uid, encryption, (snapshot) =>
+          dispatch(setFiguresSnapshot(snapshot)),
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      run.isCurrent = false;
+      stop.current?.();
+    };
+  }, [uid, keyStatus, isLedgerReady, isHeadStartOver, dispatch]);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isPlanOpen) return;
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!zone || zone === savedZone || zoneSent.has(uid)) return;
+    zoneSent.add(uid);
+    getRunwayEncryption(uid)
+      .then((encryption) => setPlanTimeZone(uid, encryption, zone))
+      .catch(() => {
+        zoneSent.delete(uid);
+      });
+  }, [uid, keyStatus, isPlanOpen, savedZone]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready') return;
@@ -257,6 +323,17 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (entries) => dispatch(setDoneForYou(entries)),
+          fail,
+        ),
+        startAlertsListener(
+          uid,
+          encryption,
+          (alerts) => dispatch(setAlerts(alerts)),
+          fail,
+        ),
+        startAlertStatesListener(
+          uid,
+          (states) => dispatch(setAlertStates(states)),
           fail,
         ),
         startNeedsHomeListener(

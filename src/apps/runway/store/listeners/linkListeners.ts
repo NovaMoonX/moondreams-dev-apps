@@ -3,6 +3,10 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 
 import { createSealedReader } from '@lib/security';
+import {
+  openAccountBalance,
+  openStartedPayment,
+} from '@apps/runway/engine/openDocs';
 import { openJson } from '@apps/runway/security';
 import type {
   AccountBalanceDoc,
@@ -20,8 +24,8 @@ import type {
   RunwayEncryption,
   OpenStartedPayment,
   StartedPaymentDoc,
-  StartedPaymentSealed,
 } from '@apps/runway/types';
+import { noteLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -40,6 +44,7 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
   const stop = onSnapshot(
     collection(db, 'apps', 'runway', 'plans', uid, collectionName),
     async (snapshot) => {
+      noteLocalWrite(uid, snapshot);
       sequence.latest += 1;
       const current = sequence.latest;
       /* Bank data is optional: a document that won't open is left out rather than closing the plan. */
@@ -133,22 +138,7 @@ export function startAccountBalancesListener(
   return startOpenedListener<AccountBalanceDoc, OpenAccountBalance>(
     uid,
     'accountBalances',
-    async (data) => {
-      const payload = await read<{
-        cents: number;
-        availableCents?: number | null;
-        limitCents?: number | null;
-        hasInstantBalance?: boolean | null;
-      }>(data.sealed);
-      return {
-        id: data.id,
-        asOf: data.asOf,
-        cents: payload.cents,
-        availableCents: payload.availableCents ?? null,
-        limitCents: payload.limitCents ?? null,
-        hasInstantBalance: payload.hasInstantBalance ?? null,
-      };
-    },
+    (data) => openAccountBalance(data, read),
     onChange,
     onError,
   );
@@ -220,16 +210,7 @@ export function startStartedPaymentsListener(
   return startOpenedListener<StartedPaymentDoc, OpenStartedPayment>(
     uid,
     'startedPayments',
-    async (data) => {
-      const payload = await read<StartedPaymentSealed>(data.sealed);
-      return {
-        id: data.id,
-        cardId: data.cardId,
-        startedOn: data.startedOn,
-        createdAt: data.createdAt,
-        amountCents: payload.amountCents,
-      };
-    },
+    (data) => openStartedPayment(data, read),
     onChange,
     onError,
   );

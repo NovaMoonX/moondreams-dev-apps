@@ -553,7 +553,7 @@ service cloud.firestore {
     // --- App: runway ---
 
     // A plan is private to one person and nests under their uid. The server-only paths
-    // (apps/runway/server, apps/runway/keyChecks, apps/runway/merchantNames, apps/runway/institutionLogos) have no match, so only Functions reach them.
+    // (apps/runway/server, apps/runway/keyChecks, apps/runway/merchantNames, apps/runway/reworks, apps/runway/institutionLogos) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
     // `links`, `accountBalances` and `cardStatements` are written only by Functions (bank data), and a card's or account's `linkId`
@@ -565,11 +565,11 @@ service cloud.firestore {
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
     // (the app deletes an event); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
     // `emailWaiting` is the one email field the app updates. `emailSetup/progress` is deprecated and no longer read or written (the walkthrough is gone); older documents stay, and the owner may still update one, never delete it. `doneForYou` is what the app did on its
-    // own: the app marks one undone and removes the ones older than 30 days.
+    // own: the app marks one undone and removes the ones older than 30 days. `figures` (the figures the server worked out) and `alertStates` (where each alert stands) are written only by Functions; the owner reads them. An `alerts` document is the person's own: created, changed and deleted by the app.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges', 'emailIntake', 'emailEvents'])
+        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges', 'emailIntake', 'emailEvents', 'figures', 'alertStates'])
         && (document[0] != 'emailFilters' || isGateOpen('runway', 'email-purchases', 'off'))
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
         && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link' && request.resource.data.get('source', null) != 'email' && request.resource.data.get('emailEventId', null) == null));
@@ -581,10 +581,10 @@ service cloud.firestore {
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
       allow update: if isUser(uid)
-        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules', 'emailSetup', 'doneForYou']
+        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules', 'emailSetup', 'doneForYou', 'alerts']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null) && request.resource.data.get('emailEventId', null) == resource.data.get('emailEventId', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters', 'doneForYou'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters', 'doneForYou', 'alerts'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

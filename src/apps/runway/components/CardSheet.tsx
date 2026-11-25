@@ -6,6 +6,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackHeading from '@/components/BackHeading';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -353,12 +354,10 @@ function CardSheet({
         </div>
       ) : view === 'history' ? (
         <div className='space-y-4'>
-          <div className='flex items-center gap-1'>
-            <BackLink isChevronOnly onBack={() => setView('menu')} />
-            <p className='min-w-0 text-2xl font-semibold'>
-              {CARD_WORDS.historyTitle}
-            </p>
-          </div>
+          <BackHeading
+            onBack={() => setView('menu')}
+            title={CARD_WORDS.historyTitle}
+          />
           <CardHistoryView
             cardId={card.id}
             cardName={name}

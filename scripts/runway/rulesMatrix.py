@@ -35,6 +35,7 @@ COLLECTIONS = {
     'accounts': {'update'},
     'expenses': {'update', 'delete'},
     'rules': {'update', 'delete'},
+    'alerts': {'update', 'delete'},
     'memories': {'delete'},
     'startedPayments': {'delete'},
     'doneForYou': {'update', 'delete'},
@@ -141,6 +142,18 @@ def main():
             check(f'{c} delete [{a}]', commit(tok, [rm(path)]), a == 'o' and 'delete' in ops)
             admin([put(path, doc)])
             check(f'{c} write twice by id [{a}]', commit(tok, [put(path, doc)]), a == 'o' and 'update' in ops)
+
+    # Where each alert stands is written only by Functions: the owner reads it and never creates, changes or deletes it.
+    state = f'{base}/alertStates/alert-1'
+    sdoc = dict(id='alert-1', alertUpdatedAt=NOW, isBelow=False, lastFiredAt=None, heldSince=None, updatedAt=NOW)
+    for a, tok in actors.items():
+        admin([rm(state)])
+        check(f'alertStates create [{a}]', commit(tok, [put_new(state, sdoc)]), False)
+        admin([put(state, sdoc)])
+        check(f'alertStates read [{a}]', get(state, tok), a == 'o')
+        check(f'alertStates update [{a}]', commit(tok, [put(state, dict(sdoc, isBelow=True))]), False)
+        check(f'alertStates delete [{a}]', commit(tok, [rm(state)]), False)
+    admin([rm(state)])
 
     # An email filter is created only while the email-purchases switch is open for the person.
     filt = f'{base}/emailFilters/filter-gate'

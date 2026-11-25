@@ -1,4 +1,4 @@
-import type { PACE_STATES } from '@apps/runway/constants';
+import type { PACE_STATES } from './engineConstants';
 import type {
   Cents,
   DateOnly,

@@ -2,11 +2,13 @@ import { disableNetwork, enableNetwork } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import { HELD_WRITE_SETTLED_MS } from '@/utils/heldWrites';
 
 /** How long a write the server accepted may take to reach the listeners before the connection is restarted. */
 export const LISTENER_CATCH_UP_MS = 4_000;
 const CHECK_EVERY_MS = 250;
 const AFTER_RESTART_MS = 10_000;
+const PAST_HOLD_EXPIRY_MS = 250;
 const RESTART_GAP_MS = 30_000;
 const FALLBACK_KEY = 'firestore-listener-stalled';
 
@@ -25,6 +27,9 @@ export const restartFirestoreConnection = (): Promise<void> => {
   return connection.restarting;
 };
 
+const pause = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
 const waitUntil = (hasLanded: () => boolean, ms: number): Promise<boolean> =>
   new Promise((resolve) => {
     const startedAt = Date.now();
@@ -41,6 +46,10 @@ export interface WriteLandedWatch {
   /** No names or amounts: debug viewers can copy it. */
   what: string;
   hasLanded: () => boolean;
+  /** Lays the holds again, so one the list delivered past but never matched lets go on time rather than at the next delivery. */
+  recheck?: () => void;
+  /** Short facts for debug viewers on what still waits; never a name or an amount. */
+  describe?: () => string[];
 }
 
 /** Restarts a stalled live connection when the listeners miss a write the server accepted, and tells debug viewers. */
@@ -48,8 +57,11 @@ export async function watchWriteLanded({
   feature,
   what,
   hasLanded,
+  recheck,
+  describe,
 }: WriteLandedWatch): Promise<void> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  const startedAt = Date.now();
   if (await waitUntil(hasLanded, LISTENER_CATCH_UP_MS)) return;
   const waited = `${LISTENER_CATCH_UP_MS / 1000} s`;
   reportFallback({
@@ -73,6 +85,16 @@ export async function watchWriteLanded({
     clearFallback(FALLBACK_KEY);
     return;
   }
+  if (recheck !== undefined) {
+    await pause(
+      startedAt + HELD_WRITE_SETTLED_MS + PAST_HOLD_EXPIRY_MS - Date.now(),
+    );
+    recheck();
+    if (hasLanded()) {
+      clearFallback(FALLBACK_KEY);
+      return;
+    }
+  }
   reportFallback({
     key: FALLBACK_KEY,
     feature,
@@ -83,5 +105,6 @@ export async function watchWriteLanded({
       stage: 'listener catch-up',
       detail: 'no snapshot after a restart',
     },
+    facts: describe?.() ?? [],
   });
 }

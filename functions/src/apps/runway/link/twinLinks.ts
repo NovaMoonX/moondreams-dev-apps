@@ -1,29 +1,7 @@
 import type { LinkSealed, ProviderAccountSealed } from './linkShared.js';
-import { toBankKey } from './unfinishedLinks.js';
+import { isTwinLink, toAccountKey } from '../engine/twinLinks.js';
 
-/** What tells one bank account apart across sign-ins: its name and mask, as the provider advises for spotting a repeat sign-in. Null without a mask. */
-export const toAccountKey = (account: { name: string; mask: string | null }) =>
-  account.mask === null || account.mask === ''
-    ? null
-    : `${account.mask}|${account.name.trim().replace(/\s+/g, ' ').toLowerCase()}`;
-
-/** Whether a link at a bank already holds one of these accounts: the same login signed in again, not a second login at the same bank. */
-export function isTwinLink(
-  link: Pick<LinkSealed, 'institutionName' | 'providerAccounts'>,
-  institutionName: string,
-  accounts: readonly { name: string; mask: string | null }[],
-) {
-  if (toBankKey(link.institutionName) !== toBankKey(institutionName)) {
-    return false;
-  }
-  const held = new Set(
-    link.providerAccounts.map(toAccountKey).filter((key) => key !== null),
-  );
-  return accounts.some((account) => {
-    const key = toAccountKey(account);
-    return key !== null && held.has(key);
-  });
-}
+export { isTwinLink, toAccountKey };
 
 export interface CombineMove {
   collection: 'accounts' | 'cards';

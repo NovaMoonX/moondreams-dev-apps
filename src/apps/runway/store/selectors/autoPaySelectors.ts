@@ -1,19 +1,17 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
 import {
   findAutoChecks,
   getMatchedKeys,
   getPaymentKey,
-  getPaysItselfFrom,
-  getUndoneDueDays,
-  isAutoBill,
-  type AutoBill,
+  toAutoBills,
   type AutoCheck,
-  type SelfPayingFacts,
 } from '@apps/runway/engine/autoPay';
-import { startOfUtcDay } from '@apps/runway/engine/dates';
+import {
+  getPaysItselfFromByBill,
+  getSelfPayingBills,
+} from '@apps/runway/engine/figures';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
@@ -35,20 +33,10 @@ const selectStartDate = (state: RootState) =>
   state.runway.plan?.startDate ?? null;
 
 /** The day each bill's "pays itself" setting was turned on, by bill id. */
-const selectPaysItselfFrom = createSelector([selectVersions], (versions) => {
-  const billVersions = versions.flatMap((version) =>
-    version.kind === 'bill' ? [version] : [],
-  );
-  const ids = [...new Set(billVersions.map((version) => version.itemId))];
-  return Object.fromEntries(
-    ids.map((id) => [
-      id,
-      getPaysItselfFrom(
-        billVersions.filter((version) => version.itemId === id),
-      ),
-    ]),
-  );
-});
+const selectPaysItselfFrom = createSelector(
+  [selectVersions],
+  getPaysItselfFromByBill,
+);
 
 /** The bills that pay themselves (from Track up), with what `isSelfPaying` reads. Takes today as its second argument, like the other bill selectors. */
 export const selectSelfPayingBills = createSelector(
@@ -59,31 +47,7 @@ export const selectSelfPayingBills = createSelector(
     selectPaysItselfFrom,
     selectStartDate,
   ],
-  (
-    bills,
-    level,
-    moves,
-    paysItselfFrom,
-    startDate,
-  ): Record<string, SelfPayingFacts & { paysItself: true }> => {
-    const undone = getUndoneDueDays(moves);
-    return Object.fromEntries(
-      bills
-        .filter(({ version }) => isAutoBill(version.payload, level))
-        .map(({ item }) => [
-          item.id,
-          {
-            paysItself: true as const,
-            undoneDueOn: undone[item.id] ?? [],
-            paysItselfFrom: Math.max(
-              paysItselfFrom[item.id] ?? 0,
-              startDate ?? 0,
-            ),
-            isAtLink: level === 'link',
-          },
-        ]),
-    );
-  },
+  getSelfPayingBills,
 );
 
 /** The bills that pay themselves as the engine reads them. Takes today as its second argument. */
@@ -99,46 +63,7 @@ export const selectAutoBills = createSelector(
     selectRecentFrom,
     selectPaysItselfFrom,
   ],
-  (
-    bills,
-    payments,
-    level,
-    moves,
-    accounts,
-    matchKeys,
-    startDate,
-    recentFrom,
-    paysItselfFrom,
-  ): AutoBill[] => {
-    const undone = getUndoneDueDays(moves);
-    return bills
-      .filter(({ version }) => isAutoBill(version.payload, level))
-      .map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-        since: Math.max(
-          startOfUtcDay(item.createdAt),
-          startDate ?? 0,
-          recentFrom ?? 0,
-          paysItselfFrom[item.id] ?? 0,
-        ),
-        cardId: version.payload.paidByCardId ?? null,
-        accountId: resolvePayFromAccountId(version.payload.accountId, accounts),
-        merchantKeys: matchKeys[item.id] ?? [],
-        payments: (payments[item.id] ?? []).map((payment) => ({
-          dueOn: payment.dueOn,
-          payOn: payment.payOn,
-          lowCents: payment.ranged
-            ? payment.ranged.range.lowCents
-            : payment.totalCents,
-          highCents: payment.ranged
-            ? payment.ranged.range.highCents
-            : payment.totalCents,
-          paid: payment.paid,
-        })),
-        undoneDueOn: undone[item.id] ?? [],
-      }));
-  },
+  toAutoBills,
 );
 
 /** The ledger, plan and bank charges an automatic mark or match reads are all loaded. */

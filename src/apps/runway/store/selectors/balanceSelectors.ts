@@ -3,65 +3,17 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectClosingBase } from '@apps/runway/store/selectors/historySelectors';
-import {
-  withoutSpending,
-  type ClosingState,
-} from '@apps/runway/engine/closings';
-import type { DateOnly, Level } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { deriveBalances } from '@apps/runway/engine/balances';
 import {
-  deriveBalances,
-  type BalancesInput,
-} from '@apps/runway/engine/balances';
-import { isTrackingLevel } from '@apps/runway/engine/level';
-import { getCashPosition } from '@apps/runway/engine/cash';
+  getBankBacking,
+  readCashPosition,
+  toBalanceInputs,
+  toBankedBalanceInputs,
+  toLedgerBalanceInputs,
+} from '@apps/runway/engine/figures';
 import { selectTwinnedEmailIds } from '@apps/runway/store/selectors/emailSelectors';
 import { selectBankHeldByCard } from '@apps/runway/store/selectors/cardBankSelectors';
-
-const toBalanceInputs =
-  (level: Level) =>
-  (
-    startDate: DateOnly | null,
-    moves: RootState['runway']['moves'],
-    records: RootState['runway']['records'],
-    days: RootState['runway']['days'],
-    items: RootState['runway']['items'],
-    purchases: RootState['runway']['purchases'],
-    cards: RootState['runway']['cards'],
-    closing: ClosingState | null,
-    today: DateOnly,
-  ): BalancesInput => ({
-    startDate,
-    moves,
-    records,
-    arrivedOn: new Map(
-      days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
-    ),
-    expectedOn: new Map(days.map((day) => [day.id, day.expectedOn])),
-    purchases: isTrackingLevel(level) ? purchases : [],
-    closing:
-      closing !== null && !isTrackingLevel(level)
-        ? withoutSpending(closing)
-        : closing,
-    isCountingCards: isTrackingLevel(level),
-    releasedFrom: Object.fromEntries(
-      items.flatMap((item) =>
-        item.heldReleasedOn === null ? [] : [[item.id, item.heldReleasedOn]],
-      ),
-    ),
-    asOf: today,
-    kinds: Object.fromEntries([
-      ...items.flatMap((item) =>
-        item.kind === 'goal' ||
-        item.kind === 'bill' ||
-        item.kind === 'envelope' ||
-        item.kind === 'horizon'
-          ? [[item.id, item.kind] as const]
-          : [],
-      ),
-      ...cards.map((card) => [card.id, 'card'] as const),
-    ]),
-  });
 
 /** What the ledger sums from, at the level the plan is at, before any match to the account balances; at Link a linked card takes its bank's figure. */
 export const selectLedgerBalanceInputs = createSelector(
@@ -78,32 +30,7 @@ export const selectLedgerBalanceInputs = createSelector(
     selectLevel,
     selectBankHeldByCard,
   ],
-  (
-    startDate,
-    moves,
-    records,
-    days,
-    items,
-    purchases,
-    cards,
-    closing,
-    today,
-    level,
-    bankOwedByCard,
-  ): BalancesInput => ({
-    ...toBalanceInputs(level)(
-      startDate,
-      moves,
-      records,
-      days,
-      items,
-      purchases,
-      cards,
-      closing,
-      today,
-    ),
-    bankOwedByCard,
-  }),
+  toLedgerBalanceInputs,
 );
 
 /** The balances from the ledger alone: what a check against the bank compares with. */
@@ -124,74 +51,19 @@ export const selectCashPosition = createSelector(
     selectTwinnedEmailIds,
     () => todayAsUtcDate(),
   ],
-  (
-    balances,
-    accounts,
-    accountBalances,
-    items,
-    needsHome,
-    purchases,
-    twinnedEmailIds,
-    today,
-  ) =>
-    getCashPosition({
-      twinnedEmailIds,
-      accounts: [...accounts].sort(
-        (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
-      ),
-      bankBalances: Object.fromEntries(
-        accountBalances.map((entry) => [entry.id, entry.cents]),
-      ),
-      balances,
-      goalIds: items
-        .filter(
-          (item) =>
-            item.kind === 'goal' &&
-            !(item.heldReleasedOn !== null && item.heldReleasedOn <= today),
-        )
-        .map((item) => item.id),
-      envelopeIds: items
-        .filter((item) => item.kind === 'envelope')
-        .map((item) => item.id),
-      purchases: [
-        ...new Map(
-          [...needsHome, ...purchases].map((purchase) => [
-            purchase.id,
-            purchase,
-          ]),
-        ).values(),
-      ],
-    }),
+  readCashPosition,
 );
 
 /** At Link, whether Free to Spend comes from the account balances, and what they hold beyond (or short of) what the ledger counts. Typed balances stand in for accounts with no link; nothing changes while an account that counts has no balance at all. */
 export const selectBankBacking = createSelector(
   [selectLevel, selectLedgerBalances, selectCashPosition],
-  (level, ledger, position) => {
-    const isBacked =
-      level === 'link' &&
-      ledger.hasMoney &&
-      position.cashCents !== null &&
-      position.accounts.some((account) => account.isBank);
-    return {
-      isBacked,
-      hasTyped: position.accounts.some((account) => !account.isBank),
-      cents: isBacked
-        ? (position.freeCents ?? 0) -
-          position.overAssignedCents -
-          ledger.freeToSpendCents
-        : 0,
-    };
-  },
+  getBankBacking,
 );
 
 /** What the balances are summed from, at the level the plan is at, matched to the account balances at Link. */
 export const selectBalanceInputs = createSelector(
   [selectLedgerBalanceInputs, selectBankBacking],
-  (inputs, backing): BalancesInput => ({
-    ...inputs,
-    bankAdjustCents: backing.cents,
-  }),
+  toBankedBalanceInputs,
 );
 
 /** The same sums as tracking counts them, spending and cards included, whatever level the plan is at now: what tracking that starts again carries forward. */

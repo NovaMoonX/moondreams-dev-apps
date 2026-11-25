@@ -84,6 +84,20 @@ identity=()
 git config user.email >/dev/null 2>&1 || identity+=(-c "user.email=pr-sync@users.noreply.github.com")
 git config user.name >/dev/null 2>&1 || identity+=(-c "user.name=PR sync")
 
+# A clean merge can still leave the server's vendored copies behind their sources
+# (one side changed a source, the other added a copy of it), so they are rewritten
+# into the merge commit before it is pushed.
+refresh_server_copies() {
+  local dir=$1 root
+  root=$(git rev-parse --show-toplevel)
+  [[ -f "$dir/scripts/checks/serverCopies.ts" && -d "$root/node_modules" ]] || return 0
+  ln -s "$root/node_modules" "$dir/node_modules"
+  (cd "$dir" && npx tsx scripts/checks/serverCopies.ts --write >/dev/null) || { rm -f "$dir/node_modules"; return 1; }
+  rm -f "$dir/node_modules"
+  [[ -z "$(git -C "$dir" status --porcelain)" ]] && return 0
+  git -C "$dir" add -A && git ${identity[@]+"${identity[@]}"} -C "$dir" commit -q --amend --no-edit
+}
+
 worst=0
 raise() { [[ "$worst" -lt "$1" ]] && worst=$1; }
 for pair in "${pairs[@]}"; do
@@ -129,6 +143,7 @@ for pair in "${pairs[@]}"; do
   errors=$(mktemp)
   if git worktree add -q --detach "$workdir" "origin/$head" 2>"$errors" &&
     git ${identity[@]+"${identity[@]}"} -C "$workdir" merge -q --no-edit -m "Merge $base into $head" "origin/$base" >/dev/null 2>"$errors" &&
+    refresh_server_copies "$workdir" 2>"$errors" &&
     git -C "$workdir" push -q origin "HEAD:refs/heads/$head" 2>"$errors"; then
     report "$head" "$base" merged "$behind" ""
   else

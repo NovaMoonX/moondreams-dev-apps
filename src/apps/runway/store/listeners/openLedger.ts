@@ -1,170 +1,27 @@
 import type { ClosingEntries } from '@apps/runway/engine/closings';
-import { createSealedReader, type SealedReader } from '@lib/security';
+import { createSealedReader, type EncryptedFieldPayload } from '@lib/security';
 import { openJson } from '@apps/runway/security';
+import {
+  openMove,
+  openPurchase,
+  openRecord as openRecordWith,
+  withLineDefaults,
+} from '@apps/runway/engine/openDocs';
 import type {
-  BillPaidSealed,
-  CardPaymentSealed,
-  ConfirmedSealed,
-  CorrectionSealed,
-  CostPaidSealed,
   DateOnly,
   DayRecordDoc,
   IncomeDayDoc,
   MoveDoc,
-  OpenMove,
-  OpenPurchase,
-  OpenRecord,
-  RecordLine,
-  ProposedSealed,
   PurchaseDoc,
-  PurchaseSealed,
   RunwayEncryption,
-  StartSealed,
-  TrackingChangeSealed,
-  TransferSealed,
 } from '@apps/runway/types';
 
-export async function openMove(
-  entry: MoveDoc,
-  read: SealedReader,
-): Promise<OpenMove> {
-  const base = {
-    id: entry.id,
-    date: entry.date,
-    refId: entry.refId ?? null,
-    reversesMoveId: entry.reversesMoveId ?? null,
-    createdAt: entry.createdAt,
-  };
-  if (entry.kind === 'start') {
-    const payload = await read<StartSealed>(entry.sealed);
-    return { ...base, kind: 'start', payload };
-  }
-  if (entry.kind === 'trackingChange') {
-    const payload = await read<TrackingChangeSealed>(entry.sealed);
-    return { ...base, kind: 'trackingChange', payload };
-  }
-  if (entry.kind === 'cardPayment') {
-    const payload = await read<CardPaymentSealed>(entry.sealed);
-    return { ...base, kind: 'cardPayment', payload };
-  }
-  if (entry.kind === 'transfer') {
-    const payload = await read<TransferSealed>(entry.sealed);
-    return {
-      ...base,
-      kind: 'transfer',
-      payload: { ...payload, isOutside: payload.isOutside ?? false },
-    };
-  }
-  if (entry.kind === 'costPaid') {
-    const payload = await read<CostPaidSealed>(entry.sealed);
-    return {
-      ...base,
-      kind: 'costPaid',
-      payload: { ...payload, purchaseId: payload.purchaseId ?? null },
-    };
-  }
-  const payload = await read<BillPaidSealed>(entry.sealed);
-  return {
-    ...base,
-    kind: 'billPaid',
-    payload: {
-      ...payload,
-      cardId: payload.cardId ?? null,
-      auto: payload.auto ?? null,
-    },
-  };
-}
+export { openMove, openPurchase, withLineDefaults };
 
-/** A line sealed before Horizon costs has no cost and gives nothing back to Free to Spend. */
-export const withLineDefaults = <T extends { lines: RecordLine[] }>(
-  payload: T,
-): T => ({
-  ...payload,
-  lines: payload.lines.map((line) => ({
-    ...line,
-    costId: line.costId ?? null,
-    costName: line.costName ?? null,
-    repaysFree: line.repaysFree ?? false,
-  })),
-});
-
-export async function openRecord(
-  entry: DayRecordDoc,
-  encryption: RunwayEncryption,
-): Promise<OpenRecord> {
-  const base = { id: entry.id, dayId: entry.dayId, createdAt: entry.createdAt };
-  if (entry.kind === 'proposed') {
-    const payload = withLineDefaults(
-      await openJson<ProposedSealed>(entry.sealed, encryption),
-    );
-    return { ...base, kind: 'proposed', payload };
-  }
-  if (entry.kind === 'correction') {
-    const payload = withLineDefaults(
-      await openJson<CorrectionSealed>(entry.sealed, encryption),
-    );
-    return {
-      ...base,
-      kind: 'correction',
-      supersedesId: entry.supersedesId ?? '',
-      payload,
-    };
-  }
-  const payload = withLineDefaults(
-    await openJson<ConfirmedSealed>(entry.sealed, encryption),
+export const openRecord = (entry: DayRecordDoc, encryption: RunwayEncryption) =>
+  openRecordWith(entry, <T extends object>(sealed: EncryptedFieldPayload) =>
+    openJson<T>(sealed, encryption),
   );
-  return { ...base, kind: 'confirmed', payload };
-}
-
-export async function openPurchase(
-  entry: PurchaseDoc,
-  read: SealedReader,
-): Promise<OpenPurchase> {
-  const payload = await read<PurchaseSealed>(entry.sealed);
-  // Before labels, a note with no merchant was what named the row, so it reads as the label.
-  const isNoteName = payload.label === undefined && !payload.merchant?.trim();
-  const result: OpenPurchase = {
-    id: entry.id,
-    date: entry.date,
-    source: entry.source,
-    status: entry.status ?? null,
-    accountId: entry.accountId ?? null,
-    needsHome: entry.needsHome,
-    expenseId: entry.expenseId ?? null,
-    emailEventId: entry.emailEventId ?? null,
-    emailWaiting: entry.emailWaiting ?? null,
-    wasPending: entry.wasPending ?? null,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-    amountCents: payload.amountCents,
-    merchant: payload.merchant ?? null,
-    bankName: payload.bankName ?? null,
-    merchantLogo: payload.merchantLogo?.startsWith('https://')
-      ? payload.merchantLogo
-      : null,
-    category: payload.category ?? null,
-    ruleId: payload.ruleId ?? null,
-    label: isNoteName ? (payload.note ?? null) : (payload.label ?? null),
-    note: isNoteName ? null : (payload.note ?? null),
-    lines: payload.lines ?? [],
-    refundOfId: payload.refundOfId ?? null,
-    paidByCardId: payload.paidByCardId ?? null,
-    link: payload.link ?? null,
-    receiptText: payload.receiptText ?? null,
-    costRef: payload.costRef ?? null,
-    billRef: payload.billRef ?? null,
-    notSameAs: payload.notSameAs ?? null,
-    incomeDayId: payload.incomeDayId ?? null,
-    assignedBy: payload.assignedBy ?? null,
-    pairedWithId: payload.pairedWithId ?? null,
-    pairKind: payload.pairKind ?? null,
-    cardPaymentMoveId: payload.cardPaymentMoveId ?? null,
-    tickedDayKey: payload.tickedDayKey ?? null,
-    storeEmail: payload.storeEmail ?? null,
-    orderLog: payload.orderLog ?? null,
-  };
-  return result;
-}
 
 /** A document from either Firestore SDK. */
 export interface LedgerDoc {

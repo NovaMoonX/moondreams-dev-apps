@@ -35,6 +35,7 @@ import { hasBrandLogos } from '@/utils/brandLogoUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC, formatTimeAgo } from '@/utils/formatUtils';
 import {
+  ALERT_WORDS,
   DELETE_PLAN_WORDS,
   EMAIL_PURCHASES_GATE_ID,
   LINK_WORDS,
@@ -53,7 +54,7 @@ import { ActionSection } from '@apps/runway/components/ActionSection';
 import BankLogo from '@apps/runway/components/BankLogo';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
 import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
-import { getOpenPeriod } from '@apps/runway/engine/level';
+import { getOpenPeriod, isTrackingLevel } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import EmailPurchasesScreen from '@apps/runway/screens/plan/EmailPurchasesScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -159,6 +160,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
   const canLink = useCanLinkBank();
+  const freeAlertCount = useAppSelector(
+    (state) =>
+      state.runway.alerts.filter((alert) => alert.target.kind === 'freeToSpend')
+        .length,
+  );
   const level = useAppSelector(selectLevel);
   const canEmail =
     useIsGateOpen('runway', EMAIL_PURCHASES_GATE_ID) && level !== 'plan';
@@ -306,19 +312,23 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             <SortingPausedRow />
           </ActionSection>
         )}
-        {canLink && (
+        {isTrackingLevel(level) && (
           <ActionSection caption={NOTIFY_WORDS.sectionCaption}>
             <SettingsRow
               icon={<Bell />}
               label={NOTIFY_WORDS.rowLabel}
               value={
-                plan?.notify?.needsHome
+                canLink && plan?.notify?.needsHome
                   ? (isDeviceOn
                       ? NOTIFY_WORDS.rowOn
                       : NOTIFY_WORDS.rowOnDeviceOff)(
                       formatNotifyHour(plan.notifyHour ?? DEFAULT_NOTIFY_HOUR),
                     )
-                  : NOTIFY_WORDS.rowOff
+                  : canLink
+                    ? NOTIFY_WORDS.rowOff
+                    : freeAlertCount === 0
+                      ? ALERT_WORDS.rowEmpty
+                      : ALERT_WORDS.rowCount(freeAlertCount)
               }
               onOpen={() => openSettingsView('notifications')}
             />

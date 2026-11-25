@@ -7,7 +7,7 @@ interface AccountLike {
 
 const toBankKey = (value: string) => value.toLowerCase().replace(/\s+/g, '');
 
-/** What tells one bank account apart across sign-ins: its name and mask. Null without a mask. Kept in step with the server's copy. */
+/** What tells one bank account apart across sign-ins: its name and mask. Null without a mask. */
 export const toAccountKey = (account: AccountLike) =>
   account.mask === null || account.mask === ''
     ? null

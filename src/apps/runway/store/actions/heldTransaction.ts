@@ -13,6 +13,8 @@ import { createSealedReader } from '@lib/security';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { openJson } from '@apps/runway/security';
 import { openDay } from '@apps/runway/store/listeners/dayListeners';
+import { markLocalWrite } from '@apps/runway/store/listeners/localWriteMark';
+import { FIGURE_INPUT_COLLECTIONS } from '@apps/runway/engine/engineConstants';
 import {
   openMove,
   openPurchase,
@@ -21,6 +23,7 @@ import {
 import {
   dropWrites,
   holdWrites,
+  HELD_KINDS,
   settleWrites,
   type HeldKind,
   type HeldWritesInput,
@@ -258,10 +261,30 @@ const isWatched = (entry: Built, heldDayIds: Set<string>): boolean => {
 
 const isLanded = (token: string) => () => {
   const { held } = store.getState().runway;
-  return (['days', 'records', 'moves', 'purchases'] as HeldKind[]).every(
+  return HELD_KINDS.every(
     (kind) =>
       (held[kind] as HeldWrite<Opened>[]).every((hold) => hold.token !== token),
   );
+};
+
+const describeWaiting = (token: string) => (): string[] => {
+  const { held, deliveredAt, deliveredAtNeedsHome } = store.getState().runway;
+  return HELD_KINDS.flatMap((kind) => {
+    const holds = (held[kind] as HeldWrite<Opened>[]).filter(
+      (hold) => hold.token === token,
+    );
+    if (holds.length === 0) return [];
+    const settledAt = Math.max(
+      ...holds.map((hold) => hold.settledAt ?? Infinity),
+    );
+    const lastDelivery = Math.max(
+      deliveredAt[kind] ?? 0,
+      kind === 'purchases' ? (deliveredAtNeedsHome ?? 0) : 0,
+    );
+    return [
+      `waiting: ${kind} ×${holds.length}, ${lastDelivery >= settledAt ? 'delivered since the write' : 'nothing delivered since the write'}`,
+    ];
+  });
 };
 
 /** A Runway transaction whose moves, days and records show at once, go back if it fails, and are watched until the listeners show them. */
@@ -271,7 +294,11 @@ export async function runHeldTransaction<T>(
 ): Promise<T> {
   const token = generateUuid();
   const encryption = await getRunwayEncryption(uid).catch(() => null);
+  const touched = { figures: false };
   const hold = async (writes: RecordedWrite[]) => {
+    touched.figures = writes.some(({ segments }) =>
+      FIGURE_INPUT_COLLECTIONS.includes(segments[4] ?? ''),
+    );
     if (encryption === null) return;
     const built = await buildItems(writes, uid, token, encryption);
     if (built === null) {
@@ -301,11 +328,14 @@ export async function runHeldTransaction<T>(
   };
   try {
     const result = await runRecordedTransaction(body, hold);
+    if (touched.figures) markLocalWrite(uid);
     store.dispatch(settleWrites(token));
     void watchWriteLanded({
       feature: 'Runway',
       what: 'a change to your plan',
       hasLanded: isLanded(token),
+      recheck: () => store.dispatch(settleWrites(token)),
+      describe: describeWaiting(token),
     });
     return result;
   } catch (error) {

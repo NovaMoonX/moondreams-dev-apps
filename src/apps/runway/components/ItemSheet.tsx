@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
+  Bell,
   CalendarClock,
   CalendarPlus,
   CalendarOff,
@@ -34,6 +35,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackHeading from '@/components/BackHeading';
 import BackLink from '@/components/BackLink';
 import HomePinsList from '@apps/runway/components/HomePinsList';
 import { useHomePins } from '@apps/runway/hooks/useHomePins';
@@ -121,6 +123,7 @@ import {
   BILL_SET_ASIDE_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
+  ALERT_WORDS,
   HOME_PIN_WORDS,
   HORIZON_PLAN_WORDS,
   HORIZON_WORDS,
@@ -225,6 +228,10 @@ import {
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { isCardFeeBill, isCardFeeGroup } from '@apps/runway/engine/cardFees';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
+import AlertsPanel from '@apps/runway/components/AlertsPanel';
+import { getEachTimeCents } from '@apps/runway/engine/alerts';
+import { useAlerts } from '@apps/runway/hooks/useAlerts';
+import { getAlertsSummary } from '@apps/runway/utils/alertText';
 
 type View =
   | 'menu'
@@ -250,7 +257,8 @@ type View =
   | 'comingList'
   | 'changeSheet'
   | 'payItems'
-  | 'pins';
+  | 'pins'
+  | 'alerts';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 export interface ItemSheetProps {
@@ -359,6 +367,7 @@ const VIEW_NOTES: Record<View, string> = {
   setAside: '',
   heldIn: '',
   spill: '',
+  alerts: '',
   charge: '',
   horizonPlan: '',
   horizonLink: '',
@@ -476,8 +485,16 @@ function ItemSheet({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
-  const { isHidden } = useValuesHidden();
+  const { isHidden, isScrambled } = useValuesHidden();
   const homePins = useHomePins(today);
+  const eachTimeCents =
+    version?.kind === 'envelope' ? getEachTimeCents(version.payload) : null;
+  const alertSet = useAlerts(
+    { kind: 'envelope', itemId },
+    eachTimeCents,
+    today,
+  );
+  const isAlertsLoaded = useAppSelector((state) => state.runway.isAlertsLoaded);
   const allCards = useAppSelector(selectAllCards);
   const versions = useAppSelector((state) => state.runway.versions);
   const paid = useBillPaid({
@@ -1785,6 +1802,24 @@ function ItemSheet({
           <ActionRow
             isGrouped
             hasChevron
+            icon={<Bell />}
+            label={ALERT_WORDS.row}
+            subtitle={
+              isAlertsLoaded
+                ? mask(
+                    getAlertsSummary(
+                      alertSet.entries,
+                      alertSet.figureCents,
+                      isHidden || isScrambled,
+                    ),
+                  )
+                : undefined
+            }
+            onClick={() => goTo('alerts')}
+          />
+          <ActionRow
+            isGrouped
+            hasChevron
             icon={<Calculator />}
             label={CHECK_WORDS.open}
             subtitle={ITEM_SHEET_R2_WORDS.checkSub}
@@ -1869,18 +1904,18 @@ function ItemSheet({
 
   const browse = (
     <div className='flex flex-1 flex-col gap-4'>
-      <div className='flex items-center gap-1'>
-        <BackLink isChevronOnly onBack={() => goTo('menu')} />
-        <p className='min-w-0 text-2xl font-semibold'>
-          {view === 'balance'
+      <BackHeading
+        onBack={() => goTo('menu')}
+        title={
+          view === 'balance'
             ? GOAL_CHART_WORDS.title
             : view === 'history'
               ? ITEM_VIEW_WORDS.historyTitle
               : view === 'check'
                 ? CHECK_WORDS.title
-                : ITEM_VIEW_WORDS.purchasesTitle}
-        </p>
-      </div>
+                : ITEM_VIEW_WORDS.purchasesTitle
+        }
+      />
       {view === 'balance' && goal ? (
         <GoalBalanceView goalId={itemId} goal={goal} today={today} />
       ) : view === 'history' ? (
@@ -2026,6 +2061,15 @@ function ItemSheet({
     });
   const spillActionClass =
     "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
+  const alertsView = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackHeading onBack={() => goTo('menu')} title={ALERT_WORDS.title} />
+      <AlertsPanel
+        target={{ kind: 'envelope', itemId }}
+        eachTimeCents={eachTimeCents}
+      />
+    </div>
+  );
   const spillView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
@@ -2478,38 +2522,40 @@ function ItemSheet({
               ? chargeView
               : view === 'group'
                 ? groupView
-                : view === 'spill'
-                  ? spillView
-                  : view === 'move'
-                    ? moveView
-                    : view === 'setHeld'
-                      ? setHeldView
-                      : view === 'setAside'
-                        ? billSetAsideView
-                        : view === 'heldIn'
-                          ? heldInView
-                          : view === 'horizonPlan'
-                            ? horizonPlanView
-                            : view === 'planChoice'
-                              ? planChoiceView
-                              : view === 'comingList'
-                                ? comingListView
-                                : view === 'changeSheet' && changeSheetView
-                                  ? changeSheetView
-                                  : view === 'horizonLink' && horizonLinkView
-                                    ? horizonLinkView
-                                    : view === 'payItems' && payItemsView
-                                      ? payItemsView
-                                      : view === 'pins'
-                                        ? pinsView
-                                        : view === 'dayAction' &&
-                                            dayAction?.renderView
-                                          ? dayAction.renderView({
-                                              onBack: () => goTo('menu'),
-                                              onClose,
-                                              openChange,
-                                            })
-                                          : action
+                : view === 'alerts'
+                  ? alertsView
+                  : view === 'spill'
+                    ? spillView
+                    : view === 'move'
+                      ? moveView
+                      : view === 'setHeld'
+                        ? setHeldView
+                        : view === 'setAside'
+                          ? billSetAsideView
+                          : view === 'heldIn'
+                            ? heldInView
+                            : view === 'horizonPlan'
+                              ? horizonPlanView
+                              : view === 'planChoice'
+                                ? planChoiceView
+                                : view === 'comingList'
+                                  ? comingListView
+                                  : view === 'changeSheet' && changeSheetView
+                                    ? changeSheetView
+                                    : view === 'horizonLink' && horizonLinkView
+                                      ? horizonLinkView
+                                      : view === 'payItems' && payItemsView
+                                        ? payItemsView
+                                        : view === 'pins'
+                                          ? pinsView
+                                          : view === 'dayAction' &&
+                                              dayAction?.renderView
+                                            ? dayAction.renderView({
+                                                onBack: () => goTo('menu'),
+                                                onClose,
+                                                openChange,
+                                              })
+                                            : action
         }
       >
         {menu}

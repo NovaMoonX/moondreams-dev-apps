@@ -37,6 +37,7 @@ import type {
   MoveDoc,
   PlanDoc,
   RunwayEncryption,
+  WrittenPaidMark,
 } from '@apps/runway/types';
 
 export const moveRef = (uid: string, moveId: string) =>
@@ -263,12 +264,6 @@ const toChunks = <T>(list: readonly T[]): T[][] =>
         (index + 1) * BILLS_PER_TRANSACTION,
       ),
   );
-
-export type WrittenPaidMark = {
-  moveId: string;
-  billId: string;
-  dueOn: DateOnly;
-} & BillPaidSealed;
 
 const dayRef = (uid: string, dayId: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId);
