@@ -1,5 +1,6 @@
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import AppAskingMark from '@/components/AppAskingMark';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useWorthTheWait } from '../context/worthTheWaitContext';
@@ -136,6 +137,7 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
       hideCloseButton
       disableCloseOnOverlayClick
     >
+      <AppAskingMark scope='worth-the-wait' />
       <div className='bg-background/90 border-border bg-card relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 text-center shadow-2xl sm:p-8'>
         <div className='from-primary/20 via-primary/5 pointer-events-none absolute inset-x-0 top-0 h-44 bg-linear-to-b to-transparent' />
 

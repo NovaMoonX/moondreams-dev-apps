@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import AppAskingMark from '@/components/AppAskingMark';
 import AppEnteredMark from '@/components/AppEnteredMark';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -302,6 +303,7 @@ function AList() {
           onClose={closeOverlay}
         />
       )}
+      {isPastOfferOpen && <AppAskingMark scope='a-list' />}
       {isPastOfferOpen && overlay === null && (
         <PastMoviesOfferModal
           onSkip={() => setIsPastOfferOpen(false)}

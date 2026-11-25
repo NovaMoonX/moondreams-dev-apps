@@ -10,6 +10,7 @@ import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
+import AppAskingMark from '@/components/AppAskingMark';
 import AppEnteredMark from '@/components/AppEnteredMark';
 import AppToggle from '@/components/AppToggle';
 import LockedButton from '@/components/LockedButton';
@@ -383,6 +384,7 @@ function Waypoint() {
         onSubmit={handleSubmitJoinCode}
         onClose={() => setIsJoinCodeModalOpen(false)}
       />
+      {inviteCode && <AppAskingMark scope='waypoint' />}
       {inviteCode && (
         <JoinTripModal
           key={inviteCode}

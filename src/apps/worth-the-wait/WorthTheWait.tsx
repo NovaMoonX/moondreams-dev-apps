@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 
+import AppAskingMark from '@/components/AppAskingMark';
 import AppEnteredMark from '@/components/AppEnteredMark';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -58,6 +59,9 @@ function WorthTheWait() {
   const creatorHasPendingApproval = Boolean(
     user && space && space.createdBy === user.uid && pendingMember,
   );
+  const isPendingApprovalOpen =
+    forceOpenPendingApprovalModal ||
+    (creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed);
   const shouldOnboardingBeOpen =
     Boolean(user) && !hasSpace && !creatorHasPendingApproval;
   const {
@@ -103,13 +107,11 @@ function WorthTheWait() {
 
   return (
     <>
+      {isPendingApprovalOpen && <AppAskingMark scope='worth-the-wait' />}
       <PendingApprovalModal
         key={pendingMember?.uid ?? 'no-pending-member'}
         space={space}
-        isOpen={
-          forceOpenPendingApprovalModal ||
-          (creatorHasPendingApproval && !hasPendingApprovalModalBeenDismissed)
-        }
+        isOpen={isPendingApprovalOpen}
         pendingMember={pendingMember}
         onApprove={approvePendingMember}
         onDecline={declinePendingMember}

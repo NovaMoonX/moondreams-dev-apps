@@ -46,6 +46,12 @@ interface WhatsNewSheetProps {
   onStopFixOnly?: () => void;
 }
 
+const MARK_FILLS: Record<WhatsNewLook['markFill'], string> = {
+  accent: 'bg-accent',
+  secondary: 'bg-secondary',
+  muted: 'bg-muted',
+};
+
 function NoteMark({
   emoji,
   look,
@@ -68,14 +74,24 @@ function NoteMark({
       </span>
     );
   }
+  const corner =
+    look.mark === 'disc'
+      ? 'rounded-full'
+      : isSmall
+        ? 'rounded-lg'
+        : 'rounded-xl';
   return (
     <span
       className={join(
-        'grid shrink-0 place-items-center border leading-none',
-        emoji === null
-          ? 'border-transparent'
-          : 'border-border bg-accent [text-shadow:0_0_1.5px_rgb(0_0_0/0.55)]',
-        isSmall ? 'size-8 rounded-lg text-base' : 'size-10 rounded-xl text-lg',
+        'grid shrink-0 place-items-center leading-none',
+        corner,
+        isSmall ? 'size-8 text-base' : 'size-10 text-lg',
+        emoji !== null && MARK_FILLS[look.markFill],
+        look.isMarkEdged && 'border',
+        look.isMarkEdged &&
+          (emoji === null
+            ? 'border-transparent'
+            : 'border-border [text-shadow:0_0_1.5px_rgb(0_0_0/0.55)]'),
       )}
       aria-hidden='true'
     >
@@ -101,13 +117,17 @@ function NoteRow({
   topLine: string | null;
   onShowMe: (note: WhatsNewNote) => void;
 }) {
-  const isCard = !isCompact && look.rows === 'cards';
+  const isCard =
+    !isCompact && (look.rows === 'cards' || look.rows === 'raised');
   const isBullet = isCompact && note.kind === 'fixed';
   const shell = join(
     'flex w-full text-left',
     isBullet ? 'items-start gap-2.5' : 'items-center gap-3',
     isCard
-      ? 'border-border rounded-2xl border px-3 py-3'
+      ? join(
+          'border-border rounded-2xl border px-3 py-3',
+          look.rows === 'raised' && 'bg-card shadow-sm',
+        )
       : isCompact
         ? join('py-1.5', note.path && 'min-h-10')
         : 'min-h-12 py-2.5',
@@ -177,6 +197,13 @@ function NoteRow({
   );
 }
 
+const LIST_CLASSES: Record<WhatsNewLook['rows'], string> = {
+  raised: 'space-y-2',
+  cards: 'space-y-2',
+  boxed: 'border-border divide-border divide-y rounded-2xl border px-3',
+  list: 'divide-border divide-y',
+};
+
 function NoteList({
   notes,
   look,
@@ -191,17 +218,9 @@ function NoteList({
   onShowMe: (note: WhatsNewNote) => void;
 }) {
   const hasMark = notes.some((note) => note.emoji !== null);
-  const isCards = !isCompact && look.rows === 'cards';
+  const listClass = isCompact ? 'space-y-1' : LIST_CLASSES[look.rows];
   return (
-    <ul
-      className={
-        isCards
-          ? 'space-y-2'
-          : isCompact
-            ? 'space-y-1'
-            : 'divide-border divide-y'
-      }
-    >
+    <ul className={listClass}>
       {notes.map((note) => (
         <NoteRow
           key={note.id}
@@ -501,6 +520,7 @@ function WhatsNewSheet({
     </Button>
   ) : null;
 
+  const buttonRound = look.isPillButtons ? 'full' : undefined;
   const footer = () => {
     if (mode === 'history') {
       return (
@@ -509,6 +529,7 @@ function WhatsNewSheet({
             type='button'
             variant='secondary'
             size='lg'
+            rounded={buttonRound}
             className='w-full'
             onClick={onClose}
           >
@@ -521,7 +542,13 @@ function WhatsNewSheet({
       return (
         <div className='p-4'>
           {door}
-          <Button type='button' size='lg' className='w-full' onClick={onGotIt}>
+          <Button
+            type='button'
+            size='lg'
+            rounded={buttonRound}
+            className='w-full'
+            onClick={onGotIt}
+          >
             Got it
           </Button>
         </div>
@@ -536,13 +563,19 @@ function WhatsNewSheet({
               type='button'
               variant='secondary'
               size='lg'
+              rounded={buttonRound}
               onClick={onCollapse}
             >
               Collapse
             </Button>
           }
           rightActions={
-            <Button type='button' size='lg' onClick={onGotIt}>
+            <Button
+              type='button'
+              size='lg'
+              rounded={buttonRound}
+              onClick={onGotIt}
+            >
               Got it
             </Button>
           }

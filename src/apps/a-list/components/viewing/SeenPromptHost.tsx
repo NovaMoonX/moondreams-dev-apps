@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AppAskingMark from '@/components/AppAskingMark';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -82,6 +83,7 @@ function SeenPromptHost() {
   // The purchase question stays mounted, so its snooze and return tracking survive a seen prompt coming and going.
   return (
     <>
+      {isSeenPromptShowing && <AppAskingMark scope='a-list' />}
       {isSeenPromptShowing && current && (
         <SeenPrompt
           key={current.id}
