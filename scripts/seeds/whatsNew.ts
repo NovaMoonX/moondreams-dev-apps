@@ -117,6 +117,7 @@ const NOTES: SeedNote[] = [
     '1.168.0',
     11,
     'A started card payment also clears its move to do.',
+    { path: '/runway' },
   ),
   note(
     'runway',
@@ -124,6 +125,7 @@ const NOTES: SeedNote[] = [
     '1.163.0',
     18,
     'Dates on paychecks no longer slip a day in some time zones.',
+    { path: '/runway' },
   ),
   note(
     'runway',

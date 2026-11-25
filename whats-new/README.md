@@ -24,7 +24,7 @@ Each app shows people what changed for them after an update. A PR that changes s
 - `app`: an app id from `APP_REGISTRY`, or `"site"` for Home, the menu and the top strip.
 - `kind`: `new`, `improved` or `fixed` (fixes are rolled up when shown).
 - `text`: at most 160 characters, no trailing spaces.
-- `path`: an in-site route starting with `/` that opens the thing, only to a screen everyone with access can open; otherwise `null`.
+- `path`: an in-site route starting with `/` that opens the thing, only to a screen everyone with access can open; otherwise `null`. A fix's `path` opens only for debug viewers, so they can check the fix where it lives; everyone else just reads the line.
 - `gate`: a feature switch id from `FEATURE_GATES` that belongs to the same app, so the note is hidden from anyone the feature is closed for; otherwise `null` (always `null` for `"site"`).
 - `audience`: `everyone`, or `debug` for admin and debug-only tools.
 - `isTold`: `true` when the person would want to hear it on opening the app: something new they can do, or a change to something they already do (it moved, was renamed, works differently). `false` for a line that is only listed. Always `false` for `fixed`; a release with nothing told doesn't open the sheet by itself.

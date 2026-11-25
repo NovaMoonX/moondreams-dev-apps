@@ -31,7 +31,7 @@ interface WhatsNewSheetProps {
   isOpen: boolean;
   title: string;
   scopeName: string;
-  /** A pop-up holds what is unseen and ends in Got it; history holds everything and just closes. */
+  /** A pop-up holds what is unseen and ends in Got it; history holds everything and ends in Close. */
   mode: 'popup' | 'history';
   notes: WhatsNewNote[];
   look: WhatsNewLook;
@@ -256,7 +256,7 @@ function WhatsNewSheet({
   title,
   scopeName,
   mode,
-  notes,
+  notes: feedNotes,
   look,
   feedState = 'ready',
   onRetry,
@@ -304,6 +304,12 @@ function WhatsNewSheet({
     if (isConfirmed) onStopFixOnly?.();
   };
 
+  // Only debug viewers are taken to the screen a fix changed; everyone else reads it.
+  const notes = isDebug
+    ? feedNotes
+    : feedNotes.map((note) =>
+        note.kind === 'fixed' ? { ...note, path: null } : note,
+      );
   const rolled = rollUp(notes);
   const restCount = rolled.total - rolled.told.length;
   const isOneRelease = new Set(notes.map((note) => note.version)).size <= 1;
@@ -359,14 +365,17 @@ function WhatsNewSheet({
     </div>
   );
 
-  // Inside a month or a version, a run of fixes is labelled once rather than "Fixed" on every bullet.
+  // A run of fixes is labelled once, not "Fixed" on every bullet; a version holding only fixes needs no label.
   const fixList = (
     list: WhatsNewNote[],
     getTopLine: (note: WhatsNewNote) => string | null,
+    hasLabel: boolean,
   ) =>
     list.length === 0 ? null : (
       <div className='space-y-1'>
-        <p className='text-muted-foreground text-xs font-medium'>Fixes</p>
+        {hasLabel ? (
+          <p className='text-muted-foreground text-xs font-medium'>Fixes</p>
+        ) : null}
         <NoteList
           notes={list}
           look={look}
@@ -393,7 +402,11 @@ function WhatsNewSheet({
               onShowMe={onShowMe}
             />
           ) : null}
-          {fixList(byKind(group.notes, 'fixed'), () => null)}
+          {fixList(
+            byKind(group.notes, 'fixed'),
+            () => null,
+            !isFixOnly(group.notes),
+          )}
         </Section>
       ))}
     </div>
@@ -421,7 +434,7 @@ function WhatsNewSheet({
                 onShowMe={onShowMe}
               />
             ))}
-          {fixList(month.fixes, getVersionLine)}
+          {fixList(month.fixes, getVersionLine, true)}
         </Section>
       ))}
     </div>
@@ -505,7 +518,21 @@ function WhatsNewSheet({
   ) : null;
 
   const footer = () => {
-    if (mode === 'history') return undefined;
+    if (mode === 'history') {
+      return (
+        <div className='p-4'>
+          <Button
+            type='button'
+            variant='secondary'
+            size='lg'
+            className='w-full'
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
+      );
+    }
     if (!isDebug) {
       return (
         <div className='p-4'>
