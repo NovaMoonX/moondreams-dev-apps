@@ -60,6 +60,18 @@ export interface AppActionManifest {
   permission: string | null;
   /** The person's words for it. */
   label: string;
+  /** The id of the `tools` entry it is offered under: actions sharing a tool are its options, picked by the tool's `action` field. */
+  tool: string;
+  /** True for a change that can alter or replace what the person already has (an edit), false for one that only adds, and for a read. */
+  changesExisting: boolean;
+}
+
+/** One tool a source app offers an assistant, grouping actions of one kind whose fields agree, so an app stays a handful of tools however many actions it has. */
+export interface AssistantToolManifest {
+  /** Snake case; the tool is named `{appId}_{id}`. */
+  id: string;
+  /** A short title in the person's words, shown by assistants that list tools. */
+  title: string;
 }
 
 /** A kind of change a source app lets an assistant make, each its own switch on the connection, off until the person turns it on. */
@@ -84,6 +96,10 @@ export interface ConnectorManifest {
   never: string[];
   /** What the app offers an assistant beyond its records; `[]` for a source with none. */
   actions: AppActionManifest[];
+  /** The tools its actions are offered under; `[]` for a source with no actions. */
+  tools: AssistantToolManifest[];
+  /** The everyday words a person uses for what this source holds (for a budgeting app: spending, bills, what is left this month), so an assistant picks its tools from how they ask; `[]` for a source with no actions. */
+  askedAbout: string[];
   /** The kinds of change an assistant may be allowed to make; `[]` for a source that takes none. */
   changes: ChangePermissionManifest[];
   capabilities: { read: true; write: boolean; backgroundSync: boolean };

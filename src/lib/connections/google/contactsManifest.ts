@@ -36,6 +36,8 @@ export const GOOGLE_CONTACTS_MANIFEST: ConnectorManifest = {
     'Creating, changing or deleting contacts',
   ],
   actions: [],
+  tools: [],
+  askedAbout: [],
   changes: [],
   capabilities: { read: true, write: false, backgroundSync: false },
   connect: {

@@ -218,6 +218,8 @@ export const RUNWAY_SHARES: SourceShares = {
         'receipts and notes',
       ],
       actions: [],
+      tools: [],
+      askedAbout: [],
       changes: [],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },

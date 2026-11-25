@@ -40,6 +40,8 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
     'Creating, changing, sharing or deleting files',
   ],
   actions: [],
+  tools: [],
+  askedAbout: [],
   changes: [],
   capabilities: { read: true, write: false, backgroundSync: false },
   connect: {
