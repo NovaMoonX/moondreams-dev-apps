@@ -300,7 +300,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
             {!note && listOnly && (
               <div className='space-y-2'>
                 <p className='text-muted-foreground text-xs'>
-                  Part of the shop (optional)
+                  Part of the shop
                 </p>
                 <PillGroup
                   label='Part of the shop'
