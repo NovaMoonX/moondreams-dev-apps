@@ -87,16 +87,18 @@ function ChangeEntryView({
 
   return (
     <div className='space-y-4'>
-      <BackHeading onBack={onBack} title={heading} />
-      <div className='space-y-0.5'>
-        <p className='text-muted-foreground text-sm'>
-          {formatChangeWhen(note.createdAt)}
-        </p>
-        {note.text && (
-          <p className='text-muted-foreground text-sm wrap-break-word'>
-            Why: {note.text}
+      <div className='space-y-1'>
+        <BackHeading onBack={onBack} title={heading} />
+        <div className='space-y-0.5'>
+          <p className='text-muted-foreground text-sm'>
+            {formatChangeWhen(note.createdAt)}
           </p>
-        )}
+          {note.text && (
+            <p className='text-muted-foreground text-sm wrap-break-word'>
+              Why: {note.text}
+            </p>
+          )}
+        </div>
       </div>
       <ChangeList changes={note.changes ?? []} />
       <ActionGroup isRoomy>

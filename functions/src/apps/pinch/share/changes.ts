@@ -622,15 +622,22 @@ const toRecipeReply = (
     ...minutes('Cook time', 'cookMinutes'),
     ...(patchOf(input, 'description') ? ['Description changed'] : []),
   ];
+  const isDescriptionOn = ctx.allowedCategories.has('fullRecipes');
   const meta = ctx.allowedCategories.has('recipes')
-    ? diff(
-        Object.fromEntries(
-          META_KEYS.filter((key) => patchOf(input, key)).map((key) => [
-            key,
-            after[key],
-          ]),
+    ? [
+        ...diff(
+          Object.fromEntries(
+            META_KEYS.filter(
+              (key) =>
+                patchOf(input, key) &&
+                (key !== 'description' || isDescriptionOn),
+            ).map((key) => [key, after[key]]),
+          ),
         ),
-      )
+        ...(patchOf(input, 'description') && !isDescriptionOn
+          ? ['Description changed']
+          : []),
+      ]
     : sentMeta;
   const ingredients = !patchOf(input, 'ingredients')
     ? []
@@ -672,7 +679,7 @@ export const updateRecipe = async (
           'Ingredients and steps replace the whole list, so send basedOn: the version pinch_get_recipe returned for this recipe. Read it first, then send every line you want kept.',
         );
       }
-      if (Number(found.recipe.updatedAt) > basedOn) {
+      if (basedOn !== (readNumber(found.recipe.updatedAt) ?? 0)) {
         return refused(
           'This recipe was changed in Pinch since you read it, so nothing was written. Read it again with pinch_get_recipe and send your edit based on what it says now.',
         );
@@ -1033,7 +1040,7 @@ const resolvePlate = async (
     return {
       kind: 'refused',
       result: refused(
-        'Pinch can only place a meal by name when the person shares their recipes or saved meals with Helm. Use a recipeId, or ask the person to turn one of those on.',
+        'Pinch can only place a meal by name when this assistant may read the person\'s apps and they share their recipes or saved meals. Use a recipeId from pinch_search_recipes, or ask the person to turn on "Read your apps" for this assistant in Helm > Settings > Connected assistants.',
       ),
     };
   }

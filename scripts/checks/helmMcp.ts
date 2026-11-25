@@ -61,6 +61,7 @@ const pinchApp = {
   })),
 };
 const actionCalls: string[] = [];
+const readFlags: (boolean | undefined)[] = [];
 let nextResult: AppActionResult = {
   status: 'ok',
   data: { days: [] },
@@ -69,8 +70,12 @@ let nextResult: AppActionResult = {
 const filedChanges: { actionId: string; summary: string }[] = [];
 const appActions = {
   apps: [pinchApp],
-  run: async (_firestore: unknown, input: { actionId: string }) => {
+  run: async (
+    _firestore: unknown,
+    input: { actionId: string; canRead?: boolean },
+  ) => {
     actionCalls.push(input.actionId);
+    readFlags.push(input.canRead);
     return nextResult;
   },
 };
@@ -1131,6 +1136,38 @@ assert.match(
   /"Edit recipes" is switched off, so nothing was changed.*Helm > Connected apps > Pinch/,
 );
 assert.deepEqual(filedChanges, [], 'a change that did not happen is not filed');
+// A change from an assistant that may not read apps is told to quote nothing stored.
+nextResult = {
+  status: 'ok',
+  data: {
+    summary: 'Nothing needed changing',
+    lines: [],
+    reply: { summary: 'Nothing needed changing', lines: [] },
+    changes: [],
+  },
+  heldBack: [],
+};
+for (const [scopes, expected] of [
+  [['apps'], true],
+  [['mail'], false],
+] as const) {
+  readFlags.length = 0;
+  await changeTool('pinch_update_recipe', {
+    outsideReadScopes: [...scopes],
+    canChangeApps: true,
+  }).run({ recipeId: 'r1' } as never);
+  assert.deepEqual(readFlags, [expected]);
+}
+assert.equal(
+  (
+    (await changeTool('pinch_update_recipe', {
+      outsideReadScopes: null,
+      canChangeApps: false,
+    }).run({ recipeId: 'r1' } as never)) as Record<string, unknown>
+  ).status,
+  'assistantCannotChange',
+  'the change switch alone gates a change',
+);
 nextResult = {
   status: 'ok',
   data: {
