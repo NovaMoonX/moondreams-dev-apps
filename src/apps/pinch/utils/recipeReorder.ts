@@ -95,9 +95,7 @@ export const moveStepSection = (
   const blocks = getStepBlocks(list);
   const pinned = blocks[0]?.name === null ? 1 : 0;
   if (from < pinned || from >= blocks.length) return list;
-  const result = flattenBlocks(
-    moveWithin(blocks, from, Math.max(pinned, to)),
-  );
+  const result = flattenBlocks(moveWithin(blocks, from, Math.max(pinned, to)));
   return result;
 };
 
@@ -238,4 +236,43 @@ export const canMoveIngredientGroup = <T extends MovableLine>(
   const pinned = groups[0]?.name === null ? 1 : 0;
   const to = group + direction;
   return group >= pinned && to >= pinned && to < groups.length;
+};
+
+/** Where a moved run of items sat, by the ids around it, so an Undo reverses only that move on whatever the list has become. */
+export interface SpanAnchor {
+  ids: string[];
+  before: string | null;
+  after: string | null;
+  index: number;
+}
+
+export const getSpanAnchor = (ids: string[], spanIds: string[]): SpanAnchor => {
+  const places = spanIds.map((id) => ids.indexOf(id)).filter((at) => at >= 0);
+  const first = Math.min(...places);
+  const last = Math.max(...places);
+  return {
+    ids: spanIds,
+    before: ids[first - 1] ?? null,
+    after: ids[last + 1] ?? null,
+    index: first,
+  };
+};
+
+/** The ids with the anchor's run put back before the id that followed it, else after the one that preceded it, else at its old index; null when none of the run is left. */
+export const restoreSpanOrder = (
+  ids: string[],
+  anchor: SpanAnchor,
+): string[] | null => {
+  const present = anchor.ids.filter((id) => ids.includes(id));
+  if (present.length === 0) return null;
+  const rest = ids.filter((id) => !present.includes(id));
+  const afterAt = rest.indexOf(anchor.after ?? '');
+  const beforeAt = rest.indexOf(anchor.before ?? '');
+  const at =
+    afterAt >= 0
+      ? afterAt
+      : beforeAt >= 0
+        ? beforeAt + 1
+        : Math.min(anchor.index, rest.length);
+  return [...rest.slice(0, at), ...present, ...rest.slice(at)];
 };

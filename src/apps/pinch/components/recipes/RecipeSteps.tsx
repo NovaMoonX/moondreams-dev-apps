@@ -32,9 +32,11 @@ import {
 } from '@apps/pinch/constants';
 import {
   canMoveStepSection,
+  getSpanAnchor,
   getStepNeighbourSlot,
   moveStep,
   moveStepSection,
+  restoreSpanOrder,
   type MoveDirection,
   type ReorderSlot,
 } from '@apps/pinch/utils/recipeReorder';
@@ -305,7 +307,6 @@ const MAX_STEP_LABEL_LENGTH = 40;
 const countWords = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-/** What a one-place move does to a step: the neighbour it passes, or the section it crosses into. */
 const describeStepMove = (
   list: { steps: string[]; sections: (string | null)[] },
   index: number,
@@ -333,12 +334,14 @@ const describeStepMove = (
 };
 
 interface StepMoveChoicesProps {
+  isCompact?: boolean;
   index: number;
   describeMove: (index: number, direction: MoveDirection) => StepMove | null;
   onMove: (direction: MoveDirection) => void;
 }
 
 function StepMoveChoices({
+  isCompact,
   index,
   describeMove,
   onMove,
@@ -347,6 +350,7 @@ function StepMoveChoices({
   const down = describeMove(index, 1);
   return (
     <MoveChoices
+      isCompact={isCompact}
       itemNoun='step'
       onMoveUp={up ? () => onMove(-1) : undefined}
       onMoveDown={down ? () => onMove(1) : undefined}
@@ -357,20 +361,26 @@ function StepMoveChoices({
 }
 
 interface StepDrawerMode {
-  index: number;
+  id: string;
   isNew: boolean;
 }
 
 interface StepDrawerProps {
   steps: string[];
   sections: (string | null)[];
+  /** The step's index now; the drawer follows its step by id, so a move or an Undo never changes which step it shows. */
+  index: number;
   mode: StepDrawerMode;
   onChange: (steps: string[], sections: (string | null)[]) => void;
   onRemove: (index: number) => void;
+  /** Drops a blank step as the drawer closes. */
+  onDiscard: (index: number) => void;
+  /** Adds a step in a section and returns its id. */
+  onAppend: (section: string | null) => string;
+  onStepChange: (id: string) => void;
   /** Where a step would land one place up or down, or null at either end. */
   describeMove: (index: number, direction: MoveDirection) => StepMove | null;
-  /** Moves the step one place and returns its new index. */
-  onMove: (index: number, direction: MoveDirection) => number;
+  onMove: (index: number, direction: MoveDirection) => void;
   onClose: () => void;
 }
 
@@ -378,14 +388,17 @@ interface StepDrawerProps {
 function StepDrawer({
   steps,
   sections,
+  index,
   mode,
   onChange,
   onRemove,
+  onDiscard,
+  onAppend,
+  onStepChange,
   describeMove,
   onMove,
   onClose,
 }: StepDrawerProps) {
-  const [index, setIndex] = useState(mode.index);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const step = steps[index] ?? '';
   const isBlank = step.trim() === '';
@@ -395,15 +408,10 @@ function StepDrawer({
     if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(() => textRef.current?.focus(), 350);
     return () => window.clearTimeout(timer);
-  }, [index]);
+  }, [mode.id]);
 
-  const removeStep = () =>
-    onChange(
-      steps.filter((_, at) => at !== index),
-      sections.filter((_, at) => at !== index),
-    );
   const close = () => {
-    if (isBlank) removeStep();
+    if (isBlank) onDiscard(index);
     onClose();
   };
 
@@ -423,13 +431,7 @@ function StepDrawer({
               variant='secondary'
               className='w-full'
               disabled={isBlank}
-              onClick={() => {
-                onChange(
-                  [...steps, ''],
-                  [...sections, sections[index] ?? null],
-                );
-                setIndex(steps.length);
-              }}
+              onClick={() => onStepChange(onAppend(sections[index] ?? null))}
             >
               Add another
             </Button>
@@ -439,7 +441,7 @@ function StepDrawer({
     >
       <div className='space-y-3'>
         <Textarea
-          key={index}
+          key={mode.id}
           ref={textRef}
           rows={6}
           variant='outline'
@@ -457,7 +459,7 @@ function StepDrawer({
           }
         />
         <SectionField
-          key={`section-${index}`}
+          key={`section-${mode.id}`}
           section={sections[index] ?? null}
           names={getSectionNames(sections)}
           onChange={(section) =>
@@ -471,7 +473,7 @@ function StepDrawer({
           <StepMoveChoices
             index={index}
             describeMove={describeMove}
-            onMove={(direction) => setIndex(onMove(index, direction))}
+            onMove={(direction) => onMove(index, direction)}
           />
         )}
         {!mode.isNew && (
@@ -519,23 +521,33 @@ function RecipeSteps({
     keptIds.length === steps.length
       ? keptIds
       : steps.map((_, at) => keptIds[at] ?? `${ADDED_ID}${at}`);
+  const drawerIndex = drawer ? ids.indexOf(drawer.id) : -1;
   const toKeptId = (id: string) =>
     id.startsWith(ADDED_ID) ? generateUuid() : id;
   const keepIds = (next: string[]) => setKeptIds(next.map(toKeptId));
-  const latest = useRef({ steps, sections, onChange });
+  const latest = useRef({ steps, sections, ids, onChange });
   useEffect(() => {
-    latest.current = { steps, sections, onChange };
+    latest.current = { steps, sections, ids, onChange };
   });
 
-  const remove = (index: number) => {
-    const removed = steps[index];
-    const removedSection = sections[index];
-    const removedId = toKeptId(ids[index]);
+  const dropStep = (index: number) => {
     keepIds(ids.filter((_, at) => at !== index));
     onChange(
       steps.filter((_, at) => at !== index),
       sections.filter((_, at) => at !== index),
     );
+  };
+  const addStep = (section: string | null) => {
+    const id = generateUuid();
+    keepIds([...ids, id]);
+    onChange([...steps, ''], [...sections, section]);
+    return id;
+  };
+  const remove = (index: number) => {
+    const removed = steps[index];
+    const removedSection = sections[index];
+    const removedId = toKeptId(ids[index]);
+    dropStep(index);
     onRemoved(`Removed step ${index + 1}`, () => {
       setKeptIds((current) => [
         ...current.slice(0, index),
@@ -582,32 +594,65 @@ function RecipeSteps({
     moved: { steps: string[]; sections: (string | null)[] },
     movedIds: string[],
     message: string,
+    spanIds: string[],
+    restoredSection?: { id: string; section: string | null },
   ) => {
     const isChanged =
-      moved.steps.some((step, at) => step !== steps[at]) ||
+      movedIds.some((id, at) => id !== ids[at]) ||
       moved.sections.some((section, at) => section !== sections[at]);
     if (!isChanged) return false;
-    const before = { steps, sections, ids };
+    const anchor = getSpanAnchor(ids, spanIds);
+    const before = ids;
     keepIds(movedIds);
     onChange(moved.steps, moved.sections);
     setOpenStep((current) =>
-      current === null ? null : movedIds.indexOf(before.ids[current]),
+      current === null ? null : movedIds.indexOf(before[current]),
     );
     onRemoved(message, () => {
-      keepIds(before.ids);
-      setOpenStep(null);
-      latest.current.onChange(before.steps, before.sections);
+      const current = latest.current;
+      const order = restoreSpanOrder(current.ids, anchor);
+      if (!order) return;
+      const at = (id: string) => current.ids.indexOf(id);
+      keepIds(order);
+      current.onChange(
+        order.map((id) => current.steps[at(id)]),
+        order.map((id) =>
+          restoredSection?.id === id
+            ? restoredSection.section
+            : current.sections[at(id)],
+        ),
+      );
+      setOpenStep((open) =>
+        open === null ? null : order.indexOf(current.ids[open]),
+      );
     });
     return true;
   };
 
-  /** Returns the step's index after the move. */
+  const getMoveMessage = (
+    from: number,
+    moved: { sections: (string | null)[]; index: number },
+  ) => {
+    const oldName = sections[from];
+    const newName = moved.sections[moved.index];
+    if (getStepSectionKey(oldName) === getStepSectionKey(newName))
+      return `Moved step ${from + 1} to step ${moved.index + 1}`;
+    return newName === null
+      ? `Moved step ${moved.index + 1} out of “${oldName ?? ''}”`
+      : `Moved step ${moved.index + 1} into “${newName}”`;
+  };
+
   const moveStepTo = (index: number, slot: ReorderSlot) => {
-    const list = { steps, sections };
-    const moved = moveStep(list, index, slot);
+    const moved = moveStep({ steps, sections }, index, slot);
     const movedIds = moveStep({ steps: ids, sections }, index, slot).steps;
-    applyMove(moved, movedIds, `Moved step ${moved.index + 1}`);
-    return moved.index;
+    const isMoved = applyMove(
+      moved,
+      movedIds,
+      getMoveMessage(index, moved),
+      [ids[index]],
+      { id: ids[index], section: sections[index] },
+    );
+    return isMoved ? moved.index : index;
   };
   const moveStepBy = (index: number, direction: MoveDirection) => {
     const slot = getStepNeighbourSlot({ steps, sections }, index, direction);
@@ -620,7 +665,12 @@ function RecipeSteps({
     const list = { steps, sections };
     const moved = moveStepSection(list, from, to);
     const movedIds = moveStepSection({ steps: ids, sections }, from, to).steps;
-    applyMove(moved, movedIds, `Moved “${blocks[from].name ?? ''}”`);
+    applyMove(
+      moved,
+      movedIds,
+      `Moved “${blocks[from].name ?? ''}”`,
+      blocks[from].steps.map((step) => ids[step.index]),
+    );
   };
   const getSectionMoveSubtitle = (at: number, direction: MoveDirection) => {
     if (!canMoveStepSection({ steps, sections }, at, direction)) return null;
@@ -681,7 +731,7 @@ function RecipeSteps({
           aria-label={`Step ${index + 1}`}
           onClick={() => {
             if (isPhone) {
-              setDrawer({ index, isNew: false });
+              setDrawer({ id: ids[index], isNew: false });
               return;
             }
             setOpenStep((current) => (current === index ? null : index));
@@ -691,14 +741,16 @@ function RecipeSteps({
           <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
             {index + 1}
           </span>
-          <span
-            className={join(
-              'line-clamp-2 min-w-0 flex-1 text-sm font-normal',
-              step.trim() === '' && 'text-muted-foreground',
-            )}
-          >
-            {step.trim() === '' ? 'Write this step' : step}
-          </span>
+          {(isPhone || openStep !== index) && (
+            <span
+              className={join(
+                'line-clamp-2 min-w-0 flex-1 text-sm font-normal',
+                step.trim() === '' && 'text-muted-foreground',
+              )}
+            >
+              {step.trim() === '' ? 'Write this step' : step}
+            </span>
+          )}
         </Button>
         <Button
           type='button'
@@ -740,6 +792,7 @@ function RecipeSteps({
             }
           />
           <StepMoveChoices
+            isCompact
             index={index}
             describeMove={describeMove}
             onMove={(direction) => setOpenStep(moveStepBy(index, direction))}
@@ -755,6 +808,7 @@ function RecipeSteps({
         groups={groups}
         isPlain
         handleSide='start'
+        isHandleAtFirstLine
         handleLabel='Move step'
         groupHandleLabel='Move section'
         getItemLabel={(item) =>
@@ -780,9 +834,9 @@ function RecipeSteps({
           rounded='full'
           className='gap-1.5'
           onClick={() => {
-            onChange([...steps, ''], [...sections, sections.at(-1) ?? null]);
+            const id = addStep(sections.at(-1) ?? null);
             if (isPhone) {
-              setDrawer({ index: steps.length, isNew: true });
+              setDrawer({ id, isNew: true });
               return;
             }
             setOpenStep(steps.length);
@@ -793,13 +847,19 @@ function RecipeSteps({
         </Button>
       )}
       {footerAction}
-      {isPhone && drawer && (
+      {isPhone && drawer && drawerIndex >= 0 && (
         <StepDrawer
           steps={steps}
           sections={sections}
+          index={drawerIndex}
           mode={drawer}
           onChange={onChange}
           onRemove={remove}
+          onDiscard={dropStep}
+          onAppend={addStep}
+          onStepChange={(id) =>
+            setDrawer((current) => current && { ...current, id })
+          }
           describeMove={describeMove}
           onMove={moveStepBy}
           onClose={() => setDrawer(null)}

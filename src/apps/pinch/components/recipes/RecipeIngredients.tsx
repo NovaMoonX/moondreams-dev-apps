@@ -96,8 +96,10 @@ import {
   canMoveIngredientGroup,
   findLineSlot,
   getLineNeighbourSlot,
+  getSpanAnchor,
   moveIngredientGroup,
   moveIngredientLine,
+  restoreSpanOrder,
   type MoveDirection,
   type ReorderSlot,
 } from '@apps/pinch/utils/recipeReorder';
@@ -123,7 +125,6 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
     .filter((row) => getGroupKey(row.group) === getGroupKey(group))
     .map((row) => row.ingredientId);
 
-/** What a one-place move does to a line: the neighbour it passes, or the group it crosses into. */
 const describeLineMove = (
   rows: IngredientRow[],
   id: string,
@@ -316,6 +317,8 @@ function GroupField({ group, names, onChange }: GroupFieldProps) {
   const [newText, setNewText] = useState('');
   const [isShown, setIsShown] = useState(group !== null || names.length > 0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const isNewTyped =
+    choice === NEW_CHOICE && getGroupKey(newText) === getGroupKey(group);
 
   if (!isShown) {
     return (
@@ -339,7 +342,7 @@ function GroupField({ group, names, onChange }: GroupFieldProps) {
       <PickOrCreate
         label='Group'
         options={names.map((name) => ({ value: name, label: name }))}
-        choice={choice}
+        choice={isNewTyped ? NEW_CHOICE : (group ?? '')}
         newText={newText}
         newPillLabel='New group'
         newPlaceholder='For the sauce'
@@ -375,7 +378,6 @@ interface IngredientEditorProps {
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
   getName: (row: IngredientRow) => string;
-  /** Moves the line one place; the sheet stays open on it. */
   onMove: (slot: ReorderSlot) => void;
 }
 
@@ -569,6 +571,7 @@ function IngredientEditor({
             }}
           />
         )}
+        {moveChoices}
         <FreeLineOffer
           onClick={() =>
             onUpdate({
@@ -579,7 +582,6 @@ function IngredientEditor({
             })
           }
         />
-        {moveChoices}
         {showRemove && (
           <ActionRow
             isDestructive
@@ -791,6 +793,7 @@ function IngredientEditor({
         names={groupNames}
         onChange={(group) => onUpdate({ group })}
       />
+      {moveChoices}
       {isFree ? (
         <ActionRow
           icon={<Link2 className='h-4 w-4' />}
@@ -818,7 +821,6 @@ function IngredientEditor({
           }
         />
       )}
-      {moveChoices}
       {showRemove && (
         <ActionRow
           isDestructive
@@ -1166,24 +1168,65 @@ function RecipeIngredients({
     );
   };
 
-  const applyMove = (next: IngredientRow[], message: string) => {
+  const applyMove = (
+    next: IngredientRow[],
+    message: string,
+    spanIds: string[],
+    restoredGroup?: { id: string; group: string | null },
+  ) => {
     const before = rows;
     const isChanged = next.some(
       (row, at) => row.id !== before[at].id || row.group !== before[at].group,
     );
     if (!isChanged) return;
+    const anchor = getSpanAnchor(
+      before.map((row) => row.id),
+      spanIds,
+    );
     onChange(next);
-    onRemoved(message, () => latest.current.onChange(before));
+    onRemoved(message, () => {
+      const current = latest.current.rows;
+      const order = restoreSpanOrder(
+        current.map((row) => row.id),
+        anchor,
+      );
+      if (!order) return;
+      latest.current.onChange(
+        orderIngredientLines(
+          order.flatMap((id) => {
+            const row = current.find((candidate) => candidate.id === id);
+            if (!row) return [];
+            return [
+              restoredGroup?.id === id
+                ? { ...row, group: restoredGroup.group }
+                : row,
+            ];
+          }),
+        ),
+      );
+    });
   };
   const moveLine = (id: string, slot: ReorderSlot) => {
     const row = rows.find((candidate) => candidate.id === id);
-    if (row)
-      applyMove(moveIngredientLine(rows, id, slot), `Moved ${getName(row)}`);
+    if (!row) return;
+    const next = moveIngredientLine(rows, id, slot);
+    const landed = next.find((candidate) => candidate.id === id);
+    const name = getName(row);
+    const isNewGroup =
+      landed !== undefined &&
+      getGroupKey(landed.group) !== getGroupKey(row.group);
+    const message = !isNewGroup
+      ? `Moved ${name}`
+      : landed.group === null
+        ? `Moved ${name} out of “${cleanGroupName(row.group) ?? ''}”`
+        : `Moved ${name} into “${landed.group}”`;
+    applyMove(next, message, [id], { id, group: row.group });
   };
   const moveGroup = (from: number, to: number) =>
     applyMove(
       moveIngredientGroup(rows, from, to),
       `Moved “${groups[from]?.name ?? ''}”`,
+      groups[from]?.lines.map((line) => line.id) ?? [],
     );
   const getGroupMoveSubtitle = (at: number, direction: MoveDirection) => {
     if (!canMoveIngredientGroup(rows, at, direction)) return null;

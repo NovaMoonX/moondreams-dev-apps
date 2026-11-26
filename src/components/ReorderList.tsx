@@ -105,6 +105,8 @@ export interface ReorderListProps<T extends { id: string }> {
   isPlain?: boolean;
   /** Which edge of a row and of a movable heading carries the grip. Defaults to the end. */
   handleSide?: 'start' | 'end';
+  /** Rows start with a line of text or a 24px node: the row aligns to the top and the grip sits on that first line instead of the row's middle. */
+  isHandleAtFirstLine?: boolean;
   /** Press and hold on touch picks a row or movable heading up. A list that uses press and hold for selection passes false. */
   canLongPressDrag?: boolean;
   announcements?: Partial<ReorderAnnouncements>;
@@ -310,6 +312,7 @@ interface RowProps<T extends { id: string }> {
   isOrdered: boolean;
   isPlain: boolean;
   handleSide: 'start' | 'end';
+  isHandleAtFirstLine: boolean;
   isActive: boolean;
   isOverOtherGroup: boolean;
   itemLabel: string;
@@ -331,6 +334,7 @@ function RowInner<T extends { id: string }>({
   isOrdered,
   isPlain,
   handleSide,
+  isHandleAtFirstLine,
   isActive,
   isOverOtherGroup,
   itemLabel,
@@ -358,7 +362,7 @@ function RowInner<T extends { id: string }>({
           : `${handleLabel}, place ${place}`
       }
       aria-pressed={isActive}
-      className={GRIP_CLASS}
+      className={join(GRIP_CLASS, isHandleAtFirstLine && 'mt-1')}
       onPointerDown={(event) => onHandlePointerDown(event, item.id)}
       onKeyDown={(event) => onHandleKeyDown(event, item.id)}
       onBlur={() => onHandleBlur(item.id)}
@@ -372,7 +376,8 @@ function RowInner<T extends { id: string }>({
       ref={(el) => register(`row:${item.id}`, el)}
       data-reorder-row={item.id}
       className={join(
-        'border-border relative flex items-center gap-1 transition-transform duration-150 motion-reduce:transition-none',
+        'border-border relative flex gap-1 transition-transform duration-150 motion-reduce:transition-none',
+        isHandleAtFirstLine ? 'items-start' : 'items-center',
         !isPlain && 'border-b last:border-b-0',
         isActive &&
           'bg-background ring-border z-10 rounded-xl border-b-0 shadow-lg ring-1 transition-none select-none',
@@ -448,6 +453,7 @@ function ReorderList<T extends { id: string }>({
   groupHandleLabel = 'Move group',
   isPlain = false,
   handleSide = 'end',
+  isHandleAtFirstLine = false,
   canLongPressDrag = true,
   announcements,
   className,
@@ -1255,7 +1261,9 @@ function ReorderList<T extends { id: string }>({
                   data-reorder-head={canMove ? group.id : undefined}
                   className={join(
                     'rounded-lg transition-transform duration-150 motion-reduce:transition-none',
-                    overGroupId === group.id && 'bg-primary/10',
+                    overGroupId === group.id &&
+                      group.items.length === 0 &&
+                      'bg-primary/10',
                   )}
                 >
                   {canMove ? (
@@ -1286,6 +1294,7 @@ function ReorderList<T extends { id: string }>({
                     isOrdered={group.isOrdered}
                     isPlain={isPlain}
                     handleSide={handleSide}
+                    isHandleAtFirstLine={isHandleAtFirstLine}
                     isActive={activeId === item.id}
                     isOverOtherGroup={overGroupId !== null}
                     itemLabel={getItemLabel?.(item) ?? ''}
