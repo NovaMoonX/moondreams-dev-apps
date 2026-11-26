@@ -11,7 +11,7 @@ const LIST_MAX_PX = 240;
 const LIST_MIN_PX = 96;
 
 const FLOATING =
-  'fixed! mt-0! top-(--app-select-top)! bottom-(--app-select-bottom)! left-(--app-select-left)! right-(--app-select-right)! w-(--app-select-width)! [&_[data-scroll-area-viewport]]:max-h-(--app-select-list)!';
+  'fixed! mt-0! transition-[opacity,translate]! top-(--app-select-top)! bottom-(--app-select-bottom)! left-(--app-select-left)! right-(--app-select-right)! w-(--app-select-width)! [&_[data-scroll-area-viewport]]:max-h-(--app-select-list)!';
 
 const makesFixedBox = (style: CSSStyleDeclaration) =>
   style.transform !== 'none' ||
@@ -40,8 +40,8 @@ const findFixedBox = (node: HTMLElement) => {
     if (makesFixedBox(getComputedStyle(current))) {
       const rect = current.getBoundingClientRect();
       return new DOMRect(
-        rect.left + current.clientLeft,
-        rect.top + current.clientTop,
+        rect.left + current.clientLeft - current.scrollLeft,
+        rect.top + current.clientTop - current.scrollTop,
         current.clientWidth,
         current.clientHeight,
       );
