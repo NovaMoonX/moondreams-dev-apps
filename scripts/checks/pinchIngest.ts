@@ -21,6 +21,16 @@ import {
   type ReadFailure,
 } from '../../src/apps/pinch/utils/readFailures.ts';
 import { resolveIngredients } from '../../src/apps/pinch/utils/resolveIngredient.ts';
+import {
+  findPickedIngredient,
+  getPickKey,
+  getRememberPatch,
+  MAX_INGREDIENT_PICKS,
+} from '../../src/apps/pinch/utils/ingredientPicks.ts';
+import type {
+  IngredientPick,
+  ResolvedIngredient,
+} from '../../src/apps/pinch/types.ts';
 
 const custom = (id: string, name: string): IngredientRecord => ({
   id,
@@ -1319,4 +1329,58 @@ assert.equal(
   normalizeExtractedRecipe({ fridgeDays: 4 }, false).care?.fridgeDays,
   4,
   'keeping the source states stays when finishing is off',
+);
+
+const pickIngredients = [
+  { id: 'cat-bread-flour', name: 'Bread flour', isArchived: false },
+  { id: 'cat-cake-flour', name: 'Cake flour', isArchived: true },
+] as unknown as ResolvedIngredient[];
+const flourPick: Record<string, IngredientPick> = {
+  [getPickKey('Flour')]: {
+    name: 'Flour',
+    ingredientId: 'cat-bread-flour',
+    pickedAt: 1,
+  },
+};
+assert.equal(
+  findPickedIngredient('flour', flourPick, pickIngredients)?.id,
+  'cat-bread-flour',
+  'a pick made for "Flour" applies to a later "flour"',
+);
+assert.equal(
+  findPickedIngredient(
+    'Flour',
+    { flour: { name: 'Flour', ingredientId: 'cat-cake-flour', pickedAt: 1 } },
+    pickIngredients,
+  ),
+  null,
+  'a pick whose ingredient is archived is ignored',
+);
+const fullPicks: Record<string, IngredientPick> = Object.fromEntries(
+  Array.from({ length: MAX_INGREDIENT_PICKS }, (_, index) => [
+    `name ${index}`,
+    {
+      name: `Name ${index}`,
+      ingredientId: index === 150 ? 'gone' : 'cat-bread-flour',
+      pickedAt: index,
+    },
+  ]),
+);
+const fullPatch = getRememberPatch(
+  'Sugar',
+  'cat-bread-flour',
+  fullPicks,
+  pickIngredients,
+);
+assert.equal(
+  fullPatch?.['name 150'],
+  null,
+  'a full list forgets a pick whose ingredient is gone before the oldest',
+);
+assert.equal(fullPatch?.['name 0'], undefined, 'the oldest live pick stays');
+assert.equal(
+  normalizeExtractedRecipe({ prepMinutes: 20, estimated: ['PREP'] }, false)
+    .prepMinutes,
+  null,
+  'a time the model estimated anyway is dropped when finishing is off',
 );

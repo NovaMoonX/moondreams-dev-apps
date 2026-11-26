@@ -12,7 +12,7 @@ const toSentence = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
 
 export const FINISHING_OFF_LINE =
-  'Want only what you gave it? Turn this off in Settings.';
+  'Want only what you gave it? Turn off finishing in Settings.';
 
 /** Details shown directly under the headline up to this many; more fold behind a tap. */
 export const MAX_DIRECT_NOTICE_DETAILS = 2;

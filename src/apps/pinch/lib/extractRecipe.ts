@@ -169,9 +169,8 @@ const getResponseSchema = (isFinishing: boolean) => ({
     ),
     estimated: {
       type: SchemaType.ARRAY,
-      description: isFinishing
-        ? 'The fields you estimated rather than read from the source: PREP and COOK for a time you worked out from the method, FRIDGE, FREEZER and REHEAT for keeping details you filled in from general knowledge. A field the source states is never listed, and a field left null is never listed. Empty when everything came from the source.'
-        : 'Always an empty list.',
+      description:
+        'The fields you estimated rather than read from the source: PREP and COOK for a time you worked out from the method, FRIDGE, FREEZER and REHEAT for keeping details you filled in from general knowledge. A field the source states is never listed, and a field left null is never listed. Empty when everything came from the source.',
       items: {
         type: SchemaType.STRING,
         enum: ['PREP', 'COOK', 'FRIDGE', 'FREEZER', 'REHEAT'],
@@ -243,7 +242,7 @@ const STRICT_PROMPT = `Read only what the source gives. Do not finish the recipe
 - Steps, times, temperatures and storage are only as the source gives them. Add no step beyond splitting a step the source packs together into one action each: no preheat, prep or joining step the source doesn't have.
 - When the source gives no prep or cook time, prepMinutes and cookMinutes are null.
 - When the source says nothing about keeping, fridgeDays, freezerDays and reheat are null.
-- "estimated" is an empty list.
+- If you fill in any time or keeping detail the source doesn't give anyway, list it in "estimated" so it can be removed.
 - Never add a cue, a time, a temperature or an ingredient the source doesn't give.
 - "finished" is an empty list.`;
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import GatesClosedNote from '@/components/GatesClosedNote';
 import IntroCard from '@/components/IntroCard';
@@ -15,6 +15,7 @@ import StartTabRow from '@apps/pinch/components/settings/StartTabRow';
 import PicksRow from '@apps/pinch/components/settings/PicksRow';
 import UnitsRow from '@apps/pinch/components/settings/UnitsRow';
 import SharedLinksSection from '@apps/pinch/components/settings/SharedLinksSection';
+import type { IngredientPick } from '@apps/pinch/types';
 import {
   selectPinchSettings,
   selectPinchSettingsLoadError,
@@ -27,10 +28,14 @@ interface SettingsScreenProps {
 /** The choices that reach every tab. A group whose document couldn't be read draws nothing to change, since its switches would show the defaults as the person's choices; the other groups read other documents and stay. */
 function SettingsScreen({ uid }: SettingsScreenProps) {
   const loadError = useAppSelector(selectPinchSettingsLoadError);
-  const hasPicks = useAppSelector(
+  const [forgottenPicks, setForgottenPicks] = useState<
+    Record<string, IngredientPick>
+  >({});
+  const hasStoredPicks = useAppSelector(
     (state) =>
       Object.keys(selectPinchSettings(state).ingredientPicks).length > 0,
   );
+  const hasPicks = hasStoredPicks || Object.keys(forgottenPicks).length > 0;
   const screenRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -57,7 +62,12 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
               <UnitsRow uid={uid} position={hasPicks ? 'middle' : 'last'} />
             )}
             {loadError === null && hasPicks && (
-              <PicksRow uid={uid} position='last' />
+              <PicksRow
+                uid={uid}
+                position='last'
+                forgotten={forgottenPicks}
+                onForgottenChange={setForgottenPicks}
+              />
             )}
           </SettingsGroup>
           {loadError !== null ? (

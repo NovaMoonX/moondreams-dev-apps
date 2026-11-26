@@ -64,7 +64,7 @@ assert.deepEqual(finished.details, [
 assert.ok(finished.details.length <= MAX_DIRECT_NOTICE_DETAILS);
 assert.equal(
   finished.footer,
-  'Want only what you gave it? Turn this off in Settings.',
+  'Want only what you gave it? Turn off finishing in Settings.',
 );
 assert.equal(plain.footer, null);
 assert.equal(four.footer, null);
