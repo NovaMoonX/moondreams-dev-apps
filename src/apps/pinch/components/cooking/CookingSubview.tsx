@@ -1131,7 +1131,10 @@ function CookingSession({
 
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
-      if (direction === -1) setIsFinished(false);
+      if (direction === -1) {
+        finishTiming.current = null;
+        setIsFinished(false);
+      }
       return;
     }
     const next = index + direction;
@@ -1542,6 +1545,7 @@ function CookingSession({
       );
       setUndoState(null);
     } catch (error) {
+      ids.forEach((id) => undoneIds.current.delete(id));
       setUndoState('FAILED');
       setMarkError(
         `Couldn't undo that. ${getErrorMessage(error, 'You can delete it from the cooking history.')}`,
