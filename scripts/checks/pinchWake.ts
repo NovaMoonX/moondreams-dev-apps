@@ -95,6 +95,12 @@ const wakes: [string, string][] = [
   ['ok, hey pepper, repeat that', 'repeat that'],
   ['hey pepper pepper', 'pepper'],
   ['hey pepper pinch of salt?', 'pinch of salt'],
+  ['Oh, Pepper, I can\'t recall the ingredients. Can you remind me?', 'i cant recall the ingredients can you remind me'],
+  ['okay pepper', ''],
+  ['ok, pepper, next', 'next'],
+  ['hi pepper', ''],
+  ['Hello Pepper, how long do I boil it?', 'how long do i boil it'],
+  ['yo pepper', ''],
 ];
 wakes.forEach(([heard, expected]) =>
   assert.equal(
@@ -114,9 +120,9 @@ const notWakes = [
   'peppers',
   'hey peppers',
   'hey peppers mill',
-  'okay pepper',
-  'ok, pepper, next',
   'yes pepper',
+  'oh peppers',
+  'hello peppermint',
   'hey',
   'hey there',
   'hey chap',
@@ -129,7 +135,6 @@ const notWakes = [
   'line it with paper',
   'say hey paper',
   'hey peppered it',
-  'hi pepper',
   'they pepper',
   'hay fever',
   'say hey pepper',

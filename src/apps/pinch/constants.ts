@@ -947,7 +947,7 @@ export const toPepperLook = (value: unknown): PepperLook =>
   PEPPER_LOOKS.find((look) => look.value === value)?.value ??
   DEFAULT_PEPPER_LOOK;
 
-/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text and in one place. Matching is only at the start of what was heard, so a step that says "pepper" or "a pepper mill" never wakes it. */
+/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it and the other greetings people use for a name ("oh Pepper", "okay Pepper"), in plain text and in one place. Matching is only at the start of what was heard, so a step that says "pepper" or "a pepper mill" never wakes it. */
 export const COOK_WAKE_PHRASE = 'Hey Pepper';
 export const COOK_WAKE_SPELLINGS = [
   'hey pepper',
@@ -960,6 +960,12 @@ export const COOK_WAKE_SPELLINGS = [
   'hey papper',
   'hey peppa',
   'hey pepa',
+  'oh pepper',
+  'okay pepper',
+  'ok pepper',
+  'hi pepper',
+  'hello pepper',
+  'yo pepper',
 ];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;
