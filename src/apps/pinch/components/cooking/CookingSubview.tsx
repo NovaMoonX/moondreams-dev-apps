@@ -235,8 +235,30 @@ import {
   isGatherLineOut,
   parseGatherLayout,
   planGatherTick,
+  planGroupTick,
   type GatherLayout,
 } from '@apps/pinch/utils/cookGather';
+
+/** The scrolled box the person is most likely reading inside `root`: the one that can scroll and shows the most of itself on screen. */
+const findScrollable = (root: HTMLElement) => {
+  const viewHeight = window.innerHeight;
+  const ranked = [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]
+    .filter(
+      (element) =>
+        element.scrollHeight > element.clientHeight + 1 &&
+        /auto|scroll/.test(getComputedStyle(element).overflowY),
+    )
+    .map((element) => {
+      const box = element.getBoundingClientRect();
+      const shown =
+        Math.max(0, Math.min(box.bottom, viewHeight) - Math.max(box.top, 0)) *
+        box.width;
+      return { element, shown };
+    })
+    .filter(({ shown }) => shown > 0)
+    .sort((a, b) => b.shown - a.shown);
+  return ranked.length > 0 ? ranked[0].element : null;
+};
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 interface ChangeTarget {
@@ -1133,13 +1155,24 @@ function CookingSession({
 
   /** The open step panel's body when it has more than fits, else the subview's own scroller. */
   const getScrollTarget = () => {
+    const root = rootRef.current;
+    const sheets = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="dialog"]'),
+    ).filter((dialog) => root === null || !dialog.contains(root));
+    const sheet = sheets.length > 0 ? sheets[sheets.length - 1] : null;
+    const inSheet = sheet === null ? null : findScrollable(sheet);
+    if (inSheet !== null) return inSheet;
     const panel = document.querySelector<HTMLElement>(
       '#cook-step-panel [data-cook-scroll]',
     );
-    return panel !== null && panel.scrollHeight > panel.clientHeight + 1
-      ? panel
-      : (rootRef.current?.closest<HTMLElement>('[data-subview-scroller]') ??
-          null);
+    if (panel !== null && panel.scrollHeight > panel.clientHeight + 1) {
+      return panel;
+    }
+    return (
+      (root === null ? null : findScrollable(root)) ??
+      root?.closest<HTMLElement>('[data-subview-scroller]') ??
+      null
+    );
   };
   const getScrollTop = (target: HTMLElement, to: CookScrollTo) => {
     const max = target.scrollHeight - target.clientHeight;
@@ -2869,6 +2902,17 @@ function CookingSession({
       );
       return done(plan.show, plan.speak);
     },
+    gotGroup: (group, isOut) => {
+      if (!isGatherView) {
+        return refuse('Ticking is on the “Get your ingredients out” screen.');
+      }
+      const plan = planGroupTick(group, getGatherDishes(), isOut);
+      if (!plan.ok) return refuse(plan.show, plan.speak);
+      plan.sources.forEach(({ recipeId, lineId }) =>
+        toggleGotOutFor(recipeId, lineId, isOut),
+      );
+      return done(plan.show, plan.speak);
+    },
     markAdded: (queries, isAdded) => {
       if (!isOnStep || isWide) {
         return refuse('Go to a step to mark what you added.');
@@ -3201,6 +3245,11 @@ function CookingSession({
     uid,
     runCook: runCookForPepper,
     getTickChanges,
+    getGroupTickChanges: (group, isOut) => {
+      if (!isGatherView) return [];
+      const plan = planGroupTick(group, getGatherDishes(), isOut);
+      return plan.ok ? plan.sources : [];
+    },
     setTicks: (lines, isOut) =>
       lines.forEach(({ recipeId, lineId }) =>
         toggleGotOutFor(recipeId, lineId, isOut),
@@ -3381,6 +3430,7 @@ function CookingSession({
               name: row.name,
               amountText: row.amountText,
               isOut: dish.gotOut[row.id] === true,
+              group: row.group,
             })),
           }))
         : null,
@@ -3402,6 +3452,17 @@ function CookingSession({
           };
         }),
       lookedUp: lookup?.found ?? null,
+      tools:
+        isGatherView || view === 'ingredients'
+          ? describeGatherTools(
+              getGatherTools(
+                isGatherView
+                  ? getGatherDishes().flatMap((dish) => dish.rows)
+                  : rows,
+                units,
+              ),
+            ).show
+          : null,
       gatherLayout: getPepperGatherLayout(),
     });
     void pepper.ask({

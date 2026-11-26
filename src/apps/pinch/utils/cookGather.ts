@@ -219,6 +219,102 @@ export const planGatherTick = (
   );
 };
 
+interface GatherGroup {
+  key: string;
+  label: string;
+  rows: { recipeId: string; lineId: string; isOut: boolean }[];
+}
+
+const groupMatcher = createOptionMatcher<GatherGroup>({
+  names: (group) => [group.label],
+  foldPlurals: true,
+  ignoreWords: new Set(['for', 'the', 'a', 'of', 'everything', 'all']),
+});
+
+/** The parts a person can name on the gather screen: each ingredient group of each dish, and on a plate each dish as a whole. */
+export const getGatherGroups = (dishes: GatherDish[]): GatherGroup[] => {
+  const isPlate = dishes.length > 1;
+  return dishes.flatMap((dish) => {
+    const toRow = (row: GatherRow) => ({
+      recipeId: dish.recipe.id,
+      lineId: row.id,
+      isOut: dish.gotOut[row.id] === true,
+    });
+    const parts = Array.from(
+      new Set(
+        dish.rows.flatMap((row) => (row.group === null ? [] : [row.group])),
+      ),
+    ).map((group) => ({
+      key: `${dish.recipe.id}:${group}`,
+      label: group.replace(/^for\s+(the\s+)?/i, ''),
+      rows: dish.rows.filter((row) => row.group === group).map(toRow),
+    }));
+    return isPlate
+      ? [
+          {
+            key: dish.recipe.id,
+            label: dish.recipe.title,
+            rows: dish.rows.map(toRow),
+          },
+          ...parts,
+        ]
+      : parts;
+  });
+};
+
+/** "I've got everything for the cornbread": ticks or unticks every line of one named part or dish, and says what changed. */
+export const planGroupTick = (
+  query: string,
+  dishes: GatherDish[],
+  isOut: boolean,
+): GatherAnswer => {
+  const groups = getGatherGroups(dishes);
+  if (groups.length === 0) {
+    return say(false, "This recipe isn't split into parts.");
+  }
+  const group = groupMatcher.match(
+    query.replace(/^for\s+(the\s+)?/i, ''),
+    groups,
+  );
+  if (group === null) {
+    return say(
+      false,
+      `No part called ${query}. The parts are ${LIST.format(groups.map((each) => lowerFirst(each.label)))}.`,
+    );
+  }
+  const changing = group.rows.filter((row) => row.isOut !== isOut);
+  const name = lowerFirst(group.label);
+  if (changing.length === 0) {
+    return say(
+      false,
+      isOut
+        ? `Everything for ${name} is already ticked.`
+        : `Nothing for ${name} is ticked.`,
+    );
+  }
+  const changedKeys = new Set(
+    changing.map((row) => `${row.recipeId}:${row.lineId}`),
+  );
+  const left = dishes
+    .flatMap((dish) =>
+      dish.rows.map((row) => ({
+        key: `${dish.recipe.id}:${row.id}`,
+        isOut: dish.gotOut[row.id] === true,
+      })),
+    )
+    .filter((row) => !row.isOut && !changedKeys.has(row.key)).length;
+  const text = !isOut
+    ? `Unticked everything for ${name}.`
+    : left === 0
+      ? "That's everything. Say start cooking when you're ready."
+      : `Ticked everything for ${name}. ${left} left.`;
+  return say(
+    true,
+    text,
+    changing.map(({ recipeId, lineId }) => ({ recipeId, lineId })),
+  );
+};
+
 const MAX_LEFT_SPOKEN = 8;
 
 const toGroupLabel = (group: string) => {
