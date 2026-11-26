@@ -913,29 +913,58 @@ html[data-pressing] * {
 
 @keyframes ai-change-in {
   from {
-    background-color: color-mix(in oklab, var(--ai-mark) 26%, transparent);
+    box-shadow:
+      inset 0 0 0 100vmax color-mix(in oklab, var(--ai-mark) 16%, transparent),
+      var(--ai-glow);
   }
   to {
-    background-color: color-mix(in oklab, var(--ai-mark) 11%, transparent);
+    box-shadow:
+      inset 0 0 0 100vmax transparent,
+      var(--ai-glow);
   }
 }
 
 .ai-changed {
+  /* Declared here, not on :root, so it follows the --ai-mark an app sets on its own scope. */
+  --ai-mark-end: color-mix(in oklab, var(--ai-mark) 55%, #8b5cf6);
+  --ai-glow: 0 4px 14px -6px color-mix(in oklab, var(--ai-mark-end) 45%, transparent);
   position: relative;
-  background-color: color-mix(in oklab, var(--ai-mark) 11%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ai-mark) 30%, transparent);
+  box-shadow: var(--ai-glow);
+  padding-inline-end: 1.75rem;
+  background-image: linear-gradient(
+    120deg,
+    color-mix(in oklab, var(--ai-mark) 10%, transparent),
+    color-mix(in oklab, var(--ai-mark-end) 12%, transparent)
+  );
   animation: ai-change-in 600ms ease-out;
+}
+
+.ai-changed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    120deg,
+    color-mix(in oklab, var(--ai-mark) 55%, transparent),
+    color-mix(in oklab, var(--ai-mark-end) 65%, transparent)
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
 }
 
 .ai-changed::before {
   content: '';
   position: absolute;
-  top: -6px;
-  inset-inline-start: -6px;
+  top: 8px;
+  inset-inline-end: 8px;
   z-index: 1;
   width: 14px;
   height: 14px;
-  background-color: var(--ai-mark);
+  background: linear-gradient(135deg, var(--ai-mark), var(--ai-mark-end));
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10 2.5l1.9 6.1 6.1 1.9-6.1 1.9L10 18.5l-1.9-6.1L2 10.5l6.1-1.9z'/%3E%3Cpath d='M19 13.5l.95 2.55 2.55.95-2.55.95L19 20.5l-.95-2.55-2.55-.95 2.55-.95z'/%3E%3C/svg%3E")
     center / contain no-repeat;
   pointer-events: none;

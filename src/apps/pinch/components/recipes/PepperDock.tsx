@@ -12,6 +12,7 @@ import { httpsCallable } from 'firebase/functions';
 import AssistantOrb from '@/components/AssistantOrb';
 import DebugDetails from '@/components/DebugDetails';
 import DictationField from '@/components/DictationField';
+import HelpTip from '@/components/HelpTip';
 import MicrophoneAccess from '@/components/MicrophoneAccess';
 import { appendDictated, useDictation } from '@/hooks/useDictation';
 import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
@@ -234,12 +235,27 @@ function PepperDock({
         </div>
       )}
       {rounds === 0 && failure === null && !isVoiceShown && (
-        <p className='text-muted-foreground px-3 text-xs'>
-          Your recipe and request go to Claude, which may search the web to find
-          a link. Nothing is saved until you press Save.
-          {dictation.canListen &&
-            " What you say goes to Deepgram to be turned into words, or to your browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models."}
-        </p>
+        <HelpTip
+          title='What Pepper sees'
+          infoLabel='Uses Claude and may search the web'
+          className='ml-3 flex w-fit'
+        >
+          <div className='space-y-3'>
+            <p>
+              Your recipe and what you ask go to Claude, which may search the
+              web to find a link.
+            </p>
+            {dictation.canListen && (
+              <p>
+                What you say goes to Deepgram to be turned into words, or to
+                your browser&rsquo;s own listening when that&rsquo;s slow.
+                Deepgram doesn&rsquo;t keep the sound or use it to train its
+                models.
+              </p>
+            )}
+            <p>Nothing is saved until you press Save.</p>
+          </div>
+        </HelpTip>
       )}
     </div>
   );

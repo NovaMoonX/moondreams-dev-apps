@@ -18,7 +18,7 @@ Pepper changes a recipe on request. The owner first held links out (an assistant
 - A link is kept only if the search returned it (a server allowlist of the recipe's own links, the pages the search found and any the person typed); the rest are dropped on the server and counted, and Pepper's line says how many.
 - On the device a found link is also dropped when its page is clearly gone (`fetchPageContent` says 404, 410 or an unknown host), never for a timeout or a block, and the line says so.
 - A round that searched shows up to three of its sources in the change summary (`SearchSourcesNote`).
-- The disclosure line before the first ask says Pepper may search the web.
+- The info line under the box before the first ask says Pepper may search the web; its sheet holds the rest of the disclosure.
 
 ## Why
 

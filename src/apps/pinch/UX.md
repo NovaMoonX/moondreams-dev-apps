@@ -1961,7 +1961,7 @@ flowchart LR
     A2["Recipe form of a saved recipe, opened any other way"] --> B
     B --> C["Type and send, or tap the mic and talk · Pepper's face while it listens and works"]
     C --> D["Form scrolls to the first change · above the box: its one line · Took out: cream"]
-    D --> E["Changed rows tinted with a hairline and a corner sparkle · 2 changes to see ↑ ↓ Undo"]
+    D --> E["Changed rows with a soft gradient frame and a sparkle inside the corner · 2 changes to see ↑ ↓ Undo"]
     E --> C
     D -->|Undo| B
     E --> F["Save · reason prefilled 'Asked Pepper: …' on a cooked recipe"]
