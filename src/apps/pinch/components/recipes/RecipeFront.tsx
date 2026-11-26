@@ -3,6 +3,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
+import DebugDetails from '@/components/DebugDetails';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import LabelChip from '@/components/LabelChip';
@@ -62,9 +64,54 @@ import {
   getAmountWords,
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
-import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
+import {
+  getHowToLink,
+  getInlineVideo,
+  getRecipeLinks,
+} from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 import { getStepSections } from '@apps/pinch/utils/stepSections';
+
+const toDebugTime = (time: unknown) =>
+  typeof time === 'number' && Number.isFinite(time)
+    ? new Date(time).toISOString()
+    : String(time);
+
+function LinksDebug({ recipe }: { recipe: Recipe }) {
+  const canSee = useCanSeeDebugDetails();
+  if (!canSee) return null;
+
+  const links = getRecipeLinks(recipe);
+  const howTo = getHowToLink(links);
+  const video = howTo === null ? null : getInlineVideo(howTo.url);
+  const stored: unknown = recipe.links;
+  const entries: unknown[] = Array.isArray(stored) ? stored : [];
+  const howToCount = entries.filter(
+    (entry) =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      (entry as { kind?: unknown }).kind === 'HOW_TO',
+  ).length;
+  return (
+    <DebugDetails
+      title='Link details'
+      message={`Playing: ${video?.src ?? 'no video'}`}
+      facts={[
+        `How-to link: ${howTo?.url ?? 'none'}`,
+        `How-to label: ${howTo?.label ?? 'none'}`,
+        `Picture: ${video?.thumbnailUrl ?? 'none'}`,
+        `Recipe: ${recipe.id}`,
+        `Saved at: ${toDebugTime(recipe.updatedAt)}`,
+        `Stored links: ${Array.isArray(stored) ? `${links.length} kept of ${entries.length}` : 'no list'}`,
+        `Stored how-to entries: ${howToCount}`,
+      ]}
+      trace={{
+        label: 'Stored links',
+        text: JSON.stringify(stored ?? null, null, 2),
+      }}
+    />
+  );
+}
 
 const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NO_PRODUCT') return 'No price yet';
@@ -257,7 +304,12 @@ function RecipeFront({
         )}
       </div>
     ) : null;
-  const linksSection = <RecipeLinksSection links={links} />;
+  const linksSection = (
+    <>
+      <RecipeLinksSection links={links} />
+      {recipe.links !== undefined && <LinksDebug recipe={recipe} />}
+    </>
+  );
 
   return (
     <div className='space-y-5'>
