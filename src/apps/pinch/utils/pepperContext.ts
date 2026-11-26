@@ -133,8 +133,12 @@ export interface PepperScreenInput {
         lines: { name: string; amountText: string; isOut: boolean }[];
       }[]
     | null;
+  /** How the gather screen lists them now, when it can list them both ways: grouped (by part, or by dish on a plate) or all together; null when there is only one way. */
+  gatherLayout?: { isTogether: boolean; groupWord: 'part' | 'dish' } | null;
   /** The shown recipe's tips, notes and changes. */
   entries: PepperEntryInput[];
+  /** What the app's own reading of this question found and showed (an amount, a conversion, a time left), exact and already scaled; null when it found nothing or the words weren't one of its questions. */
+  lookedUp?: string | null;
 }
 
 interface Block {
@@ -208,6 +212,18 @@ export const buildPepperScreen = (input: PepperScreenInput) => {
       ? []
       : [
           `Step ${input.step.number} of ${input.step.count}${input.step.section === null ? '' : ` (${plain(input.step.section)})`}: ${clip(plain(input.step.text), MAX_STEP_TEXT)}`,
+        ]),
+    ...(input.lookedUp === undefined || input.lookedUp === null
+      ? []
+      : [
+          `Just looked up for this question: ${clip(plain(input.lookedUp), MAX_STEP_TEXT)}`,
+        ]),
+    ...(input.gatherLayout === undefined || input.gatherLayout === null
+      ? []
+      : [
+          input.gatherLayout.isTogether
+            ? `Listed all together; they can also be listed by ${input.gatherLayout.groupWord}.`
+            : `Listed by ${input.gatherLayout.groupWord}; they can also be listed all together.`,
         ]),
     ...(input.isAddOffered
       ? [

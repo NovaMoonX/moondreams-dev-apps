@@ -54,6 +54,7 @@ import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
 import type { DockView } from '@apps/pinch/components/cooking/CookStepDock';
 import { useLastTimeNote } from '@apps/pinch/hooks/useLastTimeNote';
 import CookDictationCard from '@apps/pinch/components/cooking/CookDictationCard';
+import CookPepperAnswer from '@apps/pinch/components/cooking/CookPepperAnswer';
 import CookStopwatch from '@apps/pinch/components/cooking/CookStopwatch';
 import CookStepView, {
   type StepTimerSlot,
@@ -205,6 +206,7 @@ import {
   getStepSectionPlace,
   getStepSections,
 } from '@apps/pinch/utils/stepSections';
+import { toSpokenStep } from '@apps/pinch/utils/spokenStep';
 import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 import {
   isPouredIngredient,
@@ -250,6 +252,18 @@ const NO_ARG: TimerArg = { ms: 0, name: '' };
 const NO_RECIPE_NOTES: RecipeNote[] = [];
 /** How long "undo that" can take back what was just dictated. */
 const UNDO_DICTATION_MS = 60_000;
+// A turn that changed the screen already shows its result there, so only a longer reply is worth holding.
+const HELD_ACTION_REPLY_CHARS = 120;
+
+interface HeldAnswer {
+  turnKey: number;
+  /** The recipe and step it was asked on. */
+  place: string;
+  heard: string;
+  text: string;
+  isSearching: boolean;
+  hasAction: boolean;
+}
 /** What the mic still does while a tip, note or change is being typed: only the ways out and the timers. */
 const VOICE_WHILE_WRITING = new Set<CookActionCommand['kind']>([
   'PAUSE_TIMER',
@@ -488,6 +502,7 @@ function CookingSession({
     EMPTY_KITCHEN_TIMER_DRAFT,
   );
   const [pending, setPending] = useState<PendingQuestion | null>(null);
+  const [heldAnswer, setHeldAnswer] = useState<HeldAnswer | null>(null);
   const [saved, setSaved] = useState<{
     id: string;
     word: string;
@@ -938,8 +953,16 @@ function CookingSession({
     getStepSections(recipe),
     index,
   );
-  const spokenSection = stepPlace?.position === 1 ? `${stepPlace.name}. ` : '';
-  const spokenStep = `${isPlate ? `${recipe.title}. ` : ''}${spokenSection}Step ${index + 1} of ${recipe.steps.length}. ${stepText}`;
+  const spokenStep = toSpokenStep({
+    number: index + 1,
+    count: recipe.steps.length,
+    text: stepText,
+    section:
+      stepPlace === null
+        ? null
+        : { name: stepPlace.name, isStart: stepPlace.position === 1 },
+    dishTitle: isPlate ? recipe.title : null,
+  });
   /** The tips, planned changes and notes for a step (the whole recipe's too on the first); the note the first step leads with is left out unless asked for, since its card is on screen. */
   const getEntriesAt = (target: Recipe, at: number, withLastTime: boolean) => {
     const all = notesByRecipe.get(target.id) ?? NO_RECIPE_NOTES;
@@ -1771,7 +1794,13 @@ function CookingSession({
       : { recipe, stepNumber: index + 1, text: stepText };
   const spokenShownStep =
     focused !== null && focusedEntry !== null
-      ? `${isPlate ? `${focusedEntry.recipe.title}. ` : ''}Step ${focusedIndex + 1} of ${focusedSteps.length}. ${focusedStepText}`
+      ? toSpokenStep({
+          number: focusedIndex + 1,
+          count: focusedSteps.length,
+          text: focusedStepText,
+          section: null,
+          dishTitle: isPlate ? focusedEntry.recipe.title : null,
+        })
       : spokenStep;
   const getVoiceTimers = () =>
     withTimeLeft(timers.timers, getRemainingMs).map((timer) => ({
@@ -2577,7 +2606,11 @@ function CookingSession({
       return done('Last time', text);
     },
     closeEntries: () => {
-      if (shownView === null) return refuse('Nothing is open.');
+      if (shownView === null) {
+        if (shownAnswer === null) return refuse('Nothing is open.');
+        setHeldAnswer(null);
+        return done('Closed');
+      }
       showDockView(null);
       return done('Closed');
     },
@@ -2958,6 +2991,39 @@ function CookingSession({
     return null;
   };
   const dictationCard = getDictationCard();
+  /** The answer Pepper holds for the step on screen, until it is dismissed, another question replaces it or the step changes; a short reply to a turn that already changed the screen isn't held. */
+  const getShownAnswer = () => {
+    if (heldAnswer === null || !isOnStep || heldAnswer.place !== dockKey) {
+      return null;
+    }
+    if (heldAnswer.text.trim() === '' && !heldAnswer.isSearching) return null;
+    if (
+      heldAnswer.hasAction &&
+      heldAnswer.text.length < HELD_ACTION_REPLY_CHARS
+    ) {
+      return null;
+    }
+    return heldAnswer;
+  };
+  const shownAnswer = getShownAnswer();
+  const getStepCards = () =>
+    shownAnswer === null ? (
+      dictationCard
+    ) : (
+      <>
+        {dictationCard}
+        <CookPepperAnswer
+          heard={shownAnswer.heard}
+          text={shownAnswer.text}
+          isSearching={shownAnswer.isSearching}
+          onReadAloud={() => {
+            pepper.cancel();
+            void voice.speakInOrder(shownAnswer.text, { canAnswer: false });
+          }}
+          onDismiss={() => setHeldAnswer(null)}
+        />
+      </>
+    );
   const voiceContext = {
     recipes: entries.map((candidate) => ({
       id: candidate.recipe.id,
@@ -3078,10 +3144,36 @@ function CookingSession({
     isDishAmbiguous: isGatherView && isPlate,
   });
   const isPepperOn = useIsGateOpen('pinch', 'pepper');
+  // A question the app already answered says that answer itself when Pepper can't.
+  const pepperFallback = useRef<string | null>(null);
   useTurnLogRecording();
+  const pepperAsked = useRef<{ turnKey: number; place: string; heard: string }>(
+    { turnKey: 0, place: '', heard: '' },
+  );
   const pepper = usePepper({
     speak: (text, { canAnswer }) => voice.speakInOrder(text, { canAnswer }),
+    onStart: ({ turnKey, heard }) => {
+      pepperAsked.current = { turnKey, place: dockKey, heard };
+    },
+    onText: ({ turnKey, text, isSearching }) => {
+      const asked = pepperAsked.current;
+      if (asked.turnKey !== turnKey) return;
+      setHeldAnswer((current) => ({
+        turnKey,
+        place: asked.place,
+        heard: asked.heard,
+        text,
+        isSearching,
+        hasAction: current?.turnKey === turnKey && current.hasAction,
+      }));
+    },
     onAction: (action) => {
+      const askedKey = pepperAsked.current.turnKey;
+      setHeldAnswer((current) =>
+        current?.turnKey === askedKey
+          ? { ...current, hasAction: true }
+          : current,
+      );
       const result = pepperActions.run(action);
       if (result.isEnding === true) voice.endAfterReply();
       if (result.said === undefined) return;
@@ -3093,7 +3185,15 @@ function CookingSession({
       if (TICK_OFFER_WORDS.test(text)) isAddOfferMade.current = true;
     },
     onProblem: (held) => {
-      void voice.speakInOrder(getPepperProblemLine(held), {
+      const askedKey = pepperAsked.current.turnKey;
+      setHeldAnswer((current) =>
+        current?.turnKey === askedKey && current.text.trim() === ''
+          ? null
+          : current,
+      );
+      const fallback = pepperFallback.current;
+      pepperFallback.current = null;
+      void voice.speakInOrder(fallback ?? getPepperProblemLine(held), {
         canAnswer: false,
       });
     },
@@ -3108,7 +3208,20 @@ function CookingSession({
     if (isTimersView || focused !== null) return 'timers';
     return view === 'ingredients' && !isWide ? 'ingredients' : 'steps';
   };
-  const askPepper = (heard: string, alternatives: string[]) => {
+  const getPepperGatherLayout = () => {
+    if (!isGatherView) return null;
+    const dishes = getGatherDishes();
+    if (!canCombineGather(dishes)) return null;
+    return {
+      isTogether: getGatherLayout(storedGatherLayout, dishes) === 'ALL',
+      groupWord: isPlate ? ('dish' as const) : ('part' as const),
+    };
+  };
+  const askPepper: CookPepperRoute['ask'] = (heard, alternatives, lookup) => {
+    pepperFallback.current =
+      lookup === undefined || lookup.fallback.trim() === ''
+        ? null
+        : lookup.fallback;
     const pepperView = getPepperView();
     const isStepShown = pepperView === 'steps' && hasSteps;
     const shownSteps = voiceStep.recipe.steps;
@@ -3187,6 +3300,8 @@ function CookingSession({
             step: at === null ? null : at + 1,
           };
         }),
+      lookedUp: lookup?.found ?? null,
+      gatherLayout: getPepperGatherLayout(),
     });
     void pepper.ask({
       standing,
@@ -3211,6 +3326,11 @@ function CookingSession({
     clearPending: pepperActions.clearPending,
     ask: askPepper,
     cancel: pepper.cancel,
+    getHeldAnswer: () => {
+      const shown = getShownAnswer();
+      return shown === null || shown.text.trim() === '' ? null : shown.text;
+    },
+    dropHeldAnswer: () => setHeldAnswer(null),
   };
   const { connectPepper } = voice;
   useEffect(() => connectPepper(isPepperOn ? pepperRoute : null));
@@ -3467,7 +3587,7 @@ function CookingSession({
       onAddEntry={
         capture.isAvailable(recipe.id) && !isRemoved ? openStepCapture : null
       }
-      dictation={dictationCard}
+      dictation={getStepCards()}
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)

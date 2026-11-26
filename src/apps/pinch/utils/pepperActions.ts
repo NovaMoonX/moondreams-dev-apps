@@ -33,7 +33,8 @@ export type PepperCookCommand = Extract<
       | 'SHOW_ENTRIES'
       | 'GOT_INGREDIENT'
       | 'MARK_ADDED'
-      | 'SCROLL';
+      | 'SCROLL'
+      | 'SET_GATHER_LAYOUT';
   }
 >;
 
@@ -83,6 +84,10 @@ const SHOW_KINDS = new Map<string, PepperCookCommand>([
   ['notes', { kind: 'SHOW_ENTRIES', entryKind: 'NOTE' }],
   ['tips', { kind: 'SHOW_ENTRIES', entryKind: 'TIP' }],
   ['changes', { kind: 'SHOW_ENTRIES', entryKind: 'CHANGE' }],
+]);
+const GATHER_LAYOUTS = new Map<string, 'ALL' | 'PARTS'>([
+  ['by_part', 'PARTS'],
+  ['together', 'ALL'],
 ]);
 const ENTRY_WORDS: Record<CookEntryKind, string> = {
   TIP: 'tip',
@@ -259,6 +264,15 @@ export const readPepperAction = (action: {
       return shown === undefined
         ? invalid("I'm not sure what to show.")
         : cook(shown);
+    }
+    case 'gather_layout': {
+      const layout =
+        typeof input.layout === 'string'
+          ? GATHER_LAYOUTS.get(input.layout)
+          : undefined;
+      return layout === undefined
+        ? invalid("I'm not sure how to list them.")
+        : cook({ kind: 'SET_GATHER_LAYOUT', layout });
     }
     case 'tick_ingredients':
       return readTicks(input);

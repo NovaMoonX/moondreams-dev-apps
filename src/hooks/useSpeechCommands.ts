@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
-import { unlockAudio, unlockAudioOnNextTap } from '@/lib/speech/audioContext';
+import {
+  getMicrophoneSettleMs,
+  noteMicrophoneReleased,
+  unlockAudio,
+  unlockAudioOnNextTap,
+} from '@/lib/speech/audioContext';
 import {
   CUE_DEAF_EXTRA_MS,
   playListeningSound,
@@ -186,6 +191,7 @@ export const createSpeechListener = (
     if (!state.isRunning || state.recognition === null) return;
     if (state.session !== null) state.session.isAborted = true;
     state.recognition.abort();
+    noteMicrophoneReleased();
   };
 
   function halt(error: SpeechCommandsError) {
@@ -472,15 +478,32 @@ export const createSpeechListener = (
       const speakLine = state.options?.speak;
       // A custom voice may take seconds to give a sound, and the recognizer is already closed: the status says so.
       if (speakLine && state.isWanted) setStatus('speaking');
-      state.stopReading = speakLine
-        ? speakLine(text, handlers)
-        : readAloud(text, {
-            lang: state.options?.speechLang ?? '',
-            isNatural: state.options?.isNaturalVoice === true,
-            onVoice: (voice) => state.options?.onVoice?.(voice, text),
-            startTimeoutMs: SPEECH_START_TIMEOUT_MS,
-            ...handlers,
-          });
+      if (speakLine) {
+        state.stopReading = speakLine(text, handlers);
+        return;
+      }
+      const read = () =>
+        readAloud(text, {
+          lang: state.options?.speechLang ?? '',
+          isNatural: state.options?.isNaturalVoice === true,
+          onVoice: (voice) => state.options?.onVoice?.(voice, text),
+          startTimeoutMs: SPEECH_START_TIMEOUT_MS,
+          ...handlers,
+        });
+      const settleMs = getMicrophoneSettleMs();
+      if (settleMs === 0) {
+        state.stopReading = read();
+        return;
+      }
+      if (state.isWanted) setStatus('speaking');
+      const settle = { stop: null as (() => void) | null };
+      const timeoutId = window.setTimeout(() => {
+        if (token === state.speechToken) settle.stop = read();
+      }, settleMs);
+      state.stopReading = () => {
+        window.clearTimeout(timeoutId);
+        settle.stop?.();
+      };
     },
     mute,
     cue: (kind: ListeningCue) => {

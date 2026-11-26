@@ -12,6 +12,7 @@ import {
   type ListeningState,
   type ListeningStop,
 } from '@/lib/speech/listeningMode';
+import { readClosingPhrase } from '@/lib/speech/closingPhrase';
 import { readWakePhrase } from '@/lib/speech/speechText';
 import {
   COOK_LOCK_MS,
@@ -79,7 +80,9 @@ export type HeardPlan =
   | { kind: 'WAKE'; heard: HeardCommand | null }
   /** Words that are no command, for Pepper: the guesses best first, none of them empty. */
   | { kind: 'ASK'; guesses: string[] }
-  | { kind: 'MISSED' };
+  | { kind: 'MISSED' }
+  /** "Never mind", "stop talking", "shut up": stop talking and listening, with nothing said back. */
+  | { kind: 'DISMISS' };
 
 type HeardCommand = NonNullable<ReturnType<typeof readCookCommand>>;
 
@@ -103,6 +106,17 @@ export const readAddressedGuesses = (
   return phase === 'WAITING' || phase === 'OFF' ? [] : toGuesses(alternatives);
 };
 
+/** A whole phrase that tells the voice to stop, best guess only; a bare "stop" stays the timer's word. */
+const isDismissal = (text: string | null | undefined) => {
+  const plain = (text ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?,]+$/, '');
+  if (plain === '' || plain === 'stop') return false;
+  const read = readClosingPhrase(plain);
+  return read?.kind === 'dismiss' && read.position === 'whole';
+};
+
 /** What a finished phrase means in each phase: waiting hears only the wake phrase (and a command after it), a window runs commands and quotes back anything else, kept open runs commands and ignores the rest. With Pepper on, words that are no command go to it: after the wake phrase in any phase, and anything said in a window. */
 export const planHeard = (
   phase: VoicePhase,
@@ -112,6 +126,11 @@ export const planHeard = (
 ): HeardPlan => {
   if (phase === 'OFF') return { kind: 'IGNORE' };
   const woke = readWakeWord(alternatives);
+  if (isDismissal(woke === null ? alternatives[0] : woke.rests[0])) {
+    // Waiting and kept open both ignore room talk, so there it takes the wake phrase.
+    if (woke !== null || phase === 'WINDOW') return { kind: 'DISMISS' };
+    return phase === 'WAITING' ? { kind: 'IGNORE' } : { kind: 'CLEAR' };
+  }
   if (phase === 'WAITING') {
     if (woke === null) return { kind: 'IGNORE' };
     const rests = woke.rests.map((guess) => guess ?? '');

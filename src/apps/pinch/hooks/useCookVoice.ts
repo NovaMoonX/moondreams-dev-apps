@@ -151,10 +151,21 @@ export interface CookPepperRoute {
   answerPending: (heard: string) => { said?: string } | null;
   /** Drops a waiting yes or no, for a turn that is not its answer. */
   clearPending: () => void;
-  /** Sends what was heard, best guess first, with the others after it. */
-  ask: (heard: string, alternatives: string[]) => void;
+  /** Sends what was heard, best guess first, with the others after it; `lookup` carries what a question command found (null when nothing) and the line to say if no answer comes. */
+  ask: (
+    heard: string,
+    alternatives: string[],
+    lookup?: { found: string | null; fallback: string },
+  ) => void;
   cancel: () => void;
+  /** The answer Pepper is holding on screen, for a plain "repeat that"; null when none is shown. */
+  getHeldAnswer?: () => string | null;
+  /** Takes the held answer off the screen. */
+  dropHeldAnswer?: () => void;
 }
+
+// A repeat that names the step reads the step, even while an answer is held.
+const NAMES_THE_STEP = /\b(?:step|instructions?|directions?)\b/;
 
 interface QueuedLine {
   text: string;
@@ -283,6 +294,22 @@ const getListenLang = () => {
 const isExplainedStop = (stop: VoiceStop | null) =>
   stop !== null && stop !== 'wake-idle' && stop !== 'lock-ended';
 
+const ANSWERED_QUESTIONS = new Set<CookCommand['kind']>([
+  'AMOUNT',
+  'CONVERT',
+  'CONVERT_AMOUNT',
+  'TELL_SERVINGS',
+  'TIME_LEFT',
+]);
+const UNANSWERED_QUESTIONS = new Set<CookCommand['kind']>([
+  'AMOUNT',
+  'CONVERT',
+]);
+
+/** A question the app reads itself that Pepper says back in its own words: what the app found keeps it exact, and an ingredient the app couldn't find is Pepper's to reason about. */
+const isPepperQuestion = (command: CookCommand, isFound: boolean) =>
+  (isFound ? ANSWERED_QUESTIONS : UNANSWERED_QUESTIONS).has(command.kind);
+
 /** Notes what a heard phrase became in the conversation log. */
 const routed = (text: string, data?: TurnLogData) =>
   recordTurn('routed', text, data ?? null);
@@ -407,6 +434,7 @@ export function useCookVoice({
     null,
   );
   const [message, setMessage] = useState<CookVoiceMessage | null>(null);
+  const [liveWords, setLiveWords] = useState<string | null>(null);
   const [expiredStop, setExpiredStop] = useState<VoiceStop | null>(null);
   const [langs] = useState(() => ({
     listen: getListenLang(),
@@ -563,7 +591,38 @@ export function useCookVoice({
     lastHeard.current = { key, at: now };
 
     send({ type: 'COMMAND_HEARD' });
+    const held =
+      command.kind === 'REPEAT' && !NAMES_THE_STEP.test(transcript)
+        ? (pepperRoute.current?.getHeldAnswer?.() ?? null)
+        : null;
+    if (held !== null) {
+      routed('repeated the answer Pepper holds on screen', { said: held });
+      notesQueue.current = null;
+      clearLines();
+      controls.current.quiet();
+      void sayInOrder(held, { canAnswer: false });
+      return true;
+    }
     const result = run(command);
+    const route = pepperRoute.current;
+    if (route !== null && isPepperQuestion(command, result.ok)) {
+      const found = result.ok ? (result.show ?? result.speak ?? null) : null;
+      routed(`asked Pepper to answer ${command.kind} in its own words`, {
+        found,
+      });
+      show(result.ok ? (found ?? transcript) : result.reason, 'ANSWER');
+      notesQueue.current = null;
+      route.cancel();
+      clearLines();
+      controls.current.quiet();
+      route.ask(transcript, [], {
+        found,
+        fallback: result.ok
+          ? (result.speak ?? result.show ?? '')
+          : (result.spoken ?? result.reason),
+      });
+      return true;
+    }
     routed(
       result.ok
         ? `set command: ${command.kind}`
@@ -627,6 +686,7 @@ export function useCookVoice({
     confidences: (number | null)[],
   ) => {
     setHeard(null);
+    setLiveWords(null);
     const route = pepperRoute.current;
     const { phase: heardPhase } = machineRef.current;
     recordTurn('heard', `“${alternatives[0]}”`, {
@@ -659,6 +719,19 @@ export function useCookVoice({
           : 'nothing: no wake phrase (waiting for it)',
       );
       return false;
+    }
+    if (plan.kind === 'DISMISS') {
+      routed('dismissed: stopped talking and listening, nothing said back');
+      ending.current += 1;
+      route?.cancel();
+      route?.clearPending();
+      route?.dropHeldAnswer?.();
+      clearLines();
+      notesQueue.current = null;
+      setMessage(null);
+      controls.current.quiet();
+      send({ type: 'CLOSE_HEARD' });
+      return true;
     }
     if (plan.kind === 'COMMAND') return carryOut(plan.heard, run);
     if (plan.kind === 'ASK') {
@@ -704,7 +777,15 @@ export function useCookVoice({
     onFinalTranscript: handleTranscript,
     onInterimTranscript: (text) => {
       const key = dictationKeyRef.current;
-      if (key !== null) setHeard({ key, text });
+      if (key !== null) {
+        setHeard({ key, text });
+        return;
+      }
+      const { phase: livePhase } = machineRef.current;
+      const isAddressed =
+        (livePhase !== 'WAITING' && livePhase !== 'OFF') ||
+        readWakeWord([text]) !== null;
+      setLiveWords(isAddressed && text.trim() !== '' ? text.trim() : null);
     },
     isNaturalVoice: natural.isOn,
     onVoice: (voice, text) =>
@@ -721,7 +802,15 @@ export function useCookVoice({
       if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
     },
   });
-  const { say, quiet, stop, start, cue } = speech;
+  const { quiet, stop, start, cue, say: sayNow } = speech;
+  // The recognizer closes for a line, so words it never finished hearing are dropped with it.
+  const say = useCallback(
+    (text: string) => {
+      setLiveWords(null);
+      sayNow(text);
+    },
+    [sayNow],
+  );
   useEffect(() => {
     naturalRef.current = natural.isOn;
   });
@@ -1155,6 +1244,8 @@ export function useCookVoice({
     /** The stop the line still mentions: for a few seconds after it happens. */
     shownError: stopped === expiredStop ? null : stopped,
     message,
+    /** The words being said right now, while they are still being heard and are meant for the app; null otherwise. */
+    liveWords: speech.status === 'listening' ? liveWords : null,
     heardWords: heard !== null && heard.key === dictationKey ? heard.text : '',
     isExplainerOpen,
     closeExplainer: () => setIsExplainerOpen(false),
