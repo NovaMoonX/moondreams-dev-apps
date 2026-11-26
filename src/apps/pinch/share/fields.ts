@@ -209,6 +209,8 @@ const SHOPPING_ITEM_FIELDS = {
   sources: 'notUseful',
   note: 'notUseful',
   amountText: 'notUseful',
+  freeText: 'shared',
+  shopSection: 'notUseful',
   pantryAddedAt: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'shared',

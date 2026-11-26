@@ -39,6 +39,7 @@ import PantryFromShoppingSheet, {
 } from '@apps/pinch/components/pantry/PantryFromShoppingSheet';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
+import ShoppingListOnlySheet from '@apps/pinch/components/shopping/ShoppingListOnlySheet';
 import ShoppingMealsSheet from '@apps/pinch/components/shopping/ShoppingMealsSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
@@ -84,6 +85,7 @@ import {
   getShoppingNotesText,
   joinWords,
   getShopRowId,
+  isIngredientItem,
   getShownShoppingView,
   isPutAway,
   sumShopAmounts,
@@ -143,7 +145,9 @@ const makeNotesText = (
 ): GetNotesText => {
   const textByKey = new Map<string, string | null>();
   return (row) => {
-    if (row.legacySources.length === 0) return row.note ?? null;
+    if (row.legacySources.length === 0 || row.ingredientId === null) {
+      return row.note ?? null;
+    }
     const key = `${row.ingredientId}|${row.legacySources.join('|')}`;
     const derived =
       textByKey.get(key) ??
@@ -393,6 +397,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     const item = itemsById.get(id);
     return item ? [item] : [];
   });
+  const openIngredientItems = openItems.filter(isIngredientItem);
   // What came home and has not been offered to the pantry yet, one line per ingredient.
   const putAwayRows = rows.got
     .flatMap((group) => group.rows)
@@ -401,13 +406,16 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         const item = itemsById.get(id);
         return item ? [item] : [];
       });
-      if (rowItems.length === 0 || rowItems.every(isPutAway)) return [];
+      const { ingredientId } = rowItems[0] ?? {};
+      if (!ingredientId || rowItems.length === 0 || rowItems.every(isPutAway)) {
+        return [];
+      }
 
       const total = sumShopAmounts(rowItems);
       return [
         {
           id: row.id,
-          ingredientId: rowItems[0].ingredientId,
+          ingredientId,
           name: row.name,
           items: rowItems.map(({ id, updatedAt }) => ({ id, updatedAt })),
           amount: total?.amount ?? null,
@@ -538,7 +546,11 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         clearCheckedShoppingItems({ uid }),
       ).unwrap();
       const clearedRows = new Set(
-        cleared.map((item) => getShopRowId(item.ingredientId, item.unit)),
+        cleared.map((item) =>
+          item.ingredientId === null
+            ? item.id
+            : getShopRowId(item.ingredientId, item.unit),
+        ),
       ).size;
       if (clearedRows === 0) {
         addToast({ title: 'Nothing was left to clear', type: 'info' });
@@ -851,13 +863,22 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           onClose={() => setOverlay(null)}
         />
       )}
-      {openRow && openItems.length > 0 && (
+      {openRow && openItems.length > 0 && openRow.ingredientId === null && (
+        <ShoppingListOnlySheet
+          key={openRow.id}
+          uid={uid}
+          item={openItems[0]}
+          onClose={() => setOverlay(null)}
+          onRemove={() => handleRemove(openRow.name, openItems)}
+        />
+      )}
+      {openRow && openIngredientItems.length > 0 && (
         <ShoppingItemSheet
           key={openRow.id}
           uid={uid}
           name={openRow.name}
           todayKey={todayKey}
-          items={openItems}
+          items={openIngredientItems}
           onClose={() => setOverlay(null)}
           onRemove={() => handleRemove(openRow.name, openItems)}
         />

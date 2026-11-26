@@ -46,6 +46,8 @@ const item = (
 ): ShoppingItem => ({
   id: `${ingredientId}__EACH`,
   ingredientId,
+  freeText: null,
+  shopSection: null,
   amount: 1,
   unit: 'EACH',
   isChecked: false,
