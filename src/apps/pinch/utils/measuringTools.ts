@@ -47,9 +47,12 @@ const POURED_INGREDIENT_IDS = new Set([
   'cat-molasses',
   'cat-agave-syrup',
   'cat-corn-syrup',
+  'cat-vanilla-extract',
+  'cat-lemon-juice',
+  'cat-lime-juice',
 ]);
 
-/** Poured rather than scooped (milk, oil, stock, soy sauce, syrups), so a cup of it wants a cup with a spout. */
+/** Poured rather than scooped (milk, oil, stock, soy sauce, syrups, extracts, citrus juice), so a cup of it wants a cup with a spout. */
 export const isPouredIngredient = (
   ingredient: { id: string; familyId: string | null } | undefined,
 ) =>

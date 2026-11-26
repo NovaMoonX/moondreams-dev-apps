@@ -12,6 +12,7 @@ import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
 import { combineCookLines } from '../../src/apps/pinch/utils/combineCookLines.ts';
 import {
   getMeasuringTools,
+  isPouredIngredient,
   orderDryFirst,
 } from '../../src/apps/pinch/utils/measuringTools.ts';
 import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
@@ -485,6 +486,10 @@ assert.equal(
   cups.hint,
   null,
   'a liquid cup amount goes in the liquid cup, so it shares no measure with dry cups',
+);
+assert.ok(
+  isPouredIngredient({ id: 'cat-vanilla-extract', familyId: 'cat-fam-baking' }),
+  'vanilla extract wets a spoon like any liquid',
 );
 assert.equal(unchanged.hint, null);
 console.log('pinch units: ok');
