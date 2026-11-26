@@ -92,7 +92,7 @@ service firebase.storage {
       allow delete: if isKitchenOwner();
     }
 
-    // One photo of a cook, private to the person whose kitchen it is (mirrors apps/pinch/kitchens/{uid}/cooks/{cookId}); every upload has a new name, so a replaced photo is a new object.
+    // A cook's photos (up to three, a client cap), private to the person whose kitchen it is (mirrors apps/pinch/kitchens/{uid}/cooks/{cookId}); every upload has a new name, so a replaced photo is a new object.
     match /apps/pinch/kitchens/{uid}/cooks/{cookId}/{fileName} {
       function isKitchenOwner() {
         return request.auth != null && request.auth.uid == uid;

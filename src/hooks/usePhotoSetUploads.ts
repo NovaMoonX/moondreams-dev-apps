@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
-import { compressImageForUse } from '@/utils/imageCompression';
+import { compressImageForUse, type ImageUse } from '@/utils/imageCompression';
 import { generateUuid } from '@/utils';
 
 /** A picked photo on its way to being saved with the record. */
@@ -19,7 +19,7 @@ const UNREADABLE_PHOTO =
   "This photo's format can't be opened here. Try a JPG or PNG, or pick it from your phone.";
 
 /**
- * Shrinks each picked photo on the device (the `listing` use) and hands it to `onAdd`, so the state outlives the
+ * Shrinks each picked photo on the device (the `listing` use unless the caller names another) and hands it to `onAdd`, so the state outlives the
  * picker's screen: a photo still saving when the person moves on finishes in the background. Photos shrink side by
  * side but are handed over in pick order. `onAdd` returns the saved photo's id and throws a readable message when it
  * can't save; a saved upload keeps showing until its id is among `listedIds`, so the thumb never blinks.
@@ -27,6 +27,7 @@ const UNREADABLE_PHOTO =
 export function usePhotoSetUploads(
   onAdd: (file: File) => Promise<string>,
   listedIds: string[],
+  use: ImageUse = 'listing',
 ) {
   const [uploads, setUploads] = useState<PhotoUpload[]>([]);
   const addRef = useRef(onAdd);
@@ -90,7 +91,7 @@ export function usePhotoSetUploads(
 
   const shrink = useCallback(
     async (key: string, file: File) => {
-      const result = await compressImageForUse(file, 'listing');
+      const result = await compressImageForUse(file, use);
       if (result === null) {
         patch(key, { status: 'failed', message: UNREADABLE_PHOTO });
         return null;
@@ -103,7 +104,7 @@ export function usePhotoSetUploads(
       }
       return result;
     },
-    [patch],
+    [patch, use],
   );
 
   const add = useCallback(
