@@ -411,7 +411,7 @@ export function usePepperActions(screen: PepperScreen) {
           outcome: isRefused
             ? 'refused'
             : result.isEnding === true
-              ? 'mic waits for the wake phrase after the reply'
+              ? 'conversation ends after the reply'
               : result.said === undefined
                 ? 'done on screen'
                 : 'said something',

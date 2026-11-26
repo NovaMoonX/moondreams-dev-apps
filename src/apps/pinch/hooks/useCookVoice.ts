@@ -949,6 +949,7 @@ export function useCookVoice({
       isBusy && previous.stepKey !== stepKey && route?.takeMove() === true;
     // A tap on a step while anything is still being said or asked cuts it off, and the step is read as usual.
     if (isBusy && previous.stepKey !== stepKey && !isPepperMove) {
+      ending.current += 1;
       route?.cancel();
       clearLines();
     }
@@ -1073,10 +1074,11 @@ export function useCookVoice({
     setMessage(null);
   }, [send, setMessage]);
 
-  /** Pepper judged the person done: once its reply has been said, the window closes as if it ran out, so the mic waits for the wake phrase again. Anything heard before then keeps it open. */
+  /** Pepper judged the person done: once its reply has been said, the window closes as if it ran out, so the mic waits for the wake phrase again. Anything heard, a tap or a window reopened before then (a question in that reply, "Hey Pepper") keeps it open. */
   const endAfterReply = useCallback(() => {
     ending.current += 1;
     const mine = ending.current;
+    const windowAt = machineRef.current.epoch;
     const settle = () => {
       if (ending.current !== mine) return;
       const queued = lines.current;
@@ -1089,7 +1091,8 @@ export function useCookVoice({
         return;
       }
       const isAsking = pepperRoute.current?.hasPending() ?? false;
-      if (isAsking || machineRef.current.phase !== 'WINDOW') return;
+      const { phase: now, epoch } = machineRef.current;
+      if (isAsking || now !== 'WINDOW' || epoch !== windowAt) return;
       recordTurn('routed', 'Pepper ended the conversation: back to waiting');
       send({ type: 'WINDOW_ENDED' });
     };
