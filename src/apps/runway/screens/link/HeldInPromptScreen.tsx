@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
@@ -163,7 +164,7 @@ function HeldInPromptScreen({ onClose }: HeldInPromptScreenProps) {
               <span className='min-w-0 flex-1 text-sm font-medium break-words'>
                 {item.name}
               </span>
-              <Select
+              <AppSelect
                 className='w-full sm:w-40 sm:shrink-0'
                 aria-label={HOLDS_PROMPT_WORDS.accountLabel(item.name)}
                 options={[

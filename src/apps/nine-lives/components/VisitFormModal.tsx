@@ -9,9 +9,9 @@ import {
   Input,
   Label,
   Modal,
-  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft, ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
@@ -168,7 +168,7 @@ function VisitReasonField({
 
   return (
     <div className='space-y-3'>
-      <Select
+      <AppSelect
         options={REASON_OPTIONS.map((option) => ({
           text: option.label,
           value: option.value,
@@ -197,7 +197,7 @@ function VisitReasonField({
         <div className='space-y-3'>
           <div className='space-y-1'>
             <Label className='text-sm'>Original visit</Label>
-            <Select
+            <AppSelect
               options={originalVisitOptions.map((option) => ({
                 text: option.label,
                 value: option.value,
@@ -257,7 +257,7 @@ function VisitMoreDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Clinic</Label>
-          <Select
+          <AppSelect
             options={[
               { text: 'None', value: '' },
               ...clinics.map((clinic) => ({
@@ -272,7 +272,7 @@ function VisitMoreDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Doctor</Label>
-          <Select
+          <AppSelect
             options={[
               { text: 'None', value: '' },
               ...doctors.map((doctor) => ({

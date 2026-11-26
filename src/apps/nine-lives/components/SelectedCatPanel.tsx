@@ -4,12 +4,12 @@ import {
   Avatar,
   Badge,
   Button,
-  Select,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import { getInitials } from '@/utils/accountUtils';
 import { toWebLink } from '@/utils/urlUtils';
@@ -112,7 +112,7 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
       </div>
 
       <div className='md:hidden'>
-        <Select options={sectionOptions} value={activeSection} onChange={setActiveSection} />
+        <AppSelect options={sectionOptions} value={activeSection} onChange={setActiveSection} />
       </div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} tabsWidth='full' variant='pills'>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Textarea } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -93,7 +94,7 @@ function ProcedureStepSheet({
             <p className='text-sm font-medium'>
               {HELM_COPY.procedureMoveToGroup}
             </p>
-            <Select
+            <AppSelect
               aria-label={HELM_COPY.procedureMoveToGroup}
               className='h-10 min-h-10'
               options={[

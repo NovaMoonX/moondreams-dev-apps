@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import Pill from '@/components/Pill';
@@ -160,7 +161,7 @@ function SavedNoteTopicQuestion({
               <span className='text-muted-foreground text-[13px]'>
                 {HELM_COPY.savedTopicParent}
               </span>
-              <Select
+              <AppSelect
                 options={[
                   { value: TOP_LEVEL, text: HELM_COPY.savedTopicTopLevel },
                   ...parents,
