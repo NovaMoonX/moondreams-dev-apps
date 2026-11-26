@@ -61,6 +61,7 @@ import {
   DEFAULT_SERVING,
   MAX_INGREDIENT_GROUP_LENGTH,
   MAX_NAME_LENGTH,
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   UNIT_LABELS,
@@ -155,7 +156,7 @@ function FreeLineOffer({ onClick }: { onClick: () => void }) {
 }
 
 const getAmountLabel = (row: IngredientRow) => {
-  if (row.isAmountless) return row.note ?? '';
+  if (row.isAmountless) return row.amountText ?? '';
   const amount = parseAmountText(row.amount);
   if (amount !== null && isRowAmountValid(row)) {
     return `${formatAmountText(amount)} ${UNIT_LABELS[row.unit]}`;
@@ -374,7 +375,7 @@ function IngredientEditor({
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
   const [pending, setPending] = useState<PendingConversion | null>(null);
   const [groupNames] = useState(() => getGroupNames(rows));
-  const noteRef = useRef<HTMLInputElement>(null);
+  const [isAmountTextJustAdded, setIsAmountTextJustAdded] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
   const ingredients = useAppSelector(selectIngredients);
   const servingUnit = useAppSelector(selectIngredientsById).get(
@@ -574,6 +575,7 @@ function IngredientEditor({
                 onUpdate({
                   isAmountless: false,
                   amount: '',
+                  amountText: null,
                   unit: servingUnit ?? row.unit,
                 });
               }}
@@ -685,24 +687,39 @@ function IngredientEditor({
             onClick={() => {
               setPending(null);
               onUpdate({ isAmountless: true, amount: '', adaptedFrom: null });
-              if (!row.note) noteRef.current?.focus();
+              setIsAmountTextJustAdded(true);
             }}
           >
             No amount (to taste, a handful…)
           </RevealChip>
         </div>
       )}
+      {row.isAmountless && (
+        <Field label='How much, in words (optional)'>
+          {(id) => (
+            <Input
+              id={id}
+              autoFocus={isAmountTextJustAdded}
+              variant='outline'
+              placeholder='to taste'
+              maxLength={MAX_AMOUNT_TEXT_LENGTH}
+              value={row.amountText ?? ''}
+              onChange={(event) =>
+                onUpdate({
+                  amountText:
+                    event.target.value === '' ? null : event.target.value,
+                })
+              }
+            />
+          )}
+        </Field>
+      )}
       <Field label='Detail'>
         {(id) => (
           <Input
             id={id}
-            ref={noteRef}
             variant='outline'
-            placeholder={
-              row.isAmountless
-                ? 'to taste, a handful…'
-                : 'diced, room temperature…'
-            }
+            placeholder='diced, room temperature…'
             maxLength={MAX_NOTE_LENGTH}
             value={row.note ?? ''}
             onChange={(event) =>
@@ -1079,6 +1096,7 @@ function RecipeIngredients({
         amount: formatAmountText(serving.amount),
         unit: serving.unit,
         isAmountless: false,
+        amountText: null,
         note: null,
         proposedName: null,
         newName,
@@ -1109,6 +1127,7 @@ function RecipeIngredients({
         amount: '',
         unit: DEFAULT_SERVING.unit,
         isAmountless: true,
+        amountText: null,
         note: null,
         proposedName: null,
         newName: null,
@@ -1277,8 +1296,8 @@ function RecipeIngredients({
                                 {FREE_LINE_LABEL}
                               </span>
                             )}
-                            {row.note && !row.isAmountless && (
-                              <span className='text-muted-foreground block truncate text-xs font-normal'>
+                            {row.note && (
+                              <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
                                 {row.note}
                               </span>
                             )}
@@ -1288,7 +1307,7 @@ function RecipeIngredients({
                               className={join(
                                 'text-sm font-normal',
                                 row.isAmountless
-                                  ? 'max-w-[50%] truncate'
+                                  ? 'max-w-[50%] wrap-break-word'
                                   : 'shrink-0 whitespace-nowrap',
                                 isRowAmountValid(row)
                                   ? 'text-muted-foreground'

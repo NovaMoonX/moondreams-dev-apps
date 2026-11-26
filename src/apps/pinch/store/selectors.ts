@@ -32,6 +32,7 @@ import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
   countOpenShopRows,
   getShoppingCost,
+  isIngredientItem,
   getPlannedParts,
   getShoppingMeals,
   getShoppingSourceLabels,
@@ -457,7 +458,7 @@ export const selectShoppingCost = createSelector(
   [selectShoppingItems, selectIngredientsById, selectDefaultProducts],
   (items, ingredientsById, defaultProducts) =>
     getShoppingCost(
-      items.filter((item) => !item.isChecked),
+      items.filter((item) => !item.isChecked).filter(isIngredientItem),
       ingredientsById,
       defaultProducts,
     ),

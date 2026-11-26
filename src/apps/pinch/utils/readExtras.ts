@@ -117,11 +117,69 @@ export const getExtraLinks = (extras: ReadExtras): RecipeLink[] =>
 const TITLE_TAIL = /\s+[|–—•-]\s+[^|–—•-]*$/;
 const MIN_TITLE_LENGTH = 3;
 
-/** Fills a title or description the reader left empty from the page's own: the site's name after a bar or dash is dropped from the title. */
+const ISO_DURATION =
+  /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:\d+(?:\.\d+)?S)?)?$/i;
+
+/** Whole minutes in an ISO 8601 duration such as "PT1H15M"; null for anything else or zero. */
+export const readIsoMinutes = (value: unknown): number | null => {
+  const match =
+    typeof value === 'string' ? ISO_DURATION.exec(value.trim()) : null;
+  if (!match || value === 'P' || value === 'PT') return null;
+  const [days, hours, minutes] = match
+    .slice(1)
+    .map((part) => Number(part ?? 0));
+  const total = days * 24 * 60 + hours * 60 + minutes;
+  return total > 0 ? total : null;
+};
+
+const SERVINGS_YIELD =
+  /^\s*(?:(?:serves|yields?)\s*:?\s*)?(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:(?:servings?|people|persons?|portions?|helpings?)\s*(?:\(.*\))?)?\s*$/i;
+const MAKES_SERVINGS =
+  /^\s*makes\s*:?\s*(?:about\s+)?(\d+)(?:\s*(?:-|to|–)\s*\d+)?\s*(?:servings?|portions?|helpings?)\b/i;
+
+/** Servings in a Recipe's `recipeYield` when it reads as servings ("8", "8 servings", "Serves 6-8", ["8", "8 servings"], 8); a pan, loaf, dozen or quart is no count of servings. */
+export const readYieldServings = (value: unknown): number | null => {
+  const found = (Array.isArray(value) ? value : [value])
+    .map((entry) =>
+      typeof entry === 'number'
+        ? entry
+        : Number(
+            (SERVINGS_YIELD.exec(String(entry ?? '')) ??
+              MAKES_SERVINGS.exec(String(entry ?? '')))?.[1],
+          ),
+    )
+    .find((count) => Number.isInteger(count) && count > 0 && count <= 500);
+  return found ?? null;
+};
+
+const LEAKED_TITLE =
+  /https?:\/\/|www\.|[{}]|\b_?(?:type|id):\S|\bschema\.org\b|recipe data|may be incomplete|page text|begin recipe/i;
+const MAX_TITLE_WORDS = 20;
+
+/** A page reading's title that carries a web address, data keys or the reading's own labels was copied from the input, not written: null, so the page's own title fills it. Page readings only. */
+export const readPageTitle = (title: string | null): string | null =>
+  title !== null &&
+  (LEAKED_TITLE.test(title) || title.split(/\s+/).length > MAX_TITLE_WORDS)
+    ? null
+    : title;
+
+const getPublished = (
+  nodes: readonly Record<string, unknown>[] | undefined,
+  key: string,
+) => nodes?.map((node) => node[key]).find((value) => value != null) ?? null;
+
+/** Fills what the reader left empty from the page's own: a title or description, and the prep time, cook time and servings its Recipe data publishes (servings from the page replace an estimate). The site's name after a bar or dash is dropped from the title. */
 export const withPageFallbacks = (
   recipe: ExtractedRecipe,
-  page: Pick<PageContent, 'title' | 'meta'>,
+  page: Pick<PageContent, 'title' | 'meta' | 'structuredData'>,
 ): ExtractedRecipe => {
+  const nodes = page.structuredData;
+  const publishedServings = readYieldServings(
+    getPublished(nodes, 'recipeYield'),
+  );
+  const hasPublishedServings =
+    publishedServings !== null &&
+    (recipe.servings === null || recipe.isServingsEstimate);
   const fullTitle = (page.title ?? '').trim();
   const withoutSite = fullTitle.replace(TITLE_TAIL, '').trim();
   const pageTitle = clipAtWord(
@@ -134,8 +192,16 @@ export const withPageFallbacks = (
   );
   const result = {
     ...recipe,
-    title: recipe.title ?? (pageTitle || null),
+    title: readPageTitle(recipe.title) ?? (pageTitle || null),
     description: recipe.description ?? (pageDescription || null),
+    prepMinutes:
+      recipe.prepMinutes ?? readIsoMinutes(getPublished(nodes, 'prepTime')),
+    cookMinutes:
+      recipe.cookMinutes ?? readIsoMinutes(getPublished(nodes, 'cookTime')),
+    servings: hasPublishedServings ? publishedServings : recipe.servings,
+    isServingsEstimate: hasPublishedServings
+      ? false
+      : recipe.isServingsEstimate,
   };
   return result;
 };

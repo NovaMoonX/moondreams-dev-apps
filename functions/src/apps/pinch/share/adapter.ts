@@ -351,7 +351,9 @@ async function syncShoppingList(
   const records = snapshot.docs.flatMap((doc) => {
     const ingredientId = readText(doc.get('ingredientId'));
     const title =
-      ingredientId === null ? null : (names.get(ingredientId) ?? null);
+      ingredientId === null
+        ? readText(doc.get('freeText'))
+        : (names.get(ingredientId) ?? null);
     if (title === null) return [];
     return [
       toRecord({
@@ -1572,7 +1574,7 @@ export function createPinchAdapter(
         (ctx, input) => planMeal(deps.firestore(), ctx, input),
       ),
       add_to_shopping_list: toAppAction(
-        "Adds things to the person's shopping list: each with a name and optionally an amount and unit. Something already on the list gains the amount. It never ticks or removes anything. It applies at once and shows in Pinch's shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.",
+        "Adds things to the person's shopping list: each with a name and optionally an amount, a unit and a short note about the ingredient (\"chopped\", a brand; never an amount). Something already on the list gains the amount and the note. It never ticks or removes anything. It applies at once and shows in Pinch's shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.",
         ADD_TO_SHOPPING_LIST_SHAPE,
         (ctx, input) => addToShoppingList(deps.firestore(), ctx, input),
       ),

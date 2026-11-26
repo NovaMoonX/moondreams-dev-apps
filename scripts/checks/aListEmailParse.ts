@@ -5,6 +5,7 @@ import {
   htmlToText,
   snippetOf,
   withoutEmailAddresses,
+  withoutImageMarks,
 } from '../../functions/src/email/emailUtils.ts';
 import {
   isForwardingConfirmation,
@@ -114,6 +115,36 @@ const reservations = [
     feeWaivedCents: 269,
     format: null,
   },
+  {
+    name: 'reservation-entourage-raw',
+    confirmation: '0172635494',
+    title: 'Avengers: Doomsday',
+    contentRating: null,
+    showtimeLocal: local(2026, 12, 20, 12, 45),
+    theatreName: 'AMC Southpoint 17',
+    auditorium: '7',
+    seats: 'F5',
+    ticketCount: 1,
+    ticketKind: 'ADULT',
+    ticketPriceCents: 1309,
+    feeWaivedCents: 269,
+    format: null,
+  },
+  {
+    name: 'reservation-paid-raw',
+    confirmation: '0503528152',
+    title: 'OVERLORD: The Sacred Kingdom',
+    contentRating: null,
+    showtimeLocal: local(2024, 11, 15, 22, 10),
+    theatreName: 'AMC Indianapolis 17',
+    auditorium: '8',
+    seats: 'D3',
+    ticketCount: 1,
+    ticketKind: 'ADULT',
+    ticketPriceCents: 1399,
+    feeWaivedCents: 0,
+    format: null,
+  },
 ];
 
 reservations.forEach(({ name, ...expected }) => {
@@ -126,6 +157,44 @@ reservations.forEach(({ name, ...expected }) => {
   );
 });
 
+// AMC's own text puts a tracking link before the number; a hand-forward from Gmail writes one after it and a picture mark beside the title.
+const paidOrder = readFixture('reservation-paid-raw');
+const paidByGmail = paidOrder.text
+  .replace(/^https?:\/\/\S+\s*$/gm, '')
+  .replace(
+    '0503528152',
+    '0503528152 <https://click.email.amctheatres.com/?qs=x>',
+  )
+  .replace(
+    'OVERLORD: The Sacred Kingdom',
+    'OVERLORD: The Sacred Kingdom [image: Rating]',
+  );
+assert.deepEqual(
+  parseAmcEmail(withoutImageMarks(paidByGmail)),
+  parseAmcEmail(paidOrder.text),
+  'a hand-forwarded order reads as the original',
+);
+
+// Only a line that is just the language goes; a title that holds such a word stays, and a language line under the showtime is never the theater.
+const shaped = (lines: string[]) =>
+  parseAmcEmail(
+    ['Ticket Confirmation#: 0172635494', ...lines, 'Auditorium: 7'].join('\n'),
+  );
+assert.equal(
+  shaped(['The Dubbed Project', '12:45 PM 12/20/2026', 'AMC Southpoint 17'])
+    ?.title,
+  'The Dubbed Project',
+);
+assert.equal(
+  shaped([
+    'Spirited Away',
+    '12:45 PM 12/20/2026',
+    'Japanese Spoken with English Subtitles',
+    'AMC Southpoint 17',
+  ])?.theatreName,
+  'AMC Southpoint 17',
+);
+
 const cancellation = readFixture('cancellation');
 assert.ok(isFromAmc(cancellation.from, cancellation.text));
 assert.deepEqual(parseAmcEmail(cancellation.text), {
@@ -136,6 +205,20 @@ assert.deepEqual(parseAmcEmail(cancellation.text), {
   title: 'How to Rob a Bank',
   showtimeLocal: local(2026, 11, 13, 18, 50),
   theatreName: 'AMC Chattanooga 18',
+  refundedCount: 1,
+});
+
+// Gmail writes each picture as "[image: …]" when it forwards; the intake drops those marks before reading.
+const gmailForwarded = readFixture('cancellation-gmail-forwarded');
+assert.ok(isFromAmc(gmailForwarded.from, gmailForwarded.text));
+assert.deepEqual(parseAmcEmail(withoutImageMarks(gmailForwarded.text)), {
+  kind: 'cancellation',
+  confirmation: '0195443676',
+  orderNumber: '1281639600',
+  refundDate: '11/25/2026',
+  title: 'Focker In-Law',
+  showtimeLocal: local(2026, 11, 25, 16, 15),
+  theatreName: 'AMC Park Place 16',
   refundedCount: 1,
 });
 
@@ -586,9 +669,9 @@ assert.equal(
   'past five minutes',
 );
 assert.equal(
-  findCancelTarget([base], cancel),
-  null,
-  'a showing with no ticket is not canceled by a guess',
+  findCancelTarget([base], cancel)?.id,
+  'v1',
+  'a showing planned in the app with no ticket yet is still the one canceled',
 );
 assert.equal(
   findCancelTarget([{ ...paid, amcConfirmation: '0999999999' }], cancel),

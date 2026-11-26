@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -6,6 +6,7 @@ import {
   FormFactories,
   Input,
   Label,
+  Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -14,10 +15,15 @@ import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import { updateShoppingItem } from '@apps/pinch/store/actions/shoppingActions';
+import { MAX_SHOPPING_NOTE_LENGTH } from '@apps/pinch/constants';
+import {
+  setShoppingItemNote,
+  updateShoppingItem,
+} from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectPinchSettings,
   selectShoppingById,
@@ -33,6 +39,7 @@ import {
   getShoppingNotesText,
   getShoppingItemId,
   isValidAmount,
+  joinWords,
   roundAmount,
   sumShopAmounts,
 } from '@apps/pinch/utils/shopping';
@@ -40,6 +47,7 @@ import { formatSize } from '@apps/pinch/utils/productFormat';
 
 const SHARES_SHOWN = 5;
 const SHARES_FOLD_MIN_HIDDEN = 4;
+const NOTE_MAX_LINES = 4;
 
 const { custom } = FormFactories;
 
@@ -49,7 +57,7 @@ interface ShoppingItemSheetProps {
   /** The day the screen opened on, for naming planned meals. */
   todayKey: string;
   /** The stored items one row of the list stands for, largest first. */
-  items: ShoppingItem[];
+  items: (ShoppingItem & { ingredientId: string })[];
   onClose: () => void;
   /** Takes the row off at once; the list offers an Undo. */
   onRemove: () => void;
@@ -79,11 +87,24 @@ function ShoppingItemSheet({
     !isAllShown && shares.length - SHARES_SHOWN >= SHARES_FOLD_MIN_HIDDEN;
   const shownShares = isFolded ? shares.slice(0, SHARES_SHOWN) : shares;
   const [item] = items;
-  const notesText = getShoppingNotesText(
-    item.ingredientId,
-    items.flatMap((rowItem) => rowItem.sources ?? []),
-    context,
+  const [savedNote] = useState(
+    () =>
+      joinWords([
+        ...items.map((rowItem) => rowItem.note),
+        getShoppingNotesText(
+          item.ingredientId,
+          items.flatMap((rowItem) =>
+            rowItem.note === undefined ? (rowItem.sources ?? []) : [],
+          ),
+          context,
+        ),
+      ]) ?? '',
   );
+  const [noteText, setNoteText] = useState(savedNote);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+  useGrowingTextarea(noteRef, noteText, NOTE_MAX_LINES);
+  const noteValue = noteText.trim() === '' ? null : noteText.trim();
+  const isNoteChanged = noteText.trim() !== savedNote;
   const [shown] = useState(
     () => sumShopAmounts(items) ?? { amount: item.amount, unit: item.unit },
   );
@@ -99,6 +120,7 @@ function ShoppingItemSheet({
     amountText.trim() === '' ? null : roundAmount(Number(amountText));
   const isValid = amount !== null && isValidAmount(amount);
   const isChanged = amount !== shown.amount || unit !== shown.unit;
+  const canSave = isChanged ? isValid : isNoteChanged;
   const newUnitId = getShoppingItemId(item.ingredientId, unit);
   const inNewUnit = rowIds.includes(newUnitId)
     ? undefined
@@ -106,6 +128,7 @@ function ShoppingItemSheet({
 
   const getNote = () => {
     if (!inNewUnit) {
+      if (isNoteChanged && !isChanged) return null;
       if (!isValid) return 'Add an amount to save.';
 
       const amounts = items.flatMap((rowItem) =>
@@ -179,21 +202,28 @@ function ShoppingItemSheet({
   );
 
   const handleSubmit = async () => {
-    if (!isValid || !isChanged) {
+    if (!canSave) {
       return;
     }
     setError(null);
     setIsSubmitting(true);
     try {
-      await dispatch(
-        updateShoppingItem({
-          uid,
-          item,
-          mergedIds: rowIds.slice(1),
-          amount,
-          unit,
-        }),
-      ).unwrap();
+      if (isChanged && amount !== null) {
+        await dispatch(
+          updateShoppingItem({
+            uid,
+            item,
+            mergedIds: rowIds.slice(1),
+            amount,
+            unit,
+            ...(isNoteChanged ? { note: noteValue } : {}),
+          }),
+        ).unwrap();
+      } else {
+        await dispatch(
+          setShoppingItemNote({ uid, ids: rowIds, note: noteValue }),
+        ).unwrap();
+      }
       onClose();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this change.'));
@@ -203,11 +233,24 @@ function ShoppingItemSheet({
 
   return (
     <FormSheet isOpen onClose={onClose} title={name}>
-      {notesText && (
-        <p className='text-muted-foreground mb-3 text-sm wrap-break-word'>
-          {notesText}
-        </p>
-      )}
+      <div className='mb-4 space-y-1'>
+        <Label
+          htmlFor='pinch-shopping-note'
+          className='text-muted-foreground text-xs'
+        >
+          Note
+        </Label>
+        <Textarea
+          id='pinch-shopping-note'
+          ref={noteRef}
+          rows={1}
+          variant='outline'
+          placeholder='finely chopped, the brand you like…'
+          maxLength={MAX_SHOPPING_NOTE_LENGTH}
+          value={noteText}
+          onChange={(event) => setNoteText(event.target.value)}
+        />
+      </div>
       {shares.length > 0 && (
         <div className='mb-4'>
           <p className='text-muted-foreground mb-1.5 text-xs'>For</p>
@@ -224,6 +267,11 @@ function ShoppingItemSheet({
                     {share.dish && (
                       <span className='text-muted-foreground block text-xs wrap-break-word'>
                         {share.dish}
+                      </span>
+                    )}
+                    {share.words && (
+                      <span className='text-muted-foreground block text-xs wrap-break-word'>
+                        {share.words}
                       </span>
                     )}
                   </span>
@@ -275,7 +323,7 @@ function ShoppingItemSheet({
               <Button
                 type='submit'
                 loading={isSubmitting}
-                disabled={isSubmitting || !isValid || !isChanged}
+                disabled={isSubmitting || !canSave}
               >
                 Save
               </Button>

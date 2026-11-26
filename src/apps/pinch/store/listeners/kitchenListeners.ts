@@ -96,6 +96,7 @@ export const readRecipe = (recipe: Recipe): Recipe => ({
     ...line,
     adaptedFrom: line.adaptedFrom ?? null,
     freeText: line.freeText ?? null,
+    amountText: line.amountText ?? null,
   })),
 });
 
@@ -149,7 +150,15 @@ export function startShoppingListener(
     kitchenCollection(uid, 'shoppingItems'),
     (snapshot) =>
       onChange(
-        snapshot.docs.map((document) => document.data() as ShoppingItem),
+        snapshot.docs.map((document) => {
+          const item = document.data() as ShoppingItem;
+          return {
+            ...item,
+            amountText: item.amountText ?? null,
+            freeText: item.freeText ?? null,
+            shopSection: item.shopSection ?? null,
+          };
+        }),
       ),
     onError,
   );

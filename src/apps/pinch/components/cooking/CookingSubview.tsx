@@ -178,7 +178,7 @@ import {
 } from '@apps/pinch/utils/kitchenMeasure';
 import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { formatServings, getAmountWords } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeLines } from '@apps/pinch/utils/shopping';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
@@ -632,10 +632,10 @@ function CookingSession({
         return {
           id: line.id,
           name: getLineName(line, ingredientsById),
-          note: line.amount === null ? null : line.note,
+          note: line.note,
           amountText:
             shown === null
-              ? (line.note ?? '')
+              ? (getAmountWords(line) ?? '')
               : formatReadableAmount(shown.amount, shown.unit, units),
           isMeasured: line.amount !== null,
           measure,

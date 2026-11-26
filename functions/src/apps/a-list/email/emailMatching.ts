@@ -93,7 +93,7 @@ export function findAttachTarget<T extends MatchableViewing>(
   );
 }
 
-/** The planned showing a cancellation is for: the one that holds its confirmation number, else one with a ticket and no other confirmation, the same exact title and theater name within five minutes. A seen showing is never removed. */
+/** The planned showing a cancellation is for, by confirmation number, else by exact title, theater and start; never a seen one. */
 export function findCancelTarget<T extends MatchableViewing>(
   viewings: T[],
   cancellation: {
@@ -113,7 +113,6 @@ export function findCancelTarget<T extends MatchableViewing>(
   return nearest(
     planned.filter(
       (viewing) =>
-        viewing.ticket !== null &&
         (viewing.amcConfirmation === null ||
           viewing.amcConfirmation === cancellation.confirmation) &&
         normalizeTitle(viewing.movie.title) === title &&

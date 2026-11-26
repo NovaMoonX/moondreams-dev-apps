@@ -250,6 +250,28 @@ const seedOwner = () =>
       amount: 3,
       unit: 'G',
     }),
+    kitchen(OWNER, 'shoppingItems/s6').set({
+      ingredientId: null,
+      freeText: 'Paper towels',
+      shopSection: null,
+      amount: null,
+      unit: 'EACH',
+      isChecked: false,
+    }),
+    kitchen(OWNER, 'shoppingItems/s7').set({
+      ingredientId: null,
+      freeText: 'Dish soap',
+      shopSection: 'other',
+      amount: null,
+      unit: 'EACH',
+      isChecked: true,
+    }),
+    kitchen(OWNER, 'shoppingItems/s8').set({
+      ingredientId: null,
+      amount: null,
+      unit: 'EACH',
+      isChecked: false,
+    }),
     kitchen(OWNER, 'containers/c-near').set({
       title: 'Chili',
       status: 'IN_STOCK',
@@ -525,7 +547,15 @@ assert.equal(
 );
 
 const lines = await run(OWNER, 'shoppingList');
-assert.deepEqual(refs(lines), ['shoppingItems/s1', 'shoppingItems/s3']);
+assert.deepEqual(refs(lines), [
+  'shoppingItems/s1',
+  'shoppingItems/s3',
+  'shoppingItems/s6',
+]);
+assert.equal(
+  lines.find((line) => line.sourceRef === 'shoppingItems/s6')?.title,
+  'Paper towels',
+);
 assert.equal(
   lines.find((line) => line.sourceRef === 'shoppingItems/s1')?.title,
   'Salmon',

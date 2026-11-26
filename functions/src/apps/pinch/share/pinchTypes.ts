@@ -1,5 +1,6 @@
 // Generated from src/apps/pinch/types.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
 import type { MeasureUnit } from '../../../vendor/measureUtils.js';
+import type { ShopSection } from './pinchConstants.js';
 export type PinchTab =
   'calendar' | 'recipes' | 'kitchen' | 'shopping' | 'settings';
 
@@ -382,8 +383,12 @@ export interface Collection {
 export interface ShoppingItem {
   /** Immutable. */
   id: string;
-  /** Immutable. */
-  ingredientId: string;
+  /** Immutable; null for a list-only line ("Paper towels"), which is never an ingredient and has no amount, unit choice or sources. */
+  ingredientId: string | null;
+  /** A list-only line's own words, at most `MAX_NAME_LENGTH` characters; null on every ingredient line. Documents written before this lack the key, which reads as null. */
+  freeText: string | null;
+  /** Where a list-only line is found in a shop, as the person picked it; null is Other, and always null on an ingredient line, whose section comes from the ingredient. Documents written before this lack the key, which reads as null. */
+  shopSection: ShopSection | null;
   /** Above zero, at most 1,000,000, two decimals; null for a line that is just the name ("Parsley"), which is always in `EACH`. */
   amount: number | null;
   /** Immutable: a different unit is a different item. */
@@ -391,6 +396,10 @@ export interface ShoppingItem {
   isChecked: boolean;
   /** What put it on the list: planned meal ids, `recipe:<id>` and `meal:<id>`, oldest first, at most 60; empty for something added on the list itself. Documents written before sources lack the key, which reads as empty. */
   sources: string[];
+  /** The person's own words about the line, filled from the recipes' line descriptions and editable; at most `MAX_SHOPPING_NOTE_LENGTH` characters. Documents written before this lack the key (`undefined` at runtime, which shows the notes derived from the recipes); null once the person or an add has written it. */
+  note: string | null;
+  /** How much in words ("to taste") for a line with no amount; at most `MAX_AMOUNT_TEXT_LENGTH` characters. Documents written before this lack the key, which reads as null. */
+  amountText: string | null;
   /** An instant: the line's `updatedAt` as it was put in the pantry. It counts as put away only while `updatedAt` still equals this, so ticking, unticking or editing it again offers it once more. Documents written before this lack the key, which reads as null. */
   pantryAddedAt: number | null;
   createdAt: number;
@@ -566,7 +575,14 @@ export interface PinchOutsideChange {
   addedAmount: number | null;
   createdItem: boolean;
   /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
-  previousItem: { amount: number | null; isChecked: boolean } | null;
+  previousItem: {
+    amount: number | null;
+    isChecked: boolean;
+    /** The item's note before the merge; a record written before notes lacks it, and Undo then leaves the note alone. */
+    note?: string | null;
+    /** The note this change wrote; Undo restores the old note only while the item still holds it. Absent when no note was written. */
+    writtenNote?: string | null;
+  } | null;
   /** The idea an `ideaSaved` change made. A missing key reads as null. */
   ideaId: string | null;
   /** Custom ingredients this change created, which its Undo archives while nothing else uses them. A missing key reads as none. */
@@ -623,9 +639,12 @@ export interface RecipeIngredient {
   ingredientId: string | null;
   /** The words of a line that isn't a kitchen ingredient, shown as its name; null for every ingredient line. Lines written before it lack the key, which reads as null. */
   freeText: string | null;
-  /** Null for a line with no amount ("salt to taste"), whose note says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
+  /** Null for a line with no amount ("salt to taste"), whose `amountText` says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
   amount: number | null;
   unit: Unit;
+  /** How much in words ("to taste", "a handful"), only meaningful when `amount` is null; at most `MAX_AMOUNT_TEXT_LENGTH` characters. Lines written before it lack the key, which reads as null. */
+  amountText: string | null;
+  /** Describes the ingredient itself (chopped, room temperature, a brand), drawn under its name. */
   note: string | null;
   /** The heading the line sits under ("For the sauce"), or null for none; one ingredient may have a line in several groups. Lines written before groups lack the key, which reads as null. */
   group: string | null;
@@ -769,6 +788,8 @@ export interface SharedIngredient {
   catalogId: string | null;
   amount: number | null;
   unit: Unit;
+  /** How much in words for a line with no amount; a share from before it lacks the key, which reads as null. */
+  amountText: string | null;
   note: string | null;
   group: string | null;
   /** A line the owner kept outside their kitchen: it arrives as plain words, never as an ingredient. */

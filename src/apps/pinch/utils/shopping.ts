@@ -1,3 +1,4 @@
+import { clipAtWord } from '@/utils/stringUtils';
 import {
   MAX_SHOPPING_AMOUNT,
   MAX_SHOPPING_SOURCES,
@@ -45,6 +46,7 @@ import {
 } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
+import { getAmountWords } from '@apps/pinch/utils/recipeFormat';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface ShoppingLine {
@@ -52,6 +54,10 @@ export interface ShoppingLine {
   /** Null for a line that is just the name ("Parsley"), always in `EACH`. */
   amount: number | null;
   unit: Unit;
+  /** The recipe line's description ("finely chopped"); several lines' distinct ones are joined with " · ". */
+  note?: string | null;
+  /** The recipe line's how-much words ("to taste"), for a line with no amount. */
+  amountText?: string | null;
 }
 
 /** A line and what puts it on the list: a planned meal's id, a recipe's or a saved meal's source, or null for something added on the list itself. */
@@ -63,6 +69,56 @@ export interface SourcedLine extends ShoppingLine {
 export interface ListLine extends ShoppingLine {
   sources: string[];
 }
+
+const WORDS_SEPARATOR = ' · ';
+
+/** Distinct pieces of text (ignoring case) joined for one muted line; null when there are none. */
+export const joinWords = (parts: readonly (string | null | undefined)[]) => {
+  const unique = [
+    ...new Map(
+      parts.flatMap((part) =>
+        part?.trim() ? [[part.trim().toLowerCase(), part.trim()] as const] : [],
+      ),
+    ).values(),
+  ];
+  return unique.length === 0 ? null : unique.join(WORDS_SEPARATOR);
+};
+
+/** What a line's words add to words already written: each part of the incoming text that the existing text doesn't already contain (ignoring case) goes after it, clipped to `max`. Nothing is ever taken out. */
+export const appendWords = (
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+  max: number,
+) => {
+  const parts = (incoming ?? '')
+    .split(WORDS_SEPARATOR)
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+  const result = parts.reduce(
+    (text, part) =>
+      text
+        .split(WORDS_SEPARATOR)
+        .some((have) => have.trim().toLowerCase() === part.toLowerCase())
+        ? text
+        : text === ''
+          ? part
+          : `${text}${WORDS_SEPARATOR}${part}`,
+    (existing ?? '').trim(),
+  );
+  const kept = (existing ?? '').trim();
+  return result === kept
+    ? (existing ?? null)
+    : clipAtWord(result, Math.max(max, kept.length)) || null;
+};
+
+/** The words a line carries, written only when there are some so a plain line keeps its shape. */
+const toWords = (
+  note: string | null | undefined,
+  amountText: string | null | undefined,
+) => ({
+  ...(note ? { note } : {}),
+  ...(amountText ? { amountText } : {}),
+});
 
 /** Names a row's line spells out before "and N more", so the line stays within two lines on a phone. */
 const MAX_SOURCE_NAMES_SHOWN = 2;
@@ -122,14 +178,21 @@ const carriesKey = (item: Pick<ShoppingItem, 'sources'>, key: string) =>
   (item.sources ?? []).some((source) => getSourceKey(source) === key);
 
 export interface ShoppingRowData {
-  /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row. */
+  /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row; a list-only line is a row of its own. */
   id: string;
   /** Every stored item the row stands for, largest first. */
   itemIds: string[];
-  ingredientId: string;
+  /** Null for a list-only line ("Paper towels"), which sits under Other. */
+  ingredientId: string | null;
   name: string;
   /** What to pick up, or null for a pinch of a spice or oil or a line that is just the name, which needs only its name. */
   amountText: string | null;
+  /** The items' how-much words ("to taste"), only while none of them has an amount. */
+  words: string | null;
+  /** The items' notes joined; undefined while no item has the key at all (written before notes), which shows the notes derived from the recipes. */
+  note: string | null | undefined;
+  /** The sources of the items written before notes, whose notes are derived from their recipes and joined with `note`. */
+  legacySources: string[];
   isChecked: boolean;
   /** What put the row's items on the list, each once, by key. */
   sources: string[];
@@ -540,51 +603,82 @@ export const joinSourceNames = (names: string[], limit: number) => {
     : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
 };
 
-/** The notes the source recipes write on this ingredient ("finely chopped"), each once, joined for one muted line; null when none has one. */
+type NotesContext = Pick<
+  ShoppingSourceContext,
+  'plannedById' | 'mealsById' | 'recipesById'
+>;
+
+/** The recipes behind some sources: a recipe itself, or the recipes a saved or planned meal holds. */
+const getSourceRecipeIds = (sources: string[], context: NotesContext) => [
+  ...new Set(
+    getSourceKeys(sources).flatMap((key) => {
+      const { kind, id } = parseShoppingSource(key);
+      if (kind === 'recipe') return [id];
+      const items =
+        kind === 'meal'
+          ? context.mealsById.get(id)?.items
+          : context.plannedById.get(id)?.items;
+      return (items ?? []).flatMap((item) =>
+        item.kind === 'RECIPE' ? [item.refId] : [],
+      );
+    }),
+  ),
+];
+
+const getRecipeLinesOf = (
+  recipeIds: string[],
+  ingredientId: string,
+  context: NotesContext,
+) =>
+  recipeIds.flatMap((id) =>
+    (context.recipesById.get(id)?.ingredients ?? []).filter(
+      (line) => line.ingredientId === ingredientId,
+    ),
+  );
+
+/** The notes the source recipes write on this ingredient ("finely chopped"), each once, joined for one muted line; null when none has one. Shown for an item written before items kept their own note. */
 export function getShoppingNotesText(
   ingredientId: string,
   sources: string[],
-  context: Pick<
-    ShoppingSourceContext,
-    'plannedById' | 'mealsById' | 'recipesById'
-  >,
+  context: NotesContext,
 ): string | null {
-  const recipeIds = getSourceKeys(sources).flatMap((key) => {
-    const { kind, id } = parseShoppingSource(key);
-    if (kind === 'recipe') return [id];
-    const items =
-      kind === 'meal'
-        ? context.mealsById.get(id)?.items
-        : context.plannedById.get(id)?.items;
-    return (items ?? []).flatMap((item) =>
-      item.kind === 'RECIPE' ? [item.refId] : [],
-    );
-  });
-  const notes = [...new Set(recipeIds)].flatMap((id) =>
-    (context.recipesById.get(id)?.ingredients ?? []).flatMap((line) =>
-      line.ingredientId === ingredientId && line.note?.trim()
-        ? [line.note.trim()]
-        : [],
-    ),
+  return joinWords(
+    getRecipeLinesOf(
+      getSourceRecipeIds(sources, context),
+      ingredientId,
+      context,
+    ).map((line) => line.note),
   );
-  const unique = [
-    ...new Map(notes.map((note) => [note.toLowerCase(), note])).values(),
-  ];
-  return unique.length === 0 ? null : unique.join(' · ');
 }
 
-/** Null when nothing behind the line still resolves. */
-export function getShoppingSourcesText(
+/** What one source's recipes say about this ingredient: each line's description, and its how-much words where it has no amount. */
+const getSourceWords = (
+  source: string,
+  ingredientId: string,
+  context: NotesContext,
+) =>
+  joinWords(
+    getRecipeLinesOf(
+      getSourceRecipeIds([source], context),
+      ingredientId,
+      context,
+    ).flatMap((line) => [line.note, getAmountWords(line)]),
+  );
+
+/** How many recipes put a line on the list ("for 2 recipes"), or meals when a saved or planned meal is among them; null when nothing behind the line still resolves. */
+export function getShoppingForText(
   sources: string[],
   labels: Map<string, ShoppingSourceLabel>,
-  todayKey: string,
 ): string | null {
-  const names = getSourceNames(sources, labels, todayKey).map(
-    ({ name }) => name,
-  );
-  return names.length === 0
-    ? null
-    : joinSourceNames(names, MAX_SOURCE_NAMES_SHOWN);
+  const found = getSourceKeys(sources).flatMap((key) => {
+    const label = labels.get(key);
+    return label ? [label] : [];
+  });
+  if (found.length === 0) return null;
+  const noun = found.every((label) => label.kind === 'recipe')
+    ? 'recipe'
+    : 'meal';
+  return `for ${found.length} ${noun}${found.length === 1 ? '' : 's'}`;
 }
 
 /** A slot two plates share is said once, and a third meal is named rather than counted when it is the only one left. */
@@ -603,6 +697,11 @@ export function getShoppingMealsText(
   return `${shown.join(', ')} and ${rest.length} more`;
 }
 
+/** A line that names an ingredient, as opposed to a list-only line ("Paper towels"). */
+export const isIngredientItem = <T extends Pick<ShoppingItem, 'ingredientId'>>(
+  item: T,
+): item is T & { ingredientId: string } => item.ingredientId !== null;
+
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>
   Number.isFinite(amount) && amount > 0 && amount <= MAX_SHOPPING_AMOUNT;
@@ -620,9 +719,14 @@ export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
   const sums = lines.reduce((acc, line) => {
     const id = getShoppingItemId(line.ingredientId, line.unit);
     const known = acc.get(id);
+    const { note, amountText, ...rest } = line;
     return acc.set(id, {
-      ...line,
+      ...rest,
       amount: known ? addAmounts(known.amount, line.amount) : line.amount,
+      ...toWords(
+        joinWords([known?.note, note]),
+        joinWords([known?.amountText, amountText]),
+      ),
     });
   }, new Map<string, ShoppingLine>());
 
@@ -656,6 +760,10 @@ export function mergeSourcedLines(lines: SourcedLine[]): ListLine[] {
         !line.source || sources.includes(line.source)
           ? sources
           : [...sources, line.source],
+      ...toWords(
+        joinWords([known?.note, line.note]),
+        joinWords([known?.amountText, line.amountText]),
+      ),
     });
   }, new Map<string, ListLine>());
 
@@ -672,18 +780,19 @@ export function mergeSourcedLines(lines: SourcedLine[]): ListLine[] {
   );
   const isAbsorbed = (line: ListLine) =>
     line.amount === null && withAmount.has(line.ingredientId);
-  const absorbedSources = new Map(
-    merged
-      .filter(isAbsorbed)
-      .map((line) => [line.ingredientId, line.sources] as const),
+  const absorbed = new Map(
+    merged.filter(isAbsorbed).map((line) => [line.ingredientId, line] as const),
   );
   return merged
     .filter((line) => !isAbsorbed(line))
     .map((line) => {
-      const extra = absorbedSources.get(line.ingredientId);
-      return extra
-        ? { ...line, sources: [...new Set([...line.sources, ...extra])] }
-        : line;
+      const extra = absorbed.get(line.ingredientId);
+      if (!extra) return line;
+      return {
+        ...line,
+        sources: [...new Set([...line.sources, ...extra.sources])],
+        ...toWords(joinWords([line.note, extra.note]), line.amountText),
+      };
     });
 }
 
@@ -778,15 +887,22 @@ const getRecipeRawLines = (
             ? [{ ...line, ingredientId: line.ingredientId }]
             : [],
         )
-        .map((line): ShoppingLine =>
-          line.amount === null
-            ? { ingredientId: line.ingredientId, amount: null, unit: 'EACH' }
+        .map((line): ShoppingLine => {
+          const words = toWords(line.note?.trim(), getAmountWords(line));
+          return line.amount === null
+            ? {
+                ingredientId: line.ingredientId,
+                amount: null,
+                unit: 'EACH',
+                ...words,
+              }
             : {
                 ingredientId: line.ingredientId,
                 amount: scaleAmount(line.amount, servings, recipe.servings),
                 unit: line.unit,
-              },
-        )
+                ...words,
+              };
+        })
     : [];
 
 /** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone or that is not a kitchen ingredient is left out, and one with no amount stays just the name. */
@@ -854,9 +970,14 @@ export function getSourcedLines(
     .reduce((acc, line) => {
       const key = `${getShoppingItemId(line.ingredientId, line.unit)}|${line.source ?? ''}`;
       const known = acc.get(key);
+      const { note, amountText, ...rest } = line;
       return acc.set(key, {
-        ...line,
+        ...rest,
         amount: known ? addAmounts(known.amount, line.amount) : line.amount,
+        ...toWords(
+          joinWords([known?.note, note]),
+          joinWords([known?.amountText, amountText]),
+        ),
       });
     }, new Map<string, SourcedLine>());
 
@@ -1122,7 +1243,9 @@ export function planStopShopping(
     if (otherAmount > 0) {
       return keep(Math.min(item.amount, otherAmount), 'kept');
     }
-    if (item.unit === 'EACH') return keep(null, 'kept');
+    if (item.unit === 'EACH' || item.ingredientId === null) {
+      return keep(null, 'kept');
+    }
 
     const twinId = getNameOnlyItemId(item.ingredientId);
     const twin = current(planned, twinId);
@@ -1138,10 +1261,14 @@ export function planStopShopping(
         : {
             id: twinId,
             ingredientId: item.ingredientId,
+            freeText: null,
+            shopSection: null,
             amount: null,
             unit: 'EACH',
             isChecked: false,
             sources: mergeSources([], sources),
+            note: item.note ?? null,
+            amountText: item.amountText ?? null,
             pantryAddedAt: null,
             createdAt: readById.get(twinId)?.createdAt ?? now,
             updatedAt: now,
@@ -1203,6 +1330,8 @@ export interface RowSourceShare {
   dish: string | null;
   /** What the source asks of the row now, in the row's units; null when it wants only the name or can't be worked out. */
   amount: ShopAmount | null;
+  /** The source's own description of this ingredient, with its how-much words where it has no amount; null when it says nothing. */
+  words: string | null;
 }
 
 const getLeadUnit = (parts: ShopAmount[]) =>
@@ -1295,6 +1424,7 @@ export function getRowSourceShares(
           ? (parts.get(source)?.get(ingredientId) ?? label.name)
           : null,
       amount: amount && amount.amount > 0 ? amount : null,
+      words: getSourceWords(source, ingredientId, context),
     };
   });
   return result;
@@ -1414,17 +1544,22 @@ const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
 
 type RowItem = Pick<ShoppingItem, 'id' | 'ingredientId' | 'amount' | 'unit'>;
 
+/** A list-only line is its own row: it has no ingredient to share one with. */
+const getOwnRowId = (item: RowItem) =>
+  item.ingredientId === null
+    ? `free:${item.id}`
+    : getShopRowId(item.ingredientId, item.unit);
+
 /** Per ingredient that has an amount among the items, the row a name-only item of it joins. */
 const getAmountRows = (items: RowItem[]) =>
-  items
-    .filter((item) => item.amount !== null)
-    .reduce((acc, item) => {
-      const id = getShopRowId(item.ingredientId, item.unit);
-      const known = acc.get(item.ingredientId);
-      return known !== undefined && known <= id
-        ? acc
-        : acc.set(item.ingredientId, id);
-    }, new Map<string, string>());
+  items.reduce((acc, item) => {
+    if (item.amount === null || item.ingredientId === null) return acc;
+    const id = getShopRowId(item.ingredientId, item.unit);
+    const known = acc.get(item.ingredientId);
+    return known !== undefined && known <= id
+      ? acc
+      : acc.set(item.ingredientId, id);
+  }, new Map<string, string>());
 
 const groupByRow = <T extends RowItem>(
   items: T[],
@@ -1441,8 +1576,9 @@ export function getItemRowIds(items: RowItem[]): Map<string, string> {
   const result = new Map(
     items.map((item) => [
       item.id,
-      (item.amount === null ? amountRows.get(item.ingredientId) : undefined) ??
-        getShopRowId(item.ingredientId, item.unit),
+      (item.amount === null && item.ingredientId !== null
+        ? amountRows.get(item.ingredientId)
+        : undefined) ?? getOwnRowId(item),
     ]),
   );
   return result;
@@ -1460,12 +1596,10 @@ export function getItemsByRow(
   const rowIds = getItemRowIds(items);
   const amountRows = getAmountRows(items);
   const byDrawnRow = groupByRow(items, (item) => rowIds.get(item.id) ?? '');
-  const byRow = groupByRow(items, (item) =>
-    getShopRowId(item.ingredientId, item.unit),
-  );
+  const byRow = groupByRow(items, getOwnRowId);
   const nameOnlyByIngredient = groupByRow(
     items.filter((item) => item.amount === null),
-    (item) => item.ingredientId,
+    (item) => item.ingredientId ?? '',
   );
   const getJoined = (
     row: Pick<ShopLineRow, 'id' | 'ingredientId' | 'lines'>,
@@ -1517,8 +1651,13 @@ export function groupShoppingItems(
       (item) => `${rowIds.get(item.id) ?? ''}${suffix}`,
     );
     return [...byRow.entries()].map(([id, rowItems]) => {
-      const ingredient = ingredientsById.get(rowItems[0].ingredientId);
-      const section = getShopSection(ingredient);
+      const { ingredientId, freeText, shopSection } = rowItems[0];
+      const ingredient =
+        ingredientId === null ? undefined : ingredientsById.get(ingredientId);
+      const section =
+        ingredientId === null
+          ? (shopSection ?? 'other')
+          : getShopSection(ingredient);
       const byBase = [...rowItems].sort(
         (a, b) =>
           (b.amount ?? 0) * UNIT_TO_BASE[b.unit] -
@@ -1527,9 +1666,23 @@ export function groupShoppingItems(
       const row: ShoppingRowData = {
         id,
         itemIds: byBase.map((item) => item.id),
-        ingredientId: rowItems[0].ingredientId,
-        name: ingredient?.name ?? 'Removed ingredient',
+        ingredientId,
+        name:
+          ingredientId === null
+            ? (freeText ?? '')
+            : (ingredient?.name ?? 'Removed ingredient'),
         amountText: formatShopAmount(getShopAmount(rowItems, section), units),
+        words: rowItems.every((item) => item.amount === null)
+          ? joinWords(rowItems.map((item) => item.amountText))
+          : null,
+        note: rowItems.every((item) => item.note === undefined)
+          ? undefined
+          : joinWords(byBase.map((item) => item.note)),
+        legacySources: getSourceKeys(
+          byBase.flatMap((item) =>
+            item.note === undefined ? (item.sources ?? []) : [],
+          ),
+        ),
         isChecked: byBase[0].isChecked,
         sources: getSourceKeys(byBase.flatMap((item) => item.sources ?? [])),
       };

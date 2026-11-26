@@ -36,6 +36,7 @@ import {
   MAX_MEAL_ITEMS,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
@@ -43,6 +44,7 @@ import {
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
   MAX_SHOPPING_AMOUNT,
+  MAX_SHOPPING_NOTE_LENGTH,
   MAX_STEP_LENGTH,
   MEAL_TYPE_LABELS,
   MEAL_TYPES,
@@ -101,7 +103,14 @@ export interface OutsideChange {
   addedAmount: number | null;
   createdItem: boolean;
   /** The item as it was before a merge (null when created), so Undo can put a ticked line back. */
-  previousItem: { amount: number | null; isChecked: boolean } | null;
+  previousItem: {
+    amount: number | null;
+    isChecked: boolean;
+    /** The item's note before the merge; a record written before notes lacks it, and Undo then leaves the note alone. */
+    note?: string | null;
+    /** The note this change wrote; Undo restores the old note only while the item still holds it. Absent when no note was written. */
+    writtenNote?: string | null;
+  } | null;
   ideaId: string | null;
   /** Custom ingredients this change created: its Undo archives each while nothing else uses it and it is unchanged. */
   createdIngredientIds: string[] | null;
@@ -387,12 +396,21 @@ const lineShape = z.object({
     .number()
     .positive()
     .nullish()
-    .describe('How much; leave it out for "to taste".'),
+    .describe(
+      'How much; leave it out for "to taste" and put those words in amountText.',
+    ),
   unit: z
     .string()
     .max(20)
     .nullish()
     .describe(`The unit of the amount. ${UNIT_HELP}`),
+  amountText: z
+    .string()
+    .max(MAX_AMOUNT_TEXT_LENGTH)
+    .nullish()
+    .describe(
+      'For a line with no amount only: how much in words, such as "to taste" or "a handful". Leave it out when the line has an amount.',
+    ),
   note: z
     .string()
     .max(MAX_NOTE_LENGTH)
@@ -511,6 +529,11 @@ const buildLines = (
         ...base,
         amount: amount === null ? null : Math.round(amount * 10_000) / 10_000,
         unit: amount === null ? 'EACH' : (readUnit(entry.unit) ?? 'EACH'),
+        amountText:
+          amount === null
+            ? clipText(entry.amountText ?? '', MAX_AMOUNT_TEXT_LENGTH).trim() ||
+              null
+            : null,
         note: joinNote(noteWords, entry.note),
         adaptedFrom: null,
       };
@@ -814,6 +837,13 @@ export const ADD_TO_SHOPPING_LIST_SHAPE = {
           .max(20)
           .nullish()
           .describe(`The unit of the amount. ${UNIT_HELP}`),
+        note: z
+          .string()
+          .max(MAX_SHOPPING_NOTE_LENGTH)
+          .nullish()
+          .describe(
+            'Optional words about the ingredient itself ("chopped", a brand), never an amount. It is added to the note already on the line.',
+          ),
       }),
     )
     .min(1)
@@ -1450,13 +1480,57 @@ interface WantedLine {
   name: string;
   /** The name of an ingredient this add creates for a word nothing matched. */
   newName: string | null;
+  note: string | null;
 }
 
 interface ShoppingLineInput {
   name: string;
   amount?: number | null;
   unit?: string | null;
+  note?: string | null;
 }
+
+const NOTE_SEPARATOR = ' · ';
+
+/** The parts of `incoming` that `existing` lacks (whole parts, ignoring case) go after it, clipped to `max`; the same rule as the app's own note merge. */
+const appendNote = (
+  existing: string | null,
+  incoming: string | null,
+  max: number,
+) => {
+  const kept = (existing ?? '').trim();
+  const result = (incoming ?? '')
+    .split(NOTE_SEPARATOR)
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .reduce(
+      (text, part) =>
+        text
+          .split(NOTE_SEPARATOR)
+          .some((have) => have.trim().toLowerCase() === part.toLowerCase())
+          ? text
+          : text === ''
+            ? part
+            : `${text}${NOTE_SEPARATOR}${part}`,
+      kept,
+    );
+  return result === kept
+    ? existing
+    : result.slice(0, Math.max(max, kept.length)).trim() || null;
+};
+
+/** What to write to an existing item's note: null for nothing. An item written before notes keeps deriving its note from its sources, so it is left alone while it has any. */
+const getNoteWrite = (
+  existing: ShoppingItem | null,
+  incoming: string | null,
+) => {
+  if (existing === null || incoming === null) return null;
+  if (existing.note === undefined) {
+    return (existing.sources ?? []).length > 0 ? null : { text: incoming };
+  }
+  const text = appendNote(existing.note, incoming, MAX_SHOPPING_NOTE_LENGTH);
+  return text === existing.note ? null : { text };
+};
 
 /** Adds to the list the way Pinch's own add does and never ticks or removes: an open line gains the amount, a ticked one starts again with just this amount, a missing one is created. Each line is its own recorded change, so Undo can take back one. */
 export const addToShoppingList = async (
@@ -1494,6 +1568,11 @@ export const addToShoppingList = async (
       const name =
         match?.name ??
         toDisplayCase(typed, { style: 'sentence', keepAcronyms: true });
+      const note = appendNote(
+        null,
+        typeof entry.note === 'string' ? entry.note : null,
+        MAX_SHOPPING_NOTE_LENGTH,
+      );
       const lineUnit =
         amount === null ? 'EACH' : (readUnit(entry.unit) ?? 'EACH');
       const id = `${ingredientId}__${lineUnit}`;
@@ -1515,6 +1594,7 @@ export const addToShoppingList = async (
                 ),
           name,
           newName: match ? null : name,
+          note: appendNote(known?.note ?? null, note, MAX_SHOPPING_NOTE_LENGTH),
         }),
       };
     },
@@ -1559,16 +1639,19 @@ export const addToShoppingList = async (
               roundAmount((kept ?? 0) + (line.amount ?? 0)),
               MAX_SHOPPING_AMOUNT,
             );
+      const note = getNoteWrite(existing, line.note);
       const isChanged =
         existing === null ||
         existing.isChecked ||
-        (line.amount !== null && sum !== existing.amount);
+        (line.amount !== null && sum !== existing.amount) ||
+        note !== null;
       if (!isChanged) return [{ line, record: null }];
       const where = UNIT_LABELS[line.unit];
-      const what =
+      const named =
         line.amount === null
           ? line.name
           : `${line.amount}${line.unit === 'EACH' ? '' : ` ${where}`} ${line.name}`;
+      const what = line.note === null ? named : `${named} (${line.note})`;
       const record = changeRecord(ctx, {
         kind: 'shoppingAdded',
         title: line.name,
@@ -1587,25 +1670,35 @@ export const addToShoppingList = async (
         addedAmount: existing === null ? null : line.amount,
         createdItem: existing === null,
         previousItem: existing
-          ? { amount: existing.amount, isChecked: existing.isChecked }
+          ? {
+              amount: existing.amount,
+              isChecked: existing.isChecked,
+              note: existing.note ?? null,
+              ...(note === null ? {} : { writtenNote: note.text }),
+            }
           : null,
       });
       if (existing) {
         transaction.update(snapshot.ref, {
           amount: sum,
           isChecked: false,
+          ...(note === null ? {} : { note: note.text }),
           updatedAt: ctx.now,
         });
       } else {
         const item: ShoppingItem = {
           id: line.id,
           ingredientId: line.ingredientId,
+          freeText: null,
+          shopSection: null,
           unit: line.unit,
           createdAt: ctx.now,
           amount: sum,
           isChecked: false,
           updatedAt: ctx.now,
           sources: [],
+          note: line.note,
+          amountText: null,
           pantryAddedAt: null,
         };
         transaction.set(snapshot.ref, item);
@@ -1631,7 +1724,13 @@ export const addToShoppingList = async (
   const records = outcome.written;
   const made = records.flatMap(({ record }) => (record ? [record] : []));
   const already = records.flatMap(({ line, record }) =>
-    record ? [] : [`${line.name} was already on the list`],
+    record
+      ? []
+      : [
+          line.note
+            ? `${line.name} was already on the list; its note was left as it was`
+            : `${line.name} was already on the list`,
+        ],
   );
   const summary =
     made.length === 0
@@ -2388,6 +2487,12 @@ export const undoPinchOutsideChange = async (
     }
     const added = record.addedAmount ?? 0;
     const previous = record.previousItem;
+    const noteBack =
+      previous?.note !== undefined &&
+      previous.writtenNote !== undefined &&
+      current.note === previous.writtenNote
+        ? { note: previous.note }
+        : {};
     if (previous?.isChecked) {
       if (current.amount !== record.addedAmount) {
         return refuse('That item was changed since, so it was left alone.');
@@ -2395,6 +2500,7 @@ export const undoPinchOutsideChange = async (
       transaction.update(itemRef, {
         amount: previous.amount,
         isChecked: true,
+        ...noteBack,
         updatedAt: now,
       });
       return finish();
@@ -2407,6 +2513,7 @@ export const undoPinchOutsideChange = async (
     const left = roundAmount((current.amount ?? 0) - added);
     transaction.update(itemRef, {
       amount: left > 0 ? left : (previous?.amount ?? null),
+      ...noteBack,
       updatedAt: now,
     });
     return finish();

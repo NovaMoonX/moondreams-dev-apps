@@ -4,6 +4,7 @@ import {
 } from '@apps/pinch/utils/stepSections';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import {
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_SHARED_MEAL_LINES,
   MAX_SHARED_MEAL_RECIPES,
   MAX_SHARED_NOTES,
@@ -32,6 +33,7 @@ import type {
 } from '@apps/pinch/types';
 import { resolveNoteStep } from '@apps/pinch/utils/notes';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { getAmountWords } from '@apps/pinch/utils/recipeFormat';
 
 export type NotesByRecipe = Map<string, RecipeNote[]>;
 
@@ -91,6 +93,8 @@ const toSharedLine = (
       catalogId: ingredient && !ingredient.isCustom ? ingredient.id : null,
       amount: line.amount ?? null,
       unit: line.unit,
+      amountText:
+        getAmountWords(line)?.slice(0, MAX_AMOUNT_TEXT_LENGTH) ?? null,
       note: line.note ?? null,
       isFree: line.ingredientId === null,
       group: line.group ?? null,

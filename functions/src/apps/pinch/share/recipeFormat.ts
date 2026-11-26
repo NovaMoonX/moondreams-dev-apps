@@ -23,3 +23,9 @@ export function getTotalMinutes(
 export function formatServings(servings: number): string {
   return `${servings} ${servings === 1 ? 'serving' : 'servings'}`;
 }
+
+/** A line's how-much words ("to taste"), only while it has no amount; lines written before the key read as none. */
+export const getAmountWords = (line: {
+  amount: number | null;
+  amountText?: string | null;
+}) => (line.amount === null ? line.amountText?.trim() || null : null);

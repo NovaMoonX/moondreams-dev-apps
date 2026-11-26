@@ -39,6 +39,7 @@ import PantryFromShoppingSheet, {
 } from '@apps/pinch/components/pantry/PantryFromShoppingSheet';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
+import ShoppingListOnlySheet from '@apps/pinch/components/shopping/ShoppingListOnlySheet';
 import ShoppingMealsSheet from '@apps/pinch/components/shopping/ShoppingMealsSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
@@ -80,9 +81,11 @@ import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getShoppingCostCoverage,
   getShoppingMealsText,
-  getShoppingSourcesText,
+  getShoppingForText,
   getShoppingNotesText,
+  joinWords,
   getShopRowId,
+  isIngredientItem,
   getShownShoppingView,
   isPutAway,
   sumShopAmounts,
@@ -123,16 +126,13 @@ const formatNames = (names: string[]) =>
 type GetForText = (sources: string[]) => string | null;
 
 // Rows share sources, and every render and height estimate asks again, so each set is worked out once per change of names.
-const makeForText = (
-  labels: Map<string, ShoppingSourceLabel>,
-  todayKey: string,
-): GetForText => {
+const makeForText = (labels: Map<string, ShoppingSourceLabel>): GetForText => {
   const textBySources = new Map<string, string | null>();
   return (sources) => {
     const key = sources.join('|');
     const known = textBySources.get(key);
     if (known !== undefined) return known;
-    const text = getShoppingSourcesText(sources, labels, todayKey);
+    const text = getShoppingForText(sources, labels);
     textBySources.set(key, text);
     return text;
   };
@@ -145,12 +145,15 @@ const makeNotesText = (
 ): GetNotesText => {
   const textByKey = new Map<string, string | null>();
   return (row) => {
-    const key = `${row.ingredientId}|${row.sources.join('|')}`;
-    const known = textByKey.get(key);
-    if (known !== undefined) return known;
-    const text = getShoppingNotesText(row.ingredientId, row.sources, context);
-    textByKey.set(key, text);
-    return text;
+    if (row.legacySources.length === 0 || row.ingredientId === null) {
+      return row.note ?? null;
+    }
+    const key = `${row.ingredientId}|${row.legacySources.join('|')}`;
+    const derived =
+      textByKey.get(key) ??
+      getShoppingNotesText(row.ingredientId, row.legacySources, context);
+    textByKey.set(key, derived);
+    return joinWords([row.note, derived]);
   };
 };
 
@@ -183,7 +186,7 @@ function ShoppingRows({
   );
   const getChunkHeight = (chunk: ShoppingRowData[]) =>
     chunk.reduce((sum, row) => {
-      const detail = `${row.amountText ?? ''} · for ${getForText(row.sources) ?? ''}`;
+      const detail = `${row.amountText ?? row.words ?? ''} · ${getForText(row.sources) ?? ''}`;
       const notesHeight = getNotesText(row) ? DETAIL_LINE_HEIGHT : 0;
       return detail.length > DETAIL_LINE_CHARS
         ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT + notesHeight
@@ -212,7 +215,7 @@ function ShoppingRows({
                   key={row.id}
                   id={row.id}
                   name={row.name}
-                  amountText={row.amountText}
+                  amountText={row.amountText ?? row.words}
                   forText={getForText(row.sources)}
                   notesText={getNotesText(row)}
                   isChecked={row.isChecked}
@@ -248,6 +251,9 @@ const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.id === b.id &&
   a.name === b.name &&
   a.amountText === b.amountText &&
+  a.words === b.words &&
+  a.note === b.note &&
+  a.legacySources.join() === b.legacySources.join() &&
   a.isChecked === b.isChecked &&
   a.itemIds.join() === b.itemIds.join() &&
   a.sources.join() === b.sources.join();
@@ -355,10 +361,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sourceLabels = useAppSelector(selectShoppingSourceLabels);
   const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
-  const getForText = useMemo(
-    () => makeForText(sourceLabels, todayKey),
-    [sourceLabels, todayKey],
-  );
+  const getForText = useMemo(() => makeForText(sourceLabels), [sourceLabels]);
   const sourceContext = useAppSelector(selectShoppingSourceContext);
   const getNotesText = useMemo(
     () => makeNotesText(sourceContext),
@@ -394,6 +397,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     const item = itemsById.get(id);
     return item ? [item] : [];
   });
+  const openIngredientItems = openItems.filter(isIngredientItem);
   // What came home and has not been offered to the pantry yet, one line per ingredient.
   const putAwayRows = rows.got
     .flatMap((group) => group.rows)
@@ -402,13 +406,16 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         const item = itemsById.get(id);
         return item ? [item] : [];
       });
-      if (rowItems.length === 0 || rowItems.every(isPutAway)) return [];
+      const { ingredientId } = rowItems[0] ?? {};
+      if (!ingredientId || rowItems.length === 0 || rowItems.every(isPutAway)) {
+        return [];
+      }
 
       const total = sumShopAmounts(rowItems);
       return [
         {
           id: row.id,
-          ingredientId: rowItems[0].ingredientId,
+          ingredientId,
           name: row.name,
           items: rowItems.map(({ id, updatedAt }) => ({ id, updatedAt })),
           amount: total?.amount ?? null,
@@ -539,7 +546,11 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         clearCheckedShoppingItems({ uid }),
       ).unwrap();
       const clearedRows = new Set(
-        cleared.map((item) => getShopRowId(item.ingredientId, item.unit)),
+        cleared.map((item) =>
+          item.ingredientId === null
+            ? item.id
+            : getShopRowId(item.ingredientId, item.unit),
+        ),
       ).size;
       if (clearedRows === 0) {
         addToast({ title: 'Nothing was left to clear', type: 'info' });
@@ -852,13 +863,22 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           onClose={() => setOverlay(null)}
         />
       )}
-      {openRow && openItems.length > 0 && (
+      {openRow && openItems.length > 0 && openRow.ingredientId === null && (
+        <ShoppingListOnlySheet
+          key={openRow.id}
+          uid={uid}
+          item={openItems[0]}
+          onClose={() => setOverlay(null)}
+          onRemove={() => handleRemove(openRow.name, openItems)}
+        />
+      )}
+      {openRow && openIngredientItems.length > 0 && (
         <ShoppingItemSheet
           key={openRow.id}
           uid={uid}
           name={openRow.name}
           todayKey={todayKey}
-          items={openItems}
+          items={openIngredientItems}
           onClose={() => setOverlay(null)}
           onRemove={() => handleRemove(openRow.name, openItems)}
         />

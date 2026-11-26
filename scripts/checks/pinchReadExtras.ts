@@ -16,6 +16,9 @@ import {
   getPageExtras,
   getVideoExtras,
   NO_EXTRAS,
+  readIsoMinutes,
+  readPageTitle,
+  readYieldServings,
   withPageFallbacks,
 } from '../../src/apps/pinch/utils/readExtras.ts';
 import {
@@ -225,5 +228,96 @@ assert.equal(
   getDataFromIdea(idea({ kind: 'TEXT', url: null }), []).links.others.length,
   0,
 );
+
+assert.equal(readIsoMinutes('PT15M'), 15);
+assert.equal(readIsoMinutes('PT1H10M'), 70);
+assert.equal(readIsoMinutes('P0DT0H20M'), 20);
+assert.equal(readIsoMinutes('PT0M'), null);
+assert.equal(readIsoMinutes('15 minutes'), null);
+assert.equal(readYieldServings(['8', '8 servings']), 8);
+assert.equal(readYieldServings('Serves 6'), 6);
+assert.equal(readYieldServings(4), 4);
+assert.equal(readYieldServings('a lot'), null);
+assert.equal(readYieldServings('Serves 6-8'), 6);
+assert.equal(readYieldServings('2 dozen cookies'), null);
+assert.equal(readYieldServings('1 9x13 pan'), null);
+assert.equal(readYieldServings(['1 loaf', '12 slices']), null);
+assert.equal(readYieldServings('6 servings (1 cup each)'), 6);
+assert.equal(readYieldServings('Serves: 4'), 4);
+assert.equal(readYieldServings('Yield: 8'), 8);
+assert.equal(readYieldServings('about 6 servings'), 6);
+assert.equal(readYieldServings('Makes 12'), null);
+assert.equal(readYieldServings('24 (cupcakes)'), null);
+assert.equal(readYieldServings('Makes 12 servings'), 12);
+assert.equal(readYieldServings(['12 rolls', '6 servings']), 6);
+for (const real of [
+  "Mom's #1 Chili",
+  'Mac & Cheese [Easy]',
+  'Dinner @ Home Pasta',
+]) {
+  assert.equal(readPageTitle(real), real);
+}
+assert.equal(
+  normalizeExtractedRecipe({
+    title: "Mom's #1 Chili",
+    ingredients: [],
+    steps: [],
+  }).title,
+  "Mom's #1 Chili",
+);
+const LEAKED =
+  'Easy Candied YamsRecipe Search Result Recipe Data The Page Publishes (May Be Incomplete): _Type:Recipe, Name:Easy Candied Yams, Author:_Id:Https://www.lovebakesgoodcakes.com/#/schema/person/2ba133f1b1';
+assert.equal(readPageTitle(LEAKED), null);
+assert.equal(readPageTitle('Easy candied yams'), 'Easy candied yams');
+assert.equal(
+  readPageTitle("Grandma's 3-ingredient biscuits"),
+  "Grandma's 3-ingredient biscuits",
+);
+assert.equal(
+  withPageFallbacks(
+    normalizeExtractedRecipe({ title: LEAKED, ingredients: [], steps: [] }),
+    {
+      title: 'Easy Candied Yams | Love Bakes Good Cakes',
+      meta: undefined,
+      structuredData: undefined,
+    },
+  ).title,
+  'Easy Candied Yams',
+);
+const missed = normalizeExtractedRecipe({
+  title: 'Garlic pasta',
+  servings: 4,
+  servingsEstimated: true,
+  prepMinutes: null,
+  cookMinutes: 20,
+  ingredients: [],
+  steps: [],
+  categories: ['MAIN', 'NOT_A_CATEGORY', 'MAIN'],
+});
+assert.deepEqual(missed.categories, ['MAIN']);
+assert.equal(missed.isServingsEstimate, true);
+const published = withPageFallbacks(missed, {
+  title: null,
+  meta: undefined,
+  structuredData: [
+    { prepTime: 'PT10M', cookTime: 'PT45M', recipeYield: '6 servings' },
+  ],
+});
+assert.equal(published.prepMinutes, 10);
+assert.equal(published.cookMinutes, 20);
+assert.equal(published.servings, 6);
+assert.equal(published.isServingsEstimate, false);
+assert.equal(
+  withPageFallbacks(
+    { ...missed, isServingsEstimate: false },
+    {
+      title: null,
+      meta: undefined,
+      structuredData: [{ recipeYield: '6' }],
+    },
+  ).servings,
+  4,
+);
+assert.deepEqual(getDataFromExtracted(missed, []).categories, ['MAIN']);
 
 console.log('pinch read extras: ok');

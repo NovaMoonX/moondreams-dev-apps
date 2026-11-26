@@ -1275,6 +1275,13 @@ function RecipeForm({
             <p>
               Filled in from {initialRead.label}. Take a look before you save.
             </p>
+            {initialRead.recipe.isServingsEstimate &&
+              initialRead.recipe.servings !== null && (
+                <p className='text-muted-foreground text-xs'>
+                  The recipe didn&apos;t say how many it serves, so we guessed{' '}
+                  {initialRead.recipe.servings} from the amounts.
+                </p>
+              )}
             {initialRead.recipe.unread.length > 0 && (
               <p className='text-muted-foreground text-xs'>
                 We couldn&apos;t read: {initialRead.recipe.unread.join(', ')}.

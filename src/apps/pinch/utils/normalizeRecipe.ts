@@ -1,6 +1,7 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import {
+  MAX_AMOUNT_TEXT_LENGTH,
   MAX_GUIDED_ITEMS,
   MAX_GUIDED_LENGTH,
   MAX_MINUTES,
@@ -15,7 +16,8 @@ import {
   MAX_STEP_LENGTH,
   UNITS,
 } from '@apps/pinch/constants';
-import type { RecipeCare, Unit } from '@apps/pinch/types';
+import type { DishCategory, RecipeCare, Unit } from '@apps/pinch/types';
+import { getCategories } from '@apps/pinch/utils/categories';
 import {
   getGroupKey,
   shortenGroupName,
@@ -32,6 +34,8 @@ export interface ExtractedIngredient {
   name: string;
   amount: number | null;
   unit: Unit | null;
+  /** The source's own words for how much when it gives no amount ("to taste", "a handful"); null for a measured line. */
+  amountText: string | null;
   note: string | null;
   /** Another name the line gives the same ingredient ("ground beef" in "beef mince (ground beef)"), tried when the name matches nothing. */
   alsoCalled: string | null;
@@ -43,6 +47,8 @@ export interface ExtractedIngredient {
 export interface ExtractedRecipe {
   title: string | null;
   servings: number | null;
+  isServingsEstimate: boolean;
+  categories: DishCategory[];
   prepMinutes: number | null;
   cookMinutes: number | null;
   description: string | null;
@@ -72,7 +78,12 @@ export const readSteps = (entries: unknown[]) => {
           : { text: entry, section: null };
       const text = asString(item.text);
       return text
-        ? [{ text: text.slice(0, MAX_STEP_LENGTH), section: cleanStepSection(asString(item.section)) }]
+        ? [
+            {
+              text: text.slice(0, MAX_STEP_LENGTH),
+              section: cleanStepSection(asString(item.section)),
+            },
+          ]
         : [];
     })
     .slice(0, MAX_RECIPE_STEPS);
@@ -185,18 +196,24 @@ const readAsides = (
   };
 };
 
-/** A line with no amount read the way a cook means it: "salt and pepper to taste" is two lines noted "to taste" under the same heading, and "handful of parsley" is parsley noted "a handful". A measured line is left as it was read. */
+/** A line with no amount read the way a cook means it: "salt and pepper to taste" is two lines with the amount words "to taste" under the same heading, and "handful of parsley" is parsley with "a handful". A measured line is left as it was read. */
 const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
-  if (line.amount !== null) return [line];
+  if (line.amount !== null) return [{ ...line, amountText: null }];
   const tail = UNMEASURED_TAIL.exec(line.name);
   const withoutTail = tail ? tail[1] : line.name;
   const head = UNMEASURED_HEAD.exec(withoutTail);
   const name = head ? head[2] : withoutTail;
-  const note = joinNotes([
-    head ? sayHowMuch(head[1]) : null,
-    tail ? tail[2].toLowerCase() : null,
-    line.note,
-  ]);
+  const amountText =
+    clipAtWord(
+      [
+        head ? sayHowMuch(head[1]) : null,
+        tail ? tail[2].toLowerCase() : null,
+        line.amountText,
+      ]
+        .filter((part) => part !== null && part !== '')
+        .join(', '),
+      MAX_AMOUNT_TEXT_LENGTH,
+    ) || null;
   const pair = PAIR.exec(name);
   const isSplit =
     pair &&
@@ -211,7 +228,7 @@ const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
     name: part.trim(),
     alsoCalled: names.length > 1 ? null : line.alsoCalled,
     unit: null,
-    note,
+    amountText,
   }));
 };
 
@@ -266,7 +283,7 @@ const mergeOtherMeasures = (
   ];
 };
 
-/** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its note. */
+/** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its amount text. */
 export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<
     string,
@@ -277,6 +294,13 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
   return {
     title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
+    isServingsEstimate:
+      parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
+    categories: getCategories({
+      categories: list(parsed.categories).filter(
+        (value): value is string => typeof value === 'string',
+      ),
+    }),
     prepMinutes: asMinutes(parsed.prepMinutes),
     cookMinutes: asMinutes(parsed.cookMinutes),
     description:
@@ -302,6 +326,10 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
               ),
               amount: asNumber(item.amount),
               unit: UNITS.find((unit) => unit === item.unit) ?? null,
+              amountText:
+                asString(item.amountText) === null
+                  ? null
+                  : clipAtWord(asString(item.amountText)!, MAX_AMOUNT_TEXT_LENGTH),
               group: asGroup(item.group),
             })
           : [];

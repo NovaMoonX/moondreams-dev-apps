@@ -76,6 +76,7 @@ const line = (
     freeText: null,
     amount,
     unit: amount === null ? 'EACH' : 'G',
+    amountText: null,
     note,
     group,
     adaptedFrom: null,
@@ -499,6 +500,7 @@ check('an ingredient line has exactly the public keys', () => {
   shared.ingredients.forEach((entry) =>
     assert.deepEqual(Object.keys(entry).sort(), [
       'amount',
+      'amountText',
       'catalogId',
       'group',
       'isFree',
@@ -536,6 +538,7 @@ check('amounts, units, notes and groups are kept', () => {
     name: 'Ground beef',
     catalogId: 'cat-beef',
     amount: 500,
+    amountText: null,
     unit: 'G',
     note: 'lean',
     group: 'For the chili',
@@ -560,6 +563,7 @@ check('a kitchen-free line is shared as plain words marked free', () => {
       catalogId: null,
       amount: null,
       unit: 'EACH',
+      amountText: null,
       note: null,
       group: null,
       isFree: true,
