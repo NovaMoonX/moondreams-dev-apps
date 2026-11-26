@@ -140,11 +140,11 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     appId: 'pinch',
     label: 'Change a recipe with Pepper',
     description:
-      "Someone without it edits recipes by hand as before. Someone with it can open a recipe, say or type what to change (\"make it spicier\", \"swap the butter for olive oil\"), and see Pepper's version in the recipe form, marked, before they save it.",
+      'Someone without it edits recipes by hand as before. Someone with it can open a recipe, say or type what to change ("make it spicier", "swap the butter for olive oil"), and see Pepper\'s version in the recipe form, marked, before they save it.',
     defaultRollout: 'off',
     isServerEnforced: false,
     warning:
-      'Each change asked for sends the recipe and the request to Gemini, and costs a little. Spoken requests are heard on the device.',
+      'Each change asked for sends the recipe and the request to Gemini, and costs a little. Spoken requests are heard by the browser’s speech service, never kept by Pinch.',
   },
 ];
 

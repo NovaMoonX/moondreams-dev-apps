@@ -20,6 +20,7 @@ import {
 import {
   describePepperChange,
   getAllLiveMarks,
+  getLiveMarks,
 } from '../../src/apps/pinch/utils/pepperMarks.ts';
 
 const ingredient = (id: string, name: string): ResolvedIngredient => ({
@@ -360,17 +361,40 @@ const roundOne = apply({
     .filter((line) => line.ref !== 'i2')
     .map((line) => (line.ref === 'i1' ? { ...line, amount: 3 } : line)),
 });
-const roundTwo = applyRevision(
-  roundOne.data,
-  {
-    ...same,
-    title: 'Spicy garlic toast',
-    ingredients: same.ingredients.filter((line) => line.ref !== 'i2'),
-  },
-  refMap,
-  catalog,
-  context,
+const second = toRevisionInput(roundOne.data, byId, context, {
+  ask: 'y',
+  earlierAsks: ['x'],
+});
+const secondSame: RecipeRevision = {
+  ...same,
+  title: second.input.title,
+  ingredients: second.input.ingredients.map((line) => ({
+    ref: line.ref,
+    name: line.name,
+    amount: line.amount,
+    unit: line.unit,
+    amountText: line.amountText,
+    note: line.note,
+    group: line.group,
+  })),
+  steps: second.input.steps,
+};
+const applySecond = (over: Partial<RecipeRevision>) =>
+  applyRevision(
+    roundOne.data,
+    { ...secondSame, ...over },
+    second.refMap,
+    catalog,
+    context,
+  );
+const roundTwo = applySecond({ title: 'Spicy garlic toast' });
+assert.deepEqual(
+  getLiveMarks(roundOne.marks, roundOne.data, roundTwo.data)
+    .changedIngredientIds,
+  ['r1'],
+  'round one alone is still live after round two',
 );
+assert.deepEqual(roundTwo.marks.changedIngredientIds, []);
 const together = getAllLiveMarks(
   [
     { marks: roundOne.marks, data: roundOne.data },
@@ -403,6 +427,50 @@ assert.equal(
   ),
   'changed chicken breast, olive oil, and 2 steps',
   'named ingredients read as list items in sentence case',
+);
+
+const reworded2 = apply({
+  steps: same.steps.map((step, index) =>
+    index === 1 ? { ...step, text: `${step.text} Until golden.` } : step,
+  ),
+});
+const stepSecond = toRevisionInput(reworded2.data, byId, context, {
+  ask: 'y',
+  earlierAsks: ['x'],
+});
+const preheated = applyRevision(
+  reworded2.data,
+  {
+    ...same,
+    title: stepSecond.input.title,
+    ingredients: stepSecond.input.ingredients.map((line) => ({
+      ref: line.ref,
+      name: line.name,
+      amount: line.amount,
+      unit: line.unit,
+      amountText: line.amountText,
+      note: line.note,
+      group: line.group,
+    })),
+    steps: [
+      { text: 'Preheat the oven.', section: null },
+      ...stepSecond.input.steps,
+    ],
+  },
+  stepSecond.refMap,
+  catalog,
+  context,
+);
+assert.deepEqual(
+  getAllLiveMarks(
+    [
+      { marks: reworded2.marks, data: reworded2.data },
+      { marks: preheated.marks, data: preheated.data },
+    ],
+    preheated.data,
+  )!.changedStepIndices,
+  [0, 2],
+  "a step inserted above keeps an earlier round's rewritten step marked",
 );
 
 console.log('pinch pepper revision checks passed');

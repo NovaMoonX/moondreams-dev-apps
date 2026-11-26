@@ -3,7 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Sparkles, Undo2 } from 'lucide-react';
 
 interface AiChangeNoticeProps {
-  /** Who made the change: "Pepper". */
+  /** Who made the change: the assistant's name. */
   who: string;
   /** What changed, without the name: "changed 2 ingredients and a step"; empty when nothing did and only the reply shows. */
   summary: string;

@@ -19,6 +19,11 @@ export function getLiveMarks(
   const appliedRows = new Map(applied.ingredients.map((row) => [row.id, row]));
   const isRowKept = (id: string) =>
     currentRows.has(id) && same(currentRows.get(id), appliedRows.get(id));
+  const markedSteps = new Set(
+    marks.changedStepIndices
+      .map((index) => applied.steps[index])
+      .filter((step) => step !== undefined),
+  );
   const live = {
     title: marks.title && current.title === applied.title,
     description:
@@ -38,10 +43,10 @@ export function getLiveMarks(
     addedIngredientIds: marks.addedIngredientIds.filter(isRowKept),
     changedIngredientIds: marks.changedIngredientIds.filter(isRowKept),
     removedIngredientNames: marks.removedIngredientNames,
-    changedStepIndices: marks.changedStepIndices.filter(
-      (index) =>
-        current.steps[index] !== undefined &&
-        current.steps[index] === applied.steps[index],
+    changedStepIndices: current.steps.reduce<number[]>(
+      (indices, step, index) =>
+        markedSteps.has(step) ? [...indices, index] : indices,
+      [],
     ),
   };
 

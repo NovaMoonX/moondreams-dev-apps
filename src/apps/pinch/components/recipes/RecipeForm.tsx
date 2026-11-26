@@ -35,6 +35,7 @@ import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -254,6 +255,17 @@ const withLinesAsWritten = (
   }),
 });
 
+const getRowName = (
+  row: RecipeFormData['ingredients'][number],
+  ingredientsById: Map<string, { name: string }>,
+) =>
+  row.freeText !== null
+    ? row.freeText
+    : (ingredientsById.get(row.ingredientId)?.name ??
+      row.newName ??
+      row.proposedName ??
+      '');
+
 function RecipeForm({
   uid,
   recipeId,
@@ -430,6 +442,7 @@ function RecipeForm({
     hasChosenCover.current = false;
     setFormStart(initialData);
     setFormData(initialData);
+    latestData.current = initialData;
     sectionsRef.current = initialData.stepSections;
     splitRef.current = null;
     setFormKey((current) => current + 1);
@@ -437,9 +450,11 @@ function RecipeForm({
     isDirtyRef.current = false;
     draft.hideNotice();
     setPepper({ rounds: [], asks: [], sent: 0, unchangedReply: null });
+    clearUndo();
   };
   const seedForm = (data: RecipeFormData) => {
     latestData.current = data;
+    clearUndo();
     setFormStart(data);
     setFormData(data);
     sectionsRef.current = data.stepSections;
@@ -471,10 +486,21 @@ function RecipeForm({
       .join(' · ')
       .slice(0, MAX_RECIPE_NOTE_LENGTH) ||
       '');
-  const liveMarks = useMemo(
-    () => getAllLiveMarks(pepper.rounds, formData),
-    [pepper.rounds, formData],
-  );
+  const liveMarks = useMemo(() => {
+    const marks = getAllLiveMarks(pepper.rounds, formData);
+    if (marks === null) return null;
+    const present = new Set(
+      formData.ingredients.map((row) =>
+        normalizeName(getRowName(row, ingredientsById)),
+      ),
+    );
+    return {
+      ...marks,
+      removedIngredientNames: marks.removedIngredientNames.filter(
+        (name) => !present.has(normalizeName(name)),
+      ),
+    };
+  }, [pepper.rounds, formData, ingredientsById]);
   const aiMarkedIds = useMemo(
     () =>
       liveMarks === null
@@ -487,7 +513,7 @@ function RecipeForm({
     changes: string[];
     choices: string[];
   } | null>(null);
-  const { pending, showUndo, undo } = useUndoRemoval();
+  const { pending, showUndo, undo, clear: clearUndo } = useUndoRemoval();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -756,7 +782,11 @@ function RecipeForm({
         name: 'title',
         label: '',
         renderComponent: (props) => (
-          <div className={join(liveMarks?.title && 'ai-changed rounded-xl')}>
+          <div
+            className={join(
+              liveMarks?.title && 'ai-changed -mx-2 rounded-xl px-2',
+            )}
+          >
             <RecipeTitleField
               value={String(props.value)}
               onChange={props.onValueChange}
@@ -770,7 +800,9 @@ function RecipeForm({
         label: '',
         renderComponent: (props) => (
           <div
-            className={join(liveMarks?.categories && 'ai-changed rounded-xl')}
+            className={join(
+              liveMarks?.categories && 'ai-changed -mx-2 rounded-xl px-2',
+            )}
           >
             <CategoryField
               value={props.value as DishCategory[]}
@@ -802,7 +834,9 @@ function RecipeForm({
                 />
               </div>
               <div
-                className={join(liveMarks?.times && 'ai-changed rounded-xl')}
+                className={join(
+                  liveMarks?.times && 'ai-changed -mx-2 rounded-xl px-2',
+                )}
               >
                 <RecipeTimesField
                   prep={basics.prep}
@@ -819,7 +853,9 @@ function RecipeForm({
         label: '',
         renderComponent: (props) => (
           <div
-            className={join(liveMarks?.description && 'ai-changed rounded-xl')}
+            className={join(
+              liveMarks?.description && 'ai-changed -mx-2 rounded-xl px-2',
+            )}
           >
             <RecipeDescriptionField
               value={String(props.value)}
@@ -1304,14 +1340,7 @@ function RecipeForm({
     ];
     const names = formData.ingredients
       .filter((row) => markedIds.includes(row.id))
-      .map((row) =>
-        row.freeText !== null
-          ? row.freeText
-          : (ingredientsById.get(row.ingredientId)?.name ??
-            row.newName ??
-            row.proposedName ??
-            ''),
-      )
+      .map((row) => getRowName(row, ingredientsById))
       .filter((name) => name !== '');
     const summary = describePepperChange(liveMarks, names);
     return pepper.rounds.length > 1
