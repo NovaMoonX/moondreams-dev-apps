@@ -199,6 +199,8 @@ function FreeLineOffer({ onClick }: { onClick: () => void }) {
   );
 }
 
+const MAX_SIDE_AMOUNT_TEXT = 10;
+
 const getAmountLabel = (row: IngredientRow) => {
   if (row.isAmountless) return row.amountText ?? '';
   const amount = parseAmountText(row.amount);
@@ -1448,6 +1450,8 @@ function RecipeIngredients({
           renderRow={({ row, isFirst }) => {
             const name = getName(row);
             const label = getAmountLabel(row);
+            const isLongAmount =
+              row.isAmountless && label.length > MAX_SIDE_AMOUNT_TEXT;
             const isUnresolved = isRowUnresolved(row);
             const isFree = row.freeText !== null;
             return (
@@ -1487,19 +1491,22 @@ function RecipeIngredients({
                           {FREE_LINE_LABEL}
                         </span>
                       )}
+                      {isLongAmount && (
+                        <span className='text-muted-foreground line-clamp-1 text-xs font-normal break-words'>
+                          {label}
+                        </span>
+                      )}
                       {row.note && (
                         <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
                           {row.note}
                         </span>
                       )}
                     </span>
-                    {label !== '' && (
+                    {label !== '' && !isLongAmount && (
                       <span
                         className={join(
                           'text-sm font-normal',
-                          row.isAmountless
-                            ? 'max-w-[45%] wrap-break-word'
-                            : 'shrink-0 whitespace-nowrap',
+                          'shrink-0 whitespace-nowrap',
                           isRowAmountValid(row)
                             ? 'text-muted-foreground'
                             : 'text-destructive',

@@ -16,9 +16,10 @@ import {
 import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowUp, ChevronDown, Sparkles, X } from 'lucide-react';
+import { ArrowUp, Sparkles, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
+import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
@@ -160,6 +161,7 @@ import { getFreedIngredientIds } from '@apps/pinch/utils/freeLines';
 import {
   getReadNotice,
   MAX_DIRECT_NOTICE_DETAILS,
+  type ReadNoticeDetail,
 } from '@apps/pinch/utils/readNotice';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
@@ -178,6 +180,15 @@ export interface RecipeRead {
 const USAGE_READ_TIMEOUT_MS = 4000;
 
 /** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
+const ReadNoticeLine = ({ detail }: { detail: ReadNoticeDetail }) => (
+  <li className='flex items-center gap-2.5'>
+    <span className='w-5 shrink-0 text-center text-base' aria-hidden='true'>
+      {detail.icon}
+    </span>
+    <span className='min-w-0 flex-1'>{detail.text}</span>
+  </li>
+);
+
 const findLoadablePhoto = (photos: WebPhoto[]) =>
   photos.reduce<Promise<WebPhoto | null>>(
     async (found, photo) =>
@@ -1374,63 +1385,68 @@ function RecipeForm({
         </div>
       )}
       {readNotice && !isNoteClosed && (
-        <div
-          className='bg-accent mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm'
-          role='status'
-        >
-          <div className='min-w-0 flex-1 space-y-0.5'>
-            {isReadNoticeFolded ? (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                aria-expanded={isReadDetailOpen}
-                aria-controls='pinch-read-detail'
-                className="relative -mx-2 -my-1 h-auto w-full justify-between gap-2 px-2 py-1 text-left font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-                onClick={() => setIsReadDetailOpen((open) => !open)}
-              >
-                <span className='min-w-0 flex-1 text-left'>
-                  {readNotice.headline}
-                </span>
-                <ChevronDown
-                  className={join(
-                    'h-4 w-4 shrink-0',
-                    isReadDetailOpen && 'rotate-180',
-                  )}
-                  aria-hidden='true'
-                />
-              </Button>
-            ) : (
-              <p>{readNotice.headline}</p>
-            )}
-            {(!isReadNoticeFolded || isReadDetailOpen) &&
-              readNotice.details.length > 0 && (
-                <ul
-                  id='pinch-read-detail'
-                  className='text-muted-foreground list-disc space-y-1 pl-4 text-xs'
-                >
-                  {readNotice.details.map((detail) => (
-                    <li key={detail}>{detail}</li>
-                  ))}
-                </ul>
-              )}
-            {(!isReadNoticeFolded || isReadDetailOpen) &&
-              readNotice.footer !== null && (
-                <p className='text-muted-foreground pt-1 text-xs'>
-                  {readNotice.footer}
-                </p>
-              )}
+        <div className='bg-accent mb-4 rounded-2xl p-3 text-sm' role='status'>
+          <div className='flex items-center gap-3'>
+            <span
+              className='bg-background text-primary flex size-9 shrink-0 items-center justify-center rounded-full'
+              aria-hidden='true'
+            >
+              <Sparkles className='h-4 w-4' />
+            </span>
+            <p className='min-w-0 flex-1 font-medium'>{readNotice.headline}</p>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              aria-label='Dismiss'
+              className='-m-1 size-8 shrink-0'
+              onClick={() => setIsNoteClosed(true)}
+            >
+              <X className='h-4 w-4' aria-hidden='true' />
+            </Button>
           </div>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='icon'
-            aria-label='Dismiss'
-            className='-m-1 size-8 shrink-0'
-            onClick={() => setIsNoteClosed(true)}
+          {readNotice.details.length > 0 && (
+            <ul className='mt-2.5 space-y-2'>
+              {readNotice.details
+                .slice(0, MAX_DIRECT_NOTICE_DETAILS)
+                .map((detail) => (
+                  <ReadNoticeLine key={detail.text} detail={detail} />
+                ))}
+            </ul>
+          )}
+          {isReadNoticeFolded ? (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className='mt-3 rounded-full'
+              onClick={() => setIsReadDetailOpen(true)}
+            >
+              {`See all ${readNotice.details.length} changes`}
+            </Button>
+          ) : (
+            readNotice.footer !== null && (
+              <p className='text-muted-foreground mt-2.5 text-xs'>
+                {readNotice.footer}
+              </p>
+            )
+          )}
+          <DetailSheet
+            isOpen={isReadDetailOpen}
+            onClose={() => setIsReadDetailOpen(false)}
+            title={readNotice.headline}
           >
-            <X className='h-4 w-4' aria-hidden='true' />
-          </Button>
+            <ul className='space-y-3 text-sm'>
+              {readNotice.details.map((detail) => (
+                <ReadNoticeLine key={detail.text} detail={detail} />
+              ))}
+            </ul>
+            {readNotice.footer !== null && (
+              <p className='text-muted-foreground mt-4 text-xs'>
+                {readNotice.footer}
+              </p>
+            )}
+          </DetailSheet>
         </div>
       )}
       <Form

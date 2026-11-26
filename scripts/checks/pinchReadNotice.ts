@@ -21,7 +21,7 @@ assert.deepEqual(plain.details, []);
 const guided = getReadNotice({ ...base, guided: ['a shorter title'] }, []);
 assert.equal(guided.headline, 'We followed your notes');
 assert.equal(guided.details.length, 1);
-assert.ok(!guided.details[0].startsWith(guided.headline));
+assert.ok(!guided.details[0].text.startsWith(guided.headline));
 
 const two = getReadNotice(
   {
@@ -35,7 +35,7 @@ const two = getReadNotice(
 assert.equal(two.headline, 'Filled in and finished for you');
 assert.equal(two.details.length, 2);
 assert.ok(two.details.length <= MAX_DIRECT_NOTICE_DETAILS);
-assert.ok(two.details[0].includes('12'));
+assert.ok(two.details[0].text.includes('12'));
 
 const four = getReadNotice(
   {
@@ -48,8 +48,11 @@ const four = getReadNotice(
 );
 assert.equal(four.details.length, 5);
 assert.ok(four.details.length > MAX_DIRECT_NOTICE_DETAILS);
-assert.ok(four.details.some((d) => d.includes('Bread flour for flour')));
-assert.equal(new Set(four.details).size, four.details.length);
+assert.ok(four.details.some((d) => d.text.includes('Bread flour for flour')));
+assert.equal(
+  new Set(four.details.map((d) => d.text)).size,
+  four.details.length,
+);
 
 const finishedBase = {
   ...base,
@@ -57,10 +60,11 @@ const finishedBase = {
 };
 const finished = getReadNotice(finishedBase, []);
 assert.equal(finished.headline, 'Finished like a cookbook');
-assert.deepEqual(finished.details, [
-  'Added a step to melt the butter.',
-  'Raised prep to 25 minutes.',
-]);
+assert.deepEqual(
+  finished.details.map((d) => d.text),
+  ['Added a step to melt the butter.', 'Raised prep to 25 minutes.'],
+);
+assert.ok(finished.details.every((d) => d.icon !== ''));
 assert.ok(finished.details.length <= MAX_DIRECT_NOTICE_DETAILS);
 assert.equal(
   finished.footer,
@@ -85,7 +89,7 @@ const both = getReadNotice(
   [],
 );
 assert.deepEqual(
-  both.details,
+  both.details.map((d) => d.text),
   [
     'We estimated a time the recipe didn’t give, from its steps.',
     'We estimated how long it keeps and how to reheat it.',

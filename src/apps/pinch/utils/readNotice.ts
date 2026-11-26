@@ -1,9 +1,15 @@
 import { formatList } from '@/utils/formatUtils';
 import type { ExtractedRecipe } from '@apps/pinch/utils/normalizeRecipe';
 
+export interface ReadNoticeDetail {
+  /** An emoji that says at a glance what kind of change the line is. */
+  icon: string;
+  text: string;
+}
+
 export interface ReadNotice {
   headline: string;
-  details: string[];
+  details: ReadNoticeDetail[];
   /** A quiet closing line under the details, only when finishing added something. */
   footer: string | null;
 }
@@ -44,27 +50,45 @@ export const getReadNotice = (
     usedPicks.length > 0;
   const details = [
     recipe.guided.length > 0
-      ? `Shaped to match your notes: ${formatList(recipe.guided)}.`
+      ? {
+          icon: '📝',
+          text: `Shaped to match your notes: ${formatList(recipe.guided)}.`,
+        }
       : null,
     usedPicks.length > 0
-      ? `Used your usual picks: ${formatList(
-          usedPicks.map(
-            (pick) => `${pick.ingredientName} for ${pick.name.toLowerCase()}`,
-          ),
-        )}.`
+      ? {
+          icon: '📌',
+          text: `Used your usual picks: ${formatList(
+            usedPicks.map(
+              (pick) => `${pick.ingredientName} for ${pick.name.toLowerCase()}`,
+            ),
+          )}.`,
+        }
       : null,
     recipe.isServingsEstimate && recipe.servings !== null
-      ? `We guessed ${recipe.servings} servings from the amounts, since the recipe didn’t say.`
+      ? {
+          icon: '🍽️',
+          text: `We guessed ${recipe.servings} servings from the amounts, since the recipe didn’t say.`,
+        }
       : null,
     isTimeEstimated
-      ? 'We estimated a time the recipe didn’t give, from its steps.'
+      ? {
+          icon: '⏱️',
+          text: 'We estimated a time the recipe didn’t give, from its steps.',
+        }
       : null,
     isCareEstimated
-      ? 'We estimated how long it keeps and how to reheat it.'
+      ? {
+          icon: '🧊',
+          text: 'We estimated how long it keeps and how to reheat it.',
+        }
       : null,
-    ...recipe.finished.map(toSentence),
+    ...recipe.finished.map((item) => ({
+      icon: '👩‍🍳',
+      text: toSentence(item),
+    })),
     recipe.unread.length > 0
-      ? `We couldn’t read: ${recipe.unread.join(', ')}.`
+      ? { icon: '⚠️', text: `We couldn’t read: ${recipe.unread.join(', ')}.` }
       : null,
   ].filter((detail) => detail !== null);
   const headline =

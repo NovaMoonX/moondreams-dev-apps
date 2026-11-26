@@ -4,7 +4,7 @@ import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
-import { Lightbulb, Plus, X } from 'lucide-react';
+import { Lightbulb, Plus, Sparkles, X } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
@@ -701,8 +701,12 @@ function RecipeReader({
           </div>
         )}
         {getGuidanceField()}
-        <label className='flex items-start justify-between gap-3 px-1'>
-          <span className='min-w-0'>
+        <label className='border-border flex items-center justify-between gap-3 rounded-2xl border px-4 py-3'>
+          <Sparkles
+            className='text-muted-foreground h-4 w-4 shrink-0'
+            aria-hidden='true'
+          />
+          <span className='min-w-0 flex-1'>
             <span className='block text-sm font-medium'>
               Finish it like a cookbook
             </span>
