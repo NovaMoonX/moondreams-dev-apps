@@ -20,17 +20,19 @@ import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import {
   COOK_BATCH_SIZE,
+  MAX_COOK_DURATION_HOURS,
   MAX_COOK_PHOTOS,
   MAX_COOKED_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
-import type { Cook } from '@apps/pinch/types';
+import type { Cook, CookStepTimes } from '@apps/pinch/types';
 import {
   getCookId,
   getCookPhotoPath,
   getCookPhotoPaths,
   getMissingCookFields,
   isCookHistoryFull,
+  isValidCookDuration,
   isValidCookRating,
   isValidCookServings,
   mergePlannedCook,
@@ -41,6 +43,7 @@ const cookDoc = (uid: string, id: string) =>
 
 const BAD_SERVINGS = `Pick a number of servings above zero, up to ${MAX_COOKED_SERVINGS.toLocaleString('en-US')}.`;
 const BAD_TIME = 'Pick a time that has already passed.';
+const BAD_DURATION = `Pick how long it took, up to ${MAX_COOK_DURATION_HOURS} hours.`;
 const FULL = `A recipe's history holds up to ${SOFT_MAX_COOKS_PER_RECIPE} cooks. Delete an older one to make room.`;
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
 const MINUTE_MS = 60_000;
@@ -84,6 +87,7 @@ interface AddCookInput {
   recipeId: string;
   servings: number;
   cookedAt: number;
+  durationSeconds: number | null;
 }
 
 export const addCook = createAsyncThunk<
@@ -93,11 +97,14 @@ export const addCook = createAsyncThunk<
 >(
   'pinch/cooks/add',
   async (
-    { uid, recipeId, servings, cookedAt },
+    { uid, recipeId, servings, cookedAt, durationSeconds },
     { getState, rejectWithValue },
   ) => {
     const problem = getAddProblem(getState(), recipeId, servings, cookedAt);
     if (problem !== null) return rejectWithValue(problem);
+    if (!isValidCookDuration(durationSeconds)) {
+      return rejectWithValue(BAD_DURATION);
+    }
 
     const now = Date.now();
     const cook: Cook = {
@@ -109,6 +116,8 @@ export const addCook = createAsyncThunk<
       rating: null,
       photoPath: null,
       photoPaths: [],
+      durationSeconds,
+      stepTimes: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -174,6 +183,8 @@ export const markPlannedCooked = createAsyncThunk<
             rating: null,
             photoPath: null,
             photoPaths: [],
+            durationSeconds: null,
+            stepTimes: null,
             createdAt: now,
             updatedAt: now,
           },
@@ -248,6 +259,8 @@ export const markPlannedPlateCooked = createAsyncThunk<
               rating: null,
               photoPath: null,
               photoPaths: [],
+              durationSeconds: null,
+              stepTimes: null,
               createdAt: now,
               updatedAt: now,
             },
@@ -271,6 +284,8 @@ interface UpdateCookInput {
   id: string;
   servings: number;
   cookedAt: number;
+  /** Left out to keep what the cook already says. */
+  durationSeconds?: number | null;
 }
 
 export const updateCook = createAsyncThunk<
@@ -279,7 +294,10 @@ export const updateCook = createAsyncThunk<
   { state: RootState; rejectValue: string }
 >(
   'pinch/cooks/update',
-  async ({ uid, id, servings, cookedAt }, { getState, rejectWithValue }) => {
+  async (
+    { uid, id, servings, cookedAt, durationSeconds },
+    { getState, rejectWithValue },
+  ) => {
     const existing = getState().pinch.cooks.items.find(
       (cook) => cook.id === id,
     );
@@ -290,12 +308,19 @@ export const updateCook = createAsyncThunk<
     if (!Number.isFinite(cookedAt) || cookedAt > Date.now() + MINUTE_MS) {
       return rejectWithValue(BAD_TIME);
     }
+    if (
+      durationSeconds !== undefined &&
+      !isValidCookDuration(durationSeconds)
+    ) {
+      return rejectWithValue(BAD_DURATION);
+    }
 
     try {
       await updateDoc(cookDoc(uid, id), {
         ...getMissingCookFields(existing),
         servings,
         cookedAt,
+        ...(durationSeconds === undefined ? {} : { durationSeconds }),
         updatedAt: Date.now(),
       });
     } catch (error) {
@@ -415,6 +440,48 @@ export const setCookReview = createAsyncThunk<
     }
 
     return id;
+  },
+);
+
+interface SetCookTimingInput {
+  uid: string;
+  timings: {
+    id: string;
+    durationSeconds: number | null;
+    stepTimes: CookStepTimes;
+  }[];
+}
+
+/** What cooking mode timed, written onto the cooks its Finish recorded in one batch of field-scoped updates. */
+export const setCookTiming = createAsyncThunk<
+  string[],
+  SetCookTimingInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/cooks/setTiming',
+  async ({ uid, timings }, { getState, rejectWithValue }) => {
+    const items = getState().pinch.cooks.items;
+    const now = Date.now();
+    try {
+      const batch = writeBatch(db);
+      timings.forEach(({ id, durationSeconds, stepTimes }) => {
+        const existing = items.find((cook) => cook.id === id);
+        batch.update(cookDoc(uid, id), {
+          ...(existing ? getMissingCookFields(existing) : {}),
+          durationSeconds: isValidCookDuration(durationSeconds)
+            ? durationSeconds
+            : null,
+          stepTimes,
+          updatedAt: now,
+        });
+      });
+      await batch.commit();
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to save how long it took.'),
+      );
+    }
+    return timings.map(({ id }) => id);
   },
 );
 
