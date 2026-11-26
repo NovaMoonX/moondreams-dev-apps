@@ -1389,7 +1389,7 @@ function RecipeForm({
                 className="relative -mx-2 -my-1 h-auto w-full justify-between gap-2 px-2 py-1 text-left font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                 onClick={() => setIsReadDetailOpen((open) => !open)}
               >
-                <span className='min-w-0'>
+                <span className='min-w-0 flex-1 text-left'>
                   <span className='block'>{readNotice.headline}</span>
                   {!isReadDetailOpen && (
                     <span className='text-muted-foreground block text-xs'>
