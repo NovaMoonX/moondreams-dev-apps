@@ -298,6 +298,8 @@ export type PinchSubview =
       fromIdeaId?: string;
       /** The CHANGE entries the form is applying: shown as quotes, and turned into the one TWEAK that records the edit when it is saved. */
       fromChangeIds?: string[];
+      /** Opens with the Change with Pepper box focused. */
+      withPepper?: boolean;
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
