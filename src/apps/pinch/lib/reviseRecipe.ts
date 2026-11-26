@@ -394,29 +394,6 @@ const toPromptText = (input: RevisionInput) => {
 export async function reviseRecipe(
   input: RevisionInput,
 ): Promise<RecipeRevision> {
-  await new Promise((resolve) => setTimeout(resolve, 900));
-  const w = window as unknown as { __pepperFail?: boolean };
-  if (w.__pepperFail) {
-    w.__pepperFail = false;
-    throw new Error('STUB: Gemini unavailable');
-  }
-  if (input.ask !== '__real__') {
-    const stubLines = input.ingredients
-      .filter((line) => !/cream/i.test(line.name))
-      .map((line) => {
-        if (/butter/i.test(line.name)) return { ...line, name: 'olive oil', amount: 1.5, unit: 'TBSP' };
-        if (/chicken/i.test(line.name)) return { ...line, amount: (line.amount ?? 1) * 1.5 };
-        return line;
-      });
-    const stubSteps = input.steps.map((step) => ({
-      ...step,
-      text: step.text.replace(/Melt the butter in/i, 'Warm the olive oil in').replace(/butter/gi, 'olive oil').replace(/pour the cream into the same pan/i, 'add a ladle of the pasta water to the same pan'),
-    }));
-    return normalizeRevision(
-      { ...input, reply: 'Swapped the butter for olive oil and took out the cream.', isChanged: true, ingredients: stubLines, steps: stubSteps },
-      new Set(input.ingredients.map((line) => line.ref)),
-    );
-  }
   const result = await generativeModel.generateContent({
     contents: [
       {
