@@ -13,6 +13,10 @@ import type {
   Source,
 } from '../../src/apps/pinch/types.ts';
 import {
+  cleanRevision,
+  readAllowedAddresses,
+} from '../../functions/src/apps/pinch/pepper/revisePinchRecipe.ts';
+import {
   applyRevision,
   describeRevisionMarks,
   toRevisionInput,
@@ -473,5 +477,42 @@ assert.deepEqual(
   [0, 2],
   "a step inserted above keeps an earlier round's rewritten step marked",
 );
+
+const linkOf = (url: string) => ({ kind: 'OTHER', label: 'A page', url });
+const answerWith = (urls: string[]) => ({
+  reply: 'Done.',
+  isChanged: true,
+  links: urls.map(linkOf),
+});
+const allowed = readAllowedAddresses(
+  [linkOf('https://Mine.example.com/recipe/')],
+  ['https://found.example.com/page#top'],
+  ['see https://typed.example.com/x, please'],
+);
+const keptUrls = (urls: string[]) =>
+  (cleanRevision(answerWith(urls), allowed)!.links as { url: string }[]).map(
+    (entry) => entry.url,
+  );
+assert.deepEqual(
+  keptUrls(['https://invented.example.com/a']),
+  [],
+  'an invented link is dropped',
+);
+assert.equal(
+  keptUrls(['https://found.example.com/page']).length,
+  1,
+  'a found link stays',
+);
+assert.equal(
+  keptUrls(['https://mine.example.com/recipe']).length,
+  1,
+  'an existing link stays',
+);
+assert.equal(
+  keptUrls(['https://typed.example.com/x']).length,
+  1,
+  'a typed link stays',
+);
+assert.equal(cleanRevision(answerWith([]), new Set())!.links.length, 0);
 
 console.log('pinch pepper revision checks passed');

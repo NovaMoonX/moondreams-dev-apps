@@ -6,7 +6,18 @@ import type {
 
 const OPEN_TIMEOUT_MS = 8000;
 
-/** Drops each link the revision added that its page can't be opened for; says so in the reply only when every added link failed. */
+// The function reports a gone page in its message ("returned an error (404)") and an unknown host as invalid-argument; a timeout, a block or anything else says nothing about the page.
+const isGone = (error: unknown) => {
+  const { code, message } = (error ?? {}) as Record<string, unknown>;
+  if (typeof message !== 'string') return false;
+  return (
+    /returned an error \((404|410)\)/.test(message) ||
+    (code === 'functions/invalid-argument' &&
+      message.includes('Could not resolve that link'))
+  );
+};
+
+/** Drops each link the revision added whose page clearly does not exist (gone or an unknown host), keeping any a timeout, a block or another failure leaves unsure; says so in the reply. */
 export async function dropUnopenableLinks(
   revision: RecipeRevision,
   input: RevisionInput,
@@ -24,9 +35,12 @@ export async function dropUnopenableLinks(
     ),
   );
   const failed = new Set(
-    added.flatMap((link, index) =>
-      results[index].status === 'rejected' ? [link.url] : [],
-    ),
+    added.flatMap((link, index) => {
+      const result = results[index];
+      return result.status === 'rejected' && isGone(result.reason)
+        ? [link.url]
+        : [];
+    }),
   );
   if (failed.size === 0) return revision;
 
@@ -36,6 +50,6 @@ export async function dropUnopenableLinks(
     reply:
       failed.size === added.length
         ? `${revision.reply} Couldn't open the link it found, so left it out.`
-        : revision.reply,
+        : `${revision.reply} Left out ${failed.size} ${failed.size === 1 ? 'link' : 'links'} it found that wouldn't open.`,
   };
 }

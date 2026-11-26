@@ -50,15 +50,43 @@ const readKey = () => {
   }
 };
 
-const isRedirectAddress = (url: string) => {
+const URL_IN_TEXT = /https?:\/\/[^\s<>"')\]]+/gi;
+
+/** An address as compared: trimmed, host in lower case, no hash and no trailing slash; null when it is not a web address. */
+export const normalizeAddress = (text: string) => {
   try {
-    return new URL(url).hostname
-      .toLowerCase()
-      .endsWith('vertexaisearch.cloud.google.com');
+    const url = new URL(text.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    url.hash = '';
+    return url.href.replace(/\/$/, '');
   } catch {
-    return false;
+    return null;
   }
 };
+
+/** Every address the model may hand back: the recipe's own, the pages its search found and any the person wrote. */
+export const readAllowedAddresses = (
+  recipeLinks: unknown,
+  foundUrls: string[],
+  typedTexts: string[],
+) =>
+  new Set(
+    [
+      ...(Array.isArray(recipeLinks) ? recipeLinks : []).map(
+        (entry) => (entry as { url?: unknown } | null)?.url,
+      ),
+      ...foundUrls,
+      ...typedTexts.flatMap((text) =>
+        (text.match(URL_IN_TEXT) ?? []).map((link) =>
+          link.replace(/[.,;:!?]+$/, ''),
+        ),
+      ),
+    ].flatMap((value) => {
+      const address =
+        typeof value === 'string' ? normalizeAddress(value) : null;
+      return address === null ? [] : [address];
+    }),
+  );
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -107,8 +135,8 @@ const toMessage = ({
       : ''
   }--- BEGIN ASK ---\n${ask}\n--- END ASK ---`;
 
-/** The model's answer with its links cleaned and capped and a search engine's redirect addresses dropped; null when it is not a revision. */
-export function cleanRevision(answer: unknown) {
+/** The model's answer with its links cleaned and capped and any address not in `allowed` dropped; null when it is not a revision. */
+export function cleanRevision(answer: unknown, allowed: ReadonlySet<string>) {
   if (!isObject(answer) || JSON.stringify(answer).length > MAX_ANSWER_CHARS) {
     return null;
   }
@@ -122,12 +150,12 @@ export function cleanRevision(answer: unknown) {
   }
   return {
     ...answer,
-    links: cleanLinks(
-      answer.links.filter((entry) => {
-        const url = (entry as { url?: unknown } | null)?.url;
-        return typeof url !== 'string' || !isRedirectAddress(url);
-      }),
-    ).map(({ kind, label, url }) => ({ kind, label, url })),
+    links: cleanLinks(answer.links)
+      .filter(({ url }) => {
+        const address = normalizeAddress(url);
+        return address !== null && allowed.has(address);
+      })
+      .map(({ kind, label, url }) => ({ kind, label, url })),
   };
 }
 
@@ -204,7 +232,13 @@ export const revisePinchRecipe = onCall(
         result.searches * SEARCH_COST_HUNDREDTHS;
       const revision =
         result.endedBy === 'terminal'
-          ? cleanRevision(result.terminalInput)
+          ? cleanRevision(
+              result.terminalInput,
+              readAllowedAddresses(body.recipe.links, result.foundUrls, [
+                body.ask,
+                ...body.earlier,
+              ]),
+            )
           : null;
       logger.info('pepper.revise', {
         endedBy: result.endedBy,

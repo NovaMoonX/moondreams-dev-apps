@@ -240,6 +240,7 @@ export const createResearchFixtureProvider = (): SearchProvider => ({
       usage: EMPTY_USAGE,
       searches: hasWeb ? 2 : 0,
       sources: [],
+      foundUrls: [],
     });
   },
 });

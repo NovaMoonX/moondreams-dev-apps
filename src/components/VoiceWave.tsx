@@ -5,14 +5,15 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 const BAR_COUNT = 28;
 const SAMPLE_MS = 55;
 const MIN_SCALE = 0.12;
+const STILL_SCALE = 0.35;
 
 interface VoiceWaveProps {
-  /** The live input level, 0 to 1, read every frame; null when nothing reports one (the wave then moves gently on its own). */
+  /** The live input level, 0 to 1, read every frame; null when nothing reports one (the bars then stay calm and still). */
   getLevel: () => number | null;
   className?: string;
 }
 
-/** A classic audio wave of thin bars that scrolls left as the person speaks; the colour is `--voice-wave` (an app sets it), else the orb's accent, else the primary. Still under reduced motion. */
+/** A classic audio wave of thin bars that scrolls left as the person speaks; the colour is `--voice-wave` (an app sets it), else the orb's accent, else the primary. Still under reduced motion and when no level is reported. */
 function VoiceWave({ getLevel, className }: VoiceWaveProps) {
   const bars = useRef<(HTMLSpanElement | null)[]>([]);
   const getLevelRef = useRef(getLevel);
@@ -30,9 +31,7 @@ function VoiceWave({ getLevel, className }: VoiceWaveProps) {
       if (now - lastAt >= SAMPLE_MS) {
         lastAt = now;
         const read = getLevelRef.current();
-        const level =
-          read ?? 0.18 + 0.12 * Math.sin(now / 260) * Math.sin(now / 710);
-        history.push(Math.min(1, Math.max(0, level)));
+        history.push(Math.min(1, Math.max(0, read ?? STILL_SCALE)));
         history.shift();
         history.forEach((value, index) => {
           const bar = bars.current[index];

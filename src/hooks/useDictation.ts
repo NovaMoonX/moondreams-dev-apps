@@ -104,8 +104,15 @@ export function useDictation({
       setIsAwaiting(true);
       voice.listen();
     },
-    /** Ends the listen and keeps what was said. */
-    stop: () => voice.stop(),
+    /** Ends the listen and keeps what was said; a listen that has not started yet is dropped at once. */
+    stop: () => {
+      if (!voice.isStarting) {
+        voice.stop();
+        return;
+      }
+      voice.cancel();
+      end(null);
+    },
     cancel: () => {
       voice.cancel();
       end(null);

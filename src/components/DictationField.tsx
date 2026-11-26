@@ -41,7 +41,7 @@ interface DictationFieldProps {
   };
 }
 
-/** A chat-style box that can be spoken into: while the person talks the row is a live wave and Stop (no words), a brief spinner follows while the words are formatted, then they land in the box to read, fix and send. The placeholder shows whenever the box is empty and idle. */
+/** A chat-style box that can be spoken into: while the person talks the row is a live wave and Stop (no words), a brief spinner follows while the words are formatted, then they land in the box after what is typed, to read, fix and send; the mic shows whenever the box is idle. The placeholder shows whenever the box is empty and idle. */
 function DictationField({
   dictation,
   value,
@@ -133,7 +133,7 @@ function DictationField({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
         />
-        {isIdle && dictation.canListen && value.trim() === '' && (
+        {isIdle && dictation.canListen && (
           <Button
             type='button'
             variant='tertiary'

@@ -348,6 +348,7 @@ export function createAnthropicSearchProvider(
         )
         .slice(0, MAX_SOURCES)
         .map(([url, title]) => ({ title, url })),
+      foundUrls: [...new Set([...cited.keys(), ...found.keys()])],
     });
     const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
       ...(maxSearches > 0
