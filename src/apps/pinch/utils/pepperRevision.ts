@@ -163,30 +163,28 @@ const getChangedSteps = (
 ) => {
   const same = (a: { text: string }, b: { text: string }) =>
     a.text.trim() === b.text.trim();
-  const table = Array.from({ length: previous.length + 1 }, () =>
-    Array<number>(next.length + 1).fill(0),
+  const table = previous.reduceRight<number[][]>(
+    (rows, previousStep) => {
+      const below = rows[0];
+      const row = next.reduceRight<number[]>(
+        (right, nextStep, j) => [
+          same(previousStep, nextStep)
+            ? below[j + 1] + 1
+            : Math.max(below[j], right[0]),
+          ...right,
+        ],
+        [0],
+      );
+      return [row, ...rows];
+    },
+    [Array<number>(next.length + 1).fill(0)],
   );
-  for (let i = previous.length - 1; i >= 0; i -= 1) {
-    for (let j = next.length - 1; j >= 0; j -= 1) {
-      table[i][j] = same(previous[i], next[j])
-        ? table[i + 1][j + 1] + 1
-        : Math.max(table[i + 1][j], table[i][j + 1]);
-    }
-  }
-  const pairs = new Map<number, number>();
-  let i = 0;
-  let j = 0;
-  while (i < previous.length && j < next.length) {
-    if (same(previous[i], next[j])) {
-      pairs.set(j, i);
-      i += 1;
-      j += 1;
-    } else if (table[i + 1][j] >= table[i][j + 1]) {
-      i += 1;
-    } else {
-      j += 1;
-    }
-  }
+  const walk = (i: number, j: number): [number, number][] => {
+    if (i >= previous.length || j >= next.length) return [];
+    if (same(previous[i], next[j])) return [[j, i], ...walk(i + 1, j + 1)];
+    return table[i + 1][j] >= table[i][j + 1] ? walk(i + 1, j) : walk(i, j + 1);
+  };
+  const pairs = new Map(walk(0, 0));
 
   return next.flatMap((step, index) => {
     const from = pairs.get(index);
