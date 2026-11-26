@@ -1270,7 +1270,7 @@ function RecipeIngredients({
                       className={join(
                         'scroll-mt-16 scroll-mb-28 py-1',
                         aiMarkedIds.includes(row.id) &&
-                          'ai-changed rounded-lg px-2',
+                          'ai-changed -mx-2 rounded-lg px-2',
                       )}
                       data-ingredient-row={row.id}
                       data-ingredient-unresolved={isUnresolved || undefined}

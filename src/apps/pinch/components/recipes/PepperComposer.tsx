@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { ArrowUp, LoaderCircle, Mic, Sparkles, Square } from 'lucide-react';
@@ -44,6 +44,28 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
   const [needsMicrophone, setNeedsMicrophone] = useState(false);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   useGrowingTextarea(fieldRef, text, ASK_MAX_LINES);
+
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!isStartOpen || field === null) return;
+    // The drawer that opened this screen hands focus back to its opener as it closes.
+    const home = field.closest('[role="dialog"]') ?? document.body;
+    const pullBack = (event: FocusEvent) => {
+      if (event.target instanceof Node && !home.contains(event.target)) {
+        field.focus();
+      }
+    };
+    document.addEventListener('focusin', pullBack);
+    field.focus();
+    const timer = window.setTimeout(
+      () => document.removeEventListener('focusin', pullBack),
+      1500,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('focusin', pullBack);
+    };
+  }, [isStartOpen]);
   const lang = useMemo(() => navigator.language || 'en-US', []);
 
   const voice = useVoiceConversation({
@@ -145,9 +167,8 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
       )}
       <Textarea
         ref={fieldRef}
-        rows={1}
+        rows={2}
         variant='outline'
-        autoFocus
         aria-label='What to change'
         placeholder='Make it spicier, or swap the butter for olive oil'
         maxLength={MAX_PEPPER_ASK_LENGTH}
@@ -165,6 +186,20 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
         <MicrophoneAccess onAllowed={() => setNeedsMicrophone(false)} />
       )}
       <div className='flex items-center gap-2'>
+        <span className='min-w-0 flex-1'>
+          {isWorking && (
+            <span
+              className='text-muted-foreground flex items-center gap-2 text-xs'
+              role='status'
+            >
+              <LoaderCircle
+                className='h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:[animation-duration:2.5s]'
+                aria-hidden='true'
+              />
+              Pepper is changing the recipe…
+            </span>
+          )}
+        </span>
         {canListen && (
           <Button
             type='button'
@@ -187,20 +222,6 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
             )}
           </Button>
         )}
-        <span className='min-w-0 flex-1'>
-          {isWorking && (
-            <span
-              className='text-muted-foreground flex items-center gap-2 text-xs'
-              role='status'
-            >
-              <LoaderCircle
-                className='h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:[animation-duration:2.5s]'
-                aria-hidden='true'
-              />
-              Pepper is changing the recipe…
-            </span>
-          )}
-        </span>
         <Button
           type='button'
           size='sm'

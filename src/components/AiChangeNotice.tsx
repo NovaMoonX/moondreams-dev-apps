@@ -32,7 +32,7 @@ function AiChangeNotice({
       role='status'
       aria-live='polite'
       className={join(
-        'bg-muted/60 border-border flex items-start gap-2 rounded-2xl border p-3 text-sm',
+        'bg-muted border-border flex items-start gap-2 rounded-2xl border p-3 text-sm',
         className,
       )}
     >

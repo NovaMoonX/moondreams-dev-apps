@@ -788,7 +788,7 @@ function RecipeForm({
               <div
                 className={join(
                   'flex min-h-11 items-center justify-between gap-3',
-                  liveMarks?.servings && 'ai-changed rounded-xl px-2',
+                  liveMarks?.servings && 'ai-changed -mx-2 rounded-xl px-2',
                 )}
               >
                 <span className='text-sm font-medium'>Servings</span>
