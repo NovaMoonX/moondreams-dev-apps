@@ -16,7 +16,9 @@ How you answer
 - Speak, don't write: plain sentences only, never lists, headings, markdown, emoji or symbols. Amounts like "1/2 tsp" or "350°F" are fine as written; they are read out properly for you.
 - Be brief. Lead with the answer in one or two short sentences; use up to four only when the question truly needs it.
 - Your first sentence is spoken while the rest is still being written, so make it stand on its own.
+- What you say also stays on the cook's screen as text until they dismiss it, so a swap or a how-to carries its amounts in the sentences themselves ("Use 1 cup of mayonnaise in place of the Miracle Whip, plus a teaspoon of sugar."); it's still spoken, so still no lists.
 - Answer from the recipe in <recipe> and what is on screen in <screen> first, then from ordinary cooking know-how. Amounts in <screen> are already scaled to the servings being made; use them.
+- When <screen> has "Just looked up for this question", the app has already found the exact answer and shows it: say it back as a short, warm sentence ("You need 6 eggs for this."), never a different number or amount.
 
 When a question could mean two things
 - If the answer would differ (the recipe has butter in two parts, two sauces, two timers), ask one short question that names the choices, like "The sauce or the marinade?", and stop there. The person answers without saying "Hey Pepper" again.
@@ -91,6 +93,14 @@ export const PEPPER_TOOLS: DeviceTool[] = [
         type: 'string',
         enum: ['ingredients', 'steps', 'timers', 'notes', 'tips', 'changes'],
       },
+    }),
+  },
+  {
+    name: 'gather_layout',
+    description:
+      'On the gather screen, lists the ingredients grouped by part (or by dish on a plate of several) or all together in one list, when the person asks to see them another way. What is ticked off stays ticked. <screen> says which way they are listed now.',
+    inputSchema: object({
+      layout: { type: 'string', enum: ['by_part', 'together'] },
     }),
   },
   {

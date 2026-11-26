@@ -24,6 +24,7 @@ const valid: Record<string, unknown> = {
   tick_ingredients: { names: ['butter'], got: true },
   mark_added: { names: ['flour'], added: true },
   scroll: { direction: 'down' },
+  gather_layout: { layout: 'together' },
   add_entry: { kind: 'tip', text: "Don't crowd the pan", step: null },
   edit_entry: { id: 'n1', text: 'Use less salt' },
   remove_entry: { id: 'n1' },
@@ -150,6 +151,17 @@ assert.deepEqual(read('show', { what: 'tips' }), {
 });
 assert.ok(isInvalid('show', { what: 'finish' }));
 assert.ok(isInvalid('show', { what: 'constructor' }));
+
+// The gather screen's layout.
+assert.deepEqual(read('gather_layout', { layout: 'by_part' }), {
+  kind: 'cook',
+  command: { kind: 'SET_GATHER_LAYOUT', layout: 'PARTS' },
+});
+assert.deepEqual(read('gather_layout', { layout: 'together' }), {
+  kind: 'cook',
+  command: { kind: 'SET_GATHER_LAYOUT', layout: 'ALL' },
+});
+assert.ok(isInvalid('gather_layout', { layout: 'sideways' }));
 
 // Ticks.
 assert.deepEqual(
