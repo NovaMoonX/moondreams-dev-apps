@@ -9,6 +9,7 @@ import { ChevronRight, NotebookPen, Plus } from 'lucide-react';
 import ActionChips from '@/components/ActionChips';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import IconBadge from '@/components/IconBadge';
 import { PillGroup } from '@/components/PillGroup';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import StarRating from '@/components/StarRating';
@@ -46,6 +47,7 @@ import {
 } from '@apps/pinch/utils/containers';
 import {
   formatCookRating,
+  getCookPhotoPaths,
   getCookServings,
   getRatingAverage,
   isCookHistoryFull,
@@ -265,7 +267,9 @@ function CookingHistorySheet({
         ]
           .filter((part) => part !== null)
           .join(' · ');
-  const photoCooks = cooks.filter((cook) => cook.photoPath != null);
+  const cookPhotos = cooks.flatMap((cook) =>
+    getCookPhotoPaths(cook).map((path, index) => ({ cook, path, index })),
+  );
   const shownMode =
     (mode === 'photos' && photoCount > 0) ||
     (mode === 'changes' && tweaks.length > 0)
@@ -457,19 +461,20 @@ function CookingHistorySheet({
           </p>
         ) : shownMode === 'photos' ? (
           <ul className='grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pt-2 sm:grid-cols-3'>
-            {photoCooks.slice(0, PHOTOS_SHOWN).map((cook) => {
+            {cookPhotos.slice(0, PHOTOS_SHOWN).map(({ cook, path, index }) => {
               const day = formatDateShort(cook.cookedAt);
               return (
-                <li key={cook.id}>
+                <li key={path}>
                   <Button
                     type='button'
                     variant='tertiary'
-                    aria-label={`The cook from ${day}${cook.rating == null ? '' : `, rated ${formatCookRating(cook.rating)}`}`}
+                    aria-label={`${index === 0 ? 'The' : `Photo ${index + 1} of the`} cook from ${day}${cook.rating == null ? '' : `, rated ${formatCookRating(cook.rating)}`}`}
                     className='h-auto w-full flex-col items-stretch gap-1.5 px-0! py-0 text-left font-normal'
                     onClick={() => openEdit(cook.id)}
                   >
                     <CookPhotoThumb
                       cook={cook}
+                      path={path}
                       className='aspect-square w-full rounded-2xl'
                     />
                     <span className='flex flex-wrap items-center gap-x-2 text-xs'>
@@ -484,8 +489,8 @@ function CookingHistorySheet({
                 </li>
               );
             })}
-            {photoCooks.length > PHOTOS_SHOWN && (
-              <li className='col-span-full text-muted-foreground text-xs'>
+            {cookPhotos.length > PHOTOS_SHOWN && (
+              <li className='text-muted-foreground col-span-full text-xs'>
                 The latest {PHOTOS_SHOWN} are here; the rest are in All cooks.
               </li>
             )}
@@ -497,6 +502,7 @@ function CookingHistorySheet({
               const putAway = putAwayByCook.get(cook.id) ?? null;
               const day = formatDateShort(cook.cookedAt);
               const writtenLine = getWrittenLine(writtenByCook.get(cook.id));
+              const cookPhotoCount = getCookPhotoPaths(cook).length;
               return (
                 <li key={cook.id} className='pb-2'>
                   <Button
@@ -536,7 +542,11 @@ function CookingHistorySheet({
                         </span>
                       )}
                     </span>
-                    <CookPhotoThumb cook={cook} className='size-12' />
+                    <IconBadge
+                      icon={<CookPhotoThumb cook={cook} className='size-12' />}
+                      count={cookPhotoCount > 1 ? cookPhotoCount : 0}
+                      className='shrink-0'
+                    />
                     <ChevronRight
                       className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
                       aria-hidden='true'
