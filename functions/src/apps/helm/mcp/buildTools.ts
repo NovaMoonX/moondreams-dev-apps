@@ -232,7 +232,9 @@ const describeFields = (shape: z.ZodRawShape) => {
     ? 'none'
     : keys
         .map((key) =>
-          (shape[key] as z.ZodType).safeParse(undefined).success ? key : `${key} (required)`,
+          (shape[key] as z.ZodType).safeParse(undefined).success
+            ? key
+            : `${key} (required)`,
         )
         .join(', ');
 };
@@ -1378,18 +1380,16 @@ export function buildHelmTools(scope: HelmToolScope) {
               : option.categories.map((category) => category.label).join(' or ')
           } in ${where}.)`;
     return app.tools.flatMap((declared): HelmTool<z.ZodRawShape>[] => {
-      const options = app.actions.filter(
-        (entry) => entry.tool === declared.id,
-      );
+      const options = app.actions.filter((entry) => entry.tool === declared.id);
       if (options.length === 0) return [];
       const kind = options[0].kind;
       const isChange = kind === 'change';
-      if (
-        isChange &&
-        (scope.canChangeApps !== true || options.every((entry) => !entry.isOn))
-      ) {
-        return [];
-      }
+      const blockedNote =
+        isChange && scope.canChangeApps !== true
+          ? ` Off right now for this assistant: the person turns on "Change things in your apps" for it in Helm > Settings > Connected assistants. Until then a call changes nothing and answers assistantCannotChange; when the person asks for one of these changes, tell them to turn on that switch, never that it can't be done.`
+          : isChange && options.every((entry) => !entry.isOn)
+            ? ` Every change here is off right now, each naming its switch here; a call changes nothing and answers switchedOff. When the person asks for one, tell them which switch to turn on and where, never that it can't be done.`
+            : '';
       const isGrouped = options.length > 1;
       const promise = isChange
         ? `Changes ${appLabel} through Helm, only what the person allowed; it never deletes. It applies at once and the person can undo it in ${appLabel} and in Helm, so confirm with the person before calling it. It always answers with a status: ok, switchedOff (a named switch is off), assistantCannotChange, refused (nothing was changed; the message says why) or notFound (nothing was changed; the id was not found); say exactly what a status says.`
@@ -1398,11 +1398,11 @@ export function buildHelmTools(scope: HelmToolScope) {
         `- ${option.id}: ${option.action.description}${offNote(option)} Fields: ${describeFields(option.action.shape)}.`;
       const description = isGrouped
         ? [
-            `${lead} Set action to one of these, with the fields it lists:`,
+            `${lead}${blockedNote} Set action to one of these, with the fields it lists:`,
             ...options.map(optionLine),
             promise,
           ].join('\n')
-        : `${lead} ${options[0].action.description}${offNote(options[0])} ${promise}`;
+        : `${lead}${blockedNote} ${options[0].action.description}${offNote(options[0])} ${promise}`;
       const runOption = isChange ? runAppChange : runAppRead;
       return [
         {
@@ -1415,7 +1415,10 @@ export function buildHelmTools(scope: HelmToolScope) {
           isAdditive: options.every((entry) => !entry.changesExisting),
           description,
           shape: isGrouped
-            ? groupedShape(options.map((entry) => entry.id), options)
+            ? groupedShape(
+                options.map((entry) => entry.id),
+                options,
+              )
             : options[0].action.shape,
           run: async (input) => {
             const record = input as Record<string, unknown>;

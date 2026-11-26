@@ -33,6 +33,8 @@ import {
   MAX_IDEA_SITE_NAME_LENGTH,
   MAX_IDEA_TITLE_LENGTH,
   MAX_IDEA_URL_LENGTH,
+  MAX_LINK_LABEL_LENGTH,
+  MAX_LINK_URL_LENGTH,
   MAX_MEAL_ITEMS,
   MAX_MINUTES,
   MAX_NAME_LENGTH,
@@ -40,6 +42,7 @@ import {
   MAX_NOTE_LENGTH,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
+  MAX_RECIPE_LINKS,
   MAX_RECIPE_STEPS,
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
@@ -65,6 +68,8 @@ import type {
   PlannedMeal,
   Recipe,
   RecipeIngredient,
+  RecipeLink,
+  RecipeLinkKind,
   RecipeNote,
   ResolvedIngredient,
   ShoppingItem,
@@ -76,6 +81,11 @@ import {
   getRecipeSnapshot,
   isUnrestoredLine,
 } from './recipeChanges.js';
+import {
+  getInlineVideo,
+  getLinkHost,
+  normalizeLinkUrl,
+} from './recipeLinks.js';
 import { toStoredStepSections } from './stepSections.js';
 
 export type OutsideChangeKind =
@@ -677,6 +687,127 @@ const recipeFields = {
     ),
 };
 
+const LINK_KINDS = {
+  how_to: 'HOW_TO',
+  article: 'ARTICLE',
+  original: 'ORIGINAL',
+  technique: 'TECHNIQUE',
+  other: 'OTHER',
+} as const satisfies Record<string, RecipeLinkKind>;
+
+const linkShape = z.object({
+  url: z
+    .string()
+    .min(1)
+    .max(MAX_LINK_URL_LENGTH)
+    .describe('One web address, starting with http:// or https://.'),
+  kind: z
+    .enum(Object.keys(LINK_KINDS) as [keyof typeof LINK_KINDS])
+    .nullish()
+    .describe(
+      'how_to for a video that shows how to make it (the recipe shows one, playable in place), original for the recipe it came from, article, technique for a video or page on one skill, or other. Left out, a YouTube or Vimeo video is how_to and anything else is other.',
+    ),
+  label: z
+    .string()
+    .max(MAX_LINK_LABEL_LENGTH)
+    .nullish()
+    .describe(
+      'A short name for the link, such as "Checking it is set"; left out, the kind\'s own name shows.',
+    ),
+});
+
+type LinkInput = z.infer<typeof linkShape>;
+
+interface AddedLinks {
+  links: RecipeLink[];
+  added: RecipeLink[];
+  /** Addresses already on the recipe, or sent twice. */
+  skipped: string[];
+  /** A how-to asked for while the recipe already has one, kept as another link. */
+  demoted: string[];
+}
+
+/** Links an assistant adds after the recipe's own: never removing or changing one, skipping an address already there, and keeping the recipe's one how-to video. */
+export const planAddedLinks = (
+  existing: RecipeLink[],
+  input: LinkInput[],
+  newId: () => string = randomUUID,
+): Built<AddedLinks> => {
+  const bad = input.find((entry) => normalizeLinkUrl(entry.url) === null);
+  if (bad !== undefined) {
+    return {
+      kind: 'refused',
+      message: `"${clipText(bad.url, 80)}" isn't a web address, so no link was added. Send each link on its own, starting with http:// or https://.`,
+    };
+  }
+  const comparable = (url: string) =>
+    (getComparableUrl(url) ?? url).toLowerCase();
+  const planned = input.reduce<AddedLinks>(
+    (state, entry) => {
+      const url = normalizeLinkUrl(entry.url) ?? '';
+      if (
+        state.links.some((link) => comparable(link.url) === comparable(url))
+      ) {
+        return { ...state, skipped: [...state.skipped, url] };
+      }
+      const asked: RecipeLinkKind = entry.kind
+        ? LINK_KINDS[entry.kind]
+        : getInlineVideo(url) !== null
+          ? 'HOW_TO'
+          : 'OTHER';
+      const isTaken =
+        asked === 'HOW_TO' &&
+        state.links.some((link) => link.kind === 'HOW_TO');
+      const label =
+        clipText(
+          (entry.label ?? '').replace(/\s+/g, ' '),
+          MAX_LINK_LABEL_LENGTH,
+        ).trim() || null;
+      const link: RecipeLink = {
+        id: newId(),
+        kind: isTaken ? 'OTHER' : asked,
+        label,
+        url,
+      };
+      return {
+        ...state,
+        links: [...state.links, link],
+        added: [...state.added, link],
+        demoted: isTaken ? [...state.demoted, url] : state.demoted,
+      };
+    },
+    { links: existing, added: [], skipped: [], demoted: [] },
+  );
+  const room = MAX_RECIPE_LINKS - existing.length;
+  if (planned.links.length > MAX_RECIPE_LINKS) {
+    return {
+      kind: 'refused',
+      message:
+        room <= 0
+          ? `A recipe holds up to ${MAX_RECIPE_LINKS} links and this one is full, so no link was added. The person can remove one in Pinch first.`
+          : `A recipe holds up to ${MAX_RECIPE_LINKS} links and this one has room for ${room} more, so no link was added. Send at most ${room}.`,
+    };
+  }
+  return { kind: 'ok', value: planned };
+};
+
+const toLinkReply = ({ added, skipped, demoted }: AddedLinks) => [
+  ...added.map(
+    (link) =>
+      `Added ${link.kind === 'HOW_TO' ? 'the how-to video' : 'a link'}: ${link.label ?? getLinkHost(link.url)}`,
+  ),
+  ...(demoted.length > 0
+    ? [
+        `The recipe already has a how-to video, so ${demoted.length > 1 ? 'these were' : 'this one was'} added as another link.`,
+      ]
+    : []),
+  ...(skipped.length > 0
+    ? [
+        `Already on the recipe, so not added again: ${skipped.map(getLinkHost).join(', ')}`,
+      ]
+    : []),
+];
+
 export const UPDATE_RECIPE_SHAPE = {
   recipeId: z
     .string()
@@ -692,6 +823,14 @@ export const UPDATE_RECIPE_SHAPE = {
   description: recipeFields.description,
   ingredients: recipeFields.ingredients.optional(),
   steps: recipeFields.steps.optional(),
+  addLinks: z
+    .array(linkShape)
+    .min(1)
+    .max(MAX_RECIPE_LINKS)
+    .optional()
+    .describe(
+      `Links to put on the recipe after the ones it has, up to ${MAX_RECIPE_LINKS} in all: a how-to video, the original recipe, an article. It only adds: it never removes or changes a link, the recipe's own links are never shown to you, and an address already on it is skipped. Needs no basedOn.`,
+    ),
   basedOn: z
     .number()
     .optional()
@@ -996,7 +1135,15 @@ export const updateRecipe = async (
     const steps = patchOf(input, 'steps')
       ? buildSteps((input.steps ?? []) as StepInput[])
       : null;
-    const failed = [lines, steps].find((built) => built?.kind === 'refused');
+    const links = patchOf(input, 'addLinks')
+      ? planAddedLinks(
+          before.links ?? [],
+          (input.addLinks ?? []) as LinkInput[],
+        )
+      : null;
+    const failed = [lines, steps, links].find(
+      (built) => built?.kind === 'refused',
+    );
     if (failed?.kind === 'refused') return refused(failed.message);
     const made = lines?.kind === 'ok' ? lines.value : null;
     const created = made?.created ?? [];
@@ -1031,14 +1178,16 @@ export const updateRecipe = async (
       }),
       ...(made && { ingredients: made.lines }),
       ...(steps?.kind === 'ok' && steps.value),
+      ...(links?.kind === 'ok' && { links: links.value.links }),
     };
+    const linkReply = links?.kind === 'ok' ? toLinkReply(links.value) : [];
     const changes = getRecipeChanges(before, after, liveBook.names);
     const isTitleShown = ctx.allowedCategories.has('recipes');
     if (changes.length === 0) {
       const summary = `Nothing needed changing: ${isTitleShown ? found.recipe.title : 'the recipe'} already reads that way.`;
       return ok({
         summary,
-        reply: { summary, lines: [] },
+        reply: { summary, lines: linkReply },
         lines: [],
         changes: [],
         recipeId,
@@ -1103,6 +1252,7 @@ export const updateRecipe = async (
         lines: capLines([
           ...toIngredientReply(ctx, { created, matches: made?.matches ?? [] }),
           ...toRecipeReply(ctx, input, liveBook, before, after),
+          ...linkReply,
         ]),
       }),
     );

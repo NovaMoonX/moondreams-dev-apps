@@ -1559,7 +1559,7 @@ export function createPinchAdapter(
         (ctx, input) => findKitchenIngredients(deps.firestore(), ctx, input),
       ),
       update_recipe: toAppAction(
-        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps). ingredients and steps replace the whole list, so read the recipe with pinch_read (action get_recipe) first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_read (action search_recipes) or pinch_read (action get_meal_plan). It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
+        "Edits one of the person's recipes: send only what should change (title, servings, prepMinutes, cookMinutes, description, ingredients, steps, addLinks). addLinks puts links on the recipe, such as a how-to video or the article it came from; it only adds, never removes or changes a link, and needs no read first. ingredients and steps replace the whole list, so read the recipe with pinch_read (action get_recipe) first, send every line you want kept and pass its version as basedOn (required with ingredients or steps; if the recipe changed in Pinch since you read it, nothing is written and you are told to read it again). recipeId comes from pinch_read (action search_recipes) or pinch_read (action get_meal_plan). It applies at once; it shows in the recipe's Changes in Pinch with an Undo, and in Helm. Confirm with the person what you will change before you call it.",
         UPDATE_RECIPE_SHAPE,
         (ctx, input) => updateRecipe(deps.firestore(), ctx, input),
       ),
@@ -1574,7 +1574,7 @@ export function createPinchAdapter(
         (ctx, input) => planMeal(deps.firestore(), ctx, input),
       ),
       add_to_shopping_list: toAppAction(
-        "Adds things to the person's shopping list: each with a name and optionally an amount, a unit and a short note about the ingredient (\"chopped\", a brand; never an amount). Something already on the list gains the amount and the note. It never ticks or removes anything. It applies at once and shows in Pinch's shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.",
+        'Adds things to the person\'s shopping list: each with a name and optionally an amount, a unit and a short note about the ingredient ("chopped", a brand; never an amount). Something already on the list gains the amount and the note. It never ticks or removes anything. It applies at once and shows in Pinch\'s shopping list and Done for you with an Undo, and in Helm. Confirm what you will add before you call it.',
         ADD_TO_SHOPPING_LIST_SHAPE,
         (ctx, input) => addToShoppingList(deps.firestore(), ctx, input),
       ),

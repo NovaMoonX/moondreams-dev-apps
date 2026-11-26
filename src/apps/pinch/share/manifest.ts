@@ -421,7 +421,7 @@ export const PINCH_SHARES: SourceShares = {
           id: 'editRecipes',
           label: 'Edit recipes',
           meaning:
-            "Change a recipe's name, servings, times, description, ingredients or steps, adding an ingredient it needs that you don't have.",
+            "Change a recipe's name, servings, times, description, ingredients or steps, adding an ingredient it needs that you don't have, and add links such as a how-to video. It never removes a link.",
         },
         {
           id: 'addRecipes',

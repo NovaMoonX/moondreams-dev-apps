@@ -5,6 +5,7 @@ import {
   addToShoppingList,
   fillNutrition,
   findIngredients,
+  planAddedLinks,
   planMeal,
   saveIdea,
   undoPinchOutsideChange,
@@ -498,6 +499,111 @@ for (const { existing, add } of mergeCases) {
   );
   assert.equal(store.docs.get(`${K}/recipes/r1`)?.servings, 4);
   assert.equal(store.docs.has(`${K}/notes/${record.noteId}`), false);
+}
+
+// An edit only adds links: the recipe's own stay as they are, a video becomes its how-to, the change is recorded, and Undo takes the new links back.
+{
+  const own = {
+    id: 'l0',
+    kind: 'ARTICLE',
+    label: null,
+    url: 'https://example.com/soup',
+  };
+  const store = createStore({ [`${K}/recipes/r1`]: recipe({ links: [own] }) });
+  const data = dataOf(
+    await updateRecipe(store.firestore, ctx(NOW), {
+      recipeId: 'r1',
+      addLinks: [
+        { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+        { url: 'https://example.com/soup' },
+        {
+          url: 'https://blog.example.org/pie',
+          kind: 'original',
+          label: 'Toni Toni Kitchen',
+        },
+      ],
+    }),
+  );
+  const links = store.docs.get(`${K}/recipes/r1`)?.links as {
+    kind: string;
+    url: string;
+    label: string | null;
+  }[];
+  assert.deepEqual(links[0], own, 'a link the recipe had is never changed');
+  assert.deepEqual(
+    links.map((link) => link.kind),
+    ['ARTICLE', 'HOW_TO', 'ORIGINAL'],
+  );
+  assert.equal(links.length, 3, 'an address already on the recipe is skipped');
+  assert.equal(links[2].label, 'Toni Toni Kitchen');
+  const record = recordOf(store, data.changes[0].id);
+  assert.ok((record.lines as string[]).includes('Added the how-to link'));
+  assert.ok(
+    data.reply.lines.some((line) =>
+      /Already on the recipe, so not added again: example\.com/.test(line),
+    ),
+  );
+  assert.ok(data.reply.lines.includes('Added the how-to video: youtube.com'));
+  assert.deepEqual(
+    await undoPinchOutsideChange(
+      store.firestore,
+      UID,
+      record.id,
+      'helm',
+      NOW + 10,
+    ),
+    { ok: true },
+  );
+  assert.deepEqual(store.docs.get(`${K}/recipes/r1`)?.links, [own]);
+}
+
+// Adding links needs no basedOn, a second how-to is kept as another link, a bad address or a full recipe adds nothing.
+{
+  const howTo = {
+    id: 'h',
+    kind: 'HOW_TO' as const,
+    label: null,
+    url: 'https://youtu.be/dQw4w9WgXcQ',
+  };
+  const ids = (() => {
+    let n = 0;
+    return () => `n${++n}`;
+  })();
+  const second = planAddedLinks(
+    [howTo],
+    [{ url: 'https://vimeo.com/123456789' }],
+    ids,
+  );
+  assert.equal(second.kind, 'ok');
+  if (second.kind === 'ok') {
+    assert.equal(second.value.added[0].kind, 'OTHER');
+    assert.deepEqual(second.value.demoted, ['https://vimeo.com/123456789']);
+  }
+  assert.equal(planAddedLinks([], [{ url: 'not a link' }]).kind, 'refused');
+  const full = Array.from({ length: 8 }, (_, index) => ({
+    id: `f${index}`,
+    kind: 'OTHER' as const,
+    label: null,
+    url: `https://example.com/${index}`,
+  }));
+  const over = planAddedLinks(full, [{ url: 'https://example.com/new' }]);
+  assert.equal(over.kind, 'refused');
+  if (over.kind === 'refused')
+    assert.match(over.message, /this one is full, so no link was added/);
+  const store = createStore({ [`${K}/recipes/r1`]: recipe({ links: full }) });
+  assert.equal(
+    (
+      await updateRecipe(store.firestore, ctx(NOW), {
+        recipeId: 'r1',
+        addLinks: [{ url: 'https://example.com/new' }],
+      })
+    ).status,
+    'refused',
+  );
+  assert.equal(
+    (store.docs.get(`${K}/recipes/r1`)?.links as unknown[]).length,
+    8,
+  );
 }
 
 // Once the person saved the recipe again, Undo is refused and the recipe is left as they made it.
