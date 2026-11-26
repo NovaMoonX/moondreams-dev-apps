@@ -16,7 +16,7 @@ interface CookPepperAnswerProps {
 }
 
 const ICON_BUTTON =
-  'relative h-9 w-9 shrink-0 rounded-full p-0 before:absolute before:-inset-0.5 before:content-[""] sm:[@media(min-height:701px)]:h-10 sm:[@media(min-height:701px)]:w-10';
+  'text-foreground! relative size-9 min-w-9 shrink-0 rounded-full px-0! py-0! before:absolute before:-inset-0.5 before:content-[""] sm:[@media(min-height:701px)]:size-10 sm:[@media(min-height:701px)]:min-w-10';
 
 /** Pepper's answer, kept on the step after it is spoken so the person can read it back: the question it answers, the words as they arrive, a speaker and a ✕. */
 function CookPepperAnswer({
