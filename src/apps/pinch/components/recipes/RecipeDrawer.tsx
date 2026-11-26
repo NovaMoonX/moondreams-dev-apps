@@ -26,6 +26,7 @@ import StockRows from '@apps/pinch/components/containers/StockRows';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import ChangeEntryView from '@apps/pinch/components/notes/ChangeEntryView';
 import RecipeChanges from '@apps/pinch/components/recipes/RecipeChanges';
+import { isOpenChange } from '@apps/pinch/utils/notes';
 import RecipeFront from '@apps/pinch/components/recipes/RecipeFront';
 import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
 import ShareView from '@apps/pinch/components/share/ShareView';
@@ -285,7 +286,7 @@ function RecipeDrawer({
   };
 
   const plannedChangeIds = (recipeNotes ?? [])
-    .filter((note) => note.kind === 'CHANGE')
+    .filter(isOpenChange)
     .map((note) => note.id);
   const care = getRecipeCare(recipe);
   const recipeCollections = getRecipeCollections(recipe, collections);
@@ -495,15 +496,6 @@ function RecipeDrawer({
             onOpenChange={(noteId) => {
               setChangeId(noteId);
               setView('change');
-            }}
-            onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
-            onApplyChange={(noteId) => {
-              onClose();
-              openSubview({
-                kind: 'recipe',
-                id: recipe.id,
-                fromChangeIds: [noteId],
-              });
             }}
           />
         </div>

@@ -150,7 +150,11 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getIdeaPhotoPaths } from '@apps/pinch/utils/ideas';
 import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
-import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
+import {
+  getJoinedChangeReason,
+  isOpenChange,
+  resolveNoteStep,
+} from '@apps/pinch/utils/notes';
 import {
   describePepperChange,
   getAllLiveMarks,
@@ -221,7 +225,7 @@ interface RecipeFormProps {
   initialRead: RecipeRead | null;
   /** The idea a new recipe is made from: the form opens with what it knows, and saving marks it made. */
   initialIdea: Idea | null;
-  /** The planned changes this edit applies: shown as quotes, and the tweak's reason starts as theirs. Saving turns the oldest into the tweak and takes the rest off, unless nothing changed. */
+  /** The planned changes the person came to apply: they start ticked and the edit's reason starts as theirs. Every other open change of the recipe shows unticked. */
   initialChanges: RecipeNote[];
   /** Keeps the screen's header on the recipe's name as it is typed. */
   onTitleChange: (title: string) => void;
@@ -273,6 +277,50 @@ const getRowName = (
       row.newName ??
       row.proposedName ??
       '');
+
+const TICK_HINT =
+  "Tick the ones this edit takes care of. They're marked done when you save.";
+
+interface PlannedChangeRowProps {
+  change: RecipeNote;
+  isTicked: boolean;
+  isPlain?: boolean;
+  onTick: (id: string, isTicked: boolean) => void;
+}
+
+function PlannedChangeRow({
+  change,
+  isTicked,
+  isPlain = false,
+  onTick,
+}: PlannedChangeRowProps) {
+  const Tag = isPlain ? 'li' : 'div';
+  return (
+    <Tag
+      className={
+        isPlain
+          ? 'space-y-1.5'
+          : 'bg-accent border-border space-y-1.5 rounded-xl border p-2.5 text-sm'
+      }
+    >
+      <span className='block min-w-0 space-y-0.5'>
+        <ClampedText text={`✏️ To change: ${change.text ?? ''}`} />
+        {(change.reason ?? '') !== '' && (
+          <span className='text-muted-foreground block text-xs'>
+            Why: {change.reason}
+          </span>
+        )}
+      </span>
+      <label className='flex items-center gap-2 text-xs'>
+        <AppCheckbox
+          checked={isTicked}
+          onCheckedChange={(checked) => onTick(change.id, checked === true)}
+        />
+        Done in this edit
+      </label>
+    </Tag>
+  );
+}
 
 function RecipeForm({
   uid,
@@ -495,24 +543,42 @@ function RecipeForm({
   };
   const [isNoteClosed, setIsNoteClosed] = useState(false);
   const [isAllChangesShown, setIsAllChangesShown] = useState(false);
-  const [appliedIds, setAppliedIds] = useState(() =>
+  const [tickedIds, setTickedIds] = useState(() =>
     initialChanges.map((change) => change.id),
   );
-  const [typedWhy, setWhy] = useState<string | null>(null);
-  const applied = initialChanges.filter((change) =>
-    appliedIds.includes(change.id),
+  const recipeNotes = useAppSelector(selectNotesByRecipe).get(recipeId ?? '');
+  const plannedChanges = useMemo(
+    () => (recipe === null ? [] : (recipeNotes ?? []).filter(isOpenChange)),
+    [recipe, recipeNotes],
   );
+  const applied = plannedChanges.filter((change) =>
+    tickedIds.includes(change.id),
+  );
+  const steps = formData.steps;
+  const topChanges = plannedChanges.filter(
+    (change) => resolveNoteStep(change, steps) === null,
+  );
+  const stepChangeCount = plannedChanges.length - topChanges.length;
+  const [typedWhy, setWhy] = useState<string | null>(null);
   const pepperRound = pepper.rounds.at(-1) ?? null;
   const why =
     typedWhy ??
     ([
-      getJoinedChangeReason(applied),
+      getJoinedChangeReason(
+        applied.filter((change) =>
+          initialChanges.some((first) => first.id === change.id),
+        ),
+      ),
       getPepperReason(pepper.rounds.map((round) => round.ask)),
     ]
       .filter((part): part is string => part !== null)
       .join(' · ')
       .slice(0, MAX_RECIPE_NOTE_LENGTH) ||
       '');
+  const setChangeTicked = (id: string, isTicked: boolean) =>
+    setTickedIds((current) =>
+      isTicked ? [...current, id] : current.filter((ticked) => ticked !== id),
+    );
   const liveMarks = useMemo(() => {
     const marks = getAllLiveMarks(pepper.rounds, formData);
     if (marks === null) return null;
@@ -987,6 +1053,9 @@ function RecipeForm({
         label: '',
         renderComponent: (props) => (
           <FormSection title='Steps'>
+            {topChanges.length === 0 && stepChangeCount > 0 && (
+              <p className='text-muted-foreground mb-2 text-xs'>{TICK_HINT}</p>
+            )}
             <RecipeSteps
               steps={props.value as string[]}
               sections={formData.stepSections}
@@ -996,6 +1065,24 @@ function RecipeForm({
               }}
               onRemoved={showUndo}
               aiMarkedIndices={liveMarks?.changedStepIndices}
+              renderStepExtra={(index) => {
+                const here = plannedChanges.filter(
+                  (change) =>
+                    resolveNoteStep(change, props.value as string[]) === index,
+                );
+                return here.length === 0 ? null : (
+                  <div className='space-y-2 pb-2 pl-9'>
+                    {here.map((change) => (
+                      <PlannedChangeRow
+                        key={change.id}
+                        change={change}
+                        isTicked={tickedIds.includes(change.id)}
+                        onTick={setChangeTicked}
+                      />
+                    ))}
+                  </div>
+                );
+              }}
               footerAction={
                 initialRead === null &&
                 (props.value as string[]).filter((step) => step.trim()).length >
@@ -1089,6 +1176,10 @@ function RecipeForm({
     units,
     liveMarks,
     aiMarkedIds,
+    plannedChanges,
+    tickedIds,
+    topChanges.length,
+    stepChangeCount,
     openedHowToUrl,
     isRestored,
   ]);
@@ -1544,51 +1635,31 @@ function RecipeForm({
             : 'Its photo stays with the idea.'}
         </p>
       )}
-      {initialChanges.length > 0 && (
+      {topChanges.length > 0 && (
         <div className='bg-accent border-border mb-4 space-y-2 rounded-2xl border p-3 text-sm'>
-          <p className='text-muted-foreground text-xs'>
-            {initialChanges.length === 1
-              ? 'Applying the change you planned'
-              : `Applying the ${initialChanges.length} changes you planned. Untick one this edit doesn't make, and it stays planned.`}
-          </p>
+          <p className='text-xs font-medium'>Planned changes</p>
+          <p className='text-muted-foreground text-xs'>{TICK_HINT}</p>
           <ul className='space-y-2'>
-            {(isAllChangesShown
-              ? initialChanges
-              : initialChanges.slice(0, 3)
-            ).map((change) => (
-              <li key={change.id} className='flex items-start gap-3'>
-                {initialChanges.length > 3 && (
-                  <AppCheckbox
-                    aria-label={`Apply: ${change.text ?? ''}`}
-                    checked={appliedIds.includes(change.id)}
-                    onCheckedChange={(checked) =>
-                      setAppliedIds((current) =>
-                        checked === true
-                          ? [...current, change.id]
-                          : current.filter((id) => id !== change.id),
-                      )
-                    }
-                  />
-                )}
-                <span className='min-w-0 flex-1 space-y-0.5'>
-                  <ClampedText text={change.text ?? ''} />
-                  {(change.reason ?? '') !== '' && (
-                    <span className='text-muted-foreground block text-xs'>
-                      Why: {change.reason}
-                    </span>
-                  )}
-                </span>
-              </li>
-            ))}
+            {(isAllChangesShown ? topChanges : topChanges.slice(0, 3)).map(
+              (change) => (
+                <PlannedChangeRow
+                  key={change.id}
+                  isPlain
+                  change={change}
+                  isTicked={tickedIds.includes(change.id)}
+                  onTick={setChangeTicked}
+                />
+              ),
+            )}
           </ul>
-          {initialChanges.length > 3 && (
+          {topChanges.length > 3 && (
             <ShowMoreButton
               isOpen={isAllChangesShown}
               onClick={() => setIsAllChangesShown((shown) => !shown)}
             >
               {isAllChangesShown
                 ? 'Show fewer'
-                : `and ${initialChanges.length - 3} more`}
+                : `and ${topChanges.length - 3} more`}
             </ShowMoreButton>
           )}
         </div>

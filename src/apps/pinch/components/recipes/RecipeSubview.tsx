@@ -33,6 +33,7 @@ import {
 import type { RecipeStartMethod } from '@apps/pinch/types';
 import { NO_EXTRAS } from '@apps/pinch/utils/readExtras';
 import { clipIdeaTitle, getReadingForIdea } from '@apps/pinch/utils/ideas';
+import { isOpenChange } from '@apps/pinch/utils/notes';
 
 type Stage = 'start' | 'form' | 'idea' | Exclude<RecipeStartMethod, 'manual'>;
 
@@ -88,7 +89,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     fromChangeIds.flatMap((id) => {
       const note = notesById.get(id);
       return note !== undefined &&
-        note.kind === 'CHANGE' &&
+        isOpenChange(note) &&
         note.recipeId === recipeId
         ? [note]
         : [];

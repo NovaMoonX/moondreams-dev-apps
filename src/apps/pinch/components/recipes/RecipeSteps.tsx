@@ -501,6 +501,8 @@ interface RecipeStepsProps {
   footerAction?: ReactNode;
   /** Steps an AI added or changed, by index, drawn marked. */
   aiMarkedIndices?: readonly number[];
+  /** Drawn under a step's row, by its index. */
+  renderStepExtra?: (index: number) => ReactNode;
 }
 
 const ADDED_ID = 'added-';
@@ -539,6 +541,7 @@ function RecipeSteps({
   onRemoved,
   footerAction,
   aiMarkedIndices = [],
+  renderStepExtra,
 }: RecipeStepsProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [openStep, setOpenStep] = useState<number | null>(null);
@@ -820,6 +823,7 @@ function RecipeSteps({
             <X className='h-4 w-4' aria-hidden='true' />
           </Button>
         </div>
+        {renderStepExtra?.(index)}
         {isEditing && (
           <div className='space-y-3 pb-2 pl-9'>
             <SectionField
