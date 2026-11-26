@@ -6,6 +6,7 @@ import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import DebugDetails from '@/components/DebugDetails';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
@@ -21,7 +22,6 @@ import {
   RECIPE_LINK_KIND_OPTIONS,
   RECIPE_LINK_LABELS,
 } from '@apps/pinch/constants';
-import type { RecipeLink } from '@apps/pinch/types';
 import {
   canAddLink,
   cleanLinks,
@@ -334,11 +334,10 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
   );
 }
 
-/** What the saved recipe holds beside what the form opened on, for a debug viewer chasing a link that didn't change. */
 export interface LinksDebugInfo {
   recipeId: string;
   savedAt: number;
-  savedLinks: RecipeLink[] | undefined;
+  savedLinks: unknown;
   openedHowToUrl: string;
   isDraftRestored: boolean;
 }
@@ -357,7 +356,13 @@ function LinksFormDebug({
   value: LinksText;
   debug: LinksDebugInfo;
 }) {
+  const canSee = useCanSeeDebugDetails();
+  if (!canSee) return null;
+
   const saved = getHowToLink(cleanLinks(debug.savedLinks));
+  const savedAt = Number.isFinite(debug.savedAt)
+    ? new Date(debug.savedAt).toISOString()
+    : String(debug.savedAt);
   return (
     <DebugDetails
       title='Link details'
@@ -366,9 +371,10 @@ function LinksFormDebug({
         `Saved how-to: ${saved?.url ?? 'none'}`,
         `Saved label: ${saved?.label ?? 'none'}`,
         `Form opened on: ${debug.openedHowToUrl || 'none'}`,
+        `Edited since opening: ${value.howTo.url === debug.openedHowToUrl ? 'no' : 'yes'}`,
         `Opened from a kept draft: ${debug.isDraftRestored ? 'yes' : 'no'}`,
         `Recipe: ${debug.recipeId}`,
-        `Saved at: ${new Date(debug.savedAt).toISOString()}`,
+        `Saved at: ${savedAt}`,
       ]}
       trace={{
         label: 'Saved links',

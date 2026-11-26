@@ -364,6 +364,9 @@ function RecipeForm({
     };
   });
   const [formData, setFormData] = useState<RecipeFormData>(formStart);
+  const openedHowToUrl =
+    (formStart.links as Partial<RecipeFormData['links']> | undefined)?.howTo
+      ?.url ?? '';
   const sectionsRef = useRef(formStart.stepSections);
   const [isSplitOpen, setIsSplitOpen] = useState(false);
   const splitRef = useRef<Pick<Recipe, 'steps' | 'stepSections'> | null>(null);
@@ -665,7 +668,7 @@ function RecipeForm({
                     recipeId: recipe.id,
                     savedAt: recipe.updatedAt,
                     savedLinks: recipe.links,
-                    openedHowToUrl: formStart.links.howTo.url,
+                    openedHowToUrl,
                     isDraftRestored: isRestored,
                   }
             }
@@ -914,7 +917,7 @@ function RecipeForm({
     tracking,
     adaptedIds,
     units,
-    formStart.links.howTo.url,
+    openedHowToUrl,
     isRestored,
   ]);
 
