@@ -5,6 +5,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import DebugDetails from '@/components/DebugDetails';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
@@ -22,8 +24,10 @@ import {
 } from '@apps/pinch/constants';
 import {
   canAddLink,
+  cleanLinks,
   countLinkSlots,
   getBlankLinkDraft,
+  getHowToLink,
   getLinksSummary,
   getLinkHost,
   getLinkUrlProblem,
@@ -281,7 +285,9 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
           isLabelHidden
           value={howTo.url}
           placeholder='Paste a YouTube or other video link'
-          onChange={(url) => onChange({ ...value, howTo: { ...howTo, url } })}
+          onChange={(url) =>
+            onChange({ ...value, howTo: { ...howTo, url, label: null } })
+          }
         />
         <p className='text-muted-foreground text-xs'>
           A YouTube or Vimeo link plays at the bottom of the recipe. Any other
@@ -328,16 +334,61 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
   );
 }
 
+export interface LinksDebugInfo {
+  recipeId: string;
+  savedAt: number;
+  savedLinks: unknown;
+  openedHowToUrl: string;
+  isDraftRestored: boolean;
+}
+
 interface RecipeLinksFieldProps {
   value: LinksText;
   onChange: (value: LinksText) => void;
   position: SummaryGroupPosition;
+  debug?: LinksDebugInfo | null;
+}
+
+function LinksFormDebug({
+  value,
+  debug,
+}: {
+  value: LinksText;
+  debug: LinksDebugInfo;
+}) {
+  const canSee = useCanSeeDebugDetails();
+  if (!canSee) return null;
+
+  const saved = getHowToLink(cleanLinks(debug.savedLinks));
+  const savedAt = Number.isFinite(debug.savedAt)
+    ? new Date(debug.savedAt).toISOString()
+    : String(debug.savedAt);
+  return (
+    <DebugDetails
+      title='Link details'
+      message={`How-to in the form: ${value.howTo.url || 'none'}`}
+      facts={[
+        `Saved how-to: ${saved?.url ?? 'none'}`,
+        `Saved label: ${saved?.label ?? 'none'}`,
+        `Form opened on: ${debug.openedHowToUrl || 'none'}`,
+        `Edited since opening: ${value.howTo.url === debug.openedHowToUrl ? 'no' : 'yes'}`,
+        `Opened from a kept draft: ${debug.isDraftRestored ? 'yes' : 'no'}`,
+        `Recipe: ${debug.recipeId}`,
+        `Saved at: ${savedAt}`,
+      ]}
+      trace={{
+        label: 'Saved links',
+        text: JSON.stringify(debug.savedLinks ?? null, null, 2),
+      }}
+    />
+  );
 }
 
 function RecipeLinksField({
   value,
   onChange,
   position,
+  debug = null,
 }: RecipeLinksFieldProps) {
   const { pending, showUndo, undo } = useUndoRemoval();
   const summary = getLinksSummary(value);
@@ -362,6 +413,7 @@ function RecipeLinksField({
         shouldFocus={summary === ''}
       >
         <LinksEditor value={value} onChange={onChange} onRemoved={showUndo} />
+        {debug && <LinksFormDebug value={value} debug={debug} />}
       </SummaryEditor>
       <UndoSnackbar pending={pending} onUndo={undo} isOverSheet />
     </>
