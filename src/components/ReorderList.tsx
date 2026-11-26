@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
+import { flushSync } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -18,8 +19,10 @@ import SectionDivider from '@/components/SectionDivider';
 
 export interface ReorderGroup<T extends { id: string }> {
   id: string;
-  /** Words on the group's divider; `null` draws the group with no heading. */
+  /** Words on the group's divider; `null` draws the group with no heading. It also names the group in announcements. */
   label: string | null;
+  /** Drawn as the divider's label in place of `label` (a button that opens the heading's editor). */
+  heading?: ReactNode;
   /** Sits beside the divider's label, such as how the group is sorted. */
   trailing?: ReactNode;
   items: T[];
@@ -29,12 +32,24 @@ export interface ReorderGroup<T extends { id: string }> {
   isDropTarget?: boolean;
   /** Shown in place of the rows while the group is empty, and as the drop target for it. */
   empty?: ReactNode;
+  /** Draws a grip on the heading so the whole group can be moved among the groups; needs `onMoveGroup` and a `label`. */
+  isMovable?: boolean;
+  /** Stays ahead of every moved group: nothing is dropped before it. */
+  isPinnedFirst?: boolean;
+  /** The one line shown for the group while a group is dragged; defaults to the label and the row count. */
+  foldedLabel?: string;
 }
 
 export interface ReorderMove {
   itemId: string;
   toGroupId: string;
   /** Where the item ends up among that group's drawn rows once it has left its old spot; a row `renderRow` hides is not counted, so filter hidden items out of `groups` instead. */
+  toIndex: number;
+}
+
+export interface ReorderGroupMove {
+  groupId: string;
+  /** The group's index among the drawn groups once it has left its old spot. */
   toIndex: number;
 }
 
@@ -51,12 +66,21 @@ interface MoveInfo {
   groupLabel: string | null;
 }
 
+interface GroupMoveInfo {
+  label: string;
+  position: number;
+  count: number;
+}
+
 export interface ReorderAnnouncements {
   pickedUp: (itemLabel: string) => string;
   moved: (info: MoveInfo) => string;
   dropped: (info: MoveInfo) => string;
   cancelled: (itemLabel: string) => string;
   unchanged: (itemLabel: string) => string;
+  groupPickedUp?: (label: string) => string;
+  groupMoved?: (info: GroupMoveInfo) => string;
+  groupDropped?: (info: GroupMoveInfo) => string;
 }
 
 export interface ReorderListProps<T extends { id: string }> {
@@ -65,6 +89,8 @@ export interface ReorderListProps<T extends { id: string }> {
   renderRow: (item: T, state: ReorderRowState) => ReactNode;
   /** Called with the finished move; the list keeps no order of its own beyond the drag. */
   onMove: (move: ReorderMove) => void;
+  /** Called with a finished group move; only groups with `isMovable` can be moved. */
+  onMoveGroup?: (move: ReorderGroupMove) => void;
   /** A tap on a row anywhere but its handle. Without it rows are not tappable. */
   onOpen?: (item: T) => void;
   /** The number shown for a row; defaults to its position, so a caller can show equal places. */
@@ -73,6 +99,14 @@ export interface ReorderListProps<T extends { id: string }> {
   getItemLabel?: (item: T) => string;
   /** The handle's accessible name before the item's own. */
   handleLabel?: string;
+  /** The group handle's accessible name before the group's label. */
+  groupHandleLabel?: string;
+  /** Rows draw no place number, border or padding: `renderRow` supplies the whole row. */
+  isPlain?: boolean;
+  /** Which edge of a row and of a movable heading carries the grip. Defaults to the end. */
+  handleSide?: 'start' | 'end';
+  /** Press and hold on touch picks a row or movable heading up. A list that uses press and hold for selection passes false. */
+  canLongPressDrag?: boolean;
   announcements?: Partial<ReorderAnnouncements>;
   className?: string;
 }
@@ -85,18 +119,28 @@ const whereWords = (info: MoveInfo) =>
     .filter(Boolean)
     .join(' ') || 'a new spot';
 
-const DEFAULT_ANNOUNCEMENTS: ReorderAnnouncements = {
+const DEFAULT_ANNOUNCEMENTS: Required<ReorderAnnouncements> = {
   pickedUp: (label) =>
     `Picked up${label ? ` ${label}` : ''}. Use the arrow keys to move, Space to drop, Escape to cancel.`,
   moved: (info) => `Moved to ${whereWords(info)}`,
   dropped: (info) => `Dropped at ${whereWords(info)}`,
   cancelled: () => 'Move cancelled',
   unchanged: () => 'Dropped where it was',
+  groupPickedUp: (label) =>
+    `Picked up section ${label}. Use the arrow keys to move, Space to drop, Escape to cancel.`,
+  groupMoved: (info) => `Moved to position ${info.position} of ${info.count}`,
+  groupDropped: (info) =>
+    `Dropped at position ${info.position} of ${info.count}`,
 };
 
+const NBSP = '\u00a0';
 const DRAG_START_PX = 4;
 const EDGE_ZONE_PX = 72;
 const MAX_SCROLL_PX_PER_FRAME = 18;
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP_PX = 8;
+
+type DragKind = 'item' | 'group';
 
 interface Slot {
   g: number;
@@ -110,12 +154,15 @@ interface Measured {
 }
 
 interface Snapshot {
+  /** The dragged item's id, or the dragged group's id when `kind` is 'group' (then `src.g` and `target.g` are group indexes). */
   itemId: string;
+  kind: DragKind;
   groupIds: string[];
   signature: string;
   src: Slot;
   height: number;
   srcTop: number;
+  minIndex: number;
   groups: {
     top: number;
     bottom: number;
@@ -153,6 +200,11 @@ function findScroller(from: HTMLElement | null): HTMLElement | null {
 const scrollOffset = (scroller: HTMLElement | null) =>
   window.scrollY + (scroller?.scrollTop ?? 0);
 
+const pageRect = (el: HTMLElement, offset: number) => {
+  const rect = el.getBoundingClientRect();
+  return { top: rect.top + offset, bottom: rect.bottom + offset };
+};
+
 const excluding = (items: Measured[], id: string) =>
   items.filter((item) => item.id !== id);
 
@@ -182,6 +234,14 @@ function chooseTarget(snap: Snapshot, centerY: number): Slot {
   };
 }
 
+/** The index a dragged group would take among the others, never before a pinned group. */
+function chooseGroupTarget(snap: Snapshot, centerY: number): Slot {
+  const before = snap.groups.filter(
+    (group, k) => k !== snap.src.g && (group.top + group.bottom) / 2 < centerY,
+  ).length;
+  return { g: Math.max(snap.minIndex, before), i: 0 };
+}
+
 /** Top edge, in page coordinates, of the gap the dragged row would fill at a slot. */
 function slotTop(snap: Snapshot, slot: Slot): number {
   const group = snap.groups[slot.g];
@@ -202,10 +262,54 @@ function slotTop(snap: Snapshot, slot: Slot): number {
   return group.itemsTop + (slot.g > snap.src.g ? -snap.height : 0);
 }
 
+const GRIP_CLASS =
+  "text-muted-foreground relative size-8! min-h-8! min-w-8! shrink-0 cursor-grab touch-none rounded-full p-0 select-none before:absolute before:-inset-1 before:content-[''] active:cursor-grabbing";
+
+interface GroupGripProps {
+  groupId: string;
+  label: string;
+  handleLabel: string;
+  isActive: boolean;
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>, id: string) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>, id: string) => void;
+  onBlur: (id: string) => void;
+}
+
+function GroupGrip({
+  groupId,
+  label,
+  handleLabel,
+  isActive,
+  onPointerDown,
+  onKeyDown,
+  onBlur,
+}: GroupGripProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='stripped'
+      data-no-swipe
+      data-reorder-group-handle={groupId}
+      aria-label={`${handleLabel}: ${label}`}
+      aria-pressed={isActive}
+      className={GRIP_CLASS}
+      onPointerDown={(event) => onPointerDown(event, groupId)}
+      onKeyDown={(event) => onKeyDown(event, groupId)}
+      onBlur={() => onBlur(groupId)}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <GripVertical className='size-5' aria-hidden='true' />
+    </Button>
+  );
+}
+
 interface RowProps<T extends { id: string }> {
   item: T;
   place: number;
   isOrdered: boolean;
+  isPlain: boolean;
+  handleSide: 'start' | 'end';
   isActive: boolean;
   isOverOtherGroup: boolean;
   itemLabel: string;
@@ -225,6 +329,8 @@ function RowInner<T extends { id: string }>({
   item,
   place,
   isOrdered,
+  isPlain,
+  handleSide,
   isActive,
   isOverOtherGroup,
   itemLabel,
@@ -239,33 +345,65 @@ function RowInner<T extends { id: string }>({
   const body = renderRow(item, { place, isDragging: isActive });
   if (body === null) return null;
   const content = <span className='block w-full min-w-0'>{body}</span>;
+  const handle = isOrdered && (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='stripped'
+      data-no-swipe
+      data-reorder-handle={item.id}
+      aria-label={
+        itemLabel
+          ? `${handleLabel}: ${itemLabel}, place ${place}`
+          : `${handleLabel}, place ${place}`
+      }
+      aria-pressed={isActive}
+      className={GRIP_CLASS}
+      onPointerDown={(event) => onHandlePointerDown(event, item.id)}
+      onKeyDown={(event) => onHandleKeyDown(event, item.id)}
+      onBlur={() => onHandleBlur(item.id)}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <GripVertical className='size-5' aria-hidden='true' />
+    </Button>
+  );
   return (
     <div
       ref={(el) => register(`row:${item.id}`, el)}
+      data-reorder-row={item.id}
       className={join(
-        'border-border relative flex items-center gap-1 border-b transition-transform duration-150 last:border-b-0 motion-reduce:transition-none',
+        'border-border relative flex items-center gap-1 transition-transform duration-150 motion-reduce:transition-none',
+        !isPlain && 'border-b last:border-b-0',
         isActive &&
           'bg-background ring-border z-10 rounded-xl border-b-0 shadow-lg ring-1 transition-none select-none',
       )}
     >
-      <span
-        className='text-muted-foreground w-6 shrink-0 text-center text-sm tabular-nums'
-        aria-hidden='true'
-      >
-        {isOrdered && !(isActive && isOverOtherGroup) ? place : ''}
-      </span>
+      {handleSide === 'start' && handle}
+      {!isPlain && (
+        <span
+          className='text-muted-foreground w-6 shrink-0 text-center text-sm tabular-nums'
+          aria-hidden='true'
+        >
+          {isOrdered && !(isActive && isOverOtherGroup) ? place : ''}
+        </span>
+      )}
       {onOpen ? (
         <Button
           type='button'
           variant='tertiary'
           size='stripped'
-          className='h-auto min-h-10 min-w-0 flex-1 justify-start rounded-xl py-3 text-left font-normal'
+          className={join(
+            'h-auto min-h-10 min-w-0 flex-1 justify-start rounded-xl text-left font-normal',
+            !isPlain && 'py-3',
+          )}
           onClick={() => onOpen(item)}
         >
           {content}
         </Button>
       ) : (
-        <div className='min-w-0 flex-1 py-3'>{content}</div>
+        <div className={join('min-w-0 flex-1', !isPlain && 'py-3')}>
+          {content}
+        </div>
       )}
       {!isOrdered && onOpen && (
         <span
@@ -275,43 +413,42 @@ function RowInner<T extends { id: string }>({
           <ChevronRight className='size-4' />
         </span>
       )}
-      {isOrdered && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='stripped'
-          data-no-swipe
-          data-reorder-handle={item.id}
-          aria-label={
-            itemLabel
-              ? `${handleLabel}: ${itemLabel}, place ${place}`
-              : `${handleLabel}, place ${place}`
-          }
-          aria-pressed={isActive}
-          className="text-muted-foreground relative size-8! min-h-8! min-w-8! shrink-0 cursor-grab touch-none rounded-full p-0 select-none before:absolute before:-inset-1 before:content-[''] active:cursor-grabbing"
-          onPointerDown={(event) => onHandlePointerDown(event, item.id)}
-          onKeyDown={(event) => onHandleKeyDown(event, item.id)}
-          onBlur={() => onHandleBlur(item.id)}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <GripVertical className='size-5' aria-hidden='true' />
-        </Button>
-      )}
+      {handleSide === 'end' && handle}
     </div>
   );
 }
 
 const Row = memo(RowInner) as typeof RowInner;
 
-/** An ordered list in groups, where a row's handle is pressed and dragged (or moved by keyboard) to a new place; the caller applies the finished move. */
+interface Press {
+  kind: DragKind;
+  id: string;
+  x: number;
+  y: number;
+  isFired: boolean;
+  timer: number;
+}
+
+const foldedLabelOf = <T extends { id: string }>(group: ReorderGroup<T>) =>
+  group.foldedLabel ??
+  (group.label === null
+    ? `${group.items.length} more`
+    : `${group.label} · ${group.items.length}`);
+
+/** An ordered list in groups, where a row's handle is pressed and dragged (or moved by keyboard, or held on touch) to a new place, and whole groups can be moved the same way; the caller applies the finished move. */
 function ReorderList<T extends { id: string }>({
   groups,
   renderRow,
   onMove,
+  onMoveGroup,
   onOpen,
   getPlace,
   getItemLabel,
   handleLabel = 'Reorder',
+  groupHandleLabel = 'Move group',
+  isPlain = false,
+  handleSide = 'end',
+  canLongPressDrag = true,
   announcements,
   className,
 }: ReorderListProps<T>) {
@@ -322,7 +459,9 @@ function ReorderList<T extends { id: string }>({
   const pointerY = useRef(0);
   const frame = useRef(0);
   const detach = useRef<(() => void) | null>(null);
+  const press = useRef<Press | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
   const [overGroupId, setOverGroupId] = useState<string | null>(null);
   const announceFlip = useRef(false);
 
@@ -340,6 +479,8 @@ function ReorderList<T extends { id: string }>({
   const latest = useRef({
     groups: drawnGroups,
     onMove,
+    onMoveGroup,
+    canLongPressDrag,
     getItemLabel,
     getPlace,
     announcements,
@@ -348,6 +489,8 @@ function ReorderList<T extends { id: string }>({
     latest.current = {
       groups: drawnGroups,
       onMove,
+      onMoveGroup,
+      canLongPressDrag,
       getItemLabel,
       getPlace,
       announcements,
@@ -367,6 +510,12 @@ function ReorderList<T extends { id: string }>({
       placeOf ? placeOf(others[index], index, group) : index + 1;
     if (others.length === 0) return 1;
     return slot.i < others.length ? read(slot.i) : read(others.length - 1) + 1;
+  };
+
+  const announce = (text: string) => {
+    announceFlip.current = !announceFlip.current;
+    if (liveRef.current)
+      liveRef.current.textContent = announceFlip.current ? text : text + NBSP;
   };
 
   const say = (
@@ -391,17 +540,40 @@ function ReorderList<T extends { id: string }>({
     const text =
       key === 'pickedUp' || key === 'cancelled' || key === 'unchanged'
         ? words[key](itemLabel)
-        : words[key]({
-            itemLabel,
-            place: toGroup && slot ? placeAt(toGroup, slot, itemId) : null,
-            groupLabel:
-              toGroup && toGroup.id !== fromGroupId ? toGroup.label : null,
-          });
-    announceFlip.current = !announceFlip.current;
-    if (liveRef.current)
-      liveRef.current.textContent = announceFlip.current
-        ? text
-        : `${text}\u00a0`;
+        : key === 'moved' || key === 'dropped'
+          ? words[key]({
+              itemLabel,
+              place: toGroup && slot ? placeAt(toGroup, slot, itemId) : null,
+              groupLabel:
+                toGroup && toGroup.id !== fromGroupId ? toGroup.label : null,
+            })
+          : '';
+    announce(text);
+  };
+
+  const sayGroup = (
+    key:
+      | 'groupPickedUp'
+      | 'groupMoved'
+      | 'groupDropped'
+      | 'cancelled'
+      | 'unchanged',
+    groupId: string,
+    index = 0,
+  ) => {
+    const { groups: current, announcements: custom } = latest.current;
+    const words = { ...DEFAULT_ANNOUNCEMENTS, ...custom };
+    const label = current.find((group) => group.id === groupId)?.label ?? '';
+    const info = { label, position: index + 1, count: current.length };
+    announce(
+      key === 'groupPickedUp'
+        ? words.groupPickedUp(label)
+        : key === 'groupMoved'
+          ? words.groupMoved(info)
+          : key === 'groupDropped'
+            ? words.groupDropped(info)
+            : words[key](label),
+    );
   };
 
   const measure = (
@@ -419,18 +591,17 @@ function ReorderList<T extends { id: string }>({
     if (!root || !src || !srcEl) return null;
     const scroller = findScroller(root);
     const offset = scrollOffset(scroller);
-    const page = (el: HTMLElement) => {
-      const rect = el.getBoundingClientRect();
-      return { top: rect.top + offset, bottom: rect.bottom + offset };
-    };
+    const page = (el: HTMLElement) => pageRect(el, offset);
     const srcRect = page(srcEl);
     return {
       itemId,
+      kind: 'item',
       groupIds: current.map((group) => group.id),
       signature: signatureOf(current),
       src,
       height: srcRect.bottom - srcRect.top,
       srcTop: srcRect.top,
+      minIndex: 0,
       groups: current.map((group) => {
         const wrapper = elements.current.get(`group:${group.id}`);
         const body = elements.current.get(`items:${group.id}`);
@@ -454,12 +625,85 @@ function ReorderList<T extends { id: string }>({
     };
   };
 
+  /** Folds every group to one line, keeps the grabbed heading where the finger is, then measures the folded lines. */
+  const measureGroups = (
+    groupId: string,
+    mode: Snapshot['mode'],
+    pointer: number,
+  ): Snapshot | null => {
+    const root = rootRef.current;
+    const headTop = elements.current
+      .get(`head:${groupId}`)
+      ?.getBoundingClientRect().top;
+    if (!root || headTop === undefined) return null;
+    flushSync(() => setDraggedGroupId(groupId));
+    const foldEl = elements.current.get(`fold:${groupId}`);
+    const scroller = findScroller(root);
+    if (!foldEl) return null;
+    const delta = foldEl.getBoundingClientRect().top - headTop;
+    if (delta !== 0) {
+      if (scroller) scroller.scrollTop += delta;
+      else window.scrollBy(0, delta);
+    }
+    if (mode === 'keyboard')
+      foldEl.querySelector<HTMLElement>('[data-reorder-group-handle]')?.focus();
+    const current = latest.current.groups;
+    const srcIndex = current.findIndex((group) => group.id === groupId);
+    const offset = scrollOffset(scroller);
+    const rects = current.map((group) => {
+      const el = elements.current.get(`group:${group.id}`);
+      return el ? pageRect(el, offset) : { top: 0, bottom: 0 };
+    });
+    if (srcIndex < 0) return null;
+    const src = { g: srcIndex, i: 0 };
+    return {
+      itemId: groupId,
+      kind: 'group',
+      groupIds: current.map((group) => group.id),
+      signature: signatureOf(current),
+      src,
+      height: rects[srcIndex].bottom - rects[srcIndex].top,
+      srcTop: rects[srcIndex].top,
+      minIndex: current.reduce(
+        (min, group, k) => (group.isPinnedFirst ? k + 1 : min),
+        0,
+      ),
+      groups: rects.map((rect) => ({
+        ...rect,
+        isTarget: true,
+        itemsTop: 0,
+        items: [],
+      })),
+      scroller,
+      startScroll: offset,
+      startPointerY: pointer,
+      target: src,
+      mode,
+      canScrollUp: false,
+      canScrollDown: false,
+    };
+  };
+
   const setTransform = (el: HTMLElement | undefined, offset: number) => {
     if (el)
       el.style.transform = offset === 0 ? '' : `translate3d(0, ${offset}px, 0)`;
   };
 
+  const layoutGroups = (snap: Snapshot, draggedOffset: number) => {
+    snap.groupIds.forEach((id, k) => {
+      if (k === snap.src.g) return;
+      const among = k - (k > snap.src.g ? 1 : 0);
+      setTransform(
+        elements.current.get(`group:${id}`),
+        (k > snap.src.g ? -snap.height : 0) +
+          (among >= snap.target.g ? snap.height : 0),
+      );
+    });
+    setTransform(elements.current.get(`group:${snap.itemId}`), draggedOffset);
+  };
+
   const layout = (snap: Snapshot, draggedOffset: number) => {
+    if (snap.kind === 'group') return layoutGroups(snap, draggedOffset);
     const { target, height } = snap;
     snap.groups.forEach((group, g) => {
       const headOffset =
@@ -489,9 +733,29 @@ function ReorderList<T extends { id: string }>({
 
   const begin = (snap: Snapshot) => {
     snapshot.current = snap;
-    const el = elements.current.get(`row:${snap.itemId}`);
+    const el = elements.current.get(
+      snap.kind === 'group' ? `group:${snap.itemId}` : `row:${snap.itemId}`,
+    );
     if (el) el.style.transition = 'none';
-    setActiveId(snap.itemId);
+    if (snap.kind === 'item') setActiveId(snap.itemId);
+  };
+
+  const startDrag = (
+    kind: DragKind,
+    id: string,
+    mode: Snapshot['mode'],
+    pointer: number,
+  ) => {
+    const snap =
+      kind === 'group'
+        ? measureGroups(id, mode, pointer)
+        : measure(id, mode, pointer);
+    if (!snap) {
+      setDraggedGroupId(null);
+      return null;
+    }
+    begin(snap);
+    return snap;
   };
 
   const refresh = () => {
@@ -502,7 +766,11 @@ function ReorderList<T extends { id: string }>({
       snap.startPointerY +
       scrollOffset(snap.scroller) -
       snap.startScroll;
-    snap.target = chooseTarget(snap, snap.srcTop + snap.height / 2 + dy);
+    const centerY = snap.srcTop + snap.height / 2 + dy;
+    snap.target =
+      snap.kind === 'group'
+        ? chooseGroupTarget(snap, centerY)
+        : chooseTarget(snap, centerY);
     layout(snap, dy);
   };
 
@@ -537,18 +805,59 @@ function ReorderList<T extends { id: string }>({
     frame.current = requestAnimationFrame(autoScroll);
   };
 
+  const endPress = () => {
+    const current = press.current;
+    if (!current) return;
+    window.clearTimeout(current.timer);
+    press.current = null;
+    const root = rootRef.current;
+    if (root) {
+      root.style.removeProperty('-webkit-touch-callout');
+      root.style.removeProperty('user-select');
+      root.style.removeProperty('-webkit-user-select');
+    }
+  };
+
+  const finishGroup = (snap: Snapshot, shouldCommit: boolean) => {
+    const { itemId: groupId, src, target } = snap;
+    setDraggedGroupId(null);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const root = rootRef.current;
+        elements.current
+          .get(`head:${groupId}`)
+          ?.scrollIntoView({ block: 'nearest' });
+        if (snap.mode === 'keyboard')
+          root
+            ?.querySelector<HTMLElement>(
+              `[data-reorder-group-handle="${CSS.escape(groupId)}"]`,
+            )
+            ?.focus();
+      }),
+    );
+    if (!shouldCommit) return sayGroup('cancelled', groupId);
+    if (target.g === src.g) return sayGroup('unchanged', groupId);
+    const current = latest.current.groups;
+    if (!current.some((group) => group.id === groupId))
+      return sayGroup('cancelled', groupId);
+    sayGroup('groupDropped', groupId, target.g);
+    latest.current.onMoveGroup?.({ groupId, toIndex: target.g });
+  };
+
   const finish = (shouldCommit: boolean) => {
     const snap = snapshot.current;
     detach.current?.();
     detach.current = null;
     cancelAnimationFrame(frame.current);
+    endPress();
     if (!snap) return;
     snapshot.current = null;
     const touched = Array.from(elements.current.entries()).filter(
       ([key]) =>
         key.startsWith('row:') ||
         key.startsWith('head:') ||
-        key.startsWith('empty:'),
+        key.startsWith('empty:') ||
+        key.startsWith('group:'),
     );
     touched.forEach(([, el]) => {
       el.style.transition = 'none';
@@ -561,6 +870,7 @@ function ReorderList<T extends { id: string }>({
     );
     setActiveId(null);
     setOverGroupId(null);
+    if (snap.kind === 'group') return finishGroup(snap, shouldCommit);
     const { target, src, itemId } = snap;
     if (!shouldCommit) return say('cancelled', itemId, snap);
     if (target.g === src.g && target.i === src.i)
@@ -590,6 +900,7 @@ function ReorderList<T extends { id: string }>({
   const onHandlePointerDown = (
     event: ReactPointerEvent<HTMLElement>,
     id: string,
+    kind: DragKind = 'item',
   ) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (snapshot.current) return;
@@ -607,10 +918,9 @@ function ReorderList<T extends { id: string }>({
           DRAG_START_PX
         )
           return;
-        const snap = measure(id, 'pointer', clientY);
+        const snap = startDrag(kind, id, 'pointer', clientY);
         if (!snap) return;
         isStarted = true;
-        begin(snap);
         frame.current = requestAnimationFrame(autoScroll);
       }
       move.preventDefault();
@@ -643,26 +953,35 @@ function ReorderList<T extends { id: string }>({
   };
 
   const slotsFor = (snap: Snapshot): Slot[] =>
-    snap.groups.flatMap((group, g) =>
-      group.isTarget
-        ? Array.from(
-            { length: excluding(group.items, snap.itemId).length + 1 },
-            (_, i) => ({ g, i }),
-          )
-        : [],
-    );
+    snap.kind === 'group'
+      ? Array.from({ length: snap.groups.length - snap.minIndex }, (_, k) => ({
+          g: snap.minIndex + k,
+          i: 0,
+        }))
+      : snap.groups.flatMap((group, g) =>
+          group.isTarget
+            ? Array.from(
+                { length: excluding(group.items, snap.itemId).length + 1 },
+                (_, i) => ({ g, i }),
+              )
+            : [],
+        );
 
-  const onHandleKeyDown = (event: KeyboardEvent<HTMLElement>, id: string) => {
+  const onHandleKeyDown = (
+    event: KeyboardEvent<HTMLElement>,
+    id: string,
+    kind: DragKind = 'item',
+  ) => {
     const snap = snapshot.current;
     const isOurs = snap?.mode === 'keyboard' && snap.itemId === id;
     if (event.key === ' ' || event.key === 'Enter') {
       event.preventDefault();
       if (isOurs) return finish(true);
       if (snap) return;
-      const next = measure(id, 'keyboard', 0);
+      const next = startDrag(kind, id, 'keyboard', 0);
       if (!next) return;
-      begin(next);
-      say('pickedUp', id);
+      if (kind === 'group') sayGroup('groupPickedUp', id);
+      else say('pickedUp', id);
       return;
     }
     if (!isOurs) return;
@@ -687,23 +1006,150 @@ function ReorderList<T extends { id: string }>({
     const next = slots[Math.min(slots.length - 1, Math.max(0, here + step))];
     if (!next || (next.g === snap.target.g && next.i === snap.target.i)) return;
     snap.target = next;
+    if (snap.kind === 'group') {
+      layout(snap, snap.groups[0].top + next.g * snap.height - snap.srcTop);
+      elements.current.get(`group:${id}`)?.scrollIntoView({ block: 'nearest' });
+      sayGroup('groupMoved', id, next.g);
+      return;
+    }
     layout(snap, slotTop(snap, next) - snap.srcTop);
     elements.current.get(`row:${id}`)?.scrollIntoView({ block: 'nearest' });
     say('moved', id, snap, next);
   };
 
-  const onHandleBlur = (id: string) => {
+  const onHandleBlur = (id: string, kind: DragKind = 'item') => {
+    if (kind === 'group') {
+      requestAnimationFrame(() => {
+        const snap = snapshot.current;
+        const isHeld = rootRef.current?.querySelector(
+          `[data-reorder-group-handle="${CSS.escape(id)}"]:focus`,
+        );
+        if (snap?.kind === 'group' && snap.mode === 'keyboard' && !isHeld)
+          finish(false);
+      });
+      return;
+    }
     const snap = snapshot.current;
     if (snap?.mode === 'keyboard' && snap.itemId === id) finish(false);
+  };
+
+  const onTouchStart = (event: TouchEvent) => {
+    if (event.touches.length > 1) return endPress();
+    if (press.current || snapshot.current || !latest.current.canLongPressDrag)
+      return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (
+      !target ||
+      target.closest('[data-reorder-handle],[data-reorder-group-handle]')
+    )
+      return;
+    const { groups: current, onMoveGroup: moveGroup } = latest.current;
+    const rowId = target
+      .closest<HTMLElement>('[data-reorder-row]')
+      ?.getAttribute('data-reorder-row');
+    const headId = target
+      .closest<HTMLElement>('[data-reorder-head]')
+      ?.getAttribute('data-reorder-head');
+    const kind: DragKind | null =
+      rowId &&
+      current.some(
+        (group) =>
+          group.isOrdered && group.items.some((item) => item.id === rowId),
+      )
+        ? 'item'
+        : headId &&
+            moveGroup &&
+            current.some((group) => group.id === headId && group.isMovable)
+          ? 'group'
+          : null;
+    const id = kind === 'item' ? rowId : headId;
+    const touch = event.touches[0];
+    const root = rootRef.current;
+    if (!kind || !id || !touch || !root) return;
+    pointerY.current = touch.clientY;
+    root.style.setProperty('-webkit-touch-callout', 'none');
+    root.style.setProperty('user-select', 'none');
+    root.style.setProperty('-webkit-user-select', 'none');
+    const fire = () => {
+      const armed = press.current;
+      if (!armed) return;
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        // iOS has no vibration
+      }
+      const snap = startDrag(armed.kind, armed.id, 'pointer', pointerY.current);
+      if (!snap) return endPress();
+      armed.isFired = true;
+      frame.current = requestAnimationFrame(autoScroll);
+    };
+    press.current = {
+      kind,
+      id,
+      x: touch.clientX,
+      y: touch.clientY,
+      isFired: false,
+      timer: window.setTimeout(fire, LONG_PRESS_MS),
+    };
+  };
+
+  const onTouchMove = (event: TouchEvent) => {
+    const armed = press.current;
+    const touch = event.touches[0];
+    if (!armed || !touch) return;
+    pointerY.current = touch.clientY;
+    if (!armed.isFired) {
+      if (
+        Math.hypot(touch.clientX - armed.x, touch.clientY - armed.y) >
+        LONG_PRESS_SLOP_PX
+      )
+        endPress();
+      return;
+    }
+    if (event.cancelable) event.preventDefault();
+    if (
+      snapshot.current &&
+      signatureOf(latest.current.groups) !== snapshot.current.signature
+    )
+      return finish(false);
+    refresh();
+  };
+
+  const onTouchEnd = (event: TouchEvent) => {
+    const armed = press.current;
+    if (!armed) return;
+    if (!armed.isFired) return endPress();
+    if (event.cancelable) event.preventDefault();
+    finish(true);
+  };
+
+  const onTouchCancel = () => {
+    const armed = press.current;
+    if (armed?.isFired) finish(false);
+    else endPress();
   };
 
   const handlerFns = useRef({
     onHandlePointerDown,
     onHandleKeyDown,
     onHandleBlur,
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    onTouchCancel,
+    isPressing: () => press.current !== null,
   });
   useEffect(() => {
-    handlerFns.current = { onHandlePointerDown, onHandleKeyDown, onHandleBlur };
+    handlerFns.current = {
+      onHandlePointerDown,
+      onHandleKeyDown,
+      onHandleBlur,
+      onTouchStart,
+      onTouchMove,
+      onTouchEnd,
+      onTouchCancel,
+      isPressing: () => press.current !== null,
+    };
   });
   const stable = useMemo(
     () => ({
@@ -712,67 +1158,158 @@ function ReorderList<T extends { id: string }>({
       key: (event: KeyboardEvent<HTMLElement>, id: string) =>
         handlerFns.current.onHandleKeyDown(event, id),
       blur: (id: string) => handlerFns.current.onHandleBlur(id),
+      groupDown: (event: ReactPointerEvent<HTMLElement>, id: string) =>
+        handlerFns.current.onHandlePointerDown(event, id, 'group'),
+      groupKey: (event: KeyboardEvent<HTMLElement>, id: string) =>
+        handlerFns.current.onHandleKeyDown(event, id, 'group'),
+      groupBlur: (id: string) => handlerFns.current.onHandleBlur(id, 'group'),
     }),
     [],
   );
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const start = (event: TouchEvent) => handlerFns.current.onTouchStart(event);
+    const move = (event: TouchEvent) => handlerFns.current.onTouchMove(event);
+    const end = (event: TouchEvent) => handlerFns.current.onTouchEnd(event);
+    const cancel = () => handlerFns.current.onTouchCancel();
+    const menu = (event: Event) => {
+      if (handlerFns.current.isPressing()) event.preventDefault();
+    };
+    root.addEventListener('touchstart', start, { passive: true });
+    root.addEventListener('touchmove', move, { passive: false });
+    root.addEventListener('touchend', end, { passive: false });
+    root.addEventListener('touchcancel', cancel);
+    root.addEventListener('contextmenu', menu);
+    return () => {
+      root.removeEventListener('touchstart', start);
+      root.removeEventListener('touchmove', move);
+      root.removeEventListener('touchend', end);
+      root.removeEventListener('touchcancel', cancel);
+      root.removeEventListener('contextmenu', menu);
+    };
+  }, []);
 
   useEffect(
     () => () => {
       detach.current?.();
       cancelAnimationFrame(frame.current);
+      window.clearTimeout(press.current?.timer);
     },
     [],
   );
 
+  const isFolded = draggedGroupId !== null;
+
   return (
-    <div ref={rootRef} className={join(activeId && 'select-none', className)}>
-      {drawnGroups.map((group) => (
-        <div key={group.id} ref={(el) => register(`group:${group.id}`, el)}>
-          {group.label !== null && (
-            <div
-              ref={(el) => register(`head:${group.id}`, el)}
-              className={join(
-                'rounded-lg transition-transform duration-150 motion-reduce:transition-none',
-                overGroupId === group.id && 'bg-primary/10',
+    <div
+      ref={rootRef}
+      className={join((activeId || isFolded) && 'select-none', className)}
+    >
+      {drawnGroups.map((group) => {
+        const canMove =
+          Boolean(group.isMovable && onMoveGroup) && group.label !== null;
+        const isGroupActive = draggedGroupId === group.id;
+        const grip = canMove && group.label !== null && (
+          <GroupGrip
+            groupId={group.id}
+            label={group.label}
+            handleLabel={groupHandleLabel}
+            isActive={isGroupActive}
+            onPointerDown={stable.groupDown}
+            onKeyDown={stable.groupKey}
+            onBlur={stable.groupBlur}
+          />
+        );
+        const divider = (
+          <SectionDivider
+            label={group.heading ?? group.label}
+            trailing={group.trailing}
+            className='py-2'
+          />
+        );
+        return (
+          <div
+            key={group.id}
+            ref={(el) => register(`group:${group.id}`, el)}
+            className={join(
+              isFolded &&
+                'relative transition-transform duration-150 motion-reduce:transition-none',
+              isGroupActive && 'z-10 transition-none',
+            )}
+          >
+            <div className={join(isFolded && 'hidden')}>
+              {(group.label !== null || group.heading) && (
+                <div
+                  ref={(el) => register(`head:${group.id}`, el)}
+                  data-reorder-head={canMove ? group.id : undefined}
+                  className={join(
+                    'rounded-lg transition-transform duration-150 motion-reduce:transition-none',
+                    overGroupId === group.id && 'bg-primary/10',
+                  )}
+                >
+                  {canMove ? (
+                    <div className='flex items-center gap-1'>
+                      {handleSide === 'start' && grip}
+                      <div className='min-w-0 flex-1'>{divider}</div>
+                      {handleSide === 'end' && grip}
+                    </div>
+                  ) : (
+                    divider
+                  )}
+                </div>
               )}
-            >
-              <SectionDivider
-                label={group.label}
-                trailing={group.trailing}
-                className='py-2'
-              />
+              <div ref={(el) => register(`items:${group.id}`, el)}>
+                {group.items.length === 0 && group.empty && (
+                  <div
+                    ref={(el) => register(`empty:${group.id}`, el)}
+                    className='text-muted-foreground py-3 text-sm transition-transform duration-150 motion-reduce:transition-none'
+                  >
+                    {group.empty}
+                  </div>
+                )}
+                {group.items.map((item, index) => (
+                  <Row
+                    key={item.id}
+                    item={item}
+                    place={getPlace ? getPlace(item, index, group) : index + 1}
+                    isOrdered={group.isOrdered}
+                    isPlain={isPlain}
+                    handleSide={handleSide}
+                    isActive={activeId === item.id}
+                    isOverOtherGroup={overGroupId !== null}
+                    itemLabel={getItemLabel?.(item) ?? ''}
+                    handleLabel={handleLabel}
+                    renderRow={renderRow}
+                    onOpen={onOpen}
+                    register={register}
+                    onHandlePointerDown={stable.down}
+                    onHandleKeyDown={stable.key}
+                    onHandleBlur={stable.blur}
+                  />
+                ))}
+              </div>
             </div>
-          )}
-          <div ref={(el) => register(`items:${group.id}`, el)}>
-            {group.items.length === 0 && group.empty && (
+            {isFolded && (
               <div
-                ref={(el) => register(`empty:${group.id}`, el)}
-                className='text-muted-foreground py-3 text-sm transition-transform duration-150 motion-reduce:transition-none'
+                ref={(el) => register(`fold:${group.id}`, el)}
+                className={join(
+                  'text-muted-foreground flex h-10 items-center gap-1 px-1 text-sm font-medium',
+                  isGroupActive &&
+                    'bg-background ring-border text-foreground rounded-xl shadow-lg ring-1',
+                )}
               >
-                {group.empty}
+                {handleSide === 'start' && grip}
+                <span className='min-w-0 flex-1 truncate'>
+                  {foldedLabelOf(group)}
+                </span>
+                {handleSide === 'end' && grip}
               </div>
             )}
-            {group.items.map((item, index) => (
-              <Row
-                key={item.id}
-                item={item}
-                place={getPlace ? getPlace(item, index, group) : index + 1}
-                isOrdered={group.isOrdered}
-                isActive={activeId === item.id}
-                isOverOtherGroup={overGroupId !== null}
-                itemLabel={getItemLabel?.(item) ?? ''}
-                handleLabel={handleLabel}
-                renderRow={renderRow}
-                onOpen={onOpen}
-                register={register}
-                onHandlePointerDown={stable.down}
-                onHandleKeyDown={stable.key}
-                onHandleBlur={stable.blur}
-              />
-            ))}
           </div>
-        </div>
-      ))}
+        );
+      })}
       <div ref={liveRef} className='sr-only' aria-live='assertive' />
     </div>
   );
