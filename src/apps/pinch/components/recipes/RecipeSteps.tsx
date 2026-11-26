@@ -373,9 +373,7 @@ interface StepDrawerProps {
   mode: StepDrawerMode;
   onChange: (steps: string[], sections: (string | null)[]) => void;
   onRemove: (index: number) => void;
-  /** Drops a blank step as the drawer closes. */
   onDiscard: (index: number) => void;
-  /** Adds a step in a section and returns its id. */
   onAppend: (section: string | null) => string;
   onStepChange: (id: string) => void;
   /** Where a step would land one place up or down, or null at either end. */
@@ -731,7 +729,9 @@ function RecipeSteps({
           aria-label={`Step ${index + 1}`}
           onClick={() => {
             if (isPhone) {
-              setDrawer({ id: ids[index], isNew: false });
+              const realIds = ids.map(toKeptId);
+              setKeptIds(realIds);
+              setDrawer({ id: realIds[index], isNew: false });
               return;
             }
             setOpenStep((current) => (current === index ? null : index));

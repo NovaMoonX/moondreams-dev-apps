@@ -6,7 +6,7 @@ export interface StepList {
   sections: (string | null)[];
 }
 
-/** Where an item lands: the group (a section run or an ingredient group) by its index among the groups drawn before the move, and its place there once it has left its old spot. */
+/** Where an item lands: a group index from before the move, and a place counted after the item has left its old spot. */
 export interface ReorderSlot {
   group: number;
   index: number;

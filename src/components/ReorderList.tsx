@@ -632,7 +632,6 @@ function ReorderList<T extends { id: string }>({
     };
   };
 
-  /** Folds every group to one line, keeps the grabbed heading where the finger is, then measures the folded lines. */
   const measureGroups = (
     groupId: string,
     mode: Snapshot['mode'],
