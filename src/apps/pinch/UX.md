@@ -1958,7 +1958,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["Recipe drawer · ⋯ More · Change with Pepper"] --> B["Recipe form · the box open and focused"]
-    A2["Recipe form, opened any other way"] --> A3["✨ Tell Pepper what to change"] --> B
+    A2["Recipe form, opened any other way"] --> A3["✨ Change with Pepper"] --> B
     B --> C["Type or tap the mic · Send · 'Pepper is changing the recipe…'"]
     C --> D["Notice: ✨ Pepper changed 2 ingredients and a step · its one line · Took out: cream · Undo"]
     D --> E["Changed rows, steps and fields tinted with a leading edge, until edited"]

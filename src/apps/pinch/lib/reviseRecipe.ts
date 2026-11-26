@@ -263,7 +263,7 @@ Rules:
 - Never claim anything about health, allergies or food safety, in the recipe or in the reply.
 - Never ask a question. When the ask is not a change to this recipe, or cannot be done, set isChanged to false, return the recipe unchanged and say plainly in the reply what you could not do.
 - Earlier asks in this sitting are already applied to the recipe you are given; they are context only, never to be done again.
-- The reply is one sentence in the past tense that says what changed.`;
+- The reply is one sentence in the past tense. Say what changed in plain words, and when it matters what else you adjusted so the dish still works (a time, an amount). Never list removed ingredients one by one: the app shows them.`;
 
 const asText = (value: unknown) =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : null;

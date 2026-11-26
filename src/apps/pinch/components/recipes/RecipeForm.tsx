@@ -80,6 +80,7 @@ import StepSectionsReview from '@apps/pinch/components/recipes/StepSectionsRevie
 import ActionRow from '@/components/ActionRow';
 import RecipeWhyStep from '@apps/pinch/components/recipes/RecipeWhyStep';
 import {
+  MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_TITLE_LENGTH,
@@ -144,7 +145,7 @@ import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
 import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
 import {
   describePepperChange,
-  getLiveMarks,
+  getAllLiveMarks,
   getPepperReason,
 } from '@apps/pinch/utils/pepperMarks';
 import {
@@ -462,15 +463,17 @@ function RecipeForm({
   const pepperRound = pepper.rounds.at(-1) ?? null;
   const why =
     typedWhy ??
-    getJoinedChangeReason(applied) ??
-    getPepperReason(pepper.rounds.map((round) => round.ask)) ??
-    '';
+    ([
+      getJoinedChangeReason(applied),
+      getPepperReason(pepper.rounds.map((round) => round.ask)),
+    ]
+      .filter((part): part is string => part !== null)
+      .join(' · ')
+      .slice(0, MAX_RECIPE_NOTE_LENGTH) ||
+      '');
   const liveMarks = useMemo(
-    () =>
-      pepperRound === null
-        ? null
-        : getLiveMarks(pepperRound.marks, pepperRound.data, formData),
-    [pepperRound, formData],
+    () => getAllLiveMarks(pepper.rounds, formData),
+    [pepper.rounds, formData],
   );
   const aiMarkedIds = useMemo(
     () =>
@@ -1290,6 +1293,32 @@ function RecipeForm({
     }));
   };
 
+  const getPepperSummary = () => {
+    if (liveMarks === null) return '';
+    if (liveMarks.isEmpty && liveMarks.removedIngredientNames.length === 0) {
+      return 'changed the recipe';
+    }
+    const markedIds = [
+      ...liveMarks.addedIngredientIds,
+      ...liveMarks.changedIngredientIds,
+    ];
+    const names = formData.ingredients
+      .filter((row) => markedIds.includes(row.id))
+      .map((row) =>
+        row.freeText !== null
+          ? row.freeText
+          : (ingredientsById.get(row.ingredientId)?.name ??
+            row.newName ??
+            row.proposedName ??
+            ''),
+      )
+      .filter((name) => name !== '');
+    const summary = describePepperChange(liveMarks, names);
+    return pepper.rounds.length > 1
+      ? `${summary} over ${pepper.rounds.length} asks`
+      : summary;
+  };
+
   const undoPepper = async () => {
     if (pepperRound === null) return;
     const round = pepperRound;
@@ -1391,9 +1420,10 @@ function RecipeForm({
             <AiChangeNotice
               className='mb-4'
               who='Pepper'
-              summary={describePepperChange(pepperRound.marks)}
+              summary={getPepperSummary()}
               reply={pepperRound.reply}
-              removed={pepperRound.marks.removedIngredientNames}
+              removed={liveMarks?.removedIngredientNames ?? []}
+              undoLabel={pepper.rounds.length > 1 ? 'Undo last' : 'Undo'}
               onUndo={() => void undoPepper()}
             />
           )}

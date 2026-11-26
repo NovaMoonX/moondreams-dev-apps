@@ -62,11 +62,63 @@ export function getLiveMarks(
   };
 }
 
+/** Every round's marks that still stand, together: an earlier round stays marked until saved. */
+export function getAllLiveMarks(
+  rounds: { marks: RevisionMarks; data: RecipeFormData }[],
+  current: RecipeFormData,
+): RevisionMarks | null {
+  if (rounds.length === 0) return null;
+  const lives = rounds.map((round) =>
+    getLiveMarks(round.marks, round.data, current),
+  );
+  const any = (
+    key:
+      | 'title'
+      | 'description'
+      | 'servings'
+      | 'times'
+      | 'categories'
+      | 'care'
+      | 'source'
+      | 'collections',
+  ) => lives.some((live) => live[key]);
+  const union = <T>(pick: (live: RevisionMarks) => T[]) =>
+    Array.from(new Set(lives.flatMap(pick)));
+  const addedIngredientIds = union((live) => live.addedIngredientIds);
+
+  return {
+    title: any('title'),
+    description: any('description'),
+    servings: any('servings'),
+    times: any('times'),
+    categories: any('categories'),
+    care: any('care'),
+    source: any('source'),
+    collections: any('collections'),
+    addedIngredientIds,
+    changedIngredientIds: union((live) => live.changedIngredientIds).filter(
+      (id) => !addedIngredientIds.includes(id),
+    ),
+    removedIngredientNames: union((live) => live.removedIngredientNames),
+    changedStepIndices: union((live) => live.changedStepIndices).sort(
+      (a, b) => a - b,
+    ),
+    isEmpty: lives.every((live) => live.isEmpty),
+  };
+}
+
 /** What a change did, to follow the name: "changed 2 ingredients and a step". */
-export function describePepperChange(marks: RevisionMarks) {
+export function describePepperChange(
+  marks: RevisionMarks,
+  ingredientNames: string[] = [],
+) {
   const ingredientCount =
     marks.addedIngredientIds.length + marks.changedIngredientIds.length;
   const stepCount = marks.changedStepIndices.length;
+  const namedIngredients =
+    ingredientNames.length === ingredientCount && ingredientCount <= 2
+      ? formatList(ingredientNames)
+      : null;
   const changed = [
     marks.title && 'the title',
     marks.description && 'the description',
@@ -77,7 +129,8 @@ export function describePepperChange(marks: RevisionMarks) {
     marks.source && "where it's from",
     marks.collections && 'the collections',
     ingredientCount > 0 &&
-      countOf(ingredientCount, 'an ingredient', 'ingredients'),
+      (namedIngredients ??
+        countOf(ingredientCount, 'an ingredient', 'ingredients')),
     stepCount > 0 && countOf(stepCount, 'a step', 'steps'),
   ].filter((part): part is string => part !== false);
   if (changed.length > 0) return `changed ${formatList(changed)}`;

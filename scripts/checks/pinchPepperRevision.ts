@@ -17,6 +17,10 @@ import {
   describeRevisionMarks,
   toRevisionInput,
 } from '../../src/apps/pinch/utils/pepperRevision.ts';
+import {
+  describePepperChange,
+  getAllLiveMarks,
+} from '../../src/apps/pinch/utils/pepperMarks.ts';
 
 const ingredient = (id: string, name: string): ResolvedIngredient => ({
   id,
@@ -350,5 +354,41 @@ assert.throws(
   () => apply({ isChanged: true, steps: [] }),
   'a revision with no steps is refused',
 );
+
+const roundOne = apply({
+  ingredients: same.ingredients
+    .filter((line) => line.ref !== 'i2')
+    .map((line) => (line.ref === 'i1' ? { ...line, amount: 3 } : line)),
+});
+const roundTwo = applyRevision(
+  roundOne.data,
+  {
+    ...same,
+    title: 'Spicy garlic toast',
+    ingredients: same.ingredients.filter((line) => line.ref !== 'i2'),
+  },
+  refMap,
+  catalog,
+  context,
+);
+const together = getAllLiveMarks(
+  [
+    { marks: roundOne.marks, data: roundOne.data },
+    { marks: roundTwo.marks, data: roundTwo.data },
+  ],
+  roundTwo.data,
+)!;
+assert.ok(together.title, 'the later round is marked');
+assert.deepEqual(
+  together.changedIngredientIds,
+  ['r1'],
+  'and an earlier round stays marked',
+);
+assert.deepEqual(together.removedIngredientNames, ['Salt']);
+assert.equal(
+  describePepperChange(together, ['Butter']),
+  'changed the title and Butter',
+);
+assert.equal(getAllLiveMarks([], base), null);
 
 console.log('pinch pepper revision checks passed');

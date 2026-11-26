@@ -1,6 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Undo2 } from 'lucide-react';
 
 interface AiChangeNoticeProps {
   /** Who made the change: "Pepper". */
@@ -49,7 +49,7 @@ function AiChangeNotice({
         {reply !== null && reply.trim() !== '' && (
           <p
             className={join(
-              summary === '' ? 'text-sm' : 'text-muted-foreground text-xs',
+              summary === '' ? 'text-sm' : 'text-foreground/80 text-xs',
             )}
           >
             {reply}
@@ -64,11 +64,13 @@ function AiChangeNotice({
       {onUndo && (
         <Button
           type='button'
-          variant='tertiary'
+          variant='secondary'
           size='sm'
-          className="relative -my-0.5 shrink-0 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+          rounded='full'
+          className="relative -my-0.5 shrink-0 gap-1 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
           onClick={onUndo}
         >
+          <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
           {undoLabel}
         </Button>
       )}

@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, LoaderCircle, Mic, Sparkles, Square } from 'lucide-react';
 
 import DebugDetails from '@/components/DebugDetails';
@@ -15,6 +22,8 @@ import {
 } from '@apps/pinch/constants';
 
 const ASK_MAX_LINES = 4;
+const HIT_AREA =
+  "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
 
 const VOICE_IDENTITY: VoiceIdentity = {
   id: 'pinch-pepper-edit',
@@ -47,7 +56,7 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
 
   useEffect(() => {
     const field = fieldRef.current;
-    if (!isStartOpen || field === null) return;
+    if (!isOpen || field === null) return;
     // The drawer that opened this screen hands focus back to its opener as it closes.
     const home = field.closest('[role="dialog"]') ?? document.body;
     const pullBack = (event: FocusEvent) => {
@@ -65,7 +74,7 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
       window.clearTimeout(timer);
       document.removeEventListener('focusin', pullBack);
     };
-  }, [isStartOpen]);
+  }, [isOpen]);
   const lang = useMemo(() => navigator.language || 'en-US', []);
 
   const voice = useVoiceConversation({
@@ -138,14 +147,14 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
         variant='secondary'
         size='sm'
         rounded='full'
-        className='mb-4 gap-1.5'
+        className={join('mb-4 w-fit gap-1.5', HIT_AREA)}
         onClick={() => setIsOpen(true)}
       >
         <Sparkles
           className='text-muted-foreground h-4 w-4'
           aria-hidden='true'
         />
-        Tell Pepper what to change
+        Change with Pepper
       </Button>
     );
   }
@@ -157,11 +166,12 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
           className='text-muted-foreground h-4 w-4 shrink-0'
           aria-hidden='true'
         />
-        Tell Pepper what to change
+        Change with Pepper
       </p>
       {!hasSent && (
         <p className='text-muted-foreground text-xs'>
-          Your recipe and what you ask are sent to Gemini to make the change.
+          Your recipe and what you ask are sent to Gemini to make the change. If
+          you speak instead, your browser hears it and Pinch keeps nothing.
           Nothing is saved until you press Save.
         </p>
       )}
@@ -226,7 +236,7 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
           type='button'
           size='sm'
           rounded='full'
-          className='shrink-0 gap-1.5'
+          className={join('shrink-0 gap-1.5', HIT_AREA)}
           disabled={isWorking || text.trim() === ''}
           onClick={() => void send()}
         >

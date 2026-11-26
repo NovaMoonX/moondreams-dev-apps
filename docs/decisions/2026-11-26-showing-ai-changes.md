@@ -38,3 +38,5 @@ Pinch's "Change with Pepper" lets a person tell an assistant what to change in a
 - When a second app adopts the mark: check that its `--ai-mark` reads in light and dark mode.
 
 ## Changes
+
+- 2026-11-26, after the product and design reviews of the first use: unsaved changes now add up across rounds instead of the newest replacing the old (a later ask was hiding an earlier removal); the summary names one or two changed items; Undo is a chip, not a text button; the reply line is near body contrast.

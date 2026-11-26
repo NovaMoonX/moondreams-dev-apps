@@ -154,10 +154,15 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
 
   const leave = async () => {
     if (isDirtyRef.current) {
-      const confirmed = await askToDiscard(
-        'Discard this recipe?',
-        "It isn't saved yet. If you leave now, what you typed or read in is lost.",
-      );
+      const confirmed = await (recipeId === null
+        ? askToDiscard(
+            'Discard this recipe?',
+            "It isn't saved yet. If you leave now, what you typed or read in is lost.",
+          )
+        : askToDiscard(
+            'Discard your changes?',
+            'The recipe stays as it was saved. Your edits, and any changes Pepper made, are lost.',
+          ));
       if (!confirmed) return;
     }
     closeSubview();
